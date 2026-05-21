@@ -1,0 +1,117 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ---------------------------------------------------------
+    // GLOBAL HELPERS
+    // ---------------------------------------------------------
+    function isSignedIn() { return request.auth != null; }
+    function isVerified() { return isSignedIn(); } // Defaulting to simple check as email_verified might not be set for all providers
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+
+    // User is root if isRoot field is true OR their email is in the hardcoded list
+    function isRoot(userDoc) {
+      return userDoc.get('isRoot', false) == true || 
+             userDoc.email in ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'admin@swiftship.system'];
+    }
+
+    // Role check
+    function hasRole(role) {
+      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return isRoot(userDoc) || userDoc.role == role;
+    }
+    
+    function isAdmin() {
+      return isSignedIn() && isRoot(get(/databases/$(database)/documents/users/$(request.auth.uid)).data);
+    }
+    
+    function isSystemAdmin() {
+       let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+       return isRoot(userDoc) || userDoc.role == 'Admin';
+    }
+
+    // ---------------------------------------------------------
+    // DEFAULT DENY
+    // ---------------------------------------------------------
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ---------------------------------------------------------
+    // USERS COLLECTION
+    // ---------------------------------------------------------
+    function isValidUser(data) {
+      return data.email is string && data.email.size() > 5 &&
+             data.fullName is string && data.fullName.size() >= 2 &&
+             data.role in ['Admin', 'Employee', 'Courier', 'Accountant'] &&
+             (!('isRoot' in data) || data.isRoot is bool) &&
+             (!('disabled' in data) || data.disabled is bool) &&
+             (!('systemPin' in data) || data.systemPin is string) &&
+             (!('commissionRate' in data) || data.commissionRate is number);
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      
+      allow create: if isSystemAdmin() && isValidUser(incoming());
+      
+      allow update: if isSystemAdmin() && 
+                    isValidUser(incoming()) && 
+                    // Prevent changing root flag if not already root
+                    (!incoming().diff(existing()).affectedKeys().hasAny(['isRoot']) || isRoot(existing())) &&
+                    // Prevent disabling root
+                    (!(isRoot(existing()) && incoming().disabled == true));
+                    
+      allow delete: if isSystemAdmin() && !isRoot(existing());
+    }
+
+    // ---------------------------------------------------------
+    // CUSTOMERS COLLECTION
+    // ---------------------------------------------------------
+    function isValidCustomer(data) {
+      return data.fullName is string && data.fullName.size() >= 2 &&
+             data.phone is string && data.phone.size() >= 8;
+    }
+
+    match /customers/{customerId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn() && isValidCustomer(incoming());
+      allow delete: if isSystemAdmin();
+    }
+
+    // ---------------------------------------------------------
+    // ORDERS COLLECTION
+    // ---------------------------------------------------------
+    function isValidOrder(data) {
+      return data.customerId is string && 
+             data.trackingNumber is string &&
+             data.orderStatus is string &&
+             data.createdAt is number &&
+             data.updatedAt is number;
+    }
+
+    match /orders/{orderId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidOrder(incoming()) && incoming().createdAt == request.time.toMillis();
+      allow update: if isSignedIn() && 
+                    isValidOrder(incoming()) && 
+                    incoming().updatedAt == request.time.toMillis() &&
+                    incoming().createdAt == existing().createdAt;
+      allow delete: if isSystemAdmin();
+
+      match /trackingUpdates/{updateId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn();
+      }
+    }
+
+    // ---------------------------------------------------------
+    // PUBLIC TRACKING
+    // ---------------------------------------------------------
+    match /public_tracking/{trackingNumber} {
+      allow read: if true; // Public access
+      allow write: if false; // System only (actually updated via backend or system docs)
+    }
+  }
+}

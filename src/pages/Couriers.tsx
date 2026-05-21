@@ -1,0 +1,1025 @@
+import React, { useState, useEffect } from 'react';
+import { collection, onSnapshot, doc, updateDoc, addDoc, setDoc, deleteDoc, query, where, orderBy, or } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType, auth } from '../lib/firebase';
+import { 
+  Search, 
+  Edit2, 
+  X, 
+  Plus, 
+  UserX, 
+  UserCheck, 
+  Trash2, 
+  Truck, 
+  DollarSign, 
+  Receipt, 
+  Briefcase, 
+  History, 
+  MapPin, 
+  Package, 
+  CheckCircle, 
+  Clock, 
+  User, 
+  Crown,
+  Printer,
+  ShieldAlert,
+  Coins,
+  Activity
+} from 'lucide-react';
+import { jsPDF } from 'jspdf';
+import { useRole } from '../hooks/useRole';
+import { useSettings } from '../context/SettingsContext';
+import { notificationService } from '../services/notificationService';
+import ConfirmModal from '../components/ConfirmModal';
+
+export default function Couriers() {
+  const { settings, t } = useSettings();
+  const [couriers, setCouriers] = useState<any[]>([]);
+  const { role, hasPermission, profile, loading: roleLoading } = useRole();
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [sortBy, setSortBy] = useState('newest');
+  const isAr = settings.language === 'ar';
+
+  // Confirmation Modal State
+  const [confirmConfig, setConfirmConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    type: 'danger' | 'warning' | 'info';
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    type: 'danger'
+  });
+  
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [selectedCourier, setSelectedCourier] = useState<any>(null);
+  const [courierOrders, setCourierOrders] = useState<any[]>([]);
+  const [courierExpenses, setCourierExpenses] = useState<any[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [detailsUnsubs, setDetailsUnsubs] = useState<(() => void)[]>([]);
+  
+  const [editFormData, setEditFormData] = useState({
+    fullName: '',
+    phone: '',
+    email: '',
+    address: '',
+    gpsLocation: '',
+    disabled: false,
+    commissionRate: 0,
+    notes: ''
+  });
+
+  const [addFormData, setAddFormData] = useState({
+    fullName: '',
+    phone: '',
+    email: '',
+    address: '',
+    gpsLocation: '',
+    commissionRate: 0,
+    notes: ''
+  });
+
+  const [addLoading, setAddLoading] = useState(false);
+
+  useEffect(() => {
+    if (roleLoading) return;
+    const q = query(collection(db, 'couriers'), orderBy('createdAt', 'desc'));
+    const unsub = onSnapshot(q, (snap) => {
+      setCouriers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'couriers');
+    });
+    return unsub;
+  }, [roleLoading]);
+
+  const handleOpenEdit = (courier: any) => {
+    setSelectedCourier(courier);
+    setEditFormData({
+      fullName: courier.fullName || '',
+      phone: courier.phone || '',
+      email: courier.email || '',
+      address: courier.address || '',
+      gpsLocation: courier.gpsLocation || '',
+      disabled: courier.disabled || false,
+      commissionRate: courier.commissionRate || 0,
+      notes: courier.notes || ''
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleOpenDetails = (courier: any) => {
+    setSelectedCourier(courier);
+    setIsDetailsModalOpen(true);
+    setOrdersLoading(true);
+
+    // Clear previous unsubs if any
+    detailsUnsubs.forEach(u => u());
+
+    const qOrders = query(
+      collection(db, 'orders'),
+      or(
+        where('deliveryCourierId', '==', courier.id),
+        where('shippingCourierId', '==', courier.id)
+      ),
+      orderBy('createdAt', 'desc')
+    );
+
+    const unsubOrders = onSnapshot(qOrders, (snap) => {
+      setCourierOrders(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setOrdersLoading(false);
+    }, (err) => {
+      console.error("Error fetching courier orders:", err);
+      setCourierOrders([]);
+      setOrdersLoading(false);
+    });
+
+    const qExpenses = query(
+      collection(db, 'expenses'),
+      where('recipientId', '==', courier.id),
+      orderBy('createdAt', 'desc')
+    );
+
+    const unsubExpenses = onSnapshot(qExpenses, (snap) => {
+      setCourierExpenses(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => {
+      console.error("Error fetching courier expenses:", err);
+      setCourierExpenses([]);
+    });
+
+    setDetailsUnsubs([unsubOrders, unsubExpenses]);
+  };
+
+  const handleCloseDetails = () => {
+    setIsDetailsModalOpen(false);
+    detailsUnsubs.forEach(u => u());
+    setDetailsUnsubs([]);
+  };
+
+  const handleUpdateCourier = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedCourier) return;
+    try {
+      await updateDoc(doc(db, 'couriers', selectedCourier.id), {
+        fullName: editFormData.fullName,
+        phone: editFormData.phone,
+        email: editFormData.email,
+        address: editFormData.address,
+        gpsLocation: editFormData.gpsLocation,
+        disabled: editFormData.disabled,
+        commissionRate: editFormData.commissionRate,
+        notes: editFormData.notes,
+        updatedAt: Date.now()
+      });
+      notificationService.notify({
+        title: isAr ? 'تحديث المندوب' : 'Courier Updated',
+        message: isAr ? 'تم تحديث ملف المندوب بنجاح' : 'Courier settings updated successfully',
+        type: 'success'
+      });
+      setIsEditModalOpen(false);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, 'couriers');
+    }
+  };
+
+  const handleToggleStatus = async (courier: any) => {
+    const actionText = courier.disabled ? (isAr ? 'تنشيط' : 'Activate') : (isAr ? 'تعطيل' : 'Disable');
+    setConfirmConfig({
+      isOpen: true,
+      title: isAr ? 'تحديث حالة مندوب' : 'Toggle Courier status',
+      message: isAr ? `هل أنت متأكد من رغبتك في ${actionText} حساب المندوب ${courier.fullName}؟` : `Are you sure you want to ${actionText.toLowerCase()} courier ${courier.fullName}?`,
+      type: 'warning',
+      onConfirm: async () => {
+        try {
+          await updateDoc(doc(db, 'couriers', courier.id), {
+            disabled: !courier.disabled,
+            updatedAt: Date.now()
+          });
+          notificationService.notify({
+            title: isAr ? 'تم تحديث الوضعية' : 'Status Toggle Successful',
+            message: isAr ? `تم تعديل وضعية الحساب إلى: ${courier.disabled ? 'نشط' : 'معطل'}` : `Account is now: ${courier.disabled ? 'Active' : 'Disabled'}`,
+            type: 'info'
+          });
+        } catch (err) {
+          handleFirestoreError(err, OperationType.UPDATE, 'couriers');
+        }
+      }
+    });
+  };
+
+  const handleDeleteCourier = async (id: string, name: string) => {
+    setConfirmConfig({
+      isOpen: true,
+      title: isAr ? 'حذف كود المندوب' : 'Depricate Courier',
+      message: isAr ? `تحذير: هل أنت متأكد من حذف المندوب ${name} نهائيًا من الأنظمة المحاسبية؟` : `Are you sure you want to delete courier ${name} from the active ledger permanently?`,
+      type: 'danger',
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(db, 'couriers', id));
+          notificationService.notify({
+            title: isAr ? 'تم الحذف' : 'Account Revoked',
+            message: isAr ? 'تم حذف حساب المندوب وسجلاته من النظام' : 'Courier record deleted successfully',
+            type: 'warning'
+          });
+        } catch (err) {
+          handleFirestoreError(err, OperationType.DELETE, 'couriers');
+        }
+      }
+    });
+  };
+
+  const handleAddCourier = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAddLoading(true);
+    try {
+      // 1. Generate unique custom courier ID
+      const courierCountSnap = couriers.length;
+      const customId = `ALX-CR-${(courierCountSnap + 1).toString().padStart(3, '0')}`;
+      
+      const emailValue = addFormData.email || `${customId.toLowerCase()}@alx.delivery.net`;
+
+      // 2. Save directly to Couriers portfolio as a plain record with auto-ID
+      const newCourierRef = doc(collection(db, 'couriers'));
+      await setDoc(newCourierRef, {
+        fullName: addFormData.fullName,
+        phone: addFormData.phone,
+        email: emailValue,
+        address: addFormData.address,
+        gpsLocation: addFormData.gpsLocation,
+        disabled: false,
+        courierCustomId: customId,
+        commissionRate: addFormData.commissionRate,
+        notes: addFormData.notes,
+        walletBalance: 0,
+        createdAt: Date.now()
+      });
+
+      notificationService.notify({
+        title: isAr ? 'تم تسجيل مندوب خارجي' : 'External Courier Registered',
+        message: isAr ? `تم تسجيل المندوب الخارجي بنجاح برمز: ${customId}` : `External courier registered with ID: ${customId}`,
+        type: 'success'
+      });
+      
+      // Reset form setup
+      setAddFormData({ fullName: '', phone: '', email: '', address: '', gpsLocation: '', commissionRate: 0, notes: '' });
+      setIsAddModalOpen(false);
+
+    } catch (err: any) {
+      console.error(err);
+      notificationService.notify({
+        title: isAr ? 'خطأ في إنشاء المندوب' : 'Registration Failure',
+        message: err.message || 'Error configuring Courier record',
+        type: 'error'
+      });
+    } finally {
+      setAddLoading(false);
+    }
+  };
+
+  const transliterateArabic = (text: string): string => {
+    if (!text) return '';
+    const mapping: Record<string, string> = {
+      'أ': 'A', 'ا': 'A', 'ب': 'B', 'ت': 'T', 'ث': 'Th', 'ج': 'J', 'ح': 'H', 'خ': 'Kh',
+      'د': 'D', 'ذ': 'Dh', 'ر': 'R', 'ز': 'Z', 'س': 'S', 'ش': 'Sh', 'ص': 'S', 'ض': 'D',
+      'ط': 'T', 'ظ': 'Dh', 'ع': 'A', 'غ': 'Gh', 'ف': 'F', 'ق': 'Q', 'ك': 'K', 'ل': 'L',
+      'م': 'M', 'ن': 'N', 'ه': 'H', 'و': 'W', 'ي': 'Y', 'ى': 'Y', 'ة': 'h', 'ئ': 'Y',
+      'ؤ': 'W', ' ': ' ', 'ﻻ': 'La', 'لأ': 'La'
+    };
+    return text.split('').map(char => mapping[char] || char).join('');
+  };
+
+  const exportCouriersToPDF = () => {
+    const doc = new jsPDF('p', 'mm', 'a4');
+    
+    // Top banner block (luxury charcoal gray)
+    doc.setFillColor(15, 15, 18);
+    doc.rect(0, 0, 210, 36, 'F');
+    
+    // Gold separator strip
+    doc.setFillColor(212, 175, 55);
+    doc.rect(0, 36, 210, 2, 'F');
+    
+    // Header texts
+    doc.setTextColor(212, 175, 55);
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text('AL-XPRESS COURIER & DISPATCH DIRECTORY', 15, 16);
+    
+    doc.setTextColor(180, 180, 180);
+    doc.setFontSize(8);
+    doc.setFont('Helvetica', 'normal');
+    doc.text('LIVE PERFORMANCE LEDGERS & FLEET TELEMETRY', 15, 23);
+    
+    doc.setTextColor(130, 130, 130);
+    doc.setFontSize(7);
+    doc.text(`Generated: ${new Date().toLocaleString()} | User: ${profile?.fullName || profile?.email || 'Administrator'}`, 15, 29);
+    
+    // Quick statistics summary block
+    doc.setFillColor(245, 245, 247);
+    doc.roundedRect(12, 44, 186, 22, 3, 3, 'F');
+    
+    doc.setFontSize(8);
+    doc.setFont('Helvetica', 'bold');
+    doc.setTextColor(120, 120, 120);
+    doc.text('ACTIVE DISPATCH AGENTS', 20, 51);
+    doc.text('TOTAL REVENUE POOL', 90, 51);
+    doc.text('OUTSTANDING CASH HELD', 145, 51);
+    
+    const activeFleetCount = filteredCouriers.filter(c => !c.disabled).length;
+    const totalCashHeld = filteredCouriers.reduce((sum, c) => sum + parseFloat(c.walletBalance || 0), 0);
+    
+    doc.setFontSize(11);
+    doc.setTextColor(15, 15, 18);
+    doc.text(`${activeFleetCount} Couriers`, 20, 59);
+    doc.text(`N/A (Real-time synced)`, 90, 59);
+    doc.text(`${totalCashHeld.toLocaleString()} YER`, 145, 59);
+    
+    // Headers of main data grid
+    doc.setFillColor(24, 24, 27);
+    doc.rect(12, 72, 186, 8, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(8);
+    doc.setFont('Helvetica', 'bold');
+    doc.text('AGENT CODE', 15, 77);
+    doc.text('COURIER NAME & CONTACT', 45, 77);
+    doc.text('COMMISSION %', 115, 77);
+    doc.text('CASH HELD (YER)', 145, 77);
+    doc.text('FLEET STATUS', 175, 77);
+    
+    let yIdx = 87;
+    // Walk through sorted & filtered list
+    filteredCouriers.forEach((courier, index) => {
+      // PDF line limit per page
+      if (yIdx > 275) {
+        doc.addPage();
+        
+        // Dynamic continued header
+        doc.setFillColor(15, 15, 18);
+        doc.rect(0, 0, 210, 18, 'F');
+        doc.setFillColor(212, 175, 55);
+        doc.rect(0, 18, 210, 1.5, 'F');
+        doc.setTextColor(212, 175, 55);
+        doc.setFontSize(10);
+        doc.setFont('Helvetica', 'bold');
+        doc.text('COURIER DIRECTORY (CONTINUED)', 15, 11);
+        
+        doc.setFillColor(24, 24, 27);
+        doc.rect(12, 24, 186, 8, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(8);
+        doc.text('AGENT CODE', 15, 29);
+        doc.text('COURIER NAME & CONTACT', 45, 29);
+        doc.text('COMMISSION %', 115, 29);
+        doc.text('CASH HELD (YER)', 145, 29);
+        doc.text('FLEET STATUS', 175, 29);
+        
+        yIdx = 39;
+      }
+      
+      // Zebra alternate background striping
+      if (index % 2 === 0) {
+        doc.setFillColor(248, 249, 250);
+        doc.rect(12, yIdx - 4.5, 186, 8, 'F');
+      }
+      
+      doc.setTextColor(40, 40, 43);
+      doc.setFont('Helvetica', 'normal');
+      doc.setFontSize(8);
+      
+      // Agent custom ID
+      doc.setFont('Helvetica', 'bold');
+      doc.text(courier.courierCustomId || `ALX-CR-${index + 1}`, 15, yIdx);
+      doc.setFont('Helvetica', 'normal');
+      
+      // Courier Name
+      const nameText = transliterateArabic(courier.fullName || 'Operational Box');
+      doc.text(nameText.length > 28 ? `${nameText.substring(0, 26)}...` : nameText, 45, yIdx);
+      
+      // Commission
+      const commRate = courier.commissionRate || 0;
+      doc.text(`${commRate}%`, 115, yIdx);
+      
+      // Cash Held
+      const balance = parseFloat(courier.walletBalance || 0);
+      doc.text(balance.toLocaleString(), 145, yIdx);
+      
+      // Status
+      const agentStatus = courier.disabled ? 'SUSPENDED' : 'ONLINE';
+      if (agentStatus === 'SUSPENDED') {
+        doc.setTextColor(190, 40, 40);
+        doc.setFont('Helvetica', 'bold');
+        doc.text(agentStatus, 175, yIdx);
+        doc.setFont('Helvetica', 'normal');
+        doc.setTextColor(40, 40, 43);
+      } else {
+        doc.setTextColor(16, 124, 65);
+        doc.text(agentStatus, 175, yIdx);
+        doc.setTextColor(40, 40, 43);
+      }
+      
+      // Grid bottom indicator divider
+      doc.setDrawColor(235, 235, 240);
+      doc.setLineWidth(0.15);
+      doc.line(12, yIdx + 3.5, 198, yIdx + 3.5);
+      
+      yIdx += 8.5;
+    });
+    
+    // Page footer indicator block
+    doc.setTextColor(140, 140, 140);
+    doc.setFontSize(6.5);
+    doc.setFont('Helvetica', 'normal');
+    doc.text('System generated administrative dispatcher registry. Designed for internal Al-Xpress Corp compliance audit.', 15, 288);
+    doc.text(`Doc Ref: ALX-${new Date().getFullYear()}/FLEET`, 175, 288);
+    
+    doc.save(`AlXpress_Courier_Directory_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
+  const exportCouriersToCSV = () => {
+    const headers = [
+      isAr ? 'رمز المندوب' : 'Agent ID',
+      isAr ? 'الاسم بالكامل' : 'Full Name',
+      isAr ? 'رقم الهاتف' : 'Phone Number',
+      isAr ? 'البريد الإلكتروني' : 'Mail Address',
+      isAr ? 'نسبة العمولة' : 'Commission Rate',
+      isAr ? 'الرصيد المحتجز (ريال)' : 'Cash Balance YER',
+      isAr ? 'ملاحظات المندوب' : 'Agent Notes',
+      isAr ? 'الحالة' : 'Status'
+    ];
+    
+    const csvLines = [headers.join(',')];
+    
+    filteredCouriers.forEach(c => {
+      const row = [
+        `"${c.courierCustomId || ''}"`,
+        `"${(c.fullName || '').replace(/"/g, '""')}"`,
+        `"${c.phone || ''}"`,
+        `"${c.email || ''}"`,
+        c.commissionRate || 0,
+        c.walletBalance || 0,
+        `"${(c.notes || '').replace(/"/g, '""')}"`,
+        `"${c.disabled ? (isAr ? 'موقوف' : 'Suspended') : (isAr ? 'نشط' : 'Active')}"`
+      ];
+      csvLines.push(row.join(','));
+    });
+    
+    const csvContent = "\uFEFF" + csvLines.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `AlXpress_Courier_Directory_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Filter couriers
+  const filteredCouriers = couriers
+    .filter(c => {
+      const matchSearch = (c.fullName || '').toLowerCase().includes(search.toLowerCase()) || (c.phone || '').includes(search) || (c.courierCustomId || '').toLowerCase().includes(search.toLowerCase());
+      const matchStatus = statusFilter === 'all' || (statusFilter === 'active' && !c.disabled) || (statusFilter === 'disabled' && c.disabled);
+      return matchSearch && matchStatus;
+    })
+    .sort((a, b) => {
+      if (sortBy === 'newest') return (b.createdAt || 0) - (a.createdAt || 0);
+      if (sortBy === 'name-asc') return (a.fullName || '').localeCompare(b.fullName || '');
+      if (sortBy === 'balance-desc') return (b.walletBalance || 0) - (a.walletBalance || 0);
+      return 0;
+    });
+
+  // Calculate detailed aggregates in real-time
+  const totalDelivered = courierOrders.filter(o => {
+    const status = o.orderStatus || o.order_status || '';
+    return status === 'تم التسليم';
+  }).length;
+
+  const totalInTransit = courierOrders.filter(o => {
+    const status = o.orderStatus || o.order_status || '';
+    return ['Shipped', 'In Transit', 'Out For Delivery', 'In Local Warehouse', 'وصل مركز التوزيع في اليمن'].includes(status);
+  }).length;
+
+  const totalCollectedFromCustomers = courierOrders
+    .filter(o => {
+      const status = o.orderStatus || o.order_status || '';
+      return o.deliveryCourierId === selectedCourier?.id && status === 'تم التسليم';
+    })
+    .reduce((sum, o) => sum + (parseFloat(o.totalCostYER) || parseFloat(o.totalPrice) || 0) - (parseFloat(o.amountPaid) || parseFloat(o.paidAmount) || 0), 0);
+
+  const totalAdvancesReceived = courierExpenses
+    .filter(e => e.recipientId === selectedCourier?.id && e.type === 'Advance' && e.status === 'Approved')
+    .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+
+  const totalRemittedToBox = courierExpenses
+    .filter(e => e.recipientId === selectedCourier?.id && e.type === 'Custody' && e.status === 'Settled')
+    .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+
+  const remainingCustodyInHand = totalCollectedFromCustomers + totalAdvancesReceived - totalRemittedToBox;
+
+  if (loading || roleLoading) {
+    return (
+      <div className="flex bg-[#0e0e11] text-white h-[60vh] items-center justify-center">
+        <div className="h-10 w-10 animate-spin rounded border-2 border-[#d4af37]/25 border-t-[#d4af37]"></div>
+      </div>
+    );
+  }
+
+  if (!hasPermission('manage_couriers') && role !== 'Admin') {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 bg-gradient-to-br from-[#121215] to-[#070708] rounded-3xl border border-slate-850 shadow-xl text-center select-none">
+        <ShieldAlert className="w-16 h-16 text-rose-500 mb-6 animate-pulse" />
+        <h2 className="text-2xl font-black text-[#d4af37] mb-2 uppercase tracking-wide text-center">{t('accessDenied')}</h2>
+        <p className="text-slate-500 dark:text-slate-400 max-w-md mb-6">{isAr ? 'هذه الصفحة مخصصة للمسؤولين عن تتبع الكوادر اللوجستية والمناديب.' : 'This page is restricted to logistics & courier coordinators.'}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 pb-20 text-start transition-colors font-sans selection:bg-[#d4af37]/30">
+      
+      {/* Title Header Panel */}
+      <div className="flex justify-between items-center bg-black/40 backdrop-blur-md border border-[#d4af37]/20 p-5 rounded-3xl shadow-lg shadow-black/3c">
+        <div className="flex items-center gap-3">
+          <div className="bg-[#d4af37]/10 border border-[#d4af37]/25 p-2.5 rounded-2xl text-[#d4af37]">
+            <Truck className="w-6 h-6" />
+          </div>
+          <div>
+            <h1 className="text-xl font-black text-white leading-none mb-1">{isAr ? 'إدارة وكلاء التوصيل والمناديب' : 'Couriers Portfolio'}</h1>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{isAr ? 'تنظيم الحسابات اللوجيستية • تتبع العهد المستلمة وجرد المحفظة المستقلة' : 'Logistics settlements • Cash custody & Courier balances'}</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2.5">
+          <button 
+            onClick={exportCouriersToPDF}
+            className="bg-slate-950 hover:bg-slate-900 border border-[#d4af37]/25 text-[#d4af37] px-4 py-2.5 rounded-xl flex items-center gap-2 font-black text-xs transition active:scale-95 shadow-md cursor-pointer"
+          >
+            <Printer className="w-4 h-4" /> {isAr ? 'طباعة تقرير PDF' : 'PDF Report'}
+          </button>
+          
+          <button 
+            onClick={exportCouriersToCSV}
+            className="bg-slate-950 hover:bg-slate-905 border border-emerald-900 text-emerald-400 px-4 py-2.5 rounded-xl flex items-center gap-2 font-black text-xs transition active:scale-95 shadow-md cursor-pointer"
+          >
+            <Activity className="w-4 h-4" /> {isAr ? 'تصدير CSV' : 'Export CSV'}
+          </button>
+
+          <button 
+            onClick={() => setIsAddModalOpen(true)} 
+            className="bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black px-5 py-2.5 rounded-xl flex items-center gap-2 font-black text-xs transition transform active:scale-95 shadow-md shadow-yellow-950/20 cursor-pointer"
+          >
+            <Plus className="w-4 h-4"/> {isAr ? 'مندوب جديد' : 'New Courier'}
+          </button>
+        </div>
+      </div>
+
+      {/* Main Hub Container */}
+      <div className="bg-[#121215] border border-slate-850 rounded-3xl overflow-hidden shadow-2xl flex flex-col">
+        
+        {/* Advanced Filter Belt */}
+        <div className="p-4 border-b border-slate-850 bg-black/30 flex flex-wrap gap-3">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
+            <input 
+              type="text" 
+              placeholder={isAr ? 'البحث باسم المندوب أو طرازه الموحد...' : 'Query by name or custom id...'} 
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pr-10 pl-4 py-2 bg-black/50 border border-slate-850 rounded-xl focus:border-[#d4af37]/60 outline-none text-xs text-white placeholder:text-slate-500 font-bold text-start"
+            />
+          </div>
+
+          <select 
+            value={statusFilter} 
+            onChange={e => setStatusFilter(e.target.value)} 
+            className="bg-black/50 border border-slate-850 text-slate-300 rounded-xl px-4 py-2 text-xs font-bold outline-none focus:border-[#d4af37]/50"
+          >
+            <option value="all">{isAr ? 'جميع الحالات التشغيلية' : 'All States'}</option>
+            <option value="active">{isAr ? 'نشط فقط' : 'Active Only'}</option>
+            <option value="disabled">{isAr ? 'معطل ومحظور' : 'Disabled / Suspended'}</option>
+          </select>
+
+          <select 
+            value={sortBy} 
+            onChange={e => setSortBy(e.target.value)} 
+            className="bg-black/50 border border-slate-850 text-slate-300 rounded-xl px-4 py-2 text-xs font-bold outline-none focus:border-[#d4af37]/50"
+          >
+            <option value="newest">{isAr ? 'الأحدث تسجيلاً' : 'Newest Hires'}</option>
+            <option value="name-asc">{isAr ? 'فرز أبجدي بالاسم' : 'Name (A-Z)'}</option>
+            <option value="balance-desc">{isAr ? 'الأعلى مديونية / عهدة بالصندوق' : 'Highest Balance'}</option>
+          </select>
+        </div>
+
+        {/* Deliveries Ledger Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-right">
+            <thead className="bg-[#0a0a0d] text-slate-500 text-[10px] font-black uppercase tracking-wider border-b border-slate-850">
+              <tr>
+                <th className="p-4">{isAr ? 'الترخيص والرمز' : 'Licence Code'}</th>
+                <th className="p-4">{isAr ? 'ممثل التوصيل والمدينة' : 'Courier / Location'}</th>
+                <th className="p-4">{isAr ? 'الجهاز والبريد' : 'Contact Endpoint'}</th>
+                <th className="p-4 text-center">{isAr ? 'رصيد الذمة' : 'Credit Balance'}</th>
+                <th className="p-4 text-center">{isAr ? 'العمولة الافتراضية' : 'Com Rate'}</th>
+                <th className="p-4 text-center">{isAr ? 'الحالة' : 'Activity'}</th>
+                <th className="p-4 text-left">{isAr ? 'الإجراءات والتقرير' : 'Actions'}</th>
+              </tr>
+            </thead>
+            <tbody className="text-xs divide-y divide-slate-850 bg-black/10">
+              {filteredCouriers.map(courier => (
+                <tr key={courier.id} className={`hover:bg-slate-950/40 transition-colors ${courier.disabled ? 'opacity-80' : ''}`}>
+                  <td className="p-4 font-mono font-black text-slate-400">
+                    <span className="bg-slate-900 border border-slate-800 text-[#d4af37] px-2.5 py-0.5 rounded-lg text-[10px]">
+                      {courier.courierCustomId || 'ALX-CR-XXX'}
+                    </span>
+                  </td>
+                  <td className="p-4" onClick={() => handleOpenDetails(courier)}>
+                    <div className="flex items-center gap-3 cursor-pointer group">
+                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#121215] to-[#070708] border border-slate-800 text-[#d4af37] flex items-center justify-center font-black text-xs shrink-0 group-hover:border-[#d4af37] transition-all">
+                        {courier.fullName?.substring(0, 2)}
+                      </div>
+                      <div className="flex flex-col text-start">
+                        <span className="font-extrabold text-white group-hover:text-[#d4af37] transition-colors">{courier.fullName}</span>
+                        <span className="text-[10px] text-slate-500 font-bold mt-0.5">{courier.address || '—'}</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="p-4 text-start">
+                    <div className="flex flex-col">
+                      <span className="text-slate-300 font-mono font-bold" dir="ltr">{courier.phone || '—'}</span>
+                      <span className="text-slate-500 text-[10px] font-mono mt-0.5" dir="ltr">{courier.email || '—'}</span>
+                    </div>
+                  </td>
+                  <td className="p-4 text-center font-mono font-black text-white">
+                    YER {(courier.walletBalance || 0).toLocaleString()}
+                  </td>
+                  <td className="p-4 text-center text-slate-400 font-black">
+                    {courier.commissionRate || 0}%
+                  </td>
+                  <td className="p-4 text-center">
+                    {courier.disabled ? (
+                      <span className="bg-rose-950/30 text-rose-450 border border-rose-950/60 px-2.5 py-1 rounded text-[9px] font-black uppercase tracking-tighter">
+                        {isAr ? 'معطل' : 'INACTIVE'}
+                      </span>
+                    ) : (
+                      <span className="bg-emerald-950/30 text-emerald-450 border border-emerald-950/60 px-2.5 py-1 rounded text-[9px] font-black uppercase tracking-tighter animate-pulse">
+                        {isAr ? 'نشط' : 'ACTIVE'}
+                      </span>
+                    )}
+                  </td>
+                  <td className="p-4 text-left flex justify-end gap-2">
+                    <button 
+                      onClick={() => handleOpenDetails(courier)} 
+                      title="سجلات التسليم والتوريدات المالية للمندوب" 
+                      className="text-[#d4af37] bg-[#d4af37]/5 hover:bg-[#d4af37]/15 border border-[#d4af37]/15 p-2 rounded-xl transition duration-300"
+                    >
+                      <Receipt className="w-4 h-4" />
+                    </button>
+                    <button 
+                      onClick={() => handleToggleStatus(courier)} 
+                      title={courier.disabled ? (isAr ? 'تنشيط المندوب' : 'Activate') : (isAr ? 'تعطيل الحساب' : 'Deactivate')}
+                      className={`p-2 rounded-xl border transition-all ${courier.disabled ? 'text-emerald-400 bg-emerald-950/10 border-emerald-950/30' : 'text-rose-400 bg-rose-950/10 border-rose-950/40'}`}
+                    >
+                      {courier.disabled ? <UserCheck className="w-4 h-4" /> : <UserX className="w-4 h-4" />}
+                    </button>
+                    <button 
+                      onClick={() => handleOpenEdit(courier)} 
+                      className="text-white hover:text-[#d4af37] bg-slate-900 border border-slate-800 p-2 rounded-xl transition-all"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    {hasPermission('delete_couriers') && (
+                      <button 
+                        onClick={() => handleDeleteCourier(courier.id, courier.fullName)} 
+                        className="text-rose-500 hover:bg-rose-950/20 bg-rose-950/10 border border-rose-950/45 p-2 rounded-xl transition-all"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {filteredCouriers.length === 0 && (
+                <tr>
+                   <td colSpan={7} className="p-16 text-center text-slate-600 font-bold uppercase tracking-widest font-mono text-[10px]">
+                     [ no_couriers_matched_search_filters ]
+                   </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Details / Report Modal Overlay */}
+      {isDetailsModalOpen && selectedCourier && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div className="bg-[#0c0c0f] border border-[#d4af37]/25 rounded-3xl shadow-2xl max-w-5xl w-full h-[90vh] overflow-hidden flex flex-col font-sans">
+            
+            {/* Header portion */}
+            <div className="bg-black/40 p-5 border-b border-slate-850/80 flex justify-between items-center shrink-0">
+               <div className="flex items-center gap-4 text-start">
+                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-[#121215] to-[#070708] border border-[#d4af37]/25 text-[#d4af37] flex items-center justify-center font-black text-xl shadow-lg shadow-black/40">
+                    {selectedCourier.fullName?.substring(0, 2)}
+                  </div>
+                  <div>
+                    <h2 className="text-base font-black text-white uppercase tracking-wider flex items-center gap-2 mb-1">
+                      {selectedCourier.fullName}
+                      <Crown className="w-4 h-4 text-[#d4af37]" />
+                    </h2>
+                    <div className="flex flex-wrap items-center gap-2 text-slate-500 font-bold">
+                      <span className="text-[10px] font-mono" dir="ltr">{selectedCourier.email}</span>
+                      <span className="w-1.5 h-1.5 bg-slate-805 rounded-full"></span>
+                      <span className="text-[10px] font-mono" dir="ltr">{selectedCourier.phone}</span>
+                      <span className="w-1.5 h-1.5 bg-slate-805 rounded-full"></span>
+                      <span className="text-[10px] bg-slate-900 border border-slate-800 text-[#d4af37] px-2 py-0.5 rounded-md font-mono">ID: {selectedCourier.courierCustomId}</span>
+                      <span className="text-[10px] bg-purple-950/20 border border-purple-950/50 text-purple-400 px-2 py-0.5 rounded-md">عمولة: {selectedCourier.commissionRate}%</span>
+                    </div>
+                    {selectedCourier.address && (
+                      <div className="flex items-center gap-1.5 mt-2 text-[10px] text-slate-400">
+                        <MapPin className="w-3.5 h-3.5 text-[#d4af37]" />
+                        <span>{selectedCourier.address}</span>
+                        {selectedCourier.gpsLocation && (
+                          <a href={selectedCourier.gpsLocation.startsWith('http') ? selectedCourier.gpsLocation : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedCourier.gpsLocation)}`} target="_blank" rel="noreferrer" className="text-cyan-400 hover:underline flex items-center gap-1 ml-2">
+                             (الموقع GPS)
+                          </a>
+                        )}
+                      </div>
+                    )}
+                  </div>
+               </div>
+               <button onClick={handleCloseDetails} className="bg-slate-900 hover:bg-slate-850 p-2 rounded-xl text-slate-500 hover:text-white border border-slate-800 transition-all active:scale-95"><X className="w-5 h-5" /></button>
+            </div>
+
+            {/* Scrollable Content inside Details portal */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#0a0a0c]">
+              
+              {selectedCourier.notes && (
+                <div className="bg-amber-950/10 border border-amber-950/40 p-4 rounded-xl text-start">
+                  <h5 className="text-[9px] font-black text-amber-500 uppercase tracking-widest mb-1.5 flex items-center gap-1">⚠️ ملاحظات تشغيلية سرية</h5>
+                  <p className="text-slate-350 leading-relaxed font-bold text-xs">{selectedCourier.notes}</p>
+                </div>
+              )}
+
+              {/* Courier Performance Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-gradient-to-br from-[#121215] to-[#070708] p-4 rounded-2xl border border-slate-850 shadow-md">
+                  <span className="text-[9px] uppercase font-black tracking-wider text-slate-500 block mb-3 text-start">{isAr ? 'أداء وكفاءة التوصيل' : 'Transit KPI'}</span>
+                  <div className="flex items-baseline gap-1.5 text-start">
+                    <span className="text-xl font-black text-[#d4af37]">{totalDelivered}</span>
+                    <span className="text-[10px] font-bold text-slate-500">مسلم ناجح</span>
+                  </div>
+                  <div className="text-[9px] text-amber-500 font-bold mt-1 text-start">
+                    {totalInTransit} قيد التوصيل حالياً
+                  </div>
+                </div>
+
+                <div className="bg-gradient-to-br from-[#121215] to-[#070708] p-4 rounded-2xl border border-slate-850 shadow-md text-start">
+                  <span className="text-[9px] uppercase font-black tracking-wider text-slate-500 block mb-3">{isAr ? 'مبالغ التحصيل للطلبات' : 'Collected Cash'}</span>
+                  <div className="text-base font-mono font-black text-emerald-450">{totalCollectedFromCustomers.toLocaleString()} YER</div>
+                  <span className="text-[9px] text-slate-505 font-bold block mt-1">العهد المستلمة من الزبائن</span>
+                </div>
+
+                <div className="bg-gradient-to-br from-[#121215] to-[#070708] p-4 rounded-2xl border border-slate-850 shadow-md text-start">
+                  <span className="text-[9px] uppercase font-black tracking-wider text-slate-500 block mb-3">{isAr ? 'السلف والمصروفات والعهد' : 'Advances & Custody'}</span>
+                  <div className="text-xs font-black text-slate-300">سلف: {totalAdvancesReceived.toLocaleString()} YER</div>
+                  <div className="text-[9px] text-slate-500 font-bold mt-1">تم تسوية وتوريد: {totalRemittedToBox.toLocaleString()} YER</div>
+                </div>
+
+                <div className={`p-4 rounded-2xl border text-start ${remainingCustodyInHand > 0 ? 'bg-rose-950/10 border-rose-950/40' : 'bg-[#121215] border-slate-850'}`}>
+                  <span className="text-[9px] font-black uppercase tracking-wider text-slate-500 block mb-3">
+                    {remainingCustodyInHand > 0 ? '⚠️ عهدة معلقة غير موردة' : '✅ العهدة مصفاة بالكامل'}
+                  </span>
+                  <div className="text-base font-mono font-black mb-1 text-rose-400">
+                    {remainingCustodyInHand.toLocaleString()} <span className="text-[9px] font-sans text-slate-500 font-normal">YER</span>
+                  </div>
+                  <span className="text-[9px] text-slate-504 font-bold block">بذمة المندوب ومستحقة لخزانة الشركة</span>
+                </div>
+              </div>
+
+              {/* Delivery History Log */}
+              <div className="space-y-3 text-start">
+                 <div className="flex items-center justify-between">
+                    <h4 className="font-black text-xs text-[#d4af37] uppercase tracking-wider">{isAr ? 'سجل التسليمات والشحنات الموكلة للمندوب' : 'Operational Delivery Log'}</h4>
+                    <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-500 px-3 py-1 rounded-lg font-bold font-mono">LIVE SYNC</span>
+                 </div>
+
+                 {ordersLoading ? (
+                    <div className="p-12 text-center text-slate-500 font-bold font-mono uppercase tracking-widest">[ extracting_ledger_traces ]</div>
+                 ) : (
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                      {courierOrders.map(order => {
+                        const isDelivered = (order.order_status || order.orderStatus) === "تم التسليم";
+                        return (
+                          <div key={order.id} className="bg-[#121215] p-4 rounded-2xl border border-slate-850 flex items-start gap-4 hover:border-[#d4af37]/30 transition-all group">
+                             <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border shadow-inner ${ isDelivered ? "bg-emerald-950/20 text-emerald-400 border-emerald-950/50" : "bg-blue-950/20 text-blue-400 border-blue-950/50" }`}>
+                                <Package className="w-5 h-5 animate-hover" />
+                             </div>
+                             <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between mb-1">
+                                   <span className="font-mono font-black text-white text-xs truncate">
+                                     {order.orderNumber || 'ALX-XXXX-XXXX'}
+                                     {order.trackingNumber && <span className="text-[9px] text-slate-500 font-bold block mt-0.5">Track: {order.trackingNumber}</span>}
+                                   </span>
+                                   <span className={`text-[8px] font-black px-2 py-0.5 rounded tracking-tighter ${ isDelivered ? "bg-emerald-950/30 text-emerald-400" : "bg-blue-950/30 text-blue-450" }`}>
+                                     {order.orderStatus || order.order_status || 'معلق'}
+                                   </span>
+                                </div>
+                                <div className="flex items-center gap-1 mb-2">
+                                  {order.shippingCourierId === selectedCourier.id && (
+                                    <span className="text-[8px] font-bold bg-slate-900 text-slate-400 px-1.5 py-0.5 rounded border border-slate-800">مندوب شحن</span>
+                                  )}
+                                  {order.deliveryCourierId === selectedCourier.id && (
+                                    <span className="text-[8px] font-black bg-purple-950/10 text-purple-400 px-1.5 py-0.5 rounded border border-purple-950/30">مندوب توصيل</span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-3 text-[10px] text-slate-400 font-bold mb-2">
+                                  <span className="flex items-center gap-1 text-slate-300"><User className="w-3 h-3 text-[#d4af37]" /> {order.receiverName || order.receiver_name || 'مستلم مجهول'}</span>
+                                  <span className="flex items-center gap-1 text-slate-300"><MapPin className="w-3 h-3 text-[#d4af37]" /> {order.receiverCity || order.receiver_city || '—'}</span>
+                                </div>
+                                <div className="bg-black/40 p-2 rounded-xl border border-slate-850 flex items-center justify-between">
+                                   <div className="flex items-center gap-1 text-[10px] font-bold text-slate-500">
+                                     <span>إجمالي الرسوم: <span className="text-white font-mono">{(parseFloat(order.totalCostYER) || parseFloat(order.totalPrice) || 0).toLocaleString()} YER</span></span>
+                                   </div>
+                                   <div className="text-[9px] font-mono font-bold text-slate-500">
+                                     {new Date(order.createdAt).toLocaleDateString('ar-YE')}
+                                   </div>
+                                </div>
+                             </div>
+                          </div>
+                        );
+                      })}
+                      {courierOrders.length === 0 && (
+                        <div className="lg:col-span-2 p-16 text-center text-slate-600 font-bold font-mono text-[9px] capitalize select-none">
+                          [ no_operational_handover_records_linked_to_this_account ]
+                        </div>
+                      )}
+                    </div>
+                 )}
+              </div>
+            </div>
+            
+            {/* Modal action tray */}
+            <div className="p-4 bg-black/40 border-t border-slate-850 flex justify-between items-center shrink-0">
+               <div className="flex items-center gap-2 select-none">
+                  <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span className="text-[9px] font-mono text-slate-500 uppercase">ACTIVE TRACEWAY CONNECTED</span>
+               </div>
+               <div className="flex gap-2">
+                 <button 
+                  onClick={() => window.print()} 
+                  className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black rounded-xl font-black text-xs transition-all flex items-center gap-2 shadow-md active:scale-95"
+                 >
+                   <Printer className="w-4 h-4" /> {isAr ? 'طباعة تقرير المصادقة اليدوية' : 'Print Statement & Incentives'}
+                 </button>
+               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Courier Modal (Gold Dark UI Frame) */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/25 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden font-sans">
+            <div className="p-4 border-b border-slate-850 flex justify-between items-center bg-[#07070a]/40">
+              <h3 className="font-black text-white text-xs uppercase tracking-widest flex items-center gap-2">
+                <Crown className="w-4 h-4 text-[#d4af37]" />
+                {isAr ? 'تسجيل وتقييد مندوب لوجستي' : 'Engage New Logistics Courier'}
+              </h3>
+              <button onClick={() => setIsAddModalOpen(false)} className="text-slate-550 hover:text-white p-1 bg-slate-900 border border-slate-800 rounded-lg"><X className="w-4 h-4" /></button>
+            </div>
+            
+            <form onSubmit={handleAddCourier} className="p-6 space-y-4 max-h-[72vh] overflow-y-auto text-start">
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'الاسم الثلاثي للمندوب' : 'Full Name'}</label>
+                <input required type="text" value={addFormData.fullName} onChange={(e) => setAddFormData({...addFormData, fullName: e.target.value})} className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start" />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'رقم الهوية الجوال' : 'Cellphone'}</label>
+                  <input required placeholder="+967..." type="tel" value={addFormData.phone} onChange={(e) => setAddFormData({...addFormData, phone: e.target.value})} className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-start" dir="ltr" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'البريد الإلكتروني للولوج' : 'Login Mail ID'}</label>
+                  <input type="email" placeholder="courier@swiftship.net" value={addFormData.email} onChange={(e) => setAddFormData({...addFormData, email: e.target.value})} className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-start" dir="ltr" />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'مستقر السكن الحالي' : 'Courier Base Address'}</label>
+                <input placeholder="صنعاء - شارع الخمسين" type="text" value={addFormData.address} onChange={(e) => setAddFormData({...addFormData, address: e.target.value})} className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start" />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'مسارات التتبع والموقع الفعلي (GPS)' : 'Live GPS Coords/Maps Link'}</label>
+                <div className="relative">
+                  <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#d4af37] w-4 h-4" />
+                  <input type="text" value={addFormData.gpsLocation} onChange={(e) => setAddFormData({...addFormData, gpsLocation: e.target.value})} placeholder="https://maps.google.com/?q=..." className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 pl-10 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start" />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'العمولة من عمليات التوزيع (%)' : 'Standard Commission Rate (%)'}</label>
+                <div className="relative">
+                  <DollarSign className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
+                  <input type="number" min="0" max="100" step="0.1" value={addFormData.commissionRate} onChange={(e) => setAddFormData({...addFormData, commissionRate: parseFloat(e.target.value) || 0})} className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 pl-10 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono" />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'تقرير وملاحظات التسجيل' : 'Induction confidential remarks'}</label>
+                <textarea value={addFormData.notes} onChange={(e) => setAddFormData({...addFormData, notes: e.target.value})} className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none h-20 text-start"></textarea>
+              </div>
+
+              <div className="pt-4 flex justify-end gap-3 sticky bottom-0 bg-[#0e0e11] pb-2 border-t border-slate-850">
+                <button type="button" onClick={() => setIsAddModalOpen(false)} className="px-5 py-2.5 text-slate-400 font-bold hover:bg-slate-850 rounded-xl transition-colors">{isAr ? 'إلغاء' : 'Cancel'}</button>
+                <button type="submit" disabled={addLoading} className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] disabled:from-slate-800 disabled:to-slate-900 text-black font-black rounded-xl shadow-md transition-all">
+                  {addLoading ? (isAr ? 'جاري التسجيل والربط...' : 'Creating login...') : (isAr ? 'حفظ وإصدار كود المندوب' : 'Register Courier') }
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Courier Modal */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/25 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden font-sans">
+            <div className="p-4 border-b border-slate-850 flex justify-between items-center bg-[#07070a]/40">
+              <h3 className="font-extrabold text-white text-xs uppercase tracking-widest">{isAr ? 'تعديل بيانات وإثباتات مندوب' : 'Configure Courier Parameters'}</h3>
+              <button onClick={() => setIsEditModalOpen(false)} className="text-slate-550 hover:text-white bg-slate-900 border border-slate-800 p-1 rounded-lg"><X className="w-4 h-4" /></button>
+            </div>
+            
+            <form onSubmit={handleUpdateCourier} className="p-6 space-y-4 max-h-[72vh] overflow-y-auto text-start">
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'الاسم الكامل' : 'Full Name'}</label>
+                <input required type="text" value={editFormData.fullName} onChange={(e) => setEditFormData({...editFormData, fullName: e.target.value})} className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'رقم الهاتف' : 'Phone'}</label>
+                  <input type="tel" value={editFormData.phone} onChange={(e) => setEditFormData({...editFormData, phone: e.target.value})} className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-start" dir="ltr" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'البريد الإلكتروني' : 'Mail ID'}</label>
+                  <input type="email" value={editFormData.email} onChange={(e) => setEditFormData({...editFormData, email: e.target.value})} className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-start" dir="ltr" />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'سكني' : 'Settlement Residence'}</label>
+                <input type="text" value={editFormData.address} onChange={(e) => setEditFormData({...editFormData, address: e.target.value})} className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start" />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'الموقع جيوغرافيك (GPS)' : 'Live Coordinates GPS'}</label>
+                <input type="text" value={editFormData.gpsLocation} onChange={(e) => setEditFormData({...editFormData, gpsLocation: e.target.value})} className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'نسبة العمولة التشغيلية (%)' : 'Operational Commission Rate (%)'}</label>
+                  <input type="number" min="0" max="100" step="0.1" value={editFormData.commissionRate} onChange={(e) => setEditFormData({...editFormData, commissionRate: parseFloat(e.target.value) || 0})} className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-start" />
+                </div>
+                <div>
+                  <label className="flex items-center gap-2 cursor-pointer mt-7">
+                    <input type="checkbox" checked={editFormData.disabled} onChange={(e) => setEditFormData({...editFormData, disabled: e.target.checked})} className="w-4 h-4 text-rose-600 focus:ring-rose-500 bg-black/50 border-slate-850 rounded" />
+                    <span className="text-[11px] font-black text-rose-500 uppercase tracking-tighter">{isAr ? 'تجميد حساب المندوب مؤقتاً' : 'Freeze courier account'}</span>
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'ملاحظات وبنود التحديث' : 'Administrative Confidential Remarks'}</label>
+                <textarea value={editFormData.notes} onChange={(e) => setEditFormData({...editFormData, notes: e.target.value})} className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none h-20 text-start"></textarea>
+              </div>
+
+              <div className="pt-4 flex justify-end gap-3 sticky bottom-0 bg-[#0e0e11] pb-2 border-t border-slate-850">
+                <button type="button" onClick={() => setIsEditModalOpen(false)} className="px-5 py-2.5 text-slate-400 font-bold hover:bg-slate-850 rounded-xl transition-colors">{isAr ? 'إلغاء' : 'Cancel'}</button>
+                <button type="submit" className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl shadow-md transition-all">{isAr ? 'حفظ وحماية التعديلات' : 'Save Changes'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      <ConfirmModal 
+        isOpen={confirmConfig.isOpen}
+        onClose={() => setConfirmConfig({ ...confirmConfig, isOpen: false })}
+        onConfirm={confirmConfig.onConfirm}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        type={confirmConfig.type}
+      />
+    </div>
+  );
+}
