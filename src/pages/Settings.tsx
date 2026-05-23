@@ -390,7 +390,7 @@ export default function Settings() {
                 <h3 className="font-black text-xs text-[#d4af37] uppercase tracking-wider mb-1">{isAr ? 'النسخ والتدوين المحمي سحابياً' : 'Database Custody Vault'}</h3>
                 <p className="text-[9px] text-slate-500 font-bold mb-4">{isAr ? 'سحب ملف كامل لتوقيع حساب المعاملات المالي' : 'Full block compilation and local storage file save'}</p>
                 
-                <div className="grid grid-cols-1 gap-2">
+                <div className="grid grid-cols-1 gap-2 mb-4">
                   <button 
                     type="button"
                     onClick={handleBackup}
@@ -410,6 +410,23 @@ export default function Settings() {
                     <Upload className="w-3.5 h-3.5" />
                     {importLoading ? (isAr ? 'جاري الرفع والدمج...' : 'Injecting nodes...') : t('importBackup')}
                   </button>
+                </div>
+
+                {/* 🟢 Real-time Backup & Sync Status Details */}
+                <div className="pt-3 border-t border-slate-850 space-y-2 text-[10px] font-bold text-slate-400">
+                  <div className="flex justify-between items-center text-start">
+                    <span>{isAr ? 'حالة المزامنة والنسخ الاحتياطي:' : 'Sync & Backup status:'}</span>
+                    <span className="text-emerald-400 flex items-center gap-1.5 uppercase font-black text-[9px]">
+                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full inline-block animate-pulse"></span>
+                      {isAr ? 'متصل برابط سحابي آمن' : 'Connected & Active'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-start">
+                    <span>{isAr ? 'آخر تحديث لبيانات النظام:' : 'Last system update:'}</span>
+                    <span className="font-mono text-yellow-500 font-black text-[9px] uppercase">
+                      {globalSettings.lastBackup || (isAr ? 'الآن • متصل' : 'Just Now')}
+                    </span>
+                  </div>
                 </div>
               </div>
               

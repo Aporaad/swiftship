@@ -117,7 +117,8 @@ export default function Orders() {
   const [paymentFormData, setPaymentFormData] = useState({
     amount: '',
     method: 'Cash',
-    notes: ''
+    notes: '',
+    pin: ''
   });
 
   // Nested Add Customer Form
@@ -505,6 +506,17 @@ export default function Orders() {
     const paidVal = parseFloat(paymentFormData.amount) || 0;
     if (paidVal <= 0) return;
 
+    // MANDATORY FINANCIAL SECURITY PIN VERIFICATION (Section 12 of system documentation)
+    const systemPin = profile?.systemPin || '000000';
+    if (!paymentFormData.pin || paymentFormData.pin.trim() !== systemPin.trim()) {
+      notificationService.notify({
+        title: isAr ? 'خطأ في المصادقة والـ PIN السري' : 'Verification Denied',
+        message: isAr ? 'رمز الـ PIN المالي للموظف غير صحيح! فشل ترحيل وقبض السند المالي.' : 'Employee security PIN is incorrect! Settle payment rejected.',
+        type: 'error'
+      });
+      return;
+    }
+
     const remaining = parseFloat(selectedOrder.amountRemaining || 0) - paidVal;
     const newPaid = parseFloat(selectedOrder.amountPaid || 0) + paidVal;
 
@@ -545,7 +557,7 @@ export default function Orders() {
 
       setIsPaymentModalOpen(false);
       setSelectedOrder(null);
-      setPaymentFormData({ amount: '', method: 'Cash', notes: '' });
+      setPaymentFormData({ amount: '', method: 'Cash', notes: '', pin: '' });
     } catch (err) {
       console.error(err);
     }
@@ -1219,7 +1231,7 @@ export default function Orders() {
                       <button 
                         onClick={() => {
                           setSelectedOrder(ord);
-                          setPaymentFormData({ amount: '', method: 'Cash', notes: '' });
+                          setPaymentFormData({ amount: '', method: 'Cash', notes: '', pin: '' });
                           setIsPaymentModalOpen(true);
                         }}
                         className="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-black px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1 text-[10px] cursor-pointer"
@@ -2125,10 +2137,13 @@ export default function Orders() {
           <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm overflow-hidden text-start shadow-xl">
             <div className="p-4 bg-slate-955 border-b border-slate-800 flex justify-between items-center text-xs font-black text-white">
               <span>{isAr ? 'تحصيل دفعة مالية وقبض من العميل' : 'Post payment ledger'}</span>
-              <button onClick={() => setIsPaymentModalOpen(false)} className="text-slate-400 bg-slate-800 p-1 rounded-lg"><Plus className="w-4 h-4 rotate-45" /></button>
+              <button onClick={() => {
+                setIsPaymentModalOpen(false);
+                setPaymentFormData({ amount: '', method: 'Cash', notes: '', pin: '' });
+              }} className="text-slate-400 bg-slate-800 p-1 rounded-lg"><Plus className="w-4 h-4 rotate-45" /></button>
             </div>
 
-            <form onSubmit={handleAddPayment} className="p-6 space-y-4 text-xs font-bold text-slate-300">
+            <form onSubmit={handleAddPayment} className="p-6 space-y-4 text-xs font-bold text-slate-300 font-sans">
               <div>
                 <label className="block text-slate-500 mb-1">{isAr ? 'رقم الطلب' : 'Smart order code'}</label>
                 <span className="font-mono text-[#d4af37] font-black text-sm">{selectedOrder.orderNumber}</span>
@@ -2152,8 +2167,30 @@ export default function Orders() {
                 />
               </div>
 
+              <div>
+                <label className="block text-slate-500 mb-1 text-amber-500 flex items-center gap-1">
+                  <span>{isAr ? 'رمز الـ PIN المالي الثنائي للتحقق' : 'Security PIN authorization'}</span>
+                  <span className="text-[9px] bg-amber-500/10 border border-amber-500/30 text-amber-500 px-1.5 py-0.2 rounded font-sans uppercase">MANDATORY</span>
+                </label>
+                <input 
+                  required
+                  type="password" 
+                  maxLength={6}
+                  pattern="^[0-9]{4,6}$"
+                  title={isAr ? "رمز PIN سري من 4 إلى 6 أرقام" : "A 4-6 digit security PIN code"}
+                  value={paymentFormData.pin}
+                  onChange={e => setPaymentFormData({...paymentFormData, pin: e.target.value})}
+                  className="w-full bg-slate-950 border border-slate-800 text-yellow-500 font-mono text-sm font-black p-3 rounded-xl outline-none text-center tracking-widest"
+                  placeholder="••••"
+                />
+                <p className="text-[9px] text-slate-500 mt-1">{isAr ? 'اكتب الـ PIN الخاص بك المخزن في ملف الموظف لتفويض المعاملة.' : 'Enter your professional profile PIN to authorize transaction.'}</p>
+              </div>
+
               <div className="pt-4 border-t border-slate-800 flex justify-end gap-2">
-                <button type="button" onClick={() => setIsPaymentModalOpen(false)} className="px-4 py-2 hover:bg-slate-800 text-slate-400 rounded-lg">{isAr ? 'إلغاء' : 'Cancel'}</button>
+                <button type="button" onClick={() => {
+                  setIsPaymentModalOpen(false);
+                  setPaymentFormData({ amount: '', method: 'Cash', notes: '', pin: '' });
+                }} className="px-4 py-2 hover:bg-slate-800 text-slate-400 rounded-lg">{isAr ? 'إلغاء' : 'Cancel'}</button>
                 <button type="submit" className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl transition-all">{isAr ? 'تأكيد ترحيل القبض' : 'Settle payment'}</button>
               </div>
 

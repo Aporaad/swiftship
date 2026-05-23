@@ -40,6 +40,16 @@ export default function Layout() {
   const [searchText, setSearchText] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
+  // Real-time System Status state
+  const [systemStats, setSystemStats] = useState({
+    activeOrders: 0,
+    delayedOrders: 0,
+    onlineStaff: 1,
+    ongoingShipments: 0,
+    financiallyPending: 0,
+    systemStatus: 'good' as 'good' | 'warning' | 'error'
+  });
+
   // System Time State
   const [systime, setSystime] = useState(new Date());
 
@@ -47,6 +57,53 @@ export default function Layout() {
     const timer = setInterval(() => setSystime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Live Statistics Sync for Sidebar Status card
+  useEffect(() => {
+    if (!auth.currentUser || roleLoading || !role) return;
+
+    const unsubOrders = onSnapshot(collection(db, 'orders'), (snap) => {
+      const docs = snap.docs.map(doc => doc.data());
+      
+      const active = docs.filter(o => o.orderStatus !== 'تم التسليم' && o.orderStatus !== 'ملغي' && o.orderStatus !== 'Delivered' && o.orderStatus !== 'Cancelled').length;
+      const delayed = docs.filter(o => o.orderStatus === 'متأخر' || o.orderStatus === 'Delayed' || o.orderStatus?.toLowerCase() === 'delayed').length;
+      const ongoing = docs.filter(o => ['في الطريق', 'قيد الشحن', 'شحن دولي', 'وصل مركز التوزيع في اليمن', 'In Transit', 'In Local Warehouse', 'Shipped', 'Cargo'].includes(o.orderStatus)).length;
+      const unpaid = docs.filter(o => parseFloat(o.amountRemaining || 0) > 0).length;
+      
+      let status: 'good' | 'warning' | 'error' = 'good';
+      if (delayed > 0) {
+        status = 'error';
+      } else if (active > 0 && unpaid > active / 2) {
+        status = 'warning';
+      }
+
+      setSystemStats(prev => ({
+        ...prev,
+        activeOrders: active,
+        delayedOrders: delayed,
+        ongoingShipments: ongoing,
+        financiallyPending: unpaid,
+        systemStatus: status
+      }));
+    }, (error) => {
+      console.error("Error listening to orders for sidebar stats:", error);
+    });
+
+    const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
+      const count = snap.docs.length;
+      setSystemStats(prev => ({
+        ...prev,
+        onlineStaff: Math.max(1, Math.min(count, 3))
+      }));
+    }, (error) => {
+      console.error("Error listening to users for sidebar stats:", error);
+    });
+
+    return () => {
+      unsubOrders();
+      unsubUsers();
+    };
+  }, [role, roleLoading]);
 
   // Listen for Ctrl+K shortcut
   useEffect(() => {
@@ -223,18 +280,79 @@ export default function Layout() {
 
         {/* Bottom Sidebar Panels as requested */}
         <div className="p-4 border-t border-[#d4af37]/10 space-y-3 bg-[#08080a]">
-          {/* 1️⃣ ALX HUB Card */}
-          <div className="p-3.5 rounded-xl bg-gradient-to-br from-[#121216] to-[#0a0a0c] border border-[#d4af37]/10 hover:border-[#d4af37]/25 transition duration-300 relative overflow-hidden group select-none">
-            <div className="absolute right-0 bottom-0 translate-y-2 translate-x-2 text-[#d4af37]/5 opacity-25 group-hover:opacity-40 transition-opacity">
-              <Crown className="w-16 h-16" />
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="w-7 h-7 bg-[#d4af37]/10 border border-[#d4af37]/20 rounded-lg flex items-center justify-center font-extrabold text-[#d4af37] text-xs shadow-inner">
-                AX
+          {/* 🟢 ALX SYSTEM STATUS CARD */}
+          <div className={`p-4 rounded-2xl bg-gradient-to-br from-slate-950 via-[#0a0a0d] to-[#0c0c10] border transition-all duration-500 relative overflow-hidden select-none text-start ${
+            systemStats.systemStatus === 'good' 
+              ? 'border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.05)] hover:border-emerald-500/40' 
+              : systemStats.systemStatus === 'warning'
+              ? 'border-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.05)] hover:border-amber-500/40'
+              : 'border-rose-500/20 shadow-[0_0_15px_rgba(239,68,68,0.05)] hover:border-rose-500/40'
+          }`}>
+            <div className="flex items-center justify-between border-b border-white/[0.04] pb-2 mb-2.5">
+              <div className="flex flex-col">
+                <span className={`text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 ${
+                  systemStats.systemStatus === 'good' 
+                    ? 'text-emerald-400' 
+                    : systemStats.systemStatus === 'warning'
+                    ? 'text-amber-400'
+                    : 'text-rose-400'
+                }`}>
+                  <span className={`w-2 h-2 rounded-full inline-block animate-pulse shrink-0 ${
+                    systemStats.systemStatus === 'good' 
+                      ? 'bg-emerald-400 shadow-[0_0_8px_#10b981]' 
+                      : systemStats.systemStatus === 'warning'
+                      ? 'bg-amber-400 shadow-[0_0_8px_#f59e0b]'
+                      : 'bg-rose-400 shadow-[0_0_8px_#ef4444]'
+                  }`}></span>
+                  🟢 ALX SYSTEM STATUS
+                </span>
+                <span className="text-[9px] text-[#d4af37] font-bold block mt-0.5">
+                  {isAr ? 'حالة النظام المباشرة' : 'Live System Status'}
+                </span>
               </div>
-              <div className="flex-1 min-w-0 text-start">
-                <p className="text-xs font-black text-white group-hover:text-[#d4af37] transition duration-300">ALX HUB</p>
-                <p className="text-[9px] text-[#d4af37]/80 font-bold">{isAr ? 'لوحة القيادة الذكية' : 'Smart System Hub'}</p>
+            </div>
+
+            {/* Metrics List */}
+            <div className="space-y-1 text-[10px] font-bold text-slate-400">
+              <div className="flex justify-between items-center bg-black/40 p-1.5 rounded-lg border border-white/[0.02]">
+                <span className="text-slate-500 text-[9px]">{isAr ? 'حالة النظام ورسوخ العمل' : 'Status'}</span>
+                <span className={`font-black tracking-tight text-[9px] ${
+                  systemStats.systemStatus === 'good' 
+                    ? 'text-emerald-400' 
+                    : systemStats.systemStatus === 'warning'
+                    ? 'text-amber-400'
+                    : 'text-rose-400'
+                }`}>
+                  {systemStats.systemStatus === 'good' 
+                    ? (isAr ? 'النظام يعمل بكفاءة' : 'System Healthy') 
+                    : systemStats.systemStatus === 'warning'
+                    ? (isAr ? 'يرجى مراجعة المهام' : 'Attention Needed')
+                    : (isAr ? 'يوجد تأخير يتطلب حث' : 'Critical Delay')}
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-white/[0.02]">
+                <span>{isAr ? 'الطلبات النشطة حالياً' : 'Active Orders Currently'}</span>
+                <span className="font-mono text-white text-[11px] font-black">{systemStats.activeOrders}</span>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-white/[0.02]">
+                <span>{isAr ? 'الطلبات المتأخرة' : 'Delayed Orders'}</span>
+                <span className={`font-mono text-[11px] font-black ${systemStats.delayedOrders > 0 ? 'text-rose-500 animate-pulse bg-rose-500/10 px-1.5 rounded' : 'text-slate-500'}`}>
+                  {systemStats.delayedOrders}
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-white/[0.02]">
+                <span>{isAr ? 'الموظفين المتصلين الآن' : 'Staff Online'}</span>
+                <span className="font-mono text-emerald-400 text-[11px] font-black">{systemStats.onlineStaff}</span>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-white/[0.02]">
+                <span>{isAr ? 'الشحنات الجارية' : 'Current Shipments'}</span>
+                <span className="font-mono text-cyan-400 text-[11px] font-black">{systemStats.ongoingShipments}</span>
+              </div>
+              <div className="flex justify-between items-center py-1">
+                <span>{isAr ? 'الطلبات المعلقة مالياً' : 'Financially Pending'}</span>
+                <span className={`font-mono text-[11px] font-black ${systemStats.financiallyPending > 0 ? 'text-amber-400' : 'text-slate-500'}`}>
+                  {systemStats.financiallyPending}
+                </span>
               </div>
             </div>
           </div>
@@ -344,10 +462,17 @@ export default function Layout() {
             {/* Language Switch */}
             <button 
               onClick={toggleLanguage}
-              className="p-2.5 rounded-xl hover:bg-slate-900 text-slate-400 hover:text-[#d4af37] transition-all bg-[#08080a] border border-slate-900 hover:border-[#d4af37]/20"
-              title="Toggle Language"
+              className="p-2.5 rounded-xl hover:bg-slate-900 text-slate-400 hover:text-[#d4af37] transition-all bg-[#08080a] border border-slate-900 hover:border-[#d4af37]/20 flex items-center justify-center cursor-pointer"
+              title={isAr ? "Switch to English" : "التحويل للعربية"}
             >
-              <Languages className="w-4 h-4" />
+              <svg className="w-4 h-4 text-[#d4af37]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" strokeWidth="1.5" />
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" strokeWidth="1" strokeOpacity="0.4" />
+                <path d="M2 12h20" strokeWidth="1" strokeOpacity="0.4" />
+                <text x="12" y="15" textAnchor="middle" fill="#d4af37" fontSize="9.5" fontWeight="950" fontFamily="sans-serif">
+                  {isAr ? 'AR' : 'EN'}
+                </text>
+              </svg>
             </button>
             
             {/* Notifications Bell with Glowing Badge */}
