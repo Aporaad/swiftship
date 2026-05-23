@@ -49,11 +49,11 @@ async function seedRoot() {
     await db.collection('users').doc(userRecord.uid).set({
       email: rootEmail,
       username: rootUsername,
-      fullName: 'System Root Administrator',
+      fullName: 'مدير النظام ALX',
       role: 'Admin',
       isRoot: true,
       disabled: false,
-      systemPin: '000000',
+      systemPin: '0000',
       createdAt: Date.now(),
     }, { merge: true });
     

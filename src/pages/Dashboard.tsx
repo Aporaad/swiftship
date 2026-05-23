@@ -189,39 +189,46 @@ export default function Dashboard() {
     { orderNumber: 'ALX-2605-1000', customerName: isAr ? 'يوسف أحمد' : 'Youssef Ahmed', orderStatus: 'Delayed', order_status: 'Delayed', deliveryCourierName: isAr ? 'أحمد' : 'Ahmed', totalCostYER: '750', createdAt: Date.now() - 86400000 }
   ];
 
-  // Map Status Colors for Table/Map
+  // Map Status Colors for Table/Map (Strict compliance with Section 9.3)
   const getStatusBeadStyles = (status: string) => {
-    switch (status?.toLowerCase()) {
-      case 'delivered':
+    switch (status) {
       case 'تم التسليم':
-        return 'bg-emerald-950/40 border border-emerald-800 text-emerald-400';
-      case 'shipped':
-      case 'in transit':
-      case 'جاري التوصيل':
-      case 'قيد الشحن':
-        return 'bg-blue-950/40 border border-blue-800 text-blue-400';
-      case 'processing':
-      case 'in local warehouse':
-      case 'في الطريق':
-      case 'وصل المخزن':
-        return 'bg-amber-950/40 border border-amber-800 text-amber-400';
-      case 'delayed':
-      case 'متأخر':
-        return 'bg-rose-950/40 border border-rose-800 text-rose-400';
+        return 'bg-emerald-950/40 border border-luxury-gold text-luxury-gold';
+      case 'تم تسجيل الطلب':
+        return 'bg-cyan-950/40 border border-cyan-500/10 text-cyan-400';
+      case 'وصل مستودع السعودية':
+        return 'bg-amber-950/40 border border-amber-500/20 text-amber-500';
+      case 'جاري الشحن لليمن':
+        return 'bg-orange-950/40 border border-orange-500/30 text-orange-400';
+      case 'في التخليص الجمركي':
+        return 'bg-rose-950/40 border border-rose-500/40 text-rose-500';
+      case 'وصل مركز التوزيع في اليمن':
+        return 'bg-purple-950/40 border border-purple-500/25 text-purple-400';
+      case 'مع المندوب للتوصيل':
+        return 'bg-emerald-950/40 border border-emerald-500/20 text-emerald-400 animate-pulse';
+      case 'ملغي':
+        return 'bg-slate-950/40 border border-slate-600 text-slate-500';
       default:
+        // Fallback for English/Legacy statuses
+        const lower = status?.toLowerCase() || '';
+        if (lower.includes('deliver')) return 'bg-emerald-950/40 border border-luxury-gold text-luxury-gold';
+        if (lower.includes('transit') || lower.includes('shipped')) return 'bg-orange-950/40 border border-orange-500/30 text-orange-400';
         return 'bg-slate-900 border border-slate-700 text-slate-300';
     }
   };
 
   const getStatusTextArabic = (status: string) => {
-    switch (status) {
-      case 'Delivered': return 'تم التسليم';
-      case 'In Transit': return 'جاري التوصيل';
-      case 'Processing': return 'في الطريق';
-      case 'In Local Warehouse': return 'تم التجهيز';
-      case 'Delayed': return 'متأخر';
-      default: return status;
-    }
+    const map: Record<string, string> = {
+      'تم تسجيل الطلب': 'تم تسجيل الطلب',
+      'وصل مستودع السعودية': 'وصل مستودع السعودية',
+      'جاري الشحن لليمن': 'جاري الشحن لليمن',
+      'في التخليص الجمركي': 'في التخليص الجمركي',
+      'وصل مركز التوزيع في اليمن': 'وصل مركز التوزيع',
+      'مع المندوب للتوصيل': 'مع المندوب للتوصيل',
+      'تم التسليم': 'تم التسليم بنجاح',
+      'ملغي': 'ملغي'
+    };
+    return map[status] || status;
   };
 
   if (loading || roleLoading) {

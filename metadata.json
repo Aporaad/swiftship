@@ -1,6 +1,6 @@
 {
-  "name": "SwiftShip System",
-  "description": "A comprehensive shipping and order management system with tracking and real-time updates.",
+  "name": "ALX Delivery System",
+  "description": "A comprehensive shipping and order management system for ALX Delivery with tracking and real-time updates.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -8,7 +8,7 @@ import { whatsappService } from '../services/whatsappService';
 import ConfirmModal from '../components/ConfirmModal';
 import { 
   Plus, Search, Edit2, Truck, Activity, Trash2, DollarSign, 
-  CreditCard, Printer, Calculator, Package, MapPin, X, AlertCircle, RefreshCw, UserPlus, Eye
+  CreditCard, Printer, Calculator, Package, MapPin, X, AlertCircle, RefreshCw, UserPlus, Eye, FileText
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import QRCode from 'qrcode';
@@ -235,47 +235,49 @@ export default function Orders() {
     }
   };
 
-  // Helper calculation values
+  // Helper calculation values (Strict compliance with Section 4 of SYSTEM_DOCUMENTATION2.md)
   const computeCalculations = () => {
     // 1. Compute total products prices
     const productsSum = items.reduce((sum, i) => sum + (parseFloat(i.quantity || 0) * parseFloat(i.productPrice || 0)), 0);
     const totalWeight = items.reduce((sum, i) => sum + (parseFloat(i.quantity || 0) * parseFloat(i.weight || 0)), 0);
     const totalCBM = items.reduce((sum, i) => sum + (parseFloat(i.quantity || 0) * parseFloat(i.cbm || 0)), 0);
 
-    let priceSAR = productsSum;
+    let effectivePriceSAR = productsSum;
     let shippingCostSAR = 0;
 
     if (formData.orderSourceType === 'Factory') {
-      // China Factory calculation formula
+      // China Factory calculation formula (Section 4.2)
       // standard weight shipping fee = Weight kilograms * 19 SAR
       const weightCost = totalWeight * 19;
-      // cbm standard shipping fee = CBM volume * 1400 SAR (or CBM param rate)
+      // cbm standard shipping fee = CBM volume * 1400 SAR
       const cbmCost = totalCBM * 1400; 
       shippingCostSAR = Math.max(weightCost, cbmCost);
     } else {
-      // General shopping apps (e.g., Shein, Taobao etc.)
+      // General shopping apps (e.g., Shein, Taobao etc.) (Section 4.3)
       // Shein red price can override pricing calculations
       if (formData.sheinRedPrice && parseFloat(formData.sheinRedPrice as any) > 0) {
-        priceSAR = parseFloat(formData.sheinRedPrice as any);
+        effectivePriceSAR = parseFloat(formData.sheinRedPrice as any);
       }
-      // Automatic 12% commission added to order cost
-      shippingCostSAR = priceSAR * (formData.companyProfitRate / 100);
+      // Automatic profit commission added to order cost
+      shippingCostSAR = effectivePriceSAR * (formData.companyProfitRate / 100);
     }
 
-    // Taxes (usually 15% or bank commission of 3%)
-    const bankCommissionSAR = priceSAR * (formData.bankCommissionRate / 100);
-    const totalOrderSAR = priceSAR + shippingCostSAR + bankCommissionSAR + parseFloat(formData.packagingFee || 0);
+    // Taxes & Commissions (Section 4.4)
+    const bankCommissionSAR = effectivePriceSAR * (formData.bankCommissionRate / 100);
+    const totalOrderOriginalCurrency = effectivePriceSAR + shippingCostSAR + bankCommissionSAR + parseFloat(formData.packagingFee || 0);
     
-    // Convert to YER for payment
+    // Convert to YER for payment (Section 4.5)
     const exchange = formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER;
-    const totalOrderYER = totalOrderSAR * exchange;
+    const totalOrderYER = totalOrderOriginalCurrency * exchange;
 
-    // Remaining
+    // Remaining (Section 4.5)
     const valPaid = parseFloat(formData.amountPaid as any) || 0;
     const remainingYER = totalOrderYER - valPaid;
 
-    // Profit split: Saudi partner gets 30%, ALX company gets remaining
-    const rawProfitSAR = shippingCostSAR + parseFloat(formData.packagingFee || 0) - (formData.orderSourceType === 'Factory' ? (totalWeight * 10) : 0); // hypothetical expenses
+    // Profit split: Saudi partner gets 30%, ALX company gets 70% (Section 4.6)
+    // Expenses Margin: 10 SAR/kg for Factory, 0 for Apps
+    const expensesMargin = formData.orderSourceType === 'Factory' ? (totalWeight * 10) : 0;
+    const rawProfitSAR = shippingCostSAR + parseFloat(formData.packagingFee || 0) - expensesMargin;
     const profitSaudiSAR = rawProfitSAR * 0.3;
     const profitCompanySAR = rawProfitSAR * 0.7;
 
@@ -283,10 +285,10 @@ export default function Orders() {
       productsSum,
       totalWeight,
       totalCBM,
-      priceSAR,
+      priceSAR: effectivePriceSAR,
       shippingCostSAR,
       bankCommissionSAR,
-      totalOrderSAR,
+      totalOrderSAR: totalOrderOriginalCurrency,
       totalOrderYER,
       remainingYER,
       profitSaudiSAR,
@@ -354,9 +356,11 @@ export default function Orders() {
         amountRemaining: currentCalcs.remainingYER,
         paymentStatus: payStatus,
 
-        // Profit distribution
+        // Profit distribution (Section 4.6)
         profitSaudiSAR: currentCalcs.profitSaudiSAR,
         profitCompanySAR: currentCalcs.profitCompanySAR,
+        profitSaudiYER: currentCalcs.profitSaudiSAR * (formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER),
+        profitCompanyYER: currentCalcs.profitCompanySAR * (formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER),
 
         // Items nested list
         items,
@@ -791,14 +795,14 @@ export default function Orders() {
 
   const formatStatusLabel = (status: string) => {
     const translationAr: Record<string, string> = {
-      'تم تسجيل الطلب': 'تم تسجيل الطلب',
-      'وصل مستودع السعودية': 'وصل مستودع السعودية',
-      'جاري الشحن لليمن': 'جاري الشحن لليمن',
-      'في التخليص الجمركي': 'في التخليص الجمركي',
-      'وصل مركز التوزيع في اليمن': 'وصل مركز التوزيع في اليمن',
-      'مع المندوب للتوصيل': 'مع المندوب للتوصيل',
-      'تم التسليم': 'تم التسليم',
-      'ملغي': 'ملغي'
+      'تم تسجيل الطلب': '1. تم تسجيل الطلب (Order Saved)',
+      'وصل مستودع السعودية': '2. وصل مستودع السعودية (Arrived Saudi Hub)',
+      'جاري الشحن لليمن': '3. جاري الشحن لليمن (In Transit)',
+      'في التخليص الجمركي': '4. في التخليص الجمركي (Customs)',
+      'وصل مركز التوزيع في اليمن': '5. وصل مركز التوزيع بـاليمن (Final Depot)',
+      'مع المندوب للتوصيل': '6. مع المندوب للتوصيل (Out for Delivery)',
+      'تم التسليم': '7. تم التسليم (Settled)',
+      'ملغي': '8. ملغي (Cancelled)'
     };
     return isAr ? (translationAr[status] || status) : status;
   };
@@ -962,6 +966,66 @@ export default function Orders() {
     doc.text(`Doc Ref: ALX-${new Date().getFullYear()}/LEDG`, 175, 288);
     
     doc.save(`AlXpress_Orders_Ledger_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
+  const exportManifestPDF = (courierId: string) => {
+    const courier = couriers.find(c => c.id === courierId);
+    if (!courier) return;
+
+    const courierOrders = orders.filter(o => o.deliveryCourierId === courierId && o.orderStatus === 'مع المندوب للتوصيل');
+
+    const doc = new jsPDF('p', 'mm', 'a4');
+
+    // Top banner
+    doc.setFillColor(15, 15, 18);
+    doc.rect(0, 0, 210, 40, 'F');
+    doc.setFillColor(212, 175, 55);
+    doc.rect(0, 40, 210, 2, 'F');
+
+    doc.setTextColor(212, 175, 55);
+    doc.setFontSize(18);
+    doc.setFont('Helvetica', 'bold');
+    doc.text('AL-XPRESS COURIER MANIFEST', 15, 18);
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(10);
+    doc.text(`COURIER: ${courier.fullName.toUpperCase()}`, 15, 28);
+    doc.text(`DATE: ${new Date().toLocaleDateString()} | PHONE: ${courier.phone}`, 15, 34);
+
+    // Table Headers
+    doc.setFillColor(30, 30, 35);
+    doc.rect(10, 50, 190, 10, 'F');
+    doc.setTextColor(212, 175, 55);
+    doc.setFontSize(9);
+    doc.text('ORDER #', 15, 56);
+    doc.text('CUSTOMER', 50, 56);
+    doc.text('PHONE', 100, 56);
+    doc.text('COLLECT (YER)', 140, 56);
+    doc.text('SIGNATURE', 175, 56);
+
+    let y = 68;
+    courierOrders.forEach((o, i) => {
+      if (y > 270) {
+        doc.addPage();
+        y = 20;
+      }
+      doc.setTextColor(40, 40, 40);
+      doc.text(o.orderNumber || o.id.substring(0, 8), 15, y);
+      doc.text(transliterateArabic(o.customerName).substring(0, 20), 50, y);
+      doc.text(o.customerPhone || '—', 100, y);
+      doc.text(parseFloat(o.amountRemaining || 0).toLocaleString(), 140, y);
+      doc.rect(170, y - 5, 30, 8); // Signature box
+
+      doc.setDrawColor(200, 200, 200);
+      doc.line(10, y + 4, 200, y + 4);
+      y += 12;
+    });
+
+    const totalToCollect = courierOrders.reduce((sum, o) => sum + (o.amountRemaining || 0), 0);
+    doc.setFont('Helvetica', 'bold');
+    doc.text(`TOTAL TO COLLECT: ${totalToCollect.toLocaleString()} YER`, 130, y + 10);
+
+    doc.save(`Manifest_${courier.fullName}_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   const exportOrdersToCSV = () => {
@@ -1131,6 +1195,15 @@ export default function Orders() {
             <option value="date-asc">{isAr ? 'التاريخ (الأقدم)' : 'Oldest'}</option>
             <option value="amount-desc">{isAr ? 'القيمة (الأعلى)' : 'Highest Amount'}</option>
           </select>
+
+          {courierFilter !== 'all' && (
+            <button
+              onClick={() => exportManifestPDF(courierFilter)}
+              className="bg-amber-600/10 hover:bg-amber-600/20 text-amber-500 border border-amber-500/30 px-3 py-2 rounded-xl flex items-center gap-2 font-black text-xs transition"
+            >
+              <FileText className="w-4 h-4" /> {isAr ? 'طباعة بيان المندوب (Manifest)' : 'Print Manifest'}
+            </button>
+          )}
         </div>
 
         {/* Ledger Table */}
@@ -1184,7 +1257,16 @@ export default function Orders() {
                   {/* Logistics Status */}
                   <td className="p-4 text-start">
                     <div className="flex flex-col space-y-1">
-                      <span className="px-2.5 py-0.5 rounded-xl border border-[#d4af37]/20 bg-[#d4af37]/5 text-[#d4af37] font-bold max-w-max text-[10px]">
+                      <span className={`px-2.5 py-0.5 rounded-xl border font-bold max-w-max text-[10px] ${
+                        ord.orderStatus === 'تم تسجيل الطلب' ? 'border-cyan-500/10 bg-cyan-500/5 text-cyan-400' :
+                        ord.orderStatus === 'وصل مستودع السعودية' ? 'border-amber-500/20 bg-amber-500/5 text-amber-500' :
+                        ord.orderStatus === 'جاري الشحن لليمن' ? 'border-orange-500/30 bg-orange-500/5 text-orange-400' :
+                        ord.orderStatus === 'في التخليص الجمركي' ? 'border-rose-500/40 bg-rose-500/5 text-rose-500' :
+                        ord.orderStatus === 'وصل مركز التوزيع في اليمن' ? 'border-purple-500/25 bg-purple-500/5 text-purple-400' :
+                        ord.orderStatus === 'مع المندوب للتوصيل' ? 'border-emerald-500/20 bg-emerald-500/5 text-emerald-400 animate-pulse' :
+                        ord.orderStatus === 'تم التسليم' ? 'border-luxury-gold/30 bg-luxury-gold/5 text-luxury-gold' :
+                        'border-slate-600 bg-slate-600/5 text-slate-500'
+                      }`}>
                         {formatStatusLabel(ord.orderStatus)}
                       </span>
                       <span className="text-[10px] text-slate-500 font-bold">{ord.orderSourceName || ord.orderSourceType}</span>
@@ -1925,14 +2007,14 @@ export default function Orders() {
                       onChange={e => setUpdateFormData({...updateFormData, orderStatus: e.target.value})}
                       className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 outline-none text-xs"
                     >
-                      <option value="تم تسجيل الطلب">{isAr ? 'تم تسجيل الطلب واستخلاص الفاتورة' : 'Invoice saved'}</option>
-                      <option value="وصل مستودع السعودية">{isAr ? 'وصل مستودع السعودية للتعبئة' : 'Arrived Saudi packaging HUB'}</option>
-                      <option value="جاري الشحن لليمن">{isAr ? 'جاري الشحن لليمن براً / جوأً' : 'Shipped/Transit to Yemen'}</option>
-                      <option value="في التخليص الجمركي">{isAr ? 'في التخليص الجمركي والأوراق' : 'Customs clearance'}</option>
-                      <option value="وصل مركز التوزيع في اليمن">{isAr ? 'وصل مركز التوزيع والفرز النهائي' : 'Arrived final depot'}</option>
-                      <option value="مع المندوب للتوصيل">{isAr ? 'مع المندوب بانتظار التسليم' : 'Out for Yemen delivery'}</option>
-                      <option value="تم التسليم">{isAr ? 'تم التسليم وتفصيل العهد الموردة' : 'Delivered successfully'}</option>
-                      <option value="ملغي">{isAr ? 'ملغي' : 'Cancelled'}</option>
+                      <option value="تم تسجيل الطلب">{isAr ? '1. تم تسجيل الطلب (Order Saved)' : '1. Order Saved'}</option>
+                      <option value="وصل مستودع السعودية">{isAr ? '2. وصل مستودع السعودية (Arrived Saudi Hub)' : '2. Arrived Saudi Hub'}</option>
+                      <option value="جاري الشحن لليمن">{isAr ? '3. جاري الشحن لليمن (In Transit to Yemen)' : '3. In Transit to Yemen'}</option>
+                      <option value="في التخليص الجمركي">{isAr ? '4. في التخليص الجمركي (Customs Clearance)' : '4. Customs Clearance'}</option>
+                      <option value="وصل مركز التوزيع في اليمن">{isAr ? '5. وصل مركز التوزيع بـاليمن (Arrived Final Depot)' : '5. Arrived Final Depot'}</option>
+                      <option value="مع المندوب للتوصيل">{isAr ? '6. مع المندوب للتوصيل (Out for Final Delivery)' : '6. Out for Final Delivery'}</option>
+                      <option value="تم التسليم">{isAr ? '7. تم التسليم وحفظ التحصيل (Settled)' : '7. Settled'}</option>
+                      <option value="ملغي">{isAr ? '8. ملغي (Cancelled)' : '8. Cancelled'}</option>
                     </select>
                   </div>
                 </div>

@@ -235,7 +235,7 @@ export default function Tracking() {
             customerAddress: docData.customerAddress || docData.destination || 'صنعاء، اليمن',
             weight: docData.totalWeight || 0,
             cbm: docData.totalCBM || 0,
-            shippingCompany: docData.shippingCompany || 'SwiftShip Line',
+            shippingCompany: docData.shippingCompany || 'ALX Delivery Line',
             amountPaid: docData.amountPaid || 0,
             amountRemaining: docData.amountRemaining || 0,
             totalCostYER: docData.totalCostYER || 0,
@@ -732,7 +732,7 @@ export default function Tracking() {
 
                 <div className="p-3 bg-slate-950 border border-slate-850/50 rounded-2xl">
                   <span className="text-[9px] text-slate-500 font-extrabold uppercase tracking-wide block mb-0.5">{isAr ? 'الناقل الدولي' : 'Global Ocean Carrier'}</span>
-                  <span className="text-[10px] font-black text-pink-400 block truncate uppercase">{trackingData.shippingCompany || 'SwiftShip Sea'}</span>
+                  <span className="text-[10px] font-black text-pink-400 block truncate uppercase">{trackingData.shippingCompany || 'ALX Delivery Sea'}</span>
                 </div>
               </div>
             </div>
@@ -934,7 +934,7 @@ export default function Tracking() {
                 href={`https://wa.me/967777777777?text=${encodeURIComponent(
                   isAr 
                     ? `أهلاً، أود الاستعلام عن تحديثات إضافية بخصوص الشحنة الخاصة بي رقم: (${trackingData.trackingNumber}) وحالة الدفع.`
-                    : `Hi SwiftShip team, I would like to inquire about my package ${trackingData.trackingNumber}.`
+                    : `Hi ALX Delivery team, I would like to inquire about my package ${trackingData.trackingNumber}.`
                 )}`}
                 target="_blank"
                 rel="noreferrer"

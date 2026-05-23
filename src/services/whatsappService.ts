@@ -93,6 +93,7 @@ export const whatsappService = {
       '{totalCost}': parseFloat(order.totalCostYER || 0).toLocaleString(),
       '{amountPaid}': parseFloat(order.amountPaid || 0).toLocaleString(),
       '{amountRemaining}': parseFloat(order.amountRemaining || 0).toLocaleString(),
+      '{totalCostSaved}': parseFloat(order.amountPaid || 0).toLocaleString(),
       ...additional
     };
 

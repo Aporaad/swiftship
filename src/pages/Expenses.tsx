@@ -4,13 +4,14 @@ import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { useSettings } from '../context/SettingsContext';
 import { useRole } from '../hooks/useRole';
 import { notificationService } from '../services/notificationService';
-import { Plus, Search, Wallet, DollarSign, Calendar, RefreshCw, Layers, CheckCircle2, AlertTriangle, User, FileText, ArrowUpRight, ArrowDownLeft, Crown, ShieldAlert, Coins, X, Printer, Activity } from 'lucide-react';
+import { Plus, Search, Wallet, DollarSign, Calendar, RefreshCw, Layers, CheckCircle2, AlertTriangle, User, FileText, ArrowUpRight, ArrowDownLeft, Crown, ShieldAlert, Coins, X, Printer, Activity, Truck, Building } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 
 export default function Expenses() {
   const { settings, t } = useSettings();
   const { role, hasPermission, profile, loading: roleLoading } = useRole();
   const [expenses, setExpenses] = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
   const [couriers, setCouriers] = useState<any[]>([]);
   const [expensesLoading, setExpensesLoading] = useState(true);
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -18,7 +19,19 @@ export default function Expenses() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [activeTab, setActiveTab] = useState<'expenses' | 'pivot'>('expenses');
   const isAr = settings.language === 'ar';
+
+  // Handle URL query parameter ?tab=pivot or ?tab=accounting
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    if (tab === 'pivot' || tab === 'accounting') {
+      setActiveTab('pivot');
+    } else if (tab === 'expenses') {
+      setActiveTab('expenses');
+    }
+  }, []);
 
   const [formData, setFormData] = useState({
     type: 'General', // General, Custody, FactoryPayment
@@ -78,9 +91,15 @@ export default function Expenses() {
       setCouriers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
+    // Fetch orders for settlement pivot
+    const unsubOrders = onSnapshot(collection(db, 'orders'), (snap) => {
+      setOrders(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
     return () => {
       unsubExp();
       unsubCouriers();
+      unsubOrders();
     };
   }, [roleLoading]);
 
@@ -535,6 +554,23 @@ export default function Expenses() {
       </div>
 
       {/* Main Filter Section */}
+      {/* Tabs Switcher */}
+      <div className="flex p-1 bg-black/40 border border-slate-850 rounded-2xl w-max mx-auto md:mx-0">
+        <button
+          onClick={() => setActiveTab('expenses')}
+          className={`px-6 py-2 rounded-xl text-xs font-black transition-all ${activeTab === 'expenses' ? 'bg-[#d4af37] text-black shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
+        >
+          {isAr ? 'المصروفات والعهد' : 'Expenses & Custody'}
+        </button>
+        <button
+          onClick={() => setActiveTab('pivot')}
+          className={`px-6 py-2 rounded-xl text-xs font-black transition-all ${activeTab === 'pivot' ? 'bg-[#d4af37] text-black shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
+        >
+          {isAr ? 'مطابقة الحسابات (Pivot)' : 'Accounting Pivot'}
+        </button>
+      </div>
+
+      {activeTab === 'expenses' ? (
       <div className="bg-[#121215] border border-slate-850 rounded-3xl overflow-hidden flex flex-col shadow-2xl">
         
         {/* Filter belt */}
@@ -647,6 +683,88 @@ export default function Expenses() {
           </table>
         </div>
       </div>
+      ) : (
+        /* Accounting Settlement Pivot View (Section 11.3.6) */
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+            {/* Courier Custody Settlement Card */}
+            <div className="bg-[#121215] border border-slate-850 rounded-3xl p-6 shadow-xl text-start">
+              <div className="flex items-center gap-3 border-b border-slate-800 pb-4 mb-4">
+                <Truck className="w-5 h-5 text-amber-500" />
+                <h3 className="font-black text-white text-sm uppercase">{isAr ? 'مطابقة عهد المناديب' : 'Courier Custody Pivot'}</h3>
+              </div>
+              <div className="space-y-4">
+                {couriers.map(c => {
+                  const pendingCustody = expenses
+                    .filter(e => e.type === 'Custody' && e.recipientId === c.id && e.status === 'Pending')
+                    .reduce((sum, e) => sum + (e.amount || 0), 0);
+
+                  const activeOrders = orders.filter(o => o.deliveryCourierId === c.id && o.orderStatus === 'مع المندوب للتوصيل');
+                  const pendingCollection = activeOrders.reduce((sum, o) => sum + (o.amountRemaining || 0), 0);
+
+                  return (
+                    <div key={c.id} className="p-4 bg-black/30 border border-slate-850 rounded-2xl space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="font-black text-[#d4af37] text-xs">{c.fullName}</span>
+                        <span className="text-[10px] text-slate-500 font-bold">{c.governorate || 'اليمن'}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-[10px] font-bold">
+                        <div className="flex flex-col">
+                          <span className="text-slate-500 uppercase">{isAr ? 'العهدة المالية' : 'Cash Custody'}</span>
+                          <span className="text-amber-500 font-mono">{pendingCustody.toLocaleString()} YER</span>
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-slate-500 uppercase">{isAr ? 'بذمة التحصيل' : 'To Collect'}</span>
+                          <span className="text-cyan-400 font-mono">{pendingCollection.toLocaleString()} YER</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Factory Account Matching Card */}
+            <div className="bg-[#121215] border border-slate-850 rounded-3xl p-6 shadow-xl text-start">
+              <div className="flex items-center gap-3 border-b border-slate-800 pb-4 mb-4">
+                <Building className="w-5 h-5 text-cyan-500" />
+                <h3 className="font-black text-white text-sm uppercase">{isAr ? 'مطابقة حسابات المصانع' : 'Factory Accounts Matching'}</h3>
+              </div>
+              <div className="space-y-4">
+                {/* Aggregate by Source/Factory */}
+                {Array.from(new Set(orders.filter(o => o.orderSourceType === 'Factory').map(o => o.orderSourceName))).map(factoryName => {
+                  const factoryOrders = orders.filter(o => o.orderSourceName === factoryName);
+                  const totalDebt = factoryOrders.reduce((sum, o) => sum + (o.totalCostSAR || 0), 0);
+                  const totalPaid = expenses
+                    .filter(e => e.type === 'FactoryPayment' && e.recipientName === factoryName)
+                    .reduce((sum, e) => sum + (e.amount || 0), 0);
+
+                  return (
+                    <div key={factoryName} className="p-4 bg-black/30 border border-slate-850 rounded-2xl space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="font-black text-cyan-400 text-xs">{factoryName}</span>
+                        <span className="text-[10px] text-slate-500 font-bold">{factoryOrders.length} {isAr ? 'طلبيات' : 'Orders'}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-[10px] font-bold">
+                        <div className="flex flex-col">
+                          <span className="text-slate-500 uppercase">{isAr ? 'إجمالي المستحق' : 'Total Due'}</span>
+                          <span className="text-white font-mono">{totalDebt.toLocaleString()} SAR</span>
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-slate-500 uppercase">{isAr ? 'المحول فعلياً' : 'Total Remitted'}</span>
+                          <span className="text-emerald-400 font-mono">{totalPaid.toLocaleString()} SAR</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
 
       {/* Add Expenses Modal overlay */}
       {isAddOpen && (

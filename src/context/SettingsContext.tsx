@@ -27,15 +27,16 @@ interface SettingsContextType {
 
 const defaultSettings: Settings = {
   language: 'ar',
-  theme: 'light',
-  currency: 'USD',
-  currencySymbol: '$',
-  companyName: 'لوجي-تراك',
+  theme: 'dark',
+  currency: 'YER',
+  currencySymbol: 'ر.ي',
+  companyName: 'ALX Delivery',
   companyPhone: '',
   companyEmail: '',
   companyWebsite: '',
   companyAddress: '',
   taxId: '',
+  autoNotification: true,
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
