@@ -48,6 +48,23 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     return translations[settings.language][key] || key;
   };
 
+  // Synchronize document direction, language, and theme whenever settings are updated
+  useEffect(() => {
+    if (settings.language === 'ar') {
+      document.documentElement.dir = 'rtl';
+      document.documentElement.lang = 'ar';
+    } else {
+      document.documentElement.dir = 'ltr';
+      document.documentElement.lang = 'en';
+    }
+
+    if (settings.theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [settings.language, settings.theme]);
+
   useEffect(() => {
     // Timeout to prevent infinite loading if Firestore is offline
     const timeout = setTimeout(() => {
@@ -61,22 +78,6 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       if (snap.exists()) {
         const data = snap.data() as Settings;
         setSettings(prev => ({ ...prev, ...data }));
-        
-        // Handle Theme
-        if (data.theme === 'dark') {
-          document.documentElement.classList.add('dark');
-        } else {
-          document.documentElement.classList.remove('dark');
-        }
-
-        // Handle Language (RTL/LTR)
-        if (data.language === 'ar') {
-          document.documentElement.dir = 'rtl';
-          document.documentElement.lang = 'ar';
-        } else {
-          document.documentElement.dir = 'ltr';
-          document.documentElement.lang = 'en';
-        }
       }
       setLoading(false);
       clearTimeout(timeout);

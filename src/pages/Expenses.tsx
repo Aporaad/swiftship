@@ -6,12 +6,18 @@ import { useRole } from '../hooks/useRole';
 import { notificationService } from '../services/notificationService';
 import { Plus, Search, Wallet, DollarSign, Calendar, RefreshCw, Layers, CheckCircle2, AlertTriangle, User, FileText, ArrowUpRight, ArrowDownLeft, Crown, ShieldAlert, Coins, X, Printer, Activity } from 'lucide-react';
 import { jsPDF } from 'jspdf';
+import { useLocation } from 'react-router-dom';
+import FinanceReports from '../components/FinanceReports';
+import FinanceAccounting from '../components/FinanceAccounting';
 
 export default function Expenses() {
   const { settings, t } = useSettings();
   const { role, hasPermission, profile, loading: roleLoading } = useRole();
   const [expenses, setExpenses] = useState<any[]>([]);
   const [couriers, setCouriers] = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [sources, setSources] = useState<any[]>([]);
   const [expensesLoading, setExpensesLoading] = useState(true);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [addLoading, setAddLoading] = useState(false);
@@ -19,6 +25,10 @@ export default function Expenses() {
   const [searchText, setSearchText] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const isAr = settings.language === 'ar';
+
+  const location = useLocation();
+  const queryParams = new URLSearchParams(location.search);
+  const activeTab = queryParams.get('tab') || 'expenses'; // 'expenses', 'reports', 'accounting'
 
   const [formData, setFormData] = useState({
     type: 'General', // General, Custody, FactoryPayment
@@ -78,9 +88,27 @@ export default function Expenses() {
       setCouriers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
+    // Fetch orders
+    const unsubOrders = onSnapshot(query(collection(db, 'orders'), orderBy('createdAt', 'desc')), (snap) => {
+      setOrders(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    // Fetch customers
+    const unsubCustomers = onSnapshot(collection(db, 'customers'), (snap) => {
+      setCustomers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    // Fetch sources
+    const unsubSources = onSnapshot(collection(db, 'sources'), (snap) => {
+      setSources(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
     return () => {
       unsubExp();
       unsubCouriers();
+      unsubOrders();
+      unsubCustomers();
+      unsubSources();
     };
   }, [roleLoading]);
 
@@ -429,6 +457,72 @@ export default function Expenses() {
     return (
       <div className="flex bg-[#0e0e11] text-white h-[60vh] items-center justify-center">
         <div className="h-10 w-10 animate-spin rounded border-2 border-[#d4af37]/25 border-t-[#d4af37]"></div>
+      </div>
+    );
+  }
+
+  if (activeTab === 'reports') {
+    return (
+      <div className="space-y-6 pb-20 text-start font-sans">
+        {/* Reports Header */}
+        <div className="flex justify-between items-center bg-black/40 backdrop-blur-md border border-[#d4af37]/20 p-5 rounded-3xl shadow-lg relative overflow-hidden">
+          <div className="flex items-center gap-3">
+            <div className="bg-[#d4af37]/10 border border-[#d4af37]/25 p-2.5 rounded-2xl text-[#d4af37]">
+              <Activity className="w-6 h-6 animate-pulse" />
+            </div>
+            <div>
+              <h1 className="text-xl font-black text-white leading-none mb-1">
+                {isAr ? 'مركز التقارير والتحليلات البيانية المتقدمة' : 'Executive Reports & Analytics Center'}
+              </h1>
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                {isAr ? 'إحصاءات التدفق المالي الحي • كشاف الحسابات المجمع • مصادر الشحنات وعوائد المناديب' : 'Real-time financial flows • Shipped cargo yield • Custom PDF report compilation'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Reports Component */}
+        <FinanceReports 
+          orders={orders}
+          expenses={expenses}
+          couriers={couriers}
+          sources={sources}
+          isAr={isAr}
+          settings={settings}
+        />
+      </div>
+    );
+  }
+
+  if (activeTab === 'accounting') {
+    return (
+      <div className="space-y-6 pb-20 text-start font-sans">
+        {/* Accounting Header */}
+        <div className="flex justify-between items-center bg-black/40 backdrop-blur-md border border-[#d4af37]/20 p-5 rounded-3xl shadow-lg relative overflow-hidden">
+          <div className="flex items-center gap-3">
+            <div className="bg-[#d4af37]/10 border border-[#d4af37]/25 p-2.5 rounded-2xl text-[#d4af37]">
+              <FileText className="w-6 h-6 animate-pulse" />
+            </div>
+            <div>
+              <h1 className="text-xl font-black text-white leading-none mb-1">
+                {isAr ? 'القيود المحاسبية ومطابقة الحسابات' : 'Double-Entry Ledger & Adjustments'}
+              </h1>
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                {isAr ? 'كشوف حسابات العملاء • تسوية العهد • توازن قبوضات الصندوق' : 'Ledger audits • Courier liability accounts • Balancing sheets'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Accounting Component */}
+        <FinanceAccounting 
+          orders={orders}
+          expenses={expenses}
+          couriers={couriers}
+          customers={customers}
+          isAr={isAr}
+          settings={settings}
+        />
       </div>
     );
   }
