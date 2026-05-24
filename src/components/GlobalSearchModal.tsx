@@ -1,10 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
-import { useNavigate } from 'react-router-dom';
-import toast from 'react-hot-toast';
 import { db } from '../lib/firebase';
 import { useSettings } from '../context/SettingsContext';
-import { whatsappService } from '../services/whatsappService';
 import { 
   X, 
   Search, 
@@ -23,7 +20,6 @@ import {
   Phone,
   Mail,
   ArrowLeft,
-  ArrowRight,
   Crown
 } from 'lucide-react';
 
@@ -38,8 +34,6 @@ type SearchCategory = 'all' | 'orders' | 'users' | 'customers' | 'couriers' | 's
 export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: GlobalSearchModalProps) {
   const { settings } = useSettings();
   const isAr = settings.language === 'ar';
-  const navigate = useNavigate();
-  const [sendingWhatsapp, setSendingWhatsapp] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [localQuery, setLocalQuery] = useState(searchQuery);
@@ -225,40 +219,6 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
     return `https://api.whatsapp.com/send?phone=${order.customerPhone || ''}&text=${encodeURIComponent(text)}`;
   };
 
-  const handleSendWhatsApp = async (order: any) => {
-    if (!order || !order.customerPhone) {
-      toast.error(isAr ? 'لا يوجد رقم هاتف مسجل للعميل!' : 'No registered customer phone number found!');
-      return;
-    }
-    setSendingWhatsapp(true);
-    const text = isAr 
-      ? `مرحباً عميلنا الكريم ${order.customerName || ''}،\nنود إفادتك بأن حالة طلبك رقم: (${order.orderNumber || ''}) هي حالياً: *${order.orderStatus || order.order_status || 'قيد المعالجة'}*.\n\n🚚 شركة الشحن: ${order.shippingCompany || order.carrier || '—'}\n📌 رقم التتبع الدولي: ${order.trackingNumber || '—'}\n💵 القيمة الإجمالية: ${parseFloat(order.totalCostYER || order.totalPrice || '0').toLocaleString()} ريال يمني\n💳 المدفوع: ${parseFloat(order.amountPaid || '0').toLocaleString()} YER\n⚠️ المتبقي: ${parseFloat(order.amountRemaining || '0').toLocaleString()} YER\n\nشكراً لتعاملك مع SwiftShip (ALX)!`
-      : `Hello customer ${order.customerName || ''},\nWe would like to inform you that your order (${order.orderNumber || ''}) status is: *${order.orderStatus || order.order_status || 'Processing'}*.\n\n🚚 Shipping Company: ${order.shippingCompany || order.carrier || '—'}\n📌 International Tracking: ${order.trackingNumber || '—'}\n💵 Total Amount: ${parseFloat(order.totalCostYER || order.totalPrice || '0').toLocaleString()} YER\n💳 Paid: ${parseFloat(order.amountPaid || '0').toLocaleString()} YER\n⚠️ Remaining: ${parseFloat(order.amountRemaining || '0').toLocaleString()} YER\n\nThank you for choosing SwiftShip (ALX)!`;
-
-    try {
-      const result = await whatsappService.sendDirect(
-        order.customerPhone,
-        text,
-        order.orderNumber || order.id,
-        'manual_search_share'
-      );
-      
-      if (result && result.success) {
-        toast.success(isAr ? 'تم إرسال إشعار WhatsApp التلقائي للعميل بنجاح! 📲✅' : 'WhatsApp notification auto-sent successfully! 📲✅');
-      } else {
-        toast.error(isAr 
-          ? `فشل إرسال الإشعار التلقائي: ${result?.errorMsg || result?.status || 'تأكد من إعدادات بوابة WhatsApp'}` 
-          : `Auto-dispatch failed: ${result?.errorMsg || result?.status || 'Verify WhatsApp configuration'}`
-        );
-      }
-    } catch (err: any) {
-      console.error('Error invoking send-whatsapp:', err);
-      toast.error(isAr ? 'حدث خطأ غير متوقع أثناء مخاطبة خادم الإرسال للواتساب' : 'Unexpected error invoking WhatsApp dispatch gateway');
-    } finally {
-      setSendingWhatsapp(false);
-    }
-  };
-
   const currentFilteredSet = (() => {
     switch (activeTab) {
       case 'orders': return matchedOrders.map(o => ({ ...o, _displayType: isAr ? 'شحنة/طلب' : 'Order', _color: 'cyan' }));
@@ -409,84 +369,56 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
                     const type = item._searchType;
                     const isSelected = selectedItem && selectedItem.id === item.id && selectedItem._searchType === type;
                     return (
-                      <div
+                      <button
                         key={`${type}-${item.id}`}
                         onClick={() => setSelectedItem(item)}
-                        className={`w-full p-3.5 rounded-xl transition-all duration-300 text-start flex items-center justify-between gap-3 border cursor-pointer relative ${
+                        className={`w-full p-3.5 rounded-xl transition-all duration-300 text-start flex items-center gap-3.5 border relative ${
                           isSelected
                             ? 'bg-gradient-to-r from-[#d4af37]/15 to-[#0b0b0d] border-[#d4af37] shadow-[inset_3px_0_10px_rgba(212,175,55,0.04)]'
                             : 'bg-[#08080a] hover:bg-slate-900/40 border-slate-800/80 hover:border-slate-700'
                         }`}
                       >
-                        <div className="flex items-center gap-3.5 flex-1 min-w-0">
-                          <div className={`p-2 rounded-lg shrink-0 ${
-                            isSelected ? 'bg-[#d4af37]/20' : 'bg-slate-950 border border-slate-800/60'
-                          }`}>
-                            {getIcon(type)}
+                        <div className={`p-2 rounded-lg shrink-0 ${
+                          isSelected ? 'bg-[#d4af37]/20' : 'bg-slate-950 border border-slate-800/60'
+                        }`}>
+                          {getIcon(type)}
+                        </div>
+                        
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-between items-baseline mb-1">
+                            {/* Primary Badge or ID display */}
+                            <span className="text-[9px] font-mono font-black text-[#d4af37] tracking-wider uppercase">
+                              {type === 'order' ? (item.orderNumber || item.id) : item._displayType}
+                            </span>
+                            <span className="text-[8px] text-slate-500 font-bold">
+                              {type === 'order' && formatStatus(item.orderStatus || item.order_status)}
+                              {type === 'user' && getRoleLabel(item.role)}
+                              {type === 'expense' && `${item.amount} ${item.currency || 'YER'}`}
+                              {type === 'customer' && (isAr ? 'ملف نشط' : 'Active')}
+                              {type === 'courier' && (isAr ? 'تأدية عهدة' : 'Courier')}
+                              {type === 'source' && (item.type || 'App')}
+                            </span>
                           </div>
                           
-                          <div className="flex-1 min-w-0">
-                            <div className="flex justify-between items-baseline mb-1">
-                              {/* Primary Badge or ID display */}
-                              <span className="text-[9px] font-mono font-black text-[#d4af37] tracking-wider uppercase">
-                                {type === 'order' ? (item.orderNumber || item.id) : item._displayType}
-                              </span>
-                              <span className="text-[8px] text-slate-500 font-bold">
-                                {type === 'order' && formatStatus(item.orderStatus || item.order_status)}
-                                {type === 'user' && getRoleLabel(item.role)}
-                                {type === 'expense' && `${item.amount} ${item.currency || 'YER'}`}
-                                {type === 'customer' && (isAr ? 'ملف نشط' : 'Active')}
-                                {type === 'courier' && (isAr ? 'تأدية عهدة' : 'Courier')}
-                                {type === 'source' && (item.type || 'App')}
-                              </span>
-                            </div>
-                            
-                            <p className="text-xs font-black text-white truncate">
-                              {type === 'order' && item.customerName}
-                              {type === 'user' && item.fullName}
-                              {type === 'customer' && item.fullName}
-                              {type === 'courier' && item.fullName}
-                              {type === 'source' && (item.source_name || item.name)}
-                              {type === 'expense' && (item.notes ? item.notes.substring(0, 30) + '...' : item.recipientName || (isAr ? 'مصروف عام' : 'Expense'))}
-                            </p>
-                            
-                            <p className="text-[10px] text-slate-500 font-semibold truncate font-mono mt-0.5">
-                              {type === 'order' && item.customerPhone}
-                              {type === 'user' && `@${item.username || 'user'}`}
-                              {type === 'customer' && item.phone}
-                              {type === 'courier' && item.phone}
-                              {type === 'source' && (item.location || '—')}
-                              {type === 'expense' && `${isAr ? 'بواسطة' : 'By'}: ${item.createdByName || '—'}`}
-                            </p>
-                          </div>
+                          <p className="text-xs font-black text-white truncate">
+                            {type === 'order' && item.customerName}
+                            {type === 'user' && item.fullName}
+                            {type === 'customer' && item.fullName}
+                            {type === 'courier' && item.fullName}
+                            {type === 'source' && (item.source_name || item.name)}
+                            {type === 'expense' && (item.notes ? item.notes.substring(0, 30) + '...' : item.recipientName || (isAr ? 'مصروف عام' : 'Expense'))}
+                          </p>
+                          
+                          <p className="text-[10px] text-slate-500 font-semibold truncate font-mono mt-0.5">
+                            {type === 'order' && item.customerPhone}
+                            {type === 'user' && `@${item.username || 'user'}`}
+                            {type === 'customer' && item.phone}
+                            {type === 'courier' && item.phone}
+                            {type === 'source' && (item.location || '—')}
+                            {type === 'expense' && `${isAr ? 'بواسطة' : 'By'}: ${item.createdByName || '—'}`}
+                          </p>
                         </div>
-
-                        {/* Arrow Link to specific page layout */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            let targetPath = '/';
-                            if (type === 'order') targetPath = '/orders';
-                            else if (type === 'user') targetPath = '/users';
-                            else if (type === 'customer') targetPath = '/customers';
-                            else if (type === 'courier') targetPath = '/couriers';
-                            else if (type === 'source') targetPath = '/sources';
-                            else if (type === 'expense') targetPath = '/expenses';
-                            
-                            navigate(targetPath, { state: { selectedId: item.id } });
-                            onClose();
-                          }}
-                          className="p-2 rounded-xl bg-slate-900 hover:bg-[#d4af37]/25 border border-slate-800/80 hover:border-[#d4af37]/50 text-slate-400 hover:text-white transition-all shrink-0 ml-1.5 shadow-[0_2px_8px_rgba(0,0,0,0.5)] flex items-center justify-center group"
-                          title={isAr ? 'ذهاب للواجهة الخاصة بها' : 'Navigate to page'}
-                        >
-                          {isAr ? (
-                            <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
-                          ) : (
-                            <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
-                          )}
-                        </button>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -879,28 +811,15 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
                 <div className="pt-4 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3 bg-black/40 p-4 rounded-2xl">
                   {/* WhatsApp Support integrations based on entity */}
                   {selectedItem._searchType === 'order' && (
-                    <button
-                      type="button"
-                      disabled={sendingWhatsapp}
-                      onClick={() => handleSendWhatsApp(selectedItem)}
-                      className={`font-extrabold text-white px-4 py-2.5 rounded-xl transition-all text-xs flex items-center gap-2 shadow-md shadow-emerald-950 ${
-                        sendingWhatsapp 
-                          ? 'bg-slate-700 cursor-not-allowed opacity-70' 
-                          : 'bg-emerald-600 hover:bg-emerald-500'
-                      }`}
+                    <a
+                      href={getWhatsAppUrl(selectedItem)}
+                      target="_blank"
+                      referrerPolicy="no-referrer"
+                      className="bg-emerald-600 hover:bg-emerald-500 font-extrabold text-white px-4 py-2.5 rounded-xl transition-all text-xs flex items-center gap-2 shadow-md shadow-emerald-950"
                     >
-                      {sendingWhatsapp ? (
-                        <div className="w-4 h-4 rounded-full border-2 border-white/20 border-t-white animate-spin shrink-0"></div>
-                      ) : (
-                        <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397 0 12.008 0c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 12.003-11.95 12.003-1.999-.001-3.959-.5-5.717-1.447L0 24zm6.59-4.861c1.72 1.02 3.419 1.558 5.411 1.559 5.541 0 10.054-4.515 10.057-10.057.002-2.685-1.042-5.21-2.945-7.111C17.26 1.63 14.734 1.586 12.005 1.586c-5.546 0-10.062 4.515-10.066 10.059-.001 1.93.501 3.81 1.456 5.484L2.378 21.98l4.269-1.121z"/></svg>
-                      )}
-                      <span>
-                        {sendingWhatsapp 
-                          ? (isAr ? 'جاري إرسال الإشعار التلقائي للعميل...' : 'Sending notification via WhatsApp...') 
-                          : (isAr ? 'إرسال بيانات الحالة والمبلغ المعلق للعميل' : 'Notify customer via WhatsApp')
-                        }
-                      </span>
-                    </button>
+                      <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397 0 12.008 0c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 12.003-11.95 12.003-1.999-.001-3.959-.5-5.717-1.447L0 24zm6.59-4.861c1.72 1.02 3.419 1.558 5.411 1.559 5.541 0 10.054-4.515 10.057-10.057.002-2.685-1.042-5.21-2.945-7.111C17.26 1.63 14.734 1.586 12.005 1.586c-5.546 0-10.062 4.515-10.066 10.059-.001 1.93.501 3.81 1.456 5.484L2.378 21.98l4.269-1.121z"/></svg>
+                      {isAr ? 'إرسال بيانات الحالة والمبلغ المعلق للعميل' : 'Notify customer via WhatsApp'}
+                    </a>
                   )}
 
                   {selectedItem._searchType === 'customer' && (
