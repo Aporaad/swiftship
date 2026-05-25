@@ -52,7 +52,6 @@ export default function Layout() {
 
   // System Time State
   const [systime, setSystime] = useState(new Date());
-  const [isStatusExpanded, setIsStatusExpanded] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setSystime(new Date()), 1000);
@@ -146,7 +145,7 @@ export default function Layout() {
   const navItems = [
     { name: isAr ? 'الرئيسية' : 'Dashboard', path: '/', icon: LayoutDashboard, permission: 'view_dashboard' },
     { name: isAr ? 'الطلبات' : 'Orders', path: '/orders', icon: Package, permission: 'view_orders' },
-    { name: isAr ? 'التتبع' : 'Tracking', path: '/tracking', icon: Truck, permission: 'view_orders' },
+    { name: isAr ? 'الشحن' : 'Shipping', path: '/tracking', icon: Truck, permission: 'view_orders' },
     { name: isAr ? 'العملاء' : 'Customers', path: '/customers', icon: Users, permission: 'view_customers' },
     { name: isAr ? 'المندوبين' : 'Couriers', path: '/couriers', icon: Truck, permission: 'manage_couriers' },
     { name: isAr ? 'المصروفات والعهد' : 'Expenses & Custody', path: '/expenses', icon: Wallet, permission: 'view_finance' },
@@ -196,39 +195,8 @@ export default function Layout() {
     }
   };
 
-  // Determine if a navigation item is active, accounting for query parameters
-  const isItemActive = (itemPath: string) => {
-    if (itemPath.includes('?')) {
-      const [pathPart, queryPart] = itemPath.split('?');
-      if (location.pathname !== pathPart) return false;
-      
-      const itemParams = new URLSearchParams(queryPart);
-      const currentParams = new URLSearchParams(location.search);
-      
-      let match = true;
-      itemParams.forEach((val, key) => {
-        if (currentParams.get(key) !== val) {
-          match = false;
-        }
-      });
-      return match;
-    } else {
-      if (location.pathname === itemPath) {
-        if (itemPath === '/expenses') {
-          // If the item path is just /expenses, don't match if we are on a tab query
-          const tab = new URLSearchParams(location.search).get('tab');
-          if (tab === 'reports' || tab === 'accounting') {
-            return false;
-          }
-        }
-        return true;
-      }
-      return location.pathname.startsWith(itemPath) && itemPath !== '/';
-    }
-  };
-
   // Get active item name
-  const activeItem = filteredNavItems.find(i => isItemActive(i.path));
+  const activeItem = filteredNavItems.find(i => i.path === location.pathname || (location.pathname.startsWith(i.path) && i.path !== '/'));
 
   // Multi-language system dates
   const formattedDate = systime.toLocaleDateString(isAr ? 'ar-EG' : 'en-US', {
@@ -289,7 +257,7 @@ export default function Layout() {
           {filteredNavItems.map((item) => {
             const Icon = item.icon;
             // Support sub-routing match check
-            const isActive = isItemActive(item.path);
+            const isActive = location.pathname === item.path || (location.pathname.startsWith(item.path) && item.path !== '/');
             return (
               <Link
                 key={item.path}
@@ -313,17 +281,14 @@ export default function Layout() {
         {/* Bottom Sidebar Panels as requested */}
         <div className="p-4 border-t border-[#d4af37]/10 space-y-3 bg-[#08080a]">
           {/* 🟢 ALX SYSTEM STATUS CARD */}
-          <div 
-            onClick={() => setIsStatusExpanded(!isStatusExpanded)}
-            className={`p-4 rounded-2xl bg-gradient-to-br from-slate-950 via-[#0a0a0d] to-[#0c0c10] border transition-all duration-300 relative overflow-hidden select-none text-start cursor-pointer active:scale-[0.98] ${
-              systemStats.systemStatus === 'good' 
-                ? 'border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.05)] hover:border-emerald-500/40' 
-                : systemStats.systemStatus === 'warning'
-                ? 'border-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.05)] hover:border-amber-500/40'
-                : 'border-rose-500/20 shadow-[0_0_15px_rgba(239,68,68,0.05)] hover:border-rose-500/40'
-            }`}
-          >
-            <div className="flex items-center justify-between pb-1">
+          <div className={`p-4 rounded-2xl bg-gradient-to-br from-slate-950 via-[#0a0a0d] to-[#0c0c10] border transition-all duration-500 relative overflow-hidden select-none text-start ${
+            systemStats.systemStatus === 'good' 
+              ? 'border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.05)] hover:border-emerald-500/40' 
+              : systemStats.systemStatus === 'warning'
+              ? 'border-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.05)] hover:border-amber-500/40'
+              : 'border-rose-500/20 shadow-[0_0_15px_rgba(239,68,68,0.05)] hover:border-rose-500/40'
+          }`}>
+            <div className="flex items-center justify-between border-b border-white/[0.04] pb-2 mb-2.5">
               <div className="flex flex-col">
                 <span className={`text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 ${
                   systemStats.systemStatus === 'good' 
@@ -345,14 +310,13 @@ export default function Layout() {
                   {isAr ? 'حالة النظام المباشرة' : 'Live System Status'}
                 </span>
               </div>
-              <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform duration-300 ${isStatusExpanded ? 'rotate-180 text-[#d4af37]' : ''}`} />
             </div>
 
-            {/* Quick Summary Badge for compact view */}
-            {!isStatusExpanded && (
-              <div className="mt-1.5 flex items-center justify-between text-[9px] text-slate-500 font-bold bg-black/30 px-2 py-1 rounded-lg border border-white/[0.01]">
-                <span>{isAr ? 'الحالة العامة:' : 'System overall:'}</span>
-                <span className={`font-black uppercase ${
+            {/* Metrics List */}
+            <div className="space-y-1 text-[10px] font-bold text-slate-400">
+              <div className="flex justify-between items-center bg-black/40 p-1.5 rounded-lg border border-white/[0.02]">
+                <span className="text-slate-500 text-[9px]">{isAr ? 'حالة النظام ورسوخ العمل' : 'Status'}</span>
+                <span className={`font-black tracking-tight text-[9px] ${
                   systemStats.systemStatus === 'good' 
                     ? 'text-emerald-400' 
                     : systemStats.systemStatus === 'warning'
@@ -360,59 +324,37 @@ export default function Layout() {
                     : 'text-rose-400'
                 }`}>
                   {systemStats.systemStatus === 'good' 
-                    ? (isAr ? 'يعمل بكفاءة' : 'Healthy') 
+                    ? (isAr ? 'النظام يعمل بكفاءة' : 'System Healthy') 
                     : systemStats.systemStatus === 'warning'
-                    ? (isAr ? 'يحتاج متابعة' : 'Attention')
-                    : (isAr ? 'تأخير بالمهام' : 'Delay')}
+                    ? (isAr ? 'يرجى مراجعة المهام' : 'Attention Needed')
+                    : (isAr ? 'يوجد تأخير يتطلب حث' : 'Critical Delay')}
                 </span>
               </div>
-            )}
-
-            {/* Metrics List displayed only when expanded */}
-            {isStatusExpanded && (
-              <div className="space-y-1 text-[10px] font-bold text-slate-400 mt-2.5 border-t border-white/[0.04] pt-2.5 animate-fade-in">
-                <div className="flex justify-between items-center bg-black/40 p-1.5 rounded-lg border border-white/[0.02]">
-                  <span className="text-slate-500 text-[9px]">{isAr ? 'حالة النظام ورسوخ العمل' : 'Status'}</span>
-                  <span className={`font-black tracking-tight text-[9px] ${
-                    systemStats.systemStatus === 'good' 
-                      ? 'text-emerald-400' 
-                      : systemStats.systemStatus === 'warning'
-                      ? 'text-amber-400'
-                      : 'text-rose-400'
-                  }`}>
-                    {systemStats.systemStatus === 'good' 
-                      ? (isAr ? 'النظام يعمل بكفاءة' : 'System Healthy') 
-                      : systemStats.systemStatus === 'warning'
-                      ? (isAr ? 'يرجى مراجعة المهام' : 'Attention Needed')
-                      : (isAr ? 'يوجد تأخير يتطلب حث' : 'Critical Delay')}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center py-1 border-b border-white/[0.02]">
-                  <span>{isAr ? 'الطلبات النشطة حالياً' : 'Active Orders Currently'}</span>
-                  <span className="font-mono text-white text-[11px] font-black">{systemStats.activeOrders}</span>
-                </div>
-                <div className="flex justify-between items-center py-1 border-b border-white/[0.02]">
-                  <span>{isAr ? 'الطلبات المتأخرة' : 'Delayed Orders'}</span>
-                  <span className={`font-mono text-[11px] font-black ${systemStats.delayedOrders > 0 ? 'text-rose-500 animate-pulse bg-rose-500/10 px-1.5 rounded' : 'text-slate-500'}`}>
-                    {systemStats.delayedOrders}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center py-1 border-b border-white/[0.02]">
-                  <span>{isAr ? 'الموظفين المتصلين الآن' : 'Staff Online'}</span>
-                  <span className="font-mono text-emerald-400 text-[11px] font-black">{systemStats.onlineStaff}</span>
-                </div>
-                <div className="flex justify-between items-center py-1 border-b border-white/[0.02]">
-                  <span>{isAr ? 'الشحنات الجارية' : 'Current Shipments'}</span>
-                  <span className="font-mono text-cyan-400 text-[11px] font-black">{systemStats.ongoingShipments}</span>
-                </div>
-                <div className="flex justify-between items-center py-1">
-                  <span>{isAr ? 'الطلبات المعلقة مالياً' : 'Financially Pending'}</span>
-                  <span className={`font-mono text-[11px] font-black ${systemStats.financiallyPending > 0 ? 'text-amber-400' : 'text-slate-500'}`}>
-                    {systemStats.financiallyPending}
-                  </span>
-                </div>
+              <div className="flex justify-between items-center py-1 border-b border-white/[0.02]">
+                <span>{isAr ? 'الطلبات النشطة حالياً' : 'Active Orders Currently'}</span>
+                <span className="font-mono text-white text-[11px] font-black">{systemStats.activeOrders}</span>
               </div>
-            )}
+              <div className="flex justify-between items-center py-1 border-b border-white/[0.02]">
+                <span>{isAr ? 'الطلبات المتأخرة' : 'Delayed Orders'}</span>
+                <span className={`font-mono text-[11px] font-black ${systemStats.delayedOrders > 0 ? 'text-rose-500 animate-pulse bg-rose-500/10 px-1.5 rounded' : 'text-slate-500'}`}>
+                  {systemStats.delayedOrders}
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-white/[0.02]">
+                <span>{isAr ? 'الموظفين المتصلين الآن' : 'Staff Online'}</span>
+                <span className="font-mono text-emerald-400 text-[11px] font-black">{systemStats.onlineStaff}</span>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-white/[0.02]">
+                <span>{isAr ? 'الشحنات الجارية' : 'Current Shipments'}</span>
+                <span className="font-mono text-cyan-400 text-[11px] font-black">{systemStats.ongoingShipments}</span>
+              </div>
+              <div className="flex justify-between items-center py-1">
+                <span>{isAr ? 'الطلبات المعلقة مالياً' : 'Financially Pending'}</span>
+                <span className={`font-mono text-[11px] font-black ${systemStats.financiallyPending > 0 ? 'text-amber-400' : 'text-slate-500'}`}>
+                  {systemStats.financiallyPending}
+                </span>
+              </div>
+            </div>
           </div>
 
           {/* 2️⃣ Admin/Manager Privileges Card with تاج ذهبي (Gold Crown) */}
@@ -608,7 +550,7 @@ export default function Layout() {
             <nav className="flex-1 space-y-2 overflow-y-auto">
               {filteredNavItems.map((item) => {
                 const Icon = item.icon;
-                const isActive = isItemActive(item.path);
+                const isActive = location.pathname === item.path;
                 return (
                   <Link
                     key={item.path}
