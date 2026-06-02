@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { collection, doc, getDoc, getDocs, setDoc, writeBatch } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { Save, Globe, Palette, Database, DollarSign, Building, X, Upload, CheckCircle, ShieldAlert, Crown, Cpu, Archive } from 'lucide-react';
+import { Save, Globe, Palette, Database, DollarSign, Building, X, Upload, CheckCircle, ShieldAlert, Crown, Cpu, Archive, RefreshCw } from 'lucide-react';
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
 import ConfirmModal from '../components/ConfirmModal';
@@ -15,6 +15,53 @@ export default function Settings() {
   const { settings: globalSettings, updateSettings, t } = useSettings();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isAr = globalSettings.language === 'ar';
+
+  const [apiLoading, setApiLoading] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
+
+  const fetchExchangeRates = async (url: string = localSettings.exchangeRatesApiUrl || 'https://open.er-api.com/v6/latest/USD') => {
+    setApiLoading(true);
+    setApiError(null);
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(isAr ? 'فشل الاتصال بخادم أسعار الصرف' : 'Failed to connect to exchange rate server');
+      const data = await res.json();
+      if (data && data.rates) {
+        const sarRate = data.rates.SAR || 3.75;
+        const yerRate = data.rates.YER;
+        
+        let newUSD = localSettings.exchangeRateUSD || 535;
+        let newSAR = localSettings.exchangeRateSAR || 140;
+
+        if (yerRate && yerRate > 300) {
+          // If API gives parallel/real market rates (e.g. YER > 300)
+          newUSD = Math.round(yerRate);
+          newSAR = parseFloat((yerRate / sarRate).toFixed(2));
+        } else {
+          // Official YER is returned (~250), so scale SAR relative to the user's custom USD rate
+          newSAR = parseFloat((newUSD / sarRate).toFixed(2));
+        }
+
+        setLocalSettings(prev => ({
+          ...prev,
+          exchangeRateUSD: newUSD,
+          exchangeRateSAR: newSAR,
+        }));
+
+        alert(isAr 
+          ? `تم تحديث أسعار الصرف بنجاح! USD: ${newUSD} YER, SAR: ${newSAR} YER`
+          : `Exchange rates updated! USD: ${newUSD} YER, SAR: ${newSAR} YER`
+        );
+      } else {
+        throw new Error(isAr ? 'بنية استجابة API غير صالحة' : 'Invalid API response structure');
+      }
+    } catch (err: any) {
+      console.error(err);
+      setApiError(err.message || 'Error fetching rates');
+    } finally {
+      setApiLoading(false);
+    }
+  };
 
   // Confirmation Modal State
   const [confirmConfig, setConfirmConfig] = useState<{
@@ -324,6 +371,80 @@ export default function Settings() {
                   <input type="checkbox" checked={localSettings.autoNotification} onChange={(e) => setLocalSettings({...localSettings, autoNotification: e.target.checked})} className="sr-only peer" />
                   <div className="w-11 h-6 bg-slate-850 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-slate-850 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-600"></div>
                 </label>
+              </div>
+
+              {/* Divider */}
+              <div className="md:col-span-2 border-t border-slate-850/50 my-2"></div>
+
+              {/* Exchange Rates Header */}
+              <div className="md:col-span-2 text-start">
+                <h4 className="text-xs font-black text-white uppercase tracking-wider mb-1">{isAr ? 'أسعار صرف العملات والتحويل المالي' : 'Exchange Rates & Currency Conversion'}</h4>
+                <p className="text-[10px] text-slate-500 font-bold">{isAr ? 'تحديد أسعار الصرف الافتراضية للتحويل إلى الريال اليمني (YER)' : 'Configure the default exchange rates for YER conversions'}</p>
+              </div>
+
+              {/* Exchange Rates Inputs */}
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'سعر صرف الدولار (USD) مقابل اليمني' : 'USD to YER Rate'}</label>
+                <input 
+                  type="number" 
+                  step="any"
+                  value={localSettings.exchangeRateUSD !== undefined ? localSettings.exchangeRateUSD : 535}
+                  onChange={(e) => setLocalSettings({...localSettings, exchangeRateUSD: parseFloat(e.target.value) || 0})}
+                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono"
+                  placeholder="535"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'سعر صرف السعودي (SAR) مقابل اليمني' : 'SAR to YER Rate'}</label>
+                <input 
+                  type="number" 
+                  step="any"
+                  value={localSettings.exchangeRateSAR !== undefined ? localSettings.exchangeRateSAR : 140}
+                  onChange={(e) => setLocalSettings({...localSettings, exchangeRateSAR: parseFloat(e.target.value) || 0})}
+                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono"
+                  placeholder="140"
+                />
+              </div>
+
+              {/* API Auto Update Toggle */}
+              <div className="md:col-span-2 flex items-center p-4 bg-black/40 rounded-2xl border border-slate-850 gap-4">
+                <div className="bg-[#d4af37]/10 border border-[#d4af37]/25 text-[#d4af37] p-2.5 rounded-xl"><RefreshCw className="w-5 h-5"/></div>
+                <div className="flex-1 text-start">
+                  <h4 className="text-xs font-black text-white uppercase tracking-wider">{isAr ? 'تحديث تلقائي لأسعار الصرف من API' : 'Auto-update exchange rates from API'}</h4>
+                  <p className="text-[10px] text-slate-500 font-bold">{isAr ? 'جلب تحديثات أسعار الصرف تلقائياً من خادم خارجي عند التحميل' : 'Enable background sync for exchange rates using API endpoint'}</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" checked={localSettings.autoUpdateExchangeRates || false} onChange={(e) => setLocalSettings({...localSettings, autoUpdateExchangeRates: e.target.checked})} className="sr-only peer" />
+                  <div className="w-11 h-6 bg-slate-850 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-slate-850 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-600"></div>
+                </label>
+              </div>
+
+              {/* API URL & Update Action */}
+              <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 items-end bg-black/30 p-4 rounded-2xl border border-slate-850">
+                <div className="md:col-span-2">
+                  <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'رابط خادم أسعار الصرف (API URL)' : 'Exchange Rates API Endpoint'}</label>
+                  <input 
+                    type="text" 
+                    value={localSettings.exchangeRatesApiUrl || 'https://open.er-api.com/v6/latest/USD'}
+                    onChange={(e) => setLocalSettings({...localSettings, exchangeRatesApiUrl: e.target.value})}
+                    className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs text-white focus:border-[#d4af37]/60 outline-none text-start font-mono"
+                    placeholder="https://open.er-api.com/v6/latest/USD"
+                  />
+                </div>
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => fetchExchangeRates(localSettings.exchangeRatesApiUrl)}
+                    disabled={apiLoading}
+                    className="w-full bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black py-3 rounded-xl font-black text-xs transition shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${apiLoading ? 'animate-spin' : ''}`} />
+                    {apiLoading ? (isAr ? 'جاري الجلب...' : 'Fetching...') : (isAr ? 'تحديث الآن' : 'Update Now')}
+                  </button>
+                </div>
+                {apiError && (
+                  <div className="md:col-span-3 text-[10px] font-bold text-rose-500 text-start">{apiError}</div>
+                )}
               </div>
             </div>
           </section>

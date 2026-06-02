@@ -16,6 +16,10 @@ interface Settings {
   taxId: string;
   lastBackup?: string;
   autoNotification?: boolean;
+  exchangeRateUSD?: number;
+  exchangeRateSAR?: number;
+  autoUpdateExchangeRates?: boolean;
+  exchangeRatesApiUrl?: string;
 }
 
 interface SettingsContextType {
@@ -36,6 +40,10 @@ const defaultSettings: Settings = {
   companyWebsite: '',
   companyAddress: '',
   taxId: '',
+  exchangeRateUSD: 535,
+  exchangeRateSAR: 140,
+  autoUpdateExchangeRates: false,
+  exchangeRatesApiUrl: 'https://open.er-api.com/v6/latest/USD',
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -97,6 +105,48 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     const updated = { ...settings, ...newSettings };
     await setDoc(doc(db, 'settings', 'general'), updated);
   };
+
+  useEffect(() => {
+    if (loading) return;
+    if (settings.autoUpdateExchangeRates && settings.exchangeRatesApiUrl) {
+      const fetchRatesOnStartup = async () => {
+        try {
+          const res = await fetch(settings.exchangeRatesApiUrl);
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.rates) {
+              const sarRate = data.rates.SAR || 3.75;
+              const yerRate = data.rates.YER;
+              
+              let newUSD = settings.exchangeRateUSD || 535;
+              let newSAR = settings.exchangeRateSAR || 140;
+
+              if (yerRate && yerRate > 300) {
+                newUSD = Math.round(yerRate);
+                newSAR = parseFloat((yerRate / sarRate).toFixed(2));
+              } else {
+                newSAR = parseFloat((newUSD / sarRate).toFixed(2));
+              }
+
+              // Update in Firestore silently if changed
+              if (newUSD !== settings.exchangeRateUSD || newSAR !== settings.exchangeRateSAR) {
+                console.log(`Auto-updating exchange rates to Firestore: USD=${newUSD}, SAR=${newSAR}`);
+                // Use updated directly to avoid closure stale state
+                await setDoc(doc(db, 'settings', 'general'), {
+                  ...settings,
+                  exchangeRateUSD: newUSD,
+                  exchangeRateSAR: newSAR
+                });
+              }
+            }
+          }
+        } catch (err) {
+          console.warn("Failed to auto-update exchange rates on startup:", err);
+        }
+      };
+      fetchRatesOnStartup();
+    }
+  }, [loading, settings.autoUpdateExchangeRates, settings.exchangeRatesApiUrl]);
 
   return (
     <SettingsContext.Provider value={{ settings, updateSettings, loading, t }}>
