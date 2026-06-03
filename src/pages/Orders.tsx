@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { collection, onSnapshot, orderBy, query, where, addDoc, doc, updateDoc, getDoc, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, orderBy, query, where, addDoc, doc, updateDoc, getDoc, getDocs, deleteDoc } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType, safeToDate } from '../lib/firebase';
 import { useSettings } from '../context/SettingsContext';
 import { useRole } from '../hooks/useRole';
@@ -60,6 +60,10 @@ export default function Orders() {
   // Focus Orders States
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [orderToDelete, setOrderToDelete] = useState<any>(null);
+  const [deletePin, setDeletePin] = useState('');
+  const [deleteError, setDeleteError] = useState('');
   const [isBatchUpdating, setIsBatchUpdating] = useState(false);
   const [customerUnpaidAlert, setCustomerUnpaidAlert] = useState<number | null>(null);
 
@@ -94,12 +98,50 @@ export default function Orders() {
   const [packagingFeeEnabled, setPackagingFeeEnabled] = useState(false);
   const [packagingFeeRate, setPackagingFeeRate] = useState(0);
 
-  // Pre-generate preview order number when modal opens
+  // Pre-generate preview order number when modal opens and populate settings defaults
   useEffect(() => {
     if (isAddModalOpen) {
       generateSmartOrderCode().then(code => setPreviewOrderNumber(code));
+      setFormData(prev => ({
+        ...prev,
+        currency: settings.currency || 'SAR',
+        exchangeRateYER: settings.exchangeRateSAR || 140,
+        exchangeRateUSD: settings.exchangeRateUSD || 535,
+        bankCommissionRate: settings.defaultBankCommissionRate ?? 3,
+        companyProfitRate: settings.defaultCompanyProfitRate ?? 12,
+        packagingFee: settings.defaultPackagingFee ?? 0,
+        deliveryCourierFee: settings.defaultDeliveryFee ?? 4000,
+        customerId: '',
+        customerName: '',
+        customerPhone: '',
+        customerAddress: '',
+        orderSourceId: '',
+        orderSourceName: '',
+        externalOrderNumber: '',
+        trackingNumber: '',
+        amountPaid: 0,
+        notes: ''
+      }));
+      setItems([
+        { productName: '', productUrl: '', quantity: 1, productPrice: 0, weight: 0, cbm: 0, length: 0, width: 0, height: 0, trackingNumber: '' }
+      ]);
+      setShippings([
+        {
+          id: Math.random().toString(36).substr(2, 9),
+          shippingType: 'بري',
+          shippingCompany: 'Aramex',
+          shippingSource: '',
+          shippingDestination: '',
+          shippingDate: '',
+          shippingDuration: '',
+          expectedArrival: '',
+          deliveryDate: '',
+          shippingCost: 0,
+          packagingFees: 0
+        }
+      ]);
     }
-  }, [isAddModalOpen]);
+  }, [isAddModalOpen, settings]);
 
   // Multiple shipping details sub table state
   const [shippings, setShippings] = useState<any[]>([
@@ -307,12 +349,14 @@ export default function Orders() {
     }
   }, [formData.orderSourceId, sources]);
 
-  // Auto-generate unified smart code: ALX-YYMM-NNNN
+  // Auto-generate unified smart code: [Prefix]-YYMM-[Number]
   const generateSmartOrderCode = async () => {
     const now = new Date();
     const YY = String(now.getFullYear()).slice(-2);
     const MM = String(now.getMonth() + 1).padStart(2, '0');
-    const prefix = `ALX-${YY}${MM}`;
+    const prefixStr = settings.orderPrefix || 'ALX';
+    const startNum = settings.orderStartNumber || 1001;
+    const prefix = `${prefixStr}-${YY}${MM}`;
 
     try {
       const q = query(
@@ -322,11 +366,11 @@ export default function Orders() {
       );
       const snap = await getDocs(q);
       const curCount = snap.docs.length;
-      const nextNum = 1001 + curCount;
+      const nextNum = startNum + curCount;
       return `${prefix}-${nextNum}`;
     } catch (err) {
       console.warn("Exception getting order count, using random placeholder:", err);
-      return `${prefix}-${Math.floor(1000 + Math.random() * 9000)}`;
+      return `${prefix}-${Math.floor(startNum + Math.random() * 9000)}`;
     }
   };
 
@@ -397,19 +441,55 @@ export default function Orders() {
     doc.rect(0, 40, 210, 2, 'F');
     
     // Header texts
-    doc.setTextColor(212, 175, 55);
-    doc.setFont('Helvetica', 'bold');
-    doc.setFontSize(18);
-    doc.text('SWIFT SHIP - TRACKER INVOICE', 15, 18);
-    
-    doc.setTextColor(180, 180, 180);
-    doc.setFontSize(9);
-    doc.setFont('Helvetica', 'normal');
-    doc.text('FREIGHT CARGO INVOICE & MANIFEST RECEIPTS', 15, 25);
-    
-    doc.setTextColor(130, 130, 130);
-    doc.setFontSize(7.5);
-    doc.text(`Invoice Date: ${new Date(order.createdAt || Date.now()).toLocaleDateString()} | Order Code: ${order.orderNumber || ''}`, 15, 32);
+    if (settings.invoiceLogo) {
+      try {
+        doc.addImage(settings.invoiceLogo, 'PNG', 15, 5, 25, 25, undefined, 'FAST');
+        
+        doc.setTextColor(212, 175, 55);
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(16);
+        doc.text(settings.systemName || settings.companyName || 'SWIFT SHIP', 45, 18);
+        
+        doc.setTextColor(180, 180, 180);
+        doc.setFontSize(8);
+        doc.setFont('Helvetica', 'normal');
+        doc.text('FREIGHT CARGO INVOICE & MANIFEST RECEIPTS', 45, 24);
+        
+        doc.setTextColor(130, 130, 130);
+        doc.setFontSize(7.5);
+        doc.text(`Invoice Date: ${new Date(order.createdAt || Date.now()).toLocaleDateString()} | Order Code: ${order.orderNumber || ''}`, 45, 30);
+      } catch (err) {
+        console.warn("Failed to add invoice logo to PDF:", err);
+        // Fallback if logo rendering fails
+        doc.setTextColor(212, 175, 55);
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(18);
+        doc.text(settings.systemName || settings.companyName || 'SWIFT SHIP', 15, 18);
+        
+        doc.setTextColor(180, 180, 180);
+        doc.setFontSize(9);
+        doc.setFont('Helvetica', 'normal');
+        doc.text('FREIGHT CARGO INVOICE & MANIFEST RECEIPTS', 15, 25);
+        
+        doc.setTextColor(130, 130, 130);
+        doc.setFontSize(7.5);
+        doc.text(`Invoice Date: ${new Date(order.createdAt || Date.now()).toLocaleDateString()} | Order Code: ${order.orderNumber || ''}`, 15, 32);
+      }
+    } else {
+      doc.setTextColor(212, 175, 55);
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(18);
+      doc.text(settings.systemName || settings.companyName || 'SWIFT SHIP', 15, 18);
+      
+      doc.setTextColor(180, 180, 180);
+      doc.setFontSize(9);
+      doc.setFont('Helvetica', 'normal');
+      doc.text('FREIGHT CARGO INVOICE & MANIFEST RECEIPTS', 15, 25);
+      
+      doc.setTextColor(130, 130, 130);
+      doc.setFontSize(7.5);
+      doc.text(`Invoice Date: ${new Date(order.createdAt || Date.now()).toLocaleDateString()} | Order Code: ${order.orderNumber || ''}`, 15, 32);
+    }
 
     // Embed QR code from canvas if available
     if (qrCanvasRef.current) {
@@ -829,13 +909,13 @@ export default function Orders() {
       shippingCompany: 'Aramex',
       shippingCourierId: '',
       deliveryCourierId: '',
-      deliveryCourierFee: 4000,
-      currency: 'SAR',
-      exchangeRateYER: 390,
-      exchangeRateUSD: 535,
-      bankCommissionRate: 3,
-      companyProfitRate: 12,
-      packagingFee: 0,
+      deliveryCourierFee: settings.defaultDeliveryFee ?? 4000,
+      currency: settings.currency || 'SAR',
+      exchangeRateYER: settings.exchangeRateSAR || 140,
+      exchangeRateUSD: settings.exchangeRateUSD || 535,
+      bankCommissionRate: settings.defaultBankCommissionRate ?? 3,
+      companyProfitRate: settings.defaultCompanyProfitRate ?? 12,
+      packagingFee: settings.defaultPackagingFee ?? 0,
       sheinRedPrice: 0,
       amountPaid: 0,
       paymentMethod: 'Cash',
@@ -866,6 +946,66 @@ export default function Orders() {
         packagingFees: 0
       }
     ]);
+  };
+
+  // Delete Order with Admin PIN Verification (Requirement 4: Security Settings)
+  const handleDeleteOrderClick = (order: any) => {
+    if (role !== 'Admin') {
+      alert(isAr ? 'عذراً، حذف الطلبات مخصص للمدراء فقط' : 'Order deletion is restricted to Administrators.');
+      return;
+    }
+
+    // Prevent deletion if status is beyond "تم تسجيل الطلب" / "Pending" or any payments exist
+    const isSensitive = (order.orderStatus !== 'تم تسجيل الطلب' && order.orderStatus !== 'Pending' && order.orderStatus !== 'تم تسجيل الطلب (قيد المعالجة)') || 
+                        parseFloat(order.amountPaid || 0) > 0;
+
+    if (isSensitive && settings.protectSensitiveOrderDelete) {
+      setOrderToDelete(order);
+      setDeletePin('');
+      setDeleteError('');
+      setIsDeleteModalOpen(true);
+    } else {
+      if (window.confirm(isAr 
+        ? `هل أنت متأكد من حذف الطلب رقم ${order.orderNumber || order.id}؟ لا يمكن التراجع عن هذا الإجراء.`
+        : `Are you sure you want to delete order ${order.orderNumber || order.id}? This action cannot be undone.`
+      )) {
+        executeDeleteOrder(order);
+      }
+    }
+  };
+
+  const executeDeleteOrder = async (order: any) => {
+    try {
+      await deleteDoc(doc(db, 'orders', order.id));
+      
+      activityLogService.log('delete_order', order.orderNumber || order.id, {
+        customerName: order.customerName,
+        totalCostYER: order.totalCostYER
+      });
+
+      notificationService.notify({
+        title: isAr ? 'تم حذف الطلب' : 'Order Deleted',
+        message: isAr 
+          ? `تم حذف الطلب رقم ${order.orderNumber || order.id} بنجاح` 
+          : `Order ${order.orderNumber || order.id} has been deleted`,
+        type: 'warning',
+        category: 'order'
+      });
+      
+      setIsDeleteModalOpen(false);
+      setOrderToDelete(null);
+    } catch (err: any) {
+      alert(isAr ? 'فشل حذف الطلب: ' + err.message : 'Failed to delete order: ' + err.message);
+    }
+  };
+
+  const handleVerifyDeletePin = () => {
+    const systemPin = profile?.systemPin || '000000';
+    if (deletePin.trim() === systemPin.trim()) {
+      executeDeleteOrder(orderToDelete);
+    } else {
+      setDeleteError(isAr ? 'رمز الـ PIN غير صحيح' : 'Invalid security PIN');
+    }
   };
 
   // Nested quick-add customer
@@ -1876,6 +2016,17 @@ export default function Orders() {
                       >
                         <Activity className="w-3.5 h-3.5 text-cyan-400" />
                         {isAr ? 'اللوجستيات' : 'Update'}
+                      </button>
+                    )}
+
+                    {role === 'Admin' && (
+                      <button 
+                        onClick={() => handleDeleteOrderClick(ord)}
+                        className="bg-rose-950/20 text-rose-400 hover:bg-rose-900 hover:text-white px-2.5 py-1.5 rounded-lg transition-all text-[10px] flex items-center gap-1 font-bold border border-rose-900/30 cursor-pointer"
+                        title={isAr ? 'حذف هذا الطلب نهائياً' : 'Delete Order'}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        {isAr ? 'حذف' : 'Delete'}
                       </button>
                     )}
 
@@ -3737,6 +3888,73 @@ export default function Orders() {
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* DELETE ORDER SECURITY PIN MODAL */}
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-slate-900 border-2 border-rose-500/30 rounded-3xl w-full max-w-md overflow-hidden shadow-[0_0_50px_rgba(239,68,68,0.15)] flex flex-col">
+            <div className="p-4 bg-rose-950/20 border-b border-slate-800 flex justify-between items-center">
+              <h3 className="font-black text-rose-450 text-sm flex items-center gap-2">
+                ⚠️ {isAr ? 'حذف طلب حساس ومحمي' : 'Sensitive Order Deletion'}
+              </h3>
+              <button 
+                onClick={() => {
+                  setIsDeleteModalOpen(false);
+                  setOrderToDelete(null);
+                }} 
+                className="bg-slate-800 text-slate-400 hover:text-white p-1 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <div className="p-5 space-y-4 text-xs font-bold text-slate-350 text-center">
+              <p className="text-slate-400 leading-relaxed text-center">
+                {isAr 
+                  ? 'هذا الطلب يحتوي على مدفوعات مسجلة أو تخطت حالته التثبيت الأولي. يرجى إدخال الرمز السري الشخصي للمدير (System PIN) للمتابعة.'
+                  : 'This order has payments recorded or is advanced in the logistics process. Please enter your personal System PIN to confirm deletion.'}
+              </p>
+              
+              {deleteError && (
+                <div className="bg-rose-950/30 text-rose-400 p-2.5 rounded-xl border border-rose-900/30 font-mono text-center">
+                  {deleteError}
+                </div>
+              )}
+              
+              <input
+                type="password"
+                value={deletePin}
+                onChange={(e) => {
+                  setDeletePin(e.target.value);
+                  setDeleteError('');
+                }}
+                className="block w-full px-4 py-3 bg-black border border-slate-850 rounded-xl text-white outline-none focus:border-rose-500 text-center font-mono text-xl tracking-[0.5em]"
+                placeholder="••••••"
+                maxLength={10}
+                autoFocus
+              />
+            </div>
+            
+            <div className="p-4 bg-slate-950/30 border-t border-slate-850 flex justify-end gap-2">
+              <button 
+                onClick={() => {
+                  setIsDeleteModalOpen(false);
+                  setOrderToDelete(null);
+                }} 
+                className="px-4 py-2 bg-slate-800 text-slate-400 rounded-xl font-bold hover:text-white transition text-xs cursor-pointer"
+              >
+                {isAr ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button 
+                onClick={handleVerifyDeletePin}
+                className="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl font-black transition text-xs cursor-pointer"
+              >
+                {isAr ? 'تأكيد الحذف النهائي' : 'Verify & Delete'}
+              </button>
+            </div>
           </div>
         </div>
       )}
