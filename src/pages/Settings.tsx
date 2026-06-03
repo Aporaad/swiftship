@@ -12,6 +12,10 @@ export default function Settings() {
   const [importLoading, setImportLoading] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const { role, hasPermission, loading: roleLoading } = useRole();
+  const canEditCompany = role === 'Admin' || hasPermission('edit_company_info');
+  const canEditRates = role === 'Admin' || hasPermission('edit_exchange_rates');
+  const canManageWhatsapp = role === 'Admin' || hasPermission('manage_whatsapp');
+  const canManageBackup = role === 'Admin' || hasPermission('manage_backup');
   const { settings: globalSettings, updateSettings, t } = useSettings();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isAr = globalSettings.language === 'ar';
@@ -273,60 +277,66 @@ export default function Settings() {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 relative z-10">
               <div className="md:col-span-2">
-                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'اسم الشركة ومؤسستك اللوجيستية الكبرى' : 'Global Enterprise Title Name'}</label>
+                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'اسم الشركة ومؤسستك اللوجيستية الكبرى' : 'Global Enterprise Title Name'}{!canEditCompany && ' 🔒'}</label>
                 <input 
+                  disabled={!canEditCompany}
                   type="text" 
                   value={localSettings.companyName}
                   onChange={(e) => setLocalSettings({...localSettings, companyName: e.target.value})}
-                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start"
-                  placeholder={isAr ? "الشركة اللوجستية الراقية" : "Luxury Logistics Enterprise Inc"}
+                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start disabled:opacity-55 disabled:cursor-not-allowed"
+                  placeholder={canEditCompany ? (isAr ? "الشركة اللوجستية الراقية" : "Luxury Logistics Enterprise Inc") : "🔒"}
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'الهاتف الموصول' : 'Corporate Phone'}</label>
+                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'الهاتف الموصول' : 'Corporate Phone'}{!canEditCompany && ' 🔒'}</label>
                 <input 
+                  disabled={!canEditCompany}
                   type="text" 
                   value={localSettings.companyPhone}
                   onChange={(e) => setLocalSettings({...localSettings, companyPhone: e.target.value})}
-                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono" dir="ltr"
+                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono disabled:opacity-55 disabled:cursor-not-allowed" dir="ltr"
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'البريد المؤسسي' : 'Secure Email ID'}</label>
+                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'البريد المؤسسي' : 'Secure Email ID'}{!canEditCompany && ' 🔒'}</label>
                 <input 
+                  disabled={!canEditCompany}
                   type="email" 
                   value={localSettings.companyEmail}
                   onChange={(e) => setLocalSettings({...localSettings, companyEmail: e.target.value})}
-                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono" dir="ltr"
+                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono disabled:opacity-55 disabled:cursor-not-allowed" dir="ltr"
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'النطاق والموقع الإلكتروني للشركة' : 'Web Domain'}</label>
+                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'النطاق والموقع الإلكتروني للشركة' : 'Web Domain'}{!canEditCompany && ' 🔒'}</label>
                 <input 
+                  disabled={!canEditCompany}
                   type="text" 
                   value={localSettings.companyWebsite}
                   onChange={(e) => setLocalSettings({...localSettings, companyWebsite: e.target.value})}
-                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono" dir="ltr"
+                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono disabled:opacity-55 disabled:cursor-not-allowed" dir="ltr"
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'الرقم الضريبي وتوثيق الغرفة التجارية' : 'Commercial Tax Validation ID'}</label>
+                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'الرقم الضريبي وتوثيق الغرفة التجارية' : 'Commercial Tax Validation ID'}{!canEditCompany && ' 🔒'}</label>
                 <input 
+                  disabled={!canEditCompany}
                   type="text" 
                   value={localSettings.taxId}
                   onChange={(e) => setLocalSettings({...localSettings, taxId: e.target.value})}
-                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono" dir="ltr"
-                  placeholder="TAX-967-889"
+                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono disabled:opacity-55 disabled:cursor-not-allowed" dir="ltr"
+                  placeholder={canEditCompany ? "TAX-967-889" : "🔒"}
                 />
               </div>
               <div className="md:col-span-2">
-                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'سكني وسكرتارية المقر الرئيسي للشركة' : 'Detailed Headquarters Address'}</label>
+                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'سكني وسكرتارية المقر الرئيسي للشركة' : 'Detailed Headquarters Address'}{!canEditCompany && ' 🔒'}</label>
                 <textarea 
+                  disabled={!canEditCompany}
                   rows={2}
                   value={localSettings.companyAddress}
                   onChange={(e) => setLocalSettings({...localSettings, companyAddress: e.target.value})}
-                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start"
-                  placeholder={isAr ? "اليمن - صنعاء - شارع الستين" : "Sana'a - Yemen"}
+                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start disabled:opacity-55 disabled:cursor-not-allowed"
+                  placeholder={canEditCompany ? (isAr ? "اليمن - صنعاء - شارع الستين" : "Sana'a - Yemen") : "🔒"}
                 />
               </div>
             </div>
@@ -340,11 +350,12 @@ export default function Settings() {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'عملة التقييم والتدقيق المالي' : 'Trading Vault Base Currency'}</label>
+                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'عملة التقييم والتدقيق المالي' : 'Trading Vault Base Currency'}{!canEditRates && ' 🔒'}</label>
                 <select 
+                  disabled={!canEditRates}
                   value={localSettings.currency} 
                   onChange={(e) => setLocalSettings({...localSettings, currency: e.target.value})}
-                  className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3.5 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer"
+                  className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3.5 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer disabled:opacity-55 disabled:cursor-not-allowed"
                 >
                   <option value="SAR">{isAr ? '🇸🇦 ريال سعودي (SAR)' : 'SAR'}</option>
                   <option value="USD">{isAr ? '🇺🇸 دولار أمريكي (USD)' : 'USD'}</option>
@@ -353,23 +364,24 @@ export default function Settings() {
                 </select>
               </div>
               <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'الرمز المحاسبي المطبوع' : 'Accounting Sign Symbol'}</label>
+                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'الرمز المحاسبي المطبوع' : 'Accounting Sign Symbol'}{!canEditRates && ' 🔒'}</label>
                 <input 
+                  disabled={!canEditRates}
                   type="text" 
                   value={localSettings.currencySymbol}
                   onChange={(e) => setLocalSettings({...localSettings, currencySymbol: e.target.value})}
-                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs text-center font-bold text-white focus:border-[#d4af37]/60 outline-none"
+                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs text-center font-bold text-white focus:border-[#d4af37]/60 outline-none disabled:opacity-55 disabled:cursor-not-allowed"
                 />
               </div>
               <div className="md:col-span-2 flex items-center p-4 bg-black/40 rounded-2xl border border-slate-850 gap-4">
                 <div className="bg-[#d4af37]/10 border border-[#d4af37]/25 text-[#d4af37] p-2.5 rounded-xl"><DollarSign className="w-5 h-5"/></div>
                 <div className="flex-1 text-start">
-                  <h4 className="text-xs font-black text-white uppercase tracking-wider">{isAr ? 'الإشعارات وسحابات التحصيل التلقائية' : 'Discharge Autonomous Slips'}</h4>
+                  <h4 className="text-xs font-black text-white uppercase tracking-wider">{isAr ? 'الإشعارات وسحابات التحصيل التلقائية' : 'Discharge Autonomous Slips'}{!canManageWhatsapp && ' 🔒'}</h4>
                   <p className="text-[10px] text-slate-500 font-bold">{isAr ? 'إرسال بنود إشعار تلقائي للزبون عند استلام العهدة أو تصفية الحساب ماليًا' : 'Instruct webhook integration to broadcast payment receipts immediately'}</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" checked={localSettings.autoNotification} onChange={(e) => setLocalSettings({...localSettings, autoNotification: e.target.checked})} className="sr-only peer" />
-                  <div className="w-11 h-6 bg-slate-850 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-slate-850 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-600"></div>
+                  <input type="checkbox" disabled={!canManageWhatsapp} checked={localSettings.autoNotification} onChange={(e) => setLocalSettings({...localSettings, autoNotification: e.target.checked})} className="sr-only peer" />
+                  <div className="w-11 h-6 bg-slate-850 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-slate-850 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-600 disabled:opacity-55"></div>
                 </label>
               </div>
 
@@ -384,24 +396,26 @@ export default function Settings() {
 
               {/* Exchange Rates Inputs */}
               <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'سعر صرف الدولار (USD) مقابل اليمني' : 'USD to YER Rate'}</label>
+                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'سعر صرف الدولار (USD) مقابل اليمني' : 'USD to YER Rate'}{!canEditRates && ' 🔒'}</label>
                 <input 
+                  disabled={!canEditRates}
                   type="number" 
                   step="any"
                   value={localSettings.exchangeRateUSD !== undefined ? localSettings.exchangeRateUSD : 535}
                   onChange={(e) => setLocalSettings({...localSettings, exchangeRateUSD: parseFloat(e.target.value) || 0})}
-                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono"
+                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono disabled:opacity-55 disabled:cursor-not-allowed"
                   placeholder="535"
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'سعر صرف السعودي (SAR) مقابل اليمني' : 'SAR to YER Rate'}</label>
+                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'سعر صرف السعودي (SAR) مقابل اليمني' : 'SAR to YER Rate'}{!canEditRates && ' 🔒'}</label>
                 <input 
+                  disabled={!canEditRates}
                   type="number" 
                   step="any"
                   value={localSettings.exchangeRateSAR !== undefined ? localSettings.exchangeRateSAR : 140}
                   onChange={(e) => setLocalSettings({...localSettings, exchangeRateSAR: parseFloat(e.target.value) || 0})}
-                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono"
+                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono disabled:opacity-55 disabled:cursor-not-allowed"
                   placeholder="140"
                 />
               </div>
@@ -410,24 +424,25 @@ export default function Settings() {
               <div className="md:col-span-2 flex items-center p-4 bg-black/40 rounded-2xl border border-slate-850 gap-4">
                 <div className="bg-[#d4af37]/10 border border-[#d4af37]/25 text-[#d4af37] p-2.5 rounded-xl"><RefreshCw className="w-5 h-5"/></div>
                 <div className="flex-1 text-start">
-                  <h4 className="text-xs font-black text-white uppercase tracking-wider">{isAr ? 'تحديث تلقائي لأسعار الصرف من API' : 'Auto-update exchange rates from API'}</h4>
+                  <h4 className="text-xs font-black text-white uppercase tracking-wider">{isAr ? 'تحديث تلقائي لأسعار الصرف من API' : 'Auto-update exchange rates from API'}{!canEditRates && ' 🔒'}</h4>
                   <p className="text-[10px] text-slate-500 font-bold">{isAr ? 'جلب تحديثات أسعار الصرف تلقائياً من خادم خارجي عند التحميل' : 'Enable background sync for exchange rates using API endpoint'}</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" checked={localSettings.autoUpdateExchangeRates || false} onChange={(e) => setLocalSettings({...localSettings, autoUpdateExchangeRates: e.target.checked})} className="sr-only peer" />
-                  <div className="w-11 h-6 bg-slate-850 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-slate-850 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-600"></div>
+                  <input type="checkbox" disabled={!canEditRates} checked={localSettings.autoUpdateExchangeRates || false} onChange={(e) => setLocalSettings({...localSettings, autoUpdateExchangeRates: e.target.checked})} className="sr-only peer" />
+                  <div className="w-11 h-6 bg-slate-850 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-slate-850 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-600 disabled:opacity-55"></div>
                 </label>
               </div>
 
               {/* API URL & Update Action */}
               <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 items-end bg-black/30 p-4 rounded-2xl border border-slate-850">
                 <div className="md:col-span-2">
-                  <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'رابط خادم أسعار الصرف (API URL)' : 'Exchange Rates API Endpoint'}</label>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'رابط خادم أسعار الصرف (API URL)' : 'Exchange Rates API Endpoint'}{!canEditRates && ' 🔒'}</label>
                   <input 
+                    disabled={!canEditRates}
                     type="text" 
                     value={localSettings.exchangeRatesApiUrl || 'https://open.er-api.com/v6/latest/USD'}
                     onChange={(e) => setLocalSettings({...localSettings, exchangeRatesApiUrl: e.target.value})}
-                    className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs text-white focus:border-[#d4af37]/60 outline-none text-start font-mono"
+                    className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs text-white focus:border-[#d4af37]/60 outline-none text-start font-mono disabled:opacity-55 disabled:cursor-not-allowed"
                     placeholder="https://open.er-api.com/v6/latest/USD"
                   />
                 </div>
@@ -435,8 +450,8 @@ export default function Settings() {
                   <button
                     type="button"
                     onClick={() => fetchExchangeRates(localSettings.exchangeRatesApiUrl)}
-                    disabled={apiLoading}
-                    className="w-full bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black py-3 rounded-xl font-black text-xs transition shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                    disabled={apiLoading || !canEditRates}
+                    className="w-full bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black py-3 rounded-xl font-black text-xs transition shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:from-slate-800 disabled:to-slate-900 disabled:cursor-not-allowed"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${apiLoading ? 'animate-spin' : ''}`} />
                     {apiLoading ? (isAr ? 'جاري الجلب...' : 'Fetching...') : (isAr ? 'تحديث الآن' : 'Update Now')}
@@ -515,21 +530,21 @@ export default function Settings() {
                   <button 
                     type="button"
                     onClick={handleBackup}
-                    disabled={backupLoading}
-                    className="w-full bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black py-2.5 rounded-xl font-black text-xs transition-all flex items-center justify-center gap-2 disabled:from-slate-800 disabled:to-slate-900 shadow"
+                    disabled={backupLoading || !canManageBackup}
+                    className="w-full bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black py-2.5 rounded-xl font-black text-xs transition-all flex items-center justify-center gap-2 disabled:from-slate-800 disabled:to-slate-900 disabled:cursor-not-allowed shadow"
                   >
                     {backupLoading ? (isAr ? 'جاري السحب والتأمين...' : 'Mining blocks...') : (
-                      <>{t('exportBackup')} <Save className="w-3.5 h-3.5" /></>
+                      <>{t('exportBackup')} <Save className="w-3.5 h-3.5" />{!canManageBackup && ' 🔒'}</>
                     )}
                   </button>
                   <button 
                     type="button"
                     onClick={handleImportClick}
-                    disabled={importLoading}
-                    className="w-full bg-black/40 border border-slate-850 text-slate-300 py-2.5 rounded-xl font-black text-xs hover:bg-slate-900 transition-all flex items-center justify-center gap-2"
+                    disabled={importLoading || !canManageBackup}
+                    className="w-full bg-black/40 border border-slate-850 text-slate-300 py-2.5 rounded-xl font-black text-xs hover:bg-slate-900 transition-all flex items-center justify-center gap-2 disabled:opacity-55 disabled:cursor-not-allowed"
                   >
                     <Upload className="w-3.5 h-3.5" />
-                    {importLoading ? (isAr ? 'جاري الرفع والدمج...' : 'Injecting nodes...') : t('importBackup')}
+                    {importLoading ? (isAr ? 'جاري الرفع والدمج...' : 'Injecting nodes...') : <>{t('importBackup')} {!canManageBackup && ' 🔒'}</>}
                   </button>
                 </div>
 
@@ -551,9 +566,10 @@ export default function Settings() {
                 </div>
               </div>
               
-              <div className="p-4 bg-rose-950/10 rounded-2xl border border-rose-950/40">
-                <h3 className="text-rose-400 font-black text-[9px] mb-2 uppercase tracking-widest text-center">{isAr ? 'صلاحيات النواة المعالجة (خطر)' : 'Host System Cache Clear'}</h3>
+              <div className="p-4 bg-rose-955/10 rounded-2xl border border-rose-950/40">
+                <h3 className="text-rose-455 font-black text-[9px] mb-2 uppercase tracking-widest text-center">{isAr ? 'صلاحيات النواة المعالجة (خطر)' : 'Host System Cache Clear'}{!canManageBackup && ' 🔒'}</h3>
                 <button 
+                  disabled={!canManageBackup}
                   type="button"
                   onClick={() => {
                     setConfirmConfig({
@@ -567,7 +583,7 @@ export default function Settings() {
                       }
                     });
                   }}
-                  className="w-full bg-rose-500/10 text-rose-500 py-2 rounded-xl font-black text-[9px] hover:bg-rose-500 hover:text-white transition-all border border-rose-500/30"
+                  className="w-full bg-rose-500/10 text-rose-500 py-2 rounded-xl font-black text-[9px] hover:bg-rose-500 hover:text-white transition-all border border-rose-500/30 disabled:opacity-55 disabled:cursor-not-allowed"
                 >
                   {isAr ? 'مسح الكاش وفرمتة المتصفح' : 'Clear Host LocalState'}
                 </button>

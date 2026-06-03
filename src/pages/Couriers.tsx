@@ -181,7 +181,8 @@ export default function Couriers() {
       notificationService.notify({
         title: isAr ? 'تحديث المندوب' : 'Courier Updated',
         message: isAr ? 'تم تحديث ملف المندوب بنجاح' : 'Courier settings updated successfully',
-        type: 'success'
+        type: 'success',
+        category: 'system'
       });
       setIsEditModalOpen(false);
     } catch (err) {
@@ -205,7 +206,8 @@ export default function Couriers() {
           notificationService.notify({
             title: isAr ? 'تم تحديث الوضعية' : 'Status Toggle Successful',
             message: isAr ? `تم تعديل وضعية الحساب إلى: ${courier.disabled ? 'نشط' : 'معطل'}` : `Account is now: ${courier.disabled ? 'Active' : 'Disabled'}`,
-            type: 'info'
+            type: 'info',
+            category: 'system'
           });
         } catch (err) {
           handleFirestoreError(err, OperationType.UPDATE, 'couriers');
@@ -226,7 +228,8 @@ export default function Couriers() {
           notificationService.notify({
             title: isAr ? 'تم الحذف' : 'Account Revoked',
             message: isAr ? 'تم حذف حساب المندوب وسجلاته من النظام' : 'Courier record deleted successfully',
-            type: 'warning'
+            type: 'warning',
+            category: 'system'
           });
         } catch (err) {
           handleFirestoreError(err, OperationType.DELETE, 'couriers');
@@ -264,7 +267,8 @@ export default function Couriers() {
       notificationService.notify({
         title: isAr ? 'تم تسجيل مندوب خارجي' : 'External Courier Registered',
         message: isAr ? `تم تسجيل المندوب الخارجي بنجاح برمز: ${customId}` : `External courier registered with ID: ${customId}`,
-        type: 'success'
+        type: 'success',
+        category: 'system'
       });
       
       // Reset form setup
@@ -276,7 +280,8 @@ export default function Couriers() {
       notificationService.notify({
         title: isAr ? 'خطأ في إنشاء المندوب' : 'Registration Failure',
         message: err.message || 'Error configuring Courier record',
-        type: 'error'
+        type: 'error',
+        category: 'system'
       });
     } finally {
       setAddLoading(false);

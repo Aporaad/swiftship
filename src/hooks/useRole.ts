@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, db } from '../lib/firebase';
 
@@ -24,6 +24,20 @@ export function useRole() {
     return () => unsubAuth();
   }, []);
 
+  // Heartbeat: update lastSeen every 60s so the "Active Sessions" tab works
+  useEffect(() => {
+    if (!user) return;
+    const updateLastSeen = () => {
+      updateDoc(doc(db, 'users', user.uid), {
+        lastSeen: Date.now(),
+        lastSeenAt: new Date().toISOString(),
+      }).catch(() => {/* silently ignore */});
+    };
+    updateLastSeen(); // immediate on mount
+    const interval = setInterval(updateLastSeen, 60_000);
+    return () => clearInterval(interval);
+  }, [user]);
+
   useEffect(() => {
     if (!user) return;
 
@@ -31,8 +45,23 @@ export function useRole() {
     const unsub = onSnapshot(doc(db, 'users', user.uid), (userDoc) => {
       if (userDoc.exists()) {
         const userData = userDoc.data();
-        
-        // External Couriers are completely isolated and not allowed inside the system
+
+        // ── FORCE LOGOUT: admin requested remote session termination ──
+        if (userData.forceLogout === true) {
+          // Clear the flag first, then sign out
+          updateDoc(doc(db, 'users', user.uid), { forceLogout: false, forceLogoutAt: null })
+            .catch(console.error);
+          auth.signOut().catch(console.error);
+          return;
+        }
+
+        // ── DISABLED: account was disabled while user was logged in ──
+        if (userData.disabled === true) {
+          auth.signOut().catch(console.error);
+          return;
+        }
+
+        // ── COURIERS: completely isolated from the staff system ──
         if (userData.role === 'Courier' || userData.roleId === 'courier' || userData.role === 'courier') {
           setRole(null);
           setPermissions([]);
@@ -79,6 +108,7 @@ export function useRole() {
         } else {
           setLoading(false);
         }
+
       } else {
         // If user doc doesn't exist but it's the super admin email, grant all permissions and auto-create doc
         const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'admin@swiftship.system'];
