@@ -23,6 +23,7 @@ export default function Orders() {
   const [customers, setCustomers] = useState<any[]>([]);
   const [couriers, setCouriers] = useState<any[]>([]);
   const [sources, setSources] = useState<any[]>([]);
+  const [shippingCompanies, setShippingCompanies] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Modals & Panels States
@@ -31,6 +32,30 @@ export default function Orders() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [isAddCustomerOpen, setIsAddCustomerOpen] = useState(false);
+  const [isAddShippingCompanyOpen, setIsAddShippingCompanyOpen] = useState(false);
+  const [isAddSourceOpen, setIsAddSourceOpen] = useState(false);
+  const [activeAddShippingIndex, setActiveAddShippingIndex] = useState<number | string | null>(null);
+
+  // Form Data for newly created Inline Shipping Company
+  const [shippingCompanyFormData, setShippingCompanyFormData] = useState({
+    name: '',
+    contact_person: '',
+    phone: '',
+    tracking_url: '',
+    address: '',
+    notes: ''
+  });
+
+  // Form Data for newly created Inline Source of Purchase
+  const [sourceFormData, setSourceFormData] = useState({
+    source_name: '',
+    type: 'App',
+    source_url: '',
+    contact_info: '',
+    location: '',
+    proforma_invoice: '',
+    notes: ''
+  });
 
   // Focus Orders States
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
@@ -110,7 +135,9 @@ export default function Orders() {
     orderStatus: 'تم تسجيل الطلب',
     deliveryStatus: 'في الانتظار',
     locationYemen: 'مستودع صنعاء الرئيسي',
-    internalNotes: ''
+    internalNotes: '',
+    shippingCourierId: '',
+    deliveryCourierId: ''
   });
 
   // New Payment State 
@@ -153,12 +180,57 @@ export default function Orders() {
       setSources(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
+    // Fetch shipping companies
+    const unsubShippingCompanies = onSnapshot(collection(db, 'shipping_companies'), (snap) => {
+      console.log("SHIPPING COMPANIES SNAPSHOT RECEIVED, COUNT:", snap.size);
+      const list = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name || 'بدون اسم', ...doc.data() }));
+      console.log("SHIPPING COMPANIES FETCHED IN ORDERS.tsx:", list);
+      setShippingCompanies(list);
+    }, (error) => {
+      console.error("FIRESTORE ERROR ON shipping_companies SNAPSHOT LISTENER IN ORDERS.tsx:", error);
+    });
+
     return () => {
       unsubOrders();
       unsubCustomers();
       unsubCouriers();
       unsubSources();
+      unsubShippingCompanies();
     };
+  }, [roleLoading]);
+
+  // Auto-seed default shipping companies if they do not exist
+  useEffect(() => {
+    if (roleLoading) return;
+    
+    const seedDefaultCarriers = async () => {
+      try {
+        const defaults = ['Aramex', 'DHL', 'SafePost', 'Yemen Express'];
+        const querySnapshot = await getDocs(collection(db, 'shipping_companies'));
+        const existingNames = new Set(
+          querySnapshot.docs.map(doc => (doc.data().name || '').trim().toLowerCase())
+        );
+        
+        for (const carrier of defaults) {
+          if (!existingNames.has(carrier.toLowerCase())) {
+            await addDoc(collection(db, 'shipping_companies'), {
+              name: carrier,
+              contact_person: isAr ? 'الناقل الرسمي' : 'Default Carrier',
+              phone: '',
+              tracking_url: '',
+              address: '',
+              notes: isAr ? 'تمت الإضافة تلقائياً كشركة شحن افتراضية' : 'Auto-seeded default carrier',
+              createdAt: Date.now()
+            });
+            console.log(`Auto-seeded default carrier in DB: ${carrier}`);
+          }
+        }
+      } catch (err) {
+        console.error("Error seeding default carriers:", err);
+      }
+    };
+
+    seedDefaultCarriers();
   }, [roleLoading]);
 
   // Handle URL query parameter ?new=true to automatically open Create Order modal
@@ -499,6 +571,113 @@ export default function Orders() {
     }
   };
 
+  // Nested quick-add purchase source
+  const handleAddSource = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sourceFormData.source_name) return;
+
+    try {
+      const docRef = await addDoc(collection(db, 'sources'), {
+        name: sourceFormData.source_name,
+        source_name: sourceFormData.source_name,
+        type: sourceFormData.type,
+        source_url: sourceFormData.source_url,
+        contact_info: sourceFormData.contact_info,
+        location: sourceFormData.location,
+        proforma_invoice: sourceFormData.proforma_invoice,
+        notes: sourceFormData.notes,
+        createdAt: Date.now()
+      });
+
+      // Select newly created source
+      setFormData(prev => ({
+        ...prev,
+        orderSourceId: docRef.id
+      }));
+
+      setIsAddSourceOpen(false);
+      setSourceFormData({
+        source_name: '',
+        type: 'App',
+        source_url: '',
+        contact_info: '',
+        location: '',
+        proforma_invoice: '',
+        notes: ''
+      });
+
+      notificationService.notify({
+        title: isAr ? 'تمت إضافة مصدر الشراء' : 'Source Created',
+        message: isAr ? 'تم تسجيل مصدر الشراء وتحديده تلقائياً' : 'Purchase source registered and selected',
+        type: 'success'
+      });
+    } catch (err) {
+      console.error(err);
+      notificationService.notify({
+        title: isAr ? 'خطأ' : 'Error',
+        message: isAr ? 'فشل إضافة مصدر الشراء' : 'Failed to register source',
+        type: 'error'
+      });
+    }
+  };
+
+  // Nested quick-add shipping company
+  const handleAddShippingCompany = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!shippingCompanyFormData.name) return;
+
+    try {
+      const docRef = await addDoc(collection(db, 'shipping_companies'), {
+        name: shippingCompanyFormData.name,
+        contact_person: shippingCompanyFormData.contact_person,
+        phone: shippingCompanyFormData.phone,
+        tracking_url: shippingCompanyFormData.tracking_url,
+        address: shippingCompanyFormData.address,
+        notes: shippingCompanyFormData.notes,
+        createdAt: Date.now()
+      });
+
+      // Select newly created shipping company
+      if (activeAddShippingIndex !== null) {
+        if (typeof activeAddShippingIndex === 'string' && activeAddShippingIndex.startsWith('edit-')) {
+          const idx = parseInt(activeAddShippingIndex.split('-')[1]);
+          updateUpdateShippingRow(idx, 'shippingCompany', shippingCompanyFormData.name);
+        } else if (typeof activeAddShippingIndex === 'number') {
+          updateShippingRow(activeAddShippingIndex, 'shippingCompany', shippingCompanyFormData.name);
+        }
+        setActiveAddShippingIndex(null);
+      } else {
+        setFormData(prev => ({
+          ...prev,
+          shippingCompany: shippingCompanyFormData.name
+        }));
+      }
+
+      setIsAddShippingCompanyOpen(false);
+      setShippingCompanyFormData({
+        name: '',
+        contact_person: '',
+        phone: '',
+        tracking_url: '',
+        address: '',
+        notes: ''
+      });
+
+      notificationService.notify({
+        title: isAr ? 'تمت إضافة شركة الشحن' : 'Carrier Registered',
+        message: isAr ? 'تم تسجيل شركة الشحن الجديدة بنجاح وتحديدها' : 'Carrier registered and selected',
+        type: 'success'
+      });
+    } catch (err) {
+      console.error(err);
+      notificationService.notify({
+        title: isAr ? 'خطأ' : 'Error',
+        message: isAr ? 'فشل إضافة شركة الشحن' : 'Failed to register carrier',
+        type: 'error'
+      });
+    }
+  };
+
   // Add payments to unpaid order
   const handleAddPayment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -574,6 +753,8 @@ export default function Orders() {
         deliveryStatus: updateFormData.deliveryStatus,
         locationYemen: updateFormData.locationYemen,
         internalNotes: updateFormData.internalNotes,
+        shippingCourierId: updateFormData.shippingCourierId || '',
+        deliveryCourierId: updateFormData.deliveryCourierId || '',
         shippingDetails: updateShippings || [],
         updatedAt: Date.now()
       });
@@ -1250,7 +1431,9 @@ export default function Orders() {
                           orderStatus: ord.orderStatus || 'تم تسجيل الطلب',
                           deliveryStatus: ord.deliveryStatus || 'في الانتظار',
                           locationYemen: ord.locationYemen || 'مستودع صنعاء الرئيسي',
-                          internalNotes: ord.internalNotes || ''
+                          internalNotes: ord.internalNotes || '',
+                          shippingCourierId: ord.shippingCourierId || '',
+                          deliveryCourierId: ord.deliveryCourierId || ''
                         });
                         setUpdateShippings(ord.shippingDetails || []);
                         setIsUpdateModalOpen(true);
@@ -1395,58 +1578,62 @@ export default function Orders() {
                   </div>
                 </div>
 
-                {/* 2. Source and Logistics */}
-                <div className="space-y-4 bg-slate-950/20 border border-slate-800 p-5 rounded-2xl">
-                  <label className="block text-xs font-black text-slate-400">{isAr ? 'مصدر ونوع الطلب' : 'Order Source type'}</label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <select
-                        required
-                        value={formData.orderSourceId}
-                        onChange={(e) => setFormData({...formData, orderSourceId: e.target.value})}
-                        className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-3 outline-none font-bold text-xs"
-                      >
-                        <option value="">{isAr ? '-- اختر المصدر --' : '-- Choose Source --'}</option>
-                        {sources.map(s => (
-                          <option key={s.id} value={s.id}>{s.name} ({s.type})</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <input 
-                        type="text"
-                        value={formData.externalOrderNumber}
-                        onChange={(e) => setFormData({...formData, externalOrderNumber: e.target.value})}
-                        placeholder={isAr ? "رقم الفاتورة الأصلي (سلة...)" : "Invoice reference ID"}
-                        className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-3 outline-none font-bold text-xs"
-                      />
-                    </div>
-                  </div>
+                 {/* 2. Source and Logistics */}
+                 <div className="space-y-4 bg-slate-950/20 border border-slate-800 p-5 rounded-2xl">
+                   <span className="block text-xs font-black text-slate-400">{isAr ? 'مصدر ونوع الطلب' : 'Order Source type'}</span>
+                   <div className="grid grid-cols-2 gap-3">
+                     <div>
+                       <div className="flex justify-between items-center mb-1.5 flex-row-reverse">
+                         <button
+                           type="button"
+                           onClick={() => setIsAddSourceOpen(true)}
+                           className="text-[10px] font-black text-cyan-400 hover:underline flex items-center gap-0.5"
+                         >
+                           ➕ {isAr ? 'جديد' : 'New'}
+                         </button>
+                         <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider text-start">
+                           {isAr ? 'مصدر الشراء' : 'Order Source'}
+                         </label>
+                       </div>
+                       <select
+                         required
+                         value={formData.orderSourceId}
+                         onChange={(e) => setFormData({...formData, orderSourceId: e.target.value})}
+                         className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-3 outline-none font-bold text-xs"
+                       >
+                         <option value="">{isAr ? '-- اختر المصدر --' : '-- Choose Source --'}</option>
+                         {sources.map(s => (
+                           <option key={s.id} value={s.id}>{s.name || s.source_name} {s.type ? `(${s.type})` : ''}</option>
+                         ))}
+                       </select>
+                     </div>
+                     <div>
+                       <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider text-start">
+                         {isAr ? 'رقم الفاتورة الأصلي' : 'Orig. Invoice Ref'}
+                       </label>
+                       <input 
+                         type="text"
+                         value={formData.externalOrderNumber}
+                         onChange={(e) => setFormData({...formData, externalOrderNumber: e.target.value})}
+                         placeholder={isAr ? "رقم الفاتورة الأصلي (سلة...)" : "Invoice reference ID"}
+                         className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-3 outline-none font-bold text-xs"
+                       />
+                     </div>
+                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <input 
-                        type="text"
-                        value={formData.trackingNumber}
-                        onChange={(e) => setFormData({...formData, trackingNumber: e.target.value})}
-                        placeholder={isAr ? "رقم التتبع الدولي (DHL...)" : "Global Tracking ID"}
-                        className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-3 outline-none font-bold text-xs"
-                      />
-                    </div>
-                    <div>
-                      <select
-                        value={formData.shippingCompany}
-                        onChange={(e) => setFormData({...formData, shippingCompany: e.target.value})}
-                        className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-3 outline-none font-bold text-xs"
-                      >
-                        <option value="Aramex">Aramex</option>
-                        <option value="DHL">DHL</option>
-                        <option value="SafePost">SafePost</option>
-                        <option value="YemenPost">Yemen Express</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
+                   <div>
+                     <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider text-start">
+                       {isAr ? 'رقم التتبع الدولي' : 'Global Tracking Code'}
+                     </label>
+                     <input 
+                       type="text"
+                       value={formData.trackingNumber}
+                       onChange={(e) => setFormData({...formData, trackingNumber: e.target.value})}
+                       placeholder={isAr ? "رقم التتبع الدولي (DHL...)" : "Global Tracking ID"}
+                       className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-3 outline-none font-bold text-xs"
+                     />
+                   </div>
+                 </div>
 
               </div>
 
@@ -1465,9 +1652,12 @@ export default function Orders() {
 
                 <div className="space-y-3">
                   {items.map((item, idx) => (
-                    <div key={idx} className="grid grid-cols-1 md:grid-cols-6 gap-2.5 items-center border-b border-slate-850 pb-3 md:pb-0 md:border-none p-2.5 bg-slate-950/20 rounded-xl">
+                    <div key={idx} className="grid grid-cols-1 md:grid-cols-6 gap-2.5 items-end border-b border-slate-850 pb-3 md:pb-0 md:border-none p-2.5 bg-slate-950/20 rounded-xl">
                       
                       <div className="md:col-span-2">
+                        <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider text-start">
+                          {isAr ? 'اسم المنتج أو الرابط' : 'Item Name / Link'}
+                        </label>
                         <input 
                           required
                           type="text"
@@ -1477,50 +1667,70 @@ export default function Orders() {
                           className="w-full bg-slate-950 border border-slate-815 text-white rounded-xl p-2.5 outline-none font-bold text-[11px] text-start"
                         />
                       </div>
-
+ 
                       <div className="grid grid-cols-3 gap-2 md:col-span-3">
-                        <input 
-                          required
-                          type="number"
-                          value={item.productPrice || 0}
-                          onChange={(e) => updateItemRow(idx, 'productPrice', parseFloat(e.target.value) || 0)}
-                          placeholder={isAr ? "السعر" : "Price"}
-                          className="w-full bg-slate-950 border border-slate-815 text-white rounded-xl p-2.5 outline-none font-bold text-[11px] font-mono text-center"
-                        />
-                        <input 
-                          required
-                          type="number"
-                          value={item.quantity || 1}
-                          onChange={(e) => updateItemRow(idx, 'quantity', parseInt(e.target.value) || 0)}
-                          placeholder={isAr ? "الكمية" : "Qty"}
-                          className="w-full bg-slate-950 border border-slate-815 text-white rounded-xl p-2.5 outline-none font-bold text-[11px] font-mono text-center"
-                        />
-                        <input 
-                          type="number"
-                          step="any"
-                          value={item.weight || 0}
-                          onChange={(e) => updateItemRow(idx, 'weight', parseFloat(e.target.value) || 0)}
-                          placeholder={isAr ? "الوزن (KG)" : "KG"}
-                          disabled={formData.orderSourceType !== 'Factory'}
-                          className="w-full bg-slate-950 border border-slate-815 text-white rounded-xl p-2.5 outline-none font-bold text-[11px] font-mono text-center disabled:opacity-50"
-                        />
-                      </div>
-
-                      <div className="flex justify-between md:justify-end items-center col-span-1 gap-2">
-                        {formData.orderSourceType === 'Factory' ? (
+                        <div>
+                          <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider text-center">
+                            {isAr ? 'السعر (SAR)' : 'Price'}
+                          </label>
+                          <input 
+                            required
+                            type="number"
+                            value={item.productPrice || 0}
+                            onChange={(e) => updateItemRow(idx, 'productPrice', parseFloat(e.target.value) || 0)}
+                            placeholder={isAr ? "السعر" : "Price"}
+                            className="w-full bg-slate-950 border border-slate-815 text-white rounded-xl p-2.5 outline-none font-bold text-[11px] font-mono text-center"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider text-center">
+                            {isAr ? 'الكمية' : 'Qty'}
+                          </label>
+                          <input 
+                            required
+                            type="number"
+                            value={item.quantity || 1}
+                            onChange={(e) => updateItemRow(idx, 'quantity', parseInt(e.target.value) || 0)}
+                            placeholder={isAr ? "الكمية" : "Qty"}
+                            className="w-full bg-slate-950 border border-slate-815 text-white rounded-xl p-2.5 outline-none font-bold text-[11px] font-mono text-center"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider text-center">
+                            {isAr ? 'الوزن (KG)' : 'KG'}
+                          </label>
                           <input 
                             type="number"
                             step="any"
-                            value={item.cbm || 0}
-                            onChange={(e) => updateItemRow(idx, 'cbm', parseFloat(e.target.value) || 0)}
-                            placeholder="CBM"
-                            className="w-16 bg-slate-950 border border-slate-815 text-white rounded-xl p-2 outline-none font-bold text-[11px] font-mono text-center"
+                            value={item.weight || 0}
+                            onChange={(e) => updateItemRow(idx, 'weight', parseFloat(e.target.value) || 0)}
+                            placeholder={isAr ? "الوزن (KG)" : "KG"}
+                            disabled={formData.orderSourceType !== 'Factory'}
+                            className="w-full bg-slate-950 border border-slate-815 text-white rounded-xl p-2.5 outline-none font-bold text-[11px] font-mono text-center disabled:opacity-50"
                           />
+                        </div>
+                      </div>
+ 
+                      <div className="flex justify-between md:justify-end items-end col-span-1 gap-2 pb-0.5">
+                        {formData.orderSourceType === 'Factory' ? (
+                          <div>
+                            <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider text-center">
+                              CBM
+                            </label>
+                            <input 
+                              type="number"
+                              step="any"
+                              value={item.cbm || 0}
+                              onChange={(e) => updateItemRow(idx, 'cbm', parseFloat(e.target.value) || 0)}
+                              placeholder="CBM"
+                              className="w-16 bg-slate-950 border border-slate-815 text-white rounded-xl p-2 outline-none font-bold text-[11px] font-mono text-center"
+                            />
+                          </div>
                         ) : <div className="w-16"></div>}
                         <button 
                           type="button" 
                           onClick={() => removeItemRow(idx)}
-                          className="text-rose-500 hover:text-white hover:bg-rose-600 p-2 rounded-lg transition-all"
+                          className="text-rose-500 hover:text-white hover:bg-rose-600 p-2.5 rounded-xl transition-all mb-[1px]"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -1583,15 +1793,29 @@ export default function Orders() {
 
                         {/* 2. Shipping Company */}
                         <div>
-                          <label className="block text-slate-400 mb-1">{isAr ? 'اسم الناقل / شركة الشحن' : 'Carrier/Shipping Company'}</label>
-                          <input
-                            type="text"
-                            required
+                          <div className="flex justify-between items-center mb-1">
+                            <label className="block text-slate-400">{isAr ? 'اسم الناقل / شركة الشحن' : 'Carrier/Shipping Company'}</label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveAddShippingIndex(idx);
+                                setIsAddShippingCompanyOpen(true);
+                              }}
+                              className="text-[10px] font-black text-cyan-400 hover:underline flex items-center gap-0.5"
+                            >
+                              ➕ {isAr ? 'جديدة' : 'New'}
+                            </button>
+                          </div>
+                          <select
                             value={sh.shippingCompany || ''}
                             onChange={(e) => updateShippingRow(idx, 'shippingCompany', e.target.value)}
-                            placeholder={isAr ? "مثال: آرامكس، دي إتش إل، ناقل بحري" : "e.g., Aramex, DHL"}
-                            className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold placeholder-slate-600"
-                          />
+                            className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold"
+                          >
+                            <option value="">{isAr ? '-- اختر شركة شحن --' : '-- Choose carrier --'}</option>
+                            {shippingCompanies.map(c => (
+                              <option key={c.id} value={c.name}>{c.name}</option>
+                            ))}
+                          </select>
                         </div>
 
                         {/* 3. Shipping Source */}
@@ -1769,9 +1993,11 @@ export default function Orders() {
                       onChange={(e) => setFormData({...formData, shippingCourierId: e.target.value})}
                       className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none text-[11px]"
                     >
-                      <option value="">{isAr ? '-- غير موكل مندوب سعودي --' : '-- Choose Aggregator --'}</option>
-                      {couriers.filter(c => c.provinceId === 'KSA' || c.governorate === 'السعودية').map(c => (
-                        <option key={c.id} value={c.id}>{c.fullName}</option>
+                      <option value="">{isAr ? '-- اختر موظف التعبئة والتجميع --' : '-- Choose Aggregator --'}</option>
+                      {couriers.map(c => (
+                        <option key={c.id} value={c.id}>
+                          {c.fullName} {c.governorate || c.provinceId ? `(${c.governorate || c.provinceId})` : ''}
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -1783,9 +2009,11 @@ export default function Orders() {
                       onChange={(e) => setFormData({...formData, deliveryCourierId: e.target.value})}
                       className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none text-[11px]"
                     >
-                      <option value="">{isAr ? '-- اختر مندوب التوزيع --' : '-- Choose Final Courier --'}</option>
-                      {couriers.filter(c => c.provinceId !== 'KSA' && c.governorate !== 'السعودية').map(c => (
-                        <option key={c.id} value={c.id}>{c.fullName} ({c.governorate || 'صنعاء'})</option>
+                      <option value="">{isAr ? '-- اختر مندوب التوزيع النهائي --' : '-- Choose Yemen Driver --'}</option>
+                      {couriers.map(c => (
+                        <option key={c.id} value={c.id}>
+                          {c.fullName} {c.governorate || c.provinceId ? `(${c.governorate || c.provinceId})` : ''}
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -1900,6 +2128,99 @@ export default function Orders() {
         </div>
       )}
 
+      {/* QUICK ADD PURCHASE SOURCE NESTED MODAL */}
+      {isAddSourceOpen && (
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 z-55 animate-fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl">
+            <div className="p-4 border-b border-slate-800 bg-slate-955 flex justify-between items-center text-xs font-black text-white">
+              <span>{isAr ? 'تقييد مصدر شراء جديد' : 'Incorporate Purchase Source'}</span>
+              <button type="button" onClick={() => setIsAddSourceOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-1 rounded-lg">
+                <Plus className="w-4 h-4 rotate-45" />
+              </button>
+            </div>
+            <form onSubmit={handleAddSource} className="p-5 space-y-4 text-start">
+              <div>
+                <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'تصنيف قناة التوريد' : 'Class of channel'}</label>
+                <select 
+                  value={sourceFormData.type}
+                  onChange={(e) => setSourceFormData({...sourceFormData, type: e.target.value})}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold"
+                >
+                  <option value="App">{isAr ? 'موقع تسوق إلكتروني / تطبيق' : 'Retail Application/Website'}</option>
+                  <option value="Factory">{isAr ? 'مصنع أو مورد بالصين' : 'Direct China Manufacturer'}</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'اسم المصدر / التطبيق' : 'Source Name'}</label>
+                <input required type="text" value={sourceFormData.source_name || ''} onChange={e => setSourceFormData({...sourceFormData, source_name: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold" />
+              </div>
+
+              {sourceFormData.type === 'App' && (
+                <div>
+                  <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'رابط الويب بوابة (اختياري)' : 'URL Link'}</label>
+                  <input type="url" value={sourceFormData.source_url || ''} onChange={e => setSourceFormData({...sourceFormData, source_url: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-mono font-bold" placeholder="https://example.com" />
+                </div>
+              )}
+
+              {sourceFormData.type === 'Factory' && (
+                <>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'بيانات المورد / WeChat' : 'WeChat Contact'}</label>
+                    <input type="text" value={sourceFormData.contact_info || ''} onChange={e => setSourceFormData({...sourceFormData, contact_info: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'جغرافية المصنع / التسليم' : 'Depot Location'}</label>
+                    <input type="text" value={sourceFormData.location || ''} onChange={e => setSourceFormData({...sourceFormData, location: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold" />
+                  </div>
+                </>
+              )}
+
+              <div className="pt-2 flex justify-end gap-2 text-xs">
+                <button type="button" onClick={() => setIsAddSourceOpen(false)} className="p-2 text-slate-400 hover:bg-slate-800 rounded-lg">{isAr ? 'إلغاء' : 'Cancel'}</button>
+                <button type="submit" className="p-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl transition-all">{isAr ? 'تأكيد الحفظ' : 'Confirm Save'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* QUICK ADD SHIPPING COMPANY NESTED MODAL */}
+      {isAddShippingCompanyOpen && (
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 z-55 animate-fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl">
+            <div className="p-4 border-b border-slate-800 bg-slate-955 flex justify-between items-center text-xs font-black text-white">
+              <span>{isAr ? 'تقييد شركة شحن جديدة' : 'Add New Carrier'}</span>
+              <button type="button" onClick={() => setIsAddShippingCompanyOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-1 rounded-lg">
+                <Plus className="w-4 h-4 rotate-45" />
+              </button>
+            </div>
+            <form onSubmit={handleAddShippingCompany} className="p-5 space-y-4 text-start">
+              <div>
+                <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'اسم شركة الشحن' : 'Shipping Carrier Name'}</label>
+                <input required type="text" value={shippingCompanyFormData.name || ''} onChange={e => setShippingCompanyFormData({...shippingCompanyFormData, name: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold" placeholder="e.g Aramex, Safe Ship" />
+              </div>
+              <div>
+                <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'مسؤول الاتصال' : 'Contact Person'}</label>
+                <input type="text" value={shippingCompanyFormData.contact_person || ''} onChange={e => setShippingCompanyFormData({...shippingCompanyFormData, contact_person: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold" />
+              </div>
+              <div>
+                <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'رقم الهاتف/الجوال' : 'Phone No.'}</label>
+                <input type="text" value={shippingCompanyFormData.phone || ''} onChange={e => setShippingCompanyFormData({...shippingCompanyFormData, phone: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-mono font-bold" placeholder="+967..." />
+              </div>
+              <div>
+                <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'بوابة تتبع الشحنات الويب' : 'Tracking Portal Link'}</label>
+                <input type="url" value={shippingCompanyFormData.tracking_url || ''} onChange={e => setShippingCompanyFormData({...shippingCompanyFormData, tracking_url: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-mono font-bold" placeholder="https://..." />
+              </div>
+              <div className="pt-2 flex justify-end gap-2 text-xs">
+                <button type="button" onClick={() => setIsAddShippingCompanyOpen(false)} className="p-2 text-slate-400 hover:bg-slate-800 rounded-lg">{isAr ? 'إلغاء' : 'Cancel'}</button>
+                <button type="submit" className="p-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl transition-all">{isAr ? 'تأكيد الحفظ' : 'Confirm Save'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* UPDATE STATUS MODAL */}
       {isUpdateModalOpen && selectedOrder && (
         <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in overflow-y-auto">
@@ -1960,6 +2281,45 @@ export default function Orders() {
                 </div>
               </div>
 
+              {/* Assign Couriers/Employees */}
+              <div className="pt-4 border-t border-slate-805 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-slate-500 block mb-1">
+                    {isAr ? 'موظف التعبئة والتجميع' : 'Packaging & Assembly employee'}
+                  </label>
+                  <select 
+                    value={updateFormData.shippingCourierId}
+                    onChange={(e) => setUpdateFormData({...updateFormData, shippingCourierId: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 outline-none text-xs font-bold"
+                  >
+                    <option value="">{isAr ? '-- اختر موظف التعبئة والتجميع --' : '-- Choose Aggregator --'}</option>
+                    {couriers.map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.fullName} {c.governorate || c.provinceId ? `(${c.governorate || c.provinceId})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-500 block mb-1">
+                    {isAr ? 'مندوب التوزيع النهائي' : 'Yemen Delivery Courier'}
+                  </label>
+                  <select 
+                    value={updateFormData.deliveryCourierId}
+                    onChange={(e) => setUpdateFormData({...updateFormData, deliveryCourierId: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 outline-none text-xs font-bold"
+                  >
+                    <option value="">{isAr ? '-- اختر مندوب التوزيع النهائي --' : '-- Choose Final Courier --'}</option>
+                    {couriers.map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.fullName} {c.governorate || c.provinceId ? `(${c.governorate || c.provinceId})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               {/* Edit Shipping Details Subtable */}
               <div className="pt-4 border-t border-slate-800 space-y-4">
                 <div className="flex justify-between items-center">
@@ -2010,14 +2370,29 @@ export default function Orders() {
 
                         {/* Shipping Company */}
                         <div>
-                          <label className="block text-slate-400 mb-1">{isAr ? 'اسم الناقل / شركة الشحن' : 'Carrier/Shipping Company'}</label>
-                          <input
-                            type="text"
-                            required
+                          <div className="flex justify-between items-center mb-1">
+                            <label className="block text-slate-400">{isAr ? 'اسم الناقل / شركة الشحن' : 'Carrier/Shipping Company'}</label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveAddShippingIndex(`edit-${idx}`);
+                                setIsAddShippingCompanyOpen(true);
+                              }}
+                              className="text-[10px] font-black text-cyan-400 hover:underline flex items-center gap-0.5"
+                            >
+                              ➕ {isAr ? 'جديدة' : 'New'}
+                            </button>
+                          </div>
+                          <select
                             value={sh.shippingCompany || ''}
                             onChange={(e) => updateUpdateShippingRow(idx, 'shippingCompany', e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold text-xs animate-fade-in"
-                          />
+                            className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold text-xs"
+                          >
+                            <option value="">{isAr ? '-- اختر شركة شحن --' : '-- Choose carrier --'}</option>
+                            {shippingCompanies.map(c => (
+                              <option key={c.id} value={c.name}>{c.name}</option>
+                            ))}
+                          </select>
                         </div>
 
                         {/* Shipping Source */}
