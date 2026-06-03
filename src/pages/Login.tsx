@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { Lock, LogIn, User, Eye, EyeOff, Mail, Crown } from 'lucide-react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useSettings } from '../context/SettingsContext';
+import { activityLogService } from '../services/activityLogService';
 
 export default function Login() {
   const [identifier, setIdentifier] = useState('');
@@ -129,6 +130,14 @@ export default function Login() {
         return;
       }
 
+      // Log login event
+      try {
+        await activityLogService.log('login', userData?.fullName || result.user.email || 'Unknown', {
+          email: result.user.email,
+          loginAt: new Date().toISOString(),
+        });
+      } catch (_) {}
+
       navigate('/');
     } catch (err: any) {
       console.error(err);
@@ -215,17 +224,25 @@ export default function Login() {
         
         <div className="text-center">
           <div className="w-20 h-20 bg-gradient-to-b from-[#d4af37]/10 to-yellow-950/20 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-[#d4af37]/20 shadow-[0_0_20px_rgba(212,175,55,0.1)] relative group">
-            <svg className="w-12 h-10 text-[#d4af37] transition-transform duration-500 group-hover:scale-105" viewBox="0 0 100 60" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M50 5 L75 55 L50 43 L25 55 Z" stroke="currentColor" strokeWidth="2.5" fill="rgba(212,175,55,0.08)" />
-              <path d="M50 5 L50 43" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 2" />
-              <circle cx="50" cy="5" r="3" fill="#fff" className="animate-ping" />
-            </svg>
+            {settings.systemLogo ? (
+              <img
+                src={settings.systemLogo}
+                alt={settings.systemName || 'Logo'}
+                className="w-14 h-14 object-contain transition-all duration-500 transform group-hover:scale-105"
+              />
+            ) : (
+              <svg className="w-12 h-10 text-[#d4af37] transition-transform duration-500 group-hover:scale-105" viewBox="0 0 100 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M50 5 L75 55 L50 43 L25 55 Z" stroke="currentColor" strokeWidth="2.5" fill="rgba(212,175,55,0.08)" />
+                <path d="M50 5 L50 43" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 2" />
+                <circle cx="50" cy="5" r="3" fill="#fff" className="animate-ping" />
+              </svg>
+            )}
             <span className="absolute -top-1 right-2 bg-[#d4af37] text-black rounded-full p-0.5 shadow-sm shadow-yellow-950">
               <Crown className="w-2.5 h-2.5" />
             </span>
           </div>
           <h2 className="text-3xl font-extrabold text-white tracking-widest uppercase mb-1">
-            {settings.companyName || 'ALX DELIVERY'}
+            {settings.systemName || settings.companyName || 'SwiftShip'}
           </h2>
           <p className="text-[10px] text-slate-500 font-extrabold uppercase tracking-[0.3em] inline-block border-y border-slate-900 py-1.5 px-4 mt-1">
             {t('systemAdminPanel')}

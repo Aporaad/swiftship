@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDocs, writeBatch, doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { 
   LayoutDashboard, 
@@ -28,6 +28,8 @@ import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
 import { Toaster } from 'react-hot-toast';
 import GlobalSearchModal from './GlobalSearchModal';
+import { activityLogService } from '../services/activityLogService';
+import { notificationService } from '../services/notificationService';
 
 export default function Layout() {
   const navigate = useNavigate();
@@ -146,10 +148,68 @@ export default function Layout() {
     return () => unsub();
   }, [role, roleLoading, hasPermission]);
 
+  // Log logout & sign out
   const handleLogout = async () => {
+    try {
+      await activityLogService.log('logout', 'User Session Ended');
+    } catch (_) {}
     await signOut(auth);
     navigate('/login');
   };
+
+  // Auto-backup check: if admin & autoBackupEnabled & 24h passed, run backup to Firestore
+  useEffect(() => {
+    if (roleLoading || role !== 'Admin' || !settings.autoBackupEnabled) return;
+    const lastBackupAt = settings.lastAutoBackupAt || 0;
+    const hoursSince = (Date.now() - lastBackupAt) / (1000 * 60 * 60);
+    if (hoursSince < 24) return;
+
+    const runAutoBackup = async () => {
+      try {
+        const cols = ['orders', 'customers', 'couriers', 'sources', 'users', 'roles'];
+        const backupDoc: any = {
+          version: '3.0',
+          timestamp: new Date().toISOString(),
+          createdBy: auth.currentUser?.email || 'admin',
+          type: 'auto',
+          data: {}
+        };
+        for (const col of cols) {
+          try {
+            const snap = await getDocs(collection(db, col));
+            backupDoc.data[col] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          } catch (_) {}
+        }
+        // Save backup as a Firestore document under /backups collection
+        const backupId = `auto_${new Date().toISOString().split('T')[0]}`;
+        await setDoc(doc(db, 'backups', backupId), {
+          ...backupDoc,
+          savedAt: Date.now()
+        });
+        
+        // Log activity and notify users
+        activityLogService.log('backup_export', 'Auto Backup: ' + cols.join(', '));
+        notificationService.notify({
+          title: settings.language === 'ar' ? 'النسخ الاحتياطي التلقائي' : 'Automatic System Backup',
+          message: settings.language === 'ar'
+            ? 'قام النظام تلقائياً بأخذ نسخة احتياطية لجميع البيانات وحفظها في قاعدة البيانات'
+            : 'The system has automatically backed up all collections to Firestore',
+          type: 'success',
+          category: 'system'
+        });
+
+        // Update lastAutoBackupAt
+        await updateSettings({
+          lastAutoBackupAt: Date.now(),
+          lastBackup: new Date().toLocaleString(settings.language === 'ar' ? 'ar-YE' : 'en-US')
+        } as any);
+        console.log('[AutoBackup] Completed successfully');
+      } catch (err) {
+        console.error('[AutoBackup] Failed:', err);
+      }
+    };
+    runAutoBackup();
+  }, [role, roleLoading, settings.autoBackupEnabled, settings.lastAutoBackupAt]);
 
   const toggleLanguage = () => {
     const newLang = settings.language === 'ar' ? 'en' : 'ar';
@@ -275,31 +335,35 @@ export default function Layout() {
       {/* Sidebar - Desktop Layout */}
       <aside className="w-72 bg-luxury-black border-r border-[#d4af37]/15 flex flex-col shrink-0 hidden md:flex relative z-20 backdrop-blur-md">
         
-        {/* Luxury Gold ALX Delivery Logo Block */}
+        {/* Dynamic Logo & System Name Block */}
         <div className="p-8 pb-6 flex flex-col items-center justify-center border-b border-[#d4af37]/10 relative">
           <div className="absolute top-0 left-1/4 right-1/4 h-[1px] bg-gradient-to-r from-transparent via-[#d4af37]/45 to-transparent"></div>
           
           <div className="relative group cursor-pointer mb-2">
             <div className="absolute -inset-1 rounded-full bg-[#d4af37]/10 blur-md group-hover:bg-[#d4af37]/25 transition duration-500"></div>
-            {/* Custom Gold Wing SVG Logo */}
-            <svg className="w-16 h-12 text-[#d4af37] transition-all duration-500 transform group-hover:scale-105" viewBox="0 0 100 60" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M50 5 L75 55 L50 43 L25 55 Z" stroke="currentColor" strokeWidth="2.5" fill="rgba(212,175,55,0.08)" />
-              <path d="M50 5 L50 43" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 2" />
-              {/* Left Wing */}
-              <path d="M25 55 C12 40 10 25 22 15 C30 20 40 32 50 43" stroke="currentColor" strokeWidth="1.5" />
-              {/* Right Wing */}
-              <path d="M75 55 C88 40 90 25 78 15 C70 20 60 32 50 43" stroke="currentColor" strokeWidth="1.5" />
-              {/* Core Star glow */}
-              <circle cx="50" cy="5" r="3" fill="#fff" className="animate-ping" />
-              <circle cx="50" cy="5" r="2.5" fill="currentColor" />
-            </svg>
+            {settings.systemLogo ? (
+              <img
+                src={settings.systemLogo}
+                alt={settings.systemName || 'Logo'}
+                className="w-16 h-12 object-contain transition-all duration-500 transform group-hover:scale-105"
+              />
+            ) : (
+              <svg className="w-16 h-12 text-[#d4af37] transition-all duration-500 transform group-hover:scale-105" viewBox="0 0 100 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M50 5 L75 55 L50 43 L25 55 Z" stroke="currentColor" strokeWidth="2.5" fill="rgba(212,175,55,0.08)" />
+                <path d="M50 5 L50 43" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 2" />
+                <path d="M25 55 C12 40 10 25 22 15 C30 20 40 32 50 43" stroke="currentColor" strokeWidth="1.5" />
+                <path d="M75 55 C88 40 90 25 78 15 C70 20 60 32 50 43" stroke="currentColor" strokeWidth="1.5" />
+                <circle cx="50" cy="5" r="3" fill="#fff" className="animate-ping" />
+                <circle cx="50" cy="5" r="2.5" fill="currentColor" />
+              </svg>
+            )}
           </div>
           
-          <h1 className="text-xl font-extrabold tracking-[0.15em] text-[#d4af37] uppercase text-center mt-1 luxury-glow-neon select-none">
-            ALX DELIVERY
+          <h1 className="text-lg font-extrabold tracking-[0.1em] text-[#d4af37] uppercase text-center mt-1 luxury-glow-neon select-none">
+            {settings.systemName || settings.companyName || 'SwiftShip'}
           </h1>
           <p className="text-[9px] font-black tracking-[0.3em] text-slate-500 uppercase mt-0.5 select-none">
-            Logistics & ERP
+            {isAr ? 'نظام إدارة اللوجستية' : 'Logistics & ERP'}
           </p>
         </div>
         

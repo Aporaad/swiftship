@@ -1,94 +1,189 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { collection, doc, getDoc, getDocs, setDoc, writeBatch } from 'firebase/firestore';
+import { collection, doc, getDocs, setDoc, writeBatch, query, orderBy, deleteDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { Save, Globe, Palette, Database, DollarSign, Building, X, Upload, CheckCircle, ShieldAlert, Crown, Cpu, Archive, RefreshCw } from 'lucide-react';
+import {
+  Save, Globe, Palette, Database, DollarSign, Building, X, Upload, CheckCircle,
+  ShieldAlert, RefreshCw, Archive, Settings2, Shield, FileText, Image, Type,
+  Package, Download, Clock, User, Bell, Plus, Trash2, Edit3, Power,
+  Calendar, HardDrive, History, Lock, Unlock, AlertTriangle, ChevronDown, ChevronUp
+} from 'lucide-react';
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
+import type { CustomCurrency } from '../context/SettingsContext';
 import ConfirmModal from '../components/ConfirmModal';
 import { activityLogService } from '../services/activityLogService';
+import { notificationService } from '../services/notificationService';
+import { auth } from '../lib/firebase';
 
+type SettingsTab = 'interface' | 'general' | 'currency' | 'admin';
+
+// ─────────────────────────────────────
+// REUSABLE FIELD COMPONENTS
+// ─────────────────────────────────────
+const FieldLabel = ({ children, locked = false }: { children: React.ReactNode; locked?: boolean }) => (
+  <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">
+    {children}{locked && <span className="ml-1 text-rose-400">🔒</span>}
+  </label>
+);
+
+const FieldInput = ({ disabled = false, ...props }: React.InputHTMLAttributes<HTMLInputElement>) => (
+  <input
+    {...props}
+    disabled={disabled}
+    className={`w-full bg-black/50 border border-slate-800 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start transition ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-slate-700'} ${props.className || ''}`}
+  />
+);
+
+const FieldTextarea = ({ disabled = false, ...props }: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => (
+  <textarea
+    {...props}
+    disabled={disabled}
+    className={`w-full bg-black/50 border border-slate-800 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start transition ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-slate-700'}`}
+  />
+);
+
+const SectionCard = ({ title, icon: Icon, children, className = '', badge }: { title: string; icon: any; children: React.ReactNode; className?: string; badge?: string }) => (
+  <section className={`bg-[#121215] border border-slate-850 p-6 rounded-3xl shadow-lg relative overflow-hidden group ${className}`}>
+    <div className="absolute top-0 right-0 w-24 h-24 bg-[#d4af37]/3 rounded-full -mr-12 -mt-12 opacity-30 group-hover:scale-110 transition-transform duration-500"></div>
+    <h2 className="text-sm font-black text-white mb-5 flex items-center gap-2 border-b border-slate-800/50 pb-4 relative z-10 uppercase tracking-wider">
+      <Icon className="w-4 h-4 text-[#d4af37]" />
+      {title}
+      {badge && <span className="mr-auto text-[9px] font-black bg-[#d4af37]/20 text-[#d4af37] px-2 py-0.5 rounded-full">{badge}</span>}
+    </h2>
+    <div className="relative z-10">{children}</div>
+  </section>
+);
+
+const ToggleSwitch = ({
+  checked, onChange, label, description, icon: Icon, locked = false
+}: { checked: boolean; onChange: (v: boolean) => void; label: string; description?: string; icon?: any; locked?: boolean }) => (
+  <div className="flex items-center p-4 bg-black/40 rounded-2xl border border-slate-800 gap-4">
+    {Icon && (
+      <div className="bg-[#d4af37]/10 border border-[#d4af37]/25 text-[#d4af37] p-2.5 rounded-xl shrink-0">
+        <Icon className="w-5 h-5" />
+      </div>
+    )}
+    <div className="flex-1 text-start">
+      <h4 className="text-xs font-black text-white uppercase tracking-wider">
+        {label}{locked && <span className="ml-1 text-rose-400">🔒</span>}
+      </h4>
+      {description && <p className="text-[10px] text-slate-500 font-bold mt-0.5">{description}</p>}
+    </div>
+    <label className={`relative inline-flex items-center ${locked ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => !locked && onChange(e.target.checked)}
+        className="sr-only peer"
+        disabled={locked}
+      />
+      <div className="w-11 h-6 bg-slate-800 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-slate-800 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-600"></div>
+    </label>
+  </div>
+);
+
+// ─────────────────────────────────────
+// BACKUP RECORD TYPE
+// ─────────────────────────────────────
+interface BackupRecord {
+  id: string;
+  timestamp: string;
+  savedAt: number;
+  createdBy: string;
+  type: 'auto' | 'manual';
+  collections?: string[];
+  size?: number;
+}
+
+// ─────────────────────────────────────
+// MAIN COMPONENT
+// ─────────────────────────────────────
 export default function Settings() {
-  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [backupLoading, setBackupLoading] = useState(false);
   const [importLoading, setImportLoading] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const { role, hasPermission, loading: roleLoading } = useRole();
-  const canEditCompany = role === 'Admin' || hasPermission('edit_company_info');
-  const canEditRates = role === 'Admin' || hasPermission('edit_exchange_rates');
-  const canManageWhatsapp = role === 'Admin' || hasPermission('manage_whatsapp');
-  const canManageBackup = role === 'Admin' || hasPermission('manage_backup');
-  const { settings: globalSettings, updateSettings, t } = useSettings();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const isAr = globalSettings.language === 'ar';
-
   const [apiLoading, setApiLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<SettingsTab>('interface');
+  const [exportFormat, setExportFormat] = useState<'json' | 'csv'>('json');
 
-  const fetchExchangeRates = async (url: string = localSettings.exchangeRatesApiUrl || 'https://open.er-api.com/v6/latest/USD') => {
-    setApiLoading(true);
-    setApiError(null);
-    try {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(isAr ? 'فشل الاتصال بخادم أسعار الصرف' : 'Failed to connect to exchange rate server');
-      const data = await res.json();
-      if (data && data.rates) {
-        const sarRate = data.rates.SAR || 3.75;
-        const yerRate = data.rates.YER;
-        
-        let newUSD = localSettings.exchangeRateUSD || 535;
-        let newSAR = localSettings.exchangeRateSAR || 140;
+  // Backup history state
+  const [backupHistory, setBackupHistory] = useState<BackupRecord[]>([]);
+  const [backupHistoryLoading, setBackupHistoryLoading] = useState(false);
+  const [showBackupHistory, setShowBackupHistory] = useState(false);
+  const [selectedRestoreId, setSelectedRestoreId] = useState<string | null>(null);
 
-        if (yerRate && yerRate > 300) {
-          // If API gives parallel/real market rates (e.g. YER > 300)
-          newUSD = Math.round(yerRate);
-          newSAR = parseFloat((yerRate / sarRate).toFixed(2));
-        } else {
-          // Official YER is returned (~250), so scale SAR relative to the user's custom USD rate
-          newSAR = parseFloat((newUSD / sarRate).toFixed(2));
-        }
-
-        setLocalSettings(prev => ({
-          ...prev,
-          exchangeRateUSD: newUSD,
-          exchangeRateSAR: newSAR,
-        }));
-
-        activityLogService.log('fetch_exchange_rates', 'API Rates Update');
-        alert(isAr 
-          ? `تم تحديث أسعار الصرف بنجاح! USD: ${newUSD} YER, SAR: ${newSAR} YER`
-          : `Exchange rates updated! USD: ${newUSD} YER, SAR: ${newSAR} YER`
-        );
-      } else {
-        throw new Error(isAr ? 'بنية استجابة API غير صالحة' : 'Invalid API response structure');
-      }
-    } catch (err: any) {
-      console.error(err);
-      setApiError(err.message || 'Error fetching rates');
-    } finally {
-      setApiLoading(false);
-    }
-  };
-
-  // Confirmation Modal State
-  const [confirmConfig, setConfirmConfig] = useState<{
-    isOpen: boolean;
-    title: string;
-    message: string;
-    onConfirm: () => void;
-    type: 'danger' | 'warning' | 'info';
-  }>({
-    isOpen: false,
-    title: '',
-    message: '',
-    onConfirm: () => {},
-    type: 'danger'
+  // Currency editor state
+  const [editingCurrency, setEditingCurrency] = useState<CustomCurrency | null>(null);
+  const [newCurrency, setNewCurrency] = useState<Partial<CustomCurrency>>({
+    code: '', name: '', symbol: '', flag: '', rateToYER: 0, isActive: true
   });
+  const [showAddCurrency, setShowAddCurrency] = useState(false);
+
+  const { role, hasPermission, loading: roleLoading, profile } = useRole();
+  const canEditInterface = role === 'Admin' || hasPermission('edit_interface_settings');
+  const canEditGeneral = role === 'Admin' || hasPermission('edit_general_settings');
+  const canEditCompany = role === 'Admin' || hasPermission('edit_company_info');
+  const canEditRates = role === 'Admin' || hasPermission('edit_exchange_rates');
+  const canEditOrderDefaults = role === 'Admin' || hasPermission('edit_order_defaults');
+  const canManageBackup = role === 'Admin' || hasPermission('manage_backup');
+  const canManageAdmin = role === 'Admin';
+
+  const { settings: globalSettings, updateSettings, t } = useSettings();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const invoiceLogoInputRef = useRef<HTMLInputElement>(null);
+  const isAr = globalSettings.language === 'ar';
 
   const [localSettings, setLocalSettings] = useState(globalSettings);
+  const [exportSelections, setExportSelections] = useState<Record<string, boolean>>({
+    orders: true, customers: true, couriers: true, sources: true, users: true, roles: true,
+  });
 
   useEffect(() => {
     setLocalSettings(globalSettings);
+    // Sync export selections from backup settings
+    if (globalSettings.backupCollections) {
+      const sel: Record<string, boolean> = { orders: false, customers: false, couriers: false, sources: false, users: false, roles: false };
+      globalSettings.backupCollections.forEach(c => { if (c in sel) sel[c] = true; });
+      setExportSelections(sel);
+    }
   }, [globalSettings]);
+
+  // Load backup history from Firestore
+  const loadBackupHistory = async () => {
+    setBackupHistoryLoading(true);
+    try {
+      const snap = await getDocs(collection(db, 'backups'));
+      const records: BackupRecord[] = snap.docs.map(d => {
+        const data = d.data();
+        return {
+          id: d.id,
+          timestamp: data.timestamp || '',
+          savedAt: data.savedAt || 0,
+          createdBy: data.createdBy || 'Unknown',
+          type: data.type || 'manual',
+          collections: data.collections || [],
+          size: JSON.stringify(data.data || {}).length
+        };
+      }).sort((a, b) => b.savedAt - a.savedAt).slice(0, 20);
+      setBackupHistory(records);
+    } catch (err) {
+      console.error('Failed to load backup history:', err);
+    } finally {
+      setBackupHistoryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (showBackupHistory) loadBackupHistory();
+  }, [showBackupHistory]);
+
+  // ─── CONFIRM MODAL ──────────────────
+  const [confirmConfig, setConfirmConfig] = useState<{
+    isOpen: boolean; title: string; message: string; onConfirm: () => void; type: 'danger' | 'warning' | 'info';
+  }>({ isOpen: false, title: '', message: '', onConfirm: () => {}, type: 'danger' });
 
   if (roleLoading) {
     return (
@@ -100,97 +195,390 @@ export default function Settings() {
 
   if (!hasPermission('settings') && role !== 'Admin') {
     return (
-      <div className="flex flex-col items-center justify-center p-12 bg-gradient-to-br from-[#121215] to-[#070708] rounded-3xl border border-slate-850 shadow-xl text-center select-none">
+      <div className="flex flex-col items-center justify-center p-12 bg-gradient-to-br from-[#121215] to-[#070708] rounded-3xl border border-slate-800 shadow-xl text-center select-none">
         <ShieldAlert className="w-16 h-16 text-rose-500 mb-6 animate-pulse" />
-        <h2 className="text-2xl font-black text-[#d4af37] mb-2 uppercase tracking-wide text-center">{t('accessDenied')}</h2>
-        <p className="text-slate-500 dark:text-slate-400 max-w-md mb-6">{isAr ? 'صفحة الإعدادات والتحكم بالنظام مخصصة للمطورين والمدراء الاستراتيجيين فقط.' : 'This critical systems console is restricted to administrators and system architects.'}</p>
+        <h2 className="text-2xl font-black text-[#d4af37] mb-2 uppercase tracking-wide">{t('accessDenied')}</h2>
+        <p className="text-slate-500 max-w-md">
+          {isAr ? 'صفحة الإعدادات مخصصة للمدراء والمسؤولين فقط.' : 'Settings page is restricted to administrators only.'}
+        </p>
       </div>
     );
   }
 
-  const handleSave = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    setLoading(true);
+  // ─── SAVE ─────────────────────────────
+  const handleSave = async () => {
+    const canEditAny = role === 'Admin' ||
+      hasPermission('edit_interface_settings') ||
+      hasPermission('edit_general_settings') ||
+      hasPermission('edit_company_info') ||
+      hasPermission('edit_exchange_rates') ||
+      hasPermission('edit_order_defaults') ||
+      hasPermission('manage_backup');
+
+    if (!canEditAny) {
+      alert(isAr ? 'عذراً، ليس لديك صلاحية تعديل الإعدادات.' : 'Sorry, you do not have permission to edit settings.');
+      return;
+    }
+
+    setSaving(true);
     try {
-      await updateSettings(localSettings);
-      activityLogService.log('save_settings', 'Company Settings');
+      const selectedCols = Object.entries(exportSelections).filter(([, v]) => v).map(([k]) => k);
+      await updateSettings({ ...localSettings, backupCollections: selectedCols });
+      
+      const updaterName = profile?.fullName || auth.currentUser?.email || 'Unknown';
+      activityLogService.log('save_settings', 'System Settings');
+      
+      notificationService.notify({
+        title: isAr ? 'تحديث إعدادات النظام' : 'System Settings Updated',
+        message: isAr
+          ? `تم تحديث إعدادات النظام العامة والمظهر بواسطة ${updaterName}`
+          : `System general & appearance settings updated by ${updaterName}`,
+        type: 'info',
+        category: 'system'
+      });
+
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'settings');
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
-  const handleBackup = async () => {
+  // ─── EXCHANGE RATES API ──────────────
+  const fetchExchangeRates = async () => {
+    const url = localSettings.exchangeRatesApiUrl || 'https://open.er-api.com/v6/latest/USD';
+    setApiLoading(true);
+    setApiError(null);
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(isAr ? 'فشل الاتصال بخادم أسعار الصرف' : 'Failed to connect to exchange rate server');
+      const data = await res.json();
+      if (data && data.rates) {
+        const sarRate = data.rates.SAR || 3.75;
+        const yerRate = data.rates.YER;
+        let newUSD = localSettings.exchangeRateUSD || 535;
+        let newSAR = localSettings.exchangeRateSAR || 140;
+        if (yerRate && yerRate > 300) {
+          newUSD = Math.round(yerRate);
+          newSAR = parseFloat((yerRate / sarRate).toFixed(2));
+        } else {
+          newSAR = parseFloat((newUSD / sarRate).toFixed(2));
+        }
+        const now = new Date();
+        const updaterName = profile?.fullName || auth.currentUser?.email || 'Unknown';
+
+        // Also update custom currencies using API rates
+        const updatedCurrencies = (localSettings.customCurrencies || []).map(cur => {
+          if (cur.code === 'USD' && yerRate) return { ...cur, rateToYER: Math.round(yerRate) };
+          if (cur.code === 'SAR' && yerRate) return { ...cur, rateToYER: parseFloat((yerRate / (data.rates.SAR || 3.75)).toFixed(2)) };
+          if (data.rates[cur.code] && yerRate) return { ...cur, rateToYER: parseFloat((yerRate / data.rates[cur.code]).toFixed(2)) };
+          return cur;
+        });
+
+        setLocalSettings(prev => ({
+          ...prev,
+          exchangeRateUSD: newUSD,
+          exchangeRateSAR: newSAR,
+          lastExchangeRateUpdate: now.toLocaleDateString(isAr ? 'ar-YE' : 'en-US'),
+          lastExchangeRateUpdateTime: now.toLocaleTimeString(isAr ? 'ar-YE' : 'en-US'),
+          lastExchangeRateUpdatedBy: updaterName,
+          customCurrencies: updatedCurrencies,
+        }));
+        activityLogService.log('change_exchange_rate', 'API Update', { newUSD, newSAR, updatedBy: updaterName });
+        notificationService.notify({
+          title: isAr ? 'تحديث أسعار الصرف' : 'Exchange Rates Updated',
+          message: isAr
+            ? `تم تحديث أسعار الصرف تلقائياً من الـ API بواسطة ${updaterName}. دولار: ${newUSD}، سعودي: ${newSAR}`
+            : `Exchange rates updated from API by ${updaterName}. USD: ${newUSD}, SAR: ${newSAR}`,
+          type: 'success',
+          category: 'finance'
+        });
+        alert(isAr
+          ? `✅ تم تحديث أسعار الصرف! USD: ${newUSD} YER | SAR: ${newSAR} YER`
+          : `✅ Exchange rates updated! USD: ${newUSD} YER | SAR: ${newSAR} YER`
+        );
+      } else {
+        throw new Error(isAr ? 'استجابة API غير صالحة' : 'Invalid API response');
+      }
+    } catch (err: any) {
+      setApiError(err.message);
+    } finally {
+      setApiLoading(false);
+    }
+  };
+
+  // ─── LOGO UPLOAD ────────────────────
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>, field: 'systemLogo' | 'invoiceLogo') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const base64 = ev.target?.result as string;
+      setLocalSettings(prev => ({ ...prev, [field]: base64 }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // ─── CUSTOM CURRENCY MANAGEMENT ─────
+  const handleAddCurrency = () => {
+    if (!newCurrency.code || !newCurrency.name || !newCurrency.symbol) {
+      alert(isAr ? 'يرجى ملء جميع الحقول الإلزامية (الكود، الاسم، الرمز)' : 'Please fill all required fields (code, name, symbol)');
+      return;
+    }
+    const existing = (localSettings.customCurrencies || []);
+    if (existing.find(c => c.code === newCurrency.code?.toUpperCase())) {
+      alert(isAr ? 'هذه العملة موجودة بالفعل!' : 'This currency already exists!');
+      return;
+    }
+    const currency: CustomCurrency = {
+      id: newCurrency.code!.toUpperCase(),
+      code: newCurrency.code!.toUpperCase(),
+      name: newCurrency.name!,
+      symbol: newCurrency.symbol!,
+      flag: newCurrency.flag || '🌍',
+      rateToYER: newCurrency.rateToYER || 0,
+      isActive: newCurrency.isActive !== false,
+    };
+    setLocalSettings(prev => ({
+      ...prev,
+      customCurrencies: [...(prev.customCurrencies || []), currency]
+    }));
+    
+    const updaterName = profile?.fullName || auth.currentUser?.email || 'Unknown';
+    activityLogService.log('change_exchange_rate', `Add Currency: ${currency.code}`, { rate: currency.rateToYER });
+    notificationService.notify({
+      title: isAr ? 'إضافة عملة جديدة' : 'New Currency Added',
+      message: isAr
+        ? `تم إضافة العملة ${currency.code} (${currency.name}) بسعر صرف ${currency.rateToYER} YER بواسطة ${updaterName}`
+        : `Currency ${currency.code} (${currency.name}) added with rate ${currency.rateToYER} YER by ${updaterName}`,
+      type: 'success',
+      category: 'finance'
+    });
+    
+    setNewCurrency({ code: '', name: '', symbol: '', flag: '', rateToYER: 0, isActive: true });
+    setShowAddCurrency(false);
+  };
+
+  const handleUpdateCurrency = (id: string, updates: Partial<CustomCurrency>) => {
+    setLocalSettings(prev => ({
+      ...prev,
+      customCurrencies: (prev.customCurrencies || []).map(c => c.id === id ? { ...c, ...updates } : c)
+    }));
+    
+    const updaterName = profile?.fullName || auth.currentUser?.email || 'Unknown';
+    activityLogService.log('change_exchange_rate', `Update Currency: ${id}`, updates);
+    notificationService.notify({
+      title: isAr ? 'تحديث العملة' : 'Currency Updated',
+      message: isAr
+        ? `تم تحديث بيانات العملة ${id} بواسطة ${updaterName}`
+        : `Currency ${id} updated by ${updaterName}`,
+      type: 'info',
+      category: 'finance'
+    });
+  };
+
+  const handleDeleteCurrency = (id: string) => {
+    const builtIn = ['USD', 'SAR'];
+    if (builtIn.includes(id)) {
+      alert(isAr ? 'لا يمكن حذف العملات الأساسية (USD, SAR)' : 'Cannot delete built-in currencies (USD, SAR)');
+      return;
+    }
+    setLocalSettings(prev => ({
+      ...prev,
+      customCurrencies: (prev.customCurrencies || []).filter(c => c.id !== id)
+    }));
+    
+    const updaterName = profile?.fullName || auth.currentUser?.email || 'Unknown';
+    activityLogService.log('change_exchange_rate', `Delete Currency: ${id}`);
+    notificationService.notify({
+      title: isAr ? 'حذف عملة' : 'Currency Deleted',
+      message: isAr
+        ? `تم حذف العملة ${id} من النظام بواسطة ${updaterName}`
+        : `Currency ${id} deleted by ${updaterName}`,
+      type: 'warning',
+      category: 'finance'
+    });
+  };
+
+  // ─── BACKUP ─────────────────────────
+  const runBackup = async (type: 'manual' | 'auto' = 'manual') => {
+    const selectedCols = Object.entries(exportSelections).filter(([, v]) => v).map(([k]) => k);
+    if (selectedCols.length === 0) {
+      alert(isAr ? 'يرجى اختيار فئة واحدة على الأقل' : 'Please select at least one collection');
+      return;
+    }
     setBackupLoading(true);
     try {
-      const collections = ['customers', 'couriers', 'sources', 'orders', 'users', 'roles'];
       const backupData: any = {
-        version: "2.0",
+        version: '3.0',
         timestamp: new Date().toISOString(),
+        createdBy: profile?.fullName || auth.currentUser?.email || 'Admin',
+        type,
+        collections: selectedCols,
         settings: localSettings,
         data: {}
       };
-
-      for (const colName of collections) {
+      for (const colName of selectedCols) {
         try {
           const snap = await getDocs(collection(db, colName));
-          backupData.data[colName] = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          backupData.data[colName] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         } catch (err) {
           console.error(`Error backing up ${colName}:`, err);
         }
       }
+
+      // Save to Firestore backups collection
+      const backupId = `backup_${Date.now()}`;
+      await setDoc(doc(db, 'backups', backupId), {
+        ...backupData,
+        savedAt: Date.now(),
+        size: JSON.stringify(backupData.data).length
+      });
+
+      // Download file based on format
+      if (exportFormat === 'csv') {
+        const csvParts: string[] = [];
+        for (const [col, rows] of Object.entries(backupData.data) as [string, any[]][]) {
+          if (!rows.length) continue;
+          const headers = Object.keys(rows[0]).join(',');
+          const csvRows = rows.map((r: any) => Object.values(r).map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+          csvParts.push(`\n=== ${col.toUpperCase()} ===\n${headers}\n${csvRows}`);
+        }
+        const blob = new Blob([csvParts.join('\n\n')], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `SwiftShip_Backup_${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `SwiftShip_Backup_${new Date().toISOString().split('T')[0]}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+
+      activityLogService.log('backup_export', selectedCols.join(', '));
       
-      const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `LogiTrack_Full_Backup_${new Date().toISOString().split('T')[0]}.json`;
-      a.click();
-      
-      activityLogService.log('backup_export', 'Full Database Backup');
-      updateSettings({ lastBackup: new Date().toLocaleString(globalSettings.language === 'ar' ? 'ar-YE' : 'en-US') } as any);
-      alert(globalSettings.language === 'ar' ? "تم تصدير النسخة الاحتياطية الاستراتيجية الكاملة بنجاح والتوقيع الرقمي عليها!" : "Strategy database backup executed and signed successfully!");
-    } catch (error) {
-      console.error('Backup failed:', error);
-      alert(globalSettings.language === 'ar' ? "فشل تصدير الكتل" : "Backup block indexing failed.");
+      const updaterName = profile?.fullName || auth.currentUser?.email || 'Unknown';
+      notificationService.notify({
+        title: isAr ? 'إنشاء نسخة احتياطية' : 'Backup Created',
+        message: isAr
+          ? `تم إنشاء نسخة احتياطية بنجاح للفئات: ${selectedCols.join(', ')} بواسطة ${updaterName}`
+          : `Backup successfully created for collections: ${selectedCols.join(', ')} by ${updaterName}`,
+        type: 'success',
+        category: 'system'
+      });
+
+      const newCount = (localSettings.backupCount || 0) + 1;
+      await updateSettings({
+        lastBackup: new Date().toLocaleString(isAr ? 'ar-YE' : 'en-US'),
+        lastAutoBackupAt: Date.now(),
+        backupCount: newCount
+      } as any);
+      setLocalSettings(prev => ({ ...prev, backupCount: newCount, lastBackup: new Date().toLocaleString(isAr ? 'ar-YE' : 'en-US') }));
+
+      alert(isAr ? `✅ تم حفظ النسخة الاحتياطية رقم ${newCount} بنجاح!` : `✅ Backup #${newCount} saved successfully!`);
+      if (showBackupHistory) loadBackupHistory();
+    } catch (err) {
+      console.error('Backup failed:', err);
+      alert(isAr ? '❌ فشل تصدير النسخة الاحتياطية' : '❌ Backup export failed.');
     } finally {
       setBackupLoading(false);
     }
   };
 
-  const handleImportClick = () => {
-    fileInputRef.current?.click();
+  // Restore from Firestore backup
+  const restoreFromFirestore = async (backupId: string) => {
+    setBackupLoading(true);
+    try {
+      const snap = await getDocs(collection(db, 'backups'));
+      const backupDoc = snap.docs.find(d => d.id === backupId);
+      if (!backupDoc) throw new Error('Backup not found');
+      const data = backupDoc.data();
+
+      if (data.settings) await updateSettings(data.settings);
+      if (data.data) {
+        for (const colName in data.data) {
+          const items = data.data[colName];
+          if (Array.isArray(items)) {
+            const batch = writeBatch(db);
+            for (const item of items) {
+              const { id, ...itemData } = item;
+              if (id) batch.set(doc(db, colName, id), itemData);
+            }
+            await batch.commit();
+          }
+        }
+      }
+      activityLogService.log('backup_import', `Restore from Firestore: ${backupId}`);
+      
+      const updaterName = profile?.fullName || auth.currentUser?.email || 'Unknown';
+      await notificationService.notify({
+        title: isAr ? 'استعادة النظام' : 'System Restored',
+        message: isAr
+          ? `تم استعادة قاعدة بيانات النظام بنجاح من النسخة الاحتياطية ${backupId} بواسطة ${updaterName}`
+          : `System database successfully restored from backup ${backupId} by ${updaterName}`,
+        type: 'warning',
+        category: 'system'
+      });
+
+      alert(isAr ? '✅ تم استعادة البيانات بنجاح! سيتم إعادة تحميل الصفحة.' : '✅ Data restored! Reloading page.');
+      window.location.reload();
+    } catch (err: any) {
+      alert((isAr ? '❌ فشل الاستعادة: ' : '❌ Restore failed: ') + err.message);
+    } finally {
+      setBackupLoading(false);
+    }
   };
 
+  // Delete a backup from history
+  const deleteBackupRecord = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'backups', id));
+      setBackupHistory(prev => prev.filter(b => b.id !== id));
+      
+      const updaterName = profile?.fullName || auth.currentUser?.email || 'Unknown';
+      activityLogService.log('save_settings', `Delete Backup Record: ${id}`);
+      notificationService.notify({
+        title: isAr ? 'حذف سجل نسخة احتياطية' : 'Backup Record Deleted',
+        message: isAr
+          ? `تم حذف سجل النسخة الاحتياطية ${id} بواسطة ${updaterName}`
+          : `Backup record ${id} deleted by ${updaterName}`,
+        type: 'info',
+        category: 'system'
+      });
+    } catch (err) {
+      console.error('Failed to delete backup:', err);
+    }
+  };
+
+  // ─── IMPORT ─────────────────────────
   const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
         setImportLoading(true);
         const content = event.target?.result as string;
         const data = JSON.parse(content);
-        
-        if (!data.settings && !data.data) {
-          throw new Error(globalSettings.language === 'ar' ? "ملف النسخة غير صالح أو التم كسر التوقيع الرقمي له." : "Signature broken in backup file.");
-        }
-
+        if (!data.data && !data.settings) throw new Error(isAr ? 'ملف النسخة الاحتياطية غير صالح' : 'Invalid backup file format');
         setConfirmConfig({
           isOpen: true,
-          title: globalSettings.language === 'ar' ? 'دمج وقرصنة قاعدة نسخة سابقة' : 'Rebase Previous Database Ledger',
-          message: globalSettings.language === 'ar' ? "مستحسن التأكيد: هذا سيقوم بمحو واستبدال التهيئة وإعادة قرصنة فهارس السحابة. هل تريد الحث؟" : "Warning: This action overwrites current ledger configurations and injects backup nodes. Confirm execution?",
+          title: isAr ? 'استعادة النسخة الاحتياطية' : 'Restore Backup',
+          message: isAr
+            ? `⚠️ هذا سيستبدل بيانات النظام الحالية. الفئات: ${data.collections?.join(', ') || 'الكل'}. هل تريد المتابعة؟`
+            : `⚠️ This will overwrite current data. Collections: ${data.collections?.join(', ') || 'all'}. Continue?`,
           type: 'warning',
           onConfirm: async () => {
             try {
-              if (data.settings) {
-                await updateSettings(data.settings);
-              }
-
+              if (data.settings) await updateSettings(data.settings);
               if (data.data) {
                 for (const colName in data.data) {
                   const items = data.data[colName];
@@ -198,28 +586,22 @@ export default function Settings() {
                     const batch = writeBatch(db);
                     for (const item of items) {
                       const { id, ...itemData } = item;
-                      if (id) {
-                        batch.set(doc(db, colName, id), itemData);
-                      }
+                      if (id) batch.set(doc(db, colName, id), itemData);
                     }
                     await batch.commit();
                   }
                 }
               }
-
-              activityLogService.log('backup_import', 'Restore Database Backup');
-              alert(globalSettings.language === 'ar' ? "تم استيراد الكتل وإعادة دمج السحابة!" : "Blocks rebased and successfully indexed!");
-              window.location.reload(); 
-            } catch (err) {
-              console.error('Import error:', err);
-              alert((globalSettings.language === 'ar' ? "خطأ في دمج قاعدة البيانات: " : "Ledger rebase error: ") + (err as Error).message);
+              activityLogService.log('backup_import', 'Restore from File');
+              alert(isAr ? '✅ تم استعادة البيانات بنجاح!' : '✅ Data restored successfully!');
+              window.location.reload();
+            } catch (err: any) {
+              alert((isAr ? '❌ خطأ في الاستعادة: ' : '❌ Restore error: ') + err.message);
             }
           }
         });
-
-      } catch (err) {
-        console.error('Import error:', err);
-        alert((globalSettings.language === 'ar' ? "خطأ في قراءة ملف التوقيع: " : "Signature parse error: ") + (err as Error).message);
+      } catch (err: any) {
+        alert((isAr ? '❌ خطأ في قراءة الملف: ' : '❌ File parse error: ') + err.message);
       } finally {
         setImportLoading(false);
       }
@@ -227,381 +609,743 @@ export default function Settings() {
     reader.readAsText(file);
   };
 
-  return (
-    <div className="space-y-6 max-w-5xl mx-auto pb-20 text-start selection:bg-[#d4af37]/30">
-      
-      {/* Hidden input file tag */}
-      <input 
-        type="file" 
-        ref={fileInputRef} 
-        onChange={handleFileImport} 
-        accept=".json" 
-        className="hidden" 
-      />
+  // ─── RESET COUNTER ──────────────────
+  const handleResetCounter = () => {
+    setConfirmConfig({
+      isOpen: true,
+      title: isAr ? 'إعادة ضبط العداد التسلسلي' : 'Reset Order Counter',
+      message: isAr
+        ? 'هل أنت متأكد من إعادة ضبط عداد الطلبات؟ سيبدأ الترقيم من جديد وفق الإعدادات الجديدة.'
+        : 'Reset order counter? New orders will be numbered from the configured start number.',
+      onConfirm: async () => {
+        await updateSettings({ orderStartNumber: localSettings.orderStartNumber });
+        
+        const updaterName = profile?.fullName || auth.currentUser?.email || 'Unknown';
+        activityLogService.log('save_settings', 'Reset Order Counter');
+        
+        notificationService.notify({
+          title: isAr ? 'إعادة ضبط عداد الطلبات' : 'Reset Order Counter',
+          message: isAr
+            ? `تم إعادة ضبط عداد الطلبات ليبدأ من ${localSettings.orderStartNumber} بواسطة ${updaterName}`
+            : `Order counter was reset to start from ${localSettings.orderStartNumber} by ${updaterName}`,
+          type: 'warning',
+          category: 'system'
+        });
+        
+        alert(isAr ? '✅ تم إعادة ضبط العداد' : '✅ Counter reset successfully');
+      }
+    });
+  };
 
-      {/* Header Panel */}
-      <div className="flex justify-between items-center bg-black/40 backdrop-blur-md border border-[#d4af37]/20 p-5 rounded-3xl shadow-lg sticky top-4 z-10">
+  const formatBytes = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  };
+
+  // ─── TABS CONFIG ────────────────────
+  const tabs: { id: SettingsTab; label: string; icon: any }[] = [
+    { id: 'interface', label: t('tabInterface'), icon: Palette },
+    { id: 'general',   label: t('tabGeneral'),   icon: Settings2 },
+    { id: 'currency',  label: t('tabCurrency'),  icon: DollarSign },
+    { id: 'admin',     label: t('tabAdmin'),      icon: Shield },
+  ];
+
+  const currencies = localSettings.customCurrencies || [];
+
+  // ─── RENDER ─────────────────────────
+  return (
+    <div className="space-y-5 max-w-6xl mx-auto pb-20 text-start selection:bg-[#d4af37]/30 animate-fade-slide-in" dir={isAr ? 'rtl' : 'ltr'}>
+
+      <input type="file" ref={fileInputRef} onChange={handleFileImport} accept=".json" className="hidden" />
+      <input type="file" ref={logoInputRef} onChange={(e) => handleLogoUpload(e, 'systemLogo')} accept="image/*" className="hidden" />
+      <input type="file" ref={invoiceLogoInputRef} onChange={(e) => handleLogoUpload(e, 'invoiceLogo')} accept="image/*" className="hidden" />
+
+      {/* ── STICKY HEADER ─────────────────── */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-black/40 backdrop-blur-md border border-[#d4af37]/20 p-5 rounded-3xl shadow-lg sticky top-4 z-20">
         <div className="flex items-center gap-3">
           <div className="bg-[#d4af37]/10 border border-[#d4af37]/25 p-2.5 rounded-2xl text-[#d4af37]">
-            <Database className="w-6 h-6 animate-pulse" />
+            <Settings2 className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-xl font-black text-white leading-none mb-1">{t('settings')}</h1>
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{isAr ? 'تهيئة النواة المركزية للشركة ودمج الفواتير المالية والنسخ المعزز' : 'Core Configuration & Strategic Ledgers'}</p>
+            <h1 className="text-lg font-black text-white leading-none mb-0.5">{t('settings')}</h1>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+              {isAr ? 'تهيئة النظام والإعدادات المتقدمة' : 'System Configuration & Advanced Settings'}
+            </p>
           </div>
         </div>
-        <button 
-          onClick={() => handleSave()} 
-          disabled={loading}
-          className="bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] disabled:from-slate-800 disabled:to-slate-900 text-black px-6 py-2.5 rounded-xl flex items-center gap-2 font-black text-sm transition shadow-md transform active:scale-95"
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] disabled:from-slate-800 disabled:to-slate-900 text-black px-6 py-2.5 rounded-xl flex items-center gap-2 font-black text-sm transition shadow-md active:scale-95 cursor-pointer"
         >
-          <Save className="w-4 h-4"/>
-          {loading ? (isAr ? 'جاري السحب والتأمين...' : 'Saving ledger...') : t('saveChanges')}
+          <Save className="w-4 h-4" />
+          {saving ? (isAr ? 'جاري الحفظ...' : 'Saving...') : t('saveChanges')}
         </button>
       </div>
 
+      {/* Save Success Banner */}
       {saveSuccess && (
-        <div className="bg-emerald-950/20 text-emerald-400 p-4 rounded-2xl border border-emerald-950/50 font-extrabold flex items-center gap-3 animate-bounce">
-          <div className="w-8 h-8 rounded-full bg-emerald-600/30 text-[#d4af37] border border-[#d4af37]/30 flex items-center justify-center shrink-0">✓</div>
-          <span className="text-xs">{isAr ? 'تم تأكيد البارايميترات الجوية وحفظ جميع إعدادات الشركة بنجاح!' : 'Central network settings successfully broadcasted!'}</span>
+        <div className="bg-emerald-950/30 text-emerald-400 p-4 rounded-2xl border border-emerald-900/40 font-extrabold flex items-center gap-3 animate-fade-slide-in">
+          <CheckCircle className="w-5 h-5 shrink-0" />
+          <span className="text-xs">{isAr ? '✅ تم حفظ الإعدادات بنجاح!' : '✅ Settings saved successfully!'}</span>
         </div>
       )}
 
-      {/* Two Columns Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 font-sans">
-        
-        {/* Left wider grid */}
-        <div className="lg:col-span-2 space-y-6">
-          
-          {/* Company Identity section */}
-          {canEditCompany && (
-            <section className="bg-[#121215] border border-slate-850 p-8 rounded-3xl shadow-lg relative overflow-hidden group">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-[#d4af37]/5 rounded-full -mr-16 -mt-16 opacity-40 group-hover:scale-110 transition-transform"></div>
-              <h2 className="text-base font-black text-white mb-6 flex items-center gap-2 border-b border-slate-850 pb-4 relative z-10 uppercase tracking-wider">
-                <Building className="w-5 h-5 text-[#d4af37]" />
-                {t('companyIdentity')}
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 relative z-10">
-                <div className="md:col-span-2">
-                  <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'اسم الشركة ومؤسستك اللوجيستية الكبرى' : 'Global Enterprise Title Name'}</label>
-                  <input 
-                    type="text" 
-                    value={localSettings.companyName}
-                    onChange={(e) => setLocalSettings({...localSettings, companyName: e.target.value})}
-                    className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start disabled:opacity-55 disabled:cursor-not-allowed"
-                    placeholder={isAr ? "الشركة اللوجستية الراقية" : "Luxury Logistics Enterprise Inc"}
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'الهاتف الموصول' : 'Corporate Phone'}</label>
-                  <input 
-                    type="text" 
-                    value={localSettings.companyPhone}
-                    onChange={(e) => setLocalSettings({...localSettings, companyPhone: e.target.value})}
-                    className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono disabled:opacity-55 disabled:cursor-not-allowed" dir="ltr"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'البريد المؤسسي' : 'Secure Email ID'}</label>
-                  <input 
-                    type="email" 
-                    value={localSettings.companyEmail}
-                    onChange={(e) => setLocalSettings({...localSettings, companyEmail: e.target.value})}
-                    className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono disabled:opacity-55 disabled:cursor-not-allowed" dir="ltr"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'النطاق والموقع الإلكتروني للشركة' : 'Web Domain'}</label>
-                  <input 
-                    type="text" 
-                    value={localSettings.companyWebsite}
-                    onChange={(e) => setLocalSettings({...localSettings, companyWebsite: e.target.value})}
-                    className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono disabled:opacity-55 disabled:cursor-not-allowed" dir="ltr"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'الرقم الضريبي وتوثيق الغرفة التجارية' : 'Commercial Tax Validation ID'}</label>
-                  <input 
-                    type="text" 
-                    value={localSettings.taxId}
-                    onChange={(e) => setLocalSettings({...localSettings, taxId: e.target.value})}
-                    className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono disabled:opacity-55 disabled:cursor-not-allowed" dir="ltr"
-                    placeholder="TAX-967-889"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'سكني وسكرتارية المقر الرئيسي للشركة' : 'Detailed Headquarters Address'}</label>
-                  <textarea 
-                    rows={2}
-                    value={localSettings.companyAddress}
-                    onChange={(e) => setLocalSettings({...localSettings, companyAddress: e.target.value})}
-                    className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start disabled:opacity-55 disabled:cursor-not-allowed"
-                    placeholder={isAr ? "اليمن - صنعاء - شارع الستين" : "Sana'a - Yemen"}
-                  />
+      {/* ── TABS NAV ────────────────────────── */}
+      <div className="flex gap-1.5 bg-black/40 border border-slate-800/50 rounded-2xl p-1.5 overflow-x-auto">
+        {tabs.map(tab => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all whitespace-nowrap flex-1 justify-center ${
+                isActive
+                  ? 'bg-gradient-to-r from-[#d4af37]/20 to-transparent text-white border border-[#d4af37]/30 shadow-inner'
+                  : 'text-slate-500 hover:text-white hover:bg-white/[0.03]'
+              }`}
+            >
+              <Icon className={`w-4 h-4 ${isActive ? 'text-[#d4af37]' : ''}`} />
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ══════════════════════════════════ */}
+      {/* TAB 1: INTERFACE                  */}
+      {/* ══════════════════════════════════ */}
+      {activeTab === 'interface' && (
+        <div className="space-y-5 animate-fade-slide-in">
+          <SectionCard title={isAr ? 'المظهر والوضع' : 'Theme & Mode'} icon={Palette}>
+            <FieldLabel>{t('theme')}</FieldLabel>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { value: 'dark', label: isAr ? 'الوضع المظلم الفاخر' : 'Luxury Dark', icon: '🌙', desc: isAr ? 'خلفية داكنة وعرض ذهبي' : 'Dark background & gold accents' },
+                { value: 'light', label: isAr ? 'الوضع الفاتح' : 'Light Mode', icon: '☀️', desc: isAr ? 'خلفية بيضاء وعرض مضيء' : 'Clean white background' },
+              ].map(opt => (
+                <button key={opt.value} type="button"
+                  onClick={() => setLocalSettings({ ...localSettings, theme: opt.value as any })}
+                  className={`p-4 rounded-2xl border-2 transition-all text-start ${localSettings.theme === opt.value ? 'border-[#d4af37] bg-[#d4af37]/10 shadow-[0_0_15px_rgba(212,175,55,0.15)]' : 'border-slate-800 bg-black/40 hover:border-slate-700'}`}
+                >
+                  <div className="text-2xl mb-2">{opt.icon}</div>
+                  <div className={`font-black text-xs uppercase tracking-wide ${localSettings.theme === opt.value ? 'text-[#d4af37]' : 'text-slate-400'}`}>{opt.label}</div>
+                  <div className="text-[10px] text-slate-500 mt-0.5 font-bold">{opt.desc}</div>
+                  {localSettings.theme === opt.value && <div className="mt-2 flex items-center gap-1 text-[#d4af37] text-[9px] font-black"><CheckCircle className="w-3 h-3" /> {isAr ? 'محدد' : 'Active'}</div>}
+                </button>
+              ))}
+            </div>
+          </SectionCard>
+
+          <SectionCard title={isAr ? 'حجم الخط' : 'Font Size'} icon={Type}>
+            <FieldLabel>{isAr ? 'اختر حجم خط النظام' : 'Choose system font size'}</FieldLabel>
+            <div className="grid grid-cols-4 gap-3">
+              {[{ value: 'sm', label: t('fontSizeSm'), px: '13px' }, { value: 'md', label: t('fontSizeMd'), px: '14px' }, { value: 'lg', label: t('fontSizeLg'), px: '15px' }, { value: 'xl', label: t('fontSizeXl'), px: '16px' }].map(opt => (
+                <button key={opt.value} type="button"
+                  onClick={() => setLocalSettings({ ...localSettings, fontSize: opt.value as any })}
+                  className={`p-3 rounded-xl border-2 transition-all text-center ${localSettings.fontSize === opt.value ? 'border-[#d4af37] bg-[#d4af37]/10 text-[#d4af37]' : 'border-slate-800 bg-black/40 text-slate-400 hover:border-slate-700'}`}
+                >
+                  <div className="font-black text-xs mb-1">{opt.label}</div>
+                  <div className="text-[10px] text-slate-500 font-mono">{opt.px}</div>
+                </button>
+              ))}
+            </div>
+          </SectionCard>
+
+          <SectionCard title={isAr ? 'لغة النظام' : 'System Language'} icon={Globe}>
+            <FieldLabel>{isAr ? 'لغة الواجهة الرئيسية' : 'Main Interface Language'}</FieldLabel>
+            <div className="flex p-1 bg-black/40 border border-slate-800 rounded-2xl">
+              <button type="button" onClick={() => setLocalSettings({ ...localSettings, language: 'ar' })}
+                className={`flex-1 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${localSettings.language === 'ar' ? 'bg-[#d4af37] text-black shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
+              >🇾🇪 العربية</button>
+              <button type="button" onClick={() => setLocalSettings({ ...localSettings, language: 'en' })}
+                className={`flex-1 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${localSettings.language === 'en' ? 'bg-[#d4af37] text-black shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
+              >🇺🇸 ENGLISH</button>
+            </div>
+          </SectionCard>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════ */}
+      {/* TAB 2: GENERAL SYSTEM              */}
+      {/* ══════════════════════════════════ */}
+      {activeTab === 'general' && (
+        <div className="space-y-5 animate-fade-slide-in">
+          <SectionCard title={isAr ? 'هوية النظام والعلامة التجارية' : 'System Branding & Identity'} icon={Settings2}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="md:col-span-2">
+                <FieldLabel>{t('systemName')}</FieldLabel>
+                <FieldInput type="text" value={localSettings.systemName || ''} onChange={e => setLocalSettings({ ...localSettings, systemName: e.target.value })} placeholder="SwiftShip" />
+              </div>
+              <div>
+                <FieldLabel>{t('systemLogo')}</FieldLabel>
+                <div className="flex items-center gap-3">
+                  {localSettings.systemLogo ? (
+                    <div className="relative group">
+                      <img src={localSettings.systemLogo} alt="Logo" className="w-16 h-16 object-contain rounded-xl border border-slate-800 bg-black/50 p-2" />
+                      <button onClick={() => setLocalSettings({ ...localSettings, systemLogo: '' })} className="absolute -top-2 -right-2 w-5 h-5 bg-rose-600 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition"><X className="w-3 h-3 text-white" /></button>
+                    </div>
+                  ) : (
+                    <div className="w-16 h-16 rounded-xl border border-slate-800 bg-black/50 flex items-center justify-center text-slate-600"><Image className="w-6 h-6" /></div>
+                  )}
+                  <button type="button" onClick={() => logoInputRef.current?.click()} className="flex-1 bg-black/40 border border-slate-800 hover:border-[#d4af37]/40 text-slate-300 hover:text-white py-3 px-4 rounded-xl text-xs font-black transition flex items-center gap-2 justify-center"><Upload className="w-4 h-4" />{isAr ? 'رفع شعار' : 'Upload Logo'}</button>
                 </div>
               </div>
-            </section>
-          )}
-
-          {/* Finance settings */}
-          <section className="bg-[#121215] border border-slate-850 p-8 rounded-3xl shadow-lg">
-            <h2 className="text-base font-black text-white mb-6 flex items-center gap-2 border-b border-slate-850 pb-4 uppercase tracking-wider">
-              <DollarSign className="w-5 h-5 text-[#d4af37]" />
-              {t('financeSettings')}
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'عملة التقييم والتدقيق المالي' : 'Trading Vault Base Currency'}{!canEditRates && ' 🔒'}</label>
-                <select 
-                  disabled={!canEditRates}
-                  value={localSettings.currency} 
-                  onChange={(e) => setLocalSettings({...localSettings, currency: e.target.value})}
-                  className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3.5 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer disabled:opacity-55 disabled:cursor-not-allowed"
+                <FieldLabel>{t('orderPrefix')}</FieldLabel>
+                <FieldInput type="text" value={localSettings.orderPrefix || 'ALX'} onChange={e => setLocalSettings({ ...localSettings, orderPrefix: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') })} placeholder="ALX" maxLength={5} className="font-mono uppercase" dir="ltr" />
+                <p className="text-[10px] text-slate-500 mt-1.5 font-bold">{isAr ? `مثال: ${localSettings.orderPrefix || 'ALX'}-2601-1001` : `Example: ${localSettings.orderPrefix || 'ALX'}-2601-1001`}</p>
+              </div>
+              <div>
+                <FieldLabel>{t('orderStartNumber')}</FieldLabel>
+                <FieldInput type="number" value={localSettings.orderStartNumber ?? 1001} onChange={e => setLocalSettings({ ...localSettings, orderStartNumber: parseInt(e.target.value) || 1001 })} min={1} className="font-mono" dir="ltr" />
+              </div>
+              <div className="md:col-span-2">
+                <button type="button" onClick={handleResetCounter} className="flex items-center gap-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 hover:border-amber-500/40 px-4 py-2.5 rounded-xl text-xs font-black transition"><RefreshCw className="w-4 h-4" />{t('resetCounter')}</button>
+              </div>
+            </div>
+          </SectionCard>
+
+          {canEditCompany && (
+            <SectionCard title={t('companyIdentity')} icon={Building}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="md:col-span-2">
+                  <FieldLabel>{isAr ? 'اسم الشركة' : 'Company Name'}</FieldLabel>
+                  <FieldInput type="text" value={localSettings.companyName} onChange={e => setLocalSettings({ ...localSettings, companyName: e.target.value })} />
+                </div>
+                {[
+                  { key: 'companyPhone', label: isAr ? 'هاتف الشركة' : 'Phone', placeholder: '+967 700 000 000', dir: 'ltr' },
+                  { key: 'companyEmail', label: isAr ? 'البريد الإلكتروني' : 'Email', placeholder: 'info@company.com', dir: 'ltr' },
+                  { key: 'companyWebsite', label: isAr ? 'الموقع الإلكتروني' : 'Website', placeholder: 'www.company.com', dir: 'ltr' },
+                  { key: 'taxId', label: isAr ? 'الرقم الضريبي' : 'Tax ID', placeholder: 'TAX-967-001', dir: 'ltr' },
+                ].map(f => (
+                  <div key={f.key}>
+                    <FieldLabel>{f.label}</FieldLabel>
+                    <FieldInput type="text" value={(localSettings as any)[f.key] || ''} onChange={e => setLocalSettings({ ...localSettings, [f.key]: e.target.value })} placeholder={f.placeholder} dir={f.dir as any} className="font-mono" />
+                  </div>
+                ))}
+                <div className="md:col-span-2">
+                  <FieldLabel>{isAr ? 'عنوان الشركة' : 'Company Address'}</FieldLabel>
+                  <FieldTextarea rows={2} value={localSettings.companyAddress || ''} onChange={e => setLocalSettings({ ...localSettings, companyAddress: e.target.value })} />
+                </div>
+              </div>
+            </SectionCard>
+          )}
+        </div>
+      )}
+
+      {/* ══════════════════════════════════ */}
+      {/* TAB 3: CURRENCIES & RATES         */}
+      {/* ══════════════════════════════════ */}
+      {activeTab === 'currency' && (
+        <div className="space-y-5 animate-fade-slide-in">
+
+          {/* Main Currency */}
+          <SectionCard title={isAr ? 'العملة الرئيسية للنظام' : 'Main System Currency'} icon={DollarSign}>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              <div className="md:col-span-2">
+                <FieldLabel locked={!canEditRates}>{t('mainCurrency')}</FieldLabel>
+                <select disabled={!canEditRates} value={localSettings.currency}
+                  onChange={e => {
+                    const selected = currencies.find(c => c.code === e.target.value);
+                    setLocalSettings({ ...localSettings, currency: e.target.value, currencySymbol: selected?.symbol || localSettings.currencySymbol });
+                  }}
+                  className="w-full bg-black/50 border border-slate-800 text-white rounded-xl p-3.5 text-xs font-bold outline-none focus:border-[#d4af37]/60 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <option value="SAR">{isAr ? '🇸🇦 ريال سعودي (SAR)' : 'SAR'}</option>
-                  <option value="USD">{isAr ? '🇺🇸 دولار أمريكي (USD)' : 'USD'}</option>
-                  <option value="YER">{isAr ? '🇾🇪 ريال يمني (YER)' : 'Value YER'}</option>
-                  <option value="AED">{isAr ? '🇦🇪 درهم إماراتي (AED)' : 'AED'}</option>
+                  {currencies.filter(c => c.isActive).map(c => (
+                    <option key={c.id} value={c.code}>{c.flag} {c.name} ({c.code})</option>
+                  ))}
                 </select>
               </div>
               <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'الرمز المحاسبي المطبوع' : 'Accounting Sign Symbol'}{!canEditRates && ' 🔒'}</label>
-                <input 
-                  disabled={!canEditRates}
-                  type="text" 
-                  value={localSettings.currencySymbol}
-                  onChange={(e) => setLocalSettings({...localSettings, currencySymbol: e.target.value})}
-                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs text-center font-bold text-white focus:border-[#d4af37]/60 outline-none disabled:opacity-55 disabled:cursor-not-allowed"
-                />
+                <FieldLabel locked={!canEditRates}>{t('currencySymbol')}</FieldLabel>
+                <FieldInput type="text" disabled={!canEditRates} value={localSettings.currencySymbol} onChange={e => setLocalSettings({ ...localSettings, currencySymbol: e.target.value })} className="text-center font-mono" maxLength={5} />
               </div>
-              {canManageWhatsapp && (
-                <div className="md:col-span-2 flex items-center p-4 bg-black/40 rounded-2xl border border-slate-850 gap-4">
-                  <div className="bg-[#d4af37]/10 border border-[#d4af37]/25 text-[#d4af37] p-2.5 rounded-xl"><DollarSign className="w-5 h-5"/></div>
-                  <div className="flex-1 text-start">
-                    <h4 className="text-xs font-black text-white uppercase tracking-wider">{isAr ? 'الإشعارات وسحابات التحصيل التلقائية' : 'Discharge Autonomous Slips'}</h4>
-                    <p className="text-[10px] text-slate-500 font-bold">{isAr ? 'إرسال بنود إشعار تلقائي للزبون عند استلام العهدة أو تصفية الحساب ماليًا' : 'Instruct webhook integration to broadcast payment receipts immediately'}</p>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" checked={localSettings.autoNotification} onChange={(e) => setLocalSettings({...localSettings, autoNotification: e.target.checked})} className="sr-only peer" />
-                    <div className="w-11 h-6 bg-slate-850 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-slate-850 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-600 disabled:opacity-55"></div>
-                  </label>
-                </div>
-              )}
+            </div>
+          </SectionCard>
 
-              {/* Divider */}
-              {canEditRates && <div className="md:col-span-2 border-t border-slate-850/50 my-2"></div>}
-
-              {/* Exchange Rates Header */}
-              {canEditRates && (
-                <div className="md:col-span-2 text-start">
-                  <h4 className="text-xs font-black text-white uppercase tracking-wider mb-1">{isAr ? 'أسعار صرف العملات والتحويل المالي' : 'Exchange Rates & Currency Conversion'}</h4>
-                  <p className="text-[10px] text-slate-500 font-bold">{isAr ? 'تحديد أسعار الصرف الافتراضية للتحويل إلى الريال اليمني (YER)' : 'Configure the default exchange rates for YER conversions'}</p>
-                </div>
-              )}
-
-              {/* Exchange Rates Inputs */}
-              {canEditRates && (
-                <>
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'سعر صرف الدولار (USD) مقابل اليمني' : 'USD to YER Rate'}</label>
-                    <input 
-                      type="number" 
-                      step="any"
-                      value={localSettings.exchangeRateUSD !== undefined ? localSettings.exchangeRateUSD : 535}
-                      onChange={(e) => setLocalSettings({...localSettings, exchangeRateUSD: parseFloat(e.target.value) || 0})}
-                      className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono disabled:opacity-55 disabled:cursor-not-allowed"
-                      placeholder="535"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'سعر صرف السعودي (SAR) مقابل اليمني' : 'SAR to YER Rate'}</label>
-                    <input 
-                      type="number" 
-                      step="any"
-                      value={localSettings.exchangeRateSAR !== undefined ? localSettings.exchangeRateSAR : 140}
-                      onChange={(e) => setLocalSettings({...localSettings, exchangeRateSAR: parseFloat(e.target.value) || 0})}
-                      className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono disabled:opacity-55 disabled:cursor-not-allowed"
-                      placeholder="140"
-                    />
-                  </div>
-
-                  {/* API Auto Update Toggle */}
-                  <div className="md:col-span-2 flex items-center p-4 bg-black/40 rounded-2xl border border-slate-850 gap-4">
-                    <div className="bg-[#d4af37]/10 border border-[#d4af37]/25 text-[#d4af37] p-2.5 rounded-xl"><RefreshCw className="w-5 h-5"/></div>
-                    <div className="flex-1 text-start">
-                      <h4 className="text-xs font-black text-white uppercase tracking-wider">{isAr ? 'تحديث تلقائي لأسعار الصرف من API' : 'Auto-update exchange rates from API'}</h4>
-                      <p className="text-[10px] text-slate-500 font-bold">{isAr ? 'جلب تحديثات أسعار الصرف تلقائياً من خادم خارجي عند التحميل' : 'Enable background sync for exchange rates using API endpoint'}</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" checked={localSettings.autoUpdateExchangeRates || false} onChange={(e) => setLocalSettings({...localSettings, autoUpdateExchangeRates: e.target.checked})} className="sr-only peer" />
-                      <div className="w-11 h-6 bg-slate-850 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-slate-850 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-600 disabled:opacity-55"></div>
-                    </label>
-                  </div>
-
-                  {/* API URL & Update Action */}
-                  <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 items-end bg-black/30 p-4 rounded-2xl border border-slate-850">
-                    <div className="md:col-span-2">
-                      <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'رابط خادم أسعار الصرف (API URL)' : 'Exchange Rates API Endpoint'}</label>
-                      <input 
-                        type="text" 
-                        value={localSettings.exchangeRatesApiUrl || 'https://open.er-api.com/v6/latest/USD'}
-                        onChange={(e) => setLocalSettings({...localSettings, exchangeRatesApiUrl: e.target.value})}
-                        className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs text-white focus:border-[#d4af37]/60 outline-none text-start font-mono disabled:opacity-55 disabled:cursor-not-allowed"
-                        placeholder="https://open.er-api.com/v6/latest/USD"
-                      />
-                    </div>
-                    <div>
-                      <button
-                        type="button"
-                        onClick={() => fetchExchangeRates(localSettings.exchangeRatesApiUrl)}
-                        disabled={apiLoading}
-                        className="w-full bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black py-3 rounded-xl font-black text-xs transition shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:from-slate-800 disabled:to-slate-900 disabled:cursor-not-allowed"
-                      >
-                        <RefreshCw className={`w-3.5 h-3.5 ${apiLoading ? 'animate-spin' : ''}`} />
-                        {apiLoading ? (isAr ? 'جاري الجلب...' : 'Fetching...') : (isAr ? 'تحديث الآن' : 'Update Now')}
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-                {apiError && (
-                  <div className="md:col-span-3 text-[10px] font-bold text-rose-500 text-start">{apiError}</div>
-                )}
+          {/* Exchange Rates Quick View */}
+          <SectionCard title={isAr ? 'أسعار الصرف الأساسية' : 'Core Exchange Rates'} icon={RefreshCw}>
+            {!canEditRates && (
+              <div className="flex items-center gap-2 text-amber-400 bg-amber-950/20 border border-amber-900/30 p-3 rounded-xl mb-4 text-xs font-bold">
+                <ShieldAlert className="w-4 h-4 shrink-0" />
+                {isAr ? 'أسعار الصرف للعرض فقط - تعديلها مخصص للمدير أو المحاسب' : 'View-only. Admin/Accountant can edit.'}
               </div>
-          </section>
-        </div>
-
-        {/* Right side widgets */}
-        <div className="space-y-6">
-          
-          {/* Interface options */}
-          <section className="bg-[#121215] border border-slate-850 p-6 rounded-3xl text-start">
-            <h2 className="text-sm font-black text-white mb-6 uppercase tracking-wider flex items-center gap-2">
-              <Palette className="w-4 h-4 text-[#d4af37]" />
-              {t('interfaceLanguage')}
-            </h2>
-            <div className="space-y-5">
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
-                <span className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'لغة الواجهة الرئيسية لشبكات لوجيستك' : 'Core GUI Language'}</span>
-                <div className="flex p-1 bg-black/40 border border-slate-850 rounded-2xl">
-                  <button 
-                    type="button"
-                    onClick={() => setLocalSettings({...localSettings, language: 'ar'})}
-                    className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all ${localSettings.language === 'ar' ? 'bg-[#d4af37] text-black shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
-                  >العربية</button>
-                  <button 
-                    type="button"
-                    onClick={() => setLocalSettings({...localSettings, language: 'en'})}
-                    className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all ${localSettings.language === 'en' ? 'bg-[#d4af37] text-black shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
-                  >ENGLISH</button>
+                <FieldLabel locked={!canEditRates}>{t('exchangeRateSAR')}</FieldLabel>
+                <div className="relative">
+                  <FieldInput type="number" step="any" disabled={!canEditRates} value={localSettings.exchangeRateSAR ?? 140} onChange={e => setLocalSettings({ ...localSettings, exchangeRateSAR: parseFloat(e.target.value) || 0 })} className="font-mono" dir="ltr" />
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-[#d4af37] bg-[#d4af37]/10 px-1.5 py-0.5 rounded">SAR→YER</span>
                 </div>
               </div>
-
               <div>
-                <span className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{t('theme')}</span>
-                <div className="grid grid-cols-2 gap-2">
-                  <button 
-                    type="button"
-                    onClick={() => setLocalSettings({...localSettings, theme: 'light'})}
-                    className={`p-3 rounded-xl border transition-all flex flex-col items-center gap-2 ${localSettings.theme === 'light' ? 'border-[#d4af37] bg-[#d4af37]/10 text-white' : 'border-slate-850 bg-black/40 text-slate-500'}`}
-                  >
-                    <div className="w-4 h-4 rounded-full bg-white border border-slate-300"></div>
-                    <span className="text-[10px] font-extrabold">{isAr ? 'قواعد فاتحة' : 'Light Mode'}</span>
-                  </button>
-                  <button 
-                    type="button"
-                    onClick={() => setLocalSettings({...localSettings, theme: 'dark'})}
-                    className={`p-3 rounded-xl border transition-all flex flex-col items-center gap-2 ${localSettings.theme === 'dark' ? 'border-[#d4af37] bg-[#d4af37]/10 text-white' : 'border-slate-850 bg-black/40 text-slate-500'}`}
-                  >
-                    <div className="w-4 h-4 rounded-full bg-black border border-[#d4af37]"></div>
-                    <span className="text-[10px] font-extrabold">{isAr ? 'الوضع المظلم الفاخر' : 'Luxury Dark'}</span>
-                  </button>
+                <FieldLabel locked={!canEditRates}>{t('exchangeRateUSD')}</FieldLabel>
+                <div className="relative">
+                  <FieldInput type="number" step="any" disabled={!canEditRates} value={localSettings.exchangeRateUSD ?? 535} onChange={e => setLocalSettings({ ...localSettings, exchangeRateUSD: parseFloat(e.target.value) || 0 })} className="font-mono" dir="ltr" />
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-[#d4af37] bg-[#d4af37]/10 px-1.5 py-0.5 rounded">USD→YER</span>
                 </div>
               </div>
             </div>
-          </section>
-
-          {/* Backup & ledger integration tools */}
-          {canManageBackup && (
-            <section className="bg-[#121215] border border-slate-850 p-6 rounded-3xl text-start relative overflow-hidden text-white">
-              <h2 className="text-sm font-black mb-6 flex items-center gap-2 text-white uppercase tracking-wider">
-                <Database className="w-5 h-5 text-[#d4af37]" />
-                {t('backupTools')}
-              </h2>
-              <div className="space-y-6">
-                <div className="bg-black/30 p-4 rounded-2xl border border-slate-850">
-                  <h3 className="font-black text-xs text-[#d4af37] uppercase tracking-wider mb-1">{isAr ? 'النسخ والتدوين المحمي سحابياً' : 'Database Custody Vault'}</h3>
-                  <p className="text-[9px] text-slate-500 font-bold mb-4">{isAr ? 'سحب ملف كامل لتوقيع حساب المعاملات المالي' : 'Full block compilation and local storage file save'}</p>
-                  
-                  <div className="grid grid-cols-1 gap-2 mb-4">
-                    <button 
-                      type="button"
-                      onClick={handleBackup}
-                      disabled={backupLoading}
-                      className="w-full bg-gradient-to-r from-[#d4af37] to-yellow-650 hover:from-yellow-650 hover:to-[#d4af37] text-black py-2.5 rounded-xl font-black text-xs transition-all flex items-center justify-center gap-2 disabled:from-slate-800 disabled:to-slate-900 disabled:cursor-not-allowed shadow"
-                    >
-                      {backupLoading ? (isAr ? 'جاري السحب والتأمين...' : 'Mining blocks...') : (
-                        <>{t('exportBackup')} <Save className="w-3.5 h-3.5" /></>
-                      )}
-                    </button>
-                    <button 
-                      type="button"
-                      onClick={handleImportClick}
-                      disabled={importLoading}
-                      className="w-full bg-black/40 border border-slate-850 text-slate-300 py-2.5 rounded-xl font-black text-xs hover:bg-slate-900 transition-all flex items-center justify-center gap-2 disabled:opacity-55 disabled:cursor-not-allowed"
-                    >
-                      <Upload className="w-3.5 h-3.5" />
-                      {importLoading ? (isAr ? 'جاري الرفع والدمج...' : 'Injecting nodes...') : <>{t('importBackup')}</>}
-                    </button>
+            {(localSettings.lastExchangeRateUpdate || localSettings.lastExchangeRateUpdatedBy) && (
+              <div className="mt-5 grid grid-cols-3 gap-3">
+                {[
+                  { icon: Clock, label: t('lastUpdateDate'), value: localSettings.lastExchangeRateUpdate || '—' },
+                  { icon: Clock, label: t('lastUpdateTime'), value: localSettings.lastExchangeRateUpdateTime || '—' },
+                  { icon: User, label: t('lastUpdatedBy'), value: localSettings.lastExchangeRateUpdatedBy || '—' },
+                ].map((item, idx) => (
+                  <div key={idx} className="bg-black/30 rounded-xl p-3 border border-slate-800/50 flex items-start gap-2">
+                    <item.icon className="w-3.5 h-3.5 text-[#d4af37] mt-0.5 shrink-0" />
+                    <div><div className="text-[9px] font-black text-slate-500 uppercase">{item.label}</div><div className="text-xs font-bold text-white font-mono mt-0.5">{item.value}</div></div>
                   </div>
+                ))}
+              </div>
+            )}
+          </SectionCard>
 
-                  {/* 🟢 Real-time Backup & Sync Status Details */}
-                  <div className="pt-3 border-t border-slate-850 space-y-2 text-[10px] font-bold text-slate-400">
-                    <div className="flex justify-between items-center text-start">
-                      <span>{isAr ? 'حالة المزامنة والنسخ الاحتياطي:' : 'Sync & Backup status:'}</span>
-                      <span className="text-emerald-400 flex items-center gap-1.5 uppercase font-black text-[9px]">
-                        <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full inline-block animate-pulse"></span>
-                        {isAr ? 'متصل برابط سحابي آمن' : 'Connected & Active'}
-                      </span>
+          {/* ── ALL CURRENCIES LIST ─────────── */}
+          <SectionCard title={isAr ? 'قائمة العملات المدعومة' : 'Supported Currencies'} icon={DollarSign} badge={`${currencies.length} ${isAr ? 'عملة' : 'currencies'}`}>
+            <div className="space-y-2 mb-4">
+              {currencies.map(cur => (
+                <div key={cur.id} className={`flex items-center gap-3 p-3.5 rounded-2xl border transition-all ${cur.isActive ? 'border-slate-700 bg-black/40' : 'border-slate-800/40 bg-black/20 opacity-60'}`}>
+                  <span className="text-xl shrink-0">{cur.flag || '🌍'}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-black text-white font-mono">{cur.code}</span>
+                      <span className="text-[9px] text-slate-500 font-bold truncate">{cur.name}</span>
                     </div>
-                    <div className="flex justify-between items-center text-start">
-                      <span>{isAr ? 'آخر تحديث لبيانات النظام:' : 'Last system update:'}</span>
-                      <span className="font-mono text-yellow-500 font-black text-[9px] uppercase">
-                        {globalSettings.lastBackup || (isAr ? 'الآن • متصل' : 'Just Now')}
-                      </span>
+                    <div className="flex items-center gap-3 mt-0.5">
+                      <span className="text-[10px] font-mono text-[#d4af37]">{cur.symbol}</span>
+                      {editingCurrency?.id === cur.id ? (
+                        <input
+                          type="number"
+                          value={editingCurrency.rateToYER}
+                          onChange={e => setEditingCurrency({ ...editingCurrency, rateToYER: parseFloat(e.target.value) || 0 })}
+                          className="w-28 bg-black/70 border border-[#d4af37]/50 rounded-lg px-2 py-0.5 text-[10px] font-mono text-white outline-none"
+                          dir="ltr"
+                        />
+                      ) : (
+                        <span className="text-[10px] text-slate-400 font-mono">1 {cur.code} = {cur.rateToYER} YER</span>
+                      )}
                     </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {/* Toggle Active */}
+                    {canEditRates && (
+                      <button
+                        onClick={() => handleUpdateCurrency(cur.id, { isActive: !cur.isActive })}
+                        className={`p-1.5 rounded-lg transition ${cur.isActive ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25' : 'bg-slate-800 text-slate-500 hover:bg-slate-700'}`}
+                        title={cur.isActive ? (isAr ? 'تعطيل' : 'Disable') : (isAr ? 'تفعيل' : 'Enable')}
+                      >
+                        <Power className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    {/* Edit Rate */}
+                    {canEditRates && (
+                      editingCurrency?.id === cur.id ? (
+                        <button
+                          onClick={() => { handleUpdateCurrency(cur.id, { rateToYER: editingCurrency.rateToYER }); setEditingCurrency(null); }}
+                          className="p-1.5 rounded-lg bg-[#d4af37]/15 text-[#d4af37] hover:bg-[#d4af37]/25 transition"
+                        >
+                          <CheckCircle className="w-3.5 h-3.5" />
+                        </button>
+                      ) : (
+                        <button onClick={() => setEditingCurrency(cur)} className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition">
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                      )
+                    )}
+                    {/* Delete */}
+                    {canEditRates && !['USD', 'SAR'].includes(cur.id) && (
+                      <button onClick={() => handleDeleteCurrency(cur.id)} className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
-                
-                <div className="p-4 bg-rose-955/10 rounded-2xl border border-rose-950/40">
-                  <h3 className="text-rose-455 font-black text-[9px] mb-2 uppercase tracking-widest text-center">{isAr ? 'صلاحيات النواة المعالجة (خطر)' : 'Host System Cache Clear'}</h3>
-                  <button 
-                    type="button"
-                    onClick={() => {
-                      setConfirmConfig({
-                        isOpen: true,
-                        title: isAr ? 'محو ذاكرة الكاش للشبكة' : 'Truncate State Cache',
-                        message: isAr ? 'هذا سيؤدي لإعادة تشغيل خوارزميات الولوج وفك الكوكيز المحلية. هل تريد الإستمرار؟' : 'Discard compiled state matrices? Cookies will expire and logout requested.',
-                        type: 'danger',
-                        onConfirm: () => {
-                          localStorage.clear();
-                          activityLogService.log('clear_cache', 'Host LocalState');
-                          window.location.reload();
-                        }
-                      });
-                    }}
-                    className="w-full bg-rose-500/10 text-rose-500 py-2 rounded-xl font-black text-[9px] hover:bg-rose-500 hover:text-white transition-all border border-rose-500/30 disabled:opacity-55 disabled:cursor-not-allowed"
+              ))}
+            </div>
+
+            {/* Add New Currency */}
+            {canEditRates && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setShowAddCurrency(!showAddCurrency)}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border-2 border-dashed border-slate-700 hover:border-[#d4af37]/50 text-slate-500 hover:text-[#d4af37] text-xs font-black transition"
+                >
+                  <Plus className="w-4 h-4" />
+                  {isAr ? 'إضافة عملة جديدة' : 'Add New Currency'}
+                </button>
+
+                {showAddCurrency && (
+                  <div className="mt-4 p-4 bg-[#d4af37]/5 border border-[#d4af37]/20 rounded-2xl space-y-4 animate-fade-slide-in">
+                    <h4 className="text-xs font-black text-[#d4af37] uppercase tracking-wider">{isAr ? 'بيانات العملة الجديدة' : 'New Currency Details'}</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      <div>
+                        <FieldLabel>{isAr ? 'الكود *' : 'Code *'}</FieldLabel>
+                        <FieldInput
+                          type="text"
+                          maxLength={5}
+                          placeholder="EUR"
+                          className="font-mono uppercase"
+                          dir="ltr"
+                          value={newCurrency.code}
+                          onChange={e => setNewCurrency({ ...newCurrency, code: e.target.value.toUpperCase() })}
+                        />
+                      </div>
+                      <div>
+                        <FieldLabel>{isAr ? 'الاسم *' : 'Name *'}</FieldLabel>
+                        <FieldInput type="text" placeholder={isAr ? 'يورو' : 'Euro'} value={newCurrency.name} onChange={e => setNewCurrency({ ...newCurrency, name: e.target.value })} />
+                      </div>
+                      <div>
+                        <FieldLabel>{isAr ? 'الرمز *' : 'Symbol *'}</FieldLabel>
+                        <FieldInput type="text" placeholder="€" maxLength={5} className="text-center font-mono" value={newCurrency.symbol} onChange={e => setNewCurrency({ ...newCurrency, symbol: e.target.value })} />
+                      </div>
+                      <div>
+                        <FieldLabel>{isAr ? 'رمز الدولة' : 'Flag Emoji'}</FieldLabel>
+                        <FieldInput type="text" placeholder="🇪🇺" maxLength={4} className="text-center" value={newCurrency.flag} onChange={e => setNewCurrency({ ...newCurrency, flag: e.target.value })} />
+                      </div>
+                      <div>
+                        <FieldLabel>{isAr ? 'سعر الصرف (مقابل YER)' : 'Rate to YER'}</FieldLabel>
+                        <FieldInput type="number" step="any" placeholder="580" dir="ltr" className="font-mono" value={newCurrency.rateToYER || ''} onChange={e => setNewCurrency({ ...newCurrency, rateToYER: parseFloat(e.target.value) || 0 })} />
+                      </div>
+                      <div className="flex items-end">
+                        <label className="flex items-center gap-2 cursor-pointer pb-1">
+                          <input type="checkbox" checked={newCurrency.isActive !== false} onChange={e => setNewCurrency({ ...newCurrency, isActive: e.target.checked })} className="rounded border-slate-700 bg-slate-900 text-yellow-600 focus:ring-0" />
+                          <span className="text-xs font-black text-slate-400">{isAr ? 'تفعيل فوراً' : 'Enable Now'}</span>
+                        </label>
+                      </div>
+                    </div>
+                    <div className="flex gap-3">
+                      <button onClick={handleAddCurrency} className="flex-1 bg-[#d4af37] hover:bg-yellow-600 text-black py-2.5 rounded-xl font-black text-xs transition flex items-center justify-center gap-2">
+                        <Plus className="w-4 h-4" />{isAr ? 'إضافة العملة' : 'Add Currency'}
+                      </button>
+                      <button onClick={() => { setShowAddCurrency(false); setNewCurrency({ code: '', name: '', symbol: '', flag: '', rateToYER: 0, isActive: true }); }} className="px-4 bg-black/40 border border-slate-800 text-slate-400 rounded-xl font-black text-xs transition hover:text-white">
+                        {isAr ? 'إلغاء' : 'Cancel'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </SectionCard>
+
+          {/* API Auto Update */}
+          {canEditRates && (
+            <SectionCard title={isAr ? 'التحديث التلقائي من API' : 'Auto API Update'} icon={RefreshCw}>
+              <div className="space-y-4">
+                <ToggleSwitch
+                  checked={localSettings.autoUpdateExchangeRates || false}
+                  onChange={v => setLocalSettings({ ...localSettings, autoUpdateExchangeRates: v })}
+                  label={t('autoUpdateRates')}
+                  description={isAr ? 'جلب تحديثات أسعار الصرف تلقائياً عند تشغيل النظام' : 'Auto-fetch exchange rates on system startup'}
+                  icon={RefreshCw}
+                />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                  <div className="md:col-span-2">
+                    <FieldLabel>{t('apiUrl')}</FieldLabel>
+                    <FieldInput type="text" value={localSettings.exchangeRatesApiUrl || 'https://open.er-api.com/v6/latest/USD'} onChange={e => setLocalSettings({ ...localSettings, exchangeRatesApiUrl: e.target.value })} dir="ltr" className="font-mono" />
+                  </div>
+                  <button type="button" onClick={fetchExchangeRates} disabled={apiLoading}
+                    className="w-full bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black py-3.5 rounded-xl font-black text-xs transition flex items-center justify-center gap-2 disabled:from-slate-800 disabled:to-slate-900 disabled:cursor-not-allowed"
                   >
-                    {isAr ? 'مسح الكاش وفرمتة المتصفح' : 'Clear Host LocalState'}
+                    <RefreshCw className={`w-3.5 h-3.5 ${apiLoading ? 'animate-spin' : ''}`} />
+                    {apiLoading ? (isAr ? 'جاري الجلب...' : 'Fetching...') : t('updateNow')}
                   </button>
                 </div>
+                {apiError && <div className="text-[11px] text-rose-400 font-bold bg-rose-950/20 border border-rose-900/30 p-3 rounded-xl">{apiError}</div>}
               </div>
-            </section>
+            </SectionCard>
           )}
         </div>
-      </div>
+      )}
 
-      <ConfirmModal 
+      {/* ══════════════════════════════════ */}
+      {/* TAB 4: ADMIN SETTINGS             */}
+      {/* ══════════════════════════════════ */}
+      {activeTab === 'admin' && (
+        <div className="space-y-5 animate-fade-slide-in">
+
+          {/* Order Defaults */}
+          {canManageAdmin && (
+            <SectionCard title={t('orderDefaults')} icon={Package}>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {[
+                  { key: 'defaultPackagingFee', label: t('defaultPackagingFee'), unit: isAr ? 'ر.س' : 'SAR' },
+                  { key: 'defaultBankCommissionRate', label: t('defaultBankCommission'), unit: '%' },
+                  { key: 'defaultCompanyProfitRate', label: t('defaultCompanyProfit'), unit: '%' },
+                  { key: 'defaultDeliveryFee', label: t('defaultDeliveryFee'), unit: 'YER' },
+                  { key: 'defaultCourierCommissionRate', label: t('defaultCourierCommission'), unit: '%' },
+                ].map(f => (
+                  <div key={f.key}>
+                    <FieldLabel>{f.label}</FieldLabel>
+                    <div className="relative">
+                      <FieldInput type="number" step="any" value={(localSettings as any)[f.key] ?? 0} onChange={e => setLocalSettings({ ...localSettings, [f.key]: parseFloat(e.target.value) || 0 })} className="font-mono pr-12" dir="ltr" />
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-[#d4af37] bg-[#d4af37]/10 px-1.5 py-0.5 rounded">{f.unit}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 p-3 bg-[#d4af37]/5 border border-[#d4af37]/15 rounded-xl text-[10px] text-slate-400 font-bold">
+                💡 {isAr ? 'هذه القيم ستُملأ تلقائياً عند إنشاء أي طلب جديد.' : 'These defaults auto-fill when creating new orders.'}
+              </div>
+            </SectionCard>
+          )}
+
+          {/* Invoice Settings */}
+          {canManageAdmin && (
+            <SectionCard title={t('invoiceSettings')} icon={FileText}>
+              <div className="space-y-5">
+                <div>
+                  <FieldLabel>{t('invoiceLogo')}</FieldLabel>
+                  <div className="flex items-center gap-4">
+                    {localSettings.invoiceLogo ? (
+                      <div className="relative group">
+                        <img src={localSettings.invoiceLogo} alt="Invoice Logo" className="w-20 h-20 object-contain rounded-xl border border-slate-800 bg-black/50 p-2" />
+                        <button onClick={() => setLocalSettings({ ...localSettings, invoiceLogo: '' })} className="absolute -top-2 -right-2 w-5 h-5 bg-rose-600 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition"><X className="w-3 h-3 text-white" /></button>
+                      </div>
+                    ) : (
+                      <div className="w-20 h-20 rounded-xl border border-slate-800 bg-black/50 flex items-center justify-center text-slate-600"><Image className="w-7 h-7" /></div>
+                    )}
+                    <button type="button" onClick={() => invoiceLogoInputRef.current?.click()} className="flex-1 bg-black/40 border border-slate-800 hover:border-[#d4af37]/40 text-slate-300 hover:text-white py-3 px-4 rounded-xl text-xs font-black transition flex items-center gap-2 justify-center"><Upload className="w-4 h-4" />{isAr ? 'رفع شعار الفاتورة' : 'Upload Invoice Logo'}</button>
+                  </div>
+                </div>
+                <div>
+                  <FieldLabel>{t('invoiceNotes')}</FieldLabel>
+                  <FieldTextarea rows={3} value={localSettings.invoiceNotes || ''} onChange={e => setLocalSettings({ ...localSettings, invoiceNotes: e.target.value })} />
+                </div>
+              </div>
+            </SectionCard>
+          )}
+
+          {/* Security */}
+          {canManageBackup && (
+            <SectionCard title={t('securitySettings')} icon={Shield}>
+              <div className="space-y-4">
+                <ToggleSwitch checked={localSettings.protectSensitiveOrderDelete || false} onChange={v => setLocalSettings({ ...localSettings, protectSensitiveOrderDelete: v })} label={t('protectOrderDelete')} description={isAr ? 'منع حذف الطلبات ذات المدفوعات إلا بعد إدخال رمز PIN' : 'Prevent deletion of orders with payments without PIN'} icon={Shield} />
+              </div>
+            </SectionCard>
+          )}
+
+          {/* ══════════════════════════════════ */}
+          {/* ADVANCED BACKUP SYSTEM            */}
+          {/* ══════════════════════════════════ */}
+          {canManageBackup && (
+            <SectionCard title={isAr ? 'نظام النسخ الاحتياطي المتقدم' : 'Advanced Backup System'} icon={HardDrive}>
+
+              {/* Backup Stats Row */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+                {[
+                  { icon: Archive, label: isAr ? 'إجمالي النسخ' : 'Total Backups', value: localSettings.backupCount || 0, color: 'text-[#d4af37]' },
+                  { icon: Clock, label: isAr ? 'آخر نسخة' : 'Last Backup', value: localSettings.lastBackup ? (localSettings.lastBackup.split(' ')[0] || '—') : '—', color: 'text-emerald-400' },
+                  { icon: Calendar, label: isAr ? 'الجدولة' : 'Schedule', value: localSettings.backupSchedule === 'daily' ? (isAr ? 'يومي' : 'Daily') : localSettings.backupSchedule === 'weekly' ? (isAr ? 'أسبوعي' : 'Weekly') : localSettings.backupSchedule === 'monthly' ? (isAr ? 'شهري' : 'Monthly') : (isAr ? 'يدوي' : 'Manual'), color: 'text-blue-400' },
+                  { icon: HardDrive, label: isAr ? 'الاحتفاظ' : 'Retention', value: `${localSettings.backupRetentionDays || 30} ${isAr ? 'يوم' : 'days'}`, color: 'text-purple-400' },
+                ].map((stat, idx) => (
+                  <div key={idx} className="bg-black/40 border border-slate-800/50 rounded-2xl p-3 flex flex-col items-center text-center gap-1">
+                    <stat.icon className={`w-5 h-5 ${stat.color}`} />
+                    <div className={`text-sm font-black ${stat.color}`}>{stat.value}</div>
+                    <div className="text-[9px] text-slate-500 font-bold uppercase">{stat.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Auto Backup Toggle */}
+              <div className="space-y-3 mb-5">
+                <ToggleSwitch
+                  checked={localSettings.autoBackupEnabled || false}
+                  onChange={v => setLocalSettings({ ...localSettings, autoBackupEnabled: v })}
+                  label={t('autoBackup')}
+                  description={isAr ? 'حفظ نسخة احتياطية تلقائياً في Firestore عند انتهاء الوقت المحدد' : 'Auto-save backup to Firestore on schedule'}
+                  icon={Archive}
+                />
+
+                {/* Backup Schedule */}
+                <div>
+                  <FieldLabel>{isAr ? 'جدولة النسخ الاحتياطي' : 'Backup Schedule'}</FieldLabel>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[
+                      { v: 'manual', label: isAr ? 'يدوي' : 'Manual', icon: '🖐️' },
+                      { v: 'daily', label: isAr ? 'يومي' : 'Daily', icon: '📅' },
+                      { v: 'weekly', label: isAr ? 'أسبوعي' : 'Weekly', icon: '📆' },
+                      { v: 'monthly', label: isAr ? 'شهري' : 'Monthly', icon: '🗓️' },
+                    ].map(opt => (
+                      <button key={opt.v} type="button"
+                        onClick={() => setLocalSettings({ ...localSettings, backupSchedule: opt.v as any })}
+                        className={`p-2.5 rounded-xl border-2 text-center transition ${localSettings.backupSchedule === opt.v ? 'border-[#d4af37] bg-[#d4af37]/10 text-[#d4af37]' : 'border-slate-800 bg-black/40 text-slate-400 hover:border-slate-700'}`}
+                      >
+                        <div className="text-base mb-0.5">{opt.icon}</div>
+                        <div className="text-[9px] font-black">{opt.label}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Retention Days */}
+                <div>
+                  <FieldLabel>{isAr ? 'مدة الاحتفاظ بالنسخ (أيام)' : 'Backup Retention Period (days)'}</FieldLabel>
+                  <div className="flex gap-2 items-center">
+                    {[7, 14, 30, 60, 90].map(days => (
+                      <button key={days} type="button"
+                        onClick={() => setLocalSettings({ ...localSettings, backupRetentionDays: days })}
+                        className={`flex-1 py-2 rounded-xl border text-[10px] font-black transition ${localSettings.backupRetentionDays === days ? 'border-[#d4af37] bg-[#d4af37]/10 text-[#d4af37]' : 'border-slate-800 bg-black/40 text-slate-500 hover:border-slate-700'}`}
+                      >{days}</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Collections to Backup */}
+              <div className="mb-5">
+                <FieldLabel>{isAr ? 'الفئات المشمولة في النسخة الاحتياطية' : 'Collections to Backup'}</FieldLabel>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                  {[
+                    { key: 'orders', label: '📦 ' + (isAr ? 'الطلبات' : 'Orders') },
+                    { key: 'customers', label: '👥 ' + (isAr ? 'العملاء' : 'Customers') },
+                    { key: 'couriers', label: '🚚 ' + (isAr ? 'المناديب' : 'Couriers') },
+                    { key: 'sources', label: '🗺️ ' + (isAr ? 'المصادر' : 'Sources') },
+                    { key: 'users', label: '👤 ' + (isAr ? 'الموظفون' : 'Staff') },
+                    { key: 'roles', label: '🛡️ ' + (isAr ? 'الأدوار' : 'Roles') },
+                  ].map(col => (
+                    <label key={col.key} className={`flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition ${exportSelections[col.key] ? 'border-[#d4af37]/50 bg-[#d4af37]/10 text-white' : 'border-slate-800 bg-black/40 text-slate-400 hover:border-slate-700'}`}>
+                      <input type="checkbox" checked={exportSelections[col.key]} onChange={e => setExportSelections({ ...exportSelections, [col.key]: e.target.checked })} className="rounded border-slate-700 bg-slate-900 text-yellow-600 focus:ring-0" />
+                      <span className="text-xs font-bold">{col.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Export Format */}
+              <div className="mb-5">
+                <FieldLabel>{isAr ? 'صيغة ملف الصادرة' : 'Export File Format'}</FieldLabel>
+                <div className="flex gap-3">
+                  {[
+                    { value: 'json', label: 'JSON', desc: isAr ? 'كامل + استيراد' : 'Full + importable', icon: '{}' },
+                    { value: 'csv', label: 'CSV / Excel', desc: isAr ? 'جداول للإكسيل' : 'Spreadsheet', icon: '📊' },
+                  ].map(fmt => (
+                    <button key={fmt.value} type="button" onClick={() => setExportFormat(fmt.value as any)}
+                      className={`flex-1 p-3 rounded-xl border-2 text-center transition ${exportFormat === fmt.value ? 'border-[#d4af37] bg-[#d4af37]/10 text-[#d4af37]' : 'border-slate-800 bg-black/40 text-slate-400 hover:border-slate-700'}`}
+                    >
+                      <div className="font-mono font-black text-xs">{fmt.icon} {fmt.label}</div>
+                      <div className="text-[9px] text-slate-500 mt-0.5">{fmt.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5">
+                <button type="button" onClick={() => runBackup('manual')} disabled={backupLoading}
+                  className="bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black py-3.5 rounded-xl font-black text-xs transition flex items-center justify-center gap-2 disabled:from-slate-800 disabled:to-slate-900 disabled:cursor-not-allowed shadow"
+                >
+                  <Download className="w-4 h-4" />
+                  {backupLoading ? (isAr ? 'جاري التصدير...' : 'Exporting...') : `${t('exportBackup')} (${exportFormat.toUpperCase()})`}
+                </button>
+                <button type="button" onClick={() => fileInputRef.current?.click()} disabled={importLoading}
+                  className="bg-black/40 border border-slate-800 text-slate-300 py-3.5 rounded-xl font-black text-xs hover:border-[#d4af37]/40 hover:text-white transition flex items-center justify-center gap-2"
+                >
+                  <Upload className="w-4 h-4" />
+                  {importLoading ? (isAr ? 'جاري الاستيراد...' : 'Importing...') : `${t('importBackup')} (JSON)`}
+                </button>
+              </div>
+
+              {/* ── BACKUP HISTORY ─────────────── */}
+              <div className="border-t border-slate-800/50 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowBackupHistory(!showBackupHistory)}
+                  className="w-full flex items-center justify-between text-xs font-black text-slate-400 hover:text-white transition py-2 group"
+                >
+                  <span className="flex items-center gap-2"><History className="w-4 h-4 text-[#d4af37]" />{isAr ? 'سجل النسخ الاحتياطية' : 'Backup History'}</span>
+                  {showBackupHistory ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </button>
+
+                {showBackupHistory && (
+                  <div className="mt-3 space-y-2 animate-fade-slide-in">
+                    {backupHistoryLoading ? (
+                      <div className="flex justify-center py-4"><div className="w-6 h-6 animate-spin rounded border-2 border-[#d4af37]/25 border-t-[#d4af37]"></div></div>
+                    ) : backupHistory.length === 0 ? (
+                      <div className="text-center py-6 text-slate-600 text-xs font-bold">
+                        {isAr ? 'لا توجد نسخ احتياطية محفوظة بعد' : 'No backups saved yet'}
+                      </div>
+                    ) : (
+                      backupHistory.map(backup => (
+                        <div key={backup.id} className="flex items-center gap-3 p-3 bg-black/40 border border-slate-800/50 rounded-xl">
+                          <div className={`p-1.5 rounded-lg ${backup.type === 'auto' ? 'bg-blue-500/15 text-blue-400' : 'bg-[#d4af37]/15 text-[#d4af37]'}`}>
+                            {backup.type === 'auto' ? <RefreshCw className="w-3.5 h-3.5" /> : <Archive className="w-3.5 h-3.5" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-black text-white font-mono">{new Date(backup.savedAt).toLocaleDateString(isAr ? 'ar-YE' : 'en-US')}</span>
+                              <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full ${backup.type === 'auto' ? 'bg-blue-500/20 text-blue-400' : 'bg-[#d4af37]/20 text-[#d4af37]'}`}>
+                                {backup.type === 'auto' ? (isAr ? 'تلقائي' : 'Auto') : (isAr ? 'يدوي' : 'Manual')}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3 mt-0.5">
+                              <span className="text-[9px] text-slate-500 font-mono">{new Date(backup.savedAt).toLocaleTimeString(isAr ? 'ar-YE' : 'en-US')}</span>
+                              {backup.size && <span className="text-[9px] text-slate-600 font-mono">{formatBytes(backup.size)}</span>}
+                              <span className="text-[9px] text-slate-600">{backup.createdBy}</span>
+                            </div>
+                          </div>
+                          <div className="flex gap-1.5 shrink-0">
+                            <button
+                              onClick={() => setConfirmConfig({
+                                isOpen: true,
+                                title: isAr ? 'استعادة هذه النسخة' : 'Restore This Backup',
+                                message: isAr
+                                  ? `⚠️ هذا سيستبدل بياناتك الحالية ببيانات نسخة ${new Date(backup.savedAt).toLocaleDateString('ar-YE')}. متأكد؟`
+                                  : `⚠️ This will overwrite current data with backup from ${new Date(backup.savedAt).toLocaleDateString()}. Are you sure?`,
+                                type: 'warning',
+                                onConfirm: () => restoreFromFirestore(backup.id)
+                              })}
+                              className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition" title={isAr ? 'استعادة' : 'Restore'}
+                            >
+                              <RefreshCw className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => setConfirmConfig({
+                                isOpen: true,
+                                title: isAr ? 'حذف هذه النسخة' : 'Delete This Backup',
+                                message: isAr ? 'هل تريد حذف هذه النسخة الاحتياطية نهائياً؟' : 'Permanently delete this backup record?',
+                                type: 'danger',
+                                onConfirm: () => deleteBackupRecord(backup.id)
+                              })}
+                              className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition" title={isAr ? 'حذف' : 'Delete'}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Cache Clear */}
+              <div className="pt-4 border-t border-slate-800/50 mt-4">
+                <button type="button"
+                  onClick={() => setConfirmConfig({
+                    isOpen: true,
+                    title: isAr ? 'مسح ذاكرة التخزين المؤقت' : 'Clear Local Cache',
+                    message: isAr ? 'هذا سيمسح بيانات التخزين المؤقت للمتصفح ويُعيد تحميل النظام.' : 'This will clear browser local storage and reload.',
+                    type: 'danger',
+                    onConfirm: () => { localStorage.clear(); activityLogService.log('clear_cache', 'Browser LocalStorage'); window.location.reload(); }
+                  })}
+                  className="w-full bg-rose-500/10 text-rose-400 border border-rose-500/20 py-2.5 rounded-xl font-black text-xs hover:bg-rose-500/20 transition"
+                >
+                  🗑️ {isAr ? 'مسح الكاش وإعادة التحميل' : 'Clear Cache & Reload'}
+                </button>
+              </div>
+            </SectionCard>
+          )}
+        </div>
+      )}
+
+      <ConfirmModal
         isOpen={confirmConfig.isOpen}
         onClose={() => setConfirmConfig({ ...confirmConfig, isOpen: false })}
         onConfirm={confirmConfig.onConfirm}
