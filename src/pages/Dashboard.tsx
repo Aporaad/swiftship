@@ -2,29 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { collection, onSnapshot, query, limit, orderBy } from 'firebase/firestore';
 import { db, auth, safeToDate } from '../lib/firebase';
-import { 
-  Package, 
-  Truck, 
-  CheckCircle2, 
-  AlertCircle, 
-  Clock, 
-  TrendingUp, 
-  Users as UsersIcon, 
-  DollarSign, 
-  Plus, 
-  UserPlus, 
-  FileText, 
-  ShieldAlert, 
-  Compass, 
-  MapPin, 
-  TrendingDown,
-  ArrowUpRight,
-  ArrowDownRight,
-  Sliders,
-  Check
-} from 'lucide-react';
+import { Package, Truck, CircleCheck as CheckCircle2, CircleAlert as AlertCircle, Clock, TrendingUp, Users as UsersIcon, DollarSign, Plus, UserPlus, FileText, ShieldAlert, Compass, MapPin, TrendingDown, ArrowUpRight, ArrowDownRight, FileSliders as Sliders, Check, Lock } from 'lucide-react';
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
+
+const LOCKED = '🔒 مقيد';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -232,6 +214,20 @@ export default function Dashboard() {
     );
   }
 
+  // Page Guard: requires view_dashboard
+  if (role !== 'Admin' && !hasPermission('view_dashboard')) {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 bg-gradient-to-br from-[#121215] to-[#070708] rounded-3xl border border-slate-800 shadow-xl text-center select-none">
+        <ShieldAlert className="w-16 h-16 text-rose-500 mb-6 animate-pulse" />
+        <h2 className="text-2xl font-black text-[#d4af37] mb-2 uppercase tracking-wide">{isAr ? 'وصول مقيد' : 'Access Denied'}</h2>
+        <p className="text-slate-500 max-w-md">{isAr ? 'لا تملك صلاحية عرض لوحة التحكم. تواصل مع مديرك لطلب الصلاحية.' : 'You do not have permission to access the dashboard. Contact your administrator.'}</p>
+      </div>
+    );
+  }
+
+  // Determine if user can see financial statistics
+  const canViewStats = role === 'Admin' || hasPermission('view_statistics');
+
   // Define available metric configurations
   const metricConfigs: { [key: string]: any } = {
     totalOrders: {
@@ -249,25 +245,25 @@ export default function Dashboard() {
     totalRevenues: {
       titleAr: 'إجمالي الإيرادات',
       titleEn: 'Total Revenue',
-      value: `${stats.totalRevenues.toLocaleString()} YER`,
+      value: canViewStats ? `${stats.totalRevenues.toLocaleString()} YER` : LOCKED,
       changeAr: '+18.7% من أمس',
       changeEn: '+18.7% vs yesterday',
       isPositive: true,
-      colorClass: 'text-[#d4af37]',
+      colorClass: canViewStats ? 'text-[#d4af37]' : 'text-rose-500',
       accentColor: '#d4af37',
-      bgClass: 'bg-[#d4af37]/5 border-[#d4af37]/10 text-[#d4af37]',
+      bgClass: canViewStats ? 'bg-[#d4af37]/5 border-[#d4af37]/10 text-[#d4af37]' : 'bg-rose-950/20 border-rose-900/30 text-rose-400',
       icon: DollarSign,
     },
     netProfit: {
       titleAr: 'صافي أرباح الشركة',
       titleEn: 'Net Profits',
-      value: `${stats.netProfit.toLocaleString()} YER`,
+      value: canViewStats ? `${stats.netProfit.toLocaleString()} YER` : LOCKED,
       changeAr: '+15.2% من أمس',
       changeEn: '+15.2% vs yesterday',
       isPositive: true,
-      colorClass: 'text-white',
+      colorClass: canViewStats ? 'text-white' : 'text-rose-500',
       accentColor: '#d4af37',
-      bgClass: 'bg-[#d4af37]/5 border-[#d4af37]/10 text-[#d4af37]',
+      bgClass: canViewStats ? 'bg-[#d4af37]/5 border-[#d4af37]/10 text-[#d4af37]' : 'bg-rose-950/20 border-rose-900/30 text-rose-400',
       icon: TrendingUp,
     },
     activeDeliveries: {
@@ -309,25 +305,25 @@ export default function Dashboard() {
     amountPaid: {
       titleAr: 'المبالغ المحصلة كاش',
       titleEn: 'Cash Collected',
-      value: `${stats.amountPaid.toLocaleString()} YER`,
+      value: canViewStats ? `${stats.amountPaid.toLocaleString()} YER` : LOCKED,
       changeAr: '+14.2% مؤشر ممتاز',
       changeEn: '+14.2% healthy level',
       isPositive: true,
-      colorClass: 'text-emerald-400',
+      colorClass: canViewStats ? 'text-emerald-400' : 'text-rose-500',
       accentColor: '#10b981',
-      bgClass: 'bg-emerald-950/20 border-emerald-900/30 text-emerald-400',
+      bgClass: canViewStats ? 'bg-emerald-950/20 border-emerald-900/30 text-emerald-400' : 'bg-rose-950/20 border-rose-900/30 text-rose-400',
       icon: CheckCircle2,
     },
     amountRemaining: {
       titleAr: 'المبالغ المتبقية والمديونيات',
       titleEn: 'Outstanding Debts',
-      value: `${stats.amountRemaining.toLocaleString()} YER`,
+      value: canViewStats ? `${stats.amountRemaining.toLocaleString()} YER` : LOCKED,
       changeAr: '+2.1% معلق للتحصيل',
       changeEn: '+2.1% pending collect',
       isPositive: false,
-      colorClass: 'text-rose-450',
+      colorClass: canViewStats ? 'text-rose-450' : 'text-rose-500',
       accentColor: '#f43f5e',
-      bgClass: 'bg-rose-950/10 border-rose-950/30 text-rose-400',
+      bgClass: canViewStats ? 'bg-rose-950/10 border-rose-950/30 text-rose-400' : 'bg-rose-950/20 border-rose-900/30 text-rose-400',
       icon: TrendingDown,
     },
     couriersCount: {
@@ -476,6 +472,9 @@ export default function Dashboard() {
         {visibleMetrics.map((key) => {
           const config = metricConfigs[key];
           if (!config) return null;
+          // Hide financial metric cards if user doesn't have statistics permission
+          const isFinancial = ['totalRevenues', 'netProfit', 'amountPaid', 'amountRemaining'].includes(key);
+          if (isFinancial && !canViewStats) return null;
           return (
             <div 
               key={key}
@@ -652,67 +651,68 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         
         {/* Widget 1: ملخص الأداء اليومي (Circular circular progress wheel) */}
-        <div className="bg-[#0c0c0e] border border-[#d4af37]/15 rounded-xl p-5 flex flex-col items-center justify-between shadow-lg shadow-black/55 relative">
-          <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-[#d4af37]/45 to-transparent"></div>
-          
-          <div className="w-full text-start mb-4 pb-3 border-b border-slate-900 flex justify-between">
-            <span className="font-black text-white text-xs uppercase tracking-wider">{isAr ? 'ملخص الأداء المالي' : 'Daily Core Yield'}</span>
-            <span className="text-[9px] font-bold text-slate-500 font-mono tracking-tighter">PERF v3.0</span>
-          </div>
-
-          {/* Glowing Circular Progress SVG */}
-          <div className="relative flex items-center justify-center my-4 group select-none">
-            {/* outer golden shadow ring */}
-            <div className="absolute w-36 h-36 rounded-full bg-[#d4af37]/5 blur-lg group-hover:bg-[#d4af37]/10 transition-all duration-500"></div>
+        {canViewStats && (
+          <div className="bg-[#0c0c0e] border border-[#d4af37]/15 rounded-xl p-5 flex flex-col items-center justify-between shadow-lg shadow-black/55 relative">
+            <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-[#d4af37]/45 to-transparent"></div>
             
-            <svg className="w-36 h-36 transform -rotate-90" viewBox="0 0 100 100">
-              {/* Background Circle */}
-              <circle cx="50" cy="50" r="40" stroke="rgba(212,175,55,0.05)" strokeWidth="8" fill="none" />
-              {/* Foreground Animated Gold Circle */}
-              <circle 
-                cx="50" 
-                cy="50" 
-                r="40" 
-                stroke="#d4af37" 
-                strokeWidth="8" 
-                fill="none" 
-                strokeDasharray="251.2" 
-                strokeDashoffset="32.6" // 87% filled
-                strokeLinecap="round"
-                className="transition-all duration-[2000] ease-out drop-shadow-[0_0_6px_#d4af37]"
-              />
-            </svg>
-            
-            {/* Center Text displaying status */}
-            <div className="absolute flex flex-col items-center">
-              <span className="text-3xl font-black text-white font-mono tracking-tighter">87%</span>
-              <span className="text-[10px] text-[#d4af37] font-black tracking-widest mt-0.5">{isAr ? 'مـمـتـاز' : 'OPTIMAL'}</span>
+            <div className="w-full text-start mb-4 pb-3 border-b border-slate-900 flex justify-between">
+              <span className="font-black text-white text-xs uppercase tracking-wider">{isAr ? 'ملخص الأداء المالي' : 'Daily Core Yield'}</span>
+              <span className="text-[9px] font-bold text-slate-500 font-mono tracking-tighter">PERF v3.0</span>
             </div>
-          </div>
 
-          {/* Performance small breakdown */}
-          <div className="w-full space-y-2.5 mt-2 text-start font-sans text-xs">
-            <div className="flex justify-between items-center">
-              <span className="text-slate-500 font-bold">{isAr ? 'الإيرادات اليومية' : 'Daily Revenue'}</span>
-              <span className="font-mono font-black text-white">{stats.totalRevenues.toLocaleString()} YER</span>
+            <div className="relative flex items-center justify-center my-4 group select-none">
+              {/* outer golden shadow ring */}
+              <div className="absolute w-36 h-36 rounded-full bg-[#d4af37]/5 blur-lg group-hover:bg-[#d4af37]/10 transition-all duration-500"></div>
+              
+              <svg className="w-36 h-36 transform -rotate-90" viewBox="0 0 100 100">
+                {/* Background Circle */}
+                <circle cx="50" cy="50" r="40" stroke="rgba(212,175,55,0.05)" strokeWidth="8" fill="none" />
+                {/* Foreground Animated Gold Circle */}
+                <circle 
+                  cx="50" 
+                  cy="50" 
+                  r="40" 
+                  stroke="#d4af37" 
+                  strokeWidth="8" 
+                  fill="none" 
+                  strokeDasharray="251.2" 
+                  strokeDashoffset="32.6" // 87% filled
+                  strokeLinecap="round"
+                  className="transition-all duration-[2000] ease-out drop-shadow-[0_0_6px_#d4af37]"
+                />
+              </svg>
+              
+              {/* Center Text displaying status */}
+              <div className="absolute flex flex-col items-center">
+                <span className="text-3xl font-black text-white font-mono tracking-tighter">87%</span>
+                <span className="text-[10px] text-[#d4af37] font-black tracking-widest mt-0.5">{isAr ? 'مـمـتـاز' : 'OPTIMAL'}</span>
+              </div>
             </div>
-            <div className="flex justify-between items-center border-t border-slate-900 pt-2">
-              <span className="text-slate-500 font-bold">{isAr ? 'المصروفات العامة' : 'Office Expenses'}</span>
-              <span className="font-mono font-bold text-rose-500">58,230 YER</span>
-            </div>
-            <div className="flex justify-between items-center border-t border-slate-900 pt-2">
-              <span className="text-slate-400 font-bold">{isAr ? 'صافي الربح اليومي' : 'Net Surplus'}</span>
-              <span className="font-mono font-black text-emerald-400">{stats.netProfit.toLocaleString()} YER</span>
-            </div>
-          </div>
 
-          <button onClick={() => navigate('/expenses')} className="w-full bg-[#d4af37]/5 hover:bg-[#d4af37]/15 text-[#d4af37] border border-[#d4af37]/15 hover:border-[#d4af37]/35 py-2 rounded-xl text-[10px] font-black transition-all duration-300 tracking-wider mt-4">
-            {isAr ? 'عـرض الـتـقـريـر الـمـالـي' : 'DOWNLOAD DETAILED LEDGER'}
-          </button>
-        </div>
+            {/* Performance small breakdown */}
+            <div className="w-full space-y-2.5 mt-2 text-start font-sans text-xs">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500 font-bold">{isAr ? 'إيرادات اليوم' : 'Daily Revenue'}</span>
+                <span className="font-mono font-black text-white">{stats.totalRevenues.toLocaleString()} YER</span>
+              </div>
+              <div className="flex justify-between items-center border-t border-slate-900 pt-2">
+                <span className="text-slate-500 font-bold">{isAr ? 'المصروفات العامة' : 'Office Expenses'}</span>
+                <span className="font-mono font-bold text-rose-500">58,230 YER</span>
+              </div>
+              <div className="flex justify-between items-center border-t border-slate-900 pt-2">
+                <span className="text-slate-400 font-bold">{isAr ? 'صافي الربح اليومي' : 'Net Surplus'}</span>
+                <span className="font-mono font-black text-emerald-400">{stats.netProfit.toLocaleString()} YER</span>
+              </div>
+            </div>
+
+            <button onClick={() => navigate('/expenses')} className="w-full bg-[#d4af37]/5 hover:bg-[#d4af37]/15 text-[#d4af37] border border-[#d4af37]/15 hover:border-[#d4af37]/35 py-2 rounded-xl text-[10px] font-black transition-all duration-300 tracking-wider mt-4">
+              {isAr ? 'عـرض الـتـقـريـر الـمـالـي' : 'DOWNLOAD DETAILED LEDGER'}
+            </button>
+          </div>
+        )}
 
         {/* Today's Transactions Table (جدول آخر الطلبات) */}
-        <div className="lg:col-span-2 bg-[#0c0c0e] border border-[#d4af37]/15 rounded-xl p-5 flex flex-col justify-between shadow-lg shadow-black/55 relative overflow-hidden">
+        <div className={`${canViewStats ? 'lg:col-span-2' : 'lg:col-span-3'} bg-[#0c0c0e] border border-[#d4af37]/15 rounded-xl p-5 flex flex-col justify-between shadow-lg shadow-black/55 relative overflow-hidden`}>
           <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-[#d4af37]/45 to-transparent"></div>
           
           <div className="flex justify-between items-center mb-4 border-b border-slate-900 pb-3">
@@ -733,7 +733,7 @@ export default function Dashboard() {
                   <th className="pb-3 text-center">{isAr ? 'العميل' : 'CUSTOMER'}</th>
                   <th className="pb-3 text-center">{isAr ? 'الحالة' : 'STATE'}</th>
                   <th className="pb-3 text-center">{isAr ? 'المندوب' : 'DELIVERER'}</th>
-                  <th className="pb-3 text-end">{isAr ? 'المبلغ' : 'PAY'}</th>
+                  {canViewStats && <th className="pb-3 text-end">{isAr ? 'المبلغ' : 'PAY'}</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-900/50">
@@ -753,9 +753,11 @@ export default function Dashboard() {
                     <td className="py-3 text-slate-400 font-medium text-center text-[10px]">
                       {ord.deliveryCourierName || '—'}
                     </td>
-                    <td className="py-3 font-mono font-black text-[#d4af37] text-end text-xs">
-                      {parseFloat(ord.totalCostYER || '0').toLocaleString()} YER
-                    </td>
+                    {canViewStats && (
+                      <td className="py-3 font-mono font-black text-[#d4af37] text-end text-xs">
+                        {parseFloat(ord.totalCostYER || '0').toLocaleString()} YER
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -767,49 +769,51 @@ export default function Dashboard() {
         <div className="space-y-4">
           
           {/* Dashboard Section 6: Financial Panel (الوضع المالي) */}
-          <div className="bg-[#0c0c0e] border border-[#d4af37]/15 rounded-xl p-4 flex flex-col justify-between shadow-lg shadow-black/55 relative">
-            <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-[#d4af37]/45 to-transparent"></div>
-            <div className="text-start border-b border-slate-900 pb-2 mb-3">
-              <span className="font-black text-white text-xs uppercase tracking-wider">{isAr ? 'الحسابات والمعاملات الذكية' : 'Vault Ledger'}</span>
+          {canViewStats && (
+            <div className="bg-[#0c0c0e] border border-[#d4af37]/15 rounded-xl p-4 flex flex-col justify-between shadow-lg shadow-black/55 relative">
+              <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-[#d4af37]/45 to-transparent"></div>
+              <div className="text-start border-b border-slate-900 pb-2 mb-3">
+                <span className="font-black text-white text-xs uppercase tracking-wider">{isAr ? 'الحسابات والمعاملات الذكية' : 'Vault Ledger'}</span>
+              </div>
+
+              <div className="space-y-2.5">
+                
+                {/* Stat 1: صافي أرباح الشركة */}
+                <div className="p-3 bg-gradient-to-r from-[#0d0d0f] to-transparent border-r-2 border-[#d4af37] rounded-l-lg text-start flex justify-between items-center">
+                  <div>
+                    <span className="text-[9px] text-[#d4af37] font-black uppercase tracking-wider block">{isAr ? 'صافي أرباح الشركة' : 'NET MARGINS'}</span>
+                    <span className="font-mono text-base font-black text-white mt-1 block">
+                      {`${stats.netProfit.toLocaleString()} YER`}
+                    </span>
+                  </div>
+                  <TrendingUp className="w-6 h-6 text-[#d4af37] opacity-25" />
+                </div>
+
+                {/* Stat 2: المقبوض كاش */}
+                <div className="p-3 bg-gradient-to-r from-[#0d0d0f] to-transparent border-r-2 border-emerald-500 rounded-l-lg text-start flex justify-between items-center">
+                  <div>
+                    <span className="text-[9px] text-emerald-400 font-black uppercase tracking-wider block">{isAr ? 'المقبوض كاش' : 'CASH COLLECTED'}</span>
+                    <span className="font-mono text-base font-black text-white mt-1 block">
+                      {`${stats.amountPaid.toLocaleString()} YER`}
+                    </span>
+                  </div>
+                  <CheckCircle2 className="w-6 h-6 text-emerald-500 opacity-25" />
+                </div>
+
+                {/* Stat 3: المتبقي على العملاء */}
+                <div className="p-3 bg-gradient-to-r from-[#0d0d0f] to-transparent border-r-2 border-rose-500 rounded-l-lg text-start flex justify-between items-center">
+                  <div>
+                    <span className="text-[9px] text-rose-400 font-black uppercase tracking-wider block">{isAr ? 'المتبقي على العملاء' : 'OUTSTANDING DEBT'}</span>
+                    <span className="font-mono text-base font-black text-white mt-1 block">
+                      {`${stats.amountRemaining.toLocaleString()} YER`}
+                    </span>
+                  </div>
+                  <TrendingDown className="w-6 h-6 text-rose-500 opacity-25" />
+                </div>
+
+              </div>
             </div>
-
-            <div className="space-y-2.5">
-              
-              {/* Stat 1: صافي أرباح الشركة */}
-              <div className="p-3 bg-gradient-to-r from-[#0d0d0f] to-transparent border-r-2 border-[#d4af37] rounded-l-lg text-start flex justify-between items-center">
-                <div>
-                  <span className="text-[9px] text-[#d4af37] font-black uppercase tracking-wider block">{isAr ? 'صافي أرباح الشركة' : 'NET MARGINS'}</span>
-                  <span className="font-mono text-base font-black text-white mt-1 block">
-                    {stats.netProfit.toLocaleString()} <span className="text-[10px] text-slate-500 font-normal">YER</span>
-                  </span>
-                </div>
-                <TrendingUp className="w-6 h-6 text-[#d4af37] opacity-25" />
-              </div>
-
-              {/* Stat 2: المقبوض كاش */}
-              <div className="p-3 bg-gradient-to-r from-[#0d0d0f] to-transparent border-r-2 border-emerald-500 rounded-l-lg text-start flex justify-between items-center">
-                <div>
-                  <span className="text-[9px] text-emerald-400 font-black uppercase tracking-wider block">{isAr ? 'المقبوض كاش' : 'CASH COLLECTED'}</span>
-                  <span className="font-mono text-base font-black text-white mt-1 block">
-                    {stats.amountPaid.toLocaleString()} <span className="text-[10px] text-slate-500 font-normal">YER</span>
-                  </span>
-                </div>
-                <CheckCircle2 className="w-6 h-6 text-emerald-500 opacity-25" />
-              </div>
-
-              {/* Stat 3: المتبقي على العملاء */}
-              <div className="p-3 bg-gradient-to-r from-[#0d0d0f] to-transparent border-r-2 border-rose-500 rounded-l-lg text-start flex justify-between items-center">
-                <div>
-                  <span className="text-[9px] text-rose-400 font-black uppercase tracking-wider block">{isAr ? 'المتبقي على العملاء' : 'OUTSTANDING DEBT'}</span>
-                  <span className="font-mono text-base font-black text-white mt-1 block">
-                    {stats.amountRemaining.toLocaleString()} <span className="text-[10px] text-slate-500 font-normal">YER</span>
-                  </span>
-                </div>
-                <TrendingDown className="w-6 h-6 text-rose-500 opacity-25" />
-              </div>
-
-            </div>
-          </div>
+          )}
 
           {/* Smart Alerts Box (التنبيهات الذكية) */}
           <div className="bg-[#0c0c0e] border border-[#d4af37]/15 rounded-xl p-4 flex flex-col justify-between shadow-lg shadow-black/55 relative">

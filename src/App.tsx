@@ -14,6 +14,7 @@ import Orders from './pages/Orders';
 import Tracking from './pages/Tracking';
 import Customers from './pages/Customers';
 import Users from './pages/Users';
+import UserManagement from './pages/UserManagement';
 import Couriers from './pages/Couriers';
 import Roles from './pages/Roles';
 import Sources from './pages/Sources';
@@ -57,6 +58,7 @@ export default function App() {
             <Route path="customers" element={<Customers />} />
             <Route path="sources" element={<Sources />} />
             <Route path="users" element={<Users />} />
+            <Route path="user-management" element={<UserManagement />} />
             <Route path="couriers" element={<Couriers />} />
             <Route path="expenses" element={<Expenses />} />
             <Route path="roles" element={<Roles />} />

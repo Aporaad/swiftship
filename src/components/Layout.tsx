@@ -21,7 +21,8 @@ import {
   Plus, 
   Crown,
   Menu,
-  ChevronDown
+  ChevronDown,
+  UserCog
 } from 'lucide-react';
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
@@ -123,13 +124,27 @@ export default function Layout() {
     
     const q = query(collection(db, 'notifications'), where('read', '==', false));
     const unsub = onSnapshot(q, (snap) => {
-      setUnreadCount(snap.docs.length);
+      const allowedDocs = snap.docs.filter(doc => {
+        const data = doc.data();
+        if (role !== 'Admin') {
+          const isCreator = data.creatorId === auth.currentUser?.uid;
+          const isTarget = data.userId === auth.currentUser?.uid;
+          const isAssociated = data.associatedUserIds?.includes(auth.currentUser?.uid);
+          if (!isCreator && !isTarget && !isAssociated) return false;
+        }
+        const category = data.category || 'system';
+        if (category === 'finance' && !hasPermission('notify_finance') && role !== 'Admin') return false;
+        if (category === 'order' && !hasPermission('notify_orders') && role !== 'Admin') return false;
+        if (category === 'system' && !hasPermission('notify_system') && role !== 'Admin') return false;
+        return true;
+      });
+      setUnreadCount(allowedDocs.length);
     }, (error) => {
       console.error("Error listening to notifications:", error);
     });
 
     return () => unsub();
-  }, [role, roleLoading]);
+  }, [role, roleLoading, hasPermission]);
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -148,18 +163,22 @@ export default function Layout() {
     { name: isAr ? 'الطلبات' : 'Orders', path: '/orders', icon: Package, permission: 'view_orders' },
     { name: isAr ? 'التتبع' : 'Tracking', path: '/tracking', icon: Truck, permission: 'view_orders' },
     { name: isAr ? 'العملاء' : 'Customers', path: '/customers', icon: Users, permission: 'view_customers' },
-    { name: isAr ? 'المندوبين' : 'Couriers', path: '/couriers', icon: Truck, permission: 'manage_couriers' },
+    { name: isAr ? 'المناديب' : 'Couriers', path: '/couriers', icon: Truck, permission: 'view_couriers' },
     { name: isAr ? 'المصروفات والعهد' : 'Expenses & Custody', path: '/expenses', icon: Wallet, permission: 'view_finance' },
     { name: isAr ? 'المحاسبة' : 'Accounting', path: '/expenses?tab=accounting', icon: FileText, permission: 'view_finance' },
-    { name: isAr ? 'المصادر' : 'Sources', path: '/sources', icon: MapPin, permission: 'manage_sources' },
-    { name: isAr ? 'التقارير' : 'Reports', path: '/expenses?tab=reports', icon: FileText, permission: 'view_finance' },
-    { name: isAr ? 'المستخدمين' : 'Users Management', path: '/users', icon: Users, permission: 'manage_users' },
-    { name: isAr ? 'الأدوار والصلاحيات' : 'Roles & Permissions', path: '/roles', icon: ShieldCheck, permission: 'manage_users' },
-    { name: isAr ? 'الإشعارات' : 'Notifications', path: '/notifications', icon: Bell, permission: 'view_dashboard' },
+    { name: isAr ? 'المصادر' : 'Sources', path: '/sources', icon: MapPin, permission: 'view_sources' },
+    { name: isAr ? 'التقارير' : 'Reports', path: '/expenses?tab=reports', icon: FileText, permission: 'view_reports' },
+    { name: isAr ? 'المستخدمون والأدوار' : 'Users & Roles', path: '/user-management', icon: UserCog, permission: 'view_users' },
+    { name: isAr ? 'الإشعارات' : 'Notifications', path: '/notifications', icon: Bell, permission: 'view_notifications' },
     { name: isAr ? 'الإعدادات' : 'Settings', path: '/settings', icon: Settings, permission: 'settings' },
   ];
 
-  const filteredNavItems = navItems.filter(item => hasPermission(item.permission));
+  const filteredNavItems = navItems.filter(item => {
+    if (item.path === '/expenses') {
+      return hasPermission('view_finance') || hasPermission('view_expenses') || hasPermission('view_custody');
+    }
+    return hasPermission(item.permission);
+  });
 
   const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'admin@swiftship.system'];
   const userEmail = auth.currentUser?.email?.toLowerCase();

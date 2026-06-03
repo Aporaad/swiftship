@@ -4,7 +4,8 @@ import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { useSettings } from '../context/SettingsContext';
 import { useRole } from '../hooks/useRole';
 import { notificationService } from '../services/notificationService';
-import { Plus, Search, Wallet, DollarSign, Calendar, RefreshCw, Layers, CheckCircle2, AlertTriangle, User, FileText, ArrowUpRight, ArrowDownLeft, Crown, ShieldAlert, Coins, X, Printer, Activity } from 'lucide-react';
+import { activityLogService } from '../services/activityLogService';
+import { Plus, Search, Wallet, DollarSign, Calendar, RefreshCw, Layers, CircleCheck as CheckCircle2, TriangleAlert as AlertTriangle, User, FileText, ArrowUpRight, ArrowDownLeft, Crown, ShieldAlert, Coins, X, Printer, Activity } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { useLocation } from 'react-router-dom';
 import FinanceReports from '../components/FinanceReports';
@@ -13,6 +14,14 @@ import FinanceAccounting from '../components/FinanceAccounting';
 export default function Expenses() {
   const { settings, t } = useSettings();
   const { role, hasPermission, profile, loading: roleLoading } = useRole();
+  const canViewExpensesPage = role === 'Admin' || hasPermission('view_finance') || hasPermission('view_expenses') || hasPermission('view_custody');
+  const canViewCustody = role === 'Admin' || hasPermission('view_custody');
+  const canViewGeneralExpenses = role === 'Admin' || hasPermission('view_expenses');
+  const canAddExpenses = role === 'Admin' || hasPermission('add_expenses');
+  const canEditExpenses = role === 'Admin' || hasPermission('edit_expenses');
+  const canViewReports = role === 'Admin' || hasPermission('view_reports');
+  const canViewFinance = role === 'Admin' || hasPermission('view_finance');
+
   const [expenses, setExpenses] = useState<any[]>([]);
   const [couriers, setCouriers] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
@@ -58,14 +67,16 @@ export default function Expenses() {
         message: isAr 
           ? 'تم إعادة حساب إجمالي المصروفات والعهد العالقة مباشرة من الدفاتر الحية.' 
           : 'Total expenses and pending custody figures re-calculated directly from Firestore.',
-        type: 'success'
+        type: 'success',
+        category: 'finance'
       });
     } catch (err: any) {
       console.error('Error refreshing ledger stats:', err);
       notificationService.notify({
         title: isAr ? 'فشل تحديث البيانات' : 'Sync Failed',
         message: err.message || 'Failed to fetch financial record balances.',
-        type: 'error'
+        type: 'error',
+        category: 'finance'
       });
     } finally {
       setIsRefreshing(false);
@@ -137,11 +148,20 @@ export default function Expenses() {
 
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canAddExpenses) {
+      return notificationService.notify({
+        title: isAr ? 'خطأ بالصلاحيات' : 'Permission Error',
+        message: isAr ? 'ليس لديك صلاحية لإدارة المصروفات أو إضافة سندات جديدة' : 'You do not have permission to manage expenses or add new vouchers.',
+        type: 'error',
+        category: 'finance'
+      });
+    }
     if (!formData.amount || parseFloat(formData.amount) <= 0) {
       return notificationService.notify({
         title: isAr ? 'خطأ مالي' : 'Valuation Error',
         message: isAr ? 'الرجاء إدخال مبلغ دفع صحيح' : 'Please enter a valid ledger amount',
-        type: 'error'
+        type: 'error',
+        category: 'finance'
       });
     }
 
@@ -175,11 +195,13 @@ export default function Expenses() {
       };
 
       await addDoc(collection(db, 'expenses'), payload);
+      activityLogService.log('add_expense', expenseNumber, { ...payload });
 
       notificationService.notify({
         title: isAr ? 'تم تقييد السند بالخزينة' : 'Voucher Logged',
         message: isAr ? `تم تسجيل السند بنجاح برقم: ${expenseNumber}` : `Transaction recorded with ID: ${expenseNumber}`,
-        type: 'success'
+        type: 'success',
+        category: 'finance'
       });
 
       setIsAddOpen(false);
@@ -197,7 +219,8 @@ export default function Expenses() {
       notificationService.notify({
         title: 'Error',
         message: 'Could not write transaction.',
-        type: 'error'
+        type: 'error',
+        category: 'finance'
       });
     } finally {
       setAddLoading(false);
@@ -205,6 +228,14 @@ export default function Expenses() {
   };
 
   const handleSettleCustody = async (exp: any) => {
+    if (!canEditExpenses) {
+      return notificationService.notify({
+        title: isAr ? 'خطأ بالصلاحيات' : 'Permission Error',
+        message: isAr ? 'ليس لديك صلاحية لتسوية العهد المالية.' : 'You do not have permission to settle financial custody.',
+        type: 'error',
+        category: 'finance'
+      });
+    }
     try {
       await updateDoc(doc(db, 'expenses', exp.id), {
         status: 'Settled',
@@ -213,35 +244,56 @@ export default function Expenses() {
         settledByName: profile?.fullName || 'Root Admin'
       });
 
+      activityLogService.log('settle_custody', exp.recipientName || exp.recipientId, { id: exp.id, amount: exp.amount });
       notificationService.notify({
         title: isAr ? 'تم تسوية العهدة بنجاح' : 'Custody Discharged',
         message: isAr ? `تمت تسوية وتصفير عهدة المندوب ${exp.recipientName}` : `Custody balance for ${exp.recipientName} cleared`,
-        type: 'success'
+        type: 'success',
+        category: 'finance'
       });
     } catch (err) {
       console.error(err);
       notificationService.notify({
         title: 'Error',
         message: 'Could not settle custody.',
-        type: 'error'
+        type: 'error',
+        category: 'finance'
       });
     }
   };
 
+  // Set default type on mount/open based on permissions
+  useEffect(() => {
+    if (isAddOpen) {
+      if (canViewGeneralExpenses) {
+        setFormData(prev => ({ ...prev, type: 'General' }));
+      } else if (canViewCustody) {
+        setFormData(prev => ({ ...prev, type: 'Custody' }));
+      }
+    }
+  }, [isAddOpen, canViewGeneralExpenses, canViewCustody]);
+
+  // Allowed expenses based on user permissions
+  const allowedExpenses = expenses.filter(exp => {
+    if (exp.type === 'Custody' && !canViewCustody) return false;
+    if ((exp.type === 'General' || exp.type === 'FactoryPayment') && !canViewGeneralExpenses) return false;
+    return true;
+  });
+
   // Calculations for stats
-  const totalGeneralExpensesYER = expenses
+  const totalGeneralExpensesYER = allowedExpenses
     .filter(e => e.type === 'General' && e.currency === 'YER')
     .reduce((sum, e) => sum + (e.amount || 0), 0);
 
-  const totalGeneralExpensesUSD = expenses
+  const totalGeneralExpensesUSD = allowedExpenses
     .filter(e => e.type === 'General' && e.currency === 'USD')
     .reduce((sum, e) => sum + (e.amount || 0), 0);
 
-  const totalPendingCustodies = expenses
+  const totalPendingCustodies = allowedExpenses
     .filter(e => e.type === 'Custody' && e.status === 'Pending')
     .reduce((sum, e) => sum + (e.amount || 0), 0);
 
-  const totalSettledCustodies = expenses
+  const totalSettledCustodies = allowedExpenses
     .filter(e => e.type === 'Custody' && e.status === 'Settled')
     .reduce((sum, e) => sum + (e.amount || 0), 0);
 
@@ -441,7 +493,7 @@ export default function Expenses() {
     document.body.removeChild(link);
   };
 
-  const filteredExpenses = expenses.filter(exp => {
+  const filteredExpenses = allowedExpenses.filter(exp => {
     const num = (exp.expenseNumber || '').toUpperCase();
     const recipient = (exp.recipientName || '').toLowerCase();
     const notes = (exp.notes || '').toLowerCase();
@@ -461,7 +513,26 @@ export default function Expenses() {
     );
   }
 
+  if (!canViewExpensesPage) {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 bg-gradient-to-br from-[#121215] to-[#070708] rounded-3xl border border-slate-850 shadow-xl text-center select-none">
+        <ShieldAlert className="w-16 h-16 text-rose-500 mb-6 animate-pulse" />
+        <h2 className="text-2xl font-black text-[#d4af37] mb-2 uppercase tracking-wide text-center">{t('accessDenied')}</h2>
+        <p className="text-slate-500 dark:text-slate-400 max-w-md mb-6">{isAr ? 'صفحة الخزينة والمصروفات والعهد مخصصة للمخولين مالياً فقط.' : 'This financial ledger console is restricted to authorized financial officers.'}</p>
+      </div>
+    );
+  }
+
   if (activeTab === 'reports') {
+    if (!canViewReports) {
+      return (
+        <div className="flex flex-col items-center justify-center p-12 bg-gradient-to-br from-[#121215] to-[#070708] rounded-3xl border border-slate-850 shadow-xl text-center select-none">
+          <ShieldAlert className="w-16 h-16 text-rose-500 mb-6 animate-pulse" />
+          <h2 className="text-2xl font-black text-[#d4af37] mb-2 uppercase tracking-wide text-center">{t('accessDenied')}</h2>
+          <p className="text-slate-500 dark:text-slate-400 max-w-md mb-6">{isAr ? 'ليس لديك صلاحية لعرض مركز التقارير والتحليلات.' : 'You do not have permission to view the executive reports and analytics.'}</p>
+        </div>
+      );
+    }
     return (
       <div className="space-y-6 pb-20 text-start font-sans">
         {/* Reports Header */}
@@ -495,6 +566,15 @@ export default function Expenses() {
   }
 
   if (activeTab === 'accounting') {
+    if (!canViewFinance) {
+      return (
+        <div className="flex flex-col items-center justify-center p-12 bg-gradient-to-br from-[#121215] to-[#070708] rounded-3xl border border-slate-850 shadow-xl text-center select-none">
+          <ShieldAlert className="w-16 h-16 text-rose-500 mb-6 animate-pulse" />
+          <h2 className="text-2xl font-black text-[#d4af37] mb-2 uppercase tracking-wide text-center">{t('accessDenied')}</h2>
+          <p className="text-slate-500 dark:text-slate-400 max-w-md mb-6">{isAr ? 'ليس لديك صلاحية لعرض مطابقة الحسابات والقيود المحاسبية.' : 'You do not have permission to view the accounting ledger and double-entry adjustments.'}</p>
+        </div>
+      );
+    }
     return (
       <div className="space-y-6 pb-20 text-start font-sans">
         {/* Accounting Header */}
@@ -570,61 +650,75 @@ export default function Expenses() {
             <Activity className="w-4 h-4" /> {isAr ? 'تصدير CSV' : 'Export CSV'}
           </button>
 
-          <button 
-            onClick={() => setIsAddOpen(true)}
-            className="bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black px-5 py-2.5 rounded-xl flex items-center gap-2 font-black text-xs transition transform active:scale-95 shadow-md shadow-yellow-950/20 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" /> {isAr ? 'سند جديد' : 'New Voucher'}
-          </button>
+          {canAddExpenses && (
+            <button 
+              onClick={() => setIsAddOpen(true)}
+              className="bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black px-5 py-2.5 rounded-xl flex items-center gap-2 font-black text-xs transition transform active:scale-95 shadow-md shadow-yellow-950/20 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" /> {isAr ? 'سند جديد' : 'New Voucher'}
+            </button>
+          )}
         </div>
       </div>
 
       {/* KPI Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className={`grid grid-cols-1 ${
+        canViewGeneralExpenses && canViewCustody 
+          ? 'md:grid-cols-4' 
+          : (canViewGeneralExpenses || canViewCustody ? 'md:grid-cols-2' : 'hidden')
+      } gap-4`}>
         
         {/* KPI 1 */}
-        <div className="bg-gradient-to-br from-[#121215] to-[#070708] border border-slate-850 p-4 rounded-2xl relative overflow-hidden shadow">
-          <span className="text-[9px] text-slate-500 font-black uppercase block tracking-wider mb-2">
-            {isAr ? 'المصروفات العامة والتشغيلية (YER)' : 'General Expenses (YER)'}
-          </span>
-          <span className="text-lg font-mono font-black text-[#d4af37]">{totalGeneralExpensesYER.toLocaleString()} YER</span>
-          <div className="absolute top-2.5 right-2.5 p-1 text-rose-500 bg-rose-950/20 rounded-lg border border-rose-900/30">
-            <ArrowUpRight className="w-3.5 h-3.5" />
+        {canViewGeneralExpenses && (
+          <div className="bg-gradient-to-br from-[#121215] to-[#070708] border border-slate-850 p-4 rounded-2xl relative overflow-hidden shadow">
+            <span className="text-[9px] text-slate-500 font-black uppercase block tracking-wider mb-2">
+              {isAr ? 'المصروفات العامة والتشغيلية (YER)' : 'General Expenses (YER)'}
+            </span>
+            <span className="text-lg font-mono font-black text-[#d4af37]">{totalGeneralExpensesYER.toLocaleString()} YER</span>
+            <div className="absolute top-2.5 right-2.5 p-1 text-rose-500 bg-rose-950/20 rounded-lg border border-rose-900/30">
+              <ArrowUpRight className="w-3.5 h-3.5" />
+            </div>
           </div>
-        </div>
+        )}
 
         {/* KPI 2 */}
-        <div className="bg-gradient-to-br from-[#121215] to-[#070708] border border-slate-850 p-4 rounded-2xl relative overflow-hidden shadow">
-          <span className="text-[9px] text-slate-500 font-black uppercase block tracking-wider mb-2">
-            {isAr ? 'سداد فواتير الصين وحجم العمل (USD)' : 'Offshore Expenses (USD)'}
-          </span>
-          <span className="text-lg font-mono font-black text-emerald-405">${totalGeneralExpensesUSD.toLocaleString()} USD</span>
-          <div className="absolute top-2.5 right-2.5 p-1 text-emerald-400 bg-emerald-950/20 rounded-lg border border-emerald-990/30">
-            <Coins className="w-3.5 h-3.5" />
+        {canViewGeneralExpenses && (
+          <div className="bg-gradient-to-br from-[#121215] to-[#070708] border border-slate-850 p-4 rounded-2xl relative overflow-hidden shadow">
+            <span className="text-[9px] text-slate-500 font-black uppercase block tracking-wider mb-2">
+              {isAr ? 'سداد فواتير الصين وحجم العمل (USD)' : 'Offshore Expenses (USD)'}
+            </span>
+            <span className="text-lg font-mono font-black text-emerald-400">${totalGeneralExpensesUSD.toLocaleString()} USD</span>
+            <div className="absolute top-2.5 right-2.5 p-1 text-emerald-400 bg-emerald-950/20 rounded-lg border border-emerald-900/30">
+              <Coins className="w-3.5 h-3.5" />
+            </div>
           </div>
-        </div>
+        )}
 
         {/* KPI 3 */}
-        <div className="bg-gradient-to-br from-[#121215] to-[#070708] border border-slate-850 p-4 rounded-2xl relative overflow-hidden shadow">
-          <span className="text-[9px] text-slate-500 font-black uppercase block tracking-wider mb-2">
-            {isAr ? 'العهد المستلمة للمناديب العالقة' : 'Active Custody in Hand'}
-          </span>
-          <span className="text-lg font-mono font-black text-amber-500">{totalPendingCustodies.toLocaleString()} YER</span>
-          <div className="absolute top-2.5 right-2.5 p-1 text-[#d4af37] bg-yellow-950/20 rounded-lg border border-yellow-904/30">
-            <Calendar className="w-3.5 h-3.5" />
+        {canViewCustody && (
+          <div className="bg-gradient-to-br from-[#121215] to-[#070708] border border-slate-850 p-4 rounded-2xl relative overflow-hidden shadow">
+            <span className="text-[9px] text-slate-500 font-black uppercase block tracking-wider mb-2">
+              {isAr ? 'العهد المستلمة للمناديب العالقة' : 'Active Custody in Hand'}
+            </span>
+            <span className="text-lg font-mono font-black text-amber-500">{totalPendingCustodies.toLocaleString()} YER</span>
+            <div className="absolute top-2.5 right-2.5 p-1 text-[#d4af37] bg-yellow-950/20 rounded-lg border border-yellow-900/30">
+              <Calendar className="w-3.5 h-3.5" />
+            </div>
           </div>
-        </div>
+        )}
 
         {/* KPI 4 */}
-        <div className="bg-gradient-to-br from-[#121215] to-[#070708] border border-slate-850 p-4 rounded-2xl relative overflow-hidden shadow">
-          <span className="text-[9px] text-slate-500 font-black uppercase block tracking-wider mb-2">
-            {isAr ? 'العهد المالية التي تمت تصفيتها' : 'Gross Settled Custodies'}
-          </span>
-          <span className="text-lg font-mono font-black text-emerald-400">{totalSettledCustodies.toLocaleString()} YER</span>
-          <div className="absolute top-2.5 right-2.5 p-1 text-emerald-400 bg-emerald-950/20 rounded-lg border border-emerald-900/30">
-            <CheckCircle2 className="w-3.5 h-3.5" />
+        {canViewCustody && (
+          <div className="bg-gradient-to-br from-[#121215] to-[#070708] border border-slate-850 p-4 rounded-2xl relative overflow-hidden shadow">
+            <span className="text-[9px] text-slate-500 font-black uppercase block tracking-wider mb-2">
+              {isAr ? 'العهد المالية التي تمت تصفيتها' : 'Gross Settled Custodies'}
+            </span>
+            <span className="text-lg font-mono font-black text-emerald-400">{totalSettledCustodies.toLocaleString()} YER</span>
+            <div className="absolute top-2.5 right-2.5 p-1 text-emerald-400 bg-emerald-950/20 rounded-lg border border-emerald-900/30">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+            </div>
           </div>
-        </div>
+        )}
 
       </div>
 
@@ -634,7 +728,7 @@ export default function Expenses() {
         {/* Filter belt */}
         <div className="p-4 border-b border-slate-850 bg-black/30 flex flex-wrap gap-3">
           <div className="relative flex-1 min-w-[240px]">
-            <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
+            <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-550 w-4 h-4" />
             <input 
               type="text" 
               placeholder={isAr ? "بحث بالرقم المرجعي للسند أو غرض المصروف أو المستلم..." : "Search ledger entries..."}
@@ -650,9 +744,15 @@ export default function Expenses() {
             className="bg-black/50 border border-slate-850 text-slate-300 rounded-xl px-4 py-2 text-xs font-bold outline-none focus:border-[#d4af37]/50 cursor-pointer"
           >
             <option value="all">{isAr ? 'جميع المعاملات المالية' : 'All Transactions'}</option>
-            <option value="General">{isAr ? 'مصروفات تشغيلية عامة' : 'General Office Expenses'}</option>
-            <option value="Custody">{isAr ? 'سندات عهد المناديب' : 'Courier Custody Slips'}</option>
-            <option value="FactoryPayment">{isAr ? 'الحوالات وسداد المصانع' : 'Manufacturer Payments'}</option>
+            {canViewGeneralExpenses && (
+              <>
+                <option value="General">{isAr ? 'مصروفات تشغيلية عامة' : 'General Office Expenses'}</option>
+                <option value="FactoryPayment">{isAr ? 'الحوالات وسداد المصانع' : 'Manufacturer Payments'}</option>
+              </>
+            )}
+            {canViewCustody && (
+              <option value="Custody">{isAr ? 'سندات عهد المناديب' : 'Courier Custody Slips'}</option>
+            )}
           </select>
         </div>
 
@@ -672,7 +772,7 @@ export default function Expenses() {
             </thead>
             <tbody className="text-xs divide-y divide-slate-850 bg-black/10">
               {filteredExpenses.map((exp) => {
-                const isSettleBtnVisible = exp.type === 'Custody' && exp.status === 'Pending';
+                const isSettleBtnVisible = exp.type === 'Custody' && exp.status === 'Pending' && canEditExpenses;
                 return (
                   <tr key={exp.id} className="hover:bg-slate-950/40 transition-colors">
                     <td className="p-4 font-mono font-black text-slate-400">
@@ -768,9 +868,15 @@ export default function Expenses() {
                   onChange={(e) => setFormData({...formData, type: e.target.value})}
                   className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold"
                 >
-                  <option value="General">{isAr ? 'مصروف عام (غرفة وصيانة ومكتب لوجستي)' : 'General Operation Office Expense'}</option>
-                  <option value="Custody">{isAr ? 'عهدة مالية لمندوب التوزيع (تسجيل ذمة مستردة)' : 'Issue Courier Monetary Custody'}</option>
-                  <option value="FactoryPayment">{isAr ? 'دفعات وتصدير مالي لمصنع الصين كود' : 'Offshore Factory Trade Payment'}</option>
+                  {canViewGeneralExpenses && (
+                    <>
+                      <option value="General">{isAr ? 'مصروف عام (غرفة وصيانة ومكتب لوجستي)' : 'General Operation Office Expense'}</option>
+                      <option value="FactoryPayment">{isAr ? 'دفعات وتصدير مالي لمصنع الصين كود' : 'Offshore Factory Trade Payment'}</option>
+                    </>
+                  )}
+                  {canViewCustody && (
+                    <option value="Custody">{isAr ? 'عهدة مالية لمندوب التوزيع (تسجيل ذمة مستردة)' : 'Issue Courier Monetary Custody'}</option>
+                  )}
                 </select>
               </div>
 
