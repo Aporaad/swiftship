@@ -5,6 +5,7 @@ import { Search, Edit2, X, Plus, Trash2, MapPin, ShieldAlert, RefreshCw, Crown, 
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
 import { notificationService } from '../services/notificationService';
+import { activityLogService } from '../services/activityLogService';
 import ConfirmModal from '../components/ConfirmModal';
 
 export default function Sources() {
@@ -116,6 +117,7 @@ export default function Sources() {
 
       if (selectedCompany) {
         await updateDoc(doc(db, 'shipping_companies', selectedCompany.id), payload);
+        activityLogService.log('edit_shipping_company', shippingFormData.name, { ...shippingFormData });
         notificationService.notify({
           title: isAr ? 'تعديل شركة الشحن' : 'Shipping Company Updated',
           message: isAr ? `تم تحديث بيانات الشركة ${shippingFormData.name}` : `Shipping carrier ${shippingFormData.name} configuration updated`,
@@ -126,6 +128,7 @@ export default function Sources() {
           ...payload,
           createdAt: Date.now()
         });
+        activityLogService.log('add_shipping_company', shippingFormData.name, { ...shippingFormData });
         notificationService.notify({
           title: isAr ? 'إضافة شركة شحن جديدة' : 'Shipping Company Added',
           message: isAr ? `تمت إضافة شركة الشحن ${shippingFormData.name} بنجاح` : `New shipping carrier ${shippingFormData.name} registered`,
@@ -153,6 +156,7 @@ export default function Sources() {
       onConfirm: async () => {
         try {
           await deleteDoc(doc(db, 'shipping_companies', id));
+          activityLogService.log('delete_shipping_company', name, { id });
           notificationService.notify({
             title: isAr ? 'تم حذف الشركة' : 'Carrier Terminated',
             message: isAr ? 'تم الحذف من الفهارس بنجاح' : 'Shipping carrier deleted successfully from index',
@@ -206,6 +210,7 @@ export default function Sources() {
 
       if (selectedSource) {
         await updateDoc(doc(db, 'sources', selectedSource.id), payload);
+        activityLogService.log('edit_source', formData.source_name, { ...formData });
         notificationService.notify({
           title: isAr ? 'تعديل مصدر الشراء' : 'Source Updated',
           message: isAr ? `تم تحديث المصدر الكلي ${formData.source_name}` : `Order supply source ${formData.source_name} has been updated`,
@@ -216,6 +221,7 @@ export default function Sources() {
           ...payload,
           createdAt: Date.now()
         });
+        activityLogService.log('add_source', formData.source_name, { ...formData });
         notificationService.notify({
           title: isAr ? 'إضافة مصدر شراء جديد' : 'Source Added',
           message: isAr ? `تمت إضافة المصدر بنجاح برابط: ${formData.source_name}` : `New order supply source ${formData.source_name} recorded`,
@@ -238,6 +244,7 @@ export default function Sources() {
       onConfirm: async () => {
         try {
           await deleteDoc(doc(db, 'sources', id));
+          activityLogService.log('delete_source', name, { id });
           notificationService.notify({
             title: isAr ? 'تم إلغاء المصدر' : 'Source Terminated',
             message: isAr ? 'تم الحذف من الفهارس بنجاح' : 'Order source deleted successfully from ERP indexes',
@@ -273,7 +280,7 @@ export default function Sources() {
     );
   }
 
-  if (!hasPermission('manage_sources') && role !== 'Admin') {
+  if (!hasPermission('view_sources') && role !== 'Admin') {
     return (
       <div className="flex flex-col items-center justify-center p-12 bg-gradient-to-br from-[#121215] to-[#070708] rounded-3xl border border-slate-850 shadow-xl text-center select-none">
         <ShieldAlert className="w-16 h-16 text-rose-500 mb-6 animate-pulse" />
@@ -304,16 +311,18 @@ export default function Sources() {
             </p>
           </div>
         </div>
-        <button 
-          onClick={activeTab === 'sources' ? handleOpenAdd : handleOpenAddShipping}
-          className="bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black px-6 py-2.5 rounded-xl flex items-center gap-2 font-black text-sm transition transform active:scale-95 shadow-md shadow-yellow-950/20"
-        >
-          <Plus className="w-4 h-4" /> 
-          {activeTab === 'sources' 
-            ? (isAr ? 'تقييد مصدر توريد جديد' : 'Incorporate Supply Source') 
-            : (isAr ? 'إضافة شركة شحن جديدة' : 'Add Shipping Company')
-          }
-        </button>
+        {role === 'Admin' || hasPermission('add_sources') ? (
+          <button 
+            onClick={activeTab === 'sources' ? handleOpenAdd : handleOpenAddShipping}
+            className="bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black px-6 py-2.5 rounded-xl flex items-center gap-2 font-black text-sm transition transform active:scale-95 shadow-md shadow-yellow-950/20"
+          >
+            <Plus className="w-4 h-4" /> 
+            {activeTab === 'sources' 
+              ? (isAr ? 'تقييد مصدر توريد جديد' : 'Incorporate Supply Source') 
+              : (isAr ? 'إضافة شركة شحن جديدة' : 'Add Shipping Company')
+            }
+          </button>
+        ) : null}
       </div>
 
       {/* Tabs System */}
@@ -415,12 +424,14 @@ export default function Sources() {
                       </td>
                       <td className="p-4 text-slate-400 text-[11px] text-start max-w-xs truncate">{source.notes || '—'}</td>
                       <td className="p-4 text-left flex justify-end gap-2">
-                        <button 
-                          onClick={() => handleOpenEdit(source)} 
-                          className="text-[#d4af37] bg-[#d4af37]/5 hover:bg-[#d4af37]/15 border border-[#d4af37]/15 p-2 rounded-xl transition duration-300"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
+                        {role === 'Admin' || hasPermission('edit_sources') ? (
+                          <button 
+                            onClick={() => handleOpenEdit(source)} 
+                            className="text-[#d4af37] bg-[#d4af37]/5 hover:bg-[#d4af37]/15 border border-[#d4af37]/15 p-2 rounded-xl transition duration-300"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                        ) : null}
                         {hasPermission('delete_sources') && (
                           <button 
                             onClick={() => handleDelete(source.id, source.source_name || t('source'))} 
@@ -520,12 +531,14 @@ export default function Sources() {
                         {company.notes || '—'}
                       </td>
                       <td className="p-4 text-left flex justify-end gap-2">
-                        <button 
-                          onClick={() => handleOpenEditShipping(company)} 
-                          className="text-[#d4af37] bg-[#d4af37]/5 hover:bg-[#d4af37]/15 border border-[#d4af37]/15 p-2 rounded-xl transition duration-300"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
+                        {role === 'Admin' || hasPermission('edit_sources') ? (
+                          <button 
+                            onClick={() => handleOpenEditShipping(company)} 
+                            className="text-[#d4af37] bg-[#d4af37]/5 hover:bg-[#d4af37]/15 border border-[#d4af37]/15 p-2 rounded-xl transition duration-300"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                        ) : null}
                         {hasPermission('delete_sources') && (
                           <button 
                             onClick={() => handleDeleteShipping(company.id, company.name)} 

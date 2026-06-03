@@ -94,8 +94,8 @@ export function useRole() {
             } else {
               // Default fallback permissions if role doc doesn't exist yet
               const defaults: Record<string, string[]> = {
-                'Employee': ['view_dashboard', 'view_orders', 'manage_orders', 'view_customers', 'manage_customers', 'delete_orders', 'delete_customers', 'manage_couriers', 'delete_couriers'],
-                'Accountant': ['view_dashboard', 'view_orders', 'view_finance', 'manage_finance', 'manage_sources', 'delete_sources'],
+                'Employee': ['view_dashboard', 'view_orders', 'add_orders', 'edit_orders', 'update_order_status', 'print_orders', 'view_customers', 'add_customers', 'edit_customers', 'view_couriers', 'add_couriers', 'edit_couriers', 'view_sources', 'add_sources', 'edit_sources', 'view_notifications', 'notify_orders', 'notify_system'],
+                'Accountant': ['view_dashboard', 'view_orders', 'view_finance', 'add_finance', 'edit_finance', 'view_sources', 'add_sources', 'edit_sources', 'view_expenses', 'add_expenses', 'edit_expenses', 'view_statistics'],
                 'Courier': ['view_orders', 'update_order_status']
               };
               setPermissions(defaults[userData.role] || []);

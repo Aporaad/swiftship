@@ -126,6 +126,12 @@ export default function Layout() {
     const unsub = onSnapshot(q, (snap) => {
       const allowedDocs = snap.docs.filter(doc => {
         const data = doc.data();
+        if (role !== 'Admin') {
+          const isCreator = data.creatorId === auth.currentUser?.uid;
+          const isTarget = data.userId === auth.currentUser?.uid;
+          const isAssociated = data.associatedUserIds?.includes(auth.currentUser?.uid);
+          if (!isCreator && !isTarget && !isAssociated) return false;
+        }
         const category = data.category || 'system';
         if (category === 'finance' && !hasPermission('notify_finance') && role !== 'Admin') return false;
         if (category === 'order' && !hasPermission('notify_orders') && role !== 'Admin') return false;
@@ -160,9 +166,9 @@ export default function Layout() {
     { name: isAr ? 'المناديب' : 'Couriers', path: '/couriers', icon: Truck, permission: 'view_couriers' },
     { name: isAr ? 'المصروفات والعهد' : 'Expenses & Custody', path: '/expenses', icon: Wallet, permission: 'view_finance' },
     { name: isAr ? 'المحاسبة' : 'Accounting', path: '/expenses?tab=accounting', icon: FileText, permission: 'view_finance' },
-    { name: isAr ? 'المصادر' : 'Sources', path: '/sources', icon: MapPin, permission: 'manage_sources' },
+    { name: isAr ? 'المصادر' : 'Sources', path: '/sources', icon: MapPin, permission: 'view_sources' },
     { name: isAr ? 'التقارير' : 'Reports', path: '/expenses?tab=reports', icon: FileText, permission: 'view_reports' },
-    { name: isAr ? 'المستخدمون والأدوار' : 'Users & Roles', path: '/user-management', icon: UserCog, permission: 'manage_users' },
+    { name: isAr ? 'المستخدمون والأدوار' : 'Users & Roles', path: '/user-management', icon: UserCog, permission: 'view_users' },
     { name: isAr ? 'الإشعارات' : 'Notifications', path: '/notifications', icon: Bell, permission: 'view_notifications' },
     { name: isAr ? 'الإعدادات' : 'Settings', path: '/settings', icon: Settings, permission: 'settings' },
   ];

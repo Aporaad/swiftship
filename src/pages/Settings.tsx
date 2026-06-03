@@ -5,6 +5,7 @@ import { Save, Globe, Palette, Database, DollarSign, Building, X, Upload, CheckC
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
 import ConfirmModal from '../components/ConfirmModal';
+import { activityLogService } from '../services/activityLogService';
 
 export default function Settings() {
   const [loading, setLoading] = useState(false);
@@ -52,6 +53,7 @@ export default function Settings() {
           exchangeRateSAR: newSAR,
         }));
 
+        activityLogService.log('fetch_exchange_rates', 'API Rates Update');
         alert(isAr 
           ? `تم تحديث أسعار الصرف بنجاح! USD: ${newUSD} YER, SAR: ${newSAR} YER`
           : `Exchange rates updated! USD: ${newUSD} YER, SAR: ${newSAR} YER`
@@ -111,6 +113,7 @@ export default function Settings() {
     setLoading(true);
     try {
       await updateSettings(localSettings);
+      activityLogService.log('save_settings', 'Company Settings');
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (error) {
@@ -147,6 +150,7 @@ export default function Settings() {
       a.download = `LogiTrack_Full_Backup_${new Date().toISOString().split('T')[0]}.json`;
       a.click();
       
+      activityLogService.log('backup_export', 'Full Database Backup');
       updateSettings({ lastBackup: new Date().toLocaleString(globalSettings.language === 'ar' ? 'ar-YE' : 'en-US') } as any);
       alert(globalSettings.language === 'ar' ? "تم تصدير النسخة الاحتياطية الاستراتيجية الكاملة بنجاح والتوقيع الرقمي عليها!" : "Strategy database backup executed and signed successfully!");
     } catch (error) {
@@ -203,6 +207,7 @@ export default function Settings() {
                 }
               }
 
+              activityLogService.log('backup_import', 'Restore Database Backup');
               alert(globalSettings.language === 'ar' ? "تم استيراد الكتل وإعادة دمج السحابة!" : "Blocks rebased and successfully indexed!");
               window.location.reload(); 
             } catch (err) {
@@ -269,78 +274,74 @@ export default function Settings() {
         <div className="lg:col-span-2 space-y-6">
           
           {/* Company Identity section */}
-          <section className="bg-[#121215] border border-slate-850 p-8 rounded-3xl shadow-lg relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-[#d4af37]/5 rounded-full -mr-16 -mt-16 opacity-40 group-hover:scale-110 transition-transform"></div>
-            <h2 className="text-base font-black text-white mb-6 flex items-center gap-2 border-b border-slate-850 pb-4 relative z-10 uppercase tracking-wider">
-              <Building className="w-5 h-5 text-[#d4af37]" />
-              {t('companyIdentity')}
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 relative z-10">
-              <div className="md:col-span-2">
-                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'اسم الشركة ومؤسستك اللوجيستية الكبرى' : 'Global Enterprise Title Name'}{!canEditCompany && ' 🔒'}</label>
-                <input 
-                  disabled={!canEditCompany}
-                  type="text" 
-                  value={localSettings.companyName}
-                  onChange={(e) => setLocalSettings({...localSettings, companyName: e.target.value})}
-                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start disabled:opacity-55 disabled:cursor-not-allowed"
-                  placeholder={canEditCompany ? (isAr ? "الشركة اللوجستية الراقية" : "Luxury Logistics Enterprise Inc") : "🔒"}
-                />
+          {canEditCompany && (
+            <section className="bg-[#121215] border border-slate-850 p-8 rounded-3xl shadow-lg relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-[#d4af37]/5 rounded-full -mr-16 -mt-16 opacity-40 group-hover:scale-110 transition-transform"></div>
+              <h2 className="text-base font-black text-white mb-6 flex items-center gap-2 border-b border-slate-850 pb-4 relative z-10 uppercase tracking-wider">
+                <Building className="w-5 h-5 text-[#d4af37]" />
+                {t('companyIdentity')}
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 relative z-10">
+                <div className="md:col-span-2">
+                  <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'اسم الشركة ومؤسستك اللوجيستية الكبرى' : 'Global Enterprise Title Name'}</label>
+                  <input 
+                    type="text" 
+                    value={localSettings.companyName}
+                    onChange={(e) => setLocalSettings({...localSettings, companyName: e.target.value})}
+                    className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start disabled:opacity-55 disabled:cursor-not-allowed"
+                    placeholder={isAr ? "الشركة اللوجستية الراقية" : "Luxury Logistics Enterprise Inc"}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'الهاتف الموصول' : 'Corporate Phone'}</label>
+                  <input 
+                    type="text" 
+                    value={localSettings.companyPhone}
+                    onChange={(e) => setLocalSettings({...localSettings, companyPhone: e.target.value})}
+                    className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono disabled:opacity-55 disabled:cursor-not-allowed" dir="ltr"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'البريد المؤسسي' : 'Secure Email ID'}</label>
+                  <input 
+                    type="email" 
+                    value={localSettings.companyEmail}
+                    onChange={(e) => setLocalSettings({...localSettings, companyEmail: e.target.value})}
+                    className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono disabled:opacity-55 disabled:cursor-not-allowed" dir="ltr"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'النطاق والموقع الإلكتروني للشركة' : 'Web Domain'}</label>
+                  <input 
+                    type="text" 
+                    value={localSettings.companyWebsite}
+                    onChange={(e) => setLocalSettings({...localSettings, companyWebsite: e.target.value})}
+                    className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono disabled:opacity-55 disabled:cursor-not-allowed" dir="ltr"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'الرقم الضريبي وتوثيق الغرفة التجارية' : 'Commercial Tax Validation ID'}</label>
+                  <input 
+                    type="text" 
+                    value={localSettings.taxId}
+                    onChange={(e) => setLocalSettings({...localSettings, taxId: e.target.value})}
+                    className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono disabled:opacity-55 disabled:cursor-not-allowed" dir="ltr"
+                    placeholder="TAX-967-889"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'سكني وسكرتارية المقر الرئيسي للشركة' : 'Detailed Headquarters Address'}</label>
+                  <textarea 
+                    rows={2}
+                    value={localSettings.companyAddress}
+                    onChange={(e) => setLocalSettings({...localSettings, companyAddress: e.target.value})}
+                    className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start disabled:opacity-55 disabled:cursor-not-allowed"
+                    placeholder={isAr ? "اليمن - صنعاء - شارع الستين" : "Sana'a - Yemen"}
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'الهاتف الموصول' : 'Corporate Phone'}{!canEditCompany && ' 🔒'}</label>
-                <input 
-                  disabled={!canEditCompany}
-                  type="text" 
-                  value={localSettings.companyPhone}
-                  onChange={(e) => setLocalSettings({...localSettings, companyPhone: e.target.value})}
-                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono disabled:opacity-55 disabled:cursor-not-allowed" dir="ltr"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'البريد المؤسسي' : 'Secure Email ID'}{!canEditCompany && ' 🔒'}</label>
-                <input 
-                  disabled={!canEditCompany}
-                  type="email" 
-                  value={localSettings.companyEmail}
-                  onChange={(e) => setLocalSettings({...localSettings, companyEmail: e.target.value})}
-                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono disabled:opacity-55 disabled:cursor-not-allowed" dir="ltr"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'النطاق والموقع الإلكتروني للشركة' : 'Web Domain'}{!canEditCompany && ' 🔒'}</label>
-                <input 
-                  disabled={!canEditCompany}
-                  type="text" 
-                  value={localSettings.companyWebsite}
-                  onChange={(e) => setLocalSettings({...localSettings, companyWebsite: e.target.value})}
-                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono disabled:opacity-55 disabled:cursor-not-allowed" dir="ltr"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'الرقم الضريبي وتوثيق الغرفة التجارية' : 'Commercial Tax Validation ID'}{!canEditCompany && ' 🔒'}</label>
-                <input 
-                  disabled={!canEditCompany}
-                  type="text" 
-                  value={localSettings.taxId}
-                  onChange={(e) => setLocalSettings({...localSettings, taxId: e.target.value})}
-                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono disabled:opacity-55 disabled:cursor-not-allowed" dir="ltr"
-                  placeholder={canEditCompany ? "TAX-967-889" : "🔒"}
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'سكني وسكرتارية المقر الرئيسي للشركة' : 'Detailed Headquarters Address'}{!canEditCompany && ' 🔒'}</label>
-                <textarea 
-                  disabled={!canEditCompany}
-                  rows={2}
-                  value={localSettings.companyAddress}
-                  onChange={(e) => setLocalSettings({...localSettings, companyAddress: e.target.value})}
-                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start disabled:opacity-55 disabled:cursor-not-allowed"
-                  placeholder={canEditCompany ? (isAr ? "اليمن - صنعاء - شارع الستين" : "Sana'a - Yemen") : "🔒"}
-                />
-              </div>
-            </div>
-          </section>
+            </section>
+          )}
 
           {/* Finance settings */}
           <section className="bg-[#121215] border border-slate-850 p-8 rounded-3xl shadow-lg">
@@ -373,95 +374,100 @@ export default function Settings() {
                   className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs text-center font-bold text-white focus:border-[#d4af37]/60 outline-none disabled:opacity-55 disabled:cursor-not-allowed"
                 />
               </div>
-              <div className="md:col-span-2 flex items-center p-4 bg-black/40 rounded-2xl border border-slate-850 gap-4">
-                <div className="bg-[#d4af37]/10 border border-[#d4af37]/25 text-[#d4af37] p-2.5 rounded-xl"><DollarSign className="w-5 h-5"/></div>
-                <div className="flex-1 text-start">
-                  <h4 className="text-xs font-black text-white uppercase tracking-wider">{isAr ? 'الإشعارات وسحابات التحصيل التلقائية' : 'Discharge Autonomous Slips'}{!canManageWhatsapp && ' 🔒'}</h4>
-                  <p className="text-[10px] text-slate-500 font-bold">{isAr ? 'إرسال بنود إشعار تلقائي للزبون عند استلام العهدة أو تصفية الحساب ماليًا' : 'Instruct webhook integration to broadcast payment receipts immediately'}</p>
+              {canManageWhatsapp && (
+                <div className="md:col-span-2 flex items-center p-4 bg-black/40 rounded-2xl border border-slate-850 gap-4">
+                  <div className="bg-[#d4af37]/10 border border-[#d4af37]/25 text-[#d4af37] p-2.5 rounded-xl"><DollarSign className="w-5 h-5"/></div>
+                  <div className="flex-1 text-start">
+                    <h4 className="text-xs font-black text-white uppercase tracking-wider">{isAr ? 'الإشعارات وسحابات التحصيل التلقائية' : 'Discharge Autonomous Slips'}</h4>
+                    <p className="text-[10px] text-slate-500 font-bold">{isAr ? 'إرسال بنود إشعار تلقائي للزبون عند استلام العهدة أو تصفية الحساب ماليًا' : 'Instruct webhook integration to broadcast payment receipts immediately'}</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" checked={localSettings.autoNotification} onChange={(e) => setLocalSettings({...localSettings, autoNotification: e.target.checked})} className="sr-only peer" />
+                    <div className="w-11 h-6 bg-slate-850 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-slate-850 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-600 disabled:opacity-55"></div>
+                  </label>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" disabled={!canManageWhatsapp} checked={localSettings.autoNotification} onChange={(e) => setLocalSettings({...localSettings, autoNotification: e.target.checked})} className="sr-only peer" />
-                  <div className="w-11 h-6 bg-slate-850 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-slate-850 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-600 disabled:opacity-55"></div>
-                </label>
-              </div>
+              )}
 
               {/* Divider */}
-              <div className="md:col-span-2 border-t border-slate-850/50 my-2"></div>
+              {canEditRates && <div className="md:col-span-2 border-t border-slate-850/50 my-2"></div>}
 
               {/* Exchange Rates Header */}
-              <div className="md:col-span-2 text-start">
-                <h4 className="text-xs font-black text-white uppercase tracking-wider mb-1">{isAr ? 'أسعار صرف العملات والتحويل المالي' : 'Exchange Rates & Currency Conversion'}</h4>
-                <p className="text-[10px] text-slate-500 font-bold">{isAr ? 'تحديد أسعار الصرف الافتراضية للتحويل إلى الريال اليمني (YER)' : 'Configure the default exchange rates for YER conversions'}</p>
-              </div>
+              {canEditRates && (
+                <div className="md:col-span-2 text-start">
+                  <h4 className="text-xs font-black text-white uppercase tracking-wider mb-1">{isAr ? 'أسعار صرف العملات والتحويل المالي' : 'Exchange Rates & Currency Conversion'}</h4>
+                  <p className="text-[10px] text-slate-500 font-bold">{isAr ? 'تحديد أسعار الصرف الافتراضية للتحويل إلى الريال اليمني (YER)' : 'Configure the default exchange rates for YER conversions'}</p>
+                </div>
+              )}
 
               {/* Exchange Rates Inputs */}
-              <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'سعر صرف الدولار (USD) مقابل اليمني' : 'USD to YER Rate'}{!canEditRates && ' 🔒'}</label>
-                <input 
-                  disabled={!canEditRates}
-                  type="number" 
-                  step="any"
-                  value={localSettings.exchangeRateUSD !== undefined ? localSettings.exchangeRateUSD : 535}
-                  onChange={(e) => setLocalSettings({...localSettings, exchangeRateUSD: parseFloat(e.target.value) || 0})}
-                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono disabled:opacity-55 disabled:cursor-not-allowed"
-                  placeholder="535"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'سعر صرف السعودي (SAR) مقابل اليمني' : 'SAR to YER Rate'}{!canEditRates && ' 🔒'}</label>
-                <input 
-                  disabled={!canEditRates}
-                  type="number" 
-                  step="any"
-                  value={localSettings.exchangeRateSAR !== undefined ? localSettings.exchangeRateSAR : 140}
-                  onChange={(e) => setLocalSettings({...localSettings, exchangeRateSAR: parseFloat(e.target.value) || 0})}
-                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono disabled:opacity-55 disabled:cursor-not-allowed"
-                  placeholder="140"
-                />
-              </div>
+              {canEditRates && (
+                <>
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'سعر صرف الدولار (USD) مقابل اليمني' : 'USD to YER Rate'}</label>
+                    <input 
+                      type="number" 
+                      step="any"
+                      value={localSettings.exchangeRateUSD !== undefined ? localSettings.exchangeRateUSD : 535}
+                      onChange={(e) => setLocalSettings({...localSettings, exchangeRateUSD: parseFloat(e.target.value) || 0})}
+                      className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono disabled:opacity-55 disabled:cursor-not-allowed"
+                      placeholder="535"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'سعر صرف السعودي (SAR) مقابل اليمني' : 'SAR to YER Rate'}</label>
+                    <input 
+                      type="number" 
+                      step="any"
+                      value={localSettings.exchangeRateSAR !== undefined ? localSettings.exchangeRateSAR : 140}
+                      onChange={(e) => setLocalSettings({...localSettings, exchangeRateSAR: parseFloat(e.target.value) || 0})}
+                      className="w-full bg-black/50 border border-slate-850 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono disabled:opacity-55 disabled:cursor-not-allowed"
+                      placeholder="140"
+                    />
+                  </div>
 
-              {/* API Auto Update Toggle */}
-              <div className="md:col-span-2 flex items-center p-4 bg-black/40 rounded-2xl border border-slate-850 gap-4">
-                <div className="bg-[#d4af37]/10 border border-[#d4af37]/25 text-[#d4af37] p-2.5 rounded-xl"><RefreshCw className="w-5 h-5"/></div>
-                <div className="flex-1 text-start">
-                  <h4 className="text-xs font-black text-white uppercase tracking-wider">{isAr ? 'تحديث تلقائي لأسعار الصرف من API' : 'Auto-update exchange rates from API'}{!canEditRates && ' 🔒'}</h4>
-                  <p className="text-[10px] text-slate-500 font-bold">{isAr ? 'جلب تحديثات أسعار الصرف تلقائياً من خادم خارجي عند التحميل' : 'Enable background sync for exchange rates using API endpoint'}</p>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" disabled={!canEditRates} checked={localSettings.autoUpdateExchangeRates || false} onChange={(e) => setLocalSettings({...localSettings, autoUpdateExchangeRates: e.target.checked})} className="sr-only peer" />
-                  <div className="w-11 h-6 bg-slate-850 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-slate-850 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-600 disabled:opacity-55"></div>
-                </label>
-              </div>
+                  {/* API Auto Update Toggle */}
+                  <div className="md:col-span-2 flex items-center p-4 bg-black/40 rounded-2xl border border-slate-850 gap-4">
+                    <div className="bg-[#d4af37]/10 border border-[#d4af37]/25 text-[#d4af37] p-2.5 rounded-xl"><RefreshCw className="w-5 h-5"/></div>
+                    <div className="flex-1 text-start">
+                      <h4 className="text-xs font-black text-white uppercase tracking-wider">{isAr ? 'تحديث تلقائي لأسعار الصرف من API' : 'Auto-update exchange rates from API'}</h4>
+                      <p className="text-[10px] text-slate-500 font-bold">{isAr ? 'جلب تحديثات أسعار الصرف تلقائياً من خادم خارجي عند التحميل' : 'Enable background sync for exchange rates using API endpoint'}</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" checked={localSettings.autoUpdateExchangeRates || false} onChange={(e) => setLocalSettings({...localSettings, autoUpdateExchangeRates: e.target.checked})} className="sr-only peer" />
+                      <div className="w-11 h-6 bg-slate-850 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-slate-850 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-600 disabled:opacity-55"></div>
+                    </label>
+                  </div>
 
-              {/* API URL & Update Action */}
-              <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 items-end bg-black/30 p-4 rounded-2xl border border-slate-850">
-                <div className="md:col-span-2">
-                  <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'رابط خادم أسعار الصرف (API URL)' : 'Exchange Rates API Endpoint'}{!canEditRates && ' 🔒'}</label>
-                  <input 
-                    disabled={!canEditRates}
-                    type="text" 
-                    value={localSettings.exchangeRatesApiUrl || 'https://open.er-api.com/v6/latest/USD'}
-                    onChange={(e) => setLocalSettings({...localSettings, exchangeRatesApiUrl: e.target.value})}
-                    className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs text-white focus:border-[#d4af37]/60 outline-none text-start font-mono disabled:opacity-55 disabled:cursor-not-allowed"
-                    placeholder="https://open.er-api.com/v6/latest/USD"
-                  />
-                </div>
-                <div>
-                  <button
-                    type="button"
-                    onClick={() => fetchExchangeRates(localSettings.exchangeRatesApiUrl)}
-                    disabled={apiLoading || !canEditRates}
-                    className="w-full bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black py-3 rounded-xl font-black text-xs transition shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:from-slate-800 disabled:to-slate-900 disabled:cursor-not-allowed"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${apiLoading ? 'animate-spin' : ''}`} />
-                    {apiLoading ? (isAr ? 'جاري الجلب...' : 'Fetching...') : (isAr ? 'تحديث الآن' : 'Update Now')}
-                  </button>
-                </div>
+                  {/* API URL & Update Action */}
+                  <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 items-end bg-black/30 p-4 rounded-2xl border border-slate-850">
+                    <div className="md:col-span-2">
+                      <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">{isAr ? 'رابط خادم أسعار الصرف (API URL)' : 'Exchange Rates API Endpoint'}</label>
+                      <input 
+                        type="text" 
+                        value={localSettings.exchangeRatesApiUrl || 'https://open.er-api.com/v6/latest/USD'}
+                        onChange={(e) => setLocalSettings({...localSettings, exchangeRatesApiUrl: e.target.value})}
+                        className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs text-white focus:border-[#d4af37]/60 outline-none text-start font-mono disabled:opacity-55 disabled:cursor-not-allowed"
+                        placeholder="https://open.er-api.com/v6/latest/USD"
+                      />
+                    </div>
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => fetchExchangeRates(localSettings.exchangeRatesApiUrl)}
+                        disabled={apiLoading}
+                        className="w-full bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black py-3 rounded-xl font-black text-xs transition shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:from-slate-800 disabled:to-slate-900 disabled:cursor-not-allowed"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${apiLoading ? 'animate-spin' : ''}`} />
+                        {apiLoading ? (isAr ? 'جاري الجلب...' : 'Fetching...') : (isAr ? 'تحديث الآن' : 'Update Now')}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
                 {apiError && (
                   <div className="md:col-span-3 text-[10px] font-bold text-rose-500 text-start">{apiError}</div>
                 )}
               </div>
-            </div>
           </section>
         </div>
 
@@ -516,80 +522,82 @@ export default function Settings() {
           </section>
 
           {/* Backup & ledger integration tools */}
-          <section className="bg-[#121215] border border-slate-850 p-6 rounded-3xl text-start relative overflow-hidden text-white">
-            <h2 className="text-sm font-black mb-6 flex items-center gap-2 text-white uppercase tracking-wider">
-              <Database className="w-5 h-5 text-[#d4af37]" />
-              {t('backupTools')}
-            </h2>
-            <div className="space-y-6">
-              <div className="bg-black/30 p-4 rounded-2xl border border-slate-850">
-                <h3 className="font-black text-xs text-[#d4af37] uppercase tracking-wider mb-1">{isAr ? 'النسخ والتدوين المحمي سحابياً' : 'Database Custody Vault'}</h3>
-                <p className="text-[9px] text-slate-500 font-bold mb-4">{isAr ? 'سحب ملف كامل لتوقيع حساب المعاملات المالي' : 'Full block compilation and local storage file save'}</p>
-                
-                <div className="grid grid-cols-1 gap-2 mb-4">
-                  <button 
-                    type="button"
-                    onClick={handleBackup}
-                    disabled={backupLoading || !canManageBackup}
-                    className="w-full bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black py-2.5 rounded-xl font-black text-xs transition-all flex items-center justify-center gap-2 disabled:from-slate-800 disabled:to-slate-900 disabled:cursor-not-allowed shadow"
-                  >
-                    {backupLoading ? (isAr ? 'جاري السحب والتأمين...' : 'Mining blocks...') : (
-                      <>{t('exportBackup')} <Save className="w-3.5 h-3.5" />{!canManageBackup && ' 🔒'}</>
-                    )}
-                  </button>
-                  <button 
-                    type="button"
-                    onClick={handleImportClick}
-                    disabled={importLoading || !canManageBackup}
-                    className="w-full bg-black/40 border border-slate-850 text-slate-300 py-2.5 rounded-xl font-black text-xs hover:bg-slate-900 transition-all flex items-center justify-center gap-2 disabled:opacity-55 disabled:cursor-not-allowed"
-                  >
-                    <Upload className="w-3.5 h-3.5" />
-                    {importLoading ? (isAr ? 'جاري الرفع والدمج...' : 'Injecting nodes...') : <>{t('importBackup')} {!canManageBackup && ' 🔒'}</>}
-                  </button>
-                </div>
+          {canManageBackup && (
+            <section className="bg-[#121215] border border-slate-850 p-6 rounded-3xl text-start relative overflow-hidden text-white">
+              <h2 className="text-sm font-black mb-6 flex items-center gap-2 text-white uppercase tracking-wider">
+                <Database className="w-5 h-5 text-[#d4af37]" />
+                {t('backupTools')}
+              </h2>
+              <div className="space-y-6">
+                <div className="bg-black/30 p-4 rounded-2xl border border-slate-850">
+                  <h3 className="font-black text-xs text-[#d4af37] uppercase tracking-wider mb-1">{isAr ? 'النسخ والتدوين المحمي سحابياً' : 'Database Custody Vault'}</h3>
+                  <p className="text-[9px] text-slate-500 font-bold mb-4">{isAr ? 'سحب ملف كامل لتوقيع حساب المعاملات المالي' : 'Full block compilation and local storage file save'}</p>
+                  
+                  <div className="grid grid-cols-1 gap-2 mb-4">
+                    <button 
+                      type="button"
+                      onClick={handleBackup}
+                      disabled={backupLoading}
+                      className="w-full bg-gradient-to-r from-[#d4af37] to-yellow-650 hover:from-yellow-650 hover:to-[#d4af37] text-black py-2.5 rounded-xl font-black text-xs transition-all flex items-center justify-center gap-2 disabled:from-slate-800 disabled:to-slate-900 disabled:cursor-not-allowed shadow"
+                    >
+                      {backupLoading ? (isAr ? 'جاري السحب والتأمين...' : 'Mining blocks...') : (
+                        <>{t('exportBackup')} <Save className="w-3.5 h-3.5" /></>
+                      )}
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={handleImportClick}
+                      disabled={importLoading}
+                      className="w-full bg-black/40 border border-slate-850 text-slate-300 py-2.5 rounded-xl font-black text-xs hover:bg-slate-900 transition-all flex items-center justify-center gap-2 disabled:opacity-55 disabled:cursor-not-allowed"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      {importLoading ? (isAr ? 'جاري الرفع والدمج...' : 'Injecting nodes...') : <>{t('importBackup')}</>}
+                    </button>
+                  </div>
 
-                {/* 🟢 Real-time Backup & Sync Status Details */}
-                <div className="pt-3 border-t border-slate-850 space-y-2 text-[10px] font-bold text-slate-400">
-                  <div className="flex justify-between items-center text-start">
-                    <span>{isAr ? 'حالة المزامنة والنسخ الاحتياطي:' : 'Sync & Backup status:'}</span>
-                    <span className="text-emerald-400 flex items-center gap-1.5 uppercase font-black text-[9px]">
-                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full inline-block animate-pulse"></span>
-                      {isAr ? 'متصل برابط سحابي آمن' : 'Connected & Active'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center text-start">
-                    <span>{isAr ? 'آخر تحديث لبيانات النظام:' : 'Last system update:'}</span>
-                    <span className="font-mono text-yellow-500 font-black text-[9px] uppercase">
-                      {globalSettings.lastBackup || (isAr ? 'الآن • متصل' : 'Just Now')}
-                    </span>
+                  {/* 🟢 Real-time Backup & Sync Status Details */}
+                  <div className="pt-3 border-t border-slate-850 space-y-2 text-[10px] font-bold text-slate-400">
+                    <div className="flex justify-between items-center text-start">
+                      <span>{isAr ? 'حالة المزامنة والنسخ الاحتياطي:' : 'Sync & Backup status:'}</span>
+                      <span className="text-emerald-400 flex items-center gap-1.5 uppercase font-black text-[9px]">
+                        <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full inline-block animate-pulse"></span>
+                        {isAr ? 'متصل برابط سحابي آمن' : 'Connected & Active'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-start">
+                      <span>{isAr ? 'آخر تحديث لبيانات النظام:' : 'Last system update:'}</span>
+                      <span className="font-mono text-yellow-500 font-black text-[9px] uppercase">
+                        {globalSettings.lastBackup || (isAr ? 'الآن • متصل' : 'Just Now')}
+                      </span>
+                    </div>
                   </div>
                 </div>
+                
+                <div className="p-4 bg-rose-955/10 rounded-2xl border border-rose-950/40">
+                  <h3 className="text-rose-455 font-black text-[9px] mb-2 uppercase tracking-widest text-center">{isAr ? 'صلاحيات النواة المعالجة (خطر)' : 'Host System Cache Clear'}</h3>
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      setConfirmConfig({
+                        isOpen: true,
+                        title: isAr ? 'محو ذاكرة الكاش للشبكة' : 'Truncate State Cache',
+                        message: isAr ? 'هذا سيؤدي لإعادة تشغيل خوارزميات الولوج وفك الكوكيز المحلية. هل تريد الإستمرار؟' : 'Discard compiled state matrices? Cookies will expire and logout requested.',
+                        type: 'danger',
+                        onConfirm: () => {
+                          localStorage.clear();
+                          activityLogService.log('clear_cache', 'Host LocalState');
+                          window.location.reload();
+                        }
+                      });
+                    }}
+                    className="w-full bg-rose-500/10 text-rose-500 py-2 rounded-xl font-black text-[9px] hover:bg-rose-500 hover:text-white transition-all border border-rose-500/30 disabled:opacity-55 disabled:cursor-not-allowed"
+                  >
+                    {isAr ? 'مسح الكاش وفرمتة المتصفح' : 'Clear Host LocalState'}
+                  </button>
+                </div>
               </div>
-              
-              <div className="p-4 bg-rose-955/10 rounded-2xl border border-rose-950/40">
-                <h3 className="text-rose-455 font-black text-[9px] mb-2 uppercase tracking-widest text-center">{isAr ? 'صلاحيات النواة المعالجة (خطر)' : 'Host System Cache Clear'}{!canManageBackup && ' 🔒'}</h3>
-                <button 
-                  disabled={!canManageBackup}
-                  type="button"
-                  onClick={() => {
-                    setConfirmConfig({
-                      isOpen: true,
-                      title: isAr ? 'محو ذاكرة الكاش للشبكة' : 'Truncate State Cache',
-                      message: isAr ? 'هذا سيؤدي لإعادة تشغيل خوارزميات الولوج وفك الكوكيز المحلية. هل تريد الإستمرار؟' : 'Discard compiled state matrices? Cookies will expire and logout requested.',
-                      type: 'danger',
-                      onConfirm: () => {
-                        localStorage.clear();
-                        window.location.reload();
-                      }
-                    });
-                  }}
-                  className="w-full bg-rose-500/10 text-rose-500 py-2 rounded-xl font-black text-[9px] hover:bg-rose-500 hover:text-white transition-all border border-rose-500/30 disabled:opacity-55 disabled:cursor-not-allowed"
-                >
-                  {isAr ? 'مسح الكاش وفرمتة المتصفح' : 'Clear Host LocalState'}
-                </button>
-              </div>
-            </div>
-          </section>
+            </section>
+          )}
         </div>
       </div>
 

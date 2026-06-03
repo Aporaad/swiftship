@@ -29,6 +29,7 @@ import { jsPDF } from 'jspdf';
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
 import { notificationService } from '../services/notificationService';
+import { activityLogService } from '../services/activityLogService';
 import ConfirmModal from '../components/ConfirmModal';
 
 export default function Couriers() {
@@ -178,6 +179,7 @@ export default function Couriers() {
         notes: editFormData.notes,
         updatedAt: Date.now()
       });
+      activityLogService.log('edit_courier', editFormData.fullName, { ...editFormData });
       notificationService.notify({
         title: isAr ? 'تحديث المندوب' : 'Courier Updated',
         message: isAr ? 'تم تحديث ملف المندوب بنجاح' : 'Courier settings updated successfully',
@@ -203,6 +205,7 @@ export default function Couriers() {
             disabled: !courier.disabled,
             updatedAt: Date.now()
           });
+          activityLogService.log('edit_courier', courier.fullName, { id: courier.id, disabled: !courier.disabled });
           notificationService.notify({
             title: isAr ? 'تم تحديث الوضعية' : 'Status Toggle Successful',
             message: isAr ? `تم تعديل وضعية الحساب إلى: ${courier.disabled ? 'نشط' : 'معطل'}` : `Account is now: ${courier.disabled ? 'Active' : 'Disabled'}`,
@@ -225,6 +228,7 @@ export default function Couriers() {
       onConfirm: async () => {
         try {
           await deleteDoc(doc(db, 'couriers', id));
+          activityLogService.log('delete_courier', name, { id });
           notificationService.notify({
             title: isAr ? 'تم الحذف' : 'Account Revoked',
             message: isAr ? 'تم حذف حساب المندوب وسجلاته من النظام' : 'Courier record deleted successfully',
@@ -264,6 +268,7 @@ export default function Couriers() {
         createdAt: Date.now()
       });
 
+      activityLogService.log('add_courier', addFormData.fullName, { ...addFormData, courierCustomId: customId });
       notificationService.notify({
         title: isAr ? 'تم تسجيل مندوب خارجي' : 'External Courier Registered',
         message: isAr ? `تم تسجيل المندوب الخارجي بنجاح برمز: ${customId}` : `External courier registered with ID: ${customId}`,
@@ -536,7 +541,7 @@ export default function Couriers() {
     );
   }
 
-  if (!hasPermission('manage_couriers') && role !== 'Admin') {
+  if (!hasPermission('view_couriers') && role !== 'Admin') {
     return (
       <div className="flex flex-col items-center justify-center p-12 bg-gradient-to-br from-[#121215] to-[#070708] rounded-3xl border border-slate-850 shadow-xl text-center select-none">
         <ShieldAlert className="w-16 h-16 text-rose-500 mb-6 animate-pulse" />
@@ -575,12 +580,14 @@ export default function Couriers() {
             <Activity className="w-4 h-4" /> {isAr ? 'تصدير CSV' : 'Export CSV'}
           </button>
 
-          <button 
-            onClick={() => setIsAddModalOpen(true)} 
-            className="bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black px-5 py-2.5 rounded-xl flex items-center gap-2 font-black text-xs transition transform active:scale-95 shadow-md shadow-yellow-950/20 cursor-pointer"
-          >
-            <Plus className="w-4 h-4"/> {isAr ? 'مندوب جديد' : 'New Courier'}
-          </button>
+          {role === 'Admin' || hasPermission('add_couriers') ? (
+            <button 
+              onClick={() => setIsAddModalOpen(true)} 
+              className="bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black px-5 py-2.5 rounded-xl flex items-center gap-2 font-black text-xs transition transform active:scale-95 shadow-md shadow-yellow-950/20 cursor-pointer"
+            >
+              <Plus className="w-4 h-4"/> {isAr ? 'مندوب جديد' : 'New Courier'}
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -685,19 +692,23 @@ export default function Couriers() {
                     >
                       <Receipt className="w-4 h-4" />
                     </button>
-                    <button 
-                      onClick={() => handleToggleStatus(courier)} 
-                      title={courier.disabled ? (isAr ? 'تنشيط المندوب' : 'Activate') : (isAr ? 'تعطيل الحساب' : 'Deactivate')}
-                      className={`p-2 rounded-xl border transition-all ${courier.disabled ? 'text-emerald-400 bg-emerald-950/10 border-emerald-950/30' : 'text-rose-400 bg-rose-950/10 border-rose-950/40'}`}
-                    >
-                      {courier.disabled ? <UserCheck className="w-4 h-4" /> : <UserX className="w-4 h-4" />}
-                    </button>
-                    <button 
-                      onClick={() => handleOpenEdit(courier)} 
-                      className="text-white hover:text-[#d4af37] bg-slate-900 border border-slate-800 p-2 rounded-xl transition-all"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
+                    {role === 'Admin' || hasPermission('edit_couriers') ? (
+                      <>
+                        <button 
+                          onClick={() => handleToggleStatus(courier)} 
+                          title={courier.disabled ? (isAr ? 'تنشيط المندوب' : 'Activate') : (isAr ? 'تعطيل الحساب' : 'Deactivate')}
+                          className={`p-2 rounded-xl border transition-all ${courier.disabled ? 'text-emerald-400 bg-emerald-950/10 border-emerald-950/30' : 'text-rose-450 bg-rose-950/10 border-rose-950/40'}`}
+                        >
+                          {courier.disabled ? <UserCheck className="w-4 h-4" /> : <UserX className="w-4 h-4" />}
+                        </button>
+                        <button 
+                          onClick={() => handleOpenEdit(courier)} 
+                          className="text-white hover:text-[#d4af37] bg-slate-900 border border-slate-800 p-2 rounded-xl transition-all"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                      </>
+                    ) : null}
                     {hasPermission('delete_couriers') && (
                       <button 
                         onClick={() => handleDeleteCourier(courier.id, courier.fullName)} 

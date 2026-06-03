@@ -17,7 +17,8 @@ import QRCode from 'qrcode';
 export default function Orders() {
   const { settings, t } = useSettings();
   const { role, hasPermission, profile, loading: roleLoading } = useRole();
-  const canManageOrders = role === 'Admin' || hasPermission('manage_orders');
+  const canManageOrders = role === 'Admin' || hasPermission('edit_orders');
+  const canAddOrders = role === 'Admin' || hasPermission('add_orders');
   const isAr = settings.language === 'ar';
 
   // Core Data States
@@ -589,6 +590,7 @@ export default function Orders() {
     doc.text('Thank you for choosing Swift Ship! Generated automatically by Swift Ship Logistics Engine.', 15, 285);
 
     doc.save(`SwiftShip_Invoice_${order.orderNumber || order.id}.pdf`);
+    activityLogService.log('export_orders_pdf', order.orderNumber || order.id, { singleOrder: true });
   };
 
   // Helper calculation values
@@ -1052,6 +1054,12 @@ export default function Orders() {
         updatedAt: Date.now()
       });
 
+      activityLogService.log('add_payment', selectedOrder.orderNumber || selectedOrder.id, {
+        amount: paidVal,
+        method: paymentFormData.method,
+        remaining: Math.max(0, remaining)
+      });
+
       // Insert transaction history in notifications or payments
       notificationService.notify({
         title: isAr ? 'تم الدفع بنجاح' : 'Payment Recorded',
@@ -1143,6 +1151,13 @@ export default function Orders() {
         shippingDetails: updateShippings || [],
         updatedAt: Date.now(),
         ...extraUpdateFields
+      });
+
+      activityLogService.log('edit_order', selectedOrder.orderNumber || selectedOrder.id, {
+        previousStatus: selectedOrder.orderStatus,
+        newStatus: updateFormData.orderStatus,
+        deliveryStatus: updateFormData.deliveryStatus,
+        locationYemen: updateFormData.locationYemen
       });
 
       await notificationService.notify({
@@ -1319,6 +1334,11 @@ export default function Orders() {
         });
       });
       await Promise.all(promises);
+
+      activityLogService.log('edit_order', `Batch update`, {
+        orderIds: selectedOrderIds,
+        newStatus: newStatus
+      });
       
       // Dispatch real WhatsApp notifications for each order status change in the batch
       try {
@@ -1534,6 +1554,9 @@ export default function Orders() {
     doc.text(`Doc Ref: ALX-${new Date().getFullYear()}/LEDG`, 175, 288);
     
     doc.save(`AlXpress_Orders_Ledger_${new Date().toISOString().split('T')[0]}.pdf`);
+    activityLogService.log('export_orders_pdf', `Orders list report`, {
+      count: filteredOrdersList.length
+    });
   };
 
   const exportOrdersToCSV = () => {
@@ -1575,6 +1598,9 @@ export default function Orders() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    activityLogService.log('export_orders_csv', `Orders list CSV`, {
+      count: filteredOrdersList.length
+    });
   };
 
   const filteredOrdersList = orders
@@ -1653,7 +1679,7 @@ export default function Orders() {
             </button>
           )}
 
-          {(role === 'Admin' || hasPermission('manage_orders')) && (
+          {canAddOrders && (
             <button 
               onClick={() => {
                 resetCreateForm();
@@ -1815,8 +1841,8 @@ export default function Orders() {
                       {isAr ? 'التفاصيل' : 'Details'}
                     </button>
 
-                    {/* Payment handler — requires manage_finance */}
-                    {parseFloat(ord.amountRemaining || 0) > 0 && (role === 'Admin' || hasPermission('manage_finance')) && (
+                    {/* Payment handler — requires add_finance */}
+                    {parseFloat(ord.amountRemaining || 0) > 0 && (role === 'Admin' || hasPermission('add_finance')) && (
                       <button 
                         onClick={() => {
                           setSelectedOrder(ord);
@@ -1831,8 +1857,8 @@ export default function Orders() {
                       </button>
                     )}
 
-                    {/* Status updates — requires manage_orders or update_order_status; delivered orders require edit_delivered_orders */}
-                    {(role === 'Admin' || hasPermission('manage_orders') || hasPermission('update_order_status')) && 
+                    {/* Status updates — requires edit_orders or update_order_status; delivered orders require edit_delivered_orders */}
+                    {(role === 'Admin' || hasPermission('edit_orders') || hasPermission('update_order_status')) && 
                       (ord.orderStatus !== 'تم التسليم' || role === 'Admin' || hasPermission('edit_delivered_orders')) && (
                       <button 
                         onClick={() => {
@@ -1998,7 +2024,7 @@ export default function Orders() {
                 <div className="space-y-4 bg-slate-950/30 border border-slate-800 p-5 rounded-3xl relative">
                   <div className="flex justify-between items-center">
                     <label className="text-xs font-black text-slate-400">{isAr ? 'العميل المستلم' : 'Receiver Customer'}</label>
-                    {(role === 'Admin' || hasPermission('manage_customers')) && (
+                    {(role === 'Admin' || hasPermission('add_customers')) && (
                       <button 
                         type="button"
                         onClick={() => setIsAddCustomerOpen(true)}
@@ -2040,7 +2066,7 @@ export default function Orders() {
                           ) : (
                             <div className="p-3 text-xs text-slate-500 font-bold flex justify-between items-center">
                               <span>{isAr ? '🟢 عميل جديد' : '🟢 New Customer'}</span>
-                              {(role === 'Admin' || hasPermission('manage_customers')) && (
+                              {(role === 'Admin' || hasPermission('add_customers')) && (
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -2131,7 +2157,7 @@ export default function Orders() {
                     {/* Order Source */}
                     <div>
                       <div className="flex justify-between items-center mb-1.5 flex-row-reverse">
-                        {(role === 'Admin' || hasPermission('manage_sources')) && (
+                        {(role === 'Admin' || hasPermission('add_sources')) && (
                           <button
                             type="button"
                             onClick={() => setIsAddSourceOpen(true)}
@@ -2498,7 +2524,7 @@ export default function Orders() {
                         <div>
                           <div className="flex justify-between items-center mb-1">
                             <label className="block text-slate-400">{isAr ? 'شركة الشحن' : 'Carrier'}</label>
-                            {(role === 'Admin' || hasPermission('manage_sources')) && (
+                            {(role === 'Admin' || hasPermission('add_sources')) && (
                               <button
                                 type="button"
                                 onClick={() => {
@@ -3198,7 +3224,7 @@ export default function Orders() {
                           <div>
                             <div className="flex justify-between items-center mb-1">
                               <label className="block text-slate-400">{isAr ? 'اسم الناقل / شركة الشحن' : 'Carrier/Shipping Company'}</label>
-                              {(role === 'Admin' || hasPermission('manage_sources')) && (
+                              {(role === 'Admin' || hasPermission('add_sources')) && (
                                 <button
                                   type="button"
                                   onClick={() => {

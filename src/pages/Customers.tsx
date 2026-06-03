@@ -25,6 +25,7 @@ import {
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
 import { notificationService } from '../services/notificationService';
+import { activityLogService } from '../services/activityLogService';
 import ConfirmModal from '../components/ConfirmModal';
 
 export default function Customers() {
@@ -142,6 +143,7 @@ export default function Customers() {
           ...formData,
           updatedAt: Date.now()
         });
+        activityLogService.log('edit_customer', formData.fullName || selectedCustomer.id, { ...formData });
         notificationService.notify({
           title: isAr ? 'تحديث عميل' : 'Customer Updated',
           message: isAr ? `تم تحديث بيانات العميل ${formData.fullName}` : `Customer ${formData.fullName} has been updated`,
@@ -152,6 +154,7 @@ export default function Customers() {
           ...formData,
           createdAt: Date.now()
         });
+        activityLogService.log('add_customer', formData.fullName, { ...formData });
         notificationService.notify({
           title: isAr ? 'إضافة عميل' : 'Customer Added',
           message: isAr ? `تمت إضافة العميل الجديد ${formData.fullName}` : `New customer ${formData.fullName} added`,
@@ -173,6 +176,7 @@ export default function Customers() {
       onConfirm: async () => {
         try {
           await deleteDoc(doc(db, 'customers', id));
+          activityLogService.log('delete_customer', name, { id });
           notificationService.notify({
             title: isAr ? 'حذف عميل' : 'Customer Deleted',
             message: isAr ? `تم حذف العميل ${name} بنجاح` : `Customer ${name} deleted successfully`,
@@ -234,14 +238,14 @@ export default function Customers() {
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{isAr ? 'قاعدة بيانات عملاء النظام • تتبع العهد والديون والتوريدات ماليًا' : 'System customer database • Debt logs'}</p>
           </div>
         </div>
-        {hasPermission('manage_customers') && (
+        {role === 'Admin' || hasPermission('add_customers') ? (
           <button 
             onClick={handleOpenAdd}
             className="bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black px-6 py-2.5 rounded-xl flex items-center gap-2 font-black text-sm transition transform active:scale-95 shadow-md shadow-yellow-950/20"
           >
             <Plus className="w-4 h-4" /> {isAr ? 'إضافة عميل جديد' : 'Add New Customer'}
           </button>
-        )}
+        ) : null}
       </div>
 
       {/* Main Customers Hub Grid */}
@@ -300,7 +304,7 @@ export default function Customers() {
                       >
                         <Receipt className="w-4 h-4" />
                       </button>
-                      {hasPermission('manage_customers') && (
+                      {role === 'Admin' || hasPermission('edit_customers') ? (
                         <>
                           <button 
                             onClick={() => handleOpenEdit(customer)} 
@@ -317,7 +321,7 @@ export default function Customers() {
                             </button>
                           )}
                         </>
-                      )}
+                      ) : null}
                     </td>
                   </tr>
                 ))}

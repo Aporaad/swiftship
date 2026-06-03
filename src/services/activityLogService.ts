@@ -23,7 +23,30 @@ export type ActivityAction =
   | 'add_customer'
   | 'edit_customer'
   | 'delete_customer'
-  | 'terminate_session';
+  | 'terminate_session'
+  | 'add_source'
+  | 'edit_source'
+  | 'delete_source'
+  | 'add_courier'
+  | 'edit_courier'
+  | 'delete_courier'
+  | 'settle_custody'
+  | 'save_settings'
+  | 'backup_export'
+  | 'backup_import'
+  | 'clear_cache'
+  | 'fetch_exchange_rates'
+  | 'save_whatsapp_settings'
+  | 'send_test_whatsapp'
+  | 'mark_all_read'
+  | 'export_orders_pdf'
+  | 'export_orders_csv'
+  | 'add_payment'
+  | 'add_shipping_company'
+  | 'edit_shipping_company'
+  | 'delete_shipping_company'
+  | 'force_logout'
+  | 'temp_ban';
 
 export interface ActivityLog {
   userId: string;

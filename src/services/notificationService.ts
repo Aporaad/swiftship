@@ -10,12 +10,13 @@ interface NotificationParams {
   type: NotificationType;
   orderId?: string;
   userId?: string; // Target specific user
+  associatedUserIds?: string[]; // Users associated with this notification
   isPublic?: boolean;
   category?: 'order' | 'finance' | 'system';
 }
 
 export const notificationService = {
-  async notify({ title, message, type, orderId, userId, isPublic = true, category }: NotificationParams) {
+  async notify({ title, message, type, orderId, userId, associatedUserIds, isPublic = true, category }: NotificationParams) {
     try {
       // 1. Show local toast
       switch (type) {
@@ -61,6 +62,7 @@ export const notificationService = {
         type,
         orderId: orderId || null,
         userId: userId || 'global',
+        associatedUserIds: associatedUserIds || [],
         isPublic,
         read: false,
         category: inferredCategory,

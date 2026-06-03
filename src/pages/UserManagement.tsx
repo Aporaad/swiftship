@@ -29,14 +29,15 @@ const PERMISSION_GROUPS = (isAr: boolean) => [
     group: isAr ? '🏠 عام' : '🏠 General',
     perms: [
       { id: 'view_dashboard', label: isAr ? 'عرض لوحة التحكم والإحصائيات' : 'View Dashboard & Statistics' },
-      { id: 'view_statistics', label: isAr ? 'عرض الإحصائيات التفصيلية' : 'View Detailed Statistics' },
+      { id: 'view_statistics', label: isAr ? 'عرض الإحصائيات المالية التفصيلية' : 'View Detailed Financial Statistics' },
     ]
   },
   {
     group: isAr ? '📦 الطلبات' : '📦 Orders',
     perms: [
       { id: 'view_orders', label: isAr ? 'عرض الطلبات' : 'View Orders' },
-      { id: 'manage_orders', label: isAr ? 'إضافة وتعديل الطلبات' : 'Add & Edit Orders' },
+      { id: 'add_orders', label: isAr ? 'إضافة الطلبات' : 'Add Orders' },
+      { id: 'edit_orders', label: isAr ? 'تعديل الطلبات' : 'Edit Orders' },
       { id: 'update_order_status', label: isAr ? 'تحديث حالة الطلب فقط' : 'Update Order Status Only' },
       { id: 'delete_orders', label: isAr ? 'حذف الطلبات' : 'Delete Orders' },
       { id: 'edit_delivered_orders', label: isAr ? 'تعديل الطلبات بعد التسليم' : 'Edit Orders After Delivery' },
@@ -48,7 +49,8 @@ const PERMISSION_GROUPS = (isAr: boolean) => [
     group: isAr ? '👥 العملاء' : '👥 Customers',
     perms: [
       { id: 'view_customers', label: isAr ? 'عرض قائمة العملاء' : 'View Customers List' },
-      { id: 'manage_customers', label: isAr ? 'إضافة وتعديل العملاء' : 'Add & Edit Customers' },
+      { id: 'add_customers', label: isAr ? 'إضافة العملاء' : 'Add Customers' },
+      { id: 'edit_customers', label: isAr ? 'تعديل العملاء' : 'Edit Customers' },
       { id: 'delete_customers', label: isAr ? 'حذف العملاء' : 'Delete Customers' },
     ]
   },
@@ -56,7 +58,8 @@ const PERMISSION_GROUPS = (isAr: boolean) => [
     group: isAr ? '🚚 المناديب' : '🚚 Couriers',
     perms: [
       { id: 'view_couriers', label: isAr ? 'عرض المناديب' : 'View Couriers' },
-      { id: 'manage_couriers', label: isAr ? 'إضافة وتعديل المناديب' : 'Add & Edit Couriers' },
+      { id: 'add_couriers', label: isAr ? 'إضافة المناديب' : 'Add Couriers' },
+      { id: 'edit_couriers', label: isAr ? 'تعديل المناديب' : 'Edit Couriers' },
       { id: 'delete_couriers', label: isAr ? 'حذف المناديب' : 'Delete Couriers' },
     ]
   },
@@ -64,11 +67,12 @@ const PERMISSION_GROUPS = (isAr: boolean) => [
     group: isAr ? '💰 المالية' : '💰 Finance',
     perms: [
       { id: 'view_finance', label: isAr ? 'عرض البيانات المالية العامة' : 'View General Financial Data' },
-      { id: 'manage_finance', label: isAr ? 'إدارة المدفوعات والمالية' : 'Manage Payments & Finance' },
-      { id: 'view_profits', label: isAr ? 'رؤية الأرباح والإيرادات' : 'View Profits & Revenue' },
+      { id: 'add_finance', label: isAr ? 'إضافة المدفوعات والعمليات المالية' : 'Add Payments & Finance' },
+      { id: 'edit_finance', label: isAr ? 'تعديل المدفوعات والعمليات المالية' : 'Edit Payments & Finance' },
       { id: 'view_expenses', label: isAr ? 'رؤية المصروفات والتكاليف' : 'View Expenses & Costs' },
       { id: 'view_custody', label: isAr ? 'عرض العهد المالية' : 'View Financial Custody' },
-      { id: 'manage_expenses', label: isAr ? 'إضافة وتعديل المصروفات' : 'Add & Edit Expenses' },
+      { id: 'add_expenses', label: isAr ? 'إضافة المصروفات' : 'Add Expenses' },
+      { id: 'edit_expenses', label: isAr ? 'تعديل المصروفات وتسوية العهد' : 'Edit Expenses & Reconcile' },
       { id: 'delete_expenses', label: isAr ? 'حذف المصروفات' : 'Delete Expenses' },
       { id: 'edit_exchange_rates', label: isAr ? 'تعديل أسعار الصرف' : 'Edit Exchange Rates' },
     ]
@@ -77,22 +81,23 @@ const PERMISSION_GROUPS = (isAr: boolean) => [
     group: isAr ? '📊 التقارير' : '📊 Reports',
     perms: [
       { id: 'view_reports', label: isAr ? 'عرض التقارير المالية' : 'View Financial Reports' },
-      { id: 'export_reports', label: isAr ? 'تصدير التقارير' : 'Export Reports' },
     ]
   },
   {
     group: isAr ? '🗺️ المصادر' : '🗺️ Sources',
     perms: [
-      { id: 'manage_sources', label: isAr ? 'إدارة مصادر الطلبات' : 'Manage Order Sources' },
+      { id: 'view_sources', label: isAr ? 'عرض مصادر الطلبات' : 'View Order Sources' },
+      { id: 'add_sources', label: isAr ? 'إضافة مصادر الطلبات' : 'Add Order Sources' },
+      { id: 'edit_sources', label: isAr ? 'تعديل مصادر الطلبات' : 'Edit Order Sources' },
       { id: 'delete_sources', label: isAr ? 'حذف مصادر الطلبات' : 'Delete Order Sources' },
     ]
   },
   {
     group: isAr ? '🔔 الإشعارات' : '🔔 Notifications',
     perms: [
-      { id: 'view_notifications', label: isAr ? 'عرض الإشعارات' : 'View Notifications' },
+      { id: 'view_notifications', label: isAr ? 'عرض صفحة الإشعارات' : 'View Notifications' },
+      { id: 'send_notifications', label: isAr ? 'إرسال إشعارات مخصصة وتجريبية' : 'Send Custom Notifications' },
       { id: 'manage_notifications', label: isAr ? 'إدارة وحذف الإشعارات' : 'Manage & Delete Notifications' },
-      { id: 'send_notifications', label: isAr ? 'إرسال إشعارات مخصصة' : 'Send Custom Notifications' },
       { id: 'notify_orders', label: isAr ? 'استقبال إشعارات الطلبات' : 'Receive Order Notifications' },
       { id: 'notify_finance', label: isAr ? 'استقبال إشعارات المالية' : 'Receive Finance Notifications' },
       { id: 'notify_system', label: isAr ? 'استقبال إشعارات النظام والأمان' : 'Receive System & Security Notifications' },
@@ -101,11 +106,12 @@ const PERMISSION_GROUPS = (isAr: boolean) => [
   {
     group: isAr ? '👤 إدارة الموظفين' : '👤 Staff Management',
     perms: [
-      { id: 'manage_users', label: isAr ? 'إدارة الموظفين (عرض + إضافة + تعديل)' : 'Manage Staff (View + Add + Edit)' },
+      { id: 'view_users', label: isAr ? 'عرض قائمة الموظفين والأدوار' : 'View Staff & Roles List' },
+      { id: 'add_users', label: isAr ? 'إضافة الموظفين' : 'Add Staff members' },
+      { id: 'edit_users', label: isAr ? 'تعديل الموظفين والأدوار' : 'Edit Staff & Roles' },
       { id: 'delete_users', label: isAr ? 'حذف الموظفين' : 'Delete Staff Members' },
       { id: 'reset_passwords', label: isAr ? 'إعادة تعيين كلمات المرور' : 'Reset User Passwords' },
       { id: 'disable_accounts', label: isAr ? 'تعطيل وتفعيل الحسابات' : 'Disable & Enable Accounts' },
-      { id: 'view_active_sessions', label: isAr ? 'رؤية الجلسات النشطة' : 'View Active Sessions' },
       { id: 'terminate_sessions', label: isAr ? 'إنهاء جلسات المستخدمين' : 'Terminate User Sessions' },
       { id: 'view_activity_log', label: isAr ? 'رؤية سجل النشاط الكامل' : 'View Full Activity Log' },
     ]
@@ -113,7 +119,9 @@ const PERMISSION_GROUPS = (isAr: boolean) => [
   {
     group: isAr ? '🛡️ الأدوار والصلاحيات' : '🛡️ Roles & Permissions',
     perms: [
-      { id: 'manage_roles', label: isAr ? 'إدارة الأدوار والصلاحيات' : 'Manage Roles & Permissions' },
+      { id: 'view_roles', label: isAr ? 'عرض الأدوار والصلاحيات' : 'View Roles & Permissions' },
+      { id: 'add_roles', label: isAr ? 'إنشاء أدوار جديدة' : 'Create New Roles' },
+      { id: 'edit_roles', label: isAr ? 'تعديل الأدوار والصلاحيات' : 'Edit Roles & Permissions' },
       { id: 'delete_roles', label: isAr ? 'حذف الأدوار' : 'Delete Roles' },
     ]
   },
@@ -124,7 +132,6 @@ const PERMISSION_GROUPS = (isAr: boolean) => [
       { id: 'edit_company_info', label: isAr ? 'تعديل معلومات الشركة' : 'Edit Company Information' },
       { id: 'manage_whatsapp', label: isAr ? 'إعدادات واتساب والتنبيهات' : 'WhatsApp & Alert Settings' },
       { id: 'manage_backup', label: isAr ? 'إدارة النسخ الاحتياطية' : 'Manage Backups' },
-      { id: 'manage_tracking', label: isAr ? 'إعدادات التتبع والشحن' : 'Tracking & Shipping Settings' },
     ]
   },
 ];
@@ -620,7 +627,7 @@ export default function UserManagement() {
     </div>
   );
 
-  if (role !== 'Admin' && !hasPermission('manage_users')) return (
+  if (role !== 'Admin' && !hasPermission('view_users')) return (
     <div className="flex flex-col items-center justify-center p-12 bg-gradient-to-br from-[#121215] to-[#070708] rounded-3xl border border-slate-800 text-center">
       <ShieldAlert className="w-16 h-16 text-rose-500 mb-6 animate-pulse" />
       <h2 className="text-2xl font-black text-[#d4af37] mb-2 uppercase">{t('وصول مرفوض', 'Access Denied')}</h2>
@@ -652,12 +659,12 @@ export default function UserManagement() {
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{t('تحكم شامل • موظفون • أدوار • جلسات • سجل نشاط', 'Full Control • Staff • Roles • Sessions • Audit Log')}</p>
           </div>
         </div>
-        {activeTab === 'users' && (
+        {activeTab === 'users' && (role === 'Admin' || hasPermission('add_users')) && (
           <button onClick={() => setIsAddModalOpen(true)} className="bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black px-5 py-2.5 rounded-xl flex items-center gap-2 font-black text-sm transition active:scale-95 shadow-md shrink-0">
             <Plus className="w-4 h-4" /> {t('إضافة موظف', 'Add Staff Member')}
           </button>
         )}
-        {activeTab === 'roles' && role === 'Admin' && (
+        {activeTab === 'roles' && (role === 'Admin' || hasPermission('add_roles')) && (
           <button onClick={handleOpenAddRole} className="bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black px-5 py-2.5 rounded-xl flex items-center gap-2 font-black text-sm transition active:scale-95 shadow-md shrink-0">
             <Plus className="w-4 h-4" /> {t('إنشاء دور جديد', 'Create New Role')}
           </button>
@@ -787,24 +794,28 @@ export default function UserManagement() {
                       <td className="p-4 text-center text-[9px] text-slate-500 font-bold">{getTimeSince(user.lastSeen)}</td>
                       <td className="p-4">
                         <div className="flex items-center justify-center gap-1">
-                          <button onClick={() => handleToggleStatus(user)} title={user.disabled ? t('تفعيل', 'Enable') : t('تعطيل', 'Disable')}
-                            className={`p-1.5 rounded-lg border transition-all ${user.disabled ? 'text-emerald-400 bg-emerald-950/10 border-emerald-900/30 hover:bg-emerald-950/30' : 'text-rose-400 bg-rose-950/10 border-rose-900/30 hover:bg-rose-950/30'}`}>
-                            {user.disabled ? <UserCheck className="w-3.5 h-3.5" /> : <UserX className="w-3.5 h-3.5" />}
-                          </button>
-                          <button onClick={() => handleOpenEdit(user)} title={t('تعديل', 'Edit')} className="p-1.5 rounded-lg border text-slate-400 hover:text-white bg-slate-900/50 border-slate-800 hover:border-[#d4af37]/30 transition-all">
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          {hasPermission('reset_passwords') && (
+                          {(role === 'Admin' || hasPermission('disable_accounts')) && (
+                            <button onClick={() => handleToggleStatus(user)} title={user.disabled ? t('تفعيل', 'Enable') : t('تعطيل', 'Disable')}
+                              className={`p-1.5 rounded-lg border transition-all ${user.disabled ? 'text-emerald-400 bg-emerald-950/10 border-emerald-900/30 hover:bg-emerald-950/30' : 'text-rose-400 bg-rose-950/10 border-rose-900/30 hover:bg-rose-950/30'}`}>
+                              {user.disabled ? <UserCheck className="w-3.5 h-3.5" /> : <UserX className="w-3.5 h-3.5" />}
+                            </button>
+                          )}
+                          {(role === 'Admin' || hasPermission('edit_users')) && (
+                            <button onClick={() => handleOpenEdit(user)} title={t('تعديل', 'Edit')} className="p-1.5 rounded-lg border text-slate-400 hover:text-white bg-slate-900/50 border-slate-800 hover:border-[#d4af37]/30 transition-all">
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {(role === 'Admin' || hasPermission('reset_passwords')) && (
                             <button onClick={() => handleResetPassword(user)} title={t('إعادة تعيين كلمة المرور', 'Reset Password')} className="p-1.5 rounded-lg border text-amber-400 bg-amber-950/10 border-amber-900/30 hover:bg-amber-950/30 transition-all">
                               <Key className="w-3.5 h-3.5" />
                             </button>
                           )}
-                          {hasPermission('terminate_sessions') && !isRootTarget && online && (
+                          {(role === 'Admin' || hasPermission('terminate_sessions')) && !isRootTarget && online && (
                             <button onClick={() => { setSessionTargetUser(user); setIsSessionModalOpen(true); }} title={t('إنهاء الجلسة', 'End Session')} className="p-1.5 rounded-lg border text-rose-400 bg-rose-950/10 border-rose-900/30 hover:bg-rose-950/30 transition-all">
                               <WifiOff className="w-3.5 h-3.5" />
                             </button>
                           )}
-                          {!isRootTarget && (
+                          {(role === 'Admin' || hasPermission('delete_users')) && !isRootTarget && (
                             <button onClick={() => handleDeleteUser(user.id, user.fullName)} title={t('حذف', 'Delete')} className="p-1.5 rounded-lg border text-rose-500 bg-rose-950/10 border-rose-900/30 hover:bg-rose-950/30 transition-all">
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -844,8 +855,12 @@ export default function UserManagement() {
                     </div>
                   </div>
                   <div className="flex gap-1">
-                    <button onClick={() => handleOpenEditRole(r)} className="p-1.5 text-slate-400 border border-slate-800 bg-slate-950 hover:text-[#d4af37] hover:border-[#d4af37]/30 rounded-lg transition-all"><Edit2 className="w-3.5 h-3.5" /></button>
-                    {r.id !== 'Admin' && <button onClick={() => handleDeleteRole(r.id, r.title || r.id)} className="p-1.5 text-rose-400 border border-slate-800 bg-slate-950 hover:bg-rose-950/20 hover:border-rose-500/30 rounded-lg transition-all"><Trash2 className="w-3.5 h-3.5" /></button>}
+                    {(role === 'Admin' || hasPermission('edit_roles')) && (
+                      <button onClick={() => handleOpenEditRole(r)} className="p-1.5 text-slate-400 border border-slate-800 bg-slate-950 hover:text-[#d4af37] hover:border-[#d4af37]/30 rounded-lg transition-all"><Edit2 className="w-3.5 h-3.5" /></button>
+                    )}
+                    {r.id !== 'Admin' && (role === 'Admin' || hasPermission('delete_roles')) && (
+                      <button onClick={() => handleDeleteRole(r.id, r.title || r.id)} className="p-1.5 text-rose-400 border border-slate-800 bg-slate-950 hover:bg-rose-950/20 hover:border-rose-500/30 rounded-lg transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
+                    )}
                   </div>
                 </div>
                 <div className="p-4 flex-1">

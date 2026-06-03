@@ -4,6 +4,7 @@ import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { useSettings } from '../context/SettingsContext';
 import { useRole } from '../hooks/useRole';
 import { notificationService } from '../services/notificationService';
+import { activityLogService } from '../services/activityLogService';
 import { Plus, Search, Wallet, DollarSign, Calendar, RefreshCw, Layers, CheckCircle2, AlertTriangle, User, FileText, ArrowUpRight, ArrowDownLeft, Crown, ShieldAlert, Coins, X, Printer, Activity } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { useLocation } from 'react-router-dom';
@@ -16,7 +17,8 @@ export default function Expenses() {
   const canViewExpensesPage = role === 'Admin' || hasPermission('view_finance') || hasPermission('view_expenses') || hasPermission('view_custody');
   const canViewCustody = role === 'Admin' || hasPermission('view_custody');
   const canViewGeneralExpenses = role === 'Admin' || hasPermission('view_expenses');
-  const canManageExpenses = role === 'Admin' || hasPermission('manage_expenses');
+  const canAddExpenses = role === 'Admin' || hasPermission('add_expenses');
+  const canEditExpenses = role === 'Admin' || hasPermission('edit_expenses');
   const canViewReports = role === 'Admin' || hasPermission('view_reports');
   const canViewFinance = role === 'Admin' || hasPermission('view_finance');
 
@@ -146,7 +148,7 @@ export default function Expenses() {
 
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canManageExpenses) {
+    if (!canAddExpenses) {
       return notificationService.notify({
         title: isAr ? 'خطأ بالصلاحيات' : 'Permission Error',
         message: isAr ? 'ليس لديك صلاحية لإدارة المصروفات أو إضافة سندات جديدة' : 'You do not have permission to manage expenses or add new vouchers.',
@@ -193,6 +195,7 @@ export default function Expenses() {
       };
 
       await addDoc(collection(db, 'expenses'), payload);
+      activityLogService.log('add_expense', expenseNumber, { ...payload });
 
       notificationService.notify({
         title: isAr ? 'تم تقييد السند بالخزينة' : 'Voucher Logged',
@@ -225,7 +228,7 @@ export default function Expenses() {
   };
 
   const handleSettleCustody = async (exp: any) => {
-    if (!canManageExpenses) {
+    if (!canEditExpenses) {
       return notificationService.notify({
         title: isAr ? 'خطأ بالصلاحيات' : 'Permission Error',
         message: isAr ? 'ليس لديك صلاحية لتسوية العهد المالية.' : 'You do not have permission to settle financial custody.',
@@ -241,6 +244,7 @@ export default function Expenses() {
         settledByName: profile?.fullName || 'Root Admin'
       });
 
+      activityLogService.log('settle_custody', exp.recipientName || exp.recipientId, { id: exp.id, amount: exp.amount });
       notificationService.notify({
         title: isAr ? 'تم تسوية العهدة بنجاح' : 'Custody Discharged',
         message: isAr ? `تمت تسوية وتصفير عهدة المندوب ${exp.recipientName}` : `Custody balance for ${exp.recipientName} cleared`,
@@ -646,7 +650,7 @@ export default function Expenses() {
             <Activity className="w-4 h-4" /> {isAr ? 'تصدير CSV' : 'Export CSV'}
           </button>
 
-          {canManageExpenses && (
+          {canAddExpenses && (
             <button 
               onClick={() => setIsAddOpen(true)}
               className="bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black px-5 py-2.5 rounded-xl flex items-center gap-2 font-black text-xs transition transform active:scale-95 shadow-md shadow-yellow-950/20 cursor-pointer"
@@ -768,7 +772,7 @@ export default function Expenses() {
             </thead>
             <tbody className="text-xs divide-y divide-slate-850 bg-black/10">
               {filteredExpenses.map((exp) => {
-                const isSettleBtnVisible = exp.type === 'Custody' && exp.status === 'Pending' && canManageExpenses;
+                const isSettleBtnVisible = exp.type === 'Custody' && exp.status === 'Pending' && canEditExpenses;
                 return (
                   <tr key={exp.id} className="hover:bg-slate-950/40 transition-colors">
                     <td className="p-4 font-mono font-black text-slate-400">
