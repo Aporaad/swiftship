@@ -23,7 +23,8 @@ import {
   Printer,
   ShieldAlert,
   Coins,
-  Activity
+  Activity,
+  AlertTriangle
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { useRole } from '../hooks/useRole';
@@ -65,6 +66,10 @@ export default function Couriers() {
   const [courierExpenses, setCourierExpenses] = useState<any[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [detailsUnsubs, setDetailsUnsubs] = useState<(() => void)[]>([]);
+
+  // Global collections for smart calculations
+  const [allOrders, setAllOrders] = useState<any[]>([]);
+  const [allExpenses, setAllExpenses] = useState<any[]>([]);
   
   const [editFormData, setEditFormData] = useState({
     fullName: '',
@@ -89,16 +94,95 @@ export default function Couriers() {
 
   const [addLoading, setAddLoading] = useState(false);
 
+  // Smart Custody Calculator Helper
+  const getCourierCustodyStats = (courierId: string) => {
+    // Shipments associated with courier (as shipping or delivery courier)
+    const cOrders = allOrders.filter(o => o.deliveryCourierId === courierId || o.shippingCourierId === courierId);
+    
+    // Expenses/custodies associated with courier
+    const cExpenses = allExpenses.filter(e => e.recipientId === courierId);
+
+    // 1. Mabaligh Received (المبالغ التي استلمها المندوب)
+    // - All custody slips issued to them (automatic from delivered orders + manually established)
+    // - Any approved advances
+    const totalCustodyIssued = cExpenses
+      .filter(e => e.type === 'Custody')
+      .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+
+    const totalAdvancesReceived = cExpenses
+      .filter(e => e.type === 'Advance' && e.status === 'Approved')
+      .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+
+    const totalReceived = totalCustodyIssued + totalAdvancesReceived;
+
+    // 2. Mabaligh Remitted/Settled (المبالغ التي قام بتوريدها للصندوق)
+    const totalCustodySettled = cExpenses
+      .filter(e => e.type === 'Custody' && e.status === 'Settled')
+      .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+
+    // 3. Outstanding Custody (المبالغ المتبقية بعهدته)
+    const remainingCustody = totalReceived - totalCustodySettled;
+
+    // 4. Performance analytics
+    const totalDelivered = cOrders.filter(o => {
+      const status = o.orderStatus || o.order_status || '';
+      return status === 'تم التسليم' || status === 'Delivered';
+    }).length;
+
+    const totalOrdersCount = cOrders.length;
+    const deliverySuccessRate = totalOrdersCount > 0 
+      ? Math.round((totalDelivered / totalOrdersCount) * 100) 
+      : 0;
+
+    const totalInTransit = cOrders.filter(o => {
+      const status = o.orderStatus || o.order_status || '';
+      return ['Shipped', 'In Transit', 'Out For Delivery', 'In Local Warehouse', 'وصل مركز التوزيع في اليمن'].includes(status);
+    }).length;
+
+    return {
+      totalReceived,
+      totalRemitted: totalCustodySettled,
+      remainingCustody,
+      totalDelivered,
+      totalOrdersCount,
+      deliverySuccessRate,
+      totalInTransit,
+      courierExpenses: cExpenses,
+      courierOrders: cOrders
+    };
+  };
+
   useEffect(() => {
     if (roleLoading) return;
-    const q = query(collection(db, 'couriers'), orderBy('createdAt', 'desc'));
-    const unsub = onSnapshot(q, (snap) => {
+
+    // 1. Subscribe to Couriers
+    const qCouriers = query(collection(db, 'couriers'), orderBy('createdAt', 'desc'));
+    const unsubCouriers = onSnapshot(qCouriers, (snap) => {
       setCouriers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       setLoading(false);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'couriers');
     });
-    return unsub;
+
+    // 2. Subscribe to Orders (Smart Custody / Performance sync)
+    const unsubOrders = onSnapshot(collection(db, 'orders'), (snap) => {
+      setAllOrders(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (error) => {
+      console.error("Error loading orders:", error);
+    });
+
+    // 3. Subscribe to Expenses (Smart Custody sync)
+    const unsubExpenses = onSnapshot(collection(db, 'expenses'), (snap) => {
+      setAllExpenses(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (error) => {
+      console.error("Error loading expenses:", error);
+    });
+
+    return () => {
+      unsubCouriers();
+      unsubOrders();
+      unsubExpenses();
+    };
   }, [roleLoading]);
 
   const handleOpenEdit = (courier: any) => {
@@ -501,37 +585,34 @@ export default function Couriers() {
     .sort((a, b) => {
       if (sortBy === 'newest') return (b.createdAt || 0) - (a.createdAt || 0);
       if (sortBy === 'name-asc') return (a.fullName || '').localeCompare(b.fullName || '');
-      if (sortBy === 'balance-desc') return (b.walletBalance || 0) - (a.walletBalance || 0);
+      if (sortBy === 'balance-desc') {
+        return getCourierCustodyStats(b.id).remainingCustody - getCourierCustodyStats(a.id).remainingCustody;
+      }
       return 0;
     });
 
-  // Calculate detailed aggregates in real-time
-  const totalDelivered = courierOrders.filter(o => {
-    const status = o.orderStatus || o.order_status || '';
-    return status === 'تم التسليم';
-  }).length;
+  // Calculate detailed aggregates in real-time using the Smart Custody system
+  const activeStats = selectedCourier ? getCourierCustodyStats(selectedCourier.id) : null;
+  const totalDelivered = activeStats ? activeStats.totalDelivered : 0;
+  const totalInTransit = activeStats ? activeStats.totalInTransit : 0;
 
-  const totalInTransit = courierOrders.filter(o => {
-    const status = o.orderStatus || o.order_status || '';
-    return ['Shipped', 'In Transit', 'Out For Delivery', 'In Local Warehouse', 'وصل مركز التوزيع في اليمن'].includes(status);
-  }).length;
+  const totalCollectedFromCustomers = activeStats
+    ? activeStats.courierOrders
+        .filter(o => {
+          const status = o.orderStatus || o.order_status || '';
+          return o.deliveryCourierId === selectedCourier?.id && (status === 'تم التسليم' || status === 'Delivered');
+        })
+        .reduce((sum, o) => sum + (parseFloat(o.totalCostYER) || parseFloat(o.totalPrice) || 0) - (parseFloat(o.amountPaid) || parseFloat(o.paidAmount) || 0), 0)
+    : 0;
 
-  const totalCollectedFromCustomers = courierOrders
-    .filter(o => {
-      const status = o.orderStatus || o.order_status || '';
-      return o.deliveryCourierId === selectedCourier?.id && status === 'تم التسليم';
-    })
-    .reduce((sum, o) => sum + (parseFloat(o.totalCostYER) || parseFloat(o.totalPrice) || 0) - (parseFloat(o.amountPaid) || parseFloat(o.paidAmount) || 0), 0);
+  const totalAdvancesReceived = activeStats
+    ? activeStats.courierExpenses
+        .filter(e => e.recipientId === selectedCourier?.id && e.type === 'Advance' && e.status === 'Approved')
+        .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0)
+    : 0;
 
-  const totalAdvancesReceived = courierExpenses
-    .filter(e => e.recipientId === selectedCourier?.id && e.type === 'Advance' && e.status === 'Approved')
-    .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
-
-  const totalRemittedToBox = courierExpenses
-    .filter(e => e.recipientId === selectedCourier?.id && e.type === 'Custody' && e.status === 'Settled')
-    .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
-
-  const remainingCustodyInHand = totalCollectedFromCustomers + totalAdvancesReceived - totalRemittedToBox;
+  const totalRemittedToBox = activeStats ? activeStats.totalRemitted : 0;
+  const remainingCustodyInHand = activeStats ? activeStats.remainingCustody : 0;
 
   if (loading || roleLoading) {
     return (
@@ -630,96 +711,123 @@ export default function Couriers() {
 
         {/* Deliveries Ledger Table */}
         <div className="overflow-x-auto">
-          <table className="w-full text-right">
+          <table className="w-full text-right animate-fade-in">
             <thead className="bg-[#0a0a0d] text-slate-500 text-[10px] font-black uppercase tracking-wider border-b border-slate-850">
               <tr>
                 <th className="p-4">{isAr ? 'الترخيص والرمز' : 'Licence Code'}</th>
                 <th className="p-4">{isAr ? 'ممثل التوصيل والمدينة' : 'Courier / Location'}</th>
                 <th className="p-4">{isAr ? 'الجهاز والبريد' : 'Contact Endpoint'}</th>
-                <th className="p-4 text-center">{isAr ? 'رصيد الذمة' : 'Credit Balance'}</th>
+                <th className="p-4 text-center">{isAr ? 'رصيد العهدة المعلقة' : 'Outstanding Custody'}</th>
                 <th className="p-4 text-center">{isAr ? 'العمولة الافتراضية' : 'Com Rate'}</th>
                 <th className="p-4 text-center">{isAr ? 'الحالة' : 'Activity'}</th>
                 <th className="p-4 text-left">{isAr ? 'الإجراءات والتقرير' : 'Actions'}</th>
               </tr>
             </thead>
             <tbody className="text-xs divide-y divide-slate-850 bg-black/10">
-              {filteredCouriers.map(courier => (
-                <tr key={courier.id} className={`hover:bg-slate-950/40 transition-colors ${courier.disabled ? 'opacity-80' : ''}`}>
-                  <td className="p-4 font-mono font-black text-slate-400">
-                    <span className="bg-slate-900 border border-slate-800 text-[#d4af37] px-2.5 py-0.5 rounded-lg text-[10px]">
-                      {courier.courierCustomId || 'ALX-CR-XXX'}
-                    </span>
-                  </td>
-                  <td className="p-4" onClick={() => handleOpenDetails(courier)}>
-                    <div className="flex items-center gap-3 cursor-pointer group">
-                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#121215] to-[#070708] border border-slate-800 text-[#d4af37] flex items-center justify-center font-black text-xs shrink-0 group-hover:border-[#d4af37] transition-all">
-                        {courier.fullName?.substring(0, 2)}
-                      </div>
-                      <div className="flex flex-col text-start">
-                        <span className="font-extrabold text-white group-hover:text-[#d4af37] transition-colors">{courier.fullName}</span>
-                        <span className="text-[10px] text-slate-500 font-bold mt-0.5">{courier.address || '—'}</span>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="p-4 text-start">
-                    <div className="flex flex-col">
-                      <span className="text-slate-300 font-mono font-bold" dir="ltr">{courier.phone || '—'}</span>
-                      <span className="text-slate-500 text-[10px] font-mono mt-0.5" dir="ltr">{courier.email || '—'}</span>
-                    </div>
-                  </td>
-                  <td className="p-4 text-center font-mono font-black text-white">
-                    YER {(courier.walletBalance || 0).toLocaleString()}
-                  </td>
-                  <td className="p-4 text-center text-slate-400 font-black">
-                    {courier.commissionRate || 0}%
-                  </td>
-                  <td className="p-4 text-center">
-                    {courier.disabled ? (
-                      <span className="bg-rose-950/30 text-rose-450 border border-rose-950/60 px-2.5 py-1 rounded text-[9px] font-black uppercase tracking-tighter">
-                        {isAr ? 'معطل' : 'INACTIVE'}
+              {filteredCouriers.map(courier => {
+                const cStats = getCourierCustodyStats(courier.id);
+                return (
+                  <tr key={courier.id} className={`hover:bg-slate-950/40 transition-colors ${courier.disabled ? 'opacity-80' : ''}`}>
+                    <td className="p-4 font-mono font-black text-slate-400">
+                      <span className="bg-slate-900 border border-slate-800 text-[#d4af37] px-2.5 py-0.5 rounded-lg text-[10px]">
+                        {courier.courierCustomId || 'ALX-CR-XXX'}
                       </span>
-                    ) : (
-                      <span className="bg-emerald-950/30 text-emerald-450 border border-emerald-950/60 px-2.5 py-1 rounded text-[9px] font-black uppercase tracking-tighter animate-pulse">
-                        {isAr ? 'نشط' : 'ACTIVE'}
-                      </span>
-                    )}
-                  </td>
-                  <td className="p-4 text-left flex justify-end gap-2">
-                    <button 
-                      onClick={() => handleOpenDetails(courier)} 
-                      title="سجلات التسليم والتوريدات المالية للمندوب" 
-                      className="text-[#d4af37] bg-[#d4af37]/5 hover:bg-[#d4af37]/15 border border-[#d4af37]/15 p-2 rounded-xl transition duration-300"
-                    >
-                      <Receipt className="w-4 h-4" />
-                    </button>
-                    {role === 'Admin' || hasPermission('edit_couriers') ? (
-                      <>
-                        <button 
-                          onClick={() => handleToggleStatus(courier)} 
-                          title={courier.disabled ? (isAr ? 'تنشيط المندوب' : 'Activate') : (isAr ? 'تعطيل الحساب' : 'Deactivate')}
-                          className={`p-2 rounded-xl border transition-all ${courier.disabled ? 'text-emerald-400 bg-emerald-950/10 border-emerald-950/30' : 'text-rose-450 bg-rose-950/10 border-rose-950/40'}`}
-                        >
-                          {courier.disabled ? <UserCheck className="w-4 h-4" /> : <UserX className="w-4 h-4" />}
-                        </button>
-                        <button 
-                          onClick={() => handleOpenEdit(courier)} 
-                          className="text-white hover:text-[#d4af37] bg-slate-900 border border-slate-800 p-2 rounded-xl transition-all"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                      </>
-                    ) : null}
-                    {hasPermission('delete_couriers') && (
+                    </td>
+                    <td className="p-4" onClick={() => handleOpenDetails(courier)}>
+                      <div className="flex items-center gap-3 cursor-pointer group">
+                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#121215] to-[#070708] border border-slate-800 text-[#d4af37] flex items-center justify-center font-black text-xs shrink-0 group-hover:border-[#d4af37] transition-all">
+                          {courier.fullName?.substring(0, 2)}
+                        </div>
+                        <div className="flex flex-col text-start">
+                          <span className="font-extrabold text-white group-hover:text-[#d4af37] transition-colors flex items-center gap-1.5">
+                            {courier.fullName}
+                            {cStats.remainingCustody > 0 && (
+                              <span className="inline-block w-2 w-2 rounded-full bg-rose-500 animate-pulse" title={isAr ? "لديه عهدة معلقة غير موردة" : "Has unremitted custody!"}></span>
+                            )}
+                          </span>
+                          <div className="flex flex-wrap items-center gap-1.5 mt-0.5 text-[9px] text-slate-500 font-bold">
+                            <span>{courier.address || '—'}</span>
+                            <span className="text-slate-800">•</span>
+                            <span className="text-emerald-450 font-mono">
+                              {cStats.totalDelivered} {isAr ? 'طلب مُستلم' : 'Delivered'}
+                            </span>
+                            <span className="text-slate-800">•</span>
+                            <span className="text-[#d4af37] font-mono">
+                              {cStats.deliverySuccessRate}% {isAr ? 'نجاح' : 'Success'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="p-4 text-start">
+                      <div className="flex flex-col">
+                        <span className="text-slate-300 font-mono font-bold" dir="ltr">{courier.phone || '—'}</span>
+                        <span className="text-slate-500 text-[10px] font-mono mt-0.5" dir="ltr">{courier.email || '—'}</span>
+                      </div>
+                    </td>
+                    <td className="p-4 text-center font-mono font-black border-slate-850">
+                      <div className="inline-flex flex-col items-center select-none" onClick={() => handleOpenDetails(courier)}>
+                        <span className={cStats.remainingCustody > 0 ? "text-rose-450 font-black bg-rose-950/20 border border-rose-950/40 px-2.5 py-1 rounded-lg cursor-pointer hover:bg-rose-950/30 transition-all font-mono" : "text-emerald-450 font-black bg-emerald-950/10 border border-emerald-950/20 px-2.5 py-1 rounded-lg cursor-pointer hover:bg-emerald-100/10 transition-all font-mono"}>
+                          {cStats.remainingCustody.toLocaleString()} <span className="text-[9px] font-sans text-slate-500">YER</span>
+                        </span>
+                        {cStats.remainingCustody > 0 && (
+                          <span className="text-[8px] text-rose-500/80 font-sans font-black mt-1 animate-pulse uppercase tracking-wider block">
+                            {isAr ? '⚠️ غير موردة' : '⚠️ UNREMITTED'}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="p-4 text-center text-slate-400 font-black">
+                      {courier.commissionRate || 0}%
+                    </td>
+                    <td className="p-4 text-center">
+                      {courier.disabled ? (
+                        <span className="bg-rose-950/30 text-rose-450 border border-rose-950/60 px-2.5 py-1 rounded text-[9px] font-black uppercase tracking-tighter">
+                          {isAr ? 'معطل' : 'INACTIVE'}
+                        </span>
+                      ) : (
+                        <span className="bg-emerald-950/30 text-emerald-450 border border-emerald-950/60 px-2.5 py-1 rounded text-[9px] font-black uppercase tracking-tighter animate-pulse">
+                          {isAr ? 'نشط' : 'ACTIVE'}
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-4 text-left flex justify-end gap-2">
                       <button 
-                        onClick={() => handleDeleteCourier(courier.id, courier.fullName)} 
-                        className="text-rose-500 hover:bg-rose-950/20 bg-rose-950/10 border border-rose-950/45 p-2 rounded-xl transition-all"
+                        onClick={() => handleOpenDetails(courier)} 
+                        title="سجلات التسليم والتوريدات المالية للمندوب" 
+                        className="text-[#d4af37] bg-[#d4af37]/5 hover:bg-[#d4af37]/15 border border-[#d4af37]/15 p-2 rounded-xl transition duration-300"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Receipt className="w-4 h-4" />
                       </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                      {role === 'Admin' || hasPermission('edit_couriers') ? (
+                        <>
+                          <button 
+                            onClick={() => handleToggleStatus(courier)} 
+                            title={courier.disabled ? (isAr ? 'تنشيط المندوب' : 'Activate') : (isAr ? 'تعطيل الحساب' : 'Deactivate')}
+                            className={`p-2 rounded-xl border transition-all ${courier.disabled ? 'text-emerald-400 bg-emerald-950/10 border-emerald-950/30' : 'text-rose-450 bg-rose-950/10 border-rose-950/40'}`}
+                          >
+                            {courier.disabled ? <UserCheck className="w-4 h-4" /> : <UserX className="w-4 h-4" />}
+                          </button>
+                          <button 
+                            onClick={() => handleOpenEdit(courier)} 
+                            className="text-white hover:text-[#d4af37] bg-slate-900 border border-slate-800 p-2 rounded-xl transition-all"
+                          >
+                            <Edit2 className="w-4 h-4 text-slate-400" />
+                          </button>
+                        </>
+                      ) : null}
+                      {hasPermission('delete_couriers') && (
+                        <button 
+                          onClick={() => handleDeleteCourier(courier.id, courier.fullName)} 
+                          className="text-rose-500 hover:bg-rose-950/20 bg-rose-950/10 border border-rose-950/45 p-2 rounded-xl transition-all"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
               {filteredCouriers.length === 0 && (
                 <tr>
                    <td colSpan={7} className="p-16 text-center text-slate-600 font-bold uppercase tracking-widest font-mono text-[10px]">
@@ -782,39 +890,101 @@ export default function Couriers() {
                 </div>
               )}
 
+              {/* Smart Unremitted Custody Alert Warning */}
+              {remainingCustodyInHand > 0 && (
+                <div className="bg-rose-955/15 border border-rose-500/35 p-5 rounded-2xl text-start flex items-start gap-4 animate-pulse">
+                  <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-450 shrink-0">
+                    <ShieldAlert className="w-5 h-5 animate-bounce" />
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-black text-rose-400 uppercase tracking-wide flex items-center gap-1.5">
+                      <AlertTriangle className="w-4 h-4 animate-spin-slow" />
+                      {isAr ? 'تنبيه عهد وقيم معلقة تحت التحصيل غير موردة!' : 'ALERT: ACTIVE UNREMITTED COURIER CUSTODY'}
+                    </h4>
+                    <p className="text-slate-300 text-[11px] font-bold leading-relaxed">
+                      {isAr 
+                        ? `يحمل المندوب حالياً مبالغ مالية متبقية بعهدة ذمته بقيمة (${remainingCustodyInHand.toLocaleString()} YER) مستحقة لخزينة الشركة ولم يوردها بعد. يرجى مراجعة وتصفية كافة مستحقات الشحن والعهد المفتوحة لتجنب التراكم.`
+                        : `This courier is currently holding an outstanding unremitted custody of (${remainingCustodyInHand.toLocaleString()} YER) due to the company cash box. Please initiate box remittance with the audited staff immediately.`}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Courier Performance Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-gradient-to-br from-[#121215] to-[#070708] p-4 rounded-2xl border border-slate-850 shadow-md">
                   <span className="text-[9px] uppercase font-black tracking-wider text-slate-500 block mb-3 text-start">{isAr ? 'أداء وكفاءة التوصيل' : 'Transit KPI'}</span>
                   <div className="flex items-baseline gap-1.5 text-start">
                     <span className="text-xl font-black text-[#d4af37]">{totalDelivered}</span>
-                    <span className="text-[10px] font-bold text-slate-500">مسلم ناجح</span>
+                    <span className="text-[10px] font-bold text-slate-500">{isAr ? 'مسلم ناجح' : 'Delivered success'}</span>
                   </div>
                   <div className="text-[9px] text-amber-500 font-bold mt-1 text-start">
-                    {totalInTransit} قيد التوصيل حالياً
+                    {totalInTransit} {isAr ? 'قيد التوصيل حالياً' : 'Current Handover'}
                   </div>
                 </div>
 
                 <div className="bg-gradient-to-br from-[#121215] to-[#070708] p-4 rounded-2xl border border-slate-850 shadow-md text-start">
-                  <span className="text-[9px] uppercase font-black tracking-wider text-slate-500 block mb-3">{isAr ? 'مبالغ التحصيل للطلبات' : 'Collected Cash'}</span>
-                  <div className="text-base font-mono font-black text-emerald-450">{totalCollectedFromCustomers.toLocaleString()} YER</div>
-                  <span className="text-[9px] text-slate-505 font-bold block mt-1">العهد المستلمة من الزبائن</span>
+                  <span className="text-[9px] uppercase font-black tracking-wider text-slate-500 block mb-3">{isAr ? 'المبالغ التي استلمها المندوب' : 'Total Custody Received'}</span>
+                  <div className="text-base font-mono font-black text-amber-400">{(totalCollectedFromCustomers + totalAdvancesReceived).toLocaleString()} YER</div>
+                  <span className="text-[9px] text-slate-500 font-bold block mt-1">{isAr ? 'يشمل نقد الشحنات والعهد والسلف' : 'Includes COD cash, custody & advances'}</span>
                 </div>
 
                 <div className="bg-gradient-to-br from-[#121215] to-[#070708] p-4 rounded-2xl border border-slate-850 shadow-md text-start">
-                  <span className="text-[9px] uppercase font-black tracking-wider text-slate-500 block mb-3">{isAr ? 'السلف والمصروفات والعهد' : 'Advances & Custody'}</span>
-                  <div className="text-xs font-black text-slate-300">سلف: {totalAdvancesReceived.toLocaleString()} YER</div>
-                  <div className="text-[9px] text-slate-500 font-bold mt-1">تم تسوية وتوريد: {totalRemittedToBox.toLocaleString()} YER</div>
+                  <span className="text-[9px] uppercase font-black tracking-wider text-slate-500 block mb-3">{isAr ? 'المبالغ الموردة للصندوق' : 'Remitted To Fund'}</span>
+                  <div className="text-base font-mono font-black text-emerald-450">{totalRemittedToBox.toLocaleString()} YER</div>
+                  <span className="text-[9px] text-slate-500 font-bold block mt-1">{isAr ? 'عهد مسواة وموردة رسمياً' : 'Cleared / discharged custody'}</span>
                 </div>
 
                 <div className={`p-4 rounded-2xl border text-start ${remainingCustodyInHand > 0 ? 'bg-rose-950/10 border-rose-950/40' : 'bg-[#121215] border-slate-850'}`}>
                   <span className="text-[9px] font-black uppercase tracking-wider text-slate-500 block mb-3">
-                    {remainingCustodyInHand > 0 ? '⚠️ عهدة معلقة غير موردة' : '✅ العهدة مصفاة بالكامل'}
+                    {remainingCustodyInHand > 0 ? '⚠️ المبالغ المتبقية بعهدته' : '✅ العهدة مصفاة بالكامل'}
                   </span>
-                  <div className="text-base font-mono font-black mb-1 text-rose-400">
+                  <div className={`text-base font-mono font-black mb-1 ${remainingCustodyInHand > 0 ? 'text-rose-450' : 'text-emerald-450'}`}>
                     {remainingCustodyInHand.toLocaleString()} <span className="text-[9px] font-sans text-slate-500 font-normal">YER</span>
                   </div>
-                  <span className="text-[9px] text-slate-504 font-bold block">بذمة المندوب ومستحقة لخزانة الشركة</span>
+                  <span className="text-[9px] text-slate-500 font-bold block">{isAr ? 'عهد وذمم متبقية بذمة المندوب' : 'Outstanding client-side balance'}</span>
+                </div>
+              </div>
+
+              {/* Logistics Performance Analytics Sheet */}
+              <div className="bg-[#121215] p-5 rounded-2xl border border-slate-850 text-start space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-extrabold text-xs text-[#d4af37] uppercase tracking-wider mb-1">
+                      {isAr ? '📈 تقارير ومعدلات أداء المندوب الذكية' : '📈 COURIER PERFORMANCE REPORT & KPI OUTLOOK'}
+                    </h4>
+                    <p className="text-[10px] text-slate-550 font-bold">{isAr ? 'تنقيب وتحليل فترات الشحن، والتسوية، والكفاءة العامة لنظام العهد' : 'Monitor delivery success rates, handover ratios, and physical turnovers'}</p>
+                  </div>
+                  <div className="bg-[#d4af37]/10 border border-[#d4af37]/20 text-[#d4af37] text-xs px-3 py-1 rounded-xl font-mono font-black">
+                    {activeStats ? `${activeStats.deliverySuccessRate}%` : '0%'}
+                  </div>
+                </div>
+
+                {/* Progress bar visual indicator */}
+                <div className="w-full bg-slate-900 border border-slate-855 rounded-full h-3 overflow-hidden shadow-inner">
+                  <div 
+                    className="bg-gradient-to-r from-yellow-600 to-[#d4af37] h-3 rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(212,175,55,0.3)]" 
+                    style={{ width: `${activeStats ? activeStats.deliverySuccessRate : 0}%` }}
+                  ></div>
+                </div>
+
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-center">
+                  <div className="p-3.5 bg-black/40 border border-slate-850 rounded-xl">
+                    <span className="text-[9px] text-slate-500 uppercase tracking-widest block mb-1.5 font-bold">{isAr ? 'مجموع الشحنات الموكلة' : 'Total Assigned'}</span>
+                    <span className="text-base font-black text-white font-mono">{activeStats?.totalOrdersCount || 0}</span>
+                  </div>
+                  <div className="p-3.5 bg-black/40 border border-slate-850 rounded-xl">
+                    <span className="text-[9px] text-slate-500 uppercase tracking-widest block mb-1.5 font-bold">{isAr ? 'تم تسليمها للعميل' : 'Delivered Status'}</span>
+                    <span className="text-base font-black text-emerald-450 font-mono">{activeStats?.totalDelivered || 0}</span>
+                  </div>
+                  <div className="p-3.5 bg-black/40 border border-slate-850 rounded-xl">
+                    <span className="text-[9px] text-slate-500 uppercase tracking-widest block mb-1.5 font-bold">{isAr ? 'قيد النقل والتوصيل' : 'In Hand / Shipped'}</span>
+                    <span className="text-base font-black text-cyan-400 font-mono">{activeStats?.totalInTransit || 0}</span>
+                  </div>
+                  <div className="p-3.5 bg-black/40 border border-slate-850 rounded-xl">
+                    <span className="text-[9px] text-[#d4af37]/80 uppercase tracking-widest block mb-1.5 font-bold">{isAr ? 'مجموع فاعلية التسليم' : 'Fulfillment %'}</span>
+                    <span className="text-base font-black text-[#d4af37] font-mono">{activeStats?.deliverySuccessRate || 0}%</span>
+                  </div>
                 </div>
               </div>
 
