@@ -16,6 +16,8 @@ export default function Orders() {
   const { role, hasPermission, profile, loading: roleLoading } = useRole();
   const canManageOrders = role === 'Admin' || hasPermission('edit_orders');
   const canAddOrders = role === 'Admin' || hasPermission('add_orders');
+  const canDeleteOrders = role === 'Admin' || hasPermission('delete_orders');
+  const canDeletePaidOrders = role === 'Admin' || hasPermission('delete_paid_orders');
   const isAr = settings.language === 'ar';
 
   // Core Data States
@@ -956,8 +958,16 @@ export default function Orders() {
     }
 
     // Prevent deletion if status is beyond "تم تسجيل الطلب" / "Pending" or any payments exist
-    const isSensitive = (order.orderStatus !== 'تم تسجيل الطلب' && order.orderStatus !== 'Pending' && order.orderStatus !== 'تم تسجيل الطلب (قيد المعالجة)') || 
+    const isSensitive = (order.orderStatus !== 'تم تسجيل الطلب' && order.orderStatus !== 'Pending' && order.orderStatus !== 'تم تسجيل الطلب (قيد المعالجة)') ||
                         parseFloat(order.amountPaid || 0) > 0;
+
+    // Check permission for deleting paid orders
+    if (isSensitive && parseFloat(order.amountPaid || 0) > 0 && !canDeletePaidOrders) {
+      alert(isAr
+        ? 'عذراً، ليس لديك صلاحية حذف الطلبات المدفوعة'
+        : 'Sorry, you do not have permission to delete paid orders.');
+      return;
+    }
 
     if (isSensitive && settings.protectSensitiveOrderDelete) {
       setOrderToDelete(order);
