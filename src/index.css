@@ -42,7 +42,6 @@
   --color-luxury-black: #f0f2f5;
   --color-luxury-dark: #e8eaed;
   --color-luxury-card: #ffffff;
-  --color-luxury-border: rgba(212, 175, 55, 0.25);
 }
 
 .light-mode body {
@@ -52,8 +51,6 @@
 
 /* Backgrounds */
 .light-mode .bg-luxury-black { background-color: #f0f2f5 !important; }
-.light-mode .bg-luxury-dark { background-color: #e8eaed !important; }
-.light-mode .bg-luxury-card { background-color: #ffffff !important; }
 .light-mode .bg-black\/40 { background-color: rgba(255,255,255,0.9) !important; }
 .light-mode .bg-black\/50 { background-color: rgba(255,255,255,0.95) !important; }
 .light-mode .bg-black\/60 { background-color: rgba(255,255,255,0.97) !important; }
@@ -68,61 +65,32 @@
 .light-mode .bg-slate-900\/40 { background-color: rgba(240,242,245,0.7) !important; }
 .light-mode .bg-slate-900\/30 { background-color: rgba(240,242,245,0.6) !important; }
 .light-mode .bg-slate-950\/20 { background-color: rgba(240,242,245,0.5) !important; }
-.light-mode .bg-\[\#0f0f12\] { background-color: #ffffff !important; }
-.light-mode .bg-\[\#141418\] { background-color: #fafbfc !important; }
-.light-mode .bg-\[\#16161a\] { background-color: #ffffff !important; }
-.light-mode .bg-\[\#1a1a1e\] { background-color: #f3f4f6 !important; }
-.light-mode .bg-\[\#1e1e22\] { background-color: #f9fafb !important; }
-.light-mode .bg-gray-950 { background-color: #f8f9fa !important; }
-.light-mode .bg-zinc-950 { background-color: #f8f9fa !important; }
-.light-mode .bg-neutral-950 { background-color: #f8f9fa !important; }
 
 /* Sidebar */
-.light-mode aside {
-  background-color: #ffffff !important;
+.light-mode aside { 
+  background-color: #ffffff !important; 
   border-color: rgba(212,175,55,0.2) !important;
-  box-shadow: 2px 0 8px rgba(0,0,0,0.05) !important;
 }
 .light-mode aside .bg-\[\#08080a\] { background-color: #f8f9fa !important; }
-.light-mode aside a { color: #374151 !important; }
-.light-mode aside a:hover { background-color: #f3f4f6 !important; }
-.light-mode aside a.text-gold-500,
-.light-mode aside a.text-luxury-gold { color: #b08120 !important; }
 .light-mode footer { background-color: #f0f2f5 !important; }
 
 /* Top navbar */
-.light-mode header {
+.light-mode header { 
   background-color: rgba(255,255,255,0.97) !important;
   border-color: rgba(212,175,55,0.15) !important;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06) !important;
 }
 
 /* Text Colors */
 .light-mode .text-white { color: #1a1a2e !important; }
-.light-mode .text-slate-100 { color: #1f2937 !important; }
-.light-mode .text-slate-200 { color: #1f2937 !important; }
 .light-mode .text-slate-300 { color: #374151 !important; }
 .light-mode .text-slate-400 { color: #4b5563 !important; }
 .light-mode .text-slate-500 { color: #6b7280 !important; }
 .light-mode .text-slate-600 { color: #374151 !important; }
-.light-mode .text-slate-700 { color: #1f2937 !important; }
-.light-mode .text-slate-800 { color: #111827 !important; }
-.light-mode .text-gray-300 { color: #374151 !important; }
-.light-mode .text-gray-400 { color: #4b5563 !important; }
-.light-mode .text-gray-500 { color: #6b7280 !important; }
-.light-mode .text-zinc-400 { color: #4b5563 !important; }
-.light-mode .text-zinc-500 { color: #6b7280 !important; }
 
 /* Borders */
 .light-mode .border-slate-850 { border-color: #e5e7eb !important; }
 .light-mode .border-slate-800 { border-color: #d1d5db !important; }
-.light-mode .border-slate-700 { border-color: #d1d5db !important; }
 .light-mode .border-slate-900 { border-color: #e5e7eb !important; }
-.light-mode .border-slate-700\/50 { border-color: #e5e7eb !important; }
-.light-mode .border-luxury-border { border-color: rgba(212,175,55,0.25) !important; }
-.light-mode .border-white\/10 { border-color: #e5e7eb !important; }
-.light-mode .border-white\/5 { border-color: #f3f4f6 !important; }
-.light-mode .border-white\/20 { border-color: #d1d5db !important; }
 
 /* Inputs in light mode */
 .light-mode input:not([type="checkbox"]):not([type="radio"]),
@@ -137,14 +105,6 @@
 .light-mode textarea:focus,
 .light-mode select:focus {
   border-color: #d4af37 !important;
-  box-shadow: 0 0 0 2px rgba(212,175,55,0.15) !important;
-}
-
-.light-mode input:disabled,
-.light-mode textarea:disabled,
-.light-mode select:disabled {
-  background-color: #f3f4f6 !important;
-  color: #9ca3af !important;
 }
 
 /* Card sections in light mode */
@@ -152,39 +112,6 @@
   background-color: #ffffff !important;
   border-color: #e5e7eb !important;
   box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-}
-.light-mode .glass-panel {
-  background: rgba(255,255,255,0.9) !important;
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(212,175,55,0.2) !important;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06) !important;
-}
-.light-mode .glass-panel-heavy {
-  background: rgba(255,255,255,0.95) !important;
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(212,175,55,0.2) !important;
-}
-
-/* Tables in light mode */
-.light-mode table { border-color: #e5e7eb !important; }
-.light-mode th { color: #374151 !important; background-color: #f9fafb !important; }
-.light-mode td { color: #374151 !important; border-color: #e5e7eb !important; }
-.light-mode tr:nth-child(even) td { background-color: #f9fafb !important; }
-.light-mode tr:hover td { background-color: #f3f4f6 !important; }
-
-/* Modals in light mode */
-.light-mode .fixed.inset-0 { background-color: rgba(0,0,0,0.3) !important; }
-.light-mode [role="dialog"] {
-  background-color: #ffffff !important;
-  border-color: #e5e7eb !important;
-  box-shadow: 0 8px 30px rgba(0,0,0,0.12) !important;
-}
-
-/* Buttons in light mode - preserve gold/brand buttons */
-.light-mode button.bg-luxury-gold { color: #ffffff !important; }
-.light-mode button.bg-gold-500 { color: #ffffff !important; }
-.light-mode button:not(.bg-luxury-gold):not(.bg-gold-500):not(.bg-gold-600):not([class*="bg-red"]):not([class*="bg-green"]):not([class*="bg-emerald"]):not([class*="bg-blue"]):not([class*="bg-amber"]):not([class*="bg-orange"]) {
-  color: #374151 !important;
 }
 
 /* Main scrollable content */
@@ -194,17 +121,8 @@
 
 /* Scrollbar in light mode */
 .light-mode ::-webkit-scrollbar-track { background: #f0f2f5; }
-.light-mode ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 9999px; }
+.light-mode ::-webkit-scrollbar-thumb { background: #d1d5db; }
 .light-mode ::-webkit-scrollbar-thumb:hover { background: #d4af37; }
-
-/* Placeholder text in light mode */
-.light-mode ::placeholder { color: #9ca3af !important; }
-
-/* Badge/chip elements */
-.light-mode .bg-emerald-500\/10 { background-color: rgba(16,185,129,0.08) !important; }
-.light-mode .bg-amber-500\/10 { background-color: rgba(245,158,11,0.08) !important; }
-.light-mode .bg-red-500\/10 { background-color: rgba(239,68,68,0.08) !important; }
-.light-mode .bg-blue-500\/10 { background-color: rgba(59,130,246,0.08) !important; }
 
 /* ─────────────────────────────────────── */
 /* CUSTOM SCROLLBAR (DEFAULT DARK)        */

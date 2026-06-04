@@ -1,7 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, doc, updateDoc, addDoc, setDoc, deleteDoc, query, where, orderBy, or } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType, auth } from '../lib/firebase';
-import { Search, CreditCard as Edit2, X, Plus, UserX, UserCheck, Trash2, Truck, DollarSign, Receipt, Briefcase, History, MapPin, Package, CircleCheck as CheckCircle, Clock, User, Crown, Printer, ShieldAlert, Coins, Activity } from 'lucide-react';
+import { 
+  Search, 
+  Edit2, 
+  X, 
+  Plus, 
+  UserX, 
+  UserCheck, 
+  Trash2, 
+  Truck, 
+  DollarSign, 
+  Receipt, 
+  Briefcase, 
+  History, 
+  MapPin, 
+  Package, 
+  CheckCircle, 
+  Clock, 
+  User, 
+  Crown,
+  Printer,
+  ShieldAlert,
+  Coins,
+  Activity
+} from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
@@ -13,13 +36,6 @@ export default function Couriers() {
   const { settings, t } = useSettings();
   const [couriers, setCouriers] = useState<any[]>([]);
   const { role, hasPermission, profile, loading: roleLoading } = useRole();
-
-  // Permission checks
-  const canViewCouriers = role === 'Admin' || hasPermission('view_couriers');
-  const canAddCouriers = role === 'Admin' || hasPermission('add_couriers');
-  const canEditCouriers = role === 'Admin' || hasPermission('edit_couriers');
-  const canDeleteCouriers = role === 'Admin' || hasPermission('delete_couriers');
-
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -525,7 +541,7 @@ export default function Couriers() {
     );
   }
 
-  if (!canViewCouriers) {
+  if (!hasPermission('view_couriers') && role !== 'Admin') {
     return (
       <div className="flex flex-col items-center justify-center p-12 bg-gradient-to-br from-[#121215] to-[#070708] rounded-3xl border border-slate-850 shadow-xl text-center select-none">
         <ShieldAlert className="w-16 h-16 text-rose-500 mb-6 animate-pulse" />
@@ -564,14 +580,14 @@ export default function Couriers() {
             <Activity className="w-4 h-4" /> {isAr ? 'تصدير CSV' : 'Export CSV'}
           </button>
 
-          {canAddCouriers && (
-            <button
-              onClick={() => setIsAddModalOpen(true)}
+          {role === 'Admin' || hasPermission('add_couriers') ? (
+            <button 
+              onClick={() => setIsAddModalOpen(true)} 
               className="bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black px-5 py-2.5 rounded-xl flex items-center gap-2 font-black text-xs transition transform active:scale-95 shadow-md shadow-yellow-950/20 cursor-pointer"
             >
               <Plus className="w-4 h-4"/> {isAr ? 'مندوب جديد' : 'New Courier'}
             </button>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -676,10 +692,10 @@ export default function Couriers() {
                     >
                       <Receipt className="w-4 h-4" />
                     </button>
-                    {canEditCouriers && (
+                    {role === 'Admin' || hasPermission('edit_couriers') ? (
                       <>
-                        <button
-                          onClick={() => handleToggleStatus(courier)}
+                        <button 
+                          onClick={() => handleToggleStatus(courier)} 
                           title={courier.disabled ? (isAr ? 'تنشيط المندوب' : 'Activate') : (isAr ? 'تعطيل الحساب' : 'Deactivate')}
                           className={`p-2 rounded-xl border transition-all ${courier.disabled ? 'text-emerald-400 bg-emerald-950/10 border-emerald-950/30' : 'text-rose-450 bg-rose-950/10 border-rose-950/40'}`}
                         >
@@ -692,8 +708,8 @@ export default function Couriers() {
                           <Edit2 className="w-4 h-4" />
                         </button>
                       </>
-                    )}
-                    {canDeleteCouriers && (
+                    ) : null}
+                    {hasPermission('delete_couriers') && (
                       <button 
                         onClick={() => handleDeleteCourier(courier.id, courier.fullName)} 
                         className="text-rose-500 hover:bg-rose-950/20 bg-rose-950/10 border border-rose-950/45 p-2 rounded-xl transition-all"

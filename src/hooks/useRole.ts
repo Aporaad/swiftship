@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, db } from '../lib/firebase';
-import { DEFAULT_ROLE_PERMISSIONS, PermissionKey } from '../lib/permissions';
 
 export function useRole() {
   const [role, setRole] = useState<string | null>(null);
@@ -94,7 +93,11 @@ export function useRole() {
               setPermissions(roleDoc.data().permissions || []);
             } else {
               // Default fallback permissions if role doc doesn't exist yet
-              const defaults = DEFAULT_ROLE_PERMISSIONS;
+              const defaults: Record<string, string[]> = {
+                'Employee': ['view_dashboard', 'view_orders', 'add_orders', 'edit_orders', 'update_order_status', 'print_orders', 'view_customers', 'add_customers', 'edit_customers', 'view_couriers', 'add_couriers', 'edit_couriers', 'view_sources', 'add_sources', 'edit_sources', 'view_notifications', 'notify_orders', 'notify_system'],
+                'Accountant': ['view_dashboard', 'view_orders', 'view_finance', 'add_finance', 'edit_finance', 'view_sources', 'add_sources', 'edit_sources', 'view_expenses', 'add_expenses', 'edit_expenses', 'view_statistics'],
+                'Courier': ['view_orders', 'update_order_status']
+              };
               setPermissions(defaults[userData.role] || []);
             }
             setLoading(false);
@@ -166,7 +169,7 @@ export function useRole() {
     return () => unsub();
   }, [user]);
 
-  const hasPermission = (permission: string): boolean => {
+  const hasPermission = (permission: string) => {
     if (permissions.includes('*')) return true;
     return permissions.includes(permission);
   };

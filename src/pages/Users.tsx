@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, doc, updateDoc, setDoc, deleteDoc, query, where, getDocs } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType, auth } from '../lib/firebase';
-import { Search, CreditCard as Edit2, X, Plus, UserX, UserCheck, Trash2, Users as UsersIcon, Shield, Lock, Eye, EyeOff, Crown, ShieldAlert, Coins } from 'lucide-react';
+import { Search, Edit2, X, Plus, UserX, UserCheck, Trash2, Users as UsersIcon, Shield, Lock, Eye, EyeOff, Crown, ShieldAlert, Coins } from 'lucide-react';
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
 import { notificationService } from '../services/notificationService';
-import { activityLogService } from '../services/activityLogService';
 import ConfirmModal from '../components/ConfirmModal';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
@@ -16,14 +15,6 @@ export default function Users() {
   const [users, setUsers] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
   const { role, hasPermission, profile: currentUserDoc, loading: roleLoading } = useRole();
-
-  // Permission checks
-  const canViewUsers = role === 'Admin' || hasPermission('view_users');
-  const canAddUsers = role === 'Admin' || hasPermission('add_users');
-  const canEditUsers = role === 'Admin' || hasPermission('edit_users');
-  const canDeleteUsers = role === 'Admin' || hasPermission('delete_users');
-  const canDisableUsers = role === 'Admin' || hasPermission('disable_users');
-
   const [showPassword, setShowPassword] = useState(false);
   const isAr = settings.language === 'ar';
 
@@ -147,11 +138,6 @@ export default function Users() {
         systemPin: editFormData.systemPin,
         updatedAt: Date.now()
       });
-      activityLogService.log('edit_user', editFormData.fullName || selectedUser.email, {
-        userId: selectedUser.id,
-        role: finalRole,
-        disabled: finalDisabled
-      });
       notificationService.notify({
         title: isAr ? 'تم تحديث بيانات المستخدم' : 'Staff parameters saved',
         message: isAr ? `تم تحديث ملف الموظف ${editFormData.fullName} بنجاح` : `User settings synchronized for ${editFormData.fullName}`,
@@ -186,10 +172,6 @@ export default function Users() {
             disabled: !user.disabled,
             updatedAt: Date.now()
           });
-          activityLogService.log(user.disabled ? 'enable_user' : 'disable_user', user.fullName || user.email, {
-            userId: user.id,
-            newStatus: !user.disabled
-          });
           notificationService.notify({
             title: isAr ? 'تم تحديث وضعية الحساب' : 'Security profile updated',
             message: isAr ? `وضع الحساب للموظف ${user.fullName} تم تعديله` : `Status applied to ${user.fullName}`,
@@ -220,7 +202,6 @@ export default function Users() {
       onConfirm: async () => {
         try {
           await deleteDoc(doc(db, 'users', id));
-          activityLogService.log('delete_user', name, { userId: id });
           notificationService.notify({
             title: isAr ? 'تم حذف المستخدم من السكايب' : 'Node Terminated',
             message: isAr ? `تم حذف الموظف ${name} وسحب ترخيصه` : `User ${name} purged from database`,
@@ -284,10 +265,6 @@ export default function Users() {
         title: isAr ? 'تم تقييد مستشار جديد' : 'Credentials Provisioned',
         message: isAr ? `تم دمج الموظف ${addFormData.fullName} وتوزيع ترخيصه كـ ${addFormData.role}` : `Credentials built for ${addFormData.fullName}`,
         type: 'success'
-      });
-      activityLogService.log('add_user', addFormData.fullName, {
-        email: addFormData.email,
-        role: addFormData.role
       });
       
       setIsAddModalOpen(false);
