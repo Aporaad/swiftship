@@ -16,6 +16,9 @@ export default function Orders() {
   const { role, hasPermission, profile, loading: roleLoading } = useRole();
   const canManageOrders = role === 'Admin' || hasPermission('edit_orders');
   const canAddOrders = role === 'Admin' || hasPermission('add_orders');
+  const canDeleteOrders = role === 'Admin' || hasPermission('delete_orders');
+  const canDeletePaidOrders = role === 'Admin' || hasPermission('delete_paid_orders');
+  const canEditExchangeRates = role === 'Admin' || hasPermission('edit_exchange_rates');
   const isAr = settings.language === 'ar';
 
   // Core Data States
@@ -2979,7 +2982,7 @@ export default function Orders() {
                     <input
                       type="number"
                       value={formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER}
-                      disabled={role !== 'Admin' && !hasPermission('edit_exchange_rates')}
+                      disabled={!canEditExchangeRates}
                       onChange={(e) => {
                         const val = parseFloat(e.target.value) || 1;
                         if (formData.currency === 'USD') {

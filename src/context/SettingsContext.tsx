@@ -2,7 +2,6 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { doc, onSnapshot, setDoc, collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { translations, Language, TranslationKey } from '../translations';
-import { PERMISSION_LABELS, PERMISSION_CATEGORIES, DEFAULT_ROLE_PERMISSIONS } from '../lib/permissions';
 
 // Custom currency definition
 export interface CustomCurrency {

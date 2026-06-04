@@ -1,27 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, addDoc, doc, updateDoc, onSnapshot, deleteDoc, query, where, orderBy, getDocs } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { 
-  Plus, 
-  Search, 
-  Edit2, 
-  Trash2, 
-  X, 
-  User, 
-  Phone, 
-  Mail, 
-  MapPin, 
-  Receipt, 
-  DollarSign, 
-  Package, 
-  AlertCircle, 
-  Crown, 
-  Coins, 
-  Check, 
-  Printer,
-  ShieldAlert,
-  HelpCircle
-} from 'lucide-react';
+import { Plus, Search, CreditCard as Edit2, Trash2, X, User, Phone, Mail, MapPin, Receipt, DollarSign, Package, CircleAlert as AlertCircle, Crown, Coins, Check, Printer, ShieldAlert, Circle as HelpCircle } from 'lucide-react';
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
 import { notificationService } from '../services/notificationService';
@@ -31,6 +11,13 @@ import ConfirmModal from '../components/ConfirmModal';
 export default function Customers() {
   const { role, hasPermission, loading: roleLoading } = useRole();
   const { settings, t } = useSettings();
+
+  // Permission checks
+  const canViewCustomers = role === 'Admin' || hasPermission('view_customers');
+  const canAddCustomers = role === 'Admin' || hasPermission('add_customers');
+  const canEditCustomers = role === 'Admin' || hasPermission('edit_customers');
+  const canDeleteCustomers = role === 'Admin' || hasPermission('delete_customers');
+
   const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -214,7 +201,7 @@ export default function Customers() {
     );
   }
 
-  if (!hasPermission('view_customers') && role !== 'Admin') {
+  if (!canViewCustomers) {
     return (
       <div className="flex flex-col items-center justify-center p-12 bg-gradient-to-br from-[#121215] to-[#070708] rounded-3xl border border-slate-850 shadow-xl text-center select-none">
         <ShieldAlert className="w-16 h-16 text-rose-500 mb-6 animate-pulse" />
@@ -238,14 +225,14 @@ export default function Customers() {
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{isAr ? 'قاعدة بيانات عملاء النظام • تتبع العهد والديون والتوريدات ماليًا' : 'System customer database • Debt logs'}</p>
           </div>
         </div>
-        {role === 'Admin' || hasPermission('add_customers') ? (
+        {canAddCustomers && (
           <button 
             onClick={handleOpenAdd}
             className="bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black px-6 py-2.5 rounded-xl flex items-center gap-2 font-black text-sm transition transform active:scale-95 shadow-md shadow-yellow-950/20"
           >
             <Plus className="w-4 h-4" /> {isAr ? 'إضافة عميل جديد' : 'Add New Customer'}
           </button>
-        ) : null}
+        )}
       </div>
 
       {/* Main Customers Hub Grid */}
@@ -304,15 +291,15 @@ export default function Customers() {
                       >
                         <Receipt className="w-4 h-4" />
                       </button>
-                      {role === 'Admin' || hasPermission('edit_customers') ? (
+                      {canEditCustomers && (
                         <>
-                          <button 
-                            onClick={() => handleOpenEdit(customer)} 
+                          <button
+                            onClick={() => handleOpenEdit(customer)}
                             className="text-white hover:text-[#d4af37] bg-slate-900 border border-slate-800 p-2 rounded-xl transition-all"
                           >
                             <Edit2 className="w-4 h-4" />
                           </button>
-                          {hasPermission('delete_customers') && (
+                          {canDeleteCustomers && (
                             <button 
                               onClick={() => handleDeleteCustomer(customer.id, customer.fullName || 'العميل')} 
                               className="text-rose-500 hover:bg-rose-950/20 bg-rose-950/10 border border-rose-950/45 p-2 rounded-xl transition-all"
@@ -321,7 +308,7 @@ export default function Customers() {
                             </button>
                           )}
                         </>
-                      ) : null}
+                      )}
                     </td>
                   </tr>
                 ))}
