@@ -7,10 +7,7 @@ import { notificationService } from '../services/notificationService';
 import { activityLogService } from '../services/activityLogService';
 import { whatsappService } from '../services/whatsappService';
 import ConfirmModal from '../components/ConfirmModal';
-import { 
-  Plus, Search, Edit2, Truck, Activity, Trash2, DollarSign, 
-  CreditCard, Printer, Calculator, Package, MapPin, X, AlertCircle, RefreshCw, UserPlus, Eye
-} from 'lucide-react';
+import { Plus, Search, CreditCard as Edit2, Truck, Activity, Trash2, DollarSign, CreditCard, Printer, Calculator, Package, MapPin, X, CircleAlert as AlertCircle, RefreshCw, UserPlus, Eye } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import QRCode from 'qrcode';
 
@@ -801,6 +798,8 @@ export default function Orders() {
         currency: formData.currency,
         exchangeRateYER: formData.exchangeRateYER,
         exchangeRateUSD: formData.exchangeRateUSD,
+        exchangeRateAtCreation: formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER,
+        exchangeRateDate: new Date().toISOString(),
         bankCommissionRate: formData.bankCommissionRate,
         companyProfitRate: formData.companyProfitRate,
         packagingFee: parseFloat(formData.packagingFee as any) || 0,
@@ -954,14 +953,20 @@ export default function Orders() {
 
   // Delete Order with Admin PIN Verification (Requirement 4: Security Settings)
   const handleDeleteOrderClick = (order: any) => {
-    if (role !== 'Admin') {
-      alert(isAr ? 'عذراً، حذف الطلبات مخصص للمدراء فقط' : 'Order deletion is restricted to Administrators.');
+    if (role !== 'Admin' && !canDeleteOrders) {
+      alert(isAr ? 'عذراً، ليس لديك صلاحية حذف الطلبات' : 'Sorry, you do not have permission to delete orders.');
       return;
     }
 
     // Prevent deletion if status is beyond "تم تسجيل الطلب" / "Pending" or any payments exist
-    const isSensitive = (order.orderStatus !== 'تم تسجيل الطلب' && order.orderStatus !== 'Pending' && order.orderStatus !== 'تم تسجيل الطلب (قيد المعالجة)') || 
+    const isSensitive = (order.orderStatus !== 'تم تسجيل الطلب' && order.orderStatus !== 'Pending' && order.orderStatus !== 'تم تسجيل الطلب (قيد المعالجة)') ||
                         parseFloat(order.amountPaid || 0) > 0;
+
+    // Check permission for deleting paid orders
+    if (isSensitive && parseFloat(order.amountPaid || 0) > 0 && role !== 'Admin' && !canDeletePaidOrders) {
+      alert(isAr ? 'عذراً، ليس لديك صلاحية حذف الطلبات المدفوعة' : 'Sorry, you do not have permission to delete paid orders.');
+      return;
+    }
 
     if (isSensitive && settings.protectSensitiveOrderDelete) {
       setOrderToDelete(order);
@@ -2023,8 +2028,8 @@ export default function Orders() {
                       </button>
                     )}
 
-                    {role === 'Admin' && (
-                      <button 
+                    {(role === 'Admin' || canDeleteOrders) && (
+                      <button
                         onClick={() => handleDeleteOrderClick(ord)}
                         className="bg-rose-950/20 text-rose-400 hover:bg-rose-900 hover:text-white px-2.5 py-1.5 rounded-lg transition-all text-[10px] flex items-center gap-1 font-bold border border-rose-900/30 cursor-pointer"
                         title={isAr ? 'حذف هذا الطلب نهائياً' : 'Delete Order'}
@@ -2971,9 +2976,10 @@ export default function Orders() {
 
                   <div>
                     <label className="block text-[10px] text-slate-500 uppercase tracking-widest block leading-none mb-1.5">{isAr ? 'سعر الصرف (ريال يمني)' : 'Exchange Rate (YER)'}</label>
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       value={formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER}
+                      disabled={role !== 'Admin' && !hasPermission('edit_exchange_rates')}
                       onChange={(e) => {
                         const val = parseFloat(e.target.value) || 1;
                         if (formData.currency === 'USD') {
@@ -2982,7 +2988,7 @@ export default function Orders() {
                           setFormData({...formData, exchangeRateYER: val});
                         }
                       }}
-                      className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none font-mono text-[11px] text-center"
+                      className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none font-mono text-[11px] text-center disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                   </div>
                 </div>

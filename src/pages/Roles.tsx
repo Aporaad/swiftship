@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, doc, updateDoc, addDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { Search, Edit2, X, Plus, Trash2, Shield, CheckCircle2 } from 'lucide-react';
+import { Search, CreditCard as Edit2, X, Plus, Trash2, Shield, CircleCheck as CheckCircle2 } from 'lucide-react';
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
+import { activityLogService } from '../services/activityLogService';
+import { PERMISSION_LABELS, PERMISSION_CATEGORIES, PermissionKey } from '../lib/permissions';
 
 const AVAILABLE_PERMISSIONS = (t: any, lang: string) => [
   { id: 'view_dashboard', label: lang === 'ar' ? 'عرض لوحة التحكم والإحصائيات' : 'View Dashboard & Statistics', group: lang === 'ar' ? 'عام' : 'General' },
@@ -64,7 +66,20 @@ const AVAILABLE_PERMISSIONS = (t: any, lang: string) => [
 export default function Roles() {
   const { role: currentUserRole, hasPermission, loading: roleLoading } = useRole();
   const { settings, t } = useSettings();
-  const currentPermissions = AVAILABLE_PERMISSIONS(t, settings.language);
+
+  // Check permissions
+  const canManageRoles = currentUserRole === 'Admin' || hasPermission('manage_roles') || hasPermission('edit_role_permissions');
+
+  // Build permission list from centralized PERMISSION_LABELS + PERMISSION_CATEGORIES
+  const isAr = settings.language === 'ar';
+  const currentPermissions = Object.entries(PERMISSION_CATEGORIES).flatMap(([category, permKeys]) =>
+    permKeys.map(pId => ({
+      id: pId,
+      label: PERMISSION_LABELS[pId as PermissionKey]?.[isAr ? 'ar' : 'en'] || pId,
+      group: category.includes('/') ? category.split('/')[isAr ? 0 : 1].trim() : category
+    }))
+  );
+
   const [roles, setRoles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -138,12 +153,18 @@ export default function Roles() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.id) return alert(settings.language === 'ar' ? 'يرجى إدخال معرف الدور' : 'Please enter role ID');
-    
+    if (!canManageRoles) return alert(settings.language === 'ar' ? 'ليس لديك صلاحية إدارة الأدوار' : 'You do not have permission to manage roles');
+
     try {
+      const isNew = !roles.find(r => r.id === formData.id);
       await setDoc(doc(db, 'roles', formData.id), {
         title: formData.title,
         permissions: formData.permissions,
         updatedAt: Date.now()
+      });
+      activityLogService.log(isNew ? 'add_role' : 'edit_role', formData.title || formData.id, {
+        roleId: formData.id,
+        permissionCount: formData.permissions.length
       });
       setIsModalOpen(false);
     } catch (err) {
@@ -155,9 +176,11 @@ export default function Roles() {
     if (id === 'Admin') {
       return alert(settings.language === 'ar' ? 'لا يمكن حذف دور مدير النظام مطلقا' : 'Cannot delete Admin role');
     }
+    if (!canManageRoles) return alert(settings.language === 'ar' ? 'ليس لديك صلاحية حذف الأدوار' : 'You do not have permission to delete roles');
     if (!window.confirm(settings.language === 'ar' ? `هل أنت متأكد من حذف دور ${id}؟` : `Are you sure you want to delete role ${id}?`)) return;
     try {
       await deleteDoc(doc(db, 'roles', id));
+      activityLogService.log('delete_role', id, { roleId: id });
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, 'roles');
     }
@@ -165,7 +188,7 @@ export default function Roles() {
 
   if (loading || roleLoading) return <div className="p-20 text-center text-slate-500 font-bold">{settings.language === 'ar' ? 'جاري تحميل الأدوار...' : 'Loading roles...'}</div>;
 
-  if (currentUserRole !== 'Admin') {
+  if (currentUserRole !== 'Admin' && !canManageRoles) {
     return (
       <div className="flex flex-col items-center justify-center p-12 bg-gradient-to-b from-[#121215] to-[#08080a] rounded-3xl border border-[#d4af37]/20 shadow-xl max-w-xl mx-auto text-center" dir={settings.language === 'ar' ? 'rtl' : 'ltr'}>
         <div className="bg-[#d4af37]/10 p-5 rounded-2xl border border-[#d4af37]/25 mb-6 text-[#d4af37] shadow-[0_0_15px_rgba(212,175,55,0.1)]">
