@@ -667,7 +667,8 @@ export default function Orders() {
     doc.setTextColor(140, 140, 140);
     doc.setFontSize(7);
     doc.setFont('Helvetica', 'normal');
-    doc.text('Thank you for choosing Swift Ship! Generated automatically by Swift Ship Logistics Engine.', 15, 285);
+    const footerNotes = settings.invoiceNotes || 'Thank you for choosing Swift Ship! Generated automatically by Swift Ship Logistics Engine.';
+    doc.text(footerNotes, 15, 285);
 
     doc.save(`SwiftShip_Invoice_${order.orderNumber || order.id}.pdf`);
     activityLogService.log('export_orders_pdf', order.orderNumber || order.id, { singleOrder: true });
