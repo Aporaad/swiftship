@@ -5,61 +5,16 @@ import { Search, Edit2, X, Plus, Trash2, Shield, CheckCircle2 } from 'lucide-rea
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
 
-const AVAILABLE_PERMISSIONS = (t: any, lang: string) => [
-  { id: 'view_dashboard', label: lang === 'ar' ? 'عرض لوحة التحكم والإحصائيات' : 'View Dashboard & Statistics', group: lang === 'ar' ? 'عام' : 'General' },
-  { id: 'view_statistics', label: lang === 'ar' ? 'عرض الإحصائيات المالية التفصيلية' : 'View Detailed Financial Statistics', group: lang === 'ar' ? 'عام' : 'General' },
-  { id: 'view_orders', label: lang === 'ar' ? 'عرض الطلبات' : 'View Orders', group: lang === 'ar' ? 'الطلبات' : 'Orders' },
-  { id: 'add_orders', label: lang === 'ar' ? 'إضافة الطلبات' : 'Add Orders', group: lang === 'ar' ? 'الطلبات' : 'Orders' },
-  { id: 'edit_orders', label: lang === 'ar' ? 'تعديل الطلبات' : 'Edit Orders', group: lang === 'ar' ? 'الطلبات' : 'Orders' },
-  { id: 'update_order_status', label: lang === 'ar' ? 'تحديث حالة الطلب فقط' : 'Update Order Status Only', group: lang === 'ar' ? 'الطلبات' : 'Orders' },
-  { id: 'delete_orders', label: lang === 'ar' ? 'حذف الطلبات' : 'Delete Orders', group: lang === 'ar' ? 'الطلبات' : 'Orders' },
-  { id: 'edit_delivered_orders', label: lang === 'ar' ? 'تعديل الطلبات بعد التسليم' : 'Edit Orders After Delivery', group: lang === 'ar' ? 'الطلبات' : 'Orders' },
-  { id: 'print_orders', label: lang === 'ar' ? 'طباعة وتصدير الفواتير' : 'Print & Export Invoices', group: lang === 'ar' ? 'الطلبات' : 'Orders' },
-  { id: 'export_orders', label: lang === 'ar' ? 'تصدير بيانات الطلبات' : 'Export Orders Data', group: lang === 'ar' ? 'الطلبات' : 'Orders' },
-  { id: 'view_customers', label: lang === 'ar' ? 'عرض العملاء' : 'View Customers', group: lang === 'ar' ? 'العملاء' : 'Customers' },
-  { id: 'add_customers', label: lang === 'ar' ? 'إضافة العملاء' : 'Add Customers', group: lang === 'ar' ? 'العملاء' : 'Customers' },
-  { id: 'edit_customers', label: lang === 'ar' ? 'تعديل العملاء' : 'Edit Customers', group: lang === 'ar' ? 'العملاء' : 'Customers' },
-  { id: 'delete_customers', label: lang === 'ar' ? 'حذف العملاء' : 'Delete Customers', group: lang === 'ar' ? 'العملاء' : 'Customers' },
-  { id: 'view_couriers', label: lang === 'ar' ? 'عرض المناديب' : 'View Couriers', group: lang === 'ar' ? 'المناديب' : 'Couriers' },
-  { id: 'add_couriers', label: lang === 'ar' ? 'إضافة المناديب' : 'Add Couriers', group: lang === 'ar' ? 'المناديب' : 'Couriers' },
-  { id: 'edit_couriers', label: lang === 'ar' ? 'تعديل المناديب' : 'Edit Couriers', group: lang === 'ar' ? 'المناديب' : 'Couriers' },
-  { id: 'delete_couriers', label: lang === 'ar' ? 'حذف المناديب' : 'Delete Couriers', group: lang === 'ar' ? 'المناديب' : 'Couriers' },
-  { id: 'view_sources', label: lang === 'ar' ? 'عرض مصادر الطلبات' : 'View Order Sources', group: lang === 'ar' ? 'المصادر' : 'Sources' },
-  { id: 'add_sources', label: lang === 'ar' ? 'إضافة مصادر الطلبات' : 'Add Order Sources', group: lang === 'ar' ? 'المصادر' : 'Sources' },
-  { id: 'edit_sources', label: lang === 'ar' ? 'تعديل مصادر الطلبات' : 'Edit Order Sources', group: lang === 'ar' ? 'المصادر' : 'Sources' },
-  { id: 'delete_sources', label: lang === 'ar' ? 'حذف مصادر الطلبات' : 'Delete Order Sources', group: lang === 'ar' ? 'المصادر' : 'Sources' },
-  { id: 'view_users', label: lang === 'ar' ? 'عرض الموظفين والأدوار' : 'View Staff & Roles', group: lang === 'ar' ? 'الموظفين' : 'Staff' },
-  { id: 'add_users', label: lang === 'ar' ? 'إضافة الموظفين' : 'Add Staff members', group: lang === 'ar' ? 'الموظفين' : 'Staff' },
-  { id: 'edit_users', label: lang === 'ar' ? 'تعديل الموظفين والأدوار' : 'Edit Staff & Roles', group: lang === 'ar' ? 'الموظفين' : 'Staff' },
-  { id: 'delete_users', label: lang === 'ar' ? 'حذف الموظفين' : 'Delete Staff members', group: lang === 'ar' ? 'الموظفين' : 'Staff' },
-  { id: 'reset_passwords', label: lang === 'ar' ? 'إعادة تعيين كلمات المرور' : 'Reset User Passwords', group: lang === 'ar' ? 'الموظفين' : 'Staff' },
-  { id: 'disable_accounts', label: lang === 'ar' ? 'تعطيل وتفعيل الحسابات' : 'Disable & Enable Accounts', group: lang === 'ar' ? 'الموظفين' : 'Staff' },
-  { id: 'terminate_sessions', label: lang === 'ar' ? 'إنهاء جلسات المستخدمين' : 'Terminate User Sessions', group: lang === 'ar' ? 'الموظفين' : 'Staff' },
-  { id: 'view_activity_log', label: lang === 'ar' ? 'رؤية سجل النشاط الكامل' : 'View Full Activity Log', group: lang === 'ar' ? 'الموظفين' : 'Staff' },
-  { id: 'view_finance', label: lang === 'ar' ? 'عرض البيانات المالية العامة' : 'View General Financial Data', group: lang === 'ar' ? 'المحاسبة' : 'Accounting' },
-  { id: 'add_finance', label: lang === 'ar' ? 'إضافة المدفوعات والعمليات المالية' : 'Add Payments & Finance', group: lang === 'ar' ? 'المحاسبة' : 'Accounting' },
-  { id: 'edit_finance', label: lang === 'ar' ? 'تعديل المدفوعات والعمليات المالية' : 'Edit Payments & Finance', group: lang === 'ar' ? 'المحاسبة' : 'Accounting' },
-  { id: 'view_expenses', label: lang === 'ar' ? 'رؤية المصروفات والتكاليف' : 'View Expenses & Costs', group: lang === 'ar' ? 'المحاسبة' : 'Accounting' },
-  { id: 'view_custody', label: lang === 'ar' ? 'عرض العهد المالية' : 'View Financial Custody', group: lang === 'ar' ? 'المحاسبة' : 'Accounting' },
-  { id: 'add_expenses', label: lang === 'ar' ? 'إضافة المصروفات' : 'Add Expenses', group: lang === 'ar' ? 'المحاسبة' : 'Accounting' },
-  { id: 'edit_expenses', label: lang === 'ar' ? 'تعديل المصروفات وتسوية العهد' : 'Edit Expenses & Reconcile', group: lang === 'ar' ? 'المحاسبة' : 'Accounting' },
-  { id: 'delete_expenses', label: lang === 'ar' ? 'حذف المصروفات' : 'Delete Expenses', group: lang === 'ar' ? 'المحاسبة' : 'Accounting' },
-  { id: 'edit_exchange_rates', label: lang === 'ar' ? 'تعديل أسعار الصرف' : 'Edit Exchange Rates', group: lang === 'ar' ? 'المحاسبة' : 'Accounting' },
-  { id: 'view_reports', label: lang === 'ar' ? 'عرض التقارير المالية' : 'View Financial Reports', group: lang === 'ar' ? 'التقارير' : 'Reports' },
-  { id: 'settings', label: lang === 'ar' ? 'عرض وإعدادات النظام' : 'Access System Settings', group: lang === 'ar' ? 'المسؤول' : 'Admin' },
-  { id: 'edit_interface_settings', label: lang === 'ar' ? 'تعديل إعدادات المظهر والواجهة' : 'Edit Interface & Theme Settings', group: lang === 'ar' ? 'المسؤول' : 'Admin' },
-  { id: 'edit_general_settings', label: lang === 'ar' ? 'تعديل إعدادات النظام والهوية' : 'Edit System Info & Identity', group: lang === 'ar' ? 'المسؤول' : 'Admin' },
-  { id: 'edit_order_defaults', label: lang === 'ar' ? 'تعديل النسب والرسوم الافتراضية' : 'Edit Order & Price Defaults', group: lang === 'ar' ? 'المسؤول' : 'Admin' },
-  { id: 'edit_company_info', label: lang === 'ar' ? 'تعديل معلومات الشركة' : 'Edit Company Information', group: lang === 'ar' ? 'المسؤول' : 'Admin' },
-  { id: 'manage_whatsapp', label: lang === 'ar' ? 'إعدادات واتساب والتنبيهات' : 'WhatsApp & Alert Settings', group: lang === 'ar' ? 'المسؤول' : 'Admin' },
-  { id: 'manage_backup', label: lang === 'ar' ? 'إدارة النسخ الاحتياطية' : 'Manage Backups', group: lang === 'ar' ? 'المسؤول' : 'Admin' },
-  { id: 'view_notifications', label: lang === 'ar' ? 'عرض صفحة الإشعارات' : 'View Notifications', group: lang === 'ar' ? 'الإشعارات' : 'Notifications' },
-  { id: 'send_notifications', label: lang === 'ar' ? 'إرسال إشعارات مخصصة وتجريبية' : 'Send Custom Notifications', group: lang === 'ar' ? 'الإشعارات' : 'Notifications' },
-  { id: 'manage_notifications', label: lang === 'ar' ? 'إدارة وحذف الإشعارات' : 'Manage & Delete Notifications', group: lang === 'ar' ? 'الإشعارات' : 'Notifications' },
-  { id: 'notify_orders', label: lang === 'ar' ? 'استقبل إشعارات الطلبات' : 'Receive Order Notifications', group: lang === 'ar' ? 'الإشعارات' : 'Notifications' },
-  { id: 'notify_finance', label: lang === 'ar' ? 'استقبل إشعارات المالية' : 'Receive Finance Notifications', group: lang === 'ar' ? 'الإشعارات' : 'Notifications' },
-  { id: 'notify_system', label: lang === 'ar' ? 'استقبل إشعارات النظام والأمان' : 'Receive System & Security Notifications', group: lang === 'ar' ? 'الإشعارات' : 'Notifications' },
-];
+import { ALL_PERMISSIONS, PERMISSION_CATEGORIES } from '../lib/permissions';
+
+const AVAILABLE_PERMISSIONS = (t: any, lang: string) =>
+  ALL_PERMISSIONS.map(p => ({
+    id: p.id,
+    label: lang === 'ar' ? p.labelAr : p.labelEn,
+    group: lang === 'ar'
+      ? (PERMISSION_CATEGORIES[p.category as keyof typeof PERMISSION_CATEGORIES]?.ar || p.category)
+      : (PERMISSION_CATEGORIES[p.category as keyof typeof PERMISSION_CATEGORIES]?.en || p.category)
+  }));
 
 export default function Roles() {
   const { role: currentUserRole, hasPermission, loading: roleLoading } = useRole();

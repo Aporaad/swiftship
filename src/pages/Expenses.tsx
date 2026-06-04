@@ -11,6 +11,16 @@ import { useLocation } from 'react-router-dom';
 import FinanceReports from '../components/FinanceReports';
 import FinanceAccounting from '../components/FinanceAccounting';
 
+export const EXPENSE_CATEGORIES = [
+  { id: 'marketing', labelAr: 'إعلانات وتسويق', labelEn: 'Advertising & Marketing', icon: '📣' },
+  { id: 'packaging', labelAr: 'تغليف وكرتون', labelEn: 'Packaging & Cardboard', icon: '📦' },
+  { id: 'telecom', labelAr: 'اتصالات وإنترنت', labelEn: 'Communications & Internet', icon: '🌐' },
+  { id: 'custody', labelAr: 'عهد مالية لمندوب', labelEn: 'Courier Custody', icon: '🔑' },
+  { id: 'wages', labelAr: 'أجور ومكافآت', labelEn: 'Wages & Bonuses', icon: '💵' },
+  { id: 'factory', labelAr: 'سداد مصنع الصين', labelEn: 'Offshore Factory Trade', icon: '🏭' },
+  { id: 'other', labelAr: 'مصروفات أخرى', labelEn: 'Other Expenses', icon: '📝' }
+];
+
 export default function Expenses() {
   const { settings, t } = useSettings();
   const { role, hasPermission, profile, loading: roleLoading } = useRole();
@@ -40,14 +50,16 @@ export default function Expenses() {
   const activeTab = queryParams.get('tab') || 'expenses'; // 'expenses', 'reports', 'accounting'
 
   const [formData, setFormData] = useState({
-    type: 'General', // General, Custody, FactoryPayment
+    category: 'marketing',
     amount: '',
     currency: 'YER',
     recipientId: '',
     recipientName: '',
-    notes: '',
+    notes: '', // البيان أو الشرح
+    remarks: '', // ملاحظات
     factoryName: ''
   });
+  const [selectedDateTime, setSelectedDateTime] = useState('');
 
   const handleRefreshStats = async () => {
     setIsRefreshing(true);
@@ -124,24 +136,14 @@ export default function Expenses() {
   }, [roleLoading]);
 
   const generateExpenseNumber = async () => {
-    const now = new Date();
-    const YY = String(now.getFullYear()).slice(-2);
-    const MM = String(now.getMonth() + 1).padStart(2, '0');
-    const prefix = `EXP-${YY}${MM}`;
-
     try {
       const expensesRef = collection(db, 'expenses');
-      const q = query(
-        expensesRef, 
-        where('expenseNumber', '>=', prefix),
-        where('expenseNumber', '<=', prefix + '-\uF8FF')
-      );
-      const snap = await getDocs(q);
-      const curCount = snap.docs.length;
-      const nextNum = 1001 + curCount;
-      return `${prefix}-${nextNum}`;
+      const snap = await getDocs(expensesRef);
+      const curCount = snap.size;
+      return `EXP-${String(curCount + 1).padStart(4, '0')}`;
     } catch (err) {
-      console.warn("Error getting monthly sequence, defaulting to timestamp:", err);
+      console.warn("Error generating sequential EXP number:", err);
+      const prefix = `EXP-${String(new Date().getFullYear()).slice(-2)}`;
       return `${prefix}-${Math.floor(1000 + Math.random() * 9000)}`;
     }
   };
@@ -169,29 +171,41 @@ export default function Expenses() {
     try {
       const expenseNumber = await generateExpenseNumber();
       
+      let type = 'General';
+      if (formData.category === 'custody') {
+        type = 'Custody';
+      } else if (formData.category === 'factory') {
+        type = 'FactoryPayment';
+      }
+
       let recipientName = '';
-      if (formData.type === 'Custody' && formData.recipientId) {
+      if (type === 'Custody' && formData.recipientId) {
         const found = couriers.find(c => c.id === formData.recipientId);
         recipientName = found ? found.fullName : '';
-      } else if (formData.type === 'FactoryPayment') {
+      } else if (type === 'FactoryPayment') {
         recipientName = formData.factoryName || 'الصين';
       } else {
-        recipientName = 'المكتب';
+        const catObj = EXPENSE_CATEGORIES.find(c => c.id === formData.category);
+        recipientName = catObj ? (isAr ? catObj.labelAr : catObj.labelEn) : (isAr ? 'المكتب الرئيسي' : 'Head Office');
       }
+
+      const parsedCreatedAt = selectedDateTime ? new Date(selectedDateTime).getTime() : Date.now();
 
       const payload = {
         expenseNumber,
-        type: formData.type,
+        category: formData.category,
+        type,
         amount: parseFloat(formData.amount),
         currency: formData.currency,
-        recipientId: formData.type === 'Custody' ? formData.recipientId : null,
+        recipientId: type === 'Custody' ? formData.recipientId : null,
         recipientName,
-        notes: formData.notes,
-        status: formData.type === 'Custody' ? 'Pending' : 'Completed', // Pending custody, Completed expense
+        notes: formData.notes, // البيان أو الشرح
+        remarks: formData.remarks, // ملاحظات
+        status: type === 'Custody' ? 'Pending' : 'Completed', // Pending custody, Completed expense
         createdByUid: auth.currentUser?.uid || 'system',
         createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
         createdByName: profile?.fullName || 'Root Admin',
-        createdAt: Date.now()
+        createdAt: parsedCreatedAt
       };
 
       await addDoc(collection(db, 'expenses'), payload);
@@ -206,12 +220,13 @@ export default function Expenses() {
 
       setIsAddOpen(false);
       setFormData({
-        type: 'General',
+        category: 'marketing',
         amount: '',
         currency: 'YER',
         recipientId: '',
         recipientName: '',
         notes: '',
+        remarks: '',
         factoryName: ''
       });
     } catch (err) {
@@ -265,10 +280,16 @@ export default function Expenses() {
   // Set default type on mount/open based on permissions
   useEffect(() => {
     if (isAddOpen) {
+      // Setup current local time formatted for input type="datetime-local" (YYYY-MM-DDTHH:mm)
+      const now = new Date();
+      const offset = now.getTimezoneOffset() * 60000;
+      const localISOTime = new Date(now.getTime() - offset).toISOString().slice(0, 16);
+      setSelectedDateTime(localISOTime);
+
       if (canViewGeneralExpenses) {
-        setFormData(prev => ({ ...prev, type: 'General' }));
+        setFormData(prev => ({ ...prev, category: 'marketing' }));
       } else if (canViewCustody) {
-        setFormData(prev => ({ ...prev, type: 'Custody' }));
+        setFormData(prev => ({ ...prev, category: 'custody' }));
       }
     }
   }, [isAddOpen, canViewGeneralExpenses, canViewCustody]);
@@ -280,22 +301,39 @@ export default function Expenses() {
     return true;
   });
 
-  // Calculations for stats
+  const convertToYER = (amount: number, currency: string) => {
+    const amt = parseFloat(String(amount || 0));
+    if (currency === 'USD') return amt * (settings.exchangeRateUSD || 535);
+    if (currency === 'SAR') return amt * (settings.exchangeRateSAR || 140);
+    return amt;
+  };
+
+  const getCategoryDetails = (exp: any) => {
+    let catId = exp.category;
+    if (!catId) {
+      if (exp.type === 'Custody') catId = 'custody';
+      else if (exp.type === 'FactoryPayment') catId = 'factory';
+      else catId = 'other';
+    }
+    return EXPENSE_CATEGORIES.find(c => c.id === catId) || EXPENSE_CATEGORIES[EXPENSE_CATEGORIES.length - 1];
+  };
+
+  // Calculations for stats using dynamic currency exchange rates
   const totalGeneralExpensesYER = allowedExpenses
-    .filter(e => e.type === 'General' && e.currency === 'YER')
-    .reduce((sum, e) => sum + (e.amount || 0), 0);
+    .filter(e => e.type === 'General' || e.type === 'FactoryPayment')
+    .reduce((sum, e) => sum + convertToYER(e.amount || 0, e.currency), 0);
 
   const totalGeneralExpensesUSD = allowedExpenses
-    .filter(e => e.type === 'General' && e.currency === 'USD')
-    .reduce((sum, e) => sum + (e.amount || 0), 0);
+    .filter(e => e.type === 'General' || e.type === 'FactoryPayment')
+    .reduce((sum, e) => sum + (e.currency === 'USD' ? (e.amount || 0) : convertToYER(e.amount || 0, e.currency) / (settings.exchangeRateUSD || 535)), 0);
 
   const totalPendingCustodies = allowedExpenses
     .filter(e => e.type === 'Custody' && e.status === 'Pending')
-    .reduce((sum, e) => sum + (e.amount || 0), 0);
+    .reduce((sum, e) => sum + convertToYER(e.amount || 0, e.currency), 0);
 
   const totalSettledCustodies = allowedExpenses
     .filter(e => e.type === 'Custody' && e.status === 'Settled')
-    .reduce((sum, e) => sum + (e.amount || 0), 0);
+    .reduce((sum, e) => sum + convertToYER(e.amount || 0, e.currency), 0);
 
   const transliterateArabic = (text: string): string => {
     if (!text) return '';
@@ -359,10 +397,10 @@ export default function Expenses() {
     doc.setFontSize(8);
     doc.setFont('Helvetica', 'bold');
     doc.text('VOUCHER #', 15, 77);
-    doc.text('RECIPIENT / DEPT', 45, 77);
-    doc.text('TYPE', 105, 77);
-    doc.text('AMOUNT', 140, 77);
-    doc.text('PAYMENT STATUS', 170, 77);
+    doc.text('CATEGORY', 43, 77);
+    doc.text('STATEMENT / NOTES', 85, 77);
+    doc.text('AMOUNT', 145, 77);
+    doc.text('STATUS', 178, 77);
     
     let yIdx = 87;
     // Walk through sorted & filtered list
@@ -386,10 +424,10 @@ export default function Expenses() {
         doc.setTextColor(255, 255, 255);
         doc.setFontSize(8);
         doc.text('VOUCHER #', 15, 29);
-        doc.text('RECIPIENT / DEPT', 45, 29);
-        doc.text('TYPE', 105, 29);
-        doc.text('AMOUNT', 140, 29);
-        doc.text('PAYMENT STATUS', 170, 29);
+        doc.text('CATEGORY', 43, 29);
+        doc.text('STATEMENT / NOTES', 85, 29);
+        doc.text('AMOUNT', 145, 29);
+        doc.text('STATUS', 178, 29);
         
         yIdx = 39;
       }
@@ -409,30 +447,31 @@ export default function Expenses() {
       doc.text(exp.expenseNumber || 'EXP-PENDING', 15, yIdx);
       doc.setFont('Helvetica', 'normal');
       
-      // Recipient
-      const recipientText = transliterateArabic(exp.recipientName || 'Operational Box');
-      doc.text(recipientText.length > 25 ? `${recipientText.substring(0, 23)}...` : recipientText, 45, yIdx);
+      // Category Text
+      const catObj = getCategoryDetails(exp);
+      const categoryText = catObj.labelEn;
+      doc.text(categoryText, 43, yIdx);
       
-      // Type
-      const typeLabel = exp.type === 'General' ? 'General General' : 'Custody Deposit';
-      doc.text(typeLabel, 105, yIdx);
+      // Statement / Notes
+      const stmtText = transliterateArabic(exp.notes || '').slice(0, 32);
+      doc.text(stmtText, 85, yIdx);
       
       // Cost
       const amtRaw = parseFloat(exp.amount || 0);
       const currencyLabel = exp.currency || 'YER';
-      doc.text(`${amtRaw.toLocaleString()} ${currencyLabel}`, 140, yIdx);
+      doc.text(`${amtRaw.toLocaleString()} ${currencyLabel}`, 145, yIdx);
       
       // Status
       const statusLabel = exp.status === 'Settled' ? 'SETTLED' : (exp.status === 'Pending' ? 'PENDING' : 'RELEASED');
       if (statusLabel === 'PENDING') {
         doc.setTextColor(190, 40, 40);
         doc.setFont('Helvetica', 'bold');
-        doc.text(statusLabel, 170, yIdx);
+        doc.text(statusLabel, 178, yIdx);
         doc.setFont('Helvetica', 'normal');
         doc.setTextColor(40, 40, 43);
       } else {
         doc.setTextColor(16, 124, 65);
-        doc.text(statusLabel, 170, yIdx);
+        doc.text(statusLabel, 178, yIdx);
         doc.setTextColor(40, 40, 43);
       }
       
@@ -458,25 +497,29 @@ export default function Expenses() {
     const headers = [
       isAr ? 'رقم السند' : 'ID Voucher',
       isAr ? 'اسم المستلم' : 'Recipient',
-      isAr ? 'النوع' : 'Type',
+      isAr ? 'بند المصروف' : 'Category',
+      isAr ? 'البيان أو الشرح' : 'Statement / Explanation',
       isAr ? 'المبلغ' : 'Amount',
       isAr ? 'العملة' : 'Currency',
       isAr ? 'بواسطة' : 'Created By',
-      isAr ? 'الملاحظات' : 'Notes',
+      isAr ? 'ملاحظات' : 'Remarks',
       isAr ? 'الحالة' : 'Status'
     ];
     
     const csvLines = [headers.join(',')];
     
     filteredExpenses.forEach(exp => {
+      const catObj = getCategoryDetails(exp);
+      const catLabel = isAr ? catObj.labelAr : catObj.labelEn;
       const row = [
         `"${exp.expenseNumber || ''}"`,
         `"${(exp.recipientName || '').replace(/"/g, '""')}"`,
-        `"${exp.type || ''}"`,
+        `"${catLabel.replace(/"/g, '""')}"`,
+        `"${(exp.notes || '').replace(/"/g, '""')}"`,
         exp.amount || 0,
         `"${exp.currency || ''}"`,
         `"${(exp.createdByEmail || '').replace(/"/g, '""')}"`,
-        `"${(exp.notes || '').replace(/"/g, '""')}"`,
+        `"${(exp.remarks || '').replace(/"/g, '""')}"`,
         `"${exp.status || ''}"`
       ];
       csvLines.push(row.join(','));
@@ -497,10 +540,12 @@ export default function Expenses() {
     const num = (exp.expenseNumber || '').toUpperCase();
     const recipient = (exp.recipientName || '').toLowerCase();
     const notes = (exp.notes || '').toLowerCase();
+    const remarksVal = (exp.remarks || '').toLowerCase();
     const q = searchText.toLowerCase();
 
-    const matchesSearch = num.includes(q.toUpperCase()) || recipient.includes(q) || notes.includes(q);
-    const matchesType = typeFilter === 'all' || exp.type === typeFilter;
+    const matchesSearch = num.includes(q.toUpperCase()) || recipient.includes(q) || notes.includes(q) || remarksVal.includes(q);
+    const cat = getCategoryDetails(exp);
+    const matchesType = typeFilter === 'all' || exp.type === typeFilter || cat.id === typeFilter;
 
     return matchesSearch && matchesType;
   });
@@ -753,6 +798,10 @@ export default function Expenses() {
             {canViewCustody && (
               <option value="Custody">{isAr ? 'سندات عهد المناديب' : 'Courier Custody Slips'}</option>
             )}
+            <option disabled>── {isAr ? 'الفئات التفصيلية' : 'Detailed Categories'} ──</option>
+            {EXPENSE_CATEGORIES.map(cat => (
+              <option key={cat.id} value={cat.id}>{cat.icon} {isAr ? cat.labelAr : cat.labelEn}</option>
+            ))}
           </select>
         </div>
 
@@ -762,40 +811,57 @@ export default function Expenses() {
             <thead className="bg-[#0a0a0d] text-slate-500 text-[10px] font-black uppercase tracking-wider border-b border-slate-850">
               <tr>
                 <th className="p-4">{isAr ? 'رقم السند المرجعي' : 'Voucher ID'}</th>
-                <th className="p-4">{isAr ? 'نوع المعاملة وطبيعتها' : 'Class / Type'}</th>
-                <th className="p-4">{isAr ? 'قيمة المبلغ المحول' : 'Logged Amount'}</th>
+                <th className="p-4">{isAr ? 'بند المصروف وقسمه' : 'Expense Category'}</th>
+                <th className="p-4">{isAr ? 'قيمة المبلغ والعملة' : 'Logged Amount'}</th>
                 <th className="p-4">{isAr ? 'الجهة المستلمة' : 'Discharge Recipient'}</th>
-                <th className="p-4">{isAr ? 'تحريات وتوجيهات السند' : 'Audit Annotations'}</th>
-                <th className="p-4">{isAr ? 'حالة الرصيد' : 'Status'}</th>
+                <th className="p-4">{isAr ? 'البيان وشرح المصروف' : 'Statement & Remarks'}</th>
+                <th className="p-4">{isAr ? 'حالة التقييد' : 'Status'}</th>
                 <th className="p-4 text-left">{isAr ? 'التحكيم والتسوية' : 'Reconciliation'}</th>
               </tr>
             </thead>
             <tbody className="text-xs divide-y divide-slate-850 bg-black/10">
               {filteredExpenses.map((exp) => {
                 const isSettleBtnVisible = exp.type === 'Custody' && exp.status === 'Pending' && canEditExpenses;
+                const formattedDate = new Date(exp.createdAt || Date.now()).toLocaleString(isAr ? 'ar-YE' : 'en-US', { dateStyle: 'short', timeStyle: 'short' });
                 return (
                   <tr key={exp.id} className="hover:bg-slate-950/40 transition-colors">
                     <td className="p-4 font-mono font-black text-slate-400">
-                      <span className="bg-slate-900 border border-slate-800 text-[#d4af37] px-2.5 py-0.5 rounded text-[10px]">
-                        {exp.expenseNumber}
-                      </span>
+                      <div className="flex flex-col gap-1 text-start">
+                        <span className="bg-slate-900 border border-slate-800 text-[#d4af37] px-2.5 py-0.5 rounded text-[10px] font-black w-max">
+                          {exp.expenseNumber}
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-bold block mt-1">
+                          {formattedDate}
+                        </span>
+                      </div>
                     </td>
-                    <td className="p-4">
-                      {exp.type === 'General' && <span className="text-slate-300 font-bold">{isAr ? '⚖️ مصروف عام' : 'Office Expense'}</span>}
-                      {exp.type === 'Custody' && <span className="text-[#d4af37] font-black">{isAr ? '🔑 عهدة تشغيلية' : 'Financial Custody'}</span>}
-                      {exp.type === 'FactoryPayment' && <span className="text-cyan-400 font-bold">{isAr ? '🏭 سداد مصنع الصين' : 'Factory Transfer'}</span>}
+                    <td className="p-4 text-start">
+                      {(() => {
+                        const cat = getCategoryDetails(exp);
+                        return (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl border border-slate-850 bg-slate-900 text-[11px] font-black text-slate-300">
+                            <span>{cat.icon}</span>
+                            <span>{isAr ? cat.labelAr : cat.labelEn}</span>
+                          </span>
+                        );
+                      })()}
                     </td>
-                    <td className="p-4 font-mono font-black text-white">
+                    <td className="p-4 font-mono font-black text-white text-start">
                       {exp.amount?.toLocaleString()} <span className="text-[10px] text-slate-500 font-sans">{exp.currency}</span>
                     </td>
-                    <td className="p-4 font-bold text-slate-300">
+                    <td className="p-4 font-bold text-slate-300 text-start">
                       {exp.recipientName || '—'}
                     </td>
-                    <td className="p-4 text-slate-400 text-[11px] max-w-sm truncate text-start">
-                      {exp.notes || '—'}
-                      <span className="text-[9px] text-slate-550 block font-normal">بواسطة: {exp.createdByName || 'مجهول'}</span>
+                    <td className="p-4 text-slate-300 text-[11px] max-w-sm truncate text-start">
+                      <span className="font-bold text-slate-200 block">{exp.notes || '—'}</span>
+                      {exp.remarks && (
+                        <span className="text-[10px] text-slate-500 block italic mt-1 font-sans">
+                          💡 {isAr ? 'ملاحظة: ' : 'Note: '}{exp.remarks}
+                        </span>
+                      )}
+                      <span className="text-[9px] text-slate-550 block font-normal mt-1">بواسطة: {exp.createdByName || 'مجهول'}</span>
                     </td>
-                    <td className="p-4">
+                    <td className="p-4 text-start">
                       {exp.status === 'Completed' && (
                         <span className="bg-emerald-950/25 text-emerald-400 border border-emerald-950/50 text-[9px] font-black px-2 py-0.5 rounded">
                           {isAr ? 'مقبول ومعتمد' : 'APPROVED'}
@@ -849,11 +915,11 @@ export default function Expenses() {
             <div className="p-4 border-b border-slate-850 flex justify-between items-center bg-[#07070a]/40">
               <h3 className="font-black text-white text-xs uppercase tracking-widest flex items-center gap-2">
                 <Crown className="w-4 h-4 text-[#d4af37]" />
-                {isAr ? 'تسجيل وتقييد دفعة وسند مالي' : 'Issue Strategic Settlement Voucher'}
+                {isAr ? 'تسجيل وتقييد مصروف أو عهدة مالية' : 'Issue Strategic Settlement Voucher'}
               </h3>
               <button 
                 onClick={() => setIsAddOpen(false)}
-                className="text-slate-500 hover:text-white bg-slate-900 border border-slate-800 p-1.5 rounded-lg"
+                className="text-slate-500 hover:text-white bg-slate-900 border border-slate-800 p-1.5 rounded-lg cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -861,36 +927,14 @@ export default function Expenses() {
             
             <form onSubmit={handleAddExpense} className="p-6 space-y-4 text-start">
               
-              <div>
-                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'نوع المعاملة والصرف' : 'Voucher Line Type'}</label>
-                <select 
-                  value={formData.type}
-                  onChange={(e) => setFormData({...formData, type: e.target.value})}
-                  className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold"
-                >
-                  {canViewGeneralExpenses && (
-                    <>
-                      <option value="General">{isAr ? 'مصروف عام (غرفة وصيانة ومكتب لوجستي)' : 'General Operation Office Expense'}</option>
-                      <option value="FactoryPayment">{isAr ? 'دفعات وتصدير مالي لمصنع الصين كود' : 'Offshore Factory Trade Payment'}</option>
-                    </>
-                  )}
-                  {canViewCustody && (
-                    <option value="Custody">{isAr ? 'عهدة مالية لمندوب التوزيع (تسجيل ذمة مستردة)' : 'Issue Courier Monetary Custody'}</option>
-                  )}
-                </select>
-              </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'قيمة الدفعة بالأرقام' : 'Denom Amount'}</label>
+                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'التاريخ والوقت تلقائي' : 'Date and Time'}</label>
                   <input 
-                    required 
-                    type="number" 
-                    min="1" 
-                    value={formData.amount} 
-                    onChange={(e) => setFormData({...formData, amount: e.target.value})}
-                    placeholder="25000"
-                    className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-start"
+                    type="datetime-local" 
+                    value={selectedDateTime} 
+                    onChange={(e) => setSelectedDateTime(e.target.value)}
+                    className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start"
                   />
                 </div>
                 <div>
@@ -898,7 +942,7 @@ export default function Expenses() {
                   <select 
                     value={formData.currency}
                     onChange={(e) => setFormData({...formData, currency: e.target.value})}
-                    className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold"
+                    className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer"
                   >
                     <option value="YER">{isAr ? 'ريال يمني YER' : 'YER'}</option>
                     <option value="USD">{isAr ? 'دولار أمريكي USD' : 'USD'}</option>
@@ -907,14 +951,53 @@ export default function Expenses() {
                 </div>
               </div>
 
-              {formData.type === 'Custody' && (
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 mb-2 uppercase tracking-wider">{isAr ? 'بند المصروف' : 'Expense Category'}</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {EXPENSE_CATEGORIES.map(cat => {
+                    if (cat.id === 'custody' && !canViewCustody) return null;
+                    if (cat.id !== 'custody' && !canViewGeneralExpenses) return null;
+                    const isActive = formData.category === cat.id;
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setFormData({...formData, category: cat.id})}
+                        className={`p-2 rounded-xl border text-start flex items-center gap-1.5 transition active:scale-95 cursor-pointer ${
+                          isActive 
+                            ? 'bg-[#d4af37]/15 border-[#d4af37] text-white font-black' 
+                            : 'bg-black/40 border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
+                        }`}
+                      >
+                        <span className="text-sm">{cat.icon}</span>
+                        <span className="text-[11px] leading-tight">{isAr ? cat.labelAr : cat.labelEn}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'قيمة الدفعة بالأرقام' : 'Denom Amount'}</label>
+                <input 
+                  required 
+                  type="number" 
+                  min="1" 
+                  value={formData.amount} 
+                  onChange={(e) => setFormData({...formData, amount: e.target.value})}
+                  placeholder="25000"
+                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-start"
+                />
+              </div>
+
+              {formData.category === 'custody' && (
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'المندوب كفيل العهدة' : 'Select Liable Courier'}</label>
                   <select 
                     required 
                     value={formData.recipientId} 
                     onChange={(e) => setFormData({...formData, recipientId: e.target.value})}
-                    className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold"
+                    className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer"
                   >
                     <option value="">{isAr ? '-- اختر المندوب من الكشف --' : '-- Choose Courier --'}</option>
                     {couriers.map(c => (
@@ -924,7 +1007,7 @@ export default function Expenses() {
                 </div>
               )}
 
-              {formData.type === 'FactoryPayment' && (
+              {formData.category === 'factory' && (
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'اسم المصنع بالصين المستفيد' : 'Beneficiary China Factory Name'}</label>
                   <input 
@@ -939,13 +1022,24 @@ export default function Expenses() {
               )}
 
               <div>
-                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'أسباب وبنود الصرف وتفاصيله' : 'Explanatory Ledger Remarks'}</label>
-                <textarea 
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'البيان أو الشرح' : 'Statement / Explanation'}</label>
+                <input 
                   required 
+                  type="text"
                   value={formData.notes} 
                   onChange={(e) => setFormData({...formData, notes: e.target.value})}
-                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none h-20 text-start"
-                  placeholder={isAr ? "شراء مستلزمات مكتب، وقود لمحل التوزيع..." : "Office supplies, fuel, customs clearance fees..."}
+                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start"
+                  placeholder={isAr ? "مثال: إعلانات سناب شات لشهر يونيو، شراء كرتون تغليف..." : "Snapchat June ads, packaging boxes..."}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'ملاحظات إضافية' : 'Remarks / Notes'}</label>
+                <textarea 
+                  value={formData.remarks} 
+                  onChange={(e) => setFormData({...formData, remarks: e.target.value})}
+                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none h-16 text-start"
+                  placeholder={isAr ? "ملاحظات إدارية أو توجيهات الصندوق..." : "Administrative remarks..."}
                 ></textarea>
               </div>
 
@@ -953,14 +1047,14 @@ export default function Expenses() {
                 <button 
                   type="button" 
                   onClick={() => setIsAddOpen(false)} 
-                  className="px-5 py-2.5 text-slate-400 font-bold bg-slate-900 border border-slate-850 hover:bg-slate-850 rounded-xl text-xs transition-colors"
+                  className="px-5 py-2.5 text-slate-400 font-bold bg-slate-900 border border-slate-850 hover:bg-slate-850 rounded-xl text-xs transition-colors cursor-pointer"
                 >
                   {isAr ? 'إلغاء' : 'Cancel'}
                 </button>
                 <button 
                   type="submit" 
                   disabled={addLoading}
-                  className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black text-xs rounded-xl shadow-md transition-all h-max"
+                  className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black text-xs rounded-xl shadow-md transition-all h-max cursor-pointer border-none"
                 >
                   {addLoading ? (isAr ? 'جاري التسجيل...' : 'Recording...') : (isAr ? 'اعتماد وصرف السند' : 'Approve & File Ledger')}
                 </button>

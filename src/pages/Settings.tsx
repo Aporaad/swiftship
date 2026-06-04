@@ -727,8 +727,9 @@ export default function Settings() {
                 { value: 'light', label: isAr ? 'الوضع الفاتح' : 'Light Mode', icon: '☀️', desc: isAr ? 'خلفية بيضاء وعرض مضيء' : 'Clean white background' },
               ].map(opt => (
                 <button key={opt.value} type="button"
+                  disabled={!canEditInterface}
                   onClick={() => setLocalSettings({ ...localSettings, theme: opt.value as any })}
-                  className={`p-4 rounded-2xl border-2 transition-all text-start ${localSettings.theme === opt.value ? 'border-[#d4af37] bg-[#d4af37]/10 shadow-[0_0_15px_rgba(212,175,55,0.15)]' : 'border-slate-800 bg-black/40 hover:border-slate-700'}`}
+                  className={`p-4 rounded-2xl border-2 transition-all text-start ${localSettings.theme === opt.value ? 'border-[#d4af37] bg-[#d4af37]/10 shadow-[0_0_15px_rgba(212,175,55,0.15)]' : 'border-slate-800 bg-black/40 hover:border-slate-700'} ${!canEditInterface ? 'opacity-65 cursor-not-allowed' : ''}`}
                 >
                   <div className="text-2xl mb-2">{opt.icon}</div>
                   <div className={`font-black text-xs uppercase tracking-wide ${localSettings.theme === opt.value ? 'text-[#d4af37]' : 'text-slate-400'}`}>{opt.label}</div>
@@ -744,8 +745,9 @@ export default function Settings() {
             <div className="grid grid-cols-4 gap-3">
               {[{ value: 'sm', label: t('fontSizeSm'), px: '13px' }, { value: 'md', label: t('fontSizeMd'), px: '14px' }, { value: 'lg', label: t('fontSizeLg'), px: '15px' }, { value: 'xl', label: t('fontSizeXl'), px: '16px' }].map(opt => (
                 <button key={opt.value} type="button"
+                  disabled={!canEditInterface}
                   onClick={() => setLocalSettings({ ...localSettings, fontSize: opt.value as any })}
-                  className={`p-3 rounded-xl border-2 transition-all text-center ${localSettings.fontSize === opt.value ? 'border-[#d4af37] bg-[#d4af37]/10 text-[#d4af37]' : 'border-slate-800 bg-black/40 text-slate-400 hover:border-slate-700'}`}
+                  className={`p-3 rounded-xl border-2 transition-all text-center ${localSettings.fontSize === opt.value ? 'border-[#d4af37] bg-[#d4af37]/10 text-[#d4af37]' : 'border-slate-800 bg-black/40 text-slate-400 hover:border-slate-700'} ${!canEditInterface ? 'opacity-65 cursor-not-allowed': ''}`}
                 >
                   <div className="font-black text-xs mb-1">{opt.label}</div>
                   <div className="text-[10px] text-slate-500 font-mono">{opt.px}</div>
@@ -757,11 +759,11 @@ export default function Settings() {
           <SectionCard title={isAr ? 'لغة النظام' : 'System Language'} icon={Globe}>
             <FieldLabel>{isAr ? 'لغة الواجهة الرئيسية' : 'Main Interface Language'}</FieldLabel>
             <div className="flex p-1 bg-black/40 border border-slate-800 rounded-2xl">
-              <button type="button" onClick={() => setLocalSettings({ ...localSettings, language: 'ar' })}
-                className={`flex-1 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${localSettings.language === 'ar' ? 'bg-[#d4af37] text-black shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
+              <button type="button" disabled={!canEditInterface} onClick={() => setLocalSettings({ ...localSettings, language: 'ar' })}
+                className={`flex-1 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${localSettings.language === 'ar' ? 'bg-[#d4af37] text-black shadow-md' : 'text-slate-400 hover:text-slate-200'} ${!canEditInterface ? 'opacity-50 cursor-not-allowed' : ''}`}
               >🇾🇪 العربية</button>
-              <button type="button" onClick={() => setLocalSettings({ ...localSettings, language: 'en' })}
-                className={`flex-1 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${localSettings.language === 'en' ? 'bg-[#d4af37] text-black shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
+              <button type="button" disabled={!canEditInterface} onClick={() => setLocalSettings({ ...localSettings, language: 'en' })}
+                className={`flex-1 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${localSettings.language === 'en' ? 'bg-[#d4af37] text-black shadow-md' : 'text-slate-400 hover:text-slate-200'} ${!canEditInterface ? 'opacity-50 cursor-not-allowed' : ''}`}
               >🇺🇸 ENGLISH</button>
             </div>
           </SectionCard>
@@ -777,7 +779,7 @@ export default function Settings() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="md:col-span-2">
                 <FieldLabel>{t('systemName')}</FieldLabel>
-                <FieldInput type="text" value={localSettings.systemName || ''} onChange={e => setLocalSettings({ ...localSettings, systemName: e.target.value })} placeholder="SwiftShip" />
+                <FieldInput type="text" disabled={!canEditGeneral} value={localSettings.systemName || ''} onChange={e => setLocalSettings({ ...localSettings, systemName: e.target.value })} placeholder="SwiftShip" />
               </div>
               <div>
                 <FieldLabel>{t('systemLogo')}</FieldLabel>
@@ -785,25 +787,25 @@ export default function Settings() {
                   {localSettings.systemLogo ? (
                     <div className="relative group">
                       <img src={localSettings.systemLogo} alt="Logo" className="w-16 h-16 object-contain rounded-xl border border-slate-800 bg-black/50 p-2" />
-                      <button onClick={() => setLocalSettings({ ...localSettings, systemLogo: '' })} className="absolute -top-2 -right-2 w-5 h-5 bg-rose-600 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition"><X className="w-3 h-3 text-white" /></button>
+                      <button disabled={!canEditGeneral} onClick={() => setLocalSettings({ ...localSettings, systemLogo: '' })} className="absolute -top-2 -right-2 w-5 h-5 bg-rose-600 rounded-full flex disabled:opacity-50 disabled:cursor-not-allowed items-center justify-center opacity-0 group-hover:opacity-100 transition"><X className="w-3 h-3 text-white" /></button>
                     </div>
                   ) : (
                     <div className="w-16 h-16 rounded-xl border border-slate-800 bg-black/50 flex items-center justify-center text-slate-600"><Image className="w-6 h-6" /></div>
                   )}
-                  <button type="button" onClick={() => logoInputRef.current?.click()} className="flex-1 bg-black/40 border border-slate-800 hover:border-[#d4af37]/40 text-slate-300 hover:text-white py-3 px-4 rounded-xl text-xs font-black transition flex items-center gap-2 justify-center"><Upload className="w-4 h-4" />{isAr ? 'رفع شعار' : 'Upload Logo'}</button>
+                  <button type="button" disabled={!canEditGeneral} onClick={() => logoInputRef.current?.click()} className="flex-1 bg-black/40 border border-slate-800 hover:border-[#d4af37]/40 text-slate-300 hover:text-white py-3 px-4 rounded-xl text-xs font-black transition flex items-center gap-2 justify-center disabled:opacity-50 disabled:cursor-not-allowed"><Upload className="w-4 h-4" />{isAr ? 'رفع شعار' : 'Upload Logo'}</button>
                 </div>
               </div>
               <div>
                 <FieldLabel>{t('orderPrefix')}</FieldLabel>
-                <FieldInput type="text" value={localSettings.orderPrefix || 'ALX'} onChange={e => setLocalSettings({ ...localSettings, orderPrefix: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') })} placeholder="ALX" maxLength={5} className="font-mono uppercase" dir="ltr" />
+                <FieldInput type="text" disabled={!canEditGeneral} value={localSettings.orderPrefix || 'ALX'} onChange={e => setLocalSettings({ ...localSettings, orderPrefix: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') })} placeholder="ALX" maxLength={5} className="font-mono uppercase" dir="ltr" />
                 <p className="text-[10px] text-slate-500 mt-1.5 font-bold">{isAr ? `مثال: ${localSettings.orderPrefix || 'ALX'}-2601-1001` : `Example: ${localSettings.orderPrefix || 'ALX'}-2601-1001`}</p>
               </div>
               <div>
                 <FieldLabel>{t('orderStartNumber')}</FieldLabel>
-                <FieldInput type="number" value={localSettings.orderStartNumber ?? 1001} onChange={e => setLocalSettings({ ...localSettings, orderStartNumber: parseInt(e.target.value) || 1001 })} min={1} className="font-mono" dir="ltr" />
+                <FieldInput type="number" disabled={!canEditGeneral} value={localSettings.orderStartNumber ?? 1001} onChange={e => setLocalSettings({ ...localSettings, orderStartNumber: parseInt(e.target.value) || 1001 })} min={1} className="font-mono" dir="ltr" />
               </div>
               <div className="md:col-span-2">
-                <button type="button" onClick={handleResetCounter} className="flex items-center gap-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 hover:border-amber-500/40 px-4 py-2.5 rounded-xl text-xs font-black transition"><RefreshCw className="w-4 h-4" />{t('resetCounter')}</button>
+                <button type="button" disabled={!canEditGeneral} onClick={handleResetCounter} className="flex items-center gap-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 hover:border-amber-500/40 px-4 py-2.5 rounded-xl text-xs font-black transition disabled:opacity-50 disabled:cursor-not-allowed"><RefreshCw className="w-4 h-4" />{t('resetCounter')}</button>
               </div>
             </div>
           </SectionCard>
@@ -1071,7 +1073,7 @@ export default function Settings() {
         <div className="space-y-5 animate-fade-slide-in">
 
           {/* Order Defaults */}
-          {canManageAdmin && (
+          {canEditOrderDefaults && (
             <SectionCard title={t('orderDefaults')} icon={Package}>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 {[
@@ -1097,7 +1099,7 @@ export default function Settings() {
           )}
 
           {/* Invoice Settings */}
-          {canManageAdmin && (
+          {canEditOrderDefaults && (
             <SectionCard title={t('invoiceSettings')} icon={FileText}>
               <div className="space-y-5">
                 <div>

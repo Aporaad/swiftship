@@ -9,6 +9,7 @@ import {
   ChevronRight, ArrowUpRight, ArrowDownRight, Award, Plus, Check, CheckSquare, Square
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
+import { EXPENSE_CATEGORIES } from '../pages/Expenses';
 
 interface FinanceReportsProps {
   orders: any[];
@@ -503,7 +504,10 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
         doc.text(exp.expenseNumber || 'EXP-ID', 17, y + 4);
         
         doc.setFont('Helvetica', 'Normal');
-        doc.text(exp.type || 'General', 50, y + 4);
+        const catObj = EXPENSE_CATEGORIES.find(c => c.id === exp.category) || 
+                       EXPENSE_CATEGORIES.find(c => exp.type === 'Custody' ? c.id === 'custody' : (exp.type === 'FactoryPayment' ? c.id === 'factory' : c.id === 'other'));
+        const categoryLabel = catObj ? catObj.labelEn : (exp.type || 'General');
+        doc.text(categoryLabel, 50, y + 4);
         doc.text((exp.recipientName || 'Office').substring(0, 20), 85, y + 4);
         doc.text((exp.createdByName || 'Manager').substring(0, 18), 125, y + 4);
         

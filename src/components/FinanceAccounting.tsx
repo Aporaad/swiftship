@@ -10,6 +10,7 @@ import { collection, addDoc, doc, updateDoc, writeBatch, onSnapshot } from 'fire
 import { notificationService } from '../services/notificationService';
 import ChartOfAccounts from './ChartOfAccounts';
 import AssetsPortfolio from './AssetsPortfolio';
+import { EXPENSE_CATEGORIES } from '../pages/Expenses';
 
 interface FinanceAccountingProps {
   orders: any[];
@@ -156,12 +157,14 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
       }
 
       if (exp.type === 'General') {
+        const catObj = EXPENSE_CATEGORIES.find(c => c.id === exp.category) || EXPENSE_CATEGORIES.find(c => c.id === 'other');
+        const catLabel = catObj ? (isAr ? catObj.labelAr : catObj.labelEn) : (isAr ? 'مصروف تشغيلي' : 'Operational Expense');
         entries.push({
           id: `EXP-OUT-${exp.id}`,
           refNumber: exp.expenseNumber || 'ALX-EXP',
           date: exp.createdAt?.toDate ? exp.createdAt.toDate() : new Date(exp.createdAt || Date.now()),
-          title: isAr ? `سند صرف: ${exp.notes}` : `Expense voucher: ${exp.notes}`,
-          notes: isAr ? `مصروف تشغيلي لمسؤوليات المكتب` : `Operational office expenses`,
+          title: isAr ? `سند صرف [${catLabel}]: ${exp.notes}` : `Expense voucher [${catLabel}]: ${exp.notes}`,
+          notes: isAr ? `خصم المصروف من الخزينة مباشرة` : `Direct expense treasury outflow`,
           party: exp.recipientName || (isAr ? 'خزينة المكتب' : 'Office Safe'),
           type: 'Credit', // Cash spent
           amount: convertedAmt,
