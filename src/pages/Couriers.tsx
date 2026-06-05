@@ -24,7 +24,8 @@ import {
   ShieldAlert,
   Coins,
   Activity,
-  AlertTriangle
+  AlertTriangle,
+  Wallet
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { useRole } from '../hooks/useRole';
@@ -888,11 +889,19 @@ export default function Couriers() {
                         <span className="bg-slate-900 border border-slate-800 text-[#d4af37] px-2.5 py-0.5 rounded-lg text-[10px] w-max mr-auto">
                           {courier.courierCustomId || 'ALX-CR-XXX'}
                         </span>
-                        {courier.financialAccountCode && (
-                          <span className="text-[9px] font-bold text-slate-550 font-mono block">
-                            {courier.financialAccountCode}
-                          </span>
-                        )}
+                        {courier.financialAccountCode ? (
+                          <div className="flex flex-col gap-0.5 mt-0.5">
+                            <span className="text-[9px] font-bold text-slate-550 font-mono block">
+                              {courier.financialAccountCode}
+                            </span>
+                            <span className={`text-[9px] font-bold font-mono ${
+                              (courier.financialBalance || 0) > 0 ? 'text-rose-450' :
+                              (courier.financialBalance || 0) < 0 ? 'text-emerald-400' : 'text-slate-500'
+                            }`}>
+                              {(courier.financialBalance || 0) > 0 ? '▲' : (courier.financialBalance || 0) < 0 ? '▼' : '●'} {Math.abs(courier.financialBalance || 0).toLocaleString()} {courier.financialCurrency || settings.currency}
+                            </span>
+                          </div>
+                        ) : null}
                       </div>
                     </td>
                     <td className="p-4" onClick={() => handleOpenDetails(courier)}>
@@ -1244,19 +1253,46 @@ export default function Couriers() {
               ) : (
                 <div className="space-y-4 text-start font-sans">
                   
-                  {/* Courier Wallet Info Card directly mirroring Customer details layout */}
-                  <div className="bg-gradient-to-r from-[#01140e] to-[#041a15] border border-emerald-500/20 rounded-2xl p-4 flex items-center justify-between shadow">
-                    <div className="flex items-center gap-3">
-                      <div className="bg-emerald-500/10 border border-emerald-500/25 p-2.5 rounded-xl text-emerald-400 animate-pulse">
-                        <Coins className="w-5 h-5" />
+                  {/* Courier Wallet & Financial Info Cards Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {selectedCourier.financialAccountCode && (
+                      <div className="bg-gradient-to-r from-[#0e0e11] to-[#070708] border border-[#d4af37]/25 rounded-2xl p-4 flex items-center justify-between shadow">
+                        <div className="flex items-center gap-3">
+                          <div className="bg-[#d4af37]/10 border border-[#d4af37]/20 p-2.5 rounded-xl text-[#d4af37]">
+                            <Wallet className="w-5 h-5 text-[#d4af37]" />
+                          </div>
+                          <div className="text-start">
+                            <div className="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-0.5">{isAr ? 'رقم الحساب المالي' : 'Financial Account Code'}</div>
+                            <div className="font-mono font-black text-[#d4af37] text-sm">{selectedCourier.financialAccountCode}</div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-0.5">{isAr ? 'الرصيد الحالي' : 'Current Balance'}</div>
+                          <div className={`font-mono font-black text-base ${
+                            (selectedCourier.financialBalance || 0) > 0 ? 'text-rose-450' :
+                            (selectedCourier.financialBalance || 0) < 0 ? 'text-emerald-400' : 'text-slate-400'
+                          }`}>
+                            {(selectedCourier.financialBalance || 0) > 0 ? (isAr ? 'مدين: ' : 'Debit: ') : 
+                             (selectedCourier.financialBalance || 0) < 0 ? (isAr ? 'دائن: ' : 'Credit: ') : ''}
+                            {Math.abs(selectedCourier.financialBalance || 0).toLocaleString()} {selectedCourier.financialCurrency || settings.currency}
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-start">
-                        <div className="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-0.5">{isAr ? 'رصيد المحفظة الالكترونية المتاح للمندوب' : 'Courier Wallet Balance'}</div>
-                        <div className="font-mono font-black text-emerald-400 text-base">{(selectedCourier.wallet?.balance || selectedCourier.walletBalance || 0).toLocaleString()} YER</div>
+                    )}
+
+                    <div className="bg-gradient-to-r from-[#01140e] to-[#041a15] border border-emerald-500/20 rounded-2xl p-4 flex items-center justify-between shadow">
+                      <div className="flex items-center gap-3">
+                        <div className="bg-emerald-500/10 border border-emerald-500/25 p-2.5 rounded-xl text-emerald-400 animate-pulse">
+                          <Coins className="w-5 h-5" />
+                        </div>
+                        <div className="text-start">
+                          <div className="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-0.5">{isAr ? 'رصيد المحفظة الالكترونية المتاح للمندوب' : 'Courier Wallet Balance'}</div>
+                          <div className="font-mono font-black text-emerald-400 text-base">{(selectedCourier.wallet?.balance || selectedCourier.walletBalance || 0).toLocaleString()} YER</div>
+                        </div>
                       </div>
-                    </div>
-                    <div className="text-right flex items-center justify-center">
-                      <span className="text-[10px] bg-emerald-950/20 border border-emerald-900/30 text-emerald-400 font-black px-2.5 py-1.5 rounded-xl uppercase tracking-wider">{isAr ? 'محفظة نشطة وموثقة' : 'ACTIVE WALLET'}</span>
+                      <div className="text-right flex items-center justify-center">
+                        <span className="text-[10px] bg-emerald-950/20 border border-emerald-900/30 text-emerald-400 font-black px-2.5 py-1.5 rounded-xl uppercase tracking-wider">{isAr ? 'محفظة نشطة وموثقة' : 'ACTIVE WALLET'}</span>
+                      </div>
                     </div>
                   </div>
 

@@ -17,6 +17,7 @@ export const EXPENSE_CATEGORIES = [
   { id: 'packaging', labelAr: 'تغليف وكرتون', labelEn: 'Packaging & Cardboard', icon: '📦' },
   { id: 'telecom', labelAr: 'اتصالات وإنترنت', labelEn: 'Communications & Internet', icon: '🌐' },
   { id: 'custody', labelAr: 'عهد مالية لمندوب', labelEn: 'Courier Custody', icon: '🔑' },
+  { id: 'salary', labelAr: 'صرف رواتب الموظفين', labelEn: 'Staff Salary Payments', icon: '👤' },
   { id: 'wages', labelAr: 'أجور ومكافآت', labelEn: 'Wages & Bonuses', icon: '💵' },
   { id: 'factory', labelAr: 'سداد مصنع الصين', labelEn: 'Offshore Factory Trade', icon: '🏭' },
   { id: 'other', labelAr: 'مصروفات أخرى', labelEn: 'Other Expenses', icon: '📝' }
@@ -51,6 +52,7 @@ export default function Expenses() {
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
   const activeTab = queryParams.get('tab') || 'expenses'; // 'expenses', 'reports', 'accounting'
+  const activeSubTab = queryParams.get('subtab') || undefined; // e.g. 'salary'
 
   const [formData, setFormData] = useState({
     category: 'marketing',
@@ -63,7 +65,8 @@ export default function Expenses() {
     factoryName: '',
     linkedAccountId: '',       // NEW: linked financial account ID
     linkedAccountCode: '',     // NEW: linked financial account code
-    linkedAccountEntityType: '' as '' | 'customer' | 'courier' | 'employee'
+    linkedAccountEntityType: '' as '' | 'customer' | 'courier' | 'employee',
+    salaryMonth: ''            // NEW: salary payment month YYYY-MM
   });
   const [selectedDateTime, setSelectedDateTime] = useState('');
 
@@ -197,6 +200,8 @@ export default function Expenses() {
         type = 'Custody';
       } else if (formData.category === 'factory') {
         type = 'FactoryPayment';
+      } else if (formData.category === 'salary') {
+        type = 'Salary';
       }
 
       let recipientName = '';
@@ -215,7 +220,7 @@ export default function Expenses() {
           linkedAccountId = found.financialAccountId;
           linkedAccountCode = found.financialAccountCode || '';
         }
-      } else if (formData.category === 'wages' && formData.recipientId) {
+      } else if ((formData.category === 'wages' || formData.category === 'salary') && formData.recipientId) {
         const found = systemUsers.find(u => u.id === formData.recipientId);
         recipientName = found ? (found.fullName || found.displayName || found.email) : '';
         recipientEntityId = formData.recipientId;
@@ -259,7 +264,7 @@ export default function Expenses() {
         amount: rawAmount,
         currency: formData.currency,
         amountInDefaultCurrency: convertedAmount,
-        recipientId: (type === 'Custody' || formData.category === 'wages') ? formData.recipientId : null,
+        recipientId: (type === 'Custody' || formData.category === 'wages' || formData.category === 'salary') ? formData.recipientId : null,
         recipientEntityId: recipientEntityId || null,
         recipientEntityType: recipientEntityType || null,
         recipientName,
@@ -268,6 +273,7 @@ export default function Expenses() {
         notes: formData.notes, // البيان أو الشرح
         remarks: formData.remarks, // ملاحظات
         status: type === 'Custody' ? 'Pending' : 'Completed', // Pending custody, Completed expense
+        salaryMonth: formData.category === 'salary' ? formData.salaryMonth : null,
         createdByUid: auth.currentUser?.uid || 'system',
         createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
         createdByName: profile?.fullName || 'Root Admin',
@@ -277,8 +283,24 @@ export default function Expenses() {
       await addDoc(collection(db, 'expenses'), payload);
 
       // --- Financial Account Impact ---
-      // If linked to a financial account, record the transaction as a Credit (money going out to recipient)
-      if (linkedAccountId && recipientEntityId && recipientEntityType) {
+      if (formData.category === 'salary' && linkedAccountId && recipientEntityId) {
+        try {
+          await financialAccountService.recordSalaryPayment({
+            employeeId: recipientEntityId,
+            employeeName: recipientName,
+            accountId: linkedAccountId,
+            accountCode: linkedAccountCode,
+            amount: convertedAmount,
+            currency: formData.currency,
+            salaryMonth: formData.salaryMonth,
+            notes: formData.notes || (isAr ? `صرف راتب شهر ${formData.salaryMonth}` : `Salary payment for ${formData.salaryMonth}`),
+            createdByUid: auth.currentUser?.uid || 'system',
+            createdByName: profile?.fullName || 'Root Admin'
+          });
+        } catch (txErr) {
+          console.warn('[Expenses] Could not record salary payment transaction:', txErr);
+        }
+      } else if (linkedAccountId && recipientEntityId && recipientEntityType) {
         try {
           await financialAccountService.recordTransaction(linkedAccountId, {
             accountId: linkedAccountId,
@@ -325,7 +347,8 @@ export default function Expenses() {
         factoryName: '',
         linkedAccountId: '',
         linkedAccountCode: '',
-        linkedAccountEntityType: ''
+        linkedAccountEntityType: '',
+        salaryMonth: ''
       });
     } catch (err) {
       console.error(err);
@@ -426,7 +449,7 @@ export default function Expenses() {
   // Allowed expenses based on user permissions
   const allowedExpenses = expenses.filter(exp => {
     if (exp.type === 'Custody' && !canViewCustody) return false;
-    if ((exp.type === 'General' || exp.type === 'FactoryPayment') && !canViewGeneralExpenses) return false;
+    if ((exp.type === 'General' || exp.type === 'FactoryPayment' || exp.type === 'Salary') && !canViewGeneralExpenses) return false;
     return true;
   });
 
@@ -776,6 +799,7 @@ export default function Expenses() {
           customers={customers}
           isAr={isAr}
           settings={settings}
+          initialTab={activeSubTab}
         />
       </div>
     );
@@ -1178,10 +1202,16 @@ export default function Expenses() {
                 </div>
               )}
 
-              {formData.category === 'wages' && (
+              {(formData.category === 'wages' || formData.category === 'salary') && (
                 <div>
-                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'الموظف أو مستحق الراتب' : 'Employee / Salary Recipient'}</label>
+                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
+                    {formData.category === 'salary' 
+                       ? (isAr ? 'الموظف المستحق للراتب *' : 'Liable Employee *')
+                       : (isAr ? 'الموظف أو مستحق الأجور' : 'Employee / Wage Recipient')
+                    }
+                  </label>
                   <select 
+                    required={formData.category === 'salary'}
                     value={formData.recipientId} 
                     onChange={(e) => {
                       const user = systemUsers.find(u => u.id === e.target.value);
@@ -1190,15 +1220,23 @@ export default function Expenses() {
                         recipientId: e.target.value,
                         linkedAccountId: user?.financialAccountId || '',
                         linkedAccountCode: user?.financialAccountCode || '',
-                        linkedAccountEntityType: 'employee'
+                        linkedAccountEntityType: 'employee',
+                        ...(formData.category === 'salary' && user?.monthlySalary && { amount: String(user.monthlySalary) })
                       });
                     }}
                     className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer"
                   >
-                    <option value="">{isAr ? '-- اختر الموظف (اختياري) --' : '-- Select Employee (Optional) --'}</option>
+                    <option value="">
+                      {formData.category === 'salary'
+                        ? (isAr ? '-- اختر الموظف لصرف الراتب --' : '-- Choose Employee --')
+                        : (isAr ? '-- اختر الموظف (اختياري) --' : '-- Select Employee (Optional) --')
+                      }
+                    </option>
                     {systemUsers.map(u => (
                       <option key={u.id} value={u.id}>
-                        {u.fullName || u.displayName || u.email}{u.financialAccountCode ? ` — ${u.financialAccountCode}` : ''}
+                        {u.fullName || u.displayName || u.email}
+                        {u.monthlySalary ? ` (${isAr ? 'راتب' : 'Salary'}: ${u.monthlySalary.toLocaleString()} ${settings.currency || 'YER'})` : ''}
+                        {u.financialAccountCode ? ` — ${u.financialAccountCode}` : ''}
                       </option>
                     ))}
                   </select>
@@ -1208,6 +1246,19 @@ export default function Expenses() {
                       <span className="font-mono font-black text-[#d4af37] text-[10px] bg-[#d4af37]/10 border border-[#d4af37]/20 px-2 py-0.5 rounded">{formData.linkedAccountCode}</span>
                     </div>
                   )}
+                </div>
+              )}
+
+              {formData.category === 'salary' && (
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'الشهر المستحق للراتب *' : 'Salary Month *'}</label>
+                  <input 
+                    required
+                    type="month"
+                    value={formData.salaryMonth}
+                    onChange={(e) => setFormData({...formData, salaryMonth: e.target.value})}
+                    className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold font-mono text-center"
+                  />
                 </div>
               )}
 
@@ -1225,7 +1276,7 @@ export default function Expenses() {
                 </div>
               )}
 
-              {formData.category !== 'custody' && formData.category !== 'wages' && (
+              {formData.category !== 'custody' && formData.category !== 'wages' && formData.category !== 'salary' && (
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
                     {isAr ? 'ربط بحساب مالي مخصص (اختياري)' : 'Link to Custom Account (Optional)'}

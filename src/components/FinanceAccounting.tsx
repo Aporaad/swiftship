@@ -3,10 +3,10 @@ import {
   FileText, Search, CreditCard, ShieldAlert, CheckCircle, Wallet, ArrowUpRight, 
   ArrowDownLeft, HelpCircle, User, Truck, Calendar, Printer, Download, Star, ExternalLink,
   DollarSign, Activity, FileSpreadsheet, PlusCircle, Scale, Receipt, Sparkles, TrendingUp, RefreshCw, X,
-  FolderTree, Wrench
+  FolderTree, Wrench, Users, Coins, UserCheck, Eye, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { db, auth } from '../lib/firebase';
-import { collection, addDoc, doc, updateDoc, writeBatch, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc, writeBatch, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { notificationService } from '../services/notificationService';
 import ChartOfAccounts from './ChartOfAccounts';
 import AssetsPortfolio from './AssetsPortfolio';
@@ -20,11 +20,17 @@ interface FinanceAccountingProps {
   customers: any[];
   isAr: boolean;
   settings: any;
+  initialTab?: string;
 }
 
-export default function FinanceAccounting({ orders, expenses, couriers, customers, isAr, settings }: FinanceAccountingProps) {
+export default function FinanceAccounting({ orders, expenses, couriers, customers, isAr, settings, initialTab }: FinanceAccountingProps) {
   // Navigation tabs for accounting
-  const [accountingTab, setAccountingTab] = useState<'general_ledger' | 'courier_audit' | 'customer_audit' | 'chart_of_accounts' | 'assets_management' | 'financial_accounts'>('general_ledger');
+  const [accountingTab, setAccountingTab] = useState<'general_ledger' | 'courier_audit' | 'customer_audit' | 'chart_of_accounts' | 'assets_management' | 'financial_accounts' | 'salary_history'>('general_ledger');
+
+  // Auto-switch to a requested tab when mounted via deep-link (e.g. sidebar ?subtab=salary)
+  useEffect(() => {
+    if (initialTab === 'salary') setAccountingTab('salary_history');
+  }, [initialTab]);
   
   // Real-time assets sync for dynamic pricing in Chart of Accounts
   const [assets, setAssets] = useState<any[]>([]);
@@ -81,6 +87,56 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
   });
   const [adjustLoading, setAdjustLoading] = useState(false);
 
+  // New states for Unified Ledger and Salary Audits
+  const [accountTransactions, setAccountTransactions] = useState<any[]>([]);
+  const [moduleFilter, setModuleFilter] = useState<'all' | 'order' | 'expenses' | 'custody' | 'payment' | 'salary' | 'adjustment'>('all');
+  const [isSalaryPayment, setIsSalaryPayment] = useState(false);
+  const [adjustSalaryMonth, setAdjustSalaryMonth] = useState('');
+  const [bulkReconciliationLoading, setBulkReconciliationLoading] = useState(false);
+
+  // ── Salary History tab states ──
+  const [salaryHistory, setSalaryHistory] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [salarySearch, setSalarySearch] = useState('');
+  const [salaryEmployeeFilter, setSalaryEmployeeFilter] = useState('all');
+  const [salaryMonthFilter, setSalaryMonthFilter] = useState('');
+  const [selectedSalaryVoucher, setSelectedSalaryVoucher] = useState<any>(null);
+  // Employee Statement sub-view
+  const [employeeStatementId, setEmployeeStatementId] = useState<string | null>(null);
+  const [empStmtDateFilter, setEmpStmtDateFilter] = useState<'all'|'30days'|'custom'>('all');
+  const [empStmtStartDate, setEmpStmtStartDate] = useState('');
+  const [empStmtEndDate, setEmpStmtEndDate] = useState('');
+
+  useEffect(() => {
+    // Default adjustSalaryMonth to current month YYYY-MM
+    const now = new Date();
+    const YYYY = now.getFullYear();
+    const MM = String(now.getMonth() + 1).padStart(2, '0');
+    setAdjustSalaryMonth(`${YYYY}-${MM}`);
+
+    // Snapshot listener for account transactions
+    const unsub = onSnapshot(collection(db, 'account_transactions'), (snap) => {
+      setAccountTransactions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.error("Error loading account transactions:", error);
+    });
+    return () => unsub();
+  }, []);
+
+  // Load salary history & employees for the Salary History tab
+  useEffect(() => {
+    const qHist = query(collection(db, 'salary_history'), orderBy('createdAt', 'desc'));
+    const unsubH = onSnapshot(qHist, (snap) => {
+      setSalaryHistory(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    }, (err) => console.error('[SalaryTab] salary_history error:', err));
+
+    const unsubE = onSnapshot(collection(db, 'users'), (snap) => {
+      setEmployees(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => console.error('[SalaryTab] users error:', err));
+
+    return () => { unsubH(); unsubE(); };
+  }, []);
+
   // Quick Customer FIFO Settle payment state
   const [isPayModalOpen, setIsPayModalOpen] = useState(false);
   const [payAmount, setPayAmount] = useState('');
@@ -124,51 +180,50 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
       .reduce((sum, a) => sum + convertToYER(a.cost || 0, a.currency || 'YER'), 0);
   }, [assets, settings]);
 
-  // 1. Double-Entry General Chronology Ledger
+  // 1. Double-Entry General Chronology Ledger (Unified from account_transactions and unlinked expenses)
   const ledgerEntries = useMemo(() => {
     const entries: any[] = [];
 
-    // Push Orders as credit/debit
-    // An order registers potential revenue, but cash payments received are real dynamic Inflows (Debited)
-    orders.forEach(ord => {
-      // 1. Initial Deposit
-      const deposit = parseFloat(ord.amountPaid || 0);
-      if (deposit > 0) {
-        entries.push({
-          id: `ORD-IN-${ord.id}`,
-          refNumber: ord.orderNumber || 'ALX-ORD',
-          date: ord.createdAt?.toDate ? ord.createdAt.toDate() : new Date(ord.createdAt || Date.now()),
-          title: isAr ? `سداد من العميل: ${ord.customerName}` : `Customer payment: ${ord.customerName}`,
-          notes: isAr ? `رسوم شحن طرد من محطة ${ord.orderSourceName || 'الرئيسية'}` : `Cargo transport fee via ${ord.orderSourceName || 'Hub'}`,
-          party: ord.customerName,
-          entityId: ord.customerId,
-          entityType: 'customer',
-          type: 'Debit', // Cash is coming into safe (Debit in asset accounting)
-          amount: deposit,
-          currency: 'YER',
-          amountOriginal: deposit,
-          currencyOriginal: 'YER',
-          module: 'order'
-        });
-      }
+    // A. Push all transactions from account_transactions
+    accountTransactions.forEach(tx => {
+      const date = tx.createdAt ? new Date(tx.createdAt) : new Date();
+      entries.push({
+        id: tx.id || `TX-${Math.random()}`,
+        refNumber: tx.refNumber || 'TX-REF',
+        date,
+        title: tx.description || `${tx.entityName} - ${tx.type}`,
+        notes: tx.description || '',
+        party: tx.entityName,
+        entityId: tx.entityId,
+        entityType: tx.entityType,
+        type: tx.type, // 'Debit' | 'Credit'
+        amount: tx.amount || 0,
+        currency: settings.currency || 'YER',
+        amountOriginal: tx.amountOriginal || tx.amount || 0,
+        currencyOriginal: tx.currencyOriginal || 'YER',
+        module: tx.module || 'adjustment'
+      });
     });
 
-    // Push Expenses as outflows (Credited)
+    // B. Push unlinked expenses (general safebox outflows / inflows)
     expenses.forEach(exp => {
+      // Skip if it is linked to a financial account
+      if (exp.linkedAccountId || exp.financialAccountId) return;
+
+      const date = exp.createdAt ? new Date(exp.createdAt) : new Date();
       const convertedAmt = convertToYER(exp.amount || 0, exp.currency);
       const isManualDebit = exp.notes && (exp.notes.includes('[MANUAL-DEBIT]') || exp.notes.includes('قيد تسوية مدين'));
-      
-      // Treat manual adjustments
+
       if (isManualDebit) {
         entries.push({
-          id: `ADJ-IN-${exp.id}`,
-          refNumber: exp.expenseNumber || 'ALX-ADJ',
-          date: exp.createdAt?.toDate ? exp.createdAt.toDate() : new Date(exp.createdAt || Date.now()),
+          id: `EXP-UNLINKED-${exp.id}`,
+          refNumber: exp.expenseNumber || 'EXP-UNLINKED',
+          date,
           title: exp.notes.replace('[MANUAL-DEBIT]', '').trim(),
-          notes: isAr ? `تسوية حسابية يدوية داخلية للأصول` : `Bilateral manual treasury entry`,
+          notes: isAr ? 'تسوية حسابية يدوية داخلية للأصول' : 'Bilateral manual treasury entry',
           party: exp.recipientName || (isAr ? 'الخزينة العامة' : 'Central Treasury'),
-          entityId: exp.recipientEntityId || exp.recipientId,
-          entityType: exp.recipientEntityType || 'courier',
+          entityId: null,
+          entityType: null,
           type: 'Debit',
           amount: convertedAmt,
           currency: 'YER',
@@ -176,38 +231,18 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
           currencyOriginal: exp.currency,
           module: 'adjustment'
         });
-        return;
-      }
-
-      if (exp.type === 'General') {
+      } else {
         const catObj = EXPENSE_CATEGORIES.find(c => c.id === exp.category) || EXPENSE_CATEGORIES.find(c => c.id === 'other');
         const catLabel = catObj ? (isAr ? catObj.labelAr : catObj.labelEn) : (isAr ? 'مصروف تشغيلي' : 'Operational Expense');
         entries.push({
-          id: `EXP-OUT-${exp.id}`,
-          refNumber: exp.expenseNumber || 'ALX-EXP',
-          date: exp.createdAt?.toDate ? exp.createdAt.toDate() : new Date(exp.createdAt || Date.now()),
+          id: `EXP-UNLINKED-${exp.id}`,
+          refNumber: exp.expenseNumber || 'EXP-UNLINKED',
+          date,
           title: isAr ? `سند صرف [${catLabel}]: ${exp.notes}` : `Expense voucher [${catLabel}]: ${exp.notes}`,
-          notes: isAr ? `خصم المصروف من الخزينة مباشرة` : `Direct expense treasury outflow`,
+          notes: isAr ? 'خصم المصروف من الخزينة مباشرة (غير مرتبط بحساب)' : 'Direct expense safe outflow (unlinked)',
           party: exp.recipientName || (isAr ? 'خزينة المكتب' : 'Office Safe'),
-          entityId: exp.recipientEntityId || exp.recipientId,
-          entityType: exp.recipientEntityType || 'courier',
-          type: 'Credit', // Cash spent
-          amount: convertedAmt,
-          currency: 'YER',
-          amountOriginal: exp.amount,
-          currencyOriginal: exp.currency,
-          module: 'expenses'
-        });
-      } else if (exp.type === 'FactoryPayment') {
-        entries.push({
-          id: `EXP-OUT-${exp.id}`,
-          refNumber: exp.expenseNumber || 'ALX-EXP',
-          date: exp.createdAt?.toDate ? exp.createdAt.toDate() : new Date(exp.createdAt || Date.now()),
-          title: isAr ? `حوالة وتصدير لمصانع الصين` : `China factory offshore remittance`,
-          notes: exp.notes || (isAr ? 'عقود المصانع' : 'Manufacturer trade balance'),
-          party: exp.factoryName || exp.recipientName,
-          entityId: exp.recipientEntityId || exp.recipientId,
-          entityType: exp.recipientEntityType || 'courier',
+          entityId: null,
+          entityType: null,
           type: 'Credit',
           amount: convertedAmt,
           currency: 'YER',
@@ -215,44 +250,6 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
           currencyOriginal: exp.currency,
           module: 'expenses'
         });
-      } else if (exp.type === 'Custody') {
-        // Opened Custody
-        entries.push({
-          id: `CUST-OUT-${exp.id}`,
-          refNumber: exp.expenseNumber || 'ALX-CST',
-          date: exp.createdAt?.toDate ? exp.createdAt.toDate() : new Date(exp.createdAt || Date.now()),
-          title: isAr ? `تسليم عهدة تشغيلية للمندوب: ${exp.recipientName}` : `Courier custody issued: ${exp.recipientName}`,
-          notes: exp.notes || (isAr ? 'اموال عهد تصفية' : 'Logistics liquid trust'),
-          party: exp.recipientName,
-          entityId: exp.recipientEntityId || exp.recipientId,
-          entityType: 'courier',
-          type: 'Credit',
-          amount: convertedAmt,
-          currency: 'YER',
-          amountOriginal: exp.amount,
-          currencyOriginal: exp.currency,
-          module: 'custody'
-        });
-
-        // If settled, push a dynamic reverse debit
-        if (exp.status === 'Settled') {
-          entries.push({
-            id: `CUST-IN-${exp.id}`,
-            refNumber: `${exp.expenseNumber}-SET`,
-            date: exp.settledAt?.toDate ? exp.settledAt.toDate() : new Date(exp.createdAt || Date.now()),
-            title: isAr ? `تصفية واسترجاع عهدة المندوب: ${exp.recipientName}` : `Reconciliation custody settled: ${exp.recipientName}`,
-            notes: isAr ? `مصادقة المراجعة لتسليم فواتير وتوريد فرق المال` : `Custodial accounting reconciliation`,
-            party: exp.recipientName,
-            entityId: exp.recipientEntityId || exp.recipientId,
-            entityType: 'courier',
-            type: 'Debit',
-            amount: convertedAmt,
-            currency: 'YER',
-            amountOriginal: exp.amount,
-            currencyOriginal: exp.currency,
-            module: 'custody'
-          });
-        }
       }
     });
 
@@ -273,9 +270,9 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
       };
     });
 
-    // Return reversed (newest first for comfortable feed view)
+    // Return reversed (newest first for feed view)
     return computed.reverse();
-  }, [orders, expenses, isAr, settings]);
+  }, [accountTransactions, expenses, isAr, settings]);
 
   // Apply filters to ledger
   const filteredLedgerEntries = useMemo(() => {
@@ -332,9 +329,12 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
         }
       }
 
+      // 5. Module Filter
+      if (moduleFilter !== 'all' && e.module !== moduleFilter) return false;
+
       return true;
     });
-  }, [ledgerEntries, searchLedgerQuery, typeFilter, currencyFilter, dateFilter, customStartDate, customEndDate]);
+  }, [ledgerEntries, searchLedgerQuery, typeFilter, currencyFilter, dateFilter, customStartDate, customEndDate, moduleFilter]);
 
   // Filter financial accounts list based on search and type filters
   const filteredAccountsList = useMemo(() => {
@@ -430,7 +430,7 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
   // Handle addition of quick accounting adjustment voucher
   const handleAddAdjustment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!adjustData.amount || parseFloat(adjustData.amount) <= 0 || !adjustData.title) {
+    if (!adjustData.amount || parseFloat(adjustData.amount) <= 0 || (!adjustData.title && !isSalaryPayment)) {
       notificationService.notify({
         title: isAr ? 'خطأ بالبيانات' : 'Invalid Entry',
         message: isAr ? 'يرجى ملء تفاصيل القيد والمبلغ المالي الصحيح.' : 'Provide precise title and positive currency amount.',
@@ -460,60 +460,113 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
 
       const timestamp = Date.now();
       const randStr = Math.floor(1000 + Math.random() * 9000);
-      const voucherCode = `ADJ-${new Date().getFullYear().toString().slice(-2)}-${randStr}`;
-
       const targetAccount = targetType !== 'general' 
         ? financialAccounts.find(a => a.id === selectedAccountId) 
         : null;
 
-      // 1. Record the transaction in the financial account if selected
-      if (targetAccount) {
-        await financialAccountService.recordTransaction(selectedAccountId, {
+      // 1. If it is a Salary Payment, invoke the atomic recordSalaryPayment service
+      if (isSalaryPayment && targetType === 'employee' && targetAccount) {
+        if (!adjustSalaryMonth) {
+          notificationService.notify({
+            title: isAr ? 'الشهر غير محدد' : 'Month Required',
+            message: isAr ? 'يرجى تحديد شهر صرف الراتب.' : 'Please select the salary month.',
+            type: 'error'
+          });
+          setAdjustLoading(false);
+          return;
+        }
+
+        const voucherCode = await financialAccountService.recordSalaryPayment({
+          employeeId: targetAccount.entityId,
+          employeeName: targetAccount.entityName,
           accountId: selectedAccountId,
           accountCode: targetAccount.accountCode,
-          entityType: targetAccount.entityType,
-          entityId: targetAccount.entityId,
-          entityName: targetAccount.entityName,
-          type: adjustData.type as 'Debit' | 'Credit',
           amount: convertedAmt,
-          amountOriginal: amountVal,
-          currencyOriginal: adjustData.currency,
-          description: adjustData.title,
-          refNumber: voucherCode,
-          module: 'adjustment',
-          createdAt: timestamp,
+          currency: adjustData.currency,
+          salaryMonth: adjustSalaryMonth,
+          notes: adjustData.notes || (isAr ? `صرف راتب شهر ${adjustSalaryMonth}` : `Salary payment for ${adjustSalaryMonth}`),
           createdByUid: auth.currentUser?.uid || 'system',
           createdByName: auth.currentUser?.email?.split('@')[0] || 'Finance Auditor'
         });
+
+        // Insert safebox / expense entry to display in general daily ledger
+        const payload = {
+          expenseNumber: voucherCode,
+          category: 'salary',
+          type: 'Salary',
+          amount: amountVal,
+          currency: adjustData.currency,
+          amountInDefaultCurrency: convertedAmt,
+          recipientId: targetAccount.entityId,
+          recipientEntityId: targetAccount.entityId,
+          recipientEntityType: 'employee',
+          recipientName: targetAccount.entityName,
+          notes: `صرف راتب شهر ${adjustSalaryMonth} — ${targetAccount.entityName}`,
+          remarks: adjustData.notes || '',
+          status: 'Completed',
+          createdByUid: auth.currentUser?.uid || 'system',
+          createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
+          createdByName: auth.currentUser?.email?.split('@')[0] || 'Finance Auditor',
+          createdAt: timestamp,
+          financialAccountId: selectedAccountId,
+          financialAccountCode: targetAccount.accountCode,
+          salaryMonth: adjustSalaryMonth
+        };
+
+        await addDoc(collection(db, 'expenses'), payload);
+
+      } else {
+        // 2. Regular adjustment double entry
+        const voucherCode = `ADJ-${new Date().getFullYear().toString().slice(-2)}-${randStr}`;
+
+        if (targetAccount) {
+          await financialAccountService.recordTransaction(selectedAccountId, {
+            accountId: selectedAccountId,
+            accountCode: targetAccount.accountCode,
+            entityType: targetAccount.entityType,
+            entityId: targetAccount.entityId,
+            entityName: targetAccount.entityName,
+            type: adjustData.type as 'Debit' | 'Credit',
+            amount: convertedAmt,
+            amountOriginal: amountVal,
+            currencyOriginal: adjustData.currency,
+            description: adjustData.title,
+            refNumber: voucherCode,
+            module: 'adjustment',
+            createdAt: timestamp,
+            createdByUid: auth.currentUser?.uid || 'system',
+            createdByName: auth.currentUser?.email?.split('@')[0] || 'Finance Auditor'
+          });
+        }
+
+        // Insert safe box / expense entry so it shows in the general daily ledger
+        const typeLabel = adjustData.type === 'Debit' ? '[MANUAL-DEBIT]' : '[MANUAL-CREDIT]';
+        const accountInfo = targetAccount ? ` (الحساب المالي: ${targetAccount.accountCode} - ${targetAccount.entityName})` : '';
+        const notesLabel = `${typeLabel} ${adjustData.title}${accountInfo}`;
+
+        const payload = {
+          expenseNumber: voucherCode,
+          type: 'General',
+          amount: amountVal,
+          currency: adjustData.currency,
+          recipientId: targetAccount ? targetAccount.entityId : 'adjustment',
+          recipientName: adjustData.recipientName || (isAr ? 'التعديلات المحاسبية' : 'Ledger Adjustments'),
+          notes: notesLabel + (adjustData.notes ? ` : ${adjustData.notes}` : ''),
+          status: 'Completed',
+          createdByUid: auth.currentUser?.uid || 'system',
+          createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
+          createdByName: auth.currentUser?.email?.split('@')[0] || 'Finance Auditor',
+          createdAt: timestamp,
+          financialAccountId: selectedAccountId || null,
+          financialAccountCode: targetAccount ? targetAccount.accountCode : null
+        };
+
+        await addDoc(collection(db, 'expenses'), payload);
       }
-
-      // 2. Insert safe box/expense entry so it shows in the general daily ledger
-      const typeLabel = adjustData.type === 'Debit' ? '[MANUAL-DEBIT]' : '[MANUAL-CREDIT]';
-      const accountInfo = targetAccount ? ` (الحساب المالي: ${targetAccount.accountCode} - ${targetAccount.entityName})` : '';
-      const notesLabel = `${typeLabel} ${adjustData.title}${accountInfo}`;
-
-      const payload = {
-        expenseNumber: voucherCode,
-        type: 'General',
-        amount: amountVal,
-        currency: adjustData.currency,
-        recipientId: targetAccount ? targetAccount.entityId : 'adjustment',
-        recipientName: adjustData.recipientName || (isAr ? 'التعديلات المحاسبية' : 'Ledger Adjustments'),
-        notes: notesLabel + (adjustData.notes ? ` : ${adjustData.notes}` : ''),
-        status: 'Completed',
-        createdByUid: auth.currentUser?.uid || 'system',
-        createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
-        createdByName: auth.currentUser?.email?.split('@')[0] || 'Finance Auditor',
-        createdAt: timestamp,
-        financialAccountId: selectedAccountId || null,
-        financialAccountCode: targetAccount ? targetAccount.accountCode : null
-      };
-
-      await addDoc(collection(db, 'expenses'), payload);
 
       notificationService.notify({
         title: isAr ? 'تم تقييد القيد بنجاح' : 'Adjustment Logged',
-        message: isAr ? `تم حفظ قيد تسويقي برقم: ${voucherCode}` : `Financial adjustments journal voucher added: ${voucherCode}`,
+        message: isAr ? 'تم حفظ قيد تسويقي وترحيله بنجاح' : 'Journal voucher registered and ledger synchronized.',
         type: 'success'
       });
 
@@ -528,6 +581,7 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
       });
       setTargetType('general');
       setSelectedAccountId('');
+      setIsSalaryPayment(false);
     } catch (err: any) {
       console.error(err);
       notificationService.notify({
@@ -556,8 +610,7 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
     const totalCustodySettled = courierExpenses.filter(e => e.status === 'Settled').reduce((sum, exp) => sum + convertToYER(exp.amount || 0, exp.currency), 0);
     const netLiableBalance = totalCustodyIssued - totalCustodySettled;
 
-    // Calculation for dynamic physical COD cash holdings (المبالغ التي تم تحصيلها من شحنات التوصيل ولم تسلم للمكتب بعد)
-    // All orders assigned to courier for delivery that are 'tem el taslim' but have outstanding cash in our db
+    // Calculation for dynamic physical COD cash holdings
     const currentUnremittedCargoCash = orders
       .filter(o => o.deliveryCourierId === auditedCourierId && (o.orderStatus === 'تم التسليم' || o.orderStatus === 'Delivered') && parseFloat(o.amountRemaining || 0) > 0);
 
@@ -581,6 +634,163 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
       successRate
     };
   }, [auditedCourierId, couriers, expenses, orders, settings]);
+
+  // Courier transactions list
+  const courierTransactions = useMemo(() => {
+    if (!auditedCourierId) return [];
+    return accountTransactions
+      .filter(tx => tx.entityType === 'courier' && tx.entityId === auditedCourierId)
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  }, [auditedCourierId, accountTransactions]);
+
+  // Full reconciliation and balance clearance for courier
+  const handleFullCourierReconciliation = async () => {
+    if (!courierAuditSheet) return;
+    const cour = courierAuditSheet.courier;
+    const currentBalance = cour.financialBalance || 0;
+    
+    if (!window.confirm(isAr 
+      ? `تحذير: هل أنت متأكد من تصفية ذمة المندوب (${cour.fullName}) بالكامل؟
+سيقوم هذا الإجراء بـ:
+1. تصفير رصيد الحساب المالي الحالي (${currentBalance.toLocaleString()} YER) بقيد محاسبي تعويضي.
+2. تصفية كافة العهد المالية المعلقة.
+3. توريد وتصفير كافة تحصيلات الطرود النقدية المعلقة (${courierAuditSheet.totalUnremittedCashValue.toLocaleString()} YER).
+هل تريد الاستمرار؟`
+      : `Warning: Confirm full audit reconciliation for ${cour.fullName}?
+This will:
+1. Zero out the financial account balance (${currentBalance.toLocaleString()} YER) with an offsetting journal entry.
+2. Reconcile all outstanding open custodies.
+3. Settle and remit all unremitted COD cargo collections (${courierAuditSheet.totalUnremittedCashValue.toLocaleString()} YER).
+Continue?`
+    )) return;
+
+    setBulkReconciliationLoading(true);
+    try {
+      const batch = writeBatch(db);
+      const timestamp = Date.now();
+      const randStr = Math.floor(1000 + Math.random() * 9000);
+      const mainVoucherCode = `AUDIT-${randStr}`;
+
+      // 1. Reconcile current financial balance if not zero
+      if (currentBalance !== 0) {
+        const linkedAccountId = cour.financialAccountId;
+        const linkedAccountCode = cour.financialAccountCode;
+
+        if (linkedAccountId) {
+          const type = currentBalance > 0 ? 'Credit' : 'Debit'; // Credit to reduce balance, Debit to increase it
+          const amount = Math.abs(currentBalance);
+
+          await financialAccountService.recordTransaction(linkedAccountId, {
+            accountId: linkedAccountId,
+            accountCode: linkedAccountCode || '',
+            entityType: 'courier',
+            entityId: cour.id,
+            entityName: cour.fullName,
+            type,
+            amount,
+            amountOriginal: amount,
+            currencyOriginal: 'YER',
+            description: isAr 
+              ? `قيد تسوية لمطابقة وتصفير الحساب المالي للمندوب — قيد إقفال` 
+              : `Offsetting adjustment to zero out courier account balance`,
+            refNumber: mainVoucherCode,
+            module: 'adjustment',
+            createdByUid: auth.currentUser?.uid || 'system',
+            createdByName: 'Finance Auditor',
+            createdAt: timestamp
+          });
+        }
+      }
+
+      // 2. Settle all pending open custodies
+      const pendingCustodies = courierAuditSheet.custodies.filter(c => c.status === 'Pending');
+      for (const exp of pendingCustodies) {
+        const docRef = doc(db, 'expenses', exp.id);
+        batch.update(docRef, {
+          status: 'Settled',
+          settledAt: timestamp,
+          settledByEmail: auth.currentUser?.email || 'admin@swiftship.system',
+          settledByName: 'Finance Auditor'
+        });
+
+        if (exp.linkedAccountId) {
+          const settledAmount = financialAccountService.convertToDefaultCurrency(
+            parseFloat(exp.amount || 0),
+            exp.currency || 'YER',
+            settings.currency || 'SAR',
+            { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+          );
+          await financialAccountService.recordTransaction(exp.linkedAccountId, {
+            accountId: exp.linkedAccountId,
+            accountCode: exp.linkedAccountCode || '',
+            entityType: 'courier',
+            entityId: cour.id,
+            entityName: cour.fullName,
+            type: 'Debit', // Reversal
+            amount: settledAmount,
+            amountOriginal: parseFloat(exp.amount || 0),
+            currencyOriginal: exp.currency || 'YER',
+            description: isAr ? `تسوية عهدة تلقائية: ${exp.expenseNumber}` : `Auto custody settlement: ${exp.expenseNumber}`,
+            refNumber: `${exp.expenseNumber}-SET`,
+            module: 'custody',
+            createdByUid: auth.currentUser?.uid || 'system',
+            createdByName: 'Finance Auditor',
+            createdAt: timestamp
+          });
+        }
+      }
+
+      // 3. Remit all unremitted COD cargo cash
+      courierAuditSheet.currentUnremittedCargoCash.forEach(ord => {
+        const orderRef = doc(db, 'orders', ord.id);
+        const prevPaid = parseFloat(ord.amountPaid || 0);
+        const rem = parseFloat(ord.amountRemaining || 0);
+
+        batch.update(orderRef, {
+          amountPaid: prevPaid + rem,
+          amountRemaining: 0,
+          paymentStatus: isAr ? 'خالص' : 'Fully Paid',
+          courierRemittedAt: timestamp
+        });
+      });
+
+      // 4. Create one big adjustment document in expenses
+      const expensesRef = collection(db, 'expenses');
+      await addDoc(expensesRef, {
+        expenseNumber: mainVoucherCode,
+        type: 'General',
+        amount: Math.abs(currentBalance) + courierAuditSheet.totalUnremittedCashValue,
+        currency: 'YER',
+        recipientId: cour.id,
+        recipientName: cour.fullName,
+        notes: `[MANUAL-DEBIT] قيد مطابقة شامل وإقفال ذمة المندوب ${cour.fullName}`,
+        status: 'Completed',
+        createdByUid: auth.currentUser?.uid || 'system',
+        createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
+        createdByName: 'Finance Auditor',
+        createdAt: timestamp
+      });
+
+      await batch.commit();
+
+      notificationService.notify({
+        title: isAr ? 'نجاح مطابقة الذمة بالكامل' : 'Full Audit Reconciled',
+        message: isAr 
+          ? `تم تصفير رصيد المندوب وتصفية كافة العهد وتحصيلات الشحنات بنجاح!` 
+          : `Audit successful: All custodies, cargo collections, and balances resolved to 0 YER for ${cour.fullName}.`,
+        type: 'success'
+      });
+    } catch (err: any) {
+      console.error(err);
+      notificationService.notify({
+        title: 'Audit transaction failed',
+        message: err.message || 'Error executing full courier reconciliation.',
+        type: 'error'
+      });
+    } finally {
+      setBulkReconciliationLoading(false);
+    }
+  };
 
   // Bulk Settle Courier's outstanding physical delivery receipts of COD cargo
   const [cargoRemitLoading, setCargoRemitLoading] = useState(false);
@@ -685,75 +895,57 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
     }
   };
 
-  // 3. Bilateral Customer Statement of Account Ledger (Standard matching sub-ledger)
+  // 3. Bilateral Customer Statement of Account Ledger (Standard matching sub-ledger using account_transactions)
   const customerLedgerDetails = useMemo(() => {
     if (!auditedCustomerId) return null;
     const cust = customers.find(c => c.id === auditedCustomerId);
     if (!cust) return null;
 
-    const customerOrders = orders.filter(o => o.customerId === auditedCustomerId);
-    
-    // Sort customer orders by date ascending to match chronological ledger rule
-    const sortedOrders = [...customerOrders].sort((a, b) => {
-      const d1 = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.createdAt || 0);
-      const d2 = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.createdAt || 0);
-      return d1 - d2;
-    });
+    const customerTx = accountTransactions.filter(tx => tx.entityType === 'customer' && tx.entityId === auditedCustomerId);
+    const sortedTx = [...customerTx].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
 
     const rows: any[] = [];
-    let cumulativeBalance = 0; // Cumulative customer debt (Total invoiced cost - total amount paid)
+    let cumulativeBalance = 0; // Cumulative customer debt (YER)
 
-    sortedOrders.forEach(o => {
-      const orderDate = o.createdAt?.toDate ? o.createdAt.toDate() : new Date(o.createdAt || Date.now());
-      const freightCost = parseFloat(o.totalCostYER || 0);
-      const paidCash = parseFloat(o.amountPaid || 0);
+    sortedTx.forEach(tx => {
+      const date = tx.createdAt ? new Date(tx.createdAt) : new Date();
+      const isDebit = tx.type === 'Debit';
+      const amt = tx.amount || 0;
 
-      // Row 1: Invoice debit entry (استحقاق قيمة الشحن)
-      if (freightCost > 0) {
-        cumulativeBalance += freightCost;
-        rows.push({
-          id: `INV-DEB-${o.id}`,
-          date: orderDate,
-          ref: o.orderNumber || 'ALX-INV',
-          description: isAr ? `قيد مديونية: شحن طرد [${o.orderSourceName || 'محطة شحن'}]` : `Invoiced freight debit: cargo [${o.orderSourceName}]`,
-          debit: freightCost,
-          credit: 0,
-          balance: cumulativeBalance
-        });
+      if (isDebit) {
+        cumulativeBalance += amt;
+      } else {
+        cumulativeBalance -= amt;
       }
 
-      // Row 2: Deposit credit entry (تسديد مالي مستلم)
-      if (paidCash > 0) {
-        cumulativeBalance -= paidCash;
-        rows.push({
-          id: `PMT-CRE-${o.id}`,
-          date: orderDate,
-          ref: `${o.orderNumber}-DEP`,
-          description: isAr ? `تحصيل مستلم: دفعة نقدية مقبوضة للطلب` : `Cash Payment: Deposit credited for order`,
-          debit: 0,
-          credit: paidCash,
-          balance: cumulativeBalance
-        });
-      }
+      rows.push({
+        id: tx.id || `TX-${Math.random()}`,
+        date,
+        ref: tx.refNumber || 'TX',
+        description: tx.description || (isDebit ? (isAr ? 'قيد مدين' : 'Debit Entry') : (isAr ? 'قيد دائن' : 'Credit Entry')),
+        debit: isDebit ? amt : 0,
+        credit: !isDebit ? amt : 0,
+        balance: cumulativeBalance
+      });
     });
 
     // Reversed for display (newest events first)
     const reversedRows = [...rows].reverse();
 
-    const grossFreightValuation = sortedOrders.reduce((sum, o) => sum + parseFloat(o.totalCostYER || 0), 0);
-    const netPaidRevenues = sortedOrders.reduce((sum, o) => sum + parseFloat(o.amountPaid || 0), 0);
-    const outstandingDebits = sortedOrders.reduce((sum, o) => sum + parseFloat(o.amountRemaining || 0), 0);
+    const grossFreightValuation = sortedTx.filter(t => t.type === 'Debit').reduce((sum, t) => sum + (t.amount || 0), 0);
+    const netPaidRevenues = sortedTx.filter(t => t.type === 'Credit').reduce((sum, t) => sum + (t.amount || 0), 0);
+    const outstandingDebits = cumulativeBalance > 0 ? cumulativeBalance : 0;
 
     return {
       customer: cust,
-      orders: sortedOrders,
+      orders: orders.filter(o => o.customerId === auditedCustomerId),
       accountingTimeline: reversedRows,
       grossFreightValuation,
       netPaidRevenues,
       outstandingDebits,
       currentOutstandingBalance: cumulativeBalance
     };
-  }, [auditedCustomerId, customers, orders, isAr]);
+  }, [auditedCustomerId, customers, accountTransactions, orders, isAr]);
 
   // FIFO Payment settlement for selected Customer outstanding debt
   const handleCustomerFIFOPayment = async (e: React.FormEvent) => {
@@ -840,6 +1032,41 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
       };
 
       await addDoc(adjustmentsRef, payload);
+
+      // --- Register Credit in Customer's Financial Account ---
+      const customerRecord = customerLedgerDetails.customer;
+      const linkedAccountId = customerRecord.financialAccountId;
+      const linkedAccountCode = customerRecord.financialAccountCode;
+
+      if (linkedAccountId) {
+        const convertedPaid = financialAccountService.convertToDefaultCurrency(
+          amountVal,
+          'YER',
+          settings.currency || 'YER',
+          { USD: settings.exchangeRateUSD || 535, SAR: settings.exchangeRateSAR || 140 }
+        );
+
+        await financialAccountService.recordTransaction(linkedAccountId, {
+          accountId: linkedAccountId,
+          accountCode: linkedAccountCode || '',
+          entityType: 'customer',
+          entityId: auditedCustomerId,
+          entityName: customerRecord.fullName,
+          type: 'Credit', // Credit transaction to reflect cash received
+          amount: convertedPaid,
+          amountOriginal: amountVal,
+          currencyOriginal: 'YER',
+          description: isAr 
+            ? `دفعة نقدية مستلمة على الحساب كشف حساب: ${payNotes || ''}` 
+            : `Cash payment received on account statement: ${payNotes || ''}`,
+          refNumber: voucherNum,
+          module: 'payment',
+          createdByUid: auth.currentUser?.uid || 'system',
+          createdByName: 'Finance Auditor',
+          createdAt: Date.now()
+        });
+      }
+
       await batch.commit();
 
       notificationService.notify({
@@ -1180,6 +1407,19 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
           <Wrench className="w-3.5 h-3.5 text-[#d4af37]" />
           {isAr ? '📦 سجل الأصول والثابتة وصيانتها' : 'Assets & Maintenance Portfolio'}
         </button>
+
+        {/* Tab 7: Salary History & Employee Statements */}
+        <button
+          onClick={() => setAccountingTab('salary_history')}
+          className={`pb-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 flex items-center gap-1.5 ${
+            accountingTab === 'salary_history' 
+              ? 'border-[#d4af37] text-white' 
+              : 'border-transparent text-slate-500 hover:text-slate-350'
+          }`}
+        >
+          <Users className="w-3.5 h-3.5 text-[#d4af37]" />
+          {isAr ? '💼 سجل الرواتب وكشف حساب الموظفين' : 'Salary History & Staff Statements'}
+        </button>
       </div>
 
       {/* RENDER TAB 1: GENERAL DOUBLE-ENTRY LEDGER */}
@@ -1224,7 +1464,7 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-black/20 p-4 rounded-2xl border border-slate-900">
+            <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 bg-black/20 p-4 rounded-2xl border border-slate-900">
               
               {/* Type Filter */}
               <div>
@@ -1237,6 +1477,24 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
                   <option value="all">{isAr ? 'جميع القيود' : 'All Ledger Entries'}</option>
                   <option value="Debit">{isAr ? 'مقبوضات / مدين (+)' : 'Inflows / Debits'}</option>
                   <option value="Credit">{isAr ? 'مصروفات وصرف / دائن (-)' : 'Outflows / Credits'}</option>
+                </select>
+              </div>
+
+              {/* Module Filter */}
+              <div>
+                <label className="block text-[9px] text-slate-500 font-extrabold uppercase mb-1">{isAr ? 'فلتر المعاملة (الوحدة)' : 'Module / Type'}</label>
+                <select
+                  value={moduleFilter}
+                  onChange={e => setModuleFilter(e.target.value as any)}
+                  className="bg-black/40 border border-slate-850 text-white rounded-lg px-3 py-1.5 text-xs font-bold outline-none focus:border-[#d4af37] w-full cursor-pointer"
+                >
+                  <option value="all">{isAr ? 'جميع الوحدات' : 'All Modules'}</option>
+                  <option value="order">{isAr ? 'طلبات الشحن الشحنات' : 'Cargo Orders'}</option>
+                  <option value="expenses">{isAr ? 'مصروفات عامة' : 'Expenses'}</option>
+                  <option value="custody">{isAr ? 'عهد مالية' : 'Custodies'}</option>
+                  <option value="payment">{isAr ? 'قبض دفعات' : 'Customer Payments'}</option>
+                  <option value="salary">{isAr ? 'صرف رواتب' : 'Salaries'}</option>
+                  <option value="adjustment">{isAr ? 'قيود تسوية' : 'Adjustments'}</option>
                 </select>
               </div>
 
@@ -1275,7 +1533,7 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
               <div>
                 <label className="block text-[9px] text-slate-500 font-extrabold uppercase mb-1">{isAr ? 'بحث سريع بالنص' : 'Interactive text search'}</label>
                 <div className="relative">
-                  <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 w-3 h-3" />
+                  <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-550 w-3 h-3" />
                   <input
                     type="text"
                     value={searchLedgerQuery}
@@ -1489,20 +1747,35 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
                       </span>
                     </div>
 
-                    {courierAuditSheet.totalUnremittedCashValue > 0 && (
+                    <div className="flex flex-col gap-2">
+                      {courierAuditSheet.totalUnremittedCashValue > 0 && (
+                        <button
+                          onClick={handleBulkRemitCourierCash}
+                          disabled={cargoRemitLoading}
+                          className="w-full bg-cyan-500 hover:bg-cyan-600 active:bg-cyan-700 text-black py-2 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-cyan-950/20 disabled:opacity-50 cursor-pointer"
+                        >
+                          {cargoRemitLoading ? (
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Receipt className="w-3.5 h-3.5" />
+                          )}
+                          {isAr ? 'توريد النقدية وتصفير تحصيلات الطرود' : 'Deposit COD Collections Cash'}
+                        </button>
+                      )}
+                      
                       <button
-                        onClick={handleBulkRemitCourierCash}
-                        disabled={cargoRemitLoading}
-                        className="w-full bg-cyan-500 hover:bg-cyan-600 active:bg-cyan-700 text-black py-2 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-cyan-950/20 disabled:opacity-50"
+                        onClick={handleFullCourierReconciliation}
+                        disabled={bulkReconciliationLoading}
+                        className="w-full bg-[#d4af37] hover:bg-[#bfa032] active:bg-[#aa8e2b] text-black py-2 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-yellow-950/20 disabled:opacity-50 cursor-pointer"
                       >
-                        {cargoRemitLoading ? (
+                        {bulkReconciliationLoading ? (
                           <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                         ) : (
-                          <Receipt className="w-3.5 h-3.5" />
+                          <Scale className="w-3.5 h-3.5" />
                         )}
-                        {isAr ? 'توريد النقدية وتصفير تحصيلات الطرود' : 'Deposit COD Collections Cash'}
+                        {isAr ? 'تصفير الذمة والمطابقة الكاملة' : 'Full Audit Reconciliation'}
                       </button>
-                    )}
+                    </div>
                   </div>
 
                   <div className="pt-2 border-t border-slate-850 flex justify-between items-center text-[10px] font-bold">
@@ -1561,6 +1834,43 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
                     {courierAuditSheet.custodies.length === 0 && (
                       <p className="p-12 text-center text-slate-550 font-bold font-mono text-[9px] uppercase select-none">
                         [ no_custody_vouchers_filed_for_courier ]
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* 2. Courier Transactions Ledger section */}
+                <div className="space-y-3 pt-4 border-t border-slate-850">
+                  <h3 className="text-xs font-black text-white uppercase tracking-wider pb-2 border-b border-slate-850">
+                    {isAr ? 'ثانياً: المعاملات المالية والحركات المقيدة على الحساب' : 'II. Financial Transactions Sub-Ledger'}
+                  </h3>
+                  
+                  <div className="divide-y divide-slate-850 space-y-2 max-h-60 overflow-y-auto pr-1">
+                    {courierTransactions.map((tx) => {
+                      const isDebit = tx.type === 'Debit';
+                      return (
+                        <div key={tx.id} className="pt-2 flex items-center justify-between text-xs">
+                          <div>
+                            <span className="bg-slate-900 border border-slate-800 text-[#d4af37] px-2 py-0.5 rounded text-[9px] font-mono mr-2">
+                              {tx.refNumber}
+                            </span>
+                            <span className="text-slate-305 text-slate-300 font-bold">{tx.description || tx.module}</span>
+                            <span className="text-[9px] text-slate-550 block font-normal">
+                              {tx.createdAt ? new Date(tx.createdAt).toLocaleDateString() : ''}
+                            </span>
+                          </div>
+                          
+                          <div className="text-right">
+                            <span className={`font-mono font-black ${isDebit ? 'text-emerald-400' : 'text-rose-500'}`}>
+                              {isDebit ? '+' : '-'}{tx.amount?.toLocaleString()} {tx.currencyOriginal}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {courierTransactions.length === 0 && (
+                      <p className="p-12 text-center text-slate-550 font-bold font-mono text-[9px] uppercase select-none">
+                        [ no_financial_transactions_logged_for_courier ]
                       </p>
                     )}
                   </div>
@@ -1874,6 +2184,7 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
                     <th className="p-4">{isAr ? 'رمز الحساب' : 'Account Code'}</th>
                     <th className="p-4">{isAr ? 'الاسم المستهدف' : 'Name'}</th>
                     <th className="p-4">{isAr ? 'نوع الحساب' : 'Type'}</th>
+                    <th className="p-4">{isAr ? 'الراتب الشهري' : 'Monthly Salary'}</th>
                     <th className="p-4">{isAr ? 'العملة الافتراضية' : 'Currency'}</th>
                     <th className="p-4">{isAr ? 'الرصيد باليمني' : 'YER Balance'}</th>
                     <th className="p-4">{isAr ? 'المعادل بالدولار' : 'USD Balance'}</th>
@@ -1922,6 +2233,15 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
                               : acc.entityType
                             }
                           </span>
+                        </td>
+                        <td className="p-4 font-mono text-slate-300">
+                          {acc.entityType === 'employee' && acc.monthlySalary !== undefined ? (
+                            <span className="text-[#d4af37] font-black">
+                              {acc.monthlySalary.toLocaleString()} {acc.currency}
+                            </span>
+                          ) : (
+                            <span className="text-slate-600">—</span>
+                          )}
                         </td>
                         <td className="p-4 text-slate-400 font-mono">
                           {acc.currency}
@@ -2019,6 +2339,477 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
           couriers={couriers}
         />
       )}
+
+      {/* RENDER TAB 7: SALARY HISTORY & EMPLOYEE STATEMENTS */}
+      {accountingTab === 'salary_history' && (() => {
+        // ── Derived data ──
+        const filteredSalaries = salaryHistory.filter(item => {
+          const q = salarySearch.toLowerCase();
+          const matchSearch = !q ||
+            (item.employeeName || '').toLowerCase().includes(q) ||
+            (item.voucherCode || '').toLowerCase().includes(q) ||
+            (item.accountCode || '').toLowerCase().includes(q);
+          const matchEmp = salaryEmployeeFilter === 'all' || item.employeeId === salaryEmployeeFilter;
+          const matchMonth = !salaryMonthFilter || item.salaryMonth === salaryMonthFilter;
+          return matchSearch && matchEmp && matchMonth;
+        });
+
+        const totalPaid = salaryHistory.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+        const uniqueStaff = new Set(salaryHistory.map(i => i.employeeId)).size;
+
+        // Employee statement transactions
+        const empStatementEmployee = employees.find(e => e.id === employeeStatementId);
+        const empStatementTxns = accountTransactions
+          .filter(tx => tx.entityId === employeeStatementId && tx.entityType === 'employee')
+          .concat(
+            salaryHistory
+              .filter(s => s.employeeId === employeeStatementId)
+              .map(s => ({
+                id: `SAL-${s.id}`,
+                createdAt: s.paidAt || s.createdAt,
+                description: isAr ? `صرف راتب شهر ${s.salaryMonth}` : `Salary payment for ${s.salaryMonth}`,
+                type: 'Credit',
+                amount: parseFloat(s.amount) || 0,
+                currency: s.currency || settings.currency || 'YER',
+                module: 'salary',
+                refNumber: s.voucherCode
+              }))
+          )
+          .filter(tx => {
+            if (empStmtDateFilter === '30days') {
+              const d = new Date(tx.createdAt);
+              return (Date.now() - d.getTime()) <= 30 * 24 * 60 * 60 * 1000;
+            }
+            if (empStmtDateFilter === 'custom' && empStmtStartDate && empStmtEndDate) {
+              const d = new Date(tx.createdAt);
+              return d >= new Date(empStmtStartDate) && d <= new Date(empStmtEndDate + 'T23:59:59');
+            }
+            return true;
+          })
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+        const empStmtCredit = empStatementTxns.filter(t => t.type === 'Credit').reduce((s, t) => s + (t.amount || 0), 0);
+        const empStmtDebit = empStatementTxns.filter(t => t.type === 'Debit').reduce((s, t) => s + (t.amount || 0), 0);
+        const empStmtBalance = empStmtDebit - empStmtCredit;
+
+        return (
+          <div className="space-y-6 pb-10">
+            {/* Print CSS */}
+            <style dangerouslySetInnerHTML={{__html: `
+              @media print {
+                body * { visibility: hidden; }
+                #salary-print-modal, #salary-print-modal * { visibility: visible; }
+                #salary-print-modal { position: absolute; left: 0; top: 0; width: 100%; background: white !important; color: black !important; }
+                .no-print { display: none !important; }
+              }
+            `}} />
+
+            {/* ── Sub-navigation: Salary list vs Employee Statement ── */}
+            <div className="flex items-center gap-3 flex-wrap">
+              <button
+                onClick={() => setEmployeeStatementId(null)}
+                className={`text-[11px] font-black uppercase tracking-wider px-4 py-2 rounded-xl border transition-all flex items-center gap-1.5 ${
+                  !employeeStatementId
+                    ? 'bg-[#d4af37]/15 border-[#d4af37]/40 text-[#d4af37]'
+                    : 'bg-black/30 border-slate-800 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Receipt className="w-3.5 h-3.5" />
+                {isAr ? 'سجل الرواتب' : 'Salary History'}
+              </button>
+              <span className="text-slate-700 text-xs">|</span>
+              <select
+                value={employeeStatementId || ''}
+                onChange={e => setEmployeeStatementId(e.target.value || null)}
+                className="bg-black/40 border border-slate-800 rounded-xl px-3 py-2 text-[11px] font-black text-slate-300 outline-none focus:border-[#d4af37]/50 cursor-pointer"
+              >
+                <option value="">{isAr ? '── كشف حساب موظف ──' : '── Employee Statement ──'}</option>
+                {employees.map(emp => (
+                  <option key={emp.id} value={emp.id}>{emp.fullName || emp.email}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* ════════════════════════════════════════════════════════ */}
+            {/* VIEW A: SALARY HISTORY LIST */}
+            {/* ════════════════════════════════════════════════════════ */}
+            {!employeeStatementId && (
+              <div className="space-y-5">
+                {/* Analytics Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-gradient-to-br from-[#121215] to-[#070708] p-5 rounded-2xl border border-slate-850 shadow-md flex flex-col justify-between">
+                    <span className="text-[9px] uppercase font-black tracking-wider text-slate-550 block mb-1">{isAr ? 'إجمالي الرواتب المصروفة' : 'Total Salaries Paid'}</span>
+                    <div className="flex items-baseline justify-between mt-2">
+                      <span className="text-xl font-mono font-black text-[#d4af37]">
+                        {totalPaid.toLocaleString()}
+                        <span className="text-xs font-sans text-slate-500 font-normal ml-1.5">{settings.currency || 'YER'}</span>
+                      </span>
+                      <Coins className="w-6 h-6 text-[#d4af37]/20 shrink-0" />
+                    </div>
+                  </div>
+                  <div className="bg-gradient-to-br from-[#121215] to-[#070708] p-5 rounded-2xl border border-slate-850 shadow-md flex flex-col justify-between">
+                    <span className="text-[9px] uppercase font-black tracking-wider text-slate-550 block mb-1">{isAr ? 'إجمالي سندات الصرف' : 'Total Salary Slips'}</span>
+                    <div className="flex items-baseline justify-between mt-2">
+                      <span className="text-xl font-mono font-black text-emerald-400">
+                        {salaryHistory.length}
+                        <span className="text-xs font-sans text-slate-500 font-normal ml-1.5">{isAr ? 'سند' : 'slips'}</span>
+                      </span>
+                      <Receipt className="w-6 h-6 text-emerald-500/20 shrink-0" />
+                    </div>
+                  </div>
+                  <div className="bg-gradient-to-br from-[#121215] to-[#070708] p-5 rounded-2xl border border-slate-850 shadow-md flex flex-col justify-between">
+                    <span className="text-[9px] uppercase font-black tracking-wider text-slate-550 block mb-1">{isAr ? 'الموظفين المستلمين للرواتب' : 'Staff Members Settled'}</span>
+                    <div className="flex items-baseline justify-between mt-2">
+                      <span className="text-xl font-mono font-black text-cyan-400">
+                        {uniqueStaff}
+                        <span className="text-xs font-sans text-slate-500 font-normal ml-1.5">{isAr ? 'موظف' : 'staff'}</span>
+                      </span>
+                      <UserCheck className="w-6 h-6 text-cyan-500/20 shrink-0" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Filter Belt */}
+                <div className="bg-[#121215] border border-slate-850 rounded-2xl p-4 flex flex-col md:flex-row gap-3">
+                  <div className="relative flex-1">
+                    <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
+                    <input
+                      type="text"
+                      placeholder={isAr ? 'ابحث باسم الموظف أو رقم السند...' : 'Search employee, voucher ID...'}
+                      value={salarySearch}
+                      onChange={e => setSalarySearch(e.target.value)}
+                      className="w-full bg-black/50 border border-slate-850 rounded-xl py-2.5 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/50 outline-none"
+                    />
+                  </div>
+                  <div className="relative min-w-[180px]">
+                    <select
+                      value={salaryEmployeeFilter}
+                      onChange={e => setSalaryEmployeeFilter(e.target.value)}
+                      className="w-full bg-black/50 border border-slate-850 rounded-xl py-2.5 px-3 text-xs font-bold text-slate-300 outline-none focus:border-[#d4af37]/50 cursor-pointer"
+                    >
+                      <option value="all">{isAr ? 'كل الموظفين' : 'All Staff'}</option>
+                      {employees.map(emp => (
+                        <option key={emp.id} value={emp.id}>{emp.fullName || emp.email}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="relative min-w-[140px]">
+                    <input
+                      type="month"
+                      value={salaryMonthFilter}
+                      onChange={e => setSalaryMonthFilter(e.target.value)}
+                      className="w-full bg-black/50 border border-slate-850 rounded-xl py-2.5 px-3 text-xs font-bold text-slate-300 outline-none focus:border-[#d4af37]/50 font-mono text-center cursor-pointer"
+                    />
+                  </div>
+                  {salaryMonthFilter && (
+                    <button
+                      onClick={() => setSalaryMonthFilter('')}
+                      className="bg-slate-900 hover:bg-slate-850 text-slate-400 px-3 py-2.5 rounded-xl border border-slate-850 text-xs font-black transition-all"
+                    >
+                      {isAr ? 'إلغاء الفلتر' : 'Clear'}
+                    </button>
+                  )}
+                </div>
+
+                {/* Salary History Table */}
+                <div className="bg-[#121215] border border-slate-850 rounded-3xl overflow-hidden shadow-2xl">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-right text-xs">
+                      <thead className="bg-[#0a0a0d] text-slate-500 text-[10px] font-black uppercase tracking-widest border-b border-slate-850">
+                        <tr>
+                          <th className="p-4 text-start">{isAr ? 'تاريخ الصرف' : 'Payment Date'}</th>
+                          <th className="p-4 text-start">{isAr ? 'الموظف المستلم' : 'Staff Member'}</th>
+                          <th className="p-4 text-start">{isAr ? 'رقم الحساب' : 'Account Code'}</th>
+                          <th className="p-4 text-center">{isAr ? 'الشهر المستحق' : 'Salary Month'}</th>
+                          <th className="p-4 text-start">{isAr ? 'رقم السند' : 'Voucher ID'}</th>
+                          <th className="p-4 text-start">{isAr ? 'البيان' : 'Notes'}</th>
+                          <th className="p-4 text-center">{isAr ? 'المبلغ المصروف' : 'Amount Paid'}</th>
+                          <th className="p-4 text-left">{isAr ? 'إجراءات' : 'Actions'}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-850/60 bg-black/10">
+                        {filteredSalaries.map(item => (
+                          <tr key={item.id} className="hover:bg-slate-950/40 transition-colors">
+                            <td className="p-4 font-mono font-bold text-slate-400 text-start" dir="ltr">
+                              {new Date(item.paidAt || item.createdAt).toLocaleString(isAr ? 'ar-YE' : 'en-US', {
+                                year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
+                              })}
+                            </td>
+                            <td className="p-4 text-start">
+                              <div className="flex items-center gap-2">
+                                <div className="w-7 h-7 rounded-lg bg-slate-900 border border-slate-850 flex items-center justify-center font-black text-[10px] text-[#d4af37] shrink-0">
+                                  {(item.employeeName || '?').substring(0, 1)}
+                                </div>
+                                <div>
+                                  <span className="font-extrabold text-white block">{item.employeeName}</span>
+                                  <button
+                                    onClick={() => setEmployeeStatementId(item.employeeId)}
+                                    className="text-[9px] text-[#d4af37]/70 hover:text-[#d4af37] font-bold underline underline-offset-2 transition"
+                                  >
+                                    {isAr ? 'عرض كشف الحساب' : 'View Statement'}
+                                  </button>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="p-4 text-start">
+                              <span className="font-mono text-[10px] text-slate-400 bg-slate-900/60 border border-slate-850 px-2 py-0.5 rounded-md">
+                                {item.accountCode || '—'}
+                              </span>
+                            </td>
+                            <td className="p-4 text-center font-mono font-black text-slate-300">
+                              <span className="bg-amber-950/20 text-amber-500 border border-amber-900/20 px-2 py-0.5 rounded-lg text-[10px]">
+                                {item.salaryMonth}
+                              </span>
+                            </td>
+                            <td className="p-4 font-mono text-xs font-black text-[#d4af37] text-start">{item.voucherCode}</td>
+                            <td className="p-4 text-slate-400 max-w-xs truncate text-start">{item.notes || '—'}</td>
+                            <td className="p-4 text-center font-mono font-black text-xs text-emerald-400">
+                              {(item.amount || 0).toLocaleString()} {item.currency || settings.currency}
+                            </td>
+                            <td className="p-4 text-left">
+                              <button
+                                onClick={() => setSelectedSalaryVoucher(item)}
+                                className="text-[#d4af37] bg-[#d4af37]/5 hover:bg-[#d4af37]/15 border border-[#d4af37]/15 p-2 rounded-xl transition flex items-center gap-1.5 font-bold"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                <span className="text-[10px]">{isAr ? 'معاينة' : 'View'}</span>
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                        {filteredSalaries.length === 0 && (
+                          <tr>
+                            <td colSpan={8} className="p-16 text-center text-slate-600 font-bold uppercase tracking-widest font-mono text-[10px]">
+                              {isAr ? '[ لم يتم العثور على قيود صرف رواتب ]' : '[ NO SALARY PAYOUT RECORDS FOUND ]'}
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ════════════════════════════════════════════════════════ */}
+            {/* VIEW B: EMPLOYEE ACCOUNT STATEMENT */}
+            {/* ════════════════════════════════════════════════════════ */}
+            {employeeStatementId && (
+              <div className="space-y-5">
+                {/* Employee header card */}
+                <div className="bg-gradient-to-r from-[#121215] to-[#0a0a0d] border border-[#d4af37]/20 rounded-3xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-2xl bg-[#d4af37]/10 border border-[#d4af37]/25 flex items-center justify-center font-black text-2xl text-[#d4af37]">
+                      {(empStatementEmployee?.fullName || empStatementEmployee?.email || '?')[0]}
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-black text-white">{empStatementEmployee?.fullName || empStatementEmployee?.email || employeeStatementId}</h2>
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                        {isAr ? 'كشف حساب الموظف' : 'Employee Account Statement'}
+                      </p>
+                      {empStatementEmployee?.monthlySalary && (
+                        <p className="text-xs font-mono text-[#d4af37] mt-0.5">
+                          {isAr ? 'الراتب الشهري:' : 'Monthly Salary:'} {empStatementEmployee.monthlySalary?.toLocaleString()} {empStatementEmployee.currency || settings.currency}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  {/* Summary metrics */}
+                  <div className="flex gap-4 flex-wrap">
+                    <div className="bg-black/40 border border-slate-850 rounded-2xl px-4 py-3 text-center min-w-[110px]">
+                      <span className="text-[9px] font-black uppercase text-slate-500 block">{isAr ? 'إجمالي المصروف' : 'Total Paid Out'}</span>
+                      <span className="text-base font-mono font-black text-rose-400">{empStmtCredit.toLocaleString()}</span>
+                    </div>
+                    <div className="bg-black/40 border border-slate-850 rounded-2xl px-4 py-3 text-center min-w-[110px]">
+                      <span className="text-[9px] font-black uppercase text-slate-500 block">{isAr ? 'إجمالي الوارد' : 'Total Received'}</span>
+                      <span className="text-base font-mono font-black text-emerald-400">{empStmtDebit.toLocaleString()}</span>
+                    </div>
+                    <div className="bg-black/40 border border-slate-850 rounded-2xl px-4 py-3 text-center min-w-[110px]">
+                      <span className="text-[9px] font-black uppercase text-slate-500 block">{isAr ? 'الرصيد الصافي' : 'Net Balance'}</span>
+                      <span className={`text-base font-mono font-black ${empStmtBalance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {empStmtBalance.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Statement Filters */}
+                <div className="bg-[#121215] border border-slate-850 rounded-2xl p-4 flex flex-col md:flex-row gap-3 items-start md:items-center">
+                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">{isAr ? 'تصفية حسب الفترة:' : 'Filter by Period:'}</span>
+                  {(['all', '30days', 'custom'] as const).map(opt => (
+                    <button
+                      key={opt}
+                      onClick={() => setEmpStmtDateFilter(opt)}
+                      className={`text-[11px] font-black px-3 py-1.5 rounded-lg border transition-all ${
+                        empStmtDateFilter === opt
+                          ? 'bg-[#d4af37]/15 border-[#d4af37]/40 text-[#d4af37]'
+                          : 'bg-black/30 border-slate-800 text-slate-500 hover:text-slate-300'
+                      }`}
+                    >
+                      {opt === 'all' ? (isAr ? 'الكل' : 'All Time') : opt === '30days' ? (isAr ? 'آخر 30 يوم' : 'Last 30 Days') : (isAr ? 'نطاق مخصص' : 'Custom Range')}
+                    </button>
+                  ))}
+                  {empStmtDateFilter === 'custom' && (
+                    <>
+                      <input type="date" value={empStmtStartDate} onChange={e => setEmpStmtStartDate(e.target.value)}
+                        className="bg-black/50 border border-slate-850 rounded-xl py-1.5 px-3 text-xs font-bold text-slate-300 outline-none focus:border-[#d4af37]/50" />
+                      <span className="text-slate-600 text-xs">—</span>
+                      <input type="date" value={empStmtEndDate} onChange={e => setEmpStmtEndDate(e.target.value)}
+                        className="bg-black/50 border border-slate-850 rounded-xl py-1.5 px-3 text-xs font-bold text-slate-300 outline-none focus:border-[#d4af37]/50" />
+                    </>
+                  )}
+                  <button
+                    onClick={() => window.print()}
+                    className="mr-auto bg-[#d4af37]/10 hover:bg-[#d4af37]/20 border border-[#d4af37]/25 text-[#d4af37] px-3 py-1.5 rounded-xl text-[10px] font-black flex items-center gap-1.5 transition-all no-print"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    {isAr ? 'طباعة الكشف' : 'Print Statement'}
+                  </button>
+                </div>
+
+                {/* Statement Table */}
+                <div className="bg-[#121215] border border-slate-850 rounded-3xl overflow-hidden shadow-2xl" id="emp-statement-print">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-right text-xs">
+                      <thead className="bg-[#0a0a0d] text-slate-500 text-[10px] font-black uppercase tracking-widest border-b border-slate-850">
+                        <tr>
+                          <th className="p-4 text-start">{isAr ? 'التاريخ والوقت' : 'Date & Time'}</th>
+                          <th className="p-4 text-start">{isAr ? 'البيان' : 'Description'}</th>
+                          <th className="p-4 text-start">{isAr ? 'المرجع' : 'Reference'}</th>
+                          <th className="p-4 text-start">{isAr ? 'نوع العملية' : 'Module'}</th>
+                          <th className="p-4 text-center">{isAr ? 'مدين (وارد)' : 'Debit (In)'}</th>
+                          <th className="p-4 text-center">{isAr ? 'دائن (صادر)' : 'Credit (Out)'}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-850/60 bg-black/10">
+                        {empStatementTxns.map(tx => (
+                          <tr key={tx.id} className="hover:bg-slate-950/40 transition-colors">
+                            <td className="p-4 font-mono text-slate-400 text-start" dir="ltr">
+                              {new Date(tx.createdAt).toLocaleString(isAr ? 'ar-YE' : 'en-US', {
+                                year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
+                              })}
+                            </td>
+                            <td className="p-4 text-start text-slate-300 font-bold max-w-xs truncate">{tx.description}</td>
+                            <td className="p-4 text-start">
+                              <span className="font-mono text-[10px] text-[#d4af37] bg-amber-950/20 border border-amber-900/20 px-2 py-0.5 rounded-md">
+                                {tx.refNumber || '—'}
+                              </span>
+                            </td>
+                            <td className="p-4 text-start">
+                              <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg border ${
+                                tx.module === 'salary'
+                                  ? 'bg-purple-950/30 text-purple-400 border-purple-900/30'
+                                  : tx.module === 'order'
+                                  ? 'bg-blue-950/30 text-blue-400 border-blue-900/30'
+                                  : 'bg-slate-900 text-slate-500 border-slate-800'
+                              }`}>
+                                {tx.module === 'salary' ? (isAr ? 'راتب' : 'Salary') :
+                                 tx.module === 'order' ? (isAr ? 'طلب' : 'Order') :
+                                 tx.module === 'expenses' ? (isAr ? 'مصروف' : 'Expense') :
+                                 tx.module || '—'}
+                              </span>
+                            </td>
+                            <td className="p-4 text-center font-mono font-black text-emerald-400">
+                              {tx.type === 'Debit' ? `${(tx.amount || 0).toLocaleString()} ${tx.currency || ''}` : '—'}
+                            </td>
+                            <td className="p-4 text-center font-mono font-black text-rose-400">
+                              {tx.type === 'Credit' ? `${(tx.amount || 0).toLocaleString()} ${tx.currency || ''}` : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                        {empStatementTxns.length === 0 && (
+                          <tr>
+                            <td colSpan={6} className="p-16 text-center text-slate-600 font-bold uppercase tracking-widest font-mono text-[10px]">
+                              {isAr ? '[ لا توجد حركات مسجلة لهذا الموظف ]' : '[ NO TRANSACTIONS FOUND FOR THIS EMPLOYEE ]'}
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                      {empStatementTxns.length > 0 && (
+                        <tfoot className="bg-[#0a0a0d] border-t border-slate-850">
+                          <tr>
+                            <td colSpan={4} className="p-4 text-start font-black text-slate-400 text-[10px] uppercase tracking-wider">
+                              {isAr ? 'المجموع الإجمالي للفترة' : 'Period Grand Totals'}
+                            </td>
+                            <td className="p-4 text-center font-mono font-black text-emerald-400">{empStmtDebit.toLocaleString()}</td>
+                            <td className="p-4 text-center font-mono font-black text-rose-400">{empStmtCredit.toLocaleString()}</td>
+                          </tr>
+                        </tfoot>
+                      )}
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ════════════ SALARY SLIP VOUCHER MODAL ════════════ */}
+            {selectedSalaryVoucher && (
+              <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 no-print">
+                <div className="bg-[#0c0c0f] border border-[#d4af37]/25 rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden flex flex-col font-sans" id="salary-print-modal">
+                  <div className="bg-black/40 p-5 border-b border-slate-850 flex justify-between items-center shrink-0 no-print">
+                    <h3 className="font-black text-white text-xs uppercase tracking-widest flex items-center gap-2">
+                      <Receipt className="w-4 h-4 text-[#d4af37]" />
+                      {isAr ? 'سند صرف راتب شهري رسمي' : 'Official Salary Slip Voucher'}
+                    </h3>
+                    <button onClick={() => setSelectedSalaryVoucher(null)} className="text-slate-500 hover:text-white p-1 bg-slate-900 border border-slate-800 rounded-lg">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="p-8 space-y-6 text-start flex-1 overflow-y-auto bg-white text-black font-sans leading-relaxed select-all">
+                    <div className="text-center pb-6 border-b border-slate-300">
+                      <h2 className="text-lg font-black tracking-wider text-slate-800">{settings.systemName || settings.companyName || 'SwiftShip'}</h2>
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">{isAr ? 'سند صرف رواتب الموظفين' : 'Salary Payout Receipt'}</p>
+                      <p className="text-[9px] font-mono text-slate-400 mt-0.5">{selectedSalaryVoucher.voucherCode}</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 text-xs">
+                      <div>
+                        <span className="text-slate-500 block text-[9px] uppercase font-bold">{isAr ? 'الموظف المستلم' : 'Staff Member'}</span>
+                        <span className="font-extrabold text-slate-800 text-sm mt-0.5 block">{selectedSalaryVoucher.employeeName}</span>
+                        <span className="text-[10px] font-mono text-slate-600 block mt-0.5">{isAr ? 'حساب: ' : 'A/C: '}{selectedSalaryVoucher.accountCode}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-slate-500 block text-[9px] uppercase font-bold">{isAr ? 'تاريخ الصرف' : 'Payment Date'}</span>
+                        <span className="font-bold text-slate-700 mt-0.5 block font-mono">
+                          {new Date(selectedSalaryVoucher.paidAt || selectedSalaryVoucher.createdAt).toLocaleString(isAr ? 'ar-YE' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="bg-slate-100 border border-slate-200 rounded-xl p-4 space-y-2.5">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-slate-500 font-bold">{isAr ? 'الشهر المستحق' : 'Salary Period'}</span>
+                        <span className="font-mono font-black text-slate-800 bg-slate-200 px-2 py-0.5 rounded">{selectedSalaryVoucher.salaryMonth}</span>
+                      </div>
+                      <div className="border-t border-slate-200/80 my-2 pt-2 flex justify-between items-center text-sm font-black">
+                        <span className="text-slate-800">{isAr ? 'المبلغ الصافي المصروف' : 'Net Amount Disbursed'}</span>
+                        <span className="font-mono text-lg text-emerald-600">{(selectedSalaryVoucher.amount || 0).toLocaleString()} {selectedSalaryVoucher.currency || settings.currency}</span>
+                      </div>
+                    </div>
+                    <div className="text-xs">
+                      <span className="text-slate-500 block text-[9px] uppercase font-bold mb-1">{isAr ? 'البيان' : 'Narrative'}</span>
+                      <p className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 italic font-bold">
+                        {selectedSalaryVoucher.notes || (isAr ? `صرف راتب شهر ${selectedSalaryVoucher.salaryMonth}` : `Salary paid for ${selectedSalaryVoucher.salaryMonth}`)}
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-3 gap-4 text-center pt-8 border-t border-slate-200/80 text-[10px] font-bold text-slate-600">
+                      <div className="space-y-8"><span>{isAr ? 'توقيع أمين الصندوق' : 'Cashier'}</span><div className="border-b border-slate-300 w-3/4 mx-auto"></div></div>
+                      <div className="space-y-8"><span>{isAr ? 'توقيع المحاسب' : 'Accountant'}</span><div className="border-b border-slate-300 w-3/4 mx-auto"></div></div>
+                      <div className="space-y-8"><span>{isAr ? 'توقيع المستلم' : 'Recipient'}</span><div className="border-b border-slate-300 w-3/4 mx-auto"></div></div>
+                    </div>
+                  </div>
+                  <div className="p-4 bg-black/40 border-t border-slate-850 flex justify-end gap-3 shrink-0 no-print">
+                    <button type="button" onClick={() => setSelectedSalaryVoucher(null)} className="px-5 py-2.5 text-slate-400 font-bold hover:bg-slate-850/40 rounded-xl transition">
+                      {isAr ? 'إغلاق' : 'Close'}
+                    </button>
+                    <button onClick={() => window.print()} className="px-6 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl shadow-lg transition flex items-center gap-1.5">
+                      <Printer className="w-4 h-4" /> {isAr ? 'طباعة السند' : 'Print Voucher'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* MODAL 1: PRECISE MANUAL JOURNAL ENTRY ADJUSTMENT ADJUSTMENT */}
       {isAdjustmentModalOpen && (
@@ -2124,6 +2915,43 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
                         </option>
                       ))}
                   </select>
+                </div>
+              )}
+
+              {/* If targetType is employee, show option for Salary Payment */}
+              {targetType === 'employee' && selectedAccountId && (
+                <div className="bg-black/30 border border-slate-850 rounded-xl p-3 space-y-3">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input 
+                      type="checkbox"
+                      checked={isSalaryPayment}
+                      onChange={e => {
+                        const checked = e.target.checked;
+                        setIsSalaryPayment(checked);
+                        const acc = financialAccounts.find(a => a.id === selectedAccountId);
+                        if (checked && acc && acc.monthlySalary) {
+                          setAdjustData(prev => ({ ...prev, amount: String(acc.monthlySalary) }));
+                        }
+                      }}
+                      className="w-4 h-4 rounded border-slate-800 bg-slate-950 text-[#d4af37] focus:ring-0 cursor-pointer accent-[#d4af37]"
+                    />
+                    <span className="text-xs font-black text-white">
+                      {isAr ? 'صرف كراتب شهري رسمي' : 'File as Official Monthly Salary'}
+                    </span>
+                  </label>
+                  
+                  {isSalaryPayment && (
+                    <div className="animate-fade-in">
+                      <label className="block text-[9px] font-black text-slate-500 mb-1.5 uppercase">{isAr ? 'الشهر المستحق للراتب *' : 'Salary Month *'}</label>
+                      <input 
+                        type="month"
+                        required
+                        value={adjustSalaryMonth}
+                        onChange={e => setAdjustSalaryMonth(e.target.value)}
+                        className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-2.5 text-xs font-bold font-mono text-center outline-none focus:border-[#d4af37]"
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 

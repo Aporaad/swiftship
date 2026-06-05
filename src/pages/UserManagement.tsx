@@ -266,10 +266,10 @@ export default function UserManagement() {
 
   // ── Forms ────────────────────────────────────────────────
   const [editFormData, setEditFormData] = useState({
-    fullName: '', role: '', disabled: false, commissionRate: 0, username: '', systemPin: ''
+    fullName: '', role: '', disabled: false, commissionRate: 0, username: '', systemPin: '', monthlySalary: 0
   });
   const [addFormData, setAddFormData] = useState({
-    fullName: '', username: '', email: '', password: '', systemPin: '', role: 'Employee', commissionRate: 0
+    fullName: '', username: '', email: '', password: '', systemPin: '', role: 'Employee', commissionRate: 0, monthlySalary: 0
   });
 
   // ── Roles ────────────────────────────────────────────────
@@ -358,7 +358,8 @@ export default function UserManagement() {
     setEditFormData({
       fullName: user.fullName || '', username: user.username || '',
       role: user.role || 'Employee', disabled: user.disabled || false,
-      commissionRate: user.commissionRate || 0, systemPin: user.systemPin || ''
+      commissionRate: user.commissionRate || 0, systemPin: user.systemPin || '',
+      monthlySalary: user.monthlySalary || 0
     });
     setIsEditModalOpen(true);
   };
@@ -380,11 +381,16 @@ export default function UserManagement() {
         role: isRoot ? 'Admin' : editFormData.role,
         disabled: isRoot ? false : editFormData.disabled,
         commissionRate: editFormData.commissionRate, systemPin: editFormData.systemPin,
+        monthlySalary: editFormData.monthlySalary,
         updatedAt: Date.now()
       });
       // Sync financial account name if changed
       if (editFormData.fullName !== selectedUser.fullName && selectedUser.financialAccountId) {
         await financialAccountService.updateAccountEntityName(selectedUser.id, editFormData.fullName);
+      }
+      // Sync monthly salary change in financial account
+      if (editFormData.monthlySalary !== (selectedUser.monthlySalary || 0)) {
+        await financialAccountService.updateMonthlySalary(selectedUser.id, editFormData.monthlySalary);
       }
       await activityLogService.log('edit_user', editFormData.fullName, { userId: selectedUser.id });
       notificationService.notify({ title: t('تم التحديث', 'Updated'), message: t(`تم تحديث ${editFormData.fullName}`, `${editFormData.fullName} updated`), type: 'info', category: 'system' });
@@ -460,16 +466,18 @@ export default function UserManagement() {
         fullName: addFormData.fullName, email: addFormData.email.toLowerCase(),
         username: addFormData.username, systemPin: addFormData.systemPin,
         role: addFormData.role, commissionRate: addFormData.commissionRate,
+        monthlySalary: addFormData.monthlySalary,
         disabled: false, createdAt: Date.now()
       });
 
-      // Auto-create financial account for employee (2130-xxxx)
+      // Auto-create financial account for employee (2130-xxxx) with monthly salary
       try {
         await financialAccountService.createAccountForEntity(
           'employee',
           newUser.uid,
           addFormData.fullName,
-          settings.currency || 'YER'
+          settings.currency || 'YER',
+          addFormData.monthlySalary
         );
       } catch (accErr) {
         console.warn('[UserManagement] Could not create financial account for employee:', accErr);
@@ -478,7 +486,7 @@ export default function UserManagement() {
       await activityLogService.log('add_user', addFormData.fullName, { email: addFormData.email, role: addFormData.role });
       notificationService.notify({ title: t('تم إنشاء الحساب', 'Account Created'), message: t(`تم إنشاء حساب ${addFormData.fullName}`, `${addFormData.fullName} account created`), type: 'success', category: 'system' });
       setIsAddModalOpen(false);
-      setAddFormData({ fullName: '', username: '', email: '', password: '', systemPin: '', role: 'Employee', commissionRate: 0 });
+      setAddFormData({ fullName: '', username: '', email: '', password: '', systemPin: '', role: 'Employee', commissionRate: 0, monthlySalary: 0 });
     } catch (err: any) {
       let msg = err.message;
       if (err.code === 'auth/email-already-in-use') msg = t('البريد مسجل في نظام المصادقة', 'Email already in auth system');
@@ -790,7 +798,9 @@ export default function UserManagement() {
                   <th className="p-4 text-start">{t('الموظف', 'Staff Member')}</th>
                   <th className="p-4 text-start">{t('البريد', 'Email')}</th>
                   <th className="p-4 text-start">{t('الدور', 'Role')}</th>
+                  <th className="p-4 text-center">{t('الراتب', 'Salary')}</th>
                   <th className="p-4 text-center">{t('عمولة%', 'Commission%')}</th>
+                  <th className="p-4 text-center">{t('الرصيد المالي', 'Balance')}</th>
                   <th className="p-4 text-center">PIN</th>
                   <th className="p-4 text-center">{t('الحالة', 'Status')}</th>
                   <th className="p-4 text-center">{t('آخر ظهور', 'Last Seen')}</th>
@@ -829,7 +839,11 @@ export default function UserManagement() {
                       </td>
                       <td className="p-4 font-mono text-slate-400 text-[10px]" dir="ltr">{user.email}</td>
                       <td className="p-4"><span className={`px-2.5 py-1 rounded-lg border text-[9px] font-black uppercase tracking-wider ${getRoleBadgeStyle(user.role)}`}>{user.role}</span></td>
+                      <td className="p-4 text-center font-mono text-[#d4af37] font-black">{(user.monthlySalary || 0).toLocaleString()} {settings.currency || 'YER'}</td>
                       <td className="p-4 text-center font-mono text-slate-300 font-black">{user.commissionRate || 0}%</td>
+                      <td className={`p-4 text-center font-mono font-black ${(user.financialBalance || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {(user.financialBalance || 0).toLocaleString()} {settings.currency || 'YER'}
+                      </td>
                       <td className="p-4 text-center font-mono text-slate-400 font-semibold text-[11px] tracking-widest">{user.systemPin || '—'}</td>
                       <td className="p-4 text-center">
                         {user.disabled ? (
@@ -1406,7 +1420,7 @@ export default function UserManagement() {
                   </button>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الدور', 'Role')}</label>
                   <select value={addFormData.role} onChange={e => setAddFormData({...addFormData, role: e.target.value})} className="w-full bg-black/50 border border-slate-800 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold">
@@ -1416,6 +1430,10 @@ export default function UserManagement() {
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('نسبة العمولة%', 'Commission%')}</label>
                   <input type="number" min="0" max="100" step="0.1" value={addFormData.commissionRate} onChange={e => setAddFormData({...addFormData, commissionRate: parseFloat(e.target.value) || 0})} className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الراتب الشهري', 'Monthly Salary')}</label>
+                  <input type="number" min="0" value={addFormData.monthlySalary} onChange={e => setAddFormData({...addFormData, monthlySalary: parseFloat(e.target.value) || 0})} className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono" />
                 </div>
               </div>
               <div className="pt-3 flex justify-end gap-3 border-t border-slate-800/50">
@@ -1454,7 +1472,7 @@ export default function UserManagement() {
                   <input type="text" maxLength={4} value={editFormData.systemPin} onChange={e => setEditFormData({...editFormData, systemPin: e.target.value})} className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-center tracking-widest" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الدور', 'Role')}</label>
                   <select disabled={ROOT_EMAILS.includes(selectedUser.email) || selectedUser.isRoot} value={editFormData.role} onChange={e => setEditFormData({...editFormData, role: e.target.value})} className="w-full bg-black/50 border border-slate-800 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed">
@@ -1464,6 +1482,10 @@ export default function UserManagement() {
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('عمولة%', 'Commission%')}</label>
                   <input type="number" min="0" max="100" step="0.1" value={editFormData.commissionRate} onChange={e => setEditFormData({...editFormData, commissionRate: parseFloat(e.target.value) || 0})} className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الراتب الشهري', 'Monthly Salary')}</label>
+                  <input type="number" min="0" value={editFormData.monthlySalary} onChange={e => setEditFormData({...editFormData, monthlySalary: parseFloat(e.target.value) || 0})} className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono" />
                 </div>
               </div>
               {!ROOT_EMAILS.includes(selectedUser.email) && !selectedUser.isRoot && (

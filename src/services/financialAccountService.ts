@@ -41,6 +41,7 @@ export interface FinancialAccount {
   createdAt: number;
   updatedAt: number;
   notes?: string;
+  monthlySalary?: number;       // Default monthly salary (for employees)
 }
 
 export interface AccountTransaction {
@@ -56,7 +57,8 @@ export interface AccountTransaction {
   currencyOriginal: string;     // Original currency (YER, USD, SAR)
   description: string;          // Transaction description
   refNumber: string;            // Reference number (expense/order/adjustment)
-  module: 'expense' | 'order' | 'adjustment' | 'custody' | 'payment';
+  module: 'expense' | 'order' | 'adjustment' | 'custody' | 'payment' | 'salary';
+  salaryMonth?: string;         // e.g. '2026-06' for salary payments
   createdAt: number;
   createdByUid?: string;
   createdByName?: string;
@@ -93,7 +95,8 @@ class FinancialAccountService {
     entityType: AccountEntityType,
     entityId: string,
     entityName: string,
-    currency: string
+    currency: string,
+    monthlySalary?: number
   ): Promise<FinancialAccount> {
     try {
       const prefix = ACCOUNT_PREFIXES[entityType];
@@ -115,20 +118,25 @@ class FinancialAccountService {
         isActive: true,
         createdAt: now,
         updatedAt: now,
-        notes: ''
+        notes: '',
+        ...(monthlySalary !== undefined && { monthlySalary })
       };
 
       const ref = await addDoc(collection(db, 'accounts'), accountData);
       
       // Update the entity's document with the account code reference
       const entityCollection = this.getEntityCollection(entityType);
-      await updateDoc(doc(db, entityCollection, entityId), {
+      const entityUpdateData: any = {
         financialAccountId: ref.id,
         financialAccountCode: accountCode,
         financialBalance: 0,
         financialCurrency: currency,
         updatedAt: now
-      });
+      };
+      if (monthlySalary !== undefined) {
+        entityUpdateData.monthlySalary = monthlySalary;
+      }
+      await updateDoc(doc(db, entityCollection, entityId), entityUpdateData);
 
       activityLogService.log(
         'create_financial_account' as any,
@@ -226,6 +234,115 @@ class FinancialAccountService {
         refNumber: transactionData.refNumber
       }
     );
+  }
+
+  /**
+   * Record a salary payment for an employee
+   * Creates an account_transaction + salary_history record atomically
+   */
+  async recordSalaryPayment(params: {
+    employeeId: string;
+    employeeName: string;
+    accountId: string;
+    accountCode: string;
+    amount: number;
+    currency: string;
+    salaryMonth: string;        // Format: 'YYYY-MM'
+    notes?: string;
+    createdByUid?: string;
+    createdByName?: string;
+  }): Promise<string> {
+    const now = Date.now();
+    const randStr = Math.floor(1000 + Math.random() * 9000);
+    const voucherCode = `SAL-${params.salaryMonth.replace('-', '')}-${randStr}`;
+
+    // 1. Record in account_transactions (Credit on employee account = salary paid out)
+    await this.recordTransaction(params.accountId, {
+      accountId: params.accountId,
+      accountCode: params.accountCode,
+      entityType: 'employee',
+      entityId: params.employeeId,
+      entityName: params.employeeName,
+      type: 'Credit',  // Credit = money paid out to employee
+      amount: params.amount,
+      amountOriginal: params.amount,
+      currencyOriginal: params.currency,
+      description: `صرف راتب شهر ${params.salaryMonth} — ${params.employeeName}`,
+      refNumber: voucherCode,
+      module: 'salary',
+      salaryMonth: params.salaryMonth,
+      createdAt: now,
+      createdByUid: params.createdByUid || 'system',
+      createdByName: params.createdByName || 'Admin'
+    });
+
+    // 2. Record in salary_history collection for the dedicated salary history page
+    await addDoc(collection(db, 'salary_history'), {
+      employeeId: params.employeeId,
+      employeeName: params.employeeName,
+      accountId: params.accountId,
+      accountCode: params.accountCode,
+      amount: params.amount,
+      currency: params.currency,
+      salaryMonth: params.salaryMonth,
+      voucherCode,
+      notes: params.notes || '',
+      status: 'Paid',
+      paidAt: now,
+      createdByUid: params.createdByUid || 'system',
+      createdByName: params.createdByName || 'Admin',
+      createdAt: now
+    });
+
+    activityLogService.log(
+      'salary_payment' as any,
+      params.employeeName,
+      {
+        salaryMonth: params.salaryMonth,
+        amount: params.amount,
+        currency: params.currency,
+        voucherCode
+      }
+    );
+
+    return voucherCode;
+  }
+
+  /**
+   * Get salary history for a specific employee or all
+   */
+  async getSalaryHistory(employeeId?: string): Promise<any[]> {
+    try {
+      const q = employeeId 
+        ? query(collection(db, 'salary_history'), where('employeeId', '==', employeeId), orderBy('createdAt', 'desc'))
+        : query(collection(db, 'salary_history'), orderBy('createdAt', 'desc'));
+        
+      const snap = await getDocs(q);
+      return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    } catch (error) {
+      console.error('[FinancialAccountService] Error fetching salary history:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Update monthly salary for an employee account
+   */
+  async updateMonthlySalary(employeeId: string, monthlySalary: number): Promise<void> {
+    try {
+      const account = await this.getAccountByEntityId(employeeId);
+      if (!account || !account.id) return;
+      await updateDoc(doc(db, 'accounts', account.id), {
+        monthlySalary,
+        updatedAt: Date.now()
+      });
+      await updateDoc(doc(db, 'users', employeeId), {
+        monthlySalary,
+        updatedAt: Date.now()
+      });
+    } catch (error) {
+      console.error('[FinancialAccountService] Error updating monthly salary:', error);
+    }
   }
 
   /**

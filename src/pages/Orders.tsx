@@ -1639,13 +1639,130 @@ export default function Orders() {
     if (selectedOrderIds.length === 0) return;
     setIsBatchUpdating(true);
     try {
-      const promises = selectedOrderIds.map(orderId => {
+      const promises = selectedOrderIds.map(async (orderId) => {
         const defaultLocation = newStatus === 'وصل مستودع السعودية' ? 'مستودع السعودية للتعبئة' : 
                                 newStatus === 'وصل مركز التوزيع في اليمن' ? 'مستودع صنعاء الرئيسي' : 'قيد النقل';
-        return updateDoc(doc(db, 'orders', orderId), {
+        
+        const ord = orders.find(o => o.id === orderId);
+        if (!ord) return;
+
+        const wasDelivered = ord.orderStatus === 'تم التسليم';
+        const isDelivered = newStatus === 'تم التسليم';
+        const remainingVal = parseFloat(ord.amountRemaining || '0');
+        const courierId = ord.deliveryCourierId;
+
+        let extraUpdateFields: any = {};
+
+        if (isDelivered && !wasDelivered && remainingVal > 0 && courierId) {
+          // Create auto-custody for courier
+          const YY = String(new Date().getFullYear()).slice(-2);
+          const MM = String(new Date().getMonth() + 1).padStart(2, '0');
+          const expenseNumber = `EXP-${YY}${MM}-${Math.floor(1000 + Math.random() * 9000)}`;
+          
+          const courierRecord = couriers.find(c => c.id === courierId);
+          const courierName = courierRecord ? courierRecord.fullName : (isAr ? 'مندوب توصيل' : 'Delivery Courier');
+          const linkedAccountId = courierRecord?.financialAccountId || null;
+          const linkedAccountCode = courierRecord?.financialAccountCode || null;
+
+          const convertedRemainingVal = financialAccountService.convertToDefaultCurrency(
+            remainingVal,
+            'YER',
+            settings.currency || 'YER',
+            { USD: ord.exchangeRateUSD || settings.exchangeRateUSD, SAR: ord.exchangeRateYER || settings.exchangeRateSAR }
+          );
+
+          const custodyPayload = {
+            expenseNumber,
+            category: 'custody',
+            type: 'Custody',
+            amount: remainingVal,
+            currency: 'YER',
+            amountInDefaultCurrency: convertedRemainingVal,
+            recipientId: courierId,
+            recipientEntityId: courierId,
+            recipientEntityType: 'courier',
+            recipientName: courierName,
+            linkedAccountId,
+            linkedAccountCode,
+            notes: isAr
+              ? `عهدة تلقائية مرحلة من تسليم الطلب رقم: ${ord.orderNumber}`
+              : `Auto-custody generated from delivery of order: ${ord.orderNumber}`,
+            status: 'Pending',
+            createdByUid: auth.currentUser?.uid || 'system',
+            createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
+            createdByName: profile?.fullName || 'System Auto-Custody',
+            createdAt: Date.now()
+          };
+
+          await addDoc(collection(db, 'expenses'), custodyPayload);
+
+          // --- Courier Financial Account Transaction ---
+          if (linkedAccountId) {
+            try {
+              await financialAccountService.recordTransaction(linkedAccountId, {
+                accountId: linkedAccountId,
+                accountCode: linkedAccountCode || '',
+                entityType: 'courier',
+                entityId: courierId,
+                entityName: courierName,
+                type: 'Credit', // Charging custody to courier
+                amount: convertedRemainingVal,
+                amountOriginal: remainingVal,
+                currencyOriginal: 'YER',
+                description: isAr
+                  ? `عهدة تلقائية مرحلة من تسليم الطلب رقم: ${ord.orderNumber}`
+                  : `Auto-custody generated from delivery of order: ${ord.orderNumber}`,
+                refNumber: expenseNumber,
+                module: 'custody',
+                createdByUid: auth.currentUser?.uid || 'system',
+                createdByName: profile?.fullName || 'System Auto-Custody',
+                createdAt: Date.now()
+              });
+            } catch (txErr) {
+              console.warn('[Orders] Could not record auto-custody on courier financial account:', txErr);
+            }
+          }
+
+          // --- Customer Financial Account Transaction ---
+          const customerRecord = customers.find(c => c.id === ord.customerId);
+          if (customerRecord?.financialAccountId) {
+            try {
+              await financialAccountService.recordTransaction(customerRecord.financialAccountId, {
+                accountId: customerRecord.financialAccountId,
+                accountCode: customerRecord.financialAccountCode || '',
+                entityType: 'customer',
+                entityId: ord.customerId,
+                entityName: ord.customerName,
+                type: 'Credit', // Customer paid the courier
+                amount: convertedRemainingVal,
+                amountOriginal: remainingVal,
+                currencyOriginal: 'YER',
+                description: isAr
+                  ? `تسوية تلقائية لتسليم الطلب رقم: ${ord.orderNumber} (مع المندوب)`
+                  : `Auto credit for delivery of order: ${ord.orderNumber} (via courier)`,
+                refNumber: ord.orderNumber,
+                module: 'payment',
+                createdByUid: auth.currentUser?.uid || 'system',
+                createdByName: profile?.fullName || 'System Auto-Custody',
+                createdAt: Date.now()
+              });
+            } catch (txErr) {
+              console.warn('[Orders] Could not record auto-payment on customer financial account:', txErr);
+            }
+          }
+
+          extraUpdateFields = {
+            amountPaid: parseFloat(ord.amountPaid || '0') + remainingVal,
+            amountRemaining: 0,
+            paymentStatus: 'Paid'
+          };
+        }
+
+        await updateDoc(doc(db, 'orders', orderId), {
           orderStatus: newStatus,
           locationYemen: defaultLocation,
-          updatedAt: Date.now()
+          updatedAt: Date.now(),
+          ...extraUpdateFields
         });
       });
       await Promise.all(promises);
