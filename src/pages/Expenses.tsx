@@ -1170,6 +1170,7 @@ export default function Expenses() {
                       setFormData({
                         ...formData, 
                         recipientId: e.target.value,
+                        amount: user?.salary ? String(user.salary) : formData.amount,
                         linkedAccountId: user?.financialAccountId || '',
                         linkedAccountCode: user?.financialAccountCode || '',
                         linkedAccountEntityType: 'employee'
@@ -1185,9 +1186,23 @@ export default function Expenses() {
                     ))}
                   </select>
                   {formData.linkedAccountCode && (
-                    <div className="mt-1.5 flex items-center gap-1.5">
-                      <span className="text-[9px] font-black text-slate-500">{isAr ? 'سيتم تسجيل على حساب:' : 'Will record on account:'}</span>
-                      <span className="font-mono font-black text-[#d4af37] text-[10px] bg-[#d4af37]/10 border border-[#d4af37]/20 px-2 py-0.5 rounded">{formData.linkedAccountCode}</span>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[9px] font-black text-slate-500">{isAr ? 'حساب الموظف:' : 'Employee Account:'}</span>
+                        <span className="font-mono font-black text-[#d4af37] text-[10px] bg-[#d4af37]/10 border border-[#d4af37]/20 px-2 py-0.5 rounded">{formData.linkedAccountCode}</span>
+                      </div>
+                      {(() => {
+                        const user = systemUsers.find(u => u.id === formData.recipientId);
+                        if (user?.salary) {
+                          return (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[9px] font-black text-slate-500">{isAr ? 'الراتب المسجل:' : 'Default Salary:'}</span>
+                              <span className="font-mono font-black text-emerald-400 text-[10px] bg-emerald-950/20 border border-emerald-900/30 px-2 py-0.5 rounded">{user.salary.toLocaleString()} YER</span>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
                   )}
                 </div>

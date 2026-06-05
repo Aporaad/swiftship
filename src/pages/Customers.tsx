@@ -41,6 +41,7 @@ export default function Customers() {
   const [search, setSearch] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [customerOrders, setCustomerOrders] = useState<any[]>([]);
+  const [customerTransactions, setCustomerTransactions] = useState<any[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const isAr = settings.language === 'ar';
 
@@ -135,7 +136,22 @@ export default function Customers() {
       setOrdersLoading(false);
     });
 
-    return unsub;
+    const qTx = query(
+      collection(db, 'account_transactions'),
+      where('entityId', '==', customer.id),
+      orderBy('createdAt', 'desc')
+    );
+
+    const unsubTx = onSnapshot(qTx, (snap) => {
+      setCustomerTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => {
+      console.error(err);
+    });
+
+    return () => {
+      unsub();
+      unsubTx();
+    };
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -584,63 +600,70 @@ export default function Customers() {
                 </div>
               </div>
 
-              {/* Order History Table */}
+              {/* Tabs for History */}
+              <div className="flex gap-2 mb-4 bg-black/40 p-1 rounded-xl w-max">
+                <button className="px-4 py-1.5 rounded-lg text-[10px] font-black bg-[#d4af37] text-black">
+                  {isAr ? 'سجل العمليات المالية' : 'Financial Ledger'}
+                </button>
+              </div>
+
+              {/* Financial Ledger Table */}
               <div className="bg-[#121215] border border-slate-850 rounded-2xl overflow-hidden shadow-2xl">
                  <div className="p-4 border-b border-slate-850 bg-black/40 flex justify-between items-center">
-                    <h4 className="font-black text-xs text-[#d4af37] uppercase tracking-wider">{isAr ? 'سجل وكشف حساب المبيعات واللوجيستية للعميل' : 'Customer Account Orders Ledger'}</h4>
-                    <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 px-3 py-1 rounded-lg font-bold font-mono">COUNT: {customerOrders.length}</span>
+                    <h4 className="font-black text-xs text-[#d4af37] uppercase tracking-wider">{isAr ? 'كشف الحساب المالي التفصيلي للعميل' : 'Detailed Customer Financial Statement'}</h4>
+                    <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 px-3 py-1 rounded-lg font-bold font-mono">TXN: {customerTransactions.length}</span>
                  </div>
                  
                  {ordersLoading ? (
-                    <div className="p-12 text-center text-slate-500 font-bold font-mono uppercase tracking-wider">[ loading_order_indexes ]</div>
+                    <div className="p-12 text-center text-slate-500 font-bold font-mono uppercase tracking-wider">[ loading_ledger_entries ]</div>
                  ) : (
                     <div className="overflow-x-auto">
                       <table className="w-full text-right text-xs">
                         <thead className="bg-black/30 text-[10px] text-slate-500 uppercase tracking-widest font-black border-b border-slate-850">
                           <tr>
-                            <th className="p-3">{isAr ? 'رمز الطلب الموحد' : 'Request Code'}</th>
-                            <th className="p-3">{isAr ? 'تاريخ المعاملة' : 'Posting Date'}</th>
-                            <th className="p-3">{isAr ? 'حالة الشحن' : 'Transit Status'}</th>
-                            <th className="p-3">{isAr ? 'إجمالي الرسوم' : 'Gross Total'}</th>
-                            <th className="p-3 text-emerald-400">{isAr ? 'المدفوع' : 'Matured'}</th>
-                            <th className="p-3 text-left">{isAr ? 'الرصيد المتبقي (الوضعية)' : 'Outstanding State'}</th>
+                            <th className="p-3">{isAr ? 'التاريخ' : 'Date'}</th>
+                            <th className="p-3">{isAr ? 'سند/مرجع' : 'Ref Number'}</th>
+                            <th className="p-3">{isAr ? 'البيان' : 'Description'}</th>
+                            <th className="p-3 text-rose-400">{isAr ? 'مدين (+)' : 'Debit (+)'}</th>
+                            <th className="p-3 text-emerald-400">{isAr ? 'دائن (-)' : 'Credit (-)'}</th>
+                            <th className="p-3 text-left">{isAr ? 'الرصيد' : 'Running Balance'}</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-850 bg-[#08080a]/20">
-                          {customerOrders.map(order => {
-                            const tot = parseFloat(order.totalCostYER || order.totalPrice || 0);
-                            const paid = parseFloat(order.amountPaid || order.paidAmount || 0);
-                            const remaining = tot - paid;
-                            return (
-                              <tr key={order.id} className="hover:bg-slate-950/40 transition-colors">
-                                <td className="p-3 font-mono font-black text-[#d4af37]">
-                                  {order.orderNumber || 'ALX-XXXX-XXXX'}
-                                  {order.trackingNumber && (
-                                    <div className="text-[9px] text-slate-500 font-mono mt-0.5" dir="ltr">GLOBAL_TRACK: {order.trackingNumber}</div>
-                                  )}
-                                </td>
-                                <td className="p-3 text-slate-400 font-mono text-[10px]">{new Date(order.createdAt).toLocaleDateString(isAr ? 'ar-YE' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</td>
-                                <td className="p-3">
-                                  <span className="px-2.5 py-0.5 rounded text-[9px] font-black uppercase tracking-tighter bg-slate-900 border border-slate-800 text-[#d4af37]">
-                                    {order.orderStatus || order.order_status || 'تم تسجيل الطلب'}
-                                  </span>
-                                </td>
-                                <td className="p-3 font-mono font-bold text-white">{tot.toLocaleString()} YER</td>
-                                <td className="p-3 text-emerald-400 font-mono font-bold">{paid.toLocaleString()} YER</td>
-                                <td className={`p-3 text-left font-mono font-bold ${remaining > 0 ? 'text-rose-400' : remaining < 0 ? 'text-cyan-400' : 'text-slate-500'}`}>
-                                  {remaining > 0 ? (
-                                    <span>{remaining.toLocaleString()} YER [عليه]</span>
-                                  ) : remaining < 0 ? (
-                                    <span>{Math.abs(remaining).toLocaleString()} YER [دائن]</span>
-                                  ) : (
-                                    <span className="text-emerald-500 font-sans font-black uppercase tracking-widest text-[9px]">&gt; PAID_IN_FULL</span>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                          {customerOrders.length === 0 && (
-                            <tr><td colSpan={6} className="p-16 text-center text-slate-600 italic font-bold select-none">[ no_orders_logged_to_this_patron ]</td></tr>
+                          {(() => {
+                            let runningBalance = 0;
+                            const sortedTxs = [...customerTransactions].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+
+                            return sortedTxs.reverse().map((tx, idx) => {
+                              const date = new Date(tx.createdAt || Date.now());
+                              // Calculate balance for this row (simplified for view)
+                              // In real logic we'd need to compute it from oldest to newest
+                              const rowBalance = tx.balanceAfter || 0;
+
+                              return (
+                                <tr key={tx.id} className="hover:bg-slate-950/40 transition-colors">
+                                  <td className="p-3 text-slate-400 font-mono text-[10px]">{date.toLocaleDateString(isAr ? 'ar-YE' : 'en-US')}</td>
+                                  <td className="p-3">
+                                    <span className="bg-slate-900 border border-slate-800 text-slate-300 px-2 py-0.5 rounded text-[9px] font-mono">
+                                      {tx.refNumber}
+                                    </span>
+                                  </td>
+                                  <td className="p-3 text-white font-bold max-w-[200px] truncate">{tx.description}</td>
+                                  <td className="p-3 font-mono font-bold text-rose-400">
+                                    {tx.type === 'Debit' ? `+${tx.amountOriginal.toLocaleString()}` : '—'}
+                                  </td>
+                                  <td className="p-3 font-mono font-bold text-emerald-400">
+                                    {tx.type === 'Credit' ? `-${tx.amountOriginal.toLocaleString()}` : '—'}
+                                  </td>
+                                  <td className="p-3 text-left font-mono font-black text-white">
+                                    {tx.balanceAfter ? tx.balanceAfter.toLocaleString() : '—'}
+                                  </td>
+                                </tr>
+                              );
+                            });
+                          })()}
+                          {customerTransactions.length === 0 && (
+                            <tr><td colSpan={6} className="p-16 text-center text-slate-600 italic font-bold select-none">[ no_financial_transactions_logged ]</td></tr>
                           )}
                         </tbody>
                       </table>

@@ -30,12 +30,29 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
   const [assets, setAssets] = useState<any[]>([]);
   // Real-time financial accounts sync
   const [financialAccounts, setFinancialAccounts] = useState<any[]>([]);
+  // Real-time account transactions sync
+  const [accountTransactions, setAccountTransactions] = useState<any[]>([]);
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'assets'), (snap) => {
       setAssets(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => {
       console.error("Error loading assets for balance list:", error);
+    });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    // Apply limit to recent transactions for performance, older ones can be fetched via reports or specific audits
+    const q = query(
+      collection(db, 'account_transactions'),
+      orderBy('createdAt', 'desc'),
+      limit(500)
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      setAccountTransactions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.error("Error loading account transactions:", error);
     });
     return () => unsub();
   }, []);
@@ -128,38 +145,87 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
   const ledgerEntries = useMemo(() => {
     const entries: any[] = [];
 
-    // Push Orders as credit/debit
-    // An order registers potential revenue, but cash payments received are real dynamic Inflows (Debited)
-    orders.forEach(ord => {
-      // 1. Initial Deposit
-      const deposit = parseFloat(ord.amountPaid || 0);
-      if (deposit > 0) {
-        entries.push({
-          id: `ORD-IN-${ord.id}`,
-          refNumber: ord.orderNumber || 'ALX-ORD',
-          date: ord.createdAt?.toDate ? ord.createdAt.toDate() : new Date(ord.createdAt || Date.now()),
-          title: isAr ? `سداد من العميل: ${ord.customerName}` : `Customer payment: ${ord.customerName}`,
-          notes: isAr ? `رسوم شحن طرد من محطة ${ord.orderSourceName || 'الرئيسية'}` : `Cargo transport fee via ${ord.orderSourceName || 'Hub'}`,
-          party: ord.customerName,
-          type: 'Debit', // Cash is coming into safe (Debit in asset accounting)
-          amount: deposit,
-          currency: 'YER',
-          amountOriginal: deposit,
-          currencyOriginal: 'YER',
-          module: 'order'
-        });
+    // Use account transactions for a more accurate and centralized ledger
+    accountTransactions.forEach(tx => {
+      const convertedAmt = tx.amount; // amount is already in default currency (YER)
+      const date = new Date(tx.createdAt || Date.now());
+
+      let type: 'Debit' | 'Credit' = tx.type;
+      let title = tx.description || tx.title;
+      let party = tx.entityName;
+
+      // In asset accounting for the Safe Box/Treasury:
+      // - Payment received from customer (Credit on their account) = Debit (Inflow) for Treasury
+      // - Charge to customer (Debit on their account) = Potential Revenue (not cash flow yet, usually handled by actual payments)
+      // - Payment to courier/employee (Credit on their account) = Credit (Outflow) for Treasury
+      // - Returning custody (Debit on courier account) = Debit (Inflow) for Treasury
+
+      if (tx.entityType === 'customer') {
+        if (tx.type === 'Credit') {
+          // Cash coming in
+          entries.push({
+            id: `TX-${tx.id}`,
+            refNumber: tx.refNumber || 'ALX-TX',
+            date,
+            title: isAr ? `تحصيل من العميل: ${tx.entityName}` : `Collection from customer: ${tx.entityName}`,
+            notes: tx.description,
+            party: tx.entityName,
+            type: 'Debit',
+            amount: convertedAmt,
+            currency: 'YER',
+            amountOriginal: tx.amountOriginal,
+            currencyOriginal: tx.currencyOriginal,
+            module: tx.module
+          });
+        }
+      } else {
+        if (tx.type === 'Credit') {
+          // Cash going out
+          entries.push({
+            id: `TX-${tx.id}`,
+            refNumber: tx.refNumber || 'ALX-TX',
+            date,
+            title: isAr ? `صرف للمستفيد: ${tx.entityName}` : `Payment to: ${tx.entityName}`,
+            notes: tx.description,
+            party: tx.entityName,
+            type: 'Credit',
+            amount: convertedAmt,
+            currency: 'YER',
+            amountOriginal: tx.amountOriginal,
+            currencyOriginal: tx.currencyOriginal,
+            module: tx.module
+          });
+        } else if (tx.type === 'Debit' && (tx.module === 'custody' || tx.module === 'adjustment')) {
+          // Reversal/Inflow
+          entries.push({
+            id: `TX-${tx.id}`,
+            refNumber: tx.refNumber || 'ALX-TX',
+            date,
+            title: isAr ? `توريد/تسوية من: ${tx.entityName}` : `Remittance/Reconcile from: ${tx.entityName}`,
+            notes: tx.description,
+            party: tx.entityName,
+            type: 'Debit',
+            amount: convertedAmt,
+            currency: 'YER',
+            amountOriginal: tx.amountOriginal,
+            currencyOriginal: tx.currencyOriginal,
+            module: tx.module
+          });
+        }
       }
     });
 
-    // Push Expenses as outflows (Credited)
+    // Fallback/Supplement with legacy expenses if they are not linked to accounts
     expenses.forEach(exp => {
+      if (exp.linkedAccountId || exp.financialAccountId) return; // Skip if already handled by account_transactions
+
       const convertedAmt = convertToYER(exp.amount || 0, exp.currency);
       const isManualDebit = exp.notes && (exp.notes.includes('[MANUAL-DEBIT]') || exp.notes.includes('قيد تسوية مدين'));
       
       // Treat manual adjustments
       if (isManualDebit) {
         entries.push({
-          id: `ADJ-IN-${exp.id}`,
+          id: `EXP-ADJ-${exp.id}`,
           refNumber: exp.expenseNumber || 'ALX-ADJ',
           date: exp.createdAt?.toDate ? exp.createdAt.toDate() : new Date(exp.createdAt || Date.now()),
           title: exp.notes.replace('[MANUAL-DEBIT]', '').trim(),
@@ -485,7 +551,10 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
         type: 'General',
         amount: amountVal,
         currency: adjustData.currency,
+        amountInDefaultCurrency: convertedAmt,
         recipientId: targetAccount ? targetAccount.entityId : 'adjustment',
+        recipientEntityId: targetAccount ? targetAccount.entityId : 'adjustment',
+        recipientEntityType: targetAccount ? targetAccount.entityType : null,
         recipientName: adjustData.recipientName || (isAr ? 'التعديلات المحاسبية' : 'Ledger Adjustments'),
         notes: notesLabel + (adjustData.notes ? ` : ${adjustData.notes}` : ''),
         status: 'Completed',
@@ -493,6 +562,8 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
         createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
         createdByName: auth.currentUser?.email?.split('@')[0] || 'Finance Auditor',
         createdAt: timestamp,
+        linkedAccountId: selectedAccountId || null,
+        linkedAccountCode: targetAccount ? targetAccount.accountCode : null,
         financialAccountId: selectedAccountId || null,
         financialAccountCode: targetAccount ? targetAccount.accountCode : null
       };
@@ -598,9 +669,41 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
         });
       });
 
-      // Insert a Double-Entry safe box inflow receipt voucher
+      // 1. Update Courier Financial Account
+      const courierAccount = financialAccounts.find(a => a.entityId === courierAuditSheet.courier.id);
       const randStr = Math.floor(1000 + Math.random() * 9000);
       const voucherCode = `REMIT-${randStr}`;
+      const timestamp = Date.now();
+
+      if (courierAccount) {
+        const amountVal = courierAuditSheet.totalUnremittedCashValue;
+        const convertedAmt = financialAccountService.convertToDefaultCurrency(
+          amountVal,
+          'YER',
+          settings.currency || 'YER',
+          { USD: settings.exchangeRateUSD || 535, SAR: settings.exchangeRateSAR || 140 }
+        );
+
+        await financialAccountService.recordTransaction(courierAccount.id, {
+          accountId: courierAccount.id,
+          accountCode: courierAccount.accountCode,
+          entityType: 'courier',
+          entityId: courierAuditSheet.courier.id,
+          entityName: courierAuditSheet.courier.fullName,
+          type: 'Debit', // Courier is returning money
+          amount: convertedAmt,
+          amountOriginal: amountVal,
+          currencyOriginal: 'YER',
+          description: `توريد تحصيلات شحنات المندوب ${courierAuditSheet.courier.fullName}`,
+          refNumber: voucherCode,
+          module: 'payment',
+          createdAt: timestamp,
+          createdByUid: auth.currentUser?.uid || 'system',
+          createdByName: auth.currentUser?.email?.split('@')[0] || 'Finance Auditor'
+        });
+      }
+
+      // 2. Insert a Double-Entry safe box inflow receipt voucher
       const remitsRef = collection(db, 'expenses');
       
       const payload = {
@@ -609,13 +712,17 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
         amount: courierAuditSheet.totalUnremittedCashValue,
         currency: 'YER',
         recipientId: courierAuditSheet.courier.id,
+        recipientEntityId: courierAuditSheet.courier.id,
+        recipientEntityType: 'courier',
         recipientName: courierAuditSheet.courier.fullName,
         notes: `[MANUAL-DEBIT] توريد تحصيلات شحنات المندوب ${courierAuditSheet.courier.fullName}`,
         status: 'Completed',
         createdByUid: auth.currentUser?.uid || 'system',
         createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
         createdByName: 'Finance Auditor',
-        createdAt: Date.now()
+        createdAt: timestamp,
+        linkedAccountId: courierAccount?.id || null,
+        linkedAccountCode: courierAccount?.accountCode || null
       };
 
       await addDoc(remitsRef, payload);
@@ -642,19 +749,57 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
 
   // Live Settle specific Custody record from the interactive sheet
   const handleDirectSettleCustody = async (custodyDocId: string, recipientName: string) => {
+    const custodyExp = expenses.find(e => e.id === custodyDocId);
+    if (!custodyExp) return;
+
     if (!window.confirm(isAr 
       ? `هل أنت متأكد من مراجعة وتصفية هذا السند العهدة؟` 
       : `Are you sure you want to discharge and settle this custody entry?`
     )) return;
 
     try {
+      const timestamp = Date.now();
       const docRef = doc(db, 'expenses', custodyDocId);
       await updateDoc(docRef, {
         status: 'Settled',
-        settledAt: Date.now(),
+        settledAt: timestamp,
         settledByEmail: auth.currentUser?.email || 'admin@swiftship.system',
         settledByName: 'Finance Auditor'
       });
+
+      // Reversal on Financial Account
+      if (custodyExp.linkedAccountId || custodyExp.financialAccountId) {
+        const accId = custodyExp.linkedAccountId || custodyExp.financialAccountId;
+        const targetAccount = financialAccounts.find(a => a.id === accId);
+
+        if (targetAccount) {
+          const amountVal = parseFloat(custodyExp.amount || 0);
+          const convertedAmt = financialAccountService.convertToDefaultCurrency(
+            amountVal,
+            custodyExp.currency || 'YER',
+            settings.currency || 'YER',
+            { USD: settings.exchangeRateUSD || 535, SAR: settings.exchangeRateSAR || 140 }
+          );
+
+          await financialAccountService.recordTransaction(accId, {
+            accountId: accId,
+            accountCode: targetAccount.accountCode,
+            entityType: targetAccount.entityType,
+            entityId: targetAccount.entityId,
+            entityName: targetAccount.entityName,
+            type: 'Debit', // Reversal: money returned
+            amount: convertedAmt,
+            amountOriginal: amountVal,
+            currencyOriginal: custodyExp.currency || 'YER',
+            description: isAr ? `تسوية عهدة: ${custodyExp.expenseNumber}` : `Custody settlement: ${custodyExp.expenseNumber}`,
+            refNumber: `${custodyExp.expenseNumber}-SETTLE`,
+            module: 'custody',
+            createdAt: timestamp,
+            createdByUid: auth.currentUser?.uid || 'system',
+            createdByName: auth.currentUser?.email?.split('@')[0] || 'Finance Auditor'
+          });
+        }
+      }
 
       notificationService.notify({
         title: isAr ? 'تم تسوية وتصفير العهدة' : 'Custody Discharged',
@@ -807,9 +952,40 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
         }
       }
 
-      // Record cash inflow adjustment voucher in ledger safe box
+      // 1. Record in Financial Account
+      const customerAccount = financialAccounts.find(a => a.entityId === auditedCustomerId);
       const randStr = Math.floor(1000 + Math.random() * 9000);
       const voucherNum = `RCV-${randStr}`;
+      const timestamp = Date.now();
+
+      if (customerAccount) {
+        const convertedAmt = financialAccountService.convertToDefaultCurrency(
+          amountVal,
+          'YER',
+          settings.currency || 'YER',
+          { USD: settings.exchangeRateUSD || 535, SAR: settings.exchangeRateSAR || 140 }
+        );
+
+        await financialAccountService.recordTransaction(customerAccount.id, {
+          accountId: customerAccount.id,
+          accountCode: customerAccount.accountCode,
+          entityType: 'customer',
+          entityId: auditedCustomerId,
+          entityName: customerLedgerDetails.customer.fullName,
+          type: 'Credit', // Payment received from customer
+          amount: convertedAmt,
+          amountOriginal: amountVal,
+          currencyOriginal: 'YER',
+          description: `سند قبض دفعة على الحساب للعميل: ${customerLedgerDetails.customer.fullName} - ${payNotes || ''}`,
+          refNumber: voucherNum,
+          module: 'payment',
+          createdAt: timestamp,
+          createdByUid: auth.currentUser?.uid || 'system',
+          createdByName: auth.currentUser?.email?.split('@')[0] || 'Finance Auditor'
+        });
+      }
+
+      // 2. Record cash inflow adjustment voucher in ledger safe box (legacy/expense collection sync)
       const adjustmentsRef = collection(db, 'expenses');
       
       const payload = {
@@ -818,13 +994,17 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
         amount: amountVal,
         currency: 'YER',
         recipientId: customerLedgerDetails.customer.id,
+        recipientEntityId: customerLedgerDetails.customer.id,
+        recipientEntityType: 'customer',
         recipientName: customerLedgerDetails.customer.fullName,
         notes: `[MANUAL-DEBIT] سند قبض دفعة على الحساب للعميل: ${customerLedgerDetails.customer.fullName} - ${payNotes || ''}`,
         status: 'Completed',
         createdByUid: auth.currentUser?.uid || 'system',
         createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
         createdByName: 'Finance Auditor',
-        createdAt: Date.now()
+        createdAt: timestamp,
+        linkedAccountId: customerAccount?.id || null,
+        linkedAccountCode: customerAccount?.accountCode || null
       };
 
       await addDoc(adjustmentsRef, payload);

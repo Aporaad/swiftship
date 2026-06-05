@@ -65,6 +65,7 @@ export default function Couriers() {
   const [selectedCourier, setSelectedCourier] = useState<any>(null);
   const [courierOrders, setCourierOrders] = useState<any[]>([]);
   const [courierExpenses, setCourierExpenses] = useState<any[]>([]);
+  const [courierTransactions, setCourierTransactions] = useState<any[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [detailsUnsubs, setDetailsUnsubs] = useState<(() => void)[]>([]);
 
@@ -240,7 +241,19 @@ export default function Couriers() {
       setCourierExpenses([]);
     });
 
-    setDetailsUnsubs([unsubOrders, unsubExpenses]);
+    const qTx = query(
+      collection(db, 'account_transactions'),
+      where('entityId', '==', courier.id),
+      orderBy('createdAt', 'desc')
+    );
+
+    const unsubTx = onSnapshot(qTx, (snap) => {
+      setCourierTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => {
+      console.error("Error fetching courier transactions:", err);
+    });
+
+    setDetailsUnsubs([unsubOrders, unsubExpenses, unsubTx]);
   };
 
   const handleCloseDetails = () => {
@@ -664,7 +677,7 @@ export default function Couriers() {
           </div>
           <div>
             <h1 className="text-xl font-black text-white leading-none mb-1">{isAr ? 'إدارة وكلاء التوصيل والمناديب' : 'Couriers Portfolio'}</h1>
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{isAr ? 'تنظيم الحسابات اللوجيستية • تتبع العهد المستلمة وجرد المحفظة المستقلة' : 'Logistics settlements • Cash custody & Courier balances'}</p>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{isAr ? 'تنظيم الحسابات اللوجيستية • تتبع العهد المستلمة وجرد الحسابات المالية المستقلة' : 'Logistics settlements • Cash custody & Courier balances'}</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-2.5">
@@ -1014,6 +1027,68 @@ export default function Couriers() {
                     <span className="text-base font-black text-[#d4af37] font-mono">{activeStats?.deliverySuccessRate || 0}%</span>
                   </div>
                 </div>
+              </div>
+
+              {/* Tabs for Courier History */}
+              <div className="flex gap-2 bg-black/40 p-1 rounded-xl w-max">
+                <button className="px-4 py-1.5 rounded-lg text-[10px] font-black bg-[#d4af37] text-black">
+                  {isAr ? 'كشف الحساب المالي' : 'Financial Statement'}
+                </button>
+              </div>
+
+              {/* Courier Financial Ledger Table */}
+              <div className="bg-[#121215] border border-slate-850 rounded-2xl overflow-hidden shadow-2xl">
+                 <div className="p-4 border-b border-slate-850 bg-black/40 flex justify-between items-center">
+                    <h4 className="font-black text-xs text-[#d4af37] uppercase tracking-wider">{isAr ? 'سجل العمليات المالية للمندوب' : 'Courier Financial Transaction Ledger'}</h4>
+                    <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 px-3 py-1 rounded-lg font-bold font-mono">TXN: {courierTransactions.length}</span>
+                 </div>
+
+                 {ordersLoading ? (
+                    <div className="p-12 text-center text-slate-500 font-bold font-mono uppercase tracking-wider">[ loading_ledger_entries ]</div>
+                 ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-right text-xs">
+                        <thead className="bg-black/30 text-[10px] text-slate-500 uppercase tracking-widest font-black border-b border-slate-850">
+                          <tr>
+                            <th className="p-3">{isAr ? 'التاريخ' : 'Date'}</th>
+                            <th className="p-3">{isAr ? 'سند/مرجع' : 'Ref'}</th>
+                            <th className="p-3">{isAr ? 'البيان' : 'Particulars'}</th>
+                            <th className="p-3 text-rose-400">{isAr ? 'مدين (+)' : 'Debit (+)'}</th>
+                            <th className="p-3 text-emerald-400">{isAr ? 'دائن (-)' : 'Credit (-)'}</th>
+                            <th className="p-3 text-left">{isAr ? 'الرصيد' : 'Balance'}</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-850 bg-[#08080a]/20">
+                          {courierTransactions.map(tx => {
+                            const date = new Date(tx.createdAt || Date.now());
+                            return (
+                              <tr key={tx.id} className="hover:bg-slate-950/40 transition-colors">
+                                <td className="p-3 text-slate-400 font-mono text-[10px]">{date.toLocaleDateString(isAr ? 'ar-YE' : 'en-US')}</td>
+                                <td className="p-3">
+                                  <span className="bg-slate-900 border border-slate-800 text-slate-300 px-2 py-0.5 rounded text-[9px] font-mono">
+                                    {tx.refNumber}
+                                  </span>
+                                </td>
+                                <td className="p-3 text-white font-bold max-w-[200px] truncate">{tx.description}</td>
+                                <td className="p-3 font-mono font-bold text-rose-400">
+                                  {tx.type === 'Debit' ? `+${tx.amountOriginal.toLocaleString()}` : '—'}
+                                </td>
+                                <td className="p-3 font-mono font-bold text-emerald-400">
+                                  {tx.type === 'Credit' ? `-${tx.amountOriginal.toLocaleString()}` : '—'}
+                                </td>
+                                <td className="p-3 text-left font-mono font-black text-white">
+                                  {tx.balanceAfter ? tx.balanceAfter.toLocaleString() : '—'}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          {courierTransactions.length === 0 && (
+                            <tr><td colSpan={6} className="p-16 text-center text-slate-600 italic font-bold select-none">[ no_financial_transactions_logged ]</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                 )}
               </div>
 
               {/* Delivery History Log */}

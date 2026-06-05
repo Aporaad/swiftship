@@ -261,10 +261,10 @@ export default function UserManagement() {
 
   // ── Forms ────────────────────────────────────────────────
   const [editFormData, setEditFormData] = useState({
-    fullName: '', role: '', disabled: false, commissionRate: 0, username: '', systemPin: ''
+    fullName: '', role: '', disabled: false, commissionRate: 0, salary: 0, username: '', systemPin: ''
   });
   const [addFormData, setAddFormData] = useState({
-    fullName: '', username: '', email: '', password: '', systemPin: '', role: 'Employee', commissionRate: 0
+    fullName: '', username: '', email: '', password: '', systemPin: '', role: 'Employee', commissionRate: 0, salary: 0
   });
 
   // ── Roles ────────────────────────────────────────────────
@@ -337,7 +337,9 @@ export default function UserManagement() {
     setEditFormData({
       fullName: user.fullName || '', username: user.username || '',
       role: user.role || 'Employee', disabled: user.disabled || false,
-      commissionRate: user.commissionRate || 0, systemPin: user.systemPin || ''
+      commissionRate: user.commissionRate || 0,
+      salary: user.salary || 0,
+      systemPin: user.systemPin || ''
     });
     setIsEditModalOpen(true);
   };
@@ -358,7 +360,9 @@ export default function UserManagement() {
         fullName: editFormData.fullName, username: editFormData.username,
         role: isRoot ? 'Admin' : editFormData.role,
         disabled: isRoot ? false : editFormData.disabled,
-        commissionRate: editFormData.commissionRate, systemPin: editFormData.systemPin,
+        commissionRate: editFormData.commissionRate,
+        salary: editFormData.salary,
+        systemPin: editFormData.systemPin,
         updatedAt: Date.now()
       });
       // Sync financial account name if changed
@@ -438,7 +442,9 @@ export default function UserManagement() {
       await setDoc(doc(db, 'users', newUser.uid), {
         fullName: addFormData.fullName, email: addFormData.email.toLowerCase(),
         username: addFormData.username, systemPin: addFormData.systemPin,
-        role: addFormData.role, commissionRate: addFormData.commissionRate,
+        role: addFormData.role,
+        commissionRate: addFormData.commissionRate,
+        salary: addFormData.salary,
         disabled: false, createdAt: Date.now()
       });
 
@@ -457,7 +463,7 @@ export default function UserManagement() {
       await activityLogService.log('add_user', addFormData.fullName, { email: addFormData.email, role: addFormData.role });
       notificationService.notify({ title: t('تم إنشاء الحساب', 'Account Created'), message: t(`تم إنشاء حساب ${addFormData.fullName}`, `${addFormData.fullName} account created`), type: 'success', category: 'system' });
       setIsAddModalOpen(false);
-      setAddFormData({ fullName: '', username: '', email: '', password: '', systemPin: '', role: 'Employee', commissionRate: 0 });
+      setAddFormData({ fullName: '', username: '', email: '', password: '', systemPin: '', role: 'Employee', commissionRate: 0, salary: 0 });
     } catch (err: any) {
       let msg = err.message;
       if (err.code === 'auth/email-already-in-use') msg = t('البريد مسجل في نظام المصادقة', 'Email already in auth system');
@@ -1251,12 +1257,16 @@ export default function UserManagement() {
                   </button>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الدور', 'Role')}</label>
                   <select value={addFormData.role} onChange={e => setAddFormData({...addFormData, role: e.target.value})} className="w-full bg-black/50 border border-slate-800 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold">
                     {roles.filter(r => r.id !== 'courier' && r.id !== 'Courier').map(r => <option key={r.id} value={r.id}>{r.title || r.id}</option>)}
                   </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الراتب الشهري', 'Monthly Salary')}</label>
+                  <input type="number" min="0" value={addFormData.salary} onChange={e => setAddFormData({...addFormData, salary: parseFloat(e.target.value) || 0})} className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono" />
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('نسبة العمولة%', 'Commission%')}</label>
@@ -1299,12 +1309,16 @@ export default function UserManagement() {
                   <input type="text" maxLength={4} value={editFormData.systemPin} onChange={e => setEditFormData({...editFormData, systemPin: e.target.value})} className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-center tracking-widest" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الدور', 'Role')}</label>
                   <select disabled={ROOT_EMAILS.includes(selectedUser.email) || selectedUser.isRoot} value={editFormData.role} onChange={e => setEditFormData({...editFormData, role: e.target.value})} className="w-full bg-black/50 border border-slate-800 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed">
                     {roles.filter(r => r.id !== 'courier' && r.id !== 'Courier').map(r => <option key={r.id} value={r.id}>{r.title || r.id}</option>)}
                   </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الراتب الشهري', 'Monthly Salary')}</label>
+                  <input type="number" min="0" value={editFormData.salary} onChange={e => setEditFormData({...editFormData, salary: parseFloat(e.target.value) || 0})} className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono" />
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('عمولة%', 'Commission%')}</label>

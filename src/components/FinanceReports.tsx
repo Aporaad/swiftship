@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   BarChart, Bar, Cell, PieChart, Pie
@@ -10,6 +10,8 @@ import {
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { EXPENSE_CATEGORIES } from '../pages/Expenses';
+import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 interface FinanceReportsProps {
   orders: any[];
@@ -21,6 +23,21 @@ interface FinanceReportsProps {
 }
 
 export default function FinanceReports({ orders, expenses, couriers, sources, isAr, settings }: FinanceReportsProps) {
+  const [accountTransactions, setAccountTransactions] = useState<any[]>([]);
+
+  useEffect(() => {
+    // In reports, we typically want a larger window, but still limited for initial load
+    // Users can use specific date filters which could be improved with dynamic queries
+    const q = query(
+      collection(db, 'account_transactions'),
+      orderBy('createdAt', 'desc'),
+      limit(1000)
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      setAccountTransactions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsub();
+  }, []);
   // Advanced Filter state
   const [dateRange, setDateRange] = useState<'all' | 'today' | 'week' | 'month' | 'year' | 'custom'>('month');
   const [startDate, setStartDate] = useState('');
@@ -228,7 +245,36 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
       dailyMap[key].revenue += parseFloat(o.amountPaid || 0);
     });
 
+    // Use account transactions for more accurate expense tracking including manual adjustments
+    accountTransactions.forEach(tx => {
+      // Date filter for chart
+      const { key, label } = formatDateKey(tx.createdAt);
+      if (!dailyMap[key]) {
+        dailyMap[key] = { dateStr: key, dateLabel: label, revenue: 0, expenses: 0 };
+      }
+
+      // If it's a Credit on a customer account, it's actually Revenue for the company (payment received)
+      // If it's a Debit on a customer account, it's an Invoiced Amount
+      // If it's a Credit on a courier/employee account, it's an Expense for the company
+
+      if (tx.entityType === 'customer') {
+        if (tx.type === 'Credit') {
+          dailyMap[key].revenue += tx.amount;
+        }
+      } else {
+        if (tx.type === 'Credit') {
+          dailyMap[key].expenses += tx.amount;
+        } else if (tx.type === 'Debit' && (tx.module === 'custody' || tx.module === 'adjustment')) {
+          // Returning custody or adjustment inflow is a reduction in net expenses for reporting
+          dailyMap[key].expenses -= tx.amount;
+        }
+      }
+    });
+
+    // Also include legacy expenses that ARE NOT linked to accounts to ensure data continuity
     filteredExpenses.forEach(e => {
+      if (e.linkedAccountId || e.financialAccountId) return; // Already handled via accountTransactions
+
       const { key, label } = formatDateKey(e.createdAt);
       if (!dailyMap[key]) {
         dailyMap[key] = { dateStr: key, dateLabel: label, revenue: 0, expenses: 0 };

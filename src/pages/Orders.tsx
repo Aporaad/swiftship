@@ -3245,7 +3245,7 @@ export default function Orders() {
                       >
                         <option value="Cash">{isAr ? 'نقد كاش' : 'Cash'}</option>
                         <option value="Bank Transfer">{isAr ? 'تحويل بنكي' : 'Bank Transfer'}</option>
-                        <option value="E-Wallet">{isAr ? 'محفظة إلكترونية' : 'E-Wallet'}</option>
+                        <option value="E-Wallet">{isAr ? 'حساب مالي إلكتروني' : 'E-Wallet'}</option>
                       </select>
                     </div>
 

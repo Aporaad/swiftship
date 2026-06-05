@@ -73,15 +73,24 @@ class FinancialAccountService {
   
   /**
    * Generate next sequential account number for a given entity type
+   * Searches for the highest existing number to prevent duplicates even after deletions
    */
   private async getNextAccountNumber(entityType: AccountEntityType): Promise<string> {
     const prefix = ACCOUNT_PREFIXES[entityType];
     const q = query(
       collection(db, 'accounts'),
-      where('accountPrefix', '==', prefix)
+      where('accountPrefix', '==', prefix),
+      orderBy('accountNumber', 'desc'),
+      limit(1)
     );
     const snap = await getDocs(q);
-    const nextNum = snap.size + 1;
+
+    let nextNum = 1;
+    if (!snap.empty) {
+      const lastNumber = parseInt(snap.docs[0].data().accountNumber || '0');
+      nextNum = lastNumber + 1;
+    }
+
     return String(nextNum).padStart(4, '0');
   }
 
@@ -187,16 +196,21 @@ class FinancialAccountService {
     const batch = writeBatch(db);
     const now = Date.now();
 
-    // 1. Create transaction record
-    const txRef = doc(collection(db, 'account_transactions'));
-    batch.set(txRef, { ...transactionData, createdAt: now });
-
-    // 2. Update account balance
     const accountRef = doc(db, 'accounts', accountId);
     const balanceDelta = transactionData.type === 'Debit'
       ? transactionData.amount
       : -transactionData.amount;
     
+    // Fetch current balance to calculate balanceAfter
+    const accountSnap = await getDoc(accountRef);
+    const currentBalance = accountSnap.exists() ? (accountSnap.data().balance || 0) : 0;
+    const balanceAfter = currentBalance + balanceDelta;
+
+    // 1. Create transaction record with balanceAfter
+    const txRef = doc(collection(db, 'account_transactions'));
+    batch.set(txRef, { ...transactionData, balanceAfter, createdAt: now });
+
+    // 2. Update account balance
     batch.update(accountRef, {
       balance: increment(balanceDelta),
       debitTotal: transactionData.type === 'Debit' ? increment(transactionData.amount) : increment(0),
@@ -207,10 +221,18 @@ class FinancialAccountService {
     // 3. Update the entity's financial balance directly
     const entityCollection = this.getEntityCollection(transactionData.entityType);
     const entityRef = doc(db, entityCollection, transactionData.entityId);
-    batch.update(entityRef, {
+
+    const entityUpdate: any = {
       financialBalance: increment(balanceDelta),
       updatedAt: now
-    });
+    };
+
+    // Also sync walletBalance for couriers for backward compatibility in some views
+    if (transactionData.entityType === 'courier') {
+      entityUpdate.walletBalance = increment(balanceDelta);
+    }
+
+    batch.update(entityRef, entityUpdate);
 
     await batch.commit();
 
