@@ -11,6 +11,7 @@ import { notificationService } from '../services/notificationService';
 import ChartOfAccounts from './ChartOfAccounts';
 import AssetsPortfolio from './AssetsPortfolio';
 import { EXPENSE_CATEGORIES } from '../pages/Expenses';
+import { financialAccountService } from '../services/financialAccountService';
 
 interface FinanceAccountingProps {
   orders: any[];
@@ -23,10 +24,12 @@ interface FinanceAccountingProps {
 
 export default function FinanceAccounting({ orders, expenses, couriers, customers, isAr, settings }: FinanceAccountingProps) {
   // Navigation tabs for accounting
-  const [accountingTab, setAccountingTab] = useState<'general_ledger' | 'courier_audit' | 'customer_audit' | 'chart_of_accounts' | 'assets_management'>('general_ledger');
+  const [accountingTab, setAccountingTab] = useState<'general_ledger' | 'courier_audit' | 'customer_audit' | 'chart_of_accounts' | 'assets_management' | 'financial_accounts'>('general_ledger');
   
   // Real-time assets sync for dynamic pricing in Chart of Accounts
   const [assets, setAssets] = useState<any[]>([]);
+  // Real-time financial accounts sync
+  const [financialAccounts, setFinancialAccounts] = useState<any[]>([]);
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'assets'), (snap) => {
@@ -37,11 +40,23 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
     return () => unsub();
   }, []);
 
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'accounts'), (snap) => {
+      setFinancialAccounts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.error("Error loading financial accounts:", error);
+    });
+    return () => unsub();
+  }, []);
   
   // Selection states
   const [auditedCourierId, setAuditedCourierId] = useState('');
   const [auditedCustomerId, setAuditedCustomerId] = useState('');
   const [searchLedgerQuery, setSearchLedgerQuery] = useState('');
+
+  // Financial Accounts dashboard filter states
+  const [accountTypeFilter, setAccountTypeFilter] = useState<'all' | 'customer' | 'courier' | 'employee'>('all');
+  const [searchAccountQuery, setSearchAccountQuery] = useState('');
 
   // Filtering ledger states
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | '7days' | '30days' | 'custom'>('all');
@@ -50,6 +65,10 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
   const [typeFilter, setTypeFilter] = useState<'all' | 'Debit' | 'Credit'>('all');
   const [currencyFilter, setCurrencyFilter] = useState<'all' | 'YER' | 'USD' | 'SAR'>('all');
   
+  // Target sub-account selection state for manual adjustment modal
+  const [targetType, setTargetType] = useState<'general' | 'customer' | 'courier' | 'employee'>('general');
+  const [selectedAccountId, setSelectedAccountId] = useState('');
+
   // Quick manual adjustment voucher modal state
   const [isAdjustmentModalOpen, setIsAdjustmentModalOpen] = useState(false);
   const [adjustData, setAdjustData] = useState({
@@ -305,6 +324,25 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
     });
   }, [ledgerEntries, searchLedgerQuery, typeFilter, currencyFilter, dateFilter, customStartDate, customEndDate]);
 
+  // Filter financial accounts list based on search and type filters
+  const filteredAccountsList = useMemo(() => {
+    return financialAccounts.filter(acc => {
+      // 1. Filter by entity type
+      if (accountTypeFilter !== 'all' && acc.entityType !== accountTypeFilter) return false;
+      
+      // 2. Filter by search query
+      const query = searchAccountQuery.trim().toLowerCase();
+      if (query) {
+        const matchesQuery = 
+          (acc.accountCode || '').toLowerCase().includes(query) ||
+          (acc.entityName || '').toLowerCase().includes(query);
+        if (!matchesQuery) return false;
+      }
+      
+      return true;
+    });
+  }, [financialAccounts, accountTypeFilter, searchAccountQuery]);
+
   // Dynamic Multi-Currency Cash Box Vault Balances
   const vaultBalances = useMemo(() => {
     let yerIn = 0, yerOut = 0;
@@ -389,30 +427,74 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
       return;
     }
 
+    if (targetType !== 'general' && !selectedAccountId) {
+      notificationService.notify({
+        title: isAr ? 'الحساب غير محدد' : 'Account Required',
+        message: isAr ? 'يرجى تحديد الحساب المالي المستهدف للتسوية.' : 'Please select the target financial account.',
+        type: 'error'
+      });
+      return;
+    }
+
     setAdjustLoading(true);
     try {
-      // In our setup, a manual adjustment registers in the 'expenses' collection but flagged uniquely in notes
-      // Prefixing notes with '[MANUAL-DEBIT]' or '[MANUAL-CREDIT]' so the ledger processes it as double-entry flow correctly
-      const label = adjustData.type === 'Debit' ? `[MANUAL-DEBIT] ${adjustData.title}` : adjustData.title;
-      const amountSign = adjustData.type === 'Debit' ? parseFloat(adjustData.amount) : parseFloat(adjustData.amount);
+      const amountVal = parseFloat(adjustData.amount);
+      const convertedAmt = financialAccountService.convertToDefaultCurrency(
+        amountVal,
+        adjustData.currency,
+        settings.currency || 'YER',
+        { USD: settings.exchangeRateUSD || 535, SAR: settings.exchangeRateSAR || 140 }
+      );
 
       const timestamp = Date.now();
       const randStr = Math.floor(1000 + Math.random() * 9000);
       const voucherCode = `ADJ-${new Date().getFullYear().toString().slice(-2)}-${randStr}`;
 
+      const targetAccount = targetType !== 'general' 
+        ? financialAccounts.find(a => a.id === selectedAccountId) 
+        : null;
+
+      // 1. Record the transaction in the financial account if selected
+      if (targetAccount) {
+        await financialAccountService.recordTransaction(selectedAccountId, {
+          accountId: selectedAccountId,
+          accountCode: targetAccount.accountCode,
+          entityType: targetAccount.entityType,
+          entityId: targetAccount.entityId,
+          entityName: targetAccount.entityName,
+          type: adjustData.type as 'Debit' | 'Credit',
+          amount: convertedAmt,
+          amountOriginal: amountVal,
+          currencyOriginal: adjustData.currency,
+          description: adjustData.title,
+          refNumber: voucherCode,
+          module: 'adjustment',
+          createdAt: timestamp,
+          createdByUid: auth.currentUser?.uid || 'system',
+          createdByName: auth.currentUser?.email?.split('@')[0] || 'Finance Auditor'
+        });
+      }
+
+      // 2. Insert safe box/expense entry so it shows in the general daily ledger
+      const typeLabel = adjustData.type === 'Debit' ? '[MANUAL-DEBIT]' : '[MANUAL-CREDIT]';
+      const accountInfo = targetAccount ? ` (الحساب المالي: ${targetAccount.accountCode} - ${targetAccount.entityName})` : '';
+      const notesLabel = `${typeLabel} ${adjustData.title}${accountInfo}`;
+
       const payload = {
         expenseNumber: voucherCode,
-        type: adjustData.type === 'Debit' ? 'General' : 'General', // Store under general for database consistency
-        amount: amountSign,
+        type: 'General',
+        amount: amountVal,
         currency: adjustData.currency,
-        recipientId: 'adjustment',
+        recipientId: targetAccount ? targetAccount.entityId : 'adjustment',
         recipientName: adjustData.recipientName || (isAr ? 'التعديلات المحاسبية' : 'Ledger Adjustments'),
-        notes: label + (adjustData.notes ? ` : ${adjustData.notes}` : ''),
+        notes: notesLabel + (adjustData.notes ? ` : ${adjustData.notes}` : ''),
         status: 'Completed',
         createdByUid: auth.currentUser?.uid || 'system',
         createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
-        createdByName: 'Finance Auditor',
-        createdAt: timestamp
+        createdByName: auth.currentUser?.email?.split('@')[0] || 'Finance Auditor',
+        createdAt: timestamp,
+        financialAccountId: selectedAccountId || null,
+        financialAccountCode: targetAccount ? targetAccount.accountCode : null
       };
 
       await addDoc(collection(db, 'expenses'), payload);
@@ -432,6 +514,8 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
         recipientName: '',
         notes: ''
       });
+      setTargetType('general');
+      setSelectedAccountId('');
     } catch (err: any) {
       console.error(err);
       notificationService.notify({
@@ -1059,7 +1143,20 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
           {isAr ? '🌳 الشجرة المحاسبية (COA)' : 'Chart of Accounts'}
         </button>
         
-        {/* Tab 5: Assets Management */}
+        {/* Tab 5: Financial Accounts Dashboard */}
+        <button
+          onClick={() => setAccountingTab('financial_accounts')}
+          className={`pb-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 flex items-center gap-1.5 ${
+            accountingTab === 'financial_accounts' 
+              ? 'border-[#d4af37] text-white' 
+              : 'border-transparent text-slate-500 hover:text-slate-350'
+          }`}
+        >
+          <Wallet className="w-3.5 h-3.5 text-[#d4af37]" />
+          {isAr ? '💳 إدارة الحسابات المالية' : 'Financial Accounts'}
+        </button>
+
+        {/* Tab 6: Assets Management */}
         <button
           onClick={() => setAccountingTab('assets_management')}
           className={`pb-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 flex items-center gap-1.5 ${
@@ -1644,6 +1741,221 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
         </div>
       )}
 
+      {accountingTab === 'financial_accounts' && (
+        <div className="space-y-6">
+          {/* Dashboard Header & Quick Actions */}
+          <div className="bg-[#121215] border border-slate-850 p-5 rounded-3xl space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-xs font-black text-white uppercase tracking-wider mb-1">
+                  {isAr ? 'لوحة التحكم بالحسابات المالية' : 'Financial Accounts Dashboard'}
+                </h3>
+                <p className="text-[10px] text-slate-550 font-medium">
+                  {isAr 
+                    ? 'إدارة ومطابقة أرصدة حسابات العملاء، المناديب، والموظفين مباشرة مع التحويل الفوري للعملات.' 
+                    : 'Manage and reconcile balances for customers, couriers, and staff with real-time exchange rates.'}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setAdjustData({
+                      type: 'Debit',
+                      amount: '',
+                      currency: 'YER',
+                      title: '',
+                      recipientName: '',
+                      notes: ''
+                    });
+                    setTargetType('general');
+                    setSelectedAccountId('');
+                    setIsAdjustmentModalOpen(true);
+                  }}
+                  className="flex items-center gap-1.5 bg-[#d4af37]/15 hover:bg-[#d4af37]/25 border border-[#d4af37]/35 text-[#d4af37] px-4 py-2 rounded-xl text-xs font-black transition-all"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  {isAr ? 'قيد تسوية جديد' : 'New Journal Entry'}
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-black/20 p-4 rounded-2xl border border-slate-900">
+              {/* Entity Type Filter */}
+              <div>
+                <label className="block text-[9px] text-slate-500 font-extrabold uppercase mb-1">
+                  {isAr ? 'تصنيف الحساب المالي' : 'Account Category'}
+                </label>
+                <select
+                  value={accountTypeFilter}
+                  onChange={e => setAccountTypeFilter(e.target.value as any)}
+                  className="bg-black/40 border border-slate-850 text-white rounded-lg px-3 py-1.5 text-xs font-bold outline-none focus:border-[#d4af37] w-full cursor-pointer"
+                >
+                  <option value="all">{isAr ? 'جميع الحسابات' : 'All Accounts'}</option>
+                  <option value="customer">{isAr ? 'حسابات العملاء (1130)' : 'Customer Accounts'}</option>
+                  <option value="courier">{isAr ? 'حسابات المناديب (2120)' : 'Courier Accounts'}</option>
+                  <option value="employee">{isAr ? 'حسابات الموظفين (2130)' : 'Employee Accounts'}</option>
+                </select>
+              </div>
+
+              {/* Text Search */}
+              <div>
+                <label className="block text-[9px] text-slate-500 font-extrabold uppercase mb-1">
+                  {isAr ? 'البحث بالاسم أو رمز الحساب' : 'Search name or account code'}
+                </label>
+                <div className="relative">
+                  <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 w-3 h-3" />
+                  <input
+                    type="text"
+                    value={searchAccountQuery}
+                    onChange={e => setSearchAccountQuery(e.target.value)}
+                    placeholder={isAr ? "بحث..." : "Search..."}
+                    className="w-full pr-8 pl-3 py-1.5 bg-black/40 border border-slate-850 text-white rounded-lg text-xs font-semibold outline-none focus:border-[#d4af37]"
+                  />
+                </div>
+              </div>
+
+              {/* Quick Summary Cards */}
+              <div className="flex items-center justify-around bg-black/35 rounded-xl border border-slate-850 px-2">
+                <div className="text-center">
+                  <span className="block text-[8px] text-slate-500 font-black">{isAr ? 'إجمالي العملاء' : 'Cust Bal'}</span>
+                  <span className="font-mono text-[10px] font-bold text-white block">
+                    {financialAccounts.filter(a => a.entityType === 'customer').reduce((sum, a) => sum + (a.balance || 0), 0).toLocaleString()} YER
+                  </span>
+                </div>
+                <div className="text-center border-l border-r border-slate-850 px-3">
+                  <span className="block text-[8px] text-slate-500 font-black">{isAr ? 'إجمالي المناديب' : 'Courier Bal'}</span>
+                  <span className="font-mono text-[10px] font-bold text-amber-500 block">
+                    {financialAccounts.filter(a => a.entityType === 'courier').reduce((sum, a) => sum + (a.balance || 0), 0).toLocaleString()} YER
+                  </span>
+                </div>
+                <div className="text-center">
+                  <span className="block text-[8px] text-slate-500 font-black">{isAr ? 'إجمالي الموظفين' : 'Staff Bal'}</span>
+                  <span className="font-mono text-[10px] font-bold text-indigo-400 block">
+                    {financialAccounts.filter(a => a.entityType === 'employee').reduce((sum, a) => sum + (a.balance || 0), 0).toLocaleString()} YER
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Accounts List Table */}
+          <div className="bg-[#121215] border border-slate-850 rounded-2xl overflow-hidden shadow-xl">
+            <div className="overflow-x-auto">
+              <table className="w-full text-start">
+                <thead className="bg-[#0a0a0d] text-slate-500 text-[9.5px] font-black uppercase tracking-wider border-b border-slate-850">
+                  <tr>
+                    <th className="p-4">{isAr ? 'رمز الحساب' : 'Account Code'}</th>
+                    <th className="p-4">{isAr ? 'الاسم المستهدف' : 'Name'}</th>
+                    <th className="p-4">{isAr ? 'نوع الحساب' : 'Type'}</th>
+                    <th className="p-4">{isAr ? 'العملة الافتراضية' : 'Currency'}</th>
+                    <th className="p-4">{isAr ? 'الرصيد باليمني' : 'YER Balance'}</th>
+                    <th className="p-4">{isAr ? 'المعادل بالدولار' : 'USD Balance'}</th>
+                    <th className="p-4">{isAr ? 'المعادل بالسعودي' : 'SAR Balance'}</th>
+                    <th className="p-4 text-center">{isAr ? 'الإجراءات' : 'Actions'}</th>
+                  </tr>
+                </thead>
+                <tbody className="text-xs divide-y divide-slate-805 bg-black/10 font-bold">
+                  {filteredAccountsList.map((acc) => {
+                    const balanceInUSD = getDisplayEquivalent(acc.balance || 0, 'USD');
+                    const balanceInSAR = getDisplayEquivalent(acc.balance || 0, 'SAR');
+                    
+                    return (
+                      <tr key={acc.id} className="hover:bg-slate-950/40 transition-colors">
+                        <td className="p-4">
+                          <span className="bg-slate-900 border border-slate-800 text-[#d4af37] px-2.5 py-1 rounded-lg text-[9.5px] font-mono">
+                            {acc.accountCode}
+                          </span>
+                        </td>
+                        <td className="p-4 text-white text-xs font-black">
+                          {acc.entityName}
+                        </td>
+                        <td className="p-4">
+                          <span className={`text-[8px] uppercase font-black px-2 py-0.5 rounded ${
+                            acc.entityType === 'customer' ? 'bg-indigo-950/40 text-indigo-400 border border-indigo-900/20' :
+                            acc.entityType === 'courier' ? 'bg-amber-950/40 text-amber-400 border border-amber-900/20' :
+                            'bg-[#d4af37]/10 text-[#d4af37] border border-[#d4af37]/10'
+                          }`}>
+                            {isAr 
+                              ? (acc.entityType === 'customer' ? 'عميل' : acc.entityType === 'courier' ? 'مندوب' : 'موظف')
+                              : acc.entityType
+                            }
+                          </span>
+                        </td>
+                        <td className="p-4 text-slate-400 font-mono">
+                          {acc.currency}
+                        </td>
+                        <td className={`p-4 font-mono font-black ${
+                          (acc.balance || 0) >= 0 ? 'text-emerald-400' : 'text-rose-500'
+                        }`}>
+                          {acc.balance?.toLocaleString()} YER
+                        </td>
+                        <td className="p-4 text-slate-350 font-mono">
+                          ${balanceInUSD.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                        </td>
+                        <td className="p-4 text-slate-350 font-mono">
+                          SR {balanceInSAR.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                        </td>
+                        <td className="p-4 text-center space-x-1.5 space-x-reverse">
+                          <button
+                            onClick={() => {
+                              setAdjustData({
+                                type: 'Debit',
+                                amount: '',
+                                currency: 'YER',
+                                title: isAr ? 'تسوية حساب مالي' : 'Reconciliation of Account',
+                                recipientName: acc.entityName,
+                                notes: ''
+                              });
+                              setTargetType(acc.entityType);
+                              setSelectedAccountId(acc.id);
+                              setIsAdjustmentModalOpen(true);
+                            }}
+                            className="bg-[#d4af37]/10 hover:bg-[#d4af37]/20 border border-[#d4af37]/25 text-[#d4af37] px-2 py-1 rounded-lg text-[10px] transition-all"
+                          >
+                            {isAr ? 'تسوية' : 'Reconcile'}
+                          </button>
+                          
+                          {acc.entityType === 'customer' && (
+                            <button
+                              onClick={() => {
+                                setAuditedCustomerId(acc.entityId);
+                                setAccountingTab('customer_audit');
+                              }}
+                              className="bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 px-2 py-1 rounded-lg text-[10px] transition-all"
+                            >
+                              {isAr ? 'كشف الحساب' : 'Statement'}
+                            </button>
+                          )}
+                          
+                          {acc.entityType === 'courier' && (
+                            <button
+                              onClick={() => {
+                                setAuditedCourierId(acc.entityId);
+                                setAccountingTab('courier_audit');
+                              }}
+                              className="bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 px-2 py-1 rounded-lg text-[10px] transition-all"
+                            >
+                              {isAr ? 'كشف العهد' : 'Statement'}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {filteredAccountsList.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="p-16 text-center text-slate-500 font-bold font-mono text-[10px] uppercase select-none">
+                        [ {isAr ? 'لا توجد حسابات مالية مطابقة' : 'no_financial_accounts_found'} ]
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* RENDER TAB 4: CHART OF ACCOUNTS TREE */}
       {accountingTab === 'chart_of_accounts' && (
         <ChartOfAccounts
@@ -1717,6 +2029,61 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
                   </button>
                 </div>
               </div>
+
+              {/* Target Entity Type */}
+              <div>
+                <label className="block text-[9.5px] font-black text-slate-500 mb-1 uppercase">
+                  {isAr ? 'نوع الحساب المستهدف للتسوية' : 'Target Account Type'}
+                </label>
+                <select
+                  value={targetType}
+                  onChange={e => {
+                    const val = e.target.value as any;
+                    setTargetType(val);
+                    setSelectedAccountId('');
+                  }}
+                  className="w-full bg-black/40 border border-slate-850 text-white rounded-xl px-3 py-2 text-xs font-black cursor-pointer outline-none focus:border-[#d4af37]"
+                >
+                  <option value="general">{isAr ? 'حساب النظام العام / الخزينة' : 'General System Treasury'}</option>
+                  <option value="customer">{isAr ? 'حساب مالي لعميل' : 'Customer Financial Account'}</option>
+                  <option value="courier">{isAr ? 'حساب مالي لمندوب' : 'Courier Financial Account'}</option>
+                  <option value="employee">{isAr ? 'حساب مالي لموظف' : 'Employee Financial Account'}</option>
+                </select>
+              </div>
+
+              {/* Target Account Selection (only if targetType is not general) */}
+              {targetType !== 'general' && (
+                <div>
+                  <label className="block text-[9.5px] font-black text-slate-500 mb-1 uppercase">
+                    {isAr ? 'اختر الحساب المستهدف' : 'Select Target Financial Account'}
+                  </label>
+                  <select
+                    required
+                    value={selectedAccountId}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setSelectedAccountId(val);
+                      const acc = financialAccounts.find(a => a.id === val);
+                      if (acc) {
+                        setAdjustData(prev => ({
+                          ...prev,
+                          recipientName: acc.entityName
+                        }));
+                      }
+                    }}
+                    className="w-full bg-black/40 border border-slate-850 text-white rounded-xl px-3 py-2 text-xs font-black cursor-pointer outline-none focus:border-[#d4af37]"
+                  >
+                    <option value="">{isAr ? '-- اختر الحساب --' : '-- Choose Account --'}</option>
+                    {financialAccounts
+                      .filter(a => a.entityType === targetType)
+                      .map(a => (
+                        <option key={a.id} value={a.id}>
+                          {a.accountCode} - {a.entityName}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
 
               {/* Amount && Original Currency */}
               <div className="grid grid-cols-3 gap-2">

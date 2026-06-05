@@ -31,6 +31,7 @@ import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
 import { notificationService } from '../services/notificationService';
 import { activityLogService } from '../services/activityLogService';
+import { financialAccountService } from '../services/financialAccountService';
 import ConfirmModal from '../components/ConfirmModal';
 
 export default function Couriers() {
@@ -263,6 +264,10 @@ export default function Couriers() {
         notes: editFormData.notes,
         updatedAt: Date.now()
       });
+      // Sync financial account name if changed
+      if (editFormData.fullName !== selectedCourier.fullName) {
+        await financialAccountService.updateAccountEntityName(selectedCourier.id, editFormData.fullName);
+      }
       activityLogService.log('edit_courier', editFormData.fullName, { ...editFormData });
       notificationService.notify({
         title: isAr ? 'تحديث المندوب' : 'Courier Updated',
@@ -349,13 +354,29 @@ export default function Couriers() {
         commissionRate: addFormData.commissionRate,
         notes: addFormData.notes,
         walletBalance: 0,
+        financialBalance: 0,
+        financialCurrency: settings.currency || 'SAR',
         createdAt: Date.now()
       });
+
+      // 3. Auto-create financial account (2120-xxxx)
+      try {
+        await financialAccountService.createAccountForEntity(
+          'courier',
+          newCourierRef.id,
+          addFormData.fullName,
+          settings.currency || 'SAR'
+        );
+      } catch (accErr) {
+        console.warn('[Couriers] Could not create financial account:', accErr);
+      }
 
       activityLogService.log('add_courier', addFormData.fullName, { ...addFormData, courierCustomId: customId });
       notificationService.notify({
         title: isAr ? 'تم تسجيل مندوب خارجي' : 'External Courier Registered',
-        message: isAr ? `تم تسجيل المندوب الخارجي بنجاح برمز: ${customId}` : `External courier registered with ID: ${customId}`,
+        message: isAr 
+          ? `تم تسجيل المندوب برمز: ${customId} وإنشاء حسابه المالي تلقائياً` 
+          : `External courier registered: ${customId} with auto-generated financial account`,
         type: 'success',
         category: 'system'
       });
@@ -729,9 +750,16 @@ export default function Couriers() {
                 return (
                   <tr key={courier.id} className={`hover:bg-slate-950/40 transition-colors ${courier.disabled ? 'opacity-80' : ''}`}>
                     <td className="p-4 font-mono font-black text-slate-400">
-                      <span className="bg-slate-900 border border-slate-800 text-[#d4af37] px-2.5 py-0.5 rounded-lg text-[10px]">
-                        {courier.courierCustomId || 'ALX-CR-XXX'}
-                      </span>
+                      <div className="flex flex-col gap-1 text-right">
+                        <span className="bg-slate-900 border border-slate-800 text-[#d4af37] px-2.5 py-0.5 rounded-lg text-[10px] w-max mr-auto">
+                          {courier.courierCustomId || 'ALX-CR-XXX'}
+                        </span>
+                        {courier.financialAccountCode && (
+                          <span className="text-[9px] font-bold text-slate-550 font-mono block">
+                            {courier.financialAccountCode}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="p-4" onClick={() => handleOpenDetails(courier)}>
                       <div className="flex items-center gap-3 cursor-pointer group">

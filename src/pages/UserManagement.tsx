@@ -20,6 +20,7 @@ import { useSettings } from '../context/SettingsContext';
 import { notificationService } from '../services/notificationService';
 import { activityLogService } from '../services/activityLogService';
 import ConfirmModal from '../components/ConfirmModal';
+import { financialAccountService } from '../services/financialAccountService';
 
 // ══════════════════════════════════════════════════════════════
 // PERMISSIONS — FULL SYSTEM COVERAGE
@@ -75,6 +76,8 @@ const PERMISSION_GROUPS = (isAr: boolean) => [
       { id: 'edit_expenses', label: isAr ? 'تعديل المصروفات وتسوية العهد' : 'Edit Expenses & Reconcile' },
       { id: 'delete_expenses', label: isAr ? 'حذف المصروفات' : 'Delete Expenses' },
       { id: 'edit_exchange_rates', label: isAr ? 'تعديل أسعار الصرف' : 'Edit Exchange Rates' },
+      { id: 'view_financial_accounts', label: isAr ? 'عرض أرصدة وكشوفات الحسابات المالية' : 'View Financial Account Balances & Statements' },
+      { id: 'manage_financial_accounts', label: isAr ? 'إدارة وتعديل أرصدة الحسابات المالية' : 'Manage Financial Account Balances & Adjustments' },
     ]
   },
   {
@@ -358,6 +361,10 @@ export default function UserManagement() {
         commissionRate: editFormData.commissionRate, systemPin: editFormData.systemPin,
         updatedAt: Date.now()
       });
+      // Sync financial account name if changed
+      if (editFormData.fullName !== selectedUser.fullName && selectedUser.financialAccountId) {
+        await financialAccountService.updateAccountEntityName(selectedUser.id, editFormData.fullName);
+      }
       await activityLogService.log('edit_user', editFormData.fullName, { userId: selectedUser.id });
       notificationService.notify({ title: t('تم التحديث', 'Updated'), message: t(`تم تحديث ${editFormData.fullName}`, `${editFormData.fullName} updated`), type: 'info', category: 'system' });
       setIsEditModalOpen(false); setSelectedUser(null);
@@ -434,6 +441,19 @@ export default function UserManagement() {
         role: addFormData.role, commissionRate: addFormData.commissionRate,
         disabled: false, createdAt: Date.now()
       });
+
+      // Auto-create financial account for employee (2130-xxxx)
+      try {
+        await financialAccountService.createAccountForEntity(
+          'employee',
+          newUser.uid,
+          addFormData.fullName,
+          settings.currency || 'YER'
+        );
+      } catch (accErr) {
+        console.warn('[UserManagement] Could not create financial account for employee:', accErr);
+      }
+
       await activityLogService.log('add_user', addFormData.fullName, { email: addFormData.email, role: addFormData.role });
       notificationService.notify({ title: t('تم إنشاء الحساب', 'Account Created'), message: t(`تم إنشاء حساب ${addFormData.fullName}`, `${addFormData.fullName} account created`), type: 'success', category: 'system' });
       setIsAddModalOpen(false);
@@ -771,7 +791,17 @@ export default function UserManagement() {
                           </div>
                           <div>
                             <div className="font-extrabold text-white">{user.fullName}</div>
-                            <div className="text-[9px] font-mono text-slate-500 mt-0.5">@{user.username || 'not_set'}</div>
+                            <div className="text-[9px] font-mono text-slate-500 mt-0.5 flex items-center gap-1.5">
+                              <span>@{user.username || 'not_set'}</span>
+                              {user.financialAccountCode && (
+                                <>
+                                  <span className="text-slate-700">•</span>
+                                  <span className="text-[#d4af37] font-black font-mono">
+                                    {user.financialAccountCode}
+                                  </span>
+                                </>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </td>

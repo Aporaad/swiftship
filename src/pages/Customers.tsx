@@ -20,12 +20,15 @@ import {
   Check, 
   Printer,
   ShieldAlert,
-  HelpCircle
+  HelpCircle,
+  Wallet,
+  TrendingUp
 } from 'lucide-react';
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
 import { notificationService } from '../services/notificationService';
 import { activityLogService } from '../services/activityLogService';
+import { financialAccountService } from '../services/financialAccountService';
 import ConfirmModal from '../components/ConfirmModal';
 
 export default function Customers() {
@@ -143,6 +146,10 @@ export default function Customers() {
           ...formData,
           updatedAt: Date.now()
         });
+        // Update account name if it changed
+        if (formData.fullName !== selectedCustomer.fullName && selectedCustomer.financialAccountId) {
+          await financialAccountService.updateAccountEntityName(selectedCustomer.id, formData.fullName);
+        }
         activityLogService.log('edit_customer', formData.fullName || selectedCustomer.id, { ...formData });
         notificationService.notify({
           title: isAr ? 'تحديث عميل' : 'Customer Updated',
@@ -150,14 +157,32 @@ export default function Customers() {
           type: 'info'
         });
       } else {
-        await addDoc(collection(db, 'customers'), {
+        // Step 1: Create the customer document
+        const newCustomerRef = await addDoc(collection(db, 'customers'), {
           ...formData,
-          createdAt: Date.now()
+          createdAt: Date.now(),
+          financialBalance: 0,
+          financialCurrency: settings.currency || 'SAR'
         });
+
+        // Step 2: Auto-create financial account (1130-xxxx)
+        try {
+          await financialAccountService.createAccountForEntity(
+            'customer',
+            newCustomerRef.id,
+            formData.fullName,
+            settings.currency || 'SAR'
+          );
+        } catch (accErr) {
+          console.warn('[Customers] Could not create financial account:', accErr);
+        }
+
         activityLogService.log('add_customer', formData.fullName, { ...formData });
         notificationService.notify({
           title: isAr ? 'إضافة عميل' : 'Customer Added',
-          message: isAr ? `تمت إضافة العميل الجديد ${formData.fullName}` : `New customer ${formData.fullName} added`,
+          message: isAr 
+            ? `تمت إضافة العميل ${formData.fullName} وإنشاء حسابه المالي تلقائياً` 
+            : `Customer ${formData.fullName} added with auto-generated financial account`,
           type: 'success'
         });
       }
@@ -274,6 +299,7 @@ export default function Customers() {
                 <tr>
                   <th className="p-4">{isAr ? 'دفتر العميل' : 'Client Profile'}</th>
                   <th className="p-4">{isAr ? 'رقم الهاتف' : 'Telephone'}</th>
+                  <th className="p-4">{isAr ? 'الحساب المالي' : 'Financial Account'}</th>
                   <th className="p-4">{isAr ? 'تفاصيل العنوان السكني' : 'Settlement Location'}</th>
                   <th className="p-4 text-left">{isAr ? 'الإجراءات والتقرير' : 'Ledger Actions'}</th>
                 </tr>
@@ -290,6 +316,23 @@ export default function Customers() {
                       </div>
                     </td>
                     <td className="p-4 text-slate-300 font-mono font-bold" dir="ltr">{customer.phone}</td>
+                    <td className="p-4">
+                      {customer.financialAccountCode ? (
+                        <div className="flex flex-col gap-0.5">
+                          <span className="font-mono font-black text-[#d4af37] text-[10px] bg-[#d4af37]/10 border border-[#d4af37]/20 px-2 py-0.5 rounded-lg w-max">
+                            {customer.financialAccountCode}
+                          </span>
+                          <span className={`text-[10px] font-bold font-mono ${
+                            (customer.financialBalance || 0) > 0 ? 'text-rose-400' :
+                            (customer.financialBalance || 0) < 0 ? 'text-emerald-400' : 'text-slate-500'
+                          }`}>
+                            {(customer.financialBalance || 0) > 0 ? '▲' : (customer.financialBalance || 0) < 0 ? '▼' : '●'} {Math.abs(customer.financialBalance || 0).toLocaleString()} {customer.financialCurrency || settings.currency}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-slate-600 font-bold font-mono">— {isAr ? 'لا يوجد حساب' : 'No account'}</span>
+                      )}
+                    </td>
                     <td className="p-4 text-slate-400 max-w-xs truncate">
                        <div className="font-bold text-slate-300 text-xs">{customer.address || '—'}</div>
                        {customer.gps_location && (
@@ -327,7 +370,7 @@ export default function Customers() {
                 ))}
                 {filteredCustomers.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="p-16 text-center text-slate-600 font-bold uppercase tracking-widest font-mono text-[10px]">
+                    <td colSpan={5} className="p-16 text-center text-slate-600 font-bold uppercase tracking-widest font-mono text-[10px]">
                       [ no_registered_customers_found ]
                     </td>
                   </tr>
@@ -475,6 +518,32 @@ export default function Customers() {
 
             {/* Scrollable Modal Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
+
+              {/* Financial Account Info Card */}
+              {selectedCustomer.financialAccountCode && (
+                <div className="bg-gradient-to-r from-[#0e0e11] to-[#070708] border border-[#d4af37]/25 rounded-2xl p-4 flex items-center justify-between shadow">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-[#d4af37]/10 border border-[#d4af37]/20 p-2.5 rounded-xl">
+                      <Wallet className="w-5 h-5 text-[#d4af37]" />
+                    </div>
+                    <div>
+                      <div className="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-0.5">{isAr ? 'رقم الحساب المالي' : 'Financial Account Code'}</div>
+                      <div className="font-mono font-black text-[#d4af37] text-sm">{selectedCustomer.financialAccountCode}</div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-0.5">{isAr ? 'الرصيد الحالي' : 'Current Balance'}</div>
+                    <div className={`font-mono font-black text-base ${
+                      (selectedCustomer.financialBalance || 0) > 0 ? 'text-rose-400' :
+                      (selectedCustomer.financialBalance || 0) < 0 ? 'text-emerald-400' : 'text-slate-400'
+                    }`}>
+                      {(selectedCustomer.financialBalance || 0) > 0 ? isAr ? 'مدين: ' : 'Debit: ' : 
+                       (selectedCustomer.financialBalance || 0) < 0 ? isAr ? 'دائن: ' : 'Credit: ' : ''}
+                      {Math.abs(selectedCustomer.financialBalance || 0).toLocaleString()} {selectedCustomer.financialCurrency || settings.currency}
+                    </div>
+                  </div>
+                </div>
+              )}
               
               {/* Client Ledger Summary Cards */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
