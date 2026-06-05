@@ -980,7 +980,22 @@ export default function Expenses() {
                     </td>
                     <td className="p-4 font-bold text-slate-300 text-start">
                       <div className="flex flex-col text-start">
-                        <span>{exp.recipientName || '—'}</span>
+                        <span 
+                          onClick={() => {
+                            if (exp.recipientEntityId && (exp.recipientEntityType === 'customer' || exp.recipientEntityType === 'courier')) {
+                              window.dispatchEvent(new CustomEvent('open-entity-ledger', { 
+                                detail: { entityId: exp.recipientEntityId, entityType: exp.recipientEntityType } 
+                              }));
+                            }
+                          }}
+                          className={
+                            exp.recipientEntityId && (exp.recipientEntityType === 'customer' || exp.recipientEntityType === 'courier')
+                              ? 'hover:text-[#d4af37] cursor-pointer underline decoration-dotted decoration-[#d4af37]/40 transition-colors'
+                              : ''
+                          }
+                        >
+                          {exp.recipientName || '—'}
+                        </span>
                         {exp.linkedAccountCode && (
                           <span className="font-mono font-black text-[#d4af37] text-[9.5px] mt-1 bg-[#d4af37]/10 border border-[#d4af37]/20 px-1.5 py-0.5 rounded w-max">
                             {exp.linkedAccountCode}
@@ -1145,11 +1160,14 @@ export default function Expenses() {
                     className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer"
                   >
                     <option value="">{isAr ? '-- اختر المندوب من الكشف --' : '-- Choose Courier --'}</option>
-                    {couriers.map(c => (
-                      <option key={c.id} value={c.id}>
-                        {c.fullName} ({c.courierCustomId}){c.financialAccountCode ? ` — ${c.financialAccountCode}` : ''}
-                      </option>
-                    ))}
+                    {couriers.map(c => {
+                      const bal = c.wallet?.balance || c.walletBalance || 0;
+                      return (
+                        <option key={c.id} value={c.id}>
+                          {c.fullName} ({c.courierCustomId}) — Wallet: {bal.toLocaleString()} YER {c.financialAccountCode ? ` (${c.financialAccountCode})` : ''}
+                        </option>
+                      );
+                    })}
                   </select>
                   {formData.linkedAccountCode && (
                     <div className="mt-1.5 flex items-center gap-1.5">

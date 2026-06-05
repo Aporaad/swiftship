@@ -141,6 +141,8 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
           title: isAr ? `سداد من العميل: ${ord.customerName}` : `Customer payment: ${ord.customerName}`,
           notes: isAr ? `رسوم شحن طرد من محطة ${ord.orderSourceName || 'الرئيسية'}` : `Cargo transport fee via ${ord.orderSourceName || 'Hub'}`,
           party: ord.customerName,
+          entityId: ord.customerId,
+          entityType: 'customer',
           type: 'Debit', // Cash is coming into safe (Debit in asset accounting)
           amount: deposit,
           currency: 'YER',
@@ -165,6 +167,8 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
           title: exp.notes.replace('[MANUAL-DEBIT]', '').trim(),
           notes: isAr ? `تسوية حسابية يدوية داخلية للأصول` : `Bilateral manual treasury entry`,
           party: exp.recipientName || (isAr ? 'الخزينة العامة' : 'Central Treasury'),
+          entityId: exp.recipientEntityId || exp.recipientId,
+          entityType: exp.recipientEntityType || 'courier',
           type: 'Debit',
           amount: convertedAmt,
           currency: 'YER',
@@ -185,6 +189,8 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
           title: isAr ? `سند صرف [${catLabel}]: ${exp.notes}` : `Expense voucher [${catLabel}]: ${exp.notes}`,
           notes: isAr ? `خصم المصروف من الخزينة مباشرة` : `Direct expense treasury outflow`,
           party: exp.recipientName || (isAr ? 'خزينة المكتب' : 'Office Safe'),
+          entityId: exp.recipientEntityId || exp.recipientId,
+          entityType: exp.recipientEntityType || 'courier',
           type: 'Credit', // Cash spent
           amount: convertedAmt,
           currency: 'YER',
@@ -200,6 +206,8 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
           title: isAr ? `حوالة وتصدير لمصانع الصين` : `China factory offshore remittance`,
           notes: exp.notes || (isAr ? 'عقود المصانع' : 'Manufacturer trade balance'),
           party: exp.factoryName || exp.recipientName,
+          entityId: exp.recipientEntityId || exp.recipientId,
+          entityType: exp.recipientEntityType || 'courier',
           type: 'Credit',
           amount: convertedAmt,
           currency: 'YER',
@@ -216,6 +224,8 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
           title: isAr ? `تسليم عهدة تشغيلية للمندوب: ${exp.recipientName}` : `Courier custody issued: ${exp.recipientName}`,
           notes: exp.notes || (isAr ? 'اموال عهد تصفية' : 'Logistics liquid trust'),
           party: exp.recipientName,
+          entityId: exp.recipientEntityId || exp.recipientId,
+          entityType: 'courier',
           type: 'Credit',
           amount: convertedAmt,
           currency: 'YER',
@@ -233,6 +243,8 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
             title: isAr ? `تصفية واسترجاع عهدة المندوب: ${exp.recipientName}` : `Reconciliation custody settled: ${exp.recipientName}`,
             notes: isAr ? `مصادقة المراجعة لتسليم فواتير وتوريد فرق المال` : `Custodial accounting reconciliation`,
             party: exp.recipientName,
+            entityId: exp.recipientEntityId || exp.recipientId,
+            entityType: 'courier',
             type: 'Debit',
             amount: convertedAmt,
             currency: 'YER',
@@ -1345,7 +1357,22 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
                           <span className="text-[9px] text-slate-500 block font-normal">{e.notes}</span>
                         </td>
                         <td className="p-4 text-slate-350">
-                          {e.party || '—'}
+                          <span 
+                            onClick={() => {
+                              if (e.entityId && (e.entityType === 'customer' || e.entityType === 'courier')) {
+                                window.dispatchEvent(new CustomEvent('open-entity-ledger', { 
+                                  detail: { entityId: e.entityId, entityType: e.entityType } 
+                                }));
+                              }
+                            }}
+                            className={
+                              e.entityId && (e.entityType === 'customer' || e.entityType === 'courier')
+                                ? 'hover:text-[#d4af37] cursor-pointer underline decoration-dotted decoration-[#d4af37]/40 transition-colors'
+                                : ''
+                            }
+                          >
+                            {e.party || '—'}
+                          </span>
                         </td>
                         <td className="p-4 font-mono font-black text-emerald-400">
                           {isDebit ? `+${e.amount.toLocaleString()} YER` : '—'}
@@ -1867,7 +1894,22 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
                           </span>
                         </td>
                         <td className="p-4 text-white text-xs font-black">
-                          {acc.entityName}
+                          <span 
+                            onClick={() => {
+                              if (acc.entityId && (acc.entityType === 'customer' || acc.entityType === 'courier')) {
+                                window.dispatchEvent(new CustomEvent('open-entity-ledger', { 
+                                  detail: { entityId: acc.entityId, entityType: acc.entityType } 
+                                }));
+                              }
+                            }}
+                            className={
+                              acc.entityId && (acc.entityType === 'customer' || acc.entityType === 'courier')
+                                ? 'hover:text-[#d4af37] cursor-pointer underline decoration-dotted decoration-[#d4af37]/40 transition-colors'
+                                : ''
+                            }
+                          >
+                            {acc.entityName}
+                          </span>
                         </td>
                         <td className="p-4">
                           <span className={`text-[8px] uppercase font-black px-2 py-0.5 rounded ${

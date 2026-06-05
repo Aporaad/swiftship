@@ -2106,7 +2106,18 @@ export default function Orders() {
                   {/* Customer */}
                   <td className="p-4 text-start">
                     <div className="flex flex-col">
-                      <span className="font-bold text-white text-xs">{ord.customerName}</span>
+                      <span 
+                        onClick={() => {
+                          if (ord.customerId) {
+                            window.dispatchEvent(new CustomEvent('open-entity-ledger', { 
+                              detail: { entityId: ord.customerId, entityType: 'customer' } 
+                            }));
+                          }
+                        }}
+                        className="font-bold text-white text-xs hover:text-[#d4af37] cursor-pointer underline decoration-dotted decoration-[#d4af37]/40 transition-colors"
+                      >
+                        {ord.customerName}
+                      </span>
                       <span className="text-[10px] font-mono text-slate-500 mt-0.5">{ord.customerPhone}</span>
                     </div>
                   </td>
