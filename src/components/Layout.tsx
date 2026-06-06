@@ -28,7 +28,6 @@ import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
 import { Toaster } from 'react-hot-toast';
 import GlobalSearchModal from './GlobalSearchModal';
-import GlobalEntityLedgerModal from './GlobalEntityLedgerModal';
 import { activityLogService } from '../services/activityLogService';
 import { notificationService } from '../services/notificationService';
 
@@ -667,9 +666,6 @@ export default function Layout() {
           }}
           searchQuery={searchText}
         />
-
-        {/* Global Financial Statement Modal */}
-        <GlobalEntityLedgerModal />
       </main>
 
       {/* Mobile Sidebar overlay block */}

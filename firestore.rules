@@ -59,14 +59,6 @@ service cloud.firestore {
       allow read, write: if isSignedIn();
     }
 
-    match /accounts/{accountId} {
-      allow read, write: if isSignedIn();
-    }
-
-    match /account_transactions/{transactionId} {
-      allow read, write: if isSignedIn();
-    }
-
     // Public tracking access for customers using search
     match /public_tracking/{trackingNumber} {
       allow read: if true;

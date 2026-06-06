@@ -46,18 +46,7 @@ export type ActivityAction =
   | 'edit_shipping_company'
   | 'delete_shipping_company'
   | 'force_logout'
-  | 'temp_ban'
-  // Financial Account Actions
-  | 'create_financial_account'
-  | 'financial_transaction'
-  | 'account_debit'
-  | 'account_credit'
-  | 'account_adjustment'
-  | 'account_custody_charge'
-  | 'account_custody_settle'
-  | 'account_order_charge'
-  | 'account_payment_received'
-  | 'manage_financial_accounts';
+  | 'temp_ban';
 
 export interface ActivityLog {
   userId: string;

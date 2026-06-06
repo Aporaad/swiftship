@@ -26,36 +26,7 @@
         "phone": { "type": "string" },
         "governorate": { "type": "string" },
         "address": { "type": "string" },
-        "notes": { "type": "string" },
-        "wallet": {
-          "type": "object",
-          "properties": {
-            "balance": { "type": "number" }
-          }
-        }
-      },
-      "required": ["fullName", "phone"]
-    },
-    "Courier": {
-      "title": "Courier",
-      "description": "An external delivery courier in the system",
-      "type": "object",
-      "properties": {
-        "fullName": { "type": "string" },
-        "phone": { "type": "string" },
-        "email": { "type": "string" },
-        "address": { "type": "string" },
-        "gpsLocation": { "type": "string" },
-        "courierCustomId": { "type": "string" },
-        "commissionRate": { "type": "number" },
-        "notes": { "type": "string" },
-        "disabled": { "type": "boolean" },
-        "wallet": {
-          "type": "object",
-          "properties": {
-            "balance": { "type": "number" }
-          }
-        }
+        "notes": { "type": "string" }
       },
       "required": ["fullName", "phone"]
     },
@@ -162,10 +133,6 @@
     "/orders/{orderId}/trackingUpdates/{updateId}": {
       "schema": { "$ref": "#/entities/TrackingUpdate" },
       "description": "History of the order"
-    },
-    "/couriers/{courierId}": {
-      "schema": { "$ref": "#/entities/Courier" },
-      "description": "External couriers list and wallet balances"
     }
   }
 }

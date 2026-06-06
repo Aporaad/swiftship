@@ -7,7 +7,6 @@ import { notificationService } from '../services/notificationService';
 import { activityLogService } from '../services/activityLogService';
 import { whatsappService } from '../services/whatsappService';
 import ConfirmModal from '../components/ConfirmModal';
-import { financialAccountService } from '../services/financialAccountService';
 import { 
   Plus, Search, Edit2, Truck, Activity, Trash2, DollarSign, 
   CreditCard, Printer, Calculator, Package, MapPin, X, AlertCircle, RefreshCw, UserPlus, Eye
@@ -847,71 +846,6 @@ export default function Orders() {
 
       await addDoc(collection(db, 'orders'), payload);
 
-      // --- Financial Account Impact ---
-      const customerRecord = customers.find(c => c.id === formData.customerId);
-      const linkedAccountId = customerRecord?.financialAccountId;
-      const linkedAccountCode = customerRecord?.financialAccountCode;
-
-      if (linkedAccountId) {
-        try {
-          const totalBilledOriginal = currentCalcs.totalOrderYER + (parseFloat(formData.deliveryCourierFee as any) || 0);
-          const convertedOrderAmount = financialAccountService.convertToDefaultCurrency(
-            totalBilledOriginal,
-            'YER',
-            settings.currency || 'YER',
-            { USD: formData.exchangeRateUSD, SAR: formData.exchangeRateYER }
-          );
-
-          await financialAccountService.recordTransaction(linkedAccountId, {
-            accountId: linkedAccountId,
-            accountCode: linkedAccountCode || '',
-            entityType: 'customer',
-            entityId: formData.customerId,
-            entityName: formData.customerName,
-            type: 'Debit', // Debiting customer for the total order amount
-            amount: convertedOrderAmount,
-            amountOriginal: totalBilledOriginal,
-            currencyOriginal: 'YER',
-            description: isAr ? `قيد قيمة الطلب رقم: ${orderNumber}` : `Charge for order: ${orderNumber}`,
-            refNumber: orderNumber,
-            module: 'order',
-            createdByUid: auth.currentUser?.uid || 'system',
-            createdByName: profile?.fullName || 'Root Admin',
-            createdAt: Date.now()
-          });
-
-          const paidVal = parseFloat(formData.amountPaid as any) || 0;
-          if (paidVal > 0) {
-            const convertedPaid = financialAccountService.convertToDefaultCurrency(
-              paidVal,
-              'YER',
-              settings.currency || 'YER',
-              { USD: formData.exchangeRateUSD, SAR: formData.exchangeRateYER }
-            );
-
-            await financialAccountService.recordTransaction(linkedAccountId, {
-              accountId: linkedAccountId,
-              accountCode: linkedAccountCode || '',
-              entityType: 'customer',
-              entityId: formData.customerId,
-              entityName: formData.customerName,
-              type: 'Credit', // Crediting customer for downpayment
-              amount: convertedPaid,
-              amountOriginal: paidVal,
-              currencyOriginal: 'YER',
-              description: isAr ? `دفعة مقدمة للطلب رقم: ${orderNumber}` : `Down payment for order: ${orderNumber}`,
-              refNumber: orderNumber,
-              module: 'payment',
-              createdByUid: auth.currentUser?.uid || 'system',
-              createdByName: profile?.fullName || 'Root Admin',
-              createdAt: Date.now()
-            });
-          }
-        } catch (txErr) {
-          console.error('[Orders] Error registering financial account transactions:', txErr);
-        }
-      }
-
       // Log the order creation to activity log
       activityLogService.log('add_order', payload.orderNumber || 'New Order', {
         customer: payload.customerName,
@@ -1254,52 +1188,14 @@ export default function Orders() {
     }
 
     try {
-        await updateDoc(doc(db, 'orders', selectedOrder.id), {
-          amountPaid: newPaid,
-          amountRemaining: Math.max(0, remaining),
-          paymentStatus: targetStatus,
-          updatedAt: Date.now()
-        });
+      await updateDoc(doc(db, 'orders', selectedOrder.id), {
+        amountPaid: newPaid,
+        amountRemaining: Math.max(0, remaining),
+        paymentStatus: targetStatus,
+        updatedAt: Date.now()
+      });
 
-        // --- Financial Account Impact ---
-        const customerRecord = customers.find(c => c.id === selectedOrder.customerId);
-        const linkedAccountId = customerRecord?.financialAccountId;
-        const linkedAccountCode = customerRecord?.financialAccountCode;
-
-        if (linkedAccountId) {
-          try {
-            const convertedPaid = financialAccountService.convertToDefaultCurrency(
-              paidVal,
-              'YER',
-              settings.currency || 'YER',
-              { USD: selectedOrder.exchangeRateUSD || settings.exchangeRateUSD, SAR: selectedOrder.exchangeRateYER || settings.exchangeRateSAR }
-            );
-
-            await financialAccountService.recordTransaction(linkedAccountId, {
-              accountId: linkedAccountId,
-              accountCode: linkedAccountCode || '',
-              entityType: 'customer',
-              entityId: selectedOrder.customerId,
-              entityName: selectedOrder.customerName,
-              type: 'Credit', // Crediting customer for payment received
-              amount: convertedPaid,
-              amountOriginal: paidVal,
-              currencyOriginal: 'YER',
-              description: isAr 
-                ? `دفعة للطلب رقم: ${selectedOrder.orderNumber} (طريقة الدفع: ${paymentFormData.method})` 
-                : `Payment for order: ${selectedOrder.orderNumber} (via ${paymentFormData.method})`,
-              refNumber: selectedOrder.orderNumber,
-              module: 'payment',
-              createdByUid: auth.currentUser?.uid || 'system',
-              createdByName: profile?.fullName || 'Root Admin',
-              createdAt: Date.now()
-            });
-          } catch (txErr) {
-            console.error('[Orders] Error registering payment transaction on financial account:', txErr);
-          }
-        }
-
-        activityLogService.log('add_payment', selectedOrder.orderNumber || selectedOrder.id, {
+      activityLogService.log('add_payment', selectedOrder.orderNumber || selectedOrder.id, {
         amount: paidVal,
         method: paymentFormData.method,
         remaining: Math.max(0, remaining)
@@ -1358,29 +1254,14 @@ export default function Orders() {
         
         const courierRecord = couriers.find(c => c.id === courierId);
         const courierName = courierRecord ? courierRecord.fullName : (isAr ? 'مندوب توصيل' : 'Delivery Courier');
-        const linkedAccountId = courierRecord?.financialAccountId || null;
-        const linkedAccountCode = courierRecord?.financialAccountCode || null;
-
-        const convertedRemainingVal = financialAccountService.convertToDefaultCurrency(
-          remainingVal,
-          'YER',
-          settings.currency || 'YER',
-          { USD: selectedOrder.exchangeRateUSD || settings.exchangeRateUSD, SAR: selectedOrder.exchangeRateYER || settings.exchangeRateSAR }
-        );
 
         const custodyPayload = {
           expenseNumber,
-          category: 'custody',
           type: 'Custody',
           amount: remainingVal,
           currency: 'YER',
-          amountInDefaultCurrency: convertedRemainingVal,
           recipientId: courierId,
-          recipientEntityId: courierId,
-          recipientEntityType: 'courier',
           recipientName: courierName,
-          linkedAccountId,
-          linkedAccountCode,
           notes: isAr
             ? `عهدة تلقائية مرحلة من تسليم الطلب رقم: ${selectedOrder.orderNumber}`
             : `Auto-custody generated from delivery of order: ${selectedOrder.orderNumber}`,
@@ -1392,61 +1273,6 @@ export default function Orders() {
         };
 
         await addDoc(collection(db, 'expenses'), custodyPayload);
-
-        // --- Courier Financial Account Transaction ---
-        if (linkedAccountId) {
-          try {
-            await financialAccountService.recordTransaction(linkedAccountId, {
-              accountId: linkedAccountId,
-              accountCode: linkedAccountCode || '',
-              entityType: 'courier',
-              entityId: courierId,
-              entityName: courierName,
-              type: 'Credit', // Charging custody to courier
-              amount: convertedRemainingVal,
-              amountOriginal: remainingVal,
-              currencyOriginal: 'YER',
-              description: isAr
-                ? `عهدة تلقائية مرحلة من تسليم الطلب رقم: ${selectedOrder.orderNumber}`
-                : `Auto-custody generated from delivery of order: ${selectedOrder.orderNumber}`,
-              refNumber: expenseNumber,
-              module: 'custody',
-              createdByUid: auth.currentUser?.uid || 'system',
-              createdByName: profile?.fullName || 'System Auto-Custody',
-              createdAt: Date.now()
-            });
-          } catch (txErr) {
-            console.warn('[Orders] Could not record auto-custody on courier financial account:', txErr);
-          }
-        }
-
-        // --- Customer Financial Account Transaction ---
-        const customerRecord = customers.find(c => c.id === selectedOrder.customerId);
-        if (customerRecord?.financialAccountId) {
-          try {
-            await financialAccountService.recordTransaction(customerRecord.financialAccountId, {
-              accountId: customerRecord.financialAccountId,
-              accountCode: customerRecord.financialAccountCode || '',
-              entityType: 'customer',
-              entityId: selectedOrder.customerId,
-              entityName: selectedOrder.customerName,
-              type: 'Credit', // Customer paid the courier
-              amount: convertedRemainingVal,
-              amountOriginal: remainingVal,
-              currencyOriginal: 'YER',
-              description: isAr
-                ? `تسوية تلقائية لتسليم الطلب رقم: ${selectedOrder.orderNumber} (مع المندوب)`
-                : `Auto credit for delivery of order: ${selectedOrder.orderNumber} (via courier)`,
-              refNumber: selectedOrder.orderNumber,
-              module: 'payment',
-              createdByUid: auth.currentUser?.uid || 'system',
-              createdByName: profile?.fullName || 'System Auto-Custody',
-              createdAt: Date.now()
-            });
-          } catch (txErr) {
-            console.warn('[Orders] Could not record auto-payment on customer financial account:', txErr);
-          }
-        }
 
         // Update order payment status to paid since it is now in the courier's custody
         extraUpdateFields = {
@@ -1639,130 +1465,13 @@ export default function Orders() {
     if (selectedOrderIds.length === 0) return;
     setIsBatchUpdating(true);
     try {
-      const promises = selectedOrderIds.map(async (orderId) => {
+      const promises = selectedOrderIds.map(orderId => {
         const defaultLocation = newStatus === 'وصل مستودع السعودية' ? 'مستودع السعودية للتعبئة' : 
                                 newStatus === 'وصل مركز التوزيع في اليمن' ? 'مستودع صنعاء الرئيسي' : 'قيد النقل';
-        
-        const ord = orders.find(o => o.id === orderId);
-        if (!ord) return;
-
-        const wasDelivered = ord.orderStatus === 'تم التسليم';
-        const isDelivered = newStatus === 'تم التسليم';
-        const remainingVal = parseFloat(ord.amountRemaining || '0');
-        const courierId = ord.deliveryCourierId;
-
-        let extraUpdateFields: any = {};
-
-        if (isDelivered && !wasDelivered && remainingVal > 0 && courierId) {
-          // Create auto-custody for courier
-          const YY = String(new Date().getFullYear()).slice(-2);
-          const MM = String(new Date().getMonth() + 1).padStart(2, '0');
-          const expenseNumber = `EXP-${YY}${MM}-${Math.floor(1000 + Math.random() * 9000)}`;
-          
-          const courierRecord = couriers.find(c => c.id === courierId);
-          const courierName = courierRecord ? courierRecord.fullName : (isAr ? 'مندوب توصيل' : 'Delivery Courier');
-          const linkedAccountId = courierRecord?.financialAccountId || null;
-          const linkedAccountCode = courierRecord?.financialAccountCode || null;
-
-          const convertedRemainingVal = financialAccountService.convertToDefaultCurrency(
-            remainingVal,
-            'YER',
-            settings.currency || 'YER',
-            { USD: ord.exchangeRateUSD || settings.exchangeRateUSD, SAR: ord.exchangeRateYER || settings.exchangeRateSAR }
-          );
-
-          const custodyPayload = {
-            expenseNumber,
-            category: 'custody',
-            type: 'Custody',
-            amount: remainingVal,
-            currency: 'YER',
-            amountInDefaultCurrency: convertedRemainingVal,
-            recipientId: courierId,
-            recipientEntityId: courierId,
-            recipientEntityType: 'courier',
-            recipientName: courierName,
-            linkedAccountId,
-            linkedAccountCode,
-            notes: isAr
-              ? `عهدة تلقائية مرحلة من تسليم الطلب رقم: ${ord.orderNumber}`
-              : `Auto-custody generated from delivery of order: ${ord.orderNumber}`,
-            status: 'Pending',
-            createdByUid: auth.currentUser?.uid || 'system',
-            createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
-            createdByName: profile?.fullName || 'System Auto-Custody',
-            createdAt: Date.now()
-          };
-
-          await addDoc(collection(db, 'expenses'), custodyPayload);
-
-          // --- Courier Financial Account Transaction ---
-          if (linkedAccountId) {
-            try {
-              await financialAccountService.recordTransaction(linkedAccountId, {
-                accountId: linkedAccountId,
-                accountCode: linkedAccountCode || '',
-                entityType: 'courier',
-                entityId: courierId,
-                entityName: courierName,
-                type: 'Credit', // Charging custody to courier
-                amount: convertedRemainingVal,
-                amountOriginal: remainingVal,
-                currencyOriginal: 'YER',
-                description: isAr
-                  ? `عهدة تلقائية مرحلة من تسليم الطلب رقم: ${ord.orderNumber}`
-                  : `Auto-custody generated from delivery of order: ${ord.orderNumber}`,
-                refNumber: expenseNumber,
-                module: 'custody',
-                createdByUid: auth.currentUser?.uid || 'system',
-                createdByName: profile?.fullName || 'System Auto-Custody',
-                createdAt: Date.now()
-              });
-            } catch (txErr) {
-              console.warn('[Orders] Could not record auto-custody on courier financial account:', txErr);
-            }
-          }
-
-          // --- Customer Financial Account Transaction ---
-          const customerRecord = customers.find(c => c.id === ord.customerId);
-          if (customerRecord?.financialAccountId) {
-            try {
-              await financialAccountService.recordTransaction(customerRecord.financialAccountId, {
-                accountId: customerRecord.financialAccountId,
-                accountCode: customerRecord.financialAccountCode || '',
-                entityType: 'customer',
-                entityId: ord.customerId,
-                entityName: ord.customerName,
-                type: 'Credit', // Customer paid the courier
-                amount: convertedRemainingVal,
-                amountOriginal: remainingVal,
-                currencyOriginal: 'YER',
-                description: isAr
-                  ? `تسوية تلقائية لتسليم الطلب رقم: ${ord.orderNumber} (مع المندوب)`
-                  : `Auto credit for delivery of order: ${ord.orderNumber} (via courier)`,
-                refNumber: ord.orderNumber,
-                module: 'payment',
-                createdByUid: auth.currentUser?.uid || 'system',
-                createdByName: profile?.fullName || 'System Auto-Custody',
-                createdAt: Date.now()
-              });
-            } catch (txErr) {
-              console.warn('[Orders] Could not record auto-payment on customer financial account:', txErr);
-            }
-          }
-
-          extraUpdateFields = {
-            amountPaid: parseFloat(ord.amountPaid || '0') + remainingVal,
-            amountRemaining: 0,
-            paymentStatus: 'Paid'
-          };
-        }
-
-        await updateDoc(doc(db, 'orders', orderId), {
+        return updateDoc(doc(db, 'orders', orderId), {
           orderStatus: newStatus,
           locationYemen: defaultLocation,
-          updatedAt: Date.now(),
-          ...extraUpdateFields
+          updatedAt: Date.now()
         });
       });
       await Promise.all(promises);
@@ -2223,18 +1932,7 @@ export default function Orders() {
                   {/* Customer */}
                   <td className="p-4 text-start">
                     <div className="flex flex-col">
-                      <span 
-                        onClick={() => {
-                          if (ord.customerId) {
-                            window.dispatchEvent(new CustomEvent('open-entity-ledger', { 
-                              detail: { entityId: ord.customerId, entityType: 'customer' } 
-                            }));
-                          }
-                        }}
-                        className="font-bold text-white text-xs hover:text-[#d4af37] cursor-pointer underline decoration-dotted decoration-[#d4af37]/40 transition-colors"
-                      >
-                        {ord.customerName}
-                      </span>
+                      <span className="font-bold text-white text-xs">{ord.customerName}</span>
                       <span className="text-[10px] font-mono text-slate-500 mt-0.5">{ord.customerPhone}</span>
                     </div>
                   </td>

@@ -53,9 +53,7 @@ export type PermissionKey =
   | 'manage_notifications'
   | 'notify_orders'
   | 'notify_finance'
-  | 'notify_system'
-  | 'view_financial_accounts'
-  | 'manage_financial_accounts';
+  | 'notify_system';
 
 export interface PermissionDefinition {
   id: PermissionKey;
@@ -131,8 +129,6 @@ export const ALL_PERMISSIONS: PermissionDefinition[] = [
   { id: 'edit_expenses', labelAr: 'تسوية وإقفال العهدة مع موظف والتحديث المالي المباشر', labelEn: 'Reconcile outstanding balances & settle custody', category: 'accounting' },
   { id: 'delete_expenses', labelAr: 'شطب وإبطال فاتورة من المصروفات والمدفوعات لتحديث السيولة', labelEn: 'Delete Expenditure record & reverse ledger', category: 'accounting' },
   { id: 'edit_exchange_rates', labelAr: 'تنظيم أسعار صرف وتحويل الدولار والريال السعودي بالYER', labelEn: 'Modify currency rates & exchange multipliers', category: 'accounting' },
-  { id: 'view_financial_accounts', labelAr: 'عرض أرصدة الحسابات المالية وكشوفاتها', labelEn: 'View Financial Account Balances & Statements', category: 'accounting' },
-  { id: 'manage_financial_accounts', labelAr: 'إدارة أرصدة الحسابات المالية وإجراء حركات تسوية يدوية', labelEn: 'Manage Financial Account Balances & Adjustments', category: 'accounting' },
 
   // Reports
   { id: 'view_reports', labelAr: 'تأطير ورؤية تقارير جرد أرباح وحسابات الأنشطة', labelEn: 'Access Profit Analytics & Financial Reports', category: 'reports' },
@@ -187,8 +183,6 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     'view_custody',
     'add_expenses',
     'edit_expenses',
-    'view_financial_accounts',
-    'manage_financial_accounts',
     'view_reports',
     'view_sources',
     'add_sources',

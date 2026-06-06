@@ -24,15 +24,13 @@ import {
   ShieldAlert,
   Coins,
   Activity,
-  AlertTriangle,
-  Wallet
+  AlertTriangle
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
 import { notificationService } from '../services/notificationService';
 import { activityLogService } from '../services/activityLogService';
-import { financialAccountService } from '../services/financialAccountService';
 import ConfirmModal from '../components/ConfirmModal';
 
 export default function Couriers() {
@@ -69,30 +67,6 @@ export default function Couriers() {
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [detailsUnsubs, setDetailsUnsubs] = useState<(() => void)[]>([]);
 
-  const [detailTab, setDetailTab] = useState<'logistics' | 'financial'>('logistics');
-  const [courierTransactions, setCourierTransactions] = useState<any[]>([]);
-  const [finSearch, setFinSearch] = useState('');
-  const [finModuleFilter, setFinModuleFilter] = useState<'all' | 'order' | 'expense' | 'payment' | 'custody'>('all');
-
-  useEffect(() => {
-    if (!selectedCourier || !isDetailsModalOpen) {
-      setCourierTransactions([]);
-      return;
-    }
-
-    const qTx = query(
-      collection(db, 'account_transactions'),
-      where('entityId', '==', selectedCourier.id)
-    );
-    const unsubTx = onSnapshot(qTx, (snap) => {
-      setCourierTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => {
-      console.error("Error fetching transactions for courier:", err);
-    });
-
-    return () => unsubTx();
-  }, [selectedCourier, isDetailsModalOpen]);
-
   // Global collections for smart calculations
   const [allOrders, setAllOrders] = useState<any[]>([]);
   const [allExpenses, setAllExpenses] = useState<any[]>([]);
@@ -105,8 +79,7 @@ export default function Couriers() {
     gpsLocation: '',
     disabled: false,
     commissionRate: 0,
-    notes: '',
-    walletBalance: 0
+    notes: ''
   });
 
   const [addFormData, setAddFormData] = useState({
@@ -116,8 +89,7 @@ export default function Couriers() {
     address: '',
     gpsLocation: '',
     commissionRate: 0,
-    notes: '',
-    walletBalance: 0
+    notes: ''
   });
 
   const [addLoading, setAddLoading] = useState(false);
@@ -180,103 +152,6 @@ export default function Couriers() {
     };
   };
 
-  const getCourierUnifiedLedger = () => {
-    const ledger: any[] = [];
-    const isAr = settings.language === 'ar';
-
-    // 1. Map Expenses, Custodies, and Wages from the expenses collection
-    courierExpenses.forEach(exp => {
-      const amt = parseFloat(exp.amount || 0);
-      if (amt <= 0) return;
-
-      let type: 'Debit' | 'Credit' = 'Debit';
-      let title = '';
-      if (exp.type === 'Custody') {
-        type = 'Debit';
-        title = isAr ? 'تسليم عهدة مالية للمندوب' : 'Custody Handed Over';
-      } else if (exp.type === 'Advance') {
-        type = 'Debit';
-        title = isAr ? 'صرف سلفة مالية للمندوب' : 'Advance Granted';
-      } else if (exp.type === 'Wage') {
-        type = 'Credit';
-        title = isAr ? 'صرف مستحقات / أجور توصيل المندوب' : 'Delivery Wages Paid';
-      } else {
-        type = 'Debit';
-        title = isAr ? 'صرف مصروفات تشغيلية للمندوب' : 'Operating Expense Disbursed';
-      }
-
-      ledger.push({
-        id: `exp-${exp.id}`,
-        date: exp.createdAt || Date.now(),
-        type,
-        amount: amt,
-        module: 'expense',
-        title,
-        description: isAr 
-          ? `حالة السند: ${exp.status === 'Settled' ? 'مسدد ومورد للصندوق' : 'معلق بعهدة المندوب'} - بيان: ${exp.notes || exp.purpose || ''}`
-          : `Status: ${exp.status} - Notes: ${exp.notes || exp.purpose || ''}`,
-        ref: exp.expenseNumber || exp.invoiceNumber || 'SLIP-EXP'
-      });
-    });
-
-    // 2. Map delivered orders (collection of cash from customer increases courier liability/custody)
-    courierOrders.forEach(order => {
-      const status = order.orderStatus || order.order_status || '';
-      if (status !== 'تم التسليم' && status !== 'Delivered') return;
-
-      const collectedCOD = parseFloat(order.totalCostYER || order.totalPrice || 0);
-      if (collectedCOD <= 0) return;
-
-      ledger.push({
-        id: `order-cod-${order.id}`,
-        date: order.updatedAt || order.createdAt || Date.now(),
-        type: 'Debit',
-        amount: collectedCOD,
-        module: 'order',
-        title: isAr ? 'مقبوضات شحنة لم يتم توريدها' : 'Delivered Shipment COD Collected',
-        description: isAr 
-          ? `تم توصيل الطلب رقم: ${order.orderNumber || 'ALX-CR'} وتحصيل غراس الكاش بعهدة المندوب` 
-          : `Delivered shipment #${order.orderNumber || 'ALX-CR'} - Cash collected at door`,
-        ref: order.orderNumber || order.id
-      });
-    });
-
-    // 3. Central journal transactions (withdrawals, deposits, clearings)
-    courierTransactions.forEach(tx => {
-      ledger.push({
-        id: tx.id || `tx-${Math.random()}`,
-        date: tx.createdAt || Date.now(),
-        type: tx.type,
-        amount: tx.amount || 0,
-        module: tx.module || 'transaction',
-        title: tx.description ? tx.description : (isAr ? (tx.type === 'Credit' ? 'إيداع وتسوية محفظة' : 'سحب وتوريد من الصندوق') : (tx.type === 'Credit' ? 'Wallet Deposit' : 'Cash Remitted/Withdrawn')),
-        description: isAr 
-          ? `قيد مركزي رقم القيد: ${tx.refNumber || tx.accountCode || 'Journal-Entry'}`
-          : `Accounting central ref: ${tx.refNumber || tx.accountCode || 'Journal-Entry'}`,
-        ref: tx.refNumber || tx.accountCode || ''
-      });
-    });
-
-    // Sort oldest to newest
-    const sorted = [...ledger].sort((a, b) => a.date - b.date);
-
-    let runningWalletBal = 0;
-    const finalLedger = sorted.map(item => {
-      if (item.type === 'Credit') {
-        runningWalletBal += item.amount;
-      } else {
-        runningWalletBal -= item.amount;
-      }
-
-      return {
-        ...item,
-        runningWalletBal
-      };
-    });
-
-    return finalLedger.reverse();
-  };
-
   useEffect(() => {
     if (roleLoading) return;
 
@@ -320,17 +195,13 @@ export default function Couriers() {
       gpsLocation: courier.gpsLocation || '',
       disabled: courier.disabled || false,
       commissionRate: courier.commissionRate || 0,
-      notes: courier.notes || '',
-      walletBalance: courier.wallet?.balance || courier.walletBalance || 0
+      notes: courier.notes || ''
     });
     setIsEditModalOpen(true);
   };
 
   const handleOpenDetails = (courier: any) => {
     setSelectedCourier(courier);
-    setDetailTab('logistics');
-    setFinSearch('');
-    setFinModuleFilter('all');
     setIsDetailsModalOpen(true);
     setOrdersLoading(true);
 
@@ -390,16 +261,8 @@ export default function Couriers() {
         disabled: editFormData.disabled,
         commissionRate: editFormData.commissionRate,
         notes: editFormData.notes,
-        wallet: {
-          balance: editFormData.walletBalance || 0
-        },
-        walletBalance: editFormData.walletBalance || 0,
         updatedAt: Date.now()
       });
-      // Sync financial account name if changed
-      if (editFormData.fullName !== selectedCourier.fullName) {
-        await financialAccountService.updateAccountEntityName(selectedCourier.id, editFormData.fullName);
-      }
       activityLogService.log('edit_courier', editFormData.fullName, { ...editFormData });
       notificationService.notify({
         title: isAr ? 'تحديث المندوب' : 'Courier Updated',
@@ -485,39 +348,20 @@ export default function Couriers() {
         courierCustomId: customId,
         commissionRate: addFormData.commissionRate,
         notes: addFormData.notes,
-        wallet: {
-          balance: addFormData.walletBalance || 0
-        },
-        walletBalance: addFormData.walletBalance || 0,
-        financialBalance: 0,
-        financialCurrency: settings.currency || 'SAR',
+        walletBalance: 0,
         createdAt: Date.now()
       });
-
-      // 3. Auto-create financial account (2120-xxxx)
-      try {
-        await financialAccountService.createAccountForEntity(
-          'courier',
-          newCourierRef.id,
-          addFormData.fullName,
-          settings.currency || 'SAR'
-        );
-      } catch (accErr) {
-        console.warn('[Couriers] Could not create financial account:', accErr);
-      }
 
       activityLogService.log('add_courier', addFormData.fullName, { ...addFormData, courierCustomId: customId });
       notificationService.notify({
         title: isAr ? 'تم تسجيل مندوب خارجي' : 'External Courier Registered',
-        message: isAr 
-          ? `تم تسجيل المندوب برمز: ${customId} وإنشاء حسابه المالي تلقائياً` 
-          : `External courier registered: ${customId} with auto-generated financial account`,
+        message: isAr ? `تم تسجيل المندوب الخارجي بنجاح برمز: ${customId}` : `External courier registered with ID: ${customId}`,
         type: 'success',
         category: 'system'
       });
       
       // Reset form setup
-      setAddFormData({ fullName: '', phone: '', email: '', address: '', gpsLocation: '', commissionRate: 0, notes: '', walletBalance: 0 });
+      setAddFormData({ fullName: '', phone: '', email: '', address: '', gpsLocation: '', commissionRate: 0, notes: '' });
       setIsAddModalOpen(false);
 
     } catch (err: any) {
@@ -885,24 +729,9 @@ export default function Couriers() {
                 return (
                   <tr key={courier.id} className={`hover:bg-slate-950/40 transition-colors ${courier.disabled ? 'opacity-80' : ''}`}>
                     <td className="p-4 font-mono font-black text-slate-400">
-                      <div className="flex flex-col gap-1 text-right">
-                        <span className="bg-slate-900 border border-slate-800 text-[#d4af37] px-2.5 py-0.5 rounded-lg text-[10px] w-max mr-auto">
-                          {courier.courierCustomId || 'ALX-CR-XXX'}
-                        </span>
-                        {courier.financialAccountCode ? (
-                          <div className="flex flex-col gap-0.5 mt-0.5">
-                            <span className="text-[9px] font-bold text-slate-550 font-mono block">
-                              {courier.financialAccountCode}
-                            </span>
-                            <span className={`text-[9px] font-bold font-mono ${
-                              (courier.financialBalance || 0) > 0 ? 'text-rose-450' :
-                              (courier.financialBalance || 0) < 0 ? 'text-emerald-400' : 'text-slate-500'
-                            }`}>
-                              {(courier.financialBalance || 0) > 0 ? '▲' : (courier.financialBalance || 0) < 0 ? '▼' : '●'} {Math.abs(courier.financialBalance || 0).toLocaleString()} {courier.financialCurrency || settings.currency}
-                            </span>
-                          </div>
-                        ) : null}
-                      </div>
+                      <span className="bg-slate-900 border border-slate-800 text-[#d4af37] px-2.5 py-0.5 rounded-lg text-[10px]">
+                        {courier.courierCustomId || 'ALX-CR-XXX'}
+                      </span>
                     </td>
                     <td className="p-4" onClick={() => handleOpenDetails(courier)}>
                       <div className="flex items-center gap-3 cursor-pointer group">
@@ -1081,38 +910,8 @@ export default function Couriers() {
                 </div>
               )}
 
-              {/* Tab Selector for Courier */}
-              <div className="flex bg-black/35 border border-slate-850/50 p-1 rounded-2xl gap-2 mt-4 shrink-0 font-sans">
-                <button
-                  type="button"
-                  onClick={() => setDetailTab('logistics')}
-                  className={`flex-1 py-1.5 rounded-xl text-[10px] sm:text-xs font-black transition flex items-center justify-center gap-1.5 ${
-                    detailTab === 'logistics'
-                      ? 'bg-[#d4af37]/15 border border-[#d4af37]/30 text-[#d4af37]'
-                      : 'border border-transparent text-slate-500 hover:text-slate-350'
-                  }`}
-                >
-                  <Package className="w-4 h-4" />
-                  {isAr ? 'بيانات الأداء الميداني والعهد' : 'Field Performance & Custody'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDetailTab('financial')}
-                  className={`flex-1 py-1.5 rounded-xl text-[10px] sm:text-xs font-black transition flex items-center justify-center gap-1.5 ${
-                    detailTab === 'financial'
-                      ? 'bg-emerald-950/20 border border-emerald-900/30 text-emerald-400'
-                      : 'border border-transparent text-slate-500 hover:text-slate-350'
-                  }`}
-                >
-                  <Coins className="w-4 h-4" />
-                  {isAr ? 'كشف الحساب المالي للمحفظة حركي' : 'Wallet Financial Ledger'}
-                </button>
-              </div>
-
-              {detailTab === 'logistics' ? (
-                <>
-                  {/* Courier Performance Cards */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Courier Performance Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-gradient-to-br from-[#121215] to-[#070708] p-4 rounded-2xl border border-slate-850 shadow-md">
                   <span className="text-[9px] uppercase font-black tracking-wider text-slate-500 block mb-3 text-start">{isAr ? 'أداء وكفاءة التوصيل' : 'Transit KPI'}</span>
                   <div className="flex items-baseline gap-1.5 text-start">
@@ -1249,170 +1048,6 @@ export default function Couriers() {
                     </div>
                  )}
               </div>
-                </>
-              ) : (
-                <div className="space-y-4 text-start font-sans">
-                  
-                  {/* Courier Wallet & Financial Info Cards Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {selectedCourier.financialAccountCode && (
-                      <div className="bg-gradient-to-r from-[#0e0e11] to-[#070708] border border-[#d4af37]/25 rounded-2xl p-4 flex items-center justify-between shadow">
-                        <div className="flex items-center gap-3">
-                          <div className="bg-[#d4af37]/10 border border-[#d4af37]/20 p-2.5 rounded-xl text-[#d4af37]">
-                            <Wallet className="w-5 h-5 text-[#d4af37]" />
-                          </div>
-                          <div className="text-start">
-                            <div className="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-0.5">{isAr ? 'رقم الحساب المالي' : 'Financial Account Code'}</div>
-                            <div className="font-mono font-black text-[#d4af37] text-sm">{selectedCourier.financialAccountCode}</div>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-0.5">{isAr ? 'الرصيد الحالي' : 'Current Balance'}</div>
-                          <div className={`font-mono font-black text-base ${
-                            (selectedCourier.financialBalance || 0) > 0 ? 'text-rose-450' :
-                            (selectedCourier.financialBalance || 0) < 0 ? 'text-emerald-400' : 'text-slate-400'
-                          }`}>
-                            {(selectedCourier.financialBalance || 0) > 0 ? (isAr ? 'مدين: ' : 'Debit: ') : 
-                             (selectedCourier.financialBalance || 0) < 0 ? (isAr ? 'دائن: ' : 'Credit: ') : ''}
-                            {Math.abs(selectedCourier.financialBalance || 0).toLocaleString()} {selectedCourier.financialCurrency || settings.currency}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="bg-gradient-to-r from-[#01140e] to-[#041a15] border border-emerald-500/20 rounded-2xl p-4 flex items-center justify-between shadow">
-                      <div className="flex items-center gap-3">
-                        <div className="bg-emerald-500/10 border border-emerald-500/25 p-2.5 rounded-xl text-emerald-400 animate-pulse">
-                          <Coins className="w-5 h-5" />
-                        </div>
-                        <div className="text-start">
-                          <div className="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-0.5">{isAr ? 'رصيد المحفظة الالكترونية المتاح للمندوب' : 'Courier Wallet Balance'}</div>
-                          <div className="font-mono font-black text-emerald-400 text-base">{(selectedCourier.wallet?.balance || selectedCourier.walletBalance || 0).toLocaleString()} YER</div>
-                        </div>
-                      </div>
-                      <div className="text-right flex items-center justify-center">
-                        <span className="text-[10px] bg-emerald-950/20 border border-emerald-900/30 text-emerald-400 font-black px-2.5 py-1.5 rounded-xl uppercase tracking-wider">{isAr ? 'محفظة نشطة وموثقة' : 'ACTIVE WALLET'}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Ledger Filters */}
-                  <div className="flex flex-col sm:flex-row gap-3 p-4 bg-black/45 border border-slate-850/60 rounded-2xl font-sans">
-                    <div className="relative flex-1">
-                      <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
-                      <input 
-                        type="text"
-                        placeholder={isAr ? 'البحث عن حركة بالرقم المرجعي أو السند أو الكلمة...' : 'Filter ledger entries...'}
-                        value={finSearch}
-                        onChange={e => setFinSearch(e.target.value)}
-                        className="w-full bg-black/50 border border-slate-850 rounded-xl py-2 px-9 text-xs font-bold text-white focus:border-[#d4af37]/50 outline-none text-start"
-                      />
-                    </div>
-                    
-                    <select 
-                      value={finModuleFilter} 
-                      onChange={e => setFinModuleFilter(e.target.value as any)} 
-                      className="bg-[#0e0e11] border border-slate-820 rounded-xl py-2 px-3 text-xs font-black text-slate-300 outline-none focus:border-[#d4af37]/50 cursor-pointer text-start font-sans"
-                    >
-                      <option value="all">{isAr ? 'كل قنوات الحركة' : 'All Ledger Modules'}</option>
-                      <option value="order">{isAr ? 'مقبوضات الشحنات (مدين)' : 'Assigned COD Collected'}</option>
-                      <option value="expense">{isAr ? 'العهد، السلف والمصروفات المستلمة' : 'Custody, Advances & Expenses'}</option>
-                      <option value="transaction">{isAr ? 'الحركات اليدوية والإيداعات' : 'Central Deposits & Adjustments'}</option>
-                    </select>
-                  </div>
-
-                  {/* Chronological Unified Ledger Table */}
-                  <div className="bg-[#121215] border border-slate-850 rounded-2xl overflow-hidden shadow-2xl font-sans">
-                    <div className="p-4 border-b border-slate-850 bg-black/40 flex justify-between items-center text-start">
-                      <h4 className="font-black text-xs text-emerald-450 uppercase tracking-wider flex items-center gap-2">
-                        <Coins className="w-4 h-4 text-emerald-450 animate-pulse" />
-                        {isAr ? 'كشف الحساب المالي التفصيلي الموحد لحساب المندوب' : 'COURIER GENERAL LEDGER - CHRONOLOGICAL WALLET'}
-                      </h4>
-                      <span className="text-[10px] bg-emerald-950/25 text-emerald-450 border border-emerald-900/40 px-3 py-1 rounded-lg font-bold font-mono">
-                        CUSTODY RECORD
-                      </span>
-                    </div>
-
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-right text-xs">
-                        <thead className="bg-black/30 text-[9px] text-slate-500 uppercase tracking-widest font-black border-b border-slate-850">
-                          <tr>
-                            <th className="p-3 text-start">{isAr ? 'التاريخ والوقت الحقيقي' : 'Posting Timeline'}</th>
-                            <th className="p-3 text-start">{isAr ? 'التصنيف العملي للموديول' : 'Source Module'}</th>
-                            <th className="p-3 text-start">{isAr ? 'البيان وتفاصيل المعاملة المالية' : 'Journal Narrative Explanation'}</th>
-                            <th className="p-3 text-start">{isAr ? 'السند / مرجع' : 'Receipt / Document / Ref'}</th>
-                            <th className="p-3 text-start">{isAr ? 'نوع طبيعة القيد' : 'Entry Classification'}</th>
-                            <th className="p-3 text-start">{isAr ? 'القيمة' : 'Amount YER'}</th>
-                            <th className="p-3 text-left">{isAr ? 'رصيد المحفظة المتغير' : 'Running Wallet Balance'}</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-850 bg-[#08080a]/20">
-                          {getCourierUnifiedLedger()
-                            .filter(item => {
-                              const q = finSearch.toLowerCase();
-                              const matchesSearch = !q || 
-                                (item.title || '').toLowerCase().includes(q) || 
-                                (item.description || '').toLowerCase().includes(q) || 
-                                (item.ref || '').toLowerCase().includes(q);
-                              const matchesModule = finModuleFilter === 'all' || 
-                                (finModuleFilter === 'order' && item.module === 'order') ||
-                                (finModuleFilter === 'expense' && item.module === 'expense') ||
-                                (finModuleFilter === 'transaction' && item.module === 'transaction');
-                              return matchesSearch && matchesModule;
-                            })
-                            .map((item, idx) => {
-                              const isCredit = item.type === 'Credit';
-                              return (
-                                <tr key={item.id || idx} className="hover:bg-slate-950/40 transition-colors">
-                                  <td className="p-3 font-mono font-bold text-[10px] text-slate-400 text-start" dir="ltr">
-                                    {new Date(item.date).toLocaleString(isAr ? 'ar-YE' : 'en-US', { year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                                  </td>
-                                  <td className="p-3 text-start">
-                                    <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${
-                                      item.module === 'order' ? 'bg-indigo-950/40 text-indigo-400 border border-indigo-900/20' :
-                                      item.module === 'expense' ? 'bg-amber-955/20 text-amber-500 border border-amber-950/20' :
-                                      'bg-emerald-950/20 text-emerald-400 border border-emerald-900/20'
-                                    }`}>
-                                      {item.module === 'order' ? (isAr ? 'توصيل وتحصيل كاش' : 'Customer COD Collected') :
-                                       item.module === 'expense' ? (isAr ? 'عهد/مصروف/أجور' : 'Disbursed Item') :
-                                       (isAr ? 'إيداع/تعديل مركزي' : 'Back-Office Adj')}
-                                    </span>
-                                  </td>
-                                  <td className="p-3 font-bold text-white text-start font-sans">
-                                    <div className="text-xs">{item.title}</div>
-                                    <div className="text-[9px] text-slate-500 font-bold mt-0.5">{item.description}</div>
-                                  </td>
-                                  <td className="p-3 font-mono text-[10px] text-[#d4af37] font-black text-start">{item.ref}</td>
-                                  <td className="p-3 text-start">
-                                    {isCredit ? (
-                                      <span className="text-[9px] bg-emerald-950/20 text-emerald-400 border border-emerald-900/30 px-2.5 py-0.5 rounded-xl font-black font-sans">{isAr ? 'قيد دائن (+)' : 'Credit (+)'}</span>
-                                    ) : (
-                                      <span className="text-[9px] bg-rose-955/20 text-rose-500 border border-rose-950/30 px-2.5 py-0.5 rounded-xl font-black font-sans">{isAr ? 'قيد مدين (-)' : 'Debit (-)'}</span>
-                                    )}
-                                  </td>
-                                  <td className={`p-3 font-mono font-black text-xs ${isCredit ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                    {isCredit ? '+' : '-'}{item.amount.toLocaleString()} YER
-                                  </td>
-                                  <td className={`p-3 text-left font-mono font-black text-xs ${item.runningWalletBal >= 0 ? 'text-emerald-400' : 'text-rose-450'}`}>
-                                    {item.runningWalletBal.toLocaleString()} YER
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          
-                          {getCourierUnifiedLedger().length === 0 && (
-                            <tr>
-                              <td colSpan={7} className="p-16 text-center text-slate-655 italic font-bold">
-                                {isAr ? '[ لم يتم تسجيل أي حركات مالية على هذه المحفظة ]' : '[ NO FINANCIAL TRANSACTIONS REGISTERED ON THIS WALLET ]'}
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
             
             {/* Modal action tray */}
@@ -1477,14 +1112,6 @@ export default function Couriers() {
               </div>
 
               <div>
-                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'رصيد المحفظة المبدئي (YER)' : 'Initial Wallet Balance (YER)'}</label>
-                <div className="relative">
-                  <Coins className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#d4af37] w-4 h-4" />
-                  <input type="number" placeholder="0" value={addFormData.walletBalance} onChange={(e) => setAddFormData({...addFormData, walletBalance: parseFloat(e.target.value) || 0})} className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 pl-10 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono" />
-                </div>
-              </div>
-
-              <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'العمولة من عمليات التوزيع (%)' : 'Standard Commission Rate (%)'}</label>
                 <div className="relative">
                   <DollarSign className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
@@ -1542,14 +1169,6 @@ export default function Couriers() {
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'الموقع جيوغرافيك (GPS)' : 'Live Coordinates GPS'}</label>
                 <input type="text" value={editFormData.gpsLocation} onChange={(e) => setEditFormData({...editFormData, gpsLocation: e.target.value})} className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono" />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'رصيد المحفظة الحالي (YER)' : 'Current Wallet Balance (YER)'}</label>
-                <div className="relative">
-                  <Coins className="absolute left-3.5 top-1/2 -translate-y-1/2 text-emerald-500 w-4 h-4" />
-                  <input type="number" placeholder="0" value={editFormData.walletBalance} onChange={(e) => setEditFormData({...editFormData, walletBalance: parseFloat(e.target.value) || 0})} className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 pl-10 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono" />
-                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
