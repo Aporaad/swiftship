@@ -139,6 +139,11 @@ export default function ChartOfAccounts({
         let type = ca.type || 'Asset';
         if (ca.entityType === 'customer') type = 'Asset';
         else if (ca.entityType === 'courier' || ca.entityType === 'employee') type = 'Liability';
+        else if (ca.entityType === 'system') {
+           if (ca.accountPrefix === '4000') type = 'Revenue';
+           else if (ca.accountPrefix === '5000') type = 'Expense';
+           else if (ca.accountPrefix === '1000') type = 'Asset';
+        }
         
         const parentCode = ca.accountPrefix || ca.parentCode || null;
         

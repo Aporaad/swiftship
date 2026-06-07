@@ -220,12 +220,14 @@ class FinancialAccountService {
     });
 
     // 3. Update the entity's financial balance directly
-    const entityCollection = this.getEntityCollection(transactionData.entityType);
-    const entityRef = doc(db, entityCollection, transactionData.entityId);
-    batch.update(entityRef, {
-      financialBalance: increment(balanceDelta),
-      updatedAt: now
-    });
+    if (transactionData.entityType !== 'system') {
+      const entityCollection = this.getEntityCollection(transactionData.entityType);
+      const entityRef = doc(db, entityCollection, transactionData.entityId);
+      batch.update(entityRef, {
+        financialBalance: increment(balanceDelta),
+        updatedAt: now
+      });
+    }
 
     await batch.commit();
 

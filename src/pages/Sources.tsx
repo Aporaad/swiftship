@@ -588,6 +588,7 @@ export default function Sources() {
                   onChange={(e) => setFormData({...formData, type: e.target.value})}
                   className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/50 outline-none text-xs font-bold"
                 >
+                  <option value="SHEIN">{isAr ? 'موقع SHEIN' : 'SHEIN Website'}</option>
                   <option value="App">{isAr ? 'موقع تسوق إلكتروني وتطبيق كود (شحن طرود تداول)' : 'Application shopping (Standard parcels Shein/Salla)'}</option>
                   <option value="Factory">{isAr ? 'مصنع أو مورد دولي في الصين (شحن بوزن/حجم)' : 'Direct China Manufacturer (Weighted/CBM container cargo)'}</option>
                 </select>

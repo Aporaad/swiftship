@@ -707,9 +707,8 @@ export default function Orders() {
       const cbmCost = totalCBM * 1400; 
       shippingCostSAR = Math.max(weightCost, cbmCost);
     } else {
-      // General shopping apps (e.g., Shein, Taobao etc.)
-      // Shein red price can override pricing calculations
-      if (formData.sheinRedPrice && parseFloat(formData.sheinRedPrice as any) > 0) {
+      // General shopping apps
+      if (formData.orderSourceType === 'SHEIN' && formData.sheinRedPrice && parseFloat(formData.sheinRedPrice as any) > 0) {
         priceSAR = parseFloat(formData.sheinRedPrice as any);
       }
       // Automatic 12% commission added to order cost
@@ -1542,7 +1541,7 @@ export default function Orders() {
                 ? `تسوية تلقائية لتسليم الطلب رقم: ${selectedOrder.orderNumber} (مع المندوب)`
                 : `Auto credit for delivery of order: ${selectedOrder.orderNumber} (via courier)`,
               refNumber: selectedOrder.orderNumber,
-              module: 'custody_payment',
+              module: 'payment',
               createdByUid: auth.currentUser?.uid || 'system',
               createdByName: profile?.fullName || 'System Auto-Custody',
               createdAt: Date.now()
@@ -1998,7 +1997,7 @@ export default function Orders() {
                   ? `تسوية تلقائية لتسليم الطلب رقم: ${ord.orderNumber} (مع المندوب)`
                   : `Auto credit for delivery of order: ${ord.orderNumber} (via courier)`,
                 refNumber: ord.orderNumber,
-                module: 'custody_payment',
+                module: 'payment',
                 createdByUid: auth.currentUser?.uid || 'system',
                 createdByName: profile?.fullName || 'System Auto-Custody',
                 createdAt: Date.now()
@@ -3674,7 +3673,7 @@ export default function Orders() {
                 {/* Inputs for pricing parameters */}
                 <div className="space-y-4 col-span-2 grid grid-cols-2 gap-3 self-start">
                   
-                  {formData.orderSourceType !== 'Factory' && (
+                  {formData.orderSourceType === 'SHEIN' && (
                     <div>
                       <label className="block text-[10px] text-slate-500 uppercase tracking-widest block leading-none mb-1.5">
                         {isAr ? 'سعر شي إن الأحمر (SAR)' : 'SHEIN Red Price (SAR)'}
@@ -3977,6 +3976,7 @@ export default function Orders() {
                   onChange={(e) => setSourceFormData({...sourceFormData, type: e.target.value})}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold"
                 >
+                  <option value="SHEIN">{isAr ? 'موقع SHEIN' : 'SHEIN Website'}</option>
                   <option value="App">{isAr ? 'موقع تسوق إلكتروني / تطبيق' : 'Retail Application/Website'}</option>
                   <option value="Factory">{isAr ? 'مصنع أو مورد بالصين' : 'Direct China Manufacturer'}</option>
                 </select>
