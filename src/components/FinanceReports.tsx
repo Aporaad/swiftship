@@ -136,7 +136,7 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
   // 2. Financial Metrics calculations
   const metrics = useMemo(() => {
     // Revenues
-    const totalOrderValueYER = filteredOrders.reduce((sum, o) => sum + parseFloat(o.totalCostYER || 0), 0);
+    const totalOrderValueYER = filteredOrders.reduce((sum, o) => sum + (parseFloat(o.amountPaid || 0) + parseFloat(o.amountRemaining || 0)), 0);
     const totalCollectedYER = filteredOrders.reduce((sum, o) => sum + parseFloat(o.amountPaid || 0), 0);
     const totalOutstandingYER = filteredOrders.reduce((sum, o) => sum + parseFloat(o.amountRemaining || 0), 0);
 
@@ -441,7 +441,7 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
         
         doc.setFontSize(7.5);
         doc.setTextColor(50, 50, 55);
-        doc.text(`${(ord.totalCostYER || 0).toLocaleString()} YER`, 123, y + 4);
+        doc.text(`${(parseFloat(ord.amountPaid || 0) + parseFloat(ord.amountRemaining || 0)).toLocaleString()} YER`, 123, y + 4);
         doc.text(`${(ord.amountPaid || 0).toLocaleString()} YER`, 150, y + 4);
         
         // Status badge color help

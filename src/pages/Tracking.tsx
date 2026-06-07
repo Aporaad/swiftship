@@ -752,7 +752,7 @@ export default function Tracking() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="flex flex-col">
                   <span className="text-[9px] text-slate-500 font-extrabold uppercase">{isAr ? 'إجمالي رسوم الشحن والتعبئة' : 'Total Charges'}</span>
-                  <span className="font-mono text-base font-black text-white mt-1">{(trackingData.totalCostYER || 0).toLocaleString()} <span className="text-[10px] text-slate-500">YER</span></span>
+                  <span className="font-mono text-base font-black text-white mt-1">{((parseFloat(trackingData.amountPaid) || 0) + (parseFloat(trackingData.amountRemaining) || 0)).toLocaleString()} <span className="text-[10px] text-slate-500">YER</span></span>
                 </div>
                 
                 <div className="flex flex-col">

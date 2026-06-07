@@ -21,6 +21,7 @@ import Sources from './pages/Sources';
 import Settings from './pages/Settings';
 import Notifications from './pages/Notifications';
 import Expenses from './pages/Expenses';
+import SalaryHistory from './pages/SalaryHistory';
 
 import { SettingsProvider } from './context/SettingsContext';
 
@@ -64,6 +65,7 @@ export default function App() {
             <Route path="roles" element={<Roles />} />
             <Route path="settings" element={<Settings />} />
             <Route path="notifications" element={<Notifications />} />
+            <Route path="salary-history" element={<SalaryHistory />} />
           </Route>
         </Routes>
       </BrowserRouter>

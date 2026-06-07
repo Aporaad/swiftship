@@ -133,10 +133,11 @@ export default function Dashboard() {
     let computedRemaining = 0;
 
     orders.forEach((o: any) => {
-      const price = parseFloat(o.totalCostYER || o.totalCost || o.totalPrice || '0');
+      const paid = parseFloat(o.amountPaid || o.paidAmount || '0');
+      const remain = parseFloat(o.amountRemaining || '0');
+      const price = paid + remain;
       computedRevenues += price;
 
-      const paid = parseFloat(o.amountPaid || o.paidAmount || '0');
       computedPaid += paid;
 
       const remaining = parseFloat(o.amountRemaining || '0');
@@ -776,7 +777,7 @@ export default function Dashboard() {
                     </td>
                     {canViewStats && (
                       <td className="py-3 font-mono font-black text-[#d4af37] text-end text-xs">
-                        {parseFloat(ord.totalCostYER || '0').toLocaleString()} YER
+                        {((parseFloat(ord.amountPaid) || 0) + (parseFloat(ord.amountRemaining) || 0)).toLocaleString()} YER
                       </td>
                     )}
                   </tr>

@@ -90,7 +90,7 @@ export const whatsappService = {
       '{shippingCompany}': order.shippingCompany || '',
       '{orderStatus}': order.orderStatus || '',
       '{locationYemen}': order.locationYemen || '',
-      '{totalCost}': parseFloat(order.totalCostYER || 0).toLocaleString(),
+      '{totalCost}': ((parseFloat(order.amountPaid) || 0) + (parseFloat(order.amountRemaining) || 0)).toLocaleString(),
       '{amountPaid}': parseFloat(order.amountPaid || 0).toLocaleString(),
       '{amountRemaining}': parseFloat(order.amountRemaining || 0).toLocaleString(),
       ...additional

@@ -20,12 +20,15 @@ import {
   Check, 
   Printer,
   ShieldAlert,
-  HelpCircle
+  HelpCircle,
+  Wallet,
+  TrendingUp
 } from 'lucide-react';
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
 import { notificationService } from '../services/notificationService';
 import { activityLogService } from '../services/activityLogService';
+import { financialAccountService } from '../services/financialAccountService';
 import ConfirmModal from '../components/ConfirmModal';
 
 export default function Customers() {
@@ -40,6 +43,31 @@ export default function Customers() {
   const [customerOrders, setCustomerOrders] = useState<any[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const isAr = settings.language === 'ar';
+
+  const [detailTab, setDetailTab] = useState<'logistics' | 'financial'>('logistics');
+  const [customerTransactions, setCustomerTransactions] = useState<any[]>([]);
+  const [finSearch, setFinSearch] = useState('');
+  const [finModuleFilter, setFinModuleFilter] = useState<'all' | 'order' | 'expense' | 'payment' | 'custody'>('all');
+
+  useEffect(() => {
+    if (!selectedCustomer || !showDetailsModal) {
+      setCustomerTransactions([]);
+      return;
+    }
+
+    const qTx = query(
+      collection(db, 'account_transactions'),
+      where('entityId', '==', selectedCustomer.id)
+    );
+    const unsubTx = onSnapshot(qTx, (snap) => {
+      const txs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setCustomerTransactions(txs);
+    }, (err) => {
+      console.error("Error fetching transactions for customer:", err);
+    });
+
+    return () => unsubTx();
+  }, [selectedCustomer, showDetailsModal]);
 
   // Confirmation Modal State
   const [confirmConfig, setConfirmConfig] = useState<{
@@ -57,7 +85,7 @@ export default function Customers() {
   });
 
   const [formData, setFormData] = useState({
-    fullName: '', phone: '', email: '', gps_location: '', address: '', notes: ''
+    fullName: '', phone: '', email: '', gps_location: '', address: '', notes: '', walletBalance: 0
   });
 
   const [searchCustomerId, setSearchCustomerId] = useState<string | null>(null);
@@ -96,7 +124,7 @@ export default function Customers() {
 
   const handleOpenAdd = () => {
     setSelectedCustomer(null);
-    setFormData({ fullName: '', phone: '', email: '', gps_location: '', address: '', notes: '' });
+    setFormData({ fullName: '', phone: '', email: '', gps_location: '', address: '', notes: '', walletBalance: 0 });
     setShowModal(true);
   };
 
@@ -108,13 +136,17 @@ export default function Customers() {
       email: customer.email || '',
       gps_location: customer.gps_location || '',
       address: customer.address || '',
-      notes: customer.notes || ''
+      notes: customer.notes || '',
+      walletBalance: customer.wallet?.balance || customer.walletBalance || 0
     });
     setShowModal(true);
   };
 
   const handleOpenDetails = (customer: any) => {
     setSelectedCustomer(customer);
+    setDetailTab('logistics');
+    setFinSearch('');
+    setFinModuleFilter('all');
     setShowDetailsModal(true);
     setOrdersLoading(true);
     
@@ -140,9 +172,22 @@ export default function Customers() {
     try {
       if (selectedCustomer) {
         await updateDoc(doc(db, 'customers', selectedCustomer.id), {
-          ...formData,
+          fullName: formData.fullName,
+          phone: formData.phone,
+          email: formData.email,
+          gps_location: formData.gps_location,
+          address: formData.address,
+          notes: formData.notes,
+          wallet: {
+            balance: formData.walletBalance || 0
+          },
+          walletBalance: formData.walletBalance || 0,
           updatedAt: Date.now()
         });
+        // Update account name if it changed
+        if (formData.fullName !== selectedCustomer.fullName && selectedCustomer.financialAccountId) {
+          await financialAccountService.updateAccountEntityName(selectedCustomer.id, formData.fullName);
+        }
         activityLogService.log('edit_customer', formData.fullName || selectedCustomer.id, { ...formData });
         notificationService.notify({
           title: isAr ? 'تحديث عميل' : 'Customer Updated',
@@ -150,14 +195,41 @@ export default function Customers() {
           type: 'info'
         });
       } else {
-        await addDoc(collection(db, 'customers'), {
-          ...formData,
-          createdAt: Date.now()
+        // Step 1: Create the customer document
+        const newCustomerRef = await addDoc(collection(db, 'customers'), {
+          fullName: formData.fullName,
+          phone: formData.phone,
+          email: formData.email,
+          gps_location: formData.gps_location,
+          address: formData.address,
+          notes: formData.notes,
+          createdAt: Date.now(),
+          financialBalance: 0,
+          financialCurrency: settings.currency || 'SAR',
+          wallet: {
+            balance: formData.walletBalance || 0
+          },
+          walletBalance: formData.walletBalance || 0
         });
+
+        // Step 2: Auto-create financial account (1130-xxxx)
+        try {
+          await financialAccountService.createAccountForEntity(
+            'customer',
+            newCustomerRef.id,
+            formData.fullName,
+            settings.currency || 'SAR'
+          );
+        } catch (accErr) {
+          console.warn('[Customers] Could not create financial account:', accErr);
+        }
+
         activityLogService.log('add_customer', formData.fullName, { ...formData });
         notificationService.notify({
           title: isAr ? 'إضافة عميل' : 'Customer Added',
-          message: isAr ? `تمت إضافة العميل الجديد ${formData.fullName}` : `New customer ${formData.fullName} added`,
+          message: isAr 
+            ? `تمت إضافة العميل ${formData.fullName} وإنشاء حسابه المالي تلقائياً` 
+            : `Customer ${formData.fullName} added with auto-generated financial account`,
           type: 'success'
         });
       }
@@ -205,6 +277,99 @@ export default function Customers() {
   const totalAmount = customerOrders.reduce((acc, o) => acc + (parseFloat(o.totalCostYER) || parseFloat(o.totalPrice) || 0), 0);
   const totalPaid = customerOrders.reduce((acc, o) => acc + (parseFloat(o.amountPaid) || parseFloat(o.paidAmount) || 0), 0);
   const totalRemaining = totalAmount - totalPaid;
+
+  const getCustomerUnifiedLedger = () => {
+    const ledger: any[] = [];
+
+    // 1. Add orders as Double-Entry debits/credits
+    customerOrders.forEach(order => {
+      const amtPaid = parseFloat(order.amountPaid || order.paidAmount || 0);
+      const amtRemain = parseFloat(order.amountRemaining || 0);
+      const totalCost = amtPaid + amtRemain;
+
+      // Total Cost (Debit - customer owes this amount)
+      if (totalCost > 0) {
+        ledger.push({
+          id: `order-charge-${order.id}`,
+          date: order.createdAt || Date.now(),
+          type: 'Debit',
+          amount: totalCost,
+          module: 'order',
+          title: isAr ? 'قيمة مبيعات / رسوم شحن' : 'Sales COD Charge',
+          description: isAr 
+            ? `قيمة الشحنة الموكلة رقم: ${order.orderNumber || 'ALX-CR'} (توجيه محلي)` 
+            : `Gross COD for shipment #${order.orderNumber || 'ALX-CR'}`,
+          ref: order.orderNumber || order.id
+        });
+      }
+
+      // COD Paid (Credit - customer paid this amount)
+      const orderPaymentTxs = customerTransactions.filter(tx => tx.module === 'payment' && (tx.refNumber === order.orderNumber || tx.refNumber === order.id));
+      const sumOfRecordedTxs = orderPaymentTxs.reduce((sum, tx) => sum + (parseFloat(tx.amountOriginal || tx.amount || 0)), 0);
+      
+      const unrecordedPayment = amtPaid - sumOfRecordedTxs;
+
+      if (unrecordedPayment > 0.01) {
+        ledger.push({
+          id: `order-pay-${order.id}`,
+          date: (order.updatedAt || order.createdAt || Date.now()) + 1,
+          type: 'Credit',
+          amount: unrecordedPayment,
+          module: 'payment',
+          title: isAr ? 'مقبوضات شحن مبدئية / غير مقيدة' : 'Initial COD Payment',
+          description: isAr 
+            ? `كاش سدد مسبقاً للشحنة رقم: ${order.orderNumber || 'ALX-CR'} ولم يُقيد بسند منفصل` 
+            : `Legacy cash paid for shipment #${order.orderNumber || 'ALX-CR'}`,
+          ref: order.orderNumber || order.id
+        });
+      }
+    });
+
+    // 2. Add ledger system transactions (deposits, manual entries from back-office)
+    customerTransactions.forEach(tx => {
+      // Prevent duplication: our order generator always adds the 'order charge' debit line
+      if (tx.module === 'order') return;
+
+      ledger.push({
+        id: tx.id || `tx-${Math.random()}`,
+        date: tx.createdAt || Date.now(),
+        type: tx.type, // 'Debit' | 'Credit'
+        amount: tx.amount || 0,
+        module: tx.module || 'transaction',
+        title: tx.description ? tx.description : (isAr ? (tx.type === 'Credit' ? 'إيداع نقدي للمحفظة' : 'سحب / تسوية من المحفظة') : (tx.type === 'Credit' ? 'Wallet Deposit' : 'Wallet Withdrawal')),
+        description: isAr 
+          ? `حركة حساب مركزية رقم القيد: ${tx.refNumber || tx.accountCode || 'Ledger-Tx'}`
+          : `System journal entry ref: ${tx.refNumber || tx.accountCode || 'Ledger-Tx'}`,
+        ref: tx.refNumber || tx.accountCode || ''
+      });
+    });
+
+    // Sort oldest to newest to compute running balances correctly
+    const sorted = [...ledger].sort((a, b) => a.date - b.date);
+
+    // Compute running totals
+    let runningWalletBal = 0; // Credit increases balance (+), Debit decreases balance (-)
+    let runningFinancialBal = 0; // Customer accounts: Debit (+ owing), Credit (- paying)
+
+    const finalLedger = sorted.map(item => {
+      if (item.type === 'Debit') {
+        runningFinancialBal += item.amount;
+        runningWalletBal -= item.amount;
+      } else {
+        runningFinancialBal -= item.amount;
+        runningWalletBal += item.amount;
+      }
+
+      return {
+        ...item,
+        runningWalletBal,
+        runningFinancialBal
+      };
+    });
+
+    // Return newest-first for the display timeline
+    return finalLedger.reverse();
+  };
 
   if (roleLoading) {
     return (
@@ -274,6 +439,8 @@ export default function Customers() {
                 <tr>
                   <th className="p-4">{isAr ? 'دفتر العميل' : 'Client Profile'}</th>
                   <th className="p-4">{isAr ? 'رقم الهاتف' : 'Telephone'}</th>
+                  <th className="p-4">{isAr ? 'المحفظة الالكترونية' : 'Wallet Balance'}</th>
+                  <th className="p-4">{isAr ? 'الحساب المالي' : 'Financial Account'}</th>
                   <th className="p-4">{isAr ? 'تفاصيل العنوان السكني' : 'Settlement Location'}</th>
                   <th className="p-4 text-left">{isAr ? 'الإجراءات والتقرير' : 'Ledger Actions'}</th>
                 </tr>
@@ -290,6 +457,29 @@ export default function Customers() {
                       </div>
                     </td>
                     <td className="p-4 text-slate-300 font-mono font-bold" dir="ltr">{customer.phone}</td>
+                    <td className="p-4 text-right">
+                      <div className="flex flex-col gap-0.5 text-right font-mono font-bold text-xs text-emerald-400">
+                        <span>{(customer.wallet?.balance || customer.walletBalance || 0).toLocaleString()} YER</span>
+                        <span className="text-[9px] text-slate-500 font-sans font-normal">{isAr ? 'رصيد المحفظة الشغال' : 'Reactive Wallet'}</span>
+                      </div>
+                    </td>
+                    <td className="p-4">
+                      {customer.financialAccountCode ? (
+                        <div className="flex flex-col gap-0.5">
+                          <span className="font-mono font-black text-[#d4af37] text-[10px] bg-[#d4af37]/10 border border-[#d4af37]/20 px-2 py-0.5 rounded-lg w-max">
+                            {customer.financialAccountCode}
+                          </span>
+                          <span className={`text-[10px] font-bold font-mono ${
+                            (customer.financialBalance || 0) > 0 ? 'text-rose-400' :
+                            (customer.financialBalance || 0) < 0 ? 'text-emerald-400' : 'text-slate-500'
+                          }`}>
+                            {(customer.financialBalance || 0) > 0 ? '▲' : (customer.financialBalance || 0) < 0 ? '▼' : '●'} {Math.abs(customer.financialBalance || 0).toLocaleString()} {customer.financialCurrency || settings.currency}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-slate-600 font-bold font-mono">— {isAr ? 'لا يوجد حساب' : 'No account'}</span>
+                      )}
+                    </td>
                     <td className="p-4 text-slate-400 max-w-xs truncate">
                        <div className="font-bold text-slate-300 text-xs">{customer.address || '—'}</div>
                        {customer.gps_location && (
@@ -327,7 +517,7 @@ export default function Customers() {
                 ))}
                 {filteredCustomers.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="p-16 text-center text-slate-600 font-bold uppercase tracking-widest font-mono text-[10px]">
+                    <td colSpan={5} className="p-16 text-center text-slate-600 font-bold uppercase tracking-widest font-mono text-[10px]">
                       [ no_registered_customers_found ]
                     </td>
                   </tr>
@@ -422,6 +612,20 @@ export default function Customers() {
               </div>
 
               <div>
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'رصيد المحفظة الخاص بالعميل (YER)' : 'Patron Wallet Balance (YER)'}</label>
+                <div className="relative">
+                  <Coins className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#d4af37]" />
+                  <input 
+                    placeholder="0" 
+                    type="number" 
+                    value={formData.walletBalance} 
+                    onChange={e => setFormData({...formData, walletBalance: parseFloat(e.target.value) || 0})} 
+                    className="w-full bg-black/50 border border-slate-850 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-start" 
+                  />
+                </div>
+              </div>
+
+              <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'ملاحظات وتصنيفات إدارية خاصة' : 'Administrative Confidential Annotations'}</label>
                 <textarea 
                   rows={3} 
@@ -475,109 +679,300 @@ export default function Customers() {
 
             {/* Scrollable Modal Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              
-              {/* Client Ledger Summary Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-gradient-to-br from-[#121215] to-[#070708] p-4 rounded-2xl border border-slate-850 shadow-md flex flex-col justify-between">
-                  <span className="text-[9px] uppercase font-black tracking-wider text-slate-500">{isAr ? 'إجمالي فواتير الحساب' : 'Total Orders'}</span>
-                  <div className="flex items-center justify-between mt-3">
-                    <span className="text-xl font-black text-white">{totalOrdersCount} <span className="text-[10px] text-slate-500 font-normal">UNIT</span></span>
-                    <Package className="w-6 h-6 text-[#d4af37]/20" />
-                  </div>
-                </div>
 
-                <div className="bg-gradient-to-br from-[#121215] to-[#070708] p-4 rounded-2xl border border-slate-850 shadow-md flex flex-col justify-between">
-                  <span className="text-[9px] uppercase font-black tracking-wider text-slate-500">{isAr ? 'إجمالي حساب المستحقات (القيمة)' : 'Gross Shipment value'}</span>
-                  <div className="flex items-center justify-between mt-3">
-                    <span className="text-base font-mono font-black text-[#d4af37]">{totalAmount.toLocaleString()} <span className="text-[9px] text-slate-500 font-sans font-normal">YER</span></span>
-                    <DollarSign className="w-6 h-6 text-[#d4af37]/20" />
+              {/* Financial Account Info Card */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {selectedCustomer.financialAccountCode && (
+                  <div className="bg-gradient-to-r from-[#0e0e11] to-[#070708] border border-[#d4af37]/25 rounded-2xl p-4 flex items-center justify-between shadow">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-[#d4af37]/10 border border-[#d4af37]/20 p-2.5 rounded-xl">
+                        <Wallet className="w-5 h-5 text-[#d4af37]" />
+                      </div>
+                      <div className="text-start">
+                        <div className="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-0.5">{isAr ? 'رقم الحساب المالي' : 'Financial Account Code'}</div>
+                        <div className="font-mono font-black text-[#d4af37] text-sm">{selectedCustomer.financialAccountCode}</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-0.5">{isAr ? 'الرصيد الحالي' : 'Current Balance'}</div>
+                      <div className={`font-mono font-black text-base ${
+                        (selectedCustomer.financialBalance || 0) > 0 ? 'text-rose-400' :
+                        (selectedCustomer.financialBalance || 0) < 0 ? 'text-emerald-400' : 'text-slate-400'
+                      }`}>
+                        {(selectedCustomer.financialBalance || 0) > 0 ? isAr ? 'مدين: ' : 'Debit: ' : 
+                         (selectedCustomer.financialBalance || 0) < 0 ? isAr ? 'دائن: ' : 'Credit: ' : ''}
+                        {Math.abs(selectedCustomer.financialBalance || 0).toLocaleString()} {selectedCustomer.financialCurrency || settings.currency}
+                      </div>
+                    </div>
                   </div>
-                </div>
-
-                <div className="bg-gradient-to-br from-[#121215] to-[#070708] p-4 rounded-2xl border border-slate-850 shadow-md flex flex-col justify-between border-r-2 border-r-emerald-500">
-                  <span className="text-[9px] uppercase font-black tracking-wider text-emerald-500">{isAr ? 'المقبوضات الموردة (المدفوعة)' : 'Collected / Liquidified'}</span>
-                  <div className="flex items-center justify-between mt-3">
-                    <span className="text-base font-mono font-black text-emerald-400">{totalPaid.toLocaleString()} <span className="text-[9px] text-slate-500 font-sans font-normal">YER</span></span>
-                    <Receipt className="w-6 h-6 text-emerald-500/20" />
+                )}
+                
+                <div className="bg-gradient-to-r from-[#010c06] to-[#04160a] border border-emerald-500/20 rounded-2xl p-4 flex items-center justify-between shadow">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-emerald-500/10 border border-emerald-500/25 p-2.5 rounded-xl text-emerald-400">
+                      <Coins className="w-5 h-5 text-emerald-400" />
+                    </div>
+                    <div className="text-start">
+                      <div className="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-0.5">{isAr ? 'الرصيد الكلي بمحفظة العميل' : 'Total Customer Wallet Balance'}</div>
+                      <div className="font-mono font-black text-emerald-400 text-sm">{(selectedCustomer?.walletBalance || selectedCustomer?.wallet?.balance || 0).toLocaleString()} YER</div>
+                    </div>
                   </div>
-                </div>
-
-                <div className={`bg-gradient-to-br from-[#121215] to-[#070708] p-4 rounded-2xl border border-slate-850 shadow-md flex flex-col justify-between border-r-2 ${totalRemaining >= 0 ? 'border-r-rose-500' : 'border-r-cyan-500'}`}>
-                  <span className="text-[9px] uppercase font-black tracking-wider text-slate-500">
-                    {totalRemaining >= 0 ? (isAr ? 'المتبقي عليه للتحصيل (مديونية)' : 'Debt Balance Due') : (isAr ? 'رصيد دائن للعميل لدى الشركة' : 'Client Credit Balance')}
-                  </span>
-                  <div className="flex items-center justify-between mt-3">
-                    <span className={`text-base font-mono font-black ${totalRemaining >= 0 ? 'text-rose-400 animate-pulse' : 'text-cyan-400'}`}>
-                      {Math.abs(totalRemaining).toLocaleString()} <span className="text-[9px] text-slate-500 font-sans font-normal">YER</span>
-                    </span>
-                    <AlertCircle className={`w-6 h-6 ${totalRemaining >= 0 ? 'text-rose-500/20' : 'text-cyan-500/20'}`} />
+                  <div className="text-right font-sans">
+                    <span className="text-[9px] bg-emerald-950/25 border border-emerald-900/40 text-emerald-400 font-bold px-2 py-1 rounded-md">LIVE</span>
                   </div>
                 </div>
               </div>
 
-              {/* Order History Table */}
-              <div className="bg-[#121215] border border-slate-850 rounded-2xl overflow-hidden shadow-2xl">
-                 <div className="p-4 border-b border-slate-850 bg-black/40 flex justify-between items-center">
-                    <h4 className="font-black text-xs text-[#d4af37] uppercase tracking-wider">{isAr ? 'سجل وكشف حساب المبيعات واللوجيستية للعميل' : 'Customer Account Orders Ledger'}</h4>
-                    <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 px-3 py-1 rounded-lg font-bold font-mono">COUNT: {customerOrders.length}</span>
-                 </div>
-                 
-                 {ordersLoading ? (
-                    <div className="p-12 text-center text-slate-500 font-bold font-mono uppercase tracking-wider">[ loading_order_indexes ]</div>
-                 ) : (
+              {/* Tab Selector for logistics vs wallet ledger */}
+              <div className="flex bg-black/35 border border-slate-850/50 p-1 rounded-2xl gap-2 mt-4 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setDetailTab('logistics')}
+                  className={`flex-1 py-2.5 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 ${
+                    detailTab === 'logistics'
+                      ? 'bg-[#d4af37]/15 border border-[#d4af37]/30 text-[#d4af37]'
+                      : 'border border-transparent text-slate-500 hover:text-slate-350'
+                  }`}
+                >
+                  <Package className="w-4 h-4" />
+                  {isAr ? 'سجل عمليات الشحنات واللوجيستيات' : 'Sales & Logistics Statement'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDetailTab('financial')}
+                  className={`flex-1 py-2.5 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 ${
+                    detailTab === 'financial'
+                      ? 'bg-emerald-950/20 border border-emerald-900/30 text-emerald-400'
+                      : 'border border-transparent text-slate-500 hover:text-slate-350'
+                  }`}
+                >
+                  <Coins className="w-4 h-4" />
+                  {isAr ? 'كشف الحساب المالي للمحفظة حركي' : 'Wallet Financial Ledger'}
+                </button>
+              </div>
+
+              {detailTab === 'logistics' ? (
+                <>
+                  {/* Client Ledger Summary Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="bg-gradient-to-br from-[#121215] to-[#070708] p-4 rounded-2xl border border-slate-850 shadow-md flex flex-col justify-between text-start">
+                      <span className="text-[9px] uppercase font-black tracking-wider text-slate-500">{isAr ? 'إجمالي فواتير الحساب' : 'Total Orders'}</span>
+                      <div className="flex items-center justify-between mt-3">
+                        <span className="text-xl font-black text-white">{totalOrdersCount} <span className="text-[10px] text-slate-500 font-normal">UNIT</span></span>
+                        <Package className="w-6 h-6 text-[#d4af37]/20" />
+                      </div>
+                    </div>
+
+                    <div className="bg-gradient-to-br from-[#121215] to-[#070708] p-4 rounded-2xl border border-slate-850 shadow-md flex flex-col justify-between text-start">
+                      <span className="text-[9px] uppercase font-black tracking-wider text-slate-500">{isAr ? 'إجمالي حساب المستحقات (القيمة)' : 'Gross Shipment value'}</span>
+                      <div className="flex items-center justify-between mt-3">
+                        <span className="text-base font-mono font-black text-[#d4af37]">{totalAmount.toLocaleString()} <span className="text-[9px] text-slate-500 font-sans font-normal">YER</span></span>
+                        <DollarSign className="w-6 h-6 text-[#d4af37]/20" />
+                      </div>
+                    </div>
+
+                    <div className="bg-gradient-to-br from-[#121215] to-[#070708] p-4 rounded-2xl border border-slate-850 shadow-md flex flex-col justify-between border-r-2 border-r-emerald-500 text-start">
+                      <span className="text-[9px] uppercase font-black tracking-wider text-emerald-500">{isAr ? 'المقبوضات الموردة (المدفوعة)' : 'Collected / Liquidified'}</span>
+                      <div className="flex items-center justify-between mt-3">
+                        <span className="text-base font-mono font-black text-emerald-400">{totalPaid.toLocaleString()} <span className="text-[9px] text-slate-500 font-sans font-normal">YER</span></span>
+                        <Receipt className="w-6 h-6 text-emerald-500/20" />
+                      </div>
+                    </div>
+
+                    <div className={`bg-gradient-to-br from-[#121215] to-[#070708] p-4 rounded-2xl border border-slate-850 shadow-md flex flex-col justify-between border-r-2 text-start ${totalRemaining >= 0 ? 'border-r-rose-500' : 'border-r-cyan-500'}`}>
+                      <span className="text-[9px] uppercase font-black tracking-wider text-slate-500">
+                        {totalRemaining >= 0 ? (isAr ? 'المتبقي عليه للتحصيل (مديونية)' : 'Debt Balance Due') : (isAr ? 'رصيد دائن للعميل لدى الشركة' : 'Client Credit Balance')}
+                      </span>
+                      <div className="flex items-center justify-between mt-3">
+                        <span className={`text-base font-mono font-black ${totalRemaining >= 0 ? 'text-rose-400 animate-pulse' : 'text-cyan-400'}`}>
+                          {Math.abs(totalRemaining).toLocaleString()} <span className="text-[9px] text-slate-500 font-sans font-normal">YER</span>
+                        </span>
+                        <AlertCircle className={`w-6 h-6 ${totalRemaining >= 0 ? 'text-rose-500/20' : 'text-cyan-500/20'}`} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Order History Table */}
+                  <div className="bg-[#121215] border border-slate-850 rounded-2xl overflow-hidden shadow-2xl">
+                     <div className="p-4 border-b border-slate-850 bg-black/40 flex justify-between items-center text-start">
+                        <h4 className="font-black text-xs text-[#d4af37] uppercase tracking-wider">{isAr ? 'سجل وكشف حساب المبيعات واللوجيستية للعميل' : 'Customer Account Orders Ledger'}</h4>
+                        <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 px-3 py-1 rounded-lg font-bold font-mono">COUNT: {customerOrders.length}</span>
+                     </div>
+                     
+                     {ordersLoading ? (
+                        <div className="p-12 text-center text-slate-500 font-bold font-mono uppercase tracking-wider">[ loading_order_indexes ]</div>
+                     ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-right text-xs">
+                            <thead className="bg-black/30 text-[10px] text-slate-500 uppercase tracking-widest font-black border-b border-slate-850">
+                              <tr>
+                                <th className="p-3">{isAr ? 'رمز الطلب الموحد' : 'Request Code'}</th>
+                                <th className="p-3">{isAr ? 'تاريخ المعاملة' : 'Posting Date'}</th>
+                                <th className="p-3">{isAr ? 'حالة الشحن' : 'Transit Status'}</th>
+                                <th className="p-3">{isAr ? 'إجمالي الرسوم' : 'Gross Total'}</th>
+                                <th className="p-3 text-emerald-400">{isAr ? 'المدفوع' : 'Matured'}</th>
+                                <th className="p-3 text-left">{isAr ? 'الرصيد المتبقي (الوضعية)' : 'Outstanding State'}</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-850 bg-[#08080a]/20">
+                              {customerOrders.map(order => {
+                                const tot = parseFloat(order.totalCostYER || order.totalPrice || 0);
+                                const paid = parseFloat(order.amountPaid || order.paidAmount || 0);
+                                const remaining = tot - paid;
+                                return (
+                                  <tr key={order.id} className="hover:bg-slate-950/40 transition-colors">
+                                    <td className="p-3 font-mono font-black text-[#d4af37]">
+                                      {order.orderNumber || 'ALX-XXXX-XXXX'}
+                                      {order.trackingNumber && (
+                                        <div className="text-[9px] text-slate-500 font-mono mt-0.5" dir="ltr">GLOBAL_TRACK: {order.trackingNumber}</div>
+                                      )}
+                                    </td>
+                                    <td className="p-3 text-slate-400 font-mono text-[10px]">{new Date(order.createdAt).toLocaleDateString(isAr ? 'ar-YE' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</td>
+                                    <td className="p-3">
+                                      <span className="px-2.5 py-0.5 rounded text-[9px] font-black uppercase tracking-tighter bg-slate-900 border border-slate-800 text-[#d4af37]">
+                                        {order.orderStatus || order.order_status || 'تم تسجيل الطلب'}
+                                      </span>
+                                    </td>
+                                    <td className="p-3 font-mono font-bold text-white">{tot.toLocaleString()} YER</td>
+                                    <td className="p-3 text-emerald-400 font-mono font-bold">{paid.toLocaleString()} YER</td>
+                                    <td className={`p-3 text-left font-mono font-bold ${remaining > 0 ? 'text-rose-400' : remaining < 0 ? 'text-cyan-400' : 'text-slate-500'}`}>
+                                      {remaining > 0 ? (
+                                        <span>{remaining.toLocaleString()} YER [عليه]</span>
+                                      ) : remaining < 0 ? (
+                                        <span>{Math.abs(remaining).toLocaleString()} YER [دائن]</span>
+                                      ) : (
+                                        <span className="text-emerald-500 font-sans font-black uppercase tracking-widest text-[9px]">&gt; PAID_IN_FULL</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                              {customerOrders.length === 0 && (
+                                <tr><td colSpan={6} className="p-16 text-center text-slate-600 italic font-bold select-none">[ no_orders_logged_to_this_patron ]</td></tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                     )}
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-4 text-start">
+                  
+                  {/* Ledger Filters */}
+                  <div className="flex flex-col sm:flex-row gap-3 p-4 bg-black/45 border border-slate-850/60 rounded-2xl">
+                    <div className="relative flex-1">
+                      <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
+                      <input 
+                        type="text"
+                        placeholder={isAr ? 'البحث عن حركة بالرقم المرجعي أو البيان دائن/مدين...' : 'Filter ledger entries...'}
+                        value={finSearch}
+                        onChange={e => setFinSearch(e.target.value)}
+                        className="w-full bg-black/50 border border-slate-850 rounded-xl py-2 px-9 text-xs font-bold text-white focus:border-[#d4af37]/50 outline-none text-start"
+                      />
+                    </div>
+                    
+                    <select 
+                      value={finModuleFilter} 
+                      onChange={e => setFinModuleFilter(e.target.value as any)} 
+                      className="bg-[#0e0e11] border border-slate-820 rounded-xl py-2 px-3 text-xs font-black text-slate-300 outline-none focus:border-[#d4af37]/50 cursor-pointer text-start"
+                    >
+                      <option value="all">{isAr ? 'كل قنوات موديولات الحركة' : 'All Ledger Modules'}</option>
+                      <option value="order">{isAr ? 'قيمة الرسوم (مبيعات/شحن)' : 'Shipment COD Charges (Debit)'}</option>
+                      <option value="payment">{isAr ? 'الكاش المحصل (مدفوعات شحن)' : 'Cash COD Collections (Credit)'}</option>
+                      <option value="transaction">{isAr ? 'الإيداعات والقيود المركزية الحركية' : 'Central Bookkeeping (Manual/Direct)'}</option>
+                    </select>
+                  </div>
+
+                  {/* Unified Chronological Ledger Table */}
+                  <div className="bg-[#121215] border border-slate-850 rounded-2xl overflow-hidden shadow-2xl">
+                    <div className="p-4 border-b border-slate-850 bg-black/40 flex justify-between items-center text-start">
+                      <h4 className="font-black text-xs text-emerald-400 uppercase tracking-wider flex items-center gap-2">
+                        <Coins className="w-4 h-4 text-emerald-400 animate-pulse" />
+                        {isAr ? 'كشف حركة حساب المحفظة التراكمي التفصيلي' : 'PATRON ACCOUNT CHRONOLOGICAL WALLET AUDIT'}
+                      </h4>
+                      <span className="text-[10px] bg-emerald-950/25 text-emerald-450 border border-emerald-900/40 px-3 py-1 rounded-lg font-bold font-mono">
+                        YER LEDGER
+                      </span>
+                    </div>
+
                     <div className="overflow-x-auto">
                       <table className="w-full text-right text-xs">
-                        <thead className="bg-black/30 text-[10px] text-slate-500 uppercase tracking-widest font-black border-b border-slate-850">
+                        <thead className="bg-black/30 text-[9px] text-slate-500 uppercase tracking-widest font-black border-b border-slate-850">
                           <tr>
-                            <th className="p-3">{isAr ? 'رمز الطلب الموحد' : 'Request Code'}</th>
-                            <th className="p-3">{isAr ? 'تاريخ المعاملة' : 'Posting Date'}</th>
-                            <th className="p-3">{isAr ? 'حالة الشحن' : 'Transit Status'}</th>
-                            <th className="p-3">{isAr ? 'إجمالي الرسوم' : 'Gross Total'}</th>
-                            <th className="p-3 text-emerald-400">{isAr ? 'المدفوع' : 'Matured'}</th>
-                            <th className="p-3 text-left">{isAr ? 'الرصيد المتبقي (الوضعية)' : 'Outstanding State'}</th>
+                            <th className="p-3">{isAr ? 'التاريخ والوقت الحقيقي' : 'Posting Timeline'}</th>
+                            <th className="p-3">{isAr ? 'التصنيف / الموديول' : 'Module Classification'}</th>
+                            <th className="p-3">{isAr ? 'بيان وشرح الحركة المالية الحركية' : 'Journal Explanation / Narrative'}</th>
+                            <th className="p-3">{isAr ? 'المرجع / السند' : 'Audit Link / Ref'}</th>
+                            <th className="p-3">{isAr ? 'طبيعة القيد' : 'Entry Type'}</th>
+                            <th className="p-3">{isAr ? 'القيمة المالية' : 'Amount'}</th>
+                            <th className="p-3 text-left">{isAr ? 'رصيد المحفظة المتدرج' : 'Running Wallet Balance'}</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-850 bg-[#08080a]/20">
-                          {customerOrders.map(order => {
-                            const tot = parseFloat(order.totalCostYER || order.totalPrice || 0);
-                            const paid = parseFloat(order.amountPaid || order.paidAmount || 0);
-                            const remaining = tot - paid;
-                            return (
-                              <tr key={order.id} className="hover:bg-slate-950/40 transition-colors">
-                                <td className="p-3 font-mono font-black text-[#d4af37]">
-                                  {order.orderNumber || 'ALX-XXXX-XXXX'}
-                                  {order.trackingNumber && (
-                                    <div className="text-[9px] text-slate-500 font-mono mt-0.5" dir="ltr">GLOBAL_TRACK: {order.trackingNumber}</div>
-                                  )}
-                                </td>
-                                <td className="p-3 text-slate-400 font-mono text-[10px]">{new Date(order.createdAt).toLocaleDateString(isAr ? 'ar-YE' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</td>
-                                <td className="p-3">
-                                  <span className="px-2.5 py-0.5 rounded text-[9px] font-black uppercase tracking-tighter bg-slate-900 border border-slate-800 text-[#d4af37]">
-                                    {order.orderStatus || order.order_status || 'تم تسجيل الطلب'}
-                                  </span>
-                                </td>
-                                <td className="p-3 font-mono font-bold text-white">{tot.toLocaleString()} YER</td>
-                                <td className="p-3 text-emerald-400 font-mono font-bold">{paid.toLocaleString()} YER</td>
-                                <td className={`p-3 text-left font-mono font-bold ${remaining > 0 ? 'text-rose-400' : remaining < 0 ? 'text-cyan-400' : 'text-slate-500'}`}>
-                                  {remaining > 0 ? (
-                                    <span>{remaining.toLocaleString()} YER [عليه]</span>
-                                  ) : remaining < 0 ? (
-                                    <span>{Math.abs(remaining).toLocaleString()} YER [دائن]</span>
-                                  ) : (
-                                    <span className="text-emerald-500 font-sans font-black uppercase tracking-widest text-[9px]">&gt; PAID_IN_FULL</span>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                          {customerOrders.length === 0 && (
-                            <tr><td colSpan={6} className="p-16 text-center text-slate-600 italic font-bold select-none">[ no_orders_logged_to_this_patron ]</td></tr>
+                          {getCustomerUnifiedLedger()
+                            .filter(item => {
+                              const q = finSearch.toLowerCase();
+                              const matchesSearch = !q || 
+                                (item.title || '').toLowerCase().includes(q) || 
+                                (item.description || '').toLowerCase().includes(q) || 
+                                (item.ref || '').toLowerCase().includes(q);
+                              const matchesModule = finModuleFilter === 'all' || item.module === finModuleFilter;
+                              return matchesSearch && matchesModule;
+                            })
+                            .map((item, idx) => {
+                              const isCredit = item.type === 'Credit';
+                              return (
+                                <tr key={item.id || idx} className="hover:bg-slate-950/40 transition-colors">
+                                  <td className="p-3 font-mono font-bold text-[10px] text-slate-400 text-start" dir="ltr">
+                                    {new Date(item.date).toLocaleString(isAr ? 'ar-YE' : 'en-US', { year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                  </td>
+                                  <td className="p-3 text-start">
+                                    <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${
+                                      item.module === 'order' ? 'bg-indigo-950/40 text-indigo-400 border border-indigo-900/20' :
+                                      item.module === 'payment' ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-900/20' :
+                                      'bg-amber-955/20 text-amber-500 border border-amber-950/20'
+                                    }`}>
+                                      {item.module === 'order' ? (isAr ? 'قيمة مبيعات وتوصيل' : 'SalesCOD-Dr') :
+                                       item.module === 'payment' ? (isAr ? 'تحصيل كاش مسدد' : 'COD Settled-Cr') :
+                                       (isAr ? 'إيداع/تعديل' : 'Journal Entry')}
+                                    </span>
+                                  </td>
+                                  <td className="p-3 font-bold text-white text-start">
+                                    <div className="text-xs">{item.title}</div>
+                                    <div className="text-[9px] text-slate-500 font-normal mt-0.5">{item.description}</div>
+                                  </td>
+                                  <td className="p-3 font-mono text-[10px] text-[#d4af37] font-black text-start">{item.ref}</td>
+                                  <td className="p-3 text-start">
+                                    {isCredit ? (
+                                      <span className="text-[9px] bg-emerald-950/20 text-emerald-400 border border-emerald-900/30 px-2.5 py-0.5 rounded-xl font-black">{isAr ? 'قيد دائن (+)' : 'Credit (+)'}</span>
+                                    ) : (
+                                      <span className="text-[9px] bg-rose-955/20 text-rose-500 border border-rose-950/30 px-2.5 py-0.5 rounded-xl font-black">{isAr ? 'قيد مدين (-)' : 'Debit (-)'}</span>
+                                    )}
+                                  </td>
+                                  <td className={`p-3 font-mono font-black text-xs ${isCredit ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                    {isCredit ? '+' : '-'}{item.amount.toLocaleString()} YER
+                                  </td>
+                                  <td className={`p-3 text-left font-mono font-black text-xs ${item.runningWalletBal >= 0 ? 'text-emerald-400' : 'text-rose-450'}`}>
+                                    {item.runningWalletBal.toLocaleString()} YER
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          
+                          {getCustomerUnifiedLedger().length === 0 && (
+                            <tr>
+                              <td colSpan={7} className="p-16 text-center text-slate-650 italic font-bold">
+                                {isAr ? '[ لم يتم تسجيل أي حركات مالية على هذه المحفظة ]' : '[ NO FINANCIAL TRANSACTIONS REGISTERED ON THIS WALLET ]'}
+                              </td>
+                            </tr>
                           )}
                         </tbody>
                       </table>
                     </div>
-                 )}
-              </div>
+                  </div>
+                </div>
+              )}
             </div>
             
             {/* Modal Footer (with Printable actions) */}

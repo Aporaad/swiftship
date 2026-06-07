@@ -70,8 +70,12 @@ export default function ChartOfAccounts({
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({
     '1000': true,
     '1100': true,
+    '1130': true,
     '1200': true,
     '2000': true,
+    '2100': true,
+    '2120': true,
+    '2130': true,
     '3000': true,
     '4000': true,
     '5000': true
@@ -80,7 +84,7 @@ export default function ChartOfAccounts({
   // Sync custom accounts from DB
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'accounts'), (snap) => {
-      setCustomAccounts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as AccountNode)));
+      setCustomAccounts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)));
     }, (error) => {
       console.error("Error loading custom accounts:", error);
     });
@@ -96,6 +100,7 @@ export default function ChartOfAccounts({
       { code: '1100', nameAr: 'الأصول المتداولة والسيولة', nameEn: 'Current Assets & Liquidity', type: 'Asset', parentCode: '1000', isSystem: true },
       { code: '1110', nameAr: 'نقدية الصناديق والخزائن الحية', nameEn: 'Safe-Box Cash Accounts (Live)', type: 'Asset', parentCode: '1100', isSystem: true, balance: cashTotal, currency: 'YER' },
       { code: '1120', nameAr: 'ذمم وشحنات العملاء المعلقة المدينة', nameEn: 'Accounts Receivable (Pending Cargo)', type: 'Asset', parentCode: '1100', isSystem: true, balance: financialTrialMetrics.netReceivables, currency: 'YER' },
+      { code: '1130', nameAr: 'حسابات العملاء الماليين الكلية', nameEn: 'Customers Financial Accounts Ledger', type: 'Asset', parentCode: '1100', isSystem: true },
       
       { code: '1200', nameAr: 'الأصول الثابتة والعهد العينية', nameEn: 'Fixed Capital Assets Portfolio', type: 'Asset', parentCode: '1000', isSystem: true },
       { code: '1210', nameAr: 'سيارات نقل وشحن ومعدات لوجستية', nameEn: 'Logistic Truck Fleet & Vehicles (Active)', type: 'Asset', parentCode: '1200', isSystem: true, balance: vehiclesTotal, currency: 'YER' },
@@ -105,9 +110,11 @@ export default function ChartOfAccounts({
       { code: '2000', nameAr: 'الخصوم والالتزامات الكلية للغير', nameEn: 'Total Financial Liabilities', type: 'Liability', parentCode: null, isSystem: true },
       { code: '2100', nameAr: 'الالتزامات التشغيلية المتداولة', nameEn: 'Current Operating Liabilities', type: 'Liability', parentCode: '2000', isSystem: true },
       { code: '2110', nameAr: 'العهد المالية المفتوحة بذمة المناديب', nameEn: 'Couriers Pending Custody Liabilities', type: 'Liability', parentCode: '2100', isSystem: true, balance: financialTrialMetrics.activeCustodyLiabilities, currency: 'YER' },
+      { code: '2120', nameAr: 'ذمم وحسابات المناديب المالية الكلية', nameEn: 'Couriers Financial Accounts Ledger', type: 'Liability', parentCode: '2100', isSystem: true },
+      { code: '2130', nameAr: 'ذمم وحسابات الموظفين المالية الكلية', nameEn: 'Employees Financial Accounts Ledger', type: 'Liability', parentCode: '2100', isSystem: true },
 
       { code: '3000', nameAr: 'حقوق الملكية والشركاء المؤسسين', nameEn: 'Gross Shareholders Equity', type: 'Equity', parentCode: null, isSystem: true },
-      { code: '3100', nameAr: 'رأس مال المجموعة والشركاء الأساسي', nameEn: 'Paid-in Capital Share Equity', type: 'Equity', parentCode: '3000', isSystem: true, balance: 150000000, currency: 'YER' },
+      { code: '3100', nameAr: 'رأس مال المجموعة والشركاء الأساسي', nameEn: 'Paid-in Capital Share Equity', type: 'Equity', parentCode: '3000', isSystem: true, balance: 0, currency: 'YER' },
       { code: '3200', nameAr: 'أرباح وخسائر السنة التراكمية (الصافي)', nameEn: 'Retained Earnings & Reserves', type: 'Equity', parentCode: '3000', isSystem: true, balance: financialTrialMetrics.netProfit, currency: 'YER' },
 
       { code: '4000', nameAr: 'الإيرادات والعائدات التشغيلية والمالية', nameEn: 'Total Operating Revenues', type: 'Revenue', parentCode: null, isSystem: true },
@@ -125,14 +132,23 @@ export default function ChartOfAccounts({
     
     // Add custom accounts avoiding code duplicates
     customAccounts.forEach(ca => {
-      if (!combined.some(sa => sa.code === ca.code)) {
+      const code = ca.accountCode || ca.code;
+      if (!code) return;
+      
+      if (!combined.some(sa => sa.code === code)) {
+        let type = ca.type || 'Asset';
+        if (ca.entityType === 'customer') type = 'Asset';
+        else if (ca.entityType === 'courier' || ca.entityType === 'employee') type = 'Liability';
+        
+        const parentCode = ca.accountPrefix || ca.parentCode || null;
+        
         combined.push({
           id: ca.id,
-          code: ca.code,
-          nameAr: ca.nameAr,
-          nameEn: ca.nameEn,
-          type: ca.type,
-          parentCode: ca.parentCode || null,
+          code,
+          nameAr: ca.entityName || ca.nameAr || '',
+          nameEn: ca.entityName || ca.nameEn || '',
+          type: type as any,
+          parentCode: parentCode || null,
           balance: ca.balance || 0,
           currency: ca.currency || 'YER',
           isSystem: false

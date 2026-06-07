@@ -13,13 +13,15 @@ import {
   Shield, Eye, EyeOff, Crown, ShieldAlert, Activity, Clock,
   CheckCircle2, LogOut, Key, MonitorCheck, FileClock,
   Zap, AlertTriangle, Timer, Ban, WifiOff, Lock, Unlock,
-  UserMinus, RefreshCw, ChevronDown, ChevronRight, Info
+  UserMinus, RefreshCw, ChevronDown, ChevronRight, Info,
+  Coins, Truck
 } from 'lucide-react';
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
 import { notificationService } from '../services/notificationService';
 import { activityLogService } from '../services/activityLogService';
 import ConfirmModal from '../components/ConfirmModal';
+import { financialAccountService } from '../services/financialAccountService';
 
 // ══════════════════════════════════════════════════════════════
 // PERMISSIONS — FULL SYSTEM COVERAGE
@@ -75,6 +77,8 @@ const PERMISSION_GROUPS = (isAr: boolean) => [
       { id: 'edit_expenses', label: isAr ? 'تعديل المصروفات وتسوية العهد' : 'Edit Expenses & Reconcile' },
       { id: 'delete_expenses', label: isAr ? 'حذف المصروفات' : 'Delete Expenses' },
       { id: 'edit_exchange_rates', label: isAr ? 'تعديل أسعار الصرف' : 'Edit Exchange Rates' },
+      { id: 'view_financial_accounts', label: isAr ? 'عرض أرصدة وكشوفات الحسابات المالية' : 'View Financial Account Balances & Statements' },
+      { id: 'manage_financial_accounts', label: isAr ? 'إدارة وتعديل أرصدة الحسابات المالية' : 'Manage Financial Account Balances & Adjustments' },
     ]
   },
   {
@@ -234,12 +238,16 @@ export default function UserManagement() {
   const isAr = settings.language === 'ar';
   const t = (ar: string, en: string) => isAr ? ar : en;
 
-  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'sessions' | 'activity'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'sessions' | 'activity' | 'wallets'>('users');
 
   // ── Data ─────────────────────────────────────────────────
   const [users, setUsers] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
   const [activityLogs, setActivityLogs] = useState<any[]>([]);
+  const [couriers, setCouriers] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [walletSearch, setWalletSearch] = useState('');
+  const [walletTypeFilter, setWalletTypeFilter] = useState<'all' | 'customer' | 'courier'>('all');
   const [loading, setLoading] = useState(true);
 
   // ── Users filters ────────────────────────────────────────
@@ -258,10 +266,10 @@ export default function UserManagement() {
 
   // ── Forms ────────────────────────────────────────────────
   const [editFormData, setEditFormData] = useState({
-    fullName: '', role: '', disabled: false, commissionRate: 0, username: '', systemPin: ''
+    fullName: '', role: '', disabled: false, commissionRate: 0, username: '', systemPin: '', monthlySalary: 0
   });
   const [addFormData, setAddFormData] = useState({
-    fullName: '', username: '', email: '', password: '', systemPin: '', role: 'Employee', commissionRate: 0
+    fullName: '', username: '', email: '', password: '', systemPin: '', role: 'Employee', commissionRate: 0, monthlySalary: 0
   });
 
   // ── Roles ────────────────────────────────────────────────
@@ -304,6 +312,22 @@ export default function UserManagement() {
   }, [roleLoading]);
 
   useEffect(() => {
+    if (roleLoading) return;
+    const unsub = onSnapshot(collection(db, 'couriers'), snap => {
+      setCouriers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return unsub;
+  }, [roleLoading]);
+
+  useEffect(() => {
+    if (roleLoading) return;
+    const unsub = onSnapshot(collection(db, 'customers'), snap => {
+      setCustomers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return unsub;
+  }, [roleLoading]);
+
+  useEffect(() => {
     if (roleLoading || !hasPermission('view_activity_log')) return;
     const q = query(collection(db, 'activity_logs'), orderBy('timestamp', 'desc'), limit(200));
     const unsub = onSnapshot(q, snap =>
@@ -334,7 +358,8 @@ export default function UserManagement() {
     setEditFormData({
       fullName: user.fullName || '', username: user.username || '',
       role: user.role || 'Employee', disabled: user.disabled || false,
-      commissionRate: user.commissionRate || 0, systemPin: user.systemPin || ''
+      commissionRate: user.commissionRate || 0, systemPin: user.systemPin || '',
+      monthlySalary: user.monthlySalary || 0
     });
     setIsEditModalOpen(true);
   };
@@ -356,8 +381,17 @@ export default function UserManagement() {
         role: isRoot ? 'Admin' : editFormData.role,
         disabled: isRoot ? false : editFormData.disabled,
         commissionRate: editFormData.commissionRate, systemPin: editFormData.systemPin,
+        monthlySalary: editFormData.monthlySalary,
         updatedAt: Date.now()
       });
+      // Sync financial account name if changed
+      if (editFormData.fullName !== selectedUser.fullName && selectedUser.financialAccountId) {
+        await financialAccountService.updateAccountEntityName(selectedUser.id, editFormData.fullName);
+      }
+      // Sync monthly salary change in financial account
+      if (editFormData.monthlySalary !== (selectedUser.monthlySalary || 0)) {
+        await financialAccountService.updateMonthlySalary(selectedUser.id, editFormData.monthlySalary);
+      }
       await activityLogService.log('edit_user', editFormData.fullName, { userId: selectedUser.id });
       notificationService.notify({ title: t('تم التحديث', 'Updated'), message: t(`تم تحديث ${editFormData.fullName}`, `${editFormData.fullName} updated`), type: 'info', category: 'system' });
       setIsEditModalOpen(false); setSelectedUser(null);
@@ -432,12 +466,27 @@ export default function UserManagement() {
         fullName: addFormData.fullName, email: addFormData.email.toLowerCase(),
         username: addFormData.username, systemPin: addFormData.systemPin,
         role: addFormData.role, commissionRate: addFormData.commissionRate,
+        monthlySalary: addFormData.monthlySalary,
         disabled: false, createdAt: Date.now()
       });
+
+      // Auto-create financial account for employee (2130-xxxx) with monthly salary
+      try {
+        await financialAccountService.createAccountForEntity(
+          'employee',
+          newUser.uid,
+          addFormData.fullName,
+          settings.currency || 'YER',
+          addFormData.monthlySalary
+        );
+      } catch (accErr) {
+        console.warn('[UserManagement] Could not create financial account for employee:', accErr);
+      }
+
       await activityLogService.log('add_user', addFormData.fullName, { email: addFormData.email, role: addFormData.role });
       notificationService.notify({ title: t('تم إنشاء الحساب', 'Account Created'), message: t(`تم إنشاء حساب ${addFormData.fullName}`, `${addFormData.fullName} account created`), type: 'success', category: 'system' });
       setIsAddModalOpen(false);
-      setAddFormData({ fullName: '', username: '', email: '', password: '', systemPin: '', role: 'Employee', commissionRate: 0 });
+      setAddFormData({ fullName: '', username: '', email: '', password: '', systemPin: '', role: 'Employee', commissionRate: 0, monthlySalary: 0 });
     } catch (err: any) {
       let msg = err.message;
       if (err.code === 'auth/email-already-in-use') msg = t('البريد مسجل في نظام المصادقة', 'Email already in auth system');
@@ -640,6 +689,7 @@ export default function UserManagement() {
     { id: 'roles',    icon: Shield,       label: t('الأدوار والصلاحيات', 'Roles'),      count: roles.length },
     { id: 'sessions', icon: MonitorCheck, label: t('الجلسات النشطة', 'Active Sessions'), count: activeSessions.length, pulse: true },
     { id: 'activity', icon: FileClock,    label: t('سجل النشاط', 'Activity Log'),       count: activityLogs.length },
+    { id: 'wallets',  icon: Coins,        label: t('المحافظ العهد', 'Wallets'),        count: couriers.length + customers.length }
   ] as const;
 
   // ══════════════════════════════════════════════════════════
@@ -748,7 +798,9 @@ export default function UserManagement() {
                   <th className="p-4 text-start">{t('الموظف', 'Staff Member')}</th>
                   <th className="p-4 text-start">{t('البريد', 'Email')}</th>
                   <th className="p-4 text-start">{t('الدور', 'Role')}</th>
+                  <th className="p-4 text-center">{t('الراتب', 'Salary')}</th>
                   <th className="p-4 text-center">{t('عمولة%', 'Commission%')}</th>
+                  <th className="p-4 text-center">{t('الرصيد المالي', 'Balance')}</th>
                   <th className="p-4 text-center">PIN</th>
                   <th className="p-4 text-center">{t('الحالة', 'Status')}</th>
                   <th className="p-4 text-center">{t('آخر ظهور', 'Last Seen')}</th>
@@ -771,13 +823,27 @@ export default function UserManagement() {
                           </div>
                           <div>
                             <div className="font-extrabold text-white">{user.fullName}</div>
-                            <div className="text-[9px] font-mono text-slate-500 mt-0.5">@{user.username || 'not_set'}</div>
+                            <div className="text-[9px] font-mono text-slate-500 mt-0.5 flex items-center gap-1.5">
+                              <span>@{user.username || 'not_set'}</span>
+                              {user.financialAccountCode && (
+                                <>
+                                  <span className="text-slate-700">•</span>
+                                  <span className="text-[#d4af37] font-black font-mono">
+                                    {user.financialAccountCode}
+                                  </span>
+                                </>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </td>
                       <td className="p-4 font-mono text-slate-400 text-[10px]" dir="ltr">{user.email}</td>
                       <td className="p-4"><span className={`px-2.5 py-1 rounded-lg border text-[9px] font-black uppercase tracking-wider ${getRoleBadgeStyle(user.role)}`}>{user.role}</span></td>
+                      <td className="p-4 text-center font-mono text-[#d4af37] font-black">{(user.monthlySalary || 0).toLocaleString()} {settings.currency || 'YER'}</td>
                       <td className="p-4 text-center font-mono text-slate-300 font-black">{user.commissionRate || 0}%</td>
+                      <td className={`p-4 text-center font-mono font-black ${(user.financialBalance || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {(user.financialBalance || 0).toLocaleString()} {settings.currency || 'YER'}
+                      </td>
                       <td className="p-4 text-center font-mono text-slate-400 font-semibold text-[11px] tracking-widest">{user.systemPin || '—'}</td>
                       <td className="p-4 text-center">
                         {user.disabled ? (
@@ -1096,6 +1162,139 @@ export default function UserManagement() {
       )}
 
       {/* ══════════════════════════════════════════════════ */}
+      {/* TAB 5: SMART WALLETS                              */}
+      {/* ══════════════════════════════════════════════════ */}
+      {activeTab === 'wallets' && (
+        <div className="space-y-6">
+          {/* Filter Bar */}
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-black/40 border border-slate-800/50 p-4 rounded-2xl animate-fade-in">
+            <div className="relative w-full md:max-w-md">
+              <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-550 w-4 h-4" />
+              <input 
+                type="text"
+                placeholder={isAr ? 'ابحث باسم العميل أو المندوب أو كوده...' : 'Search by name, phone, or custom ID...'}
+                value={walletSearch}
+                onChange={e => setWalletSearch(e.target.value)}
+                className="w-full bg-black/50 border border-slate-850 rounded-xl py-2.5 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start"
+              />
+            </div>
+            
+            <div className="flex gap-2 w-full md:w-auto">
+              <button 
+                onClick={() => setWalletTypeFilter('all')}
+                className={`flex-1 md:flex-none px-4 py-2 rounded-xl text-xs font-black border transition ${walletTypeFilter === 'all' ? 'bg-[#d4af37]/20 border-[#d4af37]/30 text-[#d4af37]' : 'bg-slate-900 border-slate-800 text-slate-400'}`}
+              >
+                {isAr ? 'الكل' : 'All'}
+              </button>
+              <button 
+                onClick={() => setWalletTypeFilter('courier')}
+                className={`flex-1 md:flex-none px-4 py-2 rounded-xl text-xs font-black border transition ${walletTypeFilter === 'courier' ? 'bg-indigo-950/45 border-indigo-900/50 text-indigo-400' : 'bg-slate-900 border-slate-800 text-slate-400'}`}
+              >
+                {isAr ? 'المناديب' : 'Couriers'}
+              </button>
+              <button 
+                onClick={() => setWalletTypeFilter('customer')}
+                className={`flex-1 md:flex-none px-4 py-2 rounded-xl text-xs font-black border transition ${walletTypeFilter === 'customer' ? 'bg-emerald-950/45 border-emerald-900/50 text-emerald-400' : 'bg-slate-900 border-slate-800 text-slate-400'}`}
+              >
+                {isAr ? 'العملاء' : 'Customers'}
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            {/* Courier Wallets */}
+            {(walletTypeFilter === 'all' || walletTypeFilter === 'courier') && (
+              <div className="bg-[#121215] border border-slate-850 rounded-2xl p-5 space-y-4">
+                <div className="flex justify-between items-center border-b border-slate-850 pb-3">
+                  <h3 className="font-black text-sm text-indigo-400 flex items-center gap-2">
+                    <Truck className="w-4 h-4 text-[#d4af37]" />
+                    {isAr ? 'محافظ ومستحقات المناديب' : 'External Courier Balance Sheets'}
+                  </h3>
+                  <span className="font-mono text-xs text-slate-500 font-bold">COUNT: {couriers.length}</span>
+                </div>
+                
+                <div className="space-y-2.5 overflow-y-auto max-h-[480px]">
+                  {couriers
+                    .filter(c => {
+                      const q = walletSearch.toLowerCase();
+                      return !q || (c.fullName || '').toLowerCase().includes(q) || (c.phone || '').includes(q) || (c.courierCustomId || '').toLowerCase().includes(q);
+                    })
+                    .map(c => {
+                      const bal = c.wallet?.balance || c.walletBalance || 0;
+                      return (
+                        <div key={c.id} className="flex justify-between items-center bg-black/40 border border-slate-850 hover:border-slate-800 p-3.5 rounded-xl transition duration-200">
+                          <div className="text-start">
+                            <h4 className="font-extrabold text-xs text-white flex items-center gap-1.5">{c.fullName}</h4>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-[9px] bg-slate-900 border border-slate-800 text-[#d4af37] px-1.5 py-0.5 rounded font-mono font-bold">ID: {c.courierCustomId || 'ALX-CR'}</span>
+                              <span className="text-[9px] text-slate-550 font-bold font-mono" dir="ltr">{c.phone}</span>
+                            </div>
+                          </div>
+                          
+                          <div className="text-right">
+                            <div className="text-[11px] font-mono font-black text-[#d4af37]">{bal.toLocaleString()} YER</div>
+                            <span className="text-[8px] bg-[#d4af37]/10 text-[#d4af37] border border-[#d4af37]/10 font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md mt-1 inline-block">{isAr ? 'رصيد عهدة محتجز' : 'Wallet Balance'}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  {couriers.length === 0 && (
+                    <div className="p-8 text-center text-slate-600 font-bold text-xs uppercase tracking-widest">[ no_couriers_matched ]</div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Customer Wallets */}
+            {(walletTypeFilter === 'all' || walletTypeFilter === 'customer') && (
+              <div className="bg-[#121215] border border-slate-850 rounded-2xl p-5 space-y-4">
+                <div className="flex justify-between items-center border-b border-slate-850 pb-3">
+                  <h3 className="font-black text-sm text-emerald-400 flex items-center gap-2">
+                    <UsersIcon className="w-4 h-4" />
+                    {isAr ? 'محافظ وودائع العملاء' : 'Patron Client Wallets'}
+                  </h3>
+                  <span className="font-mono text-xs text-slate-500 font-bold">COUNT: {customers.length}</span>
+                </div>
+                
+                <div className="space-y-2.5 overflow-y-auto max-h-[480px]">
+                  {customers
+                    .filter(c => {
+                      const q = walletSearch.toLowerCase();
+                      return !q || (c.fullName || '').toLowerCase().includes(q) || (c.phone || '').includes(q) || (c.financialAccountCode || '').toLowerCase().includes(q);
+                    })
+                    .map(c => {
+                      const bal = c.wallet?.balance || c.walletBalance || 0;
+                      return (
+                        <div key={c.id} className="flex justify-between items-center bg-black/40 border border-slate-850 hover:border-slate-800 p-3.5 rounded-xl transition duration-200">
+                          <div className="text-start">
+                            <h4 className="font-extrabold text-xs text-white">{c.fullName}</h4>
+                            <div className="flex items-center gap-2 mt-1">
+                              {c.financialAccountCode && (
+                                <span className="text-[9px] bg-slate-900 border border-slate-800 text-[#d4af37] px-1.5 py-0.5 rounded font-mono font-bold">ACC: {c.financialAccountCode}</span>
+                              )}
+                              <span className="text-[9px] text-slate-550 font-bold font-mono" dir="ltr">{c.phone}</span>
+                            </div>
+                          </div>
+                          
+                          <div className="text-right">
+                            <div className="text-[11px] font-mono font-black text-emerald-400">{bal.toLocaleString()} YER</div>
+                            <span className="text-[8px] bg-emerald-950/20 text-emerald-400 border border-emerald-900/10 font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md mt-1 inline-block">{isAr ? 'محفظة نشطة' : 'Active Wallet'}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  {customers.length === 0 && (
+                    <div className="p-8 text-center text-slate-600 font-bold text-xs uppercase tracking-widest">[ no_customers_matched ]</div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════ */}
       {/* SESSION ACTION MODAL — ENHANCED                   */}
       {/* ══════════════════════════════════════════════════ */}
       {isSessionModalOpen && sessionTargetUser && (
@@ -1221,7 +1420,7 @@ export default function UserManagement() {
                   </button>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الدور', 'Role')}</label>
                   <select value={addFormData.role} onChange={e => setAddFormData({...addFormData, role: e.target.value})} className="w-full bg-black/50 border border-slate-800 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold">
@@ -1231,6 +1430,10 @@ export default function UserManagement() {
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('نسبة العمولة%', 'Commission%')}</label>
                   <input type="number" min="0" max="100" step="0.1" value={addFormData.commissionRate} onChange={e => setAddFormData({...addFormData, commissionRate: parseFloat(e.target.value) || 0})} className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الراتب الشهري', 'Monthly Salary')}</label>
+                  <input type="number" min="0" value={addFormData.monthlySalary} onChange={e => setAddFormData({...addFormData, monthlySalary: parseFloat(e.target.value) || 0})} className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono" />
                 </div>
               </div>
               <div className="pt-3 flex justify-end gap-3 border-t border-slate-800/50">
@@ -1269,7 +1472,7 @@ export default function UserManagement() {
                   <input type="text" maxLength={4} value={editFormData.systemPin} onChange={e => setEditFormData({...editFormData, systemPin: e.target.value})} className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-center tracking-widest" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الدور', 'Role')}</label>
                   <select disabled={ROOT_EMAILS.includes(selectedUser.email) || selectedUser.isRoot} value={editFormData.role} onChange={e => setEditFormData({...editFormData, role: e.target.value})} className="w-full bg-black/50 border border-slate-800 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed">
@@ -1279,6 +1482,10 @@ export default function UserManagement() {
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('عمولة%', 'Commission%')}</label>
                   <input type="number" min="0" max="100" step="0.1" value={editFormData.commissionRate} onChange={e => setEditFormData({...editFormData, commissionRate: parseFloat(e.target.value) || 0})} className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الراتب الشهري', 'Monthly Salary')}</label>
+                  <input type="number" min="0" value={editFormData.monthlySalary} onChange={e => setEditFormData({...editFormData, monthlySalary: parseFloat(e.target.value) || 0})} className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono" />
                 </div>
               </div>
               {!ROOT_EMAILS.includes(selectedUser.email) && !selectedUser.isRoot && (

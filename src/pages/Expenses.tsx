@@ -5,6 +5,7 @@ import { useSettings } from '../context/SettingsContext';
 import { useRole } from '../hooks/useRole';
 import { notificationService } from '../services/notificationService';
 import { activityLogService } from '../services/activityLogService';
+import { financialAccountService } from '../services/financialAccountService';
 import { Plus, Search, Wallet, DollarSign, Calendar, RefreshCw, Layers, CheckCircle2, AlertTriangle, User, FileText, ArrowUpRight, ArrowDownLeft, Crown, ShieldAlert, Coins, X, Printer, Activity } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { useLocation } from 'react-router-dom';
@@ -16,6 +17,7 @@ export const EXPENSE_CATEGORIES = [
   { id: 'packaging', labelAr: 'تغليف وكرتون', labelEn: 'Packaging & Cardboard', icon: '📦' },
   { id: 'telecom', labelAr: 'اتصالات وإنترنت', labelEn: 'Communications & Internet', icon: '🌐' },
   { id: 'custody', labelAr: 'عهد مالية لمندوب', labelEn: 'Courier Custody', icon: '🔑' },
+  { id: 'salary', labelAr: 'صرف رواتب الموظفين', labelEn: 'Staff Salary Payments', icon: '👤' },
   { id: 'wages', labelAr: 'أجور ومكافآت', labelEn: 'Wages & Bonuses', icon: '💵' },
   { id: 'factory', labelAr: 'سداد مصنع الصين', labelEn: 'Offshore Factory Trade', icon: '🏭' },
   { id: 'other', labelAr: 'مصروفات أخرى', labelEn: 'Other Expenses', icon: '📝' }
@@ -37,6 +39,8 @@ export default function Expenses() {
   const [orders, setOrders] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [sources, setSources] = useState<any[]>([]);
+  const [systemUsers, setSystemUsers] = useState<any[]>([]);
+  const [financialAccounts, setFinancialAccounts] = useState<any[]>([]);
   const [expensesLoading, setExpensesLoading] = useState(true);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [addLoading, setAddLoading] = useState(false);
@@ -48,6 +52,7 @@ export default function Expenses() {
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
   const activeTab = queryParams.get('tab') || 'expenses'; // 'expenses', 'reports', 'accounting'
+  const activeSubTab = queryParams.get('subtab') || undefined; // e.g. 'salary'
 
   const [formData, setFormData] = useState({
     category: 'marketing',
@@ -57,7 +62,11 @@ export default function Expenses() {
     recipientName: '',
     notes: '', // البيان أو الشرح
     remarks: '', // ملاحظات
-    factoryName: ''
+    factoryName: '',
+    linkedAccountId: '',       // NEW: linked financial account ID
+    linkedAccountCode: '',     // NEW: linked financial account code
+    linkedAccountEntityType: '' as '' | 'customer' | 'courier' | 'employee',
+    salaryMonth: ''            // NEW: salary payment month YYYY-MM
   });
   const [selectedDateTime, setSelectedDateTime] = useState('');
 
@@ -126,12 +135,24 @@ export default function Expenses() {
       setSources(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
+    // Fetch users (non-couriers) for wages/salary category
+    const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
+      setSystemUsers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    // Fetch financial accounts
+    const unsubAccounts = onSnapshot(collection(db, 'accounts'), (snap) => {
+      setFinancialAccounts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
     return () => {
       unsubExp();
       unsubCouriers();
       unsubOrders();
       unsubCustomers();
       unsubSources();
+      unsubUsers();
+      unsubAccounts();
     };
   }, [roleLoading]);
 
@@ -176,32 +197,80 @@ export default function Expenses() {
         type = 'Custody';
       } else if (formData.category === 'factory') {
         type = 'FactoryPayment';
+      } else if (formData.category === 'salary') {
+        type = 'Salary';
       }
 
       let recipientName = '';
+      let recipientEntityId = '';
+      let recipientEntityType: 'customer' | 'courier' | 'employee' | '' = '';
+      let linkedAccountId = formData.linkedAccountId || '';
+      let linkedAccountCode = formData.linkedAccountCode || '';
+
       if (type === 'Custody' && formData.recipientId) {
         const found = couriers.find(c => c.id === formData.recipientId);
         recipientName = found ? found.fullName : '';
+        recipientEntityId = formData.recipientId;
+        recipientEntityType = 'courier';
+        // Get the courier's financial account code automatically
+        if (!linkedAccountId && found?.financialAccountId) {
+          linkedAccountId = found.financialAccountId;
+          linkedAccountCode = found.financialAccountCode || '';
+        }
+      } else if ((formData.category === 'wages' || formData.category === 'salary') && formData.recipientId) {
+        const found = systemUsers.find(u => u.id === formData.recipientId);
+        recipientName = found ? (found.fullName || found.displayName || found.email) : '';
+        recipientEntityId = formData.recipientId;
+        recipientEntityType = 'employee';
+        if (!linkedAccountId && found?.financialAccountId) {
+          linkedAccountId = found.financialAccountId;
+          linkedAccountCode = found.financialAccountCode || '';
+        }
       } else if (type === 'FactoryPayment') {
         recipientName = formData.factoryName || 'الصين';
+        if (linkedAccountId && formData.recipientId) {
+          recipientEntityId = formData.recipientId;
+          recipientEntityType = formData.linkedAccountEntityType as any;
+          recipientName = formData.recipientName || recipientName;
+        }
       } else {
         const catObj = EXPENSE_CATEGORIES.find(c => c.id === formData.category);
         recipientName = catObj ? (isAr ? catObj.labelAr : catObj.labelEn) : (isAr ? 'المكتب الرئيسي' : 'Head Office');
+        if (linkedAccountId && formData.recipientId) {
+          recipientEntityId = formData.recipientId;
+          recipientEntityType = formData.linkedAccountEntityType as any;
+          recipientName = formData.recipientName || recipientName;
+        }
       }
 
       const parsedCreatedAt = selectedDateTime ? new Date(selectedDateTime).getTime() : Date.now();
+
+      // Convert amount to default currency for financial account
+      const rawAmount = parseFloat(formData.amount);
+      const convertedAmount = financialAccountService.convertToDefaultCurrency(
+        rawAmount,
+        formData.currency,
+        settings.currency || 'SAR',
+        { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+      );
 
       const payload = {
         expenseNumber,
         category: formData.category,
         type,
-        amount: parseFloat(formData.amount),
+        amount: rawAmount,
         currency: formData.currency,
-        recipientId: type === 'Custody' ? formData.recipientId : null,
+        amountInDefaultCurrency: convertedAmount,
+        recipientId: (type === 'Custody' || formData.category === 'wages' || formData.category === 'salary') ? formData.recipientId : null,
+        recipientEntityId: recipientEntityId || null,
+        recipientEntityType: recipientEntityType || null,
         recipientName,
+        linkedAccountId: linkedAccountId || null,
+        linkedAccountCode: linkedAccountCode || null,
         notes: formData.notes, // البيان أو الشرح
         remarks: formData.remarks, // ملاحظات
         status: type === 'Custody' ? 'Pending' : 'Completed', // Pending custody, Completed expense
+        salaryMonth: formData.category === 'salary' ? formData.salaryMonth : null,
         createdByUid: auth.currentUser?.uid || 'system',
         createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
         createdByName: profile?.fullName || 'Root Admin',
@@ -209,11 +278,56 @@ export default function Expenses() {
       };
 
       await addDoc(collection(db, 'expenses'), payload);
+
+      // --- Financial Account Impact ---
+      if (formData.category === 'salary' && linkedAccountId && recipientEntityId) {
+        try {
+          await financialAccountService.recordSalaryPayment({
+            employeeId: recipientEntityId,
+            employeeName: recipientName,
+            accountId: linkedAccountId,
+            accountCode: linkedAccountCode,
+            amount: convertedAmount,
+            currency: formData.currency,
+            salaryMonth: formData.salaryMonth,
+            notes: formData.notes || (isAr ? `صرف راتب شهر ${formData.salaryMonth}` : `Salary payment for ${formData.salaryMonth}`),
+            createdByUid: auth.currentUser?.uid || 'system',
+            createdByName: profile?.fullName || 'Root Admin'
+          });
+        } catch (txErr) {
+          console.warn('[Expenses] Could not record salary payment transaction:', txErr);
+        }
+      } else if (linkedAccountId && recipientEntityId && recipientEntityType && recipientEntityType !== 'employee') {
+        try {
+          await financialAccountService.recordTransaction(linkedAccountId, {
+            accountId: linkedAccountId,
+            accountCode: linkedAccountCode,
+            entityType: recipientEntityType,
+            entityId: recipientEntityId,
+            entityName: recipientName,
+            type: 'Credit', // Money out from company, charged to entity's account
+            amount: convertedAmount,
+            amountOriginal: rawAmount,
+            currencyOriginal: formData.currency,
+            description: formData.notes || (isAr ? `سند مصروف: ${expenseNumber}` : `Expense voucher: ${expenseNumber}`),
+            refNumber: expenseNumber,
+            module: type === 'Custody' ? 'custody' : 'expense',
+            createdByUid: auth.currentUser?.uid || 'system',
+            createdByName: profile?.fullName || 'Root Admin',
+            createdAt: parsedCreatedAt
+          });
+        } catch (txErr) {
+          console.warn('[Expenses] Could not record financial account transaction:', txErr);
+        }
+      }
+
       activityLogService.log('add_expense', expenseNumber, { ...payload });
 
       notificationService.notify({
         title: isAr ? 'تم تقييد السند بالخزينة' : 'Voucher Logged',
-        message: isAr ? `تم تسجيل السند بنجاح برقم: ${expenseNumber}` : `Transaction recorded with ID: ${expenseNumber}`,
+        message: isAr 
+          ? `تم تسجيل السند برقم: ${expenseNumber}${linkedAccountCode ? ` (مرتبط بحساب ${linkedAccountCode})` : ''}` 
+          : `Transaction recorded: ${expenseNumber}${linkedAccountCode ? ` (linked to account ${linkedAccountCode})` : ''}`,
         type: 'success',
         category: 'finance'
       });
@@ -227,7 +341,11 @@ export default function Expenses() {
         recipientName: '',
         notes: '',
         remarks: '',
-        factoryName: ''
+        factoryName: '',
+        linkedAccountId: '',
+        linkedAccountCode: '',
+        linkedAccountEntityType: '',
+        salaryMonth: ''
       });
     } catch (err) {
       console.error(err);
@@ -258,6 +376,37 @@ export default function Expenses() {
         settledByEmail: auth.currentUser?.email || 'admin',
         settledByName: profile?.fullName || 'Root Admin'
       });
+
+      // --- Financial Account Reversal: Debit on courier's account (returning the custody) ---
+      if (exp.linkedAccountId && exp.recipientEntityId) {
+        try {
+          const settledAmount = financialAccountService.convertToDefaultCurrency(
+            parseFloat(exp.amount || 0),
+            exp.currency || 'YER',
+            settings.currency || 'SAR',
+            { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+          );
+          await financialAccountService.recordTransaction(exp.linkedAccountId, {
+            accountId: exp.linkedAccountId,
+            accountCode: exp.linkedAccountCode || '',
+            entityType: 'courier',
+            entityId: exp.recipientEntityId,
+            entityName: exp.recipientName,
+            type: 'Credit', // Reversal: money returned / settled
+            amount: settledAmount,
+            amountOriginal: parseFloat(exp.amount || 0),
+            currencyOriginal: exp.currency || 'YER',
+            description: isAr ? `تسوية عهدة: ${exp.expenseNumber}` : `Custody settlement: ${exp.expenseNumber}`,
+            refNumber: `${exp.expenseNumber}-SETTLE`,
+            module: 'custody',
+            createdByUid: auth.currentUser?.uid || 'system',
+            createdByName: profile?.fullName || 'Root Admin',
+            createdAt: Date.now()
+          });
+        } catch (txErr) {
+          console.warn('[Expenses] Could not record settlement on financial account:', txErr);
+        }
+      }
 
       activityLogService.log('settle_custody', exp.recipientName || exp.recipientId, { id: exp.id, amount: exp.amount });
       notificationService.notify({
@@ -297,7 +446,7 @@ export default function Expenses() {
   // Allowed expenses based on user permissions
   const allowedExpenses = expenses.filter(exp => {
     if (exp.type === 'Custody' && !canViewCustody) return false;
-    if ((exp.type === 'General' || exp.type === 'FactoryPayment') && !canViewGeneralExpenses) return false;
+    if ((exp.type === 'General' || exp.type === 'FactoryPayment' || exp.type === 'Salary') && !canViewGeneralExpenses) return false;
     return true;
   });
 
@@ -647,6 +796,7 @@ export default function Expenses() {
           customers={customers}
           isAr={isAr}
           settings={settings}
+          initialTab={activeSubTab}
         />
       </div>
     );
@@ -850,7 +1000,29 @@ export default function Expenses() {
                       {exp.amount?.toLocaleString()} <span className="text-[10px] text-slate-500 font-sans">{exp.currency}</span>
                     </td>
                     <td className="p-4 font-bold text-slate-300 text-start">
-                      {exp.recipientName || '—'}
+                      <div className="flex flex-col text-start">
+                        <span 
+                          onClick={() => {
+                            if (exp.recipientEntityId && (exp.recipientEntityType === 'customer' || exp.recipientEntityType === 'courier')) {
+                              window.dispatchEvent(new CustomEvent('open-entity-ledger', { 
+                                detail: { entityId: exp.recipientEntityId, entityType: exp.recipientEntityType } 
+                              }));
+                            }
+                          }}
+                          className={
+                            exp.recipientEntityId && (exp.recipientEntityType === 'customer' || exp.recipientEntityType === 'courier')
+                              ? 'hover:text-[#d4af37] cursor-pointer underline decoration-dotted decoration-[#d4af37]/40 transition-colors'
+                              : ''
+                          }
+                        >
+                          {exp.recipientName || '—'}
+                        </span>
+                        {exp.linkedAccountCode && (
+                          <span className="font-mono font-black text-[#d4af37] text-[9.5px] mt-1 bg-[#d4af37]/10 border border-[#d4af37]/20 px-1.5 py-0.5 rounded w-max">
+                            {exp.linkedAccountCode}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="p-4 text-slate-300 text-[11px] max-w-sm truncate text-start">
                       <span className="font-bold text-slate-200 block">{exp.notes || '—'}</span>
@@ -996,14 +1168,94 @@ export default function Expenses() {
                   <select 
                     required 
                     value={formData.recipientId} 
-                    onChange={(e) => setFormData({...formData, recipientId: e.target.value})}
+                    onChange={(e) => {
+                      const courier = couriers.find(c => c.id === e.target.value);
+                      setFormData({
+                        ...formData, 
+                        recipientId: e.target.value,
+                        linkedAccountId: courier?.financialAccountId || '',
+                        linkedAccountCode: courier?.financialAccountCode || '',
+                        linkedAccountEntityType: 'courier'
+                      });
+                    }}
                     className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer"
                   >
                     <option value="">{isAr ? '-- اختر المندوب من الكشف --' : '-- Choose Courier --'}</option>
-                    {couriers.map(c => (
-                      <option key={c.id} value={c.id}>{c.fullName} ({c.courierCustomId})</option>
+                    {couriers.map(c => {
+                      const bal = c.wallet?.balance || c.walletBalance || 0;
+                      return (
+                        <option key={c.id} value={c.id}>
+                          {c.fullName} ({c.courierCustomId}) — Wallet: {bal.toLocaleString()} YER {c.financialAccountCode ? ` (${c.financialAccountCode})` : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  {formData.linkedAccountCode && (
+                    <div className="mt-1.5 flex items-center gap-1.5">
+                      <span className="text-[9px] font-black text-slate-500">{isAr ? 'سيتم الخصم من حساب:' : 'Will charge account:'}</span>
+                      <span className="font-mono font-black text-[#d4af37] text-[10px] bg-[#d4af37]/10 border border-[#d4af37]/20 px-2 py-0.5 rounded">{formData.linkedAccountCode}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {(formData.category === 'wages' || formData.category === 'salary') && (
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
+                    {formData.category === 'salary' 
+                       ? (isAr ? 'الموظف المستحق للراتب *' : 'Liable Employee *')
+                       : (isAr ? 'الموظف أو مستحق الأجور' : 'Employee / Wage Recipient')
+                    }
+                  </label>
+                  <select 
+                    required={formData.category === 'salary'}
+                    value={formData.recipientId} 
+                    onChange={(e) => {
+                      const user = systemUsers.find(u => u.id === e.target.value);
+                      setFormData({
+                        ...formData, 
+                        recipientId: e.target.value,
+                        linkedAccountId: user?.financialAccountId || '',
+                        linkedAccountCode: user?.financialAccountCode || '',
+                        linkedAccountEntityType: 'employee',
+                        ...(formData.category === 'salary' && user?.monthlySalary && { amount: String(user.monthlySalary) })
+                      });
+                    }}
+                    className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer"
+                  >
+                    <option value="">
+                      {formData.category === 'salary'
+                        ? (isAr ? '-- اختر الموظف لصرف الراتب --' : '-- Choose Employee --')
+                        : (isAr ? '-- اختر الموظف (اختياري) --' : '-- Select Employee (Optional) --')
+                      }
+                    </option>
+                    {systemUsers.map(u => (
+                      <option key={u.id} value={u.id}>
+                        {u.fullName || u.displayName || u.email}
+                        {u.monthlySalary ? ` (${isAr ? 'راتب' : 'Salary'}: ${u.monthlySalary.toLocaleString()} ${settings.currency || 'YER'})` : ''}
+                        {u.financialAccountCode ? ` — ${u.financialAccountCode}` : ''}
+                      </option>
                     ))}
                   </select>
+                  {formData.linkedAccountCode && (
+                    <div className="mt-1.5 flex items-center gap-1.5">
+                      <span className="text-[9px] font-black text-slate-500">{isAr ? 'سيتم تسجيل على حساب:' : 'Will record on account:'}</span>
+                      <span className="font-mono font-black text-[#d4af37] text-[10px] bg-[#d4af37]/10 border border-[#d4af37]/20 px-2 py-0.5 rounded">{formData.linkedAccountCode}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {formData.category === 'salary' && (
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'الشهر المستحق للراتب *' : 'Salary Month *'}</label>
+                  <input 
+                    required
+                    type="month"
+                    value={formData.salaryMonth}
+                    onChange={(e) => setFormData({...formData, salaryMonth: e.target.value})}
+                    className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold font-mono text-center"
+                  />
                 </div>
               )}
 
@@ -1018,6 +1270,53 @@ export default function Expenses() {
                     placeholder="Guangzhou Tech Group" 
                     className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start"
                   />
+                </div>
+              )}
+
+              {formData.category !== 'custody' && formData.category !== 'wages' && formData.category !== 'salary' && (
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
+                    {isAr ? 'ربط بحساب مالي مخصص (اختياري)' : 'Link to Custom Account (Optional)'}
+                  </label>
+                  <select 
+                    value={formData.linkedAccountId} 
+                    onChange={(e) => {
+                      const acc = financialAccounts.find(a => a.id === e.target.value);
+                      if (acc) {
+                        setFormData({
+                          ...formData, 
+                          linkedAccountId: acc.id,
+                          linkedAccountCode: acc.accountCode || '',
+                          linkedAccountEntityType: acc.entityType || '',
+                          recipientId: acc.entityId || '',
+                          recipientName: acc.entityName || ''
+                        });
+                      } else {
+                        setFormData({
+                          ...formData,
+                          linkedAccountId: '',
+                          linkedAccountCode: '',
+                          linkedAccountEntityType: '',
+                          recipientId: '',
+                          recipientName: ''
+                        });
+                      }
+                    }}
+                    className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer"
+                  >
+                    <option value="">{isAr ? '-- لا يوجد ربط (صرف عام) --' : '-- No Custom Link (General Outflow) --'}</option>
+                    {financialAccounts.map(a => (
+                      <option key={a.id} value={a.id}>
+                        [{a.accountCode}] {a.entityName} ({isAr ? (a.entityType === 'customer' ? 'عميل' : a.entityType === 'courier' ? 'مندوب' : 'موظف') : a.entityType})
+                      </option>
+                    ))}
+                  </select>
+                  {formData.linkedAccountCode && (
+                    <div className="mt-1.5 flex items-center gap-1.5">
+                      <span className="text-[9px] font-black text-slate-550">{isAr ? 'سيتم الربط بالحساب المالي:' : 'Will link to financial account:'}</span>
+                      <span className="font-mono font-black text-[#d4af37] text-[10px] bg-[#d4af37]/10 border border-[#d4af37]/20 px-2 py-0.5 rounded">{formData.linkedAccountCode}</span>
+                    </div>
+                  )}
                 </div>
               )}
 

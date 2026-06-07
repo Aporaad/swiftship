@@ -7,6 +7,7 @@ import { notificationService } from '../services/notificationService';
 import { activityLogService } from '../services/activityLogService';
 import { whatsappService } from '../services/whatsappService';
 import ConfirmModal from '../components/ConfirmModal';
+import { financialAccountService } from '../services/financialAccountService';
 import { 
   Plus, Search, Edit2, Truck, Activity, Trash2, DollarSign, 
   CreditCard, Printer, Calculator, Package, MapPin, X, AlertCircle, RefreshCw, UserPlus, Eye
@@ -195,7 +196,8 @@ export default function Orders() {
     // Prepayment info
     amountPaid: 0,
     paymentMethod: 'Cash',
-    notes: ''
+    notes: '',
+    deductSourcingCostFromCourier: false
   });
 
   // Edit / Update State 
@@ -649,7 +651,8 @@ export default function Orders() {
     doc.setFont('Helvetica', 'bold');
     doc.setTextColor(15, 15, 18);
     doc.text('Total Invoice (YER):', 114, yIdx + offset);
-    doc.text(`${Math.ceil(parseFloat(order.totalCostYER) + (parseFloat(order.deliveryCourierFee) || 0)).toLocaleString()} YER`, 170, yIdx + offset);
+    const invoiceTotalYER = parseFloat(order.amountRemaining || 0) + parseFloat(order.amountPaid || 0);
+    doc.text(`${Math.ceil(invoiceTotalYER).toLocaleString()} YER`, 170, yIdx + offset);
 
     // Paid & Remaining text
     doc.setFont('Helvetica', 'normal');
@@ -718,17 +721,22 @@ export default function Orders() {
     
     // Convert to YER for payment
     const exchange = formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER;
-    const totalOrderYER = totalOrderSAR * exchange;
+    const baseTotalOrderYER = totalOrderSAR * exchange;
 
     // Delivery courier fee (flat fee in YER)
     const deliveryCourierFee = parseFloat(formData.deliveryCourierFee as any) || 0;
 
-    // Remaining in YER: Total in YER + Delivery courier fee in YER - Amount Paid
+    // The grand total YER includes everything.
+    const totalOrderYER = baseTotalOrderYER + deliveryCourierFee;
+
+    // Remaining in YER: Total in YER (which includes delivery fee) - Amount Paid
     const valPaid = parseFloat(formData.amountPaid as any) || 0;
-    const remainingYER = (totalOrderYER + deliveryCourierFee) - valPaid;
+    const remainingYER = totalOrderYER - valPaid;
 
     // Profit split: Saudi partner gets dynamic percentage from courier record, ALX company gets remaining
-    const rawProfitSAR = shippingCostSAR + parseFloat(formData.packagingFee || 0) - (formData.orderSourceType === 'Factory' ? (totalWeight * 10) : 0); // hypothetical expenses
+    // إجمالي أرباح الطلب = قيمة بيع العميل - تكلفة الشراء - الشحن الدولي - الرسوم
+    const fees = bankCommValue + parseFloat(formData.packagingFee as any || 0) - couponValue;
+    const rawProfitSAR = totalOrderSAR - totalProductsCostWithAdjustments - shippingsCostSum - fees;
     
     // Fetch Saudi courier dynamic rate (default to 30%)
     const saudiCourier = couriers.find(c => c.id === formData.shippingCourierId);
@@ -846,6 +854,168 @@ export default function Orders() {
 
       await addDoc(collection(db, 'orders'), payload);
 
+      // --- Financial Account Impact ---
+      const customerRecord = customers.find(c => c.id === formData.customerId);
+      const linkedAccountId = customerRecord?.financialAccountId;
+      const linkedAccountCode = customerRecord?.financialAccountCode;
+
+      if (linkedAccountId) {
+        try {
+          const totalBilledOriginal = currentCalcs.totalOrderYER;
+          const convertedOrderAmount = financialAccountService.convertToDefaultCurrency(
+            totalBilledOriginal,
+            'YER',
+            settings.currency || 'YER',
+            { USD: formData.exchangeRateUSD, SAR: formData.exchangeRateYER }
+          );
+
+          await financialAccountService.recordTransaction(linkedAccountId, {
+            accountId: linkedAccountId,
+            accountCode: linkedAccountCode || '',
+            entityType: 'customer',
+            entityId: formData.customerId,
+            entityName: formData.customerName,
+            type: 'Debit', // Debiting customer for the total order amount
+            amount: convertedOrderAmount,
+            amountOriginal: totalBilledOriginal,
+            currencyOriginal: 'YER',
+            description: isAr ? `قيد قيمة الطلب رقم: ${orderNumber}` : `Charge for order: ${orderNumber}`,
+            refNumber: orderNumber,
+            module: 'order',
+            createdByUid: auth.currentUser?.uid || 'system',
+            createdByName: profile?.fullName || 'Root Admin',
+            createdAt: Date.now()
+          });
+
+          const paidVal = parseFloat(formData.amountPaid as any) || 0;
+          if (paidVal > 0) {
+            const convertedPaid = financialAccountService.convertToDefaultCurrency(
+              paidVal,
+              'YER',
+              settings.currency || 'YER',
+              { USD: formData.exchangeRateUSD, SAR: formData.exchangeRateYER }
+            );
+
+            await financialAccountService.recordTransaction(linkedAccountId, {
+              accountId: linkedAccountId,
+              accountCode: linkedAccountCode || '',
+              entityType: 'customer',
+              entityId: formData.customerId,
+              entityName: formData.customerName,
+              type: 'Credit', // Crediting customer for downpayment
+              amount: convertedPaid,
+              amountOriginal: paidVal,
+              currencyOriginal: 'YER',
+              description: isAr ? `دفعة مقدمة للطلب رقم: ${orderNumber}` : `Down payment for order: ${orderNumber}`,
+              refNumber: orderNumber,
+              module: 'payment',
+              createdByUid: auth.currentUser?.uid || 'system',
+              createdByName: profile?.fullName || 'Root Admin',
+              createdAt: Date.now()
+            });
+          }
+        } catch (txErr) {
+          console.error('[Orders] Error registering financial account transactions:', txErr);
+        }
+      }
+
+      // Ensure system accounts exist
+      let systemAccs: Record<string, string> = {};
+      try {
+        systemAccs = await financialAccountService.ensureSystemAccounts(settings.currency || 'SAR');
+      } catch (err) {
+        console.error('Could not ensure system accounts:', err);
+      }
+
+      const sourcingCostConverted = financialAccountService.convertToDefaultCurrency(
+        currentCalcs.totalProductsCostWithAdjustments,
+        'SAR',
+        settings.currency || 'YER',
+        { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+      );
+
+      if (formData.deductSourcingCostFromCourier && formData.shippingCourierId) {
+        const saudiCourier = couriers.find(c => c.id === formData.shippingCourierId);
+        if (saudiCourier && saudiCourier.financialAccountId) {
+          try {
+            await financialAccountService.recordTransaction(saudiCourier.financialAccountId, {
+              accountId: saudiCourier.financialAccountId,
+              accountCode: saudiCourier.financialAccountCode || '',
+              entityType: 'courier',
+              entityId: saudiCourier.id,
+              entityName: saudiCourier.fullName,
+              type: 'Debit',
+              amount: sourcingCostConverted,
+              amountOriginal: currentCalcs.totalProductsCostWithAdjustments,
+              currencyOriginal: 'SAR',
+              description: isAr ? `خصم تكاليف المنتجات الأصلية للطلب: ${orderNumber}` : `Sourcing products cost for order: ${orderNumber}`,
+              refNumber: orderNumber,
+              module: 'expense',
+              createdByUid: auth.currentUser?.uid || 'system',
+              createdByName: profile?.fullName || 'Root Admin',
+              createdAt: Date.now()
+            });
+          } catch (e) {
+            console.error('Failed to deduct sourcing from courier', e);
+          }
+        }
+      } else if (systemAccs['sys_sourcing_cost']) {
+         // Debit Sourcing Costs Account (Instead of Courier)
+         try {
+            await financialAccountService.recordTransaction(systemAccs['sys_sourcing_cost'], {
+              accountId: systemAccs['sys_sourcing_cost'],
+              accountCode: 'EXP-SRC',
+              entityType: 'system',
+              entityId: 'sys_sourcing_cost',
+              entityName: 'حساب تكاليف الاستيراد',
+              type: 'Debit',
+              amount: sourcingCostConverted,
+              amountOriginal: currentCalcs.totalProductsCostWithAdjustments,
+              currencyOriginal: 'SAR',
+              description: isAr ? `تكلفة شراء منتجات الطلب: ${orderNumber}` : `Sourcing products cost for order: ${orderNumber}`,
+              refNumber: orderNumber,
+              module: 'expense',
+              createdByUid: auth.currentUser?.uid || 'system',
+              createdByName: profile?.fullName || 'Root Admin',
+              createdAt: Date.now()
+            });
+         } catch (e) {
+            console.error('Failed to deduct sourcing from system account', e);
+         }
+      }
+
+      // Record Company Profit directly
+      if (currentCalcs.profitCompanySAR > 0 && systemAccs['sys_profit_account']) {
+        try {
+          const profitConverted = financialAccountService.convertToDefaultCurrency(
+            currentCalcs.profitCompanySAR,
+            'SAR',
+            settings.currency || 'YER',
+            { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+          );
+
+          await financialAccountService.recordTransaction(systemAccs['sys_profit_account'], {
+              accountId: systemAccs['sys_profit_account'],
+              accountCode: 'REV-PRFT',
+              entityType: 'system',
+              entityId: 'sys_profit_account',
+              entityName: 'حساب أرباح الشركة',
+              type: 'Credit', // Credit for Revenue/Profit
+              amount: profitConverted,
+              amountOriginal: currentCalcs.profitCompanySAR,
+              currencyOriginal: 'SAR',
+              description: isAr ? `صافي أرباح الطلب: ${orderNumber}` : `Company profit for order: ${orderNumber}`,
+              refNumber: orderNumber,
+              module: 'order',
+              createdByUid: auth.currentUser?.uid || 'system',
+              createdByName: profile?.fullName || 'Root Admin',
+              createdAt: Date.now()
+          });
+        } catch (e) {
+           console.error('Failed to log company profit', e);
+        }
+      }
+
       // Log the order creation to activity log
       activityLogService.log('add_order', payload.orderNumber || 'New Order', {
         customer: payload.customerName,
@@ -871,7 +1041,7 @@ export default function Orders() {
 
       // Automatically dispatch simulated API dispatch status for WhatsApp + SMS in logs/panel
       const remainingVal = parseFloat(String(payload.amountRemaining || '0'));
-      const totalCostYERVal = parseFloat(String(payload.totalCostYER || '0'));
+      const totalCostYERVal = parseFloat(String(payload.amountPaid || '0')) + parseFloat(String(payload.amountRemaining || '0'));
       const smsMessage = isAr 
         ? `عزيزنا العميل ${payload.customerName}، تم تأكيد طلبك رقم: (${orderNumber}) بنجاح. حالة الشحنة: (${payload.orderStatus}). تتبع مع: ${payload.shippingCompany}، تتبع رقم: ${payload.trackingNumber || 'قيد الرفع'}. القيمة الإجمالية: ${totalCostYERVal.toLocaleString()} YER، المتبقي: ${remainingVal.toLocaleString()} YER.`
         : `Dear ${payload.customerName}, your order ${orderNumber} has been confirmed. Status: ${payload.orderStatus}. Track with ${payload.shippingCompany}: ${payload.trackingNumber || 'Pending'}. Total: ${totalCostYERVal.toLocaleString()} YER, Remaining: ${remainingVal.toLocaleString()} YER.`;
@@ -1188,14 +1358,52 @@ export default function Orders() {
     }
 
     try {
-      await updateDoc(doc(db, 'orders', selectedOrder.id), {
-        amountPaid: newPaid,
-        amountRemaining: Math.max(0, remaining),
-        paymentStatus: targetStatus,
-        updatedAt: Date.now()
-      });
+        await updateDoc(doc(db, 'orders', selectedOrder.id), {
+          amountPaid: newPaid,
+          amountRemaining: Math.max(0, remaining),
+          paymentStatus: targetStatus,
+          updatedAt: Date.now()
+        });
 
-      activityLogService.log('add_payment', selectedOrder.orderNumber || selectedOrder.id, {
+        // --- Financial Account Impact ---
+        const customerRecord = customers.find(c => c.id === selectedOrder.customerId);
+        const linkedAccountId = customerRecord?.financialAccountId;
+        const linkedAccountCode = customerRecord?.financialAccountCode;
+
+        if (linkedAccountId) {
+          try {
+            const convertedPaid = financialAccountService.convertToDefaultCurrency(
+              paidVal,
+              'YER',
+              settings.currency || 'YER',
+              { USD: selectedOrder.exchangeRateUSD || settings.exchangeRateUSD, SAR: selectedOrder.exchangeRateYER || settings.exchangeRateSAR }
+            );
+
+            await financialAccountService.recordTransaction(linkedAccountId, {
+              accountId: linkedAccountId,
+              accountCode: linkedAccountCode || '',
+              entityType: 'customer',
+              entityId: selectedOrder.customerId,
+              entityName: selectedOrder.customerName,
+              type: 'Credit', // Crediting customer for payment received
+              amount: convertedPaid,
+              amountOriginal: paidVal,
+              currencyOriginal: 'YER',
+              description: isAr 
+                ? `دفعة للطلب رقم: ${selectedOrder.orderNumber} (طريقة الدفع: ${paymentFormData.method})` 
+                : `Payment for order: ${selectedOrder.orderNumber} (via ${paymentFormData.method})`,
+              refNumber: selectedOrder.orderNumber,
+              module: 'payment',
+              createdByUid: auth.currentUser?.uid || 'system',
+              createdByName: profile?.fullName || 'Root Admin',
+              createdAt: Date.now()
+            });
+          } catch (txErr) {
+            console.error('[Orders] Error registering payment transaction on financial account:', txErr);
+          }
+        }
+
+        activityLogService.log('add_payment', selectedOrder.orderNumber || selectedOrder.id, {
         amount: paidVal,
         method: paymentFormData.method,
         remaining: Math.max(0, remaining)
@@ -1239,8 +1447,8 @@ export default function Orders() {
     if (!selectedOrder) return;
 
     try {
-      const isDelivered = updateFormData.orderStatus === 'تم التسليم';
-      const wasDelivered = selectedOrder.orderStatus === 'تم التسليم';
+      const isDelivered = ['تم التسليم', 'مع المندوب للتوصيل'].includes(updateFormData.orderStatus);
+      const wasDelivered = ['تم التسليم', 'مع المندوب للتوصيل'].includes(selectedOrder.orderStatus || '');
       const remainingVal = parseFloat(selectedOrder.amountRemaining || '0');
       const courierId = updateFormData.deliveryCourierId || selectedOrder.deliveryCourierId;
 
@@ -1254,14 +1462,29 @@ export default function Orders() {
         
         const courierRecord = couriers.find(c => c.id === courierId);
         const courierName = courierRecord ? courierRecord.fullName : (isAr ? 'مندوب توصيل' : 'Delivery Courier');
+        const linkedAccountId = courierRecord?.financialAccountId || null;
+        const linkedAccountCode = courierRecord?.financialAccountCode || null;
+
+        const convertedRemainingVal = financialAccountService.convertToDefaultCurrency(
+          remainingVal,
+          'YER',
+          settings.currency || 'YER',
+          { USD: selectedOrder.exchangeRateUSD || settings.exchangeRateUSD, SAR: selectedOrder.exchangeRateYER || settings.exchangeRateSAR }
+        );
 
         const custodyPayload = {
           expenseNumber,
+          category: 'custody',
           type: 'Custody',
           amount: remainingVal,
           currency: 'YER',
+          amountInDefaultCurrency: convertedRemainingVal,
           recipientId: courierId,
+          recipientEntityId: courierId,
+          recipientEntityType: 'courier',
           recipientName: courierName,
+          linkedAccountId,
+          linkedAccountCode,
           notes: isAr
             ? `عهدة تلقائية مرحلة من تسليم الطلب رقم: ${selectedOrder.orderNumber}`
             : `Auto-custody generated from delivery of order: ${selectedOrder.orderNumber}`,
@@ -1274,12 +1497,220 @@ export default function Orders() {
 
         await addDoc(collection(db, 'expenses'), custodyPayload);
 
+        // --- Courier Financial Account Transaction ---
+        if (linkedAccountId) {
+          try {
+            await financialAccountService.recordTransaction(linkedAccountId, {
+              accountId: linkedAccountId,
+              accountCode: linkedAccountCode || '',
+              entityType: 'courier',
+              entityId: courierId,
+              entityName: courierName,
+              type: 'Debit', // Charging custody to courier
+              amount: convertedRemainingVal,
+              amountOriginal: remainingVal,
+              currencyOriginal: 'YER',
+              description: isAr
+                ? `عهدة تلقائية مرحلة من تسليم الطلب رقم: ${selectedOrder.orderNumber}`
+                : `Auto-custody generated from delivery of order: ${selectedOrder.orderNumber}`,
+              refNumber: expenseNumber,
+              module: 'custody',
+              createdByUid: auth.currentUser?.uid || 'system',
+              createdByName: profile?.fullName || 'System Auto-Custody',
+              createdAt: Date.now()
+            });
+          } catch (txErr) {
+            console.warn('[Orders] Could not record auto-custody on courier financial account:', txErr);
+          }
+        }
+
+        // --- Customer Financial Account Transaction ---
+        const customerRecord = customers.find(c => c.id === selectedOrder.customerId);
+        if (customerRecord?.financialAccountId) {
+          try {
+            await financialAccountService.recordTransaction(customerRecord.financialAccountId, {
+              accountId: customerRecord.financialAccountId,
+              accountCode: customerRecord.financialAccountCode || '',
+              entityType: 'customer',
+              entityId: selectedOrder.customerId,
+              entityName: selectedOrder.customerName,
+              type: 'Credit', // Customer paid the courier
+              amount: convertedRemainingVal,
+              amountOriginal: remainingVal,
+              currencyOriginal: 'YER',
+              description: isAr
+                ? `تسوية تلقائية لتسليم الطلب رقم: ${selectedOrder.orderNumber} (مع المندوب)`
+                : `Auto credit for delivery of order: ${selectedOrder.orderNumber} (via courier)`,
+              refNumber: selectedOrder.orderNumber,
+              module: 'custody_payment',
+              createdByUid: auth.currentUser?.uid || 'system',
+              createdByName: profile?.fullName || 'System Auto-Custody',
+              createdAt: Date.now()
+            });
+          } catch (txErr) {
+            console.warn('[Orders] Could not record auto-payment on customer financial account:', txErr);
+          }
+        }
+
         // Update order payment status to paid since it is now in the courier's custody
         extraUpdateFields = {
           amountPaid: parseFloat(selectedOrder.amountPaid || '0') + remainingVal,
           amountRemaining: 0,
           paymentStatus: 'Paid'
         };
+      }
+
+      // Create auto-wage for Delivery Courier
+      const deliveryFee = parseFloat(selectedOrder.deliveryCourierFee || updateFormData.deliveryCourierFee || '0');
+      if (isDelivered && !wasDelivered && courierId && deliveryFee > 0) {
+        const YY = String(new Date().getFullYear()).slice(-2);
+        const MM = String(new Date().getMonth() + 1).padStart(2, '0');
+        const wageNumber = `WGE-${YY}${MM}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+        const courierRecord = couriers.find(c => c.id === courierId);
+        const courierName = courierRecord ? courierRecord.fullName : (isAr ? 'مندوب توصيل' : 'Delivery Courier');
+        const linkedAccountId = courierRecord?.financialAccountId || null;
+        const linkedAccountCode = courierRecord?.financialAccountCode || null;
+
+        const convertedFee = financialAccountService.convertToDefaultCurrency(
+          deliveryFee,
+          'YER',
+          settings.currency || 'YER',
+          { USD: selectedOrder.exchangeRateUSD || settings.exchangeRateUSD, SAR: selectedOrder.exchangeRateYER || settings.exchangeRateSAR }
+        );
+
+        const wagePayload = {
+          expenseNumber: wageNumber,
+          category: 'wage',
+          type: 'Wage',
+          amount: deliveryFee,
+          currency: 'YER',
+          amountInDefaultCurrency: convertedFee,
+          recipientId: courierId,
+          recipientEntityId: courierId,
+          recipientEntityType: 'courier',
+          recipientName: courierName,
+          linkedAccountId,
+          linkedAccountCode,
+          notes: isAr
+            ? `أجور توصيل تلقائية لتسليم الطلب رقم: ${selectedOrder.orderNumber}`
+            : `Auto-wage for delivery of order: ${selectedOrder.orderNumber}`,
+          status: 'Approved',
+          createdByUid: auth.currentUser?.uid || 'system',
+          createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
+          createdByName: profile?.fullName || 'System Auto-Wage',
+          createdAt: Date.now()
+        };
+
+        await addDoc(collection(db, 'expenses'), wagePayload);
+
+        if (linkedAccountId) {
+          try {
+            await financialAccountService.recordTransaction(linkedAccountId, {
+              accountId: linkedAccountId,
+              accountCode: linkedAccountCode || '',
+              entityType: 'courier',
+              entityId: courierId,
+              entityName: courierName,
+              type: 'Credit',
+              amount: convertedFee,
+              amountOriginal: deliveryFee,
+              currencyOriginal: 'YER',
+              description: isAr
+                ? `أجور توصيل تلقائية لتسليم الطلب رقم: ${selectedOrder.orderNumber}`
+                : `Auto-wage for delivery of order: ${selectedOrder.orderNumber}`,
+              refNumber: wageNumber,
+              module: 'expense',
+              createdByUid: auth.currentUser?.uid || 'system',
+              createdByName: profile?.fullName || 'System Auto-Wage',
+              createdAt: Date.now()
+            });
+          } catch (txErr) {
+            console.warn('[Orders] Could not record delivery wage on courier financial account:', txErr);
+          }
+        }
+      }
+
+      // Create auto-wage for Collection Courier
+      const isArrivedYemen = updateFormData.orderStatus === 'وصل مركز التوزيع في اليمن';
+      const wasArrivedYemen = selectedOrder.orderStatus === 'وصل مركز التوزيع في اليمن';
+      const shippingCourierId = updateFormData.shippingCourierId || selectedOrder.shippingCourierId;
+      
+      if (isArrivedYemen && !wasArrivedYemen && shippingCourierId) {
+        const courierRecord = couriers.find(c => c.id === shippingCourierId);
+        
+        if (courierRecord && courierRecord.commissionRate && courierRecord.commissionRate > 0) {
+          const exchangeRate = parseFloat(selectedOrder.exchangeRateYER || settings.exchangeRateYER || 390);
+          const commissionProfit = parseFloat(selectedOrder.profitSaudiSAR || '0') * exchangeRate;
+          
+          if (commissionProfit > 0) {
+             const YY = String(new Date().getFullYear()).slice(-2);
+             const MM = String(new Date().getMonth() + 1).padStart(2, '0');
+             const commissionNumber = `COM-${YY}${MM}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+             const courierName = courierRecord.fullName;
+             const linkedAccountId = courierRecord.financialAccountId || null;
+             const linkedAccountCode = courierRecord.financialAccountCode || null;
+
+             const convertedCommission = financialAccountService.convertToDefaultCurrency(
+               commissionProfit,
+               'YER',
+               settings.currency || 'YER',
+               { USD: selectedOrder.exchangeRateUSD || settings.exchangeRateUSD, SAR: selectedOrder.exchangeRateYER || settings.exchangeRateSAR }
+             );
+
+             const commissionPayload = {
+               expenseNumber: commissionNumber,
+               category: 'wage',
+               type: 'Wage',
+               amount: commissionProfit,
+               currency: 'YER',
+               amountInDefaultCurrency: convertedCommission,
+               recipientId: shippingCourierId,
+               recipientEntityId: shippingCourierId,
+               recipientEntityType: 'courier',
+               recipientName: courierName,
+               linkedAccountId,
+               linkedAccountCode,
+               notes: isAr
+                 ? `عمولة شحن تلقائية (${courierRecord.commissionRate}%) للطلب رقم: ${selectedOrder.orderNumber}`
+                 : `Auto-commission (${courierRecord.commissionRate}%) for order: ${selectedOrder.orderNumber}`,
+               status: 'Approved',
+               createdByUid: auth.currentUser?.uid || 'system',
+               createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
+               createdByName: profile?.fullName || 'System Auto-Commission',
+               createdAt: Date.now()
+             };
+
+             await addDoc(collection(db, 'expenses'), commissionPayload);
+
+             if (linkedAccountId) {
+               try {
+                 await financialAccountService.recordTransaction(linkedAccountId, {
+                   accountId: linkedAccountId,
+                   accountCode: linkedAccountCode || '',
+                   entityType: 'courier',
+                   entityId: shippingCourierId,
+                   entityName: courierName,
+                   type: 'Credit',
+                   amount: convertedCommission,
+                   amountOriginal: commissionProfit,
+                   currencyOriginal: 'YER',
+                   description: isAr
+                     ? `عمولة شحن تلقائية (${courierRecord.commissionRate}%) للطلب رقم: ${selectedOrder.orderNumber}`
+                     : `Auto-commission (${courierRecord.commissionRate}%) for order: ${selectedOrder.orderNumber}`,
+                   refNumber: commissionNumber,
+                   module: 'expense',
+                   createdByUid: auth.currentUser?.uid || 'system',
+                   createdByName: profile?.fullName || 'System Auto-Commission',
+                   createdAt: Date.now()
+                 });
+               } catch (txErr) {
+                 console.warn('[Orders] Could not record commission wage on collection courier financial account:', txErr);
+               }
+             }
+          }
+        }
       }
 
       await updateDoc(doc(db, 'orders', selectedOrder.id), {
@@ -1465,13 +1896,283 @@ export default function Orders() {
     if (selectedOrderIds.length === 0) return;
     setIsBatchUpdating(true);
     try {
-      const promises = selectedOrderIds.map(orderId => {
+      const promises = selectedOrderIds.map(async (orderId) => {
         const defaultLocation = newStatus === 'وصل مستودع السعودية' ? 'مستودع السعودية للتعبئة' : 
                                 newStatus === 'وصل مركز التوزيع في اليمن' ? 'مستودع صنعاء الرئيسي' : 'قيد النقل';
-        return updateDoc(doc(db, 'orders', orderId), {
+        
+        const ord = orders.find(o => o.id === orderId);
+        if (!ord) return;
+
+        const wasDelivered = ['تم التسليم', 'مع المندوب للتوصيل'].includes(ord.orderStatus || '');
+        const isDelivered = ['تم التسليم', 'مع المندوب للتوصيل'].includes(newStatus);
+        const remainingVal = parseFloat(ord.amountRemaining || '0');
+        const courierId = ord.deliveryCourierId;
+
+        let extraUpdateFields: any = {};
+
+        if (isDelivered && !wasDelivered && remainingVal > 0 && courierId) {
+          // Create auto-custody for courier
+          const YY = String(new Date().getFullYear()).slice(-2);
+          const MM = String(new Date().getMonth() + 1).padStart(2, '0');
+          const expenseNumber = `EXP-${YY}${MM}-${Math.floor(1000 + Math.random() * 9000)}`;
+          
+          const courierRecord = couriers.find(c => c.id === courierId);
+          const courierName = courierRecord ? courierRecord.fullName : (isAr ? 'مندوب توصيل' : 'Delivery Courier');
+          const linkedAccountId = courierRecord?.financialAccountId || null;
+          const linkedAccountCode = courierRecord?.financialAccountCode || null;
+
+          const convertedRemainingVal = financialAccountService.convertToDefaultCurrency(
+            remainingVal,
+            'YER',
+            settings.currency || 'YER',
+            { USD: ord.exchangeRateUSD || settings.exchangeRateUSD, SAR: ord.exchangeRateYER || settings.exchangeRateSAR }
+          );
+
+          const custodyPayload = {
+            expenseNumber,
+            category: 'custody',
+            type: 'Custody',
+            amount: remainingVal,
+            currency: 'YER',
+            amountInDefaultCurrency: convertedRemainingVal,
+            recipientId: courierId,
+            recipientEntityId: courierId,
+            recipientEntityType: 'courier',
+            recipientName: courierName,
+            linkedAccountId,
+            linkedAccountCode,
+            notes: isAr
+              ? `عهدة تلقائية مرحلة من تسليم الطلب رقم: ${ord.orderNumber}`
+              : `Auto-custody generated from delivery of order: ${ord.orderNumber}`,
+            status: 'Pending',
+            createdByUid: auth.currentUser?.uid || 'system',
+            createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
+            createdByName: profile?.fullName || 'System Auto-Custody',
+            createdAt: Date.now()
+          };
+
+          await addDoc(collection(db, 'expenses'), custodyPayload);
+
+          // --- Courier Financial Account Transaction ---
+          if (linkedAccountId) {
+            try {
+              await financialAccountService.recordTransaction(linkedAccountId, {
+                accountId: linkedAccountId,
+                accountCode: linkedAccountCode || '',
+                entityType: 'courier',
+                entityId: courierId,
+                entityName: courierName,
+                type: 'Debit', // Charging custody to courier
+                amount: convertedRemainingVal,
+                amountOriginal: remainingVal,
+                currencyOriginal: 'YER',
+                description: isAr
+                  ? `عهدة تلقائية مرحلة من تسليم الطلب رقم: ${ord.orderNumber}`
+                  : `Auto-custody generated from delivery of order: ${ord.orderNumber}`,
+                refNumber: expenseNumber,
+                module: 'custody',
+                createdByUid: auth.currentUser?.uid || 'system',
+                createdByName: profile?.fullName || 'System Auto-Custody',
+                createdAt: Date.now()
+              });
+            } catch (txErr) {
+              console.warn('[Orders] Could not record auto-custody on courier financial account:', txErr);
+            }
+          }
+
+          // --- Customer Financial Account Transaction ---
+          const customerRecord = customers.find(c => c.id === ord.customerId);
+          if (customerRecord?.financialAccountId) {
+            try {
+              await financialAccountService.recordTransaction(customerRecord.financialAccountId, {
+                accountId: customerRecord.financialAccountId,
+                accountCode: customerRecord.financialAccountCode || '',
+                entityType: 'customer',
+                entityId: ord.customerId,
+                entityName: ord.customerName,
+                type: 'Credit', // Customer paid the courier
+                amount: convertedRemainingVal,
+                amountOriginal: remainingVal,
+                currencyOriginal: 'YER',
+                description: isAr
+                  ? `تسوية تلقائية لتسليم الطلب رقم: ${ord.orderNumber} (مع المندوب)`
+                  : `Auto credit for delivery of order: ${ord.orderNumber} (via courier)`,
+                refNumber: ord.orderNumber,
+                module: 'custody_payment',
+                createdByUid: auth.currentUser?.uid || 'system',
+                createdByName: profile?.fullName || 'System Auto-Custody',
+                createdAt: Date.now()
+              });
+            } catch (txErr) {
+              console.warn('[Orders] Could not record auto-payment on customer financial account:', txErr);
+            }
+          }
+
+          extraUpdateFields = {
+            amountPaid: parseFloat(ord.amountPaid || '0') + remainingVal,
+            amountRemaining: 0,
+            paymentStatus: 'Paid'
+          };
+        }
+
+        // Create auto-wage for Delivery Courier
+        const deliveryFee = parseFloat(ord.deliveryCourierFee || '0');
+        if (isDelivered && !wasDelivered && courierId && deliveryFee > 0) {
+          const YY = String(new Date().getFullYear()).slice(-2);
+          const MM = String(new Date().getMonth() + 1).padStart(2, '0');
+          const wageNumber = `WGE-${YY}${MM}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+          const courierRecord = couriers.find(c => c.id === courierId);
+          const courierName = courierRecord ? courierRecord.fullName : (isAr ? 'مندوب توصيل' : 'Delivery Courier');
+          const linkedAccountId = courierRecord?.financialAccountId || null;
+          const linkedAccountCode = courierRecord?.financialAccountCode || null;
+
+          const convertedFee = financialAccountService.convertToDefaultCurrency(
+            deliveryFee,
+            'YER',
+            settings.currency || 'YER',
+            { USD: ord.exchangeRateUSD || settings.exchangeRateUSD, SAR: ord.exchangeRateYER || settings.exchangeRateSAR }
+          );
+
+          const wagePayload = {
+            expenseNumber: wageNumber,
+            category: 'wage',
+            type: 'Wage',
+            amount: deliveryFee,
+            currency: 'YER',
+            amountInDefaultCurrency: convertedFee,
+            recipientId: courierId,
+            recipientEntityId: courierId,
+            recipientEntityType: 'courier',
+            recipientName: courierName,
+            linkedAccountId,
+            linkedAccountCode,
+            notes: isAr
+              ? `أجور توصيل تلقائية لتسليم الطلب رقم: ${ord.orderNumber}`
+              : `Auto-wage for delivery of order: ${ord.orderNumber}`,
+            status: 'Approved',
+            createdByUid: auth.currentUser?.uid || 'system',
+            createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
+            createdByName: profile?.fullName || 'System Auto-Wage',
+            createdAt: Date.now()
+          };
+
+          await addDoc(collection(db, 'expenses'), wagePayload);
+
+          if (linkedAccountId) {
+            try {
+              await financialAccountService.recordTransaction(linkedAccountId, {
+                accountId: linkedAccountId,
+                accountCode: linkedAccountCode || '',
+                entityType: 'courier',
+                entityId: courierId,
+                entityName: courierName,
+                type: 'Credit',
+                amount: convertedFee,
+                amountOriginal: deliveryFee,
+                currencyOriginal: 'YER',
+                description: isAr
+                  ? `أجور توصيل تلقائية لتسليم الطلب رقم: ${ord.orderNumber}`
+                  : `Auto-wage for delivery of order: ${ord.orderNumber}`,
+                refNumber: wageNumber,
+                module: 'expense',
+                createdByUid: auth.currentUser?.uid || 'system',
+                createdByName: profile?.fullName || 'System Auto-Wage',
+                createdAt: Date.now()
+              });
+            } catch (txErr) {
+              console.warn('[Orders] Could not record delivery wage on courier financial account:', txErr);
+            }
+          }
+        }
+
+        // Create auto-wage for Collection Courier
+        const isArrivedYemen = newStatus === 'وصل مركز التوزيع في اليمن';
+        const wasArrivedYemen = ord.orderStatus === 'وصل مركز التوزيع في اليمن';
+        const shippingCourierId = ord.shippingCourierId;
+        
+        if (isArrivedYemen && !wasArrivedYemen && shippingCourierId) {
+          const courierRecord = couriers.find(c => c.id === shippingCourierId);
+          
+          if (courierRecord && courierRecord.commissionRate && courierRecord.commissionRate > 0) {
+            const exchangeRate = parseFloat(ord.exchangeRateYER || settings.exchangeRateYER || 390);
+            const commissionProfit = parseFloat(ord.profitSaudiSAR || '0') * exchangeRate;
+            
+            if (commissionProfit > 0) {
+               const YY = String(new Date().getFullYear()).slice(-2);
+               const MM = String(new Date().getMonth() + 1).padStart(2, '0');
+               const commissionNumber = `COM-${YY}${MM}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+               const courierName = courierRecord.fullName;
+               const linkedAccountId = courierRecord.financialAccountId || null;
+               const linkedAccountCode = courierRecord.financialAccountCode || null;
+
+               const convertedCommission = financialAccountService.convertToDefaultCurrency(
+                 commissionProfit,
+                 'YER',
+                 settings.currency || 'YER',
+                 { USD: ord.exchangeRateUSD || settings.exchangeRateUSD, SAR: ord.exchangeRateYER || settings.exchangeRateSAR }
+               );
+
+               const commissionPayload = {
+                 expenseNumber: commissionNumber,
+                 category: 'wage',
+                 type: 'Wage',
+                 amount: commissionProfit,
+                 currency: 'YER',
+                 amountInDefaultCurrency: convertedCommission,
+                 recipientId: shippingCourierId,
+                 recipientEntityId: shippingCourierId,
+                 recipientEntityType: 'courier',
+                 recipientName: courierName,
+                 linkedAccountId,
+                 linkedAccountCode,
+                 notes: isAr
+                   ? `عمولة شحن تلقائية (${courierRecord.commissionRate}%) للطلب رقم: ${ord.orderNumber}`
+                   : `Auto-commission (${courierRecord.commissionRate}%) for order: ${ord.orderNumber}`,
+                 status: 'Approved',
+                 createdByUid: auth.currentUser?.uid || 'system',
+                 createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
+                 createdByName: profile?.fullName || 'System Auto-Commission',
+                 createdAt: Date.now()
+               };
+
+               await addDoc(collection(db, 'expenses'), commissionPayload);
+
+               if (linkedAccountId) {
+                 try {
+                   await financialAccountService.recordTransaction(linkedAccountId, {
+                     accountId: linkedAccountId,
+                     accountCode: linkedAccountCode || '',
+                     entityType: 'courier',
+                     entityId: shippingCourierId,
+                     entityName: courierName,
+                     type: 'Credit',
+                     amount: convertedCommission,
+                     amountOriginal: commissionProfit,
+                     currencyOriginal: 'YER',
+                     description: isAr
+                       ? `عمولة شحن تلقائية (${courierRecord.commissionRate}%) للطلب رقم: ${ord.orderNumber}`
+                       : `Auto-commission (${courierRecord.commissionRate}%) for order: ${ord.orderNumber}`,
+                     refNumber: commissionNumber,
+                     module: 'expense',
+                     createdByUid: auth.currentUser?.uid || 'system',
+                     createdByName: profile?.fullName || 'System Auto-Commission',
+                     createdAt: Date.now()
+                   });
+                 } catch (txErr) {
+                   console.warn('[Orders] Could not record commission wage on collection courier financial account:', txErr);
+                 }
+               }
+            }
+          }
+        }
+
+        await updateDoc(doc(db, 'orders', orderId), {
           orderStatus: newStatus,
           locationYemen: defaultLocation,
-          updatedAt: Date.now()
+          updatedAt: Date.now(),
+          ...extraUpdateFields
         });
       });
       await Promise.all(promises);
@@ -1586,7 +2287,7 @@ export default function Orders() {
     doc.text('PENDING CASH BALANCE', 140, 51);
     
     // Calculate metrics
-    const totalRevenue = filteredOrdersList.reduce((sum, o) => sum + parseFloat(o.totalCostYER || 0), 0);
+    const totalRevenue = filteredOrdersList.reduce((sum, o) => sum + (parseFloat(o.amountPaid || 0) + parseFloat(o.amountRemaining || 0)), 0);
     const pendingBalance = filteredOrdersList.reduce((sum, o) => sum + parseFloat(o.amountRemaining || 0), 0);
     
     doc.setFontSize(11);
@@ -1662,7 +2363,7 @@ export default function Orders() {
       doc.text(transliteratedStatus, 105, yIdx);
       
       // Total Cost
-      const costRaw = parseFloat(ord.totalCostYER || 0);
+      const costRaw = parseFloat(ord.amountPaid || 0) + parseFloat(ord.amountRemaining || 0);
       doc.text(costRaw.toLocaleString(), 150, yIdx);
       
       // Remaining Bal
@@ -1723,7 +2424,7 @@ export default function Orders() {
         `"${o.customerPhone || ''}"`,
         `"${o.orderStatus || ''}"`,
         `"${o.orderSourceName || o.orderSourceType || ''}"`,
-        o.totalCostYER || 0,
+        (parseFloat(o.amountPaid || 0) + parseFloat(o.amountRemaining || 0)),
         o.amountPaid || 0,
         o.amountRemaining || 0
       ];
@@ -1762,7 +2463,7 @@ export default function Orders() {
     .sort((a, b) => {
       if (sortBy === 'date-desc') return (b.createdAt || 0) - (a.createdAt || 0);
       if (sortBy === 'date-asc') return (a.createdAt || 0) - (b.createdAt || 0);
-      if (sortBy === 'amount-desc') return (b.totalCostYER || 0) - (a.totalCostYER || 0);
+      if (sortBy === 'amount-desc') return ((parseFloat(b.amountPaid || 0) + parseFloat(b.amountRemaining || 0))) - ((parseFloat(a.amountPaid || 0) + parseFloat(a.amountRemaining || 0)));
       return 0;
     });
 
@@ -1932,7 +2633,18 @@ export default function Orders() {
                   {/* Customer */}
                   <td className="p-4 text-start">
                     <div className="flex flex-col">
-                      <span className="font-bold text-white text-xs">{ord.customerName}</span>
+                      <span 
+                        onClick={() => {
+                          if (ord.customerId) {
+                            window.dispatchEvent(new CustomEvent('open-entity-ledger', { 
+                              detail: { entityId: ord.customerId, entityType: 'customer' } 
+                            }));
+                          }
+                        }}
+                        className="font-bold text-white text-xs hover:text-[#d4af37] cursor-pointer underline decoration-dotted decoration-[#d4af37]/40 transition-colors"
+                      >
+                        {ord.customerName}
+                      </span>
                       <span className="text-[10px] font-mono text-slate-500 mt-0.5">{ord.customerPhone}</span>
                     </div>
                   </td>
@@ -1949,21 +2661,33 @@ export default function Orders() {
 
                   {/* Financial status */}
                   <td className="p-4 text-start">
-                    <div className="flex flex-col space-y-0.5">
-                      <div className="font-mono text-slate-200 font-semibold">
-                        {isAr ? 'الإجمالي: ' : 'Total: '}{parseFloat(ord.totalCostYER || 0).toLocaleString()} <span className="text-[10px] text-slate-500">YER</span>
-                      </div>
-                      <div className="font-mono text-emerald-400 text-[11px]">
-                        {isAr ? 'المدفوع: ' : 'Paid: '}{parseFloat(ord.amountPaid || 0).toLocaleString()} YER
-                      </div>
-                      {parseFloat(ord.amountRemaining || 0) > 0 ? (
-                        <div className="font-mono text-rose-450 text-[11px] font-bold">
-                          {isAr ? 'المتبقي: ' : 'Remaining: '}{parseFloat(ord.amountRemaining).toLocaleString()} YER
+                    {(() => {
+                      const paidTotal = parseFloat(ord.amountPaid || 0);
+                      const remainVal = parseFloat(ord.amountRemaining || 0);
+                      const totalFinal = paidTotal + remainVal;
+                      
+                      return (
+                        <div className="flex flex-col space-y-0.5">
+                          <div className="font-mono text-slate-200 font-semibold">
+                            {isAr ? 'الإجمالي: ' : 'Total: '}{Math.ceil(totalFinal).toLocaleString()} <span className="text-[10px] text-slate-500">YER</span>
+                          </div>
+                          <div className="font-mono text-emerald-400 text-[11px]">
+                            {isAr ? 'المدفوع: ' : 'Paid: '}{Math.ceil(paidTotal).toLocaleString()} YER
+                          </div>
+                          {Math.ceil(remainVal) > 0 ? (
+                            <div className="font-mono text-rose-450 text-[11px] font-bold">
+                              {isAr ? 'المتبقي: ' : 'Remaining: '}{Math.ceil(remainVal).toLocaleString()} YER
+                            </div>
+                          ) : Math.ceil(remainVal) < 0 ? (
+                             <div className="font-mono text-amber-500 text-[11px] font-bold">
+                              {isAr ? 'فائض حساب: ' : 'Overpaid: '}{Math.abs(Math.ceil(remainVal)).toLocaleString()} YER
+                            </div>
+                          ) : (
+                            <span className="text-[9px] bg-emerald-950/20 border border-emerald-800 text-emerald-400 px-1.5 py-0.5 rounded font-black max-w-max uppercase tracking-tighter mt-0.5">{isAr ? 'مسدد بالكامل' : 'Paid in Full'}</span>
+                          )}
                         </div>
-                      ) : (
-                        <span className="text-[9px] bg-emerald-950/20 border border-emerald-800 text-emerald-400 px-1.5 py-0.5 rounded font-black max-w-max uppercase tracking-tighter mt-0.5">{isAr ? 'مسدد بالكامل' : 'Paid in Full'}</span>
-                      )}
-                    </div>
+                      );
+                    })()}
                   </td>
 
                   {/* Actions */}
@@ -2094,14 +2818,33 @@ export default function Orders() {
 
           <div className="h-6 w-[1px] bg-slate-800"></div>
 
-          <button 
-            id="batch-deselect-btn"
-            onClick={() => setSelectedOrderIds([])}
-            disabled={isBatchUpdating}
-            className="text-xs text-rose-400 hover:text-rose-300 font-black cursor-pointer bg-slate-950 px-2.5 py-1 rounded-lg border border-rose-950/20 active:scale-95 transition"
-          >
-            {isAr ? 'إلغاء التحديد الكلي' : 'Deselect All'}
-          </button>
+          <div className="flex gap-2">
+            <button 
+              onClick={() => {
+                // A quick way to ensure data is forcefully synced
+                const btn = document.getElementById('batch-deselect-btn');
+                if (btn) {
+                  const originalText = btn.innerText;
+                  window.dispatchEvent(new Event('reload-orders'));
+                  setTimeout(() => window.location.reload(), 300);
+                }
+              }}
+              disabled={isBatchUpdating}
+              className="text-xs text-cyan-400 hover:text-cyan-300 font-black cursor-pointer bg-slate-950 px-2.5 py-1 rounded-lg border border-cyan-950/20 active:scale-95 transition flex items-center gap-1.5"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              {isAr ? 'تحديث البيانات' : 'Refresh Data'}
+            </button>
+
+            <button 
+              id="batch-deselect-btn"
+              onClick={() => setSelectedOrderIds([])}
+              disabled={isBatchUpdating}
+              className="text-xs text-rose-400 hover:text-rose-300 font-black cursor-pointer bg-slate-950 px-2.5 py-1 rounded-lg border border-rose-950/20 active:scale-95 transition"
+            >
+              {isAr ? 'إلغاء التحديد الكلي' : 'Deselect All'}
+            </button>
+          </div>
         </div>
       )}
 
@@ -2985,102 +3728,191 @@ export default function Orders() {
                       className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none font-mono text-[11px] text-center"
                     />
                   </div>
+
+                  <div className="md:col-span-2 mt-2">
+                    <label className="flex items-center gap-2 cursor-pointer bg-slate-900/40 p-3 rounded-xl border border-slate-800 hover:bg-slate-900 transition">
+                      <input 
+                        type="checkbox"
+                        checked={formData.deductSourcingCostFromCourier || false}
+                        onChange={(e) => setFormData({...formData, deductSourcingCostFromCourier: e.target.checked})}
+                        className="w-4 h-4 rounded border-slate-700 bg-slate-950 text-[#d4af37] focus:ring-0 focus:ring-offset-0 cursor-pointer accent-[#d4af37]"
+                      />
+                      <span className="text-[11px] font-bold text-slate-300">{isAr ? 'خصم تكاليف شراء المنتجات من حساب مندوب التجميع حالاً' : 'Deduct Orignal Products Cost from Collecting Courier Liability Now'}</span>
+                    </label>
+                  </div>
                 </div>
 
                 {/* Audit summary calculations details panel */}
-                <div className="p-4 bg-slate-955 rounded-2xl border border-slate-800 space-y-3.5 text-xs text-slate-350">
-                  <span className="text-[10px] text-slate-500 font-black block pb-1.5 border-b border-slate-800 uppercase tracking-wider">{isAr ? 'خلاصة كشف الحساب والتقرير اللوجيستي' : 'Audit Summary'}</span>
+                <div className="p-5 bg-slate-950 rounded-2xl border border-slate-800 shadow-xl space-y-4 text-xs mt-2 relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-[#d4af37]/5 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
                   
-                  <div className="flex justify-between">
-                    <span>{isAr ? 'إجمالي المنتجات المكتوبة:' : 'Cargo Subtotal:'}</span>
-                    <span className="font-mono text-white">{calcs.totalProductsCostWithAdjustments.toLocaleString()} SAR</span>
+                  <div className="flex items-center gap-2 pb-3 border-b border-slate-800/80">
+                    <Calculator className="w-4 h-4 text-[#d4af37]" />
+                    <span className="text-[11px] text-slate-300 font-extrabold uppercase tracking-widest">{isAr ? 'خلاصة كشف الحساب المالي (مفصل)' : 'Detailed Financial Audit Report'}</span>
                   </div>
-
-                  {formData.orderSourceType === 'Factory' && (
-                    <div className="flex justify-between">
-                      <span>{isAr ? 'الحجم والوزن الكلي:' : 'Cargo weight/CBM:'}</span>
-                      <span className="font-mono text-amber-400">
-                        {calcs.totalWeight} KG | {calcs.totalCBM} CBM
-                      </span>
-                    </div>
-                  )}
-
-                  <div className="flex justify-between">
-                    <span>{isAr ? 'تكاليف ومكسب النقل والشحن:' : 'Company Freight Service:'}</span>
-                    <span className="font-mono text-white">{calcs.shippingCostSAR.toLocaleString()} SAR</span>
-                  </div>
-
-                  {bankCommissionEnabled && (
-                    <div className="flex justify-between text-yellow-500/90">
-                      <span>{isAr ? 'عمولة البوابات البنكية:' : 'Aggregate Bank Fee:'}</span>
-                      <span className="font-mono">+{calcs.bankCommissionSAR.toLocaleString()} SAR</span>
-                    </div>
-                  )}
-
-                  {couponEnabled && (
-                    <div className="flex justify-between text-rose-400/95">
-                      <span>{isAr ? 'خصم الكوبون المطبق:' : 'Coupon Discount:'}</span>
-                      <span className="font-mono">-{calcs.couponValue.toLocaleString()} SAR</span>
-                    </div>
-                  )}
-
-                  <div className="flex justify-between">
-                    <span>{isAr ? 'رسوم التوصيل لليمن:' : 'Yemen Driver Fee:'}</span>
-                    <span className="font-mono text-white">{formData.deliveryCourierFee.toLocaleString()} YER</span>
-                  </div>
-
-                  <div className="flex justify-between pt-2 border-t border-slate-850 text-emerald-400 font-extrabold text-[13px]">
-                    <span className="font-bold">{isAr ? 'الإجمالي النهائي باليمني:' : 'Total due in YER:'}</span>
-                    <span className="font-black font-mono">
-                      {Math.ceil(calcs.totalOrderYER + formData.deliveryCourierFee).toLocaleString()} YER
-                    </span>
-                  </div>
-
-                  {/* Prepayment info input */}
-                  <div className="pt-2 border-t border-slate-850 space-y-2">
-                    <label className="text-[9px] text-slate-500 block font-black uppercase text-start">{isAr ? 'المقدار المدفوع مقدماً / كاش (ريال يمني)' : 'Cash paid advance YER'}</label>
-                    <input 
-                      type="number"
-                      value={formData.amountPaid || ''}
-                      onChange={(e) => setFormData({...formData, amountPaid: parseFloat(e.target.value) || 0})}
-                      placeholder="0.00 YER"
-                      className="w-full bg-slate-950 border border-slate-800 text-emerald-400 font-mono text-xs font-black rounded-xl p-2 outline-none text-center"
-                    />
-
-                    {/* Radio buttons for Payment Status */}
-                    <div className="flex justify-between items-center text-[10px] text-slate-400 pt-1">
-                      <span>{isAr ? 'حالة الدفع المقبوض:' : 'Payment Status:'}</span>
-                      <div className="font-semibold">
-                        {Math.ceil(calcs.remainingYER) <= 0 ? (
-                          <span className="text-emerald-400 font-black">{isAr ? 'مدفوع بالكامل' : 'Paid'}</span>
-                        ) : parseFloat(formData.amountPaid as any) > 0 ? (
-                          <span className="text-amber-500 font-black">{isAr ? 'مدفوع جزئياً' : 'Partial'}</span>
-                        ) : (
-                          <span className="text-red-500 font-black">{isAr ? 'غير مدفوع' : 'Unpaid'}</span>
-                        )}
+                  
+                  <div className="space-y-3">
+                    {/* Products Cost */}
+                    <div className="flex justify-between items-center text-slate-400">
+                      <span className="font-medium">{isAr ? 'قيمة المنتجات الأصلية:' : 'Original Products Subtotal:'}</span>
+                      <div className="text-right">
+                        <span className="font-mono text-white block">{calcs.productsSum.toLocaleString()} SAR</span>
+                        <span className="font-mono text-[9px] text-slate-500 block">{(calcs.productsSum * (formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER)).toLocaleString()} YER</span>
                       </div>
                     </div>
 
-                    {/* Selector for Payment Method */}
-                    <div className="flex justify-between items-center text-[10px] text-slate-400 pt-1">
-                      <span>{isAr ? 'طريقة الدفع:' : 'Payment Method:'}</span>
-                      <select
-                        value={formData.paymentMethod}
-                        onChange={(e) => setFormData({...formData, paymentMethod: e.target.value})}
-                        className="bg-slate-950 border border-slate-850 text-white rounded-lg p-1 text-[10px] font-bold outline-none cursor-pointer"
-                      >
-                        <option value="Cash">{isAr ? 'نقد كاش' : 'Cash'}</option>
-                        <option value="Bank Transfer">{isAr ? 'تحويل بنكي' : 'Bank Transfer'}</option>
-                        <option value="E-Wallet">{isAr ? 'محفظة إلكترونية' : 'E-Wallet'}</option>
-                      </select>
+                    {/* Bank Commission section */}
+                    {bankCommissionEnabled && calcs.bankCommissionSAR > 0 && (
+                      <div className="flex justify-between items-center text-amber-500/80">
+                        <span className="font-medium">{isAr ? `عمولة الدفع الإلكتروني (${bankCommissionRate}%):` : `Bank Fee (${bankCommissionRate}%):`}</span>
+                        <div className="text-right">
+                          <span className="font-mono block">+{calcs.bankCommissionSAR.toLocaleString()} SAR</span>
+                          <span className="font-mono text-[9px] opacity-70 block">+{(calcs.bankCommissionSAR * (formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER)).toLocaleString()} YER</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Coupon Discount */}
+                    {couponEnabled && calcs.couponValue > 0 && (
+                      <div className="flex justify-between items-center text-rose-400/90">
+                        <span className="font-medium">{isAr ? `خصم الكوبون النشط (${couponRate}%):` : `Coupon Discount (${couponRate}%):`}</span>
+                        <div className="text-right">
+                          <span className="font-mono block">-{calcs.couponValue.toLocaleString()} SAR</span>
+                          <span className="font-mono text-[9px] opacity-70 block">-{(calcs.couponValue * (formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER)).toLocaleString()} YER</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Adjusted Products Price */}
+                    <div className="flex justify-between items-center text-slate-350 bg-slate-900/50 p-2.5 rounded-xl border border-slate-800/50">
+                      <span className="text-[10px] font-bold">{isAr ? 'إجمالي المنتجات المعدل:' : 'Adjusted Products Total:'}</span>
+                      <div className="text-right">
+                        <span className="font-mono text-emerald-100 block">{calcs.totalProductsCostWithAdjustments.toLocaleString()} SAR</span>
+                        <span className="font-mono text-[9px] text-slate-500 block">{(calcs.totalProductsCostWithAdjustments * (formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER)).toLocaleString()} YER</span>
+                      </div>
                     </div>
 
-                    <div className="flex justify-between pt-2 border-t border-slate-850 font-black text-rose-400">
-                      <span>{isAr ? 'المديونية المتبقية للدفع:' : 'Outstanding remaining balance:'}</span>
-                      <span className="font-mono text-sm">{Math.ceil(calcs.remainingYER).toLocaleString()} YER</span>
+                    {/* Factory specifics OR ordinary shipping fee */}
+                    {(formData.orderSourceType === 'Factory' || calcs.shippingCostSAR > 0) && (
+                      <div className="pt-2 border-t border-slate-800/50 space-y-3">
+                        <span className="text-[9px] text-slate-500 font-extrabold uppercase tracking-wider block">{isAr ? 'تفاصيل أجور الشحن والنقل الدولي' : 'Logistics & Freight Cost'}</span>
+                        
+                        {formData.orderSourceType === 'Factory' && (
+                          <div className="flex items-center gap-4 bg-slate-900 p-2.5 rounded-xl border border-slate-800">
+                            <div className="flex-1">
+                              <span className="block text-[9px] text-slate-500 uppercase">{isAr ? 'الوزن الفعلي (كجم)' : 'Weight (KG)'}</span>
+                              <span className="font-mono text-amber-500/90 font-bold">{calcs.totalWeight}</span>
+                            </div>
+                            <div className="w-[1px] h-6 bg-slate-800"></div>
+                            <div className="flex-1">
+                              <span className="block text-[9px] text-slate-500 uppercase">{isAr ? 'الحجم الفعلي (CBM)' : 'Volume (CBM)'}</span>
+                              <span className="font-mono text-blue-400/90 font-bold">{calcs.totalCBM}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex justify-between items-center text-slate-350">
+                          <span className="font-medium">{isAr ? 'تكلفة النقل والشحن الدولي:' : 'International Freight Fee:'}</span>
+                          <div className="text-right">
+                            <span className="font-mono text-white block">{calcs.shippingCostSAR.toLocaleString()} SAR</span>
+                            <span className="font-mono text-[9px] text-slate-500 block">{(calcs.shippingCostSAR * (formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER)).toLocaleString()} YER</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* KSA Packaging Fee */}
+                    {parseFloat(formData.packagingFee as any) > 0 && (
+                      <div className="flex justify-between items-center text-slate-400">
+                        <span className="font-medium">{isAr ? 'رسوم التغليف العامة:' : 'General Packaging Fee:'}</span>
+                        <div className="text-right">
+                          <span className="font-mono text-white block">{parseFloat(formData.packagingFee as any).toLocaleString()} SAR</span>
+                          <span className="font-mono text-[9px] text-slate-500 block">{(parseFloat(formData.packagingFee as any) * (formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER)).toLocaleString()} YER</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Pre-computation Exchanged amount */}
+                    <div className="pt-4 border-t border-slate-800/80">
+                      <div className="flex justify-between items-center text-slate-400 bg-[#d4af37]/5 p-3 rounded-xl border border-[#d4af37]/20">
+                        <div>
+                          <span className="block font-bold text-[11px] text-[#d4af37]">{isAr ? 'مجموع التكلفة الإجمالية (خارجياً):' : 'Foreign Grand Total:'}</span>
+                          <span className="block text-[9px] text-yellow-600/70 mt-0.5">{isAr ? `تُحسب بسعر صرف: ${formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER} YER` : `At exchange rate: ${formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER} YER`}</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="font-mono text-white text-sm font-black block">{(calcs.totalProductsCostWithAdjustments + calcs.shippingCostSAR + parseFloat(formData.packagingFee as any)).toLocaleString()} SAR</span>
+                          <span className="font-mono text-[10px] text-[#d4af37] block mt-0.5 font-bold">{(((calcs.totalProductsCostWithAdjustments + calcs.shippingCostSAR + parseFloat(formData.packagingFee as any)) * (formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER))).toLocaleString()} YER</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-center text-slate-300 pt-3">
+                      <span className="font-medium">{isAr ? 'المقدار المستحق للمندوب (توصيل يمني):' : 'Local Courier/Yemen Delivery Fee:'}</span>
+                      <span className="font-mono text-white bg-slate-900 border border-slate-700 px-2.5 py-1 rounded-lg">+{parseFloat(formData.deliveryCourierFee as any).toLocaleString()} YER</span>
+                    </div>
+
+                    {/* Final Grand Total */}
+                    <div className="flex justify-between items-center pt-4 mt-2 border-t-2 border-dashed border-emerald-900/40 pb-3">
+                      <span className="font-black text-emerald-400/90 text-xs">{isAr ? 'المبلغ النهائي والمستحق إجمالاً:' : 'Final Estimated Due Amount:'}</span>
+                      <span className="font-black font-mono text-emerald-400 text-lg bg-emerald-950/20 px-3 py-1 rounded-xl border border-emerald-900/40 shadow-inner">
+                        {Math.ceil(calcs.totalOrderYER).toLocaleString()} YER
+                      </span>
                     </div>
                   </div>
 
+                  {/* Payment & Receipts panel */}
+                  <div className="pt-4 border-t-2 border-slate-800 space-y-4">
+                    <div className="flex flex-col space-y-2">
+                      <label className="text-[10px] text-slate-400 font-bold flex justify-between items-center">
+                        <span className="text-[#d4af37]">{isAr ? 'االدفعة المقدمة / كاش (ريال يمني)' : 'Cash/Advance Payment (YER)'}</span>
+                        <div className="flex gap-1.5 text-[9px]">
+                          <button type="button" onClick={() => setFormData({...formData, amountPaid: 0})} className="px-2.5 py-0.5 rounded border border-slate-700 bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer">0</button>
+                          <button type="button" onClick={() => setFormData({...formData, amountPaid: Math.ceil(calcs.totalOrderYER)})} className="px-2.5 py-0.5 rounded border border-emerald-800/40 bg-emerald-900/40 text-emerald-400 hover:bg-emerald-900/60 transition cursor-pointer">{isAr ? 'سداد الكل' : 'Pay All'}</button>
+                        </div>
+                      </label>
+                      <div className="relative group">
+                        <DollarSign className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-500/50 group-focus-within:text-emerald-400 transition-colors" />
+                        <input 
+                          type="number" 
+                          value={formData.amountPaid || ''}
+                          onChange={(e) => setFormData({...formData, amountPaid: parseFloat(e.target.value) || 0})}
+                          className="w-full bg-slate-950/50 border border-slate-700 focus:border-emerald-500/50 text-emerald-400 font-black rounded-xl py-3 pl-10 pr-4 outline-none font-mono text-sm shadow-inner transition-colors"
+                          placeholder="0.00 YER"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 pb-2">
+                      <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl flex flex-col justify-center">
+                        <span className="text-[9px] font-black uppercase text-slate-500 block mb-1">{isAr ? 'حالة السداد الآلية' : 'Payment Status'}</span>
+                        {Math.ceil(calcs.remainingYER) <= 0 ? (
+                          <span className="text-emerald-400 font-black flex items-center gap-1.5 text-xs"><Package className="w-3.5 h-3.5" />{isAr ? 'فاتورة مدفوعة' : 'PAID'}</span>
+                        ) : parseFloat(formData.amountPaid as any) > 0 ? (
+                          <span className="text-amber-500 font-black flex items-center gap-1.5 text-xs"><AlertCircle className="w-3.5 h-3.5" />{isAr ? 'دفع جزئي' : 'PARTIAL'}</span>
+                        ) : (
+                          <span className="text-rose-500 font-black flex items-center gap-1.5 text-xs"><AlertCircle className="w-3.5 h-3.5" />{isAr ? 'مديونية غير مسددة' : 'UNPAID'}</span>
+                        )}
+                      </div>
+
+                      <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl flex flex-col justify-center">
+                        <span className="text-[9px] font-black uppercase text-slate-500 block mb-1">{isAr ? 'بوابة الدفع' : 'Pay Method'}</span>
+                        <select
+                          value={formData.paymentMethod}
+                          onChange={(e) => setFormData({...formData, paymentMethod: e.target.value})}
+                          className="w-full bg-transparent text-white font-bold text-xs outline-none cursor-pointer"
+                        >
+                          <option value="Cash" className="bg-slate-900">{isAr ? 'نقد كاش' : 'Cash'}</option>
+                          <option value="Bank Transfer" className="bg-slate-900">{isAr ? 'تحويل بنكي' : 'Bank Transfer'}</option>
+                          <option value="E-Wallet" className="bg-slate-900">{isAr ? 'محفظة إلكترونية' : 'E-Wallet'}</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-center p-3 bg-rose-500/5 rounded-xl border border-rose-500/10">
+                      <span className="font-extrabold text-[#d4af37] text-[11px]">{isAr ? 'المديونية المتبقية للدفع:' : 'Outstanding Debt:'}</span>
+                      <span className="font-mono text-sm font-black text-rose-500">{Math.ceil(calcs.remainingYER).toLocaleString()} YER</span>
+                    </div>
+                  </div>
                 </div>
 
               </div>
@@ -3679,7 +4511,7 @@ export default function Orders() {
                 <div className="grid grid-cols-3 gap-2 text-center text-[11px]">
                   <div className="bg-slate-955 border border-slate-800 p-2.5 rounded-lg flex flex-col justify-between">
                     <span className="text-[10px] text-slate-500 font-bold">{isAr ? 'إجمالي قيمة الفاتورة' : 'Total Invoice Due'}</span>
-                    <span className="font-mono text-white text-xs font-black mt-1">{(parseFloat(selectedOrder.totalCostYER) || 0).toLocaleString()} YER</span>
+                    <span className="font-mono text-white text-xs font-black mt-1">{((parseFloat(selectedOrder.amountPaid) || 0) + (parseFloat(selectedOrder.amountRemaining) || 0)).toLocaleString()} YER</span>
                   </div>
                   <div className="bg-emerald-950/10 border border-emerald-950/20 p-2.5 rounded-lg flex flex-col justify-between">
                     <span className="text-[10px] text-emerald-400 font-bold">{isAr ? 'المقدار المقبوض' : 'Settled Balance'}</span>
