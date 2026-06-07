@@ -55,7 +55,9 @@ export type PermissionKey =
   | 'notify_finance'
   | 'notify_system'
   | 'view_financial_accounts'
-  | 'manage_financial_accounts';
+  | 'manage_financial_accounts'
+  | 'edit_profit_per_kg'
+  | 'edit_cbm_shipping_rate';
 
 export interface PermissionDefinition {
   id: PermissionKey;
@@ -133,6 +135,8 @@ export const ALL_PERMISSIONS: PermissionDefinition[] = [
   { id: 'edit_exchange_rates', labelAr: 'تنظيم أسعار صرف وتحويل الدولار والريال السعودي بالYER', labelEn: 'Modify currency rates & exchange multipliers', category: 'accounting' },
   { id: 'view_financial_accounts', labelAr: 'عرض أرصدة الحسابات المالية وكشوفاتها', labelEn: 'View Financial Account Balances & Statements', category: 'accounting' },
   { id: 'manage_financial_accounts', labelAr: 'إدارة أرصدة الحسابات المالية وإجراء حركات تسوية يدوية', labelEn: 'Manage Financial Account Balances & Adjustments', category: 'accounting' },
+  { id: 'edit_profit_per_kg', labelAr: 'تعديل نسبة الربح للكيلو لطلبات المصنع', labelEn: 'Edit Profit Per KG Rate (Factory Orders)', category: 'accounting' },
+  { id: 'edit_cbm_shipping_rate', labelAr: 'تعديل سعر شحن الـ CBM لطلبات المصنع والموردين', labelEn: 'Edit CBM Shipping Rate (Factory Orders)', category: 'accounting' },
 
   // Reports
   { id: 'view_reports', labelAr: 'تأطير ورؤية تقارير جرد أرباح وحسابات الأنشطة', labelEn: 'Access Profit Analytics & Financial Reports', category: 'reports' },

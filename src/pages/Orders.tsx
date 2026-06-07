@@ -97,6 +97,11 @@ export default function Orders() {
   const [couponEnabled, setCouponEnabled] = useState(false);
   const [couponRate, setCouponRate] = useState(0);
   const [cartShareCode, setCartShareCode] = useState('');
+  
+  // New States for order source types
+  const [addShippingEnabled, setAddShippingEnabled] = useState(false);
+  const [profitPerKgRate, setProfitPerKgRate] = useState(19);
+  const [cbmShippingRateValue, setCbmShippingRateValue] = useState(1400);
 
   // Shipping packaging fee state
   const [packagingFeeEnabled, setPackagingFeeEnabled] = useState(false);
@@ -144,6 +149,9 @@ export default function Orders() {
           packagingFees: 0
         }
       ]);
+      setProfitPerKgRate(settings.defaultProfitPerKg ?? 19);
+      setCbmShippingRateValue(settings.defaultCbmShippingRate ?? 1400);
+      setAddShippingEnabled(false);
     }
   }, [isAddModalOpen, settings]);
 
@@ -681,6 +689,19 @@ export default function Orders() {
   const computeCalculations = () => {
     // 1. Compute total products prices
     const productsSum = items.reduce((sum, i) => sum + (parseFloat(i.quantity || 0) * parseFloat(i.productPrice || 0)), 0);
+    
+    // Auto-calculate CBM for each item if dimensions are provided
+    items.forEach(i => {
+      if (formData.orderSourceType === 'Factory') {
+        const length = parseFloat(i.length || 0);
+        const width = parseFloat(i.width || 0);
+        const height = parseFloat(i.height || 0);
+        if (length > 0 && width > 0 && height > 0) {
+          i.cbm = parseFloat(((length * width * height) / 1000000).toFixed(6));
+        }
+      }
+    });
+
     const totalWeight = items.reduce((sum, i) => sum + (parseFloat(i.quantity || 0) * parseFloat(i.weight || 0)), 0);
     const totalCBM = items.reduce((sum, i) => sum + (parseFloat(i.quantity || 0) * parseFloat(i.cbm || 0)), 0);
 
@@ -691,33 +712,48 @@ export default function Orders() {
 
     let priceSAR = totalProductsCostWithAdjustments;
     let shippingCostSAR = 0;
+    let profitCompanySAR = 0;
+    let profitSaudiSAR = 0;
+    let totalOrderSAR = 0;
 
     // Sum up shipping cost from shippings table
     const shippingsCostSum = shippings.reduce((sum, s) => sum + parseFloat(s.shippingCost || 0), 0);
     const shippingPackagingFee = packagingFeeEnabled ? (shippingsCostSum * (packagingFeeRate / 100)) : 0;
     const totalShippingsCost = shippingsCostSum + shippingPackagingFee;
 
-    if (totalShippingsCost > 0) {
-      shippingCostSAR = totalShippingsCost;
+    if (formData.orderSourceType === 'SHEIN') {
+      const redPrice = parseFloat(formData.sheinRedPrice as any) || 0;
+      priceSAR = redPrice;
+      shippingCostSAR = 0;
+      totalOrderSAR = redPrice;
+      const rawProfitSAR = redPrice - productsSum;
+      const saudiCourier = couriers.find(c => c.id === formData.shippingCourierId);
+      const saudiRate = (saudiCourier && saudiCourier.commissionRate !== undefined) ? parseFloat(saudiCourier.commissionRate) : 0;
+      profitSaudiSAR = rawProfitSAR * (saudiRate / 100);
+      profitCompanySAR = rawProfitSAR - profitSaudiSAR;
     } else if (formData.orderSourceType === 'Factory') {
-      // China Factory calculation formula
-      // standard weight shipping fee = Weight kilograms * 19 SAR
-      const weightCost = totalWeight * 19;
-      // cbm standard shipping fee = CBM volume * 1400 SAR (or CBM param rate)
-      const cbmCost = totalCBM * 1400; 
-      shippingCostSAR = Math.max(weightCost, cbmCost);
+      const rawProfitSAR = totalWeight * (parseFloat(profitPerKgRate as any) || 0);
+      shippingCostSAR = totalCBM * (parseFloat(cbmShippingRateValue as any) || 0);
+      const generalPackagingFee = parseFloat(formData.packagingFee as any) || 0;
+      totalOrderSAR = productsSum + rawProfitSAR + shippingCostSAR + generalPackagingFee;
+      
+      const saudiCourier = couriers.find(c => c.id === formData.shippingCourierId);
+      const saudiRate = (saudiCourier && saudiCourier.commissionRate !== undefined) ? parseFloat(saudiCourier.commissionRate) : 0;
+      profitSaudiSAR = rawProfitSAR * (saudiRate / 100);
+      profitCompanySAR = rawProfitSAR - profitSaudiSAR;
     } else {
-      // General shopping apps
-      if (formData.orderSourceType === 'SHEIN' && formData.sheinRedPrice && parseFloat(formData.sheinRedPrice as any) > 0) {
-        priceSAR = parseFloat(formData.sheinRedPrice as any);
-      }
-      // Automatic 12% commission added to order cost
-      shippingCostSAR = priceSAR * (formData.companyProfitRate / 100);
+      // Shopping (App)
+      const rawProfitSAR = productsSum * ((parseFloat(formData.companyProfitRate as any) || 12) / 100);
+      shippingCostSAR = addShippingEnabled ? totalShippingsCost : 0;
+      const generalPackagingFee = parseFloat(formData.packagingFee as any) || 0;
+      totalOrderSAR = totalProductsCostWithAdjustments + rawProfitSAR + shippingCostSAR + generalPackagingFee;
+      
+      const saudiCourier = couriers.find(c => c.id === formData.shippingCourierId);
+      const saudiRate = (saudiCourier && saudiCourier.commissionRate !== undefined) ? parseFloat(saudiCourier.commissionRate) : 30;
+      profitSaudiSAR = rawProfitSAR * (saudiRate / 100);
+      profitCompanySAR = rawProfitSAR - profitSaudiSAR;
     }
 
-    // Total order in SAR: Price + Shipping + general packaging fee
-    const totalOrderSAR = priceSAR + shippingCostSAR + parseFloat(formData.packagingFee || 0);
-    
     // Convert to YER for payment
     const exchange = formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER;
     const baseTotalOrderYER = totalOrderSAR * exchange;
@@ -731,18 +767,6 @@ export default function Orders() {
     // Remaining in YER: Total in YER (which includes delivery fee) - Amount Paid
     const valPaid = parseFloat(formData.amountPaid as any) || 0;
     const remainingYER = totalOrderYER - valPaid;
-
-    // Profit split: Saudi partner gets dynamic percentage from courier record, ALX company gets remaining
-    // إجمالي أرباح الطلب = قيمة بيع العميل - تكلفة الشراء - الشحن الدولي - الرسوم
-    const fees = bankCommValue + parseFloat(formData.packagingFee as any || 0) - couponValue;
-    const rawProfitSAR = totalOrderSAR - totalProductsCostWithAdjustments - shippingsCostSum - fees;
-    
-    // Fetch Saudi courier dynamic rate (default to 30%)
-    const saudiCourier = couriers.find(c => c.id === formData.shippingCourierId);
-    const saudiRate = (saudiCourier && saudiCourier.commissionRate !== undefined) ? parseFloat(saudiCourier.commissionRate) : 30;
-
-    const profitSaudiSAR = rawProfitSAR * (saudiRate / 100);
-    const profitCompanySAR = rawProfitSAR - profitSaudiSAR;
 
     return {
       productsSum,
@@ -773,6 +797,19 @@ export default function Orders() {
         type: 'error',
         category: 'order'
       });
+    }
+
+    if (formData.orderSourceType === 'SHEIN') {
+      const redPrice = parseFloat(formData.sheinRedPrice as any) || 0;
+      const productsSum = items.reduce((sum, i) => sum + (parseFloat(i.quantity || 0) * parseFloat(i.productPrice || 0)), 0);
+      if (redPrice < productsSum) {
+        return notificationService.notify({
+          title: isAr ? 'خطأ في التحقق' : 'Validation Error',
+          message: isAr ? 'السعر الأحمر لـ SHEIN يجب ألا يقل عن إجمالي تكلفة المنتجات الأصلي' : 'SHEIN Red Price cannot be less than the total products cost',
+          type: 'error',
+          category: 'order'
+        });
+      }
     }
 
     setLoading(true);
@@ -829,6 +866,12 @@ export default function Orders() {
         amountPaid: parseFloat(formData.amountPaid as any) || 0,
         amountRemaining: currentCalcs.remainingYER,
         paymentStatus: payStatus,
+
+        // Add details from source types
+        profitPerKgRate: parseFloat(profitPerKgRate as any) || 19,
+        cbmShippingRateValue: parseFloat(cbmShippingRateValue as any) || 1400,
+        addShippingEnabled: addShippingEnabled,
+        shippingCostSAR: currentCalcs.shippingCostSAR,
 
         // Profit distribution
         profitSaudiSAR: currentCalcs.profitSaudiSAR,
@@ -926,8 +969,12 @@ export default function Orders() {
         console.error('Could not ensure system accounts:', err);
       }
 
+      const sourcingCostAmount = formData.orderSourceType === 'App'
+        ? currentCalcs.totalProductsCostWithAdjustments
+        : currentCalcs.productsSum;
+
       const sourcingCostConverted = financialAccountService.convertToDefaultCurrency(
-        currentCalcs.totalProductsCostWithAdjustments,
+        sourcingCostAmount,
         'SAR',
         settings.currency || 'YER',
         { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
@@ -945,7 +992,7 @@ export default function Orders() {
               entityName: saudiCourier.fullName,
               type: 'Debit',
               amount: sourcingCostConverted,
-              amountOriginal: currentCalcs.totalProductsCostWithAdjustments,
+              amountOriginal: sourcingCostAmount,
               currencyOriginal: 'SAR',
               description: isAr ? `خصم تكاليف المنتجات الأصلية للطلب: ${orderNumber}` : `Sourcing products cost for order: ${orderNumber}`,
               refNumber: orderNumber,
@@ -966,10 +1013,10 @@ export default function Orders() {
               accountCode: 'EXP-SRC',
               entityType: 'system',
               entityId: 'sys_sourcing_cost',
-              entityName: 'حساب تكاليف الاستيراد',
+              entityName: 'حساب تكاليف الاستيراد التشغيلية',
               type: 'Debit',
               amount: sourcingCostConverted,
-              amountOriginal: currentCalcs.totalProductsCostWithAdjustments,
+              amountOriginal: sourcingCostAmount,
               currencyOriginal: 'SAR',
               description: isAr ? `تكلفة شراء منتجات الطلب: ${orderNumber}` : `Sourcing products cost for order: ${orderNumber}`,
               refNumber: orderNumber,
@@ -981,6 +1028,72 @@ export default function Orders() {
          } catch (e) {
             console.error('Failed to deduct sourcing from system account', e);
          }
+      }
+
+      // Record Packaging Fees Credit
+      const shippingsCostSum = shippings.reduce((sum, s) => sum + parseFloat(s.shippingCost || 0), 0);
+      const shippingPackagingFee = packagingFeeEnabled ? (shippingsCostSum * (packagingFeeRate / 100)) : 0;
+      const packagingFeeSAR = parseFloat(formData.packagingFee as any || 0) + (formData.orderSourceType !== 'SHEIN' ? shippingPackagingFee : 0);
+
+      if (formData.orderSourceType !== 'SHEIN' && packagingFeeSAR > 0 && systemAccs['sys_packaging_fees']) {
+        try {
+          const pkgConverted = financialAccountService.convertToDefaultCurrency(
+            packagingFeeSAR,
+            'SAR',
+            settings.currency || 'YER',
+            { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+          );
+          await financialAccountService.recordTransaction(systemAccs['sys_packaging_fees'], {
+            accountId: systemAccs['sys_packaging_fees'],
+            accountCode: 'REV-PKG',
+            entityType: 'system',
+            entityId: 'sys_packaging_fees',
+            entityName: 'حساب رسوم التغليف والتعبئة',
+            type: 'Credit',
+            amount: pkgConverted,
+            amountOriginal: packagingFeeSAR,
+            currencyOriginal: 'SAR',
+            description: isAr ? `رسوم تغليف للطلب: ${orderNumber}` : `Packaging fee for order: ${orderNumber}`,
+            refNumber: orderNumber,
+            module: 'order',
+            createdByUid: auth.currentUser?.uid || 'system',
+            createdByName: profile?.fullName || 'Root Admin',
+            createdAt: Date.now()
+          });
+        } catch (e) {
+          console.error('Failed to log packaging fee', e);
+        }
+      }
+
+      // Record Shipping Cost Debit (for Factory only)
+      if (formData.orderSourceType === 'Factory' && currentCalcs.shippingCostSAR > 0 && systemAccs['sys_shipping_costs']) {
+        try {
+          const shipCostConverted = financialAccountService.convertToDefaultCurrency(
+            currentCalcs.shippingCostSAR,
+            'SAR',
+            settings.currency || 'YER',
+            { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+          );
+          await financialAccountService.recordTransaction(systemAccs['sys_shipping_costs'], {
+            accountId: systemAccs['sys_shipping_costs'],
+            accountCode: 'EXP-SHIP',
+            entityType: 'system',
+            entityId: 'sys_shipping_costs',
+            entityName: 'حساب تكاليف الشحن الدولي',
+            type: 'Debit',
+            amount: shipCostConverted,
+            amountOriginal: currentCalcs.shippingCostSAR,
+            currencyOriginal: 'SAR',
+            description: isAr ? `تكلفة الشحن الدولي للطلب: ${orderNumber}` : `International shipping cost for order: ${orderNumber}`,
+            refNumber: orderNumber,
+            module: 'expense',
+            createdByUid: auth.currentUser?.uid || 'system',
+            createdByName: profile?.fullName || 'Root Admin',
+            createdAt: Date.now()
+          });
+        } catch (e) {
+          console.error('Failed to log shipping cost', e);
+        }
       }
 
       // Record Company Profit directly
@@ -1003,7 +1116,7 @@ export default function Orders() {
               amount: profitConverted,
               amountOriginal: currentCalcs.profitCompanySAR,
               currencyOriginal: 'SAR',
-              description: isAr ? `صافي أرباح الطلب: ${orderNumber}` : `Company profit for order: ${orderNumber}`,
+              description: isAr ? `صافي أرباح الشركة للطلب: ${orderNumber}` : `Company profit for order: ${orderNumber}`,
               refNumber: orderNumber,
               module: 'order',
               createdByUid: auth.currentUser?.uid || 'system',
@@ -1012,6 +1125,77 @@ export default function Orders() {
           });
         } catch (e) {
            console.error('Failed to log company profit', e);
+        }
+      }
+
+      // Record Saudi partner Aggregator profit
+      if (currentCalcs.profitSaudiSAR > 0 && formData.shippingCourierId) {
+        const saudiCourier = couriers.find(c => c.id === formData.shippingCourierId);
+        if (saudiCourier && saudiCourier.financialAccountId) {
+          try {
+            const saudiProfitConverted = financialAccountService.convertToDefaultCurrency(
+              currentCalcs.profitSaudiSAR,
+              'SAR',
+              settings.currency || 'YER',
+              { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+            );
+            await financialAccountService.recordTransaction(saudiCourier.financialAccountId, {
+              accountId: saudiCourier.financialAccountId,
+              accountCode: saudiCourier.financialAccountCode || '',
+              entityType: 'courier',
+              entityId: saudiCourier.id,
+              entityName: saudiCourier.fullName,
+              type: 'Credit',
+              amount: saudiProfitConverted,
+              amountOriginal: currentCalcs.profitSaudiSAR,
+              currencyOriginal: 'SAR',
+              description: isAr ? `عمولة تجميع شحنة الطلب: ${orderNumber}` : `Aggregation commission for order: ${orderNumber}`,
+              refNumber: orderNumber,
+              module: 'order',
+              createdByUid: auth.currentUser?.uid || 'system',
+              createdByName: profile?.fullName || 'Root Admin',
+              createdAt: Date.now()
+            });
+          } catch (e) {
+            console.error('Failed to credit saudi courier profit', e);
+          }
+        }
+      }
+
+      // Record Yemen flat delivery driver wage
+      const deliveryFee = parseFloat(formData.deliveryCourierFee as any) || 0;
+      if (deliveryFee > 0 && formData.deliveryCourierId) {
+        const yemenCourier = couriers.find(c => c.id === formData.deliveryCourierId);
+        const targetAccountId = yemenCourier?.financialAccountId || systemAccs['sys_delivery_cost'];
+        const targetAccountCode = yemenCourier?.financialAccountCode || 'EXP-DELIV';
+        if (targetAccountId) {
+          try {
+            const delFeeConverted = financialAccountService.convertToDefaultCurrency(
+              deliveryFee,
+              'YER',
+              settings.currency || 'YER',
+              { USD: formData.exchangeRateUSD, SAR: formData.exchangeRateYER }
+            );
+            await financialAccountService.recordTransaction(targetAccountId, {
+              accountId: targetAccountId,
+              accountCode: targetAccountCode,
+              entityType: yemenCourier ? 'courier' : 'system',
+              entityId: yemenCourier ? yemenCourier.id : 'sys_delivery_cost',
+              entityName: yemenCourier ? yemenCourier.fullName : 'حساب مصروفات التوصيل',
+              type: 'Credit',
+              amount: delFeeConverted,
+              amountOriginal: deliveryFee,
+              currencyOriginal: 'YER',
+              description: isAr ? `أجرة توصيل الطلب رقم: ${orderNumber}` : `Delivery fee for order: ${orderNumber}`,
+              refNumber: orderNumber,
+              module: 'order',
+              createdByUid: auth.currentUser?.uid || 'system',
+              createdByName: profile?.fullName || 'Root Admin',
+              createdAt: Date.now()
+            });
+          } catch (e) {
+            console.error('Failed to log delivery courier fee', e);
+          }
         }
       }
 
@@ -1773,7 +1957,7 @@ export default function Orders() {
 
   // Items handling
   const addItemRow = () => {
-    setItems([...items, { productName: '', productUrl: '', quantity: 1, productPrice: 0, weight: 0, cbm: 0, trackingNumber: '' }]);
+    setItems([...items, { productName: '', productUrl: '', quantity: 1, productPrice: 0, weight: 0, cbm: 0, length: 0, width: 0, height: 0, trackingNumber: '' }]);
   };
 
   const updateItemRow = (idx: number, field: string, val: any) => {
@@ -3241,7 +3425,13 @@ export default function Orders() {
                             <input 
                               type="number"
                               value={item.length || 0}
-                              onChange={(e) => updateItemRow(idx, 'length', parseFloat(e.target.value) || 0)}
+                              onChange={(e) => {
+                                const newL = parseFloat(e.target.value) || 0;
+                                const w = parseFloat(item.width || 0);
+                                const h = parseFloat(item.height || 0);
+                                updateItemRow(idx, 'length', newL);
+                                updateItemRow(idx, 'cbm', parseFloat(((newL * w * h) / 1000000).toFixed(6)));
+                              }}
                               placeholder="L"
                               className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2 outline-none font-bold text-[11px] font-mono text-center"
                             />
@@ -3251,7 +3441,13 @@ export default function Orders() {
                             <input 
                               type="number"
                               value={item.width || 0}
-                              onChange={(e) => updateItemRow(idx, 'width', parseFloat(e.target.value) || 0)}
+                              onChange={(e) => {
+                                const newW = parseFloat(e.target.value) || 0;
+                                const l = parseFloat(item.length || 0);
+                                const h = parseFloat(item.height || 0);
+                                updateItemRow(idx, 'width', newW);
+                                updateItemRow(idx, 'cbm', parseFloat(((l * newW * h) / 1000000).toFixed(6)));
+                              }}
                               placeholder="W"
                               className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2 outline-none font-bold text-[11px] font-mono text-center"
                             />
@@ -3261,7 +3457,13 @@ export default function Orders() {
                             <input 
                               type="number"
                               value={item.height || 0}
-                              onChange={(e) => updateItemRow(idx, 'height', parseFloat(e.target.value) || 0)}
+                              onChange={(e) => {
+                                const newH = parseFloat(e.target.value) || 0;
+                                const l = parseFloat(item.length || 0);
+                                const w = parseFloat(item.width || 0);
+                                updateItemRow(idx, 'height', newH);
+                                updateItemRow(idx, 'cbm', parseFloat(((l * w * newH) / 1000000).toFixed(6)));
+                              }}
                               placeholder="H"
                               className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2 outline-none font-bold text-[11px] font-mono text-center"
                             />
@@ -3309,298 +3511,341 @@ export default function Orders() {
                 </div>
 
                 {/* Adjustments row: Bank Commission & Coupon discounts */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-slate-850/65">
-                  {/* Bank Commission Checkbox & Rate */}
-                  <div className="flex items-center gap-3 bg-slate-900/40 p-3 rounded-2xl border border-slate-850">
-                    <input 
-                      type="checkbox"
-                      id="bank-comm-check"
-                      checked={bankCommissionEnabled}
-                      onChange={(e) => setBankCommissionEnabled(e.target.checked)}
-                      className="rounded bg-slate-950 border-slate-800 text-yellow-600 focus:ring-0 w-4 h-4 cursor-pointer"
-                    />
-                    <label htmlFor="bank-comm-check" className="text-[11px] font-bold text-slate-350 cursor-pointer">{isAr ? 'إضافة عمولة بنك (%)' : 'Apply Bank Commission (%)'}</label>
-                    {bankCommissionEnabled && (
+                {formData.orderSourceType === 'App' && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-3 border-t border-slate-850/65">
+                    {/* Bank Commission Checkbox & Rate */}
+                    <div className="flex items-center gap-3 bg-slate-900/40 p-3 rounded-2xl border border-slate-850">
                       <input 
-                        type="number"
-                        value={bankCommissionRate}
-                        onChange={(e) => setBankCommissionRate(parseFloat(e.target.value) || 0)}
-                        className="w-14 bg-slate-950 border border-slate-800 text-white rounded-xl p-1.5 text-center font-mono font-bold text-[11px]"
+                        type="checkbox"
+                        id="bank-comm-check"
+                        checked={bankCommissionEnabled}
+                        onChange={(e) => setBankCommissionEnabled(e.target.checked)}
+                        className="rounded bg-slate-950 border-slate-800 text-yellow-600 focus:ring-0 w-4 h-4 cursor-pointer"
                       />
-                    )}
-                  </div>
+                      <label htmlFor="bank-comm-check" className="text-[11px] font-bold text-slate-350 cursor-pointer">{isAr ? 'عمولة بنك (%)' : 'Bank Comm (%)'}</label>
+                      {bankCommissionEnabled && (
+                        <input 
+                          type="number"
+                          value={bankCommissionRate}
+                          onChange={(e) => setBankCommissionRate(parseFloat(e.target.value) || 0)}
+                          className="w-12 bg-slate-950 border border-slate-800 text-white rounded-xl p-1 text-center font-mono font-bold text-[10px]"
+                        />
+                      )}
+                    </div>
 
-                  {/* Coupon Discount Checkbox & Rate */}
-                  <div className="flex items-center gap-3 bg-slate-900/40 p-3 rounded-2xl border border-slate-850">
-                    <input 
-                      type="checkbox"
-                      id="coupon-check"
-                      checked={couponEnabled}
-                      onChange={(e) => setCouponEnabled(e.target.checked)}
-                      className="rounded bg-slate-950 border-slate-800 text-yellow-600 focus:ring-0 w-4 h-4 cursor-pointer"
-                    />
-                    <label htmlFor="coupon-check" className="text-[11px] font-bold text-slate-350 cursor-pointer">{isAr ? 'تطبيق كود / كوبون خصم (%)' : 'Apply Coupon Discount (%)'}</label>
-                    {couponEnabled && (
+                    {/* Coupon Discount Checkbox & Rate */}
+                    <div className="flex items-center gap-3 bg-slate-900/40 p-3 rounded-2xl border border-slate-850">
                       <input 
-                        type="number"
-                        value={couponRate}
-                        onChange={(e) => setCouponRate(parseFloat(e.target.value) || 0)}
-                        className="w-14 bg-slate-950 border border-slate-800 text-white rounded-xl p-1.5 text-center font-mono font-bold text-[11px]"
+                        type="checkbox"
+                        id="coupon-check"
+                        checked={couponEnabled}
+                        onChange={(e) => setCouponEnabled(e.target.checked)}
+                        className="rounded bg-slate-950 border-slate-800 text-yellow-600 focus:ring-0 w-4 h-4 cursor-pointer"
                       />
-                    )}
+                      <label htmlFor="coupon-check" className="text-[11px] font-bold text-slate-350 cursor-pointer">{isAr ? 'كوبون خصم (%)' : 'Coupon Discount (%)'}</label>
+                      {couponEnabled && (
+                        <input 
+                          type="number"
+                          value={couponRate}
+                          onChange={(e) => setCouponRate(parseFloat(e.target.value) || 0)}
+                          className="w-12 bg-slate-950 border border-slate-800 text-white rounded-xl p-1 text-center font-mono font-bold text-[10px]"
+                        />
+                      )}
+                    </div>
+
+                    {/* Add Shipping Checkbox */}
+                    <div className="flex items-center gap-3 bg-slate-900/40 p-3 rounded-2xl border border-slate-850">
+                      <input 
+                        type="checkbox"
+                        id="add-shipping-check"
+                        checked={addShippingEnabled}
+                        onChange={(e) => setAddShippingEnabled(e.target.checked)}
+                        className="rounded bg-slate-950 border-slate-800 text-yellow-600 focus:ring-0 w-4 h-4 cursor-pointer"
+                      />
+                      <label htmlFor="add-shipping-check" className="text-[11px] font-bold text-slate-350 cursor-pointer">{isAr ? 'إضافة شحن للطلب' : 'Add Shipping Costs'}</label>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Subtotals calculations summary */}
-                <div className="pt-2 flex justify-between text-[11px] font-bold text-slate-500">
-                  <div>
-                    {isAr ? 'إجمالي المنتجات الأصلي:' : 'Original Products Subtotal:'}{' '}
-                    <span className="font-mono text-slate-300">{calcs.productsSum.toLocaleString()} SAR</span>
+                {formData.orderSourceType !== 'SHEIN' && (
+                  <div className="pt-2 flex justify-between text-[11px] font-bold text-slate-500 border-t border-slate-850/50 mt-2">
+                    <div>
+                      {isAr ? 'إجمالي المنتجات الأصلي:' : 'Original Products Subtotal:'}{' '}
+                      <span className="font-mono text-slate-300">{calcs.productsSum.toLocaleString()} SAR</span>
+                    </div>
+                    {formData.orderSourceType === 'App' && (
+                      <div>
+                        {isAr ? 'الإجمالي بعد التعديل (العمولة والخصم):' : 'Adjusted Products Subtotal:'}{' '}
+                        <span className="font-mono text-emerald-400 font-black">{calcs.totalProductsCostWithAdjustments.toLocaleString()} SAR</span>
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    {isAr ? 'الإجمالي بعد التعديل (العمولة والخصم):' : 'Adjusted Products Subtotal:'}{' '}
-                    <span className="font-mono text-emerald-400 font-black">{calcs.totalProductsCostWithAdjustments.toLocaleString()} SAR</span>
+                )}
+
+                {/* Factory specifics: Total weight and volume */}
+                {formData.orderSourceType === 'Factory' && (
+                  <div className="p-3 bg-slate-900/40 border border-slate-850 rounded-2xl flex justify-between text-[11px] font-bold text-slate-400 mt-2">
+                    <div>
+                      {isAr ? 'إجمالي الوزن:' : 'Total Weight:'}{' '}
+                      <span className="font-mono text-amber-500 font-black">{calcs.totalWeight.toLocaleString()} {isAr ? 'كجم' : 'kg'}</span>
+                    </div>
+                    <div>
+                      {isAr ? 'إجمالي الحجم:' : 'Total Volume:'}{' '}
+                      <span className="font-mono text-blue-400 font-black">{calcs.totalCBM.toFixed(6)} CBM</span>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
 
               {/* Section 3: Shipping manifestation details */}
-              <div className="space-y-4 bg-slate-950/20 border border-slate-850 p-5 rounded-3xl">
-                <div className="flex justify-between items-center border-b border-slate-800 pb-3 flex-wrap gap-2">
-                  <div className="text-start">
-                    <span className="text-xs font-black text-white block">{isAr ? 'تفاصيل شحنات المسار اللوجيستي' : 'Shipping Manifest Tracks'}</span>
-                    <span className="text-[10px] text-slate-500 font-bold mt-0.5">{isAr ? 'أدخل مسارات الشحن المعتمدة لهذا الطرد للتدقيق' : 'Define transport companies and costs for delivery tracks'}</span>
+              {formData.orderSourceType !== 'SHEIN' && (formData.orderSourceType !== 'App' || addShippingEnabled) && (
+                <div className="space-y-4 bg-slate-950/20 border border-slate-850 p-5 rounded-3xl">
+                  <div className="flex justify-between items-center border-b border-slate-800 pb-3 flex-wrap gap-2">
+                    <div className="text-start">
+                      <span className="text-xs font-black text-white block">{isAr ? 'تفاصيل شحنات المسار اللوجيستي' : 'Shipping Manifest Tracks'}</span>
+                      <span className="text-[10px] text-slate-500 font-bold mt-0.5">{isAr ? 'أدخل مسارات الشحن المعتمدة لهذا الطرد للتدقيق' : 'Define transport companies and costs for delivery tracks'}</span>
+                    </div>
+                    <button 
+                      type="button"
+                      onClick={addShippingRow}
+                      className="bg-emerald-600/10 hover:bg-emerald-650/20 text-emerald-400 px-3 py-1.5 rounded-xl text-[10px] font-black transition-all flex items-center gap-1"
+                    >
+                      ➕ {isAr ? 'إضافة تفاصيل شحن' : 'Add Shipping Track'}
+                    </button>
                   </div>
-                  <button 
-                    type="button"
-                    onClick={addShippingRow}
-                    className="bg-emerald-600/10 hover:bg-emerald-650/20 text-emerald-400 px-3 py-1.5 rounded-xl text-[10px] font-black transition-all flex items-center gap-1"
-                  >
-                    ➕ {isAr ? 'إضافة تفاصيل شحن' : 'Add Shipping Track'}
-                  </button>
-                </div>
 
-                <div className="space-y-3.5">
-                  {shippings && shippings.map((sh, idx) => (
-                    <div key={sh.id || idx} className="bg-slate-900/40 p-4 rounded-2xl border border-slate-850 space-y-3 relative">
-                      {/* Segment title and remove action */}
-                      <div className="flex justify-between items-center border-b border-slate-850/50 pb-2">
-                        <span className="text-[10px] font-black text-[#d4af37] bg-[#d4af37]/5 px-2 py-0.5 rounded">
-                          {isAr ? `مسار الشحن #${idx + 1}` : `Shipping Track #${idx + 1}`}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => removeShippingRow(idx)}
-                          className="text-rose-500 hover:text-rose-400 p-1 rounded hover:bg-rose-950/10 transition-all font-bold text-[10px] flex items-center gap-1"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          {isAr ? 'إلغاء المسار' : 'Delete Segment'}
-                        </button>
-                      </div>
-
-                      {/* Manifest inputs */}
-                      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-[11px] text-start font-bold">
-                        {/* 1. Mode */}
-                        <div>
-                          <label className="block text-slate-500 mb-1">{isAr ? 'نوع الشحن' : 'Mode'}</label>
-                          <select
-                            value={sh.shippingType || 'بري'}
-                            onChange={(e) => updateShippingRow(idx, 'shippingType', e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold"
+                  <div className="space-y-3.5">
+                    {shippings && shippings.map((sh, idx) => (
+                      <div key={sh.id || idx} className="bg-slate-900/40 p-4 rounded-2xl border border-slate-850 space-y-3 relative">
+                        {/* Segment title and remove action */}
+                        <div className="flex justify-between items-center border-b border-slate-850/50 pb-2">
+                          <span className="text-[10px] font-black text-[#d4af37] bg-[#d4af37]/5 px-2 py-0.5 rounded">
+                            {isAr ? `مسار الشحن #${idx + 1}` : `Shipping Track #${idx + 1}`}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removeShippingRow(idx)}
+                            className="text-rose-500 hover:text-rose-400 p-1 rounded hover:bg-rose-950/10 transition-all font-bold text-[10px] flex items-center gap-1"
                           >
-                            <option value="بري">{isAr ? 'Overland بري' : 'Land - Overland'}</option>
-                            <option value="جوي">{isAr ? 'Air Freight جوي' : 'Air - Air Freight'}</option>
-                            <option value="بحري">{isAr ? 'Ocean Cargo بحري' : 'Sea - Ocean Cargo'}</option>
-                          </select>
+                            <Trash2 className="w-3.5 h-3.5" />
+                            {isAr ? 'إلغاء المسار' : 'Delete Segment'}
+                          </button>
                         </div>
 
-                        {/* 2. Carrier company */}
-                        <div>
-                          <div className="flex justify-between items-center mb-1">
-                            <label className="block text-slate-400">{isAr ? 'شركة الشحن' : 'Carrier'}</label>
-                            {(role === 'Admin' || hasPermission('add_sources')) && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setActiveAddShippingIndex(idx);
-                                  setIsAddShippingCompanyOpen(true);
-                                }}
-                                className="text-[10px] font-black text-cyan-400 hover:underline flex items-center gap-0.5"
-                              >
-                                ➕ {isAr ? 'جديدة' : 'New'}
-                              </button>
-                            )}
+                        {/* Manifest inputs */}
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-[11px] text-start font-bold">
+                          {/* 1. Mode */}
+                          <div>
+                            <label className="block text-slate-500 mb-1">{isAr ? 'نوع الشحن' : 'Mode'}</label>
+                            <select
+                              value={sh.shippingType || 'بري'}
+                              onChange={(e) => updateShippingRow(idx, 'shippingType', e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold"
+                            >
+                              <option value="بري">{isAr ? 'Overland بري' : 'Land - Overland'}</option>
+                              <option value="جوي">{isAr ? 'Air Freight جوي' : 'Air - Air Freight'}</option>
+                              <option value="بحري">{isAr ? 'Ocean Cargo بحري' : 'Sea - Ocean Cargo'}</option>
+                            </select>
                           </div>
-                          <select
-                            value={sh.shippingCompany || ''}
-                            onChange={(e) => updateShippingRow(idx, 'shippingCompany', e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold"
-                          >
-                            <option value="">{isAr ? '-- اختر شركة شحن --' : '-- Choose carrier --'}</option>
-                            {shippingCompanies.map(c => (
-                              <option key={c.id} value={c.name}>{c.name}</option>
-                            ))}
-                          </select>
-                        </div>
 
-                        {/* 3. Tracking Number (new requirement) */}
-                        <div>
-                          <label className="block text-slate-500 mb-1">{isAr ? 'رقم التتبع للشحنة' : 'Tracking Number'}</label>
-                          <input
-                            type="text"
-                            value={sh.trackingNumber || ''}
-                            onChange={(e) => updateShippingRow(idx, 'trackingNumber', e.target.value)}
-                            placeholder={isAr ? "رقم التتبع المخصص للشحنة" : "Cargo tracking ID"}
-                            className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-mono placeholder-slate-650"
-                          />
-                        </div>
+                          {/* 2. Carrier company */}
+                          <div>
+                            <div className="flex justify-between items-center mb-1">
+                              <label className="block text-slate-400">{isAr ? 'شركة الشحن' : 'Carrier'}</label>
+                              {(role === 'Admin' || hasPermission('add_sources')) && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveAddShippingIndex(idx);
+                                    setIsAddShippingCompanyOpen(true);
+                                  }}
+                                  className="text-[10px] font-black text-cyan-400 hover:underline flex items-center gap-0.5"
+                                >
+                                  ➕ {isAr ? 'جديدة' : 'New'}
+                                </button>
+                              )}
+                            </div>
+                            <select
+                              value={sh.shippingCompany || ''}
+                              onChange={(e) => updateShippingRow(idx, 'shippingCompany', e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold"
+                            >
+                              <option value="">{isAr ? '-- اختر شركة شحن --' : '-- Choose carrier --'}</option>
+                              {shippingCompanies.map(c => (
+                                <option key={c.id} value={c.name}>{c.name}</option>
+                              ))}
+                            </select>
+                          </div>
 
-                        {/* 4. Shipping Cost */}
-                        <div>
-                          <label className="block text-slate-500 mb-1">{isAr ? 'أجرة وتكاليف النقل (ريال سعودي)' : 'Shipping Cost (SAR)'}</label>
-                          <input
-                            type="number"
-                            required
-                            value={sh.shippingCost || 0}
-                            onChange={(e) => updateShippingRow(idx, 'shippingCost', parseFloat(e.target.value) || 0)}
-                            className="w-full bg-slate-950 border border-slate-800 text-[#d4af37] rounded-xl p-2.5 outline-none font-mono"
-                          />
-                        </div>
+                          {/* 3. Tracking Number */}
+                          <div>
+                            <label className="block text-slate-500 mb-1">{isAr ? 'رقم التتبع للشحنة' : 'Tracking Number'}</label>
+                            <input
+                              type="text"
+                              value={sh.trackingNumber || ''}
+                              onChange={(e) => updateShippingRow(idx, 'trackingNumber', e.target.value)}
+                              placeholder={isAr ? "رقم التتبع المخصص للشحنة" : "Cargo tracking ID"}
+                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-mono placeholder-slate-650"
+                            />
+                          </div>
 
-                        {/* 5. Origin */}
-                        <div>
-                          <label className="block text-slate-500 mb-1">{isAr ? 'مكان التصدير' : 'Source'}</label>
-                          <input
-                            type="text"
-                            required
-                            value={sh.shippingSource || ''}
-                            onChange={(e) => updateShippingRow(idx, 'shippingSource', e.target.value)}
-                            placeholder={isAr ? "مثال: الصين، دبي" : "Source country"}
-                            className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none placeholder-slate-600"
-                          />
-                        </div>
+                          {/* 4. Shipping Cost */}
+                          <div>
+                            <label className="block text-slate-500 mb-1">{isAr ? 'أجرة وتكاليف النقل (ريال سعودي)' : 'Shipping Cost (SAR)'}</label>
+                            <input
+                              type="number"
+                              required
+                              value={sh.shippingCost || 0}
+                              onChange={(e) => updateShippingRow(idx, 'shippingCost', parseFloat(e.target.value) || 0)}
+                              className="w-full bg-slate-950 border border-slate-800 text-[#d4af37] rounded-xl p-2.5 outline-none font-mono"
+                            />
+                          </div>
 
-                        {/* 6. Destination */}
-                        <div>
-                          <label className="block text-slate-500 mb-1">{isAr ? 'مكان الاستلام' : 'Destination'}</label>
-                          <input
-                            type="text"
-                            required
-                            value={sh.shippingDestination || ''}
-                            onChange={(e) => updateShippingRow(idx, 'shippingDestination', e.target.value)}
-                            placeholder={isAr ? "مثال: مستودع صنعاء" : "Destination depot"}
-                            className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none placeholder-slate-600"
-                          />
-                        </div>
+                          {/* 5. Origin */}
+                          <div>
+                            <label className="block text-slate-500 mb-1">{isAr ? 'مكان التصدير' : 'Source'}</label>
+                            <input
+                              type="text"
+                              required
+                              value={sh.shippingSource || ''}
+                              onChange={(e) => updateShippingRow(idx, 'shippingSource', e.target.value)}
+                              placeholder={isAr ? "مثال: الصين، دبي" : "Source country"}
+                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none placeholder-slate-600"
+                            />
+                          </div>
 
-                        {/* 7. Handover Date */}
-                        <div>
-                          <label className="block text-slate-500 mb-1">{isAr ? 'تاريخ التسليم للناقل' : 'Handover Date'}</label>
-                          <input
-                            type="date"
-                            value={sh.shippingDate || ''}
-                            onChange={(e) => {
-                              const newDate = e.target.value;
-                              // Calculate expected arrival date automatically if duration (days) is integer
-                              let expected = sh.expectedArrival || '';
-                              if (newDate && sh.shippingDuration) {
-                                const days = parseInt(sh.shippingDuration);
-                                if (!isNaN(days)) {
-                                  const dateObj = new Date(newDate);
-                                  dateObj.setDate(dateObj.getDate() + days);
-                                  expected = dateObj.toISOString().split('T')[0];
+                          {/* 6. Destination */}
+                          <div>
+                            <label className="block text-slate-500 mb-1">{isAr ? 'مكان الاستلام' : 'Destination'}</label>
+                            <input
+                              type="text"
+                              required
+                              value={sh.shippingDestination || ''}
+                              onChange={(e) => updateShippingRow(idx, 'shippingDestination', e.target.value)}
+                              placeholder={isAr ? "مثال: مستودع صنعاء" : "Destination depot"}
+                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none placeholder-slate-600"
+                            />
+                          </div>
+
+                          {/* 7. Handover Date */}
+                          <div>
+                            <label className="block text-slate-500 mb-1">{isAr ? 'تاريخ التسليم للناقل' : 'Handover Date'}</label>
+                            <input
+                              type="date"
+                              value={sh.shippingDate || ''}
+                              onChange={(e) => {
+                                const newDate = e.target.value;
+                                let expected = sh.expectedArrival || '';
+                                if (newDate && sh.shippingDuration) {
+                                  const days = parseInt(sh.shippingDuration);
+                                  if (!isNaN(days)) {
+                                    const dateObj = new Date(newDate);
+                                    dateObj.setDate(dateObj.getDate() + days);
+                                    expected = dateObj.toISOString().split('T')[0];
+                                  }
                                 }
-                              }
-                              updateShippingRow(idx, 'shippingDate', newDate);
-                              updateShippingRow(idx, 'expectedArrival', expected);
-                            }}
-                            className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans"
-                          />
-                        </div>
+                                updateShippingRow(idx, 'shippingDate', newDate);
+                                updateShippingRow(idx, 'expectedArrival', expected);
+                              }}
+                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans"
+                            />
+                          </div>
 
-                        {/* 8. Duration (days) */}
-                        <div>
-                          <label className="block text-slate-500 mb-1">{isAr ? 'المدة التقديرية (أيام)' : 'Transit Duration (Days)'}</label>
-                          <input
-                            type="number"
-                            value={sh.shippingDuration || ''}
-                            onChange={(e) => {
-                              const durationVal = e.target.value;
-                              let expected = sh.expectedArrival || '';
-                              if (sh.shippingDate && durationVal) {
-                                const days = parseInt(durationVal);
-                                if (!isNaN(days)) {
-                                  const dateObj = new Date(sh.shippingDate);
-                                  dateObj.setDate(dateObj.getDate() + days);
-                                  expected = dateObj.toISOString().split('T')[0];
+                          {/* 8. Transit Duration */}
+                          <div>
+                            <label className="block text-slate-500 mb-1">{isAr ? 'المدة التقديرية (أيام)' : 'Transit Duration (Days)'}</label>
+                            <input
+                              type="number"
+                              value={sh.shippingDuration || ''}
+                              onChange={(e) => {
+                                const durationVal = e.target.value;
+                                let expected = sh.expectedArrival || '';
+                                if (sh.shippingDate && durationVal) {
+                                  const days = parseInt(durationVal);
+                                  if (!isNaN(days)) {
+                                    const dateObj = new Date(sh.shippingDate);
+                                    dateObj.setDate(dateObj.getDate() + days);
+                                    expected = dateObj.toISOString().split('T')[0];
+                                  }
                                 }
-                              }
-                              updateShippingRow(idx, 'shippingDuration', durationVal);
-                              updateShippingRow(idx, 'expectedArrival', expected);
-                            }}
-                            placeholder={isAr ? "مثال: 12 يوم" : "e.g. 12"}
-                            className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none placeholder-slate-650"
-                          />
-                        </div>
+                                updateShippingRow(idx, 'shippingDuration', durationVal);
+                                updateShippingRow(idx, 'expectedArrival', expected);
+                              }}
+                              placeholder={isAr ? "مثال: 12 يوم" : "e.g. 12"}
+                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none placeholder-slate-655 font-mono"
+                            />
+                          </div>
 
-                        {/* 9. Expected Arrival (auto-updated or manual) */}
-                        <div>
-                          <label className="block text-slate-500 mb-1">{isAr ? 'موعد الوصول المتوقع' : 'Expected Arrival'}</label>
-                          <input
-                            type="text"
-                            value={sh.expectedArrival || ''}
-                            onChange={(e) => updateShippingRow(idx, 'expectedArrival', e.target.value)}
-                            placeholder={isAr ? "سنة/شهر/يوم" : "YYYY-MM-DD"}
-                            className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none placeholder-slate-650 font-mono"
-                          />
-                        </div>
+                          {/* 9. Expected Arrival */}
+                          <div>
+                            <label className="block text-slate-500 mb-1">{isAr ? 'موعد الوصول المتوقع' : 'Expected Arrival'}</label>
+                            <input
+                              type="text"
+                              value={sh.expectedArrival || ''}
+                              onChange={(e) => updateShippingRow(idx, 'expectedArrival', e.target.value)}
+                              placeholder={isAr ? "سنة/شهر/يوم" : "YYYY-MM-DD"}
+                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none placeholder-slate-650 font-mono"
+                            />
+                          </div>
 
-                        {/* 10. Delivery Date */}
-                        <div>
-                          <label className="block text-slate-500 mb-1">{isAr ? 'التسليم الفعلي لليمن' : 'Completed Delivery'}</label>
-                          <input
-                            type="date"
-                            value={sh.deliveryDate || ''}
-                            onChange={(e) => updateShippingRow(idx, 'deliveryDate', e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans"
-                          />
-                        </div>
+                          {/* 10. Completed Delivery */}
+                          <div>
+                            <label className="block text-slate-500 mb-1">{isAr ? 'التسليم الفعلي لليمن' : 'Completed Delivery'}</label>
+                            <input
+                              type="date"
+                              value={sh.deliveryDate || ''}
+                              onChange={(e) => updateShippingRow(idx, 'deliveryDate', e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans"
+                            />
+                          </div>
 
-                        {/* 11. Packaging Fees */}
-                        <div className="col-span-2">
-                          <label className="block text-slate-500 mb-1">{isAr ? 'أجور التغليف والصناديق (SAR)' : 'Packaging Fees (SAR)'}</label>
-                          <input
-                            type="number"
-                            value={sh.packagingFees || 0}
-                            onChange={(e) => updateShippingRow(idx, 'packagingFees', parseFloat(e.target.value) || 0)}
-                            className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-mono"
-                          />
+                          {/* 11. Packaging Fees */}
+                          <div className="col-span-2">
+                            <label className="block text-slate-500 mb-1">{isAr ? 'أجور التغليف والصناديق (SAR)' : 'Packaging Fees (SAR)'}</label>
+                            <input
+                              type="number"
+                              value={sh.packagingFees || 0}
+                              onChange={(e) => updateShippingRow(idx, 'packagingFees', parseFloat(e.target.value) || 0)}
+                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-mono"
+                            />
+                          </div>
                         </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Show CBM under shipping rows for Factory */}
+                  {formData.orderSourceType === 'Factory' && (
+                    <div className="p-3 bg-slate-900/40 border border-slate-850 rounded-2xl flex justify-between text-[11px] font-bold text-slate-400 mt-2 text-start">
+                      <div>
+                        {isAr ? 'إجمالي الـ CBM للمنتجات:' : 'Total Products CBM:'}{' '}
+                        <span className="font-mono text-blue-400 font-black">{calcs.totalCBM.toFixed(6)} m³</span>
                       </div>
                     </div>
-                  ))}
-                </div>
-
-                {/* Packaging Fee for shipping companies (%) checkbox */}
-                <div className="flex items-center gap-3 bg-slate-900/40 p-3 rounded-2xl border border-slate-850 mt-3 text-start">
-                  <input 
-                    type="checkbox"
-                    id="packaging-fee-check"
-                    checked={packagingFeeEnabled}
-                    onChange={(e) => setPackagingFeeEnabled(e.target.checked)}
-                    className="rounded bg-slate-950 border-slate-800 text-yellow-600 focus:ring-0 w-4 h-4 cursor-pointer"
-                  />
-                  <label htmlFor="packaging-fee-check" className="text-[11px] font-bold text-slate-350 cursor-pointer">{isAr ? 'تطبيق رسوم تغليف شركة الشحن (%)' : 'Apply carrier packaging fee (%)'}</label>
-                  {packagingFeeEnabled && (
-                    <input 
-                      type="number"
-                      value={packagingFeeRate}
-                      onChange={(e) => setPackagingFeeRate(parseFloat(e.target.value) || 0)}
-                      className="w-14 bg-slate-950 border border-slate-800 text-white rounded-xl p-1.5 text-center font-mono font-bold text-[11px]"
-                    />
                   )}
+
+                  {/* Packaging Fee for shipping companies (%) checkbox */}
+                  <div className="flex items-center gap-3 bg-slate-900/40 p-3 rounded-2xl border border-slate-850 mt-3 text-start">
+                    <input 
+                      type="checkbox"
+                      id="packaging-fee-check"
+                      checked={packagingFeeEnabled}
+                      onChange={(e) => setPackagingFeeEnabled(e.target.checked)}
+                      className="rounded bg-slate-950 border-slate-800 text-yellow-600 focus:ring-0 w-4 h-4 cursor-pointer"
+                    />
+                    <label htmlFor="packaging-fee-check" className="text-[11px] font-bold text-slate-350 cursor-pointer">{isAr ? 'تطبيق رسوم تغليف شركة الشحن (%)' : 'Apply carrier packaging fee (%)'}</label>
+                    {packagingFeeEnabled && (
+                      <input 
+                        type="number"
+                        value={packagingFeeRate}
+                        onChange={(e) => setPackagingFeeRate(parseFloat(e.target.value) || 0)}
+                        className="w-14 bg-slate-950 border border-slate-800 text-white rounded-xl p-1.5 text-center font-mono font-bold text-[11px]"
+                      />
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Section 4: Couriers & Local Logistics Drivers */}
               <div className="space-y-4 bg-slate-950/20 border border-slate-800 p-5 rounded-3xl">
@@ -3685,19 +3930,81 @@ export default function Orders() {
                         className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none font-mono text-[11px]"
                         placeholder="0.00"
                       />
+                      {formData.sheinRedPrice > 0 && formData.sheinRedPrice < calcs.productsSum && (
+                        <p className="text-[9px] text-red-500 mt-1 font-bold">
+                          {isAr ? '⚠️ السعر الأحمر يجب ألا يقل عن تكلفة المنتجات' : '⚠️ Red price cannot be less than products cost'}
+                        </p>
+                      )}
                     </div>
                   )}
 
-                  <div>
-                    <label className="block text-[10px] text-slate-500 uppercase tracking-widest block leading-none mb-1.5">{isAr ? 'رسوم التغليف العامة (SAR)' : 'KSA Wrapping Fee (SAR)'}</label>
-                    <input 
-                      type="number" 
-                      value={formData.packagingFee || ''}
-                      onChange={(e) => setFormData({...formData, packagingFee: parseFloat(e.target.value) || 0})}
-                      className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none font-mono text-[11px]"
-                      placeholder="0.00"
-                    />
-                  </div>
+                  {formData.orderSourceType === 'Factory' && (
+                    <>
+                      <div>
+                        <label className="block text-[10px] text-slate-500 uppercase tracking-widest block leading-none mb-1.5">
+                          {isAr ? 'نسبة الربح للكيلو (SAR/كجم)' : 'Profit Rate per KG (SAR/kg)'}
+                        </label>
+                        <input 
+                          type="number"
+                          step="any"
+                          value={profitPerKgRate}
+                          onChange={(e) => setProfitPerKgRate(parseFloat(e.target.value) || 0)}
+                          className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none font-mono text-[11px]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-slate-500 uppercase tracking-widest block leading-none mb-1.5 font-bold">
+                          {isAr ? 'سعر شحن الـ CBM (SAR/m³)' : 'CBM Shipping Rate (SAR/m³)'}
+                        </label>
+                        <div className="flex gap-1.5">
+                          <input 
+                            type="number"
+                            step="any"
+                            value={cbmShippingRateValue}
+                            onChange={(e) => setCbmShippingRateValue(parseFloat(e.target.value) || 0)}
+                            className="flex-1 bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none font-mono text-[11px]"
+                          />
+                          {settings.cbmShippingRateApiUrl && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  const res = await fetch(settings.cbmShippingRateApiUrl!);
+                                  if (!res.ok) throw new Error('API request failed');
+                                  const data = await res.json();
+                                  const rate = data.cbm_rate || data.rate || data.value || data.price;
+                                  if (rate && !isNaN(parseFloat(rate))) {
+                                    setCbmShippingRateValue(parseFloat(rate));
+                                    alert(isAr ? `✅ تم جلب سعر CBM الجديد: ${rate} SAR/m³` : `✅ New CBM rate fetched: ${rate} SAR/m³`);
+                                  } else {
+                                    throw new Error(isAr ? 'لم يتم العثور على سعر CBM' : 'CBM rate not found');
+                                  }
+                                } catch (err: any) {
+                                  alert((isAr ? '❌ خطأ: ' : '❌ Error: ') + err.message);
+                                }
+                              }}
+                              className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-xl text-xs flex items-center justify-center transition"
+                            >
+                              <RefreshCw className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {formData.orderSourceType !== 'SHEIN' && (
+                    <div>
+                      <label className="block text-[10px] text-slate-500 uppercase tracking-widest block leading-none mb-1.5">{isAr ? 'رسوم التغليف العامة (SAR)' : 'KSA Wrapping Fee (SAR)'}</label>
+                      <input 
+                        type="number" 
+                        value={formData.packagingFee || ''}
+                        onChange={(e) => setFormData({...formData, packagingFee: parseFloat(e.target.value) || 0})}
+                        className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none font-mono text-[11px]"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  )}
 
                   <div>
                     <label className="block text-[10px] text-slate-500 uppercase tracking-widest block leading-none mb-1.5">{isAr ? 'العملة والتحصيل المالي' : 'Collection Currency'}</label>
@@ -3839,8 +4146,8 @@ export default function Orders() {
                           <span className="block text-[9px] text-yellow-600/70 mt-0.5">{isAr ? `تُحسب بسعر صرف: ${formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER} YER` : `At exchange rate: ${formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER} YER`}</span>
                         </div>
                         <div className="text-right">
-                          <span className="font-mono text-white text-sm font-black block">{(calcs.totalProductsCostWithAdjustments + calcs.shippingCostSAR + parseFloat(formData.packagingFee as any)).toLocaleString()} SAR</span>
-                          <span className="font-mono text-[10px] text-[#d4af37] block mt-0.5 font-bold">{(((calcs.totalProductsCostWithAdjustments + calcs.shippingCostSAR + parseFloat(formData.packagingFee as any)) * (formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER))).toLocaleString()} YER</span>
+                          <span className="font-mono text-white text-sm font-black block">{calcs.totalOrderSAR.toLocaleString()} SAR</span>
+                          <span className="font-mono text-[10px] text-[#d4af37] block mt-0.5 font-bold">{(calcs.totalOrderSAR * (formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER)).toLocaleString()} YER</span>
                         </div>
                       </div>
                     </div>

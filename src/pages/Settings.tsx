@@ -1098,6 +1098,121 @@ export default function Settings() {
             </SectionCard>
           )}
 
+          {/* Factory / Manufacturer Order Defaults */}
+          {(role === 'Admin' || hasPermission('edit_profit_per_kg') || hasPermission('edit_cbm_shipping_rate')) && (
+            <SectionCard
+              title={isAr ? 'إعدادات طلبات المصنع والمورد الدولي' : 'Factory & International Supplier Defaults'}
+              icon={Package}
+              badge={isAr ? 'شحن بالحجم' : 'CBM Freight'}
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Profit per KG */}
+                <div>
+                  <FieldLabel locked={!(role === 'Admin' || hasPermission('edit_profit_per_kg'))}>
+                    {isAr ? 'نسبة الربح للكيلو (SAR/كجم)' : 'Profit Rate per KG (SAR/kg)'}
+                  </FieldLabel>
+                  <div className="relative">
+                    <FieldInput
+                      type="number"
+                      step="any"
+                      disabled={!(role === 'Admin' || hasPermission('edit_profit_per_kg'))}
+                      value={localSettings.defaultProfitPerKg ?? 19}
+                      onChange={e => setLocalSettings({ ...localSettings, defaultProfitPerKg: parseFloat(e.target.value) || 0 })}
+                      className="font-mono pr-16"
+                      dir="ltr"
+                    />
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-amber-400 bg-amber-950/30 px-1.5 py-0.5 rounded">SAR/kg</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1.5 font-bold">
+                    {isAr ? 'أرباح الشركة = إجمالي الوزن (كج) × هذه النسبة' : 'Company profit = Total weight (kg) × this rate'}
+                  </p>
+                </div>
+
+                {/* CBM Shipping Rate */}
+                <div>
+                  <FieldLabel locked={!(role === 'Admin' || hasPermission('edit_cbm_shipping_rate'))}>
+                    {isAr ? 'سعر شحن الـ CBM الحالي (SAR/m³)' : 'Current CBM Shipping Rate (SAR/m³)'}
+                  </FieldLabel>
+                  <div className="relative">
+                    <FieldInput
+                      type="number"
+                      step="any"
+                      disabled={!(role === 'Admin' || hasPermission('edit_cbm_shipping_rate'))}
+                      value={localSettings.defaultCbmShippingRate ?? 1400}
+                      onChange={e => setLocalSettings({ ...localSettings, defaultCbmShippingRate: parseFloat(e.target.value) || 0 })}
+                      className="font-mono pr-20"
+                      dir="ltr"
+                    />
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-blue-400 bg-blue-950/30 px-1.5 py-0.5 rounded">SAR/m³</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1.5 font-bold">
+                    {isAr ? 'تكلفة الشحن = إجمالي CBM × هذا السعر' : 'Shipping cost = Total CBM × this rate'}
+                  </p>
+                </div>
+
+                {/* CBM Rate API URL */}
+                {(role === 'Admin' || hasPermission('edit_cbm_shipping_rate')) && (
+                  <div className="md:col-span-2">
+                    <FieldLabel>
+                      {isAr ? 'رابط API لتحديث سعر الـ CBM تلقائياً (اختياري)' : 'API URL for auto-updating CBM rate (optional)'}
+                    </FieldLabel>
+                    <div className="flex gap-3">
+                      <FieldInput
+                        type="text"
+                        value={localSettings.cbmShippingRateApiUrl || ''}
+                        onChange={e => setLocalSettings({ ...localSettings, cbmShippingRateApiUrl: e.target.value })}
+                        placeholder="https://api.example.com/cbm-rate"
+                        dir="ltr"
+                        className="font-mono flex-1"
+                      />
+                      {localSettings.cbmShippingRateApiUrl && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              const res = await fetch(localSettings.cbmShippingRateApiUrl!);
+                              if (!res.ok) throw new Error('API request failed');
+                              const data = await res.json();
+                              const rate = data.cbm_rate || data.rate || data.value || data.price;
+                              if (rate && !isNaN(parseFloat(rate))) {
+                                const newRate = parseFloat(rate);
+                                const now = new Date();
+                                const updaterName = profile?.fullName || auth.currentUser?.email || 'Unknown';
+                                setLocalSettings(prev => ({
+                                  ...prev,
+                                  defaultCbmShippingRate: newRate,
+                                  lastCbmRateUpdate: now.toLocaleString(isAr ? 'ar-YE' : 'en-US'),
+                                  lastCbmRateUpdatedBy: updaterName
+                                }));
+                                alert(isAr ? `✅ تم تحديث سعر CBM إلى: ${newRate} SAR/m³` : `✅ CBM rate updated to: ${newRate} SAR/m³`);
+                              } else {
+                                throw new Error(isAr ? 'لم يتم إيجاد سعر CBM في الاستجابة' : 'CBM rate not found in API response');
+                              }
+                            } catch (err: any) {
+                              alert((isAr ? '❌ خطأ في جلب سعر CBM: ' : '❌ Error fetching CBM rate: ') + err.message);
+                            }
+                          }}
+                          className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white py-2 px-4 rounded-xl font-black text-xs transition flex items-center gap-2 whitespace-nowrap"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          {isAr ? 'جلب السعر' : 'Fetch Rate'}
+                        </button>
+                      )}
+                    </div>
+                    {localSettings.lastCbmRateUpdate && (
+                      <p className="text-[10px] text-slate-500 mt-1.5 font-bold">
+                        {isAr ? `آخر تحديث: ${localSettings.lastCbmRateUpdate} بواسطة ${localSettings.lastCbmRateUpdatedBy}` : `Last updated: ${localSettings.lastCbmRateUpdate} by ${localSettings.lastCbmRateUpdatedBy}`}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="mt-4 p-3 bg-blue-950/20 border border-blue-900/30 rounded-xl text-[10px] text-blue-400 font-bold">
+                🏭 {isAr ? 'تُستخدم هذه الإعدادات لطلبات المصنع والمورد الدولي فقط.' : 'These settings apply to Factory & International Supplier order types only.'}
+              </div>
+            </SectionCard>
+          )}
+
           {/* Invoice Settings */}
           {canEditOrderDefaults && (
             <SectionCard title={t('invoiceSettings')} icon={FileText}>

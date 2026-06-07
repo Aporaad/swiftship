@@ -437,9 +437,11 @@ class FinancialAccountService {
    */
   async ensureSystemAccounts(currency: string = 'SAR'): Promise<Record<string, string>> {
     const sysAccounts = [
-      { id: 'sys_profit_account', name: 'حساب أرباح الشركة', prefix: '4000' },
-      { id: 'sys_delivery_cost', name: 'حساب مصروفات التوصيل', prefix: '5000' },
-      { id: 'sys_sourcing_cost', name: 'حساب تكاليف الاستيراد', prefix: '5000' }
+      { id: 'sys_profit_account',   name: 'حساب أرباح الشركة',                      prefix: '4000' },
+      { id: 'sys_delivery_cost',    name: 'حساب مصروفات التوصيل',                   prefix: '5000' },
+      { id: 'sys_sourcing_cost',    name: 'حساب تكاليف الاستيراد التشغيلية',        prefix: '5100' },
+      { id: 'sys_packaging_fees',   name: 'حساب رسوم التغليف والتعبئة',            prefix: '5200' },
+      { id: 'sys_shipping_costs',   name: 'حساب تكاليف الشحن الدولي',              prefix: '5300' },
     ];
 
     const sysIds: Record<string, string> = {};

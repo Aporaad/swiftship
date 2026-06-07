@@ -56,6 +56,13 @@ export interface Settings {
   defaultDeliveryFee?: number;
   defaultCourierCommissionRate?: number;
 
+  // Factory / Manufacturer Order Defaults
+  defaultProfitPerKg?: number;          // نسبة الربح للكيلو (SAR/kg) للمصنع
+  defaultCbmShippingRate?: number;      // سعر شحن الـ CBM (SAR/m³) للمصنع
+  cbmShippingRateApiUrl?: string;       // رابط API لتحديث سعر CBM تلقائياً
+  lastCbmRateUpdate?: string;           // آخر تحديث لسعر CBM
+  lastCbmRateUpdatedBy?: string;        // من حدّث سعر CBM
+
   // Security & Protection
   protectSensitiveOrderDelete?: boolean;
 
@@ -118,6 +125,11 @@ const defaultSettings: Settings = {
   defaultCompanyProfitRate: 12,
   defaultDeliveryFee: 4000,
   defaultCourierCommissionRate: 30,
+  defaultProfitPerKg: 19,
+  defaultCbmShippingRate: 1400,
+  cbmShippingRateApiUrl: '',
+  lastCbmRateUpdate: '',
+  lastCbmRateUpdatedBy: '',
   protectSensitiveOrderDelete: true,
   autoBackupEnabled: false,
   backupSchedule: 'daily',
