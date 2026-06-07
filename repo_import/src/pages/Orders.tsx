@@ -641,18 +641,12 @@ export default function Orders() {
       offset += 6;
     }
 
-    if (parseFloat(order.shippingCostSAR || '0') > 0) {
-      doc.text('Shipping/Freight:', 114, yIdx + 7 + offset);
-      doc.text(`${parseFloat(order.shippingCostSAR || '0').toLocaleString()} SAR`, 170, yIdx + 7 + offset);
-      offset += 6;
-    }
-
-    const companyProfit = parseFloat(order.profitCompanySAR || '0');
-    if (companyProfit > 0) {
-      doc.text('App Commission (عمولة التطبيق):', 114, yIdx + 7 + offset);
-      doc.text(`${companyProfit.toLocaleString()} SAR`, 170, yIdx + 7 + offset);
-      offset += 6;
-    }
+    doc.text('Shipping/Freight:', 114, yIdx + 7 + offset);
+    const shipCost = order.orderSourceType === 'Factory' 
+      ? (shippingList.reduce((sum: number, sh: any) => sum + parseFloat(sh.shippingCost || 0), 0))
+      : (order.totalCostSAR * (order.companyProfitRate / 100)); // approximate or read from DB
+    doc.text(`${(parseFloat(order.totalCostSAR) - (order.totalCostSAR * 0.12) - parseFloat(order.packagingFee || 0) > 0 ? (order.totalCostSAR * 0.12) : 0).toLocaleString()} SAR`, 170, yIdx + 7 + offset);
+    offset += 6;
 
     doc.text('Yemen Delivery Fee:', 114, yIdx + 7 + offset);
     doc.text(`${(parseFloat(order.deliveryCourierFee) || 0).toLocaleString()} YER`, 170, yIdx + 7 + offset);
@@ -739,10 +733,7 @@ export default function Orders() {
       profitCompanySAR = rawProfitSAR - profitSaudiSAR;
     } else if (formData.orderSourceType === 'Factory') {
       const rawProfitSAR = totalWeight * (parseFloat(profitPerKgRate as any) || 0);
-      
-      // Use the shipping cost from the shippings table (which is filled automatically based on formula and is editable)
-      shippingCostSAR = totalShippingsCost;
-
+      shippingCostSAR = totalCBM * (parseFloat(cbmShippingRateValue as any) || 0);
       const generalPackagingFee = parseFloat(formData.packagingFee as any) || 0;
       totalOrderSAR = productsSum + rawProfitSAR + shippingCostSAR + generalPackagingFee;
       
@@ -803,19 +794,6 @@ export default function Orders() {
       return notificationService.notify({
         title: isAr ? 'خطأ' : 'Error',
         message: isAr ? 'الرجاء اختيار العميل أولاً' : 'Please select a customer first',
-        type: 'error',
-        category: 'order'
-      });
-    }
-
-    const currentCalcs = computeCalculations();
-    const productsSumYER = currentCalcs.productsSum * (formData.currency === 'USD' ? (parseFloat(formData.exchangeRateUSD as any) || 535) : (parseFloat(formData.exchangeRateYER as any) || 140));
-    const paidAmount = parseFloat(formData.amountPaid as any) || 0;
-
-    if (paidAmount < Math.floor(productsSumYER)) {
-      return notificationService.notify({
-        title: isAr ? 'خطأ في التحقق' : 'Validation Error',
-        message: isAr ? `المبلغ المدفوع كاش يجب ألا يقل عن تكلفة المنتجات الأصلية (${Math.floor(productsSumYER).toLocaleString()} YER)` : `Paid amount cannot be less than original products cost (${Math.floor(productsSumYER).toLocaleString()} YER)`,
         type: 'error',
         category: 'order'
       });
@@ -918,14 +896,6 @@ export default function Orders() {
 
       await addDoc(collection(db, 'orders'), payload);
 
-      // Ensure system accounts exist
-      let systemAccs: Record<string, string> = {};
-      try {
-        systemAccs = await financialAccountService.ensureSystemAccounts(settings.currency || 'SAR');
-      } catch (err) {
-        console.error('Could not ensure system accounts:', err);
-      }
-
       // --- Financial Account Impact ---
       const customerRecord = customers.find(c => c.id === formData.customerId);
       const linkedAccountId = customerRecord?.financialAccountId;
@@ -968,50 +938,35 @@ export default function Orders() {
               { USD: formData.exchangeRateUSD, SAR: formData.exchangeRateYER }
             );
 
-            if (systemAccs['sys_cash_account']) {
-               await financialAccountService.recordDoubleEntryTransaction(
-                 systemAccs['sys_cash_account'], // Debit Cash
-                 linkedAccountId, // Credit Customer
-                 {
-                    accountCode: linkedAccountCode || '',
-                    entityType: 'customer',
-                    accountId: linkedAccountId,
-                    entityId: formData.customerId,
-                    entityName: formData.customerName,
-                    amount: convertedPaid,
-                    amountOriginal: paidVal,
-                    currencyOriginal: 'YER',
-                    description: isAr ? `دفعة مقدمة للطلب رقم: ${orderNumber}` : `Down payment for order: ${orderNumber}`,
-                    refNumber: orderNumber,
-                    module: 'payment',
-                    createdByUid: auth.currentUser?.uid || 'system',
-                    createdByName: profile?.fullName || 'Root Admin',
-                    createdAt: Date.now()
-                 }
-               );
-            } else {
-               await financialAccountService.recordTransaction(linkedAccountId, {
-                 accountId: linkedAccountId,
-                 accountCode: linkedAccountCode || '',
-                 entityType: 'customer',
-                 entityId: formData.customerId,
-                 entityName: formData.customerName,
-                 type: 'Credit', // Crediting customer for downpayment
-                 amount: convertedPaid,
-                 amountOriginal: paidVal,
-                 currencyOriginal: 'YER',
-                 description: isAr ? `دفعة مقدمة للطلب رقم: ${orderNumber}` : `Down payment for order: ${orderNumber}`,
-                 refNumber: orderNumber,
-                 module: 'payment',
-                 createdByUid: auth.currentUser?.uid || 'system',
-                 createdByName: profile?.fullName || 'Root Admin',
-                 createdAt: Date.now()
-               });
-            }
+            await financialAccountService.recordTransaction(linkedAccountId, {
+              accountId: linkedAccountId,
+              accountCode: linkedAccountCode || '',
+              entityType: 'customer',
+              entityId: formData.customerId,
+              entityName: formData.customerName,
+              type: 'Credit', // Crediting customer for downpayment
+              amount: convertedPaid,
+              amountOriginal: paidVal,
+              currencyOriginal: 'YER',
+              description: isAr ? `دفعة مقدمة للطلب رقم: ${orderNumber}` : `Down payment for order: ${orderNumber}`,
+              refNumber: orderNumber,
+              module: 'payment',
+              createdByUid: auth.currentUser?.uid || 'system',
+              createdByName: profile?.fullName || 'Root Admin',
+              createdAt: Date.now()
+            });
           }
         } catch (txErr) {
           console.error('[Orders] Error registering financial account transactions:', txErr);
         }
+      }
+
+      // Ensure system accounts exist
+      let systemAccs: Record<string, string> = {};
+      try {
+        systemAccs = await financialAccountService.ensureSystemAccounts(settings.currency || 'SAR');
+      } catch (err) {
+        console.error('Could not ensure system accounts:', err);
       }
 
       const sourcingCostAmount = formData.orderSourceType === 'App'
@@ -1141,9 +1096,108 @@ export default function Orders() {
         }
       }
 
-      // Record Company Profit and Saudi Partner Profit will be recorded upon designated logistics statuses (handled in Update Status).
-      // Removed direct ledger creation for couriers and company profit from here to prevent duplicates.
-      // Removed Yemen delivery driver wage creation here to prevent duplicates (handled on "تم التسليم").
+      // Record Company Profit directly
+      if (currentCalcs.profitCompanySAR > 0 && systemAccs['sys_profit_account']) {
+        try {
+          const profitConverted = financialAccountService.convertToDefaultCurrency(
+            currentCalcs.profitCompanySAR,
+            'SAR',
+            settings.currency || 'YER',
+            { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+          );
+
+          await financialAccountService.recordTransaction(systemAccs['sys_profit_account'], {
+              accountId: systemAccs['sys_profit_account'],
+              accountCode: 'REV-PRFT',
+              entityType: 'system',
+              entityId: 'sys_profit_account',
+              entityName: 'حساب أرباح الشركة',
+              type: 'Credit', // Credit for Revenue/Profit
+              amount: profitConverted,
+              amountOriginal: currentCalcs.profitCompanySAR,
+              currencyOriginal: 'SAR',
+              description: isAr ? `صافي أرباح الشركة للطلب: ${orderNumber}` : `Company profit for order: ${orderNumber}`,
+              refNumber: orderNumber,
+              module: 'order',
+              createdByUid: auth.currentUser?.uid || 'system',
+              createdByName: profile?.fullName || 'Root Admin',
+              createdAt: Date.now()
+          });
+        } catch (e) {
+           console.error('Failed to log company profit', e);
+        }
+      }
+
+      // Record Saudi partner Aggregator profit
+      if (currentCalcs.profitSaudiSAR > 0 && formData.shippingCourierId) {
+        const saudiCourier = couriers.find(c => c.id === formData.shippingCourierId);
+        if (saudiCourier && saudiCourier.financialAccountId) {
+          try {
+            const saudiProfitConverted = financialAccountService.convertToDefaultCurrency(
+              currentCalcs.profitSaudiSAR,
+              'SAR',
+              settings.currency || 'YER',
+              { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+            );
+            await financialAccountService.recordTransaction(saudiCourier.financialAccountId, {
+              accountId: saudiCourier.financialAccountId,
+              accountCode: saudiCourier.financialAccountCode || '',
+              entityType: 'courier',
+              entityId: saudiCourier.id,
+              entityName: saudiCourier.fullName,
+              type: 'Credit',
+              amount: saudiProfitConverted,
+              amountOriginal: currentCalcs.profitSaudiSAR,
+              currencyOriginal: 'SAR',
+              description: isAr ? `عمولة تجميع شحنة الطلب: ${orderNumber}` : `Aggregation commission for order: ${orderNumber}`,
+              refNumber: orderNumber,
+              module: 'order',
+              createdByUid: auth.currentUser?.uid || 'system',
+              createdByName: profile?.fullName || 'Root Admin',
+              createdAt: Date.now()
+            });
+          } catch (e) {
+            console.error('Failed to credit saudi courier profit', e);
+          }
+        }
+      }
+
+      // Record Yemen flat delivery driver wage
+      const deliveryFee = parseFloat(formData.deliveryCourierFee as any) || 0;
+      if (deliveryFee > 0 && formData.deliveryCourierId) {
+        const yemenCourier = couriers.find(c => c.id === formData.deliveryCourierId);
+        const targetAccountId = yemenCourier?.financialAccountId || systemAccs['sys_delivery_cost'];
+        const targetAccountCode = yemenCourier?.financialAccountCode || 'EXP-DELIV';
+        if (targetAccountId) {
+          try {
+            const delFeeConverted = financialAccountService.convertToDefaultCurrency(
+              deliveryFee,
+              'YER',
+              settings.currency || 'YER',
+              { USD: formData.exchangeRateUSD, SAR: formData.exchangeRateYER }
+            );
+            await financialAccountService.recordTransaction(targetAccountId, {
+              accountId: targetAccountId,
+              accountCode: targetAccountCode,
+              entityType: yemenCourier ? 'courier' : 'system',
+              entityId: yemenCourier ? yemenCourier.id : 'sys_delivery_cost',
+              entityName: yemenCourier ? yemenCourier.fullName : 'حساب مصروفات التوصيل',
+              type: 'Credit',
+              amount: delFeeConverted,
+              amountOriginal: deliveryFee,
+              currencyOriginal: 'YER',
+              description: isAr ? `أجرة توصيل الطلب رقم: ${orderNumber}` : `Delivery fee for order: ${orderNumber}`,
+              refNumber: orderNumber,
+              module: 'order',
+              createdByUid: auth.currentUser?.uid || 'system',
+              createdByName: profile?.fullName || 'Root Admin',
+              createdAt: Date.now()
+            });
+          } catch (e) {
+            console.error('Failed to log delivery courier fee', e);
+          }
+        }
+      }
 
       // Log the order creation to activity log
       activityLogService.log('add_order', payload.orderNumber || 'New Order', {
@@ -1222,8 +1276,7 @@ export default function Orders() {
       sheinRedPrice: 0,
       amountPaid: 0,
       paymentMethod: 'Cash',
-      notes: '',
-      deductSourcingCostFromCourier: false
+      notes: ''
     });
     setItems([{ productName: '', productUrl: '', quantity: 1, productPrice: 0, weight: 0, cbm: 0, length: 0, width: 0, height: 0, trackingNumber: '' }]);
     setCustomerSearchQuery('');
@@ -1692,9 +1745,7 @@ export default function Orders() {
 
       // Create auto-wage for Delivery Courier
       const deliveryFee = parseFloat(selectedOrder.deliveryCourierFee || updateFormData.deliveryCourierFee || '0');
-      const isStrictlyDeliveredStatus = updateFormData.orderStatus === 'تم التسليم';
-      const wasStrictlyDeliveredStatus = (selectedOrder.orderStatus || '') === 'تم التسليم';
-      if (isStrictlyDeliveredStatus && !wasStrictlyDeliveredStatus && courierId && deliveryFee > 0) {
+      if (isDelivered && !wasDelivered && courierId && deliveryFee > 0) {
         const YY = String(new Date().getFullYear()).slice(-2);
         const MM = String(new Date().getMonth() + 1).padStart(2, '0');
         const wageNumber = `WGE-${YY}${MM}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -1771,7 +1822,7 @@ export default function Orders() {
       if (isArrivedYemen && !wasArrivedYemen && shippingCourierId) {
         const courierRecord = couriers.find(c => c.id === shippingCourierId);
         
-        if (courierRecord) {
+        if (courierRecord && courierRecord.commissionRate && courierRecord.commissionRate > 0) {
           const exchangeRate = parseFloat(selectedOrder.exchangeRateYER || settings.exchangeRateYER || 390);
           const commissionProfit = parseFloat(selectedOrder.profitSaudiSAR || '0') * exchangeRate;
           
@@ -1845,45 +1896,6 @@ export default function Orders() {
         }
       }
 
-      // Add Company Profit trigger strictly for 'تم التسليم' status
-      const isStrictlyDelivered = updateFormData.orderStatus === 'تم التسليم';
-      const wasStrictlyDelivered = selectedOrder.orderStatus === 'تم التسليم';
-
-      if (isStrictlyDelivered && !wasStrictlyDelivered && parseFloat(selectedOrder.profitCompanySAR || '0') > 0) {
-        try {
-          const sysAccounts = await financialAccountService.ensureSystemAccounts(settings.currency || 'SAR');
-          if (sysAccounts['sys_profit_account']) {
-            const profitValSAR = parseFloat(selectedOrder.profitCompanySAR || '0');
-            const profitConverted = financialAccountService.convertToDefaultCurrency(
-              profitValSAR,
-              'SAR',
-              settings.currency || 'YER',
-              { USD: selectedOrder.exchangeRateUSD || settings.exchangeRateUSD || 535, SAR: selectedOrder.exchangeRateYER || settings.exchangeRateSAR || 140 }
-            );
-
-            await financialAccountService.recordTransaction(sysAccounts['sys_profit_account'], {
-              accountId: sysAccounts['sys_profit_account'],
-              accountCode: 'REV-PRFT',
-              entityType: 'system',
-              entityId: 'sys_profit_account',
-              entityName: 'حساب أرباح الشركة',
-              type: 'Credit',
-              amount: profitConverted,
-              amountOriginal: profitValSAR,
-              currencyOriginal: 'SAR',
-              description: isAr ? `صافي أرباح الشركة للطلب: ${selectedOrder.orderNumber}` : `Company profit for order: ${selectedOrder.orderNumber}`,
-              refNumber: selectedOrder.orderNumber || '',
-              module: 'order',
-              createdByUid: auth.currentUser?.uid || 'system',
-              createdByName: profile?.fullName || 'System Auto-Profit',
-              createdAt: Date.now()
-            });
-          }
-        } catch (e) {
-          console.warn('[Orders] Could not record company profit on status transition:', e);
-        }
-      }
-
       await updateDoc(doc(db, 'orders', selectedOrder.id), {
         orderStatus: updateFormData.orderStatus,
         deliveryStatus: updateFormData.deliveryStatus,
@@ -1949,11 +1961,9 @@ export default function Orders() {
   };
 
   const updateItemRow = (idx: number, field: string, val: any) => {
-    setItems(prev => {
-      const updated = [...prev];
-      updated[idx] = { ...updated[idx], [field]: val };
-      return updated;
-    });
+    const updated = [...items];
+    updated[idx] = { ...updated[idx], [field]: val };
+    setItems(updated);
   };
 
   const removeItemRow = (idx: number) => {
@@ -1981,39 +1991,8 @@ export default function Orders() {
   const updateShippingRow = (idx: number, field: string, val: any) => {
     const updated = [...shippings];
     updated[idx] = { ...updated[idx], [field]: val };
-    if (field === 'shippingCost') {
-      updated[idx]._isCalculated = false;
-    }
     setShippings(updated);
   };
-
-  // Auto-calculate shipping cost for Factory and sync with primary shipping row
-  useEffect(() => {
-    if (formData.orderSourceType === 'Factory') {
-      const totalCBM = items.reduce((sum, i) => sum + (parseFloat(i.quantity || 0) * parseFloat(i.cbm || 0)), 0);
-      const cbmShippingRateUSD = parseFloat(cbmShippingRateValue as any) || 0;
-      const cbmShippingUSD = totalCBM * cbmShippingRateUSD;
-      const exUSD = parseFloat(formData.exchangeRateUSD as any) || 535;
-      const exYER = parseFloat(formData.exchangeRateYER as any) || 140;
-      const calculatedShippingCostSAR = Math.round((cbmShippingUSD * exUSD) / exYER) || 0;
-
-      setShippings(prev => {
-        if (!prev || prev.length === 0) return prev;
-        const firstRow = prev[0];
-        const isUnmodified = firstRow._isCalculated !== false;
-        if (isUnmodified && firstRow.shippingCost !== calculatedShippingCostSAR) {
-          const updated = [...prev];
-          updated[0] = {
-            ...updated[0],
-            shippingCost: calculatedShippingCostSAR,
-            _isCalculated: true
-          };
-          return updated;
-        }
-        return prev;
-      });
-    }
-  }, [formData.orderSourceType, items, cbmShippingRateValue, formData.exchangeRateUSD, formData.exchangeRateYER]);
 
   const removeShippingRow = (idx: number) => {
     if (shippings.length === 1) {
@@ -2221,9 +2200,7 @@ export default function Orders() {
 
         // Create auto-wage for Delivery Courier
         const deliveryFee = parseFloat(ord.deliveryCourierFee || '0');
-        const isStrictlyDeliveredStatus = newStatus === 'تم التسليم';
-        const wasStrictlyDeliveredStatus = (ord.orderStatus || '') === 'تم التسليم';
-        if (isStrictlyDeliveredStatus && !wasStrictlyDeliveredStatus && courierId && deliveryFee > 0) {
+        if (isDelivered && !wasDelivered && courierId && deliveryFee > 0) {
           const YY = String(new Date().getFullYear()).slice(-2);
           const MM = String(new Date().getMonth() + 1).padStart(2, '0');
           const wageNumber = `WGE-${YY}${MM}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -2300,7 +2277,7 @@ export default function Orders() {
         if (isArrivedYemen && !wasArrivedYemen && shippingCourierId) {
           const courierRecord = couriers.find(c => c.id === shippingCourierId);
           
-          if (courierRecord) {
+          if (courierRecord && courierRecord.commissionRate && courierRecord.commissionRate > 0) {
             const exchangeRate = parseFloat(ord.exchangeRateYER || settings.exchangeRateYER || 390);
             const commissionProfit = parseFloat(ord.profitSaudiSAR || '0') * exchangeRate;
             
@@ -3428,8 +3405,8 @@ export default function Orders() {
                             <input 
                               type="number"
                               step="any"
-                              value={item.weight ?? ''}
-                              onChange={(e) => updateItemRow(idx, 'weight', e.target.value)}
+                              value={item.weight || 0}
+                              onChange={(e) => updateItemRow(idx, 'weight', parseFloat(e.target.value) || 0)}
                               className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2 outline-none font-bold text-[11px] font-mono text-center"
                             />
                           </div>
@@ -3438,8 +3415,8 @@ export default function Orders() {
                             <input 
                               type="number"
                               step="any"
-                              value={item.cbm ?? ''}
-                              onChange={(e) => updateItemRow(idx, 'cbm', e.target.value)}
+                              value={item.cbm || 0}
+                              onChange={(e) => updateItemRow(idx, 'cbm', parseFloat(e.target.value) || 0)}
                               className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2 outline-none font-bold text-[11px] font-mono text-center"
                             />
                           </div>
@@ -3447,14 +3424,13 @@ export default function Orders() {
                           <div className="col-span-1">
                             <input 
                               type="number"
-                              step="any"
-                              value={item.length ?? ''}
+                              value={item.length || 0}
                               onChange={(e) => {
-                                const newL = e.target.value;
+                                const newL = parseFloat(e.target.value) || 0;
                                 const w = parseFloat(item.width || 0);
                                 const h = parseFloat(item.height || 0);
                                 updateItemRow(idx, 'length', newL);
-                                updateItemRow(idx, 'cbm', parseFloat(((parseFloat(newL || '0') * w * h) / 1000000).toFixed(6)));
+                                updateItemRow(idx, 'cbm', parseFloat(((newL * w * h) / 1000000).toFixed(6)));
                               }}
                               placeholder="L"
                               className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2 outline-none font-bold text-[11px] font-mono text-center"
@@ -3464,14 +3440,13 @@ export default function Orders() {
                           <div className="col-span-1">
                             <input 
                               type="number"
-                              step="any"
-                              value={item.width ?? ''}
+                              value={item.width || 0}
                               onChange={(e) => {
-                                const newW = e.target.value;
+                                const newW = parseFloat(e.target.value) || 0;
                                 const l = parseFloat(item.length || 0);
                                 const h = parseFloat(item.height || 0);
                                 updateItemRow(idx, 'width', newW);
-                                updateItemRow(idx, 'cbm', parseFloat(((l * parseFloat(newW || '0') * h) / 1000000).toFixed(6)));
+                                updateItemRow(idx, 'cbm', parseFloat(((l * newW * h) / 1000000).toFixed(6)));
                               }}
                               placeholder="W"
                               className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2 outline-none font-bold text-[11px] font-mono text-center"
@@ -3481,14 +3456,13 @@ export default function Orders() {
                           <div className="col-span-1">
                             <input 
                               type="number"
-                              step="any"
-                              value={item.height ?? ''}
+                              value={item.height || 0}
                               onChange={(e) => {
-                                const newH = e.target.value;
+                                const newH = parseFloat(e.target.value) || 0;
                                 const l = parseFloat(item.length || 0);
                                 const w = parseFloat(item.width || 0);
                                 updateItemRow(idx, 'height', newH);
-                                updateItemRow(idx, 'cbm', parseFloat(((l * w * parseFloat(newH || '0')) / 1000000).toFixed(6)));
+                                updateItemRow(idx, 'cbm', parseFloat(((l * w * newH) / 1000000).toFixed(6)));
                               }}
                               placeholder="H"
                               className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2 outline-none font-bold text-[11px] font-mono text-center"
@@ -3980,7 +3954,7 @@ export default function Orders() {
                       </div>
                       <div>
                         <label className="block text-[10px] text-slate-500 uppercase tracking-widest block leading-none mb-1.5 font-bold">
-                          {isAr ? 'سعر شحن الـ CBM (دولار USD/m³)' : 'CBM Shipping Rate (USD/m³)'}
+                          {isAr ? 'سعر شحن الـ CBM (SAR/m³)' : 'CBM Shipping Rate (SAR/m³)'}
                         </label>
                         <div className="flex gap-1.5">
                           <input 
@@ -4001,7 +3975,7 @@ export default function Orders() {
                                   const rate = data.cbm_rate || data.rate || data.value || data.price;
                                   if (rate && !isNaN(parseFloat(rate))) {
                                     setCbmShippingRateValue(parseFloat(rate));
-                                    alert(isAr ? `✅ تم جلب سعر CBM الجديد: ${rate} USD/m³` : `✅ New CBM rate fetched: ${rate} USD/m³`);
+                                    alert(isAr ? `✅ تم جلب سعر CBM الجديد: ${rate} SAR/m³` : `✅ New CBM rate fetched: ${rate} SAR/m³`);
                                   } else {
                                     throw new Error(isAr ? 'لم يتم العثور على سعر CBM' : 'CBM rate not found');
                                   }
@@ -4841,39 +4815,6 @@ export default function Orders() {
                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block border-b border-slate-850 pb-1">
                   {isAr ? 'كشف الرصيد وتفاصيل السداد المالي' : 'Financial breakdown'}
                 </span>
-                
-                {/* Cost Breakdown Details */}
-                <div className="flex flex-col gap-1 text-[11px] font-bold text-slate-400 mb-3 border-b border-slate-850 pb-3">
-                  <div className="flex justify-between">
-                    <span>{isAr ? 'تكلفة المنتجات الأصلية:' : 'Original Products:'}</span>
-                    <span className="text-slate-300 font-mono">{(parseFloat(selectedOrder.totalCostSAR) - parseFloat(selectedOrder.profitCompanySAR || 0) - parseFloat(selectedOrder.shippingCostSAR || 0) - parseFloat(selectedOrder.packagingFee || 0)).toLocaleString()} SAR</span>
-                  </div>
-                  {parseFloat(selectedOrder.shippingCostSAR || '0') > 0 && (
-                    <div className="flex justify-between">
-                      <span>{isAr ? 'تكلفة الشحن والتخليص:' : 'Shipping Cost:'}</span>
-                      <span className="text-slate-300 font-mono">{parseFloat(selectedOrder.shippingCostSAR).toLocaleString()} SAR</span>
-                    </div>
-                  )}
-                  {parseFloat(selectedOrder.profitCompanySAR || '0') > 0 && (
-                    <div className="flex justify-between">
-                      <span>{isAr ? 'عمولة التطبيق (أرباح الشركة):' : 'App Commission (Profit):'}</span>
-                      <span className="text-slate-300 font-mono">{parseFloat(selectedOrder.profitCompanySAR).toLocaleString()} SAR</span>
-                    </div>
-                  )}
-                  {parseFloat(selectedOrder.packagingFee || '0') > 0 && (
-                     <div className="flex justify-between">
-                      <span>{isAr ? 'رسوم التغليف:' : 'Packaging Fee:'}</span>
-                      <span className="text-slate-300 font-mono">{parseFloat(selectedOrder.packagingFee).toLocaleString()} SAR</span>
-                    </div>
-                  )}
-                  {parseFloat(selectedOrder.deliveryCourierFee || '0') > 0 && (
-                    <div className="flex justify-between text-yellow-400/80">
-                      <span>{isAr ? 'أجرة التوصيل الداخلي:' : 'Internal Delivery Wage:'}</span>
-                      <span className="font-mono">{parseFloat(selectedOrder.deliveryCourierFee).toLocaleString()} YER</span>
-                    </div>
-                  )}
-                </div>
-
                 <div className="grid grid-cols-3 gap-2 text-center text-[11px]">
                   <div className="bg-slate-955 border border-slate-800 p-2.5 rounded-lg flex flex-col justify-between">
                     <span className="text-[10px] text-slate-500 font-bold">{isAr ? 'إجمالي قيمة الفاتورة' : 'Total Invoice Due'}</span>

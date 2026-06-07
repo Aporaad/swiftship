@@ -1131,7 +1131,7 @@ export default function Settings() {
                 {/* CBM Shipping Rate */}
                 <div>
                   <FieldLabel locked={!(role === 'Admin' || hasPermission('edit_cbm_shipping_rate'))}>
-                    {isAr ? 'سعر شحن الـ CBM الحالي (دولار USD/m³)' : 'Current CBM Shipping Rate (USD/m³)'}
+                    {isAr ? 'سعر شحن الـ CBM الحالي (SAR/m³)' : 'Current CBM Shipping Rate (SAR/m³)'}
                   </FieldLabel>
                   <div className="relative">
                     <FieldInput
@@ -1184,7 +1184,7 @@ export default function Settings() {
                                   lastCbmRateUpdate: now.toLocaleString(isAr ? 'ar-YE' : 'en-US'),
                                   lastCbmRateUpdatedBy: updaterName
                                 }));
-                                alert(isAr ? `✅ تم تحديث سعر CBM إلى: ${newRate} USD/m³` : `✅ CBM rate updated to: ${newRate} USD/m³`);
+                                alert(isAr ? `✅ تم تحديث سعر CBM إلى: ${newRate} SAR/m³` : `✅ CBM rate updated to: ${newRate} SAR/m³`);
                               } else {
                                 throw new Error(isAr ? 'لم يتم إيجاد سعر CBM في الاستجابة' : 'CBM rate not found in API response');
                               }

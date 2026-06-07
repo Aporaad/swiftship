@@ -192,65 +192,6 @@ class FinancialAccountService {
   }
 
   /**
-   * Record a true double-entry transaction (Debit one account, Credit another)
-   */
-  async recordDoubleEntryTransaction(
-    debitAccountId: string,
-    creditAccountId: string,
-    transactionData: Omit<AccountTransaction, 'id' | 'type'>
-  ): Promise<void> {
-    const batch = writeBatch(db);
-    const now = Date.now();
-
-    // --- DEBIT LEG ---
-    const debitTxRef = doc(collection(db, 'account_transactions'));
-    const debitData = { ...transactionData, type: 'Debit', accountId: debitAccountId, createdAt: now };
-    batch.set(debitTxRef, debitData);
-
-    const debitAccountRef = doc(db, 'accounts', debitAccountId);
-    batch.update(debitAccountRef, {
-      balance: increment(transactionData.amount),
-      debitTotal: increment(transactionData.amount),
-      updatedAt: now
-    });
-
-    if (transactionData.entityType !== 'system') {
-      const debitEntityCollection = this.getEntityCollection(transactionData.entityType);
-      const debitEntityRef = doc(db, debitEntityCollection, transactionData.entityId);
-      batch.update(debitEntityRef, {
-        financialBalance: increment(transactionData.amount),
-        updatedAt: now
-      });
-    }
-
-    // --- CREDIT LEG ---
-    const creditTxRef = doc(collection(db, 'account_transactions'));
-    const creditData = { ...transactionData, type: 'Credit', accountId: creditAccountId, createdAt: now };
-    batch.set(creditTxRef, creditData);
-
-    const creditAccountRef = doc(db, 'accounts', creditAccountId);
-    batch.update(creditAccountRef, {
-      balance: increment(-transactionData.amount),
-      creditTotal: increment(transactionData.amount),
-      updatedAt: now
-    });
-
-    await batch.commit();
-
-    activityLogService.log(
-      'financial_transaction' as any,
-      transactionData.entityName,
-      {
-        type: 'Double-Entry',
-        amount: transactionData.amount,
-        currency: transactionData.currencyOriginal,
-        description: transactionData.description,
-        refNumber: transactionData.refNumber
-      }
-    );
-  }
-
-  /**
    * Record a financial transaction on an account (Debit or Credit)
    * Uses writeBatch to ensure atomicity: updates both account balance and transaction log
    */
@@ -501,7 +442,6 @@ class FinancialAccountService {
       { id: 'sys_sourcing_cost',    name: 'حساب تكاليف الاستيراد التشغيلية',        prefix: '5100' },
       { id: 'sys_packaging_fees',   name: 'حساب رسوم التغليف والتعبئة',            prefix: '5200' },
       { id: 'sys_shipping_costs',   name: 'حساب تكاليف الشحن الدولي',              prefix: '5300' },
-      { id: 'sys_cash_account',     name: 'حساب الصندوق العام (كاش)',               prefix: '1000' },
     ];
 
     const sysIds: Record<string, string> = {};

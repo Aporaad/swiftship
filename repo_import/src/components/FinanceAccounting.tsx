@@ -1774,9 +1774,9 @@ Continue?`
 
                   {/* Active liability trust */}
                   <div className="bg-[#ef4444]/5 p-3 rounded-2xl border border-[#ef4444]/15">
-                    <span className="text-[10px] text-rose-400 uppercase block font-black">{isAr ? 'الرصيد المالي الإجمالي المطلوب من المندوب' : 'Net Liable Ledger Balance'}</span>
-                    <span className="text-lg font-mono font-black text-rose-500">{(courierAuditSheet.netLiableBalance + (courierAuditSheet.courier.financialBalance || 0)).toLocaleString()} YER</span>
-                    <span className="text-[8.5px] text-slate-500 block mt-1 leading-snug">{isAr ? 'رصيد العهد غير المصفاة + صافي قيد القيود المحاسبية للمندوب.' : 'Outstanding custody + Net financial ledger postings.'}</span>
+                    <span className="text-[10px] text-rose-400 uppercase block font-black">{isAr ? 'ذمة العهد التشغيلية العالقة' : 'Locked Liable Custody'}</span>
+                    <span className="text-lg font-mono font-black text-rose-500">{courierAuditSheet.netLiableBalance.toLocaleString()} YER</span>
+                    <span className="text-[8.5px] text-slate-500 block mt-1 leading-snug">{isAr ? 'عهد نقدية مفتوحة مخصصة لتصاريف العمل لم تصف بعد.' : 'Outstanding custody needing administrative settlement receipts.'}</span>
                   </div>
 
                   {/* Delivery Cargo COD Cash holding - HUGE Logistics-finance highlight! */}
