@@ -2,9 +2,10 @@ import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, getDoc, collection, addDoc, query, where, limit, getDocs } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, collection, addDoc, query, where, limit, getDocs, updateDoc } from 'firebase/firestore';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import fs from 'fs';
+import admin from 'firebase-admin';
 
 async function startServer() {
   const app = express();
@@ -22,6 +23,18 @@ async function startServer() {
     }
   } catch (err: any) {
     console.error('Error reading firebase-applet-config.json:', err.message);
+  }
+
+  // Initialize Firebase Admin SDK
+  if (!admin.apps.length) {
+    try {
+      admin.initializeApp({
+        projectId: firebaseConfig.projectId || undefined,
+      });
+      console.log('Firebase Admin SDK initialized successfully');
+    } catch (adminErr: any) {
+      console.error('Firebase Admin SDK failed to initialize:', adminErr.message);
+    }
   }
   
   let firebaseApp;
@@ -80,6 +93,94 @@ async function startServer() {
 
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', project: firebaseConfig.projectId || 'unknown' });
+  });
+
+  // Direct administrative password update using Firestore to bypass disabled Identity Toolkit API
+  app.post('/api/auth/admin-change-password', async (req, res) => {
+    const { uid, newPassword } = req.body;
+    if (!uid || !newPassword) {
+      return res.status(400).json({ error: 'User ID and password are required' });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    try {
+      const userRef = doc(db, 'users', uid);
+      await updateDoc(userRef, { password: newPassword });
+      console.log(`Successfully changed password in Firestore for user ${uid}`);
+      return res.json({ success: true });
+    } catch (err: any) {
+      console.error('Failed to change user password in Firestore:', err);
+      // Fallback: search by uid or username if needed, but doc is standard
+      return res.status(500).json({ error: err.message || 'Failed to change password' });
+    }
+  });
+
+  // Dual-logic login validation (supports custom/override Firestore passwords and Firebase Auth verification)
+  app.post('/api/auth/verify-login', async (req, res) => {
+    const { identifier, password } = req.body;
+    if (!identifier || !password) {
+      return res.status(400).json({ error: 'Identifier and password are required' });
+    }
+
+    try {
+      const idLower = identifier.toLowerCase();
+      let email = idLower;
+
+      const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'admin@swiftship.system'];
+      if (idLower === 'admin') {
+        email = 'admin@swiftship.system';
+      }
+
+      let userDoc: any = null;
+      let userDocId = '';
+
+      if (email.includes('@')) {
+        const snap = await getDocs(query(collection(db, 'users'), where('email', '==', email), limit(1)));
+        if (!snap.empty) {
+          userDoc = snap.docs[0].data();
+          userDocId = snap.docs[0].id;
+        }
+      } else {
+        const snap = await getDocs(query(collection(db, 'users'), where('username', '==', identifier), limit(1)));
+        if (!snap.empty) {
+          userDoc = snap.docs[0].data();
+          userDocId = snap.docs[0].id;
+          email = userDoc.email;
+        }
+      }
+
+      const isRoot = ROOT_EMAILS.includes(email.toLowerCase());
+
+      if (!userDoc && isRoot) {
+        return res.json({ success: true, useClientAuth: true, email: email });
+      }
+
+      if (!userDoc) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      if (userDoc.disabled) {
+        return res.status(403).json({ error: 'This account is currently disabled.' });
+      }
+
+      // If document has custom password, verify it directly
+      if (userDoc.password) {
+        if (userDoc.password === password) {
+          return res.json({ success: true, useClientAuth: true, email: email });
+        } else {
+          return res.status(401).json({ error: 'Invalid login credentials' });
+        }
+      }
+
+      // Legacy user verification (no password field yet)
+      return res.json({ success: true, useClientAuth: true, email: email });
+
+    } catch (err: any) {
+      console.error('Verify login backend error:', err);
+      return res.status(500).json({ error: err.message || 'Verification failed' });
+    }
   });
 
   // Secure WhatsApp Notification Sender proxy

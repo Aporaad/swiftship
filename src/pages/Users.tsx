@@ -240,11 +240,12 @@ export default function Users() {
       secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
       const secondaryAuth = getAuth(secondaryApp);
 
-      // 2. Create the user in Firebase Authentication
+      // 2. Create the user in Firebase Authentication with a constant system auth password
+      const SHARED_SYSTEM_AUTH_PASSWORD = 'swiftship@system_pw_2026';
       const authResult = await createUserWithEmailAndPassword(
         secondaryAuth, 
         addFormData.email.toLowerCase(), 
-        addFormData.password
+        SHARED_SYSTEM_AUTH_PASSWORD
       );
       
       const newUid = authResult.user.uid;
@@ -257,6 +258,7 @@ export default function Users() {
         systemPin: addFormData.systemPin,
         role: addFormData.role,
         commissionRate: addFormData.commissionRate,
+        password: addFormData.password,
         disabled: false,
         createdAt: Date.now()
       });

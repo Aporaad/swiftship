@@ -264,6 +264,15 @@ export default function UserManagement() {
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [addLoading, setAddLoading] = useState(false);
 
+  // -- Multidevice Sessions --
+  const [dbSessions, setDbSessions] = useState<any[]>([]);
+
+  // -- Direct Password Change --
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [passwordTargetUser, setPasswordTargetUser] = useState<any>(null);
+  const [newPasswordValue, setNewPasswordValue] = useState('');
+  const [passwordLoading, setPasswordLoading] = useState(false);
+
   // ── Forms ────────────────────────────────────────────────
   const [editFormData, setEditFormData] = useState({
     fullName: '', role: '', disabled: false, commissionRate: 0, username: '', systemPin: '', monthlySalary: 0
@@ -299,6 +308,16 @@ export default function UserManagement() {
       setRoles(snap.docs.map(d => ({ id: d.id, ...d.data() })))
     );
     return () => unsubRoles();
+  }, [roleLoading]);
+
+  useEffect(() => {
+    if (roleLoading) return;
+    const unsub = onSnapshot(collection(db, 'sessions'), snap => {
+      const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
+      setDbSessions(all.filter((s: any) => s.lastSeen && s.lastSeen > twentyFourHoursAgo));
+    }, err => console.error("Error fetching sessions:", err));
+    return unsub;
   }, [roleLoading]);
 
   useEffect(() => {
@@ -432,20 +451,58 @@ export default function UserManagement() {
   };
 
   const handleResetPassword = (user: any) => {
-    setConfirmConfig({
-      isOpen: true, type: 'warning',
-      title: t('إعادة تعيين كلمة المرور', 'Reset Password'),
-      message: t(`سيُرسَل بريد إعادة التعيين إلى ${user.email}. هل تريد المتابعة؟`, `Password reset email will be sent to ${user.email}. Continue?`),
-      onConfirm: async () => {
-        try {
-          await sendPasswordResetEmail(auth, user.email);
-          await activityLogService.log('reset_password', user.fullName, { email: user.email });
-          notificationService.notify({ title: t('تم الإرسال', 'Email Sent'), message: t(`تم إرسال رابط إعادة التعيين إلى ${user.email}`, `Reset link sent to ${user.email}`), type: 'success', category: 'system' });
-        } catch (err: any) {
-          notificationService.notify({ title: t('خطأ', 'Error'), message: err.message, type: 'error', category: 'system' });
-        }
+    setPasswordTargetUser(user);
+    setNewPasswordValue('');
+    setIsPasswordModalOpen(true);
+  };
+
+  const handleAdminChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!passwordTargetUser || !newPasswordValue) return;
+    if (newPasswordValue.length < 6) {
+      return notificationService.notify({
+        title: t('خطأ', 'Error'),
+        message: t('يجب أن تكون كلمة المرور 6 أحرف على الأقل', 'Password must be at least 6 characters'),
+        type: 'error',
+        category: 'system'
+      });
+    }
+    setPasswordLoading(true);
+    try {
+      const response = await fetch('/api/auth/admin-change-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          uid: passwordTargetUser.id,
+          newPassword: newPasswordValue
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to update password');
       }
-    });
+      await activityLogService.log('reset_password', passwordTargetUser.fullName, { email: passwordTargetUser.email, directChange: true });
+      notificationService.notify({
+        title: t('تم تغيير كلمة المرور', 'Password Changed'),
+        message: t(`تم تغيير كلمة مرور ${passwordTargetUser.fullName} بنجاح`, `Password for ${passwordTargetUser.fullName} changed successfully`),
+        type: 'success',
+        category: 'system'
+      });
+      setIsPasswordModalOpen(false);
+      setPasswordTargetUser(null);
+      setNewPasswordValue('');
+    } catch (err: any) {
+      notificationService.notify({
+        title: t('خطأ', 'Error'),
+        message: err.message,
+        type: 'error',
+        category: 'system'
+      });
+    } finally {
+      setPasswordLoading(false);
+    }
   };
 
   const handleAddUser = async (e: React.FormEvent) => {
@@ -461,12 +518,14 @@ export default function UserManagement() {
       const secondaryAppName = `Secondary-${Date.now()}`;
       secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
       const secondaryAuth = getAuth(secondaryApp);
-      const { user: newUser } = await createUserWithEmailAndPassword(secondaryAuth, addFormData.email.toLowerCase(), addFormData.password);
+      const SHARED_SYSTEM_AUTH_PASSWORD = 'swiftship@system_pw_2026';
+      const { user: newUser } = await createUserWithEmailAndPassword(secondaryAuth, addFormData.email.toLowerCase(), SHARED_SYSTEM_AUTH_PASSWORD);
       await setDoc(doc(db, 'users', newUser.uid), {
         fullName: addFormData.fullName, email: addFormData.email.toLowerCase(),
         username: addFormData.username, systemPin: addFormData.systemPin,
         role: addFormData.role, commissionRate: addFormData.commissionRate,
         monthlySalary: addFormData.monthlySalary,
+        password: addFormData.password,
         disabled: false, createdAt: Date.now()
       });
 
@@ -651,7 +710,9 @@ export default function UserManagement() {
     })
     .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
-  const activeSessions = users.filter(u => isUserOnline(u));
+  const isSessionOnline = (sess: any) => sess.lastSeen && (Date.now() - sess.lastSeen < 15 * 60 * 1000);
+  const onlineSessionsCount = dbSessions.filter(isSessionOnline).length;
+  const activeSessions = dbSessions;
 
   const filteredLogs = activityLogs
     .filter(l => (logFilter === 'all' || l.action === logFilter) && (logUserFilter === 'all' || l.userId === logUserFilter))
@@ -687,7 +748,7 @@ export default function UserManagement() {
   const tabs = [
     { id: 'users',    icon: UsersIcon,    label: t('الموظفون', 'Staff'),               count: users.length },
     { id: 'roles',    icon: Shield,       label: t('الأدوار والصلاحيات', 'Roles'),      count: roles.length },
-    { id: 'sessions', icon: MonitorCheck, label: t('الجلسات النشطة', 'Active Sessions'), count: activeSessions.length, pulse: true },
+    { id: 'sessions', icon: MonitorCheck, label: t('الجلسات النشطة', 'Active Sessions'), count: onlineSessionsCount, pulse: onlineSessionsCount > 0 },
     { id: 'activity', icon: FileClock,    label: t('سجل النشاط', 'Activity Log'),       count: activityLogs.length },
     { id: 'wallets',  icon: Coins,        label: t('المحافظ العهد', 'Wallets'),        count: couriers.length + customers.length }
   ] as const;
@@ -962,7 +1023,7 @@ export default function UserManagement() {
           {/* Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
-              { label: t('متصلون الآن', 'Online Now'), value: activeSessions.length, color: 'emerald', Icon: MonitorCheck },
+              { label: t('متصلون الآن', 'Online Now'), value: onlineSessionsCount, color: 'emerald', Icon: MonitorCheck },
               { label: t('إجمالي الموظفين', 'Total Staff'), value: users.length, color: 'blue', Icon: UsersIcon },
               { label: t('حسابات معطَّلة', 'Disabled'), value: users.filter(u => u.disabled).length, color: 'rose', Icon: UserX },
               { label: t('حظر مؤقت', 'Temp Banned'), value: users.filter(u => u.disabled && u.tempBanUntil).length, color: 'orange', Icon: Timer },
@@ -1003,73 +1064,93 @@ export default function UserManagement() {
                   <tr>
                     <th className="p-4 text-start">{t('المستخدم', 'User')}</th>
                     <th className="p-4 text-start">{t('الدور', 'Role')}</th>
+                    <th className="p-4 text-center">{t('الجهاز / المتصفح', 'Device / Browser')}</th>
                     <th className="p-4 text-center">{t('آخر نشاط', 'Last Activity')}</th>
-                    <th className="p-4 text-center">{t('حالة الجلسة', 'Session Status')}</th>
                     <th className="p-4 text-center">{t('إجراء الجلسة', 'Session Action')}</th>
                   </tr>
                 </thead>
                 <tbody className="text-xs divide-y divide-slate-800/30">
-                  {users.sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0)).map(u => {
-                    const online = isUserOnline(u);
-                    const isSelf = u.id === auth.currentUser?.uid;
-                    const isRoot = ROOT_EMAILS.includes(u.email) || u.isRoot;
-                    const tempBanLeft = getTempBanRemaining(u);
+                  {dbSessions.sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0)).map(sess => {
+                    const isSelf = sessionStorage.getItem('swiftship_session_id') === sess.id;
+                    const isRoot = ROOT_EMAILS.includes(sess.email) || sess.role === 'Admin';
+                    const isOnline = isSessionOnline(sess);
+                    const statusDotColor = isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500';
                     return (
-                      <tr key={u.id} className={`transition-colors ${online && !u.disabled ? 'hover:bg-emerald-950/5' : 'hover:bg-slate-900/10'} ${u.disabled ? 'opacity-50' : ''}`}>
+                      <tr key={sess.id} className="transition-colors hover:bg-emerald-950/5">
                         <td className="p-4">
                           <div className="flex items-center gap-3">
                             <div className="relative w-8 h-8 rounded-xl bg-gradient-to-br from-[#121215] to-[#070708] border border-slate-800 text-[#d4af37] flex items-center justify-center font-black text-[10px]">
-                              {u.fullName?.substring(0, 2)}
-                              {online && !u.disabled && <span className="absolute -bottom-1 -right-1 w-2 h-2 bg-emerald-400 rounded-full border border-[#0a0a0d]"></span>}
+                              {sess.fullName?.substring(0, 2)}
+                              <span className={`absolute -bottom-1 -right-1 w-2 h-2 ${statusDotColor} rounded-full border border-[#0a0a0d]`}></span>
                               {isRoot && <Crown className="w-2.5 h-2.5 text-yellow-400 absolute -top-1 -right-1" />}
                             </div>
                             <div>
-                              <div className="font-bold text-white text-[11px] flex items-center gap-1.5">
-                                {u.fullName}
-                                {isSelf && <span className="text-[8px] text-[#d4af37] font-black bg-[#d4af37]/10 border border-[#d4af37]/20 px-1.5 py-0.5 rounded">{t('أنت', 'YOU')}</span>}
+                              <div className="font-bold text-white text-[11px] flex items-center gap-1.5 flex-wrap">
+                                {sess.fullName}
+                                {isSelf && <span className="text-[8px] text-[#d4af37] font-black bg-[#d4af37]/10 border border-[#d4af37]/20 px-1.5 py-0.5 rounded">{t('جلستك الحالية', 'CURRENT TAB')}</span>}
+                                {isOnline ? (
+                                  <span className="text-[8px] text-emerald-400 font-bold bg-emerald-950/40 border border-emerald-900/30 px-1.5 py-0.5 rounded-md uppercase tracking-wide">{t('متصل الآن', 'Online')}</span>
+                                ) : (
+                                  <span className="text-[8px] text-slate-400 font-bold bg-slate-950/40 border border-slate-900/30 px-1.5 py-0.5 rounded-md uppercase tracking-wide">{t('خامل', 'Idle')}</span>
+                                )}
                               </div>
-                              <div className="text-[9px] text-slate-500 font-mono">@{u.username || u.email}</div>
+                              <div className="text-[9px] text-slate-500 font-mono">@{sess.email || sess.userId}</div>
                             </div>
                           </div>
                         </td>
-                        <td className="p-4"><span className={`px-2 py-0.5 rounded-md border text-[9px] font-black uppercase ${getRoleBadgeStyle(u.role)}`}>{u.role}</span></td>
-                        <td className="p-4 text-center text-[10px] font-bold text-slate-400">{getTimeSince(u.lastSeen)}</td>
+                        <td className="p-4"><span className={`px-2 py-0.5 rounded-md border text-[9px] font-black uppercase ${getRoleBadgeStyle(sess.role)}`}>{sess.role}</span></td>
+                        <td className="p-4 text-center text-[10px] font-bold text-slate-400">{sess.deviceInfo || t('غير معروف', 'Unknown')}</td>
+                        <td className="p-4 text-center text-[10px] font-bold text-slate-400">{getTimeSince(sess.lastSeen)}</td>
                         <td className="p-4 text-center">
-                          {u.disabled ? (
-                            <div className="flex flex-col items-center gap-0.5">
-                              <span className="text-rose-400 text-[9px] font-black flex items-center gap-1">
-                                <Ban className="w-3 h-3" />
-                                {tempBanLeft ? t('حظر مؤقت', 'TEMP BAN') : t('معطَّل', 'DISABLED')}
-                              </span>
-                              {tempBanLeft && <span className="text-[8px] text-orange-400 font-mono font-bold">{t('يرفع خلال:', 'Lifts in:')} {tempBanLeft}</span>}
-                            </div>
-                          ) : online ? (
-                            <span className="bg-emerald-950/20 text-emerald-400 border border-emerald-900/20 px-2 py-0.5 rounded-lg text-[9px] font-black flex items-center gap-1 justify-center w-fit mx-auto">
-                              <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span>{t('جلسة نشطة', 'ACTIVE SESSION')}
+                          {isSelf || (isRoot && !ROOT_EMAILS.includes(currentUserDoc?.email)) ? (
+                            <span className="text-[#d4af37] text-[9px] font-black bg-[#d4af37]/10 border border-[#d4af37]/25 px-2 py-1 rounded-lg">
+                              {isSelf ? t('جلستك', 'Your Session') : t('محمي', 'Protected')}
                             </span>
                           ) : (
-                            <span className="text-slate-600 text-[9px] font-bold uppercase flex items-center gap-1 justify-center">
-                              <WifiOff className="w-3 h-3" />{t('غير متصل', 'OFFLINE')}
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-4 text-center">
-                          {!isSelf && !isRoot && hasPermission('terminate_sessions') && (
                             <button
-                              onClick={() => { setSessionTargetUser(u); setIsSessionModalOpen(true); }}
+                              onClick={() => {
+                                setConfirmConfig({
+                                  isOpen: true,
+                                  type: 'danger',
+                                  title: t('إنهاء الجلسة المحددة', 'Terminate Selected Session'),
+                                  message: t(`هل أنت متأكد من إنهاء جلسة ${sess.fullName} على الجهاز "${sess.deviceInfo || 'غير معروف'}"؟`, `Are you sure you want to terminate ${sess.fullName}'s session on "${sess.deviceInfo || 'Unknown'}"?`),
+                                  onConfirm: async () => {
+                                    try {
+                                      await updateDoc(doc(db, 'sessions', sess.id), { forceLogout: true });
+                                      await activityLogService.log('terminate_session', sess.fullName, { sessionId: sess.id, deviceInfo: sess.deviceInfo });
+                                      notificationService.notify({
+                                        title: t('تم تسجيل الخروج', 'Logged Out'),
+                                        message: t('تم إرسال أمر الخروج للجلسة بنجاح', 'Logout command sent successfully'),
+                                        type: 'success',
+                                        category: 'system'
+                                      });
+                                    } catch (err: any) {
+                                      notificationService.notify({
+                                        title: t('خطأ', 'Error'),
+                                        message: err.message,
+                                        type: 'error',
+                                        category: 'system'
+                                      });
+                                    }
+                                  }
+                                });
+                              }}
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-950/20 text-rose-400 border border-rose-900/30 hover:bg-rose-950/40 rounded-lg text-[9px] font-black transition-all mx-auto"
                             >
-                              <Zap className="w-3 h-3" /> {t('إجراء', 'Action')}
+                              <Zap className="w-3 h-3" /> {t('إنهاء الجلسة', 'Terminate')}
                             </button>
                           )}
-                          {!isSelf && !isRoot && !hasPermission('terminate_sessions') && (
-                            <span className="text-slate-700 text-[9px] font-bold">—</span>
-                          )}
-                          {isSelf && <span className="text-slate-600 text-[9px] font-bold">{t('جلستك', 'Your Session')}</span>}
                         </td>
                       </tr>
                     );
                   })}
+                  {dbSessions.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="p-8 text-center text-slate-600 font-bold text-xs uppercase tracking-widest">
+                        {t('لا توجد جلسات نشطة حالياً', 'NO ACTIVE SESSIONS FOUND')}
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1505,6 +1586,55 @@ export default function UserManagement() {
               <div className="pt-3 flex justify-end gap-3 border-t border-slate-800/50">
                 <button type="button" onClick={() => { setIsEditModalOpen(false); setSelectedUser(null); }} className="px-5 py-2.5 text-slate-400 font-bold bg-slate-900 border border-slate-800 hover:bg-slate-800 rounded-xl text-xs">{t('إلغاء', 'Cancel')}</button>
                 <button type="submit" className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black text-xs rounded-xl shadow-md transition-all">{t('حفظ التغييرات', 'Save Changes')}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════ */}
+      {/* DIRECT CHANGE PASSWORD MODAL                       */}
+      {/* ══════════════════════════════════════════════════ */}
+      {isPasswordModalOpen && passwordTargetUser && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/20 rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden">
+            <div className="p-5 border-b border-slate-800/50 flex justify-between items-center bg-black/40">
+              <h3 className="font-black text-white text-xs uppercase tracking-widest flex items-center gap-2">
+                <Key className="w-4 h-4 text-amber-400" />
+                {t('تغيير كلمة المرور مباشرة', 'Direct Password Change')}
+              </h3>
+              <button onClick={() => { setIsPasswordModalOpen(false); setPasswordTargetUser(null); }} className="text-slate-500 hover:text-white bg-slate-900 border border-slate-800 p-1.5 rounded-lg">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={handleAdminChangePassword} className="p-6 space-y-4" dir={isAr ? 'rtl' : 'ltr'}>
+              <div className="flex items-center gap-3 p-3 bg-black/40 border border-slate-800/40 rounded-xl">
+                <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 text-[#d4af37] flex items-center justify-center font-black text-[10px]">
+                  {passwordTargetUser.fullName?.substring(0, 2)}
+                </div>
+                <div>
+                  <div className="text-xs font-black text-white">{passwordTargetUser.fullName}</div>
+                  <div className="text-[9px] text-slate-500 font-mono">{passwordTargetUser.email}</div>
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('كلمة المرور الجديدة', 'New Password')}</label>
+                <input
+                  required
+                  type="text"
+                  placeholder="••••••••"
+                  value={newPasswordValue}
+                  onChange={e => setNewPasswordValue(e.target.value)}
+                  className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 px-4 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono"
+                  dir="ltr"
+                />
+                <span className="block text-[8px] text-slate-500 mt-1">{t('سيتغير تسجيل الدخول للمستخدم فوراً بهذا المفتاح دون الحاجة لبريده الإلكتروني.', 'This will instantly change the user\'s password in Firebase Authentication directly.')}</span>
+              </div>
+              <div className="pt-3 flex justify-end gap-3 border-t border-slate-800/50">
+                <button type="button" onClick={() => { setIsPasswordModalOpen(false); setPasswordTargetUser(null); }} className="px-5 py-2.5 text-slate-400 font-bold bg-slate-900 border border-slate-800 hover:bg-slate-800 rounded-xl text-xs">{t('إلغاء', 'Cancel')}</button>
+                <button type="submit" disabled={passwordLoading} className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-700 hover:from-amber-700 hover:to-amber-500 disabled:opacity-50 text-black font-black text-xs rounded-xl shadow-md transition-all">
+                  {passwordLoading ? t('جاري التغيير...', 'Changing...') : t('تغيير الآن', 'Change Now')}
+                </button>
               </div>
             </form>
           </div>

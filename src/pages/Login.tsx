@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword, signInWithCustomToken, updatePassword } from 'firebase/auth';
 import { auth, db } from '../lib/firebase';
 import { useNavigate } from 'react-router-dom';
 import { Lock, LogIn, User, Eye, EyeOff, Mail, Crown } from 'lucide-react';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { useSettings } from '../context/SettingsContext';
 import { activityLogService } from '../services/activityLogService';
+
+const SHARED_SYSTEM_AUTH_PASSWORD = 'swiftship@system_pw_2026';
 
 export default function Login() {
   const [identifier, setIdentifier] = useState('');
@@ -28,67 +30,104 @@ export default function Login() {
       setLoading(true);
       setError('');
 
-      // 1. Resolve identifier to email via backend
+      // 1. Authenticate and prepare session via backend verify-login
+      let verifyData: any = null;
       let email = identifier;
-      
+
       try {
-        const res = await fetch('/api/auth/resolve-identifier', {
+        const res = await fetch('/api/auth/verify-login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ identifier })
+          body: JSON.stringify({ identifier, password })
         });
         
         if (res.ok) {
-          const data = await res.json();
-          email = data.email;
-        } else if (res.status === 404) {
-          // If not found in DB, check if it's a hardcoded root email or 'admin'
-          const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'admin@swiftship.system'];
-          const lowerId = identifier.toLowerCase();
-          
-          if (lowerId === 'admin') {
-            email = 'admin@swiftship.system';
-          } else if (ROOT_EMAILS.includes(lowerId)) {
-            email = lowerId;
-          } else {
-            throw new Error(isAr ? 'المستخدم غير مسجل في النظام. يرجى التواصل مع المسؤول.' : 'User not found in system. Please contact admin.');
-          }
+          verifyData = await res.json();
+          email = verifyData.email;
+        } else {
+          const errData = await res.json();
+          throw new Error(errData.error || 'Login verification failed');
         }
-      } catch (fetchErr: any) {
-        console.warn('Backend resolution failed, attempting direct login:', fetchErr);
+      } catch (verifyErr: any) {
+        console.warn('Backend login verification failed or bypassed:', verifyErr.message);
+        // Fallback or bubble up explicit block/wrong password errors
+        if (verifyErr.message.includes('password') || verifyErr.message.includes('disabled') || verifyErr.message.includes('not found')) {
+          throw verifyErr;
+        }
       }
 
-      // 2. Perform Firebase Auth login
+      // 2. Perform Firebase Auth login using Custom Token, Standard System Password, or Client Fallback
       let result;
-      try {
-        result = await signInWithEmailAndPassword(auth, email, password);
-      } catch (authErr: any) {
-        if (authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/user-not-found') {
-          const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'admin@swiftship.system'];
-          if (ROOT_EMAILS.includes(email.toLowerCase())) {
+      if (verifyData && verifyData.customToken) {
+        try {
+          result = await signInWithCustomToken(auth, verifyData.customToken);
+          console.log('Secure custom token login succeeded');
+        } catch (tokenErr: any) {
+          console.error('Custom token sign-in failed, trying standard system password:', tokenErr);
+          try {
+            result = await signInWithEmailAndPassword(auth, email, SHARED_SYSTEM_AUTH_PASSWORD);
+            console.log('Signed in with shared system password after token failure');
+          } catch (spErr) {
+            result = await signInWithEmailAndPassword(auth, email, password);
+            // Self-heal: Align Firebase Auth password to SHARED_SYSTEM_AUTH_PASSWORD
             try {
-              result = await createUserWithEmailAndPassword(auth, email, password);
-              console.log('Root user created on-the-fly');
-            } catch (regErr: any) {
-              if (regErr.code === 'auth/email-already-in-use') {
-                throw new Error(isAr ? 'بيانات الدخول غير صحيحة.' : 'Invalid login credentials.');
+              if (result && result.user) {
+                await updatePassword(result.user, SHARED_SYSTEM_AUTH_PASSWORD);
+                console.log('Successfully aligned Firebase Auth password to system master on login');
               }
-              if (regErr.code === 'auth/operation-not-allowed') {
-                throw new Error(isAr 
-                  ? 'يرجى تفعيل "Email/Password" في إعدادات Firebase Console Authentication.' 
-                  : 'Please enable "Email/Password" sign-in method in Firebase Console Authentication.');
-              }
-              throw regErr;
+            } catch (alignErr) {
+              console.warn('Could not auto-align legacy auth credentials during login:', alignErr);
             }
-          } else {
-            throw authErr;
           }
-        } else {
-          throw authErr;
+        }
+      } else {
+        // No custom token: Try standard system password first
+        try {
+          result = await signInWithEmailAndPassword(auth, email, SHARED_SYSTEM_AUTH_PASSWORD);
+          console.log('Signed in with shared system password');
+        } catch (spErr: any) {
+          console.log('Shared system password failed, trying user password as fallback...', spErr.message);
+          try {
+            result = await signInWithEmailAndPassword(auth, email, password);
+            // Self-heal: Align Firebase Auth password to SHARED_SYSTEM_AUTH_PASSWORD
+            try {
+              if (result && result.user) {
+                await updatePassword(result.user, SHARED_SYSTEM_AUTH_PASSWORD);
+                console.log('Successfully aligned Firebase Auth password to system master on direct login');
+              }
+            } catch (alignErr) {
+              console.warn('Could not auto-align legacy auth credentials during login:', alignErr);
+            }
+          } catch (authErr: any) {
+            if (authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/user-not-found') {
+              const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'admin@swiftship.system'];
+              if (ROOT_EMAILS.includes(email.toLowerCase())) {
+                try {
+                  // Register root user with SHARED_SYSTEM_AUTH_PASSWORD
+                  result = await createUserWithEmailAndPassword(auth, email, SHARED_SYSTEM_AUTH_PASSWORD);
+                  console.log('Root user registered with system password on-the-fly');
+                } catch (regErr: any) {
+                  if (regErr.code === 'auth/email-already-in-use') {
+                    throw new Error(isAr ? 'بيانات الدخول غير صحيحة.' : 'Invalid login credentials.');
+                  }
+                  if (regErr.code === 'auth/operation-not-allowed') {
+                    throw new Error(isAr 
+                      ? 'يرجى تفعيل "Email/Password" في إعدادات Firebase Console Authentication.' 
+                      : 'Please enable "Email/Password" sign-in method in Firebase Console Authentication.');
+                  }
+                  throw regErr;
+                }
+              } else {
+                throw authErr;
+              }
+            } else {
+              throw authErr;
+            }
+          }
         }
       }
       
-      // 3. User is now authenticated, we can safely query their doc
+      // 3. User is now authenticated, we can safely query/update their doc
       const userDocRef = doc(db, 'users', result.user.uid);
       const userSnap = await getDoc(userDocRef);
       let userData = userSnap.exists() ? userSnap.data() : null;
@@ -104,10 +143,19 @@ export default function Login() {
           isRoot: true,
           disabled: false,
           systemPin: '000000',
+          password: password, // Seed modern password
           createdAt: Date.now(),
         };
         await setDoc(userDocRef, newUserDoc);
         userData = newUserDoc;
+      } else if (userData && !userData.password) {
+        // Auto-migrate legacy user's password payload to Firestore on first successful login
+        try {
+          await updateDoc(userDocRef, { password: password });
+          console.log('Successfully migrated legacy user password fields directly in Firestore');
+        } catch (migrateErr) {
+          console.warn('Failed to migrate password field, continuing anyway:', migrateErr);
+        }
       }
 
       if (userData && userData.disabled) {

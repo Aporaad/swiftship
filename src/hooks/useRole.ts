@@ -1,8 +1,33 @@
 import { useState, useEffect } from 'react';
-import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, db } from '../lib/firebase';
 import { DEFAULT_ROLE_PERMISSIONS } from '../lib/permissions';
+
+const getDeviceAndBrowser = () => {
+  if (typeof window === 'undefined') return 'Unknown';
+  const ua = navigator.userAgent;
+  let browser = "Unknown Browser";
+  let os = "Unknown OS";
+
+  if (ua.includes("Firefox")) browser = "Firefox";
+  else if (ua.includes("SamsungBrowser")) browser = "Samsung Browser";
+  else if (ua.includes("Opera") || ua.includes("OPR")) browser = "Opera";
+  else if (ua.includes("Trident")) browser = "Internet Explorer";
+  else if (ua.includes("Edge") || ua.includes("Edg")) browser = "Edge";
+  else if (ua.includes("Chrome")) browser = "Chrome";
+  else if (ua.includes("Safari")) browser = "Safari";
+
+  if (ua.includes("Windows NT 10.0")) os = "Windows 10/11";
+  else if (ua.includes("Windows NT 6.2")) os = "Windows 8";
+  else if (ua.includes("Windows NT 6.1")) os = "Windows 7";
+  else if (ua.includes("Macintosh") || ua.includes("Mac OS X")) os = "macOS";
+  else if (ua.includes("Android")) os = "Android";
+  else if (ua.includes("iPhone") || ua.includes("iPad")) os = "iOS";
+  else if (ua.includes("Linux")) os = "Linux";
+
+  return `${browser} - ${os}`;
+};
 
 export function useRole() {
   const [role, setRole] = useState<string | null>(null);
@@ -25,7 +50,71 @@ export function useRole() {
     return () => unsubAuth();
   }, []);
 
-  // Heartbeat: update lastSeen every 60s so the "Active Sessions" tab works
+  const sessionId = (() => {
+    if (typeof window === 'undefined') return 'sess-server';
+    let id = sessionStorage.getItem('swiftship_session_id');
+    if (!id) {
+      id = `sess-${Math.floor(100000 + Math.random() * 900000)}-${Date.now()}`;
+      sessionStorage.setItem('swiftship_session_id', id);
+    }
+    return id;
+  })();
+
+  // Session heartbeats: update /sessions/{sessionId} dynamically so the Admin knows which device/tab is active
+  useEffect(() => {
+    if (!user || !profile) return;
+    
+    const updateSessionHeartbeat = async () => {
+      try {
+        const sessionRef = doc(db, 'sessions', sessionId);
+        const createdTime = sessionStorage.getItem('swiftship_session_created') || String(Date.now());
+        if (!sessionStorage.getItem('swiftship_session_created')) {
+          sessionStorage.setItem('swiftship_session_created', createdTime);
+        }
+        
+        await setDoc(sessionRef, {
+          id: sessionId,
+          userId: user.uid,
+          email: profile.email || user.email || '',
+          fullName: profile.fullName || 'User',
+          role: profile.role || 'Employee',
+          deviceInfo: getDeviceAndBrowser(),
+          lastSeen: Date.now(),
+          lastSeenAt: new Date().toISOString(),
+          createdAt: Number(createdTime),
+          forceLogout: false
+        }, { merge: true });
+      } catch (err) {
+        console.warn("[Session Heartbeat] Error:", err);
+      }
+    };
+
+    updateSessionHeartbeat();
+    const interval = setInterval(updateSessionHeartbeat, 45_000);
+    return () => clearInterval(interval);
+  }, [user, profile]);
+
+  // Listen for individual session termination
+  useEffect(() => {
+    if (!user) return;
+    
+    const sessionRef = doc(db, 'sessions', sessionId);
+    const unsubSession = onSnapshot(sessionRef, (sessionDoc) => {
+      if (sessionDoc.exists()) {
+        const sessionData = sessionDoc.data();
+        if (sessionData.forceLogout === true) {
+          sessionStorage.removeItem('swiftship_session_id');
+          sessionStorage.removeItem('swiftship_session_created');
+          deleteDoc(sessionRef).catch(console.error);
+          auth.signOut().catch(console.error);
+        }
+      }
+    });
+
+    return () => unsubSession();
+  }, [user]);
+
+  // Heartbeat: update lastSeen every 60s so the general user lists show online/offline status
   useEffect(() => {
     if (!user) return;
     const updateLastSeen = () => {
