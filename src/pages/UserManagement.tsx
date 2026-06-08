@@ -710,7 +710,11 @@ export default function UserManagement() {
     })
     .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
-  const isSessionOnline = (sess: any) => sess.lastSeen && (Date.now() - sess.lastSeen < 15 * 60 * 1000);
+  const isSessionOnline = (sess: any) => {
+    if (!sess.lastSeen) return false;
+    // Heartbeat updates are every 45s; mark offline if no heartbeat for 3 minutes
+    return (Date.now() - sess.lastSeen) < 3 * 60 * 1000;
+  };
   const onlineSessionsCount = dbSessions.filter(isSessionOnline).length;
   const activeSessions = dbSessions;
 

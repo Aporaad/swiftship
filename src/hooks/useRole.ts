@@ -29,7 +29,7 @@ const getDeviceAndBrowser = () => {
   return `${browser} - ${os}`;
 };
 
-export function useRole() {
+export function useRole(enableHeartbeat: boolean = false) {
   const [role, setRole] = useState<string | null>(null);
   const [permissions, setPermissions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,6 +44,10 @@ export function useRole() {
         setPermissions([]);
         setProfile(null);
         setLoading(false);
+        if (typeof window !== 'undefined') {
+          sessionStorage.removeItem('swiftship_session_id');
+          sessionStorage.removeItem('swiftship_session_created');
+        }
       }
     });
 
@@ -62,7 +66,7 @@ export function useRole() {
 
   // Session heartbeats: update /sessions/{sessionId} dynamically so the Admin knows which device/tab is active
   useEffect(() => {
-    if (!user || !profile) return;
+    if (!enableHeartbeat || !user || loading) return;
     
     const updateSessionHeartbeat = async () => {
       try {
@@ -72,12 +76,16 @@ export function useRole() {
           sessionStorage.setItem('swiftship_session_created', createdTime);
         }
         
+        const emailVal = profile?.email || user.email || '';
+        const fullNameVal = profile?.fullName || user.displayName || (emailVal ? emailVal.split('@')[0] : 'User');
+        const roleVal = profile?.role || role || 'Employee';
+
         await setDoc(sessionRef, {
           id: sessionId,
           userId: user.uid,
-          email: profile.email || user.email || '',
-          fullName: profile.fullName || 'User',
-          role: profile.role || 'Employee',
+          email: emailVal,
+          fullName: fullNameVal,
+          role: roleVal,
           deviceInfo: getDeviceAndBrowser(),
           lastSeen: Date.now(),
           lastSeenAt: new Date().toISOString(),
@@ -92,11 +100,11 @@ export function useRole() {
     updateSessionHeartbeat();
     const interval = setInterval(updateSessionHeartbeat, 45_000);
     return () => clearInterval(interval);
-  }, [user, profile]);
+  }, [enableHeartbeat, user, profile, role, loading]);
 
   // Listen for individual session termination
   useEffect(() => {
-    if (!user) return;
+    if (!enableHeartbeat || !user) return;
     
     const sessionRef = doc(db, 'sessions', sessionId);
     const unsubSession = onSnapshot(sessionRef, (sessionDoc) => {
@@ -112,11 +120,11 @@ export function useRole() {
     });
 
     return () => unsubSession();
-  }, [user]);
+  }, [enableHeartbeat, user]);
 
   // Heartbeat: update lastSeen every 60s so the general user lists show online/offline status
   useEffect(() => {
-    if (!user) return;
+    if (!enableHeartbeat || !user || loading) return;
     const updateLastSeen = () => {
       updateDoc(doc(db, 'users', user.uid), {
         lastSeen: Date.now(),
@@ -126,12 +134,23 @@ export function useRole() {
     updateLastSeen(); // immediate on mount
     const interval = setInterval(updateLastSeen, 60_000);
     return () => clearInterval(interval);
-  }, [user]);
+  }, [enableHeartbeat, user, loading]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setRole(null);
+      setProfile(null);
+      setPermissions([]);
+      setLoading(false);
+      return;
+    }
 
+    // Reset state for new user to prevent stale profile/role mixing
+    setRole(null);
+    setProfile(null);
+    setPermissions([]);
     setLoading(true);
+
     const unsub = onSnapshot(doc(db, 'users', user.uid), (userDoc) => {
       if (userDoc.exists()) {
         const userData = userDoc.data();

@@ -35,7 +35,7 @@ import { notificationService } from '../services/notificationService';
 export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { role, profile, hasPermission, loading: roleLoading } = useRole();
+  const { role, profile, hasPermission, loading: roleLoading } = useRole(true);
   const { settings, updateSettings, t } = useSettings();
   const [unreadCount, setUnreadCount] = useState(0);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -154,6 +154,19 @@ export default function Layout() {
     try {
       await activityLogService.log('logout', 'User Session Ended');
     } catch (_) {}
+    
+    try {
+      const sessId = sessionStorage.getItem('swiftship_session_id');
+      if (sessId) {
+        const { deleteDoc, doc } = await import('firebase/firestore');
+        await deleteDoc(doc(db, 'sessions', sessId));
+        sessionStorage.removeItem('swiftship_session_id');
+        sessionStorage.removeItem('swiftship_session_created');
+      }
+    } catch (err) {
+      console.warn("Could not delete session on manual signout:", err);
+    }
+
     await signOut(auth);
     navigate('/login');
   };
