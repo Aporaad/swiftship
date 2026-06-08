@@ -1,5 +1,5 @@
 import { collection, addDoc } from 'firebase/firestore';
-import { db, auth } from '../lib/firebase';
+import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import toast from 'react-hot-toast';
 
 export type NotificationType = 'info' | 'success' | 'warning' | 'error';
@@ -55,23 +55,26 @@ export const notificationService = {
         }
       }
 
-      // 2. Save to Firestore for persistence
-      await addDoc(collection(db, 'notifications'), {
-        title,
-        message,
-        type,
-        orderId: orderId || null,
-        userId: userId || 'global',
-        associatedUserIds: associatedUserIds || [],
-        isPublic,
-        read: false,
-        category: inferredCategory,
-        createdAt: Date.now(),
-        creatorId: auth.currentUser?.uid || 'system',
-        creatorName: auth.currentUser?.displayName || 'System'
-      });
+      // 2. Save to Firestore for persistence only if the operator is authenticated
+      if (auth.currentUser) {
+        await addDoc(collection(db, 'notifications'), {
+          title,
+          message,
+          type,
+          orderId: orderId || null,
+          userId: userId || 'global',
+          associatedUserIds: associatedUserIds || [],
+          isPublic,
+          read: false,
+          category: inferredCategory,
+          createdAt: Date.now(),
+          creatorId: auth.currentUser?.uid || 'system',
+          creatorName: auth.currentUser?.displayName || 'System'
+        });
+      }
     } catch (error) {
       console.error('Failed to create notification:', error);
+      handleFirestoreError(error, OperationType.CREATE, 'notifications');
     }
   }
 };

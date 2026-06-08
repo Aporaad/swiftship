@@ -221,6 +221,7 @@ export default function Users() {
 
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (addLoading) return;
     setAddLoading(true);
     let secondaryApp;
     try {
@@ -498,8 +499,8 @@ export default function Users() {
       {/* Add User Modal */}
       {isAddModalOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
-          <div className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/25 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden font-sans">
-            <div className="p-4 border-b border-slate-850 flex justify-between items-center bg-[#07070a]/40">
+          <div className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/25 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden font-sans flex flex-col max-h-[90vh]">
+            <div className="p-4 border-b border-slate-850 flex justify-between items-center bg-[#07070a]/40 shrink-0">
               <h3 className="font-black text-white text-xs uppercase tracking-widest flex items-center gap-2">
                 <Crown className="w-4 h-4 text-[#d4af37]" />
                 {isAr ? 'تفويض حساب موظف جديد' : 'Provision Staff Member Account'}
@@ -512,7 +513,7 @@ export default function Users() {
               </button>
             </div>
             
-            <form onSubmit={handleAddUser} className="p-6 space-y-4 text-start">
+            <form onSubmit={handleAddUser} className="p-6 space-y-4 text-start overflow-y-auto flex-1">
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'الاسم الكامل الثلاثي' : 'Employee Full Name'}</label>
                 <input 
@@ -634,8 +635,8 @@ export default function Users() {
       {/* Edit User Modal */}
       {isEditModalOpen && selectedUser && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
-          <div className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/25 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden font-sans">
-            <div className="p-4 border-b border-slate-850 flex justify-between items-center bg-[#07070a]/40">
+          <div className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/25 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden font-sans flex flex-col max-h-[90vh]">
+            <div className="p-4 border-b border-slate-850 flex justify-between items-center bg-[#07070a]/40 shrink-0">
               <h3 className="font-black text-white text-xs uppercase tracking-widest">{isAr ? 'تعديل ملف موظف' : 'Configure Staff Parameters'}</h3>
               <button 
                 onClick={() => { setIsEditModalOpen(false); setSelectedUser(null); }}
@@ -645,7 +646,7 @@ export default function Users() {
               </button>
             </div>
             
-            <form onSubmit={handleUpdateUser} className="p-6 space-y-4 text-start">
+            <form onSubmit={handleUpdateUser} className="p-6 space-y-4 text-start overflow-y-auto flex-1">
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'الاسم الكامل الموثق' : 'Employee Full Name'}</label>
                 <input 

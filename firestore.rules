@@ -72,5 +72,43 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isSignedIn();
     }
+
+    // Interactive session & logging collections
+    match /sessions/{sessionId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /activity_logs/{logId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /notifications/{notificationId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /backups/{backupId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /roles/{roleId} {
+      allow read: if isSignedIn();
+      allow write: if isRoot();
+    }
+
+    match /whatsapp_logs/{logId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /shipping_companies/{companyId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /salary_history/{historyId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /assets/{assetId} {
+      allow read, write: if isSignedIn();
+    }
   }
 }

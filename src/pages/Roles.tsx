@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, doc, updateDoc, addDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { Search, Edit2, X, Plus, Trash2, Shield, CheckCircle2 } from 'lucide-react';
+import { Search, Edit2, X, Plus, Trash2, Shield, CheckCircle2, RefreshCw } from 'lucide-react';
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
+import { notificationService } from '../services/notificationService';
 
 import { ALL_PERMISSIONS, PERMISSION_CATEGORIES } from '../lib/permissions';
 
@@ -31,6 +32,7 @@ export default function Roles() {
     title: '',
     permissions: [] as string[]
   });
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (roleLoading) return;
@@ -92,17 +94,33 @@ export default function Roles() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.id) return alert(settings.language === 'ar' ? 'يرجى إدخال معرف الدور' : 'Please enter role ID');
+    if (saving) return;
+    if (!formData.id) {
+      notificationService.notify({
+        title: settings.language === 'ar' ? 'خطأ بالبيانات' : 'Data Error',
+        message: settings.language === 'ar' ? 'يرجى إدخال معرف الدور' : 'Please enter role ID',
+        type: 'error'
+      });
+      return;
+    }
     
+    setSaving(true);
     try {
       await setDoc(doc(db, 'roles', formData.id), {
         title: formData.title,
         permissions: formData.permissions,
         updatedAt: Date.now()
       });
+      notificationService.notify({
+        title: settings.language === 'ar' ? 'تم الحفظ' : 'Saved Successfully',
+        message: settings.language === 'ar' ? `تم حفظ دور ${formData.title} بنجاح` : `Role ${formData.title} has been successfully updated.`,
+        type: 'success'
+      });
       setIsModalOpen(false);
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, 'roles');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -249,9 +267,22 @@ export default function Roles() {
               </div>
             </form>
 
-            <div className="p-5 border-t border-slate-850 bg-black/40 flex justify-end gap-3">
-              <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 text-slate-400 font-bold hover:bg-slate-850/40 rounded-xl transition-colors">{settings.language === 'ar' ? 'إلغاء' : 'Cancel'}</button>
-              <button onClick={handleSave} className="px-6 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl shadow-lg transition-all active:scale-[0.98]">{settings.language === 'ar' ? 'حفظ وتحميل الدور' : 'Save configuration'}</button>
+            <div className="p-5 border-t border-slate-850 bg-black/40 flex justify-end gap-3 shrink-0">
+              <button 
+                type="button" 
+                onClick={() => setIsModalOpen(false)} 
+                className="px-5 py-2.5 text-slate-400 font-bold hover:bg-slate-850/40 rounded-xl transition-colors active:scale-95 text-xs border border-slate-800"
+              >
+                {settings.language === 'ar' ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button 
+                onClick={handleSave} 
+                disabled={saving}
+                className="px-6 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl shadow-lg transition-all active:scale-[0.98] flex items-center gap-1.5 disabled:opacity-50 text-xs"
+              >
+                {saving && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                {settings.language === 'ar' ? 'حفظ وتحميل الدور' : 'Save configuration'}
+              </button>
             </div>
           </div>
         </div>

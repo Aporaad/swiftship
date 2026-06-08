@@ -1,11 +1,10 @@
 import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
+import fs from 'fs';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, doc, getDoc, collection, addDoc, query, where, limit, getDocs, updateDoc } from 'firebase/firestore';
-import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
-import fs from 'fs';
-import admin from 'firebase-admin';
+import { initializeAuth, inMemoryPersistence, signInWithEmailAndPassword } from 'firebase/auth';
 
 async function startServer() {
   const app = express();
@@ -25,18 +24,7 @@ async function startServer() {
     console.error('Error reading firebase-applet-config.json:', err.message);
   }
 
-  // Initialize Firebase Admin SDK
-  if (!admin.apps.length) {
-    try {
-      admin.initializeApp({
-        projectId: firebaseConfig.projectId || undefined,
-      });
-      console.log('Firebase Admin SDK initialized successfully');
-    } catch (adminErr: any) {
-      console.error('Firebase Admin SDK failed to initialize:', adminErr.message);
-    }
-  }
-  
+  // Initialize Firebase Client (Web) SDK
   let firebaseApp;
   try {
     firebaseApp = initializeApp(firebaseConfig);
@@ -46,16 +34,53 @@ async function startServer() {
   }
 
   const db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
-  const auth = getAuth(firebaseApp);
+  const auth = initializeAuth(firebaseApp, {
+    persistence: inMemoryPersistence
+  });
 
-  // Authenticate the server session using system administrative account
+  // Authenticate the server session using system administrative account to secure backend operations
   const systemEmail = 'admin@swiftship.system';
-  const systemPassword = 'password123';
+  const systemPassword = 'swiftship@system_pw_2026'; // Standard master password for system synchronization
   try {
     await signInWithEmailAndPassword(auth, systemEmail, systemPassword);
-    console.log('Backend server authenticated securely as admin@swiftship.system');
+    console.log('Backend server authenticated securely as admin@swiftship.system using Web SDK');
   } catch (authErr: any) {
-    console.error('WARNING: Backend failed to authenticate session on startup:', authErr.message);
+    console.warn('Backend failed standard authentication with system master password:', authErr.message);
+    if (authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/user-not-found') {
+      try {
+        const { createUserWithEmailAndPassword } = await import('firebase/auth');
+        await createUserWithEmailAndPassword(auth, systemEmail, systemPassword);
+        console.log('Backend server successfully registered admin@swiftship.system on-the-fly');
+
+        // Auto-seed admin user document in Firestore to enable immediate resolve-identifier and verify-login lookup list
+        try {
+          const { doc: fDoc, setDoc } = await import('firebase/firestore');
+          await setDoc(fDoc(db, 'users', auth.currentUser!.uid), {
+            email: systemEmail,
+            username: 'admin',
+            fullName: 'System Root Administrator',
+            role: 'Admin',
+            isRoot: true,
+            disabled: false,
+            systemPin: '000000',
+            password: systemPassword,
+            createdAt: Date.now()
+          });
+          console.log('Successfully seeded admin user doc on startup');
+        } catch (seedErr: any) {
+          console.error('Could not seed admin user doc on startup:', seedErr.message);
+        }
+      } catch (regErr: any) {
+        console.error('Backend failed to register administrative account:', regErr.message);
+        // Fallback: Try legacy standard password
+        try {
+          await signInWithEmailAndPassword(auth, systemEmail, 'password123');
+          console.log('Backend server authenticated securely using legacy password123');
+        } catch (legacyErr: any) {
+          console.error('Backend fallback authentication failed:', legacyErr.message);
+        }
+      }
+    }
   }
 
   // API Routes
@@ -76,7 +101,7 @@ async function startServer() {
          return res.json({ email: idLower });
       }
 
-      // Lookup username in Firestore via authenticated Web SDK
+      // Lookup username in Firestore via Client SDK
       const snap = await getDocs(query(collection(db, 'users'), where('username', '==', identifier), limit(1)));
       if (snap.empty) {
         return res.status(404).json({ error: 'User not found' });
@@ -154,7 +179,9 @@ async function startServer() {
       const isRoot = ROOT_EMAILS.includes(email.toLowerCase());
 
       if (!userDoc && isRoot) {
-        return res.json({ success: true, useClientAuth: true, email: email });
+        // Return isLegacyNoPasswordDoc to force the client-side to authenticate actual entered password directly against Firebase Auth!
+        // This ensures the custom password input cannot be bypassed or accepted with mock values for first-time root logins.
+        return res.json({ success: true, useClientAuth: true, email: email, isLegacyNoPasswordDoc: true });
       }
 
       if (!userDoc) {
@@ -174,8 +201,9 @@ async function startServer() {
         }
       }
 
-      // Legacy user verification (no password field yet)
-      return res.json({ success: true, useClientAuth: true, email: email });
+      // Legacy user/root verification with NO password field stored in Firestore
+      // tag it as legacy, forcing client to authenticate with real user password
+      return res.json({ success: true, useClientAuth: true, email: email, isLegacyNoPasswordDoc: true });
 
     } catch (err: any) {
       console.error('Verify login backend error:', err);
@@ -191,7 +219,7 @@ async function startServer() {
     }
 
     try {
-      // 1. Fetch settings from Firestore via authenticated Web SDK
+      // 1. Fetch settings from Firestore via Client SDK
       const settingsRef = doc(db, 'settings', 'whatsapp');
       const configSnap = await getDoc(settingsRef);
       const whatsappConfig = configSnap.exists() ? configSnap.data() : null;

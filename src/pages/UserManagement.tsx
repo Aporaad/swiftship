@@ -234,7 +234,7 @@ const SESSION_ACTIONS = (isAr: boolean): { id: SessionAction; label: string; des
 // ══════════════════════════════════════════════════════════════
 export default function UserManagement() {
   const { settings } = useSettings();
-  const { role, hasPermission, profile: currentUserDoc, loading: roleLoading } = useRole();
+  const { role, hasPermission, profile: currentUserDoc, loading: roleLoading, sessionId } = useRole();
   const isAr = settings.language === 'ar';
   const t = (ar: string, en: string) => isAr ? ar : en;
 
@@ -266,6 +266,14 @@ export default function UserManagement() {
 
   // -- Multidevice Sessions --
   const [dbSessions, setDbSessions] = useState<any[]>([]);
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTick(prev => prev + 1);
+    }, 15000); // Trigger re-render to update relative time ("2 mins ago") & status dots
+    return () => clearInterval(interval);
+  }, []);
 
   // -- Direct Password Change --
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
@@ -506,7 +514,9 @@ export default function UserManagement() {
   };
 
   const handleAddUser = async (e: React.FormEvent) => {
-    e.preventDefault(); setAddLoading(true);
+    e.preventDefault();
+    if (addLoading) return;
+    setAddLoading(true);
     let secondaryApp: any;
     try {
       const emailQ = query(collection(db, 'users'), where('email', '==', addFormData.email.toLowerCase()));
@@ -1075,7 +1085,7 @@ export default function UserManagement() {
                 </thead>
                 <tbody className="text-xs divide-y divide-slate-800/30">
                   {dbSessions.sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0)).map(sess => {
-                    const isSelf = sessionStorage.getItem('swiftship_session_id') === sess.id;
+                    const isSelf = sessionId === sess.id;
                     const isRoot = ROOT_EMAILS.includes(sess.email) || sess.role === 'Admin';
                     const isOnline = isSessionOnline(sess);
                     const statusDotColor = isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500';
@@ -1471,59 +1481,126 @@ export default function UserManagement() {
       {/* ══════════════════════════════════════════════════ */}
       {isAddModalOpen && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50">
-          <div className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/20 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden">
-            <div className="p-5 border-b border-slate-800/50 flex justify-between items-center bg-black/40">
+          <div className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/20 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-5 border-b border-slate-800/50 flex justify-between items-center bg-black/40 shrink-0">
               <h3 className="font-black text-white text-xs uppercase tracking-widest flex items-center gap-2"><Crown className="w-4 h-4 text-[#d4af37]" />{t('إضافة موظف جديد', 'Add New Staff Member')}</h3>
-              <button onClick={() => setIsAddModalOpen(false)} className="text-slate-500 hover:text-white bg-slate-900 border border-slate-800 p-1.5 rounded-lg"><X className="w-4 h-4" /></button>
+              <button type="button" onClick={() => setIsAddModalOpen(false)} className="text-slate-500 hover:text-white bg-slate-900 border border-slate-800 p-1.5 rounded-lg"><X className="w-4 h-4" /></button>
             </div>
-            <form onSubmit={handleAddUser} className="p-6 space-y-4 overflow-y-auto max-h-[75vh]" dir={isAr ? 'rtl' : 'ltr'}>
+            <form onSubmit={handleAddUser} className="p-6 space-y-4 overflow-y-auto flex-1 text-start" dir={isAr ? 'rtl' : 'ltr'}>
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الاسم الكامل', 'Full Name')} *</label>
-                <input required type="text" value={addFormData.fullName} onChange={e => setAddFormData({...addFormData, fullName: e.target.value})} className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 px-4 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none" />
+                <input 
+                  required 
+                  tabIndex={1}
+                  type="text" 
+                  value={addFormData.fullName} 
+                  onChange={e => setAddFormData({...addFormData, fullName: e.target.value})} 
+                  className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none transition-all" 
+                />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('اسم المستخدم', 'Username')} *</label>
-                  <input required type="text" placeholder="arslan_ops" value={addFormData.username} onChange={e => setAddFormData({...addFormData, username: e.target.value})} className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono" dir="ltr" />
+                  <input 
+                    required 
+                    tabIndex={2}
+                    type="text" 
+                    placeholder="arslan_ops" 
+                    value={addFormData.username} 
+                    onChange={e => setAddFormData({...addFormData, username: e.target.value})} 
+                    className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono transition-all" 
+                    dir="ltr" 
+                  />
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('رمز PIN', 'Security PIN')}</label>
-                  <input type="text" maxLength={4} placeholder="1234" value={addFormData.systemPin} onChange={e => setAddFormData({...addFormData, systemPin: e.target.value})} className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-center tracking-widest" />
+                  <input 
+                    tabIndex={3}
+                    type="text" 
+                    maxLength={4} 
+                    placeholder="1234" 
+                    value={addFormData.systemPin} 
+                    onChange={e => setAddFormData({...addFormData, systemPin: e.target.value})} 
+                    className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-center tracking-widest transition-all" 
+                  />
                 </div>
               </div>
+
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('البريد الإلكتروني', 'Email')} *</label>
-                <input required type="email" placeholder="name@company.com" value={addFormData.email} onChange={e => setAddFormData({...addFormData, email: e.target.value})} className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 px-4 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono" dir="ltr" />
+                <input 
+                  required 
+                  tabIndex={4}
+                  type="email" 
+                  placeholder="name@company.com" 
+                  value={addFormData.email} 
+                  onChange={e => setAddFormData({...addFormData, email: e.target.value})} 
+                  className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono transition-all" 
+                  dir="ltr" 
+                />
               </div>
+
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('كلمة المرور', 'Password')} *</label>
                 <div className="relative">
-                  <input required type={showPassword ? 'text' : 'password'} value={addFormData.password} onChange={e => setAddFormData({...addFormData, password: e.target.value})} placeholder="••••••••"
-                    className={`w-full bg-black/50 border border-slate-800 rounded-xl py-3 ${isAr ? 'pr-4 pl-10' : 'pl-4 pr-10'} text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono`} dir="ltr" />
+                  <input 
+                    required 
+                    tabIndex={5}
+                    type={showPassword ? 'text' : 'password'} 
+                    value={addFormData.password} 
+                    onChange={e => setAddFormData({...addFormData, password: e.target.value})} 
+                    placeholder="••••••••"
+                    className={`w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-xs font-bold transition-all ${isAr ? 'pr-4 pl-10' : 'pl-4 pr-10'}`} 
+                    dir="ltr" 
+                  />
                   <button type="button" onClick={() => setShowPassword(!showPassword)} className={`absolute ${isAr ? 'left-3' : 'right-3'} top-1/2 -translate-y-1/2 text-slate-500 hover:text-white`}>
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-4">
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الدور', 'Role')}</label>
-                  <select value={addFormData.role} onChange={e => setAddFormData({...addFormData, role: e.target.value})} className="w-full bg-black/50 border border-slate-800 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold">
+                  <select 
+                    tabIndex={6}
+                    value={addFormData.role} 
+                    onChange={e => setAddFormData({...addFormData, role: e.target.value})} 
+                    className="w-full bg-black/50 border border-slate-800 text-white rounded-xl py-3 px-4 focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none text-xs font-bold transition-all font-sans"
+                  >
                     {roles.filter(r => r.id !== 'courier' && r.id !== 'Courier').map(r => <option key={r.id} value={r.id}>{r.title || r.id}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('نسبة العمولة%', 'Commission%')}</label>
-                  <input type="number" min="0" max="100" step="0.1" value={addFormData.commissionRate} onChange={e => setAddFormData({...addFormData, commissionRate: parseFloat(e.target.value) || 0})} className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono" />
+                  <input 
+                    tabIndex={7}
+                    type="number" 
+                    min="0" 
+                    max="100" 
+                    step="0.1" 
+                    value={addFormData.commissionRate} 
+                    onChange={e => setAddFormData({...addFormData, commissionRate: parseFloat(e.target.value) || 0})} 
+                    className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono transition-all" 
+                  />
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الراتب الشهري', 'Monthly Salary')}</label>
-                  <input type="number" min="0" value={addFormData.monthlySalary} onChange={e => setAddFormData({...addFormData, monthlySalary: parseFloat(e.target.value) || 0})} className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono" />
+                  <input 
+                    tabIndex={8}
+                    type="number" 
+                    min="0" 
+                    value={addFormData.monthlySalary} 
+                    onChange={e => setAddFormData({...addFormData, monthlySalary: parseFloat(e.target.value) || 0})} 
+                    className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono transition-all" 
+                  />
                 </div>
               </div>
-              <div className="pt-3 flex justify-end gap-3 border-t border-slate-800/50">
-                <button type="button" onClick={() => setIsAddModalOpen(false)} className="px-5 py-2.5 text-slate-400 font-bold bg-slate-900 border border-slate-800 hover:bg-slate-800 rounded-xl text-xs">{t('إلغاء', 'Cancel')}</button>
-                <button type="submit" disabled={addLoading} className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] disabled:opacity-50 text-black font-black text-xs rounded-xl shadow-md transition-all">
+
+              <div className="pt-4 flex justify-end gap-3 border-t border-slate-800/50 shrink-0">
+                <button type="button" onClick={() => setIsAddModalOpen(false)} className="px-5 py-2.5 text-slate-400 font-bold bg-slate-900 border border-slate-800 hover:bg-slate-850 rounded-xl text-xs transition active:scale-95">{t('إلغاء', 'Cancel')}</button>
+                <button type="submit" disabled={addLoading} className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] disabled:opacity-50 text-black font-black text-xs rounded-xl shadow-md transition active:scale-95">
                   {addLoading ? t('جاري الإنشاء...', 'Creating...') : t('إنشاء الحساب', 'Create Account')}
                 </button>
               </div>
@@ -1537,44 +1614,91 @@ export default function UserManagement() {
       {/* ══════════════════════════════════════════════════ */}
       {isEditModalOpen && selectedUser && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50">
-          <div className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/20 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden">
-            <div className="p-5 border-b border-slate-800/50 flex justify-between items-center bg-black/40">
+          <div className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/20 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-5 border-b border-slate-800/50 flex justify-between items-center bg-black/40 shrink-0">
               <h3 className="font-black text-white text-xs uppercase tracking-widest">{t('تعديل بيانات الموظف', 'Edit Staff Member')}</h3>
-              <button onClick={() => { setIsEditModalOpen(false); setSelectedUser(null); }} className="text-slate-500 hover:text-white bg-slate-900 border border-slate-800 p-1.5 rounded-lg"><X className="w-4 h-4" /></button>
+              <button type="button" onClick={() => { setIsEditModalOpen(false); setSelectedUser(null); }} className="text-slate-500 hover:text-white bg-slate-900 border border-slate-800 p-1.5 rounded-lg"><X className="w-4 h-4" /></button>
             </div>
-            <form onSubmit={handleUpdateUser} className="p-6 space-y-4" dir={isAr ? 'rtl' : 'ltr'}>
+            <form onSubmit={handleUpdateUser} className="p-6 space-y-4 overflow-y-auto flex-1 text-start" dir={isAr ? 'rtl' : 'ltr'}>
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الاسم الكامل', 'Full Name')}</label>
-                <input required type="text" value={editFormData.fullName} onChange={e => setEditFormData({...editFormData, fullName: e.target.value})} className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 px-4 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none" />
+                <input 
+                  required 
+                  tabIndex={1}
+                  type="text" 
+                  value={editFormData.fullName} 
+                  onChange={e => setEditFormData({...editFormData, fullName: e.target.value})} 
+                  className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none transition-all" 
+                />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('اسم المستخدم', 'Username')}</label>
-                  <input required type="text" value={editFormData.username} onChange={e => setEditFormData({...editFormData, username: e.target.value})} className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono" dir="ltr" />
+                  <input 
+                    required 
+                    tabIndex={2}
+                    type="text" 
+                    value={editFormData.username} 
+                    onChange={e => setEditFormData({...editFormData, username: e.target.value})} 
+                    className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold-focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono transition-all" 
+                    dir="ltr" 
+                  />
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">PIN</label>
-                  <input type="text" maxLength={4} value={editFormData.systemPin} onChange={e => setEditFormData({...editFormData, systemPin: e.target.value})} className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-center tracking-widest" />
+                  <input 
+                    tabIndex={3}
+                    type="text" 
+                    maxLength={4} 
+                    value={editFormData.systemPin} 
+                    onChange={e => setEditFormData({...editFormData, systemPin: e.target.value})} 
+                    className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-center tracking-widest transition-all" 
+                  />
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-4">
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الدور', 'Role')}</label>
-                  <select disabled={ROOT_EMAILS.includes(selectedUser.email) || selectedUser.isRoot} value={editFormData.role} onChange={e => setEditFormData({...editFormData, role: e.target.value})} className="w-full bg-black/50 border border-slate-800 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed">
+                  <select 
+                    tabIndex={4}
+                    disabled={ROOT_EMAILS.includes(selectedUser.email) || selectedUser.isRoot} 
+                    value={editFormData.role} 
+                    onChange={e => setEditFormData({...editFormData, role: e.target.value})} 
+                    className="w-full bg-black/50 border border-slate-800 text-white rounded-xl py-3 px-4 focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed font-sans transition-all"
+                  >
                     {roles.filter(r => r.id !== 'courier' && r.id !== 'Courier').map(r => <option key={r.id} value={r.id}>{r.title || r.id}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('عمولة%', 'Commission%')}</label>
-                  <input type="number" min="0" max="100" step="0.1" value={editFormData.commissionRate} onChange={e => setEditFormData({...editFormData, commissionRate: parseFloat(e.target.value) || 0})} className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono" />
+                  <input 
+                    tabIndex={5}
+                    type="number" 
+                    min="0" 
+                    max="100" 
+                    step="0.1" 
+                    value={editFormData.commissionRate} 
+                    onChange={e => setEditFormData({...editFormData, commissionRate: parseFloat(e.target.value) || 0})} 
+                    className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono transition-all" 
+                  />
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الراتب الشهري', 'Monthly Salary')}</label>
-                  <input type="number" min="0" value={editFormData.monthlySalary} onChange={e => setEditFormData({...editFormData, monthlySalary: parseFloat(e.target.value) || 0})} className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono" />
+                  <input 
+                    tabIndex={6}
+                    type="number" 
+                    min="0" 
+                    value={editFormData.monthlySalary} 
+                    onChange={e => setEditFormData({...editFormData, monthlySalary: parseFloat(e.target.value) || 0})} 
+                    className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono transition-all" 
+                  />
                 </div>
               </div>
+
               {!ROOT_EMAILS.includes(selectedUser.email) && !selectedUser.isRoot && (
-                <div className="bg-black/30 border border-slate-800 rounded-xl p-4">
+                <div className="bg-black/30 border border-slate-800 rounded-xl p-4 shrink-0">
                   <label className="flex items-center gap-3 cursor-pointer">
                     <div onClick={() => setEditFormData({...editFormData, disabled: !editFormData.disabled})}
                       className={`w-11 h-6 rounded-full border transition-all flex items-center relative cursor-pointer ${editFormData.disabled ? 'bg-rose-900/30 border-rose-700/40' : 'bg-slate-800 border-slate-700'}`}>
@@ -1587,9 +1711,10 @@ export default function UserManagement() {
                   </label>
                 </div>
               )}
-              <div className="pt-3 flex justify-end gap-3 border-t border-slate-800/50">
-                <button type="button" onClick={() => { setIsEditModalOpen(false); setSelectedUser(null); }} className="px-5 py-2.5 text-slate-400 font-bold bg-slate-900 border border-slate-800 hover:bg-slate-800 rounded-xl text-xs">{t('إلغاء', 'Cancel')}</button>
-                <button type="submit" className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black text-xs rounded-xl shadow-md transition-all">{t('حفظ التغييرات', 'Save Changes')}</button>
+
+              <div className="pt-4 flex justify-end gap-3 border-t border-slate-800/50 shrink-0">
+                <button type="button" onClick={() => { setIsEditModalOpen(false); setSelectedUser(null); }} className="px-5 py-2.5 text-slate-400 font-bold bg-slate-900 border border-slate-800 hover:bg-slate-850 rounded-xl text-xs transition active:scale-95">{t('إلغاء', 'Cancel')}</button>
+                <button type="submit" className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black text-xs rounded-xl shadow-md transition active:scale-95">{t('حفظ التغييرات', 'Save Changes')}</button>
               </div>
             </form>
           </div>
@@ -1601,18 +1726,18 @@ export default function UserManagement() {
       {/* ══════════════════════════════════════════════════ */}
       {isPasswordModalOpen && passwordTargetUser && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50">
-          <div className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/20 rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden">
-            <div className="p-5 border-b border-slate-800/50 flex justify-between items-center bg-black/40">
+          <div className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/20 rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-5 border-b border-slate-800/50 flex justify-between items-center bg-black/40 shrink-0">
               <h3 className="font-black text-white text-xs uppercase tracking-widest flex items-center gap-2">
                 <Key className="w-4 h-4 text-amber-400" />
                 {t('تغيير كلمة المرور مباشرة', 'Direct Password Change')}
               </h3>
-              <button onClick={() => { setIsPasswordModalOpen(false); setPasswordTargetUser(null); }} className="text-slate-500 hover:text-white bg-slate-900 border border-slate-800 p-1.5 rounded-lg">
+              <button type="button" onClick={() => { setIsPasswordModalOpen(false); setPasswordTargetUser(null); }} className="text-slate-500 hover:text-white bg-slate-900 border border-slate-800 p-1.5 rounded-lg">
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <form onSubmit={handleAdminChangePassword} className="p-6 space-y-4" dir={isAr ? 'rtl' : 'ltr'}>
-              <div className="flex items-center gap-3 p-3 bg-black/40 border border-slate-800/40 rounded-xl">
+            <form onSubmit={handleAdminChangePassword} className="p-6 space-y-4 overflow-y-auto flex-1 text-start" dir={isAr ? 'rtl' : 'ltr'}>
+              <div className="flex items-center gap-3 p-3 bg-black/40 border border-slate-800/40 rounded-xl shrink-0">
                 <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 text-[#d4af37] flex items-center justify-center font-black text-[10px]">
                   {passwordTargetUser.fullName?.substring(0, 2)}
                 </div>
@@ -1625,18 +1750,19 @@ export default function UserManagement() {
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('كلمة المرور الجديدة', 'New Password')}</label>
                 <input
                   required
+                  tabIndex={1}
                   type="text"
                   placeholder="••••••••"
                   value={newPasswordValue}
                   onChange={e => setNewPasswordValue(e.target.value)}
-                  className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 px-4 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono"
+                  className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 px-4 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono transition-all"
                   dir="ltr"
                 />
                 <span className="block text-[8px] text-slate-500 mt-1">{t('سيتغير تسجيل الدخول للمستخدم فوراً بهذا المفتاح دون الحاجة لبريده الإلكتروني.', 'This will instantly change the user\'s password in Firebase Authentication directly.')}</span>
               </div>
-              <div className="pt-3 flex justify-end gap-3 border-t border-slate-800/50">
-                <button type="button" onClick={() => { setIsPasswordModalOpen(false); setPasswordTargetUser(null); }} className="px-5 py-2.5 text-slate-400 font-bold bg-slate-900 border border-slate-800 hover:bg-slate-800 rounded-xl text-xs">{t('إلغاء', 'Cancel')}</button>
-                <button type="submit" disabled={passwordLoading} className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-700 hover:from-amber-700 hover:to-amber-500 disabled:opacity-50 text-black font-black text-xs rounded-xl shadow-md transition-all">
+              <div className="pt-3 flex justify-end gap-3 border-t border-slate-800/50 shrink-0">
+                <button type="button" onClick={() => { setIsPasswordModalOpen(false); setPasswordTargetUser(null); }} className="px-5 py-2.5 text-slate-400 font-bold bg-slate-900 border border-slate-800 hover:bg-slate-850 rounded-xl text-xs transition active:scale-95">{t('إلغاء', 'Cancel')}</button>
+                <button type="submit" disabled={passwordLoading} className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-700 hover:from-amber-700 hover:to-amber-500 disabled:opacity-50 text-black font-black text-xs rounded-xl shadow-md transition active:scale-95">
                   {passwordLoading ? t('جاري التغيير...', 'Changing...') : t('تغيير الآن', 'Change Now')}
                 </button>
               </div>

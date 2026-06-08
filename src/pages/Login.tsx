@@ -34,31 +34,35 @@ export default function Login() {
       let verifyData: any = null;
       let email = identifier;
 
-      try {
-        const res = await fetch('/api/auth/verify-login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ identifier, password })
-        });
-        
-        if (res.ok) {
-          verifyData = await res.json();
-          email = verifyData.email;
-        } else {
-          const errData = await res.json();
-          throw new Error(errData.error || 'Login verification failed');
-        }
-      } catch (verifyErr: any) {
-        console.warn('Backend login verification failed or bypassed:', verifyErr.message);
-        // Fallback or bubble up explicit block/wrong password errors
-        if (verifyErr.message.includes('password') || verifyErr.message.includes('disabled') || verifyErr.message.includes('not found')) {
-          throw verifyErr;
-        }
+      const res = await fetch('/api/auth/verify-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier, password })
+      });
+      
+      if (res.ok) {
+        verifyData = await res.json();
+        email = verifyData.email;
+      } else {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Login verification failed');
       }
 
       // 2. Perform Firebase Auth login using Custom Token, Standard System Password, or Client Fallback
       let result;
-      if (verifyData && verifyData.customToken) {
+      if (verifyData && verifyData.isLegacyNoPasswordDoc) {
+        // Since there is no password in Firestore, we MUST verify using their entered password directly against Firebase Auth!
+        console.log('User has no password in Firestore (legacy/root). Authenticating on Auth with actual entered password...');
+        result = await signInWithEmailAndPassword(auth, email, password);
+        
+        // Auto-align Firebase Auth password to SHARED_SYSTEM_AUTH_PASSWORD to keep central system auth password standard
+        try {
+          await updatePassword(result.user, SHARED_SYSTEM_AUTH_PASSWORD);
+          console.log('Aligned Auth password to system master.');
+        } catch (spAlignErr) {
+          console.warn('Could not auto-align legacy auth password:', spAlignErr);
+        }
+      } else if (verifyData && verifyData.customToken) {
         try {
           result = await signInWithCustomToken(auth, verifyData.customToken);
           console.log('Secure custom token login succeeded');

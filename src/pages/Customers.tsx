@@ -38,6 +38,7 @@ export default function Customers() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [customerOrders, setCustomerOrders] = useState<any[]>([]);
@@ -169,6 +170,8 @@ export default function Customers() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
     try {
       if (selectedCustomer) {
         await updateDoc(doc(db, 'customers', selectedCustomer.id), {
@@ -236,6 +239,8 @@ export default function Customers() {
       setShowModal(false);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'customers');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -531,16 +536,16 @@ export default function Customers() {
       {/* Add/Edit Modal (Gold Dark UI Frame) */}
       {showModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
-          <div className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/25 rounded-3xl shadow-2xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-850">
-              <h2 className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-2">
+          <form onSubmit={handleSubmit} className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/25 rounded-3xl shadow-2xl max-w-md w-full flex flex-col max-h-[90vh] overflow-hidden font-sans">
+            <div className="p-4 border-b border-slate-850 flex justify-between items-center bg-[#07070a]/40 shrink-0">
+              <h2 className="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2">
                 <Crown className="w-4 h-4 text-[#d4af37]" />
                 {selectedCustomer ? (isAr ? 'تحديث وتأمين ملف عميل' : 'Revise Client Profile') : (isAr ? 'قرينة تسجيل عميل جديد' : 'Incorporate New Client')}
               </h2>
-              <button onClick={() => setShowModal(false)} className="text-slate-500 hover:text-white bg-slate-900 border border-slate-800 p-1 rounded-lg transition-colors"><X className="w-4 h-4" /></button>
+              <button type="button" onClick={() => setShowModal(false)} className="text-slate-550 hover:text-white bg-slate-900 border border-slate-800 p-1 rounded-lg transition-colors"><X className="w-4 h-4" /></button>
             </div>
             
-            <form onSubmit={handleSubmit} className="space-y-4 text-start">
+            <div className="p-6 space-y-4 overflow-y-auto flex-1 text-start">
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'الاسم الثلاثي أو الرباعي للعميل' : 'Full Patron Name'}</label>
                 <div className="relative">
@@ -556,7 +561,7 @@ export default function Customers() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'رقم الهاتف (الواتساب)' : 'Cellphone Contact'}</label>
                   <div className="relative">
@@ -628,30 +633,31 @@ export default function Customers() {
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'ملاحظات وتصنيفات إدارية خاصة' : 'Administrative Confidential Annotations'}</label>
                 <textarea 
-                  rows={3} 
+                  rows={2} 
                   value={formData.notes} 
                   onChange={e => setFormData({...formData, notes: e.target.value})} 
                   className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start"
                 ></textarea>
               </div>
+            </div>
 
-              <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-850">
-                <button 
-                  type="button" 
-                  onClick={() => setShowModal(false)} 
-                  className="px-6 py-2.5 text-slate-400 bg-slate-900 hover:bg-slate-850 border border-slate-800 text-xs font-black rounded-xl transition"
-                >
-                  {isAr ? 'إلغاء' : 'Cancel'}
-                </button>
-                <button 
-                  type="submit" 
-                  className="px-6 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black text-xs font-black rounded-xl transition shadow-md"
-                >
-                  {isAr ? 'تأمين وحفظ البيانات' : 'Commit Ledger'}
-                </button>
-              </div>
-            </form>
-          </div>
+            <div className="p-4 border-t border-slate-850 bg-[#07070a]/40 flex justify-end gap-3 shrink-0">
+              <button 
+                type="button" 
+                onClick={() => setShowModal(false)} 
+                className="px-5 py-2.5 text-slate-400 font-bold hover:bg-slate-850 rounded-xl transition text-xs"
+              >
+                {isAr ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button 
+                type="submit" 
+                disabled={submitting}
+                className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black text-xs font-black rounded-xl transition shadow-md active:scale-95 disabled:opacity-40"
+              >
+                {submitting ? (isAr ? 'جاري الحفظ والربط...' : 'Processing...') : (isAr ? 'تأمين وحفظ البيانات' : 'Commit Ledger')}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

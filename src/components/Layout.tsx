@@ -22,20 +22,22 @@ import {
   Crown,
   Menu,
   ChevronDown,
-  UserCog
+  UserCog,
+  Command
 } from 'lucide-react';
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
 import { Toaster } from 'react-hot-toast';
 import GlobalSearchModal from './GlobalSearchModal';
 import GlobalEntityLedgerModal from './GlobalEntityLedgerModal';
+import QuickNavModal from './QuickNavModal';
 import { activityLogService } from '../services/activityLogService';
 import { notificationService } from '../services/notificationService';
 
 export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { role, profile, hasPermission, loading: roleLoading } = useRole(true);
+  const { role, profile, hasPermission, loading: roleLoading, sessionId } = useRole(true);
   const { settings, updateSettings, t } = useSettings();
   const [unreadCount, setUnreadCount] = useState(0);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -43,6 +45,9 @@ export default function Layout() {
   // Global Search State
   const [searchText, setSearchText] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  
+  // Quick Navigation State
+  const [isQuickNavOpen, setIsQuickNavOpen] = useState(false);
 
   // Real-time System Status state
   const [systemStats, setSystemStats] = useState({
@@ -110,12 +115,19 @@ export default function Layout() {
     };
   }, [role, roleLoading]);
 
-  // Listen for Ctrl+K shortcut
+  // Listen for Ctrl+K and Ctrl+T shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+      // Ctrl + K for search
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setIsSearchOpen(true);
+      }
+      
+      // Ctrl + T or Cmd + T or Alt + T for Quick Navigation
+      if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 't') || (e.altKey && e.key.toLowerCase() === 't')) {
+        e.preventDefault();
+        setIsQuickNavOpen(prev => !prev);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -156,12 +168,19 @@ export default function Layout() {
     } catch (_) {}
     
     try {
-      const sessId = sessionStorage.getItem('swiftship_session_id');
-      if (sessId) {
+      const activeSessId = sessionId || sessionStorage.getItem('swiftship_session_id');
+      if (activeSessId && activeSessId !== 'sess-loading' && activeSessId !== 'sess-loggedout') {
         const { deleteDoc, doc } = await import('firebase/firestore');
-        await deleteDoc(doc(db, 'sessions', sessId));
-        sessionStorage.removeItem('swiftship_session_id');
-        sessionStorage.removeItem('swiftship_session_created');
+        await deleteDoc(doc(db, 'sessions', activeSessId));
+      }
+      
+      if (typeof window !== 'undefined') {
+        for (let i = sessionStorage.length - 1; i >= 0; i--) {
+          const key = sessionStorage.key(i);
+          if (key && (key.startsWith('swiftship_session_id') || key.startsWith('swiftship_session_created'))) {
+            sessionStorage.removeItem(key);
+          }
+        }
       }
     } catch (err) {
       console.warn("Could not delete session on manual signout:", err);
@@ -173,7 +192,7 @@ export default function Layout() {
 
   // Auto-backup check: if admin & autoBackupEnabled & 24h passed, run backup to Firestore
   useEffect(() => {
-    if (roleLoading || role !== 'Admin' || !settings.autoBackupEnabled) return;
+    if (roleLoading || role !== 'Admin' || !settings.autoBackupEnabled || !auth.currentUser) return;
     const lastBackupAt = settings.lastAutoBackupAt || 0;
     const hoursSince = (Date.now() - lastBackupAt) / (1000 * 60 * 60);
     if (hoursSince < 24) return;
@@ -190,40 +209,72 @@ export default function Layout() {
         };
         for (const col of cols) {
           try {
+            console.log(`[AutoBackup] Fetching collection: ${col}`);
             const snap = await getDocs(collection(db, col));
             backupDoc.data[col] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-          } catch (_) {}
+            console.log(`[AutoBackup] Fecthed ${col} size: ${snap.size}`);
+          } catch (colErr: any) {
+            console.warn(`[AutoBackup] Ignored error reading collection ${col}:`, colErr.message || colErr);
+          }
         }
         // Save backup as a Firestore document under /backups collection
         const backupId = `auto_${new Date().toISOString().split('T')[0]}`;
-        await setDoc(doc(db, 'backups', backupId), {
-          ...backupDoc,
-          savedAt: Date.now()
-        });
+        try {
+          console.log(`[AutoBackup] Attempting to save document backups/${backupId}`);
+          await setDoc(doc(db, 'backups', backupId), {
+            ...backupDoc,
+            savedAt: Date.now()
+          });
+          console.log(`[AutoBackup] Saved document backups/${backupId} successfully`);
+        } catch (setDocErr: any) {
+          console.error('[AutoBackup] setDoc to backups collection failed:', setDocErr);
+          throw setDocErr;
+        }
         
         // Log activity and notify users
-        activityLogService.log('backup_export', 'Auto Backup: ' + cols.join(', '));
-        notificationService.notify({
-          title: settings.language === 'ar' ? 'النسخ الاحتياطي التلقائي' : 'Automatic System Backup',
-          message: settings.language === 'ar'
-            ? 'قام النظام تلقائياً بأخذ نسخة احتياطية لجميع البيانات وحفظها في قاعدة البيانات'
-            : 'The system has automatically backed up all collections to Firestore',
-          type: 'success',
-          category: 'system'
-        });
+        try {
+          console.log('[AutoBackup] Attempting activityLogService.log');
+          activityLogService.log('backup_export', 'Auto Backup: ' + cols.join(', '));
+        } catch (actLogErr) {
+          console.warn('[AutoBackup] activityLogService failed, continuing:', actLogErr);
+        }
+
+        try {
+          console.log('[AutoBackup] Attempting notificationService.notify');
+          await notificationService.notify({
+            title: settings.language === 'ar' ? 'النسخ الاحتياطي التلقائي' : 'Automatic System Backup',
+            message: settings.language === 'ar'
+              ? 'قام النظام تلقائياً بأخذ نسخة احتياطية لجميع البيانات وحفظها في قاعدة البيانات'
+              : 'The system has automatically backed up all collections to Firestore',
+            type: 'success',
+            category: 'system'
+          });
+          console.log('[AutoBackup] notificationService.notify was successful');
+        } catch (notifErr: any) {
+          console.error('[AutoBackup] notificationService.notify failed:', notifErr);
+          throw notifErr;
+        }
 
         // Update lastAutoBackupAt
-        await updateSettings({
-          lastAutoBackupAt: Date.now(),
-          lastBackup: new Date().toLocaleString(settings.language === 'ar' ? 'ar-YE' : 'en-US')
-        } as any);
+        try {
+          console.log('[AutoBackup] Attempting updateSettings');
+          await updateSettings({
+            lastAutoBackupAt: Date.now(),
+            lastBackup: new Date().toLocaleString(settings.language === 'ar' ? 'ar-YE' : 'en-US')
+          } as any);
+          console.log('[AutoBackup] updateSettings was successful');
+        } catch (updateSetErr: any) {
+          console.error('[AutoBackup] updateSettings failed:', updateSetErr);
+          throw updateSetErr;
+        }
+
         console.log('[AutoBackup] Completed successfully');
-      } catch (err) {
-        console.error('[AutoBackup] Failed:', err);
+      } catch (err: any) {
+        console.error('[AutoBackup] General failure caught in runAutoBackup:', err.message || err);
       }
     };
     runAutoBackup();
-  }, [role, roleLoading, settings.autoBackupEnabled, settings.lastAutoBackupAt]);
+  }, [role, roleLoading, settings.autoBackupEnabled, settings.lastAutoBackupAt, auth.currentUser]);
 
   const toggleLanguage = () => {
     const newLang = settings.language === 'ar' ? 'en' : 'ar';
@@ -614,6 +665,18 @@ export default function Layout() {
               </span>
             </div>
 
+            {/* Quick Navigation Command Button (Ctrl+T) */}
+            <button
+              onClick={() => setIsQuickNavOpen(true)}
+              className="p-2.5 rounded-xl hover:bg-slate-900 text-slate-400 hover:text-[#d4af37] transition-all bg-[#08080a] border border-slate-900 hover:border-[#d4af37]/20 flex items-center justify-center cursor-pointer relative group"
+              title={isAr ? "التنقل السريع (Ctrl+T)" : "Quick Navigation Command (Ctrl+T)"}
+            >
+              <Command className="w-4 h-4 text-[#d4af37]" />
+              <span className="absolute -bottom-8 right-1/2 translate-x-1/2 bg-black border border-slate-800 text-[9px] text-slate-400 px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-250 pointer-events-none whitespace-nowrap font-mono">
+                {isAr ? "Ctrl + T للتنقل" : "Ctrl + T to Nav"}
+              </span>
+            </button>
+
             {/* Language Switch */}
             <button 
               onClick={toggleLanguage}
@@ -679,6 +742,12 @@ export default function Layout() {
             setSearchText('');
           }}
           searchQuery={searchText}
+        />
+
+        {/* Quick Navigation Menu Modal */}
+        <QuickNavModal
+          isOpen={isQuickNavOpen}
+          onClose={() => setIsQuickNavOpen(false)}
         />
 
         {/* Global Financial Statement Modal */}

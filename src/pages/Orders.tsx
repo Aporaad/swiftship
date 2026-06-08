@@ -10,7 +10,8 @@ import ConfirmModal from '../components/ConfirmModal';
 import { financialAccountService } from '../services/financialAccountService';
 import { 
   Plus, Search, Edit2, Truck, Activity, Trash2, DollarSign, 
-  CreditCard, Printer, Calculator, Package, MapPin, X, AlertCircle, RefreshCw, UserPlus, Eye
+  CreditCard, Printer, Calculator, Package, MapPin, X, AlertCircle, RefreshCw, UserPlus, Eye,
+  User, Mail, Phone, Coins
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import QRCode from 'qrcode';
@@ -230,8 +231,11 @@ export default function Orders() {
   const [customerFormData, setCustomerFormData] = useState({
     fullName: '',
     phone: '',
+    email: '',
+    gps_location: '',
     address: '',
-    notes: ''
+    notes: '',
+    walletBalance: 0
   });
 
   useEffect(() => {
@@ -1318,13 +1322,34 @@ export default function Orders() {
     if (!customerFormData.fullName || !customerFormData.phone) return;
 
     try {
+      // Step 1: Create the customer document
       const docRef = await addDoc(collection(db, 'customers'), {
         fullName: customerFormData.fullName,
         phone: customerFormData.phone,
-        address: customerFormData.address,
-        notes: customerFormData.notes,
-        createdAt: Date.now()
+        email: customerFormData.email || '',
+        gps_location: customerFormData.gps_location || '',
+        address: customerFormData.address || '',
+        notes: customerFormData.notes || '',
+        createdAt: Date.now(),
+        financialBalance: 0,
+        financialCurrency: settings.currency || 'SAR',
+        wallet: {
+          balance: customerFormData.walletBalance || 0
+        },
+        walletBalance: customerFormData.walletBalance || 0
       });
+
+      // Step 2: Auto-create financial account (1130-xxxx)
+      try {
+        await financialAccountService.createAccountForEntity(
+          'customer',
+          docRef.id,
+          customerFormData.fullName,
+          settings.currency || 'SAR'
+        );
+      } catch (accErr) {
+        console.warn('[Orders.tsx] Could not create financial account for quick-added customer:', accErr);
+      }
 
       // Autofollow selected
       setFormData(prev => ({
@@ -1332,20 +1357,33 @@ export default function Orders() {
         customerId: docRef.id,
         customerName: customerFormData.fullName,
         customerPhone: customerFormData.phone,
-        customerAddress: customerFormData.address
+        customerAddress: customerFormData.address || ''
       }));
 
       setIsAddCustomerOpen(false);
-      setCustomerFormData({ fullName: '', phone: '', address: '', notes: '' });
+      setCustomerFormData({ 
+        fullName: '', 
+        phone: '', 
+        email: '',
+        gps_location: '',
+        address: '', 
+        notes: '',
+        walletBalance: 0
+      });
+
+      activityLogService.log('add_customer', customerFormData.fullName, { ...customerFormData });
 
       notificationService.notify({
         title: isAr ? 'تمت الإضافة' : 'Client Created',
-        message: isAr ? 'تم تسجيل الزبون وتحميل ملفه في الفاتورة' : 'Customer created and attached',
+        message: isAr 
+          ? `تمت إضافة الزبون ${customerFormData.fullName} وإنشاء ملفه المالي تلقائياً` 
+          : `Customer ${customerFormData.fullName} added with auto-generated financial account`,
         type: 'success',
         category: 'system'
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      handleFirestoreError(err, OperationType.CREATE, 'customers');
     }
   };
 
@@ -4264,27 +4302,146 @@ export default function Orders() {
       {/* QUICK ADD CUSTOMER NESTED MODAL */}
       {isAddCustomerOpen && (
         <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 z-55 animate-fade-in">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl">
-            <div className="p-4 border-b border-slate-800 bg-slate-955 flex justify-between items-center text-xs font-black text-white">
-              <span>{isAr ? 'تسجيل زبون سريع في الدفتر' : 'Quick Register Customer'}</span>
-              <button onClick={() => setIsAddCustomerOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-1 rounded-lg"><Plus className="w-4 h-4 rotate-45" /></button>
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl">
+            <div className="p-4 border-b border-slate-800 bg-slate-950 flex justify-between items-center text-xs font-black text-white">
+              <span className="flex items-center gap-1.5 uppercase tracking-wider">
+                <UserPlus className="w-4 h-4 text-[#d4af37]" />
+                {isAr ? 'تسجيل عميل جديد ومطابقة الحساب بالكامل' : 'Quick Register Customer'}
+              </span>
+              <button type="button" onClick={() => setIsAddCustomerOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-1 rounded-lg">
+                <X className="w-4 h-4" />
+              </button>
             </div>
-            <form onSubmit={handleAddCustomer} className="p-5 space-y-4 text-start">
+            <form onSubmit={handleAddCustomer} className="p-5 space-y-4 text-start overflow-y-auto max-h-[85vh]">
               <div>
-                <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'اسم الزبون الكامل' : 'FullName'}</label>
-                <input required type="text" value={customerFormData.fullName || ''} onChange={e => setCustomerFormData({...customerFormData, fullName: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold" />
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
+                  {isAr ? 'الاسم الثلاثي أو الرباعي للعميل' : 'Full Patron Name'} *
+                </label>
+                <div className="relative">
+                  <User className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#d4af37]" />
+                  <input 
+                    required 
+                    tabIndex={1}
+                    placeholder={isAr ? 'أدخل اسم العميل بالكامل...' : 'e.g. Abdullah bin Ali'} 
+                    type="text" 
+                    value={customerFormData.fullName} 
+                    onChange={e => setCustomerFormData({...customerFormData, fullName: e.target.value})} 
+                    className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none text-start transition-all" 
+                  />
+                </div>
               </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
+                    {isAr ? 'رقم الهاتف (الواتساب)' : 'Cellphone Contact'} *
+                  </label>
+                  <div className="relative">
+                    <Phone className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                    <input 
+                      required 
+                      tabIndex={2}
+                      type="text" 
+                      placeholder="+967..."
+                      value={customerFormData.phone} 
+                      onChange={e => setCustomerFormData({...customerFormData, phone: e.target.value})} 
+                      className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-start" 
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
+                    {isAr ? 'البريد الإلكتروني' : 'Electronic Mail'}
+                  </label>
+                  <div className="relative">
+                    <Mail className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                    <input 
+                      tabIndex={3}
+                      type="email" 
+                      placeholder="client@mail.com"
+                      value={customerFormData.email} 
+                      onChange={e => setCustomerFormData({...customerFormData, email: e.target.value})} 
+                      className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-start" 
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div>
-                <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'رقم جوال العميل الواتساب' : 'WhatsApp/Phone'}</label>
-                <input required type="text" value={customerFormData.phone || ''} onChange={e => setCustomerFormData({...customerFormData, phone: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-mono font-bold" placeholder="e.g. 777123456" />
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
+                  {isAr ? 'العنوان وتفاصيل التوزيع بليمن' : 'Yemen Handover Settlement Address'}
+                </label>
+                <div className="relative">
+                  <MapPin className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                  <input 
+                    tabIndex={4}
+                    placeholder={isAr ? 'المدينة • المديرية • الشارع • معلم بجانب المنزل' : 'Sanaa, Haddah, behind post office'} 
+                    type="text" 
+                    value={customerFormData.address} 
+                    onChange={e => setCustomerFormData({...customerFormData, address: e.target.value})} 
+                    className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none text-start" 
+                  />
+                </div>
               </div>
+
               <div>
-                <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'العنوان الإقليمي' : 'Regional Depot'}</label>
-                <input type="text" value={customerFormData.address || ''} onChange={e => setCustomerFormData({...customerFormData, address: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold" placeholder={isAr ? "مثال: صنعاء - حدة" : "District"} />
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
+                  {isAr ? 'رابط الموقع الجغرافي الخرائط (GPS)' : 'Google Maps Embed/URL'}
+                </label>
+                <input 
+                  tabIndex={5}
+                  placeholder="https://maps.google.com/?q=..." 
+                  type="text" 
+                  value={customerFormData.gps_location} 
+                  onChange={e => setCustomerFormData({...customerFormData, gps_location: e.target.value})} 
+                  className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-start" 
+                />
               </div>
-              <div className="pt-2 flex justify-end gap-2 text-xs">
-                <button type="button" onClick={() => setIsAddCustomerOpen(false)} className="p-2 text-slate-400 hover:bg-slate-800 rounded-lg">{isAr ? 'إلغاء' : 'Cancel'}</button>
-                <button type="submit" className="p-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl transition-all">{isAr ? 'تأكيد الحفظ' : 'Confirm Save'}</button>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
+                  {isAr ? 'رصيد المحفظة الافتتاحي (YER)' : 'Patron Wallet Balance (YER)'}
+                </label>
+                <div className="relative">
+                  <Coins className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#d4af37]" />
+                  <input 
+                    tabIndex={6}
+                    placeholder="0" 
+                    type="number" 
+                    value={customerFormData.walletBalance || ''} 
+                    onChange={e => setCustomerFormData({...customerFormData, walletBalance: parseFloat(e.target.value) || 0})} 
+                    className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-start" 
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
+                  {isAr ? 'ملاحظات وتصنيفات إدارية خاصة' : 'Administrative Confidential Annotations'}
+                </label>
+                <textarea 
+                  tabIndex={7}
+                  rows={2} 
+                  value={customerFormData.notes} 
+                  onChange={e => setCustomerFormData({...customerFormData, notes: e.target.value})} 
+                  className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none text-start"
+                ></textarea>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-850">
+                <button 
+                  type="button" 
+                  onClick={() => setIsAddCustomerOpen(false)} 
+                  className="px-5 py-2 text-slate-400 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-black rounded-xl transition"
+                >
+                  {isAr ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button 
+                  type="submit" 
+                  className="px-6 py-2 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black text-xs rounded-xl transition-all"
+                >
+                  {isAr ? 'تأكيد الحفظ' : 'Confirm Save'}
+                </button>
               </div>
             </form>
           </div>

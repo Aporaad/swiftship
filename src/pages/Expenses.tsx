@@ -171,6 +171,7 @@ export default function Expenses() {
 
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (addLoading) return;
     if (!canAddExpenses) {
       return notificationService.notify({
         title: isAr ? 'خطأ بالصلاحيات' : 'Permission Error',
@@ -1083,21 +1084,22 @@ export default function Expenses() {
       {/* Add Expenses Modal overlay */}
       {isAddOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
-          <div className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/25 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden font-sans">
-            <div className="p-4 border-b border-slate-850 flex justify-between items-center bg-[#07070a]/40">
+          <form onSubmit={handleAddExpense} className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/25 rounded-3xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh] overflow-hidden font-sans">
+            <div className="p-4 border-b border-slate-850 flex justify-between items-center bg-[#07070a]/40 shrink-0">
               <h3 className="font-black text-white text-xs uppercase tracking-widest flex items-center gap-2">
                 <Crown className="w-4 h-4 text-[#d4af37]" />
                 {isAr ? 'تسجيل وتقييد مصروف أو عهدة مالية' : 'Issue Strategic Settlement Voucher'}
               </h3>
               <button 
+                type="button"
                 onClick={() => setIsAddOpen(false)}
-                className="text-slate-500 hover:text-white bg-slate-900 border border-slate-800 p-1.5 rounded-lg cursor-pointer"
+                className="text-slate-500 hover:text-white bg-slate-900 border border-slate-800 p-1.5 rounded-lg cursor-pointer transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
             
-            <form onSubmit={handleAddExpense} className="p-6 space-y-4 text-start">
+            <div className="p-6 space-y-4 overflow-y-auto flex-1 text-start">
               
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -1221,7 +1223,7 @@ export default function Expenses() {
                         ...(formData.category === 'salary' && user?.monthlySalary && { amount: String(user.monthlySalary) })
                       });
                     }}
-                    className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer"
+                    className="w-full bg-black/50 border border-slate-850 text-white text-xs font-bold p-3 outline-none rounded-xl focus:border-[#d4af37]/60 cursor-pointer text-start"
                   >
                     <option value="">
                       {formData.category === 'salary'
@@ -1302,7 +1304,7 @@ export default function Expenses() {
                         });
                       }
                     }}
-                    className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer"
+                    className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer text-start"
                   >
                     <option value="">{isAr ? '-- لا يوجد ربط (صرف عام) --' : '-- No Custom Link (General Outflow) --'}</option>
                     {financialAccounts.map(a => (
@@ -1341,25 +1343,25 @@ export default function Expenses() {
                   placeholder={isAr ? "ملاحظات إدارية أو توجيهات الصندوق..." : "Administrative remarks..."}
                 ></textarea>
               </div>
+            </div>
 
-              <div className="pt-4 flex justify-end gap-3 border-t border-slate-850">
-                <button 
-                  type="button" 
-                  onClick={() => setIsAddOpen(false)} 
-                  className="px-5 py-2.5 text-slate-400 font-bold bg-slate-900 border border-slate-850 hover:bg-slate-850 rounded-xl text-xs transition-colors cursor-pointer"
-                >
-                  {isAr ? 'إلغاء' : 'Cancel'}
-                </button>
-                <button 
-                  type="submit" 
-                  disabled={addLoading}
-                  className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black text-xs rounded-xl shadow-md transition-all h-max cursor-pointer border-none"
-                >
-                  {addLoading ? (isAr ? 'جاري التسجيل...' : 'Recording...') : (isAr ? 'اعتماد وصرف السند' : 'Approve & File Ledger')}
-                </button>
-              </div>
-            </form>
-          </div>
+            <div className="p-4 border-t border-slate-850 bg-[#07070a]/40 flex justify-end gap-3 shrink-0">
+              <button 
+                type="button" 
+                onClick={() => setIsAddOpen(false)} 
+                className="px-5 py-2.5 text-slate-400 font-bold bg-slate-900 border border-slate-850 hover:bg-slate-850 rounded-xl text-xs transition-colors cursor-pointer"
+              >
+                {isAr ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button 
+                type="submit" 
+                disabled={addLoading}
+                className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black text-xs rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-40 cursor-pointer"
+              >
+                {addLoading ? (isAr ? 'جاري التسجيل...' : 'Recording...') : (isAr ? 'اعتماد وصرف السند' : 'Approve & File Ledger')}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

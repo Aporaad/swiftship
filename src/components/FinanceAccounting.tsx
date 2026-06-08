@@ -472,6 +472,7 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
   // Handle addition of quick accounting adjustment voucher
   const handleAddAdjustment = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (adjustLoading) return;
     if (!adjustData.amount || parseFloat(adjustData.amount) <= 0 || (!adjustData.title && !isSalaryPayment)) {
       notificationService.notify({
         title: isAr ? 'خطأ بالبيانات' : 'Invalid Entry',
@@ -992,6 +993,7 @@ Continue?`
   // FIFO Payment settlement for selected Customer outstanding debt
   const handleCustomerFIFOPayment = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (payLoading) return;
     const amountVal = parseFloat(payAmount);
     if (!customerLedgerDetails || isNaN(amountVal) || amountVal <= 0) {
       notificationService.notify({
@@ -2783,6 +2785,9 @@ Continue?`
                 </div>
               </div>
             )}
+          </div>
+        );
+      })()}
 
             {/* ════════════ SALARY SLIP VOUCHER MODAL ════════════ */}
             {selectedSalaryVoucher && (
@@ -2849,33 +2854,30 @@ Continue?`
                 </div>
               </div>
             )}
-          </div>
-        );
-      })()}
-
-      {/* MODAL 1: PRECISE MANUAL JOURNAL ENTRY ADJUSTMENT ADJUSTMENT */}
+                           {/* MODAL 1: PRECISE MANUAL JOURNAL ENTRY ADJUSTMENT ADJUSTMENT */}
       {isAdjustmentModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 text-start">
-          <div className="bg-[#121215] border border-slate-850 w-full max-w-md rounded-3xl overflow-hidden shadow-2xl relative animate-fade-in">
-            <button 
-              onClick={() => setIsAdjustmentModalOpen(false)}
-              className="absolute top-4 right-4 p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-500 hover:text-white transition-all"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            <div className="p-6 border-b border-slate-850">
-              <h3 className="text-sm font-black text-white flex items-center gap-1.5 uppercase tracking-wider">
-                <Scale className="w-4 h-4 text-[#d4af37]" />
-                {isAr ? 'تسجيل إقرار مالي وقيد تسوية خزينة' : 'Add Ledger Journal Adjustment Voucher'}
-              </h3>
-              <p className="text-[10px] text-slate-500 mt-1 leading-snug">
-                {isAr ? 'لتسوية أرصدة العملات أو عوائد غير تشغيلية.' : 'Manually adjust cash balance for capital assets or currency offsets.'}
-              </p>
+          <form onSubmit={handleAddAdjustment} className="bg-[#121215] border border-slate-850 w-full max-w-md rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] font-sans">
+            <div className="p-4 border-b border-slate-850 flex justify-between items-center bg-[#07070a]/40 shrink-0">
+              <div>
+                <h3 className="text-sm font-black text-white flex items-center gap-1.5 uppercase tracking-wider">
+                  <Scale className="w-4 h-4 text-[#d4af37]" />
+                  {isAr ? 'تسجيل إقرار مالي وقيد تسوية خزينة' : 'Add Ledger Journal Adjustment Voucher'}
+                </h3>
+                <p className="text-[10px] text-slate-500 mt-1 leading-snug">
+                  {isAr ? 'لتسوية أرصدة العملات أو عوائد غير تشغيلية.' : 'Manually adjust cash balance for capital assets or currency offsets.'}
+                </p>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setIsAdjustmentModalOpen(false)}
+                className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-500 hover:text-white transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
-            <form onSubmit={handleAddAdjustment} className="p-6 space-y-4">
-              
+            <div className="p-6 space-y-4 overflow-y-auto flex-1">
               {/* Type Select */}
               <div>
                 <label className="block text-[9.5px] font-black text-slate-500 mb-1 uppercase">{isAr ? 'اتجاه حركة النقدية' : 'Accounting safe action'}</label>
@@ -2886,7 +2888,7 @@ Continue?`
                     className={`py-2 px-3 rounded-xl text-xs font-black border transition-all ${
                       adjustData.type === 'Debit'
                         ? 'bg-emerald-500/15 border-emerald-500/25 text-emerald-400'
-                        : 'bg-black/20 border-slate-850 text-slate-450'
+                        : 'bg-black/20 border-slate-850 text-slate-400'
                     }`}
                   >
                     {isAr ? 'وارد / مدين (+)' : 'Receipt (Debit Inflow +)'}
@@ -2897,7 +2899,7 @@ Continue?`
                     className={`py-2 px-3 rounded-xl text-xs font-black border transition-all ${
                       adjustData.type === 'Credit'
                         ? 'bg-rose-500/15 border-rose-500/25 text-rose-452 text-rose-400'
-                        : 'bg-black/20 border-slate-850 text-slate-450'
+                        : 'bg-black/20 border-slate-850 text-slate-400'
                     }`}
                   >
                     {isAr ? 'صادر / دائن (-)' : 'Payment (Credit Outflow -)'}
@@ -2946,7 +2948,7 @@ Continue?`
                         }));
                       }
                     }}
-                    className="w-full bg-black/40 border border-slate-850 text-white rounded-xl px-3 py-2 text-xs font-black cursor-pointer outline-none focus:border-[#d4af37]"
+                    className="w-full bg-black/40 border border-slate-850 text-white rounded-xl px-3 py-2 text-xs font-black cursor-pointer outline-none focus:border-[#d4af37] text-start"
                   >
                     <option value="">{isAr ? '-- اختر الحساب --' : '-- Choose Account --'}</option>
                     {financialAccounts
@@ -3059,27 +3061,26 @@ Continue?`
                   placeholder={isAr ? "أية مستندات أو شروحات مرافقة للقيد..." : "Provide internal notes about this treasury adjustment..."}
                 />
               </div>
+            </div>
 
-              <div className="pt-3 border-t border-slate-850 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsAdjustmentModalOpen(false)}
-                  className="w-1/2 bg-slate-900 hover:bg-slate-800 text-slate-350 py-2.5 rounded-xl text-xs font-bold transition-all"
-                >
-                  {isAr ? 'إلغاء' : 'Cancel'}
-                </button>
-                <button
-                  type="submit"
-                  disabled={adjustLoading}
-                  className="w-1/2 bg-[#d4af37] hover:bg-[#bfa032] active:bg-[#aa8e2b] text-black py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
-                >
-                  {adjustLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
-                  {isAr ? 'تنزيل التسجيل' : 'Commit Entry'}
-                </button>
-              </div>
-
-            </form>
-          </div>
+            <div className="p-4 border-t border-slate-850 bg-[#07070a]/40 flex gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsAdjustmentModalOpen(false)}
+                className="w-1/2 bg-slate-900 hover:bg-slate-800 text-slate-350 py-2.5 rounded-xl text-xs font-bold transition-all"
+              >
+                {isAr ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button
+                type="submit"
+                disabled={adjustLoading}
+                className="w-1/2 bg-[#d4af37] hover:bg-[#bfa032] active:bg-[#aa8e2b] text-black py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                {adjustLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                {isAr ? 'تنزيل التسجيل' : 'Commit Entry'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

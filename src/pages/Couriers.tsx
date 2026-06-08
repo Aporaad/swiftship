@@ -121,6 +121,7 @@ export default function Couriers() {
   });
 
   const [addLoading, setAddLoading] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
 
   // Smart Custody Calculator Helper
   const getCourierCustodyStats = (courierId: string) => {
@@ -390,7 +391,8 @@ export default function Couriers() {
 
   const handleUpdateCourier = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedCourier) return;
+    if (!selectedCourier || editLoading) return;
+    setEditLoading(true);
     try {
       await updateDoc(doc(db, 'couriers', selectedCourier.id), {
         fullName: editFormData.fullName,
@@ -421,6 +423,8 @@ export default function Couriers() {
       setIsEditModalOpen(false);
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, 'couriers');
+    } finally {
+      setEditLoading(false);
     }
   };
 
@@ -476,6 +480,7 @@ export default function Couriers() {
 
   const handleAddCourier = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (addLoading) return;
     setAddLoading(true);
     try {
       // 1. Generate unique custom courier ID
@@ -1401,11 +1406,11 @@ export default function Couriers() {
                                       <span className="text-[9px] bg-rose-955/20 text-rose-500 border border-rose-950/30 px-2.5 py-0.5 rounded-xl font-black font-sans">{isAr ? 'قيد مدين (-)' : 'Debit (-)'}</span>
                                     )}
                                   </td>
-                                  <td className={`p-3 font-mono font-black text-xs ${isCredit ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                  <td className={`p-3 font-mono font-black text-xs text-start ${isCredit ? 'text-emerald-400' : 'text-rose-455'}`}>
                                     {isCredit ? '+' : '-'}{item.amount.toLocaleString()} YER
                                   </td>
-                                  <td className={`p-3 text-left font-mono font-black text-xs ${item.runningWalletBal >= 0 ? 'text-emerald-400' : 'text-rose-450'}`}>
-                                    {item.runningWalletBal.toLocaleString()} YER
+                                  <td className={`p-3 text-start font-mono font-black text-xs ${item.runningWalletBal >= 0 ? 'text-emerald-400' : 'text-rose-450'}`}>
+                                    {item.runningWalletBal ? item.runningWalletBal.toLocaleString() : '0'} YER
                                   </td>
                                 </tr>
                               );
@@ -1448,22 +1453,22 @@ export default function Couriers() {
       {/* Add Courier Modal (Gold Dark UI Frame) */}
       {isAddModalOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
-          <div className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/25 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden font-sans">
-            <div className="p-4 border-b border-slate-850 flex justify-between items-center bg-[#07070a]/40">
+          <form onSubmit={handleAddCourier} className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/25 rounded-3xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh] overflow-hidden font-sans">
+            <div className="p-4 border-b border-slate-850 flex justify-between items-center bg-[#07070a]/40 shrink-0">
               <h3 className="font-black text-white text-xs uppercase tracking-widest flex items-center gap-2">
                 <Crown className="w-4 h-4 text-[#d4af37]" />
                 {isAr ? 'تسجيل وتقييد مندوب لوجستي' : 'Engage New Logistics Courier'}
               </h3>
-              <button onClick={() => setIsAddModalOpen(false)} className="text-slate-550 hover:text-white p-1 bg-slate-900 border border-slate-800 rounded-lg"><X className="w-4 h-4" /></button>
+              <button type="button" onClick={() => setIsAddModalOpen(false)} className="text-slate-550 hover:text-white p-1 bg-slate-900 border border-slate-800 rounded-lg"><X className="w-4 h-4" /></button>
             </div>
             
-            <form onSubmit={handleAddCourier} className="p-6 space-y-4 max-h-[72vh] overflow-y-auto text-start">
+            <div className="p-6 space-y-4 overflow-y-auto flex-1 text-start">
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'الاسم الثلاثي للمندوب' : 'Full Name'}</label>
                 <input required type="text" value={addFormData.fullName} onChange={(e) => setAddFormData({...addFormData, fullName: e.target.value})} className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start" />
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'رقم الهوية الجوال' : 'Cellphone'}</label>
                   <input required placeholder="+967..." type="tel" value={addFormData.phone} onChange={(e) => setAddFormData({...addFormData, phone: e.target.value})} className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-start" dir="ltr" />
@@ -1487,19 +1492,21 @@ export default function Couriers() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'رصيد المحفظة المبدئي (YER)' : 'Initial Wallet Balance (YER)'}</label>
-                <div className="relative">
-                  <Coins className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#d4af37] w-4 h-4" />
-                  <input type="number" placeholder="0" value={addFormData.walletBalance} onChange={(e) => setAddFormData({...addFormData, walletBalance: parseFloat(e.target.value) || 0})} className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 pl-10 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'رصيد المحفظة المبدئي (YER)' : 'Initial Wallet Balance (YER)'}</label>
+                  <div className="relative">
+                    <Coins className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#d4af37] w-4 h-4" />
+                    <input type="number" placeholder="0" value={addFormData.walletBalance} onChange={(e) => setAddFormData({...addFormData, walletBalance: parseFloat(e.target.value) || 0})} className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 pl-10 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono" />
+                  </div>
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'العمولة من عمليات التوزيع (%)' : 'Standard Commission Rate (%)'}</label>
-                <div className="relative">
-                  <DollarSign className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
-                  <input type="number" min="0" max="100" step="0.1" value={addFormData.commissionRate} onChange={(e) => setAddFormData({...addFormData, commissionRate: parseFloat(e.target.value) || 0})} className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 pl-10 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono" />
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'العمولة من عمليات التوزيع (%)' : 'Standard Commission Rate (%)'}</label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
+                    <input type="number" min="0" max="100" step="0.1" value={addFormData.commissionRate} onChange={(e) => setAddFormData({...addFormData, commissionRate: parseFloat(e.target.value) || 0})} className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 pl-10 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono" />
+                  </div>
                 </div>
               </div>
 
@@ -1507,34 +1514,34 @@ export default function Couriers() {
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'تقرير وملاحظات التسجيل' : 'Induction confidential remarks'}</label>
                 <textarea value={addFormData.notes} onChange={(e) => setAddFormData({...addFormData, notes: e.target.value})} className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none h-20 text-start"></textarea>
               </div>
+            </div>
 
-              <div className="pt-4 flex justify-end gap-3 sticky bottom-0 bg-[#0e0e11] pb-2 border-t border-slate-850">
-                <button type="button" onClick={() => setIsAddModalOpen(false)} className="px-5 py-2.5 text-slate-400 font-bold hover:bg-slate-850 rounded-xl transition-colors">{isAr ? 'إلغاء' : 'Cancel'}</button>
-                <button type="submit" disabled={addLoading} className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] disabled:from-slate-800 disabled:to-slate-900 text-black font-black rounded-xl shadow-md transition-all">
-                  {addLoading ? (isAr ? 'جاري التسجيل والربط...' : 'Creating login...') : (isAr ? 'حفظ وإصدار كود المندوب' : 'Register Courier') }
-                </button>
-              </div>
-            </form>
-          </div>
+            <div className="p-4 border-t border-slate-850 bg-[#07070a]/40 flex justify-end gap-3 shrink-0">
+              <button type="button" onClick={() => setIsAddModalOpen(false)} className="px-5 py-2.5 text-slate-400 font-bold hover:bg-slate-850 rounded-xl transition-colors text-xs">{isAr ? 'إلغاء' : 'Cancel'}</button>
+              <button type="submit" disabled={addLoading} className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] disabled:opacity-40 text-black font-black rounded-xl shadow-md transition-all text-xs active:scale-95">
+                {addLoading ? (isAr ? 'جاري التسجيل والربط...' : 'Creating login...') : (isAr ? 'حفظ وإصدار كود المندوب' : 'Register Courier') }
+              </button>
+            </div>
+          </form>
         </div>
       )}
 
       {/* Edit Courier Modal */}
       {isEditModalOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
-          <div className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/25 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden font-sans">
-            <div className="p-4 border-b border-slate-850 flex justify-between items-center bg-[#07070a]/40">
+          <form onSubmit={handleUpdateCourier} className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/25 rounded-3xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh] overflow-hidden font-sans">
+            <div className="p-4 border-b border-slate-850 flex justify-between items-center bg-[#07070a]/40 shrink-0">
               <h3 className="font-extrabold text-white text-xs uppercase tracking-widest">{isAr ? 'تعديل بيانات وإثباتات مندوب' : 'Configure Courier Parameters'}</h3>
-              <button onClick={() => setIsEditModalOpen(false)} className="text-slate-550 hover:text-white bg-slate-900 border border-slate-800 p-1 rounded-lg"><X className="w-4 h-4" /></button>
+              <button type="button" onClick={() => setIsEditModalOpen(false)} className="text-slate-550 hover:text-white bg-slate-900 border border-slate-800 p-1.5 rounded-lg"><X className="w-4 h-4" /></button>
             </div>
             
-            <form onSubmit={handleUpdateCourier} className="p-6 space-y-4 max-h-[72vh] overflow-y-auto text-start">
+            <div className="p-6 space-y-4 overflow-y-auto flex-1 text-start">
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'الاسم الكامل' : 'Full Name'}</label>
                 <input required type="text" value={editFormData.fullName} onChange={(e) => setEditFormData({...editFormData, fullName: e.target.value})} className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start" />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'رقم الهاتف' : 'Phone'}</label>
                   <input type="tel" value={editFormData.phone} onChange={(e) => setEditFormData({...editFormData, phone: e.target.value})} className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-start" dir="ltr" />
@@ -1563,13 +1570,13 @@ export default function Couriers() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'نسبة العمولة التشغيلية (%)' : 'Operational Commission Rate (%)'}</label>
                   <input type="number" min="0" max="100" step="0.1" value={editFormData.commissionRate} onChange={(e) => setEditFormData({...editFormData, commissionRate: parseFloat(e.target.value) || 0})} className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-start" />
                 </div>
-                <div>
-                  <label className="flex items-center gap-2 cursor-pointer mt-7">
+                <div className="flex items-center">
+                  <label className="flex items-center gap-2 cursor-pointer pt-3">
                     <input type="checkbox" checked={editFormData.disabled} onChange={(e) => setEditFormData({...editFormData, disabled: e.target.checked})} className="w-4 h-4 text-rose-600 focus:ring-rose-500 bg-black/50 border-slate-850 rounded" />
                     <span className="text-[11px] font-black text-rose-500 uppercase tracking-tighter">{isAr ? 'تجميد حساب المندوب مؤقتاً' : 'Freeze courier account'}</span>
                   </label>
@@ -1580,13 +1587,15 @@ export default function Couriers() {
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'ملاحظات وبنود التحديث' : 'Administrative Confidential Remarks'}</label>
                 <textarea value={editFormData.notes} onChange={(e) => setEditFormData({...editFormData, notes: e.target.value})} className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none h-20 text-start"></textarea>
               </div>
+            </div>
 
-              <div className="pt-4 flex justify-end gap-3 sticky bottom-0 bg-[#0e0e11] pb-2 border-t border-slate-850">
-                <button type="button" onClick={() => setIsEditModalOpen(false)} className="px-5 py-2.5 text-slate-400 font-bold hover:bg-slate-850 rounded-xl transition-colors">{isAr ? 'إلغاء' : 'Cancel'}</button>
-                <button type="submit" className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl shadow-md transition-all">{isAr ? 'حفظ وحماية التعديلات' : 'Save Changes'}</button>
-              </div>
-            </form>
-          </div>
+            <div className="p-4 border-t border-slate-850 bg-[#07070a]/40 flex justify-end gap-3 shrink-0">
+              <button type="button" onClick={() => setIsEditModalOpen(false)} className="px-5 py-2.5 text-slate-400 font-bold hover:bg-slate-855 rounded-xl transition-colors text-xs">{isAr ? 'إلغاء' : 'Cancel'}</button>
+              <button type="submit" disabled={editLoading} className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] disabled:opacity-40 text-black font-black rounded-xl shadow-md transition-all text-xs active:scale-95">
+                {editLoading ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'حفظ وحماية التعديلات' : 'Save Changes')}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

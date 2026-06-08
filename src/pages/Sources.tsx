@@ -33,6 +33,7 @@ export default function Sources() {
   });
   
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [sourceSubmitting, setSourceSubmitting] = useState(false);
   const [selectedSource, setSelectedSource] = useState<any>(null);
   const [formData, setFormData] = useState({
     source_name: '',
@@ -49,6 +50,7 @@ export default function Sources() {
   const [activeTab, setActiveTab] = useState<'sources' | 'shipping_companies'>('sources');
   const [shippingCompanies, setShippingCompanies] = useState<any[]>([]);
   const [isShippingModalOpen, setIsShippingModalOpen] = useState(false);
+  const [shippingSubmitting, setShippingSubmitting] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState<any>(null);
   const [shippingFormData, setShippingFormData] = useState({
     name: '',
@@ -109,6 +111,8 @@ export default function Sources() {
 
   const handleShippingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (shippingSubmitting) return;
+    setShippingSubmitting(true);
     try {
       const payload = {
         ...shippingFormData,
@@ -144,6 +148,8 @@ export default function Sources() {
         message: isAr ? 'فشلت معالجة بيانات شركة الشحن' : 'Failed to save shipping carrier details',
         type: 'error'
       });
+    } finally {
+      setShippingSubmitting(false);
     }
   };
 
@@ -201,6 +207,8 @@ export default function Sources() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (sourceSubmitting) return;
+    setSourceSubmitting(true);
     try {
       const payload = {
         ...formData,
@@ -232,6 +240,8 @@ export default function Sources() {
       setSelectedSource(null);
     } catch (err) {
       handleFirestoreError(err, selectedSource ? OperationType.UPDATE : OperationType.CREATE, 'sources');
+    } finally {
+      setSourceSubmitting(false);
     }
   };
 
@@ -566,21 +576,22 @@ export default function Sources() {
       {/* Origin Purchase Sources Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
-          <div className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/25 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden font-sans">
-            <div className="p-4 border-b border-slate-850 flex justify-between items-center bg-[#07070a]/40">
+          <form onSubmit={handleSubmit} className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/25 rounded-3xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh] overflow-hidden font-sans">
+            <div className="p-4 border-b border-slate-850 flex justify-between items-center bg-[#07070a]/40 shrink-0">
               <h3 className="font-black text-white text-xs uppercase tracking-widest flex items-center gap-2">
                 <Crown className="w-4 h-4 text-[#d4af37]" />
                 {selectedSource ? (isAr ? 'تهيئة فهارس مصدر شحن' : 'Update Index Source') : (isAr ? 'تسجيل وتقييد مصدر شراء' : 'Incorporation of Source')}
               </h3>
               <button 
+                type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="text-slate-500 hover:text-white bg-slate-900 border border-slate-800 p-1.5 rounded-lg"
+                className="text-slate-500 hover:text-white bg-slate-900 border border-slate-800 p-1.5 rounded-lg transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
             
-            <form onSubmit={handleSubmit} className="p-6 space-y-4 text-start">
+            <div className="p-6 space-y-4 overflow-y-auto flex-1 text-start">
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'تصنيف قناة التوريد الفعلي' : 'Supply Channel Class'}</label>
                 <select 
@@ -614,7 +625,7 @@ export default function Sources() {
                     type="url" 
                     value={formData.source_url}
                     onChange={(e) => setFormData({...formData, source_url: e.target.value})}
-                    className="w-full bg-black/50 border border-slate-850 rounded-xl py-3 px-4 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-start animate-fade-in"
+                    className="w-full bg-black/50 border border-slate-850 rounded-xl py-3 px-4 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-start"
                     dir="ltr"
                     placeholder="https://example.com"
                   />
@@ -663,49 +674,51 @@ export default function Sources() {
                 <textarea 
                   value={formData.notes}
                   onChange={(e) => setFormData({...formData, notes: e.target.value})}
-                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start"
-                  rows={3}
+                  className="w-full bg-[#030303] border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start"
+                  rows={2}
                 ></textarea>
               </div>
+            </div>
 
-              <div className="pt-4 flex justify-end gap-3 border-t border-slate-850">
-                <button 
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-5 py-2.5 text-slate-400 font-bold bg-slate-900 border border-slate-850 hover:bg-slate-850 rounded-xl text-xs transition-colors"
-                >
-                  {isAr ? 'إلغاء' : 'Cancel'}
-                </button>
-                <button 
-                  type="submit"
-                  className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black text-xs rounded-xl shadow-md transition-all"
-                >
-                  {isAr ? 'تحديث وتأمين المصدر' : 'Publish configuration'}
-                </button>
-              </div>
-            </form>
-          </div>
+            <div className="p-4 border-t border-slate-850 bg-[#07070a]/40 flex justify-end gap-3 shrink-0">
+              <button 
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="px-5 py-2.5 text-slate-400 font-bold bg-slate-900 border border-slate-850 hover:bg-slate-850 rounded-xl text-xs transition-all"
+              >
+                {isAr ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button 
+                type="submit"
+                disabled={sourceSubmitting}
+                className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black text-xs rounded-xl shadow-md transition-all disabled:opacity-40 active:scale-95"
+              >
+                {sourceSubmitting ? (isAr ? 'جاري التأمين...' : 'Processing...') : (isAr ? 'تحديث وتأمين المصدر' : 'Publish configuration')}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 
       {/* Shipping Carrier Companies Modal */}
       {isShippingModalOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
-          <div className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/25 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden font-sans">
-            <div className="p-4 border-b border-slate-850 flex justify-between items-center bg-[#07070a]/40">
+          <form onSubmit={handleShippingSubmit} className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/25 rounded-3xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh] overflow-hidden font-sans">
+            <div className="p-4 border-b border-slate-850 flex justify-between items-center bg-[#07070a]/40 shrink-0">
               <h3 className="font-black text-white text-xs uppercase tracking-widest flex items-center gap-2">
                 <Truck className="w-4 h-4 text-[#d4af37]" />
                 {selectedCompany ? (isAr ? 'تعديل بيانات شركة الشحن' : 'Update Shipping Carrier') : (isAr ? 'تقييد شركة شحن جديدة' : 'Add New Shipping Carrier')}
               </h3>
               <button 
+                type="button"
                 onClick={() => setIsShippingModalOpen(false)}
-                className="text-slate-500 hover:text-white bg-slate-900 border border-slate-800 p-1.5 rounded-lg"
+                className="text-slate-500 hover:text-white bg-slate-900 border border-slate-800 p-1.5 rounded-lg transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
             
-            <form onSubmit={handleShippingSubmit} className="p-6 space-y-4 text-start">
+            <div className="p-6 space-y-4 overflow-y-auto flex-1 text-start">
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'اسم شركة الشحن الكلي' : 'Shipping Line Name'}</label>
                 <input 
@@ -735,7 +748,7 @@ export default function Sources() {
                   type="text" 
                   value={shippingFormData.phone}
                   onChange={(e) => setShippingFormData({...shippingFormData, phone: e.target.value})}
-                  className="w-full bg-black/50 border border-[#1e1f26] rounded-xl py-3 px-4 text-xs font-mono font-bold text-white focus:border-[#d4af37]/60 outline-none text-start"
+                  className="w-full bg-black/50 border border-slate-850 rounded-xl py-3 px-4 text-xs font-mono font-bold text-white focus:border-[#d4af37]/60 outline-none text-start"
                   placeholder="+9677..."
                 />
               </div>
@@ -758,7 +771,7 @@ export default function Sources() {
                   type="text" 
                   value={shippingFormData.address}
                   onChange={(e) => setShippingFormData({...shippingFormData, address: e.target.value})}
-                  className="w-full bg-black/50 border border-[#1e1f26] rounded-xl py-3 px-4 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start"
+                  className="w-full bg-black/50 border border-slate-850 rounded-xl py-3 px-4 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start"
                   placeholder={isAr ? 'مثال: صنعاء - شارع الستين / دبي - القوز' : 'e.g. Sanaa - Main St / Guangzhou Warehouse'}
                 />
               </div>
@@ -768,29 +781,30 @@ export default function Sources() {
                 <textarea 
                   value={shippingFormData.notes}
                   onChange={(e) => setShippingFormData({...shippingFormData, notes: e.target.value})}
-                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start"
-                  rows={3}
+                  className="w-full bg-[#030303] border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start"
+                  rows={2}
                   placeholder={isAr ? 'شروط خاصة، حدود الأوزان، أسعار تداول...' : 'Pricing guidelines, limits, specific requirements'}
                 ></textarea>
               </div>
+            </div>
 
-              <div className="pt-4 flex justify-end gap-3 border-t border-slate-850">
-                <button 
-                  type="button"
-                  onClick={() => setIsShippingModalOpen(false)}
-                  className="px-5 py-2.5 text-slate-400 font-bold bg-slate-900 border border-slate-850 hover:bg-slate-850 rounded-xl text-xs transition-colors"
-                >
-                  {isAr ? 'إلغاء' : 'Cancel'}
-                </button>
-                <button 
-                  type="submit"
-                  className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black text-xs rounded-xl shadow-md transition-all"
-                >
-                  {isAr ? 'تحديث وتأمين جهة الشحن' : 'Publish carrier info'}
-                </button>
-              </div>
-            </form>
-          </div>
+            <div className="p-4 border-t border-slate-850 bg-[#07070a]/40 flex justify-end gap-3 shrink-0">
+              <button 
+                type="button"
+                onClick={() => setIsShippingModalOpen(false)}
+                className="px-5 py-2.5 text-slate-400 font-bold bg-slate-900 border border-slate-850 hover:bg-slate-850 rounded-xl text-xs transition-colors"
+              >
+                {isAr ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button 
+                type="submit"
+                disabled={shippingSubmitting}
+                className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black text-xs rounded-xl shadow-md transition-all disabled:opacity-40 active:scale-95"
+              >
+                {shippingSubmitting ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'تحديث وتأمين جهة الشحن' : 'Publish carrier info')}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

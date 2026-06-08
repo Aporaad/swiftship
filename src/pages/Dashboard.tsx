@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { collection, onSnapshot, query, limit, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, query, limit, orderBy, addDoc } from 'firebase/firestore';
 import { db, auth, safeToDate } from '../lib/firebase';
 import { 
   Package, 
@@ -26,6 +26,18 @@ import {
 } from 'lucide-react';
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
+import { 
+  ResponsiveContainer, 
+  AreaChart, 
+  Area, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  PieChart, 
+  Pie, 
+  Cell 
+} from 'recharts';
 
 const LOCKED = '🔒 مقيد';
 
@@ -55,6 +67,10 @@ export default function Dashboard() {
 
   // DB States
   const [orders, setOrders] = useState<any[]>([]);
+  const [couriers, setCouriers] = useState<any[]>([]);
+  const [expenses, setExpenses] = useState<any[]>([]);
+  const [realLogs, setRealLogs] = useState<any[]>([]);
+  const [isSeeding, setIsSeeding] = useState(false);
   const [customersCount, setCustomersCount] = useState(0);
   const [couriersCount, setCouriersCount] = useState(0);
   const [expensesCount, setExpensesCount] = useState(0);
@@ -62,15 +78,182 @@ export default function Dashboard() {
 
   // Computed Stats
   const [stats, setStats] = useState({
-    totalOrders: 1248,
-    totalRevenues: 524780,
-    netProfit: 128940,
-    activeDeliveries: 356,
-    delayedOrders: 28,
-    activeCustomers: 982,
-    amountRemaining: 32540,
-    amountPaid: 196800,
+    totalOrders: 0,
+    totalRevenues: 0,
+    netProfit: 0,
+    activeDeliveries: 0,
+    delayedOrders: 0,
+    activeCustomers: 0,
+    amountRemaining: 0,
+    amountPaid: 0,
   });
+
+  // Database seeder action
+  const seedSampleData = async () => {
+    if (isSeeding) return;
+    setIsSeeding(true);
+    try {
+      // 1. Create 3 couriers
+      const courierPayloads = [
+        { fullName: isAr ? 'أحمد الهلالي' : 'Ahmed Al-Hilali', phone: '777123456', email: 'ahmed@alx.com', address: isAr ? 'صنعاء - باب اليمن' : 'Sanaa - Bab Al-Yemen', commissionRate: 500, createdAt: new Date() },
+        { fullName: isAr ? 'علي باخميس' : 'Ali Bakhmis', phone: '777456123', email: 'ali@alx.com', address: isAr ? 'عدن - كريتر' : 'Aden - Crater', commissionRate: 600, createdAt: new Date() },
+        { fullName: isAr ? 'محمد الحربي' : 'Mohamed Al-Harbi', phone: '777987654', email: 'mohamed@alx.com', address: isAr ? 'تعز - شارع جمال' : 'Taiz - Gamal St', commissionRate: 550, createdAt: new Date() }
+      ];
+
+      const courierIds: string[] = [];
+      for (const cp of courierPayloads) {
+        const docRef = await addDoc(collection(db, 'couriers'), cp);
+        courierIds.push(docRef.id);
+      }
+
+      // 2. Create 4 customers
+      const customerPayloads = [
+        { fullName: isAr ? 'سالم الحربي' : 'Salem Al-Harbi', phone: '771111111', email: 'salem@gmail.com', address: isAr ? 'صنعاء - حدة' : 'Sanaa - Hadda', notes: '', createdAt: new Date() },
+        { fullName: isAr ? 'مريم علي' : 'Maryam Ali', phone: '772222222', email: 'maryam@gmail.com', address: isAr ? 'عدن - المنصورة' : 'Aden - Mansoura', notes: '', createdAt: new Date() },
+        { fullName: isAr ? 'ناصر باخميس' : 'Nasser Bakhmis', phone: '773333333', email: 'nasser@gmail.com', address: isAr ? 'المكلا - الديس' : 'Mukalla - Ad-Dees', notes: '', createdAt: new Date() },
+        { fullName: isAr ? 'عبدالله السعيد' : 'Abdullah Al-Saeed', phone: '774444444', email: 'abdullah@gmail.com', address: isAr ? 'صنعاء - الستين' : 'Sanaa - Sixty St', notes: '', createdAt: new Date() }
+      ];
+
+      const customerIds: string[] = [];
+      for (const cust of customerPayloads) {
+        const docRef = await addDoc(collection(db, 'customers'), cust);
+        customerIds.push(docRef.id);
+      }
+
+      // 3. Create 6 orders with diverse statuses and financial details spread out over the last 7 days
+      const daysAgo = (num: number) => {
+        const d = new Date();
+        d.setDate(d.getDate() - num);
+        return d;
+      };
+
+      const orderPayloads = [
+        {
+          orderNumber: 'ALX-2605-1001',
+          customerName: isAr ? 'عبدالله السعيد' : 'Abdullah Al-Saeed',
+          customerId: customerIds[3],
+          orderStatus: 'Delivered',
+          deliveryCourierId: courierIds[1], // Ali
+          deliveryCourierFee: 4000,
+          totalPrice: 45000,
+          amountPaid: 45000,
+          amountRemaining: 0,
+          companyCommission: 2500,
+          createdAt: daysAgo(5)
+        },
+        {
+          orderNumber: 'ALX-2605-1002',
+          customerName: isAr ? 'ناصر باخميس' : 'Nasser Bakhmis',
+          customerId: customerIds[2],
+          orderStatus: 'In Local Warehouse',
+          deliveryCourierId: courierIds[2], // Mohamed
+          deliveryCourierFee: 4000,
+          totalPrice: 28000,
+          amountPaid: 10000,
+          amountRemaining: 18000,
+          companyCommission: 1800,
+          createdAt: daysAgo(3)
+        },
+        {
+          orderNumber: 'ALX-2605-1003',
+          customerName: isAr ? 'مريم علي' : 'Maryam Ali',
+          customerId: customerIds[1],
+          orderStatus: 'Processing',
+          deliveryCourierId: courierIds[2], // Mohamed
+          deliveryCourierFee: 4000,
+          totalPrice: 15000,
+          amountPaid: 0,
+          amountRemaining: 15000,
+          companyCommission: 1000,
+          createdAt: daysAgo(2)
+        },
+        {
+          orderNumber: 'ALX-2605-1004',
+          customerName: isAr ? 'سالم الحربي' : 'Salem Al-Harbi',
+          customerId: customerIds[0],
+          orderStatus: 'In Transit',
+          deliveryCourierId: courierIds[0], // Ahmed
+          deliveryCourierFee: 4000,
+          totalPrice: 62000,
+          amountPaid: 62000,
+          amountRemaining: 0,
+          companyCommission: 3500,
+          createdAt: daysAgo(1)
+        },
+        {
+          orderNumber: 'ALX-2605-1005',
+          customerName: isAr ? 'عبدالله السعيد' : 'Abdullah Al-Saeed',
+          customerId: customerIds[3],
+          orderStatus: 'Delayed',
+          deliveryCourierId: courierIds[0], // Ahmed
+          deliveryCourierFee: 4000,
+          totalPrice: 31000,
+          amountPaid: 15000,
+          amountRemaining: 16000,
+          companyCommission: 1500,
+          createdAt: daysAgo(0) // Today
+        },
+        {
+          orderNumber: 'ALX-2605-1006',
+          customerName: isAr ? 'سالم الحربي' : 'Salem Al-Harbi',
+          customerId: customerIds[0],
+          orderStatus: 'Delivered',
+          deliveryCourierId: courierIds[1], // Ali
+          deliveryCourierFee: 4000,
+          totalPrice: 21000,
+          amountPaid: 21000,
+          amountRemaining: 0,
+          companyCommission: 1200,
+          createdAt: daysAgo(4)
+        }
+      ];
+
+      for (const ord of orderPayloads) {
+        await addDoc(collection(db, 'orders'), ord);
+      }
+
+      // 4. Create 2 expenses
+      const expensePayloads = [
+        {
+          title: isAr ? 'قرطاسية ومستلزمات مكتبية' : 'Stationery & office tools',
+          category: 'OPERATIONAL',
+          amount: 8500,
+          recipient: isAr ? 'مكتبة الجيل الجديد' : 'New Generation Bookstore',
+          notes: isAr ? 'توريد دفاتر وفواتير للمكتب' : 'Ledger logs and printouts',
+          createdAt: daysAgo(3)
+        },
+        {
+          title: isAr ? 'بنزين لمركبات التوصيل' : 'Fuel for deliverer vehicles',
+          category: 'FUEL',
+          amount: 15000,
+          recipient: isAr ? 'محطة النفط المركزية' : 'Central Gas Station',
+          notes: isAr ? 'وقود لسيارة التوصيل' : 'Delivery vehicle fuel stipend',
+          createdAt: daysAgo(1)
+        }
+      ];
+
+      for (const exp of expensePayloads) {
+        await addDoc(collection(db, 'expenses'), exp);
+      }
+
+      // 5. Create audit logs
+      const logPayloads = [
+        { userId: auth.currentUser?.uid, userEmail: auth.currentUser?.email || 'admin@alx.com', action: 'add_courier', category: 'COURIERS', target: isAr ? 'أحمد الهلالي' : 'Ahmed Al-Hilali', timestamp: Date.now() - 3600000 * 4 },
+        { userId: auth.currentUser?.uid, userEmail: auth.currentUser?.email || 'admin@alx.com', action: 'add_customer', category: 'CUSTOMERS', target: isAr ? 'سالم الحربي' : 'Salem Al-Harbi', timestamp: Date.now() - 3600000 * 3 },
+        { userId: auth.currentUser?.uid, userEmail: auth.currentUser?.email || 'admin@alx.com', action: 'add_order', category: 'ORDERS', target: 'ALX-2605-1004', timestamp: Date.now() - 3600000 * 2 },
+        { userId: auth.currentUser?.uid, userEmail: auth.currentUser?.email || 'admin@alx.com', action: 'add_expense', category: 'FINANCE', target: isAr ? 'قرطاسية ومستلزمات مكتبية' : 'Stationery & office tools', timestamp: Date.now() - 3600000 * 1 }
+      ];
+
+      for (const logItem of logPayloads) {
+        await addDoc(collection(db, 'activity_logs'), logItem);
+      }
+
+    } catch (err) {
+      console.error("Failed to seed sample database:", err);
+    } finally {
+      setIsSeeding(false);
+    }
+  };
 
   // Map Interactive Courier Highlights
   const [selectedCourierId, setSelectedCourierId] = useState<string | null>(null);
@@ -84,14 +267,18 @@ export default function Dashboard() {
       setCustomersCount(snap.docs.length);
     });
 
-    // Listen to couriers count
+    // Listen to couriers
     const unsubCouriers = onSnapshot(collection(db, 'couriers'), (snap) => {
       setCouriersCount(snap.docs.length);
+      const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+      setCouriers(list);
     });
 
-    // Listen to expenses count
+    // Listen to expenses count & list
     const unsubExpenses = onSnapshot(collection(db, 'expenses'), (snap) => {
       setExpensesCount(snap.docs.length);
+      const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+      setExpenses(list);
     });
 
     // Listen to orders
@@ -112,19 +299,34 @@ export default function Dashboard() {
       setLoading(false);
     });
 
+    // Listen to activity logs
+    const qLogs = query(collection(db, 'activity_logs'), orderBy('timestamp', 'desc'), limit(5));
+    const unsubLogs = onSnapshot(qLogs, (snap) => {
+      const logs = snap.docs.map(doc => {
+        const d = doc.data() as any;
+        return {
+          id: doc.id,
+          ...d,
+          createdAt: safeToDate(d.timestamp)
+        };
+      });
+      setRealLogs(logs);
+    }, (err) => {
+      console.warn("Activity logs subscript error (expected first run):", err);
+    });
+
     return () => {
       unsubCustomers();
       unsubCouriers();
       unsubExpenses();
       unsubOrders();
+      unsubLogs();
     };
   }, [role, roleLoading]);
 
-  // Dynamically compute/weight stats from real DB + fallback defaults to keep dashboard populated with nice data
+  // Dynamically compute stats from real DB
   useEffect(() => {
-    if (orders.length === 0) return;
-
-    let computedTotalOrders = orders.length + 1200; // Blend real items with nice standard template offsets
+    let computedTotalOrders = orders.length;
     let computedRevenues = 0;
     let computedProfit = 0;
     let computedActive = 0;
@@ -135,7 +337,7 @@ export default function Dashboard() {
     orders.forEach((o: any) => {
       const paid = parseFloat(o.amountPaid || o.paidAmount || '0');
       const remain = parseFloat(o.amountRemaining || '0');
-      const price = paid + remain;
+      const price = parseFloat(o.totalPrice || o.totalCostYER || (paid + remain) || '0');
       computedRevenues += price;
 
       computedPaid += paid;
@@ -143,55 +345,350 @@ export default function Dashboard() {
       const remaining = parseFloat(o.amountRemaining || '0');
       computedRemaining += remaining;
 
-      const profitVal = parseFloat(o.companyCommission || '0');
+      const profitVal = parseFloat(o.companyCommission || o.companyCommissionYER || '0');
       computedProfit += profitVal;
 
       const status = o.orderStatus || o.order_status || 'Processing';
-      if (['Shipped', 'In Transit', 'Out For Delivery', 'In Local Warehouse'].includes(status)) {
+      if (['Shipped', 'In Transit', 'Out For Delivery', 'In Local Warehouse', 'جاري التوصيل', 'قيد الشحن', 'وصل المخزن'].includes(status)) {
         computedActive++;
       }
-      if (status === 'Delayed') {
+      if (status === 'Delayed' || status === 'متأخر') {
         computedDelayed++;
       }
     });
 
-    // Weighted blends with mock totals (if DB is fresh, we display beautiful mock figures inspired strictly by mockup)
+    // Subtract actual total expenses to find real company Net Profit
+    const totalExpensesAmount = expenses.reduce((acc, curr) => acc + (parseFloat(curr.amount || '0')), 0);
+    const realNetProfit = computedProfit - totalExpensesAmount;
+
     setStats({
       totalOrders: computedTotalOrders,
-      totalRevenues: computedRevenues > 0 ? computedRevenues : 524780,
-      netProfit: computedProfit > 0 ? computedProfit : 128940,
-      activeDeliveries: computedActive > 0 ? computedActive : 356,
-      delayedOrders: computedDelayed > 0 ? computedDelayed : 28,
-      activeCustomers: customersCount > 0 ? customersCount : 982,
-      amountRemaining: computedRemaining > 0 ? computedRemaining : 32540,
-      amountPaid: computedPaid > 0 ? computedPaid : 196800,
+      totalRevenues: computedRevenues,
+      netProfit: realNetProfit,
+      activeDeliveries: computedActive,
+      delayedOrders: computedDelayed,
+      activeCustomers: customersCount,
+      amountRemaining: computedRemaining,
+      amountPaid: computedPaid,
     });
-  }, [orders, customersCount, couriersCount]);
+  }, [orders, customersCount, expenses]);
 
-  // Active Couriers with Coordinates over Cyber City Grid for Map illustration
-  const mapCouriers = [
-    { id: 'c1', name: isAr ? 'المندوب: أحمد' : 'Ahmed (Courier)', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80', order: 'ALX-2605-1003', status: isAr ? 'جاري التوصيل' : 'Delivering', statusColor: 'blue', x: 28, y: 32 },
-    { id: 'c2', name: isAr ? 'المندوب: علي' : 'Ali (Courier)', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80', order: 'ALX-2605-1001', status: isAr ? 'تم التسليم' : 'Delivered', statusColor: 'green', x: 58, y: 44 },
-    { id: 'c3', name: isAr ? 'المندوب: محمد' : 'Mohamed (Courier)', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=100&q=80', order: 'ALX-2605-1002', status: isAr ? 'في الطريق' : 'In transit', statusColor: 'yellow', x: 39, y: 48 }
-  ];
+  // Generate daily shipping volume dynamically
+  const volumeChartData = React.useMemo(() => {
+    const dayNamesAr = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+    const dayNamesEn = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    
+    // Create list of last 7 days (6 days ago to today)
+    const last7Days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (6 - i));
+      return d;
+    });
 
-  // Activities log matches mockup faithfully
-  const recentActivities = [
-    { id: 'a1', title: isAr ? 'طلب جديد' : 'New Order', ref: 'ALX-2605-1004', time: isAr ? 'منذ 5 دقائق' : '5m ago', icon: Package, iconBg: 'bg-blue-950/40 text-blue-400 border-blue-900/30' },
-    { id: 'a2', title: isAr ? 'تم تجهيز الشحنة' : 'Shipment Ready', ref: 'ALX-2605-1002', time: isAr ? 'منذ 15 دقيقة' : '15m ago', icon: Truck, iconBg: 'bg-[#d4af37]/10 text-[#d4af37] border-[#d4af37]/20' },
-    { id: 'a3', title: isAr ? 'تم استلام دفعة من العميل: عبدالله' : 'Payment Received: Abdullah', ref: 'ALX-2605-1005', time: isAr ? 'منذ 25 دقيقة' : '25m ago', icon: CheckCircle2, iconBg: 'bg-emerald-950/40 text-emerald-400 border-emerald-900/30' },
-    { id: 'a4', title: isAr ? 'تم تسليم الطلب' : 'Order Delivered', ref: 'ALX-2605-1001', time: isAr ? 'منذ 35 دقيقة' : '35m ago', icon: CheckCircle2, iconBg: 'bg-emerald-950/40 text-emerald-400 border-emerald-900/30' },
-    { id: 'a5', title: isAr ? 'طلب جديد' : 'New Order', ref: 'ALX-2605-1005', time: isAr ? 'منذ 45 دقيقة' : '45m ago', icon: Package, iconBg: 'bg-blue-950/40 text-blue-400 border-blue-900/30' }
-  ];
+    const hasRealOrders = orders.length > 0;
+    
+    return last7Days.map((date, index) => {
+      const dayOfWeek = date.getDay();
+      const dayName = isAr ? dayNamesAr[dayOfWeek] : dayNamesEn[dayOfWeek];
+      
+      let count = 0;
+      if (hasRealOrders) {
+        count = orders.filter((order: any) => {
+          if (!order.createdAt) return false;
+          const orderDate = order.createdAt instanceof Date ? order.createdAt : new Date(order.createdAt);
+          return (
+            orderDate.getDate() === date.getDate() &&
+            orderDate.getMonth() === date.getMonth() &&
+            orderDate.getFullYear() === date.getFullYear()
+          );
+        }).length;
+      }
+      
+      return {
+        day: dayName,
+        volume: count,
+      };
+    });
+  }, [orders, isAr]);
 
-  // Render static mock orders if none in DB, else use actual list
-  const displayOrders = orders.length > 0 ? orders.slice(0, 5) : [
-    { orderNumber: 'ALX-2605-1004', customerName: isAr ? 'سالم الحربي' : 'Salem Al-Harbi', orderStatus: 'In Transit', order_status: 'In Transit', deliveryCourierName: isAr ? 'أحمد' : 'Ahmed', totalCostYER: '1265', createdAt: Date.now() },
-    { orderNumber: 'ALX-2605-1003', customerName: isAr ? 'مريم علي' : 'Maryam Ali', orderStatus: 'Processing', order_status: 'Processing', deliveryCourierName: isAr ? 'محمد' : 'Mohamed', totalCostYER: '980', createdAt: Date.now() - 3600000 },
-    { orderNumber: 'ALX-2605-1002', customerName: isAr ? 'ناصر باخميس' : 'Nasser Bakhmis', orderStatus: 'In Local Warehouse', order_status: 'In Local Warehouse', deliveryCourierName: isAr ? 'محمد' : 'Mohamed', totalCostYER: '2450', createdAt: Date.now() - 7200000 },
-    { orderNumber: 'ALX-2605-1001', customerName: isAr ? 'عبدالله السعيد' : 'Abdullah Al-Saeed', orderStatus: 'Delivered', order_status: 'Delivered', deliveryCourierName: isAr ? 'علي' : 'Ali', totalCostYER: '1150', createdAt: Date.now() - 14400000 },
-    { orderNumber: 'ALX-2605-1000', customerName: isAr ? 'يوسف أحمد' : 'Youssef Ahmed', orderStatus: 'Delayed', order_status: 'Delayed', deliveryCourierName: isAr ? 'أحمد' : 'Ahmed', totalCostYER: '750', createdAt: Date.now() - 86400000 }
-  ];
+  // Generate order status distribution dynamically
+  const statusChartData = React.useMemo(() => {
+    const hasRealOrders = orders.length > 0;
+    
+    const groups: { [key: string]: number } = {
+      'Delivered': 0,
+      'In Transit': 0,
+      'Processing': 0,
+      'In Local Warehouse': 0,
+      'Delayed': 0
+    };
+    
+    if (hasRealOrders) {
+      orders.forEach((o: any) => {
+        let status = o.orderStatus || o.order_status || 'Processing';
+        // Normalize status values
+        if (status === 'تم التسليم' || status?.toLowerCase() === 'delivered') status = 'Delivered';
+        else if (status === 'جاري التوصيل' || status === 'قيد الشحن' || status?.toLowerCase() === 'in transit' || status?.toLowerCase() === 'shipped') status = 'In Transit';
+        else if (status === 'في الطريق' || status?.toLowerCase() === 'processing') status = 'Processing';
+        else if (status === 'وصل المخزن' || status === 'تم التجهيز' || status?.toLowerCase() === 'in local warehouse') status = 'In Local Warehouse';
+        else if (status === 'متأخر' || status?.toLowerCase() === 'delayed') status = 'Delayed';
+        else {
+          status = 'Processing';
+        }
+        groups[status] = (groups[status] || 0) + 1;
+      });
+    }
+
+    return [
+      { name: isAr ? 'تم التسليم' : 'Delivered', value: groups['Delivered'] || 0, color: '#10b981' },
+      { name: isAr ? 'جاري التوصيل' : 'In Transit', value: groups['In Transit'] || 0, color: '#3b82f6' },
+      { name: isAr ? 'في الطريق' : 'Processing', value: groups['Processing'] || 0, color: '#f59e0b' },
+      { name: isAr ? 'وصل المخزن' : 'Local Warehouse', value: groups['In Local Warehouse'] || 0, color: '#d4af37' },
+      { name: isAr ? 'متأخر' : 'Delayed', value: groups['Delayed'] || 0, color: '#ef4444' }
+    ];
+  }, [orders, isAr]);
+
+  // Active Couriers linked directly with real-time Firestore database coordinates
+  const mapCouriers = React.useMemo(() => {
+    // Return empty if no database couriers to strictly prevent mock representations
+    if (couriers.length === 0) {
+      return [];
+    }
+
+    const fixedCoords = [
+      { x: 28, y: 32 },
+      { x: 58, y: 44 },
+      { x: 39, y: 48 },
+      { x: 74, y: 25 },
+      { x: 15, y: 62 },
+      { x: 50, y: 75 }
+    ];
+
+    const avatars = [
+      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80',
+      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80',
+      'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=100&q=80',
+      'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=100&q=80',
+      'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=100&q=80'
+    ];
+
+    return couriers.map((courier, idx) => {
+      const coord = fixedCoords[idx % fixedCoords.length];
+      const avatar = avatars[idx % avatars.length];
+      
+      const courierOrders = orders.filter(o => o.deliveryCourierId === courier.id);
+      const activeOrder = courierOrders[0];
+      const orderRef = activeOrder ? (activeOrder.orderNumber || `ALX-ID-${activeOrder.id.slice(0, 4)}`) : (isAr ? 'بدون شحنة نشطة' : 'No Active Order');
+      
+      let statusStr = isAr ? 'نشط ميدانياً' : 'Operational';
+      let statusColor = 'blue';
+      
+      if (activeOrder) {
+        const oStatus = activeOrder.orderStatus || activeOrder.order_status || 'Processing';
+        if (oStatus === 'Delivered' || oStatus === 'تم التسليم') {
+          statusStr = isAr ? 'تم التسليم' : 'Delivered';
+          statusColor = 'green';
+        } else if (oStatus === 'Delayed' || oStatus === 'متأخر') {
+          statusStr = isAr ? 'متأخر' : 'Delayed';
+          statusColor = 'red';
+        } else {
+          statusStr = isAr ? 'جاري التوصيل' : 'Delivering';
+          statusColor = 'blue';
+        }
+      }
+
+      return {
+        id: courier.id,
+        name: courier.fullName || courier.name || 'Courier',
+        avatar,
+        order: orderRef,
+        status: statusStr,
+        statusColor,
+        x: coord.x,
+        y: coord.y
+      };
+    });
+  }, [couriers, orders, isAr]);
+
+  // Activity stream resolved dynamically from audit logs collection in Firestore
+  const recentActivities = React.useMemo(() => {
+    if (realLogs.length > 0) {
+      return realLogs.map(log => {
+        let title = log.action;
+        let icon = Package;
+        let iconBg = 'bg-blue-950/40 text-blue-400 border-blue-900/30';
+
+        const actionMapAr: { [key: string]: string } = {
+          'login': 'تسجيل دخول للنظام',
+          'logout': 'تسجيل خروج من النظام',
+          'add_user': 'إضافة مستخدم جديد',
+          'edit_user': 'تعديل بيانات مستخدم',
+          'add_order': 'تم إنشاء طلب شحن جديد',
+          'edit_order': 'تحديث بيانات الطلب',
+          'delete_order': 'حذف طلب شحن من النظام',
+          'add_customer': 'تم تسجيل عميل جديد',
+          'add_courier': 'تم إضافة مندوب توصيل جديد',
+          'add_expense': 'تسجيل مصروفات تشغيلية',
+          'settle_custody': 'تسوية عهدة مالية للمندوب',
+        };
+
+        const actionMapEn: { [key: string]: string } = {
+          'login': 'User successfully logged in',
+          'logout': 'User logged out',
+          'add_user': 'Created new user account',
+          'edit_user': 'Modified user profile',
+          'add_order': 'New delivery slot registered',
+          'edit_order': 'Updated order details',
+          'delete_order': 'Deleted shipping order',
+          'add_customer': 'Customer profile added',
+          'add_courier': 'Registered new dispatcher',
+          'add_expense': 'Recorded operational expenses',
+          'settle_custody': 'Settled courier custody',
+        };
+
+        if (isAr) {
+          title = actionMapAr[log.action] || log.action || 'نشاط لوحة التحكم';
+        } else {
+          title = actionMapEn[log.action] || log.action || 'System ledger log';
+        }
+
+        if (log.action?.includes('order') || log.category === 'ORDERS') {
+          icon = Package;
+          iconBg = 'bg-blue-950/40 text-blue-400 border-blue-900/30';
+        } else if (log.action?.includes('expense') || log.action?.includes('custody') || log.category === 'FINANCE') {
+          icon = DollarSign;
+          iconBg = 'bg-emerald-950/40 text-emerald-400 border-emerald-900/30';
+        } else if (log.action?.includes('courier') || log.category === 'COURIERS') {
+          icon = Truck;
+          iconBg = 'bg-cyan-950/40 text-cyan-400 border-cyan-900/30';
+        } else if (log.action?.includes('customer') || log.category === 'CUSTOMERS') {
+          icon = UsersIcon;
+          iconBg = 'bg-purple-950/40 text-purple-400 border-purple-900/30';
+        } else {
+          icon = CheckCircle2;
+          iconBg = 'bg-slate-900/40 text-slate-400 border-slate-800/35';
+        }
+
+        let timeStr = '';
+        const now = Date.now();
+        const diffMs = now - (log.createdAt ? log.createdAt.getTime() : now);
+        const mins = Math.floor(diffMs / 60000);
+        if (mins < 1) {
+          timeStr = isAr ? 'الآن' : 'Just now';
+        } else if (mins < 60) {
+          timeStr = isAr ? `منذ ${mins} دقيقة` : `${mins}m ago`;
+        } else {
+          const hours = Math.floor(mins / 60);
+          if (hours < 24) {
+            timeStr = isAr ? `منذ ${hours} ساعة` : `${hours}h ago`;
+          } else {
+            const days = Math.floor(hours / 24);
+            timeStr = isAr ? `منذ ${days} يوم` : `${days}d ago`;
+          }
+        }
+
+        return {
+          id: log.id,
+          title,
+          ref: log.target || log.userEmail || log.userName || '',
+          time: timeStr,
+          icon,
+          iconBg
+        };
+      });
+    }
+
+    return [];
+  }, [realLogs, isAr]);
+
+  // Dynamic, authentic alerts computed from the live database
+  const alertsList = React.useMemo(() => {
+    const list = [];
+    
+    // 1. Delayed shipments alert
+    const delayed = orders.filter(o => {
+      const st = o.orderStatus || o.order_status || '';
+      return ['Delayed', 'متأخر'].includes(st);
+    });
+    if (delayed.length > 0) {
+      list.push({
+        id: 'delayed_alert',
+        type: 'danger',
+        messageAr: `يوجد ${delayed.length} شحنات متأخرة بالوصول في النظام حالياً!`,
+        messageEn: `There are ${delayed.length} delayed shipments in the system currently!`,
+        icon: AlertCircle,
+        bgClass: 'bg-rose-950/20 border-rose-800/40',
+        textClass: 'text-rose-400'
+      });
+    }
+
+    // 2. High outstanding debts alert
+    const outstanding = orders.filter(o => parseFloat(o.amountRemaining || '0') > 15000);
+    if (outstanding.length > 0) {
+      list.push({
+        id: 'debt_alert',
+        type: 'warning',
+        messageAr: `مبالغ متبقية مستحقة تزيد عن ١٥,٠٠٠ ريال يمني على ${outstanding.length} طلبات!`,
+        messageEn: `Outstanding balances over 15k YER detected on ${outstanding.length} orders!`,
+        icon: ShieldAlert,
+        bgClass: 'bg-amber-950/20 border-amber-800/40',
+        textClass: 'text-amber-500'
+      });
+    }
+
+    // 3. Operational standby courier alert
+    const idleCouriersCount = couriers.length - orders.reduce((acc, o) => {
+      if (o.deliveryCourierId) acc.add(o.deliveryCourierId);
+      return acc;
+    }, new Set<string>()).size;
+    
+    if (idleCouriersCount > 0 && couriers.length > 0) {
+      list.push({
+        id: 'courier_idle_alert',
+        type: 'info',
+        messageAr: `يوجد ${idleCouriersCount} مناديب في جاهزية تامة في الميدان لتوزيع الشحنات الإضافية.`,
+        messageEn: `${idleCouriersCount} registered dispatchers are standby on the field for operations.`,
+        icon: Truck,
+        bgClass: 'bg-cyan-950/20 border-cyan-800/40',
+        textClass: 'text-cyan-400'
+      });
+    }
+
+    // If completely clean tracker
+    if (list.length === 0) {
+      list.push({
+        id: 'system_ok',
+        type: 'success',
+        messageAr: 'نظام إدارة الشحنات والمناديب مستقر تماماً. كافة الخدمات والاتصالات الطارئة مؤمنة.',
+        messageEn: 'Shipping management core is fully optimized. All dispatch networks secure.',
+        icon: CheckCircle2,
+        bgClass: 'bg-emerald-950/15 border-emerald-900/45',
+        textClass: 'text-emerald-400'
+      });
+    }
+
+    return list;
+  }, [orders, couriers, isAr]);
+
+  // Render authentic orders list from active database documents
+  const displayOrders = React.useMemo(() => {
+    if (orders.length > 0) {
+      return orders.slice(0, 5).map(ord => {
+        const matchingCourier = couriers.find(c => c.id === ord.deliveryCourierId || c.id === ord.shippingCourierId);
+        return {
+          ...ord,
+          orderNumber: ord.orderNumber || `ALX-ID-${ord.id.slice(0, 4)}`,
+          customerName: ord.customerName || (isAr ? 'عضو زائر' : 'Guest Customer'),
+          orderStatus: ord.orderStatus || ord.order_status || 'Processing',
+          deliveryCourierName: matchingCourier ? (matchingCourier.fullName || matchingCourier.name) : '—',
+          totalCostYER: ord.totalPrice || ord.totalCostYER || '0',
+          createdAt: ord.createdAt
+        };
+      });
+    }
+
+    return [];
+  }, [orders, couriers, isAr]);
 
   // Map Status Colors for Table/Map
   const getStatusBeadStyles = (status: string) => {
@@ -376,10 +873,10 @@ export default function Dashboard() {
 
   const getGridColsClass = () => {
     switch (gridColumns) {
-      case 2: return 'grid-cols-1 md:grid-cols-2';
-      case 3: return 'grid-cols-1 md:grid-cols-3';
-      case 4: return 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4';
-      default: return 'grid-cols-1 md:grid-cols-2 lg:grid-cols-6';
+      case 2: return 'grid-cols-1 sm:grid-cols-2';
+      case 3: return 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3';
+      case 4: return 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4';
+      default: return 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6';
     }
   };
 
@@ -411,6 +908,39 @@ export default function Dashboard() {
         </button>
       </div>
 
+      {orders.length === 0 && !loading && (
+        <div className="bg-gradient-to-r from-amber-950/40 via-yellow-950/30 to-slate-900 border border-yellow-700/35 p-6 rounded-3xl flex flex-col md:flex-row justify-between items-start md:items-center gap-6 shadow-xl shadow-yellow-950/10">
+          <div className="space-y-1.5 text-right md:text-start">
+            <h3 className="text-base font-black text-[#d4af37] flex items-center gap-2 justify-end md:justify-start">
+              <Plus className="w-5 h-5 text-yellow-400 animate-pulse" />
+              {isAr ? 'لوحة التحكم جديدة وبحاجة لبيانات!' : 'New Dashboard Awaiting Dynamic Data!'}
+            </h3>
+            <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
+              {isAr 
+                ? 'لوحة القيادة حالياً خالية من مؤشرات التشغيل الفعلية. للحصول على تجربة تصفح تفاعلية تتضمن تقارير الإيرادات والأرباح، ومحاور الرسوم البيانية، ومواقع المناديب الحية على الخريطة ومقاييس الأداء الفورية، يمكنك فوراً توليد حزمة بيانات نموذجية كاملة ومبنية واقعياً بضغطة زر واحدة!' 
+                : 'Your operational dashboard is currently empty. To explore a fully rich and dynamic playground—including realistic revenue reports, logistics dispatch radar maps, telemetry chart groups and direct event timelines—instantly populate sample sandbox documents into your database.'}
+            </p>
+          </div>
+          <button 
+            onClick={seedSampleData}
+            disabled={isSeeding}
+            className="px-5 py-3 rounded-2xl bg-[#d4af37] text-black font-bold text-xs hover:bg-yellow-400 active:scale-95 duration-100 disabled:opacity-50 disabled:pointer-events-none whitespace-nowrap flex items-center gap-2 shadow-lg shadow-yellow-950/30 cursor-pointer self-end md:self-center"
+          >
+            {isSeeding ? (
+              <>
+                <div className="h-3 w-3 animate-spin rounded-full border-2 border-black border-t-transparent"></div>
+                {isAr ? 'جاري تجهيز الساندبوكس...' : 'Setting up playground...'}
+              </>
+            ) : (
+              <>
+                <Package className="w-4 h-4" />
+                {isAr ? 'توليد حزمة بيانات حقيقية' : 'Seed Real Evaluation Data'}
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
       {/* Customization Drawer / Panel */}
       {isCustomizing && (
         <div className="bg-[#121215] border border-[#d4af37]/20 p-5 rounded-3xl animate-in fade-in slide-in-from-top-4 duration-300 text-start space-y-4">
@@ -421,7 +951,7 @@ export default function Dashboard() {
             </div>
           </div>
           
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
             {Object.keys(metricConfigs).map((key) => {
               const config = metricConfigs[key];
               const isVisible = visibleMetrics.includes(key);
@@ -500,18 +1030,20 @@ export default function Dashboard() {
           return (
             <div 
               key={key}
-              className="bg-gradient-to-br from-[#0d0d0f] to-[#040405] border border-[#d4af37]/15 p-4 rounded-xl relative overflow-hidden group shadow-lg shadow-black/40 hover:border-[#d4af37]/30 transition-all duration-300 text-right"
+              className="bg-gradient-to-br from-[#0d0d0f] to-[#040405] border border-[#d4af37]/15 p-4 rounded-xl relative overflow-hidden group shadow-lg shadow-black/40 hover:border-[#d4af37]/30 transition-all duration-300 text-right min-w-0"
             >
               <div className="absolute right-0 top-0 w-24 h-24 bg-gradient-to-br from-[#d4af37]/5 to-transparent rounded-full blur-2xl"></div>
-              <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider block mb-1">
-                {isAr ? config.titleAr : config.titleEn}
-              </span>
-              <div className={`text-xl font-black font-mono tracking-tight mt-1 ${config.colorClass}`}>
-                {config.value}
-              </div>
-              <div className={`text-[10px] font-bold mt-1.5 flex items-center gap-1 ${config.isPositive ? 'text-emerald-400' : 'text-slate-500'}`}>
-                {config.isPositive ? <ArrowUpRight className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
-                <span>{isAr ? config.changeAr : config.changeEn}</span>
+              <div className="pl-12">
+                <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider block mb-1 truncate">
+                  {isAr ? config.titleAr : config.titleEn}
+                </span>
+                <div className={`text-base sm:text-lg md:text-xl font-black font-mono tracking-tight mt-1 break-words leading-none ${config.colorClass}`}>
+                  {config.value}
+                </div>
+                <div className={`text-[10px] font-bold mt-1.5 flex items-center gap-1 leading-none ${config.isPositive ? 'text-emerald-400' : 'text-slate-500'}`}>
+                  {config.isPositive ? <ArrowUpRight className="w-3.5 h-3.5 shrink-0" /> : <Clock className="w-3.5 h-3.5 shrink-0" />}
+                  <span className="truncate">{isAr ? config.changeAr : config.changeEn}</span>
+                </div>
               </div>
               <div className={`absolute top-4 left-4 p-2.5 rounded-lg ${config.bgClass} group-hover:scale-105 transition-transform duration-300`}>
                 <config.icon className="w-4 h-4" />
@@ -590,7 +1122,7 @@ export default function Dashboard() {
                 </div>
 
                 {/* Floating Courier Card - faithfully styled after screenshot */}
-                <div className="absolute bottom-6 right-1/2 translate-x-1/2 bg-[#09090b]/90 border border-[#d4af37]/30 p-2.5 rounded-xl w-36 shadow-xl shadow-black/80 text-start pointer-events-none group-hover:opacity-100 opacity-90 transition-opacity whitespace-nowrap">
+                <div className="absolute bottom-6 right-1/2 translate-x-1/2 bg-[#09090b]/95 border border-[#d4af37]/30 p-2 rounded-xl w-36 shadow-xl shadow-black/80 text-start pointer-events-none group-hover:opacity-100 opacity-90 transition-opacity whitespace-nowrap z-50">
                   <div className="flex items-center gap-2">
                     <img src={c.avatar} className="w-6 h-6 rounded-full border border-[#d4af37]/30 object-cover" referrerPolicy="no-referrer" />
                     <div>
@@ -612,13 +1144,35 @@ export default function Dashboard() {
               </div>
             ))}
 
-            {/* Map Legend Overlay at the bottom center */}
-            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-[#070708]/90 border border-[#d4af37]/15 p-2 px-4 rounded-xl flex items-center gap-4 text-[9px] font-black tracking-wider whitespace-nowrap shadow-lg shadow-black/60 relative z-10 transition-all">
-              <span className="text-slate-500 uppercase">{isAr ? 'حالات التوصيل:' : 'LEGEND:'}</span>
-              <div className="flex items-center gap-1.5 font-bold"><span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse inline-block"></span>{isAr ? 'تم التسليم' : 'DELIVERED'}</div>
-              <div className="flex items-center gap-1.5 font-bold"><span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse inline-block"></span>{isAr ? 'جاري التوصيل' : 'DELIVERING'}</div>
-              <div className="flex items-center gap-1.5 font-bold"><span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse inline-block"></span>{isAr ? 'في الطريق' : 'IN ROAD'}</div>
-              <div className="flex items-center gap-1.5 font-bold"><span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse inline-block"></span>{isAr ? 'متأخر' : 'DELAYED'}</div>
+            {mapCouriers.length === 0 && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center p-6 bg-black/75 backdrop-blur-sm transition-all duration-300 z-20 text-center">
+                <div className="p-4 rounded-full bg-slate-950/90 border border-[#d4af37]/30 mb-3 animate-pulse">
+                  <Truck className="w-8 h-8 text-[#d4af37]" />
+                </div>
+                <p className="text-sm font-extrabold text-[#d4af37]">
+                  {isAr ? 'خريطة التتبع الميداني خالية' : 'No Operational Field Dispatchers'}
+                </p>
+                <p className="text-[10px] text-slate-400 mt-1 max-w-xs leading-relaxed">
+                  {isAr 
+                    ? 'لا توجد مناديب توصيل نشطين حالياً. قم بإضافة مندوب توصيل أو انقر زر توليد البيانات المحاكية لتجربة نظام الملاحة التفاعلي.'
+                    : 'Dispatch tracking is empty. Manage couriers or seed dynamic data clusters to initialize navigation grids.'}
+                </p>
+                <button 
+                  onClick={() => navigate('/couriers')}
+                  className="mt-4 px-3 py-1.5 border border-[#d4af37]/35 text-[#d4af37] bg-[#d4af37]/5 hover:bg-[#d4af37]/10 text-[10px] font-black rounded-lg transition-all"
+                >
+                  {isAr ? 'إجراء تسجيل مندوب جديد 🚚' : 'Register Operator 🚚'}
+                </button>
+              </div>
+            )}
+
+            {/* Map Legend Overlay built with full responsive wrapping bounds */}
+            <div className="absolute bottom-3 inset-x-3 bg-[#070708]/95 border border-[#d4af37]/15 p-2 px-3 rounded-xl flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-[9px] font-black tracking-wider shadow-lg shadow-black/80 z-10 transition-all">
+              <span className="text-slate-500 uppercase">{isAr ? 'الحالات:' : 'KEY:'}</span>
+              <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>{isAr ? 'تم التسليم' : 'DELIVERED'}</div>
+              <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>{isAr ? 'جاهز/توصيل' : 'ON ROAD'}</div>
+              <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>{isAr ? 'في الطريق' : 'PREPPED'}</div>
+              <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>{isAr ? 'متأخر' : 'DELAYED'}</div>
             </div>
           </div>
         </div>
@@ -638,24 +1192,36 @@ export default function Dashboard() {
           </div>
 
           {/* Activities vertical list */}
-          <div className="flex-1 space-y-4">
+          <div className="flex-1 space-y-4 flex flex-col justify-center">
             {recentActivities.map((act) => {
               const Icon = act.icon;
               return (
-                <div key={act.id} className="flex gap-3 text-start items-start group">
+                <div key={act.id} className="flex gap-3 text-start items-start group min-w-0">
                   <div className={`p-2.5 rounded-xl border ${act.iconBg} transform group-hover:scale-105 transition-all duration-300 shrink-0`}>
                     <Icon className="w-4 h-4" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h4 className="text-xs font-black text-white leading-snug group-hover:text-[#d4af37] transition duration-300">{act.title}</h4>
-                    <span className="font-mono text-[10px] text-[#d4af37]/80 block mt-0.5 font-bold">{act.ref}</span>
+                    <h4 className="text-xs font-black text-white leading-snug group-hover:text-[#d4af37] transition duration-300 truncate">{act.title}</h4>
+                    <span className="font-mono text-[10px] text-[#d4af37]/80 block mt-0.5 font-bold truncate">{act.ref}</span>
                   </div>
-                  <span className="text-[10px] text-slate-500 font-bold justify-end block whitespace-nowrap pt-1">
+                  <span className="text-[10px] text-slate-500 font-bold justify-end block whitespace-nowrap pt-1 shrink-0">
                     {act.time}
                   </span>
                 </div>
               );
             })}
+
+            {recentActivities.length === 0 && (
+              <div className="flex-1 flex flex-col items-center justify-center py-12 text-center text-slate-500 font-sans">
+                <div className="p-3 bg-slate-900/10 rounded-full border border-slate-800/40 mb-3 animate-pulse">
+                  <Clock className="w-6 h-6 text-slate-500" />
+                </div>
+                <p className="text-xs font-black text-slate-400">{isAr ? 'لا توجد سجلات نشاط' : 'No Activities Labeled'}</p>
+                <p className="text-[9px] text-slate-605 max-w-[200px] mt-1.5 leading-normal">
+                  {isAr ? 'تظهر هنا أحدث العمليات والتحركات التي تتم في النظام تلقائياً وبكل دقة في الوقت الحقيقي.' : 'System ledger tracks administrative and operational events here.'}
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="bg-gradient-to-r from-[#d4af37]/5 to-[#d4af37]/0 p-3 rounded-xl border border-[#d4af37]/10 mt-6 flex justify-between items-center select-none text-start">
@@ -664,6 +1230,171 @@ export default function Dashboard() {
               <p className="text-[10px] font-black text-white">{isAr ? 'تحديث الاتصالات الذاتي نشط' : 'Pulse streaming enabled'}</p>
             </div>
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+          </div>
+        </div>
+
+      </div>
+
+      {/* 📊 SECTION 2.5: Interactive Analytics Charts (Recharts) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* Daily Shipping Volume Line/Area Chart */}
+        <div className="lg:col-span-2 bg-[#0c0c0e]/95 border border-[#d4af37]/15 rounded-xl p-5 flex flex-col shadow-lg shadow-black/55 relative min-h-[360px]">
+          <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-[#d4af37]/40 to-transparent"></div>
+          
+          <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-900/40">
+            <div className="text-start">
+              <h3 className="font-black text-white text-sm flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-[#d4af37]" />
+                {isAr ? 'حجم الشحن والعمليات اليومية' : 'Daily Shipping Volume'}
+              </h3>
+              <p className="text-[9px] text-slate-500 font-bold uppercase mt-0.5 tracking-wider">
+                {isAr ? 'مؤشر الإنتاجية والتدفق العام لآخر ٧ أيام' : 'Logistics throughput & operational volume over 7 days'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex-1 w-full min-h-[240px] flex items-center justify-center relative">
+            {orders.length === 0 ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-4 bg-black/40 backdrop-blur-[1px] z-10 rounded-xl">
+                <TrendingUp className="w-8 h-8 text-slate-700 mb-2 animate-pulse" />
+                <p className="text-xs font-black text-slate-400">{isAr ? 'لا توجد بيانات شحن كافية للرسم البياني' : 'Insufficient Shipping Volumes'}</p>
+                <p className="text-[9px] text-slate-500 mt-1 max-w-xs">{isAr ? 'عندما تبدأ في إنشاء الطلبات وجدولة الطرود، سيتم تمثيل تدفق الإيرادات اللوجستية والكميات هنا تلقائياً.' : 'Operations telemetry will render dynamically once daily orders begin streaming inside your logs.'}</p>
+              </div>
+            ) : null}
+            <ResponsiveContainer width="100%" height={250}>
+              <AreaChart data={volumeChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorVolume" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#d4af37" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#d4af37" stopOpacity={0.0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(212, 175, 55, 0.05)" />
+                <XAxis 
+                  dataKey="day" 
+                  stroke="#566573" 
+                  tick={{ fontSize: 10, fontWeight: 'bold' }} 
+                />
+                <YAxis 
+                  stroke="#566573" 
+                  tick={{ fontSize: 10, fontWeight: 'bold' }} 
+                  allowDecimals={false}
+                />
+                <Tooltip 
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      return (
+                        <div className="bg-[#09090b]/95 border border-[#d4af37]/45 p-2.5 rounded-xl shadow-xl text-xs text-right">
+                          <p className="text-[#d4af37] font-black">{payload[0].payload.day}</p>
+                          <p className="text-white mt-1">
+                            {isAr ? 'عدد الشحنات:' : 'Total Shipments:'}{' '}
+                            <span className="font-mono font-black text-[#d4af37]">{payload[0].value}</span>
+                          </p>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="volume" 
+                  stroke="#d4af37" 
+                  strokeWidth={2}
+                  fillOpacity={1} 
+                  fill="url(#colorVolume)" 
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Order Status Distribution Pie/Donut Chart */}
+        <div className="bg-[#0c0c0e]/95 border border-[#d4af37]/15 rounded-xl p-5 flex flex-col shadow-lg shadow-black/55 relative min-h-[360px]">
+          <div className="absolute top-0 inset-x-0 h-[1px] bg-gradient-to-r from-transparent via-[#d4af37]/40 to-transparent"></div>
+          
+          <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-900/40">
+            <div className="text-start">
+              <h3 className="font-black text-white text-sm flex items-center gap-2">
+                <Package className="w-4 h-4 text-[#d4af37]" />
+                {isAr ? 'توزيع حالات الطلبات' : 'Order Status Share'}
+              </h3>
+              <p className="text-[9px] text-slate-500 font-bold uppercase mt-0.5 tracking-wider">
+                {isAr ? 'إحصاء الحصص لقطاعات التوصيل' : 'Current snapshot of dispatch status allocations'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex-1 w-full flex flex-col items-center justify-center relative min-h-[240px]">
+            {orders.length === 0 ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-4 bg-black/40 backdrop-blur-[1px] z-10 rounded-xl">
+                <Package className="w-8 h-8 text-slate-700 mb-2 animate-pulse" />
+                <p className="text-xs font-black text-slate-400">{isAr ? 'لا توجود حالات جدولة حالياً' : 'No Active Shipments Found'}</p>
+                <p className="text-[9px] text-slate-500 mt-1 max-w-xs">{isAr ? 'يتم توزيع الحصص النسبية للحالات اللوجستية بمجرد تشغيل وجدولة الطلبات الأولى.' : 'Sector allocations will construct automatically once shipment orders begin streaming.'}</p>
+              </div>
+            ) : null}
+            <div className="relative w-full h-[160px] flex items-center justify-center">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={statusChartData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={48}
+                    outerRadius={68}
+                    paddingAngle={3}
+                    dataKey="value"
+                  >
+                    {statusChartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        return (
+                          <div className="bg-[#09090b]/95 border border-[#d4af37]/30 p-2 rounded-xl shadow-xl text-xs text-right">
+                            <p className="font-black text-white">{payload[0].name}</p>
+                            <p className="text-slate-400 mt-1">
+                              {isAr ? 'العدد:' : 'Count:'}{' '}
+                              <span className="font-mono font-black" style={{ color: payload[0].payload.color }}>
+                                {payload[0].value}
+                              </span>
+                            </p>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              
+              {/* Abs center stats indicator */}
+              <div className="absolute flex flex-col items-center justify-center mt-[-10px]">
+                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest leading-none">
+                  {isAr ? 'إجمالي' : 'TOTAL'}
+                </span>
+                <span className="text-lg font-black text-white font-mono mt-0.5">
+                  {statusChartData.reduce((acc, curr) => acc + curr.value, 0)}
+                </span>
+              </div>
+            </div>
+
+            {/* Custom Responsive Side Legend Layout */}
+            <div className="w-full grid grid-cols-2 gap-2 mt-4 text-[10px] font-bold">
+              {statusChartData.map((entry, index) => {
+                if (entry.value === 0 && orders.length === 0) return null;
+                return (
+                  <div key={index} className="flex items-center gap-1.5 justify-start text-start">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
+                    <span className="text-slate-400 truncate w-20">{entry.name}</span>
+                    <span className="font-mono text-white shrink-0">({entry.value})</span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
 
@@ -846,26 +1577,19 @@ export default function Dashboard() {
             </div>
 
             <div className="space-y-2 text-start font-sans">
-              <div className="p-2.5 rounded-lg bg-rose-950/20 border border-rose-800/40 flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-                <div className="leading-tight">
-                  <p className="text-[10px] font-black text-white">{isAr ? 'يوجد 3 شحنات متأخرة بالوصول!' : '3 Delayed shipments!'}</p>
-                </div>
-              </div>
-
-              <div className="p-2.5 rounded-lg bg-amber-950/20 border border-amber-800/40 flex items-center gap-2">
-                <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0" />
-                <div className="leading-tight">
-                  <p className="text-[10px] font-black text-white">{isAr ? 'عهدة غير مسددة للمندوب محمد' : 'Pending custody for Mohamed'}</p>
-                </div>
-              </div>
-
-              <div className="p-2.5 rounded-lg bg-blue-950/20 border border-blue-800/40 flex items-center gap-2">
-                <Package className="w-4 h-4 text-blue-400 shrink-0" />
-                <div className="leading-tight">
-                  <p className="text-[10px] font-black text-white">{isAr ? 'تم استيراد تحديث المصادر الدولية' : 'International sources updated'}</p>
-                </div>
-              </div>
+              {alertsList.map((alert) => {
+                const AlertIcon = alert.icon;
+                return (
+                  <div key={alert.id} className={`p-2.5 rounded-lg border flex items-center gap-2 ${alert.bgClass}`}>
+                    <AlertIcon className={`w-4 h-4 shrink-0 ${alert.textClass}`} />
+                    <div className="leading-tight min-w-0">
+                      <p className="text-[10px] font-black text-white break-words">
+                        {isAr ? alert.messageAr : alert.messageEn}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -879,7 +1603,7 @@ export default function Dashboard() {
           {isAr ? 'أزرار الإجراءات السريعة للنظام' : 'CORE HUB ACTIONS'}
         </h4>
         
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
           
           <button 
             onClick={() => navigate('/orders?new=true')} 

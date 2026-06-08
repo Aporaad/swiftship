@@ -35,6 +35,7 @@ export function useRole(enableHeartbeat: boolean = false) {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<any>(null);
   const [user, setUser] = useState<User | null>(auth.currentUser);
+  const [sessionId, setSessionId] = useState<string>('sess-loading');
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (u) => {
@@ -44,9 +45,15 @@ export function useRole(enableHeartbeat: boolean = false) {
         setPermissions([]);
         setProfile(null);
         setLoading(false);
+        setSessionId('sess-loggedout');
         if (typeof window !== 'undefined') {
-          sessionStorage.removeItem('swiftship_session_id');
-          sessionStorage.removeItem('swiftship_session_created');
+          // Clear all stored custom/standard session attributes to avoid stale logins crossing paths
+          for (let i = sessionStorage.length - 1; i >= 0; i--) {
+            const key = sessionStorage.key(i);
+            if (key && (key.startsWith('swiftship_session_id') || key.startsWith('swiftship_session_created'))) {
+              sessionStorage.removeItem(key);
+            }
+          }
         }
       }
     });
@@ -54,26 +61,33 @@ export function useRole(enableHeartbeat: boolean = false) {
     return () => unsubAuth();
   }, []);
 
-  const sessionId = (() => {
-    if (typeof window === 'undefined') return 'sess-server';
-    let id = sessionStorage.getItem('swiftship_session_id');
-    if (!id) {
-      id = `sess-${Math.floor(100000 + Math.random() * 900000)}-${Date.now()}`;
-      sessionStorage.setItem('swiftship_session_id', id);
+  // Compute or retrieve a unique, user-specific, tab-isolated session ID
+  useEffect(() => {
+    if (!user) {
+      setSessionId('sess-loggedout');
+      return;
     }
-    return id;
-  })();
+
+    const storageKey = `swiftship_session_id_${user.uid}`;
+    let id = sessionStorage.getItem(storageKey);
+    if (!id) {
+      id = `sess-${user.uid.substring(0, 5)}-${Math.floor(100000 + Math.random() * 900000)}-${Date.now()}`;
+      sessionStorage.setItem(storageKey, id);
+    }
+    setSessionId(id);
+  }, [user]);
 
   // Session heartbeats: update /sessions/{sessionId} dynamically so the Admin knows which device/tab is active
   useEffect(() => {
-    if (!enableHeartbeat || !user || loading) return;
+    if (!enableHeartbeat || !user || loading || sessionId === 'sess-loading' || sessionId === 'sess-loggedout') return;
     
     const updateSessionHeartbeat = async () => {
       try {
         const sessionRef = doc(db, 'sessions', sessionId);
-        const createdTime = sessionStorage.getItem('swiftship_session_created') || String(Date.now());
-        if (!sessionStorage.getItem('swiftship_session_created')) {
-          sessionStorage.setItem('swiftship_session_created', createdTime);
+        const createdTimeKey = `swiftship_session_created_${user.uid}`;
+        const createdTime = sessionStorage.getItem(createdTimeKey) || String(Date.now());
+        if (!sessionStorage.getItem(createdTimeKey)) {
+          sessionStorage.setItem(createdTimeKey, createdTime);
         }
         
         const emailVal = profile?.email || user.email || '';
@@ -100,19 +114,21 @@ export function useRole(enableHeartbeat: boolean = false) {
     updateSessionHeartbeat();
     const interval = setInterval(updateSessionHeartbeat, 45_000);
     return () => clearInterval(interval);
-  }, [enableHeartbeat, user, profile, role, loading]);
+  }, [enableHeartbeat, user, profile, role, loading, sessionId]);
 
   // Listen for individual session termination
   useEffect(() => {
-    if (!enableHeartbeat || !user) return;
+    if (!enableHeartbeat || !user || sessionId === 'sess-loading' || sessionId === 'sess-loggedout') return;
     
     const sessionRef = doc(db, 'sessions', sessionId);
     const unsubSession = onSnapshot(sessionRef, (sessionDoc) => {
       if (sessionDoc.exists()) {
         const sessionData = sessionDoc.data();
         if (sessionData.forceLogout === true) {
-          sessionStorage.removeItem('swiftship_session_id');
-          sessionStorage.removeItem('swiftship_session_created');
+          const keyId = `swiftship_session_id_${user.uid}`;
+          const keyCreated = `swiftship_session_created_${user.uid}`;
+          sessionStorage.removeItem(keyId);
+          sessionStorage.removeItem(keyCreated);
           deleteDoc(sessionRef).catch(console.error);
           auth.signOut().catch(console.error);
         }
@@ -120,7 +136,7 @@ export function useRole(enableHeartbeat: boolean = false) {
     });
 
     return () => unsubSession();
-  }, [enableHeartbeat, user]);
+  }, [enableHeartbeat, user, sessionId]);
 
   // Heartbeat: update lastSeen every 60s so the general user lists show online/offline status
   useEffect(() => {
@@ -278,5 +294,5 @@ export function useRole(enableHeartbeat: boolean = false) {
     return permissions.includes(permission);
   };
 
-  return { role, permissions, hasPermission, loading, profile };
+  return { role, permissions, hasPermission, loading, profile, sessionId };
 }
