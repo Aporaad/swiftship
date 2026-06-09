@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
-  collection, onSnapshot, query, orderBy, getDocs, where, limit 
+  collection, onSnapshot, query, orderBy, getDocs 
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useSettings } from '../context/SettingsContext';
@@ -69,8 +69,7 @@ export default function Reports() {
   const [sources, setSources] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [accountTransactions, setAccountTransactions] = useState<any[]>([]);
   const [shippingCompanies, setShippingCompanies] = useState<any[]>([]);
 
@@ -85,50 +84,48 @@ export default function Reports() {
   const [sortBy, setSortBy] = useState('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
-  // Unified Fetch Data Function
-  const fetchReportData = async () => {
-    if (roleLoading) return;
-    setLoading(true);
-    try {
-      const results = await Promise.all([
-        getDocs(collection(db, 'orders')),
-        getDocs(collection(db, 'expenses')),
-        getDocs(collection(db, 'couriers')),
-        getDocs(collection(db, 'customers')),
-        getDocs(collection(db, 'sources')),
-        getDocs(collection(db, 'users')),
-        getDocs(collection(db, 'accounts')),
-        getDocs(collection(db, 'shipping_companies'))
-      ]);
-
-      setOrders(results[0].docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      setExpenses(results[1].docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      setCouriers(results[2].docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      setCustomers(results[3].docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      setSources(results[4].docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      setUsers(results[5].docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      setAccounts(results[6].docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      setShippingCompanies(results[7].docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      
-      setIsLoaded(true);
-    } catch (err) {
-      console.error("Error fetching report data:", err);
-      notificationService.notify({
-        title: isAr ? 'خطأ في التحميل' : 'Fetch Error',
-        message: isAr ? 'تعذر تحميل البيانات. يرجى المحاولة لاحقاً.' : 'Could not fetch data. Please try again.',
-        type: 'error'
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Initial Fetch on mount
+  // Fetch Data
   useEffect(() => {
-    if (!roleLoading && !isLoaded) {
-      fetchReportData();
-    }
-  }, [roleLoading, isLoaded]);
+    if (roleLoading) return;
+
+    const unsubOrders = onSnapshot(collection(db, 'orders'), snap => {
+      setOrders(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    const unsubExp = onSnapshot(collection(db, 'expenses'), snap => {
+      setExpenses(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    const unsubCouriers = onSnapshot(collection(db, 'couriers'), snap => {
+      setCouriers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    const unsubCustomers = onSnapshot(collection(db, 'customers'), snap => {
+      setCustomers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    const unsubSources = onSnapshot(collection(db, 'sources'), snap => {
+      setSources(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    const unsubUsers = onSnapshot(collection(db, 'users'), snap => {
+      setUsers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    const unsubAccounts = onSnapshot(collection(db, 'accounts'), snap => {
+      setAccounts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    const unsubShipping = onSnapshot(collection(db, 'shipping_companies'), snap => {
+      setShippingCompanies(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    setLoading(false);
+
+    return () => {
+      unsubOrders();
+      unsubExp();
+      unsubCouriers();
+      unsubCustomers();
+      unsubSources();
+      unsubUsers();
+      unsubAccounts();
+      unsubShipping();
+    };
+  }, [roleLoading]);
 
   // Handle Account Transaction Fetching
   useEffect(() => {
@@ -142,31 +139,26 @@ export default function Reports() {
 
     if (!targetAccountId) return;
 
-    const fetchTxs = async () => {
-      // Use more restrictive collection fetch for specific account
-      const qTx = query(
-        collection(db, 'account_transactions'),
-        where('accountId', '==', targetAccountId),
-        orderBy('createdAt', 'desc'),
-        limit(1000) // Safety limit
-      );
+    const qTx = query(
+      collection(db, 'account_transactions'),
+      orderBy('createdAt', 'desc')
+    );
 
-      try {
-        const snap = await getDocs(qTx);
-        const allTxs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
-        const filtered = allTxs.filter((tx: any) => {
-          const txDate = new Date(tx.createdAt);
-          const start = startOfDay(new Date(filters.startDate));
-          const end = endOfDay(new Date(filters.endDate));
-          return isWithinInterval(txDate, { start, end });
-        });
-        setAccountTransactions(filtered.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
-      } catch (err) {
-        console.error("Error fetching account transactions:", err);
-      }
-    };
+    const unsub = onSnapshot(qTx, (snap) => {
+      const allTxs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+      const filtered = allTxs.filter((tx: any) => {
+        const matchesAccount = tx.accountId === targetAccountId;
+        if (!matchesAccount) return false;
+        
+        const txDate = new Date(tx.createdAt);
+        const start = startOfDay(new Date(filters.startDate));
+        const end = endOfDay(new Date(filters.endDate));
+        return isWithinInterval(txDate, { start, end });
+      });
+      setAccountTransactions(filtered.sort((a, b) => b.createdAt - a.createdAt));
+    });
 
-    fetchTxs();
+    return () => unsub();
   }, [filters.accountId, filters.entityId, filters.startDate, filters.endDate, accounts]);
 
   // Derived Data

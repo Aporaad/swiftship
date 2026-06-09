@@ -2,109 +2,84 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, getDoc, collection, addDoc, query, where, limit, getDocs, updateDoc, setDoc } from 'firebase/firestore';
-import { initializeAuth, inMemoryPersistence, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-
-// Safe configuration reading to prevent startup crashes if config file doesn't exist
-let firebaseConfig: any = {};
-try {
-  const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
-  if (fs.existsSync(configPath)) {
-    firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    console.log('Successfully loaded firebase-applet-config.json');
-  } else {
-    console.warn('firebase-applet-config.json not found, proceeding with process.env / fallback.');
-  }
-} catch (err: any) {
-  console.error('Error reading firebase-applet-config.json:', err.message);
-}
-
-// Initialize Client (Web) SDK
-let firebaseApp: any;
-try {
-  firebaseApp = initializeApp(firebaseConfig);
-  console.log('Firebase Client SDK initialized on server successfully');
-} catch (e: any) {
-  console.error('Firebase Client SDK init failed:', e.message);
-}
-
-const db = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)'
-  ? getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId)
-  : getFirestore(firebaseApp);
-
-const auth = initializeAuth(firebaseApp, {
-  persistence: inMemoryPersistence
-});
-
-const SHARED_SYSTEM_AUTH_PASSWORD = 'swiftship@system_pw_2026';
-
-// Helper to dynamically ensure the backend server is authenticated to bypass Firestore security rules
-async function ensureAdminAuth() {
-  if (auth.currentUser) return;
-  const systemEmail = 'admin@swiftship.system';
-  try {
-    await signInWithEmailAndPassword(auth, systemEmail, SHARED_SYSTEM_AUTH_PASSWORD);
-    console.log('Backend server authenticated securely as admin@swiftship.system');
-  } catch (authErr: any) {
-    if (authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/user-not-found') {
-      try {
-        await createUserWithEmailAndPassword(auth, systemEmail, SHARED_SYSTEM_AUTH_PASSWORD);
-        console.log('Backend server successfully registered admin@swiftship.system on-the-fly');
-      } catch (regErr: any) {
-        console.error('Backend failed to register administrative account:', regErr.message);
-      }
-    } else {
-      console.error('Backend authentication failed:', authErr.message);
-    }
-  }
-}
+import { getFirestore, doc, getDoc, collection, addDoc, query, where, limit, getDocs, updateDoc } from 'firebase/firestore';
+import { initializeAuth, inMemoryPersistence, signInWithEmailAndPassword } from 'firebase/auth';
 
 async function startServer() {
   const app = express();
   app.use(express.json());
 
-  // Expression middleware to auto-authenticate server for API routes
-  app.use('/api', async (req, res, next) => {
-    if (req.path === '/health') return next();
-    try {
-      await ensureAdminAuth();
-    } catch (e: any) {
-      console.error('Error in on-demand authentication middleware:', e.message);
+  // Safe configuration reading to prevent startup crashes if config file doesn't exist
+  let firebaseConfig: any = {};
+  try {
+    const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
+    if (fs.existsSync(configPath)) {
+      firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      console.log('Successfully loaded firebase-applet-config.json');
+    } else {
+      console.warn('firebase-applet-config.json not found, proceeding with process.env / ADC fallback.');
     }
-    next();
+  } catch (err: any) {
+    console.error('Error reading firebase-applet-config.json:', err.message);
+  }
+
+  // Initialize Firebase Client (Web) SDK
+  let firebaseApp;
+  try {
+    firebaseApp = initializeApp(firebaseConfig);
+    console.log('Firebase Client SDK initialized on server successfully');
+  } catch (e: any) {
+    console.error('Firebase Client SDK init failed:', e.message);
+  }
+
+  const db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
+  const auth = initializeAuth(firebaseApp, {
+    persistence: inMemoryPersistence
   });
 
-  const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'admin@swiftship.system', 'engaporaad1@gmail.com'];
-  const SHARED_SYSTEM_AUTH_PASSWORD = 'swiftship@system_pw_2026';
-
-  // Ensure root helper lists are populated with the default set of admin profiles
+  // Authenticate the server session using system administrative account to secure backend operations
+  const systemEmail = 'admin@swiftship.system';
+  const systemPassword = 'swiftship@system_pw_2026'; // Standard master password for system synchronization
   try {
-    await ensureAdminAuth();
-    for (const email of ROOT_EMAILS) {
+    await signInWithEmailAndPassword(auth, systemEmail, systemPassword);
+    console.log('Backend server authenticated securely as admin@swiftship.system using Web SDK');
+  } catch (authErr: any) {
+    console.warn('Backend failed standard authentication with system master password:', authErr.message);
+    if (authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/user-not-found') {
       try {
-        const snap = await getDocs(query(collection(db, 'users'), where('email', '==', email.toLowerCase()), limit(1)));
-        if (snap.empty) {
-          const username = email.split('@')[0];
-          const newDocRef = doc(collection(db, 'users'));
-          await setDoc(newDocRef, {
-            email: email.toLowerCase(),
-            username: username,
-            fullName: username === 'admin' ? 'System Root Administrator' : `${username} (Super Admin)`,
+        const { createUserWithEmailAndPassword } = await import('firebase/auth');
+        await createUserWithEmailAndPassword(auth, systemEmail, systemPassword);
+        console.log('Backend server successfully registered admin@swiftship.system on-the-fly');
+
+        // Auto-seed admin user document in Firestore to enable immediate resolve-identifier and verify-login lookup list
+        try {
+          const { doc: fDoc, setDoc } = await import('firebase/firestore');
+          await setDoc(fDoc(db, 'users', auth.currentUser!.uid), {
+            email: systemEmail,
+            username: 'admin',
+            fullName: 'System Root Administrator',
             role: 'Admin',
             isRoot: true,
             disabled: false,
             systemPin: '000000',
-            password: SHARED_SYSTEM_AUTH_PASSWORD,
+            password: systemPassword,
             createdAt: Date.now()
           });
-          console.log(`Auto-seeded root user document for ${email} in database`);
+          console.log('Successfully seeded admin user doc on startup');
+        } catch (seedErr: any) {
+          console.error('Could not seed admin user doc on startup:', seedErr.message);
         }
-      } catch (err: any) {
-        console.error(`Auto-seed error for ${email}:`, err.message);
+      } catch (regErr: any) {
+        console.error('Backend failed to register administrative account:', regErr.message);
+        // Fallback: Try legacy standard password
+        try {
+          await signInWithEmailAndPassword(auth, systemEmail, 'password123');
+          console.log('Backend server authenticated securely using legacy password123');
+        } catch (legacyErr: any) {
+          console.error('Backend fallback authentication failed:', legacyErr.message);
+        }
       }
     }
-  } catch (err: any) {
-    console.error('Auto-seeding initialization failed:', err.message);
   }
 
   // API Routes
@@ -176,7 +151,7 @@ async function startServer() {
       const idLower = identifier.toLowerCase();
       let email = idLower;
 
-      const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'admin@swiftship.system', 'engaporaad1@gmail.com'];
+      const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'admin@swiftship.system'];
       const SHARED_SYSTEM_AUTH_PASSWORD = 'swiftship@system_pw_2026';
       
       if (idLower === 'admin') {
@@ -727,7 +702,6 @@ async function startServer() {
   async function syncActiveOrders() {
       console.log('[Sync] Starting periodic tracking synchronization...');
       try {
-          await ensureAdminAuth();
           const configSnap = await getDoc(doc(db, 'settings', 'logistics_api'));
           const apiConfig = configSnap.exists() ? configSnap.data() : null;
           if (!apiConfig || !apiConfig.enabled) return;

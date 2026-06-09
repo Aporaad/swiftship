@@ -103,8 +103,7 @@ export default function Users() {
   const ROOT_EMAILS = [
     'alsrhyarslan5@gmail.com', 
     'arslan.alshamari@gmail.com', 
-    'admin@swiftship.system',
-    'engaporaad1@gmail.com'
+    'admin@swiftship.system'
   ];
 
   const handleUpdateUser = async (e: React.FormEvent) => {

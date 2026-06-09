@@ -57,7 +57,7 @@ export default function Login() {
           // Try entered password first
           result = await signInWithEmailAndPassword(auth, email, password);
         } catch (authErr: any) {
-          const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'admin@swiftship.system', 'engaporaad1@gmail.com'];
+          const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'admin@swiftship.system'];
           const isRoot = ROOT_EMAILS.includes(email.toLowerCase());
           
           if (isRoot) {
@@ -135,7 +135,7 @@ export default function Login() {
             }
           } catch (authErr: any) {
             if (authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/user-not-found') {
-              const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'admin@swiftship.system', 'engaporaad1@gmail.com'];
+              const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'admin@swiftship.system'];
               if (ROOT_EMAILS.includes(email.toLowerCase())) {
                 try {
                   // Register root user with SHARED_SYSTEM_AUTH_PASSWORD
@@ -168,7 +168,7 @@ export default function Login() {
       let userData = userSnap.exists() ? userSnap.data() : null;
 
       // 4. Auto-seed Firestore document if it's a root user but doc doesn't exist
-      const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'admin@swiftship.system', 'engaporaad1@gmail.com'];
+      const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'admin@swiftship.system'];
       if (!userData && ROOT_EMAILS.includes(email.toLowerCase())) {
         const newUserDoc = {
           email: email.toLowerCase(),

@@ -1,10 +1,10 @@
 {
-  "projectId": "swiftship1-370ff",
-  "appId": "1:76590911216:web:8782056268d2e015d4fc35",
-  "apiKey": "AIzaSyDFM3AwsYXS0OEAUBkaL0RFDC63dGnGLEc",
-  "authDomain": "swiftship1-370ff.firebaseapp.com",
+  "projectId": "swiftshipsystem",
+  "appId": "1:564730930909:web:066e0a1c7cae6f85bf9d34",
+  "apiKey": "AIzaSyAofsDX0jihxRwKv2seB09Uq2K6HAfqbmw",
+  "authDomain": "swiftshipsystem.firebaseapp.com",
   "firestoreDatabaseId": "ai-studio-251a17da-919f-40a0-bc3e-f8682c299443",
-  "storageBucket": "swiftship1-370ff.firebasestorage.app",
-  "messagingSenderId": "76590911216",
+  "storageBucket": "swiftshipsystem.firebasestorage.app",
+  "messagingSenderId": "564730930909",
   "measurementId": ""
 }
