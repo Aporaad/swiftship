@@ -72,47 +72,48 @@ export default function Layout() {
   useEffect(() => {
     if (!auth.currentUser || roleLoading || !role) return;
 
-    const unsubOrders = onSnapshot(collection(db, 'orders'), (snap) => {
-      const docs = snap.docs.map(doc => doc.data());
-      
-      const active = docs.filter(o => o.orderStatus !== 'تم التسليم' && o.orderStatus !== 'ملغي' && o.orderStatus !== 'Delivered' && o.orderStatus !== 'Cancelled').length;
-      const delayed = docs.filter(o => o.orderStatus === 'متأخر' || o.orderStatus === 'Delayed' || o.orderStatus?.toLowerCase() === 'delayed').length;
-      const ongoing = docs.filter(o => ['في الطريق', 'قيد الشحن', 'شحن دولي', 'وصل مركز التوزيع في اليمن', 'In Transit', 'In Local Warehouse', 'Shipped', 'Cargo'].includes(o.orderStatus)).length;
-      const unpaid = docs.filter(o => parseFloat(o.amountRemaining || 0) > 0).length;
-      
-      let status: 'good' | 'warning' | 'error' = 'good';
-      if (delayed > 0) {
-        status = 'error';
-      } else if (active > 0 && unpaid > active / 2) {
-        status = 'warning';
+    const fetchStats = async () => {
+      try {
+        const snap = await getDocs(collection(db, 'orders'));
+        const docs = snap.docs.map(doc => doc.data());
+        
+        const active = docs.filter(o => o.orderStatus !== 'تم التسليم' && o.orderStatus !== 'ملغي' && o.orderStatus !== 'Delivered' && o.orderStatus !== 'Cancelled').length;
+        const delayed = docs.filter(o => o.orderStatus === 'متأخر' || o.orderStatus === 'Delayed' || o.orderStatus?.toLowerCase() === 'delayed').length;
+        const ongoing = docs.filter(o => ['في الطريق', 'قيد الشحن', 'شحن دولي', 'وصل مركز التوزيع في اليمن', 'In Transit', 'In Local Warehouse', 'Shipped', 'Cargo'].includes(o.orderStatus)).length;
+        const unpaid = docs.filter(o => parseFloat(o.amountRemaining || 0) > 0).length;
+        
+        let status: 'good' | 'warning' | 'error' = 'good';
+        if (delayed > 0) {
+          status = 'error';
+        } else if (active > 0 && unpaid > active / 2) {
+          status = 'warning';
+        }
+
+        setSystemStats(prev => ({
+          ...prev,
+          activeOrders: active,
+          delayedOrders: delayed,
+          ongoingShipments: ongoing,
+          financiallyPending: unpaid,
+          systemStatus: status
+        }));
+      } catch (error) {
+        console.error("Error fetching orders for sidebar stats:", error);
       }
 
-      setSystemStats(prev => ({
-        ...prev,
-        activeOrders: active,
-        delayedOrders: delayed,
-        ongoingShipments: ongoing,
-        financiallyPending: unpaid,
-        systemStatus: status
-      }));
-    }, (error) => {
-      console.error("Error listening to orders for sidebar stats:", error);
-    });
-
-    const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
-      const count = snap.docs.length;
-      setSystemStats(prev => ({
-        ...prev,
-        onlineStaff: Math.max(1, Math.min(count, 3))
-      }));
-    }, (error) => {
-      console.error("Error listening to users for sidebar stats:", error);
-    });
-
-    return () => {
-      unsubOrders();
-      unsubUsers();
+      try {
+        const snap = await getDocs(collection(db, 'users'));
+        const count = snap.docs.length;
+        setSystemStats(prev => ({
+          ...prev,
+          onlineStaff: Math.max(1, Math.min(count, 3))
+        }));
+      } catch (error) {
+        console.error("Error fetching users for sidebar stats:", error);
+      }
     };
+
+    fetchStats();
   }, [role, roleLoading]);
 
   // Listen for Ctrl+K and Ctrl+T shortcuts
@@ -305,7 +306,7 @@ export default function Layout() {
     return hasPermission(item.permission);
   });
 
-  const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'admin@swiftship.system'];
+  const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'admin@swiftship.system', 'engaporaad1@gmail.com'];
   const userEmail = auth.currentUser?.email?.toLowerCase();
   const isRootAdmin = userEmail && ROOT_EMAILS.includes(userEmail);
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { collection, onSnapshot, query, limit, orderBy, addDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, limit, orderBy, addDoc, getDocs } from 'firebase/firestore';
 import { db, auth, safeToDate } from '../lib/firebase';
 import { 
   Package, 
@@ -94,66 +94,53 @@ export default function Dashboard() {
   useEffect(() => {
     if (roleLoading || !auth.currentUser) return;
 
-    // Listen to customers count
-    const unsubCustomers = onSnapshot(collection(db, 'customers'), (snap) => {
-      setCustomersCount(snap.docs.length);
-    });
+    const fetchDashData = async () => {
+      try {
+        // One-time fetch for dashboard overview to save quota
+        const [custSnap, courSnap, expSnap, ordSnap, logSnap] = await Promise.all([
+          getDocs(collection(db, 'customers')),
+          getDocs(collection(db, 'couriers')),
+          getDocs(collection(db, 'expenses')),
+          getDocs(query(collection(db, 'orders'), orderBy('createdAt', 'desc'), limit(150))),
+          getDocs(query(collection(db, 'activity_logs'), orderBy('timestamp', 'desc'), limit(5)))
+        ]);
 
-    // Listen to couriers
-    const unsubCouriers = onSnapshot(collection(db, 'couriers'), (snap) => {
-      setCouriersCount(snap.docs.length);
-      const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
-      setCouriers(list);
-    });
+        setCustomersCount(custSnap.docs.length);
+        
+        setCouriersCount(courSnap.docs.length);
+        setCouriers(courSnap.docs.map(doc => ({ id: doc.id, ...doc.data() as any })));
 
-    // Listen to expenses count & list
-    const unsubExpenses = onSnapshot(collection(db, 'expenses'), (snap) => {
-      setExpensesCount(snap.docs.length);
-      const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
-      setExpenses(list);
-    });
+        setExpensesCount(expSnap.docs.length);
+        setExpenses(expSnap.docs.map(doc => ({ id: doc.id, ...doc.data() as any })));
 
-    // Listen to orders
-    const qOrders = query(collection(db, 'orders'), orderBy('createdAt', 'desc'), limit(150));
-    const unsubOrders = onSnapshot(qOrders, (snap) => {
-      const allOrders = snap.docs.map(doc => {
-        const d = doc.data() as any;
-        return { 
-          id: doc.id, 
-          ...d, 
-          createdAt: safeToDate(d.createdAt) 
-        };
-      });
-      setOrders(allOrders);
-      setLoading(false);
-    }, (err) => {
-      console.error(err);
-      setLoading(false);
-    });
+        const allOrders = ordSnap.docs.map(doc => {
+          const d = doc.data() as any;
+          return { 
+            id: doc.id, 
+            ...d, 
+            createdAt: safeToDate(d.createdAt) 
+          };
+        });
+        setOrders(allOrders);
 
-    // Listen to activity logs
-    const qLogs = query(collection(db, 'activity_logs'), orderBy('timestamp', 'desc'), limit(5));
-    const unsubLogs = onSnapshot(qLogs, (snap) => {
-      const logs = snap.docs.map(doc => {
-        const d = doc.data() as any;
-        return {
-          id: doc.id,
-          ...d,
-          createdAt: safeToDate(d.timestamp)
-        };
-      });
-      setRealLogs(logs);
-    }, (err) => {
-      console.warn("Activity logs subscript error (expected first run):", err);
-    });
+        const logs = logSnap.docs.map(doc => {
+          const d = doc.data() as any;
+          return {
+            id: doc.id,
+            ...d,
+            createdAt: safeToDate(d.timestamp)
+          };
+        });
+        setRealLogs(logs);
 
-    return () => {
-      unsubCustomers();
-      unsubCouriers();
-      unsubExpenses();
-      unsubOrders();
-      unsubLogs();
+        setLoading(false);
+      } catch (err) {
+        console.error("Dashboard fetch error:", err);
+        setLoading(false);
+      }
     };
+
+    fetchDashData();
   }, [role, roleLoading]);
 
   // Dynamically compute stats from real DB
