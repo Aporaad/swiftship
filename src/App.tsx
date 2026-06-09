@@ -22,6 +22,7 @@ import Settings from './pages/Settings';
 import Notifications from './pages/Notifications';
 import Expenses from './pages/Expenses';
 import SalaryHistory from './pages/SalaryHistory';
+import Reports from './pages/Reports';
 
 import { SettingsProvider } from './context/SettingsContext';
 
@@ -62,6 +63,7 @@ export default function App() {
             <Route path="user-management" element={<UserManagement />} />
             <Route path="couriers" element={<Couriers />} />
             <Route path="expenses" element={<Expenses />} />
+            <Route path="reports" element={<Reports />} />
             <Route path="roles" element={<Roles />} />
             <Route path="settings" element={<Settings />} />
             <Route path="notifications" element={<Notifications />} />

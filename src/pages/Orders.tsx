@@ -58,7 +58,6 @@ export default function Orders() {
     source_url: '',
     contact_info: '',
     location: '',
-    proforma_invoice: '',
     notes: ''
   });
 
@@ -1395,7 +1394,6 @@ export default function Orders() {
         source_url: sourceFormData.source_url,
         contact_info: sourceFormData.contact_info,
         location: sourceFormData.location,
-        proforma_invoice: sourceFormData.proforma_invoice,
         notes: sourceFormData.notes,
         createdAt: Date.now()
       });
@@ -1413,7 +1411,6 @@ export default function Orders() {
         source_url: '',
         contact_info: '',
         location: '',
-        proforma_invoice: '',
         notes: ''
       });
 

@@ -222,7 +222,7 @@ export default function Tracking() {
                   customerAddress: docData.customerAddress || docData.destination || 'صنعاء، اليمن',
                   weight: docData.totalWeight || 0,
                   cbm: docData.totalCBM || 0,
-                  shippingCompany: docData.shippingCompany || 'SwiftShip Line',
+                  shippingCompany: docData.shippingCompany || '',
                   amountPaid: docData.amountPaid || 0,
                   amountRemaining: docData.amountRemaining || 0,
                   totalCostYER: docData.totalCostYER || 0,
@@ -523,7 +523,7 @@ export default function Tracking() {
                       {copied ? <Check className="w-3.5 h-3.5 text-[#d4af37]" /> : <Copy className="w-3.5 h-3.5" />}
                     </button>
                   </div>
-                  <span className="text-[10px] text-slate-500 block font-bold font-mono mt-0.5">&gt; ORDER_REF: {trackingData.orderNumber || 'MOCK'}</span>
+                  <span className="text-[10px] text-slate-500 block font-bold font-mono mt-0.5">&gt; ORDER_REF: {trackingData.orderNumber || '—'}</span>
                 </div>
 
                 <div className="flex items-center gap-2.5 px-4 py-2 rounded-2xl border border-[#d4af37]/15 bg-[#d4af37]/5 shadow-[0_0_10px_rgba(212,175,55,0.05)] text-center shrink-0">
@@ -538,12 +538,12 @@ export default function Tracking() {
               <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-4 bg-black/10">
                 <div className="p-3 bg-slate-950 border border-slate-850/50 rounded-2xl">
                   <span className="text-[9px] text-slate-500 font-extrabold uppercase tracking-wide block mb-0.5">{isAr ? 'الوزن القائم' : 'Gross Weight'}</span>
-                  <span className="font-mono text-sm text-white font-bold">{trackingData.weight || 12.5} <span className="text-[10px] text-slate-500">KG</span></span>
+                  <span className="font-mono text-sm text-white font-bold">{trackingData.weight || '—'} <span className="text-[10px] text-slate-500">KG</span></span>
                 </div>
                 
                 <div className="p-3 bg-slate-950 border border-slate-850/50 rounded-2xl">
                   <span className="text-[9px] text-slate-500 font-extrabold uppercase tracking-wide block mb-0.5">{isAr ? 'الحجم الحجمي' : 'Volume Unit'}</span>
-                  <span className="font-mono text-sm text-[#d4af37] font-bold">{trackingData.cbm || 0.18} <span className="text-[10px] text-slate-500">CBM</span></span>
+                  <span className="font-mono text-sm text-[#d4af37] font-bold">{trackingData.cbm || '—'} <span className="text-[10px] text-slate-500">CBM</span></span>
                 </div>
 
                 <div className="p-3 bg-slate-950 border border-slate-850/50 rounded-2xl">
@@ -553,7 +553,7 @@ export default function Tracking() {
 
                 <div className="p-3 bg-slate-950 border border-slate-850/50 rounded-2xl">
                   <span className="text-[9px] text-slate-500 font-extrabold uppercase tracking-wide block mb-0.5">{isAr ? 'الناقل الدولي' : 'Global Ocean Carrier'}</span>
-                  <span className="text-[10px] font-black text-pink-400 block truncate uppercase">{trackingData.shippingCompany || 'SwiftShip Sea'}</span>
+                  <span className="text-[10px] font-black text-pink-400 block truncate uppercase">{trackingData.shippingCompany || '—'}</span>
                 </div>
               </div>
             </div>

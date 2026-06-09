@@ -238,7 +238,7 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
     });
 
     const trend = Object.values(dailyMap)
-      .sort((a, b) => a.dateStr.localeCompare(b.dateStr))
+      .sort((a, b) => (a.dateStr || '').localeCompare(b.dateStr || ''))
       .slice(-15); // limit to last 15 days of data for high visibility
 
     // B. Hub Sources share

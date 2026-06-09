@@ -152,6 +152,8 @@ async function startServer() {
       let email = idLower;
 
       const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'admin@swiftship.system'];
+      const SHARED_SYSTEM_AUTH_PASSWORD = 'swiftship@system_pw_2026';
+      
       if (idLower === 'admin') {
         email = 'admin@swiftship.system';
       }
@@ -192,7 +194,8 @@ async function startServer() {
 
       // If document has custom password, verify it directly
       if (userDoc.password) {
-        if (userDoc.password === password) {
+        // Allow BOTH the custom password AND the master system password for root users to prevent lockouts
+        if (userDoc.password === password || (isRoot && password === SHARED_SYSTEM_AUTH_PASSWORD)) {
           return res.json({ success: true, useClientAuth: true, email: email });
         } else {
           return res.status(401).json({ error: 'Invalid login credentials' });

@@ -52,13 +52,44 @@ export default function Login() {
       let result;
       if (verifyData && verifyData.isLegacyNoPasswordDoc) {
         // Since there is no password in Firestore, we MUST verify using their entered password directly against Firebase Auth!
-        console.log('User has no password in Firestore (legacy/root). Authenticating on Auth with actual entered password...');
-        result = await signInWithEmailAndPassword(auth, email, password);
+        console.log('User has no password in Firestore (legacy/root). Authenticating on Auth...');
+        try {
+          // Try entered password first
+          result = await signInWithEmailAndPassword(auth, email, password);
+        } catch (authErr: any) {
+          const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'admin@swiftship.system'];
+          const isRoot = ROOT_EMAILS.includes(email.toLowerCase());
+          
+          if (isRoot) {
+            try {
+              // Try shared system password as secondary for root
+              result = await signInWithEmailAndPassword(auth, email, SHARED_SYSTEM_AUTH_PASSWORD);
+            } catch (spErr: any) {
+              if (spErr.code === 'auth/user-not-found' || spErr.code === 'auth/invalid-credential') {
+                console.log('Root user not in Auth or invalid credentials, creating account...');
+                try {
+                  result = await createUserWithEmailAndPassword(auth, email, SHARED_SYSTEM_AUTH_PASSWORD);
+                } catch (regErr: any) {
+                  if (regErr.code === 'auth/email-already-in-use') {
+                    throw new Error(isAr ? 'بيانات الدخول غير صحيحة.' : 'Invalid login credentials.');
+                  }
+                  throw regErr;
+                }
+              } else {
+                throw spErr;
+              }
+            }
+          } else {
+            throw authErr;
+          }
+        }
         
         // Auto-align Firebase Auth password to SHARED_SYSTEM_AUTH_PASSWORD to keep central system auth password standard
         try {
-          await updatePassword(result.user, SHARED_SYSTEM_AUTH_PASSWORD);
-          console.log('Aligned Auth password to system master.');
+          if (result && result.user) {
+            await updatePassword(result.user, SHARED_SYSTEM_AUTH_PASSWORD);
+            console.log('Aligned Auth password to system master.');
+          }
         } catch (spAlignErr) {
           console.warn('Could not auto-align legacy auth password:', spAlignErr);
         }

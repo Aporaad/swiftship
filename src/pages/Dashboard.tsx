@@ -70,7 +70,6 @@ export default function Dashboard() {
   const [couriers, setCouriers] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
   const [realLogs, setRealLogs] = useState<any[]>([]);
-  const [isSeeding, setIsSeeding] = useState(false);
   const [customersCount, setCustomersCount] = useState(0);
   const [couriersCount, setCouriersCount] = useState(0);
   const [expensesCount, setExpensesCount] = useState(0);
@@ -87,173 +86,6 @@ export default function Dashboard() {
     amountRemaining: 0,
     amountPaid: 0,
   });
-
-  // Database seeder action
-  const seedSampleData = async () => {
-    if (isSeeding) return;
-    setIsSeeding(true);
-    try {
-      // 1. Create 3 couriers
-      const courierPayloads = [
-        { fullName: isAr ? 'أحمد الهلالي' : 'Ahmed Al-Hilali', phone: '777123456', email: 'ahmed@alx.com', address: isAr ? 'صنعاء - باب اليمن' : 'Sanaa - Bab Al-Yemen', commissionRate: 500, createdAt: new Date() },
-        { fullName: isAr ? 'علي باخميس' : 'Ali Bakhmis', phone: '777456123', email: 'ali@alx.com', address: isAr ? 'عدن - كريتر' : 'Aden - Crater', commissionRate: 600, createdAt: new Date() },
-        { fullName: isAr ? 'محمد الحربي' : 'Mohamed Al-Harbi', phone: '777987654', email: 'mohamed@alx.com', address: isAr ? 'تعز - شارع جمال' : 'Taiz - Gamal St', commissionRate: 550, createdAt: new Date() }
-      ];
-
-      const courierIds: string[] = [];
-      for (const cp of courierPayloads) {
-        const docRef = await addDoc(collection(db, 'couriers'), cp);
-        courierIds.push(docRef.id);
-      }
-
-      // 2. Create 4 customers
-      const customerPayloads = [
-        { fullName: isAr ? 'سالم الحربي' : 'Salem Al-Harbi', phone: '771111111', email: 'salem@gmail.com', address: isAr ? 'صنعاء - حدة' : 'Sanaa - Hadda', notes: '', createdAt: new Date() },
-        { fullName: isAr ? 'مريم علي' : 'Maryam Ali', phone: '772222222', email: 'maryam@gmail.com', address: isAr ? 'عدن - المنصورة' : 'Aden - Mansoura', notes: '', createdAt: new Date() },
-        { fullName: isAr ? 'ناصر باخميس' : 'Nasser Bakhmis', phone: '773333333', email: 'nasser@gmail.com', address: isAr ? 'المكلا - الديس' : 'Mukalla - Ad-Dees', notes: '', createdAt: new Date() },
-        { fullName: isAr ? 'عبدالله السعيد' : 'Abdullah Al-Saeed', phone: '774444444', email: 'abdullah@gmail.com', address: isAr ? 'صنعاء - الستين' : 'Sanaa - Sixty St', notes: '', createdAt: new Date() }
-      ];
-
-      const customerIds: string[] = [];
-      for (const cust of customerPayloads) {
-        const docRef = await addDoc(collection(db, 'customers'), cust);
-        customerIds.push(docRef.id);
-      }
-
-      // 3. Create 6 orders with diverse statuses and financial details spread out over the last 7 days
-      const daysAgo = (num: number) => {
-        const d = new Date();
-        d.setDate(d.getDate() - num);
-        return d;
-      };
-
-      const orderPayloads = [
-        {
-          orderNumber: 'ALX-2605-1001',
-          customerName: isAr ? 'عبدالله السعيد' : 'Abdullah Al-Saeed',
-          customerId: customerIds[3],
-          orderStatus: 'Delivered',
-          deliveryCourierId: courierIds[1], // Ali
-          deliveryCourierFee: 4000,
-          totalPrice: 45000,
-          amountPaid: 45000,
-          amountRemaining: 0,
-          companyCommission: 2500,
-          createdAt: daysAgo(5)
-        },
-        {
-          orderNumber: 'ALX-2605-1002',
-          customerName: isAr ? 'ناصر باخميس' : 'Nasser Bakhmis',
-          customerId: customerIds[2],
-          orderStatus: 'In Local Warehouse',
-          deliveryCourierId: courierIds[2], // Mohamed
-          deliveryCourierFee: 4000,
-          totalPrice: 28000,
-          amountPaid: 10000,
-          amountRemaining: 18000,
-          companyCommission: 1800,
-          createdAt: daysAgo(3)
-        },
-        {
-          orderNumber: 'ALX-2605-1003',
-          customerName: isAr ? 'مريم علي' : 'Maryam Ali',
-          customerId: customerIds[1],
-          orderStatus: 'Processing',
-          deliveryCourierId: courierIds[2], // Mohamed
-          deliveryCourierFee: 4000,
-          totalPrice: 15000,
-          amountPaid: 0,
-          amountRemaining: 15000,
-          companyCommission: 1000,
-          createdAt: daysAgo(2)
-        },
-        {
-          orderNumber: 'ALX-2605-1004',
-          customerName: isAr ? 'سالم الحربي' : 'Salem Al-Harbi',
-          customerId: customerIds[0],
-          orderStatus: 'In Transit',
-          deliveryCourierId: courierIds[0], // Ahmed
-          deliveryCourierFee: 4000,
-          totalPrice: 62000,
-          amountPaid: 62000,
-          amountRemaining: 0,
-          companyCommission: 3500,
-          createdAt: daysAgo(1)
-        },
-        {
-          orderNumber: 'ALX-2605-1005',
-          customerName: isAr ? 'عبدالله السعيد' : 'Abdullah Al-Saeed',
-          customerId: customerIds[3],
-          orderStatus: 'Delayed',
-          deliveryCourierId: courierIds[0], // Ahmed
-          deliveryCourierFee: 4000,
-          totalPrice: 31000,
-          amountPaid: 15000,
-          amountRemaining: 16000,
-          companyCommission: 1500,
-          createdAt: daysAgo(0) // Today
-        },
-        {
-          orderNumber: 'ALX-2605-1006',
-          customerName: isAr ? 'سالم الحربي' : 'Salem Al-Harbi',
-          customerId: customerIds[0],
-          orderStatus: 'Delivered',
-          deliveryCourierId: courierIds[1], // Ali
-          deliveryCourierFee: 4000,
-          totalPrice: 21000,
-          amountPaid: 21000,
-          amountRemaining: 0,
-          companyCommission: 1200,
-          createdAt: daysAgo(4)
-        }
-      ];
-
-      for (const ord of orderPayloads) {
-        await addDoc(collection(db, 'orders'), ord);
-      }
-
-      // 4. Create 2 expenses
-      const expensePayloads = [
-        {
-          title: isAr ? 'قرطاسية ومستلزمات مكتبية' : 'Stationery & office tools',
-          category: 'OPERATIONAL',
-          amount: 8500,
-          recipient: isAr ? 'مكتبة الجيل الجديد' : 'New Generation Bookstore',
-          notes: isAr ? 'توريد دفاتر وفواتير للمكتب' : 'Ledger logs and printouts',
-          createdAt: daysAgo(3)
-        },
-        {
-          title: isAr ? 'بنزين لمركبات التوصيل' : 'Fuel for deliverer vehicles',
-          category: 'FUEL',
-          amount: 15000,
-          recipient: isAr ? 'محطة النفط المركزية' : 'Central Gas Station',
-          notes: isAr ? 'وقود لسيارة التوصيل' : 'Delivery vehicle fuel stipend',
-          createdAt: daysAgo(1)
-        }
-      ];
-
-      for (const exp of expensePayloads) {
-        await addDoc(collection(db, 'expenses'), exp);
-      }
-
-      // 5. Create audit logs
-      const logPayloads = [
-        { userId: auth.currentUser?.uid, userEmail: auth.currentUser?.email || 'admin@alx.com', action: 'add_courier', category: 'COURIERS', target: isAr ? 'أحمد الهلالي' : 'Ahmed Al-Hilali', timestamp: Date.now() - 3600000 * 4 },
-        { userId: auth.currentUser?.uid, userEmail: auth.currentUser?.email || 'admin@alx.com', action: 'add_customer', category: 'CUSTOMERS', target: isAr ? 'سالم الحربي' : 'Salem Al-Harbi', timestamp: Date.now() - 3600000 * 3 },
-        { userId: auth.currentUser?.uid, userEmail: auth.currentUser?.email || 'admin@alx.com', action: 'add_order', category: 'ORDERS', target: 'ALX-2605-1004', timestamp: Date.now() - 3600000 * 2 },
-        { userId: auth.currentUser?.uid, userEmail: auth.currentUser?.email || 'admin@alx.com', action: 'add_expense', category: 'FINANCE', target: isAr ? 'قرطاسية ومستلزمات مكتبية' : 'Stationery & office tools', timestamp: Date.now() - 3600000 * 1 }
-      ];
-
-      for (const logItem of logPayloads) {
-        await addDoc(collection(db, 'activity_logs'), logItem);
-      }
-
-    } catch (err) {
-      console.error("Failed to seed sample database:", err);
-    } finally {
-      setIsSeeding(false);
-    }
-  };
 
   // Map Interactive Courier Highlights
   const [selectedCourierId, setSelectedCourierId] = useState<string | null>(null);
@@ -908,39 +740,6 @@ export default function Dashboard() {
         </button>
       </div>
 
-      {orders.length === 0 && !loading && (
-        <div className="bg-gradient-to-r from-amber-950/40 via-yellow-950/30 to-slate-900 border border-yellow-700/35 p-6 rounded-3xl flex flex-col md:flex-row justify-between items-start md:items-center gap-6 shadow-xl shadow-yellow-950/10">
-          <div className="space-y-1.5 text-right md:text-start">
-            <h3 className="text-base font-black text-[#d4af37] flex items-center gap-2 justify-end md:justify-start">
-              <Plus className="w-5 h-5 text-yellow-400 animate-pulse" />
-              {isAr ? 'لوحة التحكم جديدة وبحاجة لبيانات!' : 'New Dashboard Awaiting Dynamic Data!'}
-            </h3>
-            <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
-              {isAr 
-                ? 'لوحة القيادة حالياً خالية من مؤشرات التشغيل الفعلية. للحصول على تجربة تصفح تفاعلية تتضمن تقارير الإيرادات والأرباح، ومحاور الرسوم البيانية، ومواقع المناديب الحية على الخريطة ومقاييس الأداء الفورية، يمكنك فوراً توليد حزمة بيانات نموذجية كاملة ومبنية واقعياً بضغطة زر واحدة!' 
-                : 'Your operational dashboard is currently empty. To explore a fully rich and dynamic playground—including realistic revenue reports, logistics dispatch radar maps, telemetry chart groups and direct event timelines—instantly populate sample sandbox documents into your database.'}
-            </p>
-          </div>
-          <button 
-            onClick={seedSampleData}
-            disabled={isSeeding}
-            className="px-5 py-3 rounded-2xl bg-[#d4af37] text-black font-bold text-xs hover:bg-yellow-400 active:scale-95 duration-100 disabled:opacity-50 disabled:pointer-events-none whitespace-nowrap flex items-center gap-2 shadow-lg shadow-yellow-950/30 cursor-pointer self-end md:self-center"
-          >
-            {isSeeding ? (
-              <>
-                <div className="h-3 w-3 animate-spin rounded-full border-2 border-black border-t-transparent"></div>
-                {isAr ? 'جاري تجهيز الساندبوكس...' : 'Setting up playground...'}
-              </>
-            ) : (
-              <>
-                <Package className="w-4 h-4" />
-                {isAr ? 'توليد حزمة بيانات حقيقية' : 'Seed Real Evaluation Data'}
-              </>
-            )}
-          </button>
-        </div>
-      )}
-
       {/* Customization Drawer / Panel */}
       {isCustomizing && (
         <div className="bg-[#121215] border border-[#d4af37]/20 p-5 rounded-3xl animate-in fade-in slide-in-from-top-4 duration-300 text-start space-y-4">
@@ -1154,8 +953,8 @@ export default function Dashboard() {
                 </p>
                 <p className="text-[10px] text-slate-400 mt-1 max-w-xs leading-relaxed">
                   {isAr 
-                    ? 'لا توجد مناديب توصيل نشطين حالياً. قم بإضافة مندوب توصيل أو انقر زر توليد البيانات المحاكية لتجربة نظام الملاحة التفاعلي.'
-                    : 'Dispatch tracking is empty. Manage couriers or seed dynamic data clusters to initialize navigation grids.'}
+                    ? 'لا توجد مناديب توصيل نشطين حالياً في النظام اللوجستي.'
+                    : 'Dispatch tracking is empty. Manage couriers to initialize navigation grids.'}
                 </p>
                 <button 
                   onClick={() => navigate('/couriers')}

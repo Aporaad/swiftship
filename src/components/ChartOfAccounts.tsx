@@ -162,7 +162,7 @@ export default function ChartOfAccounts({
     });
 
     // Sort by code string which naturally lists them parent-first (1000, 1100, 1110)
-    combined.sort((a, b) => a.code.localeCompare(b.code));
+    combined.sort((a, b) => (a.code || '').localeCompare(b.code || ''));
 
     // Dynamic recursive balance roll-up
     const calculateAccountBalance = (nodeCode: string): number => {
