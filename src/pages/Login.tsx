@@ -34,18 +34,32 @@ export default function Login() {
       let verifyData: any = null;
       let email = identifier;
 
-      const res = await fetch('/api/auth/verify-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier, password })
-      });
+      let res;
+      try {
+        res = await fetch('/api/auth/verify-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier, password })
+        });
+      } catch (err: any) {
+        throw new Error(isAr 
+          ? 'عذراً، تعذر الاتصال بخادم التحقق من الهوية (الخلفي). يرجى التأكد من تشغيل الخادم بالكامل ومن سلامة اتصالك بالإنترنت.' 
+          : 'Could not connect to the authentication server is offline. Please verify that your backend server is running and reachable.');
+      }
       
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        throw new Error(isAr 
+          ? 'خطأ في الاستجابة: أرجع الخادم صفحة ويب (HTML) بدلاً من بيانات (JSON). للتصحيح: تأكد من تشغيل خادم Express، وتأكد من عدم رفع الموقع كصفحة ساكنة فقط، أو افحص سجلات الخوادم.' 
+          : 'Server Error: The backend returned an HTML document instead of JSON. Ensure your Express server is running, and that you did not deploy as static-only.');
+      }
+
+      const resData = await res.json();
       if (res.ok) {
-        verifyData = await res.json();
+        verifyData = resData;
         email = verifyData.email;
       } else {
-        const errData = await res.json();
-        throw new Error(errData.error || 'Login verification failed');
+        throw new Error(resData.error || 'Login verification failed');
       }
 
       // 2. Perform Firebase Auth login using Custom Token, Standard System Password, or Client Fallback

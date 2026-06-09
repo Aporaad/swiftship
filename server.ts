@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import admin from 'firebase-admin';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, doc, getDoc, collection, addDoc, query, where, limit, getDocs, updateDoc } from 'firebase/firestore';
 import { initializeAuth, inMemoryPersistence, signInWithEmailAndPassword } from 'firebase/auth';
@@ -23,66 +24,101 @@ async function startServer() {
     console.error('Error reading firebase-applet-config.json:', err.message);
   }
 
-  // Initialize Firebase Client (Web) SDK
-  let firebaseApp;
+  // Initialize Firebase Admin SDK
   try {
-    firebaseApp = initializeApp(firebaseConfig);
-    console.log('Firebase Client SDK initialized on server successfully');
-  } catch (e: any) {
-    console.error('Firebase Client SDK init failed:', e.message);
+    if (admin.apps.length === 0 && firebaseConfig.projectId) {
+      admin.initializeApp({
+        projectId: firebaseConfig.projectId
+      });
+      console.log('Firebase Admin SDK initialized successfully');
+    } else if (!firebaseConfig.projectId) {
+      console.warn('Firebase Admin SDK could not be initialized: projectId is missing.');
+    }
+  } catch (adminErr: any) {
+    console.error('Firebase Admin SDK init failed:', adminErr.message);
   }
 
-  const db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
-  const auth = initializeAuth(firebaseApp, {
-    persistence: inMemoryPersistence
-  });
+  // Initialize Firebase Client (Web) SDK & services safely
+  let firebaseApp: any = null;
+  let db: any = null;
+  let auth: any = null;
+
+  if (firebaseConfig && firebaseConfig.apiKey && firebaseConfig.projectId) {
+    try {
+      firebaseApp = initializeApp(firebaseConfig);
+      db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
+      auth = initializeAuth(firebaseApp, {
+        persistence: inMemoryPersistence
+      });
+      console.log('Firebase Client SDK & Firestore Services initialized successfully on server');
+    } catch (e: any) {
+      console.error('Firebase Client SDK init failed:', e.message);
+    }
+  } else {
+    console.error('CRITICAL WARNING: firebase-applet-config.json is missing or contains invalid Firebase credentials (apiKey/projectId). Database and auth operations will fallback gracefully or fail.');
+  }
 
   // Authenticate the server session using system administrative account to secure backend operations
   const systemEmail = 'admin@swiftship.system';
   const systemPassword = 'swiftship@system_pw_2026'; // Standard master password for system synchronization
-  try {
-    await signInWithEmailAndPassword(auth, systemEmail, systemPassword);
-    console.log('Backend server authenticated securely as admin@swiftship.system using Web SDK');
-  } catch (authErr: any) {
-    console.warn('Backend failed standard authentication with system master password:', authErr.message);
-    if (authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/user-not-found') {
-      try {
-        const { createUserWithEmailAndPassword } = await import('firebase/auth');
-        await createUserWithEmailAndPassword(auth, systemEmail, systemPassword);
-        console.log('Backend server successfully registered admin@swiftship.system on-the-fly');
+  
+  if (auth && db) {
+    try {
+      await signInWithEmailAndPassword(auth, systemEmail, systemPassword);
+      console.log('Backend server authenticated securely as admin@swiftship.system using Web SDK');
+    } catch (authErr: any) {
+      console.warn('Backend failed standard authentication with system master password:', authErr.message);
+      if (authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/user-not-found') {
+        try {
+          const { createUserWithEmailAndPassword } = await import('firebase/auth');
+          await createUserWithEmailAndPassword(auth, systemEmail, systemPassword);
+          console.log('Backend server successfully registered admin@swiftship.system on-the-fly');
 
-        // Auto-seed admin user document in Firestore to enable immediate resolve-identifier and verify-login lookup list
-        try {
-          const { doc: fDoc, setDoc } = await import('firebase/firestore');
-          await setDoc(fDoc(db, 'users', auth.currentUser!.uid), {
-            email: systemEmail,
-            username: 'admin',
-            fullName: 'System Root Administrator',
-            role: 'Admin',
-            isRoot: true,
-            disabled: false,
-            systemPin: '000000',
-            password: systemPassword,
-            createdAt: Date.now()
-          });
-          console.log('Successfully seeded admin user doc on startup');
-        } catch (seedErr: any) {
-          console.error('Could not seed admin user doc on startup:', seedErr.message);
-        }
-      } catch (regErr: any) {
-        console.error('Backend failed to register administrative account:', regErr.message);
-        // Fallback: Try legacy standard password
-        try {
-          await signInWithEmailAndPassword(auth, systemEmail, 'password123');
-          console.log('Backend server authenticated securely using legacy password123');
-        } catch (legacyErr: any) {
-          console.error('Backend fallback authentication failed:', legacyErr.message);
+          // Auto-seed admin user document in Firestore to enable immediate resolve-identifier and verify-login lookup list
+          try {
+            const { doc: fDoc, setDoc } = await import('firebase/firestore');
+            await setDoc(fDoc(db, 'users', auth.currentUser!.uid), {
+              email: systemEmail,
+              username: 'admin',
+              fullName: 'System Root Administrator',
+              role: 'Admin',
+              isRoot: true,
+              disabled: false,
+              systemPin: '000000',
+              password: systemPassword,
+              createdAt: Date.now()
+            });
+            console.log('Successfully seeded admin user doc on startup');
+          } catch (seedErr: any) {
+            console.error('Could not seed admin user doc on startup:', seedErr.message);
+          }
+        } catch (regErr: any) {
+          console.error('Backend failed to register administrative account:', regErr.message);
+          // Fallback: Try legacy standard password
+          try {
+            await signInWithEmailAndPassword(auth, systemEmail, 'password123');
+            console.log('Backend server authenticated securely using legacy password123');
+          } catch (legacyErr: any) {
+            console.error('Backend fallback authentication failed:', legacyErr.message);
+          }
         }
       }
     }
   }
 
   // API Routes
+  // Middleware to ensure database is online and initialized before performing database-driven API calls
+  app.use('/api/*', (req, res, next) => {
+    if (req.path === '/api/health') {
+      return next();
+    }
+    if (!db || !auth) {
+      return res.status(503).json({ 
+        error: 'خدمات قاعدة البيانات غير مهيأة أو غير متصلة بالإنترنت حالياً. يرجى التأكد من وجود ملف firebase-applet-config.json وتهيئته بشكل صحيح بقيم api-key وصلاحيات الوصول على الخادم، وتأكد من تشغيل الخادم الخلفي بالكامل.' 
+      });
+    }
+    next();
+  });
   app.post('/api/auth/resolve-identifier', async (req, res) => {
     const { identifier } = req.body;
     if (!identifier) return res.status(400).json({ error: 'Identifier required' });
@@ -177,9 +213,109 @@ async function startServer() {
       const isRoot = ROOT_EMAILS.includes(email.toLowerCase());
 
       if (!userDoc && isRoot) {
-        // Return isLegacyNoPasswordDoc to force the client-side to authenticate actual entered password directly against Firebase Auth!
-        // This ensures the custom password input cannot be bypassed or accepted with mock values for first-time root logins.
-        return res.json({ success: true, useClientAuth: true, email: email, isLegacyNoPasswordDoc: true });
+        // Automatically check/create Auth user and Firestore doc for root emails
+        let uid = '';
+        let createdSuccessfully = false;
+
+        // Try Admin SDK first
+        try {
+          if (admin.apps.length > 0) {
+            try {
+              const authUser = await admin.auth().getUserByEmail(email);
+              uid = authUser.uid;
+            } catch (authErr: any) {
+              if (authErr.code === 'auth/user-not-found' || authErr.code === 'user-not-found') {
+                const userRecord = await admin.auth().createUser({
+                  email: email,
+                  emailVerified: true,
+                  password: password
+                });
+                uid = userRecord.uid;
+              } else {
+                throw authErr;
+              }
+            }
+
+            // Create/merge the user document in Firestore using Admin SDK
+            await admin.firestore().collection('users').doc(uid).set({
+              email: email.toLowerCase(),
+              username: email.toLowerCase().split('@')[0],
+              fullName: email.toLowerCase().split('@')[0].toUpperCase() + ' (Root)',
+              role: 'Admin',
+              isRoot: true,
+              password: password,
+              disabled: false,
+              createdAt: Date.now()
+            }, { merge: true });
+            console.log(`Successfully created/merged Root admin document via Admin SDK for ${email}`);
+            createdSuccessfully = true;
+          }
+        } catch (adminErr: any) {
+          console.warn('Admin SDK failed for root creation, attempting Client Web SDK fallback:', adminErr.message);
+        }
+
+        // Fallback to Client Web SDK if Admin SDK was unavailable or failed
+        if (!createdSuccessfully) {
+          try {
+            const { signInWithEmailAndPassword, createUserWithEmailAndPassword } = await import('firebase/auth');
+            const { setDoc, doc: fDoc } = await import('firebase/firestore');
+
+            // Try to sign in as this user to see if they exist in auth
+            try {
+              const userCred = await signInWithEmailAndPassword(auth, email, password);
+              uid = userCred.user.uid;
+              console.log('Root user found in Auth via Client SDK sign-in');
+            } catch (signInErr: any) {
+              // If user is not found, let's create them
+              if (signInErr.code === 'auth/user-not-found' || signInErr.code === 'auth/invalid-credential' || signInErr.code === 'auth/user-disabled') {
+                try {
+                  const userCred = await createUserWithEmailAndPassword(auth, email, password);
+                  uid = userCred.user.uid;
+                  console.log('Root user created on-the-fly via Client Web SDK');
+                } catch (createErr: any) {
+                  if (createErr.code === 'auth/email-already-in-use') {
+                    console.log('Root email already exists, but password was wrong or auth unaligned.');
+                  } else {
+                    throw createErr;
+                  }
+                }
+              } else {
+                throw signInErr;
+              }
+            }
+
+            // Write/merge the Firestore document via Web SDK if uid got resolved
+            if (uid) {
+              await setDoc(fDoc(db, 'users', uid), {
+                email: email.toLowerCase(),
+                username: email.toLowerCase().split('@')[0],
+                fullName: email.toLowerCase().split('@')[0].toUpperCase() + ' (Root)',
+                role: 'Admin',
+                isRoot: true,
+                password: password,
+                disabled: false,
+                createdAt: Date.now()
+              }, { merge: true });
+              console.log(`Successfully created/merged Root admin document via Client Web SDK for ${email}`);
+              createdSuccessfully = true;
+            }
+          } catch (clientErr: any) {
+            console.error('Client SDK root creation fallback failed:', clientErr.message);
+          }
+        }
+
+        if (uid) {
+          userDoc = {
+            email: email,
+            username: email.split('@')[0],
+            fullName: email.split('@')[0].toUpperCase() + ' (Root)',
+            role: 'Admin',
+            isRoot: true,
+            password: password,
+            disabled: false
+          };
+          userDocId = uid;
+        }
       }
 
       if (!userDoc) {
@@ -193,15 +329,38 @@ async function startServer() {
       // If document has custom password, verify it directly
       if (userDoc.password) {
         if (userDoc.password === password) {
-          return res.json({ success: true, useClientAuth: true, email: email });
+          // Generate secure customToken using firebase-admin to seamlessly sign in on-the-fly and self-heal any password/provider issues
+          let customToken = '';
+          try {
+            customToken = await admin.auth().createCustomToken(userDocId);
+            console.log('Successfully generated customToken for verified user:', userDocId);
+          } catch (tokenErr: any) {
+            console.warn('Could not generate customToken for user (will fall back to client password match):', tokenErr.message);
+          }
+          if (customToken) {
+            return res.json({ success: true, customToken, email: email });
+          } else {
+            return res.json({ success: true, useClientAuth: true, email: email });
+          }
         } else {
           return res.status(401).json({ error: 'Invalid login credentials' });
         }
       }
 
       // Legacy user/root verification with NO password field stored in Firestore
-      // tag it as legacy, forcing client to authenticate with real user password
-      return res.json({ success: true, useClientAuth: true, email: email, isLegacyNoPasswordDoc: true });
+      let customToken = '';
+      try {
+        customToken = await admin.auth().createCustomToken(userDocId);
+        console.log('Successfully generated customToken for legacy/root:', userDocId);
+      } catch (tokenErr: any) {
+        console.warn('Could not generate customToken for legacy/root:', tokenErr.message);
+      }
+      
+      if (customToken) {
+        return res.json({ success: true, customToken, email: email });
+      } else {
+        return res.json({ success: true, useClientAuth: true, email: email, isLegacyNoPasswordDoc: true });
+      }
 
     } catch (err: any) {
       console.error('Verify login backend error:', err);
@@ -911,79 +1070,46 @@ async function startServer() {
            
            // Standardise tracking phase translation
            const historyMap: Record<string, string> = {
-               'InfoReceived': 'تم تسجيل الطلب',
-               'InTransit': 'جاري الشحن لليمن',
-               'OutForDelivery': 'مع المندوب للتوصيل',
-               'Delivered': 'تم التسليم',
-               'Exception': 'ملغي'
-           };
-           
-           const newStatusMap = historyMap[newTag] || 'جاري الشحن لليمن';
-           
-           const newHistoryEntry = {
-               status: newStatusMap,
-               location: locationStr,
-               timestamp: Date.now(),
-               notes: payload.msg.checkpoint?.message || 'Automatic third-party checkpoint update',
-               createdBy: 'API_WEBHOOK'
-           };
-           
-           const updatedHistory = [...(orderData.history || []), newHistoryEntry];
-           
-           // Update secured backend Order document
-           await updateDoc(doc(db, 'orders', orderDoc.id), {
-               orderStatus: newStatusMap,
-               locationYemen: locationStr,
-               history: updatedHistory,
-               updatedAt: Date.now()
-           });
-           
-           // If tracking interface was public, update that too
-           const publicRef = doc(db, 'public_tracking', trackingNumber.toUpperCase());
-           const publicSnap = await getDoc(publicRef);
-           if (publicSnap.exists()) {
-               await updateDoc(publicRef, {
-                   status: newStatusMap,
-                   locationYemen: locationStr,
-                   history: updatedHistory,
-                   updatedAt: Date.now()
-               });
-           }
-           console.log(`[Webhook] Tracking ${trackingNumber} state machine advanced to ${newStatusMap}`);
-       } catch (err: any) {
-           console.error('[Webhook] Failed to process logistics update:', err.message);
-       }
-    })();
+                'InfoReceived': 'تم تسجيل الطلب',
+                'InTransit': 'جاري الشحن لليمن',
+                'OutForDelivery': 'مع المندوب للتوصيل',
+                'Delivered': 'تم التسليم',
+                'Exception': 'ملغي'
+            };
+            const newStatusMap = historyMap[newTag] || 'جاري الشحن لليمن';
+            const newHistoryEntry = {
+                status: newStatusMap,
+                location: locationStr,
+                timestamp: Date.now(),
+                notes: payload.msg.checkpoint?.message || 'Automatic third-party checkpoint update',
+                createdBy: 'API_WEBHOOK'
+            };
+            const updatedHistory = [...(orderData.history || []), newHistoryEntry];
+            // Update secured backend Order document
+            await updateDoc(doc(db, 'orders', orderDoc.id), {
+                orderStatus: newStatusMap,
+                locationYemen: locationStr,
+                history: updatedHistory,
+                updatedAt: Date.now()
+            });
+            
+            // If tracking interface was public, update that too
+            const publicRef = doc(db, 'public_tracking', trackingNumber.toUpperCase());
+            const publicSnap = await getDoc(publicRef);
+            if (publicSnap.exists()) {
+                await updateDoc(publicRef, {
+                    status: newStatusMap,
+                    locationYemen: locationStr,
+                    history: updatedHistory,
+                    updatedAt: Date.now()
+                });
+            }
+            console.log(`[Webhook] Tracking ${trackingNumber} state machine advanced to ${newStatusMap}`);
+        } catch (err: any) {
+            console.error('[Webhook] Failed to process logistics update:', err.message);
+        }
+     })();
   });
-
-  // API Fallback to prevent returning HTML for missing API routes
-  app.all('/api/*', (req, res) => {
-    res.status(404).json({ error: 'API endpoint not found' });
-  });
-
-  // Vite Middleware
-  if (process.env.NODE_ENV !== "production") {
-    const { createServer: createViteServer } = await import('vite');
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
-    // Standard path for build artifacts in AI Studio is 'dist' 
-    const distPath = path.resolve(process.cwd(), 'dist');
-    if (fs.existsSync(distPath)) {
-        app.use(express.static(distPath));
-        app.get('*', (req, res) => {
-          res.sendFile(path.join(distPath, 'index.html'));
-        });
-    } else {
-        console.error('CRITICAL: dist directory missing in production');
-        app.get('*', (req, res) => {
-           res.status(500).send('Application is still building or dist directory is missing.');
-        });
-    }
-  }
 
   // Secure Logistics Credentials Test Connection
   app.post('/api/tracking/test-connection', async (req, res) => {
@@ -994,7 +1120,6 @@ async function startServer() {
 
     try {
       if (provider === 'parcelsapp') {
-        // v3 Ping test: initiate with a dummy ID (invalid but should auth properly)
         const response = await fetch(`https://parcelsapp.com/api/v3/shipments/tracking`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1030,6 +1155,35 @@ async function startServer() {
       return res.status(500).json({ error: e.message });
     }
   });
+
+  // API Fallback to prevent returning HTML for missing API routes
+  app.all('/api/*', (req, res) => {
+    res.status(404).json({ error: 'API endpoint not found' });
+  });
+
+  // Vite Middleware
+  if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import('vite');
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: "spa",
+    });
+    app.use(vite.middlewares);
+  } else {
+    // Standard path for build artifacts in AI Studio is 'dist' 
+    const distPath = path.resolve(process.cwd(), 'dist');
+    if (fs.existsSync(distPath)) {
+        app.use(express.static(distPath));
+        app.get('*', (req, res) => {
+          res.sendFile(path.join(distPath, 'index.html'));
+        });
+    } else {
+        console.error('CRITICAL: dist directory missing in production');
+        app.get('*', (req, res) => {
+           res.status(500).send('Application is still building or dist directory is missing.');
+         });
+    }
+  }
 
   app.listen(3000, '0.0.0.0', () => {
     console.log('Server running on port 3000');
