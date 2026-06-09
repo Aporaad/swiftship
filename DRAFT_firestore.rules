@@ -13,7 +13,7 @@ service cloud.firestore {
     // User is root if isRoot field is true OR their email is in the hardcoded list
     function isRoot(userDoc) {
       return userDoc.get('isRoot', false) == true || 
-             userDoc.email in ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'admin@swiftship.system'];
+             userDoc.email in ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'engaporaad1@gmail.com', 'admin@swiftship.system'];
     }
 
     // Role check

@@ -34,64 +34,74 @@ export default function Login() {
       let verifyData: any = null;
       let email = identifier;
 
-      const res = await fetch('/api/auth/verify-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier, password })
-      });
+      let res;
+      try {
+        res = await fetch('/api/auth/verify-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier, password })
+        });
+      } catch (err: any) {
+        throw new Error(isAr 
+          ? 'عذراً، تعذر الاتصال بخادم التحقق من الهوية (الخلفي). يرجى التأكد من تشغيل الخادم بالكامل ومن سلامة اتصالك بالإنترنت.' 
+          : 'Could not connect to the authentication server is offline. Please verify that your backend server is running and reachable.');
+      }
       
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        throw new Error(isAr 
+          ? 'خطأ في الاستجابة: أرجع الخادم صفحة ويب (HTML) بدلاً من بيانات (JSON). للتصحيح: تأكد من تشغيل خادم Express، وتأكد من عدم رفع الموقع كصفحة ساكنة فقط، أو افحص سجلات الخوادم.' 
+          : 'Server Error: The backend returned an HTML document instead of JSON. Ensure your Express server is running, and that you did not deploy as static-only.');
+      }
+
+      const resData = await res.json();
       if (res.ok) {
-        verifyData = await res.json();
+        verifyData = resData;
         email = verifyData.email;
       } else {
-        const errData = await res.json();
-        throw new Error(errData.error || 'Login verification failed');
+        throw new Error(resData.error || 'Login verification failed');
       }
 
       // 2. Perform Firebase Auth login using Custom Token, Standard System Password, or Client Fallback
       let result;
       if (verifyData && verifyData.isLegacyNoPasswordDoc) {
         // Since there is no password in Firestore, we MUST verify using their entered password directly against Firebase Auth!
-        console.log('User has no password in Firestore (legacy/root). Authenticating on Auth...');
+        console.log('User has no password in Firestore (legacy/root). Authenticating on Auth with actual entered password...');
         try {
-          // Try entered password first
           result = await signInWithEmailAndPassword(auth, email, password);
-        } catch (authErr: any) {
-          const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'admin@swiftship.system'];
-          const isRoot = ROOT_EMAILS.includes(email.toLowerCase());
           
-          if (isRoot) {
-            try {
-              // Try shared system password as secondary for root
-              result = await signInWithEmailAndPassword(auth, email, SHARED_SYSTEM_AUTH_PASSWORD);
-            } catch (spErr: any) {
-              if (spErr.code === 'auth/user-not-found' || spErr.code === 'auth/invalid-credential') {
-                console.log('Root user not in Auth or invalid credentials, creating account...');
-                try {
-                  result = await createUserWithEmailAndPassword(auth, email, SHARED_SYSTEM_AUTH_PASSWORD);
-                } catch (regErr: any) {
-                  if (regErr.code === 'auth/email-already-in-use') {
-                    throw new Error(isAr ? 'بيانات الدخول غير صحيحة.' : 'Invalid login credentials.');
-                  }
-                  throw regErr;
+          // Auto-align Firebase Auth password to SHARED_SYSTEM_AUTH_PASSWORD to keep central system auth password standard
+          try {
+            await updatePassword(result.user, SHARED_SYSTEM_AUTH_PASSWORD);
+            console.log('Aligned Auth password to system master.');
+          } catch (spAlignErr) {
+            console.warn('Could not auto-align legacy auth password:', spAlignErr);
+          }
+        } catch (authErr: any) {
+          if (authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/user-not-found') {
+            const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'engaporaad1@gmail.com', 'admin@swiftship.system'];
+            if (ROOT_EMAILS.includes(email.toLowerCase())) {
+              try {
+                // Register root user with SHARED_SYSTEM_AUTH_PASSWORD
+                result = await createUserWithEmailAndPassword(auth, email, SHARED_SYSTEM_AUTH_PASSWORD);
+                console.log('Root user registered with system password on-the-fly');
+              } catch (regErr: any) {
+                if (regErr.code === 'auth/email-already-in-use') {
+                  throw new Error(isAr ? 'بيانات الدخول غير صحيحة.' : 'Invalid login credentials.');
                 }
-              } else {
-                throw spErr;
+                if (regErr.code === 'auth/operation-not-allowed') {
+                  throw new Error(isAr 
+                    ? 'يرجى تفعيل "Email/Password" في إعدادات Firebase Console Authentication.' 
+                    : 'Please enable "Email/Password" sign-in method in Firebase Console Authentication.');
+                }
+                throw regErr;
               }
+            } else {
+              throw authErr;
             }
           } else {
             throw authErr;
           }
-        }
-        
-        // Auto-align Firebase Auth password to SHARED_SYSTEM_AUTH_PASSWORD to keep central system auth password standard
-        try {
-          if (result && result.user) {
-            await updatePassword(result.user, SHARED_SYSTEM_AUTH_PASSWORD);
-            console.log('Aligned Auth password to system master.');
-          }
-        } catch (spAlignErr) {
-          console.warn('Could not auto-align legacy auth password:', spAlignErr);
         }
       } else if (verifyData && verifyData.customToken) {
         try {
@@ -135,25 +145,20 @@ export default function Login() {
             }
           } catch (authErr: any) {
             if (authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/user-not-found') {
-              const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'admin@swiftship.system'];
-              if (ROOT_EMAILS.includes(email.toLowerCase())) {
-                try {
-                  // Register root user with SHARED_SYSTEM_AUTH_PASSWORD
-                  result = await createUserWithEmailAndPassword(auth, email, SHARED_SYSTEM_AUTH_PASSWORD);
-                  console.log('Root user registered with system password on-the-fly');
-                } catch (regErr: any) {
-                  if (regErr.code === 'auth/email-already-in-use') {
-                    throw new Error(isAr ? 'بيانات الدخول غير صحيحة.' : 'Invalid login credentials.');
-                  }
-                  if (regErr.code === 'auth/operation-not-allowed') {
-                    throw new Error(isAr 
-                      ? 'يرجى تفعيل "Email/Password" في إعدادات Firebase Console Authentication.' 
-                      : 'Please enable "Email/Password" sign-in method in Firebase Console Authentication.');
-                  }
-                  throw regErr;
+              try {
+                // Register the successfully verified client on-the-fly in Firebase Auth block
+                result = await createUserWithEmailAndPassword(auth, email, SHARED_SYSTEM_AUTH_PASSWORD);
+                console.log('Verified database user registered with system password on-the-fly');
+              } catch (regErr: any) {
+                if (regErr.code === 'auth/email-already-in-use') {
+                  throw new Error(isAr ? 'بيانات الدخول غير صحيحة.' : 'Invalid login credentials.');
                 }
-              } else {
-                throw authErr;
+                if (regErr.code === 'auth/operation-not-allowed') {
+                  throw new Error(isAr 
+                    ? 'يرجى تفعيل "Email/Password" في إعدادات Firebase Console Authentication.' 
+                    : 'Please enable "Email/Password" sign-in method in Firebase Console Authentication.');
+                }
+                throw regErr;
               }
             } else {
               throw authErr;
@@ -168,7 +173,7 @@ export default function Login() {
       let userData = userSnap.exists() ? userSnap.data() : null;
 
       // 4. Auto-seed Firestore document if it's a root user but doc doesn't exist
-      const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'admin@swiftship.system'];
+      const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'engaporaad1@gmail.com', 'admin@swiftship.system'];
       if (!userData && ROOT_EMAILS.includes(email.toLowerCase())) {
         const newUserDoc = {
           email: email.toLowerCase(),
