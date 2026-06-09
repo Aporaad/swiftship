@@ -15,7 +15,7 @@ import { activityLogService } from '../services/activityLogService';
 import { notificationService } from '../services/notificationService';
 import { auth } from '../lib/firebase';
 
-type SettingsTab = 'interface' | 'general' | 'currency' | 'admin';
+type SettingsTab = 'interface' | 'general' | 'currency' | 'admin' | 'logistics';
 
 // ─────────────────────────────────────
 // REUSABLE FIELD COMPONENTS
@@ -141,6 +141,19 @@ export default function Settings() {
     orders: true, customers: true, couriers: true, sources: true, users: true, roles: true,
   });
 
+  // Logistics API state
+  const [logisticsSettings, setLogisticsSettings] = useState<{
+    enabled: boolean;
+    provider: string;
+    apiKey: string;
+    defaultDestinationCountry?: string;
+  }>({
+    enabled: false,
+    provider: 'aftership',
+    apiKey: '',
+    defaultDestinationCountry: 'Yemen'
+  });
+
   useEffect(() => {
     setLocalSettings(globalSettings);
     // Sync export selections from backup settings
@@ -150,6 +163,28 @@ export default function Settings() {
       setExportSelections(sel);
     }
   }, [globalSettings]);
+
+  // Fetch Logistics Settings
+  useEffect(() => {
+    const fetchLogistics = async () => {
+      try {
+        const snap = await getDocs(collection(db, 'settings'));
+        const apiDoc = snap.docs.find(d => d.id === 'logistics_api');
+        if (apiDoc) {
+          const data = apiDoc.data();
+          setLogisticsSettings({
+            enabled: data.enabled || false,
+            provider: data.provider || 'aftership',
+            apiKey: data.apiKey || '',
+            defaultDestinationCountry: data.defaultDestinationCountry || 'Yemen'
+          });
+        }
+      } catch (err) {
+        console.error('Error fetching logistics settings:', err);
+      }
+    };
+    fetchLogistics();
+  }, []);
 
   // Load backup history from Firestore
   const loadBackupHistory = async () => {
@@ -225,6 +260,10 @@ export default function Settings() {
       const selectedCols = Object.entries(exportSelections).filter(([, v]) => v).map(([k]) => k);
       await updateSettings({ ...localSettings, backupCollections: selectedCols });
       
+      if (canManageAdmin) {
+        await setDoc(doc(db, 'settings', 'logistics_api'), logisticsSettings);
+      }
+
       const updaterName = profile?.fullName || auth.currentUser?.email || 'Unknown';
       activityLogService.log('save_settings', 'System Settings');
       
@@ -644,11 +683,12 @@ export default function Settings() {
   };
 
   // ─── TABS CONFIG ────────────────────
-  const tabs: { id: SettingsTab; label: string; icon: any }[] = [
-    { id: 'interface', label: t('tabInterface'), icon: Palette },
-    { id: 'general',   label: t('tabGeneral'),   icon: Settings2 },
-    { id: 'currency',  label: t('tabCurrency'),  icon: DollarSign },
-    { id: 'admin',     label: t('tabAdmin'),      icon: Shield },
+  const tabs: { id: SettingsTab; label: string; icon: any; show?: boolean }[] = [
+    { id: 'interface', label: t('tabInterface'), icon: Palette, show: true },
+    { id: 'general',   label: t('tabGeneral'),   icon: Settings2, show: true },
+    { id: 'currency',  label: t('tabCurrency'),  icon: DollarSign, show: true },
+    { id: 'admin',     label: t('tabAdmin'),      icon: Shield, show: canManageAdmin },
+    { id: 'logistics', label: isAr ? 'الربط اللوجستي' : 'Logistics API', icon: Globe, show: canManageAdmin }
   ];
 
   const currencies = localSettings.customCurrencies || [];
@@ -694,7 +734,7 @@ export default function Settings() {
 
       {/* ── TABS NAV ────────────────────────── */}
       <div className="flex gap-1.5 bg-black/40 border border-slate-800/50 rounded-2xl p-1.5 overflow-x-auto">
-        {tabs.map(tab => {
+        {tabs.filter(t => t.show !== false).map(tab => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           return (
@@ -1458,6 +1498,123 @@ export default function Settings() {
                 </button>
               </div>
             </SectionCard>
+          )}
+        </div>
+      )}
+
+      {/* ══════════════════════════════════ */}
+      {/* TAB 5: LOGISTICS                   */}
+      {/* ══════════════════════════════════ */}
+      {activeTab === 'logistics' && (
+        <div className="space-y-5 animate-fade-slide-in">
+          {canManageAdmin ? (
+            <SectionCard title={isAr ? 'الربط المباشر مع شركات الشحن (API)' : 'Logistics External API Hooks'} icon={Globe} badge={isAr ? "ميزة احترافية" : "PRO"}>
+              <div className="bg-black/30 border border-[#d4af37]/20 p-4 rounded-xl mb-6">
+                <p className="text-xs text-[#d4af37] font-bold leading-relaxed mb-2">
+                  {isAr 
+                    ? 'يتيح لك هذا القسم ربط نظام التتبع بموفري الخدمات اللوجستية الخارجيين مثل AfterShip أو 17TRACK لجلب مسارات وحالات الشحنات دولياً بشكل تلقائي.'
+                    : 'Bind external third-party tracking sources like AfterShip or 17Track. Enhances the customer GPS map drastically with live resolution.'}
+                </p>
+                <p className="text-[10px] text-slate-400 font-medium">
+                  {isAr 
+                    ? 'عند تفعيل الخيار، سيقوم خادم SwiftShip بالاتصال بالـ API الخارجي تلقائياً لجلب المسارات بمجرد إدخال رقم تتبع صالح.'
+                    : 'Once enabled, our internal server orchestrator automatically maps global checkpoints when queried.'}
+                </p>
+              </div>
+
+              <div className="mb-6">
+                 <ToggleSwitch
+                   checked={logisticsSettings.enabled}
+                   onChange={(v) => setLogisticsSettings({ ...logisticsSettings, enabled: v })}
+                   label={isAr ? 'تفعيل الربط التلقائي للمسارات' : 'Enable Automated Live Sync (Global Networks)'}
+                   description={isAr ? 'سيطلب النظام الحالات من الموفر المعين بشكل مباشر' : 'Queries integrated API endpoints seamlessly.'}
+                 />
+              </div>
+
+              <div className="space-y-4 pt-4 border-t border-slate-800">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div>
+                    <FieldLabel>{isAr ? 'مزود الخدمة (API)' : 'External Provider'}</FieldLabel>
+                    <select
+                      value={logisticsSettings.provider}
+                      onChange={(e) => setLogisticsSettings({ ...logisticsSettings, provider: e.target.value })}
+                      className="w-full bg-black/50 border border-slate-800 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none"
+                    >
+                      <option value="aftership">AfterShip API (باقة مجانية متاحة)</option>
+                      <option value="17track">17TRACK API (إصدار تجريبي)</option>
+                      <option value="trackingmore">TrackingMore (باقة مجانية متاحة)</option>
+                      <option value="parcelsapp">ParcelsApp.com (باقة عالمية)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <FieldLabel>{isAr ? 'مفتاح الربط (API Key)' : 'Access Key / Token'}</FieldLabel>
+                    <FieldInput 
+                       type="password" 
+                       value={logisticsSettings.apiKey} 
+                       onChange={(e) => setLogisticsSettings({ ...logisticsSettings, apiKey: e.target.value })} 
+                       placeholder="asat_XXXXXXXXXXXXXXXXXXXXXXXX"
+                    />
+                  </div>
+                  {logisticsSettings.provider === 'parcelsapp' && (
+                    <div className="md:col-span-2">
+                       <FieldLabel>{isAr ? 'بلد الوجهة الافتراضي (ParcelsApp)' : 'Default Destination Country (ParcelsApp)'}</FieldLabel>
+                       <FieldInput 
+                          type="text" 
+                          value={logisticsSettings.defaultDestinationCountry} 
+                          onChange={(e) => setLogisticsSettings({ ...logisticsSettings, defaultDestinationCountry: e.target.value })} 
+                          placeholder="Yemen"
+                       />
+                       <p className="text-[10px] text-slate-500 mt-1.5 font-bold">
+                         {isAr ? 'يتطلب ParcelsApp v3 تحديد بلد الوجهة لضمان دقة النتائج.' : 'ParcelsApp v3 requires a destination country for accurate tracking resolution.'}
+                       </p>
+                    </div>
+                  )}
+                  <div className="md:col-span-2 flex items-center gap-3">
+                    <button
+                      type="button"
+                      disabled={apiLoading || !logisticsSettings.apiKey}
+                      onClick={async () => {
+                        setApiLoading(true);
+                        setApiError(null);
+                        try {
+                          const res = await fetch('/api/tracking/test-connection', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(logisticsSettings)
+                          });
+                          const json = await res.json();
+                          if (res.ok && json.success) {
+                            alert(`✅ ${json.message}`);
+                          } else {
+                            setApiError(json.error || 'Connection failed');
+                          }
+                        } catch (err: any) {
+                          setApiError(err.message);
+                        } finally {
+                          setApiLoading(false);
+                        }
+                      }}
+                      className="bg-black/40 border border-slate-800 hover:border-[#d4af37]/40 text-slate-300 hover:text-white py-2.5 px-6 rounded-xl text-[10px] font-black tracking-widest uppercase transition flex items-center gap-2 justify-center disabled:opacity-50"
+                    >
+                      {apiLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
+                      {isAr ? 'اختبار الاتصال بالخادم' : 'Test API Connection'}
+                    </button>
+                    {apiError && (
+                      <div className="flex items-center gap-2 text-rose-500 text-[10px] font-bold">
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        <span>{apiError}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </SectionCard>
+          ) : (
+            <div className="flex bg-rose-500/10 text-rose-400 p-6 rounded-2xl border border-rose-500/20 font-extrabold flex-col items-center justify-center gap-4 py-16">
+              <ShieldAlert className="w-12 h-12" />
+              <h3 className="text-xl">{isAr ? 'وصول مرفوض' : 'Access Denied'}</h3>
+              <p className="text-xs text-center">{isAr ? 'هذا القسم يتطلب صلاحية أعلى للوصول.' : 'Elevated clearance required for API configurations.'}</p>
+            </div>
           )}
         </div>
       )}

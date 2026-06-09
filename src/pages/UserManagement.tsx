@@ -238,16 +238,12 @@ export default function UserManagement() {
   const isAr = settings.language === 'ar';
   const t = (ar: string, en: string) => isAr ? ar : en;
 
-  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'sessions' | 'activity' | 'wallets'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'sessions' | 'activity'>('users');
 
   // ── Data ─────────────────────────────────────────────────
   const [users, setUsers] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
   const [activityLogs, setActivityLogs] = useState<any[]>([]);
-  const [couriers, setCouriers] = useState<any[]>([]);
-  const [customers, setCustomers] = useState<any[]>([]);
-  const [walletSearch, setWalletSearch] = useState('');
-  const [walletTypeFilter, setWalletTypeFilter] = useState<'all' | 'customer' | 'courier'>('all');
   const [loading, setLoading] = useState(true);
 
   // ── Users filters ────────────────────────────────────────
@@ -335,22 +331,6 @@ export default function UserManagement() {
       setUsers(all.filter((u: any) => u.role !== 'Courier' && u.roleId !== 'courier' && u.role !== 'courier'));
       setLoading(false);
     }, err => handleFirestoreError(err, OperationType.LIST, 'users'));
-    return unsub;
-  }, [roleLoading]);
-
-  useEffect(() => {
-    if (roleLoading) return;
-    const unsub = onSnapshot(collection(db, 'couriers'), snap => {
-      setCouriers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-    return unsub;
-  }, [roleLoading]);
-
-  useEffect(() => {
-    if (roleLoading) return;
-    const unsub = onSnapshot(collection(db, 'customers'), snap => {
-      setCustomers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
     return unsub;
   }, [roleLoading]);
 
@@ -763,8 +743,7 @@ export default function UserManagement() {
     { id: 'users',    icon: UsersIcon,    label: t('الموظفون', 'Staff'),               count: users.length },
     { id: 'roles',    icon: Shield,       label: t('الأدوار والصلاحيات', 'Roles'),      count: roles.length },
     { id: 'sessions', icon: MonitorCheck, label: t('الجلسات النشطة', 'Active Sessions'), count: onlineSessionsCount, pulse: onlineSessionsCount > 0 },
-    { id: 'activity', icon: FileClock,    label: t('سجل النشاط', 'Activity Log'),       count: activityLogs.length },
-    { id: 'wallets',  icon: Coins,        label: t('المحافظ العهد', 'Wallets'),        count: couriers.length + customers.length }
+    { id: 'activity', icon: FileClock,    label: t('سجل النشاط', 'Activity Log'),       count: activityLogs.length }
   ] as const;
 
   // ══════════════════════════════════════════════════════════
@@ -1253,139 +1232,6 @@ export default function UserManagement() {
               </div>
             </>
           )}
-        </div>
-      )}
-
-      {/* ══════════════════════════════════════════════════ */}
-      {/* TAB 5: SMART WALLETS                              */}
-      {/* ══════════════════════════════════════════════════ */}
-      {activeTab === 'wallets' && (
-        <div className="space-y-6">
-          {/* Filter Bar */}
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-black/40 border border-slate-800/50 p-4 rounded-2xl animate-fade-in">
-            <div className="relative w-full md:max-w-md">
-              <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-550 w-4 h-4" />
-              <input 
-                type="text"
-                placeholder={isAr ? 'ابحث باسم العميل أو المندوب أو كوده...' : 'Search by name, phone, or custom ID...'}
-                value={walletSearch}
-                onChange={e => setWalletSearch(e.target.value)}
-                className="w-full bg-black/50 border border-slate-850 rounded-xl py-2.5 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start"
-              />
-            </div>
-            
-            <div className="flex gap-2 w-full md:w-auto">
-              <button 
-                onClick={() => setWalletTypeFilter('all')}
-                className={`flex-1 md:flex-none px-4 py-2 rounded-xl text-xs font-black border transition ${walletTypeFilter === 'all' ? 'bg-[#d4af37]/20 border-[#d4af37]/30 text-[#d4af37]' : 'bg-slate-900 border-slate-800 text-slate-400'}`}
-              >
-                {isAr ? 'الكل' : 'All'}
-              </button>
-              <button 
-                onClick={() => setWalletTypeFilter('courier')}
-                className={`flex-1 md:flex-none px-4 py-2 rounded-xl text-xs font-black border transition ${walletTypeFilter === 'courier' ? 'bg-indigo-950/45 border-indigo-900/50 text-indigo-400' : 'bg-slate-900 border-slate-800 text-slate-400'}`}
-              >
-                {isAr ? 'المناديب' : 'Couriers'}
-              </button>
-              <button 
-                onClick={() => setWalletTypeFilter('customer')}
-                className={`flex-1 md:flex-none px-4 py-2 rounded-xl text-xs font-black border transition ${walletTypeFilter === 'customer' ? 'bg-emerald-950/45 border-emerald-900/50 text-emerald-400' : 'bg-slate-900 border-slate-800 text-slate-400'}`}
-              >
-                {isAr ? 'العملاء' : 'Customers'}
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
-            {/* Courier Wallets */}
-            {(walletTypeFilter === 'all' || walletTypeFilter === 'courier') && (
-              <div className="bg-[#121215] border border-slate-850 rounded-2xl p-5 space-y-4">
-                <div className="flex justify-between items-center border-b border-slate-850 pb-3">
-                  <h3 className="font-black text-sm text-indigo-400 flex items-center gap-2">
-                    <Truck className="w-4 h-4 text-[#d4af37]" />
-                    {isAr ? 'محافظ ومستحقات المناديب' : 'External Courier Balance Sheets'}
-                  </h3>
-                  <span className="font-mono text-xs text-slate-500 font-bold">COUNT: {couriers.length}</span>
-                </div>
-                
-                <div className="space-y-2.5 overflow-y-auto max-h-[480px]">
-                  {couriers
-                    .filter(c => {
-                      const q = walletSearch.toLowerCase();
-                      return !q || (c.fullName || '').toLowerCase().includes(q) || (c.phone || '').includes(q) || (c.courierCustomId || '').toLowerCase().includes(q);
-                    })
-                    .map(c => {
-                      const bal = c.wallet?.balance || c.walletBalance || 0;
-                      return (
-                        <div key={c.id} className="flex justify-between items-center bg-black/40 border border-slate-850 hover:border-slate-800 p-3.5 rounded-xl transition duration-200">
-                          <div className="text-start">
-                            <h4 className="font-extrabold text-xs text-white flex items-center gap-1.5">{c.fullName}</h4>
-                            <div className="flex items-center gap-2 mt-1">
-                              <span className="text-[9px] bg-slate-900 border border-slate-800 text-[#d4af37] px-1.5 py-0.5 rounded font-mono font-bold">ID: {c.courierCustomId || 'ALX-CR'}</span>
-                              <span className="text-[9px] text-slate-550 font-bold font-mono" dir="ltr">{c.phone}</span>
-                            </div>
-                          </div>
-                          
-                          <div className="text-right">
-                            <div className="text-[11px] font-mono font-black text-[#d4af37]">{bal.toLocaleString()} YER</div>
-                            <span className="text-[8px] bg-[#d4af37]/10 text-[#d4af37] border border-[#d4af37]/10 font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md mt-1 inline-block">{isAr ? 'رصيد عهدة محتجز' : 'Wallet Balance'}</span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  {couriers.length === 0 && (
-                    <div className="p-8 text-center text-slate-600 font-bold text-xs uppercase tracking-widest">[ no_couriers_matched ]</div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Customer Wallets */}
-            {(walletTypeFilter === 'all' || walletTypeFilter === 'customer') && (
-              <div className="bg-[#121215] border border-slate-850 rounded-2xl p-5 space-y-4">
-                <div className="flex justify-between items-center border-b border-slate-850 pb-3">
-                  <h3 className="font-black text-sm text-emerald-400 flex items-center gap-2">
-                    <UsersIcon className="w-4 h-4" />
-                    {isAr ? 'محافظ وودائع العملاء' : 'Patron Client Wallets'}
-                  </h3>
-                  <span className="font-mono text-xs text-slate-500 font-bold">COUNT: {customers.length}</span>
-                </div>
-                
-                <div className="space-y-2.5 overflow-y-auto max-h-[480px]">
-                  {customers
-                    .filter(c => {
-                      const q = walletSearch.toLowerCase();
-                      return !q || (c.fullName || '').toLowerCase().includes(q) || (c.phone || '').includes(q) || (c.financialAccountCode || '').toLowerCase().includes(q);
-                    })
-                    .map(c => {
-                      const bal = c.wallet?.balance || c.walletBalance || 0;
-                      return (
-                        <div key={c.id} className="flex justify-between items-center bg-black/40 border border-slate-850 hover:border-slate-800 p-3.5 rounded-xl transition duration-200">
-                          <div className="text-start">
-                            <h4 className="font-extrabold text-xs text-white">{c.fullName}</h4>
-                            <div className="flex items-center gap-2 mt-1">
-                              {c.financialAccountCode && (
-                                <span className="text-[9px] bg-slate-900 border border-slate-800 text-[#d4af37] px-1.5 py-0.5 rounded font-mono font-bold">ACC: {c.financialAccountCode}</span>
-                              )}
-                              <span className="text-[9px] text-slate-550 font-bold font-mono" dir="ltr">{c.phone}</span>
-                            </div>
-                          </div>
-                          
-                          <div className="text-right">
-                            <div className="text-[11px] font-mono font-black text-emerald-400">{bal.toLocaleString()} YER</div>
-                            <span className="text-[8px] bg-emerald-950/20 text-emerald-400 border border-emerald-900/10 font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md mt-1 inline-block">{isAr ? 'محفظة نشطة' : 'Active Wallet'}</span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  {customers.length === 0 && (
-                    <div className="p-8 text-center text-slate-600 font-bold text-xs uppercase tracking-widest">[ no_customers_matched ]</div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
         </div>
       )}
 

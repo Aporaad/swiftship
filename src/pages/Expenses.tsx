@@ -1187,7 +1187,7 @@ export default function Expenses() {
                       const bal = c.wallet?.balance || c.walletBalance || 0;
                       return (
                         <option key={c.id} value={c.id}>
-                          {c.fullName} ({c.courierCustomId}) — Wallet: {bal.toLocaleString()} YER {c.financialAccountCode ? ` (${c.financialAccountCode})` : ''}
+                          {c.fullName} ({c.courierCustomId}) — {isAr ? 'الرصيد' : 'Balance'}: {bal.toLocaleString()} YER {c.financialAccountCode ? ` (${c.financialAccountCode})` : ''}
                         </option>
                       );
                     })}

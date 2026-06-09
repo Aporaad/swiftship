@@ -1,6 +1,5 @@
 import express from 'express';
 import path from 'path';
-import { createServer as createViteServer } from 'vite';
 import fs from 'fs';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, doc, getDoc, collection, addDoc, query, where, limit, getDocs, updateDoc } from 'firebase/firestore';
@@ -137,7 +136,6 @@ async function startServer() {
       return res.json({ success: true });
     } catch (err: any) {
       console.error('Failed to change user password in Firestore:', err);
-      // Fallback: search by uid or username if needed, but doc is standard
       return res.status(500).json({ error: err.message || 'Failed to change password' });
     }
   });
@@ -331,9 +329,6 @@ async function startServer() {
           status = 'Failed';
           errorMsg = `HTTP Error ${apiRes.status}: ${resText.substring(0, 200)}`;
         }
-      } else if (provider === 'sandbox') {
-        status = 'Simulated';
-        externalResponse = 'Simulated Delivery Successful (Sandbox Mode)';
       } else {
         status = 'Skipped';
         errorMsg = 'No active WhatsApp provider configured.';
@@ -379,13 +374,6 @@ async function startServer() {
     }
 
     try {
-      if (provider === 'sandbox') {
-        return res.json({ 
-          success: true, 
-          message: 'Sandbox mode is fully simulated and virtualized. No real credentials needed.' 
-        });
-      }
-
       if (provider === 'ultramsg') {
         const { instanceId, token } = config || {};
         if (!instanceId || !token) {
@@ -521,20 +509,527 @@ async function startServer() {
     }
   });
 
+  // ========== LOGISTICS HELPER FUNCTIONS ==========
+
+  const STATUS_MAP_TO_AR: Record<string, string> = {
+    'InfoReceived': 'تم تسجيل الطلب',
+    'InTransit': 'جاري الشحن لليمن',
+    'OutForDelivery': 'مع المندوب للتوصيل',
+    'Delivered': 'تم التسليم',
+    'Exception': 'ملغي',
+    'Processing': 'تم تسجيل الطلب',
+    'Shipped': 'جاري الشحن لليمن',
+    'Arrived': 'وصل مركز التوزيع في اليمن',
+    'Held': 'في التخليص الجمركي',
+    'Customs': 'في التخليص الجمركي',
+    'Available for pickup': 'وصل مركز التوزيع في اليمن',
+    'Pending': 'تم تسجيل الطلب',
+    'Packed': 'وصل مستودع السعودية',
+    'Received': 'تم تسجيل الطلب',
+    'Departed': 'جاري الشحن لليمن',
+    'Picked Up': 'تم تسجيل الطلب',
+    'Collection': 'تم التسليم',
+    'Dispatched': 'جاري الشحن لليمن',
+    'Sorted': 'وصل مستودع السعودية',
+    'Out for delivery': 'مع المندوب للتوصيل',
+    'Ready for collection': 'وصل مركز التوزيع في اليمن',
+    'archive': 'تم التسليم',
+    'active': 'جاري الشحن لليمن',
+    'expired': 'ملغي',
+    'undelivered': 'ملغي',
+    'pickup': 'وصل مركز التوزيع في اليمن',
+    'transit': 'جاري الشحن لليمن',
+    'delivered': 'تم التسليم',
+    'out_for_delivery': 'مع المندوب للتوصيل',
+    'info_received': 'تم تسجيل الطلب',
+    'alert': 'ملغي',
+    'notfound': 'رقم تتبع غير معروف'
+  };
+
+  function normalizeStatus(status: string | undefined): string {
+      if (!status) return 'تم تسجيل الطلب';
+      // Direct lookup
+      if (STATUS_MAP_TO_AR[status]) return STATUS_MAP_TO_AR[status];
+      // Case insensitive check
+      for (const key of Object.keys(STATUS_MAP_TO_AR)) {
+          if (status.toLowerCase().includes(key.toLowerCase())) return STATUS_MAP_TO_AR[key];
+      }
+      return status; // Fallback to original
+  }
+  
+  async function fetchExternalTracking(trackingNumber: string, apiConfig: any) {
+      if (!apiConfig || !apiConfig.enabled) return null;
+      
+      let externalHistory: any[] | null = null;
+      let externalStatus: string | null = null;
+      let externalLocation: string | null = null;
+
+      try {
+          // AfterShip
+          if (!externalHistory && apiConfig.provider === 'aftership' && apiConfig.apiKey) {
+            const response = await fetch(`https://api.aftership.com/v4/trackings/${trackingNumber}`, {
+              headers: { 'aftership-api-key': apiConfig.apiKey, 'Content-Type': 'application/json' }
+            });
+            if (response.ok) {
+              const json = await response.json() as any;
+              if (json.data && json.data.tracking) {
+                 const t = json.data.tracking;
+                 externalHistory = t.checkpoints.map((c: any) => ({
+                    status: c.tag || 'Processing',
+                    timestamp: new Date(c.checkpoint_time).getTime(),
+                    location: [c.city, c.state, c.country_name].filter(Boolean).join(', ') || 'Global Transit Hub',
+                    notes: c.message,
+                    coordinates: c.coordinates || null 
+                 }));
+                 if (externalHistory && externalHistory.length > 0) {
+                     externalStatus = t.tag;
+                     externalLocation = externalHistory[externalHistory.length-1].location;
+                 }
+              }
+            }
+          }
+
+          // 17TRACK
+          if (!externalHistory && apiConfig.provider === '17track' && apiConfig.apiKey) {
+            const headers = { '17token': apiConfig.apiKey, 'Content-Type': 'application/json' };
+            const body = JSON.stringify([{ number: trackingNumber }]);
+            let response = await fetch(`https://api.17track.net/track/v2.2/gettrackinfo`, { method: 'POST', headers, body });
+            let json = await response.json() as any;
+
+            if (json?.data?.accepted?.[0]?.track?.z1?.length > 0) {
+                const t = json.data.accepted[0].track;
+                externalHistory = t.z1.map((c: any) => ({
+                    status: c.z || 'Processing',
+                    timestamp: c.a ? new Date(c.a.replace(' ', 'T') + ':00Z').getTime() : Date.now(),
+                    location: c.c || 'Global Transit Hub',
+                    notes: c.z || '',
+                    coordinates: null 
+                })).sort((a: any, b: any) => a.timestamp - b.timestamp);
+                
+                externalStatus = t.e === 10 ? 'Delivered' : (t.e === 30 || t.e === 40 ? 'InTransit' : 'Processing');
+                externalLocation = externalHistory && externalHistory.length > 0 ? externalHistory[externalHistory.length-1].location : 'Unknown';
+            }
+          }
+
+          // TrackingMore
+          if (!externalHistory && apiConfig.provider === 'trackingmore' && apiConfig.apiKey) {
+            const response = await fetch(`https://api.trackingmore.com/v4/trackings/get?tracking_numbers=${trackingNumber}`, {
+              headers: { 'Tracking-Api-Key': apiConfig.apiKey, 'Content-Type': 'application/json' }
+            });
+            if (response.ok) {
+              const json = await response.json() as any;
+              const t = json.data?.[0];
+              if (t?.tracking_detail?.length > 0) {
+                 externalHistory = t.tracking_detail.map((c: any) => ({
+                    status: c.sub_status_id || c.status || 'Processing',
+                    timestamp: new Date(c.checkpoint_date).getTime(),
+                    location: c.location || 'Global Transit Hub',
+                    notes: c.checkpoint_status || '',
+                    coordinates: null 
+                 })).sort((a: any, b: any) => a.timestamp - b.timestamp);
+                 externalStatus = t.delivery_status || 'InTransit';
+                 externalLocation = externalHistory && externalHistory.length > 0 ? externalHistory[externalHistory.length-1].location : 'Unknown';
+              }
+            }
+          }
+
+          // ParcelsApp v3 Integration
+          if (!externalHistory && apiConfig.provider === 'parcelsapp' && apiConfig.apiKey) {
+            const destCountry = apiConfig.defaultDestinationCountry || 'Yemen';
+            
+            // Phase 1: Initiate Tracking Request
+            const initResponse = await fetch(`https://parcelsapp.com/api/v3/shipments/tracking`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                shipments: [{ trackingId: trackingNumber, destinationCountry: destCountry }], 
+                language: 'en', 
+                apiKey: apiConfig.apiKey 
+              })
+            });
+
+            if (initResponse.ok) {
+              let json = await initResponse.json() as any;
+              
+              // Phase 2: Polling if not done (Limit attempts to avoid hanging the request)
+              let uuid = json.uuid;
+              let attempts = 0;
+              const maxAttempts = 6; 
+              
+              while (!json.done && uuid && attempts < maxAttempts) {
+                await new Promise(r => setTimeout(r, 1500));
+                const pollRes = await fetch(`https://parcelsapp.com/api/v3/shipments/tracking?apiKey=${apiConfig.apiKey}&uuid=${uuid}`);
+                if (pollRes.ok) {
+                   json = await pollRes.json();
+                } else {
+                   break;
+                }
+                attempts++;
+              }
+
+              const shipment = json.shipments?.find((s: any) => s.trackingId.toUpperCase() === trackingNumber.toUpperCase());
+              
+              if (shipment && shipment.states && shipment.states.length > 0) {
+                 externalHistory = shipment.states.map((s: any) => ({
+                    status: s.state || s.status || s.header || s.description || 'Processing',
+                    timestamp: s.date ? new Date(s.date).getTime() : Date.now(),
+                    location: s.location || 'Global Transit Hub',
+                    notes: s.info || s.header || s.description || '',
+                    coordinates: s.coordinates || null
+                 })).sort((a: any, b: any) => a.timestamp - b.timestamp);
+                 
+                 externalStatus = shipment.status || (shipment.states && shipment.states.length > 0 ? (shipment.states[shipment.states.length-1].state || shipment.states[shipment.states.length-1].status) : 'InTransit');
+                 externalLocation = externalHistory && externalHistory.length > 0 ? externalHistory[externalHistory.length-1].location : 'Unknown';
+              }
+            }
+          }
+
+      } catch (err: any) {
+          console.error(`Fetch external tracking error (${trackingNumber}):`, err.message);
+      }
+
+      if (externalHistory) {
+          return { history: externalHistory, status: externalStatus, location: externalLocation };
+      }
+      return null;
+  }
+
+  // ========== PERIODIC BACKGROUND SYNC TASK ==========
+
+  async function syncActiveOrders() {
+      console.log('[Sync] Starting periodic tracking synchronization...');
+      try {
+          const configSnap = await getDoc(doc(db, 'settings', 'logistics_api'));
+          const apiConfig = configSnap.exists() ? configSnap.data() : null;
+          if (!apiConfig || !apiConfig.enabled) return;
+
+          const activeStatuses = ['تم تسجيل الطلب', 'جاري الشحن لليمن', 'في التخليص الجمركي', 'مع المندوب للتوصيل'];
+          const ordersSnap = await getDocs(query(collection(db, 'orders'), where('orderStatus', 'in', activeStatuses)));
+          
+          if (ordersSnap.empty) return;
+
+          for (const orderDoc of ordersSnap.docs) {
+              const data = orderDoc.data();
+              const trackingNumber = data.trackingNumber;
+              if (!trackingNumber) continue;
+
+              const result = await fetchExternalTracking(trackingNumber, apiConfig);
+              if (result) {
+                  const normalizedStatus = normalizeStatus(result.status);
+                  const historyChanged = (result.history.length > (data.history?.length || 0));
+                  const statusChanged = normalizedStatus !== data.orderStatus;
+
+                  if (historyChanged || statusChanged) {
+                      const updatePayload: any = {
+                          history: result.history,
+                          updatedAt: Date.now()
+                      };
+                      updatePayload.orderStatus = normalizedStatus;
+                      if (result.location) updatePayload.locationYemen = result.location;
+
+                      await updateDoc(doc(db, 'orders', orderDoc.id), updatePayload);
+
+                      const publicRef = doc(db, 'public_tracking', trackingNumber.toUpperCase());
+                      const publicSnap = await getDoc(publicRef);
+                      if (publicSnap.exists()) {
+                          await updateDoc(publicRef, {
+                              status: normalizedStatus,
+                              locationYemen: result.location || publicSnap.data().locationYemen,
+                              history: result.history,
+                              updatedAt: Date.now()
+                          });
+                      }
+                  }
+              }
+              await new Promise(r => setTimeout(r, 500));
+          }
+          console.log('[Sync] Synchronization cycle completed.');
+      } catch (err: any) {
+          console.error('[Sync] Background synchronization failed:', err.message);
+      }
+  }
+
+  // Start background sync loop (6 hours for full sweep)
+  setInterval(syncActiveOrders, 6 * 60 * 60 * 1000);
+  setTimeout(syncActiveOrders, 10000); 
+
+  // ========== TRACKING AND LOGISTICS API INTEGRATION ==========
+  
+  // Real-time tracking resolution and telemetry fetch API
+  // This acts as a proxy to third-party shipping APIs (like AfterShip, 17Track) 
+  // safely obscuring API Keys from the frontend client.
+  app.get('/api/tracking/live/:trackingId', async (req, res) => {
+    const { trackingId } = req.params;
+    if (!trackingId) return res.status(400).json({ error: 'Tracking number is required.' });
+
+    try {
+      const trackingNumber = trackingId.toUpperCase();
+      // 1. Fetch Internal Document
+      let internalDocData: any = null;
+      const publicRef = await getDoc(doc(db, 'public_tracking', trackingNumber));
+      if (publicRef.exists()) {
+          internalDocData = publicRef.data();
+      } else {
+          // Robust query supporting case insensitivity by trying exact match and upper case
+          const ordersSnap = await getDocs(query(collection(db, 'orders'), where('trackingNumber', 'in', [trackingId, trackingNumber]), limit(1)));
+          if (!ordersSnap.empty) internalDocData = ordersSnap.docs[0].data();
+      }
+
+      // 2. Fetch external data using shared helper
+      const configSnap = await getDoc(doc(db, 'settings', 'logistics_api'));
+      const apiConfig = configSnap.exists() ? configSnap.data() : { enabled: false, provider: 'none' }; 
+      
+      const externalResult = await fetchExternalTracking(trackingNumber, apiConfig);
+
+      // 3. Synthesize
+      let trackingData: any = null;
+      if (internalDocData || externalResult) {
+          const statusToUse = normalizeStatus(externalResult?.status || internalDocData?.status || internalDocData?.orderStatus);
+          const historyToUse = externalResult?.history || internalDocData?.history || [];
+          
+          trackingData = {
+             status: statusToUse,
+             currentLocation: externalResult?.location || internalDocData?.locationYemen || internalDocData?.location || 'مستودع الفرز والتبريد',
+             history: historyToUse,
+             isLiveApi: !!externalResult,
+             docData: internalDocData || null 
+          };
+
+          // AUTO-SYNC: Persist external updates back to the primary record immediately
+          if (externalResult && internalDocData) {
+              try {
+                  const historyChanged = (externalResult.history.length > (internalDocData.history?.length || 0));
+                  const statusChanged = (statusToUse !== (internalDocData.status || internalDocData.orderStatus));
+                  
+                  if (historyChanged || statusChanged) {
+                      const updatePayload: any = {
+                          history: externalResult.history,
+                          orderStatus: statusToUse,
+                          updatedAt: Date.now()
+                      };
+                      if (externalResult.location) updatePayload.locationYemen = externalResult.location;
+
+                      // Update the order if it was an order doc
+                      const ordersSnap = await getDocs(query(collection(db, 'orders'), where('trackingNumber', '==', trackingNumber), limit(1)));
+                      if (!ordersSnap.empty) {
+                          await updateDoc(doc(db, 'orders', ordersSnap.docs[0].id), updatePayload);
+                      }
+
+                      // Update public tracking doc
+                      const publicRef = doc(db, 'public_tracking', trackingNumber.toUpperCase());
+                      const publicData = (await getDoc(publicRef));
+                      if (publicData.exists()) {
+                          await updateDoc(publicRef, {
+                              ...updatePayload,
+                              status: statusToUse // alignment
+                          });
+                      }
+                      console.log(`[AutoSync] Live update persisted for ${trackingNumber}`);
+                  }
+              } catch (persistenceErr: any) {
+                  console.error('[AutoSync] Failed to persist live update:', persistenceErr.message);
+              }
+          }
+      } else if (externalResult) {
+          trackingData = {
+             status: externalResult.status || 'Processing',
+             currentLocation: externalResult.location || 'Unknown',
+             history: externalResult.history,
+             isLiveApi: true
+          };
+      }
+
+      if (!trackingData) return res.status(404).json({ error: 'Tracking not found neither externally nor internally.' });
+
+      // Geocoding Coordinates Resolution:
+      // Real tracking APIs usually only return text ("Riyadh", "Sanaa"). We need Lat/Lng for Maps.
+      // So we map common hubs to coordinates.
+      const locationMap: Record<string, [number, number]> = {
+          'جدة': [21.4858, 39.1925],
+          'مستودع السعودية': [21.4858, 39.1925],
+          'مستودع الشحن الرئيسي (جدة - الرياض)': [24.7136, 46.6753],
+          'أوتوستراد حرض': [16.4026, 43.1099],
+          'في التخليص الجمركي': [16.4820, 42.9230], // الوديعة 
+          'صنعاء': [15.3694, 44.1910],
+          'مركز التوزيع في اليمن': [15.3694, 44.1910],
+          'مستودع الفرز والترحيل': [15.4, 44.2],
+          'تم التسليم': [15.3500, 44.2000],
+      };
+
+      // Best effort attach coordinates to live history array
+      let currentLocCoords: [number, number] | null = null;
+      if (trackingData.history && trackingData.history.length > 0) {
+         trackingData.history = trackingData.history.map((h: any) => {
+             let coords = h.coordinates || null;
+             if (!coords) {
+                 // Try exact or partial match
+                 const locText = ((h.location || '') + ' ' + (h.status || '') + ' ' + (h.notes || '')).toLowerCase();
+                 for (const key of Object.keys(locationMap)) {
+                     if (locText.includes(key.toLowerCase())) {
+                         coords = locationMap[key];
+                         break;
+                     }
+                 }
+             }
+             if (coords) currentLocCoords = coords;
+
+             return { ...h, coordinates: coords };
+         });
+      }
+
+      trackingData.currentCoordinates = currentLocCoords || [15.3694, 44.1910]; // Default to Sanaa
+
+      return res.json({ success: true, tracking: trackingData });
+    } catch (e: any) {
+      console.error('Tracking Read Error:', e.message);
+      return res.status(500).json({ error: 'Failed to fetch live logistics payload.' });
+    }
+  });
+
+  // Webhook Receiver for Automatic Third-Party Tracking status push updates
+  app.post('/api/tracking/webhook', async (req, res) => {
+    // Return 200 immediately to acknowledge webhook receipt
+    res.status(200).json({ received: true });
+    
+    // Process payload asynchronously to avoid timeouts
+    (async () => {
+       try {
+           const payload = req.body;
+           // Example AfterShip webhook format: payload.msg.tracking_number, payload.msg.tag
+           if (!payload || !payload.msg || !payload.msg.tracking_number) return;
+           
+           const trackingNumber = payload.msg.tracking_number;
+           const newTag = payload.msg.tag; // 'Delivered', 'InTransit'
+           const locationStr = payload.msg.checkpoint?.location || 'Unknown Checkpoint';
+           
+           // Query the order
+           const ordersSnap = await getDocs(query(collection(db, 'orders'), where('trackingNumber', '==', trackingNumber), limit(1)));
+           if (ordersSnap.empty) return;
+           
+           const orderDoc = ordersSnap.docs[0];
+           const orderData = orderDoc.data();
+           
+           // Standardise tracking phase translation
+           const historyMap: Record<string, string> = {
+               'InfoReceived': 'تم تسجيل الطلب',
+               'InTransit': 'جاري الشحن لليمن',
+               'OutForDelivery': 'مع المندوب للتوصيل',
+               'Delivered': 'تم التسليم',
+               'Exception': 'ملغي'
+           };
+           
+           const newStatusMap = historyMap[newTag] || 'جاري الشحن لليمن';
+           
+           const newHistoryEntry = {
+               status: newStatusMap,
+               location: locationStr,
+               timestamp: Date.now(),
+               notes: payload.msg.checkpoint?.message || 'Automatic third-party checkpoint update',
+               createdBy: 'API_WEBHOOK'
+           };
+           
+           const updatedHistory = [...(orderData.history || []), newHistoryEntry];
+           
+           // Update secured backend Order document
+           await updateDoc(doc(db, 'orders', orderDoc.id), {
+               orderStatus: newStatusMap,
+               locationYemen: locationStr,
+               history: updatedHistory,
+               updatedAt: Date.now()
+           });
+           
+           // If tracking interface was public, update that too
+           const publicRef = doc(db, 'public_tracking', trackingNumber.toUpperCase());
+           const publicSnap = await getDoc(publicRef);
+           if (publicSnap.exists()) {
+               await updateDoc(publicRef, {
+                   status: newStatusMap,
+                   locationYemen: locationStr,
+                   history: updatedHistory,
+                   updatedAt: Date.now()
+               });
+           }
+           console.log(`[Webhook] Tracking ${trackingNumber} state machine advanced to ${newStatusMap}`);
+       } catch (err: any) {
+           console.error('[Webhook] Failed to process logistics update:', err.message);
+       }
+    })();
+  });
+
+  // API Fallback to prevent returning HTML for missing API routes
+  app.all('/api/*', (req, res) => {
+    res.status(404).json({ error: 'API endpoint not found' });
+  });
+
   // Vite Middleware
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
+    // Standard path for build artifacts in AI Studio is 'dist' 
+    const distPath = path.resolve(process.cwd(), 'dist');
+    if (fs.existsSync(distPath)) {
+        app.use(express.static(distPath));
+        app.get('*', (req, res) => {
+          res.sendFile(path.join(distPath, 'index.html'));
+        });
+    } else {
+        console.error('CRITICAL: dist directory missing in production');
+        app.get('*', (req, res) => {
+           res.status(500).send('Application is still building or dist directory is missing.');
+        });
+    }
   }
+
+  // Secure Logistics Credentials Test Connection
+  app.post('/api/tracking/test-connection', async (req, res) => {
+    const { provider, apiKey, defaultDestinationCountry } = req.body;
+    if (!provider || !apiKey) {
+      return res.status(400).json({ error: 'Provider and API Key are required' });
+    }
+
+    try {
+      if (provider === 'parcelsapp') {
+        // v3 Ping test: initiate with a dummy ID (invalid but should auth properly)
+        const response = await fetch(`https://parcelsapp.com/api/v3/shipments/tracking`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            shipments: [{ trackingId: 'PING_TEST_AUTH_CHECK', destinationCountry: defaultDestinationCountry || 'Yemen' }], 
+            language: 'en', 
+            apiKey 
+          })
+        });
+
+        const json = await response.json() as any;
+        if (response.ok && !json.error) {
+          return res.json({ success: true, message: 'ParcelsApp v3 authenticated successfully!' });
+        } else {
+          throw new Error(json.error || 'ParcelsApp authentication failed');
+        }
+      } else if (provider === 'aftership') {
+        const response = await fetch('https://api.aftership.com/v4/couriers', {
+          headers: { 'aftership-api-key': apiKey, 'Content-Type': 'application/json' }
+        });
+        const json = await response.json() as any;
+        if (response.ok && json.meta && json.meta.code === 200) {
+          return res.json({ success: true, message: 'AfterShip API key is valid!' });
+        } else {
+          throw new Error(json.meta?.message || 'AfterShip authentication failed');
+        }
+      } else if (provider === 'sandbox') {
+         return res.json({ success: true, message: 'Sandbox mode is virtualized and always ready.' });
+      }
+
+      return res.status(400).json({ error: 'Provider test not yet implemented' });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
+    }
+  });
 
   app.listen(3000, '0.0.0.0', () => {
     console.log('Server running on port 3000');

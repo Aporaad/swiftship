@@ -42,7 +42,6 @@ export default function Sources() {
     source_url: '',
     contact_info: '',
     location: '',
-    proforma_invoice: '',
     notes: ''
   });
 
@@ -184,7 +183,6 @@ export default function Sources() {
       source_url: source.source_url || '',
       contact_info: source.contact_info || '',
       location: source.location || '',
-      proforma_invoice: source.proforma_invoice || '',
       notes: source.notes || ''
     });
     setIsModalOpen(true);
@@ -199,7 +197,6 @@ export default function Sources() {
       source_url: '',
       contact_info: '',
       location: '',
-      proforma_invoice: '',
       notes: ''
     });
     setIsModalOpen(true);
@@ -428,7 +425,6 @@ export default function Sources() {
                         {source.type === 'Factory' ? (
                           <div className="text-[11px] space-y-0.5">
                             <div><span className="text-slate-500">{isAr ? 'المقر بالصين:' : 'Factory base Depot:'}</span> {source.location || '—'}</div>
-                            {source.proforma_invoice && <div><span className="text-slate-500">{isAr ? 'جرد الفاتورة PI:' : 'Config PI No:'}</span> <span className="font-mono text-amber-500 tracking-tighter">{source.proforma_invoice}</span></div>}
                           </div>
                         ) : '—'}
                       </td>
@@ -653,17 +649,6 @@ export default function Sources() {
                       onChange={(e) => setFormData({...formData, location: e.target.value})}
                       className="w-full bg-black/50 border border-slate-850 rounded-xl py-3 px-4 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start"
                       placeholder={isAr ? 'إدراج المقاطعة أو المدينة كود' : 'Guangdong, Yiwu, warehouse details'}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'رقم الفاتورة المرجعية Proforma Invoice' : 'Standard Proforma Invoice PI Ref'}</label>
-                    <input 
-                      type="text" 
-                      value={formData.proforma_invoice}
-                      onChange={(e) => setFormData({...formData, proforma_invoice: e.target.value})}
-                      className="w-full bg-black/50 border border-slate-850 rounded-xl py-3 px-4 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-start"
-                      placeholder="PI-2026-CHN"
                     />
                   </div>
                 </>

@@ -3,7 +3,7 @@ import { db } from '../lib/firebase';
 
 export interface WhatsAppConfig {
   enabled: boolean;
-  provider: 'sandbox' | 'ultramsg' | 'twilio' | 'custom';
+  provider: 'ultramsg' | 'twilio' | 'custom';
   config: {
     token: string;
     instanceId: string;
@@ -28,7 +28,7 @@ export interface WhatsAppConfig {
 
 export const defaultWhatsAppConfig: WhatsAppConfig = {
   enabled: false,
-  provider: 'sandbox',
+  provider: 'ultramsg',
   config: {
     token: '',
     instanceId: '',

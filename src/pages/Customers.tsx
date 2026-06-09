@@ -86,7 +86,7 @@ export default function Customers() {
   });
 
   const [formData, setFormData] = useState({
-    fullName: '', phone: '', email: '', gps_location: '', address: '', notes: '', walletBalance: 0
+    fullName: '', phone: '', email: '', gps_location: '', address: '', notes: ''
   });
 
   const [searchCustomerId, setSearchCustomerId] = useState<string | null>(null);
@@ -125,7 +125,7 @@ export default function Customers() {
 
   const handleOpenAdd = () => {
     setSelectedCustomer(null);
-    setFormData({ fullName: '', phone: '', email: '', gps_location: '', address: '', notes: '', walletBalance: 0 });
+    setFormData({ fullName: '', phone: '', email: '', gps_location: '', address: '', notes: '' });
     setShowModal(true);
   };
 
@@ -137,8 +137,7 @@ export default function Customers() {
       email: customer.email || '',
       gps_location: customer.gps_location || '',
       address: customer.address || '',
-      notes: customer.notes || '',
-      walletBalance: customer.wallet?.balance || customer.walletBalance || 0
+      notes: customer.notes || ''
     });
     setShowModal(true);
   };
@@ -181,10 +180,6 @@ export default function Customers() {
           gps_location: formData.gps_location,
           address: formData.address,
           notes: formData.notes,
-          wallet: {
-            balance: formData.walletBalance || 0
-          },
-          walletBalance: formData.walletBalance || 0,
           updatedAt: Date.now()
         });
         // Update account name if it changed
@@ -208,11 +203,7 @@ export default function Customers() {
           notes: formData.notes,
           createdAt: Date.now(),
           financialBalance: 0,
-          financialCurrency: settings.currency || 'SAR',
-          wallet: {
-            balance: formData.walletBalance || 0
-          },
-          walletBalance: formData.walletBalance || 0
+          financialCurrency: settings.currency || 'SAR'
         });
 
         // Step 2: Auto-create financial account (1130-xxxx)
@@ -341,7 +332,7 @@ export default function Customers() {
         type: tx.type, // 'Debit' | 'Credit'
         amount: tx.amount || 0,
         module: tx.module || 'transaction',
-        title: tx.description ? tx.description : (isAr ? (tx.type === 'Credit' ? 'إيداع نقدي للمحفظة' : 'سحب / تسوية من المحفظة') : (tx.type === 'Credit' ? 'Wallet Deposit' : 'Wallet Withdrawal')),
+        title: tx.description ? tx.description : (isAr ? (tx.type === 'Credit' ? 'إيداع نقدي للحساب' : 'سحب / تسوية من الحساب') : (tx.type === 'Credit' ? 'Account Deposit' : 'Account Withdrawal')),
         description: isAr 
           ? `حركة حساب مركزية رقم القيد: ${tx.refNumber || tx.accountCode || 'Ledger-Tx'}`
           : `System journal entry ref: ${tx.refNumber || tx.accountCode || 'Ledger-Tx'}`,
@@ -353,21 +344,21 @@ export default function Customers() {
     const sorted = [...ledger].sort((a, b) => a.date - b.date);
 
     // Compute running totals
-    let runningWalletBal = 0; // Credit increases balance (+), Debit decreases balance (-)
+    let runningAccountBal = 0; // Credit increases balance (+), Debit decreases balance (-)
     let runningFinancialBal = 0; // Customer accounts: Debit (+ owing), Credit (- paying)
 
     const finalLedger = sorted.map(item => {
       if (item.type === 'Debit') {
         runningFinancialBal += item.amount;
-        runningWalletBal -= item.amount;
+        runningAccountBal -= item.amount;
       } else {
         runningFinancialBal -= item.amount;
-        runningWalletBal += item.amount;
+        runningAccountBal += item.amount;
       }
 
       return {
         ...item,
-        runningWalletBal,
+        runningAccountBal,
         runningFinancialBal
       };
     });
@@ -444,7 +435,7 @@ export default function Customers() {
                 <tr>
                   <th className="p-4">{isAr ? 'دفتر العميل' : 'Client Profile'}</th>
                   <th className="p-4">{isAr ? 'رقم الهاتف' : 'Telephone'}</th>
-                  <th className="p-4">{isAr ? 'المحفظة الالكترونية' : 'Wallet Balance'}</th>
+                  <th className="p-4">{isAr ? 'إجمالي الأرصدة' : 'Total Balances'}</th>
                   <th className="p-4">{isAr ? 'الحساب المالي' : 'Financial Account'}</th>
                   <th className="p-4">{isAr ? 'تفاصيل العنوان السكني' : 'Settlement Location'}</th>
                   <th className="p-4 text-left">{isAr ? 'الإجراءات والتقرير' : 'Ledger Actions'}</th>
@@ -465,7 +456,7 @@ export default function Customers() {
                     <td className="p-4 text-right">
                       <div className="flex flex-col gap-0.5 text-right font-mono font-bold text-xs text-emerald-400">
                         <span>{(customer.wallet?.balance || customer.walletBalance || 0).toLocaleString()} YER</span>
-                        <span className="text-[9px] text-slate-500 font-sans font-normal">{isAr ? 'رصيد المحفظة الشغال' : 'Reactive Wallet'}</span>
+                        <span className="text-[9px] text-slate-500 font-sans font-normal">{isAr ? 'رصيد الحساب الجاري' : 'Current Ledger Balance'}</span>
                       </div>
                     </td>
                     <td className="p-4">
@@ -617,20 +608,6 @@ export default function Customers() {
               </div>
 
               <div>
-                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'رصيد المحفظة الخاص بالعميل (YER)' : 'Patron Wallet Balance (YER)'}</label>
-                <div className="relative">
-                  <Coins className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#d4af37]" />
-                  <input 
-                    placeholder="0" 
-                    type="number" 
-                    value={formData.walletBalance} 
-                    onChange={e => setFormData({...formData, walletBalance: parseFloat(e.target.value) || 0})} 
-                    className="w-full bg-black/50 border border-slate-850 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-start" 
-                  />
-                </div>
-              </div>
-
-              <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'ملاحظات وتصنيفات إدارية خاصة' : 'Administrative Confidential Annotations'}</label>
                 <textarea 
                   rows={2} 
@@ -719,7 +696,7 @@ export default function Customers() {
                       <Coins className="w-5 h-5 text-emerald-400" />
                     </div>
                     <div className="text-start">
-                      <div className="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-0.5">{isAr ? 'الرصيد الكلي بمحفظة العميل' : 'Total Customer Wallet Balance'}</div>
+                      <div className="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-0.5">{isAr ? 'الرصيد الكلي المتاح' : 'Total Client Available Balance'}</div>
                       <div className="font-mono font-black text-emerald-400 text-sm">{(selectedCustomer?.walletBalance || selectedCustomer?.wallet?.balance || 0).toLocaleString()} YER</div>
                     </div>
                   </div>
@@ -753,7 +730,7 @@ export default function Customers() {
                   }`}
                 >
                   <Coins className="w-4 h-4" />
-                  {isAr ? 'كشف الحساب المالي للمحفظة حركي' : 'Wallet Financial Ledger'}
+                  {isAr ? 'كشف الحساب المالي التفصيلي' : 'Detailed Financial Ledger'}
                 </button>
               </div>
 
@@ -895,7 +872,7 @@ export default function Customers() {
                     <div className="p-4 border-b border-slate-850 bg-black/40 flex justify-between items-center text-start">
                       <h4 className="font-black text-xs text-emerald-400 uppercase tracking-wider flex items-center gap-2">
                         <Coins className="w-4 h-4 text-emerald-400 animate-pulse" />
-                        {isAr ? 'كشف حركة حساب المحفظة التراكمي التفصيلي' : 'PATRON ACCOUNT CHRONOLOGICAL WALLET AUDIT'}
+                        {isAr ? 'كشف حركة الحساب المالي التفصيلي التراكمي' : 'CHRONOLOGICAL FINANCIAL ACCOUNT AUDIT'}
                       </h4>
                       <span className="text-[10px] bg-emerald-950/25 text-emerald-450 border border-emerald-900/40 px-3 py-1 rounded-lg font-bold font-mono">
                         YER LEDGER
@@ -912,7 +889,7 @@ export default function Customers() {
                             <th className="p-3">{isAr ? 'المرجع / السند' : 'Audit Link / Ref'}</th>
                             <th className="p-3">{isAr ? 'طبيعة القيد' : 'Entry Type'}</th>
                             <th className="p-3">{isAr ? 'القيمة المالية' : 'Amount'}</th>
-                            <th className="p-3 text-left">{isAr ? 'رصيد المحفظة المتدرج' : 'Running Wallet Balance'}</th>
+                            <th className="p-3 text-left">{isAr ? 'الرصيد المتدرج للمنشأة' : 'Running Entity Balance'}</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-850 bg-[#08080a]/20">
@@ -959,8 +936,8 @@ export default function Customers() {
                                   <td className={`p-3 font-mono font-black text-xs ${isCredit ? 'text-emerald-400' : 'text-rose-400'}`}>
                                     {isCredit ? '+' : '-'}{item.amount.toLocaleString()} YER
                                   </td>
-                                  <td className={`p-3 text-left font-mono font-black text-xs ${item.runningWalletBal >= 0 ? 'text-emerald-400' : 'text-rose-450'}`}>
-                                    {item.runningWalletBal.toLocaleString()} YER
+                                  <td className={`p-3 text-left font-mono font-black text-xs ${item.runningAccountBal >= 0 ? 'text-emerald-400' : 'text-rose-450'}`}>
+                                    {item.runningAccountBal.toLocaleString()} YER
                                   </td>
                                 </tr>
                               );
@@ -969,7 +946,7 @@ export default function Customers() {
                           {getCustomerUnifiedLedger().length === 0 && (
                             <tr>
                               <td colSpan={7} className="p-16 text-center text-slate-650 italic font-bold">
-                                {isAr ? '[ لم يتم تسجيل أي حركات مالية على هذه المحفظة ]' : '[ NO FINANCIAL TRANSACTIONS REGISTERED ON THIS WALLET ]'}
+                                {isAr ? '[ لم يتم تسجيل أي حركات مالية على هذا الحساب ]' : '[ NO FINANCIAL TRANSACTIONS REGISTERED ON THIS ACCOUNT ]'}
                               </td>
                             </tr>
                           )}

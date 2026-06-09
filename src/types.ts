@@ -1,7 +1,3 @@
-export interface Wallet {
-  balance: number;
-}
-
 export interface Customer {
   id: string;
   fullName: string;
@@ -14,7 +10,6 @@ export interface Customer {
   financialCurrency?: string;
   financialAccountCode?: string;
   financialAccountId?: string;
-  wallet?: Wallet;
   createdAt?: number;
   updatedAt?: number;
 }
@@ -34,8 +29,6 @@ export interface Courier {
   financialCurrency?: string;
   financialAccountCode?: string;
   financialAccountId?: string;
-  wallet?: Wallet;
-  walletBalance?: number;
   createdAt?: number;
   updatedAt?: number;
 }

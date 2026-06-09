@@ -460,21 +460,6 @@ export default function Notifications() {
                     <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-widest block">{isAr ? 'اختر مزود بوابة الإرسال المدمج' : 'Supported Gateways'}</span>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       
-                      {/* Sandbox Card */}
-                      <div 
-                        onClick={() => setWhatsappConfig({ ...whatsappConfig, provider: 'sandbox' })}
-                        className={`p-4 rounded-2xl border transition cursor-pointer flex flex-col justify-between h-32 ${whatsappConfig.provider === 'sandbox' ? 'bg-[#d4af37]/5 border-[#d4af37] text-white shadow-md' : 'bg-slate-950/40 border-slate-850 text-slate-400 hover:border-slate-800'}`}
-                      >
-                        <div className="flex justify-between items-start">
-                          <span className="font-mono text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-400 font-bold font-sans uppercase">SANDBOX</span>
-                          {whatsappConfig.provider === 'sandbox' && <CheckCircle className="w-5 h-5 text-[#d4af37]" />}
-                        </div>
-                        <div>
-                          <h4 className="text-xs font-black text-slate-100">{isAr ? 'محاكاة المعاينة الآمنة' : 'Sandbox Simulator'}</h4>
-                          <p className="text-[10px] text-slate-500 leading-normal mt-1">{isAr ? 'يقوم بنمذجة وحفظ الرسائل مجاناً دون تكاليف حقيقية.' : 'Simulate dispatch logs locally for sandbox diagnostics.'}</p>
-                        </div>
-                      </div>
-
                       {/* Ultramsg Card */}
                       <div 
                         onClick={() => setWhatsappConfig({ ...whatsappConfig, provider: 'ultramsg' })}
@@ -532,14 +517,6 @@ export default function Notifications() {
                     <h3 className="text-xs font-black text-white uppercase tracking-wider">{isAr ? 'بيانات وإعدادات المصادقة الائتمانية للبوابة' : 'Secure API Credentials Mapping'}</h3>
                     <p className="text-[10px] text-slate-500 leading-relaxed mt-1">{isAr ? 'يرجى حظر إفشاء هذه البيانات إلا للمسؤول ومزامنتها في ملف سري.' : 'Sensitive tokens are encrypted and handled inside proxy controllers.'}</p>
                   </div>
-
-                  {whatsappConfig.provider === 'sandbox' && (
-                    <div className="p-6 border-2 border-dashed border-slate-800 rounded-2xl text-center space-y-2 max-w-sm mx-auto">
-                      <ShieldCheck className="w-10 h-10 text-emerald-400 mx-auto" />
-                      <h4 className="text-xs font-bold text-white">{isAr ? 'خدمة المحاكاة النشطة جاهزة' : 'Simulator Online'}</h4>
-                      <p className="text-[10px] text-slate-500">{isAr ? 'لا توجد متطلبات ربط، ستتدفق كشوفات الإرسال لدفتر السجل مباشرة وبشكل وهمي بمجرد حفظ الإعدادات.' : 'Logs will register instantly into audit logs as simulated. Zero fees.'}</p>
-                    </div>
-                  )}
 
                   {whatsappConfig.provider === 'ultramsg' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

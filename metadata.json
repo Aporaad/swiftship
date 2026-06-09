@@ -1,5 +1,5 @@
 {
-  "name": "SwiftShip System",
+  "name": "swiftship",
   "description": "A comprehensive shipping and order management system with tracking and real-time updates.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

@@ -5,13 +5,10 @@ service cloud.firestore {
     
     // Check if user email is in the root list
     function isRoot() {
-      return isSignedIn() && (
+      return isSignedIn() && "email" in request.auth.token && (
         request.auth.token.email == 'alsrhyarslan5@gmail.com' ||
         request.auth.token.email == 'arslan.alshamari@gmail.com' ||
-        request.auth.token.email == 'admin@swiftship.system' ||
-        request.auth.token.get('email', '') == 'alsrhyarslan5@gmail.com' ||
-        request.auth.token.get('email', '') == 'arslan.alshamari@gmail.com' ||
-        request.auth.token.get('email', '') == 'admin@swiftship.system'
+        request.auth.token.email == 'admin@swiftship.system'
       );
     }
 

@@ -173,7 +173,7 @@ export default function GlobalEntityLedgerModal() {
           type: tx.type, // 'Debit' | 'Credit'
           amount: tx.amount || 0,
           module: 'transaction',
-          title: tx.description ? tx.description : (isAr ? (tx.type === 'Credit' ? 'إيداع نقدي للمحفظة' : 'سحب / تسوية من المحفظة') : (tx.type === 'Credit' ? 'Wallet Deposit' : 'Wallet Withdrawal')),
+          title: tx.description ? tx.description : (isAr ? (tx.type === 'Credit' ? 'إيداع نقدي للحساب' : 'سحب / تسوية من الحساب') : (tx.type === 'Credit' ? 'Account Deposit' : 'Account Withdrawal')),
           description: isAr 
             ? `حركة حساب مركزية رقم القيد: ${tx.refNumber || tx.accountCode || 'Ledger-Tx'}`
             : `System journal entry ref: ${tx.refNumber || tx.accountCode || 'Ledger-Tx'}`,
@@ -259,7 +259,7 @@ export default function GlobalEntityLedgerModal() {
           type: tx.type, // 'Debit' | 'Credit'
           amount: tx.amount || 0,
           module: 'transaction',
-          title: tx.description ? tx.description : (isAr ? (tx.type === 'Credit' ? 'تسوية إيداع للمندوب' : 'سحب / تصفية عهدة المندوب') : (tx.type === 'Credit' ? 'Courier Deposit' : 'Courier Custody Clearing')),
+          title: tx.description ? tx.description : (isAr ? (tx.type === 'Credit' ? 'تسوية إيداع للمندوب' : 'سحب / تصفية عهدة المندوب') : (tx.type === 'Credit' ? 'Courier Deposit' : 'Courier Account Clearing')),
           description: isAr 
             ? `تسوية حساب مركزية معتمدة رقم قيد: ${tx.refNumber || tx.accountCode || 'Ledger-Tx'}`
             : `System accounting adjustment ref: ${tx.refNumber || tx.accountCode || 'Ledger-Tx'}`,
@@ -272,17 +272,17 @@ export default function GlobalEntityLedgerModal() {
     const sorted = [...ledger].sort((a, b) => a.date - b.date);
 
     // Compute running balance
-    let runningWalletBal = 0;
+    let runningAccountBal = 0;
     const finalLedger = sorted.map(item => {
       if (item.type === 'Debit') {
-        runningWalletBal -= item.amount;
+        runningAccountBal -= item.amount;
       } else {
-        runningWalletBal += item.amount;
+        runningAccountBal += item.amount;
       }
 
       return {
         ...item,
-        runningWalletBal
+        runningAccountBal
       };
     });
 
@@ -342,14 +342,14 @@ export default function GlobalEntityLedgerModal() {
           {/* Quick Metrics Card Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             
-            {/* Net Wallet Balance */}
+            {/* Current Account Balance Metrics */}
             <div className="bg-gradient-to-br from-[#02130a] to-[#041a10] border border-emerald-500/20 rounded-2xl p-4 flex flex-col justify-between text-start shadow">
               <span className="text-[9px] font-black text-emerald-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                <Wallet className="w-3.5 h-3.5" />
-                {isAr ? 'رصيد المحفظة الحالي' : 'Net Wallet Balance'}
+                <Coins className="w-3.5 h-3.5" />
+                {isAr ? 'رصيد الحساب الموحد' : 'Consolidated Account Balance'}
               </span>
               <div className="font-mono font-black text-emerald-400 text-base">
-                {(entityData?.wallet?.balance || entityData?.walletBalance || 0).toLocaleString()} YER
+                {(entityData?.financialBalance || entityData?.walletBalance || 0).toLocaleString()} YER
               </div>
               <span className="text-[8.5px] text-slate-500 font-sans mt-1">
                 {isAr ? 'مزامنة تحديثات حية للنظام' : 'Live synced database balance'}
@@ -494,8 +494,8 @@ export default function GlobalEntityLedgerModal() {
                             <td className={`p-3 font-mono font-black text-xs ${isCredit ? 'text-emerald-400' : 'text-rose-400'}`}>
                               {isCredit ? '+' : '-'}{item.amount.toLocaleString()} YER
                             </td>
-                            <td className={`p-3 text-left font-mono font-black text-xs ${item.runningWalletBal >= 0 ? 'text-emerald-400' : 'text-rose-450'}`}>
-                              {item.runningWalletBal.toLocaleString()} YER
+                            <td className={`p-3 text-left font-mono font-black text-xs ${item.runningAccountBal >= 0 ? 'text-emerald-400' : 'text-rose-450'}`}>
+                              {item.runningAccountBal.toLocaleString()} YER
                             </td>
                           </tr>
                         );
@@ -503,7 +503,7 @@ export default function GlobalEntityLedgerModal() {
                     {ledgerData.length === 0 && (
                       <tr>
                         <td colSpan={7} className="p-16 text-center text-slate-650 italic font-bold">
-                          {isAr ? '[ لم يتم تقييد حركات مالية مسجلة بالتاريخ لهذه المحفظة ]' : '[ NO FINANCIAL TRANSACTIONS DISCOVERED FOR THIS WALLET ]'}
+                          {isAr ? '[ لم يتم تقييد حركات مالية مسجلة بالتاريخ لهذا الحساب ]' : '[ NO FINANCIAL TRANSACTIONS DISCOVERED FOR THIS ACCOUNT ]'}
                         </td>
                       </tr>
                     )}
@@ -517,7 +517,7 @@ export default function GlobalEntityLedgerModal() {
         {/* Modal Footer with stamp and print button */}
         <div className="p-4 bg-black/40 border-t border-slate-850 flex justify-between items-center shrink-0">
           <div className="text-[9px] font-mono text-slate-500 pr-2 uppercase select-none">
-            {isAr ? 'فرز مالي معتمد كشف حركي بالتاريخ • طبع تلقائي' : 'SECURE RECONCILIATION STAMP • GENERATED VIA WALLET MODULE'}
+            {isAr ? 'فرز مالي معتمد كشف حركي بالتاريخ • طبع تلقائي' : 'SECURE RECONCILIATION STAMP • GENERATED VIA FINANCIAL MODULE'}
           </div>
           <button 
             onClick={() => window.print()} 

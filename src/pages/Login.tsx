@@ -365,9 +365,6 @@ export default function Login() {
               ? 'يجب أن يكون حسابك مسجلاً مسبقاً من قبل الإدارة الفنية للمتابعة.' 
               : 'Restricted system. Access attempts logged natively.'}
           </p>
-          <div className="bg-black/50 border border-slate-900 p-2.5 rounded-xl text-[9px] text-slate-500 font-mono text-center">
-            {isAr ? 'الحساب الافتراضي للدخول:' : 'Default trial account ID:'} <span className="text-[#d4af37] font-bold">admin@swiftship.system</span> / <span className="text-white font-bold">password123</span>
-          </div>
         </div>
       </div>
     </div>

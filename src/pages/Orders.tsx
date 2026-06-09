@@ -1332,11 +1332,7 @@ export default function Orders() {
         notes: customerFormData.notes || '',
         createdAt: Date.now(),
         financialBalance: 0,
-        financialCurrency: settings.currency || 'SAR',
-        wallet: {
-          balance: customerFormData.walletBalance || 0
-        },
-        walletBalance: customerFormData.walletBalance || 0
+        financialCurrency: settings.currency || 'SAR'
       });
 
       // Step 2: Auto-create financial account (1130-xxxx)
@@ -1367,8 +1363,7 @@ export default function Orders() {
         email: '',
         gps_location: '',
         address: '', 
-        notes: '',
-        walletBalance: 0
+        notes: ''
       });
 
       activityLogService.log('add_customer', customerFormData.fullName, { ...customerFormData });
@@ -4273,7 +4268,6 @@ export default function Orders() {
                         >
                           <option value="Cash" className="bg-slate-900">{isAr ? 'نقد كاش' : 'Cash'}</option>
                           <option value="Bank Transfer" className="bg-slate-900">{isAr ? 'تحويل بنكي' : 'Bank Transfer'}</option>
-                          <option value="E-Wallet" className="bg-slate-900">{isAr ? 'محفظة إلكترونية' : 'E-Wallet'}</option>
                         </select>
                       </div>
                     </div>
@@ -4396,23 +4390,6 @@ export default function Orders() {
                   onChange={e => setCustomerFormData({...customerFormData, gps_location: e.target.value})} 
                   className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-start" 
                 />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
-                  {isAr ? 'رصيد المحفظة الافتتاحي (YER)' : 'Patron Wallet Balance (YER)'}
-                </label>
-                <div className="relative">
-                  <Coins className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#d4af37]" />
-                  <input 
-                    tabIndex={6}
-                    placeholder="0" 
-                    type="number" 
-                    value={customerFormData.walletBalance || ''} 
-                    onChange={e => setCustomerFormData({...customerFormData, walletBalance: parseFloat(e.target.value) || 0})} 
-                    className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-start" 
-                  />
-                </div>
               </div>
 
               <div>
