@@ -103,6 +103,7 @@ export default function Users() {
   const ROOT_EMAILS = [
     'alsrhyarslan5@gmail.com', 
     'arslan.alshamari@gmail.com', 
+    'engaporaad1@gmail.com', 
     'admin@swiftship.system'
   ];
 

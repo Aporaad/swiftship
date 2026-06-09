@@ -144,7 +144,7 @@ const PERMISSION_GROUPS = (isAr: boolean) => [
 const ALL_PERMISSIONS = (isAr: boolean) =>
   PERMISSION_GROUPS(isAr).flatMap(g => g.perms);
 
-const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'admin@swiftship.system'];
+const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'engaporaad1@gmail.com', 'admin@swiftship.system'];
 
 // ══════════════════════════════════════════════════════════════
 // ACTION LABEL MAPPING

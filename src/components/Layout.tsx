@@ -305,7 +305,7 @@ export default function Layout() {
     return hasPermission(item.permission);
   });
 
-  const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'admin@swiftship.system'];
+  const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'engaporaad1@gmail.com', 'admin@swiftship.system'];
   const userEmail = auth.currentUser?.email?.toLowerCase();
   const isRootAdmin = userEmail && ROOT_EMAILS.includes(userEmail);
 
