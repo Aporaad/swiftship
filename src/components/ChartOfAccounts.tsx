@@ -1,10 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   FolderTree, Folder, FolderOpen, ChevronRight, ChevronDown, PlusCircle, Trash2, 
-  Search, Scale, X, HelpCircle, Activity, ShieldCheck, DollarSign, RefreshCw 
+  Search, Scale, X, HelpCircle, Activity, ShieldCheck, DollarSign, RefreshCw, Edit2, FileText, FileSpreadsheet, Printer
 } from 'lucide-react';
 import { db } from '../lib/firebase';
-import { collection, addDoc, doc, deleteDoc, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, doc, deleteDoc, updateDoc, onSnapshot, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { notificationService } from '../services/notificationService';
 
 interface ChartOfAccountsProps {
@@ -54,7 +54,15 @@ export default function ChartOfAccounts({
   const [customAccounts, setCustomAccounts] = useState<AccountNode[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
   const [accountLoading, setAccountLoading] = useState(false);
+  
+  const [isReportOpen, setIsReportOpen] = useState(false);
+  const [reportAccount, setReportAccount] = useState<AccountNode | null>(null);
+  const [reportTransactions, setReportTransactions] = useState<any[]>([]);
+  const [reportLoading, setReportLoading] = useState(false);
+
+  const [editingNode, setEditingNode] = useState<AccountNode | null>(null);
 
   // Form states
   const [newAccount, setNewAccount] = useState({
@@ -254,10 +262,14 @@ export default function ChartOfAccounts({
     try {
       await addDoc(collection(db, 'accounts'), {
         code: newAccount.code,
+        accountCode: newAccount.code,
         nameAr: newAccount.nameAr,
         nameEn: newAccount.nameEn,
+        entityName: newAccount.nameAr,
         type: newAccount.type,
+        entityType: 'system',
         parentCode: newAccount.parentCode || null,
+        accountPrefix: newAccount.parentCode || null,
         balance: parseFloat(newAccount.balance) || 0,
         currency: newAccount.currency,
         createdAt: Date.now()
@@ -288,6 +300,99 @@ export default function ChartOfAccounts({
       });
     } finally {
       setAccountLoading(false);
+    }
+  };
+
+  const handleUpdateAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingNode || !editingNode.id) return;
+    
+    if (!newAccount.code || !newAccount.nameAr || !newAccount.nameEn) {
+      return;
+    }
+
+    // Verify code uniqueness if code changed
+    if (editingNode.code !== newAccount.code && allAccounts.some(a => a.code === newAccount.code)) {
+      notificationService.notify({
+        title: isAr ? 'الرمز مكرر' : 'Duplicate Code',
+        message: isAr ? 'هذا الرمز المحاسبي متواجد بالفعل في الشجرة.' : 'An account with this code already exists.',
+        type: 'error'
+      });
+      return;
+    }
+
+    setAccountLoading(true);
+    try {
+      const ref = doc(db, 'accounts', editingNode.id);
+      await updateDoc(ref, {
+        code: newAccount.code,
+        accountCode: newAccount.code,
+        nameAr: newAccount.nameAr,
+        nameEn: newAccount.nameEn,
+        entityName: newAccount.nameAr,
+        type: newAccount.type,
+        entityType: 'system',
+        parentCode: newAccount.parentCode || null,
+        accountPrefix: newAccount.parentCode || null,
+        balance: parseFloat(newAccount.balance) || 0,
+        currency: newAccount.currency,
+        updatedAt: Date.now()
+      });
+
+      notificationService.notify({
+        title: isAr ? 'تم التعديل' : 'Updated',
+        message: isAr ? `تم تعديل بيانات الحساب.` : `Account updated.`,
+        type: 'success'
+      });
+
+      setIsEditOpen(false);
+      setEditingNode(null);
+    } catch (err: any) {
+      console.error(err);
+      notificationService.notify({
+        title: 'Error',
+        message: err.message,
+        type: 'error'
+      });
+    } finally {
+      setAccountLoading(false);
+    }
+  };
+
+  const openReport = async (node: AccountNode) => {
+    setReportAccount(node);
+    setIsReportOpen(true);
+    setReportLoading(true);
+    setReportTransactions([]);
+
+    try {
+      // Find all transactions touching this account code or ID
+      // Some are linked by accountCode, some by accountId
+      const qCode = query(collection(db, 'account_transactions'), where('accountCode', '==', node.code), orderBy('createdAt', 'desc'));
+      const snapCode = await getDocs(qCode);
+      
+      let txs = snapCode.docs.map(d => ({id: d.id, ...d.data()}));
+      
+      if (node.id) {
+         const qId = query(collection(db, 'account_transactions'), where('accountId', '==', node.id), orderBy('createdAt', 'desc'));
+         const snapId = await getDocs(qId);
+         const idTxs = snapId.docs.map(d => ({id: d.id, ...d.data()}));
+         
+         // Combine avoiding duplicates
+         idTxs.forEach(itx => {
+            if (!txs.some(t => t.id === itx.id)) {
+               txs.push(itx);
+            }
+         });
+         
+         txs.sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
+      }
+      
+      setReportTransactions(txs);
+    } catch(err) {
+      console.error(err);
+    } finally {
+      setReportLoading(false);
     }
   };
 
@@ -423,15 +528,16 @@ export default function ChartOfAccounts({
         </div>
 
         {/* Flat and collapsible tree lists */}
-        <div className="border border-slate-850 rounded-2xl bg-black/10 p-4 space-y-1 overflow-x-auto min-w-[700px]">
-          
-          {/* Header titles */}
-          <div className="grid grid-cols-12 text-[9px] text-slate-500 font-black uppercase tracking-wider pb-2.5 border-b border-slate-850 mb-3 px-3">
-            <div className="col-span-3">{isAr ? 'رمز الحساب / التصنيف' : 'Account Code / Class'}</div>
-            <div className="col-span-5">{isAr ? 'اسم الحساب المحاسبي' : 'Ledger Node Nomenclature'}</div>
-            <div className="col-span-2 text-right">{isAr ? 'حالة الحساب' : 'Type'}</div>
-            <div className="col-span-2 text-left">{isAr ? 'الرصيد الكلي المجمع' : 'Aggregated Balance YER'}</div>
-          </div>
+        <div className="border border-slate-850 rounded-2xl bg-black/10 overflow-x-auto">
+          <div className="min-w-[700px] p-4 space-y-1">
+            
+            {/* Header titles */}
+            <div className="grid grid-cols-12 text-[9px] text-slate-500 font-black uppercase tracking-wider pb-2.5 border-b border-slate-850 mb-3 px-3">
+              <div className="col-span-3">{isAr ? 'رمز الحساب / التصنيف' : 'Account Code / Class'}</div>
+              <div className="col-span-4">{isAr ? 'اسم الحساب المحاسبي' : 'Ledger Node Nomenclature'}</div>
+              <div className="col-span-2 text-right">{isAr ? 'حالة الحساب' : 'Type'}</div>
+              <div className="col-span-3 text-left">{isAr ? 'الرصيد الكلي المجمع' : 'Aggregated Balance YER'}</div>
+            </div>
 
           {filteredAccounts.map((node) => {
             const isVisible = isNodeVisible(node);
@@ -466,20 +572,20 @@ export default function ChartOfAccounts({
                 </div>
 
                 {/* Account Name */}
-                <div className="col-span-5 flex items-center gap-2">
+                <div className="col-span-4 flex items-center gap-2 overflow-hidden">
                   {isRoot ? (
-                    <FolderTree className="w-4 h-4 text-[#d4af37]" />
+                    <FolderTree className="w-4 h-4 text-[#d4af37] shrink-0" />
                   ) : isSubGroup ? (
-                    isExpanded ? <FolderOpen className="w-4 h-4 text-[#d4af37]/70" /> : <Folder className="w-4 h-4 text-[#d4af37]/70" />
+                    isExpanded ? <FolderOpen className="w-4 h-4 text-[#d4af37]/70 shrink-0" /> : <Folder className="w-4 h-4 text-[#d4af37]/70 shrink-0" />
                   ) : (
-                    <Activity className="w-3.5 h-3.5 text-slate-500" />
+                    <Activity className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                   )}
                   
-                  <div>
-                    <span className={`block transition-all ${isRoot ? 'text-white font-extrabold text-xs' : isSubGroup ? 'text-slate-200 font-bold' : 'text-slate-350'}`}>
+                  <div className="min-w-0">
+                    <span className={`block truncate transition-all ${isRoot ? 'text-white font-extrabold text-xs' : isSubGroup ? 'text-slate-200 font-bold' : 'text-slate-350'}`}>
                       {isAr ? node.nameAr : node.nameEn}
                     </span>
-                    <span className="text-[8.5px] text-slate-500 block font-normal -mt-0.5">
+                    <span className="text-[8.5px] text-slate-500 block font-normal -mt-0.5 truncate">
                       {isAr ? node.nameEn : node.nameAr}
                     </span>
                   </div>
@@ -498,23 +604,62 @@ export default function ChartOfAccounts({
                   </span>
 
                   {node.isSystem ? (
-                    <span className="text-[8px] bg-slate-900 text-slate-550 border border-slate-800 px-1 py-0.5 rounded text-center">
-                      SYS
-                    </span>
-                  ) : (
-                    node.id && (
+                    <div className="flex items-center gap-1">
+                      <span className="text-[8px] bg-slate-900 text-slate-550 border border-slate-800 px-1 py-0.5 rounded text-center">
+                        SYS
+                      </span>
                       <button 
-                        onClick={() => handleDeleteAccount(node.id!, isAr ? node.nameAr : node.nameEn)}
-                        className="p-1 rounded bg-rose-950/30 text-rose-400 border border-rose-900/25 opacity-0 group-hover:opacity-100 transition-opacity ml-1 hover:bg-rose-900/60"
+                        onClick={() => openReport(node)}
+                        className="p-1 rounded bg-[#d4af37]/10 text-[#d4af37] border border-[#d4af37]/20 opacity-0 group-hover:opacity-100 transition-opacity ml-1 hover:bg-[#d4af37]/20"
+                        title={isAr ? 'تقرير الحساب' : 'Account Report'}
                       >
-                        <Trash2 className="w-3 h-3" />
+                        <FileText className="w-3 h-3" />
                       </button>
-                    )
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-1">
+                      <button 
+                        onClick={() => openReport(node)}
+                        className="p-1 rounded bg-[#d4af37]/10 text-[#d4af37] border border-[#d4af37]/20 hover:bg-[#d4af37]/20"
+                        title={isAr ? 'تقرير الحساب' : 'Account Report'}
+                      >
+                        <FileText className="w-3 h-3" />
+                      </button>
+                      {node.id && (
+                        <>
+                          <button 
+                            onClick={() => {
+                              setEditingNode(node);
+                              setNewAccount({
+                                code: node.code,
+                                nameAr: node.nameAr,
+                                nameEn: node.nameEn,
+                                type: node.type,
+                                parentCode: node.parentCode || '',
+                                balance: node.balance?.toString() || '',
+                                currency: node.currency || 'YER'
+                              });
+                              setIsEditOpen(true);
+                            }}
+                            className="p-1 rounded bg-slate-900 text-slate-300 border border-slate-800 hover:bg-slate-800 hover:text-white"
+                            title={isAr ? 'تعديل الحساب' : 'Edit Account'}
+                          >
+                            <Edit2 className="w-3 h-3" />
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteAccount(node.id!, isAr ? node.nameAr : node.nameEn)}
+                            className="p-1 rounded bg-rose-950/30 text-rose-400 border border-rose-900/25 hover:bg-rose-900/60"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </>
+                      )}
+                    </div>
                   )}
                 </div>
 
                 {/* Balanced output */}
-                <div className="col-span-2 text-left font-mono font-black text-white text-xs">
+                <div className="col-span-3 text-left font-mono font-black text-white text-xs truncate">
                   {node.balance !== undefined ? `${node.balance.toLocaleString()} YER` : '0 YER'}
                   {node.currency && node.currency !== 'YER' && (
                     <span className="text-[7.5px] font-bold block text-slate-550">
@@ -533,6 +678,7 @@ export default function ChartOfAccounts({
             </div>
           )}
 
+          </div>
         </div>
       </div>
 
@@ -667,6 +813,248 @@ export default function ChartOfAccounts({
               </div>
 
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: EDIT CUSTOM SUB-ACCOUNT */}
+      {isEditOpen && editingNode && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 text-start">
+          <div className="bg-[#121215] border border-slate-850 w-full max-w-md rounded-3xl overflow-hidden shadow-2xl relative animate-fade-in">
+            
+            <button 
+              onClick={() => setIsEditOpen(false)}
+              className="absolute top-4 right-4 p-2 text-slate-500 hover:text-white bg-slate-900/40 hover:bg-slate-800 rounded-full transition-all"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="p-5 border-b border-slate-850">
+              <h3 className="text-sm font-black text-white flex items-center gap-2">
+                <Edit2 className="w-4 h-4 text-[#d4af37]" />
+                {isAr ? 'تعديل بيانات الحساب المحاسبي' : 'Modify Ledger Account'}
+              </h3>
+            </div>
+
+            <form onSubmit={handleUpdateAccount} className="p-5 space-y-4">
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[9.5px] font-black text-slate-500 mb-1 uppercase">{isAr ? 'رقم الحساب' : 'Account id'}</label>
+                  <input
+                    required
+                    type="text"
+                    value={newAccount.code}
+                    onChange={e => setNewAccount(prev => ({ ...prev, code: e.target.value.replace(/\D/g, '') }))}
+                    placeholder="1140"
+                    className="w-full bg-black/40 border border-slate-850 text-[#d4af37] rounded-xl px-3 py-2 text-xs font-mono font-black outline-none focus:border-[#d4af37]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9.5px] font-black text-slate-500 mb-1 uppercase">{isAr ? 'الحساب الأب' : 'Parent code'}</label>
+                  <input
+                    type="text"
+                    value={newAccount.parentCode}
+                    onChange={e => setNewAccount(prev => ({ ...prev, parentCode: e.target.value.replace(/\D/g, '') }))}
+                    placeholder="1100"
+                    className="w-full bg-black/40 border border-slate-850 text-white rounded-xl px-3 py-2 text-xs font-mono font-black outline-none focus:border-[#d4af37]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[9.5px] font-black text-slate-500 mb-1 uppercase">{isAr ? 'اسم الحساب (عربي)' : 'Name Ar'}</label>
+                <input
+                  required
+                  type="text"
+                  value={newAccount.nameAr}
+                  onChange={e => setNewAccount(prev => ({ ...prev, nameAr: e.target.value }))}
+                  className="w-full bg-black/40 border border-slate-850 text-white rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-[#d4af37]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[9.5px] font-black text-slate-500 mb-1 uppercase">{isAr ? 'اسم الحساب (إنجليزي)' : 'Name En'}</label>
+                <input
+                  required
+                  type="text"
+                  value={newAccount.nameEn}
+                  onChange={e => setNewAccount(prev => ({ ...prev, nameEn: e.target.value }))}
+                  className="w-full bg-black/40 border border-slate-850 text-white rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-[#d4af37]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[9.5px] font-black text-slate-500 mb-1 uppercase">{isAr ? 'تصنيف الحساب' : 'Type'}</label>
+                  <select
+                    value={newAccount.type}
+                    onChange={e => setNewAccount(prev => ({ ...prev, type: e.target.value as any }))}
+                    className="w-full bg-black/40 border border-slate-850 text-white rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-[#d4af37] cursor-pointer"
+                  >
+                    <option value="Asset">Asset (أصول)</option>
+                    <option value="Liability">Liability (خصوم)</option>
+                    <option value="Equity">Equity (حقوق ملكية)</option>
+                    <option value="Revenue">Revenue (إيرادات)</option>
+                    <option value="Expense">Expense (مصروفات)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-850 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsEditOpen(false)}
+                  className="w-1/2 bg-slate-900 border border-slate-800 text-slate-400 py-2.5 rounded-xl text-xs font-bold hover:text-white transition-all"
+                >
+                  {isAr ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  disabled={accountLoading}
+                  className="w-1/2 bg-[#d4af37] text-black py-2.5 rounded-xl text-xs font-black hover:bg-[#bfa032] transition-all flex items-center justify-center gap-1 disabled:opacity-50"
+                >
+                  {accountLoading && <RefreshCw className="w-3 animate-spin" />}
+                  {isAr ? 'حفظ التعديلات' : 'Save Changes'}
+                </button>
+              </div>
+
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: REPORT */}
+      {isReportOpen && reportAccount && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-2 sm:p-4 text-start">
+          <div className="bg-[#121215] border border-slate-850 w-full max-w-4xl rounded-2xl sm:rounded-3xl shadow-2xl relative animate-fade-in flex flex-col h-[95vh] sm:max-h-[90vh]">
+            
+            <button 
+              onClick={() => setIsReportOpen(false)}
+              className="absolute top-3 sm:top-4 right-3 sm:right-4 p-2 text-slate-500 hover:text-white bg-slate-900/40 hover:bg-slate-800 rounded-full transition-all print:hidden z-10"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="p-4 sm:p-5 border-b border-slate-850 shrink-0 id-print-header">
+              <h3 className="text-sm font-black text-white flex items-center gap-2">
+                <FileSpreadsheet className="w-5 h-5 text-[#d4af37] print:hidden" />
+                {isAr ? 'تقرير الحساب التفصيلي' : 'Detailed Account Report'}
+              </h3>
+              <div className="mt-4 bg-slate-900/50 border border-slate-800 rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-0 print:border-slate-300 print:bg-white print:text-black">
+                <div>
+                  <h4 className="font-bold text-slate-200 print:text-black">[{reportAccount.code}] {isAr ? reportAccount.nameAr : reportAccount.nameEn}</h4>
+                  <span className="text-[10px] text-slate-500 font-mono mt-1 block tracking-wider uppercase print:text-slate-600">
+                    TYPE: {reportAccount.type}
+                  </span>
+                </div>
+                <div className="sm:text-right">
+                  <span className="block text-[10px] text-slate-500 uppercase font-black print:text-slate-600">{isAr ? 'الرصيد الكلي المجمع' : 'Total Balance'}</span>
+                  <span className="block text-lg sm:text-xl font-mono text-[#d4af37] font-black print:text-black">{reportAccount.balance?.toLocaleString() || 0} YER</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-auto p-4 sm:p-5 id-print-body print:overflow-visible relative min-h-0">
+              {reportLoading ? (
+                <div className="flex items-center justify-center py-20 text-slate-500">
+                  <RefreshCw className="w-6 h-6 animate-spin" />
+                </div>
+              ) : (
+                <div className="bg-black/30 border border-slate-850 rounded-xl overflow-x-auto print:border-none print:bg-white">
+                  <table className="w-full text-left border-collapse min-w-max">
+                    <thead className="bg-[#0e0e11] border-b border-slate-850 text-slate-400 print:bg-slate-100 print:text-black print:border-slate-300">
+                      <tr>
+                        <th className="p-2 sm:p-3 text-[10px] sm:text-xs font-black uppercase tracking-wider">{isAr ? 'التاريخ' : 'Date'}</th>
+                        <th className="p-2 sm:p-3 text-[10px] sm:text-xs font-black uppercase tracking-wider">{isAr ? 'رقم القيد' : 'Voucher No'}</th>
+                        <th className="p-2 sm:p-3 text-[10px] sm:text-xs font-black uppercase tracking-wider">{isAr ? 'البيان' : 'Particulars'}</th>
+                        <th className="p-2 sm:p-3 text-[10px] sm:text-xs font-black uppercase tracking-wider text-right">{isAr ? 'مدين (وارد)' : 'Debit'}</th>
+                        <th className="p-2 sm:p-3 text-[10px] sm:text-xs font-black uppercase tracking-wider text-right">{isAr ? 'دائن (منصرف)' : 'Credit'}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-850/50 print:divide-slate-300">
+                      {reportTransactions.map(tx => (
+                        <tr key={tx.id} className="hover:bg-slate-900/30 transition-colors print:text-black">
+                          <td className="p-2 sm:p-3 text-[10px] sm:text-xs font-mono text-slate-400 print:text-black">
+                            {tx.createdAt ? new Date(tx.createdAt).toLocaleDateString() : ''}
+                          </td>
+                          <td className="p-2 sm:p-3 text-[10px] font-mono text-[#d4af37] print:text-black">{tx.refNumber || '-'}</td>
+                          <td className="p-2 sm:p-3 text-[10px] sm:text-xs font-bold text-slate-300 print:text-black whitespace-normal break-words max-w-[200px]">{tx.description || '-'}</td>
+                          <td className="p-2 sm:p-3 text-[10px] sm:text-xs font-mono text-emerald-400 text-right print:text-black">
+                            {tx.type === 'Debit' ? tx.amount?.toLocaleString() : ''}
+                          </td>
+                          <td className="p-2 sm:p-3 text-[10px] sm:text-xs font-mono text-rose-400 text-right print:text-black">
+                            {tx.type === 'Credit' ? tx.amount?.toLocaleString() : ''}
+                          </td>
+                        </tr>
+                      ))}
+                      {reportTransactions.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="p-6 sm:p-8 text-center text-slate-500 font-bold text-[10px] uppercase font-mono tracking-widest print:text-black">
+                            [ {isAr ? 'لا توجد حركات مالية مسجلة' : 'No transactions recorded'} ]
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 sm:p-5 border-t border-slate-850 shrink-0 print:hidden flex justify-end gap-3 bg-[#0a0a0f] rounded-b-2xl sm:rounded-b-3xl">
+              <button 
+                onClick={() => setIsReportOpen(false)}
+                className="px-4 py-2 text-slate-400 bg-slate-900/50 hover:bg-slate-800 hover:text-white border border-slate-800 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              >
+                {isAr ? 'إغلاق والتراجع' : 'Close Details'}
+              </button>
+              <button 
+                onClick={() => {
+                  const printContents = document.querySelector('.id-print-header')?.outerHTML + document.querySelector('.id-print-body')?.outerHTML;
+                  if (printContents) {
+                    const printWindow = window.open('', '_blank');
+                    if (printWindow) {
+                      printWindow.document.write(`
+                        <html dir="\${isAr ? 'rtl' : 'ltr'}">
+                          <head>
+                            <title>\${isAr ? 'طباعة تقرير الحساب' : 'Print Account Report'}</title>
+                            <style>
+                              body { font-family: monospace; padding: 20px; text-align: \${isAr ? 'right' : 'left'}; color: #000; background: #fff; }
+                              table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                              th, td { border: 1px solid #ddd; padding: 8px; font-size: 12px; }
+                              th { background-color: #f5f5f5; text-align: inherit; }
+                              .text-right { text-align: \${isAr ? 'left' : 'right'}; }
+                              .text-center { text-align: center; }
+                              h3, h4 { margin: 0 0 10px 0; }
+                              .bg-slate-900\\/50 { background-color: #f9f9f9; padding: 15px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 20px;}
+                              .block { display: block; }
+                              .font-black { font-weight: 900; }
+                              .font-bold { font-weight: bold; }
+                              /* Hide unneeded icons or UI components */
+                              .print\\\\:hidden { display: none !important; }
+                            </style>
+                          </head>
+                          <body>\${printContents}</body>
+                        </html>
+                      `);
+                      printWindow.document.close();
+                      printWindow.focus();
+                      // Wait for styles to load
+                      setTimeout(() => {
+                        printWindow.print();
+                        printWindow.close();
+                      }, 250);
+                    }
+                  }
+                }}
+                disabled={reportLoading}
+                className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-[#d4af37] to-yellow-600 text-black font-black text-xs rounded-xl shadow-md transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50 cursor-pointer"
+              >
+                <Printer className="w-4 h-4" />
+                {isAr ? 'طباعة كشف الحساب' : 'Print Statement'}
+              </button>
+            </div>
+
           </div>
         </div>
       )}

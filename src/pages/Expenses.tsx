@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, orderBy, addDoc, doc, updateDoc, getDocs, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, addDoc, doc, updateDoc, getDocs, where, increment, writeBatch } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { useSettings } from '../context/SettingsContext';
 import { useRole } from '../hooks/useRole';
 import { notificationService } from '../services/notificationService';
 import { activityLogService } from '../services/activityLogService';
 import { financialAccountService } from '../services/financialAccountService';
-import { Plus, Search, Wallet, DollarSign, Calendar, RefreshCw, Layers, CheckCircle2, AlertTriangle, User, FileText, ArrowUpRight, ArrowDownLeft, Crown, ShieldAlert, Coins, X, Printer, Activity } from 'lucide-react';
+import { Plus, Search, Wallet, DollarSign, Calendar, RefreshCw, Layers, CheckCircle2, AlertTriangle, User, FileText, ArrowUpRight, ArrowDownLeft, Crown, ShieldAlert, Coins, X, Printer, Activity, Edit2 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { useLocation } from 'react-router-dom';
 import FinanceReports from '../components/FinanceReports';
@@ -46,6 +46,8 @@ export default function Expenses() {
   const [addLoading, setAddLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [accountSearchQuery, setAccountSearchQuery] = useState(''); // NEW SEARCH STATE
+  const [isAccountDropdownOpen, setIsAccountDropdownOpen] = useState(false); // NEW DROPDOWN STATE
   const [typeFilter, setTypeFilter] = useState('all');
   const isAr = settings.language === 'ar';
 
@@ -69,6 +71,25 @@ export default function Expenses() {
     salaryMonth: ''            // NEW: salary payment month YYYY-MM
   });
   const [selectedDateTime, setSelectedDateTime] = useState('');
+
+  // Editing state for expenses
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [selectedExpense, setSelectedExpense] = useState<any>(null);
+  const [editLoading, setEditLoading] = useState(false);
+
+  // Settlement state
+  const [isSettleModalOpen, setIsSettleModalOpen] = useState(false);
+  const [settleAmount, setSettleAmount] = useState('');
+  const [settleSubmitting, setSettleSubmitting] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    category: 'marketing',
+    amount: '',
+    currency: 'YER',
+    recipientName: '',
+    notes: '',
+    remarks: '',
+    createdAt: ''
+  });
 
   const handleRefreshStats = async () => {
     setIsRefreshing(true);
@@ -306,7 +327,7 @@ export default function Expenses() {
             entityType: recipientEntityType,
             entityId: recipientEntityId,
             entityName: recipientName,
-            type: 'Credit', // Money out from company, charged to entity's account
+            type: type === 'Custody' ? 'Debit' : 'Credit', // Debit courier for custody (as they owe it), otherwise Credit
             amount: convertedAmount,
             amountOriginal: rawAmount,
             currencyOriginal: formData.currency,
@@ -361,7 +382,117 @@ export default function Expenses() {
     }
   };
 
-  const handleSettleCustody = async (exp: any) => {
+  const handleEditExpense = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editFormData.amount || isNaN(parseFloat(editFormData.amount))) {
+      return notificationService.notify({
+        title: isAr ? 'قيمة المبلغ غير صالحة' : 'Invalid Amount',
+        message: isAr ? 'يرجى كتابة مبلغ رقمي موافق للشروط.' : 'Please enter a valid numeric amount.',
+        type: 'error'
+      });
+    }
+
+    setEditLoading(true);
+    try {
+      const rawAmount = parseFloat(editFormData.amount);
+      const convertedAmount = financialAccountService.convertToDefaultCurrency(
+        rawAmount,
+        editFormData.currency,
+        settings.currency || 'SAR',
+        { USD: settings.exchangeRateUSD || 535, SAR: settings.exchangeRateSAR || 140 }
+      );
+      
+      const parsedCreatedAt = editFormData.createdAt ? new Date(editFormData.createdAt).getTime() : Date.now();
+
+      const batch = writeBatch(db);
+
+      // 1. Check if we have linked account transactions (by expenseNumber vs refNumber)
+      if (selectedExpense.expenseNumber) {
+        const txQuery = query(collection(db, 'account_transactions'), where('refNumber', '==', selectedExpense.expenseNumber));
+        const txSnap = await getDocs(txQuery);
+
+        txSnap.docs.forEach((txDoc) => {
+          const txData = txDoc.data();
+          const diffVal = convertedAmount - (txData.amount || 0);
+          const delta = txData.type === 'Debit' ? diffVal : -diffVal;
+
+          batch.update(txDoc.ref, {
+            amount: convertedAmount,
+            amountOriginal: rawAmount,
+            currencyOriginal: editFormData.currency,
+            description: editFormData.notes || txData.description,
+            createdAt: parsedCreatedAt
+          });
+
+          // Update Account Balance
+          if (txData.accountId) {
+            const accRef = doc(db, 'accounts', txData.accountId);
+            batch.update(accRef, {
+              balance: increment(delta),
+              debitTotal: txData.type === 'Debit' ? increment(diffVal) : increment(0),
+              creditTotal: txData.type === 'Credit' ? increment(diffVal) : increment(0),
+              updatedAt: Date.now()
+            });
+          }
+
+          // Update Entity Balance
+          if (txData.entityType && txData.entityType !== 'system' && txData.entityId) {
+            const entityCollection = financialAccountService.getEntityCollection(txData.entityType);
+            const entityRef = doc(db, entityCollection, txData.entityId);
+            batch.update(entityRef, {
+              financialBalance: increment(delta),
+              updatedAt: Date.now()
+            });
+          }
+        });
+      }
+
+      // 2. Update the Expense document itself
+      const expenseRef = doc(db, 'expenses', selectedExpense.id);
+      batch.update(expenseRef, {
+        category: editFormData.category,
+        amount: rawAmount,
+        currency: editFormData.currency,
+        amountInDefaultCurrency: convertedAmount,
+        recipientName: editFormData.recipientName,
+        notes: editFormData.notes,
+        remarks: editFormData.remarks,
+        createdAt: parsedCreatedAt,
+        updatedAt: Date.now()
+      });
+
+      await batch.commit();
+
+      activityLogService.log('edit_expense' as any, selectedExpense.expenseNumber, {
+        id: selectedExpense.id,
+        category: editFormData.category,
+        amount: rawAmount,
+        currency: editFormData.currency
+      });
+
+      notificationService.notify({
+        title: isAr ? 'تم تعديل السند بنجاح' : 'Voucher Updated',
+        message: isAr ? 'تم حفظ التعديلات وإعادة مطابقة الدفاتر الحسابية بنجاح.' : 'Voucher changed & general ledger adjusted accordingly.',
+        type: 'success',
+        category: 'finance'
+      });
+
+      setIsEditOpen(false);
+      setSelectedExpense(null);
+    } catch (err: any) {
+      console.error('[EditExpense] failed:', err);
+      notificationService.notify({
+        title: 'Error',
+        message: err.message || 'Could not update voucher transaction.',
+        type: 'error',
+        category: 'finance'
+      });
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const openSettleModal = (exp: any) => {
     if (!canEditExpenses) {
       return notificationService.notify({
         title: isAr ? 'خطأ بالصلاحيات' : 'Permission Error',
@@ -370,23 +501,57 @@ export default function Expenses() {
         category: 'finance'
       });
     }
+    const remainingToSettle = (parseFloat(exp.amount) || 0) - (parseFloat(exp.remittedAmount) || 0);
+    setSettleAmount(remainingToSettle.toString());
+    setSelectedExpense(exp);
+    setIsSettleModalOpen(true);
+  };
+
+  const handleConfirmSettleCustody = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedExpense || !settleAmount || settleSubmitting) return;
+
+    const amountToRemit = parseFloat(settleAmount);
+    if (isNaN(amountToRemit) || amountToRemit <= 0) {
+      return notificationService.notify({
+        title: isAr ? 'مبلغ غير صالح' : 'Invalid Amount',
+        message: isAr ? 'يرجى إدخال مبلغ صحيح' : 'Please enter a valid amount',
+        type: 'error'
+      });
+    }
+
+    setSettleSubmitting(true);
     try {
+      const exp = selectedExpense;
+      const currentRemitted = parseFloat(exp.remittedAmount) || 0;
+      const currentRemittedDefault = parseFloat(exp.remittedAmountInDefaultCurrency) || 0;
+      const totalAmount = parseFloat(exp.amount) || 0;
+      
+      const newRemitted = currentRemitted + amountToRemit;
+      const isFullySettled = newRemitted >= totalAmount;
+
+      const settledAmountInDefaultCurrency = financialAccountService.convertToDefaultCurrency(
+        amountToRemit,
+        exp.currency || 'YER',
+        settings.currency || 'SAR',
+        { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+      );
+      
+      const newRemittedDefault = currentRemittedDefault + settledAmountInDefaultCurrency;
+
       await updateDoc(doc(db, 'expenses', exp.id), {
-        status: 'Settled',
-        settledAt: Date.now(),
-        settledByEmail: auth.currentUser?.email || 'admin',
-        settledByName: profile?.fullName || 'Root Admin'
+        status: isFullySettled ? 'Settled' : 'Pending',
+        remittedAmount: newRemitted,
+        remittedAmountInDefaultCurrency: newRemittedDefault,
+        settledAt: isFullySettled ? Date.now() : exp.settledAt || null,
+        settledByEmail: isFullySettled ? (auth.currentUser?.email || 'admin') : null,
+        settledByName: isFullySettled ? (profile?.fullName || 'Root Admin') : null,
+        updatedAt: Date.now()
       });
 
       // --- Financial Account Reversal: Debit on courier's account (returning the custody) ---
       if (exp.linkedAccountId && exp.recipientEntityId) {
         try {
-          const settledAmount = financialAccountService.convertToDefaultCurrency(
-            parseFloat(exp.amount || 0),
-            exp.currency || 'YER',
-            settings.currency || 'SAR',
-            { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
-          );
           await financialAccountService.recordTransaction(exp.linkedAccountId, {
             accountId: exp.linkedAccountId,
             accountCode: exp.linkedAccountCode || '',
@@ -394,11 +559,11 @@ export default function Expenses() {
             entityId: exp.recipientEntityId,
             entityName: exp.recipientName,
             type: 'Credit', // Reversal: money returned / settled
-            amount: settledAmount,
-            amountOriginal: parseFloat(exp.amount || 0),
+            amount: settledAmountInDefaultCurrency,
+            amountOriginal: amountToRemit,
             currencyOriginal: exp.currency || 'YER',
-            description: isAr ? `تسوية عهدة: ${exp.expenseNumber}` : `Custody settlement: ${exp.expenseNumber}`,
-            refNumber: `${exp.expenseNumber}-SETTLE`,
+            description: isAr ? `تسوية/سداد عهدة (${amountToRemit} ${exp.currency || ''}): ${exp.expenseNumber}` : `Custody settlement (${amountToRemit} ${exp.currency}): ${exp.expenseNumber}`,
+            refNumber: `${exp.expenseNumber}-SETTLE-${Math.floor(Math.random()*1000)}`,
             module: 'custody',
             createdByUid: auth.currentUser?.uid || 'system',
             createdByName: profile?.fullName || 'Root Admin',
@@ -409,13 +574,17 @@ export default function Expenses() {
         }
       }
 
-      activityLogService.log('settle_custody', exp.recipientName || exp.recipientId, { id: exp.id, amount: exp.amount });
+      activityLogService.log('settle_custody', exp.recipientName || exp.recipientId, { id: exp.id, amount: amountToRemit, type: isFullySettled ? 'Full' : 'Partial' });
       notificationService.notify({
-        title: isAr ? 'تم تسوية العهدة بنجاح' : 'Custody Discharged',
-        message: isAr ? `تمت تسوية وتصفير عهدة المندوب ${exp.recipientName}` : `Custody balance for ${exp.recipientName} cleared`,
+        title: isAr ? 'تم تسجيل السداد' : 'Remittance Logged',
+        message: isFullySettled ? (isAr ? `تمت تسوية العهدة بالكامل للمندوب ${exp.recipientName}` : `Custody balance fully cleared for ${exp.recipientName}`) : (isAr ? `تم تسجيل تسوية جزئية ببلغ ${amountToRemit}` : `Partial settlement of ${amountToRemit} recorded`),
         type: 'success',
         category: 'finance'
       });
+      
+      setIsSettleModalOpen(false);
+      setSelectedExpense(null);
+      setSettleAmount('');
     } catch (err) {
       console.error(err);
       notificationService.notify({
@@ -424,6 +593,8 @@ export default function Expenses() {
         type: 'error',
         category: 'finance'
       });
+    } finally {
+      setSettleSubmitting(false);
     }
   };
 
@@ -698,6 +869,10 @@ export default function Expenses() {
     const matchesType = typeFilter === 'all' || exp.type === typeFilter || cat.id === typeFilter;
 
     return matchesSearch && matchesType;
+  }).sort((a, b) => {
+    const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return timeB - timeA;
   });
 
   if (roleLoading || expensesLoading) {
@@ -1052,19 +1227,44 @@ export default function Expenses() {
                       )}
                     </td>
                     <td className="p-4 text-left">
-                      {isSettleBtnVisible && (
-                        <button 
-                          onClick={() => handleSettleCustody(exp)}
-                          className="bg-emerald-600/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500 hover:text-black hover:border-transparent px-3 py-1.5 rounded-xl font-black text-[10px] transition-all"
-                        >
-                          {isAr ? 'تأكيد التصفية والتسليم' : 'Discharge Vault'}
-                        </button>
-                      )}
-                      {!isSettleBtnVisible && (
-                        <span className="text-[9px] text-slate-600 font-bold font-mono uppercase">
-                          {exp.status === 'Settled' ? (isAr ? 'مغلق ومسوى' : 'RECONCILED') : (isAr ? 'مثبت' : 'LOCKED')}
-                        </span>
-                      )}
+                      <div className="flex items-center justify-end gap-2 shrink-0">
+                        {isSettleBtnVisible && (
+                          <button 
+                            onClick={() => openSettleModal(exp)}
+                            className="bg-emerald-600/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500 hover:text-black hover:border-transparent px-3 py-1.5 rounded-xl font-black text-[10px] transition-all cursor-pointer"
+                          >
+                            {isAr ? 'تأكيد التصفية والتسليم' : 'Discharge Vault'}
+                          </button>
+                        )}
+                        {canEditExpenses && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedExpense(exp);
+                              setEditFormData({
+                                category: exp.category || 'marketing',
+                                amount: exp.amount?.toString() || '',
+                                currency: exp.currency || 'YER',
+                                recipientName: exp.recipientName || '',
+                                notes: exp.notes || '',
+                                remarks: exp.remarks || '',
+                                createdAt: new Date(exp.createdAt || Date.now()).toISOString().substring(0, 16)
+                              });
+                              setIsEditOpen(true);
+                            }}
+                            className="bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white px-2.5 py-1.5 rounded-xl text-[10px] font-black transition-all flex items-center gap-1 cursor-pointer"
+                            title={isAr ? 'تعديل السند المالي' : 'Edit Voucher Details'}
+                          >
+                            <Edit2 className="w-3.5 h-3.5 text-[#d4af37]" />
+                            {isAr ? 'تعديل' : 'Edit'}
+                          </button>
+                        )}
+                        {!isSettleBtnVisible && !canEditExpenses && (
+                          <span className="text-[9px] text-slate-600 font-bold font-mono uppercase">
+                            {exp.status === 'Settled' ? (isAr ? 'مغلق ومسوى' : 'RECONCILED') : (isAr ? 'مثبت' : 'LOCKED')}
+                          </span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -1080,6 +1280,80 @@ export default function Expenses() {
           </table>
         </div>
       </div>
+
+      {/* Settle Custody Modal overlay */}
+      {isSettleModalOpen && selectedExpense && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <form onSubmit={handleConfirmSettleCustody} className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/25 rounded-3xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh] overflow-hidden font-sans">
+            <div className="p-4 border-b border-slate-850 flex justify-between items-center bg-[#07070a]/40 shrink-0">
+              <h3 className="font-black text-white text-xs uppercase tracking-widest flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-[#d4af37]" />
+                {isAr ? 'تأكيد التسوية والتصفية للعهدة' : 'Settle Custody'}
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => { setIsSettleModalOpen(false); setSelectedExpense(null); setSettleAmount(''); }} 
+                className="text-slate-500 hover:text-white p-1 bg-slate-900 border border-slate-800 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-5 flex-1 overflow-y-auto space-y-4">
+              <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-4">
+                <div className="text-[10px] text-slate-500 font-bold mb-1">{isAr ? 'العهدة المالية المستلمة:' : 'Custody Amount:'}</div>
+                <div className="font-mono font-black text-emerald-400 text-lg">
+                  {parseFloat(selectedExpense.amount || 0).toLocaleString()} {selectedExpense.currency || 'YER'}
+                </div>
+                {parseFloat(selectedExpense.remittedAmount || 0) > 0 && (
+                  <div className="text-[10px] text-slate-400 font-bold mt-1">
+                    {isAr ? 'المبلغ المسدد مسبقاً:' : 'Already Remitted:'} <span className="font-mono text-white">{parseFloat(selectedExpense.remittedAmount).toLocaleString()} {selectedExpense.currency || 'YER'}</span>
+                  </div>
+                )}
+                {selectedExpense.recipientName && (
+                  <div className="text-[10px] text-slate-400 font-bold mt-1">
+                    {isAr ? 'المندوب:' : 'Courier:'} <span className="text-white">{selectedExpense.recipientName}</span>
+                  </div>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-black text-slate-400 uppercase">{isAr ? 'المبلغ المراد تسويته (تصفية)' : 'Amount to Remit/Settle'}</label>
+                <div className="relative">
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 font-black text-[10px] select-none pointer-events-none">
+                    {selectedExpense.currency || 'YER'}
+                  </span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={settleAmount}
+                    onChange={(e) => setSettleAmount(e.target.value)}
+                    className="w-full bg-slate-950 border border-[#d4af37]/30 rounded-xl p-3 outline-none focus:border-[#d4af37] text-white text-sm font-mono font-bold transition-all pr-12 focus:shadow-[0_0_15px_rgba(212,175,55,0.15)] shadow-inner placeholder:text-slate-700"
+                    placeholder={isAr ? 'أدخل المبلغ المسدد فعلياً...' : 'Enter remitted amount...'}
+                  />
+                </div>
+                <p className="text-[9px] text-slate-500 font-bold">{isAr ? 'سيتم توليد قيد مالي بالقيمة المدخلة وإضافته كرصيد دائن للمندوب.' : 'A credit transaction will be logged for the entered amount.'}</p>
+              </div>
+            </div>
+            <div className="p-4 border-t border-slate-850 flex justify-end gap-3 shrink-0">
+              <button 
+                type="button" 
+                disabled={settleSubmitting}
+                onClick={() => { setIsSettleModalOpen(false); setSelectedExpense(null); setSettleAmount(''); }} 
+                className="px-5 py-2.5 text-slate-400 hover:bg-slate-800 rounded-xl transition-all font-bold text-[10px] disabled:opacity-50"
+              >
+                {isAr ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button 
+                type="submit" 
+                disabled={settleSubmitting}
+                className="px-6 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-800 hover:from-emerald-500 hover:to-emerald-700 text-white font-black rounded-xl transition-all text-xs flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {settleSubmitting ? (isAr ? 'جاري الترحيل...' : 'Processing...') : (isAr ? 'تأكيد التسوية والترحيل' : 'Confirm Settlement')}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* Add Expenses Modal overlay */}
       {isAddOpen && (
@@ -1164,89 +1438,184 @@ export default function Expenses() {
                 />
               </div>
 
-              {formData.category === 'custody' && (
-                <div>
-                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'المندوب كفيل العهدة' : 'Select Liable Courier'}</label>
-                  <select 
-                    required 
-                    value={formData.recipientId} 
-                    onChange={(e) => {
-                      const courier = couriers.find(c => c.id === e.target.value);
-                      setFormData({
-                        ...formData, 
-                        recipientId: e.target.value,
-                        linkedAccountId: courier?.financialAccountId || '',
-                        linkedAccountCode: courier?.financialAccountCode || '',
-                        linkedAccountEntityType: 'courier'
-                      });
-                    }}
-                    className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer"
-                  >
-                    <option value="">{isAr ? '-- اختر المندوب من الكشف --' : '-- Choose Courier --'}</option>
-                    {couriers.map(c => {
-                      const bal = c.wallet?.balance || c.walletBalance || 0;
-                      return (
-                        <option key={c.id} value={c.id}>
-                          {c.fullName} ({c.courierCustomId}) — {isAr ? 'الرصيد' : 'Balance'}: {bal.toLocaleString()} YER {c.financialAccountCode ? ` (${c.financialAccountCode})` : ''}
-                        </option>
-                      );
-                    })}
-                  </select>
-                  {formData.linkedAccountCode && (
-                    <div className="mt-1.5 flex items-center gap-1.5">
-                      <span className="text-[9px] font-black text-slate-500">{isAr ? 'سيتم الخصم من حساب:' : 'Will charge account:'}</span>
-                      <span className="font-mono font-black text-[#d4af37] text-[10px] bg-[#d4af37]/10 border border-[#d4af37]/20 px-2 py-0.5 rounded">{formData.linkedAccountCode}</span>
-                    </div>
-                  )}
+              {/* UNIFIED LEDGER SELECTION FOR ALL EXPENSE CATEGORIES */}
+              <div className="relative">
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
+                  {isAr ? 'الحساب المالي المستهدف (شجرة الحسابات) *' : 'Target Ledger Account *'}
+                </label>
+                
+                {/* Account Selection Trigger */}
+                <div 
+                  onClick={() => setIsAccountDropdownOpen(!isAccountDropdownOpen)}
+                  className="w-full bg-black/40 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer flex justify-between items-center"
+                >
+                  <span className="truncate">
+                    {formData.linkedAccountId ? (
+                      (() => {
+                        const acc = financialAccounts.find(a => a.id === formData.linkedAccountId);
+                        if (!acc) return isAr ? '-- اختر حساب التوجيه المحاسبي --' : '-- Choose Ledger Account --';
+                        return `[${acc.code || acc.accountCode || 'Sys'}] - ${isAr ? acc.nameAr || acc.entityName : acc.nameEn || acc.entityName} ${acc.balance !== undefined ? `(${acc.balance.toLocaleString()} YER)` : ''}`;
+                      })()
+                    ) : (
+                      <span className="text-slate-500">{isAr ? '-- اختر حساب التوجيه المحاسبي --' : '-- Choose Ledger Account --'}</span>
+                    )}
+                  </span>
+                  <svg className={`w-4 h-4 text-slate-500 transition-transform ${isAccountDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                 </div>
-              )}
+                
+                {/* Custom Dropdown Content */}
+                {isAccountDropdownOpen && (
+                  <div className="absolute z-50 mt-2 w-full bg-[#121215] border border-slate-850 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-64">
+                    {/* Account Search Input */}
+                    <div className="p-2 border-b border-slate-850 bg-black/40 sticky top-0">
+                      <input
+                        type="text"
+                        placeholder={isAr ? "🔎 ابحث بالاسم أو الكود..." : "🔎 Search by name or code..."}
+                        value={accountSearchQuery}
+                        onChange={(e) => setAccountSearchQuery(e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-full bg-black/50 border border-slate-800 text-white rounded-lg p-2 outline-none text-xs font-bold focus:border-[#d4af37]/50"
+                        autoFocus
+                      />
+                    </div>
+                    
+                    <div className="overflow-y-auto p-1 custom-scrollbar">
+                      {(() => {
+                        const filteredAccounts = financialAccounts.filter(acc => {
+                          const q = accountSearchQuery.toLowerCase().trim();
+                          if (!q) {
+                            if (formData.category === 'salary' || formData.category === 'wages') return acc.entityType === 'employee';
+                            if (formData.category === 'custody') return acc.entityType === 'courier';
+                            return true;
+                          }
+                          return (
+                            (acc.accountCode && acc.accountCode.toLowerCase().includes(q)) ||
+                            (acc.code && acc.code.toLowerCase().includes(q)) ||
+                            (acc.nameAr && acc.nameAr.toLowerCase().includes(q)) ||
+                            (acc.nameEn && acc.nameEn.toLowerCase().includes(q)) ||
+                            (acc.entityName && acc.entityName.toLowerCase().includes(q))
+                          );
+                        });
 
-              {(formData.category === 'wages' || formData.category === 'salary') && (
-                <div>
-                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
-                    {formData.category === 'salary' 
-                       ? (isAr ? 'الموظف المستحق للراتب *' : 'Liable Employee *')
-                       : (isAr ? 'الموظف أو مستحق الأجور' : 'Employee / Wage Recipient')
-                    }
-                  </label>
-                  <select 
-                    required={formData.category === 'salary'}
-                    value={formData.recipientId} 
-                    onChange={(e) => {
-                      const user = systemUsers.find(u => u.id === e.target.value);
-                      setFormData({
-                        ...formData, 
-                        recipientId: e.target.value,
-                        linkedAccountId: user?.financialAccountId || '',
-                        linkedAccountCode: user?.financialAccountCode || '',
-                        linkedAccountEntityType: 'employee',
-                        ...(formData.category === 'salary' && user?.monthlySalary && { amount: String(user.monthlySalary) })
-                      });
-                    }}
-                    className="w-full bg-black/50 border border-slate-850 text-white text-xs font-bold p-3 outline-none rounded-xl focus:border-[#d4af37]/60 cursor-pointer text-start"
-                  >
-                    <option value="">
-                      {formData.category === 'salary'
-                        ? (isAr ? '-- اختر الموظف لصرف الراتب --' : '-- Choose Employee --')
-                        : (isAr ? '-- اختر الموظف (اختياري) --' : '-- Select Employee (Optional) --')
-                      }
-                    </option>
-                    {systemUsers.map(u => (
-                      <option key={u.id} value={u.id}>
-                        {u.fullName || u.displayName || u.email}
-                        {u.monthlySalary ? ` (${isAr ? 'راتب' : 'Salary'}: ${u.monthlySalary.toLocaleString()} ${settings.currency || 'YER'})` : ''}
-                        {u.financialAccountCode ? ` — ${u.financialAccountCode}` : ''}
-                      </option>
-                    ))}
-                  </select>
-                  {formData.linkedAccountCode && (
-                    <div className="mt-1.5 flex items-center gap-1.5">
-                      <span className="text-[9px] font-black text-slate-500">{isAr ? 'سيتم تسجيل على حساب:' : 'Will record on account:'}</span>
-                      <span className="font-mono font-black text-[#d4af37] text-[10px] bg-[#d4af37]/10 border border-[#d4af37]/20 px-2 py-0.5 rounded">{formData.linkedAccountCode}</span>
+                        const grouped: Record<string, any[]> = {};
+                        filteredAccounts.forEach(acc => {
+                          const type = acc.type || 'Other';
+                          const entityType = acc.entityType || 'system';
+                          let groupKey = type;
+                          if (entityType === 'customer') groupKey = 'Customer (عملاء)';
+                          else if (entityType === 'courier') groupKey = 'Courier (مناديب)';
+                          else if (entityType === 'employee') groupKey = 'Employee (موظفين)';
+                          if (!grouped[groupKey]) grouped[groupKey] = [];
+                          grouped[groupKey].push(acc);
+                        });
+                        
+                        if (Object.keys(grouped).length === 0) {
+                          return <div className="p-4 text-center text-slate-500 text-xs font-bold">{isAr ? 'لا توجد نتائج' : 'No results found'}</div>;
+                        }
+
+                        return Object.entries(grouped).map(([type, accs]) => {
+                           let iconColor = 'text-slate-400 font-black';
+                           let iconSvg = <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" /></svg>;
+                           
+                           if (type.includes('Asset')) {
+                              iconColor = 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20';
+                              iconSvg = <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>;
+                           } else if (type.includes('Liability')) {
+                              iconColor = 'text-rose-400 bg-rose-500/10 border border-rose-500/20';
+                              iconSvg = <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
+                           } else if (type.includes('Equity')) {
+                              iconColor = 'text-purple-400 bg-purple-500/10 border border-purple-500/20';
+                              iconSvg = <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" /></svg>;
+                           } else if (type.includes('Revenue')) {
+                              iconColor = 'text-blue-400 bg-blue-500/10 border border-blue-500/20';
+                              iconSvg = <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>;
+                           } else if (type.includes('Expense')) {
+                              iconColor = 'text-orange-400 bg-orange-500/10 border border-orange-500/20';
+                              iconSvg = <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0v-8m0 8l-8-8-4 4-6-6" /></svg>;
+                           }
+
+                           let label = type === 'Asset' ? (isAr ? 'أصول (Asset)' : 'Asset') :
+                                       type === 'Liability' ? (isAr ? 'خصوم (Liability)' : 'Liability') :
+                                       type === 'Equity' ? (isAr ? 'حقوق ملكية (Equity)' : 'Equity') :
+                                       type === 'Revenue' ? (isAr ? 'إيرادات (Revenue)' : 'Revenue') :
+                                       type === 'Expense' ? (isAr ? 'مصروفات (Expense)' : 'Expense') : type;
+                           
+                           return (
+                             <div key={type} className="mb-2">
+                               <div className="px-2 py-1.5 flex items-center gap-1.5">
+                                 <div className={`p-1 rounded-md ${iconColor}`}>
+                                   {iconSvg}
+                                 </div>
+                                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">{label}</span>
+                               </div>
+                               {accs.sort((a,b) => (a.code || a.accountCode || '').localeCompare(b.code || b.accountCode || '')).map(a => (
+                                 <div 
+                                   key={a.id} 
+                                   onClick={() => {
+                                      let updatedAmount = formData.amount;
+                                      if (formData.category === 'salary' && a.entityType === 'employee') {
+                                        const user = systemUsers.find(u => u.id === a.entityId);
+                                        if (user?.monthlySalary) updatedAmount = String(user.monthlySalary);
+                                      }
+                                      setFormData({
+                                        ...formData, 
+                                        linkedAccountId: a.id,
+                                        linkedAccountCode: a.accountCode || a.code || '',
+                                        linkedAccountEntityType: a.entityType || 'system',
+                                        recipientId: a.entityId || a.id,
+                                        recipientName: a.nameAr || a.entityName || '',
+                                        amount: updatedAmount
+                                      });
+                                      setIsAccountDropdownOpen(false);
+                                      setAccountSearchQuery('');
+                                   }}
+                                   className={`px-3 py-2.5 mx-1 mb-0.5 mt-0 hover:bg-white/5 cursor-pointer rounded-lg flex justify-between items-center transition-colors ${formData.linkedAccountId === a.id ? 'bg-[#d4af37]/10 border border-[#d4af37]/30' : ''}`}
+                                 >
+                                   <div className="flex flex-col gap-0.5">
+                                     <span className={`text-xs font-bold ${formData.linkedAccountId === a.id ? 'text-[#d4af37]' : 'text-slate-200'}`}>
+                                       {isAr ? a.nameAr || a.entityName : a.nameEn || a.entityName}
+                                     </span>
+                                     <span className="font-mono text-[9px] text-slate-500">{a.code || a.accountCode || 'Sys'}</span>
+                                   </div>
+                                   {a.balance !== undefined && (
+                                     <span className="font-mono text-[10px] font-black tracking-tighter text-slate-400 bg-black/40 px-1.5 py-0.5 rounded border border-slate-800">
+                                       {a.balance.toLocaleString()}
+                                     </span>
+                                   )}
+                                 </div>
+                               ))}
+                             </div>
+                           );
+                        });
+                      })()}
                     </div>
-                  )}
-                </div>
-              )}
+                  </div>
+                )}
+                
+                {formData.linkedAccountCode && (
+                  <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[9px] font-black text-slate-500">{isAr ? 'سيتم التقييد على حساب:' : 'Will record on account:'}</span>
+                    <span className="font-mono font-black text-[#d4af37] text-[10px] bg-[#d4af37]/10 border border-[#d4af37]/20 px-2 py-0.5 rounded">{formData.linkedAccountCode}</span>
+                    
+                    {(() => {
+                        const targetAcc = financialAccounts.find(a => a.id === formData.linkedAccountId);
+                        const expAmt = parseFloat(formData.amount) || 0;
+                        if (targetAcc && typeof targetAcc.balance === 'number') {
+                           // If paying out reduces the balance below 0 for an Asset (like employee advance or just normal account)
+                           if (targetAcc.balance - expAmt < 0 && expAmt > 0) {
+                              return (
+                                <div className="w-full mt-1.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[10px] p-2 rounded-lg flex items-start gap-1.5 animate-pulse">
+                                  <svg className="w-3.5 h-3.5 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                  <span>{isAr ? 'تنبيه: هذا القيد سيؤدي لتجاوز الرصيد الحالي للحساب وسيصبح بالسالب.' : 'Alert: This entry will exceed the current balance causing it to go negative.'}</span>
+                                </div>
+                              );
+                           }
+                        }
+                        return null;
+                    })()}
+                  </div>
+                )}
+              </div>
 
               {formData.category === 'salary' && (
                 <div>
@@ -1272,53 +1641,6 @@ export default function Expenses() {
                     placeholder="Guangzhou Tech Group" 
                     className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start"
                   />
-                </div>
-              )}
-
-              {formData.category !== 'custody' && formData.category !== 'wages' && formData.category !== 'salary' && (
-                <div>
-                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
-                    {isAr ? 'ربط بحساب مالي مخصص (اختياري)' : 'Link to Custom Account (Optional)'}
-                  </label>
-                  <select 
-                    value={formData.linkedAccountId} 
-                    onChange={(e) => {
-                      const acc = financialAccounts.find(a => a.id === e.target.value);
-                      if (acc) {
-                        setFormData({
-                          ...formData, 
-                          linkedAccountId: acc.id,
-                          linkedAccountCode: acc.accountCode || '',
-                          linkedAccountEntityType: acc.entityType || '',
-                          recipientId: acc.entityId || '',
-                          recipientName: acc.entityName || ''
-                        });
-                      } else {
-                        setFormData({
-                          ...formData,
-                          linkedAccountId: '',
-                          linkedAccountCode: '',
-                          linkedAccountEntityType: '',
-                          recipientId: '',
-                          recipientName: ''
-                        });
-                      }
-                    }}
-                    className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer text-start"
-                  >
-                    <option value="">{isAr ? '-- لا يوجد ربط (صرف عام) --' : '-- No Custom Link (General Outflow) --'}</option>
-                    {financialAccounts.map(a => (
-                      <option key={a.id} value={a.id}>
-                        [{a.accountCode}] {a.entityName} ({isAr ? (a.entityType === 'customer' ? 'عميل' : a.entityType === 'courier' ? 'مندوب' : 'موظف') : a.entityType})
-                      </option>
-                    ))}
-                  </select>
-                  {formData.linkedAccountCode && (
-                    <div className="mt-1.5 flex items-center gap-1.5">
-                      <span className="text-[9px] font-black text-slate-550">{isAr ? 'سيتم الربط بالحساب المالي:' : 'Will link to financial account:'}</span>
-                      <span className="font-mono font-black text-[#d4af37] text-[10px] bg-[#d4af37]/10 border border-[#d4af37]/20 px-2 py-0.5 rounded">{formData.linkedAccountCode}</span>
-                    </div>
-                  )}
                 </div>
               )}
 
@@ -1359,6 +1681,141 @@ export default function Expenses() {
                 className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black text-xs rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-40 cursor-pointer"
               >
                 {addLoading ? (isAr ? 'جاري التسجيل...' : 'Recording...') : (isAr ? 'اعتماد وصرف السند' : 'Approve & File Ledger')}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Edit Expenses Modal overlay */}
+      {isEditOpen && selectedExpense && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <form onSubmit={handleEditExpense} className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/25 rounded-3xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh] overflow-hidden font-sans text-start">
+            <div className="p-4 border-b border-slate-850 flex justify-between items-center bg-[#07070a]/40 shrink-0">
+              <h3 className="font-black text-white text-xs uppercase tracking-widest flex items-center gap-2">
+                <Crown className="w-4 h-4 text-[#d4af37]" />
+                {isAr ? 'تعديل السند المالي أو المصروف' : 'Modify Financial Voucher Document'}
+              </h3>
+              <button 
+                type="button"
+                onClick={() => {
+                  setIsEditOpen(false);
+                  setSelectedExpense(null);
+                }}
+                className="text-slate-500 hover:text-white bg-slate-900 border border-slate-800 p-1.5 rounded-lg cursor-pointer transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-4 text-start font-sans">
+              <div className="bg-[#d4af37]/5 border border-[#d4af37]/15 p-3 rounded-2xl">
+                <span className="text-[10px] font-bold text-slate-500 block uppercase tracking-wider">{isAr ? 'الرقم المرجعي للسند' : 'Voucher Serial ID'}</span>
+                <span className="text-xs font-mono font-black text-[#d4af37]">{selectedExpense.expenseNumber}</span>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'فئة وبند المصروف' : 'Expense Category'}</label>
+                <select 
+                  required 
+                  value={editFormData.category} 
+                  onChange={(e) => setEditFormData({...editFormData, category: e.target.value})}
+                  className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer text-start bg-[#121215]"
+                >
+                  {EXPENSE_CATEGORIES.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.icon} {isAr ? cat.labelAr : cat.labelEn}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2.5">
+                <div className="col-span-2 text-start">
+                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'المبلغ' : 'Amount'}</label>
+                  <input 
+                    required 
+                    type="number" 
+                    min="1" 
+                    value={editFormData.amount} 
+                    onChange={(e) => setEditFormData({...editFormData, amount: e.target.value})}
+                    placeholder="25000"
+                    className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-start"
+                  />
+                </div>
+                <div className="text-start">
+                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'العملة' : 'Currency'}</label>
+                  <select 
+                    value={editFormData.currency} 
+                    onChange={(e) => setEditFormData({...editFormData, currency: e.target.value})}
+                    className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer font-mono bg-[#121215]"
+                  >
+                    <option value="YER">YER</option>
+                    <option value="USD">USD</option>
+                    <option value="SAR">SAR</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="text-start">
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'تاريخ ووقت تقييد السند' : 'Voucher Created At'}</label>
+                <input 
+                  type="datetime-local" 
+                  value={editFormData.createdAt} 
+                  onChange={(e) => setEditFormData({...editFormData, createdAt: e.target.value})}
+                  className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold font-mono text-center"
+                />
+              </div>
+
+              <div className="text-start">
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'المرسل إليه / المستلم' : 'Recipient'}</label>
+                <input 
+                  type="text" 
+                  value={editFormData.recipientName} 
+                  onChange={(e) => setEditFormData({...editFormData, recipientName: e.target.value})}
+                  placeholder="John Doe"
+                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start"
+                />
+              </div>
+
+              <div className="text-start">
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'البيان أو الشرح' : 'Statement / Explanation'}</label>
+                <input 
+                  required 
+                  type="text"
+                  value={editFormData.notes} 
+                  onChange={(e) => setEditFormData({...editFormData, notes: e.target.value})}
+                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start"
+                  placeholder={isAr ? "البيان لتعديل السند..." : "Description..."}
+                />
+              </div>
+
+              <div className="text-start">
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'ملاحظات إضافية' : 'Remarks / Notes'}</label>
+                <textarea 
+                  value={editFormData.remarks} 
+                  onChange={(e) => setEditFormData({...editFormData, remarks: e.target.value})}
+                  className="w-full bg-[#121215] border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none h-16 text-start"
+                  placeholder={isAr ? "ملاحظات إدارية..." : "Remarks..."}
+                ></textarea>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-850 bg-[#07070a]/40 flex justify-end gap-3 shrink-0">
+              <button 
+                type="button" 
+                onClick={() => {
+                  setIsEditOpen(false);
+                  setSelectedExpense(null);
+                }} 
+                className="px-5 py-2.5 text-slate-400 font-bold bg-slate-900 border border-slate-850 hover:bg-slate-850 rounded-xl text-xs transition-colors cursor-pointer"
+              >
+                {isAr ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button 
+                type="submit" 
+                disabled={editLoading}
+                className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black text-xs rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-40 cursor-pointer"
+              >
+                {editLoading ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'اعتماد وحفظ السند' : 'Save Changes')}
               </button>
             </div>
           </form>
