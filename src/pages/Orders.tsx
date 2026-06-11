@@ -1035,6 +1035,7 @@ export default function Orders() {
         const saudiCourier = couriers.find(c => c.id === formData.shippingCourierId);
         if (saudiCourier && saudiCourier.financialAccountId) {
           try {
+            const isSourcing = saudiCourier.courierType === 'sourcing';
             await financialAccountService.recordTransaction(saudiCourier.financialAccountId, {
               accountId: saudiCourier.financialAccountId,
               accountCode: saudiCourier.financialAccountCode || '',
@@ -1042,7 +1043,7 @@ export default function Orders() {
               entityId: saudiCourier.id,
               entityName: saudiCourier.fullName,
               type: 'Debit',
-              amount: sourcingCostConverted,
+              amount: isSourcing ? sourcingCostAmount : sourcingCostConverted,
               amountOriginal: sourcingCostAmount,
               currencyOriginal: 'SAR',
               description: isAr ? `خصم تكاليف المنتجات الأصلية للطلب: ${orderNumber}` : `Sourcing products cost for order: ${orderNumber}`,
@@ -1824,8 +1825,11 @@ export default function Orders() {
         const courierRecord = couriers.find(c => c.id === shippingCourierId);
         
         if (courierRecord) {
+          const isSourcing = courierRecord.courierType === 'sourcing';
           const exchangeRate = parseFloat(selectedOrder.exchangeRateYER || settings.exchangeRateYER || 390);
-          const commissionProfit = parseFloat(selectedOrder.profitSaudiSAR || '0') * exchangeRate;
+          const commissionProfitOriginal = parseFloat(selectedOrder.profitSaudiSAR || '0');
+          const commissionProfit = isSourcing ? commissionProfitOriginal : (commissionProfitOriginal * exchangeRate);
+          const finalCurrency = isSourcing ? 'SAR' : 'YER';
           
           if (commissionProfit > 0) {
              const YY = String(new Date().getFullYear()).slice(-2);
@@ -1838,7 +1842,7 @@ export default function Orders() {
 
              const convertedCommission = financialAccountService.convertToDefaultCurrency(
                commissionProfit,
-               'YER',
+               finalCurrency,
                settings.currency || 'YER',
                { USD: selectedOrder.exchangeRateUSD || settings.exchangeRateUSD, SAR: selectedOrder.exchangeRateYER || settings.exchangeRateSAR }
              );
@@ -1848,7 +1852,7 @@ export default function Orders() {
                category: 'wage',
                type: 'Wage',
                amount: commissionProfit,
-               currency: 'YER',
+               currency: finalCurrency,
                amountInDefaultCurrency: convertedCommission,
                recipientId: shippingCourierId,
                recipientEntityId: shippingCourierId,
@@ -1877,9 +1881,9 @@ export default function Orders() {
                    entityId: shippingCourierId,
                    entityName: courierName,
                    type: 'Credit',
-                   amount: convertedCommission,
-                   amountOriginal: commissionProfit,
-                   currencyOriginal: 'YER',
+                   amount: commissionProfit,
+                   amountOriginal: commissionProfitOriginal,
+                   currencyOriginal: 'SAR',
                    description: isAr
                      ? `عمولة شحن تلقائية (${courierRecord.commissionRate}%) للطلب رقم: ${selectedOrder.orderNumber}`
                      : `Auto-commission (${courierRecord.commissionRate}%) for order: ${selectedOrder.orderNumber}`,
@@ -2355,8 +2359,11 @@ export default function Orders() {
           const courierRecord = couriers.find(c => c.id === shippingCourierId);
           
           if (courierRecord) {
+            const isSourcing = courierRecord.courierType === 'sourcing';
             const exchangeRate = parseFloat(ord.exchangeRateYER || settings.exchangeRateYER || 390);
-            const commissionProfit = parseFloat(ord.profitSaudiSAR || '0') * exchangeRate;
+            const commissionProfitOriginal = parseFloat(ord.profitSaudiSAR || '0');
+            const commissionProfit = isSourcing ? commissionProfitOriginal : (commissionProfitOriginal * exchangeRate);
+            const finalCurrency = isSourcing ? 'SAR' : 'YER';
             
             if (commissionProfit > 0) {
                const YY = String(new Date().getFullYear()).slice(-2);
@@ -2369,7 +2376,7 @@ export default function Orders() {
 
                const convertedCommission = financialAccountService.convertToDefaultCurrency(
                  commissionProfit,
-                 'YER',
+                 finalCurrency,
                  settings.currency || 'YER',
                  { USD: ord.exchangeRateUSD || settings.exchangeRateUSD, SAR: ord.exchangeRateYER || settings.exchangeRateSAR }
                );
@@ -2379,7 +2386,7 @@ export default function Orders() {
                  category: 'wage',
                  type: 'Wage',
                  amount: commissionProfit,
-                 currency: 'YER',
+                 currency: finalCurrency,
                  amountInDefaultCurrency: convertedCommission,
                  recipientId: shippingCourierId,
                  recipientEntityId: shippingCourierId,
@@ -2408,9 +2415,9 @@ export default function Orders() {
                      entityId: shippingCourierId,
                      entityName: courierName,
                      type: 'Credit',
-                     amount: convertedCommission,
-                     amountOriginal: commissionProfit,
-                     currencyOriginal: 'YER',
+                     amount: commissionProfit,
+                     amountOriginal: commissionProfitOriginal,
+                     currencyOriginal: 'SAR',
                      description: isAr
                        ? `عمولة شحن تلقائية (${courierRecord.commissionRate}%) للطلب رقم: ${ord.orderNumber}`
                        : `Auto-commission (${courierRecord.commissionRate}%) for order: ${ord.orderNumber}`,
@@ -3941,7 +3948,7 @@ export default function Orders() {
                       className="w-full bg-slate-950 border border-slate-855 text-white rounded-xl p-3 outline-none text-[11px] font-bold"
                     >
                       <option value="">{isAr ? '-- اختر موظف التجميع --' : '-- Choose Aggregator --'}</option>
-                      {couriers.map(c => (
+                      {couriers.filter(c => c.courierType === 'sourcing').map(c => (
                         <option key={c.id} value={c.id}>
                           {c.fullName}
                         </option>
@@ -3971,7 +3978,7 @@ export default function Orders() {
                       className="w-full bg-slate-950 border border-slate-855 text-white rounded-xl p-3 outline-none text-[11px] font-bold"
                     >
                       <option value="">{isAr ? '-- اختر مندوب التوصيل --' : '-- Choose Yemen Driver --'}</option>
-                      {couriers.map(c => (
+                      {couriers.filter(c => c.courierType === 'local' || !c.courierType).map(c => (
                         <option key={c.id} value={c.id}>
                           {c.fullName} {c.governorate || c.provinceId ? `(${c.governorate || c.provinceId})` : ''}
                         </option>
@@ -4623,7 +4630,7 @@ export default function Orders() {
                       className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 outline-none text-xs font-bold"
                     >
                       <option value="">{isAr ? '-- اختر موظف التعبئة والتجميع --' : '-- Choose Aggregator --'}</option>
-                      {couriers.map(c => (
+                      {couriers.filter(c => c.courierType === 'sourcing').map(c => (
                         <option key={c.id} value={c.id}>
                           {c.fullName} {c.governorate || c.provinceId ? `(${c.governorate || c.provinceId})` : ''}
                         </option>
@@ -4641,7 +4648,7 @@ export default function Orders() {
                       className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 outline-none text-xs font-bold"
                     >
                       <option value="">{isAr ? '-- اختر مندوب التوزيع النهائي --' : '-- Choose Final Courier --'}</option>
-                      {couriers.map(c => (
+                      {couriers.filter(c => c.courierType === 'local' || !c.courierType).map(c => (
                         <option key={c.id} value={c.id}>
                           {c.fullName} {c.governorate || c.provinceId ? `(${c.governorate || c.provinceId})` : ''}
                         </option>

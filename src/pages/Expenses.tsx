@@ -321,6 +321,20 @@ export default function Expenses() {
         }
       } else if (linkedAccountId && recipientEntityId && recipientEntityType && recipientEntityType !== 'employee') {
         try {
+          let ledgerAmount = convertedAmount;
+          if (recipientEntityType === 'courier') {
+            const targetCourier = couriers.find(c => c.id === recipientEntityId);
+            const accountCurrency = targetCourier?.financialCurrency || 'YER';
+            if (accountCurrency !== (settings.currency || 'YER')) {
+              ledgerAmount = financialAccountService.convertToDefaultCurrency(
+                rawAmount,
+                formData.currency,
+                accountCurrency,
+                { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+              );
+            }
+          }
+
           await financialAccountService.recordTransaction(linkedAccountId, {
             accountId: linkedAccountId,
             accountCode: linkedAccountCode,
@@ -328,7 +342,7 @@ export default function Expenses() {
             entityId: recipientEntityId,
             entityName: recipientName,
             type: type === 'Custody' ? 'Debit' : 'Credit', // Debit courier for custody (as they owe it), otherwise Credit
-            amount: convertedAmount,
+            amount: ledgerAmount,
             amountOriginal: rawAmount,
             currencyOriginal: formData.currency,
             description: formData.notes || (isAr ? `سند مصروف: ${expenseNumber}` : `Expense voucher: ${expenseNumber}`),
@@ -552,6 +566,18 @@ export default function Expenses() {
       // --- Financial Account Reversal: Debit on courier's account (returning the custody) ---
       if (exp.linkedAccountId && exp.recipientEntityId) {
         try {
+          let settleLedgerAmount = settledAmountInDefaultCurrency;
+          const targetCourier = couriers.find(c => c.id === exp.recipientEntityId);
+          const accountCurrency = targetCourier?.financialCurrency || 'YER';
+          if (accountCurrency !== (settings.currency || 'YER')) {
+            settleLedgerAmount = financialAccountService.convertToDefaultCurrency(
+              amountToRemit,
+              exp.currency || 'YER',
+              accountCurrency,
+              { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+            );
+          }
+
           await financialAccountService.recordTransaction(exp.linkedAccountId, {
             accountId: exp.linkedAccountId,
             accountCode: exp.linkedAccountCode || '',
@@ -559,7 +585,7 @@ export default function Expenses() {
             entityId: exp.recipientEntityId,
             entityName: exp.recipientName,
             type: 'Credit', // Reversal: money returned / settled
-            amount: settledAmountInDefaultCurrency,
+            amount: settleLedgerAmount,
             amountOriginal: amountToRemit,
             currencyOriginal: exp.currency || 'YER',
             description: isAr ? `تسوية/سداد عهدة (${amountToRemit} ${exp.currency || ''}): ${exp.expenseNumber}` : `Custody settlement (${amountToRemit} ${exp.currency}): ${exp.expenseNumber}`,

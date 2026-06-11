@@ -107,7 +107,8 @@ export default function Couriers() {
     gpsLocation: '',
     disabled: false,
     commissionRate: 0,
-    notes: ''
+    notes: '',
+    courierType: 'local' as 'sourcing' | 'local'
   });
 
   const [addFormData, setAddFormData] = useState({
@@ -117,7 +118,8 @@ export default function Couriers() {
     address: '',
     gpsLocation: '',
     commissionRate: 0,
-    notes: ''
+    notes: '',
+    courierType: 'local' as 'sourcing' | 'local'
   });
 
   const [addLoading, setAddLoading] = useState(false);
@@ -125,6 +127,19 @@ export default function Couriers() {
 
   // Smart Custody Calculator Helper
   const getCourierCustodyStats = (courierId: string) => {
+    const cour = couriers.find(c => c.id === courierId);
+    const targetCurrency = cour?.courierType === 'sourcing' ? 'SAR' : 'YER';
+    const rates = { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR };
+
+    const convertToCourierCurrency = (amount: number, fromCurrency?: string) => {
+      return financialAccountService.convertToDefaultCurrency(
+        amount,
+        fromCurrency || 'YER',
+        targetCurrency,
+        rates
+      );
+    };
+
     // Shipments associated with courier (as shipping or delivery courier)
     const cOrders = allOrders.filter(o => o.deliveryCourierId === courierId || o.shippingCourierId === courierId);
     
@@ -136,11 +151,11 @@ export default function Couriers() {
     // - Any approved advances
     const totalCustodyIssued = cExpenses
       .filter(e => e.type === 'Custody')
-      .reduce((sum, e) => sum + (parseFloat(e.amountInDefaultCurrency || e.amount) || 0), 0);
+      .reduce((sum, e) => sum + convertToCourierCurrency(e.amount, e.currency), 0);
 
     const totalAdvancesReceived = cExpenses
       .filter(e => e.type === 'Advance' && e.status === 'Approved')
-      .reduce((sum, e) => sum + (parseFloat(e.amountInDefaultCurrency || e.amount) || 0), 0);
+      .reduce((sum, e) => sum + convertToCourierCurrency(e.amount, e.currency), 0);
 
     const totalReceived = totalCustodyIssued + totalAdvancesReceived;
 
@@ -149,9 +164,9 @@ export default function Couriers() {
       .filter(e => e.type === 'Custody')
       .reduce((sum, e) => {
         if (e.status === 'Settled') {
-          return sum + (parseFloat(e.amountInDefaultCurrency || e.amount) || 0);
+          return sum + convertToCourierCurrency(e.amount, e.currency);
         }
-        return sum + (parseFloat(e.remittedAmountInDefaultCurrency || e.remittedAmount || 0));
+        return sum + convertToCourierCurrency(e.remittedAmount || 0, e.currency);
       }, 0);
 
     // 3. Outstanding Custody (المبالغ المتبقية بعهدته)
@@ -189,6 +204,8 @@ export default function Couriers() {
   const getCourierUnifiedLedger = () => {
     const ledger: any[] = [];
     const isAr = settings.language === 'ar';
+    const fCurrency = selectedCourier ? (selectedCourier.financialCurrency || 'YER') : 'YER';
+    const exchangeRateSAR = parseFloat(settings.exchangeRateSAR || 140);
 
     // 1. Map courierTransactions directly to preserve real double entries
     courierTransactions.forEach(tx => {
@@ -226,11 +243,21 @@ export default function Couriers() {
         title = tx.description || (isAr ? 'قيد تسوية لمطابقة رصيد المندوب' : 'Corporate Ledger Adjustment');
       }
 
+      let amountInFCurrency = amtBase;
+      if (fCurrency === 'SAR') {
+        if (tx.currencyOriginal === 'SAR') {
+          amountInFCurrency = amtOriginal;
+        } else {
+          amountInFCurrency = amtBase / exchangeRateSAR;
+        }
+      }
+
       ledger.push({
         id: tx.id || `tx-${Math.random()}`,
         date: tx.createdAt || Date.now(),
         type,
         amount: amtBase,
+        amountFCurrency: amountInFCurrency,
         amountOriginal: amtOriginal,
         currencyOriginal: tx.currencyOriginal || 'YER',
         module: category,
@@ -247,9 +274,9 @@ export default function Couriers() {
     let runningAccountBal = 0;
     const finalLedger = sorted.map(item => {
       if (item.type === 'Debit') {
-        runningAccountBal += item.amount;
+        runningAccountBal += item.amountFCurrency;
       } else {
-        runningAccountBal -= item.amount;
+        runningAccountBal -= item.amountFCurrency;
       }
 
       return {
@@ -304,7 +331,8 @@ export default function Couriers() {
       gpsLocation: courier.gpsLocation || '',
       disabled: courier.disabled || false,
       commissionRate: courier.commissionRate || 0,
-      notes: courier.notes || ''
+      notes: courier.notes || '',
+      courierType: courier.courierType || 'local'
     });
     setIsEditModalOpen(true);
   };
@@ -365,6 +393,7 @@ export default function Couriers() {
     if (!selectedCourier || editLoading) return;
     setEditLoading(true);
     try {
+      const finCurrency = editFormData.courierType === 'sourcing' ? 'SAR' : 'YER';
       await updateDoc(doc(db, 'couriers', selectedCourier.id), {
         fullName: editFormData.fullName,
         phone: editFormData.phone,
@@ -374,11 +403,18 @@ export default function Couriers() {
         disabled: editFormData.disabled,
         commissionRate: editFormData.commissionRate,
         notes: editFormData.notes,
+        courierType: editFormData.courierType,
+        financialCurrency: finCurrency,
         updatedAt: Date.now()
       });
-      // Sync financial account name if changed
-      if (editFormData.fullName !== selectedCourier.fullName) {
-        await financialAccountService.updateAccountEntityName(selectedCourier.id, editFormData.fullName);
+      // Sync financial account name and currency if changed
+      const assocAccount = await financialAccountService.getAccountByEntityId(selectedCourier.id);
+      if (assocAccount && assocAccount.id) {
+        await updateDoc(doc(db, 'accounts', assocAccount.id), {
+          entityName: editFormData.fullName,
+          currency: finCurrency,
+          updatedAt: Date.now()
+        });
       }
       activityLogService.log('edit_courier', editFormData.fullName, { ...editFormData });
       notificationService.notify({
@@ -458,6 +494,7 @@ export default function Couriers() {
 
       // 2. Save directly to Couriers portfolio as a plain record with auto-ID
       const newCourierRef = doc(collection(db, 'couriers'));
+      const finCurrency = addFormData.courierType === 'sourcing' ? 'SAR' : 'YER';
       await setDoc(newCourierRef, {
         fullName: addFormData.fullName,
         phone: addFormData.phone,
@@ -468,8 +505,9 @@ export default function Couriers() {
         courierCustomId: customId,
         commissionRate: addFormData.commissionRate,
         notes: addFormData.notes,
+        courierType: addFormData.courierType,
         financialBalance: 0,
-        financialCurrency: settings.currency || 'SAR',
+        financialCurrency: finCurrency,
         createdAt: Date.now()
       });
 
@@ -479,7 +517,7 @@ export default function Couriers() {
           'courier',
           newCourierRef.id,
           addFormData.fullName,
-          settings.currency || 'SAR'
+          finCurrency
         );
       } catch (accErr) {
         console.warn('[Couriers] Could not create financial account:', accErr);
@@ -748,6 +786,21 @@ export default function Couriers() {
   const totalRemittedToBox = activeStats ? activeStats.totalRemitted : 0;
   const remainingCustodyInHand = activeStats ? activeStats.remainingCustody : 0;
 
+  const totalCollectedFromCustomersInCourierCurrency = selectedCourier?.courierType === 'sourcing'
+    ? totalCollectedFromCustomers / (settings.exchangeRateSAR || 140)
+    : totalCollectedFromCustomers;
+
+  const formatDetailCurrency = (amount: number) => {
+    const isSourcing = selectedCourier?.courierType === 'sourcing';
+    const curr = isSourcing ? 'SAR' : 'YER';
+    const formatted = `${amount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ${curr}`;
+    if (isSourcing) {
+      const yerEquiv = amount * (settings.exchangeRateSAR || 140);
+      return `${formatted} (≈ ${Math.round(yerEquiv).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} YER)`;
+    }
+    return formatted;
+  };
+
   if (loading || roleLoading) {
     return (
       <div className="flex bg-[#0e0e11] text-white h-[60vh] items-center justify-center">
@@ -876,7 +929,12 @@ export default function Couriers() {
                               (courier.financialBalance || 0) > 0 ? 'text-rose-450' :
                               (courier.financialBalance || 0) < 0 ? 'text-emerald-400' : 'text-slate-500'
                             }`}>
-                              {(courier.financialBalance || 0) > 0 ? '▲' : (courier.financialBalance || 0) < 0 ? '▼' : '●'} {Math.abs(courier.financialBalance || 0).toLocaleString()} {courier.financialCurrency || settings.currency}
+                              {(courier.financialBalance || 0) > 0 ? '▲' : (courier.financialBalance || 0) < 0 ? '▼' : '●'} {Math.abs(courier.financialBalance || 0).toLocaleString()} {courier.financialCurrency || 'YER'}
+                              {courier.financialCurrency === 'SAR' && (
+                                <span className="block text-[8px] text-slate-500 opacity-80 font-normal mt-0.5">
+                                  (≈ {(Math.abs(courier.financialBalance || 0) * (settings.exchangeRateSAR || 140)).toLocaleString()} YER)
+                                </span>
+                              )}
                             </span>
                           </div>
                         ) : null}
@@ -917,8 +975,13 @@ export default function Couriers() {
                     <td className="p-4 text-center font-mono font-black border-slate-850">
                       <div className="inline-flex flex-col items-center select-none" onClick={() => handleOpenDetails(courier)}>
                         <span className={cStats.remainingCustody > 0 ? "text-rose-450 font-black bg-rose-950/20 border border-rose-950/40 px-2.5 py-1 rounded-lg cursor-pointer hover:bg-rose-950/30 transition-all font-mono" : "text-emerald-450 font-black bg-emerald-950/10 border border-emerald-950/20 px-2.5 py-1 rounded-lg cursor-pointer hover:bg-emerald-100/10 transition-all font-mono"}>
-                          {cStats.remainingCustody.toLocaleString()} <span className="text-[9px] font-sans text-slate-500">YER</span>
+                          {cStats.remainingCustody.toLocaleString()} <span className="text-[9px] font-sans text-slate-500">{courier.financialCurrency || 'YER'}</span>
                         </span>
+                        {courier.financialCurrency === 'SAR' && (
+                          <span className="text-[8.5px] text-slate-500 block mt-0.7 font-bold">
+                            (≈ {(cStats.remainingCustody * (settings.exchangeRateSAR || 140)).toLocaleString()} YER)
+                          </span>
+                        )}
                         {cStats.remainingCustody > 0 && (
                           <span className="text-[8px] text-rose-500/80 font-sans font-black mt-1 animate-pulse uppercase tracking-wider block">
                             {isAr ? '⚠️ غير موردة' : '⚠️ UNREMITTED'}
@@ -1052,8 +1115,8 @@ export default function Couriers() {
                     </h4>
                     <p className="text-slate-300 text-[11px] font-bold leading-relaxed">
                       {isAr 
-                        ? `يحمل المندوب حالياً مبالغ مالية متبقية بعهدة ذمته بقيمة (${remainingCustodyInHand.toLocaleString()} YER) مستحقة لخزينة الشركة ولم يوردها بعد. يرجى مراجعة وتصفية كافة مستحقات الشحن والعهد المفتوحة لتجنب التراكم.`
-                        : `This courier is currently holding an outstanding unremitted custody of (${remainingCustodyInHand.toLocaleString()} YER) due to the company cash box. Please initiate box remittance with the audited staff immediately.`}
+                        ? `يحمل المندوب حالياً مبالغ مالية متبقية بعهدة ذمته بقيمة (${formatDetailCurrency(remainingCustodyInHand)}) مستحقة لخزينة الشركة ولم يوردها بعد. يرجى مراجعة وتصفية كافة مستحقات الشحن والعهد المفتوحة لتجنب التراكم.`
+                        : `This courier is currently holding an outstanding unremitted custody of (${formatDetailCurrency(remainingCustodyInHand)}) due to the company cash box. Please initiate box remittance with the audited staff immediately.`}
                     </p>
                   </div>
                 </div>
@@ -1104,13 +1167,13 @@ export default function Couriers() {
 
                 <div className="bg-gradient-to-br from-[#121215] to-[#070708] p-4 rounded-2xl border border-slate-850 shadow-md text-start">
                   <span className="text-[9px] uppercase font-black tracking-wider text-slate-500 block mb-3">{isAr ? 'المبالغ التي استلمها المندوب' : 'Total Custody Received'}</span>
-                  <div className="text-base font-mono font-black text-amber-400">{(totalCollectedFromCustomers + totalAdvancesReceived).toLocaleString()} YER</div>
+                  <div className="text-base font-mono font-black text-amber-400">{formatDetailCurrency(totalCollectedFromCustomersInCourierCurrency + totalAdvancesReceived)}</div>
                   <span className="text-[9px] text-slate-500 font-bold block mt-1">{isAr ? 'يشمل نقد الشحنات والعهد والسلف' : 'Includes COD cash, custody & advances'}</span>
                 </div>
 
                 <div className="bg-gradient-to-br from-[#121215] to-[#070708] p-4 rounded-2xl border border-slate-850 shadow-md text-start">
                   <span className="text-[9px] uppercase font-black tracking-wider text-slate-500 block mb-3">{isAr ? 'المبالغ الموردة للصندوق' : 'Remitted To Fund'}</span>
-                  <div className="text-base font-mono font-black text-emerald-450">{totalRemittedToBox.toLocaleString()} YER</div>
+                  <div className="text-base font-mono font-black text-emerald-450">{formatDetailCurrency(totalRemittedToBox)}</div>
                   <span className="text-[9px] text-slate-500 font-bold block mt-1">{isAr ? 'عهد مسواة وموردة رسمياً' : 'Cleared / discharged custody'}</span>
                 </div>
 
@@ -1119,7 +1182,7 @@ export default function Couriers() {
                     {remainingCustodyInHand > 0 ? '⚠️ المبالغ المتبقية بعهدته' : '✅ العهدة مصفاة بالكامل'}
                   </span>
                   <div className={`text-base font-mono font-black mb-1 ${remainingCustodyInHand > 0 ? 'text-rose-450' : 'text-emerald-450'}`}>
-                    {remainingCustodyInHand.toLocaleString()} <span className="text-[9px] font-sans text-slate-500 font-normal">YER</span>
+                    {formatDetailCurrency(remainingCustodyInHand)}
                   </div>
                   <span className="text-[9px] text-slate-500 font-bold block">{isAr ? 'عهد وذمم متبقية بذمة المندوب' : 'Outstanding client-side balance'}</span>
                 </div>
@@ -1232,9 +1295,11 @@ export default function Couriers() {
 
             {detailTab === 'financial' && (() => {
               const ledgerData = getCourierUnifiedLedger();
-              const debits = ledgerData.filter(i => i.type === 'Debit').reduce((sum, i) => sum + i.amount, 0);
-              const credits = ledgerData.filter(i => i.type === 'Credit').reduce((sum, i) => sum + i.amount, 0);
+              const debits = ledgerData.filter(i => i.type === 'Debit').reduce((sum, i) => sum + i.amountFCurrency, 0);
+              const credits = ledgerData.filter(i => i.type === 'Credit').reduce((sum, i) => sum + i.amountFCurrency, 0);
               const netBalance = credits - debits;
+              const fCurrency = selectedCourier.financialCurrency || 'YER';
+              const exchangeRateSAR = parseFloat(settings.exchangeRateSAR || 140);
 
               const filteredLedger = ledgerData.filter(item => {
                 const q = finSearch.toLowerCase();
@@ -1257,7 +1322,12 @@ export default function Couriers() {
                         {isAr ? 'رصيد الحساب الموحد' : 'Consolidated Balance'}
                       </span>
                       <div className={`font-mono font-black text-base ${netBalance >= 0 ? 'text-emerald-400' : 'text-rose-455'}`}>
-                        {netBalance.toLocaleString()} YER
+                        {netBalance.toLocaleString()} {fCurrency}
+                        {fCurrency === 'SAR' && (
+                          <span className="block text-[11px] text-slate-400 font-normal mt-0.5" dir="ltr">
+                            (≈ {(netBalance * exchangeRateSAR).toLocaleString()} YER)
+                          </span>
+                        )}
                       </div>
                       <span className="text-[8.5px] text-slate-500 font-sans mt-1">
                         {isAr ? 'مستحق كسب (دائن) أو ذمة (مدين)' : 'Live calculated balanced path'}
@@ -1271,7 +1341,12 @@ export default function Couriers() {
                         {isAr ? 'إجمالي المدينات (المستقطع -)' : 'Total Debits (-)'}
                       </span>
                       <div className="font-mono font-black text-rose-400 text-base">
-                        {debits.toLocaleString()} YER
+                        {debits.toLocaleString()} {fCurrency}
+                        {fCurrency === 'SAR' && (
+                          <span className="block text-[11px] text-slate-400 font-normal mt-0.5" dir="ltr">
+                            (≈ {(debits * exchangeRateSAR).toLocaleString()} YER)
+                          </span>
+                        )}
                       </div>
                       <span className="text-[8.5px] text-slate-500 font-sans mt-1">
                         {isAr ? 'العهد المستلمة والمبيعات المحصلة' : 'Obligations, COD cash & custodies'}
@@ -1285,7 +1360,12 @@ export default function Couriers() {
                         {isAr ? 'إجمالي المودعات (المضاف +)' : 'Total Credits (+)'}
                       </span>
                       <div className="font-mono font-black text-emerald-400 text-base">
-                        {credits.toLocaleString()} YER
+                        {credits.toLocaleString()} {fCurrency}
+                        {fCurrency === 'SAR' && (
+                          <span className="block text-[11px] text-slate-400 font-normal mt-0.5" dir="ltr">
+                            (≈ {(credits * exchangeRateSAR).toLocaleString()} YER)
+                          </span>
+                        )}
                       </div>
                       <span className="text-[8.5px] text-slate-500 font-sans mt-1">
                         {isAr ? 'العهد المصفاة من رواتب وأجور وتوريد' : 'Wages earned & cash box handovers'}
@@ -1339,7 +1419,7 @@ export default function Couriers() {
                             <th className="p-3 text-start">{isAr ? 'رقم المرجع' : 'Reference Ref'}</th>
                             <th className="p-3 text-start">{isAr ? 'النوع' : 'Entry Type'}</th>
                             <th className="p-3 text-start">{isAr ? 'المبلغ (العملة الأصلية)' : 'Amount (Original)'}</th>
-                            <th className="p-3 text-start">{isAr ? 'المبلغ (العملة المحلية)' : 'Amount (Local YER)'}</th>
+                            <th className="p-3 text-start">{isAr ? `الحساب المالي (${selectedCourier.financialCurrency || 'YER'})` : `Account Balance (${selectedCourier.financialCurrency || 'YER'})`}</th>
                             <th className="p-3 text-left">{isAr ? 'الرصيد التراكمي' : 'Running Balance'}</th>
                           </tr>
                         </thead>
@@ -1378,10 +1458,20 @@ export default function Couriers() {
                                   <span>{isCredit ? '+' : '-'}{(item.amountOriginal || item.amount || 0).toLocaleString()} {item.currencyOriginal || 'YER'}</span>
                                 </td>
                                 <td className={`p-3 font-mono font-black text-xs ${isCredit ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                  <span>{isCredit ? '+' : '-'}{(item.amount || 0).toLocaleString()} YER</span>
+                                  <span>{isCredit ? '+' : '-'}{(item.amountFCurrency || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })} {selectedCourier.financialCurrency || 'YER'}</span>
+                                  {selectedCourier.financialCurrency === 'SAR' && (
+                                    <span className="block text-[9px] text-slate-500 font-normal mt-0.5" dir="ltr">
+                                      ≈ {isCredit ? '+' : '-'}{(item.amount || 0).toLocaleString()} YER
+                                    </span>
+                                  )}
                                 </td>
                                 <td className={`p-3 text-left font-mono font-black text-xs ${item.runningAccountBal >= 0 ? 'text-emerald-400' : 'text-rose-450'}`}>
-                                  {item.runningAccountBal.toLocaleString()} YER
+                                  <span>{item.runningAccountBal.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })} {selectedCourier.financialCurrency || 'YER'}</span>
+                                  {selectedCourier.financialCurrency === 'SAR' && (
+                                    <span className="block text-[9px] text-slate-550 font-normal mt-0.5" dir="ltr">
+                                      ≈ {Math.round(item.runningAccountBal * exchangeRateSAR).toLocaleString()} YER
+                                    </span>
+                                  )}
                                 </td>
                               </tr>
                             );
@@ -1467,9 +1557,20 @@ export default function Couriers() {
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'العمولة من عمليات التوزيع (%)' : 'Standard Commission Rate (%)'}</label>
                   <div className="relative">
-                    <DollarSign className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-550 w-4 h-4" />
-                    <input type="number" min="0" max="100" step="0.1" value={addFormData.commissionRate} onChange={(e) => setAddFormData({...addFormData, commissionRate: parseFloat(e.target.value) || 0})} className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 pl-10 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono" />
+                     <DollarSign className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-550 w-4 h-4" />
+                     <input type="number" min="0" max="100" step="0.1" value={addFormData.commissionRate} onChange={(e) => setAddFormData({...addFormData, commissionRate: parseFloat(e.target.value) || 0})} className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 pl-10 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono" />
                   </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'نوع المندوب' : 'Courier Type'}</label>
+                  <select 
+                    value={addFormData.courierType} 
+                    onChange={(e) => setAddFormData({...addFormData, courierType: e.target.value as any})} 
+                    className="w-full bg-black/50 border border-[#d4af37]/25 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start"
+                  >
+                    <option value="local" className="bg-[#121215] text-white">{isAr ? 'مندوب محلي (اليمن)' : 'Local / Delivery'}</option>
+                    <option value="sourcing" className="bg-[#121215] text-[#d4af37]">{isAr ? 'مندوب تجميع (سعودي)' : 'Sourcing / Collection'}</option>
+                  </select>
                 </div>
               </div>
 
@@ -1530,13 +1631,24 @@ export default function Couriers() {
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'نسبة العمولة التشغيلية (%)' : 'Operational Commission Rate (%)'}</label>
                   <input type="number" min="0" max="100" step="0.1" value={editFormData.commissionRate} onChange={(e) => setEditFormData({...editFormData, commissionRate: parseFloat(e.target.value) || 0})} className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-start" />
                 </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'نوع المندوب' : 'Courier Type'}</label>
+                  <select 
+                    value={editFormData.courierType || 'local'} 
+                    onChange={(e) => setEditFormData({...editFormData, courierType: e.target.value as any})} 
+                    className="w-full bg-black/50 border border-[#d4af37]/25 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start"
+                  >
+                    <option value="local" className="bg-[#121215] text-white">{isAr ? 'مندوب محلي (اليمن)' : 'Local / Delivery'}</option>
+                    <option value="sourcing" className="bg-[#121215] text-[#d4af37]">{isAr ? 'مندوب تجميع (سعودي)' : 'Sourcing / Collection'}</option>
+                  </select>
+                </div>
+              </div>
                 <div className="flex items-center">
                   <label className="flex items-center gap-2 cursor-pointer pt-3">
                     <input type="checkbox" checked={editFormData.disabled} onChange={(e) => setEditFormData({...editFormData, disabled: e.target.checked})} className="w-4 h-4 text-rose-600 focus:ring-rose-500 bg-black/50 border-slate-850 rounded" />
                     <span className="text-[11px] font-black text-rose-500 uppercase tracking-tighter">{isAr ? 'تجميد حساب المندوب مؤقتاً' : 'Freeze courier account'}</span>
                   </label>
                 </div>
-              </div>
 
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'ملاحظات وبنود التحديث' : 'Administrative Confidential Remarks'}</label>

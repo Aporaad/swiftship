@@ -32,6 +32,36 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
   useEffect(() => {
     if (initialTab === 'salary') setAccountingTab('salary_history');
   }, [initialTab]);
+
+  const formatCurrencyWithYerEquiv = (amount: number, isSourcingCourier: boolean, isAlreadyInNativeCurrency: boolean = false) => {
+    if (isSourcingCourier) {
+      const amountInSAR = isAlreadyInNativeCurrency ? amount : getDisplayEquivalent(amount, 'SAR');
+      const amountInYER = isAlreadyInNativeCurrency ? amount * (settings.exchangeRateSAR || 140) : amount;
+      return (
+        <span className="font-mono">
+          {amountInSAR.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} <span className="text-[10px] font-sans text-slate-500">SAR</span>
+          <span className="text-[10px] font-sans text-slate-450 ml-1.5 opacity-85 font-normal">
+            ({isAr ? 'يعادل' : 'equiv.'} {Math.round(amountInYER).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} YER)
+          </span>
+        </span>
+      );
+    } else {
+      return (
+        <span className="font-mono">
+          {amount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} <span className="text-[10px] font-sans text-slate-550">YER</span>
+        </span>
+      );
+    }
+  };
+
+  const formatAmountWithEquiv = (amount: number, currency: string) => {
+    const formatted = `${amount.toLocaleString()} ${currency}`;
+    if (currency === 'SAR') {
+      const yerEquiv = amount * (settings.exchangeRateSAR || 140);
+      return `${formatted} (≈ ${Math.round(yerEquiv).toLocaleString()} YER)`;
+    }
+    return formatted;
+  };
   
   // Real-time assets sync for dynamic pricing in Chart of Accounts
   const [assets, setAssets] = useState<any[]>([]);
@@ -204,6 +234,11 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
     // A. Push all transactions from account_transactions
     accountTransactions.forEach(tx => {
       const date = tx.createdAt ? new Date(tx.createdAt) : new Date();
+      const isSourcing = tx.entityType === 'courier' && (() => {
+        const c = couriers.find(currCourier => currCourier.id === tx.entityId || currCourier.financialAccountId === tx.accountId);
+        return c?.courierType === 'sourcing' || c?.financialCurrency === 'SAR';
+      })() || tx.currencyOriginal === 'SAR';
+
       entries.push({
         id: tx.id || `TX-${Math.random()}`,
         refNumber: tx.refNumber || 'TX-REF',
@@ -215,10 +250,11 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
         entityType: tx.entityType,
         type: tx.type, // 'Debit' | 'Credit'
         amount: tx.amount || 0,
-        currency: settings.currency || 'YER',
+        currency: isSourcing ? 'SAR' : (settings.currency || 'YER'),
         amountOriginal: tx.amountOriginal || tx.amount || 0,
-        currencyOriginal: tx.currencyOriginal || 'YER',
-        module: tx.module || 'adjustment'
+        currencyOriginal: isSourcing ? 'SAR' : (tx.currencyOriginal || 'YER'),
+        module: tx.module || 'adjustment',
+        isSourcing
       });
     });
 
@@ -1007,9 +1043,15 @@ Continue?`
   const handleBulkRemitCourierCash = async () => {
     if (!courierAuditSheet || courierAuditSheet.currentUnremittedCargoCash.length === 0) return;
     
+    const isSourcing = courierAuditSheet.courier.courierType === 'sourcing';
+    const currency = isSourcing ? 'SAR' : 'YER';
+    const amountLabel = isSourcing 
+      ? `${courierAuditSheet.totalUnremittedCashValue.toLocaleString()} SAR`
+      : `${courierAuditSheet.totalUnremittedCashValue.toLocaleString()} YER`;
+
     if (!window.confirm(isAr 
-      ? `هل تريد تصفية كافة مستحقات الشحن المحصلة بذمة المندوب (${courierAuditSheet.totalUnremittedCashValue.toLocaleString()} YER) وتوريدها للخزينة؟` 
-      : `Confirm remittance of ${courierAuditSheet.totalUnremittedCashValue.toLocaleString()} YER held by ${courierAuditSheet.courier.fullName}?`
+      ? `هل تريد تصفية كافة مستحقات الشحن المحصلة بذمة المندوب (${amountLabel}) وتوريدها للخزينة؟` 
+      : `Confirm remittance of ${amountLabel} held by ${courierAuditSheet.courier.fullName}?`
     )) return;
 
     setCargoRemitLoading(true);
@@ -1025,7 +1067,7 @@ Continue?`
         batch.update(orderRef, {
           amountPaid: prevPaid + rem,
           amountRemaining: 0,
-          paymentStatus: isAr ? 'خالص' : 'Fully Paid',
+          paymentStatus: isAr ? 'خ خالص' : 'Fully Paid',
           courierRemittedAt: Date.now()
         });
       });
@@ -1039,7 +1081,10 @@ Continue?`
         expenseNumber: voucherCode,
         type: 'General',
         amount: courierAuditSheet.totalUnremittedCashValue,
-        currency: 'YER',
+        currency: currency,
+        amountInDefaultCurrency: isSourcing 
+          ? courierAuditSheet.totalUnremittedCashValue * (settings.exchangeRateSAR || 140)
+          : courierAuditSheet.totalUnremittedCashValue,
         recipientId: courierAuditSheet.courier.id,
         recipientName: courierAuditSheet.courier.fullName,
         notes: `[MANUAL-DEBIT] توريد تحصيلات شحنات المندوب ${courierAuditSheet.courier.fullName}`,
@@ -1056,8 +1101,8 @@ Continue?`
       notificationService.notify({
         title: isAr ? 'تم توريد التحصيلات وتصفير الذمة' : 'Cargo Cash Remitted',
         message: isAr 
-          ? `تم تصفير ذمة المندوب وتوريد مبلغ ${courierAuditSheet.totalUnremittedCashValue.toLocaleString()} YER للخزينة بنجاح!` 
-          : `Remittance logged: safely deposited ${courierAuditSheet.totalUnremittedCashValue.toLocaleString()} YER from Courier collections.`,
+          ? `تم تصفير ذمة المندوب وتوريد مبلغ ${amountLabel} للخزينة بنجاح!` 
+          : `Remittance logged: safely deposited ${amountLabel} from Courier collections.`,
         type: 'success'
       });
     } catch (err: any) {
@@ -1871,14 +1916,36 @@ Continue?`
                           </span>
                         </td>
                         <td className="p-4 font-mono font-black text-emerald-400">
-                          {isDebit ? `+${e.amount.toLocaleString()} YER` : '—'}
-                          {isDebit && e.amountOriginal && e.currencyOriginal !== 'YER' && (
+                          {isDebit ? (
+                            e.isSourcing || e.currencyOriginal === 'SAR' ? (
+                              <div className="flex flex-col">
+                                <span>+{e.amountOriginal.toLocaleString()} SAR</span>
+                                <span className="text-[10px] text-slate-500 font-normal mt-0.5" dir="ltr">
+                                  (≈ {e.amount.toLocaleString()} YER)
+                                </span>
+                              </div>
+                            ) : (
+                              `+${e.amount.toLocaleString()} YER`
+                            )
+                          ) : '—'}
+                          {isDebit && !(e.isSourcing || e.currencyOriginal === 'SAR') && e.amountOriginal && e.currencyOriginal !== 'YER' && (
                             <span className="text-[9px] text-slate-500 block font-normal">({e.amountOriginal} {e.currencyOriginal})</span>
                           )}
                         </td>
                         <td className="p-4 font-mono font-black text-rose-500">
-                          {!isDebit ? `-${e.amount.toLocaleString()} YER` : '—'}
-                          {!isDebit && e.amountOriginal && e.currencyOriginal !== 'YER' && (
+                          {!isDebit ? (
+                            e.isSourcing || e.currencyOriginal === 'SAR' ? (
+                              <div className="flex flex-col">
+                                <span>-{e.amountOriginal.toLocaleString()} SAR</span>
+                                <span className="text-[10px] text-slate-500 font-normal mt-0.5" dir="ltr">
+                                  (≈ {e.amount.toLocaleString()} YER)
+                                </span>
+                              </div>
+                            ) : (
+                              `-${e.amount.toLocaleString()} YER`
+                            )
+                          ) : '—'}
+                          {!isDebit && !(e.isSourcing || e.currencyOriginal === 'SAR') && e.amountOriginal && e.currencyOriginal !== 'YER' && (
                             <span className="text-[9px] text-slate-500 block font-normal">({e.amountOriginal} {e.currencyOriginal})</span>
                           )}
                         </td>
@@ -1960,18 +2027,18 @@ Continue?`
                 <div className="space-y-4 pt-1">
                   <div>
                     <span className="text-[10px] text-slate-500 uppercase block font-black">{isAr ? 'العهد المالية الإجمالية المستلمة' : 'Gross Custodies Issued'}</span>
-                    <span className="text-base font-mono font-black text-white">{courierAuditSheet.totalCustodyIssued.toLocaleString()} YER</span>
+                    <span className="text-base font-mono font-black text-white">{formatCurrencyWithYerEquiv(courierAuditSheet.totalCustodyIssued, courierAuditSheet.courier.courierType === 'sourcing')}</span>
                   </div>
                   
                   <div>
                     <span className="text-[10px] text-slate-500 uppercase block font-black">{isAr ? 'العهد المصفاة والمسلمة' : 'Reconciled & Settled'}</span>
-                    <span className="text-base font-mono font-black text-emerald-400">{courierAuditSheet.totalCustodySettled.toLocaleString()} YER</span>
+                    <span className="text-base font-mono font-black text-emerald-450">{formatCurrencyWithYerEquiv(courierAuditSheet.totalCustodySettled, courierAuditSheet.courier.courierType === 'sourcing')}</span>
                   </div>
 
                   {/* Active liability trust */}
                   <div className="bg-[#ef4444]/5 p-3 rounded-2xl border border-[#ef4444]/15">
                     <span className="text-[10px] text-rose-400 uppercase block font-black">{isAr ? 'الرصيد المالي الإجمالي المطلوب من المندوب' : 'Net Liable Ledger Balance'}</span>
-                    <span className="text-lg font-mono font-black text-rose-500">{(courierAuditSheet.courier.financialBalance || 0).toLocaleString()} YER</span>
+                    <span className="text-lg font-mono font-black text-rose-500">{formatCurrencyWithYerEquiv(courierAuditSheet.courier.financialBalance || 0, courierAuditSheet.courier.courierType === 'sourcing', true)}</span>
                     <span className="text-[8.5px] text-slate-500 block mt-1 leading-snug">{isAr ? 'الرصيد الجاري الفعلي للمندوب المطابق لشجرة الحسابات ودفتر اليومية الموحد.' : 'Actual current balance of the courier matching the chart of accounts and journal entries.'}</span>
                   </div>
 
@@ -1979,7 +2046,7 @@ Continue?`
                   <div className="bg-cyan-500/5 p-4 rounded-3xl border border-cyan-500/15 space-y-3">
                     <div>
                       <span className="text-[10px] text-cyan-400 uppercase block font-black">{isAr ? 'التحصيلات النقدية للشحنات المسلمة بذمته' : 'Cargo Cash Held (COD)'}</span>
-                      <span className="text-lg font-mono font-black text-cyan-400">{courierAuditSheet.totalUnremittedCashValue.toLocaleString()} YER</span>
+                      <span className="text-lg font-mono font-black text-cyan-400">{formatCurrencyWithYerEquiv(courierAuditSheet.totalUnremittedCashValue, courierAuditSheet.courier.courierType === 'sourcing')}</span>
                       <span className="text-[8.5px] text-slate-500 block mt-1 leading-snug">
                         {isAr ? `نقدية محصلة من ${courierAuditSheet.currentUnremittedCargoCash.length} طرد مسلّم، في انتظار التوريد المالي للخزينة.` : `Direct cash collected from ${courierAuditSheet.currentUnremittedCargoCash.length} delivered items waiting transfer.`}
                       </span>
@@ -2049,7 +2116,7 @@ Continue?`
                           
                           <div className="text-right flex items-center gap-3">
                             <div>
-                              <span className="text-[#d4af37] font-mono font-black block">{cust.amount?.toLocaleString()} {cust.currency}</span>
+                              <span className="text-[#d4af37] font-mono font-black block">{formatAmountWithEquiv(cust.amount || 0, cust.currency || 'YER')}</span>
                               {isSettled ? (
                                 <span className="text-[8.5px] font-black text-emerald-400 bg-emerald-950/25 px-1.5 rounded uppercase">{isAr ? `مسواة في: ${cust.settledAt ? new Date(cust.settledAt).toLocaleDateString() : ''}` : 'Settled'}</span>
                               ) : (
@@ -2100,13 +2167,8 @@ Continue?`
                           
                           <div className="text-right">
                             <div className={`font-mono font-black ${isCredit ? 'text-emerald-400' : 'text-rose-500'}`}>
-                              {isCredit ? '+' : '-'}{(tx.amountOriginal || tx.amount || 0).toLocaleString()} {tx.currencyOriginal || 'YER'}
+                              {isCredit ? '+' : '-'}{formatAmountWithEquiv(tx.amountOriginal || tx.amount || 0, tx.currencyOriginal || 'YER')}
                             </div>
-                            {(tx.amountOriginal !== tx.amount) && (
-                              <div className="text-[9px] text-slate-500 font-bold font-mono">
-                                ({(tx.amount || 0).toLocaleString()} YER)
-                              </div>
-                            )}
                           </div>
                         </div>
                       );
@@ -2145,7 +2207,14 @@ Continue?`
                               {ord.deliveredAt?.toDate ? ord.deliveredAt.toDate().toLocaleDateString() : (ord.deliveredAt ? new Date(ord.deliveredAt).toLocaleDateString() : '—')}
                             </td>
                             <td className="p-2 text-left font-mono font-black text-cyan-400">
-                              {parseFloat(ord.amountRemaining || 0).toLocaleString()} YER
+                              {courierAuditSheet.courier.courierType === 'sourcing' ? (
+                                <div className="text-right">
+                                  <span>{((parseFloat(ord.amountRemaining || 0) / (settings.exchangeRateSAR || 140))).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} SAR</span>
+                                  <span className="block text-[9px] text-slate-550 font-normal">({parseFloat(ord.amountRemaining || 0).toLocaleString()} YER)</span>
+                                </div>
+                              ) : (
+                                <span>{parseFloat(ord.amountRemaining || 0).toLocaleString()} YER</span>
+                              )}
                             </td>
                           </tr>
                         ))}
@@ -2492,7 +2561,16 @@ Continue?`
                         <td className={`p-4 font-mono font-black ${
                           (acc.balance || 0) >= 0 ? 'text-emerald-400' : 'text-rose-500'
                         }`}>
-                          {acc.balance?.toLocaleString()} YER
+                          {acc.currency === 'SAR' ? (
+                            <div>
+                              <span>SR {balanceInSAR.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                              <span className="block text-[10px] text-slate-500 font-normal mt-0.5">
+                                (≈ {acc.balance?.toLocaleString()} YER)
+                              </span>
+                            </div>
+                          ) : (
+                            <span>{acc.balance?.toLocaleString()} YER</span>
+                          )}
                         </td>
                         <td className="p-4 text-slate-350 font-mono">
                           ${balanceInUSD.toLocaleString(undefined, { maximumFractionDigits: 2 })}
@@ -3703,10 +3781,19 @@ Continue?`
                     {selectedLedgerEntry.type === 'Debit' ? (isAr ? 'حساب الخزينة (أصل متداول)' : 'Cash Asset / Treasury') : (isAr ? 'ذمم مدينة / مصروفات تشغيلية' : 'Receivables / Operational Outflow')}
                   </td>
                   <td style={{ border: '1px solid #eee', padding: '10px', textAlign: isAr ? 'left' : 'right', fontWeight: 'bold' }}>
-                    {selectedLedgerEntry.amount.toLocaleString()} YER
+                    {selectedLedgerEntry.isSourcing || selectedLedgerEntry.currencyOriginal === 'SAR' ? (
+                      <div>
+                        <span>{selectedLedgerEntry.amountOriginal.toLocaleString()} SAR</span>
+                        <span style={{ fontSize: '10px', color: '#666', display: 'block', fontWeight: 'normal', marginTop: '4px' }}>
+                          (≈ {selectedLedgerEntry.amount.toLocaleString()} YER)
+                        </span>
+                      </div>
+                    ) : (
+                      <span>{selectedLedgerEntry.amount.toLocaleString()} YER</span>
+                    )}
                   </td>
                 </tr>
-                {selectedLedgerEntry.amountOriginal && selectedLedgerEntry.currencyOriginal !== 'YER' && (
+                {selectedLedgerEntry.amountOriginal && selectedLedgerEntry.currencyOriginal !== 'YER' && !(selectedLedgerEntry.isSourcing || selectedLedgerEntry.currencyOriginal === 'SAR') && (
                   <tr style={{ fontSize: '11px', color: '#666', fontStyle: 'italic' }}>
                     <td colSpan={2} style={{ border: '1px solid #eee', padding: '10px' }}>
                       {isAr ? 'المعادل بالعملة الأصلية المقيمة تلقائياً' : 'Foreign Exchange Valued Equivalent'}
@@ -3722,7 +3809,11 @@ Continue?`
             <div style={{ marginTop: '25px', padding: '12px', border: '1px solid #e3cc9a', borderRadius: '8px', backgroundColor: '#fffdf6', fontSize: '12px', fontWeight: 'bold' }}>
               <span>{isAr ? 'صافي القيمة الدفترية كتابةً: ' : 'Amount in words: '}</span>
               <span>
-                {selectedLedgerEntry.amount.toLocaleString()} {isAr ? 'ريال يمني لا غير.' : 'Yemeni Rial Only.'}
+                {selectedLedgerEntry.isSourcing || selectedLedgerEntry.currencyOriginal === 'SAR' ? (
+                  `${selectedLedgerEntry.amountOriginal.toLocaleString()} ${isAr ? 'ريال سعودي' : 'Saudi Riyals'} (${isAr ? 'يعادل تقريباً ' : 'approx. '}${selectedLedgerEntry.amount.toLocaleString()} ${isAr ? 'ريال يمني لا غير).' : 'Yemeni Rials Only).'}`
+                ) : (
+                  `${selectedLedgerEntry.amount.toLocaleString()} ${isAr ? 'ريال يمني لا غير.' : 'Yemeni Rial Only.'}`
+                )}
               </span>
             </div>
 

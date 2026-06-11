@@ -950,7 +950,18 @@ export default function ChartOfAccounts({
                 </div>
                 <div className="sm:text-right">
                   <span className="block text-[10px] text-slate-500 uppercase font-black print:text-slate-600">{isAr ? 'الرصيد الكلي المجمع' : 'Total Balance'}</span>
-                  <span className="block text-lg sm:text-xl font-mono text-[#d4af37] font-black print:text-black">{reportAccount.balance?.toLocaleString() || 0} YER</span>
+                  {reportAccount?.currency === 'SAR' ? (
+                    <span className="block text-lg sm:text-xl font-mono text-[#d4af37] font-black print:text-black">
+                      {(reportAccount.balance || 0).toLocaleString()} SAR
+                      <span className="block text-[10px] text-slate-400 font-normal mt-0.5 font-sans" dir="ltr">
+                        (≈ {((reportAccount.balance || 0) * (settings.exchangeRateSAR || 140)).toLocaleString()} YER)
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="block text-lg sm:text-xl font-mono text-[#d4af37] font-black print:text-black">
+                      {(reportAccount?.balance || 0).toLocaleString()} YER
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -981,10 +992,32 @@ export default function ChartOfAccounts({
                           <td className="p-2 sm:p-3 text-[10px] font-mono text-[#d4af37] print:text-black">{tx.refNumber || '-'}</td>
                           <td className="p-2 sm:p-3 text-[10px] sm:text-xs font-bold text-slate-300 print:text-black whitespace-normal break-words max-w-[200px]">{tx.description || '-'}</td>
                           <td className="p-2 sm:p-3 text-[10px] sm:text-xs font-mono text-emerald-400 text-right print:text-black">
-                            {tx.type === 'Debit' ? tx.amount?.toLocaleString() : ''}
+                            {tx.type === 'Debit' ? (
+                              tx.currencyOriginal === 'SAR' || reportAccount?.currency === 'SAR' ? (
+                                <div className="text-right">
+                                  <span>{(tx.amountOriginal || tx.amount || 0).toLocaleString()} SAR</span>
+                                  <span className="block text-[9px] text-slate-500 font-normal mt-0.5" dir="ltr">
+                                    (≈ {((tx.amountOriginal || tx.amount || 0) * (settings.exchangeRateSAR || 140)).toLocaleString()} YER)
+                                  </span>
+                                </div>
+                              ) : (
+                                <span>{(tx.amountOriginal || tx.amount || 0).toLocaleString()} {tx.currencyOriginal || 'YER'}</span>
+                              )
+                            ) : ''}
                           </td>
                           <td className="p-2 sm:p-3 text-[10px] sm:text-xs font-mono text-rose-400 text-right print:text-black">
-                            {tx.type === 'Credit' ? tx.amount?.toLocaleString() : ''}
+                            {tx.type === 'Credit' ? (
+                              tx.currencyOriginal === 'SAR' || reportAccount?.currency === 'SAR' ? (
+                                <div className="text-right">
+                                  <span>{(tx.amountOriginal || tx.amount || 0).toLocaleString()} SAR</span>
+                                  <span className="block text-[9px] text-slate-500 font-normal mt-0.5" dir="ltr">
+                                    (≈ {((tx.amountOriginal || tx.amount || 0) * (settings.exchangeRateSAR || 140)).toLocaleString()} YER)
+                                  </span>
+                                </div>
+                              ) : (
+                                <span>{(tx.amountOriginal || tx.amount || 0).toLocaleString()} {tx.currencyOriginal || 'YER'}</span>
+                              )
+                            ) : ''}
                           </td>
                         </tr>
                       ))}
