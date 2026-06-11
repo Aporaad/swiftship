@@ -5,6 +5,7 @@ import admin from 'firebase-admin';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, doc, getDoc, collection, addDoc, query, where, limit, getDocs, updateDoc } from 'firebase/firestore';
 import { initializeAuth, inMemoryPersistence, signInWithEmailAndPassword } from 'firebase/auth';
+import { createServer as createViteServer } from 'vite';
 
 async function startServer() {
   const app = express();
@@ -1162,7 +1163,8 @@ async function startServer() {
   });
 
   // Vite Middleware
-  if (process.env.NODE_ENV !== "production") {
+  const isProduction = process.env.NODE_ENV === "production" || fs.existsSync(path.resolve(process.cwd(), 'dist', 'index.html'));
+  if (!isProduction) {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -1172,6 +1174,7 @@ async function startServer() {
   } else {
     // Standard path for build artifacts in AI Studio is 'dist' 
     const distPath = path.resolve(process.cwd(), 'dist');
+    console.log('Production: Checking distPath:', distPath, 'Exists:', fs.existsSync(distPath));                
     if (fs.existsSync(distPath)) {
         app.use(express.static(distPath));
         app.get('*', (req, res) => {
