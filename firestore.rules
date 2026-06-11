@@ -108,5 +108,9 @@ service cloud.firestore {
     match /assets/{assetId} {
       allow read, write: if isSignedIn();
     }
+
+    match /report_templates/{templateId} {
+      allow read, write: if isSignedIn();
+    }
   }
 }

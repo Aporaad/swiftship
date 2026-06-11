@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
-  collection, onSnapshot, query, orderBy, getDocs, doc, setDoc, getDoc, where
+  collection, onSnapshot, query, orderBy, getDocs, doc, setDoc, getDoc, where, addDoc, deleteDoc
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useSettings } from '../context/SettingsContext';
@@ -14,7 +14,8 @@ import {
   Search, Filter, Download as DownloadIcon, Printer, 
   Calendar, ArrowUpRight, ArrowDownLeft, ChevronRight, 
   Settings as SettingsIcon, AlertCircle, RefreshCw, Layers, Layout,
-  Save, CheckCircle2, ChevronDown, Check, Coins, Eye, ShoppingCart, UserCheck
+  Save, CheckCircle2, ChevronDown, Check, Coins, Eye, ShoppingCart, UserCheck,
+  Bookmark, Trash2, Palette, Sparkles
 } from 'lucide-react';
 import { format, startOfDay, endOfDay, subDays, isWithinInterval } from 'date-fns';
 import * as XLSX from 'xlsx';
@@ -48,6 +49,14 @@ interface PrintTemplateSettings {
   showTaxId: boolean;
   taxNumber: string;
   primaryColor: string;
+  fontFamily?: 'Cairo' | 'Inter' | 'JetBrains Mono' | 'Segoe UI';
+  signature1Ar?: string;
+  signature1En?: string;
+  signature2Ar?: string;
+  signature2En?: string;
+  signature3Ar?: string;
+  signature3En?: string;
+  tableStyle?: 'solid' | 'dashed' | 'minimal';
 }
 
 const DEFAULT_PRINT_SETTINGS: PrintTemplateSettings = {
@@ -67,7 +76,15 @@ const DEFAULT_PRINT_SETTINGS: PrintTemplateSettings = {
   showDateTime: true,
   showTaxId: true,
   taxNumber: 'TR-10049539-X03',
-  primaryColor: '#d4af37'
+  primaryColor: '#d4af37',
+  fontFamily: 'Cairo',
+  signature1Ar: 'توقيع المستلم والعميل',
+  signature1En: 'Recipient Signature',
+  signature2Ar: 'اعتماد المحاسب المسؤول والتدقيق',
+  signature2En: 'Auditor Acknowledgment',
+  signature3Ar: 'المدير العام والختم',
+  signature3En: 'General Director Stamp',
+  tableStyle: 'solid'
 };
 
 const COLORS = ['#d4af37', '#10b981', '#ef4444', '#3b82f6', '#8b5cf6', '#f59e0b'];
@@ -118,6 +135,12 @@ export default function Reports() {
   const [printSettings, setPrintSettings] = useState<PrintTemplateSettings>(DEFAULT_PRINT_SETTINGS);
   const [savingTemplate, setSavingTemplate] = useState(false);
 
+  // Custom Saved Report Filter Templates System
+  const [savedReportTemplates, setSavedReportTemplates] = useState<any[]>([]);
+  const [newTemplateName, setNewTemplateName] = useState('');
+  const [showSaveTemplateForm, setShowSaveTemplateForm] = useState(false);
+  const [isSavingFilterTemplate, setIsSavingFilterTemplate] = useState(false);
+
   // Filter States
   const [activeReport, setActiveReport] = useState('financial_overview');
   const [filters, setFilters] = useState<ReportFilter>({
@@ -140,6 +163,95 @@ export default function Reports() {
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedExpenseCategory, setSelectedExpenseCategory] = useState<string | null>(null);
+
+  // Custom presets handlers
+  const handleSaveFilterTemplate = async () => {
+    if (!newTemplateName.trim()) {
+      notificationService.notify({
+        title: isAr ? 'خطأ' : 'Error',
+        message: isAr ? 'يرجى إدخال اسم للقالب المحفوظ' : 'Please provide a name for the saved template',
+        type: 'error'
+      });
+      return;
+    }
+    setIsSavingFilterTemplate(true);
+    try {
+      await addDoc(collection(db, 'report_templates'), {
+        name: newTemplateName.trim(),
+        activeReport,
+        filters,
+        sortBy,
+        sortOrder,
+        searchTerm,
+        selectedOrderId,
+        selectedCustomerId,
+        selectedCourierId,
+        selectedCompanyId,
+        selectedUserId,
+        selectedExpenseCategory,
+        createdAt: Date.now()
+      });
+      notificationService.notify({
+        title: isAr ? 'تم الحفظ' : 'Saved',
+        message: isAr ? 'تم حفظ قالب الفلترة بنجاح' : 'Filter configuration saved successfully',
+        type: 'success'
+      });
+      setNewTemplateName('');
+      setShowSaveTemplateForm(false);
+    } catch (err: any) {
+      console.error(err);
+      notificationService.notify({
+        title: isAr ? 'خطأ في الحفظ' : 'Save Error',
+        message: err.message,
+        type: 'error'
+      });
+    } finally {
+      setIsSavingFilterTemplate(false);
+    }
+  };
+
+  const handleDeleteFilterTemplate = async (templateId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm(isAr ? 'هل أنت متأكد من حذف هذا القالب الذكي؟' : 'Are you sure you want to delete this custom template?')) return;
+    try {
+      await deleteDoc(doc(db, 'report_templates', templateId));
+      notificationService.notify({
+        title: isAr ? 'تم الحذف' : 'Deleted',
+        message: isAr ? 'تمت إزالة قالب الفلترة بنجاح' : 'Custom filter template layout deleted successfully',
+        type: 'success'
+      });
+    } catch (err: any) {
+      console.error(err);
+      notificationService.notify({
+        title: isAr ? 'خطأ في الحذف' : 'Delete Error',
+        message: err.message,
+        type: 'error'
+      });
+    }
+  };
+
+  const handleApplyFilterTemplate = (template: any) => {
+    setActiveReport(template.activeReport);
+    if (template.filters) {
+      setFilters(template.filters);
+    }
+    if (template.sortBy) setSortBy(template.sortBy);
+    if (template.sortOrder) setSortOrder(template.sortOrder);
+    if (template.searchTerm !== undefined) setSearchTerm(template.searchTerm);
+    
+    setSelectedOrderId(template.selectedOrderId || null);
+    setSelectedCustomerId(template.selectedCustomerId || null);
+    setSelectedCourierId(template.selectedCourierId || null);
+    setSelectedCompanyId(template.selectedCompanyId || null);
+    setSelectedUserId(template.selectedUserId || null);
+    setSelectedExpenseCategory(template.selectedExpenseCategory || null);
+
+    notificationService.notify({
+      title: isAr ? 'تم تطبيق القالب' : 'Template Applied',
+      message: isAr ? `تم تنشيط الفلترة والترتيب بناءً على القالب: ${template.name}` : `Active filters applied for ${template.name}`,
+      type: 'success'
+    });
+  };
 
   // Reset drilldowns when active report tab changes to avoid state pollution
   useEffect(() => {
@@ -180,6 +292,11 @@ export default function Reports() {
       setShippingCompanies(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
+    // Fetch custom report templates
+    const unsubReportTemplates = onSnapshot(collection(db, 'report_templates'), snap => {
+      setSavedReportTemplates(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
     // Fetch Print Settings
     onSnapshot(doc(db, 'settings', 'print_template'), (snap) => {
       if (snap.exists()) {
@@ -198,6 +315,7 @@ export default function Reports() {
       unsubUsers();
       unsubAccounts();
       unsubShipping();
+      unsubReportTemplates();
     };
   }, [roleLoading]);
 
@@ -525,6 +643,7 @@ export default function Reports() {
             height: auto;
             background: white !important;
             color: black !important;
+            font-family: "${printSettings.fontFamily || 'Cairo'}", sans-serif !important;
             padding: ${printSettings.margins === 'none' ? '0mm' : printSettings.margins === 'minimal' ? '5mm' : '12mm'} !important;
             box-shadow: none !important;
             border: none !important;
@@ -589,7 +708,7 @@ export default function Reports() {
           
           {/* LEFT: Reports Tree Menu Navigation Sidebar */}
           <div className="lg:col-span-4 bg-[#111114] border border-slate-850 p-3 rounded-3xl space-y-1 block">
-            <h3 className="px-4 py-2 text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-slate-850/40 mb-2">
+            <h3 className="px-4 py-2 text-[10px] font-black text-slate-550 uppercase tracking-widest border-b border-slate-850/40 mb-2">
               {isAr ? 'سجلات النظام المحاسبية والتقريرية' : 'Ledger Categories'}
             </h3>
             <div className="space-y-1">
@@ -633,6 +752,44 @@ export default function Reports() {
                 <span className="font-mono font-bold text-[#d4af37]">{accounts.length}</span>
               </div>
             </div>
+
+            {/* Saved Custom templates list */}
+            <div className="pt-4 mt-4 border-t border-slate-850 p-3 space-y-2 text-xs">
+              <span className="text-[10px] font-black text-slate-550 block uppercase flex items-center gap-1.5">
+                <Bookmark className="w-3.5 h-3.5 text-[#d4af37]" />
+                {isAr ? 'التقارير المخصصة والفلترات المحفوظة' : 'Saved Custom Views'}
+              </span>
+              {savedReportTemplates.length === 0 ? (
+                <p className="text-[10px] text-slate-500 italic mt-1.5">{isAr ? 'لا توجد فلترات مخصصة محفوظة حالياً.' : 'No saved presets available.'}</p>
+              ) : (
+                <div className="space-y-1.5 mt-2 max-h-[220px] overflow-y-auto pr-1">
+                  {savedReportTemplates.map((tpl) => {
+                    const rType = REPORT_TYPES.find(r => r.id === tpl.activeReport);
+                    return (
+                      <div 
+                        key={tpl.id}
+                        onClick={() => handleApplyFilterTemplate(tpl)}
+                        className="group flex items-center justify-between p-2 rounded-xl bg-slate-950/80 hover:bg-[#d4af37]/5 border border-slate-900 hover:border-[#d4af37]/20 cursor-pointer transition text-right"
+                      >
+                        <div className="flex flex-col gap-0.5 overflow-hidden">
+                          <span className="font-bold text-[11px] text-white truncate">{tpl.name}</span>
+                          <span className="text-[9px] text-slate-500 font-bold truncate">
+                            {isAr ? rType?.labelAr : rType?.labelEn}
+                          </span>
+                        </div>
+                        <button
+                          onClick={(e) => handleDeleteFilterTemplate(tpl.id, e)}
+                          className="p-1 text-slate-600 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition shrink-0 opacity-0 group-hover:opacity-100"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
           </div>
 
           {/* RIGHT: Analytical content panels */}
@@ -640,30 +797,73 @@ export default function Reports() {
             
             {/* Context Filters */}
             <div className="bg-[#111114] border border-slate-850 p-5 rounded-3xl space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <span className="text-xs font-black text-[#d4af37] uppercase flex items-center gap-2">
                   <Filter className="w-4 h-4" />
                   {isAr ? 'مصفاة البيانات الاحترافية' : 'Professional Filter Deck'}
                 </span>
                 
-                {/* Export controls */}
-                <div className="flex gap-2">
+                {/* Export/Template controls */}
+                <div className="flex flex-wrap gap-2">
+                  <button 
+                    onClick={() => setShowSaveTemplateForm(!showSaveTemplateForm)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all border ${
+                      showSaveTemplateForm 
+                        ? 'bg-rose-500/10 border-rose-500/35 text-rose-400' 
+                        : 'bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 text-indigo-400'
+                    }`}
+                  >
+                    <Bookmark className="w-3.5 h-3.5" />
+                    {isAr ? 'حفظ الفلترة الحالية كقالب' : 'Save Preset'}
+                  </button>
                   <button 
                     onClick={() => setIsPreviewModalOpen(true)}
-                    className="flex items-center gap-1.5 px-3.5 py-2 bg-[#d4af37]/10 hover:bg-[#d4af37]/20 border border-[#d4af37]/35 text-[#d4af37] rounded-xl text-xs font-black transition-all"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#d4af37]/10 hover:bg-[#d4af37]/20 border border-[#d4af37]/35 text-[#d4af37] rounded-xl text-xs font-black transition-all"
                   >
-                    <Printer className="w-4 h-4" />
-                    {isAr ? 'معاينة وطباعة القالب' : 'Live Print Config'}
+                    <Printer className="w-3.5 h-3.5" />
+                    {isAr ? 'معاينة وطباعة القالب' : 'Paper Config'}
                   </button>
                   <button 
                     onClick={handleExportExcel}
-                    className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/35 text-emerald-400 rounded-xl text-xs font-black transition-all"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/35 text-emerald-400 rounded-xl text-xs font-black transition-all"
                   >
-                    <DownloadIcon className="w-4 h-4" />
-                    {isAr ? 'إكسل Excel' : 'Excel'}
+                    <DownloadIcon className="w-3.5 h-3.5" />
+                    {isAr ? 'تصدير Excel' : 'Excel'}
                   </button>
                 </div>
               </div>
+
+              {/* Saved Configuration Inline Form */}
+              {showSaveTemplateForm && (
+                <div className="bg-slate-950/60 border border-[#d4af37]/25 p-4 rounded-2xl flex flex-col md:flex-row items-stretch md:items-center gap-3 animate-fade-slide-in">
+                  <div className="flex-1 space-y-1">
+                    <label className="text-[10px] font-black text-[#d4af37] uppercase block">{isAr ? 'اسم القالب المخصص للطلب الحالي' : 'Custom Template Name'}</label>
+                    <input 
+                      type="text"
+                      placeholder={isAr ? 'مثال: تقرير مبيعات الربع الأول للمندوب رائد' : 'e.g. Q1 Sales Report for Courier Raed'}
+                      value={newTemplateName}
+                      onChange={e => setNewTemplateName(e.target.value)}
+                      className="w-full bg-[#111114] border border-slate-850 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-[#d4af37]"
+                    />
+                  </div>
+                  <div className="flex items-end gap-2 shrink-0 self-end md:self-auto pt-3 md:pt-0">
+                    <button 
+                      onClick={handleSaveFilterTemplate}
+                      disabled={isSavingFilterTemplate}
+                      className="px-4 py-2 bg-[#d4af37] hover:bg-yellow-600 disabled:opacity-50 text-black text-xs font-black rounded-xl transition flex items-center gap-1.5"
+                    >
+                      {isSavingFilterTemplate ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                      {isAr ? 'حفظ بـ Cloud' : 'Save to Cloud'}
+                    </button>
+                    <button 
+                      onClick={() => { setShowSaveTemplateForm(false); setNewTemplateName(''); }}
+                      className="px-4 py-2 bg-slate-900 border border-slate-850 text-slate-400 hover:text-white text-xs font-bold rounded-xl transition"
+                    >
+                      {isAr ? 'إلغاء' : 'Cancel'}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* Date range picker - Start */}
@@ -2415,20 +2615,209 @@ export default function Reports() {
                 />
               </div>
 
-              {/* Preset design styling colors selection */}
+              {/* Footer text (English) */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-550 uppercase block">{isAr ? 'ملاحظات وبنود تذييل الفاتورة (إنجليزي)' : 'Footer Terms Text (EN)'}</label>
+                <textarea 
+                  rows={2}
+                  value={printSettings.footerTextEn || ''}
+                  onChange={e => setPrintSettings(p => ({ ...p, footerTextEn: e.target.value }))}
+                  className="w-full bg-slate-950 border border-slate-850 text-xs font-bold text-white rounded-xl px-3 py-2 outline-none focus:border-[#d4af37]"
+                />
+              </div>
+
+              {/* Table style */}
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-slate-400 block uppercase">{isAr ? 'لون الهوية الرئيسي للطباعة' : 'Brandy Primary Palette'}</label>
-                <div className="flex gap-2">
-                  {['#d4af37', '#10b981', '#ef4444', '#3b82f6', '#000000'].map(col => (
+                <label className="text-[10px] font-black text-slate-400 block uppercase">{isAr ? 'نمط الجدول والتأثير البصري للبيانات' : 'Ledger Table Border Layout'}</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: 'solid', label: isAr ? 'خطوط متصلة' : 'Solid Border' },
+                    { id: 'dashed', label: isAr ? 'متقطع رياضي' : 'Dashed Lines' },
+                    { id: 'minimal', label: isAr ? 'بسيط مفرغ' : 'Minimal' },
+                  ].map(opt => (
                     <button
-                      key={col}
-                      onClick={() => setPrintSettings(prev => ({ ...prev, primaryColor: col }))}
-                      className="w-8 h-8 rounded-full border border-slate-800 transition transform hover:scale-110 flex items-center justify-center relative"
-                      style={{ backgroundColor: col }}
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setPrintSettings(prev => ({ ...prev, tableStyle: opt.id as any }))}
+                      className={`px-2 py-2 rounded-xl border text-[11px] font-bold text-center transition ${printSettings.tableStyle === opt.id ? 'bg-[#d4af37]/15 text-[#d4af37] border-[#d4af37]' : 'bg-slate-950 border-slate-850 text-slate-400'}`}
                     >
-                      {printSettings.primaryColor === col && <Check className="w-4 h-4 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]" />}
+                      {opt.label}
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* Font Family selection */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 block uppercase">{isAr ? 'نوع الخط وهندسة الكلمات المطبوعة' : 'Typography Font Family'}</label>
+                <select 
+                  value={printSettings.fontFamily || 'Cairo'}
+                  onChange={e => setPrintSettings(p => ({ ...p, fontFamily: e.target.value as any }))}
+                  className="w-full bg-slate-950 border border-slate-850 text-xs font-bold text-white rounded-xl px-3 py-2 outline-none focus:border-[#d4af37]"
+                >
+                  <option value="Cairo">{isAr ? 'Cairo (خط دبي السلس - افتراضي)' : 'Cairo (Modern AR Sans)'}</option>
+                  <option value="Inter">{isAr ? 'Inter (خط هندسي عالمي مفصل)' : 'Inter (International Sans)'}</option>
+                  <option value="Segoe UI">{isAr ? 'Segoe UI (واجهة كشوفات الأعمال)' : 'Segoe UI (Systems Standard)'}</option>
+                  <option value="JetBrains Mono">{isAr ? 'JetBrains Mono (جمالية الأكواد والرياضيات)' : 'JetBrains Mono (Technical Mono)'}</option>
+                </select>
+              </div>
+
+              {/* Logo custom upload system */}
+              <div className="space-y-1.5 pt-2 border-t border-slate-850">
+                <label className="text-[10px] font-black text-slate-400 block uppercase">{isAr ? 'شعار وهوية العلامة التجارية المطبوعة' : 'Business Branding Logo'}</label>
+                <div className="space-y-2">
+                  <input 
+                    type="text"
+                    placeholder={isAr ? 'ضع رابط صورة الشعار URL (أو ارفع ملف بالأسفل)' : 'Logo Image URL Link'}
+                    value={printSettings.logoUrl}
+                    onChange={e => setPrintSettings(p => ({ ...p, logoUrl: e.target.value }))}
+                    className="w-full bg-slate-950 border border-slate-850 text-xs font-mono text-white rounded-xl px-3 py-2 outline-none focus:border-[#d4af37]"
+                  />
+                  
+                  <div className="relative border border-dashed border-slate-800 hover:border-[#d4af37]/35 rounded-xl bg-slate-950 p-3 text-center cursor-pointer transition">
+                    <input 
+                      type="file" 
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            setPrintSettings(p => ({ ...p, logoUrl: reader.result as string }));
+                            notificationService.notify({
+                              title: isAr ? 'تم تحميل الشعار' : 'Logo Uploaded',
+                              message: isAr ? 'تم تحويل الصورة محلياً وحفظ هوية الرأس بنجاح' : 'Custom picture loaded successfully',
+                              type: 'success'
+                            });
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                    />
+                    <div className="flex flex-col items-center justify-center gap-1.5 text-slate-400 text-xs py-1">
+                      <DownloadIcon className="w-4 h-4 text-[#d4af37]" />
+                      <span className="font-extrabold">{isAr ? 'اسحب أو اختر ملف صورة كشعار من جهازك' : 'Choose local image file'}</span>
+                      <span className="text-[9px] text-slate-600">JPG, PNG, WEBP, SVG</span>
+                    </div>
+                  </div>
+
+                  {printSettings.logoUrl && (
+                    <div className="flex items-center justify-between bg-slate-900 border border-slate-850 p-2 rounded-xl">
+                      <img src={printSettings.logoUrl} alt="Logo preview" className="h-8 max-w-[130px] object-contain rounded bg-white p-1" />
+                      <button 
+                        type="button"
+                        onClick={() => setPrintSettings(p => ({ ...p, logoUrl: '' }))}
+                        className="text-[10px] text-red-400 hover:text-red-300 font-extrabold px-2.5 py-1 bg-red-500/10 rounded-lg"
+                      >
+                        {isAr ? 'حذف الشعار التعبيري' : 'Delete Logo'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Signature custom titles editor */}
+              <div className="space-y-3.5 border-t border-slate-850 pt-3">
+                <span className="text-[10px] text-slate-550 block font-black uppercase tracking-widest">{isAr ? 'تخصيص أسماء وعناوين مربعات التواقيع' : 'Custom Auditor Signature Labels'}</span>
+                
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-slate-400">{isAr ? 'توقيع 1 (عربي)' : 'Sign 1 (AR)'}</label>
+                      <input 
+                        type="text"
+                        value={printSettings.signature1Ar || ''}
+                        onChange={e => setPrintSettings(p => ({ ...p, signature1Ar: e.target.value }))}
+                        className="w-full bg-slate-950 border border-slate-850 text-xs font-bold text-white rounded-lg px-2.5 py-1.5 outline-none focus:border-[#d4af37]"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-slate-500">{isAr ? 'توقيع 1 (إنجليزي)' : 'Sign 1 (EN)'}</label>
+                      <input 
+                        type="text"
+                        value={printSettings.signature1En || ''}
+                        onChange={e => setPrintSettings(p => ({ ...p, signature1En: e.target.value }))}
+                        className="w-full bg-slate-950 border border-slate-850 text-xs font-bold text-white rounded-lg px-2.5 py-1.5 outline-none focus:border-[#d4af37]"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-slate-400">{isAr ? 'توقيع 2 (عربي)' : 'Sign 2 (AR)'}</label>
+                      <input 
+                        type="text"
+                        value={printSettings.signature2Ar || ''}
+                        onChange={e => setPrintSettings(p => ({ ...p, signature2Ar: e.target.value }))}
+                        className="w-full bg-slate-950 border border-slate-850 text-xs font-bold text-white rounded-lg px-2.5 py-1.5 outline-none focus:border-[#d4af37]"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-slate-500">{isAr ? 'توقيع 2 (إنجليزي)' : 'Sign 2 (EN)'}</label>
+                      <input 
+                        type="text"
+                        value={printSettings.signature2En || ''}
+                        onChange={e => setPrintSettings(p => ({ ...p, signature2En: e.target.value }))}
+                        className="w-full bg-slate-950 border border-slate-850 text-xs font-bold text-white rounded-lg px-2.5 py-1.5 outline-none focus:border-[#d4af37]"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-slate-400">{isAr ? 'توقيع 3 (عربي)' : 'Sign 3 (AR)'}</label>
+                      <input 
+                        type="text"
+                        value={printSettings.signature3Ar || ''}
+                        onChange={e => setPrintSettings(p => ({ ...p, signature3Ar: e.target.value }))}
+                        className="w-full bg-slate-950 border border-slate-850 text-xs font-bold text-white rounded-lg px-2.5 py-1.5 outline-none focus:border-[#d4af37]"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-slate-500">{isAr ? 'توقيع 3 (إنجليزي)' : 'Sign 3 (EN)'}</label>
+                      <input 
+                        type="text"
+                        value={printSettings.signature3En || ''}
+                        onChange={e => setPrintSettings(p => ({ ...p, signature3En: e.target.value }))}
+                        className="w-full bg-slate-950 border border-slate-850 text-xs font-bold text-white rounded-lg px-2.5 py-1.5 outline-none focus:border-[#d4af37]"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Preset design styling colors selection */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-450 block uppercase">{isAr ? 'لون الهوية والمحاور المالية للمستند' : 'Corporate Identity Hex color'}</label>
+                <div className="flex flex-wrap items-center gap-2 bg-slate-950 p-2.5 rounded-xl">
+                  {['#d4af37', '#10b981', '#ef4444', '#3b82f6', '#000000', '#f59e0b', '#8b5cf6'].map(col => (
+                    <button
+                      key={col}
+                      type="button"
+                      onClick={() => setPrintSettings(prev => ({ ...prev, primaryColor: col }))}
+                      className="w-7 h-7 rounded-full border border-slate-800 transition transform hover:scale-110 flex items-center justify-center relative"
+                      style={{ backgroundColor: col }}
+                    >
+                      {printSettings.primaryColor === col && <Check className="w-3.5 h-3.5 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]" />}
+                    </button>
+                  ))}
+                  
+                  {/* Hex input and inline standard color picker */}
+                  <div className="flex items-center gap-1.5 border-l border-slate-850 pl-3 ml-2 shrink-0">
+                    <input 
+                      type="color"
+                      value={printSettings.primaryColor}
+                      onChange={e => setPrintSettings(p => ({ ...p, primaryColor: e.target.value }))}
+                      className="w-6 h-6 rounded bg-transparent border-0 cursor-pointer"
+                    />
+                    <input 
+                      type="text"
+                      value={printSettings.primaryColor}
+                      onChange={e => setPrintSettings(p => ({ ...p, primaryColor: e.target.value }))}
+                      className="w-16 bg-slate-900 border border-slate-800 rounded px-1.5 py-0.5 text-[9.5px] font-mono text-[#d4af37]"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -2449,6 +2838,7 @@ export default function Reports() {
                 style={{ 
                   width: printSettings.paperSize.startsWith('80mm') ? '300px' : printSettings.paperSize.startsWith('58mm') ? '240px' : '520px',
                   minHeight: '400px',
+                  fontFamily: `"${printSettings.fontFamily || 'Cairo'}", sans-serif`,
                   fontSize: printSettings.fontSize === 'xs' ? '10px' : printSettings.fontSize === 'sm' ? '12px' : printSettings.fontSize === 'md' ? '14px' : '16px'
                 }}
               >
@@ -2456,10 +2846,14 @@ export default function Reports() {
                 {/* Simulated Stamp Logo */}
                 {printSettings.showLogo && (
                   <div className="flex justify-center mb-4 border-b pb-3 border-slate-200">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white font-mono font-black" style={{ backgroundColor: printSettings.primaryColor }}>SS</div>
-                      <span className="font-mono font-black text-xs tracking-widest text-[#000000]">SWIFTSHIP</span>
-                    </div>
+                    {printSettings.logoUrl ? (
+                      <img src={printSettings.logoUrl} alt="Logo" className="h-10 object-contain max-w-[180px] p-0.5 bg-white rounded" />
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white font-mono font-black" style={{ backgroundColor: printSettings.primaryColor }}>SS</div>
+                        <span className="font-mono font-black text-xs tracking-widest text-[#000000]">SWIFTSHIP</span>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -2536,15 +2930,27 @@ export default function Reports() {
                 {printSettings.showSignatures && (
                   <div className="grid grid-cols-3 gap-1.5 text-center text-[7px] font-bold border-t pt-3">
                     <div className="flex flex-col">
-                      <span className="text-slate-400 italic mb-4">{isAr ? 'توقيع المستلم والعميل' : 'Recipient Stamp'}</span>
+                      <span className="text-slate-400 italic mb-4">
+                        {isAr 
+                          ? (printSettings.signature1Ar || 'توقيع المستلم والعميل') 
+                          : (printSettings.signature1En || 'Recipient Stamp')}
+                      </span>
                       <div className="border-b w-full" />
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-slate-400 italic mb-4">{isAr ? 'اعتماد المحاسب المسؤول' : 'Corporate Auditor'}</span>
+                      <span className="text-slate-400 italic mb-4">
+                        {isAr 
+                          ? (printSettings.signature2Ar || 'اعتماد المحاسب المسؤول') 
+                          : (printSettings.signature2En || 'Corporate Auditor')}
+                      </span>
                       <div className="border-b w-full" />
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-slate-400 italic mb-4">{isAr ? 'المدير العام والختم' : 'Corporate Director'}</span>
+                      <span className="text-slate-400 italic mb-4">
+                        {isAr 
+                          ? (printSettings.signature3Ar || 'المدير العام والختم') 
+                          : (printSettings.signature3En || 'Corporate Director')}
+                      </span>
                       <div className="border-b w-full" />
                     </div>
                   </div>
@@ -2583,12 +2989,13 @@ export default function Reports() {
               {/* PRINT CANVAS TARGET: Will be the unique component shown on print */}
               <div 
                 id="print-invoice-canvas"
-                className="bg-white text-black p-8 shadow-2xl relative border border-slate-300 text-start font-sans"
+                className="bg-white text-black p-8 shadow-2xl relative border border-slate-300 text-start"
                 style={{ 
                   width: printSettings.paperSize === '80mm' ? '80mm' : printSettings.paperSize === '58mm' ? '58mm' : '100%',
                   maxWidth: ['80mm', '58mm'].includes(printSettings.paperSize) ? 'none' : '210mm',
                   minHeight: '297mm',
                   boxSizing: 'border-box',
+                  fontFamily: `"${printSettings.fontFamily || 'Cairo'}", sans-serif`,
                   fontSize: printSettings.fontSize === 'xs' ? '11px' : printSettings.fontSize === 'sm' ? '13px' : printSettings.fontSize === 'md' ? '15px' : '17px'
                 }}
               >
@@ -2596,10 +3003,14 @@ export default function Reports() {
                 {/* Logo Section */}
                 {printSettings.showLogo && (
                   <div className="flex justify-center mb-6 pb-4 border-b border-slate-200">
-                    <div className="flex items-center gap-2">
-                      <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-mono font-black" style={{ backgroundColor: printSettings.primaryColor }}>SS</div>
-                      <span className="font-mono font-black text-[13px] tracking-widest text-[#000000]">SWIFTSHIP LOGISTICS</span>
-                    </div>
+                    {printSettings.logoUrl ? (
+                      <img src={printSettings.logoUrl} alt="Logo" className="h-12 object-contain max-w-[210px] p-1 bg-white rounded" />
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-mono font-black" style={{ backgroundColor: printSettings.primaryColor }}>SS</div>
+                        <span className="font-mono font-black text-[13px] tracking-widest text-[#000000]">SWIFTSHIP LOGISTICS</span>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -3101,15 +3512,27 @@ export default function Reports() {
                 {printSettings.showSignatures && (
                   <div className="grid grid-cols-3 gap-3 text-center text-[8px] font-semibold border-t pt-4">
                     <div className="flex flex-col">
-                      <span className="text-slate-400 italic mb-6">{isAr ? 'توقيع المستلم والعميل' : 'Client Signature'}</span>
+                      <span className="text-slate-400 italic mb-6">
+                        {isAr 
+                          ? (printSettings.signature1Ar || 'توقيع المستلم والعميل') 
+                          : (printSettings.signature1En || 'Client Signature')}
+                      </span>
                       <div className="border-b w-full" />
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-slate-400 italic mb-6">{isAr ? 'اعتماد المحاسب المسؤول والتدقيق' : 'Accountant Sign'}</span>
+                      <span className="text-slate-400 italic mb-6">
+                        {isAr 
+                          ? (printSettings.signature2Ar || 'اعتماد المحاسب المسؤول والتدقيق') 
+                          : (printSettings.signature2En || 'Accountant Sign')}
+                      </span>
                       <div className="border-b w-full" />
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-slate-400 italic mb-6">{isAr ? 'مسؤول مستند المدير والختم' : 'General Director Stamp'}</span>
+                      <span className="text-slate-400 italic mb-6">
+                        {isAr 
+                          ? (printSettings.signature3Ar || 'مسؤول مستند المدير والختم') 
+                          : (printSettings.signature3En || 'General Director Stamp')}
+                      </span>
                       <div className="border-b w-full" />
                     </div>
                   </div>

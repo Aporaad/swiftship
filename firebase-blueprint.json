@@ -140,9 +140,34 @@
         }
       },
       "required": ["status", "itemCount", "history"]
+    },
+    "ReportTemplate": {
+      "title": "Report Template",
+      "description": "Saved filter and sorting presets for custom financial reports",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "activeReport": { "type": "string" },
+        "filters": { "type": "object" },
+        "sortBy": { "type": "string" },
+        "sortOrder": { "type": "string" },
+        "searchTerm": { "type": "string" },
+        "selectedOrderId": { "type": "string" },
+        "selectedCustomerId": { "type": "string" },
+        "selectedCourierId": { "type": "string" },
+        "selectedCompanyId": { "type": "string" },
+        "selectedUserId": { "type": "string" },
+        "selectedExpenseCategory": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["name", "activeReport", "createdAt"]
     }
   },
   "firestore": {
+    "/report_templates/{templateId}": {
+      "schema": { "$ref": "#/entities/ReportTemplate" },
+      "description": "Custom user-saved filtering configurations for reports"
+    },
     "/public_tracking/{trackingNumber}": {
       "schema": { "$ref": "#/entities/PublicTracking" },
       "description": "Publicly accessible tracking data by tracking number"
