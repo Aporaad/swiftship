@@ -23,7 +23,12 @@ import {
   Menu,
   ChevronDown,
   UserCog,
-  Command
+  Command,
+  HelpCircle,
+  Phone,
+  Mail,
+  Send,
+  MessageCircle
 } from 'lucide-react';
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
@@ -48,6 +53,9 @@ export default function Layout() {
   
   // Quick Navigation State
   const [isQuickNavOpen, setIsQuickNavOpen] = useState(false);
+
+  // Programmer & System Info Modal State
+  const [isSystemDevModalOpen, setIsSystemDevModalOpen] = useState(false);
 
   // Real-time System Status state
   const [systemStats, setSystemStats] = useState({
@@ -714,6 +722,18 @@ export default function Layout() {
             >
               <RotateCw className="w-4 h-4 animate-hover" />
             </button>
+
+            {/* System Info & Programmer Contact Button (?) */}
+            <button
+              onClick={() => setIsSystemDevModalOpen(true)}
+              className="p-2.5 rounded-xl hover:bg-slate-900 text-slate-400 hover:text-[#d4af37] transition-all bg-[#08080a] border border-slate-900 hover:border-[#d4af37]/20 flex items-center justify-center cursor-pointer relative group"
+              title={isAr ? "معلومات النظام والمبرمج" : "System & Developer Bio"}
+            >
+              <HelpCircle className="w-4 h-4 text-[#d4af37]" />
+              <span className="absolute -bottom-8 right-1/2 translate-x-1/2 bg-black border border-slate-800 text-[9px] text-slate-400 px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-250 pointer-events-none whitespace-nowrap z-30">
+                {isAr ? "معلومات النظام" : "System & Dev Info"}
+              </span>
+            </button>
           </div>
         </header>
 
@@ -752,6 +772,139 @@ export default function Layout() {
 
         {/* Global Financial Statement Modal */}
         <GlobalEntityLedgerModal />
+
+        {/* System & Developer Information Modal */}
+        {isSystemDevModalOpen && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setIsSystemDevModalOpen(false)}>
+            <div 
+              className="w-full max-w-lg bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/25 rounded-2xl shadow-2xl relative overflow-hidden text-right leading-relaxed p-6 sm:p-8" 
+              onClick={(e) => e.stopPropagation()}
+              dir={isAr ? 'rtl' : 'ltr'}
+            >
+              <div className="absolute top-0 inset-x-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#d4af37]/45 to-transparent"></div>
+              <div className="absolute -top-12 -right-12 w-40 h-40 bg-[#d4af37]/3 rounded-full blur-3xl pointer-events-none"></div>
+
+              {/* Modal Header */}
+              <div className="flex items-center justify-between pb-4 border-b border-white/[0.04] mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#d4af37]/10 border border-[#d4af37]/25 flex items-center justify-center shrink-0">
+                    <HelpCircle className="w-5 h-5 text-[#d4af37]" />
+                  </div>
+                  <div className="text-start">
+                    <h3 className="text-sm font-black text-white uppercase tracking-wider">
+                      {isAr ? 'معلومات النظام والمطور والبرمج الكفء' : 'System & Developer Profile'}
+                    </h3>
+                    <p className="text-[10px] text-slate-500 font-extrabold uppercase mt-0.5">
+                      SwiftShip Core Gateway v1
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setIsSystemDevModalOpen(false)}
+                  className="px-2.5 py-1 text-[10px] border border-slate-800 bg-slate-900/50 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer font-extrabold"
+                >
+                  {isAr ? 'إغلاق ✕' : 'Close ✕'}
+                </button>
+              </div>
+
+              {/* Modal Content - System Details */}
+              <div className="space-y-6">
+                <div>
+                  <span className="text-[9px] font-black text-[#d4af37] uppercase tracking-widest block mb-2 text-start">
+                    {isAr ? '💻 معلومات النظام' : 'SYSTEM DETAILS'}
+                  </span>
+                  <div className="bg-[#050507]/80 border border-[#d4af37]/10 p-4 rounded-xl text-start">
+                    <h4 className="text-xs font-black text-white mb-1.5 flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                      {isAr ? 'نظام SwiftShip v1 لإدارة الطلبات والشحنات' : 'SwiftShip v1 • Order & Shipment Management ERP'}
+                    </h4>
+                    <p className="text-[11px] text-slate-400 font-bold leading-relaxed">
+                      {isAr 
+                        ? 'منصة لوجستية متكاملة عالية الأداء تم بناؤها لتسهيل تتبع الشحنات، إدارة نفقات التصنيفات، عهد المناديب والمصادر والمحاسبة المالية الموحدة مع تأمين فائق للبيانات وسرعة مزامنة المعاملات وقابلية التوسع.' 
+                        : 'A state-of-the-art enterprise-grade logistics platform engineered for real-time shipment dispatching, ledger account tracing, courier custody matching, expense classification, and automated analytical reports.'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Developer Details */}
+                <div>
+                  <span className="text-[9px] font-black text-[#d4af37] uppercase tracking-widest block mb-1.5 text-start">
+                    {isAr ? '👑 معلومات مبرمج ومطور النظام' : 'DEVELOPER PROFILE'}
+                  </span>
+                  <div className="bg-[#050507]/80 border border-[#d4af37]/10 p-5 rounded-xl space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-start border-b border-white/[0.04] pb-3">
+                      <div>
+                        <h4 className="text-sm font-black text-white flex items-center gap-1.5">
+                          {isAr ? 'أرسلان الشماري' : 'Arslan ALShamari'}
+                          <span className="text-[8.5px] px-1.5 py-0.5 bg-[#d4af37]/10 text-[#d4af37] border border-[#d4af37]/20 rounded-md font-bold">
+                            Lead Architect
+                          </span>
+                        </h4>
+                        <p className="text-[11.5px] text-[#d4af37] font-extrabold mt-1">
+                          {isAr ? 'مبرمج أنظمة ومهندس شبكات وأمن سيبراني' : 'Systems Developer, Network Engineer & Cybersecurity Specialist'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Developer Contact Info details */}
+                    <div className="space-y-2 text-xs">
+                      <div className="flex items-center justify-between text-start text-[11px] font-bold py-1.5 border-b border-white/[0.02]">
+                        <span className="text-slate-500">{isAr ? 'هاتف مباشر Contact Phone:' : 'Direct Phone Link:'}</span>
+                        <a href="tel:+967776422777" dir="ltr" className="text-slate-300 hover:text-white font-mono flex items-center gap-1 hover:underline">
+                          <Phone className="w-3.5 h-3.5 text-[#d4af37]" />
+                          <span>+967 776 422 777</span>
+                        </a>
+                      </div>
+                      
+                      <div className="flex items-center justify-between text-start text-[11px] font-bold py-1.5 border-b border-[#0f0f12]">
+                        <span className="text-slate-500">{isAr ? 'البريد الإلكتروني Email:' : 'Official Email Address:'}</span>
+                        <a href="mailto:arslan.alshamari@gmail.com" className="text-slate-200 hover:text-[#d4af37] flex items-center gap-1 hover:underline">
+                          <Mail className="w-3.5 h-3.5 text-[#d4af37]" />
+                          <span>arslan.alshamari@gmail.com</span>
+                        </a>
+                      </div>
+                    </div>
+
+                    {/* Action Hub buttons */}
+                    <div className="grid grid-cols-3 gap-2 pt-2 border-t border-white/[0.02]">
+                      <a 
+                        href="https://wa.me/967776422777" 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="p-2.5 bg-emerald-500/5 hover:bg-emerald-500/15 border border-emerald-500/15 text-emerald-400 text-xs font-black rounded-xl flex items-center justify-center gap-1.5 transition duration-205 active:scale-95 cursor-pointer"
+                      >
+                        <MessageCircle className="w-4 h-4 shrink-0" />
+                        <span>{isAr ? 'واتسـاب' : 'WhatsApp'}</span>
+                      </a>
+                      <a 
+                        href="https://t.me/Arslan_ALShamari" 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="p-2.5 bg-sky-500/5 hover:bg-sky-500/15 border border-sky-500/15 text-sky-400 text-xs font-black rounded-xl flex items-center justify-center gap-1.5 transition duration-205 active:scale-95 cursor-pointer"
+                      >
+                        <Send className="w-4 h-4 shrink-0" />
+                        <span>{isAr ? 'تلقـرام' : 'Telegram'}</span>
+                      </a>
+                      <a 
+                        href="mailto:arslan.alshamari@gmail.com" 
+                        className="p-2.5 bg-[#d4af37]/5 hover:bg-[#d4af37]/15 border border-[#d4af37]/15 text-[#d4af37] text-xs font-black rounded-xl flex items-center justify-center gap-1.5 transition duration-205 active:scale-95 cursor-pointer"
+                      >
+                        <Mail className="w-4 h-4 shrink-0" />
+                        <span>{isAr ? 'الإيميل' : 'Email Dev'}</span>
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Security signature footer */}
+              <div className="mt-6 pt-4 border-t border-white/[0.04] flex items-center justify-between text-[9px] text-slate-500 font-bold select-none">
+                <span>SYSTEM ID: SWIFTSHIP-ERP-V1</span>
+                <span>SECURED AES-256 SYSTEM</span>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Mobile Sidebar overlay block */}
