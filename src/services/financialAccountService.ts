@@ -131,6 +131,7 @@ class FinancialAccountService {
         try {
           const entityCollection = this.getEntityCollection(entityType);
           const entityUpdateData: any = {
+            accountId: ref.id,
             financialAccountId: ref.id,
             financialAccountCode: accountCode,
             updatedAt: now

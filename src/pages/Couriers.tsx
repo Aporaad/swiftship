@@ -931,7 +931,7 @@ export default function Couriers() {
                           {courier.courierCustomId || 'ALX-CR-XXX'}
                         </span>
                         {(() => {
-                          const account = accounts.find(a => a.entityId === courier.id);
+                          const account = accounts.find(a => a.id === courier.accountId || a.id === courier.financialAccountId || a.entityId === courier.id);
                           return account ? (
                             <div className="flex flex-col gap-0.5 mt-0.5">
                               <span className="text-[9px] font-bold text-slate-550 font-mono block">
@@ -1310,7 +1310,7 @@ export default function Couriers() {
             )}
 
             {detailTab === 'financial' && (() => {
-              const account = accounts.find(a => a.entityId === selectedCourier.id);
+              const account = accounts.find(a => a.id === selectedCourier.accountId || a.id === selectedCourier.financialAccountId || a.entityId === selectedCourier.id);
               const ledgerData = getCourierUnifiedLedger();
               const debits = ledgerData.filter(i => i.type === 'Debit').reduce((sum, i) => sum + i.amountFCurrency, 0);
               const credits = ledgerData.filter(i => i.type === 'Credit').reduce((sum, i) => sum + i.amountFCurrency, 0);

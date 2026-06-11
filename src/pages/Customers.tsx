@@ -35,6 +35,7 @@ export default function Customers() {
   const { role, hasPermission, loading: roleLoading } = useRole();
   const { settings, t } = useSettings();
   const [customers, setCustomers] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -120,7 +121,18 @@ export default function Customers() {
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'customers');
     });
-    return unsub;
+    
+    // Subscribe to accounts collection to obtain real-time financial balances and currencies
+    const unsubAccounts = onSnapshot(collection(db, 'accounts'), (snap) => {
+      setAccounts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (error) => {
+      console.warn("Could not load financial accounts in Customers page", error);
+    });
+
+    return () => {
+      unsub();
+      unsubAccounts();
+    };
   }, [roleLoading]);
 
   const handleOpenAdd = () => {
@@ -260,7 +272,34 @@ export default function Customers() {
     });
   };
 
-  const filteredCustomers = customers.filter(c => 
+  const customersWithAccounts = React.useMemo(() => {
+    return customers.map(c => {
+      const acc = accounts.find(a => 
+        a.entityId === c.id || 
+        a.id === c.accountId || 
+        a.id === c.financialAccountId
+      );
+      return {
+        ...c,
+        financialAccountId: acc?.id || c.financialAccountId || null,
+        accountId: acc?.id || c.accountId || null,
+        financialAccountCode: acc?.accountCode || c.financialAccountCode || null,
+        financialBalance: acc ? acc.balance : 0,
+        financialCurrency: acc ? acc.currency : (c.financialCurrency || settings.currency || 'YER'),
+        walletBalance: acc ? acc.balance : 0,
+        wallet: {
+          balance: acc ? acc.balance : 0
+        }
+      };
+    });
+  }, [customers, accounts, settings.currency]);
+
+  const activeCustomer = React.useMemo(() => {
+    if (!selectedCustomer) return null;
+    return customersWithAccounts.find(c => c.id === selectedCustomer.id) || selectedCustomer;
+  }, [selectedCustomer, customersWithAccounts]);
+
+  const filteredCustomers = customersWithAccounts.filter(c => 
     (c.fullName && c.fullName.toLowerCase().includes(search.toLowerCase())) || 
     (c.phone && c.phone.includes(search)) ||
     (c.id === searchCustomerId)
@@ -637,7 +676,7 @@ export default function Customers() {
       )}
 
       {/* Details / Report Modal (Luxury Gold Theme & Print Out) */}
-      {showDetailsModal && selectedCustomer && (
+      {showDetailsModal && activeCustomer && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
           <div className="bg-[#0c0c0f] border border-[#d4af37]/25 rounded-3xl shadow-2xl max-w-4xl w-full h-[88vh] overflow-hidden flex flex-col">
             
@@ -645,14 +684,14 @@ export default function Customers() {
             <div className="bg-black/40 p-5 border-b border-slate-850/80 flex justify-between items-center shrink-0">
                <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#121215] to-[#070708] border border-[#d4af37]/25 text-[#d4af37] flex items-center justify-center font-black text-lg shadow-inner">
-                    {selectedCustomer.fullName?.substring(0, 1)}
+                    {activeCustomer.fullName?.substring(0, 1)}
                   </div>
                   <div className="text-start">
                     <h2 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-1.5">
-                      {selectedCustomer.fullName} 
+                      {activeCustomer.fullName} 
                       <Crown className="w-4 h-4 text-[#d4af37] animate-pulse" />
                     </h2>
-                    <p className="text-[10px] text-[#d4af37] font-bold font-mono mt-0.5" dir="ltr">{selectedCustomer.phone}</p>
+                    <p className="text-[10px] text-[#d4af37] font-bold font-mono mt-0.5" dir="ltr">{activeCustomer.phone}</p>
                   </div>
                </div>
                <button onClick={() => setShowDetailsModal(false)} className="bg-slate-900 hover:bg-slate-850 p-2 rounded-xl text-slate-500 hover:text-white border border-slate-800 transition duration-200"><X className="w-4.5 h-4.5" /></button>
@@ -663,7 +702,7 @@ export default function Customers() {
 
               {/* Financial Account Info Card */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {selectedCustomer.financialAccountCode && (
+                {activeCustomer.financialAccountCode && (
                   <div className="bg-gradient-to-r from-[#0e0e11] to-[#070708] border border-[#d4af37]/25 rounded-2xl p-4 flex items-center justify-between shadow">
                     <div className="flex items-center gap-3">
                       <div className="bg-[#d4af37]/10 border border-[#d4af37]/20 p-2.5 rounded-xl">
@@ -671,18 +710,18 @@ export default function Customers() {
                       </div>
                       <div className="text-start">
                         <div className="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-0.5">{isAr ? 'رقم الحساب المالي' : 'Financial Account Code'}</div>
-                        <div className="font-mono font-black text-[#d4af37] text-sm">{selectedCustomer.financialAccountCode}</div>
+                        <div className="font-mono font-black text-[#d4af37] text-sm">{activeCustomer.financialAccountCode}</div>
                       </div>
                     </div>
                     <div className="text-right">
                       <div className="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-0.5">{isAr ? 'الرصيد الحالي' : 'Current Balance'}</div>
                       <div className={`font-mono font-black text-base ${
-                        (selectedCustomer.financialBalance || 0) > 0 ? 'text-rose-400' :
-                        (selectedCustomer.financialBalance || 0) < 0 ? 'text-emerald-400' : 'text-slate-400'
+                        (activeCustomer.financialBalance || 0) > 0 ? 'text-rose-400' :
+                        (activeCustomer.financialBalance || 0) < 0 ? 'text-emerald-400' : 'text-slate-400'
                       }`}>
-                        {(selectedCustomer.financialBalance || 0) > 0 ? isAr ? 'مدين: ' : 'Debit: ' : 
-                         (selectedCustomer.financialBalance || 0) < 0 ? isAr ? 'دائن: ' : 'Credit: ' : ''}
-                        {Math.abs(selectedCustomer.financialBalance || 0).toLocaleString()} {selectedCustomer.financialCurrency || settings.currency}
+                        {(activeCustomer.financialBalance || 0) > 0 ? isAr ? 'مدين: ' : 'Debit: ' : 
+                         (activeCustomer.financialBalance || 0) < 0 ? isAr ? 'دائن: ' : 'Credit: ' : ''}
+                        {Math.abs(activeCustomer.financialBalance || 0).toLocaleString()} {activeCustomer.financialCurrency || settings.currency}
                       </div>
                     </div>
                   </div>
@@ -695,7 +734,7 @@ export default function Customers() {
                     </div>
                     <div className="text-start">
                       <div className="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-0.5">{isAr ? 'الرصيد الكلي المتاح' : 'Total Client Available Balance'}</div>
-                      <div className="font-mono font-black text-emerald-400 text-sm">{(selectedCustomer?.walletBalance || selectedCustomer?.wallet?.balance || 0).toLocaleString()} YER</div>
+                      <div className="font-mono font-black text-emerald-400 text-sm">{(activeCustomer?.walletBalance || activeCustomer?.wallet?.balance || 0).toLocaleString()} YER</div>
                     </div>
                   </div>
                   <div className="text-right font-sans">

@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import admin from 'firebase-admin';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, getDoc, collection, addDoc, query, where, limit, getDocs, updateDoc } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, collection, addDoc, query, where, limit, getDocs, updateDoc, onSnapshot } from 'firebase/firestore';
 import { initializeAuth, inMemoryPersistence, signInWithEmailAndPassword } from 'firebase/auth';
 import { createServer as createViteServer } from 'vite';
 
@@ -104,6 +104,78 @@ async function startServer() {
           }
         }
       }
+    }
+  }
+
+  // --- EMULATED CLOUD FUNCTIONS (FIREBASE FUNCTIONS TRIGGERS) ---
+  if (db) {
+    try {
+      console.log('[System Triggers] Setting up emulated real-time Firebase Cloud Functions on server backend...');
+      
+      // Reconciles an account's balances when its account_transactions are written, deleted, or updated.
+      onSnapshot(collection(db, 'account_transactions'), async (snapshot) => {
+        const changes = snapshot.docChanges();
+        if (changes.length === 0) return;
+        
+        console.log(`[System Triggers] Detected ${changes.length} change(s) in account_transactions`);
+        
+        const affectedAccountIds = new Set<string>();
+        for (const change of changes) {
+          const data = change.doc.data();
+          if (data && data.accountId) {
+            affectedAccountIds.add(data.accountId);
+          }
+        }
+        
+        for (const accountId of affectedAccountIds) {
+          try {
+            console.log(`[System Triggers] Reconciling ledger account ID: ${accountId}`);
+            
+            // Query all transactions for this accountId
+            const txsQuery = query(collection(db, 'account_transactions'), where('accountId', '==', accountId));
+            const txsSnap = await getDocs(txsQuery);
+            
+            let debitTotal = 0;
+            let creditTotal = 0;
+            
+            txsSnap.forEach(txDoc => {
+              const tx = txDoc.data();
+              const amt = parseFloat(tx.amount) || 0;
+              if (tx.type === 'Debit') {
+                debitTotal += amt;
+              } else if (tx.type === 'Credit') {
+                creditTotal += amt;
+              }
+            });
+            
+            // Read account information
+            const accountRef = doc(db, 'accounts', accountId);
+            const accountSnap = await getDoc(accountRef);
+            
+            if (accountSnap.exists()) {
+              const accountData = accountSnap.data();
+              const prefix = accountData.accountPrefix || '';
+              
+              const isAsset = prefix.startsWith('1');
+              const balance = isAsset ? (debitTotal - creditTotal) : (creditTotal - debitTotal);
+              
+              console.log(`[System Triggers] Reconciled and Synced Account ${accountData.accountCode} (${accountData.entityName}): Balance=${balance}, DebitTotal=${debitTotal}, CreditTotal=${creditTotal}`);
+              
+              await updateDoc(accountRef, {
+                balance,
+                debitTotal,
+                creditTotal,
+                updatedAt: Date.now()
+              });
+            }
+          } catch (reconErr: any) {
+            console.error(`[System Triggers] Reconcile error for account ${accountId}:`, reconErr.message);
+          }
+        }
+      });
+      
+    } catch (triggerErr: any) {
+      console.error('[System Triggers] Could not start real-time Firebase Triggers:', triggerErr.message);
     }
   }
 
