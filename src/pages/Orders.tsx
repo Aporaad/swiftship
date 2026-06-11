@@ -30,6 +30,7 @@ export default function Orders() {
   const [sources, setSources] = useState<any[]>([]);
   const [shippingCompanies, setShippingCompanies] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Modals & Panels States
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -802,6 +803,8 @@ export default function Orders() {
   // Handle order creation
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+    
     if (!formData.customerId) {
       return notificationService.notify({
         title: isAr ? 'خطأ' : 'Error',
@@ -837,7 +840,7 @@ export default function Orders() {
       }
     }
 
-    setLoading(true);
+    setIsSubmitting(true);
     try {
       const orderNumber = await generateSmartOrderCode();
       const currentCalcs = computeCalculations();
@@ -1032,6 +1035,7 @@ export default function Orders() {
         const saudiCourier = couriers.find(c => c.id === formData.shippingCourierId);
         if (saudiCourier && saudiCourier.financialAccountId) {
           try {
+            const isSourcing = saudiCourier.courierType === 'sourcing';
             await financialAccountService.recordTransaction(saudiCourier.financialAccountId, {
               accountId: saudiCourier.financialAccountId,
               accountCode: saudiCourier.financialAccountCode || '',
@@ -1039,7 +1043,7 @@ export default function Orders() {
               entityId: saudiCourier.id,
               entityName: saudiCourier.fullName,
               type: 'Debit',
-              amount: sourcingCostConverted,
+              amount: isSourcing ? sourcingCostAmount : sourcingCostConverted,
               amountOriginal: sourcingCostAmount,
               currencyOriginal: 'SAR',
               description: isAr ? `خصم تكاليف المنتجات الأصلية للطلب: ${orderNumber}` : `Sourcing products cost for order: ${orderNumber}`,
@@ -1197,7 +1201,7 @@ export default function Orders() {
         category: 'order'
       });
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -1318,8 +1322,10 @@ export default function Orders() {
   // Nested quick-add customer
   const handleAddCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!customerFormData.fullName || !customerFormData.phone) return;
 
+    setIsSubmitting(true);
     try {
       // Step 1: Create the customer document
       const docRef = await addDoc(collection(db, 'customers'), {
@@ -1378,14 +1384,18 @@ export default function Orders() {
     } catch (err: any) {
       console.error(err);
       handleFirestoreError(err, OperationType.CREATE, 'customers');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   // Nested quick-add purchase source
   const handleAddSource = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!sourceFormData.source_name) return;
 
+    setIsSubmitting(true);
     try {
       const docRef = await addDoc(collection(db, 'sources'), {
         name: sourceFormData.source_name,
@@ -1428,14 +1438,18 @@ export default function Orders() {
         type: 'error',
         category: 'system'
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   // Nested quick-add shipping company
   const handleAddShippingCompany = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!shippingCompanyFormData.name) return;
 
+    setIsSubmitting(true);
     try {
       const docRef = await addDoc(collection(db, 'shipping_companies'), {
         name: shippingCompanyFormData.name,
@@ -1487,15 +1501,20 @@ export default function Orders() {
         type: 'error',
         category: 'system'
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   // Add payments to unpaid order
   const handleAddPayment = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!selectedOrder) return;
     const paidVal = parseFloat(paymentFormData.amount) || 0;
     if (paidVal <= 0) return;
+
+    setIsSubmitting(true);
 
     // MANDATORY FINANCIAL SECURITY PIN VERIFICATION (Section 12 of system documentation)
     const systemPin = profile?.systemPin || '000000';
@@ -1598,14 +1617,18 @@ export default function Orders() {
       setPaymentFormData({ amount: '', method: 'Cash', notes: '', pin: '' });
     } catch (err) {
       console.error(err);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   // Update logistics status
   const handleUpdateStatus = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!selectedOrder) return;
 
+    setIsSubmitting(true);
     try {
       const isDelivered = ['تم التسليم', 'مع المندوب للتوصيل'].includes(updateFormData.orderStatus);
       const wasDelivered = ['تم التسليم', 'مع المندوب للتوصيل'].includes(selectedOrder.orderStatus || '');
@@ -1802,8 +1825,11 @@ export default function Orders() {
         const courierRecord = couriers.find(c => c.id === shippingCourierId);
         
         if (courierRecord) {
+          const isSourcing = courierRecord.courierType === 'sourcing';
           const exchangeRate = parseFloat(selectedOrder.exchangeRateYER || settings.exchangeRateYER || 390);
-          const commissionProfit = parseFloat(selectedOrder.profitSaudiSAR || '0') * exchangeRate;
+          const commissionProfitOriginal = parseFloat(selectedOrder.profitSaudiSAR || '0');
+          const commissionProfit = isSourcing ? commissionProfitOriginal : (commissionProfitOriginal * exchangeRate);
+          const finalCurrency = isSourcing ? 'SAR' : 'YER';
           
           if (commissionProfit > 0) {
              const YY = String(new Date().getFullYear()).slice(-2);
@@ -1816,7 +1842,7 @@ export default function Orders() {
 
              const convertedCommission = financialAccountService.convertToDefaultCurrency(
                commissionProfit,
-               'YER',
+               finalCurrency,
                settings.currency || 'YER',
                { USD: selectedOrder.exchangeRateUSD || settings.exchangeRateUSD, SAR: selectedOrder.exchangeRateYER || settings.exchangeRateSAR }
              );
@@ -1826,7 +1852,7 @@ export default function Orders() {
                category: 'wage',
                type: 'Wage',
                amount: commissionProfit,
-               currency: 'YER',
+               currency: finalCurrency,
                amountInDefaultCurrency: convertedCommission,
                recipientId: shippingCourierId,
                recipientEntityId: shippingCourierId,
@@ -1855,9 +1881,9 @@ export default function Orders() {
                    entityId: shippingCourierId,
                    entityName: courierName,
                    type: 'Credit',
-                   amount: convertedCommission,
-                   amountOriginal: commissionProfit,
-                   currencyOriginal: 'YER',
+                   amount: commissionProfit,
+                   amountOriginal: commissionProfitOriginal,
+                   currencyOriginal: 'SAR',
                    description: isAr
                      ? `عمولة شحن تلقائية (${courierRecord.commissionRate}%) للطلب رقم: ${selectedOrder.orderNumber}`
                      : `Auto-commission (${courierRecord.commissionRate}%) for order: ${selectedOrder.orderNumber}`,
@@ -1970,6 +1996,8 @@ export default function Orders() {
       setSelectedOrder(null);
     } catch (err) {
       console.error(err);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -2331,8 +2359,11 @@ export default function Orders() {
           const courierRecord = couriers.find(c => c.id === shippingCourierId);
           
           if (courierRecord) {
+            const isSourcing = courierRecord.courierType === 'sourcing';
             const exchangeRate = parseFloat(ord.exchangeRateYER || settings.exchangeRateYER || 390);
-            const commissionProfit = parseFloat(ord.profitSaudiSAR || '0') * exchangeRate;
+            const commissionProfitOriginal = parseFloat(ord.profitSaudiSAR || '0');
+            const commissionProfit = isSourcing ? commissionProfitOriginal : (commissionProfitOriginal * exchangeRate);
+            const finalCurrency = isSourcing ? 'SAR' : 'YER';
             
             if (commissionProfit > 0) {
                const YY = String(new Date().getFullYear()).slice(-2);
@@ -2345,7 +2376,7 @@ export default function Orders() {
 
                const convertedCommission = financialAccountService.convertToDefaultCurrency(
                  commissionProfit,
-                 'YER',
+                 finalCurrency,
                  settings.currency || 'YER',
                  { USD: ord.exchangeRateUSD || settings.exchangeRateUSD, SAR: ord.exchangeRateYER || settings.exchangeRateSAR }
                );
@@ -2355,7 +2386,7 @@ export default function Orders() {
                  category: 'wage',
                  type: 'Wage',
                  amount: commissionProfit,
-                 currency: 'YER',
+                 currency: finalCurrency,
                  amountInDefaultCurrency: convertedCommission,
                  recipientId: shippingCourierId,
                  recipientEntityId: shippingCourierId,
@@ -2384,9 +2415,9 @@ export default function Orders() {
                      entityId: shippingCourierId,
                      entityName: courierName,
                      type: 'Credit',
-                     amount: convertedCommission,
-                     amountOriginal: commissionProfit,
-                     currencyOriginal: 'YER',
+                     amount: commissionProfit,
+                     amountOriginal: commissionProfitOriginal,
+                     currencyOriginal: 'SAR',
                      description: isAr
                        ? `عمولة شحن تلقائية (${courierRecord.commissionRate}%) للطلب رقم: ${ord.orderNumber}`
                        : `Auto-commission (${courierRecord.commissionRate}%) for order: ${ord.orderNumber}`,
@@ -3917,7 +3948,7 @@ export default function Orders() {
                       className="w-full bg-slate-950 border border-slate-855 text-white rounded-xl p-3 outline-none text-[11px] font-bold"
                     >
                       <option value="">{isAr ? '-- اختر موظف التجميع --' : '-- Choose Aggregator --'}</option>
-                      {couriers.map(c => (
+                      {couriers.filter(c => c.courierType === 'sourcing').map(c => (
                         <option key={c.id} value={c.id}>
                           {c.fullName}
                         </option>
@@ -3947,7 +3978,7 @@ export default function Orders() {
                       className="w-full bg-slate-950 border border-slate-855 text-white rounded-xl p-3 outline-none text-[11px] font-bold"
                     >
                       <option value="">{isAr ? '-- اختر مندوب التوصيل --' : '-- Choose Yemen Driver --'}</option>
-                      {couriers.map(c => (
+                      {couriers.filter(c => c.courierType === 'local' || !c.courierType).map(c => (
                         <option key={c.id} value={c.id}>
                           {c.fullName} {c.governorate || c.provinceId ? `(${c.governorate || c.provinceId})` : ''}
                         </option>
@@ -4280,8 +4311,10 @@ export default function Orders() {
 
               {/* Action commands */}
               <div className="pt-6 border-t border-slate-850 flex justify-end gap-3 shrink-0">
-                <button type="button" onClick={() => setIsAddModalOpen(false)} className="px-5 py-2.5 text-slate-400 hover:bg-slate-800 rounded-xl transition-all font-bold text-xs">{isAr ? 'إلغاء النافذة' : 'Cancel'}</button>
-                <button type="submit" className="px-6 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl transition-all text-sm">{isAr ? 'حفظ وترحيل الفاتورة وإرسال' : 'Deploy Freight cargo'}</button>
+                <button type="button" disabled={isSubmitting} onClick={() => setIsAddModalOpen(false)} className="px-5 py-2.5 text-slate-400 hover:bg-slate-800 rounded-xl transition-all font-bold text-xs disabled:opacity-50">{isAr ? 'إلغاء النافذة' : 'Cancel'}</button>
+                <button type="submit" disabled={isSubmitting} className="px-6 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl transition-all text-sm flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed">
+                  {isSubmitting ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'حفظ وترحيل الفاتورة وإرسال' : 'Deploy Freight cargo')}
+                </button>
               </div>
 
             </form>
@@ -4405,16 +4438,18 @@ export default function Orders() {
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-850">
                 <button 
                   type="button" 
+                  disabled={isSubmitting}
                   onClick={() => setIsAddCustomerOpen(false)} 
-                  className="px-5 py-2 text-slate-400 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-black rounded-xl transition"
+                  className="px-5 py-2 text-slate-400 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-black rounded-xl transition disabled:opacity-50"
                 >
                   {isAr ? 'إلغاء' : 'Cancel'}
                 </button>
                 <button 
                   type="submit" 
-                  className="px-6 py-2 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black text-xs rounded-xl transition-all"
+                  disabled={isSubmitting}
+                  className="px-6 py-2 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black text-xs rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isAr ? 'تأكيد الحفظ' : 'Confirm Save'}
+                  {isSubmitting ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'تأكيد الحفظ' : 'Confirm Save')}
                 </button>
               </div>
             </form>
@@ -4472,8 +4507,10 @@ export default function Orders() {
               )}
 
               <div className="pt-2 flex justify-end gap-2 text-xs">
-                <button type="button" onClick={() => setIsAddSourceOpen(false)} className="p-2 text-slate-400 hover:bg-slate-800 rounded-lg">{isAr ? 'إلغاء' : 'Cancel'}</button>
-                <button type="submit" className="p-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl transition-all">{isAr ? 'تأكيد الحفظ' : 'Confirm Save'}</button>
+                <button type="button" disabled={isSubmitting} onClick={() => setIsAddSourceOpen(false)} className="p-2 text-slate-400 hover:bg-slate-800 rounded-lg disabled:opacity-50">{isAr ? 'إلغاء' : 'Cancel'}</button>
+                <button type="submit" disabled={isSubmitting} className="p-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                  {isSubmitting ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'تأكيد الحفظ' : 'Confirm Save')}
+                </button>
               </div>
             </form>
           </div>
@@ -4508,8 +4545,10 @@ export default function Orders() {
                 <input type="url" value={shippingCompanyFormData.tracking_url || ''} onChange={e => setShippingCompanyFormData({...shippingCompanyFormData, tracking_url: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-mono font-bold" placeholder="https://..." />
               </div>
               <div className="pt-2 flex justify-end gap-2 text-xs">
-                <button type="button" onClick={() => setIsAddShippingCompanyOpen(false)} className="p-2 text-slate-400 hover:bg-slate-800 rounded-lg">{isAr ? 'إلغاء' : 'Cancel'}</button>
-                <button type="submit" className="p-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl transition-all">{isAr ? 'تأكيد الحفظ' : 'Confirm Save'}</button>
+                <button type="button" disabled={isSubmitting} onClick={() => setIsAddShippingCompanyOpen(false)} className="p-2 text-slate-400 hover:bg-slate-800 rounded-lg disabled:opacity-50">{isAr ? 'إلغاء' : 'Cancel'}</button>
+                <button type="submit" disabled={isSubmitting} className="p-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                  {isSubmitting ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'تأكيد الحفظ' : 'Confirm Save')}
+                </button>
               </div>
             </form>
           </div>
@@ -4591,7 +4630,7 @@ export default function Orders() {
                       className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 outline-none text-xs font-bold"
                     >
                       <option value="">{isAr ? '-- اختر موظف التعبئة والتجميع --' : '-- Choose Aggregator --'}</option>
-                      {couriers.map(c => (
+                      {couriers.filter(c => c.courierType === 'sourcing').map(c => (
                         <option key={c.id} value={c.id}>
                           {c.fullName} {c.governorate || c.provinceId ? `(${c.governorate || c.provinceId})` : ''}
                         </option>
@@ -4609,7 +4648,7 @@ export default function Orders() {
                       className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 outline-none text-xs font-bold"
                     >
                       <option value="">{isAr ? '-- اختر مندوب التوزيع النهائي --' : '-- Choose Final Courier --'}</option>
-                      {couriers.map(c => (
+                      {couriers.filter(c => c.courierType === 'local' || !c.courierType).map(c => (
                         <option key={c.id} value={c.id}>
                           {c.fullName} {c.governorate || c.provinceId ? `(${c.governorate || c.provinceId})` : ''}
                         </option>
@@ -4800,8 +4839,10 @@ export default function Orders() {
               )}
 
               <div className="pt-4 border-t border-slate-800 flex justify-end gap-2 shrink-0">
-                <button type="button" onClick={() => setIsUpdateModalOpen(false)} className="px-5 py-2 hover:bg-slate-800 text-slate-400 rounded-lg">{isAr ? 'إلغاء' : 'Cancel'}</button>
-                <button type="submit" className="px-6 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl transition-all">{isAr ? 'حفظ وترحيل التغييرات' : 'Update settings'}</button>
+                <button type="button" disabled={isSubmitting} onClick={() => setIsUpdateModalOpen(false)} className="px-5 py-2 hover:bg-slate-800 text-slate-400 rounded-lg disabled:opacity-50">{isAr ? 'إلغاء' : 'Cancel'}</button>
+                <button type="submit" disabled={isSubmitting} className="px-6 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                  {isSubmitting ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'حفظ وترحيل التغييرات' : 'Update settings')}
+                </button>
               </div>
 
             </form>
@@ -4865,11 +4906,13 @@ export default function Orders() {
               </div>
 
               <div className="pt-4 border-t border-slate-800 flex justify-end gap-2">
-                <button type="button" onClick={() => {
+                <button type="button" disabled={isSubmitting} onClick={() => {
                   setIsPaymentModalOpen(false);
                   setPaymentFormData({ amount: '', method: 'Cash', notes: '', pin: '' });
-                }} className="px-4 py-2 hover:bg-slate-800 text-slate-400 rounded-lg">{isAr ? 'إلغاء' : 'Cancel'}</button>
-                <button type="submit" className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl transition-all">{isAr ? 'تأكيد ترحيل القبض' : 'Settle payment'}</button>
+                }} className="px-4 py-2 hover:bg-slate-800 text-slate-400 rounded-lg disabled:opacity-50">{isAr ? 'إلغاء' : 'Cancel'}</button>
+                <button type="submit" disabled={isSubmitting} className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                  {isSubmitting ? (isAr ? 'جاري التحصيل...' : 'Settling...') : (isAr ? 'تأكيد ترحيل القبض' : 'Settle payment')}
+                </button>
               </div>
 
             </form>

@@ -920,15 +920,15 @@ export default function Settings() {
               <div>
                 <FieldLabel locked={!canEditRates}>{t('exchangeRateSAR')}</FieldLabel>
                 <div className="relative">
-                  <FieldInput type="number" step="any" disabled={!canEditRates} value={localSettings.exchangeRateSAR ?? 140} onChange={e => setLocalSettings({ ...localSettings, exchangeRateSAR: parseFloat(e.target.value) || 0 })} className="font-mono" dir="ltr" />
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-[#d4af37] bg-[#d4af37]/10 px-1.5 py-0.5 rounded">SAR→YER</span>
+                  <FieldInput type="number" step="any" disabled={!canEditRates} value={localSettings.exchangeRateSAR ?? 140} onChange={e => setLocalSettings({ ...localSettings, exchangeRateSAR: parseFloat(e.target.value) || 0 })} className="font-mono pr-20" dir="ltr" />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-[#d4af37] bg-[#d4af37]/10 px-1.5 py-0.5 rounded">SAR→YER</span>
                 </div>
               </div>
               <div>
                 <FieldLabel locked={!canEditRates}>{t('exchangeRateUSD')}</FieldLabel>
                 <div className="relative">
-                  <FieldInput type="number" step="any" disabled={!canEditRates} value={localSettings.exchangeRateUSD ?? 535} onChange={e => setLocalSettings({ ...localSettings, exchangeRateUSD: parseFloat(e.target.value) || 0 })} className="font-mono" dir="ltr" />
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-[#d4af37] bg-[#d4af37]/10 px-1.5 py-0.5 rounded">USD→YER</span>
+                  <FieldInput type="number" step="any" disabled={!canEditRates} value={localSettings.exchangeRateUSD ?? 535} onChange={e => setLocalSettings({ ...localSettings, exchangeRateUSD: parseFloat(e.target.value) || 0 })} className="font-mono pr-20" dir="ltr" />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-[#d4af37] bg-[#d4af37]/10 px-1.5 py-0.5 rounded">USD→YER</span>
                 </div>
               </div>
             </div>
@@ -1127,7 +1127,7 @@ export default function Settings() {
                     <FieldLabel>{f.label}</FieldLabel>
                     <div className="relative">
                       <FieldInput type="number" step="any" value={(localSettings as any)[f.key] ?? 0} onChange={e => setLocalSettings({ ...localSettings, [f.key]: parseFloat(e.target.value) || 0 })} className="font-mono pr-12" dir="ltr" />
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-[#d4af37] bg-[#d4af37]/10 px-1.5 py-0.5 rounded">{f.unit}</span>
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-[#d4af37] bg-[#d4af37]/10 px-1.5 py-0.5 rounded">{f.unit}</span>
                     </div>
                   </div>
                 ))}
@@ -1161,7 +1161,7 @@ export default function Settings() {
                       className="font-mono pr-16"
                       dir="ltr"
                     />
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-amber-400 bg-amber-950/30 px-1.5 py-0.5 rounded">SAR/kg</span>
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-amber-400 bg-amber-950/30 px-1.5 py-0.5 rounded">SAR/kg</span>
                   </div>
                   <p className="text-[10px] text-slate-500 mt-1.5 font-bold">
                     {isAr ? 'أرباح الشركة = إجمالي الوزن (كج) × هذه النسبة' : 'Company profit = Total weight (kg) × this rate'}
@@ -1183,7 +1183,7 @@ export default function Settings() {
                       className="font-mono pr-20"
                       dir="ltr"
                     />
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-blue-400 bg-blue-950/30 px-1.5 py-0.5 rounded">SAR/m³</span>
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-blue-400 bg-blue-950/30 px-1.5 py-0.5 rounded">SAR/m³</span>
                   </div>
                   <p className="text-[10px] text-slate-500 mt-1.5 font-bold">
                     {isAr ? 'تكلفة الشحن = إجمالي CBM × هذا السعر' : 'Shipping cost = Total CBM × this rate'}
