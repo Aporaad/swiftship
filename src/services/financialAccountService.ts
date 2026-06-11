@@ -204,16 +204,7 @@ class FinancialAccountService {
 
     // --- DEBIT LEG ---
     const debitTxRef = doc(collection(db, 'account_transactions'));
-    // Debit leg is Cash Account (system inflows), we do not link it to the customer/entity directly
-    // to prevent duplicate rows from polluting the customer's ledger or statement list.
-    const debitData = { 
-      ...transactionData, 
-      type: 'Debit', 
-      accountId: debitAccountId, 
-      entityType: 'system',
-      entityId: 'system',
-      createdAt: now 
-    };
+    const debitData = { ...transactionData, type: 'Debit', accountId: debitAccountId, createdAt: now };
     batch.set(debitTxRef, debitData);
 
     const debitAccountRef = doc(db, 'accounts', debitAccountId);
@@ -222,6 +213,15 @@ class FinancialAccountService {
       debitTotal: increment(transactionData.amount),
       updatedAt: now
     });
+
+    if (transactionData.entityType !== 'system') {
+      const debitEntityCollection = this.getEntityCollection(transactionData.entityType);
+      const debitEntityRef = doc(db, debitEntityCollection, transactionData.entityId);
+      batch.update(debitEntityRef, {
+        financialBalance: increment(transactionData.amount),
+        updatedAt: now
+      });
+    }
 
     // --- CREDIT LEG ---
     const creditTxRef = doc(collection(db, 'account_transactions'));
@@ -234,16 +234,6 @@ class FinancialAccountService {
       creditTotal: increment(transactionData.amount),
       updatedAt: now
     });
-
-    // Update the customer/entity financial balance on the Credit leg
-    if (transactionData.entityType !== 'system' && transactionData.entityId) {
-      const entityCollection = this.getEntityCollection(transactionData.entityType);
-      const creditEntityRef = doc(db, entityCollection, transactionData.entityId);
-      batch.update(creditEntityRef, {
-        financialBalance: increment(-transactionData.amount),
-        updatedAt: now
-      });
-    }
 
     await batch.commit();
 
@@ -492,7 +482,7 @@ class FinancialAccountService {
   /**
    * Get the Firestore collection name for an entity type
    */
-  public getEntityCollection(entityType: AccountEntityType): string {
+  private getEntityCollection(entityType: AccountEntityType): string {
     switch (entityType) {
       case 'customer': return 'customers';
       case 'courier': return 'couriers';

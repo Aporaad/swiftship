@@ -25,7 +25,6 @@ export interface Courier {
   courierCustomId?: string;
   commissionRate?: number;
   notes?: string;
-  courierType?: 'sourcing' | 'local';
   financialBalance?: number;
   financialCurrency?: string;
   financialAccountCode?: string;

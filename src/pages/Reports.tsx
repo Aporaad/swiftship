@@ -799,42 +799,8 @@ export default function Reports() {
                                             </span>
                                          </td>
                                          <td className="px-4 py-3 text-white max-w-xs truncate">{tx.description}</td>
-                                         <td className="px-4 py-3 text-right font-mono text-emerald-400">
-                                            {(() => {
-                                              const txCourier = couriers.find((c: any) => c.id === tx.entityId || c.financialAccountId === tx.accountId);
-                                              const isSourcing = txCourier?.courierType === 'sourcing' || tx.currencyOriginal === 'SAR' || tx.accountId === 'sys_sourcing_cost';
-                                              const displayCurrency = isSourcing ? 'SAR' : (tx.currencyOriginal || 'YER');
-                                              const exchangeRateSAR = parseFloat(settings.exchangeRateSAR || 140);
-                                              return tx.type === 'Debit' ? (
-                                                <div className="flex flex-col items-end">
-                                                  <span>{tx.amount.toLocaleString()} {displayCurrency}</span>
-                                                  {isSourcing && (
-                                                    <span className="text-[9px] text-slate-500 font-normal mt-0.5" dir="ltr">
-                                                      (≈ {(tx.amount * exchangeRateSAR).toLocaleString()} YER)
-                                                    </span>
-                                                  )}
-                                                </div>
-                                              ) : '-';
-                                            })()}
-                                          </td>
-                                          <td className="px-4 py-3 text-right font-mono text-rose-400">
-                                            {(() => {
-                                              const txCourier = couriers.find((c: any) => c.id === tx.entityId || c.financialAccountId === tx.accountId);
-                                              const isSourcing = txCourier?.courierType === 'sourcing' || tx.currencyOriginal === 'SAR' || tx.accountId === 'sys_sourcing_cost';
-                                              const displayCurrency = isSourcing ? 'SAR' : (tx.currencyOriginal || 'YER');
-                                              const exchangeRateSAR = parseFloat(settings.exchangeRateSAR || 140);
-                                              return tx.type === 'Credit' ? (
-                                                <div className="flex flex-col items-end">
-                                                  <span>{tx.amount.toLocaleString()} {displayCurrency}</span>
-                                                  {isSourcing && (
-                                                    <span className="text-[9px] text-slate-500 font-normal mt-0.5" dir="ltr">
-                                                      (≈ {(tx.amount * exchangeRateSAR).toLocaleString()} YER)
-                                                    </span>
-                                                  )}
-                                                </div>
-                                              ) : '-';
-                                            })()}
-                                          </td>
+                                         <td className="px-4 py-3 text-right font-mono text-emerald-400">{tx.type === 'Debit' ? tx.amount.toLocaleString() : '-'}</td>
+                                         <td className="px-4 py-3 text-right font-mono text-rose-400">{tx.type === 'Credit' ? tx.amount.toLocaleString() : '-'}</td>
                                       </tr>
                                     ))
                                   )}
@@ -947,35 +913,13 @@ export default function Reports() {
                                  <td className="px-4 py-3 text-right font-mono font-black text-emerald-400">{c.financialBalance?.toLocaleString()} {c.financialCurrency}</td>
                               </tr>
                             ))}
-                            {activeReport === 'couriers' && couriers.map(c => {
-                               const isSourcing = c.courierType === 'sourcing' || c.financialCurrency === 'SAR';
-                               const exchangeRateSAR = parseFloat(settings.exchangeRateSAR || 140);
-                               return (
-                                 <tr key={c.id} className="bg-black/20 border border-slate-850 rounded-xl">
-                                    <td className="px-4 py-3 font-bold text-white">
-                                       <div>
-                                          <span>{c.fullName}</span>
-                                          {isSourcing && (
-                                             <span className="block text-[8.5px] text-[#d4af37] font-semibold mt-0.5">
-                                                {isAr ? 'مندوب تجميع (سعودي)' : 'Sourcing Courier (SAR)'}
-                                             </span>
-                                          )}
-                                       </div>
-                                    </td>
-                                    <td className="px-4 py-3 text-slate-500">{c.phone} | {isAr ? 'نسبة العمولة: ' : 'Comm: '}{c.commissionRate}%</td>
-                                    <td className="px-4 py-3 text-right font-mono font-black text-amber-500">
-                                       <div className="flex flex-col items-end">
-                                          <span>{c.financialBalance?.toLocaleString()} {c.financialCurrency || 'YER'}</span>
-                                          {isSourcing && (
-                                             <span className="text-[10px] text-slate-500 font-normal mt-0.5 font-sans" dir="ltr">
-                                                (≈ {( (c.financialBalance || 0) * exchangeRateSAR ).toLocaleString()} YER)
-                                             </span>
-                                          )}
-                                       </div>
-                                    </td>
-                                 </tr>
-                               );
-                             })}
+                            {activeReport === 'couriers' && couriers.map(c => (
+                              <tr key={c.id} className="bg-black/20 border border-slate-850 rounded-xl">
+                                 <td className="px-4 py-3 font-bold text-white">{c.fullName}</td>
+                                 <td className="px-4 py-3 text-slate-500">{c.phone} | {isAr ? 'نسبة العمولة: ' : 'Comm: '}{c.commissionRate}</td>
+                                 <td className="px-4 py-3 text-right font-mono font-black text-amber-500">{c.financialBalance?.toLocaleString()} {c.financialCurrency}</td>
+                              </tr>
+                            ))}
                             {activeReport === 'shipping_companies' && shippingCompanies.map(sc => (
                                <tr key={sc.id} className="bg-black/20 border border-slate-850 rounded-xl">
                                  <td className="px-4 py-3 font-bold text-white">{sc.name}</td>

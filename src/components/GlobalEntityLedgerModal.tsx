@@ -172,8 +172,6 @@ export default function GlobalEntityLedgerModal() {
           date: tx.createdAt || Date.now(),
           type: tx.type, // 'Debit' | 'Credit'
           amount: tx.amount || 0,
-          amountOriginal: tx.amountOriginal || tx.amount || 0,
-          currencyOriginal: tx.currencyOriginal || 'YER',
           module: 'transaction',
           title: tx.description ? tx.description : (isAr ? (tx.type === 'Credit' ? 'إيداع نقدي للحساب' : 'سحب / تسوية من الحساب') : (tx.type === 'Credit' ? 'Account Deposit' : 'Account Withdrawal')),
           description: isAr 
@@ -185,53 +183,87 @@ export default function GlobalEntityLedgerModal() {
 
     } else {
       // ----------------- COURIER LEDGER GENERATOR -----------------
-      transactions.forEach(tx => {
-        const amtBase = parseFloat(tx.amount || 0);
-        const amtOriginal = parseFloat(tx.amountOriginal || tx.amount || 0);
+      // 1. Map Expenses, Custodies, and Wages
+      expenses.forEach(exp => {
+        const amt = parseFloat(exp.amount || 0);
+        if (amt <= 0) return;
 
-        // We normalize types to ensure perfect bookkeeping and auto-heal any legacy data quirks.
-        let type = tx.type || 'Debit';
+        let type: 'Debit' | 'Credit' = 'Debit';
         let title = '';
-        let category = tx.module || 'transaction';
-
-        if (tx.module === 'custody') {
-          const isSettlement = (tx.description || '').includes('تسوية') || 
-                               (tx.description || '').includes('سداد') || 
-                               (tx.description || '').toLowerCase().includes('settle');
-          if (isSettlement) {
-            type = 'Credit';
-            title = isAr ? 'تسوية وسداد عهدة مالية' : 'Custody Settlement / Return';
-          } else {
-            type = 'Debit';
-            title = isAr ? 'تسليم عهدة مالية للمندوب' : 'Custody Handed Over';
-          }
-        } else if (tx.module === 'order') {
-          if (tx.type === 'Debit') {
-            title = isAr ? 'تحصيل قيمة شحنة (كاش بعهدة المندوب)' : 'Collected COD Cargo Cash';
-          } else {
-            title = isAr ? 'أجور توصيل وعمولة المندوب للطلب' : 'Earned Courier Delivery Commission';
-          }
-        } else if (tx.module === 'expense') {
+        if (exp.type === 'Custody') {
+          type = 'Debit';
+          title = isAr ? 'تسليم عهدة مالية للمندوب' : 'Custody Handed Over';
+        } else if (exp.type === 'Advance') {
+          type = 'Debit';
+          title = isAr ? 'صرف سلفة مالية للمندوب' : 'Advance Granted';
+        } else if (exp.type === 'Wage') {
           type = 'Credit';
-          title = isAr ? 'مصروف تشغيلي / أجور مسددة' : 'Operating Expense / Disbursed';
-        } else if (tx.module === 'wage' || tx.module === 'salary_payment') {
-          type = 'Credit';
-          title = isAr ? 'صرف راتب أو مستحقات الموظف' : 'Salary / Wages Paid';
+          title = isAr ? 'صرف مستحقات / أجور توصيل المندوب' : 'Delivery Wages Paid';
         } else {
-          title = tx.description || (isAr ? 'قيد تسوية لمطابقة رصيد المندوب' : 'Corporate Ledger Adjustment');
+          type = 'Debit';
+          title = isAr ? 'صرف مصروفات تشغيلية للمندوب' : 'Operating Expense Disbursed';
         }
+
+        ledger.push({
+          id: `exp-${exp.id}`,
+          date: exp.createdAt || Date.now(),
+          type,
+          amount: amt,
+          module: 'expense',
+          title,
+          description: isAr 
+            ? `حالة السند: ${exp.status === 'Settled' ? 'مسدد ومورد للصندوق' : 'معلق بعهدة المندوب'} - بيان: ${exp.notes || exp.purpose || ''}`
+            : `Status: ${exp.status} - Notes: ${exp.notes || exp.purpose || ''}`,
+          ref: exp.expenseNumber || exp.invoiceNumber || 'SLIP-EXP'
+        });
+      });
+
+      // 2. Map delivered orders (collection of cash from customer increases courier liability/custody)
+      orders.forEach(order => {
+        const status = order.orderStatus || order.order_status || '';
+        if (!['تم التسليم', 'Delivered', 'مع المندوب للتوصيل'].includes(status)) return;
+
+        // Prevent duplication: if a Custody expense was already auto-generated for this order, skip it here!
+        if (order.orderNumber || order.id) {
+          const orderIdentifier = order.orderNumber || order.id;
+          const hasAutoCustody = expenses.some(exp => exp.type === 'Custody' && (exp.notes || exp.purpose || '').includes(orderIdentifier));
+          if (hasAutoCustody) return;
+        }
+
+        const collectedCOD = parseFloat(order.totalCostYER || order.totalPrice || 0);
+        if (collectedCOD <= 0) return;
+
+        ledger.push({
+          id: `order-cod-${order.id}`,
+          date: order.updatedAt || order.createdAt || Date.now(),
+          type: 'Debit',
+          amount: collectedCOD,
+          module: 'order',
+          title: isAr ? 'مقبوضات شحنة لم يتم توريدها' : 'Delivered/Transit Shipment COD',
+          description: isAr 
+            ? `تم تسليم/نقل الطلب رقم: ${order.orderNumber || 'ALX-CR'} وتحصيل الكاش بعهدة المندوب` 
+            : `Shipment #${order.orderNumber || 'ALX-CR'} - Cash in courier custody`,
+          ref: order.orderNumber || order.id
+        });
+      });
+
+      // 3. Central account_transactions
+      transactions.forEach(tx => {
+        // Prevent duplication: auto-generated financial transactions for expenses, wages, and custodies
+        // are already mapped perfectly in the 'expenses' loop above.
+        if (tx.module === 'expense' || tx.module === 'wage' || tx.module === 'custody') return;
 
         ledger.push({
           id: tx.id || `tx-${Math.random()}`,
           date: tx.createdAt || Date.now(),
-          type,
-          amount: amtBase,
-          amountOriginal: amtOriginal,
-          currencyOriginal: tx.currencyOriginal || 'YER',
-          module: category,
-          title,
-          description: tx.description || (isAr ? `قيد مالي رقم: ${tx.refNumber || tx.accountCode || ''}` : `Entry reference: ${tx.refNumber || tx.accountCode || ''}`),
-          ref: tx.refNumber || tx.accountCode || 'GL-TX'
+          type: tx.type, // 'Debit' | 'Credit'
+          amount: tx.amount || 0,
+          module: 'transaction',
+          title: tx.description ? tx.description : (isAr ? (tx.type === 'Credit' ? 'تسوية إيداع للمندوب' : 'سحب / تصفية عهدة المندوب') : (tx.type === 'Credit' ? 'Courier Deposit' : 'Courier Account Clearing')),
+          description: isAr 
+            ? `تسوية حساب مركزية معتمدة رقم قيد: ${tx.refNumber || tx.accountCode || 'Ledger-Tx'}`
+            : `System accounting adjustment ref: ${tx.refNumber || tx.accountCode || 'Ledger-Tx'}`,
+          ref: tx.refNumber || tx.accountCode || ''
         });
       });
     }
@@ -239,13 +271,13 @@ export default function GlobalEntityLedgerModal() {
     // Sort oldest to newest to compute running totals correctly
     const sorted = [...ledger].sort((a, b) => a.date - b.date);
 
-    // Compute running balance: Debits (+) increase the outstanding balance, Credits (-) decrease it.
+    // Compute running balance
     let runningAccountBal = 0;
     const finalLedger = sorted.map(item => {
       if (item.type === 'Debit') {
-        runningAccountBal += item.amount;
-      } else {
         runningAccountBal -= item.amount;
+      } else {
+        runningAccountBal += item.amount;
       }
 
       return {
@@ -412,8 +444,7 @@ export default function GlobalEntityLedgerModal() {
                       <th className="p-3 text-start">{isAr ? 'البيان وشرح الحركة' : 'Description / Narrative'}</th>
                       <th className="p-3 text-start">{isAr ? 'رقم المرجع' : 'Reference Ref'}</th>
                       <th className="p-3 text-start">{isAr ? 'النوع' : 'Entry Type'}</th>
-                      <th className="p-3 text-start">{isAr ? 'المبلغ (العملة الأصلية)' : 'Amount (Original Currency)'}</th>
-                      <th className="p-3 text-start">{isAr ? 'المبلغ (العملة المحلية)' : 'Amount (Local YER)'}</th>
+                      <th className="p-3 text-start">{isAr ? 'المبلغ' : 'Amount'}</th>
                       <th className="p-3 text-left">{isAr ? 'الرصيد التراكمي' : 'Running Balance'}</th>
                     </tr>
                   </thead>
@@ -460,11 +491,8 @@ export default function GlobalEntityLedgerModal() {
                                 <span className="text-[9px] bg-rose-955/20 text-rose-500 border border-rose-950/30 px-2.5 py-0.5 rounded-xl font-black">{isAr ? 'خصم / مدين (-)' : 'Debit (-)'}</span>
                               )}
                             </td>
-                            <td className={`p-3 font-mono font-bold text-xs ${isCredit ? 'text-emerald-450' : 'text-rose-450'}`}>
-                              <span>{isCredit ? '+' : '-'}{(item.amountOriginal || item.amount || 0).toLocaleString()} {item.currencyOriginal || 'YER'}</span>
-                            </td>
                             <td className={`p-3 font-mono font-black text-xs ${isCredit ? 'text-emerald-400' : 'text-rose-400'}`}>
-                              <span>{isCredit ? '+' : '-'}{(item.amount || 0).toLocaleString()} YER</span>
+                              {isCredit ? '+' : '-'}{item.amount.toLocaleString()} YER
                             </td>
                             <td className={`p-3 text-left font-mono font-black text-xs ${item.runningAccountBal >= 0 ? 'text-emerald-400' : 'text-rose-450'}`}>
                               {item.runningAccountBal.toLocaleString()} YER
@@ -474,7 +502,7 @@ export default function GlobalEntityLedgerModal() {
                       })}
                     {ledgerData.length === 0 && (
                       <tr>
-                        <td colSpan={8} className="p-16 text-center text-slate-650 italic font-bold">
+                        <td colSpan={7} className="p-16 text-center text-slate-650 italic font-bold">
                           {isAr ? '[ لم يتم تقييد حركات مالية مسجلة بالتاريخ لهذا الحساب ]' : '[ NO FINANCIAL TRANSACTIONS DISCOVERED FOR THIS ACCOUNT ]'}
                         </td>
                       </tr>
