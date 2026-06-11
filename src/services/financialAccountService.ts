@@ -122,6 +122,7 @@ class FinancialAccountService {
         notes: '',
         ...(monthlySalary !== undefined && { monthlySalary })
       };
+      console.log('DEBUG: Creating account in database with currency:', currency);
 
       const ref = await addDoc(collection(db, 'accounts'), accountData);
       
@@ -132,8 +133,6 @@ class FinancialAccountService {
           const entityUpdateData: any = {
             financialAccountId: ref.id,
             financialAccountCode: accountCode,
-            financialBalance: 0,
-            financialCurrency: currency,
             updatedAt: now
           };
           if (monthlySalary !== undefined) {
@@ -197,53 +196,52 @@ class FinancialAccountService {
   async recordDoubleEntryTransaction(
     debitAccountId: string,
     creditAccountId: string,
-    transactionData: Omit<AccountTransaction, 'id' | 'type'>
+    transactionData: Omit<AccountTransaction, 'id' | 'type'>,
+    providedRates?: { USD?: number; SAR?: number; YER?: number }
   ): Promise<void> {
     const batch = writeBatch(db);
     const now = Date.now();
+    const exchangeRates = providedRates || (await this.getExchangeRates());
+
+    const debitAccount = await this.getAccountById(debitAccountId);
+    const creditAccount = await this.getAccountById(creditAccountId);
+
+    if (!debitAccount || !creditAccount) throw new Error('One or more accounts not found');
+
+    const debitAmount = this.convertToTargetCurrency(transactionData.amountOriginal, transactionData.currencyOriginal, debitAccount.currency, exchangeRates);
+    const creditAmount = this.convertToTargetCurrency(transactionData.amountOriginal, transactionData.currencyOriginal, creditAccount.currency, exchangeRates);
 
     // --- DEBIT LEG ---
     const debitTxRef = doc(collection(db, 'account_transactions'));
-    // Debit leg is Cash Account (system inflows), we do not link it to the customer/entity directly
-    // to prevent duplicate rows from polluting the customer's ledger or statement list.
     const debitData = { 
       ...transactionData, 
       type: 'Debit', 
       accountId: debitAccountId, 
       entityType: 'system',
       entityId: 'system',
+      amount: debitAmount,
       createdAt: now 
     };
     batch.set(debitTxRef, debitData);
 
     const debitAccountRef = doc(db, 'accounts', debitAccountId);
     batch.update(debitAccountRef, {
-      balance: increment(transactionData.amount),
-      debitTotal: increment(transactionData.amount),
+      balance: increment(debitAmount),
+      debitTotal: increment(debitAmount),
       updatedAt: now
     });
 
     // --- CREDIT LEG ---
     const creditTxRef = doc(collection(db, 'account_transactions'));
-    const creditData = { ...transactionData, type: 'Credit', accountId: creditAccountId, createdAt: now };
+    const creditData = { ...transactionData, type: 'Credit', accountId: creditAccountId, amount: creditAmount, createdAt: now };
     batch.set(creditTxRef, creditData);
 
     const creditAccountRef = doc(db, 'accounts', creditAccountId);
     batch.update(creditAccountRef, {
-      balance: increment(-transactionData.amount),
-      creditTotal: increment(transactionData.amount),
+      balance: increment(-creditAmount),
+      creditTotal: increment(creditAmount),
       updatedAt: now
     });
-
-    // Update the customer/entity financial balance on the Credit leg
-    if (transactionData.entityType !== 'system' && transactionData.entityId) {
-      const entityCollection = this.getEntityCollection(transactionData.entityType);
-      const creditEntityRef = doc(db, entityCollection, transactionData.entityId);
-      batch.update(creditEntityRef, {
-        financialBalance: increment(-transactionData.amount),
-        updatedAt: now
-      });
-    }
 
     await batch.commit();
 
@@ -266,37 +264,43 @@ class FinancialAccountService {
    */
   async recordTransaction(
     accountId: string,
-    transactionData: Omit<AccountTransaction, 'id'>
+    transactionData: Omit<AccountTransaction, 'id'>,
+    providedRates?: { USD?: number; SAR?: number; YER?: number }
   ): Promise<void> {
     const batch = writeBatch(db);
     const now = Date.now();
+    const exchangeRates = providedRates || (await this.getExchangeRates());
+
+    const account = await this.getAccountById(accountId);
+    if (!account) throw new Error('Account not found');
+    
+    const baseAmount = this.convertToTargetCurrency(
+      transactionData.amountOriginal, 
+      transactionData.currencyOriginal, 
+      account.currency, 
+      exchangeRates
+    );
 
     // 1. Create transaction record
     const txRef = doc(collection(db, 'account_transactions'));
-    batch.set(txRef, { ...transactionData, createdAt: now });
+    batch.set(txRef, { 
+        ...transactionData, 
+        amount: baseAmount,
+        createdAt: now 
+    });
 
     // 2. Update account balance
     const accountRef = doc(db, 'accounts', accountId);
     const balanceDelta = transactionData.type === 'Debit'
-      ? transactionData.amount
-      : -transactionData.amount;
+      ? baseAmount
+      : -baseAmount;
     
     batch.update(accountRef, {
       balance: increment(balanceDelta),
-      debitTotal: transactionData.type === 'Debit' ? increment(transactionData.amount) : increment(0),
-      creditTotal: transactionData.type === 'Credit' ? increment(transactionData.amount) : increment(0),
+      debitTotal: transactionData.type === 'Debit' ? increment(baseAmount) : increment(0),
+      creditTotal: transactionData.type === 'Credit' ? increment(baseAmount) : increment(0),
       updatedAt: now
     });
-
-    // 3. Update the entity's financial balance directly
-    if (transactionData.entityType !== 'system') {
-      const entityCollection = this.getEntityCollection(transactionData.entityType);
-      const entityRef = doc(db, entityCollection, transactionData.entityId);
-      batch.update(entityRef, {
-        financialBalance: increment(balanceDelta),
-        updatedAt: now
-      });
-    }
 
     await batch.commit();
 
@@ -306,8 +310,8 @@ class FinancialAccountService {
       {
         accountCode: transactionData.accountCode,
         type: transactionData.type,
-        amount: transactionData.amount,
-        currency: transactionData.currencyOriginal,
+        amount: baseAmount,
+        currency: account.currency, // Store currency of the account
         description: transactionData.description,
         refNumber: transactionData.refNumber
       }
@@ -428,6 +432,52 @@ class FinancialAccountService {
   }
 
   /**
+   * Fetches current exchange rates from settings collection
+   */
+  async getExchangeRates(): Promise<{ USD: number; SAR: number; YER: number }> {
+    try {
+      const snap = await getDoc(doc(db, 'settings', 'general'));
+      if (snap.exists()) {
+        const data = snap.data();
+        return {
+          USD: data.exchangeRateUSD || 535,
+          SAR: data.exchangeRateSAR || 140,
+          YER: 1
+        };
+      }
+    } catch (e) {
+      console.warn('Could not fetch exchange rates, using defaults', e);
+    }
+    return { USD: 535, SAR: 140, YER: 1 };
+  }
+
+  /**
+   * Universal Currency Converter
+   * Converts an amount from one currency to another using provided rates.
+   */
+  convertToTargetCurrency(
+    amount: number,
+    fromCurrency: string,
+    targetCurrency: string,
+    exchangeRates: { USD?: number; SAR?: number; YER?: number }
+  ): number {
+    if (fromCurrency === targetCurrency) return amount;
+
+    // Convert everything to YER as base
+    let baseAmountYER = amount;
+    if (fromCurrency === 'USD') baseAmountYER = amount * (exchangeRates.USD || 535);
+    else if (fromCurrency === 'SAR') baseAmountYER = amount * (exchangeRates.SAR || 140);
+    else if (fromCurrency === 'YER') baseAmountYER = amount;
+
+    // Convert from YER to targetCurrency
+    if (targetCurrency === 'USD') return baseAmountYER / (exchangeRates.USD || 535);
+    if (targetCurrency === 'SAR') return baseAmountYER / (exchangeRates.SAR || 140);
+    if (targetCurrency === 'YER') return baseAmountYER;
+
+    return baseAmountYER;
+  }
+
+  /**
    * Convert amount to default currency (YER by default or system currency)
    */
   convertToDefaultCurrency(
@@ -436,18 +486,7 @@ class FinancialAccountService {
     defaultCurrency: string,
     exchangeRates: { USD?: number; SAR?: number; [key: string]: number | undefined }
   ): number {
-    if (fromCurrency === defaultCurrency) return amount;
-
-    // Convert to YER first as base
-    let amtInYER = amount;
-    if (fromCurrency === 'USD') amtInYER = amount * (exchangeRates.USD || 535);
-    else if (fromCurrency === 'SAR') amtInYER = amount * (exchangeRates.SAR || 140);
-
-    // Then convert from YER to defaultCurrency if needed
-    if (defaultCurrency === 'USD') return amtInYER / (exchangeRates.USD || 535);
-    if (defaultCurrency === 'SAR') return amtInYER / (exchangeRates.SAR || 140);
-
-    return amtInYER;
+    return this.convertToTargetCurrency(amount, fromCurrency, defaultCurrency, exchangeRates as any);
   }
 
   /**
@@ -486,6 +525,94 @@ class FinancialAccountService {
       });
     } catch (error) {
       console.error('[FinancialAccountService] Error updating account name:', error);
+    }
+  }
+
+  /**
+   * Settle pending custodies for a courier
+   */
+  async settlePendingCustodies(
+    courierId: string,
+    amountToSettle: number,
+    currency: string
+  ): Promise<void> {
+    try {
+      const exchangeRates = await this.getExchangeRates();
+      const q = query(
+        collection(db, 'expenses'),
+        where('recipientEntityId', '==', courierId),
+        where('status', '==', 'Pending')
+      );
+      const snap = await getDocs(q);
+
+      const pending = snap.docs
+        .map(d => ({id: d.id, ...(d.data() as any)}))
+        .filter((e: any) => e.type === 'Custody')
+        .sort((a: any, b: any) => a.createdAt - b.createdAt);
+      
+      console.log(`[FinancialAccountService] Found ${snap.size} pending expenses for courier ${courierId}.`);
+      console.log(`[FinancialAccountService] Found ${pending.length} pending custodies for courier ${courierId}. Amount to settle: ${amountToSettle} ${currency}`);
+
+      let remainingToSettle = amountToSettle;
+      const batch = writeBatch(db);
+      let settled = false;
+
+      for (const expense of pending) {
+        if (remainingToSettle <= 0) break;
+
+        const expenseCurrency = expense.currency || 'YER';
+        const currentRemitted = parseFloat(expense.remittedAmount) || 0;
+        const totalAmount = parseFloat(expense.amount) || 0;
+        const availableToSettleExpenseCurrency = totalAmount - currentRemitted;
+        
+        if (availableToSettleExpenseCurrency <= 0) continue;
+
+        // Convert available to settle back to our budget currency for comparison
+        const availableToSettleBudgetCurrency = this.convertToTargetCurrency(
+            availableToSettleExpenseCurrency,
+            expenseCurrency,
+            currency,
+            exchangeRates
+        );
+
+        const settleAmountBudgetCurrency = Math.min(remainingToSettle, availableToSettleBudgetCurrency);
+        
+        // Convert settle amount to expense currency to update the expense record
+        const settleAmountExpenseCurrency = this.convertToTargetCurrency(
+            settleAmountBudgetCurrency,
+            currency,
+            expenseCurrency,
+            exchangeRates
+        );
+        
+        const newRemitted = currentRemitted + settleAmountExpenseCurrency;
+        const isFullySettled = newRemitted >= totalAmount - 0.01; // Avoid floating point issues
+
+        console.log(`[FinancialAccountService] Settling ${settleAmountBudgetCurrency} ${currency} (${settleAmountExpenseCurrency} ${expenseCurrency}) on expense ${expense.id}. New remitted: ${newRemitted}. Fully settled: ${isFullySettled}`);
+
+        batch.update(doc(db, 'expenses', expense.id), {
+          status: isFullySettled ? 'Settled' : 'Pending',
+          remittedAmount: newRemitted,
+          updatedAt: Date.now()
+        });
+
+        remainingToSettle -= settleAmountBudgetCurrency;
+        settled = true;
+        
+        // Log this settlement
+        activityLogService.log('settle_custody', expense.id, { amount: settleAmountBudgetCurrency, currency });
+      }
+
+      if (settled) {
+        await batch.commit();
+        console.log(`[FinancialAccountService] Settlement batch committed.`);
+      } else {
+        console.log(`[FinancialAccountService] No settlements needed.`);
+      }
+
+    } catch (error) {
+      console.error('[FinancialAccountService] Error settling pending custodies:', error);
+      throw error;
     }
   }
 

@@ -201,9 +201,7 @@ export default function Customers() {
           gps_location: formData.gps_location,
           address: formData.address,
           notes: formData.notes,
-          createdAt: Date.now(),
-          financialBalance: 0,
-          financialCurrency: settings.currency || 'SAR'
+          createdAt: Date.now()
         });
 
         // Step 2: Auto-create financial account (1130-xxxx)

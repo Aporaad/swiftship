@@ -98,6 +98,7 @@ export default function Couriers() {
   // Global collections for smart calculations
   const [allOrders, setAllOrders] = useState<any[]>([]);
   const [allExpenses, setAllExpenses] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
   
   const [editFormData, setEditFormData] = useState({
     fullName: '',
@@ -314,10 +315,18 @@ export default function Couriers() {
       console.error("Error loading expenses:", error);
     });
 
+    // 4. Subscribe to Accounts
+    const unsubAccounts = onSnapshot(collection(db, 'accounts'), (snap) => {
+      setAccounts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (error) => {
+      console.error("Error loading accounts:", error);
+    });
+
     return () => {
       unsubCouriers();
       unsubOrders();
       unsubExpenses();
+      unsubAccounts();
     };
   }, [roleLoading]);
 
@@ -393,7 +402,8 @@ export default function Couriers() {
     if (!selectedCourier || editLoading) return;
     setEditLoading(true);
     try {
-      const finCurrency = editFormData.courierType === 'sourcing' ? 'SAR' : 'YER';
+      const type = editFormData.courierType || 'local';
+      const finCurrency = type === 'sourcing' ? 'SAR' : 'YER';
       await updateDoc(doc(db, 'couriers', selectedCourier.id), {
         fullName: editFormData.fullName,
         phone: editFormData.phone,
@@ -403,8 +413,7 @@ export default function Couriers() {
         disabled: editFormData.disabled,
         commissionRate: editFormData.commissionRate,
         notes: editFormData.notes,
-        courierType: editFormData.courierType,
-        financialCurrency: finCurrency,
+        courierType: type,
         updatedAt: Date.now()
       });
       // Sync financial account name and currency if changed
@@ -494,7 +503,9 @@ export default function Couriers() {
 
       // 2. Save directly to Couriers portfolio as a plain record with auto-ID
       const newCourierRef = doc(collection(db, 'couriers'));
-      const finCurrency = addFormData.courierType === 'sourcing' ? 'SAR' : 'YER';
+      const type = addFormData.courierType === 'sourcing' ? 'sourcing' : 'local';
+      const finCurrency = type === 'sourcing' ? 'SAR' : 'YER';
+      console.log('DEBUG: Creating courier, type:', type, 'Currency:', finCurrency);
       await setDoc(newCourierRef, {
         fullName: addFormData.fullName,
         phone: addFormData.phone,
@@ -505,19 +516,18 @@ export default function Couriers() {
         courierCustomId: customId,
         commissionRate: addFormData.commissionRate,
         notes: addFormData.notes,
-        courierType: addFormData.courierType,
-        financialBalance: 0,
-        financialCurrency: finCurrency,
+        courierType: type,
         createdAt: Date.now()
       });
 
       // 3. Auto-create financial account (2120-xxxx)
+      console.log('DEBUG: Creating account for entity with currency:', type === 'sourcing' ? 'SAR' : 'YER');
       try {
         await financialAccountService.createAccountForEntity(
           'courier',
           newCourierRef.id,
           addFormData.fullName,
-          finCurrency
+          type === 'sourcing' ? 'SAR' : 'YER'
         );
       } catch (accErr) {
         console.warn('[Couriers] Could not create financial account:', accErr);
@@ -534,7 +544,7 @@ export default function Couriers() {
       });
       
       // Reset form setup
-      setAddFormData({ fullName: '', phone: '', email: '', address: '', gpsLocation: '', commissionRate: 0, notes: '' });
+      setAddFormData({ fullName: '', phone: '', email: '', address: '', gpsLocation: '', commissionRate: 0, notes: '', courierType: 'local' });
       setIsAddModalOpen(false);
 
     } catch (err: any) {
@@ -920,24 +930,27 @@ export default function Couriers() {
                         <span className="bg-slate-900 border border-slate-800 text-[#d4af37] px-2.5 py-0.5 rounded-lg text-[10px] w-max mr-auto">
                           {courier.courierCustomId || 'ALX-CR-XXX'}
                         </span>
-                        {courier.financialAccountCode ? (
-                          <div className="flex flex-col gap-0.5 mt-0.5">
-                            <span className="text-[9px] font-bold text-slate-550 font-mono block">
-                              {courier.financialAccountCode}
-                            </span>
-                            <span className={`text-[9px] font-bold font-mono ${
-                              (courier.financialBalance || 0) > 0 ? 'text-rose-450' :
-                              (courier.financialBalance || 0) < 0 ? 'text-emerald-400' : 'text-slate-500'
-                            }`}>
-                              {(courier.financialBalance || 0) > 0 ? '▲' : (courier.financialBalance || 0) < 0 ? '▼' : '●'} {Math.abs(courier.financialBalance || 0).toLocaleString()} {courier.financialCurrency || 'YER'}
-                              {courier.financialCurrency === 'SAR' && (
-                                <span className="block text-[8px] text-slate-500 opacity-80 font-normal mt-0.5">
-                                  (≈ {(Math.abs(courier.financialBalance || 0) * (settings.exchangeRateSAR || 140)).toLocaleString()} YER)
-                                </span>
-                              )}
-                            </span>
-                          </div>
-                        ) : null}
+                        {(() => {
+                          const account = accounts.find(a => a.entityId === courier.id);
+                          return account ? (
+                            <div className="flex flex-col gap-0.5 mt-0.5">
+                              <span className="text-[9px] font-bold text-slate-550 font-mono block">
+                                {account.accountCode} <span className="bg-[#d4af37]/10 text-[#d4af37] px-1 rounded">{account.currency || 'YER'}</span>
+                              </span>
+                              <span className={`text-[9px] font-bold font-mono ${
+                                (account.balance || 0) > 0 ? 'text-rose-450' :
+                                (account.balance || 0) < 0 ? 'text-emerald-400' : 'text-slate-500'
+                              }`}>
+                                {(account.balance || 0) > 0 ? '▲' : (account.balance || 0) < 0 ? '▼' : '●'} {Math.abs(account.balance || 0).toLocaleString()} {account.currency || 'YER'}
+                                {account.currency === 'SAR' && (
+                                  <span className="block text-[8px] text-slate-500 opacity-80 font-normal mt-0.5">
+                                    (≈ {(Math.abs(account.balance || 0) * (settings.exchangeRateSAR || 140)).toLocaleString()} YER)
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                          ) : null;
+                        })()}
                       </div>
                     </td>
                     <td className="p-4" onClick={() => handleOpenDetails(courier)}>
@@ -948,6 +961,9 @@ export default function Couriers() {
                         <div className="flex flex-col text-start">
                           <span className="font-extrabold text-white group-hover:text-[#d4af37] transition-colors flex items-center gap-1.5">
                             {courier.fullName}
+                            <span className="text-[9px] bg-slate-800 text-slate-400 px-1 rounded">
+                              {courier.financialCurrency || (courier.courierType === 'sourcing' ? 'SAR' : 'YER')}
+                            </span>
                             {cStats.remainingCustody > 0 && (
                               <span className="inline-block w-2 w-2 rounded-full bg-rose-500 animate-pulse" title={isAr ? "لديه عهدة معلقة غير موردة" : "Has unremitted custody!"}></span>
                             )}
@@ -1294,11 +1310,12 @@ export default function Couriers() {
             )}
 
             {detailTab === 'financial' && (() => {
+              const account = accounts.find(a => a.entityId === selectedCourier.id);
               const ledgerData = getCourierUnifiedLedger();
               const debits = ledgerData.filter(i => i.type === 'Debit').reduce((sum, i) => sum + i.amountFCurrency, 0);
               const credits = ledgerData.filter(i => i.type === 'Credit').reduce((sum, i) => sum + i.amountFCurrency, 0);
-              const netBalance = credits - debits;
-              const fCurrency = selectedCourier.financialCurrency || 'YER';
+              const netBalance = account?.balance || 0;
+              const fCurrency = account?.currency || selectedCourier.financialCurrency || 'YER';
               const exchangeRateSAR = parseFloat(settings.exchangeRateSAR || 140);
 
               const filteredLedger = ledgerData.filter(item => {

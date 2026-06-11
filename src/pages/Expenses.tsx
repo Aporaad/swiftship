@@ -352,6 +352,15 @@ export default function Expenses() {
             createdByName: profile?.fullName || 'Root Admin',
             createdAt: parsedCreatedAt
           });
+
+          // Automatically settle pending custodies if this was a Credit transaction (liability reduction)
+          if (type !== 'Custody' && recipientEntityType === 'courier') {
+            await financialAccountService.settlePendingCustodies(
+              recipientEntityId,
+              rawAmount,
+              formData.currency
+            );
+          }
         } catch (txErr) {
           console.warn('[Expenses] Could not record financial account transaction:', txErr);
         }

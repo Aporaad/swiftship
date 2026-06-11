@@ -939,6 +939,12 @@ export default function Orders() {
 
       if (linkedAccountId) {
         try {
+          const accountExists = await financialAccountService.getAccountById(linkedAccountId);
+          if (!accountExists) {
+             console.error('[Orders] Financial account missing in DB, skipping transaction:', linkedAccountId);
+             return;
+          }
+
           const totalBilledOriginal = currentCalcs.totalOrderYER;
           const convertedOrderAmount = financialAccountService.convertToDefaultCurrency(
             totalBilledOriginal,
@@ -1036,6 +1042,15 @@ export default function Orders() {
         if (saudiCourier && saudiCourier.financialAccountId) {
           try {
             const isSourcing = saudiCourier.courierType === 'sourcing';
+            const courierCurrency = saudiCourier.financialCurrency || 'YER';
+            
+            const amountInCourierCurrency = financialAccountService.convertToDefaultCurrency(
+              sourcingCostAmount,
+              'SAR',
+              courierCurrency,
+              { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+            );
+
             await financialAccountService.recordTransaction(saudiCourier.financialAccountId, {
               accountId: saudiCourier.financialAccountId,
               accountCode: saudiCourier.financialAccountCode || '',
@@ -1043,7 +1058,7 @@ export default function Orders() {
               entityId: saudiCourier.id,
               entityName: saudiCourier.fullName,
               type: 'Credit',
-              amount: isSourcing ? sourcingCostAmount : sourcingCostConverted,
+              amount: amountInCourierCurrency,
               amountOriginal: sourcingCostAmount,
               currencyOriginal: 'SAR',
               description: isAr ? `إضافة تكاليف المنتجات الأصلية للطلب للمندوب: ${orderNumber}` : `Adding sourcing products cost for order to agent: ${orderNumber}`,
@@ -1053,6 +1068,13 @@ export default function Orders() {
               createdByName: profile?.fullName || 'Root Admin',
               createdAt: Date.now()
             });
+
+            // Automatically settle pending custodies
+            await financialAccountService.settlePendingCustodies(
+              saudiCourier.id, 
+              amountInCourierCurrency, 
+              courierCurrency
+            );
           } catch (e) {
             console.error('Failed to deduct sourcing from courier', e);
           }

@@ -33,10 +33,10 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
     if (initialTab === 'salary') setAccountingTab('salary_history');
   }, [initialTab]);
 
-  const formatCurrencyWithYerEquiv = (amount: number, isSourcingCourier: boolean, isAlreadyInNativeCurrency: boolean = false) => {
-    if (isSourcingCourier) {
-      const amountInSAR = isAlreadyInNativeCurrency ? amount : getDisplayEquivalent(amount, 'SAR');
-      const amountInYER = isAlreadyInNativeCurrency ? amount * (settings.exchangeRateSAR || 140) : amount;
+  const formatCurrencyWithYerEquiv = (amount: number, currency: string) => {
+    if (currency === 'SAR') {
+      const amountInSAR = amount;
+      const amountInYER = amount * (settings.exchangeRateSAR || 140);
       return (
         <span className="font-mono">
           {amountInSAR.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} <span className="text-[10px] font-sans text-slate-500">SAR</span>
@@ -817,6 +817,9 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
     // Shipments handled
     const courierOrders = orders.filter(o => o.deliveryCourierId === auditedCourierId || o.shippingCourierId === auditedCourierId);
 
+    const linkedAccount = financialAccounts.find(a => a.id === cour.financialAccountId);
+    const currency = linkedAccount?.currency || cour.financialCurrency || 'YER';
+
     const totalCustodyIssued = courierExpenses.reduce((sum, exp) => sum + convertToYER(exp.amount || 0, exp.currency), 0);
     const totalCustodySettled = courierExpenses.filter(e => e.status === 'Settled').reduce((sum, exp) => sum + convertToYER(exp.amount || 0, exp.currency), 0);
     const netLiableBalance = totalCustodyIssued - totalCustodySettled;
@@ -826,6 +829,7 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
       .filter(o => o.deliveryCourierId === auditedCourierId && (o.orderStatus === 'تم التسليم' || o.orderStatus === 'Delivered') && parseFloat(o.amountRemaining || 0) > 0);
 
     const totalUnremittedCashValue = currentUnremittedCargoCash.reduce((sum, o) => sum + parseFloat(o.amountRemaining || 0), 0);
+    const totalUnremittedCashValueInTargetCurrency = currency === 'SAR' ? totalUnremittedCashValue / (settings.exchangeRateSAR || 140) : totalUnremittedCashValue;
 
     const totalOrdersDelivered = courierOrders.filter(o => o.orderStatus === 'تم التسليم' || o.orderStatus === 'Delivered').length;
     const successRate = courierOrders.length > 0 
@@ -841,10 +845,12 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
       netLiableBalance,
       currentUnremittedCargoCash,
       totalUnremittedCashValue,
+      totalUnremittedCashValueInTargetCurrency,
       totalOrdersDelivered,
-      successRate
+      successRate,
+      currency
     };
-  }, [auditedCourierId, couriers, expenses, orders, settings]);
+  }, [auditedCourierId, couriers, expenses, orders, settings, financialAccounts]);
 
   // Courier transactions list
   const courierTransactions = useMemo(() => {
@@ -2027,18 +2033,18 @@ Continue?`
                 <div className="space-y-4 pt-1">
                   <div>
                     <span className="text-[10px] text-slate-500 uppercase block font-black">{isAr ? 'العهد المالية الإجمالية المستلمة' : 'Gross Custodies Issued'}</span>
-                    <span className="text-base font-mono font-black text-white">{formatCurrencyWithYerEquiv(courierAuditSheet.totalCustodyIssued, courierAuditSheet.courier.courierType === 'sourcing')}</span>
+                    <span className="text-base font-mono font-black text-white">{formatCurrencyWithYerEquiv(courierAuditSheet.totalCustodyIssued, courierAuditSheet.currency)}</span>
                   </div>
                   
                   <div>
                     <span className="text-[10px] text-slate-500 uppercase block font-black">{isAr ? 'العهد المصفاة والمسلمة' : 'Reconciled & Settled'}</span>
-                    <span className="text-base font-mono font-black text-emerald-450">{formatCurrencyWithYerEquiv(courierAuditSheet.totalCustodySettled, courierAuditSheet.courier.courierType === 'sourcing')}</span>
+                    <span className="text-base font-mono font-black text-emerald-450">{formatCurrencyWithYerEquiv(courierAuditSheet.totalCustodySettled, courierAuditSheet.currency)}</span>
                   </div>
 
                   {/* Active liability trust */}
                   <div className="bg-[#ef4444]/5 p-3 rounded-2xl border border-[#ef4444]/15">
                     <span className="text-[10px] text-rose-400 uppercase block font-black">{isAr ? 'الرصيد المالي الإجمالي المطلوب من المندوب' : 'Net Liable Ledger Balance'}</span>
-                    <span className="text-lg font-mono font-black text-rose-500">{formatCurrencyWithYerEquiv(courierAuditSheet.courier.financialBalance || 0, courierAuditSheet.courier.courierType === 'sourcing', true)}</span>
+                    <span className="text-lg font-mono font-black text-rose-500">{formatCurrencyWithYerEquiv(courierAuditSheet.courier.financialBalance || 0, courierAuditSheet.currency)}</span>
                     <span className="text-[8.5px] text-slate-500 block mt-1 leading-snug">{isAr ? 'الرصيد الجاري الفعلي للمندوب المطابق لشجرة الحسابات ودفتر اليومية الموحد.' : 'Actual current balance of the courier matching the chart of accounts and journal entries.'}</span>
                   </div>
 
@@ -2046,7 +2052,7 @@ Continue?`
                   <div className="bg-cyan-500/5 p-4 rounded-3xl border border-cyan-500/15 space-y-3">
                     <div>
                       <span className="text-[10px] text-cyan-400 uppercase block font-black">{isAr ? 'التحصيلات النقدية للشحنات المسلمة بذمته' : 'Cargo Cash Held (COD)'}</span>
-                      <span className="text-lg font-mono font-black text-cyan-400">{formatCurrencyWithYerEquiv(courierAuditSheet.totalUnremittedCashValue, courierAuditSheet.courier.courierType === 'sourcing')}</span>
+                      <span className="text-lg font-mono font-black text-cyan-400">{formatCurrencyWithYerEquiv(courierAuditSheet.totalUnremittedCashValueInTargetCurrency, courierAuditSheet.currency)}</span>
                       <span className="text-[8.5px] text-slate-500 block mt-1 leading-snug">
                         {isAr ? `نقدية محصلة من ${courierAuditSheet.currentUnremittedCargoCash.length} طرد مسلّم، في انتظار التوريد المالي للخزينة.` : `Direct cash collected from ${courierAuditSheet.currentUnremittedCargoCash.length} delivered items waiting transfer.`}
                       </span>

@@ -762,7 +762,7 @@ export default function Reports() {
                                      <span className="text-lg font-black text-white truncate block">{acc?.entityName || acc?.name}</span>
                                   </div>
                                   <div className="p-5 bg-black/30 border-2 border-emerald-500/20 rounded-2xl">
-                                     <span className="text-[9px] font-black text-emerald-400 block uppercase mb-1">{isAr ? 'الرصيد الختامي' : 'Terminal Balance'}</span>
+                                     <span className="text-[9px] font-black text-emerald-400 block uppercase mb-1">{isAr ? `الرصيد الختامي (${acc?.currency || 'YER'})` : `Terminal Balance (${acc?.currency || 'YER'})`}</span>
                                      <span className={`text-lg font-mono font-black ${acc?.balance >= 0 ? 'text-emerald-400' : 'text-rose-500'}`}>
                                        {acc?.balance?.toLocaleString()} <span className="text-xs">{acc?.currency}</span>
                                      </span>

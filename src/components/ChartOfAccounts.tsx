@@ -3,6 +3,7 @@ import {
   FolderTree, Folder, FolderOpen, ChevronRight, ChevronDown, PlusCircle, Trash2, 
   Search, Scale, X, HelpCircle, Activity, ShieldCheck, DollarSign, RefreshCw, Edit2, FileText, FileSpreadsheet, Printer
 } from 'lucide-react';
+import ConfirmModal from './ConfirmModal';
 import { db } from '../lib/firebase';
 import { collection, addDoc, doc, deleteDoc, updateDoc, onSnapshot, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { notificationService } from '../services/notificationService';
@@ -63,6 +64,7 @@ export default function ChartOfAccounts({
   const [reportLoading, setReportLoading] = useState(false);
 
   const [editingNode, setEditingNode] = useState<AccountNode | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
 
   // Form states
   const [newAccount, setNewAccount] = useState({
@@ -397,10 +399,12 @@ export default function ChartOfAccounts({
   };
 
   const handleDeleteAccount = async (id: string, name: string) => {
-    if (!window.confirm(isAr 
-      ? `هل أنت متأكد من حذف الحساب (${name}) نهائياً من الشجرة المحاسبية؟` 
-      : `Verify deletion of custom account (${name})?`
-    )) return;
+    setShowDeleteConfirm({ id, name });
+  };
+
+  const confirmDeleteAccount = async () => {
+    if (!showDeleteConfirm) return;
+    const { id } = showDeleteConfirm;
 
     try {
       await deleteDoc(doc(db, 'accounts', id));
@@ -411,6 +415,13 @@ export default function ChartOfAccounts({
       });
     } catch (err: any) {
       console.error(err);
+      notificationService.notify({
+        title: 'Error',
+        message: err.message,
+        type: 'error'
+      });
+    } finally {
+      setShowDeleteConfirm(null);
     }
   };
 
@@ -660,12 +671,7 @@ export default function ChartOfAccounts({
 
                 {/* Balanced output */}
                 <div className="col-span-3 text-left font-mono font-black text-white text-xs truncate">
-                  {node.balance !== undefined ? `${node.balance.toLocaleString()} YER` : '0 YER'}
-                  {node.currency && node.currency !== 'YER' && (
-                    <span className="text-[7.5px] font-bold block text-slate-550">
-                      (Billed: {node.currency})
-                    </span>
-                  )}
+                  {node.balance !== undefined ? `${node.balance.toLocaleString()} ${node.currency || 'YER'}` : `0 ${node.currency || 'YER'}`}
                 </div>
 
               </div>
@@ -681,6 +687,16 @@ export default function ChartOfAccounts({
           </div>
         </div>
       </div>
+
+      {/* MODAL: DELETE CONFIRMATION */}
+      <ConfirmModal
+        isOpen={!!showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(null)}
+        onConfirm={confirmDeleteAccount}
+        title={isAr ? 'تأكيد حذف الحساب' : 'Confirm Account Deletion'}
+        message={isAr ? `هل أنت متأكد من حذف الحساب (${showDeleteConfirm?.name}) نهائياً من النظام؟ لا يمكن التراجع عن هذا الإجراء.` : `Verify permanent deletion of account (${showDeleteConfirm?.name})? This action cannot be undone.`}
+        confirmText={isAr ? 'حذف نهائياً' : 'Delete Permanently'}
+      />
 
       {/* MODAL: ADD CUSTOM SUB-ACCOUNT */}
       {isAddOpen && (
@@ -720,8 +736,23 @@ export default function ChartOfAccounts({
                   />
                 </div>
 
-                {/* Parent account node selector */}
+                {/* Currency selector */}
                 <div>
+                  <label className="block text-[9.5px] font-black text-slate-500 mb-1 uppercase">{isAr ? 'العملة' : 'Currency'}</label>
+                  <select
+                    value={newAccount.currency}
+                    onChange={e => setNewAccount(prev => ({ ...prev, currency: e.target.value }))}
+                    className="w-full bg-black/40 border border-slate-850 text-white rounded-xl px-3 py-2 text-xs font-black cursor-pointer outline-none focus:border-[#d4af37]"
+                  >
+                    <option value="YER">YER</option>
+                    <option value="SAR">SAR</option>
+                    <option value="USD">USD</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Parent account node selector */}
+              <div>
                   <label className="block text-[9.5px] font-black text-slate-500 mb-1 uppercase">{isAr ? 'الحساب الرئيسي الوالد' : 'Parent Reference Node'}</label>
                   <select
                     value={newAccount.parentCode}
@@ -738,7 +769,6 @@ export default function ChartOfAccounts({
                       ))}
                   </select>
                 </div>
-              </div>
 
               {/* Names Input */}
               <div>
@@ -851,15 +881,28 @@ export default function ChartOfAccounts({
                   />
                 </div>
                 <div>
-                  <label className="block text-[9.5px] font-black text-slate-500 mb-1 uppercase">{isAr ? 'الحساب الأب' : 'Parent code'}</label>
-                  <input
-                    type="text"
-                    value={newAccount.parentCode}
-                    onChange={e => setNewAccount(prev => ({ ...prev, parentCode: e.target.value.replace(/\D/g, '') }))}
-                    placeholder="1100"
-                    className="w-full bg-black/40 border border-slate-850 text-white rounded-xl px-3 py-2 text-xs font-mono font-black outline-none focus:border-[#d4af37]"
-                  />
+                  <label className="block text-[9.5px] font-black text-slate-500 mb-1 uppercase">{isAr ? 'العملة' : 'Currency'}</label>
+                  <select
+                    value={newAccount.currency}
+                    onChange={e => setNewAccount(prev => ({ ...prev, currency: e.target.value }))}
+                    className="w-full bg-black/40 border border-slate-850 text-white rounded-xl px-3 py-2 text-xs font-black cursor-pointer outline-none focus:border-[#d4af37]"
+                  >
+                    <option value="YER">YER</option>
+                    <option value="SAR">SAR</option>
+                    <option value="USD">USD</option>
+                  </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-[9.5px] font-black text-slate-500 mb-1 uppercase">{isAr ? 'الحساب الأب' : 'Parent code'}</label>
+                <input
+                  type="text"
+                  value={newAccount.parentCode}
+                  onChange={e => setNewAccount(prev => ({ ...prev, parentCode: e.target.value.replace(/\D/g, '') }))}
+                  placeholder="1100"
+                  className="w-full bg-black/40 border border-slate-850 text-white rounded-xl px-3 py-2 text-xs font-mono font-black outline-none focus:border-[#d4af37]"
+                />
               </div>
 
               <div>
