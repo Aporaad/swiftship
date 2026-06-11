@@ -112,6 +112,124 @@ async function startServer() {
     try {
       console.log('[System Triggers] Setting up emulated real-time Firebase Cloud Functions on server backend...');
       
+      const getExchangeRatesBackend = async () => {
+        try {
+          const snap = await getDoc(doc(db, 'settings', 'general'));
+          if (snap.exists()) {
+            const data = snap.data();
+            return {
+              USD: data.exchangeRateUSD || 535,
+              SAR: data.exchangeRateSAR || 140,
+              YER: 1
+            };
+          }
+        } catch (e) {
+          console.warn('Could not fetch exchange rates on server, using defaults', e);
+        }
+        return { USD: 535, SAR: 140, YER: 1 };
+      };
+
+      const convertToTargetCurrencyBackend = (
+        amount: number,
+        fromCurrency: string,
+        targetCurrency: string,
+        exchangeRates: { USD?: number; SAR?: number; YER?: number }
+      ): number => {
+        if (fromCurrency === targetCurrency) return amount;
+        let baseAmountYER = amount;
+        if (fromCurrency === 'USD') baseAmountYER = amount * (exchangeRates.USD || 535);
+        else if (fromCurrency === 'SAR') baseAmountYER = amount * (exchangeRates.SAR || 140);
+        else if (fromCurrency === 'YER') baseAmountYER = amount;
+
+        if (targetCurrency === 'USD') return baseAmountYER / (exchangeRates.USD || 535);
+        if (targetCurrency === 'SAR') return baseAmountYER / (exchangeRates.SAR || 140);
+        if (targetCurrency === 'YER') return baseAmountYER;
+        return baseAmountYER;
+      };
+
+      const settlePendingCustodiesForCourierBackend = async (courierId: string, amountToSettle: number, currency: string) => {
+        if (amountToSettle <= 0) return;
+        try {
+          const exchangeRates = await getExchangeRatesBackend();
+          const q = query(
+            collection(db, 'expenses'),
+            where('recipientEntityId', '==', courierId),
+            where('status', '==', 'Pending')
+          );
+          const snap = await getDocs(q);
+          const pending = snap.docs
+            .map(d => ({id: d.id, ...d.data()} as any))
+            .filter((e: any) => e.type === 'Custody')
+            .sort((a: any, b: any) => a.createdAt - b.createdAt);
+
+          console.log(`[System Triggers] Found ${pending.length} pending custodies for courier ${courierId}. Amount to settle: ${amountToSettle} ${currency}`);
+
+          let remainingToSettle = amountToSettle;
+          let settled = false;
+
+          for (const expense of pending) {
+            if (remainingToSettle <= 0) break;
+
+            const expenseCurrency = expense.currency || 'YER';
+            const currentRemitted = parseFloat(expense.remittedAmount) || 0;
+            const totalAmount = parseFloat(expense.amount) || 0;
+            const availableToSettleExpenseCurrency = totalAmount - currentRemitted;
+            
+            if (availableToSettleExpenseCurrency <= 0) continue;
+
+            const availableToSettleBudgetCurrency = convertToTargetCurrencyBackend(
+              availableToSettleExpenseCurrency,
+              expenseCurrency,
+              currency,
+              exchangeRates
+            );
+
+            const settleAmountBudgetCurrency = Math.min(remainingToSettle, availableToSettleBudgetCurrency);
+            
+            const settleAmountExpenseCurrency = convertToTargetCurrencyBackend(
+              settleAmountBudgetCurrency,
+              currency,
+              expenseCurrency,
+              exchangeRates
+            );
+            
+            const newRemitted = currentRemitted + settleAmountExpenseCurrency;
+            const isFullySettled = newRemitted >= totalAmount - 0.01;
+
+            console.log(`[System Triggers] Auto-Settling custody expense ${expense.id}: settling ${settleAmountBudgetCurrency} ${currency} (${settleAmountExpenseCurrency} ${expenseCurrency}). New remitted: ${newRemitted}. Fully settled: ${isFullySettled}`);
+
+            await updateDoc(doc(db, 'expenses', expense.id), {
+              status: isFullySettled ? 'Settled' : 'Pending',
+              remittedAmount: newRemitted,
+              updatedAt: Date.now()
+            });
+
+            remainingToSettle -= settleAmountBudgetCurrency;
+            settled = true;
+
+            // Log activity log
+            try {
+              await addDoc(collection(db, 'activity_logs'), {
+                action: 'settle_custody',
+                targetId: expense.id,
+                metadata: { 
+                   amount: settleAmountBudgetCurrency, 
+                   currency,
+                   automated: true,
+                   source: 'System Trigger on Credit Transaction'
+                },
+                createdAt: Date.now(),
+                userId: 'system'
+              });
+            } catch (logErr) {
+              console.error('[System Triggers] Failed to save activity log for auto-settle:', logErr);
+            }
+          }
+        } catch (settleErr: any) {
+          console.error('[System Triggers] Error in auto-settling pending custodies:', settleErr.message);
+        }
+      };
+
       // Reconciles an account's balances when its account_transactions are written, deleted, or updated.
       onSnapshot(collection(db, 'account_transactions'), async (snapshot) => {
         const changes = snapshot.docChanges();
@@ -124,6 +242,28 @@ async function startServer() {
           const data = change.doc.data();
           if (data && data.accountId) {
             affectedAccountIds.add(data.accountId);
+
+            // Auto-settle custody if a NEW Credit transaction is added
+            if (change.type === 'added' && data.type === 'Credit') {
+              try {
+                const accountRef = doc(db, 'accounts', data.accountId);
+                const accountSnap = await getDoc(accountRef);
+                if (accountSnap.exists()) {
+                  const accountData = accountSnap.data();
+                  if (accountData.entityType === 'courier') {
+                    const courierId = accountData.entityId;
+                    const txAmount = parseFloat(data.amountOriginal) || parseFloat(data.amount) || 0;
+                    const txCurrency = data.currencyOriginal || accountData.currency || 'YER';
+                    
+                    console.log(`[System Triggers] Credit transaction of ${txAmount} ${txCurrency} registered on Courier: ${accountData.entityName}. ID: ${courierId}. Processing automatic custody settlement...`);
+                    
+                    await settlePendingCustodiesForCourierBackend(courierId, txAmount, txCurrency);
+                  }
+                }
+              } catch (cErr: any) {
+                console.error('[System Triggers] Error checking courier for custody settlement:', cErr.message);
+              }
+            }
           }
         }
         
