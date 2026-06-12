@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, doc, updateDoc, addDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, updateDoc, addDoc, setDoc, deleteDoc, getDocs } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Search, Edit2, X, Plus, Trash2, Shield, CheckCircle2, RefreshCw } from 'lucide-react';
 import { useRole } from '../hooks/useRole';
@@ -36,36 +36,53 @@ export default function Roles() {
 
   useEffect(() => {
     if (roleLoading) return;
-    const unsub = onSnapshot(collection(db, 'roles'), async (snap) => {
+    const unsub = onSnapshot(collection(db, 'roles'), (snap) => {
       const fetchedRoles = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setRoles(fetchedRoles);
-      
-      // Auto-initialize default roles if they don't exist
-      const defaultRoles = [
-        { id: 'Admin', title: settings.language === 'ar' ? 'مدير النظام' : 'System Admin', permissions: ['*'] },
-        { id: 'Employee', title: settings.language === 'ar' ? 'موظف' : 'Employee', permissions: ['view_dashboard', 'view_orders', 'add_orders', 'edit_orders', 'update_order_status', 'print_orders', 'view_customers', 'add_customers', 'edit_customers', 'view_couriers', 'add_couriers', 'edit_couriers', 'view_sources', 'add_sources', 'edit_sources', 'view_notifications', 'notify_orders', 'notify_system'] },
-        { id: 'Courier', title: settings.language === 'ar' ? 'مندوب' : 'Courier', permissions: ['view_orders', 'update_order_status'] },
-        { id: 'Accountant', title: settings.language === 'ar' ? 'محاسب' : 'Accountant', permissions: ['view_dashboard', 'view_orders', 'view_finance', 'add_finance', 'edit_finance', 'view_expenses', 'add_expenses', 'edit_expenses', 'view_custody', 'view_reports', 'view_sources', 'add_sources', 'edit_sources', 'view_notifications', 'notify_finance', 'notify_system'] }
-      ];
-
-      for (const dr of defaultRoles) {
-        if (!fetchedRoles.find(r => r.id === dr.id)) {
-          console.log(`Initializing missing role: ${dr.id}`);
-          await setDoc(doc(db, 'roles', dr.id), {
-            title: dr.title,
-            permissions: dr.permissions,
-            createdAt: Date.now(),
-            isDefault: true
-          });
-        }
-      }
-
       setLoading(false);
     }, (error) => {
+      setLoading(false);
       handleFirestoreError(error, OperationType.LIST, 'roles');
     });
     return unsub;
-  }, [settings.language, roleLoading]);
+  }, [roleLoading]);
+
+  // Auto-initialize default roles (runs separately to avoid remote snapshot loop)
+  useEffect(() => {
+    if (roleLoading) return;
+    const initRoles = async () => {
+      try {
+        const snap = await getDocs(collection(db, 'roles'));
+        const fetchedRoles = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        
+        const defaultRoles = [
+          { id: 'Admin', title: settings.language === 'ar' ? 'مدير النظام' : 'System Admin', permissions: ['*'] },
+          { id: 'Employee', title: settings.language === 'ar' ? 'موظف' : 'Employee', permissions: ['view_dashboard', 'view_orders', 'add_orders', 'edit_orders', 'update_order_status', 'print_orders', 'view_customers', 'add_customers', 'edit_customers', 'view_couriers', 'add_couriers', 'edit_couriers', 'view_sources', 'add_sources', 'edit_sources', 'view_notifications', 'notify_orders', 'notify_system'] },
+          { id: 'Courier', title: settings.language === 'ar' ? 'مندوب' : 'Courier', permissions: ['view_orders', 'update_order_status'] },
+          { id: 'Accountant', title: settings.language === 'ar' ? 'محاسب' : 'Accountant', permissions: ['view_dashboard', 'view_orders', 'view_finance', 'add_finance', 'edit_finance', 'view_expenses', 'add_expenses', 'edit_expenses', 'view_custody', 'view_reports', 'view_sources', 'add_sources', 'edit_sources', 'view_notifications', 'notify_finance', 'notify_system'] }
+        ];
+
+        for (const dr of defaultRoles) {
+          if (!fetchedRoles.find(r => r.id === dr.id)) {
+            console.log(`[Roles.tsx] Initializing missing default role in Firestore: ${dr.id}`);
+            try {
+              await setDoc(doc(db, 'roles', dr.id), {
+                title: dr.title,
+                permissions: dr.permissions,
+                createdAt: Date.now(),
+                isDefault: true
+              }, { merge: true });
+            } catch (err) {
+              console.warn(`[Roles.tsx] Failed to auto-initialize role ${dr.id}:`, err);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("[Roles.tsx] Failed to fetch roles for initialization:", err);
+      }
+    };
+    initRoles();
+  }, [roleLoading, settings.language]);
 
   const handleOpenAdd = () => {
     setSelectedRole(null);
@@ -78,18 +95,21 @@ export default function Roles() {
     setFormData({
       id: role.id,
       title: role.title || role.id,
-      permissions: role.permissions || []
+      permissions: Array.isArray(role.permissions) ? role.permissions : []
     });
     setIsModalOpen(true);
   };
 
   const togglePermission = (permId: string) => {
-    setFormData(prev => ({
-      ...prev,
-      permissions: prev.permissions.includes(permId)
-        ? prev.permissions.filter(p => p !== permId)
-        : [...prev.permissions, permId]
-    }));
+    setFormData(prev => {
+      const activePerms = Array.isArray(prev.permissions) ? prev.permissions : [];
+      return {
+        ...prev,
+        permissions: activePerms.includes(permId)
+          ? activePerms.filter(p => p !== permId)
+          : [...activePerms, permId]
+      };
+    });
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -206,7 +226,7 @@ export default function Roles() {
                 {settings.language === 'ar' ? 'الصلاحيات الممنوحة:' : 'Assigned Permissions:'}
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {r.permissions?.map((pId: string) => {
+                {(Array.isArray(r.permissions) ? r.permissions : []).map((pId: string) => {
                   const perm = currentPermissions.find(ap => ap.id === pId);
                   return (
                     <span 
@@ -217,7 +237,7 @@ export default function Roles() {
                     </span>
                   );
                 })}
-                {(!r.permissions || r.permissions.length === 0) && (
+                {(!Array.isArray(r.permissions) || r.permissions.length === 0) && (
                   <span className="text-slate-500 text-[10px] italic">{settings.language === 'ar' ? 'لا توجد صلاحيات محددة' : 'No permissions assigned'}</span>
                 )}
               </div>
@@ -253,9 +273,9 @@ export default function Roles() {
                     <label key={perm.id} className="flex items-center gap-3 p-3 rounded-xl border border-slate-850 bg-slate-950/40 hover:bg-slate-900 cursor-pointer transition-colors text-start">
                       <div 
                         onClick={() => togglePermission(perm.id)}
-                        className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${formData.permissions.includes(perm.id) ? 'bg-[#d4af37] border-[#d4af37] text-black font-black' : 'border-slate-800'}`}
+                        className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${(Array.isArray(formData.permissions) && formData.permissions.includes(perm.id)) ? 'bg-[#d4af37] border-[#d4af37] text-black font-black' : 'border-slate-800'}`}
                       >
-                        {formData.permissions.includes(perm.id) && <CheckCircle2 className="w-3.5 h-3.5" />}
+                        {(Array.isArray(formData.permissions) && formData.permissions.includes(perm.id)) && <CheckCircle2 className="w-3.5 h-3.5" />}
                       </div>
                       <div className="flex-1">
                         <div className="text-xs font-bold text-white">{perm.label}</div>

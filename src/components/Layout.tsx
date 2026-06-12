@@ -28,7 +28,10 @@ import {
   Phone,
   Mail,
   Send,
-  MessageCircle
+  MessageCircle,
+  AlertTriangle,
+  Download,
+  Upload
 } from 'lucide-react';
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
@@ -44,6 +47,52 @@ export default function Layout() {
   const location = useLocation();
   const { role, profile, hasPermission, loading: roleLoading, sessionId } = useRole(true);
   const { settings, updateSettings, t } = useSettings();
+  const isAr = settings.language === 'ar';
+  const isOfflineModeActive = (window as any).__isOfflineMode || false;
+
+  const downloadBackup = () => {
+    try {
+      const backup: any = {};
+      const tables = ['users', 'orders', 'expenses', 'settings', 'accounts', 'account_transactions', 'activity_logs', 'roles', 'sources', 'notifications'];
+      tables.forEach(table => {
+        const saved = localStorage.getItem(`swiftship_table_backup_${table}`);
+        if (saved) {
+          backup[table] = JSON.parse(saved);
+        }
+      });
+
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `swiftship_emergency_backup_${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleRestoreBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const parsed = JSON.parse(evt.target?.result as string);
+        Object.entries(parsed).forEach(([table, data]) => {
+          localStorage.setItem(`swiftship_table_backup_${table}`, JSON.stringify(data));
+        });
+        alert(isAr ? 'تم استيراد واستعادة البيانات الاحتياطية بنجاح!' : 'Disaster recovery backup imported successfully!');
+        window.location.reload();
+      } catch (err) {
+        alert(isAr ? 'خطأ: ملف النسخة الاحتياطية غير صالح.' : 'Error: Selected backup file format is invalid.');
+      }
+    };
+    reader.readAsText(file);
+  };
+
   const [unreadCount, setUnreadCount] = useState(0);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -152,7 +201,7 @@ export default function Layout() {
         if (role !== 'Admin') {
           const isCreator = data.creatorId === auth.currentUser?.uid;
           const isTarget = data.userId === auth.currentUser?.uid;
-          const isAssociated = data.associatedUserIds?.includes(auth.currentUser?.uid);
+          const isAssociated = Array.isArray(data.associatedUserIds) && data.associatedUserIds.includes(auth.currentUser?.uid);
           if (!isCreator && !isTarget && !isAssociated) return false;
         }
         const category = data.category || 'system';
@@ -288,8 +337,6 @@ export default function Layout() {
     const newLang = settings.language === 'ar' ? 'en' : 'ar';
     updateSettings({ language: newLang });
   };
-
-  const isAr = settings.language === 'ar';
 
   const navItems = [
     { name: isAr ? 'الرئيسية' : 'Dashboard', path: '/', icon: LayoutDashboard, permission: 'view_dashboard' },
@@ -739,6 +786,45 @@ export default function Layout() {
 
         {/* Sub-routing Pages Outlet Viewport */}
         <div className="flex-1 overflow-y-auto p-6 bg-gradient-to-b from-luxury-black via-[#08080a] to-[#050505] custom-scrollbar">
+          {isOfflineModeActive && (
+            <div className="mb-6 p-4 rounded-xl bg-amber-950/20 border border-amber-500/30 flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 animate-bounce" />
+                <div className="text-start" dir={isAr ? "rtl" : "ltr"}>
+                  <p className="text-xs font-bold text-amber-200">
+                    {isAr 
+                      ? 'وضع التشغيل الاحتياطي للطوارئ (بدون اتصال بقاعدة البيانات). جميع البيانات معروضة ومحفوظة من النسخة الاحتياطية المحلية بأمان.' 
+                      : 'Emergency Offline Recovery Mode (Offline). All system actions are buffered locally via secure browser sandbox.'}
+                  </p>
+                  <p className="text-[10px] text-amber-500/80 mt-0.5">
+                    {isAr 
+                      ? 'تم الدخول بصفة المسؤول الرئيسي للصيانة وتفادي الكوارث. يمكنك تصفح البيانات وتغيير النظام وتصدير نسخة احتياطية محلية.' 
+                      : 'Logged in as Main System Administrator for disaster recovery and maintenance. Browse historical indices or dump cached collections.'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={downloadBackup}
+                  className="flex items-center gap-2 px-3 py-1.5 text-[11px] font-bold text-black bg-[#d4af37] hover:bg-yellow-600 rounded-lg transition-all cursor-pointer"
+                  title={isAr ? "تنزيل نسخة احتياطية دقيقة" : "Download precision system data backup"}
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  {isAr ? 'تصدير نسخة احتياطية (JSON)' : 'Export Backup (JSON)'}
+                </button>
+                <label className="flex items-center gap-2 px-3 py-1.5 text-[11px] font-bold text-amber-200 bg-amber-900/40 hover:bg-amber-900/60 border border-amber-500/35 rounded-lg transition-all cursor-pointer">
+                  <Upload className="w-3.5 h-3.5" />
+                  {isAr ? 'استيراد واستعادة بيانات' : 'Import/Restore Backup'}
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={handleRestoreBackup}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+            </div>
+          )}
           <Outlet />
         </div>
         

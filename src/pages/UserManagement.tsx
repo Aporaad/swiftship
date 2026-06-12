@@ -22,6 +22,7 @@ import { notificationService } from '../services/notificationService';
 import { activityLogService } from '../services/activityLogService';
 import ConfirmModal from '../components/ConfirmModal';
 import { financialAccountService } from '../services/financialAccountService';
+import { DEFAULT_ROLE_PERMISSIONS } from '../lib/permissions';
 
 // ══════════════════════════════════════════════════════════════
 // PERMISSIONS — FULL SYSTEM COVERAGE
@@ -308,11 +309,50 @@ export default function UserManagement() {
   // ══════════════════════════════════════════════════════════
   useEffect(() => {
     if (roleLoading) return;
-    const unsubRoles = onSnapshot(collection(db, 'roles'), snap =>
-      setRoles(snap.docs.map(d => ({ id: d.id, ...d.data() })))
-    );
+    const unsubRoles = onSnapshot(collection(db, 'roles'), (snap) => {
+      const fetchedRoles = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setRoles(fetchedRoles);
+    }, err => {
+      console.error("[UserManagement] Error listening to roles:", err);
+    });
     return () => unsubRoles();
   }, [roleLoading]);
+
+  // Auto-initialize default roles
+  useEffect(() => {
+    if (roleLoading) return;
+    const initRoles = async () => {
+      try {
+        const snap = await getDocs(collection(db, 'roles'));
+        const fetchedRoles = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        
+        const defaultRoles = [
+          { id: 'Admin', title: isAr ? 'مدير النظام' : 'System Admin', permissions: ['*'] },
+          { id: 'Employee', title: isAr ? 'موظف' : 'Employee', permissions: DEFAULT_ROLE_PERMISSIONS['Employee'] || [] },
+          { id: 'Courier', title: isAr ? 'مندوب' : 'Courier', permissions: DEFAULT_ROLE_PERMISSIONS['Courier'] || [] },
+          { id: 'Accountant', title: isAr ? 'محاسب' : 'Accountant', permissions: DEFAULT_ROLE_PERMISSIONS['Accountant'] || [] }
+        ];
+
+        for (const dr of defaultRoles) {
+          if (!fetchedRoles.find(r => r.id === dr.id)) {
+            try {
+              await setDoc(doc(db, 'roles', dr.id), {
+                title: dr.title,
+                permissions: dr.permissions,
+                createdAt: Date.now(),
+                isDefault: true
+              }, { merge: true });
+            } catch (err) {
+              console.warn(`[UserManagement] Failed to auto-initialize role ${dr.id}:`, err);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("[UserManagement] Failed to fetch roles for initialization:", err);
+      }
+    };
+    initRoles();
+  }, [roleLoading, isAr]);
 
   useEffect(() => {
     if (roleLoading) return;
@@ -471,6 +511,27 @@ export default function UserManagement() {
       if (!response.ok) {
         throw new Error(data.error || 'Failed to update password');
       }
+      if (passwordTargetUser.email?.toLowerCase() === 'admin@swiftship.system' || passwordTargetUser.email?.toLowerCase() === 'admin') {
+        try {
+          const { simpleHashPassword, encryptDataLocal } = await import('../lib/supabase-firebase-adapter');
+          const hashVal = simpleHashPassword(newPasswordValue);
+          const adminProfile = {
+            uid: passwordTargetUser.id,
+            email: 'admin@swiftship.system',
+            fullName: passwordTargetUser.fullName || 'Emergency Master Admin',
+            role: 'Admin',
+            isRoot: true,
+            disabled: false,
+            createdAt: Date.now()
+          };
+          localStorage.setItem('swiftship_emergency_admin_hash', hashVal);
+          localStorage.setItem('swiftship_emergency_admin_profile', encryptDataLocal(JSON.stringify(adminProfile), newPasswordValue));
+          localStorage.setItem('swiftship_emergency_admin_pwd', newPasswordValue);
+          console.log('[UserManagement] Successfully synchronized emergency local credentials for main admin.');
+        } catch (lsErr) {
+          console.warn('[UserManagement] Local storage credentials sync failed:', lsErr);
+        }
+      }
       await activityLogService.log('reset_password', passwordTargetUser.fullName, { email: passwordTargetUser.email, directChange: true });
       notificationService.notify({
         title: t('تم تغيير كلمة المرور', 'Password Changed'),
@@ -611,22 +672,28 @@ export default function UserManagement() {
   const handleOpenEditRole = (r: any) => { setSelectedRole(r); setRoleFormData({ id: r.id, title: r.title || r.id, permissions: r.permissions || [] }); setIsRoleModalOpen(true); };
 
   const togglePermission = (permId: string) => {
-    setRoleFormData(prev => ({
-      ...prev,
-      permissions: prev.permissions.includes(permId)
-        ? prev.permissions.filter(p => p !== permId)
-        : [...prev.permissions, permId]
-    }));
+    setRoleFormData(prev => {
+      const activePerms = Array.isArray(prev.permissions) ? prev.permissions : [];
+      return {
+        ...prev,
+        permissions: activePerms.includes(permId)
+          ? activePerms.filter(p => p !== permId)
+          : [...activePerms, permId]
+      };
+    });
   };
 
   const toggleGroup = (group: string, checked: boolean) => {
     const permsInGroup = PERMISSION_GROUPS(isAr).find(g => g.group === group)?.perms.map(p => p.id) || [];
-    setRoleFormData(prev => ({
-      ...prev,
-      permissions: checked
-        ? [...new Set([...prev.permissions, ...permsInGroup])]
-        : prev.permissions.filter(p => !permsInGroup.includes(p))
-    }));
+    setRoleFormData(prev => {
+      const activePerms = Array.isArray(prev.permissions) ? prev.permissions : [];
+      return {
+        ...prev,
+        permissions: checked
+          ? [...new Set([...activePerms, ...permsInGroup])]
+          : activePerms.filter(p => !permsInGroup.includes(p))
+      };
+    });
   };
 
   const handleSaveRole = async (e: React.FormEvent) => {
@@ -991,14 +1058,21 @@ export default function UserManagement() {
                     </div>
                   ) : (
                     <div className="flex flex-wrap gap-1">
-                      {(r.permissions || []).slice(0, 8).map((pId: string) => {
-                        const perm = allPerms.find(ap => ap.id === pId);
-                        return <span key={pId} className="bg-slate-900/80 text-slate-300 border border-slate-800/60 px-1.5 py-0.5 rounded text-[8px] font-bold">{perm?.label || pId}</span>;
-                      })}
-                      {(r.permissions || []).length > 8 && (
-                        <span className="bg-slate-900 text-slate-500 border border-slate-800 px-1.5 py-0.5 rounded text-[8px] font-bold">+{(r.permissions || []).length - 8} {t('أخرى', 'more')}</span>
-                      )}
-                      {(!r.permissions || r.permissions.length === 0) && <span className="text-slate-600 text-[10px] italic">{t('لا توجد صلاحيات', 'No permissions assigned')}</span>}
+                      {(() => {
+                        const permsArr = Array.isArray(r.permissions) ? r.permissions : [];
+                        return (
+                          <>
+                            {permsArr.slice(0, 8).map((pId: string) => {
+                              const perm = allPerms.find(ap => ap.id === pId);
+                              return <span key={pId} className="bg-slate-900/80 text-slate-300 border border-slate-800/60 px-1.5 py-0.5 rounded text-[8px] font-bold">{perm?.label || pId}</span>;
+                            })}
+                            {permsArr.length > 8 && (
+                              <span className="bg-slate-900 text-slate-500 border border-slate-800 px-1.5 py-0.5 rounded text-[8px] font-bold">+{permsArr.length - 8} {t('أخرى', 'more')}</span>
+                            )}
+                            {permsArr.length === 0 && <span className="text-slate-600 text-[10px] italic">{t('لا توجد صلاحيات', 'No permissions assigned')}</span>}
+                          </>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
@@ -1667,8 +1741,9 @@ export default function UserManagement() {
                 <div className="space-y-2">
                   {getFilteredPerms().map(group => {
                     const groupPermsIds = group.perms.map(p => p.id);
-                    const allChecked = groupPermsIds.every(id => roleFormData.permissions.includes(id));
-                    const someChecked = groupPermsIds.some(id => roleFormData.permissions.includes(id));
+                    const activePermissions = Array.isArray(roleFormData.permissions) ? roleFormData.permissions : [];
+                    const allChecked = groupPermsIds.every(id => activePermissions.includes(id));
+                    const someChecked = groupPermsIds.some(id => activePermissions.includes(id));
                     const isExpanded = expandedGroups[group.group] !== false; // default expanded
                     return (
                       <div key={group.group} className="bg-black/30 border border-slate-800/50 rounded-xl overflow-hidden">
@@ -1681,14 +1756,14 @@ export default function UserManagement() {
                               {someChecked && !allChecked && <div className="w-2 h-0.5 bg-[#d4af37]"></div>}
                             </div>
                             <span className="text-[10px] font-black text-slate-300">{group.group}</span>
-                            <span className="text-[9px] text-slate-600 font-bold">({group.perms.filter(p => roleFormData.permissions.includes(p.id)).length}/{group.perms.length})</span>
+                            <span className="text-[9px] text-slate-600 font-bold">({group.perms.filter(p => activePermissions.includes(p.id)).length}/{group.perms.length})</span>
                           </div>
                           <ChevronDown className={`w-3.5 h-3.5 text-slate-600 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                         </div>
                         {isExpanded && (
                           <div className="grid grid-cols-1 sm:grid-cols-2">
                             {group.perms.map(perm => {
-                              const isChecked = roleFormData.permissions.includes(perm.id);
+                              const isChecked = activePermissions.includes(perm.id);
                               return (
                                 <label key={perm.id} onClick={() => togglePermission(perm.id)}
                                   className={`flex items-center gap-3 p-3 cursor-pointer transition-all select-none border-b border-slate-800/20 last:border-0 ${isChecked ? 'bg-[#d4af37]/5' : 'bg-black/10 hover:bg-slate-900/30'}`}>

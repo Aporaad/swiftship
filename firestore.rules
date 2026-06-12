@@ -21,7 +21,8 @@ service cloud.firestore {
 
     // Specific match for users to update/register themselves
     match /users/{userId} {
-      allow read, write: if isSignedIn();
+      allow read: if isSignedIn();
+      allow write: if isRoot() || (isSignedIn() && (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin' || request.auth.uid == userId));
     }
 
     match /customers/{customerId} {
@@ -90,7 +91,7 @@ service cloud.firestore {
 
     match /roles/{roleId} {
       allow read: if true;
-      allow write: if isRoot();
+      allow write: if isRoot() || (isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin');
     }
 
     match /whatsapp_logs/{logId} {

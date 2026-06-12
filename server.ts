@@ -1,10 +1,25 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
-import admin from 'firebase-admin';
-import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, getDoc, collection, addDoc, query, where, limit, getDocs, updateDoc, onSnapshot } from 'firebase/firestore';
-import { initializeAuth, inMemoryPersistence, signInWithEmailAndPassword } from 'firebase/auth';
+import admin, {
+  initializeApp,
+  getFirestore,
+  doc,
+  getDoc,
+  collection,
+  addDoc,
+  query,
+  where,
+  limit,
+  getDocs,
+  updateDoc,
+  onSnapshot,
+  initializeAuth,
+  inMemoryPersistence,
+  signInWithEmailAndPassword,
+  setDoc,
+  createUserWithEmailAndPassword
+} from './src/lib/supabase-firebase-adapter';
 import { createServer as createViteServer } from 'vite';
 
 async function startServer() {
@@ -44,19 +59,15 @@ async function startServer() {
   let db: any = null;
   let auth: any = null;
 
-  if (firebaseConfig && firebaseConfig.apiKey && firebaseConfig.projectId) {
-    try {
-      firebaseApp = initializeApp(firebaseConfig);
-      db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
-      auth = initializeAuth(firebaseApp, {
-        persistence: inMemoryPersistence
-      });
-      console.log('Firebase Client SDK & Firestore Services initialized successfully on server');
-    } catch (e: any) {
-      console.error('Firebase Client SDK init failed:', e.message);
-    }
-  } else {
-    console.error('CRITICAL WARNING: firebase-applet-config.json is missing or contains invalid Firebase credentials (apiKey/projectId). Database and auth operations will fallback gracefully or fail.');
+  try {
+    firebaseApp = initializeApp(firebaseConfig);
+    db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
+    auth = initializeAuth(firebaseApp, {
+      persistence: inMemoryPersistence
+    });
+    console.log('[Server] Initialize Firebase Adapter Services supporting Supabase on server successfully');
+  } catch (e: any) {
+    console.error('Firebase Client SDK init failed:', e.message);
   }
 
   // Authenticate the server session using system administrative account to secure backend operations
@@ -71,13 +82,13 @@ async function startServer() {
       console.warn('Backend failed standard authentication with system master password:', authErr.message);
       if (authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/user-not-found') {
         try {
-          const { createUserWithEmailAndPassword } = await import('firebase/auth');
+          const { createUserWithEmailAndPassword } = await import('./src/lib/supabase-firebase-adapter');
           await createUserWithEmailAndPassword(auth, systemEmail, systemPassword);
           console.log('Backend server successfully registered admin@swiftship.system on-the-fly');
 
           // Auto-seed admin user document in Firestore to enable immediate resolve-identifier and verify-login lookup list
           try {
-            const { doc: fDoc, setDoc } = await import('firebase/firestore');
+            const { doc: fDoc, setDoc } = await import('./src/lib/supabase-firebase-adapter');
             await setDoc(fDoc(db, 'users', auth.currentUser!.uid), {
               email: systemEmail,
               username: 'admin',
@@ -470,8 +481,8 @@ async function startServer() {
         // Fallback to Client Web SDK if Admin SDK was unavailable or failed
         if (!createdSuccessfully) {
           try {
-            const { signInWithEmailAndPassword, createUserWithEmailAndPassword } = await import('firebase/auth');
-            const { setDoc, doc: fDoc } = await import('firebase/firestore');
+            const { signInWithEmailAndPassword, createUserWithEmailAndPassword } = await import('./src/lib/supabase-firebase-adapter');
+            const { setDoc, doc: fDoc } = await import('./src/lib/supabase-firebase-adapter');
 
             // Try to sign in as this user to see if they exist in auth
             try {

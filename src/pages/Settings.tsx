@@ -157,7 +157,7 @@ export default function Settings() {
   useEffect(() => {
     setLocalSettings(globalSettings);
     // Sync export selections from backup settings
-    if (globalSettings.backupCollections) {
+    if (globalSettings.backupCollections && Array.isArray(globalSettings.backupCollections)) {
       const sel: Record<string, boolean> = { orders: false, customers: false, couriers: false, sources: false, users: false, roles: false };
       globalSettings.backupCollections.forEach(c => { if (c in sel) sel[c] = true; });
       setExportSelections(sel);

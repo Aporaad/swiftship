@@ -167,6 +167,8 @@ export function useRole(enableHeartbeat: boolean = false) {
     setPermissions([]);
     setLoading(true);
 
+    let unsubRole: (() => void) | null = null;
+
     const unsub = onSnapshot(doc(db, 'users', user.uid), (userDoc) => {
       if (userDoc.exists()) {
         const userData = userDoc.data();
@@ -208,13 +210,20 @@ export function useRole(enableHeartbeat: boolean = false) {
         ];
 
         const lowerEmail = user.email?.toLowerCase() || '';
+
+        // Clean up previous role subscription if any
+        if (unsubRole) {
+          unsubRole();
+          unsubRole = null;
+        }
+
         // Fetch permissions for this role
         if (userData.role === 'Admin' || ROOT_EMAILS.includes(lowerEmail) || userData.isRoot) {
           // Admins or SuperAdmin always have all permissions
           setPermissions(['*']);
           setLoading(false);
         } else if (userData.role) {
-          onSnapshot(doc(db, 'roles', userData.role), (roleDoc) => {
+          unsubRole = onSnapshot(doc(db, 'roles', userData.role), (roleDoc) => {
             if (roleDoc.exists()) {
               setPermissions(roleDoc.data().permissions || []);
             } else {
@@ -287,10 +296,16 @@ export function useRole(enableHeartbeat: boolean = false) {
       setLoading(false);
     });
 
-    return () => unsub();
+    return () => {
+      unsub();
+      if (unsubRole) {
+        unsubRole();
+      }
+    };
   }, [user]);
 
   const hasPermission = (permission: string) => {
+    if (!permissions || !Array.isArray(permissions)) return false;
     if (permissions.includes('*')) return true;
     return permissions.includes(permission);
   };

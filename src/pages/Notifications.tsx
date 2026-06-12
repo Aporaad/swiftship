@@ -73,7 +73,7 @@ export default function Notifications() {
         if (!isAdmin) {
           const isCreator = n.creatorId === auth.currentUser?.uid;
           const isTarget = n.userId === auth.currentUser?.uid;
-          const isAssociated = n.associatedUserIds?.includes(auth.currentUser?.uid);
+          const isAssociated = Array.isArray(n.associatedUserIds) && n.associatedUserIds.includes(auth.currentUser?.uid);
           if (!isCreator && !isTarget && !isAssociated) return false;
         }
         const cat = n.category || 'system';
