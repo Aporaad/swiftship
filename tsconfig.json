@@ -18,7 +18,15 @@
     "paths": {
       "@/*": [
         "./*"
-      ]
+      ],
+      "firebase/app": ["./src/lib/supabase-firebase-adapter.ts"],
+      "firebase/auth": ["./src/lib/supabase-firebase-adapter.ts"],
+      "firebase/firestore": ["./src/lib/supabase-firebase-adapter.ts"],
+      "firebase-admin": ["./src/lib/supabase-firebase-adapter.ts"],
+      "firebase-admin/app": ["./src/lib/supabase-firebase-adapter.ts"],
+      "firebase-admin/auth": ["./src/lib/supabase-firebase-adapter.ts"],
+      "@firebase/firestore": ["./src/lib/supabase-firebase-adapter.ts"],
+      "@google-cloud/firestore": ["./src/lib/supabase-firebase-adapter.ts"]
     },
     "allowImportingTsExtensions": true,
     "noEmit": true

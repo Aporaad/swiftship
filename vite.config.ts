@@ -12,6 +12,14 @@ export default defineConfig(() => {
     resolve: {
       alias: {
         '@': path.resolve(process.cwd(), '.'),
+        'firebase/app': path.resolve(process.cwd(), './src/lib/supabase-firebase-adapter.ts'),
+        'firebase/auth': path.resolve(process.cwd(), './src/lib/supabase-firebase-adapter.ts'),
+        'firebase/firestore': path.resolve(process.cwd(), './src/lib/supabase-firebase-adapter.ts'),
+        'firebase-admin/app': path.resolve(process.cwd(), './src/lib/supabase-firebase-adapter.ts'),
+        'firebase-admin/auth': path.resolve(process.cwd(), './src/lib/supabase-firebase-adapter.ts'),
+        'firebase-admin': path.resolve(process.cwd(), './src/lib/supabase-firebase-adapter.ts'),
+        '@firebase/firestore': path.resolve(process.cwd(), './src/lib/supabase-firebase-adapter.ts'),
+        '@google-cloud/firestore': path.resolve(process.cwd(), './src/lib/supabase-firebase-adapter.ts'),
       },
     },
     server: {

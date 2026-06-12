@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword, signInWithCustomToken, updatePassword } from 'firebase/auth';
 import { auth, db } from '../lib/firebase';
 import { useNavigate } from 'react-router-dom';
-import { Lock, LogIn, User, Eye, EyeOff, Mail, Crown } from 'lucide-react';
+import { Lock, LogIn, User, Eye, EyeOff, Mail, Crown, Send, MessageCircle, Phone } from 'lucide-react';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { useSettings } from '../context/SettingsContext';
 import { activityLogService } from '../services/activityLogService';
@@ -396,61 +396,56 @@ export default function Login() {
         </form>
 
         <div className="text-center pt-6 border-t border-slate-900/60">
-          <p className="text-[9px] text-[#d4af37] font-extrabold uppercase tracking-[0.1em] leading-relaxed mb-4">
+          <p className="text-[8px] text-[#62748E] font-medium leading-relaxed mb-4">
             {isAr 
               ? 'يجب أن يكون حسابك مسجلاً مسبقاً من قبل الإدارة الفنية للمتابعة.' 
               : 'Restricted system. Access attempts logged natively.'}
           </p>
 
           {/* Interactive Developer Card */}
-          <div className="bg-[#050507]/60 border border-[#d4af37]/15 p-3.5 rounded-xl text-right relative overflow-hidden transition-all duration-305 hover:border-[#d4af37]/30" dir={isAr ? 'rtl' : 'ltr'}>
-            <div className="absolute top-0 right-0 w-20 h-20 bg-[#d4af37]/3 rounded-full blur-xl pointer-events-none"></div>
+          <div className="bg-transparent border border-slate-900 p-3 rounded-xl text-center relative" dir={isAr ? 'rtl' : 'ltr'}>
             
-            <div className="flex items-center justify-between pb-1.5 border-b border-slate-900">
-              <div className="flex flex-col text-start">
-                <span className="text-[11px] font-black text-white hover:text-[#d4af37] transition-colors leading-none mb-1">
-                  {isAr ? 'المطور: أرْسَلَان الشَّمَّارِي' : 'Developer: Arslan Al-Shamari'}
-                </span>
-                <span className="text-[8.5px] text-slate-400 font-bold">
-                  {isAr ? 'مبرمج أنظمة ومهندس شبكات وأمن سيبراني' : 'Systems Architect & Cybersecurity Engineer'}
-                </span>
-              </div>
-              <span className="text-[8px] font-black px-1.5 py-0.5 rounded-md bg-[#d4af37]/15 text-[#d4af37] border border-[#d4af37]/30">
-                PRO
+            <div className="flex flex-col items-center justify-center pb-2 border-b border-slate-900/40">
+              <span className="text-[14px] font-bold text-[#D4AF37] leading-[12px] mb-1">
+                {isAr ? 'المطور: أرْسَلَان الشَّمَّارِي' : 'Developer: Arslan Al-Shamari'}
+              </span>
+              <span className="text-[8.5px] text-slate-500 font-normal">
+                {isAr ? 'مبرمج أنظمة ومهندس شبكات وأمن سيبراني' : 'Systems Architect & Cybersecurity Engineer'}
               </span>
             </div>
 
-            <div className="grid grid-cols-3 gap-1.5 pt-2">
+            <div className="flex items-center justify-center gap-4 pt-2.5">
               <a 
                 href="https://wa.me/967776422777" 
                 target="_blank" 
                 rel="noopener noreferrer" 
-                className="py-1 px-1 bg-emerald-500/5 hover:bg-emerald-500/15 border border-emerald-500/10 text-emerald-400 text-[9.5px] font-extrabold rounded-lg flex items-center justify-center gap-1 transition-all active:scale-95"
+                className="p-1.5 text-[#25D366] hover:bg-[#25D366]/10 rounded-full transition-colors active:scale-95"
+                title={isAr ? 'واتسـاب' : 'WhatsApp'}
               >
-                <span>{isAr ? 'واتسـاب' : 'WhatsApp'}</span>
+                <MessageCircle className="w-4.5 h-4.5" />
               </a>
               <a 
                 href="https://t.me/Arslan_ALShamari" 
                 target="_blank" 
                 rel="noopener noreferrer" 
-                className="py-1 px-1 bg-sky-500/5 hover:bg-sky-500/15 border border-sky-500/10 text-sky-400 text-[9.5px] font-extrabold rounded-lg flex items-center justify-center gap-1 transition-all active:scale-95"
+                className="p-1.5 text-[#2CA5E0] hover:bg-[#2CA5E0]/10 rounded-full transition-colors active:scale-95"
+                title={isAr ? 'تلقـرام' : 'Telegram'}
               >
-                <span>{isAr ? 'تلقـرام' : 'Telegram'}</span>
+                <Send className="w-4.5 h-4.5" />
               </a>
               <a 
                 href="mailto:arslan.alshamari@gmail.com" 
-                className="py-1 px-1 bg-[#d4af37]/5 hover:bg-[#d4af37]/15 border border-[#d4af37]/10 text-[#d4af37] text-[9.5px] font-extrabold rounded-lg flex items-center justify-center gap-1 transition-all active:scale-95"
+                className="p-1.5 text-[#EA4335] hover:bg-[#EA4335]/10 rounded-full transition-colors active:scale-95"
+                title={isAr ? 'الإيميل' : 'Email'}
               >
-                <span>{isAr ? 'الإيميل' : 'Email'}</span>
+                <Mail className="w-4.5 h-4.5" />
               </a>
-            </div>
-            
-            <div className="mt-2 text-center" dir="ltr">
               <a 
                 href="tel:+967776422777" 
-                className="text-[9px] font-mono font-black text-slate-500 hover:text-white transition-colors"
+                className="p-1.5 text-[#05C46B] hover:bg-[#05C46B]/10 rounded-full transition-colors active:scale-95"
+                title={isAr ? 'اتصال هاتف' : 'Call'}
               >
-                📲 +967 776 422 777
+                <Phone className="w-4.5 h-4.5" />
               </a>
             </div>
           </div>
