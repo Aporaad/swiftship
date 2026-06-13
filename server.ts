@@ -26,48 +26,28 @@ async function startServer() {
   const app = express();
   app.use(express.json());
 
-  // Safe configuration reading to prevent startup crashes if config file doesn't exist
-  let firebaseConfig: any = {};
-  try {
-    const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
-    if (fs.existsSync(configPath)) {
-      firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-      console.log('Successfully loaded firebase-applet-config.json');
-    } else {
-      console.warn('firebase-applet-config.json not found, proceeding with process.env / ADC fallback.');
-    }
-  } catch (err: any) {
-    console.error('Error reading firebase-applet-config.json:', err.message);
-  }
-
-  // Initialize Firebase Admin SDK
-  try {
-    if (admin.apps.length === 0 && firebaseConfig.projectId) {
-      admin.initializeApp({
-        projectId: firebaseConfig.projectId
-      });
-      console.log('Firebase Admin SDK initialized successfully');
-    } else if (!firebaseConfig.projectId) {
-      console.warn('Firebase Admin SDK could not be initialized: projectId is missing.');
-    }
-  } catch (adminErr: any) {
-    console.error('Firebase Admin SDK init failed:', adminErr.message);
-  }
-
-  // Initialize Firebase Client (Web) SDK & services safely
+  // Initialize Firebase Adapter Services (Backed by Supabase)
   let firebaseApp: any = null;
   let db: any = null;
   let auth: any = null;
 
+  // Initialize Firebase Admin SDK Mock
   try {
-    firebaseApp = initializeApp(firebaseConfig);
-    db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
+    admin.initializeApp();
+    console.log('Backend Adapter Admin SDK initialized successfully');
+  } catch (adminErr: any) {
+    console.error('Backend Adapter Admin SDK init failed:', adminErr.message);
+  }
+
+  try {
+    firebaseApp = initializeApp({});
+    db = getFirestore(firebaseApp);
     auth = initializeAuth(firebaseApp, {
       persistence: inMemoryPersistence
     });
-    console.log('[Server] Initialize Firebase Adapter Services supporting Supabase on server successfully');
+    console.log('[Server] Initialize Backend Adapter Services supporting Supabase on server successfully');
   } catch (e: any) {
-    console.error('Firebase Client SDK init failed:', e.message);
+    console.error('Backend Adapter Client SDK init failed:', e.message);
   }
 
   // Authenticate the server session using system administrative account to secure backend operations
@@ -338,7 +318,7 @@ async function startServer() {
     }
     if (!db || !auth) {
       return res.status(503).json({ 
-        error: 'خدمات قاعدة البيانات غير مهيأة أو غير متصلة بالإنترنت حالياً. يرجى التأكد من وجود ملف firebase-applet-config.json وتهيئته بشكل صحيح بقيم api-key وصلاحيات الوصول على الخادم، وتأكد من تشغيل الخادم الخلفي بالكامل.' 
+        error: 'خدمات قاعدة البيانات غير مهيأة أو غير متصلة بالإنترنت حالياً. يرجى التأكد من تهيئة Supabase بشكل صحيح عبر متغيرات البيئة.' 
       });
     }
     next();
@@ -376,7 +356,7 @@ async function startServer() {
   });
 
   app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', project: firebaseConfig.projectId || 'unknown' });
+    res.json({ status: 'ok', project: 'supabase-backend' });
   });
 
   // Direct administrative password update using Firestore to bypass disabled Identity Toolkit API

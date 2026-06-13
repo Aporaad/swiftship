@@ -8,7 +8,6 @@ import { notificationService } from '../services/notificationService';
 import ConfirmModal from '../components/ConfirmModal';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
-import firebaseConfig from '../../firebase-applet-config.json';
 
 export default function Users() {
   const { settings, t } = useSettings();
@@ -239,7 +238,7 @@ export default function Users() {
 
       // 1. Create a secondary Firebase App to create the user in Auth without signing out the admin
       const secondaryAppName = `Secondary-${Date.now()}`;
-      secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
+      secondaryApp = initializeApp({}, secondaryAppName);
       const secondaryAuth = getAuth(secondaryApp);
 
       // 2. Create the user in Firebase Authentication with a constant system auth password

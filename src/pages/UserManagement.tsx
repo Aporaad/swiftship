@@ -7,7 +7,6 @@ import { sendPasswordResetEmail } from 'firebase/auth';
 import { db, handleFirestoreError, OperationType, auth } from '../lib/firebase';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
-import firebaseConfig from '../../firebase-applet-config.json';
 import {
   Search, Edit2, X, Plus, UserX, UserCheck, Trash2, Users as UsersIcon,
   Shield, Eye, EyeOff, Crown, ShieldAlert, Activity, Clock,
@@ -567,7 +566,7 @@ export default function UserManagement() {
         if (!(await getDocs(uQ)).empty) throw new Error(t('اسم المستخدم مستخدم مسبقاً', 'Username already taken'));
       }
       const secondaryAppName = `Secondary-${Date.now()}`;
-      secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
+      secondaryApp = initializeApp({}, secondaryAppName);
       const secondaryAuth = getAuth(secondaryApp);
       const SHARED_SYSTEM_AUTH_PASSWORD = 'swiftship@system_pw_2026';
       const { user: newUser } = await createUserWithEmailAndPassword(secondaryAuth, addFormData.email.toLowerCase(), SHARED_SYSTEM_AUTH_PASSWORD);
