@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { collection, doc, getDocs, setDoc, writeBatch, query, orderBy, deleteDoc } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { collection, doc, getDocs, setDoc, writeBatch, query, orderBy, deleteDoc, db, handleSupabaseError, OperationType } from '../lib/supabase';
 import {
   Save, Globe, Palette, Database, DollarSign, Building, X, Upload, CheckCircle,
   ShieldAlert, RefreshCw, Archive, Settings2, Shield, FileText, Image, Type,
@@ -186,7 +185,7 @@ export default function Settings() {
     fetchLogistics();
   }, []);
 
-  // Load backup history from Firestore
+  // Load backup history from Supabase
   const loadBackupHistory = async () => {
     setBackupHistoryLoading(true);
     try {
@@ -279,7 +278,7 @@ export default function Settings() {
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, 'settings');
+      handleSupabaseError(error, OperationType.UPDATE, 'settings');
     } finally {
       setSaving(false);
     }
@@ -468,7 +467,7 @@ export default function Settings() {
         }
       }
 
-      // Save to Firestore backups collection
+      // Save to Supabase backups table
       const backupId = `backup_${Date.now()}`;
       await setDoc(doc(db, 'backups', backupId), {
         ...backupData,
@@ -532,15 +531,15 @@ export default function Settings() {
     }
   };
 
-  // Restore from Firestore backup
-  const restoreFromFirestore = async (backupId: string) => {
+  // Restore from Supabase backup
+  const restoreFromSupabase = async (backupId: string) => {
     setBackupLoading(true);
     try {
       const snap = await getDocs(collection(db, 'backups'));
       const backupDoc = snap.docs.find(d => d.id === backupId);
       if (!backupDoc) throw new Error('Backup not found');
       const data = backupDoc.data();
-
+      
       if (data.settings) await updateSettings(data.settings);
       if (data.data) {
         for (const colName in data.data) {
@@ -555,7 +554,7 @@ export default function Settings() {
           }
         }
       }
-      activityLogService.log('backup_import', `Restore from Firestore: ${backupId}`);
+      activityLogService.log('backup_import', `Restore from Supabase: ${backupId}`);
 
       const updaterName = profile?.fullName || auth.currentUser?.email || 'Unknown';
       await notificationService.notify({
@@ -1337,7 +1336,7 @@ export default function Settings() {
                   checked={localSettings.autoBackupEnabled || false}
                   onChange={v => setLocalSettings({ ...localSettings, autoBackupEnabled: v })}
                   label={t('autoBackup')}
-                  description={isAr ? 'حفظ نسخة احتياطية تلقائياً في Firestore عند انتهاء الوقت المحدد' : 'Auto-save backup to Firestore on schedule'}
+                  description={isAr ? 'حفظ نسخة احتياطية تلقائياً في Supabase عند انتهاء الوقت المحدد' : 'Auto-save backup to Supabase on schedule'}
                   icon={Archive}
                 />
 
@@ -1477,7 +1476,7 @@ export default function Settings() {
                                   ? `⚠️ هذا سيستبدل بياناتك الحالية ببيانات نسخة ${new Date(backup.savedAt).toLocaleDateString('ar-YE')}. متأكد؟`
                                   : `⚠️ This will overwrite current data with backup from ${new Date(backup.savedAt).toLocaleDateString()}. Are you sure?`,
                                 type: 'warning',
-                                onConfirm: () => restoreFromFirestore(backup.id)
+                                onConfirm: () => restoreFromSupabase(backup.id)
                               })}
                               className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition" title={isAr ? 'استعادة' : 'Restore'}
                             >

@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { collection, onSnapshot, orderBy, query, where, addDoc, doc, updateDoc, getDoc, getDocs, deleteDoc } from 'firebase/firestore';
-import { db, auth, handleFirestoreError, OperationType, safeToDate } from '../lib/firebase';
+import { collection, onSnapshot, orderBy, query, where, addDoc, doc, updateDoc, getDoc, getDocs, deleteDoc, db, auth, handleSupabaseError, OperationType, safeToDate } from '../lib/supabase';
 import { useSettings } from '../context/SettingsContext';
 import { useRole } from '../hooks/useRole';
 import { notificationService } from '../services/notificationService';
@@ -256,7 +255,7 @@ export default function Orders() {
     const unsubOrders = onSnapshot(query(collection(db, 'orders'), orderBy('createdAt', 'desc')), (snap) => {
       setOrders(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       setLoading(false);
-    }, (error) => handleFirestoreError(error, OperationType.LIST, 'orders'));
+    }, (error) => handleSupabaseError(error, OperationType.LIST, 'orders'));
 
     // Fetch customers
     const unsubCustomers = onSnapshot(collection(db, 'customers'), (snap) => {
@@ -923,7 +922,7 @@ export default function Orders() {
         items,
 
         // Shipping details nested list
-        shippingDetails: shippings || [],
+        shippingDetails: formData.orderSourceType === 'SHEIN' ? [] : (shippings || []),
 
         // Lifecycles status
         orderStatus: 'تم تسجيل الطلب',
@@ -1421,7 +1420,7 @@ export default function Orders() {
       });
     } catch (err: any) {
       console.error(err);
-      handleFirestoreError(err, OperationType.CREATE, 'customers');
+      handleSupabaseError(err, OperationType.CREATE, 'customers');
     } finally {
       setIsSubmitting(false);
     }
@@ -2191,10 +2190,16 @@ export default function Orders() {
     }]);
   };
 
-  const updateUpdateShippingRow = (idx: number, field: string, val: any) => {
-    const updated = [...updateShippings];
-    updated[idx] = { ...updated[idx], [field]: val };
-    setUpdateShippings(updated);
+  const updateUpdateShippingRow = (idx: number, fieldOrObj: string | Record<string, any>, val?: any) => {
+    setUpdateShippings(prev => {
+      const updated = [...prev];
+      if (typeof fieldOrObj === 'string') {
+        updated[idx] = { ...updated[idx], [fieldOrObj]: val };
+      } else {
+        updated[idx] = { ...updated[idx], ...fieldOrObj };
+      }
+      return updated;
+    });
   };
 
   const removeUpdateShippingRow = (idx: number) => {
@@ -3100,7 +3105,17 @@ export default function Orders() {
                               shippingCourierId: ord.shippingCourierId || '',
                               deliveryCourierId: ord.deliveryCourierId || ''
                             });
-                            setUpdateShippings(ord.shippingDetails || []);
+                            let initialShippings = ord.shippingDetails || [];
+                            if (ord.orderSourceType === 'SHEIN') {
+                              const isDefaultOrEmpty = initialShippings.length === 1 &&
+                                !initialShippings[0].shippingSource &&
+                                !initialShippings[0].shippingDestination &&
+                                (initialShippings[0].shippingCost === 0 || !initialShippings[0].shippingCost);
+                              if (isDefaultOrEmpty || initialShippings.length === 0) {
+                                initialShippings = [];
+                              }
+                            }
+                            setUpdateShippings(initialShippings);
                             setIsUpdateModalOpen(true);
                           }}
                           className="bg-slate-805 text-slate-305 hover:text-white px-2.5 py-1.5 rounded-lg transition-all text-[10px] flex items-center gap-1 font-bold border border-slate-750 cursor-pointer"
@@ -4887,35 +4902,91 @@ export default function Orders() {
 
                           {/* Shipping Date */}
                           <div>
-                            <label className="block text-slate-400 mb-1">{isAr ? 'تاريخ تسليم الشحنة للناقل' : 'Shipping Handover Date'}</label>
-                            <input
-                              type="date"
-                              value={sh.shippingDate || ''}
-                              onChange={(e) => updateUpdateShippingRow(idx, 'shippingDate', e.target.value)}
-                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans font-bold text-xs"
-                            />
+                            <label className="block text-slate-400 mb-1">{isAr ? 'تاريخ انطلاق الشحن' : 'Dispatch Date'}</label>
+                            <div className="relative">
+                              <input
+                                type="date"
+                                id={`upd-dispatch-date-${idx}`}
+                                value={sh.shippingDate || ''}
+                                onChange={(e) => {
+                                  const newDate = e.target.value;
+                                  let expected = sh.expectedArrival || '';
+                                  if (newDate && sh.shippingDuration) {
+                                    const days = parseInt(sh.shippingDuration);
+                                    if (!isNaN(days)) {
+                                      const d = new Date(newDate);
+                                      d.setDate(d.getDate() + days);
+                                      expected = d.toISOString().split('T')[0];
+                                    }
+                                  }
+                                  updateUpdateShippingRow(idx, { shippingDate: newDate, expectedArrival: expected });
+                                }}
+                                className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans font-bold text-xs pr-9"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const el = document.getElementById(`upd-dispatch-date-${idx}`);
+                                  if (el) (el as HTMLInputElement).showPicker?.();
+                                }}
+                                className="absolute inset-y-0 end-2.5 flex items-center text-slate-500 hover:text-[#d4af37] transition"
+                              >
+                                <Calendar className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </div>
 
                           {/* Shipping Duration */}
                           <div>
-                            <label className="block text-slate-400 mb-1">{isAr ? 'المدة التقديرية (أيام/أسابيع)' : 'Transit Duration (Estimated)'}</label>
-                            <input
-                              type="text"
-                              value={sh.shippingDuration || ''}
-                              onChange={(e) => updateUpdateShippingRow(idx, 'shippingDuration', e.target.value)}
-                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold text-xs"
-                            />
+                            <label className="block text-slate-400 mb-1">{isAr ? 'المدة التقديرية (أيام)' : 'Transit Duration (Days)'}</label>
+                            <div className="relative">
+                              <input
+                                type="number"
+                                value={sh.shippingDuration || ''}
+                                onChange={(e) => {
+                                  const durationVal = e.target.value;
+                                  let expected = sh.expectedArrival || '';
+                                  if (sh.shippingDate && durationVal) {
+                                    const days = parseInt(durationVal);
+                                    if (!isNaN(days)) {
+                                      const d = new Date(sh.shippingDate);
+                                      d.setDate(d.getDate() + days);
+                                      expected = d.toISOString().split('T')[0];
+                                    }
+                                  }
+                                  updateUpdateShippingRow(idx, { shippingDuration: durationVal, expectedArrival: expected });
+                                }}
+                                placeholder={isAr ? 'مثال: 12' : 'e.g. 12'}
+                                className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-mono font-bold text-xs pr-9"
+                              />
+                              <span className="absolute inset-y-0 end-2.5 flex items-center text-slate-600 text-[10px] font-bold pointer-events-none">
+                                {isAr ? 'يوم' : 'd'}
+                              </span>
+                            </div>
                           </div>
 
                           {/* Expected Arrival */}
                           <div>
-                            <label className="block text-slate-400 mb-1">{isAr ? 'موعد التوصيل المتوقع لليمن' : 'Expected Arrival Date'}</label>
-                            <input
-                              type="text"
-                              value={sh.expectedArrival || ''}
-                              onChange={(e) => updateUpdateShippingRow(idx, 'expectedArrival', e.target.value)}
-                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold text-xs"
-                            />
+                            <label className="block text-slate-400 mb-1">{isAr ? 'موعد الوصول المتوقع' : 'Expected Arrival Date'}</label>
+                            <div className="relative">
+                              <input
+                                type="date"
+                                id={`upd-expected-date-${idx}`}
+                                value={sh.expectedArrival || ''}
+                                onChange={(e) => updateUpdateShippingRow(idx, 'expectedArrival', e.target.value)}
+                                className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans font-bold text-xs pr-9"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const el = document.getElementById(`upd-expected-date-${idx}`);
+                                  if (el) (el as HTMLInputElement).showPicker?.();
+                                }}
+                                className="absolute inset-y-0 end-2.5 flex items-center text-slate-500 hover:text-emerald-400 transition"
+                              >
+                                <Calendar className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </div>
 
                           {/* Delivery Date */}

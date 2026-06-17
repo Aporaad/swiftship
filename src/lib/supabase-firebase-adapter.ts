@@ -1072,8 +1072,12 @@ export enum OperationType {
   WRITE = 'write',
 }
 
+export function handleSupabaseError(error: unknown, operationType: OperationType, path: string | null) {
+  console.error('[Supabase query/mutation error]:', error, operationType, path);
+}
+
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  console.error('[Supabase Firestore compatibility error]:', error, operationType, path);
+  handleSupabaseError(error, operationType, path);
 }
 
 // MOCKS FOR firebase-admin

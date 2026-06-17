@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
   collection, onSnapshot, doc, updateDoc, setDoc, deleteDoc,
-  query, orderBy, limit, getDocs, where
-} from 'firebase/firestore';
-import { sendPasswordResetEmail } from 'firebase/auth';
-import { db, handleFirestoreError, OperationType, auth } from '../lib/firebase';
-import { initializeApp, deleteApp } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
+  query, orderBy, limit, getDocs, where,
+  sendPasswordResetEmail,
+  db, handleSupabaseError, OperationType, auth,
+  initializeApp, deleteApp,
+  getAuth, createUserWithEmailAndPassword
+} from '../lib/supabase';
 import {
   Search, Edit2, X, Plus, UserX, UserCheck, Trash2, Users as UsersIcon,
   Shield, Eye, EyeOff, Crown, ShieldAlert, Activity, Clock,
@@ -369,7 +369,7 @@ export default function UserManagement() {
       const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setUsers(all.filter((u: any) => u.role !== 'Courier' && u.roleId !== 'courier' && u.role !== 'courier'));
       setLoading(false);
-    }, err => handleFirestoreError(err, OperationType.LIST, 'users'));
+    }, err => handleSupabaseError(err, OperationType.LIST, 'users'));
     return unsub;
   }, [roleLoading]);
 
@@ -441,7 +441,7 @@ export default function UserManagement() {
       await activityLogService.log('edit_user', editFormData.fullName, { userId: selectedUser.id });
       notificationService.notify({ title: t('تم التحديث', 'Updated'), message: t(`تم تحديث ${editFormData.fullName}`, `${editFormData.fullName} updated`), type: 'info', category: 'system' });
       setIsEditModalOpen(false); setSelectedUser(null);
-    } catch (err) { handleFirestoreError(err, OperationType.UPDATE, 'users'); }
+    } catch (err) { handleSupabaseError(err, OperationType.UPDATE, 'users'); }
   };
 
   const handleToggleStatus = async (user: any) => {
@@ -703,7 +703,7 @@ export default function UserManagement() {
       await activityLogService.log(selectedRole ? 'edit_role' : 'add_role', roleFormData.title, { id: roleFormData.id, permCount: roleFormData.permissions.length });
       notificationService.notify({ title: t('تم الحفظ', 'Saved'), message: t(`تم حفظ دور ${roleFormData.title}`, `Role ${roleFormData.title} saved`), type: 'success', category: 'system' });
       setIsRoleModalOpen(false);
-    } catch (err) { handleFirestoreError(err, OperationType.UPDATE, 'roles'); }
+    } catch (err) { handleSupabaseError(err, OperationType.UPDATE, 'roles'); }
   };
 
   const handleDeleteRole = (id: string, title: string) => {
@@ -1109,8 +1109,8 @@ export default function UserManagement() {
             <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
             <div className="text-[10px] text-amber-300/80 font-bold leading-relaxed">
               {t(
-                'يعمل نظام إنهاء الجلسات بشكل فوري: عند النقر على "إجراء"، يُرسَل أمر إلى Firestore يُلتقط تلقائياً من المستخدم المستهدف خلال ثوانٍ ويُعيد توجيهه لصفحة تسجيل الدخول.',
-                'Session termination works in real-time: clicking an action sends a Firestore command that the target user\'s session picks up within seconds and redirects them to login.'
+                'يعمل نظام إنهاء الجلسات بشكل فوري: عند النقر على "إجراء"، يُرسَل أمر إلى Supabase يُلتقط تلقائياً من المستخدم المستهدف خلال ثوانٍ ويُعيد توجيهه لصفحة تسجيل الدخول.',
+                'Session termination works in real-time: clicking an action sends a Supabase command that the target user\'s session picks up within seconds and redirects them to login.'
               )}
             </div>
           </div>
