@@ -218,7 +218,7 @@ export default function Settings() {
   // ─── CONFIRM MODAL ──────────────────
   const [confirmConfig, setConfirmConfig] = useState<{
     isOpen: boolean; title: string; message: string; onConfirm: () => void; type: 'danger' | 'warning' | 'info';
-  }>({ isOpen: false, title: '', message: '', onConfirm: () => {}, type: 'danger' });
+  }>({ isOpen: false, title: '', message: '', onConfirm: () => { }, type: 'danger' });
 
   if (roleLoading) {
     return (
@@ -259,14 +259,14 @@ export default function Settings() {
     try {
       const selectedCols = Object.entries(exportSelections).filter(([, v]) => v).map(([k]) => k);
       await updateSettings({ ...localSettings, backupCollections: selectedCols });
-      
+
       if (canManageAdmin) {
         await setDoc(doc(db, 'settings', 'logistics_api'), logisticsSettings);
       }
 
       const updaterName = profile?.fullName || auth.currentUser?.email || 'Unknown';
       activityLogService.log('save_settings', 'System Settings');
-      
+
       notificationService.notify({
         title: isAr ? 'تحديث إعدادات النظام' : 'System Settings Updated',
         message: isAr
@@ -384,7 +384,7 @@ export default function Settings() {
       ...prev,
       customCurrencies: [...(prev.customCurrencies || []), currency]
     }));
-    
+
     const updaterName = profile?.fullName || auth.currentUser?.email || 'Unknown';
     activityLogService.log('change_exchange_rate', `Add Currency: ${currency.code}`, { rate: currency.rateToYER });
     notificationService.notify({
@@ -395,7 +395,7 @@ export default function Settings() {
       type: 'success',
       category: 'finance'
     });
-    
+
     setNewCurrency({ code: '', name: '', symbol: '', flag: '', rateToYER: 0, isActive: true });
     setShowAddCurrency(false);
   };
@@ -405,7 +405,7 @@ export default function Settings() {
       ...prev,
       customCurrencies: (prev.customCurrencies || []).map(c => c.id === id ? { ...c, ...updates } : c)
     }));
-    
+
     const updaterName = profile?.fullName || auth.currentUser?.email || 'Unknown';
     activityLogService.log('change_exchange_rate', `Update Currency: ${id}`, updates);
     notificationService.notify({
@@ -428,7 +428,7 @@ export default function Settings() {
       ...prev,
       customCurrencies: (prev.customCurrencies || []).filter(c => c.id !== id)
     }));
-    
+
     const updaterName = profile?.fullName || auth.currentUser?.email || 'Unknown';
     activityLogService.log('change_exchange_rate', `Delete Currency: ${id}`);
     notificationService.notify({
@@ -503,7 +503,7 @@ export default function Settings() {
       }
 
       activityLogService.log('backup_export', selectedCols.join(', '));
-      
+
       const updaterName = profile?.fullName || auth.currentUser?.email || 'Unknown';
       notificationService.notify({
         title: isAr ? 'إنشاء نسخة احتياطية' : 'Backup Created',
@@ -556,7 +556,7 @@ export default function Settings() {
         }
       }
       activityLogService.log('backup_import', `Restore from Firestore: ${backupId}`);
-      
+
       const updaterName = profile?.fullName || auth.currentUser?.email || 'Unknown';
       await notificationService.notify({
         title: isAr ? 'استعادة النظام' : 'System Restored',
@@ -581,7 +581,7 @@ export default function Settings() {
     try {
       await deleteDoc(doc(db, 'backups', id));
       setBackupHistory(prev => prev.filter(b => b.id !== id));
-      
+
       const updaterName = profile?.fullName || auth.currentUser?.email || 'Unknown';
       activityLogService.log('save_settings', `Delete Backup Record: ${id}`);
       notificationService.notify({
@@ -658,10 +658,10 @@ export default function Settings() {
         : 'Reset order counter? New orders will be numbered from the configured start number.',
       onConfirm: async () => {
         await updateSettings({ orderStartNumber: localSettings.orderStartNumber });
-        
+
         const updaterName = profile?.fullName || auth.currentUser?.email || 'Unknown';
         activityLogService.log('save_settings', 'Reset Order Counter');
-        
+
         notificationService.notify({
           title: isAr ? 'إعادة ضبط عداد الطلبات' : 'Reset Order Counter',
           message: isAr
@@ -670,7 +670,7 @@ export default function Settings() {
           type: 'warning',
           category: 'system'
         });
-        
+
         alert(isAr ? '✅ تم إعادة ضبط العداد' : '✅ Counter reset successfully');
       }
     });
@@ -685,9 +685,9 @@ export default function Settings() {
   // ─── TABS CONFIG ────────────────────
   const tabs: { id: SettingsTab; label: string; icon: any; show?: boolean }[] = [
     { id: 'interface', label: t('tabInterface'), icon: Palette, show: true },
-    { id: 'general',   label: t('tabGeneral'),   icon: Settings2, show: true },
-    { id: 'currency',  label: t('tabCurrency'),  icon: DollarSign, show: true },
-    { id: 'admin',     label: t('tabAdmin'),      icon: Shield, show: canManageAdmin },
+    { id: 'general', label: t('tabGeneral'), icon: Settings2, show: true },
+    { id: 'currency', label: t('tabCurrency'), icon: DollarSign, show: true },
+    { id: 'admin', label: t('tabAdmin'), icon: Shield, show: canManageAdmin },
     { id: 'logistics', label: isAr ? 'الربط اللوجستي' : 'Logistics API', icon: Globe, show: canManageAdmin }
   ];
 
@@ -741,11 +741,10 @@ export default function Settings() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all whitespace-nowrap flex-1 justify-center ${
-                isActive
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all whitespace-nowrap flex-1 justify-center ${isActive
                   ? 'bg-gradient-to-r from-[#d4af37]/20 to-transparent text-white border border-[#d4af37]/30 shadow-inner'
                   : 'text-slate-500 hover:text-white hover:bg-white/[0.03]'
-              }`}
+                }`}
             >
               <Icon className={`w-4 h-4 ${isActive ? 'text-[#d4af37]' : ''}`} />
               {tab.label}
@@ -787,7 +786,7 @@ export default function Settings() {
                 <button key={opt.value} type="button"
                   disabled={!canEditInterface}
                   onClick={() => setLocalSettings({ ...localSettings, fontSize: opt.value as any })}
-                  className={`p-3 rounded-xl border-2 transition-all text-center ${localSettings.fontSize === opt.value ? 'border-[#d4af37] bg-[#d4af37]/10 text-[#d4af37]' : 'border-slate-800 bg-black/40 text-slate-400 hover:border-slate-700'} ${!canEditInterface ? 'opacity-65 cursor-not-allowed': ''}`}
+                  className={`p-3 rounded-xl border-2 transition-all text-center ${localSettings.fontSize === opt.value ? 'border-[#d4af37] bg-[#d4af37]/10 text-[#d4af37]' : 'border-slate-800 bg-black/40 text-slate-400 hover:border-slate-700'} ${!canEditInterface ? 'opacity-65 cursor-not-allowed' : ''}`}
                 >
                   <div className="font-black text-xs mb-1">{opt.label}</div>
                   <div className="text-[10px] text-slate-500 font-mono">{opt.px}</div>
@@ -1533,24 +1532,24 @@ export default function Settings() {
             <SectionCard title={isAr ? 'الربط المباشر مع شركات الشحن (API)' : 'Logistics External API Hooks'} icon={Globe} badge={isAr ? "ميزة احترافية" : "PRO"}>
               <div className="bg-black/30 border border-[#d4af37]/20 p-4 rounded-xl mb-6">
                 <p className="text-xs text-[#d4af37] font-bold leading-relaxed mb-2">
-                  {isAr 
+                  {isAr
                     ? 'يتيح لك هذا القسم ربط نظام التتبع بموفري الخدمات اللوجستية الخارجيين مثل AfterShip أو 17TRACK لجلب مسارات وحالات الشحنات دولياً بشكل تلقائي.'
                     : 'Bind external third-party tracking sources like AfterShip or 17Track. Enhances the customer GPS map drastically with live resolution.'}
                 </p>
                 <p className="text-[10px] text-slate-400 font-medium">
-                  {isAr 
+                  {isAr
                     ? 'عند تفعيل الخيار، سيقوم خادم SwiftShip بالاتصال بالـ API الخارجي تلقائياً لجلب المسارات بمجرد إدخال رقم تتبع صالح.'
                     : 'Once enabled, our internal server orchestrator automatically maps global checkpoints when queried.'}
                 </p>
               </div>
 
               <div className="mb-6">
-                 <ToggleSwitch
-                   checked={logisticsSettings.enabled}
-                   onChange={(v) => setLogisticsSettings({ ...logisticsSettings, enabled: v })}
-                   label={isAr ? 'تفعيل الربط التلقائي للمسارات' : 'Enable Automated Live Sync (Global Networks)'}
-                   description={isAr ? 'سيطلب النظام الحالات من الموفر المعين بشكل مباشر' : 'Queries integrated API endpoints seamlessly.'}
-                 />
+                <ToggleSwitch
+                  checked={logisticsSettings.enabled}
+                  onChange={(v) => setLogisticsSettings({ ...logisticsSettings, enabled: v })}
+                  label={isAr ? 'تفعيل الربط التلقائي للمسارات' : 'Enable Automated Live Sync (Global Networks)'}
+                  description={isAr ? 'سيطلب النظام الحالات من الموفر المعين بشكل مباشر' : 'Queries integrated API endpoints seamlessly.'}
+                />
               </div>
 
               <div className="space-y-4 pt-4 border-t border-slate-800">
@@ -1570,25 +1569,25 @@ export default function Settings() {
                   </div>
                   <div>
                     <FieldLabel>{isAr ? 'مفتاح الربط (API Key)' : 'Access Key / Token'}</FieldLabel>
-                    <FieldInput 
-                       type="password" 
-                       value={logisticsSettings.apiKey} 
-                       onChange={(e) => setLogisticsSettings({ ...logisticsSettings, apiKey: e.target.value })} 
-                       placeholder="asat_XXXXXXXXXXXXXXXXXXXXXXXX"
+                    <FieldInput
+                      type="password"
+                      value={logisticsSettings.apiKey}
+                      onChange={(e) => setLogisticsSettings({ ...logisticsSettings, apiKey: e.target.value })}
+                      placeholder="asat_XXXXXXXXXXXXXXXXXXXXXXXX"
                     />
                   </div>
                   {logisticsSettings.provider === 'parcelsapp' && (
                     <div className="md:col-span-2">
-                       <FieldLabel>{isAr ? 'بلد الوجهة الافتراضي (ParcelsApp)' : 'Default Destination Country (ParcelsApp)'}</FieldLabel>
-                       <FieldInput 
-                          type="text" 
-                          value={logisticsSettings.defaultDestinationCountry} 
-                          onChange={(e) => setLogisticsSettings({ ...logisticsSettings, defaultDestinationCountry: e.target.value })} 
-                          placeholder="Yemen"
-                       />
-                       <p className="text-[10px] text-slate-500 mt-1.5 font-bold">
-                         {isAr ? 'يتطلب ParcelsApp v3 تحديد بلد الوجهة لضمان دقة النتائج.' : 'ParcelsApp v3 requires a destination country for accurate tracking resolution.'}
-                       </p>
+                      <FieldLabel>{isAr ? 'بلد الوجهة الافتراضي (ParcelsApp)' : 'Default Destination Country (ParcelsApp)'}</FieldLabel>
+                      <FieldInput
+                        type="text"
+                        value={logisticsSettings.defaultDestinationCountry}
+                        onChange={(e) => setLogisticsSettings({ ...logisticsSettings, defaultDestinationCountry: e.target.value })}
+                        placeholder="Yemen"
+                      />
+                      <p className="text-[10px] text-slate-500 mt-1.5 font-bold">
+                        {isAr ? 'يتطلب ParcelsApp v3 تحديد بلد الوجهة لضمان دقة النتائج.' : 'ParcelsApp v3 requires a destination country for accurate tracking resolution.'}
+                      </p>
                     </div>
                   )}
                   <div className="md:col-span-2 flex items-center gap-3">
