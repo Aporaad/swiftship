@@ -5,9 +5,21 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
+    // base: './' مطلوب حتى تعمل المسارات بشكل صحيح داخل Electron
+    base: './',
     plugins: [react(), tailwindcss()],
     build: {
       outDir: 'dist',
+      // تحسين الإنتاج
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            vendor: ['react', 'react-dom', 'react-router-dom'],
+            charts: ['recharts'],
+            maps: ['leaflet', 'react-leaflet'],
+          },
+        },
+      },
     },
     resolve: {
       alias: {
@@ -25,8 +37,10 @@ export default defineConfig(() => {
       },
     },
     server: {
+      // منفذ ثابت للـ dev server (Express يعمل على 3000)
+      port: 5173,
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
+      // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},

@@ -1,21 +1,33 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Parse environmental variables for client or server runtime
-const SUPABASE_URL = (typeof process !== 'undefined' && process.env?.VITE_SUPABASE_URL) || 
-                       (typeof process !== 'undefined' && process.env?.SUPABASE_URL) || 
-                       ((import.meta as any).env?.VITE_SUPABASE_URL) || 
-                       "";
+// ── قراءة lazy للمتغيرات حتى تعمل بعد تحميل dotenv ────────────────────────
+// لا تُقرأ كثوابت عالمية عند تهيئة الموديول — استخدم دوال getter
+function getSupabaseUrl(): string {
+  return (typeof process !== 'undefined' && (
+           process.env?.VITE_SUPABASE_URL ||
+           process.env?.SUPABASE_URL
+         )) ||
+         ((import.meta as any).env?.VITE_SUPABASE_URL) ||
+         "";
+}
 
-const SUPABASE_ANON_KEY = (typeof process !== 'undefined' && process.env?.VITE_SUPABASE_ANON_KEY) || 
-                            (typeof process !== 'undefined' && process.env?.SUPABASE_ANON_KEY) || 
-                            ((import.meta as any).env?.VITE_SUPABASE_ANON_KEY) || 
-                            "";
+function getSupabaseAnonKey(): string {
+  return (typeof process !== 'undefined' && (
+           process.env?.VITE_SUPABASE_ANON_KEY ||
+           process.env?.SUPABASE_ANON_KEY
+         )) ||
+         ((import.meta as any).env?.VITE_SUPABASE_ANON_KEY) ||
+         "";
+}
 
-console.log('[Supabase Adapter] Initializing with URL:', SUPABASE_URL ? 'PRESENT' : 'MISSING');
+const resolvedUrl = getSupabaseUrl();
+const resolvedKey = getSupabaseAnonKey();
+
+console.log('[Supabase Adapter] Initializing with URL:', resolvedUrl ? 'PRESENT' : 'MISSING');
 
 export const supabase = createClient(
-  SUPABASE_URL || "https://placeholder-project.supabase.co", 
-  SUPABASE_ANON_KEY || "placeholder-key"
+  resolvedUrl || "https://placeholder-project.supabase.co",
+  resolvedKey || "placeholder-key"
 );
 
 const isServer = typeof window === 'undefined';

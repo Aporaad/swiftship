@@ -1,6 +1,9 @@
+import './loadEnv'; // Loaded first to populate process.env before other modules are imported
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+
+
 import admin, {
   initializeApp,
   getFirestore,
@@ -1365,31 +1368,63 @@ async function startServer() {
     res.status(404).json({ error: 'API endpoint not found' });
   });
 
-  // Vite Middleware
-  const isProduction = process.env.NODE_ENV === "production" || fs.existsSync(path.resolve(process.cwd(), 'dist', 'index.html'));
+  // Vite Middleware / Static Files
+  const isProduction = process.env.NODE_ENV === 'production' || !!process.env.RESOURCES_PATH;
+
   if (!isProduction) {
+    // وضع التطوير: استخدام Vite dev server
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
-      appType: "spa",
+      appType: 'spa',
     });
     app.use(vite.middlewares);
   } else {
-    // Standard path for build artifacts in AI Studio is 'dist' 
-    const distPath = path.resolve(process.cwd(), 'dist');
-    console.log('Production: Checking distPath:', distPath, 'Exists:', fs.existsSync(distPath));                
-    if (fs.existsSync(distPath)) {
-        app.use(express.static(distPath));
-        app.get('*', (req, res) => {
-          res.sendFile(path.join(distPath, 'index.html'));
-        });
+    // وضع الإنتاج: خدمة ملفات dist الثابتة
+    // electron-builder يضع extraResources في process.resourcesPath
+    // الـ dist مُضاف الآن كـ extraResource → resources/app/dist/
+    const resourcesPath2 = process.env.RESOURCES_PATH || '';
+    const possibleDistPaths = [
+      // المسار الأساسي: resources/app/dist/ (extraResource)
+      resourcesPath2 ? path.join(resourcesPath2, 'app', 'dist') : '',
+      // نفس مجلد server.cjs → resources/app/dist/
+      path.join(__dirname, 'dist'),
+      // مستوى أعلى → resources/dist/
+      path.join(__dirname, '..', 'dist'),
+      // CWD
+      path.resolve(process.cwd(), 'dist'),
+    ].filter(Boolean);
+
+    let distPath: string | undefined;
+    for (const p of possibleDistPaths) {
+      const indexFile = path.join(p, 'index.html');
+      const exists = fs.existsSync(indexFile);
+      console.log(`Production: Checking distPath: ${p} Exists: ${exists}`);
+      if (exists) { distPath = p; break; }
+    }
+
+    if (distPath) {
+      app.use(express.static(distPath));
+      app.get('*', (req, res) => {
+        res.sendFile(path.join(distPath!, 'index.html'));
+      });
+      console.log('Production: Serving static files from:', distPath);
     } else {
-        console.error('CRITICAL: dist directory missing in production');
-        app.get('*', (req, res) => {
-           res.status(500).send('Application is still building or dist directory is missing.');
-         });
+      console.error('CRITICAL: dist directory missing in production');
+      app.get('*', (req, res) => {
+        res.status(503).send(`
+          <!DOCTYPE html><html dir="rtl" lang="ar">
+          <head><meta charset="UTF-8"><title>SwiftShip</title>
+          <style>body{font-family:sans-serif;background:#0a0f1e;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;flex-direction:column}
+          h1{color:#f59e0b}p{color:#94a3b8;max-width:400px;text-align:center}</style></head>
+          <body><h1>⚠️ خطأ في التثبيت</h1>
+          <p>ملفات التطبيق مفقودة. يرجى إعادة تثبيت SwiftShip.</p>
+          <p style="font-size:12px;color:#475569">dist not found in: ${possibleDistPaths.join(', ')}</p>
+          </body></html>`);
+      });
     }
   }
+
 
   app.listen(3000, '0.0.0.0', () => {
     console.log('Server running on port 3000');
