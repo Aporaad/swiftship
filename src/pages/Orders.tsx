@@ -135,12 +135,6 @@ export default function Orders() {
       setItems([
         { productName: '', productUrl: '', quantity: 1, productPrice: 0, weight: 0, cbm: 0, length: 0, width: 0, height: 0, trackingNumber: '' }
       ]);
-      // Default shipping row: today's date, duration from App settings
-      const today = new Date().toISOString().split('T')[0];
-      const defaultDuration = settings.defaultAppDuration ?? 10;
-      const arrivalDate = new Date();
-      arrivalDate.setDate(arrivalDate.getDate() + defaultDuration);
-      const expectedArrival = arrivalDate.toISOString().split('T')[0];
       setShippings([
         {
           id: Math.random().toString(36).substr(2, 9),
@@ -148,9 +142,21 @@ export default function Orders() {
           shippingCompany: 'Aramex',
           shippingSource: '',
           shippingDestination: '',
-          shippingDate: today,
-          shippingDuration: String(defaultDuration),
-          expectedArrival,
+          shippingDate: new Date().toISOString().split('T')[0],
+          shippingDuration: String(
+            formData.orderSourceType === 'SHEIN' ? (settings.defaultSheinDuration ?? 12) :
+            formData.orderSourceType === 'Factory' ? (settings.defaultFactoryDuration ?? 20) :
+            (settings.defaultAppDuration ?? 10)
+          ),
+          expectedArrival: (() => {
+            const dur = formData.orderSourceType === 'SHEIN' ? (settings.defaultSheinDuration ?? 12) :
+              formData.orderSourceType === 'Factory' ? (settings.defaultFactoryDuration ?? 20) :
+              (settings.defaultAppDuration ?? 10);
+            const d = new Date();
+            d.setDate(d.getDate() + dur);
+            return d.toISOString().split('T')[0];
+          })(),
+          deliveryDate: '',
           shippingCost: 0,
           packagingFees: 0
         }
@@ -160,7 +166,6 @@ export default function Orders() {
       setAddShippingEnabled(false);
     }
   }, [isAddModalOpen, settings]);
-
 
   // Multiple shipping details sub table state
   const [shippings, setShippings] = useState<any[]>([
@@ -643,13 +648,14 @@ export default function Orders() {
       offset += 6;
     }
 
+    /*
     if (order.couponEnabled) {
-      doc.text('Coupon Discount:', 114, yIdx + 7 + offset);
+      doc.text('Coupon Discount (Amount):', 114, yIdx + 7 + offset);
       const cRate = order.couponRate || 0;
-      const sub = (order.items || []).reduce((sum: number, it: any) => sum + (parseFloat(it.productPrice || 0) * parseInt(it.quantity || 1)), 0);
-      doc.text(`-${(sub * (cRate / 100)).toLocaleString()} SAR`, 170, yIdx + 7 + offset);
+      doc.text(`-${cRate.toLocaleString()} SAR`, 170, yIdx + 7 + offset);
       offset += 6;
     }
+    */
 
     if (parseFloat(order.shippingCostSAR || '0') > 0) {
       doc.text('Shipping/Freight:', 114, yIdx + 7 + offset);
@@ -722,9 +728,8 @@ export default function Orders() {
     const totalCBM = items.reduce((sum, i) => sum + (parseFloat(i.quantity || 0) * parseFloat(i.cbm || 0)), 0);
 
     // Apply Bank Commission and Coupon to products cost
-    // couponRate is now a fixed SAR amount (not a percentage)
     const bankCommValue = bankCommissionEnabled ? (productsSum * (bankCommissionRate / 100)) : 0;
-    const couponValue = couponEnabled ? (parseFloat(couponRate as any) || 0) : 0;
+    const couponValue = couponEnabled ? couponRate : 0; // couponRate is now treated as a fixed amount in SAR
     const totalProductsCostWithAdjustments = productsSum + bankCommValue - couponValue;
 
     let priceSAR = totalProductsCostWithAdjustments;
@@ -734,21 +739,25 @@ export default function Orders() {
     let totalOrderSAR = 0;
 
     // Sum up shipping cost from shippings table
-    // packagingFeeRate is now a fixed SAR amount per shipping row (not percentage)
+    // packagingFeeRate is now a fixed SAR amount (not a percentage)
     const shippingsCostSum = shippings.reduce((sum, s) => sum + parseFloat(s.shippingCost || 0), 0);
     const shippingPackagingFixed = packagingFeeEnabled ? (parseFloat(packagingFeeRate as any) || 0) : 0;
     const totalShippingsCost = shippingsCostSum + shippingPackagingFixed;
 
     if (formData.orderSourceType === 'SHEIN') {
       const redPrice = parseFloat(formData.sheinRedPrice as any) || 0;
+      const generalPackagingFee = parseFloat(formData.packagingFee as any) || 0;
       priceSAR = redPrice;
       shippingCostSAR = 0;
-      totalOrderSAR = redPrice;
+      // Customer pays SHEIN Red Price + packaging fee (coupon is not deducted from what customer pays)
+      totalOrderSAR = redPrice + generalPackagingFee;
+
       const rawProfitSAR = redPrice - productsSum;
       const saudiCourier = couriers.find(c => c.id === formData.shippingCourierId);
       const saudiRate = (saudiCourier && saudiCourier.commissionRate !== undefined) ? parseFloat(saudiCourier.commissionRate) : 0;
       profitSaudiSAR = rawProfitSAR * (saudiRate / 100);
-      profitCompanySAR = rawProfitSAR - profitSaudiSAR;
+      // Coupon amount is added entirely to the company profit
+      profitCompanySAR = (rawProfitSAR - profitSaudiSAR) + couponValue;
     } else if (formData.orderSourceType === 'Factory') {
       const rawProfitSAR = totalWeight * (parseFloat(profitPerKgRate as any) || 0);
 
@@ -761,18 +770,19 @@ export default function Orders() {
       const saudiCourier = couriers.find(c => c.id === formData.shippingCourierId);
       const saudiRate = (saudiCourier && saudiCourier.commissionRate !== undefined) ? parseFloat(saudiCourier.commissionRate) : 0;
       profitSaudiSAR = rawProfitSAR * (saudiRate / 100);
-      profitCompanySAR = rawProfitSAR - profitSaudiSAR;
+      profitCompanySAR = (rawProfitSAR - profitSaudiSAR) + couponValue;
     } else {
       // Shopping (App)
       const rawProfitSAR = productsSum * ((parseFloat(formData.companyProfitRate as any) || 12) / 100);
       shippingCostSAR = addShippingEnabled ? totalShippingsCost : 0;
       const generalPackagingFee = parseFloat(formData.packagingFee as any) || 0;
-      totalOrderSAR = totalProductsCostWithAdjustments + rawProfitSAR + shippingCostSAR + generalPackagingFee;
+      // Customer pays productsSum + bankCommValue (without coupon reduction) + raw profit + shipping + packaging
+      totalOrderSAR = (productsSum + bankCommValue) + rawProfitSAR + shippingCostSAR + generalPackagingFee;
 
       const saudiCourier = couriers.find(c => c.id === formData.shippingCourierId);
       const saudiRate = (saudiCourier && saudiCourier.commissionRate !== undefined) ? parseFloat(saudiCourier.commissionRate) : 30;
       profitSaudiSAR = rawProfitSAR * (saudiRate / 100);
-      profitCompanySAR = rawProfitSAR - profitSaudiSAR;
+      profitCompanySAR = (rawProfitSAR - profitSaudiSAR) + couponValue;
     }
 
     // Convert to YER for payment
@@ -826,22 +836,16 @@ export default function Orders() {
     const productsSumYER = currentCalcs.productsSum * (formData.currency === 'USD' ? (parseFloat(formData.exchangeRateUSD as any) || 535) : (parseFloat(formData.exchangeRateYER as any) || 140));
     const paidAmount = parseFloat(formData.amountPaid as any) || 0;
 
-    if (paidAmount < Math.floor(productsSumYER)) {
-      return notificationService.notify({
-        title: isAr ? 'خطأ في التحقق' : 'Validation Error',
-        message: isAr ? `المبلغ المدفوع كاش يجب ألا يقل عن تكلفة المنتجات الأصلية (${Math.floor(productsSumYER).toLocaleString()} YER)` : `Paid amount cannot be less than original products cost (${Math.floor(productsSumYER).toLocaleString()} YER)`,
-        type: 'error',
-        category: 'order'
-      });
-    }
+    // First requirement: Deleted the condition that cash paid amount cannot be less than original products cost. Any amount is allowed.
 
     if (formData.orderSourceType === 'SHEIN') {
       const redPrice = parseFloat(formData.sheinRedPrice as any) || 0;
       const productsSum = items.reduce((sum, i) => sum + (parseFloat(i.quantity || 0) * parseFloat(i.productPrice || 0)), 0);
-      if (redPrice < productsSum) {
+      const couponValue = couponEnabled ? couponRate : 0;
+      if (redPrice < (productsSum - couponValue)) {
         return notificationService.notify({
           title: isAr ? 'خطأ في التحقق' : 'Validation Error',
-          message: isAr ? 'السعر الأحمر لـ SHEIN يجب ألا يقل عن إجمالي تكلفة المنتجات الأصلي' : 'SHEIN Red Price cannot be less than the total products cost',
+          message: isAr ? 'السعر الأحمر لـ SHEIN يجب ألا يقل عن إجمالي تكلفة المنتجات الأصلي بعد الخصم' : 'SHEIN Red Price cannot be less than the total products cost after discount',
           type: 'error',
           category: 'order'
         });
@@ -891,6 +895,8 @@ export default function Orders() {
         bankCommissionEnabled,
         couponEnabled,
         couponRate,
+        couponValue: currentCalcs.couponValue,
+        productsSum: currentCalcs.productsSum,
         packagingFeeEnabled,
         packagingFeeRate,
 
@@ -1035,10 +1041,9 @@ export default function Orders() {
       }
 
       // For App orders with shipping: sourcing cost = products cost + shipping cost - coupon discount
-      // (coupon was already subtracted from totalProductsCostWithAdjustments so we use that + shipping)
       const sourcingCostAmount = formData.orderSourceType === 'App'
         ? currentCalcs.totalProductsCostWithAdjustments + (addShippingEnabled ? currentCalcs.shippingCostSAR : 0)
-        : currentCalcs.productsSum + currentCalcs.shippingCostSAR;
+        : (currentCalcs.productsSum - currentCalcs.couponValue);
 
       const sourcingCostConverted = financialAccountService.convertToDefaultCurrency(
         sourcingCostAmount,
@@ -1120,7 +1125,7 @@ export default function Orders() {
       const shippingPackagingFixed = packagingFeeEnabled ? (parseFloat(packagingFeeRate as any) || 0) : 0;
       const packagingFeeSAR = parseFloat(formData.packagingFee as any || 0) + (formData.orderSourceType !== 'SHEIN' ? shippingPackagingFixed : 0);
 
-      if (formData.orderSourceType !== 'SHEIN' && packagingFeeSAR > 0 && systemAccs['sys_packaging_fees']) {
+      if (packagingFeeSAR > 0 && systemAccs['sys_packaging_fees']) {
         try {
           const pkgConverted = financialAccountService.convertToDefaultCurrency(
             packagingFeeSAR,
@@ -2073,6 +2078,7 @@ export default function Orders() {
       expectedArrival,
       shippingCost: 0,
       packagingFees: 0
+      // Note: deliveryDate is NOT stored per-row; it's shown in the order details view as a computed field
     }]);
   };
 
@@ -2194,6 +2200,9 @@ export default function Orders() {
   const removeUpdateShippingRow = (idx: number) => {
     setUpdateShippings(updateShippings.filter((_, i) => i !== idx));
   };
+
+
+
 
   // QR code rendering effect
   useEffect(() => {
@@ -3686,29 +3695,33 @@ export default function Orders() {
                 </div>
 
                 {/* Adjustments row: Bank Commission & Coupon discounts */}
-                {formData.orderSourceType === 'App' && (
+                {(formData.orderSourceType === 'App' || formData.orderSourceType === 'SHEIN') && (
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-3 border-t border-slate-850/65">
                     {/* Bank Commission Checkbox & Rate */}
-                    <div className="flex items-center gap-3 bg-slate-900/40 p-3 rounded-2xl border border-slate-850">
-                      <input
-                        type="checkbox"
-                        id="bank-comm-check"
-                        checked={bankCommissionEnabled}
-                        onChange={(e) => setBankCommissionEnabled(e.target.checked)}
-                        className="rounded bg-slate-950 border-slate-800 text-yellow-600 focus:ring-0 w-4 h-4 cursor-pointer"
-                      />
-                      <label htmlFor="bank-comm-check" className="text-[11px] font-bold text-slate-350 cursor-pointer">{isAr ? 'عمولة بنك (%)' : 'Bank Comm (%)'}</label>
-                      {bankCommissionEnabled && (
+                    {formData.orderSourceType === 'App' ? (
+                      <div className="flex items-center gap-3 bg-slate-900/40 p-3 rounded-2xl border border-slate-850">
                         <input
-                          type="number"
-                          value={bankCommissionRate}
-                          onChange={(e) => setBankCommissionRate(parseFloat(e.target.value) || 0)}
-                          className="w-12 bg-slate-950 border border-slate-800 text-white rounded-xl p-1 text-center font-mono font-bold text-[10px]"
+                          type="checkbox"
+                          id="bank-comm-check"
+                          checked={bankCommissionEnabled}
+                          onChange={(e) => setBankCommissionEnabled(e.target.checked)}
+                          className="rounded bg-slate-950 border-slate-800 text-yellow-600 focus:ring-0 w-4 h-4 cursor-pointer"
                         />
-                      )}
-                    </div>
+                        <label htmlFor="bank-comm-check" className="text-[11px] font-bold text-slate-350 cursor-pointer">{isAr ? 'عمولة بنك (%)' : 'Bank Comm (%)'}</label>
+                        {bankCommissionEnabled && (
+                          <input
+                            type="number"
+                            value={bankCommissionRate}
+                            onChange={(e) => setBankCommissionRate(parseFloat(e.target.value) || 0)}
+                            className="w-12 bg-slate-950 border border-slate-800 text-white rounded-xl p-1 text-center font-mono font-bold text-[10px]"
+                          />
+                        )}
+                      </div>
+                    ) : (
+                      <div className="hidden md:block"></div>
+                    )}
 
-                    {/* Coupon Discount Checkbox & Amount */}
+                    {/* Coupon Discount Checkbox & Rate */}
                     <div className="flex items-center gap-3 bg-slate-900/40 p-3 rounded-2xl border border-slate-850">
                       <input
                         type="checkbox"
@@ -3717,45 +3730,46 @@ export default function Orders() {
                         onChange={(e) => setCouponEnabled(e.target.checked)}
                         className="rounded bg-slate-950 border-slate-800 text-yellow-600 focus:ring-0 w-4 h-4 cursor-pointer"
                       />
-                      <label htmlFor="coupon-check" className="text-[11px] font-bold text-slate-350 cursor-pointer">{isAr ? 'كوبون خصم (ريال ثابت)' : 'Coupon Discount (SAR)'}</label>
+                      <label htmlFor="coupon-check" className="text-[11px] font-bold text-slate-350 cursor-pointer">{isAr ? 'كوبون خصم (مبلغ)' : 'Coupon Discount (Amount)'}</label>
                       {couponEnabled && (
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="number"
-                            value={couponRate}
-                            onChange={(e) => setCouponRate(parseFloat(e.target.value) || 0)}
-                            className="w-16 bg-slate-950 border border-slate-800 text-white rounded-xl p-1 text-center font-mono font-bold text-[10px]"
-                            placeholder="0"
-                          />
-                          <span className="text-[10px] text-slate-500 font-bold">SAR</span>
-                        </div>
+                        <input
+                          type="number"
+                          value={couponRate}
+                          onChange={(e) => setCouponRate(parseFloat(e.target.value) || 0)}
+                          className="w-16 bg-slate-950 border border-slate-800 text-white rounded-xl p-1 text-center font-mono font-bold text-[10px]"
+                          placeholder="0.00"
+                        />
                       )}
                     </div>
 
                     {/* Add Shipping Checkbox */}
-                    <div className="flex items-center gap-3 bg-slate-900/40 p-3 rounded-2xl border border-slate-850">
-                      <input
-                        type="checkbox"
-                        id="add-shipping-check"
-                        checked={addShippingEnabled}
-                        onChange={(e) => setAddShippingEnabled(e.target.checked)}
-                        className="rounded bg-slate-950 border-slate-800 text-yellow-600 focus:ring-0 w-4 h-4 cursor-pointer"
-                      />
-                      <label htmlFor="add-shipping-check" className="text-[11px] font-bold text-slate-350 cursor-pointer">{isAr ? 'إضافة شحن للطلب' : 'Add Shipping Costs'}</label>
-                    </div>
+                    {formData.orderSourceType === 'App' ? (
+                      <div className="flex items-center gap-3 bg-slate-900/40 p-3 rounded-2xl border border-slate-850">
+                        <input
+                          type="checkbox"
+                          id="add-shipping-check"
+                          checked={addShippingEnabled}
+                          onChange={(e) => setAddShippingEnabled(e.target.checked)}
+                          className="rounded bg-slate-950 border-slate-800 text-yellow-600 focus:ring-0 w-4 h-4 cursor-pointer"
+                        />
+                        <label htmlFor="add-shipping-check" className="text-[11px] font-bold text-slate-350 cursor-pointer">{isAr ? 'إضافة شحن للطلب' : 'Add Shipping Costs'}</label>
+                      </div>
+                    ) : (
+                      <div className="hidden md:block"></div>
+                    )}
                   </div>
                 )}
 
                 {/* Subtotals calculations summary */}
-                {formData.orderSourceType !== 'SHEIN' && (
+                {(formData.orderSourceType === 'App' || formData.orderSourceType === 'SHEIN') && (
                   <div className="pt-2 flex justify-between text-[11px] font-bold text-slate-500 border-t border-slate-850/50 mt-2">
                     <div>
                       {isAr ? 'إجمالي المنتجات الأصلي:' : 'Original Products Subtotal:'}{' '}
                       <span className="font-mono text-slate-300">{calcs.productsSum.toLocaleString()} SAR</span>
                     </div>
-                    {formData.orderSourceType === 'App' && (
+                    {couponEnabled && (
                       <div>
-                        {isAr ? 'الإجمالي بعد التعديل (العمولة والخصم):' : 'Adjusted Products Subtotal:'}{' '}
+                        {isAr ? 'الإجمالي بعد التعديل (الخصم/العمولة):' : 'Adjusted Products Subtotal (Discount/Comm):'}{' '}
                         <span className="font-mono text-emerald-400 font-black">{calcs.totalProductsCostWithAdjustments.toLocaleString()} SAR</span>
                       </div>
                     )}
@@ -3907,12 +3921,13 @@ export default function Orders() {
                             />
                           </div>
 
-                          {/* 7. Dispatch Date - defaults to today, editable */}
+                          {/* 7. Dispatch / Departure Date - defaults to today, editable, with calendar picker */}
                           <div>
                             <label className="block text-slate-500 mb-1">{isAr ? 'تاريخ انطلاق الشحن' : 'Dispatch Date'}</label>
                             <div className="relative">
                               <input
                                 type="date"
+                                id={`dispatch-date-${idx}`}
                                 value={sh.shippingDate || ''}
                                 onChange={(e) => {
                                   const newDate = e.target.value;
@@ -3925,8 +3940,7 @@ export default function Orders() {
                                       expected = dateObj.toISOString().split('T')[0];
                                     }
                                   }
-                                  updateShippingRow(idx, 'shippingDate', newDate);
-                                  updateShippingRow(idx, 'expectedArrival', expected);
+                                  updateShippingRow(idx, { shippingDate: newDate, expectedArrival: expected });
                                 }}
                                 className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans pr-9"
                               />
@@ -3940,27 +3954,10 @@ export default function Orders() {
                               >
                                 <Calendar className="w-4 h-4" />
                               </button>
-                              <input type="date" id={`dispatch-date-${idx}`} className="sr-only"
-                                value={sh.shippingDate || ''}
-                                onChange={(e) => {
-                                  const newDate = e.target.value;
-                                  let expected = sh.expectedArrival || '';
-                                  if (newDate && sh.shippingDuration) {
-                                    const days = parseInt(sh.shippingDuration);
-                                    if (!isNaN(days)) {
-                                      const dateObj = new Date(newDate);
-                                      dateObj.setDate(dateObj.getDate() + days);
-                                      expected = dateObj.toISOString().split('T')[0];
-                                    }
-                                  }
-                                  updateShippingRow(idx, 'shippingDate', newDate);
-                                  updateShippingRow(idx, 'expectedArrival', expected);
-                                }}
-                              />
                             </div>
                           </div>
 
-                          {/* 8. Transit Duration - auto-filled from settings, editable */}
+                          {/* 8. Transit Duration - auto-filled from settings by source type, editable */}
                           <div>
                             <label className="block text-slate-500 mb-1">{isAr ? 'المدة التقديرية (أيام)' : 'Transit Duration (Days)'}</label>
                             <div className="relative">
@@ -3978,8 +3975,7 @@ export default function Orders() {
                                       expected = dateObj.toISOString().split('T')[0];
                                     }
                                   }
-                                  updateShippingRow(idx, 'shippingDuration', durationVal);
-                                  updateShippingRow(idx, 'expectedArrival', expected);
+                                  updateShippingRow(idx, { shippingDuration: durationVal, expectedArrival: expected });
                                 }}
                                 placeholder={isAr ? "مثال: 12 يوم" : "e.g. 12"}
                                 className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none placeholder-slate-655 font-mono pr-9"
@@ -3990,12 +3986,13 @@ export default function Orders() {
                             </div>
                           </div>
 
-                          {/* 9. Expected Arrival - auto-calculated, editable */}
+                          {/* 9. Expected Arrival - auto-calculated from dispatch date + duration, editable */}
                           <div>
                             <label className="block text-slate-500 mb-1">{isAr ? 'موعد الوصول المتوقع' : 'Expected Arrival'}</label>
                             <div className="relative">
                               <input
                                 type="date"
+                                id={`expected-date-${idx}`}
                                 value={sh.expectedArrival || ''}
                                 onChange={(e) => updateShippingRow(idx, 'expectedArrival', e.target.value)}
                                 className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans pr-9"
@@ -4010,14 +4007,10 @@ export default function Orders() {
                               >
                                 <Calendar className="w-4 h-4" />
                               </button>
-                              <input type="date" id={`expected-date-${idx}`} className="sr-only"
-                                value={sh.expectedArrival || ''}
-                                onChange={(e) => updateShippingRow(idx, 'expectedArrival', e.target.value)}
-                              />
                             </div>
                           </div>
 
-                          {/* 10. Packaging Fees (SAR) */}
+                          {/* 10. Packaging Fees (SAR fixed amount) */}
                           <div className="col-span-2">
                             <label className="block text-slate-500 mb-1">{isAr ? 'أجور التغليف والصناديق (SAR)' : 'Packaging Fees (SAR)'}</label>
                             <input
@@ -4032,28 +4025,6 @@ export default function Orders() {
                     ))}
                   </div>
 
-                  {/* Yemen delivery summary - computed from all shipping durations + Yemen delivery duration */}
-                  {shippings && shippings.length > 0 && (
-                    <div className="p-3 bg-slate-900/60 border border-slate-800 rounded-2xl flex flex-wrap gap-x-6 gap-y-2 text-[11px] font-bold text-slate-400 mt-2 text-start">
-                      <div>
-                        {isAr ? 'مجموع مدد الشحن:' : 'Total Transit Days:'}{' '}
-                        <span className="font-mono text-amber-400">
-                          {shippings.reduce((sum, s) => sum + (parseInt(s.shippingDuration) || 0), 0)} {isAr ? 'يوم' : 'd'}
-                        </span>
-                      </div>
-                      <div>
-                        {isAr ? 'مدة التوصيل لليمن (إعدادات):' : 'Yemen Delivery Duration:'}{' '}
-                        <span className="font-mono text-blue-400">{settings.defaultYemenDeliveryDuration ?? 5} {isAr ? 'يوم' : 'd'}</span>
-                      </div>
-                      <div className="border-t border-slate-800 w-full pt-2 flex justify-between items-center">
-                        <span className="text-[11px] font-black text-white">{isAr ? 'المدة الإجمالية المتوقعة للتسليم لليمن:' : 'Expected Yemen Delivery Duration:'}</span>
-                        <span className="font-mono text-emerald-400 font-black text-sm">
-                          {shippings.reduce((sum, s) => sum + (parseInt(s.shippingDuration) || 0), 0) + (settings.defaultYemenDeliveryDuration ?? 5)} {isAr ? 'يوم' : 'days'}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
                   {/* Show CBM under shipping rows for Factory */}
                   {formData.orderSourceType === 'Factory' && (
                     <div className="p-3 bg-slate-900/40 border border-slate-850 rounded-2xl flex justify-between text-[11px] font-bold text-slate-400 mt-2 text-start">
@@ -4064,7 +4035,7 @@ export default function Orders() {
                     </div>
                   )}
 
-                  {/* Carrier packaging fee - fixed SAR amount */}
+                  {/* Carrier packaging fee - fixed SAR amount added to shipping cost */}
                   <div className="flex items-center gap-3 bg-slate-900/40 p-3 rounded-2xl border border-slate-850 mt-3 text-start">
                     <input
                       type="checkbox"
@@ -4091,7 +4062,6 @@ export default function Orders() {
               )}
 
               {/* Section 4: Couriers & Local Logistics Drivers */}
-
               <div className="space-y-4 bg-slate-950/20 border border-slate-800 p-5 rounded-3xl">
                 <span className="block text-xs font-black text-white text-start mb-2">{isAr ? 'المناديب واللوجستيات الميدانية' : 'Field Logistics Drivers'}</span>
 
@@ -4237,18 +4207,16 @@ export default function Orders() {
                     </>
                   )}
 
-                  {formData.orderSourceType !== 'SHEIN' && (
-                    <div>
-                      <label className="block text-[10px] text-slate-500 uppercase tracking-widest block leading-none mb-1.5">{isAr ? 'رسوم التغليف العامة (SAR)' : 'KSA Wrapping Fee (SAR)'}</label>
-                      <input
-                        type="number"
-                        value={formData.packagingFee || ''}
-                        onChange={(e) => setFormData({ ...formData, packagingFee: parseFloat(e.target.value) || 0 })}
-                        className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none font-mono text-[11px]"
-                        placeholder="0.00"
-                      />
-                    </div>
-                  )}
+                  <div>
+                    <label className="block text-[10px] text-slate-500 uppercase tracking-widest block leading-none mb-1.5">{isAr ? 'رسوم التغليف العامة (SAR)' : 'KSA Wrapping Fee (SAR)'}</label>
+                    <input
+                      type="number"
+                      value={formData.packagingFee || ''}
+                      onChange={(e) => setFormData({ ...formData, packagingFee: parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none font-mono text-[11px]"
+                      placeholder="0.00"
+                    />
+                  </div>
 
                   <div>
                     <label className="block text-[10px] text-slate-500 uppercase tracking-widest block leading-none mb-1.5">{isAr ? 'العملة والتحصيل المالي' : 'Collection Currency'}</label>
@@ -4325,7 +4293,7 @@ export default function Orders() {
                     {/* Coupon Discount */}
                     {couponEnabled && calcs.couponValue > 0 && (
                       <div className="flex justify-between items-center text-rose-400/90">
-                        <span className="font-medium">{isAr ? `خصم الكوبون النشط (${couponRate} ريال):` : `Coupon Discount (${couponRate} SAR):`}</span>
+                        <span className="font-medium">{isAr ? 'كوبون الخصم النشط (مبلغ):' : 'Active Coupon Discount (Amount):'}</span>
                         <div className="text-right">
                           <span className="font-mono block">-{calcs.couponValue.toLocaleString()} SAR</span>
                           <span className="font-mono text-[9px] opacity-70 block">-{(calcs.couponValue * (formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER)).toLocaleString()} YER</span>
@@ -5177,8 +5145,19 @@ export default function Orders() {
                 <div className="flex flex-col gap-1 text-[11px] font-bold text-slate-400 mb-3 border-b border-slate-850 pb-3">
                   <div className="flex justify-between">
                     <span>{isAr ? 'تكلفة المنتجات الأصلية:' : 'Original Products:'}</span>
-                    <span className="text-slate-300 font-mono">{(parseFloat(selectedOrder.totalCostSAR) - parseFloat(selectedOrder.profitCompanySAR || 0) - parseFloat(selectedOrder.shippingCostSAR || 0) - parseFloat(selectedOrder.packagingFee || 0)).toLocaleString()} SAR</span>
+                    <span className="text-slate-300 font-mono">
+                      {(selectedOrder.productsSum !== undefined
+                        ? selectedOrder.productsSum
+                        : (parseFloat(selectedOrder.totalCostSAR) - parseFloat(selectedOrder.profitCompanySAR || 0) - parseFloat(selectedOrder.shippingCostSAR || 0) - parseFloat(selectedOrder.packagingFee || 0))
+                      ).toLocaleString()} SAR
+                    </span>
                   </div>
+                  {selectedOrder.couponEnabled && (parseFloat(selectedOrder.couponRate) > 0) && (
+                    <div className="flex justify-between text-rose-450/90">
+                      <span>{isAr ? 'كوبون الخصم للمشتريات (مبلغ):' : 'Purchase Coupon Discount:'}</span>
+                      <span className="font-mono">-{parseFloat(selectedOrder.couponRate).toLocaleString()} SAR</span>
+                    </div>
+                  )}
                   {parseFloat(selectedOrder.shippingCostSAR || '0') > 0 && (
                     <div className="flex justify-between">
                       <span>{isAr ? 'تكلفة الشحن والتخليص:' : 'Shipping Cost:'}</span>
@@ -5342,7 +5321,7 @@ export default function Orders() {
                             {/* Dates & Logistics KPIs */}
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-slate-950/20 p-3.5 rounded-xl text-[11px] border border-slate-850/30">
                               <div>
-                                <span className="block text-[9px] text-slate-500 font-black mb-1">{isAr ? 'تاريخ تسليم الشحنة للناقل' : 'Handover Date'}</span>
+                                <span className="block text-[9px] text-slate-500 font-black mb-1">{isAr ? 'تاريخ انطلاق الشحن' : 'Dispatch Date'}</span>
                                 <span className="text-slate-300 font-black font-mono">{sh.shippingDate || '—'}</span>
                               </div>
                               <div>
@@ -5394,6 +5373,54 @@ export default function Orders() {
                       );
                     })}
                   </div>
+
+                  {/* Yemen Delivery Summary - computed total: shipping durations + Yemen delivery duration */}
+                  {(() => {
+                    const totalTransitDays = (selectedOrder.shippingDetails || []).reduce(
+                      (sum: number, s: any) => sum + (parseInt(s.shippingDuration) || 0), 0
+                    );
+                    const yemenDuration = settings.defaultYemenDeliveryDuration ?? 5;
+                    const totalExpected = totalTransitDays + yemenDuration;
+                    // Find the last dispatch date from shipping details
+                    const lastDispatch = (selectedOrder.shippingDetails || []).reduce((latest: string, s: any) => {
+                      return s.shippingDate > latest ? s.shippingDate : latest;
+                    }, '');
+                    let yemenArrivalDate = '';
+                    if (lastDispatch) {
+                      const d = new Date(lastDispatch);
+                      d.setDate(d.getDate() + totalExpected);
+                      yemenArrivalDate = d.toISOString().split('T')[0];
+                    }
+                    return (
+                      <div className="p-4 bg-slate-950/60 border border-[#d4af37]/20 rounded-2xl text-[11px] font-bold mt-2">
+                        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-slate-800">
+                          <Truck className="w-4 h-4 text-[#d4af37]" />
+                          <span className="text-[10px] text-[#d4af37] font-black uppercase tracking-widest">
+                            {isAr ? 'ملخص التسليم النهائي لليمن' : 'Yemen Final Delivery Summary'}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <div>
+                            <span className="text-[9px] text-slate-500 block mb-1">{isAr ? 'مجموع أيام الشحن:' : 'Total Transit Days:'}</span>
+                            <span className="font-mono text-amber-400 font-black">{totalTransitDays} {isAr ? 'يوم' : 'd'}</span>
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-slate-500 block mb-1">{isAr ? 'مدة التوصيل لليمن (إعدادات):' : 'Yemen Delivery (Settings):'}</span>
+                            <span className="font-mono text-blue-400 font-black">{yemenDuration} {isAr ? 'يوم' : 'd'}</span>
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-slate-500 block mb-1">{isAr ? 'المدة الإجمالية المتوقعة:' : 'Total Expected Duration:'}</span>
+                            <span className="font-mono text-emerald-400 font-black text-sm">{totalExpected} {isAr ? 'يوم' : 'days'}</span>
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-slate-500 block mb-1">{isAr ? 'تاريخ التسليم لليمن المتوقع:' : 'Est. Yemen Arrival:'}</span>
+                            <span className="font-mono text-[#d4af37] font-black">{yemenArrivalDate || '—'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                 </div>
               )}
 
