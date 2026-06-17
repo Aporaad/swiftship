@@ -4817,10 +4817,11 @@ export default function Orders() {
 
                   <div className="space-y-4">
                     {updateShippings && updateShippings.map((sh, idx) => (
-                      <div key={sh.id || idx} className="bg-slate-955 p-4 rounded-xl border border-slate-800 space-y-3 relative">
-                        <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+                      <div key={sh.id || idx} className="bg-slate-900/40 p-4 rounded-2xl border border-slate-850 space-y-3 relative text-start">
+                        {/* Segment title and remove action */}
+                        <div className="flex justify-between items-center border-b border-slate-850/50 pb-2">
                           <span className="text-[10px] font-black text-[#d4af37] bg-[#d4af37]/5 px-2 py-0.5 rounded">
-                            {isAr ? `الشحنة #${idx + 1}` : `Shipment #${idx + 1}`}
+                            {isAr ? `مسار الشحن #${idx + 1}` : `Shipping Track #${idx + 1}`}
                           </span>
                           <button
                             type="button"
@@ -4828,29 +4829,30 @@ export default function Orders() {
                             className="text-rose-500 hover:text-rose-400 p-1 rounded hover:bg-rose-950/10 transition-all font-bold text-[10px] flex items-center gap-1"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
-                            {isAr ? 'حذف' : 'Remove'}
+                            {isAr ? 'إلغاء المسار' : 'Delete Segment'}
                           </button>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px]">
-                          {/* Shipping Type */}
+                        {/* Manifest inputs */}
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-[11px] text-start font-bold">
+                          {/* 1. Mode */}
                           <div>
-                            <label className="block text-slate-400 mb-1">{isAr ? 'نوع مسار الشحن (بري/جوي/بحري)' : 'Transit Mode (Land/Air/Sea)'}</label>
+                            <label className="block text-slate-500 mb-1">{isAr ? 'نوع الشحن' : 'Mode'}</label>
                             <select
                               value={sh.shippingType || 'بري'}
                               onChange={(e) => updateUpdateShippingRow(idx, 'shippingType', e.target.value)}
-                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold text-xs"
+                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold"
                             >
-                              <option value="بري">{isAr ? 'بري - Overland Cargo' : 'Land - Overland Cargo'}</option>
-                              <option value="جوي">{isAr ? 'جوي - Air Freight' : 'Air - Air Freight'}</option>
-                              <option value="بحري">{isAr ? 'بحري - Ocean Cargo' : 'Sea - Ocean Cargo'}</option>
+                              <option value="بري">{isAr ? 'Overland بري' : 'Land - Overland'}</option>
+                              <option value="جوي">{isAr ? 'Air Freight جوي' : 'Air - Air Freight'}</option>
+                              <option value="بحري">{isAr ? 'Ocean Cargo بحري' : 'Sea - Ocean Cargo'}</option>
                             </select>
                           </div>
 
-                          {/* Shipping Company */}
+                          {/* 2. Carrier company */}
                           <div>
                             <div className="flex justify-between items-center mb-1">
-                              <label className="block text-slate-400">{isAr ? 'اسم الناقل / شركة الشحن' : 'Carrier/Shipping Company'}</label>
+                              <label className="block text-slate-400">{isAr ? 'شركة الشحن' : 'Carrier'}</label>
                               {(role === 'Admin' || hasPermission('add_sources')) && (
                                 <button
                                   type="button"
@@ -4867,7 +4869,7 @@ export default function Orders() {
                             <select
                               value={sh.shippingCompany || ''}
                               onChange={(e) => updateUpdateShippingRow(idx, 'shippingCompany', e.target.value)}
-                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold text-xs"
+                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold"
                             >
                               <option value="">{isAr ? '-- اختر شركة شحن --' : '-- Choose carrier --'}</option>
                               {shippingCompanies.map(c => (
@@ -4876,33 +4878,59 @@ export default function Orders() {
                             </select>
                           </div>
 
-                          {/* Shipping Source */}
+                          {/* 3. Tracking Number */}
                           <div>
-                            <label className="block text-slate-400 mb-1">{isAr ? 'مصدر الشحن (بلد التصدير)' : 'Shipment Source (Country)'}</label>
+                            <label className="block text-slate-500 mb-1">{isAr ? 'رقم التتبع للشحنة' : 'Tracking Number'}</label>
+                            <input
+                              type="text"
+                              value={sh.trackingNumber || ''}
+                              onChange={(e) => updateUpdateShippingRow(idx, 'trackingNumber', e.target.value)}
+                              placeholder={isAr ? "رقم التتبع المخصص للشحنة" : "Cargo tracking ID"}
+                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-mono placeholder-slate-650"
+                            />
+                          </div>
+
+                          {/* 4. Shipping Cost */}
+                          <div>
+                            <label className="block text-slate-500 mb-1">{isAr ? 'أجرة وتكاليف النقل (ريال سعودي)' : 'Shipping Cost (SAR)'}</label>
+                            <input
+                              type="number"
+                              required
+                              value={sh.shippingCost || 0}
+                              onChange={(e) => updateUpdateShippingRow(idx, 'shippingCost', parseFloat(e.target.value) || 0)}
+                              className="w-full bg-slate-950 border border-slate-800 text-[#d4af37] rounded-xl p-2.5 outline-none font-mono"
+                            />
+                          </div>
+
+                          {/* 5. Origin */}
+                          <div>
+                            <label className="block text-slate-500 mb-1">{isAr ? 'مكان التصدير' : 'Source'}</label>
                             <input
                               type="text"
                               required
                               value={sh.shippingSource || ''}
                               onChange={(e) => updateUpdateShippingRow(idx, 'shippingSource', e.target.value)}
-                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold text-xs"
+                              placeholder={isAr ? "مثال: الصين، دبي" : "Source country"}
+                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none placeholder-slate-600"
                             />
                           </div>
 
-                          {/* Shipping Destination */}
+                          {/* 6. Destination */}
                           <div>
-                            <label className="block text-slate-400 mb-1">{isAr ? 'وجهة الشحن (مكان الاستقبال)' : 'Shipment Destination'}</label>
+                            <label className="block text-slate-500 mb-1">{isAr ? 'مكان الاستلام' : 'Destination'}</label>
                             <input
                               type="text"
                               required
                               value={sh.shippingDestination || ''}
                               onChange={(e) => updateUpdateShippingRow(idx, 'shippingDestination', e.target.value)}
-                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold text-xs"
+                              placeholder={isAr ? "مثال: مستودع صنعاء" : "Destination depot"}
+                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none placeholder-slate-600"
                             />
                           </div>
 
-                          {/* Shipping Date */}
+                          {/* 7. Dispatch / Departure Date */}
                           <div>
-                            <label className="block text-slate-400 mb-1">{isAr ? 'تاريخ انطلاق الشحن' : 'Dispatch Date'}</label>
+                            <label className="block text-slate-500 mb-1">{isAr ? 'تاريخ انطلاق الشحن' : 'Dispatch Date'}</label>
                             <div className="relative">
                               <input
                                 type="date"
@@ -4914,14 +4942,14 @@ export default function Orders() {
                                   if (newDate && sh.shippingDuration) {
                                     const days = parseInt(sh.shippingDuration);
                                     if (!isNaN(days)) {
-                                      const d = new Date(newDate);
-                                      d.setDate(d.getDate() + days);
-                                      expected = d.toISOString().split('T')[0];
+                                      const dateObj = new Date(newDate);
+                                      dateObj.setDate(dateObj.getDate() + days);
+                                      expected = dateObj.toISOString().split('T')[0];
                                     }
                                   }
                                   updateUpdateShippingRow(idx, { shippingDate: newDate, expectedArrival: expected });
                                 }}
-                                className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans font-bold text-xs pr-9"
+                                className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans pr-9"
                               />
                               <button
                                 type="button"
@@ -4931,14 +4959,14 @@ export default function Orders() {
                                 }}
                                 className="absolute inset-y-0 end-2.5 flex items-center text-slate-500 hover:text-[#d4af37] transition"
                               >
-                                <Calendar className="w-3.5 h-3.5" />
+                                <Calendar className="w-4 h-4" />
                               </button>
                             </div>
                           </div>
 
-                          {/* Shipping Duration */}
+                          {/* 8. Transit Duration */}
                           <div>
-                            <label className="block text-slate-400 mb-1">{isAr ? 'المدة التقديرية (أيام)' : 'Transit Duration (Days)'}</label>
+                            <label className="block text-slate-500 mb-1">{isAr ? 'المدة التقديرية (أيام)' : 'Transit Duration (Days)'}</label>
                             <div className="relative">
                               <input
                                 type="number"
@@ -4949,15 +4977,15 @@ export default function Orders() {
                                   if (sh.shippingDate && durationVal) {
                                     const days = parseInt(durationVal);
                                     if (!isNaN(days)) {
-                                      const d = new Date(sh.shippingDate);
-                                      d.setDate(d.getDate() + days);
-                                      expected = d.toISOString().split('T')[0];
+                                      const dateObj = new Date(sh.shippingDate);
+                                      dateObj.setDate(dateObj.getDate() + days);
+                                      expected = dateObj.toISOString().split('T')[0];
                                     }
                                   }
                                   updateUpdateShippingRow(idx, { shippingDuration: durationVal, expectedArrival: expected });
                                 }}
-                                placeholder={isAr ? 'مثال: 12' : 'e.g. 12'}
-                                className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-mono font-bold text-xs pr-9"
+                                placeholder={isAr ? "مثال: 12 يوم" : "e.g. 12"}
+                                className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none placeholder-slate-655 font-mono pr-9"
                               />
                               <span className="absolute inset-y-0 end-2.5 flex items-center text-slate-600 text-[10px] font-bold pointer-events-none">
                                 {isAr ? 'يوم' : 'd'}
@@ -4965,16 +4993,16 @@ export default function Orders() {
                             </div>
                           </div>
 
-                          {/* Expected Arrival */}
+                          {/* 9. Expected Arrival */}
                           <div>
-                            <label className="block text-slate-400 mb-1">{isAr ? 'موعد الوصول المتوقع' : 'Expected Arrival Date'}</label>
+                            <label className="block text-slate-500 mb-1">{isAr ? 'موعد الوصول المتوقع' : 'Expected Arrival'}</label>
                             <div className="relative">
                               <input
                                 type="date"
                                 id={`upd-expected-date-${idx}`}
                                 value={sh.expectedArrival || ''}
                                 onChange={(e) => updateUpdateShippingRow(idx, 'expectedArrival', e.target.value)}
-                                className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans font-bold text-xs pr-9"
+                                className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans pr-9"
                               />
                               <button
                                 type="button"
@@ -4984,43 +5012,44 @@ export default function Orders() {
                                 }}
                                 className="absolute inset-y-0 end-2.5 flex items-center text-slate-500 hover:text-emerald-400 transition"
                               >
-                                <Calendar className="w-3.5 h-3.5" />
+                                <Calendar className="w-4 h-4" />
                               </button>
                             </div>
                           </div>
 
-                          {/* Delivery Date */}
-                          <div>
-                            <label className="block text-slate-400 mb-1">{isAr ? 'تاريخ التسليم الفعلي المكتمل' : 'Actual Completed Delivery Date'}</label>
-                            <input
-                              type="date"
-                              value={sh.deliveryDate || ''}
-                              onChange={(e) => updateUpdateShippingRow(idx, 'deliveryDate', e.target.value)}
-                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans font-bold text-xs"
-                            />
-                          </div>
-
-                          {/* Shipping Cost */}
-                          <div>
-                            <label className="block text-slate-400 mb-1">{isAr ? 'أجرة وتكاليف النقل (ريال سعودي)' : 'Shipping Cargo Cost (SAR)'}</label>
-                            <input
-                              type="number"
-                              required
-                              value={sh.shippingCost || 0}
-                              onChange={(e) => updateUpdateShippingRow(idx, 'shippingCost', parseFloat(e.target.value) || 0)}
-                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-mono font-bold text-xs"
-                            />
-                          </div>
-
-                          {/* Packaging Fees */}
-                          <div>
-                            <label className="block text-slate-400 mb-1">{isAr ? 'أجور التغليف والصناديق (ريال سعودي)' : 'Packaging Fees (SAR)'}</label>
+                          {/* 10. Packaging Fees (SAR fixed amount) */}
+                          <div className="col-span-2">
+                            <label className="block text-slate-500 mb-1">{isAr ? 'أجور التغليف والصناديق (SAR)' : 'Packaging Fees (SAR)'}</label>
                             <input
                               type="number"
                               value={sh.packagingFees || 0}
                               onChange={(e) => updateUpdateShippingRow(idx, 'packagingFees', parseFloat(e.target.value) || 0)}
-                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-mono font-bold text-xs"
+                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-mono"
                             />
+                          </div>
+
+                          {/* 11. Delivery Date */}
+                          <div>
+                            <label className="block text-slate-500 mb-1">{isAr ? 'تاريخ التسليم الفعلي المكتمل' : 'Actual Completed Delivery Date'}</label>
+                            <div className="relative">
+                              <input
+                                type="date"
+                                id={`upd-delivery-date-${idx}`}
+                                value={sh.deliveryDate || ''}
+                                onChange={(e) => updateUpdateShippingRow(idx, 'deliveryDate', e.target.value)}
+                                className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans pr-9"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const el = document.getElementById(`upd-delivery-date-${idx}`);
+                                  if (el) (el as HTMLInputElement).showPicker?.();
+                                }}
+                                className="absolute inset-y-0 end-2.5 flex items-center text-slate-500 hover:text-emerald-400 transition"
+                              >
+                                <Calendar className="w-4 h-4" />
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </div>
