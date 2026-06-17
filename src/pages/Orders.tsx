@@ -8,10 +8,10 @@ import { activityLogService } from '../services/activityLogService';
 import { whatsappService } from '../services/whatsappService';
 import ConfirmModal from '../components/ConfirmModal';
 import { financialAccountService } from '../services/financialAccountService';
-import { 
-  Plus, Search, Edit2, Truck, Activity, Trash2, DollarSign, 
+import {
+  Plus, Search, Edit2, Truck, Activity, Trash2, DollarSign,
   CreditCard, Printer, Calculator, Package, MapPin, X, AlertCircle, RefreshCw, UserPlus, Eye,
-  User, Mail, Phone, Coins
+  User, Mail, Phone, Coins, Calendar
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import QRCode from 'qrcode';
@@ -91,14 +91,14 @@ export default function Orders() {
   const [customerSearchQuery, setCustomerSearchQuery] = useState('');
   const [selectedCustomerProfile, setSelectedCustomerProfile] = useState<any>(null);
   const [previewOrderNumber, setPreviewOrderNumber] = useState('');
-  
+
   // Products Adjustments
   const [bankCommissionEnabled, setBankCommissionEnabled] = useState(false);
   const [bankCommissionRate, setBankCommissionRate] = useState(3);
   const [couponEnabled, setCouponEnabled] = useState(false);
   const [couponRate, setCouponRate] = useState(0);
   const [cartShareCode, setCartShareCode] = useState('');
-  
+
   // New States for order source types
   const [addShippingEnabled, setAddShippingEnabled] = useState(false);
   const [profitPerKgRate, setProfitPerKgRate] = useState(19);
@@ -135,6 +135,12 @@ export default function Orders() {
       setItems([
         { productName: '', productUrl: '', quantity: 1, productPrice: 0, weight: 0, cbm: 0, length: 0, width: 0, height: 0, trackingNumber: '' }
       ]);
+      // Default shipping row: today's date, duration from App settings
+      const today = new Date().toISOString().split('T')[0];
+      const defaultDuration = settings.defaultAppDuration ?? 10;
+      const arrivalDate = new Date();
+      arrivalDate.setDate(arrivalDate.getDate() + defaultDuration);
+      const expectedArrival = arrivalDate.toISOString().split('T')[0];
       setShippings([
         {
           id: Math.random().toString(36).substr(2, 9),
@@ -142,10 +148,9 @@ export default function Orders() {
           shippingCompany: 'Aramex',
           shippingSource: '',
           shippingDestination: '',
-          shippingDate: '',
-          shippingDuration: '',
-          expectedArrival: '',
-          deliveryDate: '',
+          shippingDate: today,
+          shippingDuration: String(defaultDuration),
+          expectedArrival,
           shippingCost: 0,
           packagingFees: 0
         }
@@ -155,6 +160,7 @@ export default function Orders() {
       setAddShippingEnabled(false);
     }
   }, [isAddModalOpen, settings]);
+
 
   // Multiple shipping details sub table state
   const [shippings, setShippings] = useState<any[]>([
@@ -284,7 +290,7 @@ export default function Orders() {
   // Auto-seed default shipping companies if they do not exist
   useEffect(() => {
     if (roleLoading) return;
-    
+
     const seedDefaultCarriers = async () => {
       try {
         const defaults = ['Aramex', 'DHL', 'SafePost', 'Yemen Express'];
@@ -292,7 +298,7 @@ export default function Orders() {
         const existingNames = new Set(
           querySnapshot.docs.map(doc => (doc.data().name || '').trim().toLowerCase())
         );
-        
+
         for (const carrier of defaults) {
           if (!existingNames.has(carrier.toLowerCase())) {
             await addDoc(collection(db, 'shipping_companies'), {
@@ -394,7 +400,7 @@ export default function Orders() {
   // Smart Customer Search & Stats Upgrade
   const filteredCustomers = useMemo(() => {
     if (!customerSearchQuery.trim()) return [];
-    return customers.filter(c => 
+    return customers.filter(c =>
       (c.fullName || '').toLowerCase().includes(customerSearchQuery.toLowerCase()) ||
       (c.phone || '').toLowerCase().includes(customerSearchQuery.toLowerCase())
     );
@@ -448,30 +454,30 @@ export default function Orders() {
   const generateOrderInvoicePDF = (order: any) => {
     if (!order) return;
     const doc = new jsPDF('p', 'mm', 'a4');
-    
+
     // Top banner block (luxury charcoal gray)
     doc.setFillColor(15, 15, 18);
     doc.rect(0, 0, 210, 40, 'F');
-    
+
     // Gold separator strip
     doc.setFillColor(212, 175, 55);
     doc.rect(0, 40, 210, 2, 'F');
-    
+
     // Header texts
     if (settings.invoiceLogo) {
       try {
         doc.addImage(settings.invoiceLogo, 'PNG', 15, 5, 25, 25, undefined, 'FAST');
-        
+
         doc.setTextColor(212, 175, 55);
         doc.setFont('Helvetica', 'bold');
         doc.setFontSize(16);
         doc.text(settings.systemName || settings.companyName || 'SWIFT SHIP', 45, 18);
-        
+
         doc.setTextColor(180, 180, 180);
         doc.setFontSize(8);
         doc.setFont('Helvetica', 'normal');
         doc.text('FREIGHT CARGO INVOICE & MANIFEST RECEIPTS', 45, 24);
-        
+
         doc.setTextColor(130, 130, 130);
         doc.setFontSize(7.5);
         doc.text(`Invoice Date: ${new Date(order.createdAt || Date.now()).toLocaleDateString()} | Order Code: ${order.orderNumber || ''}`, 45, 30);
@@ -482,12 +488,12 @@ export default function Orders() {
         doc.setFont('Helvetica', 'bold');
         doc.setFontSize(18);
         doc.text(settings.systemName || settings.companyName || 'SWIFT SHIP', 15, 18);
-        
+
         doc.setTextColor(180, 180, 180);
         doc.setFontSize(9);
         doc.setFont('Helvetica', 'normal');
         doc.text('FREIGHT CARGO INVOICE & MANIFEST RECEIPTS', 15, 25);
-        
+
         doc.setTextColor(130, 130, 130);
         doc.setFontSize(7.5);
         doc.text(`Invoice Date: ${new Date(order.createdAt || Date.now()).toLocaleDateString()} | Order Code: ${order.orderNumber || ''}`, 15, 32);
@@ -497,12 +503,12 @@ export default function Orders() {
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(18);
       doc.text(settings.systemName || settings.companyName || 'SWIFT SHIP', 15, 18);
-      
+
       doc.setTextColor(180, 180, 180);
       doc.setFontSize(9);
       doc.setFont('Helvetica', 'normal');
       doc.text('FREIGHT CARGO INVOICE & MANIFEST RECEIPTS', 15, 25);
-      
+
       doc.setTextColor(130, 130, 130);
       doc.setFontSize(7.5);
       doc.text(`Invoice Date: ${new Date(order.createdAt || Date.now()).toLocaleDateString()} | Order Code: ${order.orderNumber || ''}`, 15, 32);
@@ -559,10 +565,10 @@ export default function Orders() {
       doc.setTextColor(40, 40, 43);
       doc.setFont('Helvetica', 'normal');
       doc.setFontSize(8);
-      
+
       const pName = it.productName || `Item #${index + 1}`;
       doc.text(pName.length > 50 ? `${pName.substring(0, 47)}...` : pName, 15, yIdx);
-      
+
       const price = parseFloat(it.productPrice || 0);
       const qty = parseInt(it.quantity || 1);
       doc.text(`${price.toLocaleString()} SAR`, 120, yIdx);
@@ -623,7 +629,7 @@ export default function Orders() {
 
     doc.setFontSize(8);
     doc.setTextColor(80, 80, 80);
-    
+
     // calculations subtotal
     doc.text('Products Subtotal:', 114, yIdx + 7);
     doc.text(`${(order.totalWeight ? (order.items || []).reduce((sum: number, it: any) => sum + (parseFloat(it.productPrice || 0) * parseInt(it.quantity || 1)), 0) : order.totalCostSAR).toLocaleString()} SAR`, 170, yIdx + 7);
@@ -679,7 +685,7 @@ export default function Orders() {
     doc.text(`Payment Status: ${order.paymentStatus || ''}`, 15, yIdx + 8);
     doc.text(`Payment Method: ${order.paymentMethod || 'Cash'}`, 15, yIdx + 15);
     doc.text(`Paid Amount: ${parseFloat(order.amountPaid || 0).toLocaleString()} YER`, 15, yIdx + 22);
-    
+
     doc.setFont('Helvetica', 'bold');
     doc.setTextColor(180, 40, 40);
     doc.text(`Remaining Balance: ${parseFloat(order.amountRemaining || 0).toLocaleString()} YER`, 15, yIdx + 30);
@@ -699,7 +705,7 @@ export default function Orders() {
   const computeCalculations = () => {
     // 1. Compute total products prices
     const productsSum = items.reduce((sum, i) => sum + (parseFloat(i.quantity || 0) * parseFloat(i.productPrice || 0)), 0);
-    
+
     // Auto-calculate CBM for each item if dimensions are provided
     items.forEach(i => {
       if (formData.orderSourceType === 'Factory') {
@@ -716,8 +722,9 @@ export default function Orders() {
     const totalCBM = items.reduce((sum, i) => sum + (parseFloat(i.quantity || 0) * parseFloat(i.cbm || 0)), 0);
 
     // Apply Bank Commission and Coupon to products cost
+    // couponRate is now a fixed SAR amount (not a percentage)
     const bankCommValue = bankCommissionEnabled ? (productsSum * (bankCommissionRate / 100)) : 0;
-    const couponValue = couponEnabled ? (productsSum * (couponRate / 100)) : 0;
+    const couponValue = couponEnabled ? (parseFloat(couponRate as any) || 0) : 0;
     const totalProductsCostWithAdjustments = productsSum + bankCommValue - couponValue;
 
     let priceSAR = totalProductsCostWithAdjustments;
@@ -727,9 +734,10 @@ export default function Orders() {
     let totalOrderSAR = 0;
 
     // Sum up shipping cost from shippings table
+    // packagingFeeRate is now a fixed SAR amount per shipping row (not percentage)
     const shippingsCostSum = shippings.reduce((sum, s) => sum + parseFloat(s.shippingCost || 0), 0);
-    const shippingPackagingFee = packagingFeeEnabled ? (shippingsCostSum * (packagingFeeRate / 100)) : 0;
-    const totalShippingsCost = shippingsCostSum + shippingPackagingFee;
+    const shippingPackagingFixed = packagingFeeEnabled ? (parseFloat(packagingFeeRate as any) || 0) : 0;
+    const totalShippingsCost = shippingsCostSum + shippingPackagingFixed;
 
     if (formData.orderSourceType === 'SHEIN') {
       const redPrice = parseFloat(formData.sheinRedPrice as any) || 0;
@@ -743,13 +751,13 @@ export default function Orders() {
       profitCompanySAR = rawProfitSAR - profitSaudiSAR;
     } else if (formData.orderSourceType === 'Factory') {
       const rawProfitSAR = totalWeight * (parseFloat(profitPerKgRate as any) || 0);
-      
+
       // Use the shipping cost from the shippings table (which is filled automatically based on formula and is editable)
       shippingCostSAR = totalShippingsCost;
 
       const generalPackagingFee = parseFloat(formData.packagingFee as any) || 0;
       totalOrderSAR = productsSum + rawProfitSAR + shippingCostSAR + generalPackagingFee;
-      
+
       const saudiCourier = couriers.find(c => c.id === formData.shippingCourierId);
       const saudiRate = (saudiCourier && saudiCourier.commissionRate !== undefined) ? parseFloat(saudiCourier.commissionRate) : 0;
       profitSaudiSAR = rawProfitSAR * (saudiRate / 100);
@@ -760,7 +768,7 @@ export default function Orders() {
       shippingCostSAR = addShippingEnabled ? totalShippingsCost : 0;
       const generalPackagingFee = parseFloat(formData.packagingFee as any) || 0;
       totalOrderSAR = totalProductsCostWithAdjustments + rawProfitSAR + shippingCostSAR + generalPackagingFee;
-      
+
       const saudiCourier = couriers.find(c => c.id === formData.shippingCourierId);
       const saudiRate = (saudiCourier && saudiCourier.commissionRate !== undefined) ? parseFloat(saudiCourier.commissionRate) : 30;
       profitSaudiSAR = rawProfitSAR * (saudiRate / 100);
@@ -804,7 +812,7 @@ export default function Orders() {
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
-    
+
     if (!formData.customerId) {
       return notificationService.notify({
         title: isAr ? 'خطأ' : 'Error',
@@ -845,11 +853,11 @@ export default function Orders() {
       const orderNumber = await generateSmartOrderCode();
       const currentCalcs = computeCalculations();
 
-      const payStatus = currentCalcs.remainingYER <= 0 
-        ? 'Paid' 
-        : parseFloat(formData.amountPaid as any) > 0 
-        ? 'Partial Paid' 
-        : 'Unpaid';
+      const payStatus = currentCalcs.remainingYER <= 0
+        ? 'Paid'
+        : parseFloat(formData.amountPaid as any) > 0
+          ? 'Partial Paid'
+          : 'Unpaid';
 
       const payload = {
         orderNumber,
@@ -915,7 +923,7 @@ export default function Orders() {
         orderStatus: 'تم تسجيل الطلب',
         deliveryStatus: 'في الانتظار',
         locationYemen: 'مركز التوزيع الرئيسي',
-        
+
         createdByEmail: auth.currentUser?.email || 'admin',
         createdByName: profile?.fullName || 'Root Admin',
         createdAt: Date.now(),
@@ -941,8 +949,8 @@ export default function Orders() {
         try {
           const accountExists = await financialAccountService.getAccountById(linkedAccountId);
           if (!accountExists) {
-             console.error('[Orders] Financial account missing in DB, skipping transaction:', linkedAccountId);
-             return;
+            console.error('[Orders] Financial account missing in DB, skipping transaction:', linkedAccountId);
+            return;
           }
 
           const totalBilledOriginal = currentCalcs.totalOrderYER;
@@ -981,44 +989,44 @@ export default function Orders() {
             );
 
             if (systemAccs['sys_cash_account']) {
-               await financialAccountService.recordDoubleEntryTransaction(
-                 systemAccs['sys_cash_account'], // Debit Cash
-                 linkedAccountId, // Credit Customer
-                 {
-                    accountCode: linkedAccountCode || '',
-                    entityType: 'customer',
-                    accountId: linkedAccountId,
-                    entityId: formData.customerId,
-                    entityName: formData.customerName,
-                    amount: convertedPaid,
-                    amountOriginal: paidVal,
-                    currencyOriginal: 'YER',
-                    description: isAr ? `دفعة مقدمة للطلب رقم: ${orderNumber}` : `Down payment for order: ${orderNumber}`,
-                    refNumber: orderNumber,
-                    module: 'payment',
-                    createdByUid: auth.currentUser?.uid || 'system',
-                    createdByName: profile?.fullName || 'Root Admin',
-                    createdAt: Date.now()
-                 }
-               );
+              await financialAccountService.recordDoubleEntryTransaction(
+                systemAccs['sys_cash_account'], // Debit Cash
+                linkedAccountId, // Credit Customer
+                {
+                  accountCode: linkedAccountCode || '',
+                  entityType: 'customer',
+                  accountId: linkedAccountId,
+                  entityId: formData.customerId,
+                  entityName: formData.customerName,
+                  amount: convertedPaid,
+                  amountOriginal: paidVal,
+                  currencyOriginal: 'YER',
+                  description: isAr ? `دفعة مقدمة للطلب رقم: ${orderNumber}` : `Down payment for order: ${orderNumber}`,
+                  refNumber: orderNumber,
+                  module: 'payment',
+                  createdByUid: auth.currentUser?.uid || 'system',
+                  createdByName: profile?.fullName || 'Root Admin',
+                  createdAt: Date.now()
+                }
+              );
             } else {
-               await financialAccountService.recordTransaction(linkedAccountId, {
-                 accountId: linkedAccountId,
-                 accountCode: linkedAccountCode || '',
-                 entityType: 'customer',
-                 entityId: formData.customerId,
-                 entityName: formData.customerName,
-                 type: 'Credit', // Crediting customer for downpayment
-                 amount: convertedPaid,
-                 amountOriginal: paidVal,
-                 currencyOriginal: 'YER',
-                 description: isAr ? `دفعة مقدمة للطلب رقم: ${orderNumber}` : `Down payment for order: ${orderNumber}`,
-                 refNumber: orderNumber,
-                 module: 'payment',
-                 createdByUid: auth.currentUser?.uid || 'system',
-                 createdByName: profile?.fullName || 'Root Admin',
-                 createdAt: Date.now()
-               });
+              await financialAccountService.recordTransaction(linkedAccountId, {
+                accountId: linkedAccountId,
+                accountCode: linkedAccountCode || '',
+                entityType: 'customer',
+                entityId: formData.customerId,
+                entityName: formData.customerName,
+                type: 'Credit', // Crediting customer for downpayment
+                amount: convertedPaid,
+                amountOriginal: paidVal,
+                currencyOriginal: 'YER',
+                description: isAr ? `دفعة مقدمة للطلب رقم: ${orderNumber}` : `Down payment for order: ${orderNumber}`,
+                refNumber: orderNumber,
+                module: 'payment',
+                createdByUid: auth.currentUser?.uid || 'system',
+                createdByName: profile?.fullName || 'Root Admin',
+                createdAt: Date.now()
+              });
             }
           }
         } catch (txErr) {
@@ -1026,9 +1034,11 @@ export default function Orders() {
         }
       }
 
+      // For App orders with shipping: sourcing cost = products cost + shipping cost - coupon discount
+      // (coupon was already subtracted from totalProductsCostWithAdjustments so we use that + shipping)
       const sourcingCostAmount = formData.orderSourceType === 'App'
-        ? currentCalcs.totalProductsCostWithAdjustments
-        : currentCalcs.productsSum;
+        ? currentCalcs.totalProductsCostWithAdjustments + (addShippingEnabled ? currentCalcs.shippingCostSAR : 0)
+        : currentCalcs.productsSum + currentCalcs.shippingCostSAR;
 
       const sourcingCostConverted = financialAccountService.convertToDefaultCurrency(
         sourcingCostAmount,
@@ -1043,7 +1053,7 @@ export default function Orders() {
           try {
             const isSourcing = saudiCourier.courierType === 'sourcing';
             const courierCurrency = saudiCourier.financialCurrency || 'YER';
-            
+
             const amountInCourierCurrency = financialAccountService.convertToDefaultCurrency(
               sourcingCostAmount,
               'SAR',
@@ -1071,8 +1081,8 @@ export default function Orders() {
 
             // Automatically settle pending custodies
             await financialAccountService.settlePendingCustodies(
-              saudiCourier.id, 
-              amountInCourierCurrency, 
+              saudiCourier.id,
+              amountInCourierCurrency,
               courierCurrency
             );
           } catch (e) {
@@ -1080,34 +1090,35 @@ export default function Orders() {
           }
         }
       } else if (systemAccs['sys_sourcing_cost']) {
-         // Debit Sourcing Costs Account (Instead of Courier)
-         try {
-            await financialAccountService.recordTransaction(systemAccs['sys_sourcing_cost'], {
-              accountId: systemAccs['sys_sourcing_cost'],
-              accountCode: 'EXP-SRC',
-              entityType: 'system',
-              entityId: 'sys_sourcing_cost',
-              entityName: 'حساب تكاليف الاستيراد التشغيلية',
-              type: 'Debit',
-              amount: sourcingCostConverted,
-              amountOriginal: sourcingCostAmount,
-              currencyOriginal: 'SAR',
-              description: isAr ? `تكلفة شراء منتجات الطلب: ${orderNumber}` : `Sourcing products cost for order: ${orderNumber}`,
-              refNumber: orderNumber,
-              module: 'expense',
-              createdByUid: auth.currentUser?.uid || 'system',
-              createdByName: profile?.fullName || 'Root Admin',
-              createdAt: Date.now()
-            });
-         } catch (e) {
-            console.error('Failed to deduct sourcing from system account', e);
-         }
+        // Debit Sourcing Costs Account (Instead of Courier)
+        try {
+          await financialAccountService.recordTransaction(systemAccs['sys_sourcing_cost'], {
+            accountId: systemAccs['sys_sourcing_cost'],
+            accountCode: 'EXP-SRC',
+            entityType: 'system',
+            entityId: 'sys_sourcing_cost',
+            entityName: 'حساب تكاليف الاستيراد التشغيلية',
+            type: 'Debit',
+            amount: sourcingCostConverted,
+            amountOriginal: sourcingCostAmount,
+            currencyOriginal: 'SAR',
+            description: isAr ? `تكلفة شراء منتجات الطلب: ${orderNumber}` : `Sourcing products cost for order: ${orderNumber}`,
+            refNumber: orderNumber,
+            module: 'expense',
+            createdByUid: auth.currentUser?.uid || 'system',
+            createdByName: profile?.fullName || 'Root Admin',
+            createdAt: Date.now()
+          });
+        } catch (e) {
+          console.error('Failed to deduct sourcing from system account', e);
+        }
       }
 
       // Record Packaging Fees Credit
       const shippingsCostSum = shippings.reduce((sum, s) => sum + parseFloat(s.shippingCost || 0), 0);
-      const shippingPackagingFee = packagingFeeEnabled ? (shippingsCostSum * (packagingFeeRate / 100)) : 0;
-      const packagingFeeSAR = parseFloat(formData.packagingFee as any || 0) + (formData.orderSourceType !== 'SHEIN' ? shippingPackagingFee : 0);
+      // packagingFeeRate is now a fixed SAR amount (not percentage)
+      const shippingPackagingFixed = packagingFeeEnabled ? (parseFloat(packagingFeeRate as any) || 0) : 0;
+      const packagingFeeSAR = parseFloat(formData.packagingFee as any || 0) + (formData.orderSourceType !== 'SHEIN' ? shippingPackagingFixed : 0);
 
       if (formData.orderSourceType !== 'SHEIN' && packagingFeeSAR > 0 && systemAccs['sys_packaging_fees']) {
         try {
@@ -1200,7 +1211,7 @@ export default function Orders() {
       // Automatically dispatch simulated API dispatch status for WhatsApp + SMS in logs/panel
       const remainingVal = parseFloat(String(payload.amountRemaining || '0'));
       const totalCostYERVal = parseFloat(String(payload.amountPaid || '0')) + parseFloat(String(payload.amountRemaining || '0'));
-      const smsMessage = isAr 
+      const smsMessage = isAr
         ? `عزيزنا العميل ${payload.customerName}، تم تأكيد طلبك رقم: (${orderNumber}) بنجاح. حالة الشحنة: (${payload.orderStatus}). تتبع مع: ${payload.shippingCompany}، تتبع رقم: ${payload.trackingNumber || 'قيد الرفع'}. القيمة الإجمالية: ${totalCostYERVal.toLocaleString()} YER، المتبقي: ${remainingVal.toLocaleString()} YER.`
         : `Dear ${payload.customerName}, your order ${orderNumber} has been confirmed. Status: ${payload.orderStatus}. Track with ${payload.shippingCompany}: ${payload.trackingNumber || 'Pending'}. Total: ${totalCostYERVal.toLocaleString()} YER, Remaining: ${remainingVal.toLocaleString()} YER.`;
 
@@ -1289,8 +1300,8 @@ export default function Orders() {
     }
 
     // Prevent deletion if status is beyond "تم تسجيل الطلب" / "Pending" or any payments exist
-    const isSensitive = (order.orderStatus !== 'تم تسجيل الطلب' && order.orderStatus !== 'Pending' && order.orderStatus !== 'تم تسجيل الطلب (قيد المعالجة)') || 
-                        parseFloat(order.amountPaid || 0) > 0;
+    const isSensitive = (order.orderStatus !== 'تم تسجيل الطلب' && order.orderStatus !== 'Pending' && order.orderStatus !== 'تم تسجيل الطلب (قيد المعالجة)') ||
+      parseFloat(order.amountPaid || 0) > 0;
 
     if (isSensitive && settings.protectSensitiveOrderDelete) {
       setOrderToDelete(order);
@@ -1298,7 +1309,7 @@ export default function Orders() {
       setDeleteError('');
       setIsDeleteModalOpen(true);
     } else {
-      if (window.confirm(isAr 
+      if (window.confirm(isAr
         ? `هل أنت متأكد من حذف الطلب رقم ${order.orderNumber || order.id}؟ لا يمكن التراجع عن هذا الإجراء.`
         : `Are you sure you want to delete order ${order.orderNumber || order.id}? This action cannot be undone.`
       )) {
@@ -1310,7 +1321,7 @@ export default function Orders() {
   const executeDeleteOrder = async (order: any) => {
     try {
       await deleteDoc(doc(db, 'orders', order.id));
-      
+
       activityLogService.log('delete_order', order.orderNumber || order.id, {
         customerName: order.customerName,
         totalCostYER: order.totalCostYER
@@ -1318,13 +1329,13 @@ export default function Orders() {
 
       notificationService.notify({
         title: isAr ? 'تم حذف الطلب' : 'Order Deleted',
-        message: isAr 
-          ? `تم حذف الطلب رقم ${order.orderNumber || order.id} بنجاح` 
+        message: isAr
+          ? `تم حذف الطلب رقم ${order.orderNumber || order.id} بنجاح`
           : `Order ${order.orderNumber || order.id} has been deleted`,
         type: 'warning',
         category: 'order'
       });
-      
+
       setIsDeleteModalOpen(false);
       setOrderToDelete(null);
     } catch (err: any) {
@@ -1384,12 +1395,12 @@ export default function Orders() {
       }));
 
       setIsAddCustomerOpen(false);
-      setCustomerFormData({ 
-        fullName: '', 
-        phone: '', 
+      setCustomerFormData({
+        fullName: '',
+        phone: '',
         email: '',
         gps_location: '',
-        address: '', 
+        address: '',
         notes: ''
       });
 
@@ -1397,8 +1408,8 @@ export default function Orders() {
 
       notificationService.notify({
         title: isAr ? 'تمت الإضافة' : 'Client Created',
-        message: isAr 
-          ? `تمت إضافة الزبون ${customerFormData.fullName} وإنشاء ملفه المالي تلقائياً` 
+        message: isAr
+          ? `تمت إضافة الزبون ${customerFormData.fullName} وإنشاء ملفه المالي تلقائياً`
           : `Customer ${customerFormData.fullName} added with auto-generated financial account`,
         type: 'success',
         category: 'system'
@@ -1559,52 +1570,52 @@ export default function Orders() {
     }
 
     try {
-        await updateDoc(doc(db, 'orders', selectedOrder.id), {
-          amountPaid: newPaid,
-          amountRemaining: Math.max(0, remaining),
-          paymentStatus: targetStatus,
-          updatedAt: Date.now()
-        });
+      await updateDoc(doc(db, 'orders', selectedOrder.id), {
+        amountPaid: newPaid,
+        amountRemaining: Math.max(0, remaining),
+        paymentStatus: targetStatus,
+        updatedAt: Date.now()
+      });
 
-        // --- Financial Account Impact ---
-        const customerRecord = customers.find(c => c.id === selectedOrder.customerId);
-        const linkedAccountId = customerRecord?.financialAccountId;
-        const linkedAccountCode = customerRecord?.financialAccountCode;
+      // --- Financial Account Impact ---
+      const customerRecord = customers.find(c => c.id === selectedOrder.customerId);
+      const linkedAccountId = customerRecord?.financialAccountId;
+      const linkedAccountCode = customerRecord?.financialAccountCode;
 
-        if (linkedAccountId) {
-          try {
-            const convertedPaid = financialAccountService.convertToDefaultCurrency(
-              paidVal,
-              'YER',
-              settings.currency || 'YER',
-              { USD: selectedOrder.exchangeRateUSD || settings.exchangeRateUSD, SAR: selectedOrder.exchangeRateYER || settings.exchangeRateSAR }
-            );
+      if (linkedAccountId) {
+        try {
+          const convertedPaid = financialAccountService.convertToDefaultCurrency(
+            paidVal,
+            'YER',
+            settings.currency || 'YER',
+            { USD: selectedOrder.exchangeRateUSD || settings.exchangeRateUSD, SAR: selectedOrder.exchangeRateYER || settings.exchangeRateSAR }
+          );
 
-            await financialAccountService.recordTransaction(linkedAccountId, {
-              accountId: linkedAccountId,
-              accountCode: linkedAccountCode || '',
-              entityType: 'customer',
-              entityId: selectedOrder.customerId,
-              entityName: selectedOrder.customerName,
-              type: 'Credit', // Crediting customer for payment received
-              amount: convertedPaid,
-              amountOriginal: paidVal,
-              currencyOriginal: 'YER',
-              description: isAr 
-                ? `دفعة للطلب رقم: ${selectedOrder.orderNumber} (طريقة الدفع: ${paymentFormData.method})` 
-                : `Payment for order: ${selectedOrder.orderNumber} (via ${paymentFormData.method})`,
-              refNumber: selectedOrder.orderNumber,
-              module: 'payment',
-              createdByUid: auth.currentUser?.uid || 'system',
-              createdByName: profile?.fullName || 'Root Admin',
-              createdAt: Date.now()
-            });
-          } catch (txErr) {
-            console.error('[Orders] Error registering payment transaction on financial account:', txErr);
-          }
+          await financialAccountService.recordTransaction(linkedAccountId, {
+            accountId: linkedAccountId,
+            accountCode: linkedAccountCode || '',
+            entityType: 'customer',
+            entityId: selectedOrder.customerId,
+            entityName: selectedOrder.customerName,
+            type: 'Credit', // Crediting customer for payment received
+            amount: convertedPaid,
+            amountOriginal: paidVal,
+            currencyOriginal: 'YER',
+            description: isAr
+              ? `دفعة للطلب رقم: ${selectedOrder.orderNumber} (طريقة الدفع: ${paymentFormData.method})`
+              : `Payment for order: ${selectedOrder.orderNumber} (via ${paymentFormData.method})`,
+            refNumber: selectedOrder.orderNumber,
+            module: 'payment',
+            createdByUid: auth.currentUser?.uid || 'system',
+            createdByName: profile?.fullName || 'Root Admin',
+            createdAt: Date.now()
+          });
+        } catch (txErr) {
+          console.error('[Orders] Error registering payment transaction on financial account:', txErr);
         }
+      }
 
-        activityLogService.log('add_payment', selectedOrder.orderNumber || selectedOrder.id, {
+      activityLogService.log('add_payment', selectedOrder.orderNumber || selectedOrder.id, {
         amount: paidVal,
         method: paymentFormData.method,
         remaining: Math.max(0, remaining)
@@ -1664,7 +1675,7 @@ export default function Orders() {
         const YY = String(new Date().getFullYear()).slice(-2);
         const MM = String(new Date().getMonth() + 1).padStart(2, '0');
         const expenseNumber = `EXP-${YY}${MM}-${Math.floor(1000 + Math.random() * 9000)}`;
-        
+
         const courierRecord = couriers.find(c => c.id === courierId);
         const courierName = courierRecord ? courierRecord.fullName : (isAr ? 'مندوب توصيل' : 'Delivery Courier');
         const linkedAccountId = courierRecord?.financialAccountId || null;
@@ -1842,83 +1853,83 @@ export default function Orders() {
       const isArrivedYemen = updateFormData.orderStatus === 'وصل مركز التوزيع في اليمن';
       const wasArrivedYemen = selectedOrder.orderStatus === 'وصل مركز التوزيع في اليمن';
       const shippingCourierId = updateFormData.shippingCourierId || selectedOrder.shippingCourierId;
-      
+
       if (isArrivedYemen && !wasArrivedYemen && shippingCourierId) {
         const courierRecord = couriers.find(c => c.id === shippingCourierId);
-        
+
         if (courierRecord) {
           const isSourcing = courierRecord.courierType === 'sourcing';
           const exchangeRate = parseFloat(selectedOrder.exchangeRateYER || settings.exchangeRateYER || 390);
           const commissionProfitOriginal = parseFloat(selectedOrder.profitSaudiSAR || '0');
           const commissionProfit = isSourcing ? commissionProfitOriginal : (commissionProfitOriginal * exchangeRate);
           const finalCurrency = isSourcing ? 'SAR' : 'YER';
-          
+
           if (commissionProfit > 0) {
-             const YY = String(new Date().getFullYear()).slice(-2);
-             const MM = String(new Date().getMonth() + 1).padStart(2, '0');
-             const commissionNumber = `COM-${YY}${MM}-${Math.floor(1000 + Math.random() * 9000)}`;
+            const YY = String(new Date().getFullYear()).slice(-2);
+            const MM = String(new Date().getMonth() + 1).padStart(2, '0');
+            const commissionNumber = `COM-${YY}${MM}-${Math.floor(1000 + Math.random() * 9000)}`;
 
-             const courierName = courierRecord.fullName;
-             const linkedAccountId = courierRecord.financialAccountId || null;
-             const linkedAccountCode = courierRecord.financialAccountCode || null;
+            const courierName = courierRecord.fullName;
+            const linkedAccountId = courierRecord.financialAccountId || null;
+            const linkedAccountCode = courierRecord.financialAccountCode || null;
 
-             const convertedCommission = financialAccountService.convertToDefaultCurrency(
-               commissionProfit,
-               finalCurrency,
-               settings.currency || 'YER',
-               { USD: selectedOrder.exchangeRateUSD || settings.exchangeRateUSD, SAR: selectedOrder.exchangeRateYER || settings.exchangeRateSAR }
-             );
+            const convertedCommission = financialAccountService.convertToDefaultCurrency(
+              commissionProfit,
+              finalCurrency,
+              settings.currency || 'YER',
+              { USD: selectedOrder.exchangeRateUSD || settings.exchangeRateUSD, SAR: selectedOrder.exchangeRateYER || settings.exchangeRateSAR }
+            );
 
-             const commissionPayload = {
-               expenseNumber: commissionNumber,
-               category: 'wage',
-               type: 'Wage',
-               amount: commissionProfit,
-               currency: finalCurrency,
-               amountInDefaultCurrency: convertedCommission,
-               recipientId: shippingCourierId,
-               recipientEntityId: shippingCourierId,
-               recipientEntityType: 'courier',
-               recipientName: courierName,
-               linkedAccountId,
-               linkedAccountCode,
-               notes: isAr
-                 ? `عمولة شحن تلقائية (${courierRecord.commissionRate}%) للطلب رقم: ${selectedOrder.orderNumber}`
-                 : `Auto-commission (${courierRecord.commissionRate}%) for order: ${selectedOrder.orderNumber}`,
-               status: 'Approved',
-               createdByUid: auth.currentUser?.uid || 'system',
-               createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
-               createdByName: profile?.fullName || 'System Auto-Commission',
-               createdAt: Date.now()
-             };
+            const commissionPayload = {
+              expenseNumber: commissionNumber,
+              category: 'wage',
+              type: 'Wage',
+              amount: commissionProfit,
+              currency: finalCurrency,
+              amountInDefaultCurrency: convertedCommission,
+              recipientId: shippingCourierId,
+              recipientEntityId: shippingCourierId,
+              recipientEntityType: 'courier',
+              recipientName: courierName,
+              linkedAccountId,
+              linkedAccountCode,
+              notes: isAr
+                ? `عمولة شحن تلقائية (${courierRecord.commissionRate}%) للطلب رقم: ${selectedOrder.orderNumber}`
+                : `Auto-commission (${courierRecord.commissionRate}%) for order: ${selectedOrder.orderNumber}`,
+              status: 'Approved',
+              createdByUid: auth.currentUser?.uid || 'system',
+              createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
+              createdByName: profile?.fullName || 'System Auto-Commission',
+              createdAt: Date.now()
+            };
 
-             await addDoc(collection(db, 'expenses'), commissionPayload);
+            await addDoc(collection(db, 'expenses'), commissionPayload);
 
-             if (linkedAccountId) {
-               try {
-                 await financialAccountService.recordTransaction(linkedAccountId, {
-                   accountId: linkedAccountId,
-                   accountCode: linkedAccountCode || '',
-                   entityType: 'courier',
-                   entityId: shippingCourierId,
-                   entityName: courierName,
-                   type: 'Credit',
-                   amount: commissionProfit,
-                   amountOriginal: commissionProfitOriginal,
-                   currencyOriginal: 'SAR',
-                   description: isAr
-                     ? `عمولة شحن تلقائية (${courierRecord.commissionRate}%) للطلب رقم: ${selectedOrder.orderNumber}`
-                     : `Auto-commission (${courierRecord.commissionRate}%) for order: ${selectedOrder.orderNumber}`,
-                   refNumber: commissionNumber,
-                   module: 'expense',
-                   createdByUid: auth.currentUser?.uid || 'system',
-                   createdByName: profile?.fullName || 'System Auto-Commission',
-                   createdAt: Date.now()
-                 });
-               } catch (txErr) {
-                 console.warn('[Orders] Could not record commission wage on collection courier financial account:', txErr);
-               }
-             }
+            if (linkedAccountId) {
+              try {
+                await financialAccountService.recordTransaction(linkedAccountId, {
+                  accountId: linkedAccountId,
+                  accountCode: linkedAccountCode || '',
+                  entityType: 'courier',
+                  entityId: shippingCourierId,
+                  entityName: courierName,
+                  type: 'Credit',
+                  amount: commissionProfit,
+                  amountOriginal: commissionProfitOriginal,
+                  currencyOriginal: 'SAR',
+                  description: isAr
+                    ? `عمولة شحن تلقائية (${courierRecord.commissionRate}%) للطلب رقم: ${selectedOrder.orderNumber}`
+                    : `Auto-commission (${courierRecord.commissionRate}%) for order: ${selectedOrder.orderNumber}`,
+                  refNumber: commissionNumber,
+                  module: 'expense',
+                  createdByUid: auth.currentUser?.uid || 'system',
+                  createdByName: profile?.fullName || 'System Auto-Commission',
+                  createdAt: Date.now()
+                });
+              } catch (txErr) {
+                console.warn('[Orders] Could not record commission wage on collection courier financial account:', txErr);
+              }
+            }
           }
         }
       }
@@ -2002,7 +2013,7 @@ export default function Orders() {
       }
 
       // Automatically dispatch simulated status update notification via WhatsApp + SMS
-      const smsMessage = isAr 
+      const smsMessage = isAr
         ? `عزيزنا العميل ${selectedOrder.customerName}، تم تحديث حالة شحنتك رقم: (${selectedOrder.orderNumber || selectedOrder.id}) إلى: *${updateFormData.orderStatus}*. وموقع الشحنة حالياً: *${updateFormData.locationYemen || 'قيد النقل'}*. المتبقي عليك: ${remainingVal.toLocaleString()} YER. شكراً لتعاملك معنا.`
         : `Dear ${selectedOrder.customerName}, the status of your order (${selectedOrder.orderNumber || selectedOrder.id}) update to: *${updateFormData.orderStatus}*. Current position: *${updateFormData.locationYemen || 'In-transit'}*. Bal: ${remainingVal.toLocaleString()} YER. Thank you for choosing us!`;
 
@@ -2043,29 +2054,84 @@ export default function Orders() {
 
   // Shipping details handling
   const addShippingRow = () => {
+    const today = new Date().toISOString().split('T')[0];
+    const defaultDuration =
+      formData.orderSourceType === 'SHEIN' ? (settings.defaultSheinDuration ?? 12) :
+        formData.orderSourceType === 'Factory' ? (settings.defaultFactoryDuration ?? 20) :
+          (settings.defaultAppDuration ?? 10);
+    const arrivalDate = new Date();
+    arrivalDate.setDate(arrivalDate.getDate() + defaultDuration);
+    const expectedArrival = arrivalDate.toISOString().split('T')[0];
     setShippings([...shippings, {
       id: Math.random().toString(36).substr(2, 9),
       shippingType: 'بري',
       shippingCompany: 'Aramex',
       shippingSource: '',
       shippingDestination: '',
-      shippingDate: '',
-      shippingDuration: '',
-      expectedArrival: '',
-      deliveryDate: '',
+      shippingDate: today,
+      shippingDuration: String(defaultDuration),
+      expectedArrival,
       shippingCost: 0,
       packagingFees: 0
     }]);
   };
 
-  const updateShippingRow = (idx: number, field: string, val: any) => {
-    const updated = [...shippings];
-    updated[idx] = { ...updated[idx], [field]: val };
-    if (field === 'shippingCost') {
-      updated[idx]._isCalculated = false;
-    }
-    setShippings(updated);
+
+  const updateShippingRow = (idx: number, fieldOrObj: string | Record<string, any>, val?: any) => {
+    setShippings(prev => {
+      const updated = [...prev];
+      if (typeof fieldOrObj === 'string') {
+        updated[idx] = { ...updated[idx], [fieldOrObj]: val };
+        if (fieldOrObj === 'shippingCost') {
+          updated[idx]._isCalculated = false;
+        }
+      } else {
+        updated[idx] = { ...updated[idx], ...fieldOrObj };
+        if ('shippingCost' in fieldOrObj) {
+          updated[idx]._isCalculated = false;
+        }
+      }
+      return updated;
+    });
   };
+
+  // Update shipping durations when orderSourceType changes
+  useEffect(() => {
+    if (isAddModalOpen) {
+      const defaultDuration =
+        formData.orderSourceType === 'SHEIN' ? (settings.defaultSheinDuration ?? 12) :
+          formData.orderSourceType === 'Factory' ? (settings.defaultFactoryDuration ?? 20) :
+            (settings.defaultAppDuration ?? 10);
+
+      setShippings(prev => {
+        return prev.map(sh => {
+          // If the shipping duration is empty or matches one of the defaults, we update it
+          const isDurationDefault =
+            !sh.shippingDuration ||
+            sh.shippingDuration === String(settings.defaultSheinDuration ?? 12) ||
+            sh.shippingDuration === String(settings.defaultFactoryDuration ?? 20) ||
+            sh.shippingDuration === String(settings.defaultAppDuration ?? 10);
+
+          if (isDurationDefault) {
+            const newDuration = String(defaultDuration);
+            let expected = sh.expectedArrival || '';
+            if (sh.shippingDate) {
+              const dateObj = new Date(sh.shippingDate);
+              dateObj.setDate(dateObj.getDate() + defaultDuration);
+              expected = dateObj.toISOString().split('T')[0];
+            }
+            return {
+              ...sh,
+              shippingDuration: newDuration,
+              expectedArrival: expected
+            };
+          }
+          return sh;
+        });
+      });
+    }
+  }, [formData.orderSourceType, settings, isAddModalOpen]);
+
 
   // Auto-calculate shipping cost for Factory and sync with primary shipping row
   useEffect(() => {
@@ -2104,16 +2170,16 @@ export default function Orders() {
   };
 
   const addUpdateShippingRow = () => {
+    const today = new Date().toISOString().split('T')[0];
     setUpdateShippings([...updateShippings, {
       id: Math.random().toString(36).substr(2, 9),
       shippingType: 'بري',
       shippingCompany: 'Aramex',
       shippingSource: '',
       shippingDestination: '',
-      shippingDate: '',
+      shippingDate: today,
       shippingDuration: '',
       expectedArrival: '',
-      deliveryDate: '',
       shippingCost: 0,
       packagingFees: 0
     }]);
@@ -2171,7 +2237,7 @@ export default function Orders() {
   };
 
   const handleToggleSelect = (id: string) => {
-    setSelectedOrderIds(prev => 
+    setSelectedOrderIds(prev =>
       prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
     );
   };
@@ -2181,9 +2247,9 @@ export default function Orders() {
     setIsBatchUpdating(true);
     try {
       const promises = selectedOrderIds.map(async (orderId) => {
-        const defaultLocation = newStatus === 'وصل مستودع السعودية' ? 'مستودع السعودية للتعبئة' : 
-                                newStatus === 'وصل مركز التوزيع في اليمن' ? 'مستودع صنعاء الرئيسي' : 'قيد النقل';
-        
+        const defaultLocation = newStatus === 'وصل مستودع السعودية' ? 'مستودع السعودية للتعبئة' :
+          newStatus === 'وصل مركز التوزيع في اليمن' ? 'مستودع صنعاء الرئيسي' : 'قيد النقل';
+
         const ord = orders.find(o => o.id === orderId);
         if (!ord) return;
 
@@ -2199,7 +2265,7 @@ export default function Orders() {
           const YY = String(new Date().getFullYear()).slice(-2);
           const MM = String(new Date().getMonth() + 1).padStart(2, '0');
           const expenseNumber = `EXP-${YY}${MM}-${Math.floor(1000 + Math.random() * 9000)}`;
-          
+
           const courierRecord = couriers.find(c => c.id === courierId);
           const courierName = courierRecord ? courierRecord.fullName : (isAr ? 'مندوب توصيل' : 'Delivery Courier');
           const linkedAccountId = courierRecord?.financialAccountId || null;
@@ -2376,83 +2442,83 @@ export default function Orders() {
         const isArrivedYemen = newStatus === 'وصل مركز التوزيع في اليمن';
         const wasArrivedYemen = ord.orderStatus === 'وصل مركز التوزيع في اليمن';
         const shippingCourierId = ord.shippingCourierId;
-        
+
         if (isArrivedYemen && !wasArrivedYemen && shippingCourierId) {
           const courierRecord = couriers.find(c => c.id === shippingCourierId);
-          
+
           if (courierRecord) {
             const isSourcing = courierRecord.courierType === 'sourcing';
             const exchangeRate = parseFloat(ord.exchangeRateYER || settings.exchangeRateYER || 390);
             const commissionProfitOriginal = parseFloat(ord.profitSaudiSAR || '0');
             const commissionProfit = isSourcing ? commissionProfitOriginal : (commissionProfitOriginal * exchangeRate);
             const finalCurrency = isSourcing ? 'SAR' : 'YER';
-            
+
             if (commissionProfit > 0) {
-               const YY = String(new Date().getFullYear()).slice(-2);
-               const MM = String(new Date().getMonth() + 1).padStart(2, '0');
-               const commissionNumber = `COM-${YY}${MM}-${Math.floor(1000 + Math.random() * 9000)}`;
+              const YY = String(new Date().getFullYear()).slice(-2);
+              const MM = String(new Date().getMonth() + 1).padStart(2, '0');
+              const commissionNumber = `COM-${YY}${MM}-${Math.floor(1000 + Math.random() * 9000)}`;
 
-               const courierName = courierRecord.fullName;
-               const linkedAccountId = courierRecord.financialAccountId || null;
-               const linkedAccountCode = courierRecord.financialAccountCode || null;
+              const courierName = courierRecord.fullName;
+              const linkedAccountId = courierRecord.financialAccountId || null;
+              const linkedAccountCode = courierRecord.financialAccountCode || null;
 
-               const convertedCommission = financialAccountService.convertToDefaultCurrency(
-                 commissionProfit,
-                 finalCurrency,
-                 settings.currency || 'YER',
-                 { USD: ord.exchangeRateUSD || settings.exchangeRateUSD, SAR: ord.exchangeRateYER || settings.exchangeRateSAR }
-               );
+              const convertedCommission = financialAccountService.convertToDefaultCurrency(
+                commissionProfit,
+                finalCurrency,
+                settings.currency || 'YER',
+                { USD: ord.exchangeRateUSD || settings.exchangeRateUSD, SAR: ord.exchangeRateYER || settings.exchangeRateSAR }
+              );
 
-               const commissionPayload = {
-                 expenseNumber: commissionNumber,
-                 category: 'wage',
-                 type: 'Wage',
-                 amount: commissionProfit,
-                 currency: finalCurrency,
-                 amountInDefaultCurrency: convertedCommission,
-                 recipientId: shippingCourierId,
-                 recipientEntityId: shippingCourierId,
-                 recipientEntityType: 'courier',
-                 recipientName: courierName,
-                 linkedAccountId,
-                 linkedAccountCode,
-                 notes: isAr
-                   ? `عمولة شحن تلقائية (${courierRecord.commissionRate}%) للطلب رقم: ${ord.orderNumber}`
-                   : `Auto-commission (${courierRecord.commissionRate}%) for order: ${ord.orderNumber}`,
-                 status: 'Approved',
-                 createdByUid: auth.currentUser?.uid || 'system',
-                 createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
-                 createdByName: profile?.fullName || 'System Auto-Commission',
-                 createdAt: Date.now()
-               };
+              const commissionPayload = {
+                expenseNumber: commissionNumber,
+                category: 'wage',
+                type: 'Wage',
+                amount: commissionProfit,
+                currency: finalCurrency,
+                amountInDefaultCurrency: convertedCommission,
+                recipientId: shippingCourierId,
+                recipientEntityId: shippingCourierId,
+                recipientEntityType: 'courier',
+                recipientName: courierName,
+                linkedAccountId,
+                linkedAccountCode,
+                notes: isAr
+                  ? `عمولة شحن تلقائية (${courierRecord.commissionRate}%) للطلب رقم: ${ord.orderNumber}`
+                  : `Auto-commission (${courierRecord.commissionRate}%) for order: ${ord.orderNumber}`,
+                status: 'Approved',
+                createdByUid: auth.currentUser?.uid || 'system',
+                createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
+                createdByName: profile?.fullName || 'System Auto-Commission',
+                createdAt: Date.now()
+              };
 
-               await addDoc(collection(db, 'expenses'), commissionPayload);
+              await addDoc(collection(db, 'expenses'), commissionPayload);
 
-               if (linkedAccountId) {
-                 try {
-                   await financialAccountService.recordTransaction(linkedAccountId, {
-                     accountId: linkedAccountId,
-                     accountCode: linkedAccountCode || '',
-                     entityType: 'courier',
-                     entityId: shippingCourierId,
-                     entityName: courierName,
-                     type: 'Credit',
-                     amount: commissionProfit,
-                     amountOriginal: commissionProfitOriginal,
-                     currencyOriginal: 'SAR',
-                     description: isAr
-                       ? `عمولة شحن تلقائية (${courierRecord.commissionRate}%) للطلب رقم: ${ord.orderNumber}`
-                       : `Auto-commission (${courierRecord.commissionRate}%) for order: ${ord.orderNumber}`,
-                     refNumber: commissionNumber,
-                     module: 'expense',
-                     createdByUid: auth.currentUser?.uid || 'system',
-                     createdByName: profile?.fullName || 'System Auto-Commission',
-                     createdAt: Date.now()
-                   });
-                 } catch (txErr) {
-                   console.warn('[Orders] Could not record commission wage on collection courier financial account:', txErr);
-                 }
-               }
+              if (linkedAccountId) {
+                try {
+                  await financialAccountService.recordTransaction(linkedAccountId, {
+                    accountId: linkedAccountId,
+                    accountCode: linkedAccountCode || '',
+                    entityType: 'courier',
+                    entityId: shippingCourierId,
+                    entityName: courierName,
+                    type: 'Credit',
+                    amount: commissionProfit,
+                    amountOriginal: commissionProfitOriginal,
+                    currencyOriginal: 'SAR',
+                    description: isAr
+                      ? `عمولة شحن تلقائية (${courierRecord.commissionRate}%) للطلب رقم: ${ord.orderNumber}`
+                      : `Auto-commission (${courierRecord.commissionRate}%) for order: ${ord.orderNumber}`,
+                    refNumber: commissionNumber,
+                    module: 'expense',
+                    createdByUid: auth.currentUser?.uid || 'system',
+                    createdByName: profile?.fullName || 'System Auto-Commission',
+                    createdAt: Date.now()
+                  });
+                } catch (txErr) {
+                  console.warn('[Orders] Could not record commission wage on collection courier financial account:', txErr);
+                }
+              }
             }
           }
         }
@@ -2470,14 +2536,14 @@ export default function Orders() {
         orderIds: selectedOrderIds,
         newStatus: newStatus
       });
-      
+
       // Dispatch real WhatsApp notifications for each order status change in the batch
       try {
         selectedOrderIds.forEach(async (orderId) => {
           const fullOrder = orders.find(o => o.id === orderId);
           if (fullOrder) {
-            const defaultLocation = newStatus === 'وصل مستودع السعودية' ? 'مستودع السعودية للتعبئة' : 
-                                    newStatus === 'وصل مركز التوزيع في اليمن' ? 'مستودع صنعاء الرئيسي' : 'قيد النقل';
+            const defaultLocation = newStatus === 'وصل مستودع السعودية' ? 'مستودع السعودية للتعبئة' :
+              newStatus === 'وصل مركز التوزيع في اليمن' ? 'مستودع صنعاء الرئيسي' : 'قيد النقل';
             const updatedOrderObj = {
               ...fullOrder,
               orderStatus: newStatus,
@@ -2492,8 +2558,8 @@ export default function Orders() {
 
       notificationService.notify({
         title: isAr ? 'تم التحديث بنجاح' : 'Batch Status Updated',
-        message: isAr 
-          ? `تم تغيير حالة عدد ${selectedOrderIds.length} شحنات إلى: [ ${newStatus} ]` 
+        message: isAr
+          ? `تم تغيير حالة عدد ${selectedOrderIds.length} شحنات إلى: [ ${newStatus} ]`
           : `Updated status of ${selectedOrderIds.length} orders to: [ ${newStatus} ]`,
         type: 'success',
         category: 'order'
@@ -2540,51 +2606,51 @@ export default function Orders() {
 
   const exportOrdersToPDF = () => {
     const doc = new jsPDF('p', 'mm', 'a4');
-    
+
     // Top banner block (luxury charcoal gray)
     doc.setFillColor(15, 15, 18);
     doc.rect(0, 0, 210, 36, 'F');
-    
+
     // Gold separator strip
     doc.setFillColor(212, 175, 55);
     doc.rect(0, 36, 210, 2, 'F');
-    
+
     // Header texts
     doc.setTextColor(212, 175, 55);
     doc.setFont('Helvetica', 'bold');
     doc.setFontSize(16);
     doc.text('AL-XPRESS LOGISTICS LEDGER', 15, 16);
-    
+
     doc.setTextColor(180, 180, 180);
     doc.setFontSize(8);
     doc.setFont('Helvetica', 'normal');
     doc.text('SMART FREIGHT TRACKING & FINANCIAL LEDGERS', 15, 23);
-    
+
     doc.setTextColor(130, 130, 130);
     doc.setFontSize(7);
     doc.text(`Generated: ${new Date().toLocaleString()} | User: ${profile?.fullName || profile?.email || 'Administrator'}`, 15, 29);
-    
+
     // Quick statistics summary block
     doc.setFillColor(245, 245, 247);
     doc.roundedRect(12, 44, 186, 22, 3, 3, 'F');
-    
+
     doc.setFontSize(8);
     doc.setFont('Helvetica', 'bold');
     doc.setTextColor(120, 120, 120);
     doc.text('TOTAL DECLARED REVENUE', 20, 51);
     doc.text('TOTAL LOAD COUNT', 85, 51);
     doc.text('PENDING CASH BALANCE', 140, 51);
-    
+
     // Calculate metrics
     const totalRevenue = filteredOrdersList.reduce((sum, o) => sum + (parseFloat(o.amountPaid || 0) + parseFloat(o.amountRemaining || 0)), 0);
     const pendingBalance = filteredOrdersList.reduce((sum, o) => sum + parseFloat(o.amountRemaining || 0), 0);
-    
+
     doc.setFontSize(11);
     doc.setTextColor(15, 15, 18);
     doc.text(`${totalRevenue.toLocaleString()} YER`, 20, 59);
     doc.text(`${filteredOrdersList.length} Orders`, 85, 59);
     doc.text(`${pendingBalance.toLocaleString()} YER`, 140, 59);
-    
+
     // Headers of main data grid
     doc.setFillColor(24, 24, 27);
     doc.rect(12, 72, 186, 8, 'F');
@@ -2596,14 +2662,14 @@ export default function Orders() {
     doc.text('ROUTE STATUS', 105, 77);
     doc.text('COST (YER)', 150, 77);
     doc.text('BAL (YER)', 175, 77);
-    
+
     let yIdx = 87;
     // Walk through sorted & filtered list
     filteredOrdersList.forEach((ord, index) => {
       // PDF line limit per page
       if (yIdx > 275) {
         doc.addPage();
-        
+
         // Dynamic continued header
         doc.setFillColor(15, 15, 18);
         doc.rect(0, 0, 210, 18, 'F');
@@ -2613,7 +2679,7 @@ export default function Orders() {
         doc.setFontSize(10);
         doc.setFont('Helvetica', 'bold');
         doc.text('AL-XPRESS LOGISTICS LEDGER (CONTINUED)', 15, 11);
-        
+
         doc.setFillColor(24, 24, 27);
         doc.rect(12, 24, 186, 8, 'F');
         doc.setTextColor(255, 255, 255);
@@ -2623,38 +2689,38 @@ export default function Orders() {
         doc.text('ROUTE STATUS', 105, 29);
         doc.text('COST (YER)', 150, 29);
         doc.text('BAL (YER)', 175, 29);
-        
+
         yIdx = 39;
       }
-      
+
       // Zebra alternate background striping
       if (index % 2 === 0) {
         doc.setFillColor(248, 249, 250);
         doc.rect(12, yIdx - 4.5, 186, 8, 'F');
       }
-      
+
       doc.setTextColor(40, 40, 43);
       doc.setFont('Helvetica', 'normal');
       doc.setFontSize(8);
-      
+
       // Order Smart ID
       doc.setFont('Helvetica', 'bold');
       doc.text(ord.orderNumber || 'ALX-PENDING', 15, yIdx);
       doc.setFont('Helvetica', 'normal');
-      
+
       // Customer Account transliterated nicely
       const customerText = transliterateArabic(ord.customerName || 'Walk-In Customer');
       doc.text(customerText.length > 28 ? `${customerText.substring(0, 26)}...` : customerText, 48, yIdx);
-      
+
       // Status
       const statusLabel = ord.orderStatus || 'Pending';
       const transliteratedStatus = transliterateArabic(statusLabel);
       doc.text(transliteratedStatus, 105, yIdx);
-      
+
       // Total Cost
       const costRaw = parseFloat(ord.amountPaid || 0) + parseFloat(ord.amountRemaining || 0);
       doc.text(costRaw.toLocaleString(), 150, yIdx);
-      
+
       // Remaining Bal
       const balRaw = parseFloat(ord.amountRemaining || 0);
       if (balRaw > 0) {
@@ -2668,22 +2734,22 @@ export default function Orders() {
         doc.text('PAID', 175, yIdx);
         doc.setTextColor(40, 40, 43);
       }
-      
+
       // Grid bottom indicator divider
       doc.setDrawColor(235, 235, 240);
       doc.setLineWidth(0.15);
       doc.line(12, yIdx + 3.5, 198, yIdx + 3.5);
-      
+
       yIdx += 8.5;
     });
-    
+
     // Page footer indicator block
     doc.setTextColor(140, 140, 140);
     doc.setFontSize(6.5);
     doc.setFont('Helvetica', 'normal');
     doc.text('System generated administrative logistics report. Confidential document designed for Al-Xpress Corp ledger.', 15, 288);
     doc.text(`Doc Ref: ALX-${new Date().getFullYear()}/LEDG`, 175, 288);
-    
+
     doc.save(`AlXpress_Orders_Ledger_${new Date().toISOString().split('T')[0]}.pdf`);
     activityLogService.log('export_orders_pdf', `Orders list report`, {
       count: filteredOrdersList.length
@@ -2702,9 +2768,9 @@ export default function Orders() {
       isAr ? 'المدفوع كاش (ريال)' : 'Paid YER',
       isAr ? 'المتبقي ذمة (ريال)' : 'Balance YER'
     ];
-    
+
     const csvLines = [headers.join(',')];
-    
+
     filteredOrdersList.forEach(o => {
       const row = [
         `"${o.orderNumber || ''}"`,
@@ -2719,7 +2785,7 @@ export default function Orders() {
       ];
       csvLines.push(row.join(','));
     });
-    
+
     const csvContent = "\uFEFF" + csvLines.join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -2777,7 +2843,7 @@ export default function Orders() {
 
   return (
     <div className="space-y-6 pb-20 text-start transition-colors">
-      
+
       {/* Title block */}
       <div className="flex justify-between items-center bg-black/40 backdrop-blur-md border border-[#d4af37]/20 p-5 rounded-3xl shadow-lg shadow-black/35">
         <div className="flex items-center gap-3">
@@ -2793,16 +2859,16 @@ export default function Orders() {
         </div>
         <div className="flex flex-wrap gap-2.5">
           {(role === 'Admin' || hasPermission('print_orders')) && (
-            <button 
+            <button
               onClick={exportOrdersToPDF}
               className="bg-slate-950 hover:bg-slate-900 border border-[#d4af37]/25 text-[#d4af37] px-4 py-2.5 rounded-xl flex items-center gap-2 font-black text-xs transition active:scale-95 shadow-md cursor-pointer"
             >
               <Printer className="w-4 h-4" /> {isAr ? 'طباعة تقرير PDF' : 'PDF Report'}
             </button>
           )}
-          
+
           {(role === 'Admin' || hasPermission('export_orders')) && (
-            <button 
+            <button
               onClick={exportOrdersToCSV}
               className="bg-slate-950 hover:bg-slate-905 border border-emerald-900 text-emerald-400 px-4 py-2.5 rounded-xl flex items-center gap-2 font-black text-xs transition active:scale-95 shadow-md cursor-pointer"
             >
@@ -2811,7 +2877,7 @@ export default function Orders() {
           )}
 
           {canAddOrders && (
-            <button 
+            <button
               onClick={() => {
                 resetCreateForm();
                 setIsAddModalOpen(true);
@@ -2842,13 +2908,13 @@ export default function Orders() {
 
       {/* Filter and Table Panel */}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden flex flex-col">
-        
+
         {/* Advanced Filters */}
         <div className="p-4 border-b border-slate-800 flex flex-wrap gap-3 bg-slate-950/20">
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
-            <input 
-              type="text" 
+            <input
+              type="text"
               placeholder={isAr ? "البحث بالاسم، الموحد أو الجوال..." : "Find by code, Name, Track ID..."}
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
@@ -2885,8 +2951,8 @@ export default function Orders() {
             <thead className="bg-slate-950/45 text-slate-400 text-[10px] font-black uppercase tracking-wider border-b border-slate-800">
               <tr>
                 <th className="p-4 w-12 text-center">
-                  <input 
-                    type="checkbox" 
+                  <input
+                    type="checkbox"
                     checked={filteredOrdersList.length > 0 && selectedOrderIds.length === filteredOrdersList.length}
                     onChange={handleSelectAll}
                     className="w-4 h-4 rounded border-slate-800 bg-slate-950 text-[#d4af37] focus:ring-0 focus:ring-offset-0 cursor-pointer accent-[#d4af37]"
@@ -2902,11 +2968,11 @@ export default function Orders() {
             <tbody className="divide-y divide-slate-850 text-xs text-slate-300">
               {filteredOrdersList.map((ord) => (
                 <tr key={ord.id} className="hover:bg-slate-955 transition-all">
-                  
+
                   {/* Checkbox Selector */}
                   <td className="p-4 w-12 text-center">
-                    <input 
-                      type="checkbox" 
+                    <input
+                      type="checkbox"
                       checked={selectedOrderIds.includes(ord.id)}
                       onChange={() => handleToggleSelect(ord.id)}
                       className="w-4 h-4 rounded border-slate-800 bg-slate-950 text-[#d4af37] focus:ring-0 focus:ring-offset-0 cursor-pointer accent-[#d4af37]"
@@ -2922,11 +2988,11 @@ export default function Orders() {
                   {/* Customer */}
                   <td className="p-4 text-start">
                     <div className="flex flex-col">
-                      <span 
+                      <span
                         onClick={() => {
                           if (ord.customerId) {
-                            window.dispatchEvent(new CustomEvent('open-entity-ledger', { 
-                              detail: { entityId: ord.customerId, entityType: 'customer' } 
+                            window.dispatchEvent(new CustomEvent('open-entity-ledger', {
+                              detail: { entityId: ord.customerId, entityType: 'customer' }
                             }));
                           }
                         }}
@@ -2954,7 +3020,7 @@ export default function Orders() {
                       const paidTotal = parseFloat(ord.amountPaid || 0);
                       const remainVal = parseFloat(ord.amountRemaining || 0);
                       const totalFinal = paidTotal + remainVal;
-                      
+
                       return (
                         <div className="flex flex-col space-y-0.5">
                           <div className="font-mono text-slate-200 font-semibold">
@@ -2968,7 +3034,7 @@ export default function Orders() {
                               {isAr ? 'المتبقي: ' : 'Remaining: '}{Math.ceil(remainVal).toLocaleString()} YER
                             </div>
                           ) : Math.ceil(remainVal) < 0 ? (
-                             <div className="font-mono text-amber-500 text-[11px] font-bold">
+                            <div className="font-mono text-amber-500 text-[11px] font-bold">
                               {isAr ? 'فائض حساب: ' : 'Overpaid: '}{Math.abs(Math.ceil(remainVal)).toLocaleString()} YER
                             </div>
                           ) : (
@@ -2981,9 +3047,9 @@ export default function Orders() {
 
                   {/* Actions */}
                   <td className="p-4 text-left flex justify-end gap-2 items-center">
-                    
+
                     {/* View Details / QR */}
-                    <button 
+                    <button
                       onClick={() => {
                         setSelectedOrder(ord);
                         setIsDetailsModalOpen(true);
@@ -2997,7 +3063,7 @@ export default function Orders() {
 
                     {/* Payment handler — requires add_finance */}
                     {parseFloat(ord.amountRemaining || 0) > 0 && (role === 'Admin' || hasPermission('add_finance')) && (
-                      <button 
+                      <button
                         onClick={() => {
                           setSelectedOrder(ord);
                           setPaymentFormData({ amount: '', method: 'Cash', notes: '', pin: '' });
@@ -3012,32 +3078,32 @@ export default function Orders() {
                     )}
 
                     {/* Status updates — requires edit_orders or update_order_status; delivered orders require edit_delivered_orders */}
-                    {(role === 'Admin' || hasPermission('edit_orders') || hasPermission('update_order_status')) && 
+                    {(role === 'Admin' || hasPermission('edit_orders') || hasPermission('update_order_status')) &&
                       (ord.orderStatus !== 'تم التسليم' || role === 'Admin' || hasPermission('edit_delivered_orders')) && (
-                      <button 
-                        onClick={() => {
-                          setSelectedOrder(ord);
-                          setUpdateFormData({
-                            orderStatus: ord.orderStatus || 'تم تسجيل الطلب',
-                            deliveryStatus: ord.deliveryStatus || 'في الانتظار',
-                            locationYemen: ord.locationYemen || 'مستودع صنعاء الرئيسي',
-                            internalNotes: ord.internalNotes || '',
-                            shippingCourierId: ord.shippingCourierId || '',
-                            deliveryCourierId: ord.deliveryCourierId || ''
-                          });
-                          setUpdateShippings(ord.shippingDetails || []);
-                          setIsUpdateModalOpen(true);
-                        }}
-                        className="bg-slate-805 text-slate-305 hover:text-white px-2.5 py-1.5 rounded-lg transition-all text-[10px] flex items-center gap-1 font-bold border border-slate-750 cursor-pointer"
-                        title={isAr ? 'تعديل المسار والتوجيه اللوجيستي' : 'Update state'}
-                      >
-                        <Activity className="w-3.5 h-3.5 text-cyan-400" />
-                        {isAr ? 'اللوجستيات' : 'Update'}
-                      </button>
-                    )}
+                        <button
+                          onClick={() => {
+                            setSelectedOrder(ord);
+                            setUpdateFormData({
+                              orderStatus: ord.orderStatus || 'تم تسجيل الطلب',
+                              deliveryStatus: ord.deliveryStatus || 'في الانتظار',
+                              locationYemen: ord.locationYemen || 'مستودع صنعاء الرئيسي',
+                              internalNotes: ord.internalNotes || '',
+                              shippingCourierId: ord.shippingCourierId || '',
+                              deliveryCourierId: ord.deliveryCourierId || ''
+                            });
+                            setUpdateShippings(ord.shippingDetails || []);
+                            setIsUpdateModalOpen(true);
+                          }}
+                          className="bg-slate-805 text-slate-305 hover:text-white px-2.5 py-1.5 rounded-lg transition-all text-[10px] flex items-center gap-1 font-bold border border-slate-750 cursor-pointer"
+                          title={isAr ? 'تعديل المسار والتوجيه اللوجيستي' : 'Update state'}
+                        >
+                          <Activity className="w-3.5 h-3.5 text-cyan-400" />
+                          {isAr ? 'اللوجستيات' : 'Update'}
+                        </button>
+                      )}
 
                     {role === 'Admin' && (
-                      <button 
+                      <button
                         onClick={() => handleDeleteOrderClick(ord)}
                         className="bg-rose-950/20 text-rose-400 hover:bg-rose-900 hover:text-white px-2.5 py-1.5 rounded-lg transition-all text-[10px] flex items-center gap-1 font-bold border border-rose-900/30 cursor-pointer"
                         title={isAr ? 'حذف هذا الطلب نهائياً' : 'Delete Order'}
@@ -3070,8 +3136,8 @@ export default function Orders() {
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full col-span-1 bg-yellow-500 animate-pulse"></span>
             <span className="text-white text-xs font-black">
-              {isAr 
-                ? `تم تحديد ${selectedOrderIds.length} فواتير` 
+              {isAr
+                ? `تم تحديد ${selectedOrderIds.length} فواتير`
                 : `${selectedOrderIds.length} invoices selected`}
             </span>
           </div>
@@ -3083,7 +3149,7 @@ export default function Orders() {
             <span className="text-slate-400 text-[10px] font-bold">
               {isAr ? 'تحديث الحالة الكلية:' : 'Change status:'}
             </span>
-            <select 
+            <select
               id="batch-status-select"
               defaultValue=""
               onChange={(e) => {
@@ -3108,7 +3174,7 @@ export default function Orders() {
           <div className="h-6 w-[1px] bg-slate-800"></div>
 
           <div className="flex gap-2">
-            <button 
+            <button
               onClick={() => {
                 // A quick way to ensure data is forcefully synced
                 const btn = document.getElementById('batch-deselect-btn');
@@ -3125,7 +3191,7 @@ export default function Orders() {
               {isAr ? 'تحديث البيانات' : 'Refresh Data'}
             </button>
 
-            <button 
+            <button
               id="batch-deselect-btn"
               onClick={() => setSelectedOrderIds([])}
               disabled={isBatchUpdating}
@@ -3141,7 +3207,7 @@ export default function Orders() {
       {isAddModalOpen && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in overflow-y-auto">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-6xl my-8 overflow-hidden shadow-[0_0_50px_rgba(212,175,55,0.15)] flex flex-col max-h-[90vh]">
-            
+
             {/* Header */}
             <div className="p-4 bg-slate-955 border-b border-slate-800 flex justify-between items-center">
               <h3 className="font-black text-white text-base">
@@ -3188,13 +3254,13 @@ export default function Orders() {
 
             {/* Scrollable Form Body */}
             <form onSubmit={handleCreateOrder} className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar text-start">
-              
+
               {/* Debt Alert Warning Banner */}
               {customerProfileStats && customerProfileStats.totalOutstandingDebt > 0 && (
                 <div className="p-4 bg-red-950/30 border border-red-900 text-red-400 rounded-2xl flex items-center gap-3 animate-pulse">
                   <AlertCircle className="w-6 h-6 shrink-0 text-red-500" />
                   <span className="font-black text-xs leading-relaxed">
-                    {isAr 
+                    {isAr
                       ? `⚠️ تنبيه ديون معلقة: يوجد للعميل الحالي ديون غير محصلة ومستحقة بذمته بقيمة: [ ${customerProfileStats.totalOutstandingDebt.toLocaleString()} ريال يمني ].`
                       : `⚠️ Outstanding Balances Warning: This client has outstanding pending balances of [ YER ${customerProfileStats.totalOutstandingDebt.toLocaleString()} ].`}
                   </span>
@@ -3203,13 +3269,13 @@ export default function Orders() {
 
               {/* Grid 1: Customer Section + Logistics Info */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
+
                 {/* 1. Customer Selection & Activity Profile */}
                 <div className="space-y-4 bg-slate-950/30 border border-slate-800 p-5 rounded-3xl relative">
                   <div className="flex justify-between items-center">
                     <label className="text-xs font-black text-slate-400">{isAr ? 'العميل المستلم' : 'Receiver Customer'}</label>
                     {(role === 'Admin' || hasPermission('add_customers')) && (
-                      <button 
+                      <button
                         type="button"
                         onClick={() => setIsAddCustomerOpen(true)}
                         className="text-xs font-black text-[#d4af37] hover:underline flex items-center gap-1"
@@ -3224,7 +3290,7 @@ export default function Orders() {
                   {!formData.customerId ? (
                     <div className="relative">
                       <Search className="absolute right-3 top-3 text-slate-500 w-4 h-4" />
-                      <input 
+                      <input
                         type="text"
                         placeholder={isAr ? "ابحث عن عميل بالاسم أو رقم الجوال..." : "Search customer by name or phone..."}
                         value={customerSearchQuery}
@@ -3316,7 +3382,7 @@ export default function Orders() {
                       <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider text-start">
                         {isAr ? 'رقم الطلب الموحد' : 'Unified Order Code'}
                       </label>
-                      <input 
+                      <input
                         type="text"
                         disabled
                         value={previewOrderNumber}
@@ -3328,7 +3394,7 @@ export default function Orders() {
                       <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider text-start">
                         {isAr ? 'تاريخ الفاتورة' : 'Invoice Date'}
                       </label>
-                      <input 
+                      <input
                         type="text"
                         disabled
                         value={new Date().toLocaleDateString(isAr ? 'ar-YE' : 'en-US')}
@@ -3357,7 +3423,7 @@ export default function Orders() {
                       <select
                         required
                         value={formData.orderSourceId}
-                        onChange={(e) => setFormData({...formData, orderSourceId: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, orderSourceId: e.target.value })}
                         className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-3 outline-none font-bold text-xs"
                       >
                         <option value="">{isAr ? '-- اختر المصدر --' : '-- Choose Source --'}</option>
@@ -3372,10 +3438,10 @@ export default function Orders() {
                       <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider text-start">
                         {isAr ? 'رقم الفاتورة الأصلي (سلة...)' : 'Orig. Store Reference'}
                       </label>
-                      <input 
+                      <input
                         type="text"
                         value={formData.externalOrderNumber}
-                        onChange={(e) => setFormData({...formData, externalOrderNumber: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, externalOrderNumber: e.target.value })}
                         placeholder={isAr ? "رقم الفاتورة الأصلي" : "Invoice ID"}
                         className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-3 outline-none font-bold text-xs"
                       />
@@ -3388,10 +3454,10 @@ export default function Orders() {
                       <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider text-start">
                         {isAr ? 'رقم التتبع الدولي' : 'Global Tracking Code'}
                       </label>
-                      <input 
+                      <input
                         type="text"
                         value={formData.trackingNumber}
-                        onChange={(e) => setFormData({...formData, trackingNumber: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, trackingNumber: e.target.value })}
                         placeholder={isAr ? "رقم التتبع الدولي (DHL...)" : "Global Tracking ID"}
                         className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-3 outline-none font-bold text-xs"
                       />
@@ -3403,7 +3469,7 @@ export default function Orders() {
                         {isAr ? 'كود السلة الموحد (Cart Code)' : 'Cart Share Code'}
                       </label>
                       <div className="flex gap-1.5">
-                        <input 
+                        <input
                           type="text"
                           value={cartShareCode}
                           onChange={(e) => setCartShareCode(e.target.value)}
@@ -3434,7 +3500,7 @@ export default function Orders() {
                     <span className="text-xs font-black text-white block">{isAr ? 'محتويات الشحنة والمنتجات التفصيلية' : 'Freight Cargo Contents'}</span>
                     <span className="text-[10px] text-slate-500 font-bold">{isAr ? 'قم بإدخال بيانات المنتج وعناصره بالتفصيل' : 'Define detailed products lists for weight & calculation'}</span>
                   </div>
-                  <button 
+                  <button
                     type="button"
                     onClick={addItemRow}
                     className="bg-cyan-600/10 hover:bg-cyan-650/20 text-cyan-400 px-3 py-1.5 rounded-xl text-[10px] font-black transition-all"
@@ -3468,10 +3534,10 @@ export default function Orders() {
                 <div className="space-y-2.5">
                   {items.map((item, idx) => (
                     <div key={idx} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-2.5 bg-slate-900/40 border border-slate-850/50 rounded-2xl">
-                      
+
                       {/* Name */}
                       <div className="col-span-3">
-                        <input 
+                        <input
                           required
                           type="text"
                           value={item.productName || ''}
@@ -3483,7 +3549,7 @@ export default function Orders() {
 
                       {/* Price */}
                       <div className="col-span-2">
-                        <input 
+                        <input
                           required
                           type="number"
                           value={item.productPrice || 0}
@@ -3494,7 +3560,7 @@ export default function Orders() {
 
                       {/* Quantity */}
                       <div className="col-span-1">
-                        <input 
+                        <input
                           required
                           type="number"
                           value={item.quantity || 1}
@@ -3508,7 +3574,7 @@ export default function Orders() {
                         <>
                           {/* Weight */}
                           <div className="col-span-1">
-                            <input 
+                            <input
                               type="number"
                               step="any"
                               value={item.weight ?? ''}
@@ -3518,7 +3584,7 @@ export default function Orders() {
                           </div>
                           {/* CBM */}
                           <div className="col-span-1">
-                            <input 
+                            <input
                               type="number"
                               step="any"
                               value={item.cbm ?? ''}
@@ -3528,7 +3594,7 @@ export default function Orders() {
                           </div>
                           {/* Length */}
                           <div className="col-span-1">
-                            <input 
+                            <input
                               type="number"
                               step="any"
                               value={item.length ?? ''}
@@ -3545,7 +3611,7 @@ export default function Orders() {
                           </div>
                           {/* Width */}
                           <div className="col-span-1">
-                            <input 
+                            <input
                               type="number"
                               step="any"
                               value={item.width ?? ''}
@@ -3562,7 +3628,7 @@ export default function Orders() {
                           </div>
                           {/* Height */}
                           <div className="col-span-1">
-                            <input 
+                            <input
                               type="number"
                               step="any"
                               value={item.height ?? ''}
@@ -3582,7 +3648,7 @@ export default function Orders() {
                         <>
                           {/* Product URL */}
                           <div className="col-span-2">
-                            <input 
+                            <input
                               type="text"
                               value={item.productUrl || ''}
                               onChange={(e) => updateItemRow(idx, 'productUrl', e.target.value)}
@@ -3592,7 +3658,7 @@ export default function Orders() {
                           </div>
                           {/* Tracking Number */}
                           <div className="col-span-3">
-                            <input 
+                            <input
                               type="text"
                               value={item.trackingNumber || ''}
                               onChange={(e) => updateItemRow(idx, 'trackingNumber', e.target.value)}
@@ -3605,8 +3671,8 @@ export default function Orders() {
 
                       {/* Remove Button */}
                       <div className="col-span-1 flex justify-center">
-                        <button 
-                          type="button" 
+                        <button
+                          type="button"
                           onClick={() => removeItemRow(idx)}
                           disabled={items.length === 1}
                           className="text-rose-500 hover:text-white hover:bg-rose-600/20 p-2 rounded-xl transition disabled:opacity-30 cursor-pointer"
@@ -3624,7 +3690,7 @@ export default function Orders() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-3 border-t border-slate-850/65">
                     {/* Bank Commission Checkbox & Rate */}
                     <div className="flex items-center gap-3 bg-slate-900/40 p-3 rounded-2xl border border-slate-850">
-                      <input 
+                      <input
                         type="checkbox"
                         id="bank-comm-check"
                         checked={bankCommissionEnabled}
@@ -3633,7 +3699,7 @@ export default function Orders() {
                       />
                       <label htmlFor="bank-comm-check" className="text-[11px] font-bold text-slate-350 cursor-pointer">{isAr ? 'عمولة بنك (%)' : 'Bank Comm (%)'}</label>
                       {bankCommissionEnabled && (
-                        <input 
+                        <input
                           type="number"
                           value={bankCommissionRate}
                           onChange={(e) => setBankCommissionRate(parseFloat(e.target.value) || 0)}
@@ -3642,29 +3708,33 @@ export default function Orders() {
                       )}
                     </div>
 
-                    {/* Coupon Discount Checkbox & Rate */}
+                    {/* Coupon Discount Checkbox & Amount */}
                     <div className="flex items-center gap-3 bg-slate-900/40 p-3 rounded-2xl border border-slate-850">
-                      <input 
+                      <input
                         type="checkbox"
                         id="coupon-check"
                         checked={couponEnabled}
                         onChange={(e) => setCouponEnabled(e.target.checked)}
                         className="rounded bg-slate-950 border-slate-800 text-yellow-600 focus:ring-0 w-4 h-4 cursor-pointer"
                       />
-                      <label htmlFor="coupon-check" className="text-[11px] font-bold text-slate-350 cursor-pointer">{isAr ? 'كوبون خصم (%)' : 'Coupon Discount (%)'}</label>
+                      <label htmlFor="coupon-check" className="text-[11px] font-bold text-slate-350 cursor-pointer">{isAr ? 'كوبون خصم (ريال ثابت)' : 'Coupon Discount (SAR)'}</label>
                       {couponEnabled && (
-                        <input 
-                          type="number"
-                          value={couponRate}
-                          onChange={(e) => setCouponRate(parseFloat(e.target.value) || 0)}
-                          className="w-12 bg-slate-950 border border-slate-800 text-white rounded-xl p-1 text-center font-mono font-bold text-[10px]"
-                        />
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            value={couponRate}
+                            onChange={(e) => setCouponRate(parseFloat(e.target.value) || 0)}
+                            className="w-16 bg-slate-950 border border-slate-800 text-white rounded-xl p-1 text-center font-mono font-bold text-[10px]"
+                            placeholder="0"
+                          />
+                          <span className="text-[10px] text-slate-500 font-bold">SAR</span>
+                        </div>
                       )}
                     </div>
 
                     {/* Add Shipping Checkbox */}
                     <div className="flex items-center gap-3 bg-slate-900/40 p-3 rounded-2xl border border-slate-850">
-                      <input 
+                      <input
                         type="checkbox"
                         id="add-shipping-check"
                         checked={addShippingEnabled}
@@ -3715,7 +3785,7 @@ export default function Orders() {
                       <span className="text-xs font-black text-white block">{isAr ? 'تفاصيل شحنات المسار اللوجيستي' : 'Shipping Manifest Tracks'}</span>
                       <span className="text-[10px] text-slate-500 font-bold mt-0.5">{isAr ? 'أدخل مسارات الشحن المعتمدة لهذا الطرد للتدقيق' : 'Define transport companies and costs for delivery tracks'}</span>
                     </div>
-                    <button 
+                    <button
                       type="button"
                       onClick={addShippingRow}
                       className="bg-emerald-600/10 hover:bg-emerald-650/20 text-emerald-400 px-3 py-1.5 rounded-xl text-[10px] font-black transition-all flex items-center gap-1"
@@ -3837,79 +3907,117 @@ export default function Orders() {
                             />
                           </div>
 
-                          {/* 7. Handover Date */}
+                          {/* 7. Dispatch Date - defaults to today, editable */}
                           <div>
-                            <label className="block text-slate-500 mb-1">{isAr ? 'تاريخ التسليم للناقل' : 'Handover Date'}</label>
-                            <input
-                              type="date"
-                              value={sh.shippingDate || ''}
-                              onChange={(e) => {
-                                const newDate = e.target.value;
-                                let expected = sh.expectedArrival || '';
-                                if (newDate && sh.shippingDuration) {
-                                  const days = parseInt(sh.shippingDuration);
-                                  if (!isNaN(days)) {
-                                    const dateObj = new Date(newDate);
-                                    dateObj.setDate(dateObj.getDate() + days);
-                                    expected = dateObj.toISOString().split('T')[0];
+                            <label className="block text-slate-500 mb-1">{isAr ? 'تاريخ انطلاق الشحن' : 'Dispatch Date'}</label>
+                            <div className="relative">
+                              <input
+                                type="date"
+                                value={sh.shippingDate || ''}
+                                onChange={(e) => {
+                                  const newDate = e.target.value;
+                                  let expected = sh.expectedArrival || '';
+                                  if (newDate && sh.shippingDuration) {
+                                    const days = parseInt(sh.shippingDuration);
+                                    if (!isNaN(days)) {
+                                      const dateObj = new Date(newDate);
+                                      dateObj.setDate(dateObj.getDate() + days);
+                                      expected = dateObj.toISOString().split('T')[0];
+                                    }
                                   }
-                                }
-                                updateShippingRow(idx, 'shippingDate', newDate);
-                                updateShippingRow(idx, 'expectedArrival', expected);
-                              }}
-                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans"
-                            />
+                                  updateShippingRow(idx, 'shippingDate', newDate);
+                                  updateShippingRow(idx, 'expectedArrival', expected);
+                                }}
+                                className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans pr-9"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const el = document.getElementById(`dispatch-date-${idx}`);
+                                  if (el) (el as HTMLInputElement).showPicker?.();
+                                }}
+                                className="absolute inset-y-0 end-2.5 flex items-center text-slate-500 hover:text-[#d4af37] transition"
+                              >
+                                <Calendar className="w-4 h-4" />
+                              </button>
+                              <input type="date" id={`dispatch-date-${idx}`} className="sr-only"
+                                value={sh.shippingDate || ''}
+                                onChange={(e) => {
+                                  const newDate = e.target.value;
+                                  let expected = sh.expectedArrival || '';
+                                  if (newDate && sh.shippingDuration) {
+                                    const days = parseInt(sh.shippingDuration);
+                                    if (!isNaN(days)) {
+                                      const dateObj = new Date(newDate);
+                                      dateObj.setDate(dateObj.getDate() + days);
+                                      expected = dateObj.toISOString().split('T')[0];
+                                    }
+                                  }
+                                  updateShippingRow(idx, 'shippingDate', newDate);
+                                  updateShippingRow(idx, 'expectedArrival', expected);
+                                }}
+                              />
+                            </div>
                           </div>
 
-                          {/* 8. Transit Duration */}
+                          {/* 8. Transit Duration - auto-filled from settings, editable */}
                           <div>
                             <label className="block text-slate-500 mb-1">{isAr ? 'المدة التقديرية (أيام)' : 'Transit Duration (Days)'}</label>
-                            <input
-                              type="number"
-                              value={sh.shippingDuration || ''}
-                              onChange={(e) => {
-                                const durationVal = e.target.value;
-                                let expected = sh.expectedArrival || '';
-                                if (sh.shippingDate && durationVal) {
-                                  const days = parseInt(durationVal);
-                                  if (!isNaN(days)) {
-                                    const dateObj = new Date(sh.shippingDate);
-                                    dateObj.setDate(dateObj.getDate() + days);
-                                    expected = dateObj.toISOString().split('T')[0];
+                            <div className="relative">
+                              <input
+                                type="number"
+                                value={sh.shippingDuration || ''}
+                                onChange={(e) => {
+                                  const durationVal = e.target.value;
+                                  let expected = sh.expectedArrival || '';
+                                  if (sh.shippingDate && durationVal) {
+                                    const days = parseInt(durationVal);
+                                    if (!isNaN(days)) {
+                                      const dateObj = new Date(sh.shippingDate);
+                                      dateObj.setDate(dateObj.getDate() + days);
+                                      expected = dateObj.toISOString().split('T')[0];
+                                    }
                                   }
-                                }
-                                updateShippingRow(idx, 'shippingDuration', durationVal);
-                                updateShippingRow(idx, 'expectedArrival', expected);
-                              }}
-                              placeholder={isAr ? "مثال: 12 يوم" : "e.g. 12"}
-                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none placeholder-slate-655 font-mono"
-                            />
+                                  updateShippingRow(idx, 'shippingDuration', durationVal);
+                                  updateShippingRow(idx, 'expectedArrival', expected);
+                                }}
+                                placeholder={isAr ? "مثال: 12 يوم" : "e.g. 12"}
+                                className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none placeholder-slate-655 font-mono pr-9"
+                              />
+                              <span className="absolute inset-y-0 end-2.5 flex items-center text-slate-600 text-[10px] font-bold pointer-events-none">
+                                {isAr ? 'يوم' : 'd'}
+                              </span>
+                            </div>
                           </div>
 
-                          {/* 9. Expected Arrival */}
+                          {/* 9. Expected Arrival - auto-calculated, editable */}
                           <div>
                             <label className="block text-slate-500 mb-1">{isAr ? 'موعد الوصول المتوقع' : 'Expected Arrival'}</label>
-                            <input
-                              type="text"
-                              value={sh.expectedArrival || ''}
-                              onChange={(e) => updateShippingRow(idx, 'expectedArrival', e.target.value)}
-                              placeholder={isAr ? "سنة/شهر/يوم" : "YYYY-MM-DD"}
-                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none placeholder-slate-650 font-mono"
-                            />
+                            <div className="relative">
+                              <input
+                                type="date"
+                                value={sh.expectedArrival || ''}
+                                onChange={(e) => updateShippingRow(idx, 'expectedArrival', e.target.value)}
+                                className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans pr-9"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const el = document.getElementById(`expected-date-${idx}`);
+                                  if (el) (el as HTMLInputElement).showPicker?.();
+                                }}
+                                className="absolute inset-y-0 end-2.5 flex items-center text-slate-500 hover:text-emerald-400 transition"
+                              >
+                                <Calendar className="w-4 h-4" />
+                              </button>
+                              <input type="date" id={`expected-date-${idx}`} className="sr-only"
+                                value={sh.expectedArrival || ''}
+                                onChange={(e) => updateShippingRow(idx, 'expectedArrival', e.target.value)}
+                              />
+                            </div>
                           </div>
 
-                          {/* 10. Completed Delivery */}
-                          <div>
-                            <label className="block text-slate-500 mb-1">{isAr ? 'التسليم الفعلي لليمن' : 'Completed Delivery'}</label>
-                            <input
-                              type="date"
-                              value={sh.deliveryDate || ''}
-                              onChange={(e) => updateShippingRow(idx, 'deliveryDate', e.target.value)}
-                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans"
-                            />
-                          </div>
-
-                          {/* 11. Packaging Fees */}
+                          {/* 10. Packaging Fees (SAR) */}
                           <div className="col-span-2">
                             <label className="block text-slate-500 mb-1">{isAr ? 'أجور التغليف والصناديق (SAR)' : 'Packaging Fees (SAR)'}</label>
                             <input
@@ -3924,6 +4032,28 @@ export default function Orders() {
                     ))}
                   </div>
 
+                  {/* Yemen delivery summary - computed from all shipping durations + Yemen delivery duration */}
+                  {shippings && shippings.length > 0 && (
+                    <div className="p-3 bg-slate-900/60 border border-slate-800 rounded-2xl flex flex-wrap gap-x-6 gap-y-2 text-[11px] font-bold text-slate-400 mt-2 text-start">
+                      <div>
+                        {isAr ? 'مجموع مدد الشحن:' : 'Total Transit Days:'}{' '}
+                        <span className="font-mono text-amber-400">
+                          {shippings.reduce((sum, s) => sum + (parseInt(s.shippingDuration) || 0), 0)} {isAr ? 'يوم' : 'd'}
+                        </span>
+                      </div>
+                      <div>
+                        {isAr ? 'مدة التوصيل لليمن (إعدادات):' : 'Yemen Delivery Duration:'}{' '}
+                        <span className="font-mono text-blue-400">{settings.defaultYemenDeliveryDuration ?? 5} {isAr ? 'يوم' : 'd'}</span>
+                      </div>
+                      <div className="border-t border-slate-800 w-full pt-2 flex justify-between items-center">
+                        <span className="text-[11px] font-black text-white">{isAr ? 'المدة الإجمالية المتوقعة للتسليم لليمن:' : 'Expected Yemen Delivery Duration:'}</span>
+                        <span className="font-mono text-emerald-400 font-black text-sm">
+                          {shippings.reduce((sum, s) => sum + (parseInt(s.shippingDuration) || 0), 0) + (settings.defaultYemenDeliveryDuration ?? 5)} {isAr ? 'يوم' : 'days'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Show CBM under shipping rows for Factory */}
                   {formData.orderSourceType === 'Factory' && (
                     <div className="p-3 bg-slate-900/40 border border-slate-850 rounded-2xl flex justify-between text-[11px] font-bold text-slate-400 mt-2 text-start">
@@ -3934,39 +4064,44 @@ export default function Orders() {
                     </div>
                   )}
 
-                  {/* Packaging Fee for shipping companies (%) checkbox */}
+                  {/* Carrier packaging fee - fixed SAR amount */}
                   <div className="flex items-center gap-3 bg-slate-900/40 p-3 rounded-2xl border border-slate-850 mt-3 text-start">
-                    <input 
+                    <input
                       type="checkbox"
                       id="packaging-fee-check"
                       checked={packagingFeeEnabled}
                       onChange={(e) => setPackagingFeeEnabled(e.target.checked)}
                       className="rounded bg-slate-950 border-slate-800 text-yellow-600 focus:ring-0 w-4 h-4 cursor-pointer"
                     />
-                    <label htmlFor="packaging-fee-check" className="text-[11px] font-bold text-slate-350 cursor-pointer">{isAr ? 'تطبيق رسوم تغليف شركة الشحن (%)' : 'Apply carrier packaging fee (%)'}</label>
+                    <label htmlFor="packaging-fee-check" className="text-[11px] font-bold text-slate-350 cursor-pointer">{isAr ? 'إضافة رسوم تغليف شركة الشحن (ريال ثابت)' : 'Add carrier packaging fee (fixed SAR)'}</label>
                     {packagingFeeEnabled && (
-                      <input 
-                        type="number"
-                        value={packagingFeeRate}
-                        onChange={(e) => setPackagingFeeRate(parseFloat(e.target.value) || 0)}
-                        className="w-14 bg-slate-950 border border-slate-800 text-white rounded-xl p-1.5 text-center font-mono font-bold text-[11px]"
-                      />
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          value={packagingFeeRate}
+                          onChange={(e) => setPackagingFeeRate(parseFloat(e.target.value) || 0)}
+                          className="w-20 bg-slate-950 border border-slate-800 text-white rounded-xl p-1.5 text-center font-mono font-bold text-[11px]"
+                          placeholder="0"
+                        />
+                        <span className="text-[10px] text-slate-500 font-bold">SAR</span>
+                      </div>
                     )}
                   </div>
                 </div>
               )}
 
               {/* Section 4: Couriers & Local Logistics Drivers */}
+
               <div className="space-y-4 bg-slate-950/20 border border-slate-800 p-5 rounded-3xl">
                 <span className="block text-xs font-black text-white text-start mb-2">{isAr ? 'المناديب واللوجستيات الميدانية' : 'Field Logistics Drivers'}</span>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-[11px] text-start font-bold">
                   {/* Saudi Courier */}
                   <div>
                     <label className="block text-slate-500 mb-1">{isAr ? 'موظف التعبئة والتجميع (سعودي)' : 'Saudi Partner Aggregator'}</label>
-                    <select 
+                    <select
                       value={formData.shippingCourierId}
-                      onChange={(e) => setFormData({...formData, shippingCourierId: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, shippingCourierId: e.target.value })}
                       className="w-full bg-slate-950 border border-slate-855 text-white rounded-xl p-3 outline-none text-[11px] font-bold"
                     >
                       <option value="">{isAr ? '-- اختر موظف التجميع --' : '-- Choose Aggregator --'}</option>
@@ -3994,9 +4129,9 @@ export default function Orders() {
                   {/* Yemen Driver */}
                   <div>
                     <label className="block text-slate-500 mb-1">{isAr ? 'مندوب التوزيع النهائي (اليمن)' : 'Yemen Delivery Driver'}</label>
-                    <select 
+                    <select
                       value={formData.deliveryCourierId}
-                      onChange={(e) => setFormData({...formData, deliveryCourierId: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, deliveryCourierId: e.target.value })}
                       className="w-full bg-slate-950 border border-slate-855 text-white rounded-xl p-3 outline-none text-[11px] font-bold"
                     >
                       <option value="">{isAr ? '-- اختر مندوب التوصيل --' : '-- Choose Yemen Driver --'}</option>
@@ -4011,10 +4146,10 @@ export default function Orders() {
                   {/* Yemen Driver Flat Fee */}
                   <div>
                     <label className="block text-slate-500 mb-1">{isAr ? 'رسوم التوصيل لليمن (ريال يمني)' : 'Delivery Courier Fee (YER)'}</label>
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       value={formData.deliveryCourierFee}
-                      onChange={(e) => setFormData({...formData, deliveryCourierFee: parseFloat(e.target.value) || 0})}
+                      onChange={(e) => setFormData({ ...formData, deliveryCourierFee: parseFloat(e.target.value) || 0 })}
                       className="w-full bg-slate-950 border border-slate-855 text-white rounded-xl p-3 outline-none font-mono text-xs text-center"
                     />
                   </div>
@@ -4023,19 +4158,19 @@ export default function Orders() {
 
               {/* Section 5: Financial calculations parameters */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-slate-950/30 border border-slate-800 p-6 rounded-3xl text-[11px] font-bold text-slate-400 text-start">
-                
+
                 {/* Inputs for pricing parameters */}
                 <div className="space-y-4 col-span-2 grid grid-cols-2 gap-3 self-start">
-                  
+
                   {formData.orderSourceType === 'SHEIN' && (
                     <div>
                       <label className="block text-[10px] text-slate-500 uppercase tracking-widest block leading-none mb-1.5">
                         {isAr ? 'سعر شي إن الأحمر (SAR)' : 'SHEIN Red Price (SAR)'}
                       </label>
-                      <input 
-                        type="number" 
+                      <input
+                        type="number"
                         value={formData.sheinRedPrice || ''}
-                        onChange={(e) => setFormData({...formData, sheinRedPrice: parseFloat(e.target.value) || 0})}
+                        onChange={(e) => setFormData({ ...formData, sheinRedPrice: parseFloat(e.target.value) || 0 })}
                         className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none font-mono text-[11px]"
                         placeholder="0.00"
                       />
@@ -4053,7 +4188,7 @@ export default function Orders() {
                         <label className="block text-[10px] text-slate-500 uppercase tracking-widest block leading-none mb-1.5">
                           {isAr ? 'نسبة الربح للكيلو (SAR/كجم)' : 'Profit Rate per KG (SAR/kg)'}
                         </label>
-                        <input 
+                        <input
                           type="number"
                           step="any"
                           value={profitPerKgRate}
@@ -4066,7 +4201,7 @@ export default function Orders() {
                           {isAr ? 'سعر شحن الـ CBM (دولار USD/m³)' : 'CBM Shipping Rate (USD/m³)'}
                         </label>
                         <div className="flex gap-1.5">
-                          <input 
+                          <input
                             type="number"
                             step="any"
                             value={cbmShippingRateValue}
@@ -4105,10 +4240,10 @@ export default function Orders() {
                   {formData.orderSourceType !== 'SHEIN' && (
                     <div>
                       <label className="block text-[10px] text-slate-500 uppercase tracking-widest block leading-none mb-1.5">{isAr ? 'رسوم التغليف العامة (SAR)' : 'KSA Wrapping Fee (SAR)'}</label>
-                      <input 
-                        type="number" 
+                      <input
+                        type="number"
                         value={formData.packagingFee || ''}
-                        onChange={(e) => setFormData({...formData, packagingFee: parseFloat(e.target.value) || 0})}
+                        onChange={(e) => setFormData({ ...formData, packagingFee: parseFloat(e.target.value) || 0 })}
                         className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none font-mono text-[11px]"
                         placeholder="0.00"
                       />
@@ -4117,9 +4252,9 @@ export default function Orders() {
 
                   <div>
                     <label className="block text-[10px] text-slate-500 uppercase tracking-widest block leading-none mb-1.5">{isAr ? 'العملة والتحصيل المالي' : 'Collection Currency'}</label>
-                    <select 
+                    <select
                       value={formData.currency}
-                      onChange={(e) => setFormData({...formData, currency: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
                       className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none text-[11px]"
                     >
                       <option value="SAR">{isAr ? 'ريال سعودي' : 'SAR'}</option>
@@ -4129,15 +4264,15 @@ export default function Orders() {
 
                   <div>
                     <label className="block text-[10px] text-slate-500 uppercase tracking-widest block leading-none mb-1.5">{isAr ? 'سعر الصرف (ريال يمني)' : 'Exchange Rate (YER)'}</label>
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       value={formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER}
                       onChange={(e) => {
                         const val = parseFloat(e.target.value) || 1;
                         if (formData.currency === 'USD') {
-                          setFormData({...formData, exchangeRateUSD: val});
+                          setFormData({ ...formData, exchangeRateUSD: val });
                         } else {
-                          setFormData({...formData, exchangeRateYER: val});
+                          setFormData({ ...formData, exchangeRateYER: val });
                         }
                       }}
                       className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none font-mono text-[11px] text-center"
@@ -4146,10 +4281,10 @@ export default function Orders() {
 
                   <div className="md:col-span-2 mt-2">
                     <label className="flex items-center gap-2 cursor-pointer bg-slate-900/40 p-3 rounded-xl border border-slate-800 hover:bg-slate-900 transition">
-                      <input 
+                      <input
                         type="checkbox"
                         checked={formData.deductSourcingCostFromCourier || false}
-                        onChange={(e) => setFormData({...formData, deductSourcingCostFromCourier: e.target.checked})}
+                        onChange={(e) => setFormData({ ...formData, deductSourcingCostFromCourier: e.target.checked })}
                         className="w-4 h-4 rounded border-slate-700 bg-slate-950 text-[#d4af37] focus:ring-0 focus:ring-offset-0 cursor-pointer accent-[#d4af37]"
                       />
                       <span className="text-[11px] font-bold text-slate-300">{isAr ? 'خصم تكاليف شراء المنتجات من حساب مندوب التجميع حالاً' : 'Deduct Orignal Products Cost from Collecting Courier Liability Now'}</span>
@@ -4160,12 +4295,12 @@ export default function Orders() {
                 {/* Audit summary calculations details panel */}
                 <div className="p-5 bg-slate-950 rounded-2xl border border-slate-800 shadow-xl space-y-4 text-xs mt-2 relative overflow-hidden group">
                   <div className="absolute top-0 right-0 w-24 h-24 bg-[#d4af37]/5 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
-                  
+
                   <div className="flex items-center gap-2 pb-3 border-b border-slate-800/80">
                     <Calculator className="w-4 h-4 text-[#d4af37]" />
                     <span className="text-[11px] text-slate-300 font-extrabold uppercase tracking-widest">{isAr ? 'خلاصة كشف الحساب المالي (مفصل)' : 'Detailed Financial Audit Report'}</span>
                   </div>
-                  
+
                   <div className="space-y-3">
                     {/* Products Cost */}
                     <div className="flex justify-between items-center text-slate-400">
@@ -4190,7 +4325,7 @@ export default function Orders() {
                     {/* Coupon Discount */}
                     {couponEnabled && calcs.couponValue > 0 && (
                       <div className="flex justify-between items-center text-rose-400/90">
-                        <span className="font-medium">{isAr ? `خصم الكوبون النشط (${couponRate}%):` : `Coupon Discount (${couponRate}%):`}</span>
+                        <span className="font-medium">{isAr ? `خصم الكوبون النشط (${couponRate} ريال):` : `Coupon Discount (${couponRate} SAR):`}</span>
                         <div className="text-right">
                           <span className="font-mono block">-{calcs.couponValue.toLocaleString()} SAR</span>
                           <span className="font-mono text-[9px] opacity-70 block">-{(calcs.couponValue * (formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER)).toLocaleString()} YER</span>
@@ -4211,7 +4346,7 @@ export default function Orders() {
                     {(formData.orderSourceType === 'Factory' || calcs.shippingCostSAR > 0) && (
                       <div className="pt-2 border-t border-slate-800/50 space-y-3">
                         <span className="text-[9px] text-slate-500 font-extrabold uppercase tracking-wider block">{isAr ? 'تفاصيل أجور الشحن والنقل الدولي' : 'Logistics & Freight Cost'}</span>
-                        
+
                         {formData.orderSourceType === 'Factory' && (
                           <div className="flex items-center gap-4 bg-slate-900 p-2.5 rounded-xl border border-slate-800">
                             <div className="flex-1">
@@ -4281,16 +4416,16 @@ export default function Orders() {
                       <label className="text-[10px] text-slate-400 font-bold flex justify-between items-center">
                         <span className="text-[#d4af37]">{isAr ? 'االدفعة المقدمة / كاش (ريال يمني)' : 'Cash/Advance Payment (YER)'}</span>
                         <div className="flex gap-1.5 text-[9px]">
-                          <button type="button" onClick={() => setFormData({...formData, amountPaid: 0})} className="px-2.5 py-0.5 rounded border border-slate-700 bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer">0</button>
-                          <button type="button" onClick={() => setFormData({...formData, amountPaid: Math.ceil(calcs.totalOrderYER)})} className="px-2.5 py-0.5 rounded border border-emerald-800/40 bg-emerald-900/40 text-emerald-400 hover:bg-emerald-900/60 transition cursor-pointer">{isAr ? 'سداد الكل' : 'Pay All'}</button>
+                          <button type="button" onClick={() => setFormData({ ...formData, amountPaid: 0 })} className="px-2.5 py-0.5 rounded border border-slate-700 bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer">0</button>
+                          <button type="button" onClick={() => setFormData({ ...formData, amountPaid: Math.ceil(calcs.totalOrderYER) })} className="px-2.5 py-0.5 rounded border border-emerald-800/40 bg-emerald-900/40 text-emerald-400 hover:bg-emerald-900/60 transition cursor-pointer">{isAr ? 'سداد الكل' : 'Pay All'}</button>
                         </div>
                       </label>
                       <div className="relative group">
                         <DollarSign className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-500/50 group-focus-within:text-emerald-400 transition-colors" />
-                        <input 
-                          type="number" 
+                        <input
+                          type="number"
                           value={formData.amountPaid || ''}
-                          onChange={(e) => setFormData({...formData, amountPaid: parseFloat(e.target.value) || 0})}
+                          onChange={(e) => setFormData({ ...formData, amountPaid: parseFloat(e.target.value) || 0 })}
                           className="w-full bg-slate-950/50 border border-slate-700 focus:border-emerald-500/50 text-emerald-400 font-black rounded-xl py-3 pl-10 pr-4 outline-none font-mono text-sm shadow-inner transition-colors"
                           placeholder="0.00 YER"
                         />
@@ -4313,7 +4448,7 @@ export default function Orders() {
                         <span className="text-[9px] font-black uppercase text-slate-500 block mb-1">{isAr ? 'بوابة الدفع' : 'Pay Method'}</span>
                         <select
                           value={formData.paymentMethod}
-                          onChange={(e) => setFormData({...formData, paymentMethod: e.target.value})}
+                          onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
                           className="w-full bg-transparent text-white font-bold text-xs outline-none cursor-pointer"
                         >
                           <option value="Cash" className="bg-slate-900">{isAr ? 'نقد كاش' : 'Cash'}</option>
@@ -4365,14 +4500,14 @@ export default function Orders() {
                 </label>
                 <div className="relative">
                   <User className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#d4af37]" />
-                  <input 
-                    required 
+                  <input
+                    required
                     tabIndex={1}
-                    placeholder={isAr ? 'أدخل اسم العميل بالكامل...' : 'e.g. Abdullah bin Ali'} 
-                    type="text" 
-                    value={customerFormData.fullName} 
-                    onChange={e => setCustomerFormData({...customerFormData, fullName: e.target.value})} 
-                    className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none text-start transition-all" 
+                    placeholder={isAr ? 'أدخل اسم العميل بالكامل...' : 'e.g. Abdullah bin Ali'}
+                    type="text"
+                    value={customerFormData.fullName}
+                    onChange={e => setCustomerFormData({ ...customerFormData, fullName: e.target.value })}
+                    className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none text-start transition-all"
                   />
                 </div>
               </div>
@@ -4384,14 +4519,14 @@ export default function Orders() {
                   </label>
                   <div className="relative">
                     <Phone className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                    <input 
-                      required 
+                    <input
+                      required
                       tabIndex={2}
-                      type="text" 
+                      type="text"
                       placeholder="+967..."
-                      value={customerFormData.phone} 
-                      onChange={e => setCustomerFormData({...customerFormData, phone: e.target.value})} 
-                      className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-start" 
+                      value={customerFormData.phone}
+                      onChange={e => setCustomerFormData({ ...customerFormData, phone: e.target.value })}
+                      className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-start"
                     />
                   </div>
                 </div>
@@ -4401,13 +4536,13 @@ export default function Orders() {
                   </label>
                   <div className="relative">
                     <Mail className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                    <input 
+                    <input
                       tabIndex={3}
-                      type="email" 
+                      type="email"
                       placeholder="client@mail.com"
-                      value={customerFormData.email} 
-                      onChange={e => setCustomerFormData({...customerFormData, email: e.target.value})} 
-                      className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-start" 
+                      value={customerFormData.email}
+                      onChange={e => setCustomerFormData({ ...customerFormData, email: e.target.value })}
+                      className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-start"
                     />
                   </div>
                 </div>
@@ -4419,13 +4554,13 @@ export default function Orders() {
                 </label>
                 <div className="relative">
                   <MapPin className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                  <input 
+                  <input
                     tabIndex={4}
-                    placeholder={isAr ? 'المدينة • المديرية • الشارع • معلم بجانب المنزل' : 'Sanaa, Haddah, behind post office'} 
-                    type="text" 
-                    value={customerFormData.address} 
-                    onChange={e => setCustomerFormData({...customerFormData, address: e.target.value})} 
-                    className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none text-start" 
+                    placeholder={isAr ? 'المدينة • المديرية • الشارع • معلم بجانب المنزل' : 'Sanaa, Haddah, behind post office'}
+                    type="text"
+                    value={customerFormData.address}
+                    onChange={e => setCustomerFormData({ ...customerFormData, address: e.target.value })}
+                    className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none text-start"
                   />
                 </div>
               </div>
@@ -4434,13 +4569,13 @@ export default function Orders() {
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
                   {isAr ? 'رابط الموقع الجغرافي الخرائط (GPS)' : 'Google Maps Embed/URL'}
                 </label>
-                <input 
+                <input
                   tabIndex={5}
-                  placeholder="https://maps.google.com/?q=..." 
-                  type="text" 
-                  value={customerFormData.gps_location} 
-                  onChange={e => setCustomerFormData({...customerFormData, gps_location: e.target.value})} 
-                  className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-start" 
+                  placeholder="https://maps.google.com/?q=..."
+                  type="text"
+                  value={customerFormData.gps_location}
+                  onChange={e => setCustomerFormData({ ...customerFormData, gps_location: e.target.value })}
+                  className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-start"
                 />
               </div>
 
@@ -4448,26 +4583,26 @@ export default function Orders() {
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
                   {isAr ? 'ملاحظات وتصنيفات إدارية خاصة' : 'Administrative Confidential Annotations'}
                 </label>
-                <textarea 
+                <textarea
                   tabIndex={7}
-                  rows={2} 
-                  value={customerFormData.notes} 
-                  onChange={e => setCustomerFormData({...customerFormData, notes: e.target.value})} 
+                  rows={2}
+                  value={customerFormData.notes}
+                  onChange={e => setCustomerFormData({ ...customerFormData, notes: e.target.value })}
                   className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none text-start"
                 ></textarea>
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-850">
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   disabled={isSubmitting}
-                  onClick={() => setIsAddCustomerOpen(false)} 
+                  onClick={() => setIsAddCustomerOpen(false)}
                   className="px-5 py-2 text-slate-400 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-black rounded-xl transition disabled:opacity-50"
                 >
                   {isAr ? 'إلغاء' : 'Cancel'}
                 </button>
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   disabled={isSubmitting}
                   className="px-6 py-2 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black text-xs rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -4492,9 +4627,9 @@ export default function Orders() {
             <form onSubmit={handleAddSource} className="p-5 space-y-4 text-start">
               <div>
                 <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'تصنيف قناة التوريد' : 'Class of channel'}</label>
-                <select 
+                <select
                   value={sourceFormData.type}
-                  onChange={(e) => setSourceFormData({...sourceFormData, type: e.target.value})}
+                  onChange={(e) => setSourceFormData({ ...sourceFormData, type: e.target.value })}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold"
                 >
                   <option value="SHEIN">{isAr ? 'موقع SHEIN' : 'SHEIN Website'}</option>
@@ -4505,13 +4640,13 @@ export default function Orders() {
 
               <div>
                 <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'اسم المصدر / التطبيق' : 'Source Name'}</label>
-                <input required type="text" value={sourceFormData.source_name || ''} onChange={e => setSourceFormData({...sourceFormData, source_name: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold" />
+                <input required type="text" value={sourceFormData.source_name || ''} onChange={e => setSourceFormData({ ...sourceFormData, source_name: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold" />
               </div>
 
               {sourceFormData.type === 'App' && (
                 <div>
                   <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'رابط الويب بوابة (اختياري)' : 'URL Link'}</label>
-                  <input type="url" value={sourceFormData.source_url || ''} onChange={e => setSourceFormData({...sourceFormData, source_url: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-mono font-bold" placeholder="https://example.com" />
+                  <input type="url" value={sourceFormData.source_url || ''} onChange={e => setSourceFormData({ ...sourceFormData, source_url: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-mono font-bold" placeholder="https://example.com" />
                 </div>
               )}
 
@@ -4519,11 +4654,11 @@ export default function Orders() {
                 <>
                   <div>
                     <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'بيانات المورد / WeChat' : 'WeChat Contact'}</label>
-                    <input type="text" value={sourceFormData.contact_info || ''} onChange={e => setSourceFormData({...sourceFormData, contact_info: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold" />
+                    <input type="text" value={sourceFormData.contact_info || ''} onChange={e => setSourceFormData({ ...sourceFormData, contact_info: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold" />
                   </div>
                   <div>
                     <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'جغرافية المصنع / التسليم' : 'Depot Location'}</label>
-                    <input type="text" value={sourceFormData.location || ''} onChange={e => setSourceFormData({...sourceFormData, location: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold" />
+                    <input type="text" value={sourceFormData.location || ''} onChange={e => setSourceFormData({ ...sourceFormData, location: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold" />
                   </div>
                 </>
               )}
@@ -4552,19 +4687,19 @@ export default function Orders() {
             <form onSubmit={handleAddShippingCompany} className="p-5 space-y-4 text-start">
               <div>
                 <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'اسم شركة الشحن' : 'Shipping Carrier Name'}</label>
-                <input required type="text" value={shippingCompanyFormData.name || ''} onChange={e => setShippingCompanyFormData({...shippingCompanyFormData, name: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold" placeholder="e.g Aramex, Safe Ship" />
+                <input required type="text" value={shippingCompanyFormData.name || ''} onChange={e => setShippingCompanyFormData({ ...shippingCompanyFormData, name: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold" placeholder="e.g Aramex, Safe Ship" />
               </div>
               <div>
                 <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'مسؤول الاتصال' : 'Contact Person'}</label>
-                <input type="text" value={shippingCompanyFormData.contact_person || ''} onChange={e => setShippingCompanyFormData({...shippingCompanyFormData, contact_person: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold" />
+                <input type="text" value={shippingCompanyFormData.contact_person || ''} onChange={e => setShippingCompanyFormData({ ...shippingCompanyFormData, contact_person: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold" />
               </div>
               <div>
                 <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'رقم الهاتف/الجوال' : 'Phone No.'}</label>
-                <input type="text" value={shippingCompanyFormData.phone || ''} onChange={e => setShippingCompanyFormData({...shippingCompanyFormData, phone: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-mono font-bold" placeholder="+967..." />
+                <input type="text" value={shippingCompanyFormData.phone || ''} onChange={e => setShippingCompanyFormData({ ...shippingCompanyFormData, phone: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-mono font-bold" placeholder="+967..." />
               </div>
               <div>
                 <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'بوابة تتبع الشحنات الويب' : 'Tracking Portal Link'}</label>
-                <input type="url" value={shippingCompanyFormData.tracking_url || ''} onChange={e => setShippingCompanyFormData({...shippingCompanyFormData, tracking_url: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-mono font-bold" placeholder="https://..." />
+                <input type="url" value={shippingCompanyFormData.tracking_url || ''} onChange={e => setShippingCompanyFormData({ ...shippingCompanyFormData, tracking_url: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-mono font-bold" placeholder="https://..." />
               </div>
               <div className="pt-2 flex justify-end gap-2 text-xs">
                 <button type="button" disabled={isSubmitting} onClick={() => setIsAddShippingCompanyOpen(false)} className="p-2 text-slate-400 hover:bg-slate-800 rounded-lg disabled:opacity-50">{isAr ? 'إلغاء' : 'Cancel'}</button>
@@ -4585,9 +4720,9 @@ export default function Orders() {
               <span>{isAr ? 'تحديث المسار والوجهة والوضع اللوجيستي' : 'Freight updates'}</span>
               <button onClick={() => setIsUpdateModalOpen(false)} className="text-slate-400 bg-slate-800 p-1 rounded-lg"><Plus className="w-4 h-4 rotate-45" /></button>
             </div>
-            
+
             <form onSubmit={handleUpdateStatus} className="p-6 space-y-6 text-xs font-bold text-slate-300 overflow-y-auto custom-scrollbar flex-1">
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-4">
                   <div>
@@ -4599,7 +4734,7 @@ export default function Orders() {
                     <label className="block text-slate-500 block mb-1">{isAr ? 'حالة الطلب اللوجيستية الإجمالية' : 'Logistics status'}</label>
                     <select
                       value={updateFormData.orderStatus}
-                      onChange={e => setUpdateFormData({...updateFormData, orderStatus: e.target.value})}
+                      onChange={e => setUpdateFormData({ ...updateFormData, orderStatus: e.target.value })}
                       className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 outline-none text-xs"
                     >
                       <option value="تم تسجيل الطلب">{isAr ? 'تم تسجيل الطلب واستخلاص الفاتورة' : 'Invoice saved'}</option>
@@ -4617,10 +4752,10 @@ export default function Orders() {
                 <div className="space-y-4">
                   <div>
                     <label className="block text-slate-500 block mb-1">{isAr ? 'مكان التواجد لليمن' : 'Yemen Spot'}</label>
-                    <input 
-                      type="text" 
-                      value={updateFormData.locationYemen} 
-                      onChange={e => setUpdateFormData({...updateFormData, locationYemen: e.target.value})} 
+                    <input
+                      type="text"
+                      value={updateFormData.locationYemen}
+                      onChange={e => setUpdateFormData({ ...updateFormData, locationYemen: e.target.value })}
                       className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 outline-none text-xs"
                     />
                   </div>
@@ -4628,10 +4763,10 @@ export default function Orders() {
                   {canManageOrders && (
                     <div>
                       <label className="block text-slate-500 block mb-1">{isAr ? 'ملاحظات وتنبيهات داخلية للموزع' : 'Internal notes'}</label>
-                      <textarea 
+                      <textarea
                         rows={2}
-                        value={updateFormData.internalNotes} 
-                        onChange={e => setUpdateFormData({...updateFormData, internalNotes: e.target.value})} 
+                        value={updateFormData.internalNotes}
+                        onChange={e => setUpdateFormData({ ...updateFormData, internalNotes: e.target.value })}
                         className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 outline-none text-xs"
                       />
                     </div>
@@ -4646,9 +4781,9 @@ export default function Orders() {
                     <label className="block text-slate-500 block mb-1">
                       {isAr ? 'موظف التعبئة والتجميع' : 'Packaging & Assembly employee'}
                     </label>
-                    <select 
+                    <select
                       value={updateFormData.shippingCourierId}
-                      onChange={(e) => setUpdateFormData({...updateFormData, shippingCourierId: e.target.value})}
+                      onChange={(e) => setUpdateFormData({ ...updateFormData, shippingCourierId: e.target.value })}
                       className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 outline-none text-xs font-bold"
                     >
                       <option value="">{isAr ? '-- اختر موظف التعبئة والتجميع --' : '-- Choose Aggregator --'}</option>
@@ -4664,9 +4799,9 @@ export default function Orders() {
                     <label className="block text-slate-500 block mb-1">
                       {isAr ? 'مندوب التوزيع النهائي' : 'Yemen Delivery Courier'}
                     </label>
-                    <select 
+                    <select
                       value={updateFormData.deliveryCourierId}
-                      onChange={(e) => setUpdateFormData({...updateFormData, deliveryCourierId: e.target.value})}
+                      onChange={(e) => setUpdateFormData({ ...updateFormData, deliveryCourierId: e.target.value })}
                       className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 outline-none text-xs font-bold"
                     >
                       <option value="">{isAr ? '-- اختر مندوب التوزيع النهائي --' : '-- Choose Final Courier --'}</option>
@@ -4688,7 +4823,7 @@ export default function Orders() {
                       <span className="text-xs font-black text-white">{isAr ? 'تفاصيل شحنات المسار اللوجيستي' : 'Shipping Tracks & Manifests'}</span>
                       <span className="text-[10px] text-slate-500 font-bold mt-0.5">{isAr ? 'يمكنك تحديث وإضافة مسارات الشحن للطلب' : 'Update or add new shipping segments'}</span>
                     </div>
-                    <button 
+                    <button
                       type="button"
                       onClick={addUpdateShippingRow}
                       className="bg-emerald-600/10 hover:bg-emerald-650/20 text-emerald-400 px-3 py-1.5 rounded-lg text-[10px] font-black transition-all flex items-center gap-1"
@@ -4897,12 +5032,12 @@ export default function Orders() {
 
               <div>
                 <label className="block text-slate-500 mb-1">{isAr ? 'المقدار المحصل المقبوض الآن (ريال يمني)' : 'Collection amount in YER'}</label>
-                <input 
+                <input
                   required
-                  type="number" 
+                  type="number"
                   step="any"
                   value={paymentFormData.amount}
-                  onChange={e => setPaymentFormData({...paymentFormData, amount: e.target.value})}
+                  onChange={e => setPaymentFormData({ ...paymentFormData, amount: e.target.value })}
                   className="w-full bg-slate-950 border border-slate-800 text-emerald-400 font-mono text-sm font-black p-3 rounded-xl outline-none text-center"
                   placeholder="0.00 YER"
                 />
@@ -4913,14 +5048,14 @@ export default function Orders() {
                   <span>{isAr ? 'رمز الـ PIN المالي الثنائي للتحقق' : 'Security PIN authorization'}</span>
                   <span className="text-[9px] bg-amber-500/10 border border-amber-500/30 text-amber-500 px-1.5 py-0.2 rounded font-sans uppercase">MANDATORY</span>
                 </label>
-                <input 
+                <input
                   required
-                  type="password" 
+                  type="password"
                   maxLength={6}
                   pattern="^[0-9]{4,6}$"
                   title={isAr ? "رمز PIN سري من 4 إلى 6 أرقام" : "A 4-6 digit security PIN code"}
                   value={paymentFormData.pin}
-                  onChange={e => setPaymentFormData({...paymentFormData, pin: e.target.value})}
+                  onChange={e => setPaymentFormData({ ...paymentFormData, pin: e.target.value })}
                   className="w-full bg-slate-950 border border-slate-800 text-yellow-500 font-mono text-sm font-black p-3 rounded-xl outline-none text-center tracking-widest"
                   placeholder="••••"
                 />
@@ -4946,15 +5081,15 @@ export default function Orders() {
       {isDetailsModalOpen && selectedOrder && (
         <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in overflow-y-auto font-sans">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-2xl overflow-hidden text-start shadow-xl flex flex-col max-h-[90vh]">
-            
+
             {/* Header */}
             <div className="p-4 bg-slate-955 border-b border-slate-800 flex justify-between items-center text-xs font-black text-white">
               <span>{isAr ? 'تفاصيل الفاتورة وتتبع الشحنة الرقمي' : 'Invoice Details & Tracking Profile'}</span>
-              <button 
+              <button
                 onClick={() => {
                   setIsDetailsModalOpen(false);
                   setSelectedOrder(null);
-                }} 
+                }}
                 className="text-slate-400 bg-slate-800 p-1 rounded-lg cursor-pointer hover:text-white"
               >
                 <X className="w-5 h-5" />
@@ -4963,10 +5098,10 @@ export default function Orders() {
 
             {/* Content */}
             <div className="p-6 overflow-y-auto space-y-6 text-slate-350 text-xs custom-scrollbar">
-              
+
               {/* QR Code and Key Track IDs Section */}
               <div className="bg-slate-955 border border-[#d4af37]/20 p-5 rounded-2xl flex flex-col md:flex-row items-center gap-6">
-                
+
                 {/* QR Code Draw Area */}
                 <div className="bg-white p-3 rounded-2xl shadow-lg border-2 border-[#d4af37] flex flex-col items-center justify-center shrink-0">
                   <canvas ref={qrCanvasRef} className="w-[140px] h-[140px]"></canvas>
@@ -4980,7 +5115,7 @@ export default function Orders() {
                   <span className="text-[9px] text-[#d4af37] bg-[#d4af37]/10 font-black px-2 py-0.5 rounded-full uppercase tracking-widest inline-block">
                     {isAr ? 'رمز تتبع الشحنة الموحد' : 'Logistic Courier Tracking Key'}
                   </span>
-                  
+
                   <h4 className="text-white text-lg font-black tracking-tight select-all">
                     {selectedOrder.trackingNumber || selectedOrder.orderNumber || 'ALX-XXXX-XXXX'}
                   </h4>
@@ -4992,7 +5127,7 @@ export default function Orders() {
                   </p>
 
                   <div className="pt-1 flex flex-wrap justify-center md:justify-start gap-2">
-                    <button 
+                    <button
                       onClick={() => copyToClipboard(selectedOrder.trackingNumber || selectedOrder.orderNumber || '')}
                       className="bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white px-3 py-1.5 rounded-lg border border-slate-705 flex items-center gap-1.5 font-bold cursor-pointer transition text-[10px]"
                     >
@@ -5005,7 +5140,7 @@ export default function Orders() {
 
               {/* General Order Information Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                
+
                 <div className="space-y-3 bg-slate-950/20 p-4 border border-slate-800/60 rounded-xl">
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block border-b border-slate-850 pb-1">
                     {isAr ? 'الزبون والحساب' : 'Customer Account'}
@@ -5037,7 +5172,7 @@ export default function Orders() {
                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block border-b border-slate-850 pb-1">
                   {isAr ? 'كشف الرصيد وتفاصيل السداد المالي' : 'Financial breakdown'}
                 </span>
-                
+
                 {/* Cost Breakdown Details */}
                 <div className="flex flex-col gap-1 text-[11px] font-bold text-slate-400 mb-3 border-b border-slate-850 pb-3">
                   <div className="flex justify-between">
@@ -5057,7 +5192,7 @@ export default function Orders() {
                     </div>
                   )}
                   {parseFloat(selectedOrder.packagingFee || '0') > 0 && (
-                     <div className="flex justify-between">
+                    <div className="flex justify-between">
                       <span>{isAr ? 'رسوم التغليف:' : 'Packaging Fee:'}</span>
                       <span className="text-slate-300 font-mono">{parseFloat(selectedOrder.packagingFee).toLocaleString()} SAR</span>
                     </div>
@@ -5104,7 +5239,7 @@ export default function Orders() {
                       <tbody className="divide-y divide-slate-850">
                         {selectedOrder.items.map((it: any, index: number) => (
                           <tr key={index}>
-                            <td className="p-2.5 text-white font-bold">{it.productName || (isAr ? `طرد رقم ${index+1}` : `Cargo item ${index+1}`)}</td>
+                            <td className="p-2.5 text-white font-bold">{it.productName || (isAr ? `طرد رقم ${index + 1}` : `Cargo item ${index + 1}`)}</td>
                             <td className="p-2.5 text-center font-mono text-slate-300 font-bold">{it.quantity || 1}</td>
                             <td className="p-2.5 text-center">
                               {it.productUrl ? (
@@ -5152,13 +5287,12 @@ export default function Orders() {
                       return (
                         <div key={index} className="relative group">
                           {/* Timeline dot */}
-                          <div className={`absolute -right-[23px] md:-right-[35px] top-1.5 w-4 h-4 rounded-full border-4 border-slate-900 z-10 flex items-center justify-center transition-all ${
-                            isDelivered ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-amber-500 animate-pulse'
-                          }`} />
+                          <div className={`absolute -right-[23px] md:-right-[35px] top-1.5 w-4 h-4 rounded-full border-4 border-slate-900 z-10 flex items-center justify-center transition-all ${isDelivered ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-amber-500 animate-pulse'
+                            }`} />
 
                           {/* Shipment Glass Card */}
                           <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 space-y-4 hover:border-slate-700 transition duration-300 shadow-md">
-                            
+
                             {/* Card Header Type and Delivery status */}
                             <div className="flex justify-between items-center flex-wrap gap-2">
                               <div className="flex items-center gap-2">
@@ -5176,11 +5310,10 @@ export default function Orders() {
                                 </span>
 
                                 {/* Delivered vs Transit Badge */}
-                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-black flex items-center gap-1.5 ${
-                                  isDelivered 
-                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-505/20' 
-                                    : 'bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse'
-                                }`}>
+                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-black flex items-center gap-1.5 ${isDelivered
+                                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-505/20'
+                                  : 'bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse'
+                                  }`}>
                                   <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
                                   <span>{isDelivered ? (isAr ? 'تم التسليم والمطابقة' : 'Delivered & Matched') : (isAr ? 'تحت الترانزيت 🕒' : 'In Transit 🕒')}</span>
                                 </span>
@@ -5268,18 +5401,18 @@ export default function Orders() {
 
             {/* Footer buttons */}
             <div className="p-4 bg-slate-955 border-t border-slate-850 flex justify-end gap-2 shrink-0">
-              <button 
+              <button
                 onClick={() => generateOrderInvoicePDF(selectedOrder)}
                 className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black rounded-xl transition font-extrabold flex items-center gap-1.5 cursor-pointer text-xs"
               >
                 <Printer className="w-4 h-4" />
                 {isAr ? '🖨️ إصدار فاتورة للعميل' : 'Print Invoice PDF'}
               </button>
-              <button 
+              <button
                 onClick={() => {
                   setIsDetailsModalOpen(false);
                   setSelectedOrder(null);
-                }} 
+                }}
                 className="px-5 py-2.5 bg-slate-850 text-slate-455 hover:text-white rounded-xl transition font-bold text-xs"
               >
                 {isAr ? 'إغلاق نافذة التفاصيل' : 'Close Details'}
@@ -5298,30 +5431,30 @@ export default function Orders() {
               <h3 className="font-black text-rose-450 text-sm flex items-center gap-2">
                 ⚠️ {isAr ? 'حذف طلب حساس ومحمي' : 'Sensitive Order Deletion'}
               </h3>
-              <button 
+              <button
                 onClick={() => {
                   setIsDeleteModalOpen(false);
                   setOrderToDelete(null);
-                }} 
+                }}
                 className="bg-slate-800 text-slate-400 hover:text-white p-1 rounded-lg"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
-            
+
             <div className="p-5 space-y-4 text-xs font-bold text-slate-350 text-center">
               <p className="text-slate-400 leading-relaxed text-center">
-                {isAr 
+                {isAr
                   ? 'هذا الطلب يحتوي على مدفوعات مسجلة أو تخطت حالته التثبيت الأولي. يرجى إدخال الرمز السري الشخصي للمدير (System PIN) للمتابعة.'
                   : 'This order has payments recorded or is advanced in the logistics process. Please enter your personal System PIN to confirm deletion.'}
               </p>
-              
+
               {deleteError && (
                 <div className="bg-rose-950/30 text-rose-400 p-2.5 rounded-xl border border-rose-900/30 font-mono text-center">
                   {deleteError}
                 </div>
               )}
-              
+
               <input
                 type="password"
                 value={deletePin}
@@ -5335,18 +5468,18 @@ export default function Orders() {
                 autoFocus
               />
             </div>
-            
+
             <div className="p-4 bg-slate-950/30 border-t border-slate-850 flex justify-end gap-2">
-              <button 
+              <button
                 onClick={() => {
                   setIsDeleteModalOpen(false);
                   setOrderToDelete(null);
-                }} 
+                }}
                 className="px-4 py-2 bg-slate-800 text-slate-400 rounded-xl font-bold hover:text-white transition text-xs cursor-pointer"
               >
                 {isAr ? 'إلغاء' : 'Cancel'}
               </button>
-              <button 
+              <button
                 onClick={handleVerifyDeletePin}
                 className="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl font-black transition text-xs cursor-pointer"
               >
