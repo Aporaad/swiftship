@@ -56,6 +56,12 @@ export interface Settings {
   defaultDeliveryFee?: number;
   defaultCourierCommissionRate?: number;
 
+  // Default Shipping Durations
+  defaultSheinDuration?: number;
+  defaultAppDuration?: number;
+  defaultFactoryDuration?: number;
+  defaultYemenDeliveryDuration?: number;
+
   // Factory / Manufacturer Order Defaults
   defaultProfitPerKg?: number;          // نسبة الربح للكيلو (SAR/kg) للمصنع
   defaultCbmShippingRate?: number;      // سعر شحن الـ CBM (SAR/m³) للمصنع
@@ -125,6 +131,10 @@ const defaultSettings: Settings = {
   defaultCompanyProfitRate: 12,
   defaultDeliveryFee: 4000,
   defaultCourierCommissionRate: 30,
+  defaultSheinDuration: 12,
+  defaultAppDuration: 10,
+  defaultFactoryDuration: 20,
+  defaultYemenDeliveryDuration: 5,
   defaultProfitPerKg: 19,
   defaultCbmShippingRate: 1400,
   cbmShippingRateApiUrl: '',

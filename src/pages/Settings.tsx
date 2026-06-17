@@ -1138,6 +1138,28 @@ export default function Settings() {
             </SectionCard>
           )}
 
+          {/* Default Shipping Durations */}
+          {canEditOrderDefaults && (
+            <SectionCard title={isAr ? 'مدد الشحن الافتراضية للطلبات (أيام)' : 'Default Order Shipping Durations (Days)'} icon={Clock}>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+                {[
+                  { key: 'defaultSheinDuration', label: isAr ? 'مدة شي ان' : 'SHEIN Duration' },
+                  { key: 'defaultAppDuration', label: isAr ? 'مدة التطبيقات' : 'Apps Duration' },
+                  { key: 'defaultFactoryDuration', label: isAr ? 'مدة المصانع' : 'Factory Duration' },
+                  { key: 'defaultYemenDeliveryDuration', label: isAr ? 'مدة التوصيل لليمن' : 'Yemen Delivery Duration' },
+                ].map(f => (
+                  <div key={f.key}>
+                    <FieldLabel>{f.label}</FieldLabel>
+                    <div className="relative">
+                      <FieldInput type="number" value={(localSettings as any)[f.key] ?? 0} onChange={e => setLocalSettings({ ...localSettings, [f.key]: parseInt(e.target.value) || 0 })} className="font-mono pr-16" dir="ltr" />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-[#d4af37] bg-[#d4af37]/10 px-1.5 py-0.5 rounded">{isAr ? 'يوم' : 'Days'}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </SectionCard>
+          )}
+
           {/* Factory / Manufacturer Order Defaults */}
           {(role === 'Admin' || hasPermission('edit_profit_per_kg') || hasPermission('edit_cbm_shipping_rate')) && (
             <SectionCard
