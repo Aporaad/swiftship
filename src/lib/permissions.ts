@@ -45,6 +45,9 @@ export type PermissionKey =
   | 'edit_interface_settings'
   | 'edit_general_settings'
   | 'edit_order_defaults'
+  | 'view_order_defaults'
+  | 'edit_order_defaults_creation'
+  | 'view_edit_notification_settings'
   | 'edit_company_info'
   | 'manage_whatsapp'
   | 'manage_backup'
@@ -145,13 +148,15 @@ export const ALL_PERMISSIONS: PermissionDefinition[] = [
   { id: 'settings', labelAr: 'الولوج لقائمة الإعدادات العامة للنظام وحمايتها', labelEn: 'Access general system parameters screen', category: 'admin' },
   { id: 'edit_interface_settings', labelAr: 'إدارة وإعادة التنسيق لمظهر الواجهات والأحجام واللغة', labelEn: 'Configure themes, sizes, default locale', category: 'admin' },
   { id: 'edit_general_settings', labelAr: 'تعديل اسم النظام والعلامة التجارية والبادئات وعناوين العدادات', labelEn: 'Change System brand, prefix controls, starting seed', category: 'admin' },
-  { id: 'edit_order_defaults', labelAr: 'إعداد الرسوم التلقائية من عمولات التغليف والأرباح وخدمة التوصيل', labelEn: 'Change Default packaging fees, bank cut %, margins', category: 'admin' },
+  { id: 'edit_order_defaults', labelAr: 'تعديل الإعدادات الافتراضية للطلبات', labelEn: 'Edit Default Order Settings', category: 'admin' },
+  { id: 'view_order_defaults', labelAr: 'عرض الإعدادات الافتراضية للطلبات', labelEn: 'View Default Order Settings', category: 'admin' },
   { id: 'edit_company_info', labelAr: 'تعديل كرت تعريف وسجل وعنوان الشركة والمستند الضريبي', labelEn: 'Update Corporate Card details & Tax Registration', category: 'admin' },
   { id: 'manage_whatsapp', labelAr: 'التحكم وحفظ مفاتيح ربط واتساب السحابي ودرجات التفعيل', labelEn: 'Configure UltraMsg/Twilio WhatsApp routing setups', category: 'admin' },
   { id: 'manage_backup', labelAr: 'التحكم وإجراء النسخ التلقائي وبناء ملفات استيراد وتوطين الكيانات والمطابقة للمدراء', labelEn: 'Perform Rebase backups: Import / Export datablocks', category: 'admin' },
 
   // Notifications
   { id: 'view_notifications', labelAr: 'عرض جرس الإشعارات وحالات التنبيه', labelEn: 'Display Alert system notification panel', category: 'notifications' },
+  { id: 'view_edit_notification_settings', labelAr: 'عرض وتعديل إعدادات الإشعارات وقوالب WhatsApp', labelEn: 'View and Edit Notification Settings & WhatsApp Templates', category: 'notifications' },
   { id: 'send_notifications', labelAr: 'إطلاق وتجريب جرس الإشعار لمستخدمين مخصصين بشكل وهمي', labelEn: 'Send Custom Mock notifications', category: 'notifications' },
   { id: 'manage_notifications', labelAr: 'إدارة أواني التنبيهات وحذفها وإفراغ السجلات للتحسين', labelEn: 'Acknowledge, clear or delete logged notices', category: 'notifications' },
   { id: 'notify_orders', labelAr: 'استقبال وتلقي التنبيهات مع حركة كل إضافة/شحينة طلب', labelEn: 'Toggle dispatch alerts on Order activities', category: 'notifications' },

@@ -45,6 +45,7 @@ const PERMISSION_GROUPS = (isAr: boolean) => [
       { id: 'edit_delivered_orders', label: isAr ? 'تعديل الطلبات بعد التسليم' : 'Edit Orders After Delivery' },
       { id: 'print_orders', label: isAr ? 'طباعة وتصدير الفواتير' : 'Print & Export Invoices' },
       { id: 'export_orders', label: isAr ? 'تصدير بيانات الطلبات' : 'Export Orders Data' },
+      { id: 'edit_order_defaults_creation', label: isAr ? 'تعديل الأسعار الافتراضية عند إنشاء طلب' : 'Edit Default Prices When Creating Order' },
     ]
   },
   {
@@ -102,6 +103,7 @@ const PERMISSION_GROUPS = (isAr: boolean) => [
       { id: 'view_notifications', label: isAr ? 'عرض صفحة الإشعارات' : 'View Notifications' },
       { id: 'send_notifications', label: isAr ? 'إرسال إشعارات مخصصة وتجريبية' : 'Send Custom Notifications' },
       { id: 'manage_notifications', label: isAr ? 'إدارة وحذف الإشعارات' : 'Manage & Delete Notifications' },
+      { id: 'manage_notification_settings', label: isAr ? 'عرض وتعديل إعدادات الإشعارات (قوالب WhatsApp)' : 'View & Edit Notification Settings (WhatsApp Templates)' },
       { id: 'notify_orders', label: isAr ? 'استقبال إشعارات الطلبات' : 'Receive Order Notifications' },
       { id: 'notify_finance', label: isAr ? 'استقبال إشعارات المالية' : 'Receive Finance Notifications' },
       { id: 'notify_system', label: isAr ? 'استقبال إشعارات النظام والأمان' : 'Receive System & Security Notifications' },
@@ -134,7 +136,9 @@ const PERMISSION_GROUPS = (isAr: boolean) => [
     perms: [
       { id: 'settings', label: isAr ? 'الوصول لإعدادات النظام' : 'Access System Settings' },
       { id: 'edit_company_info', label: isAr ? 'تعديل معلومات الشركة' : 'Edit Company Information' },
-      { id: 'manage_whatsapp', label: isAr ? 'إعدادات واتساب والتنبيهات' : 'WhatsApp & Alert Settings' },
+      { id: 'view_order_defaults', label: isAr ? 'عرض الإعدادات الافتراضية للطلبات' : 'View Default Order Settings' },
+      { id: 'edit_order_defaults', label: isAr ? 'تعديل الإعدادات الافتراضية للطلبات' : 'Edit Default Order Settings' },
+      { id: 'manage_whatsapp', label: isAr ? 'إعدادات واتساب والتنبيهات (قديم)' : 'WhatsApp & Alert Settings (Legacy)' },
       { id: 'manage_backup', label: isAr ? 'إدارة النسخ الاحتياطية' : 'Manage Backups' },
     ]
   },
@@ -151,30 +155,30 @@ const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'e
 // ══════════════════════════════════════════════════════════════
 const getActionMeta = (action: string, isAr: boolean) => {
   const map: Record<string, { ar: string; en: string; color: string; icon: string }> = {
-    login:                { ar: 'تسجيل دخول',                en: 'Login',               color: 'emerald', icon: '🔓' },
-    logout:               { ar: 'تسجيل خروج',               en: 'Logout',              color: 'slate',   icon: '🔒' },
-    add_user:             { ar: 'إضافة موظف',                en: 'Add User',            color: 'cyan',    icon: '➕' },
-    edit_user:            { ar: 'تعديل موظف',                en: 'Edit User',           color: 'blue',    icon: '✏️' },
-    disable_user:         { ar: 'تعطيل حساب',                en: 'Disable Account',     color: 'rose',    icon: '🚫' },
-    enable_user:          { ar: 'تفعيل حساب',                en: 'Enable Account',      color: 'emerald', icon: '✅' },
-    delete_user:          { ar: 'حذف موظف',                  en: 'Delete User',         color: 'rose',    icon: '🗑️' },
-    reset_password:       { ar: 'إعادة تعيين كلمة المرور',   en: 'Reset Password',      color: 'amber',   icon: '🔑' },
-    terminate_session:    { ar: 'إنهاء جلسة',                en: 'Terminate Session',   color: 'rose',    icon: '⛔' },
-    force_logout:         { ar: 'إنهاء قسري للجلسة',         en: 'Force Logout',        color: 'rose',    icon: '⚡' },
-    temp_ban:             { ar: 'حظر مؤقت',                   en: 'Temporary Ban',       color: 'orange',  icon: '⏳' },
-    edit_role:            { ar: 'تعديل دور',                  en: 'Edit Role',           color: 'purple',  icon: '🛡️' },
-    add_role:             { ar: 'إضافة دور',                  en: 'Add Role',            color: 'purple',  icon: '➕' },
-    delete_role:          { ar: 'حذف دور',                    en: 'Delete Role',         color: 'rose',    icon: '🗑️' },
-    delete_order:         { ar: 'حذف طلب',                    en: 'Delete Order',        color: 'rose',    icon: '📦' },
-    edit_delivered_order: { ar: 'تعديل طلب مُسلَّم',          en: 'Edit Delivered Order',color: 'amber',   icon: '📝' },
-    change_exchange_rate: { ar: 'تغيير سعر الصرف',            en: 'Change Exchange Rate',color: 'amber',   icon: '💱' },
-    add_expense:          { ar: 'إضافة مصروف',                en: 'Add Expense',         color: 'orange',  icon: '💸' },
-    delete_expense:       { ar: 'حذف مصروف',                  en: 'Delete Expense',      color: 'rose',    icon: '🗑️' },
-    edit_order:           { ar: 'تعديل طلب',                  en: 'Edit Order',          color: 'blue',    icon: '✏️' },
-    add_order:            { ar: 'إضافة طلب',                  en: 'Add Order',           color: 'cyan',    icon: '➕' },
-    add_customer:         { ar: 'إضافة عميل',                 en: 'Add Customer',        color: 'cyan',    icon: '👤' },
-    edit_customer:        { ar: 'تعديل عميل',                 en: 'Edit Customer',       color: 'blue',    icon: '✏️' },
-    delete_customer:      { ar: 'حذف عميل',                   en: 'Delete Customer',     color: 'rose',    icon: '🗑️' },
+    login: { ar: 'تسجيل دخول', en: 'Login', color: 'emerald', icon: '🔓' },
+    logout: { ar: 'تسجيل خروج', en: 'Logout', color: 'slate', icon: '🔒' },
+    add_user: { ar: 'إضافة موظف', en: 'Add User', color: 'cyan', icon: '➕' },
+    edit_user: { ar: 'تعديل موظف', en: 'Edit User', color: 'blue', icon: '✏️' },
+    disable_user: { ar: 'تعطيل حساب', en: 'Disable Account', color: 'rose', icon: '🚫' },
+    enable_user: { ar: 'تفعيل حساب', en: 'Enable Account', color: 'emerald', icon: '✅' },
+    delete_user: { ar: 'حذف موظف', en: 'Delete User', color: 'rose', icon: '🗑️' },
+    reset_password: { ar: 'إعادة تعيين كلمة المرور', en: 'Reset Password', color: 'amber', icon: '🔑' },
+    terminate_session: { ar: 'إنهاء جلسة', en: 'Terminate Session', color: 'rose', icon: '⛔' },
+    force_logout: { ar: 'إنهاء قسري للجلسة', en: 'Force Logout', color: 'rose', icon: '⚡' },
+    temp_ban: { ar: 'حظر مؤقت', en: 'Temporary Ban', color: 'orange', icon: '⏳' },
+    edit_role: { ar: 'تعديل دور', en: 'Edit Role', color: 'purple', icon: '🛡️' },
+    add_role: { ar: 'إضافة دور', en: 'Add Role', color: 'purple', icon: '➕' },
+    delete_role: { ar: 'حذف دور', en: 'Delete Role', color: 'rose', icon: '🗑️' },
+    delete_order: { ar: 'حذف طلب', en: 'Delete Order', color: 'rose', icon: '📦' },
+    edit_delivered_order: { ar: 'تعديل طلب مُسلَّم', en: 'Edit Delivered Order', color: 'amber', icon: '📝' },
+    change_exchange_rate: { ar: 'تغيير سعر الصرف', en: 'Change Exchange Rate', color: 'amber', icon: '💱' },
+    add_expense: { ar: 'إضافة مصروف', en: 'Add Expense', color: 'orange', icon: '💸' },
+    delete_expense: { ar: 'حذف مصروف', en: 'Delete Expense', color: 'rose', icon: '🗑️' },
+    edit_order: { ar: 'تعديل طلب', en: 'Edit Order', color: 'blue', icon: '✏️' },
+    add_order: { ar: 'إضافة طلب', en: 'Add Order', color: 'cyan', icon: '➕' },
+    add_customer: { ar: 'إضافة عميل', en: 'Add Customer', color: 'cyan', icon: '👤' },
+    edit_customer: { ar: 'تعديل عميل', en: 'Edit Customer', color: 'blue', icon: '✏️' },
+    delete_customer: { ar: 'حذف عميل', en: 'Delete Customer', color: 'rose', icon: '🗑️' },
   };
   const e = map[action];
   if (!e) return { label: action, color: 'slate', icon: '📌' };
@@ -301,7 +305,7 @@ export default function UserManagement() {
   const [confirmConfig, setConfirmConfig] = useState<{
     isOpen: boolean; title: string; message: string;
     onConfirm: () => void; type: 'danger' | 'warning' | 'info';
-  }>({ isOpen: false, title: '', message: '', onConfirm: () => {}, type: 'danger' });
+  }>({ isOpen: false, title: '', message: '', onConfirm: () => { }, type: 'danger' });
 
   // ══════════════════════════════════════════════════════════
   // DATA FETCHING
@@ -324,7 +328,7 @@ export default function UserManagement() {
       try {
         const snap = await getDocs(collection(db, 'roles'));
         const fetchedRoles = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        
+
         const defaultRoles = [
           { id: 'Admin', title: isAr ? 'مدير النظام' : 'System Admin', permissions: ['*'] },
           { id: 'Employee', title: isAr ? 'موظف' : 'Employee', permissions: DEFAULT_ROLE_PERMISSIONS['Employee'] || [] },
@@ -806,10 +810,10 @@ export default function UserManagement() {
   );
 
   const tabs = [
-    { id: 'users',    icon: UsersIcon,    label: t('الموظفون', 'Staff'),               count: users.length },
-    { id: 'roles',    icon: Shield,       label: t('الأدوار والصلاحيات', 'Roles'),      count: roles.length },
+    { id: 'users', icon: UsersIcon, label: t('الموظفون', 'Staff'), count: users.length },
+    { id: 'roles', icon: Shield, label: t('الأدوار والصلاحيات', 'Roles'), count: roles.length },
     { id: 'sessions', icon: MonitorCheck, label: t('الجلسات النشطة', 'Active Sessions'), count: onlineSessionsCount, pulse: onlineSessionsCount > 0 },
-    { id: 'activity', icon: FileClock,    label: t('سجل النشاط', 'Activity Log'),       count: activityLogs.length }
+    { id: 'activity', icon: FileClock, label: t('سجل النشاط', 'Activity Log'), count: activityLogs.length }
   ] as const;
 
   // ══════════════════════════════════════════════════════════
@@ -1239,7 +1243,7 @@ export default function UserManagement() {
               <div className="flex flex-wrap gap-3 p-4 bg-black/30 border border-slate-800/50 rounded-2xl">
                 <select value={logFilter} onChange={e => setLogFilter(e.target.value)} className="bg-black/50 border border-slate-800 text-slate-300 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-[#d4af37]/50">
                   <option value="all">{t('جميع الأنواع', 'All Actions')}</option>
-                  {['add_user','edit_user','disable_user','enable_user','delete_user','reset_password','force_logout','temp_ban','add_role','edit_role','delete_role','add_order','edit_order','delete_order','edit_delivered_order','change_exchange_rate','add_expense','add_customer'].map(a => (
+                  {['add_user', 'edit_user', 'disable_user', 'enable_user', 'delete_user', 'reset_password', 'force_logout', 'temp_ban', 'add_role', 'edit_role', 'delete_role', 'add_order', 'edit_order', 'delete_order', 'edit_delivered_order', 'change_exchange_rate', 'add_expense', 'add_customer'].map(a => (
                     <option key={a} value={a}>{getActionMeta(a, isAr).label}</option>
                   ))}
                 </select>
@@ -1248,7 +1252,7 @@ export default function UserManagement() {
                   {users.map(u => <option key={u.id} value={u.id}>{u.fullName}</option>)}
                 </select>
                 <select value={logLimit} onChange={e => setLogLimit(Number(e.target.value))} className="bg-black/50 border border-slate-800 text-slate-300 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-[#d4af37]/50">
-                  {[25,50,100,200].map(n => <option key={n} value={n}>{n} {t('سجل', 'records')}</option>)}
+                  {[25, 50, 100, 200].map(n => <option key={n} value={n}>{n} {t('سجل', 'records')}</option>)}
                 </select>
                 <div className="flex items-center gap-2 text-[10px] text-slate-500 font-bold">
                   <Activity className="w-3.5 h-3.5" /> {filteredLogs.length} {t('سجل', 'records')}
@@ -1408,70 +1412,70 @@ export default function UserManagement() {
             <form onSubmit={handleAddUser} className="p-6 space-y-4 overflow-y-auto flex-1 text-start" dir={isAr ? 'rtl' : 'ltr'}>
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الاسم الكامل', 'Full Name')} *</label>
-                <input 
-                  required 
+                <input
+                  required
                   tabIndex={1}
-                  type="text" 
-                  value={addFormData.fullName} 
-                  onChange={e => setAddFormData({...addFormData, fullName: e.target.value})} 
-                  className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none transition-all" 
+                  type="text"
+                  value={addFormData.fullName}
+                  onChange={e => setAddFormData({ ...addFormData, fullName: e.target.value })}
+                  className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none transition-all"
                 />
               </div>
-              
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('اسم المستخدم', 'Username')} *</label>
-                  <input 
-                    required 
+                  <input
+                    required
                     tabIndex={2}
-                    type="text" 
-                    placeholder="arslan_ops" 
-                    value={addFormData.username} 
-                    onChange={e => setAddFormData({...addFormData, username: e.target.value})} 
-                    className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono transition-all" 
-                    dir="ltr" 
+                    type="text"
+                    placeholder="arslan_ops"
+                    value={addFormData.username}
+                    onChange={e => setAddFormData({ ...addFormData, username: e.target.value })}
+                    className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono transition-all"
+                    dir="ltr"
                   />
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('رمز PIN', 'Security PIN')}</label>
-                  <input 
+                  <input
                     tabIndex={3}
-                    type="text" 
-                    maxLength={4} 
-                    placeholder="1234" 
-                    value={addFormData.systemPin} 
-                    onChange={e => setAddFormData({...addFormData, systemPin: e.target.value})} 
-                    className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-center tracking-widest transition-all" 
+                    type="text"
+                    maxLength={4}
+                    placeholder="1234"
+                    value={addFormData.systemPin}
+                    onChange={e => setAddFormData({ ...addFormData, systemPin: e.target.value })}
+                    className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-center tracking-widest transition-all"
                   />
                 </div>
               </div>
 
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('البريد الإلكتروني', 'Email')} *</label>
-                <input 
-                  required 
+                <input
+                  required
                   tabIndex={4}
-                  type="email" 
-                  placeholder="name@company.com" 
-                  value={addFormData.email} 
-                  onChange={e => setAddFormData({...addFormData, email: e.target.value})} 
-                  className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono transition-all" 
-                  dir="ltr" 
+                  type="email"
+                  placeholder="name@company.com"
+                  value={addFormData.email}
+                  onChange={e => setAddFormData({ ...addFormData, email: e.target.value })}
+                  className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono transition-all"
+                  dir="ltr"
                 />
               </div>
 
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('كلمة المرور', 'Password')} *</label>
                 <div className="relative">
-                  <input 
-                    required 
+                  <input
+                    required
                     tabIndex={5}
-                    type={showPassword ? 'text' : 'password'} 
-                    value={addFormData.password} 
-                    onChange={e => setAddFormData({...addFormData, password: e.target.value})} 
+                    type={showPassword ? 'text' : 'password'}
+                    value={addFormData.password}
+                    onChange={e => setAddFormData({ ...addFormData, password: e.target.value })}
                     placeholder="••••••••"
-                    className={`w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-xs font-bold transition-all ${isAr ? 'pr-4 pl-10' : 'pl-4 pr-10'}`} 
-                    dir="ltr" 
+                    className={`w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-xs font-bold transition-all ${isAr ? 'pr-4 pl-10' : 'pl-4 pr-10'}`}
+                    dir="ltr"
                   />
                   <button type="button" onClick={() => setShowPassword(!showPassword)} className={`absolute ${isAr ? 'left-3' : 'right-3'} top-1/2 -translate-y-1/2 text-slate-500 hover:text-white`}>
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -1482,10 +1486,10 @@ export default function UserManagement() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الدور', 'Role')}</label>
-                  <select 
+                  <select
                     tabIndex={6}
-                    value={addFormData.role} 
-                    onChange={e => setAddFormData({...addFormData, role: e.target.value})} 
+                    value={addFormData.role}
+                    onChange={e => setAddFormData({ ...addFormData, role: e.target.value })}
                     className="w-full bg-black/50 border border-slate-800 text-white rounded-xl py-3 px-4 focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none text-xs font-bold transition-all font-sans"
                   >
                     {roles.filter(r => r.id !== 'courier' && r.id !== 'Courier').map(r => <option key={r.id} value={r.id}>{r.title || r.id}</option>)}
@@ -1493,26 +1497,26 @@ export default function UserManagement() {
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('نسبة العمولة%', 'Commission%')}</label>
-                  <input 
+                  <input
                     tabIndex={7}
-                    type="number" 
-                    min="0" 
-                    max="100" 
-                    step="0.1" 
-                    value={addFormData.commissionRate} 
-                    onChange={e => setAddFormData({...addFormData, commissionRate: parseFloat(e.target.value) || 0})} 
-                    className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono transition-all" 
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    value={addFormData.commissionRate}
+                    onChange={e => setAddFormData({ ...addFormData, commissionRate: parseFloat(e.target.value) || 0 })}
+                    className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono transition-all"
                   />
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الراتب الشهري', 'Monthly Salary')}</label>
-                  <input 
+                  <input
                     tabIndex={8}
-                    type="number" 
-                    min="0" 
-                    value={addFormData.monthlySalary} 
-                    onChange={e => setAddFormData({...addFormData, monthlySalary: parseFloat(e.target.value) || 0})} 
-                    className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono transition-all" 
+                    type="number"
+                    min="0"
+                    value={addFormData.monthlySalary}
+                    onChange={e => setAddFormData({ ...addFormData, monthlySalary: parseFloat(e.target.value) || 0 })}
+                    className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono transition-all"
                   />
                 </div>
               </div>
@@ -1541,38 +1545,38 @@ export default function UserManagement() {
             <form onSubmit={handleUpdateUser} className="p-6 space-y-4 overflow-y-auto flex-1 text-start" dir={isAr ? 'rtl' : 'ltr'}>
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الاسم الكامل', 'Full Name')}</label>
-                <input 
-                  required 
+                <input
+                  required
                   tabIndex={1}
-                  type="text" 
-                  value={editFormData.fullName} 
-                  onChange={e => setEditFormData({...editFormData, fullName: e.target.value})} 
-                  className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none transition-all" 
+                  type="text"
+                  value={editFormData.fullName}
+                  onChange={e => setEditFormData({ ...editFormData, fullName: e.target.value })}
+                  className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none transition-all"
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('اسم المستخدم', 'Username')}</label>
-                  <input 
-                    required 
+                  <input
+                    required
                     tabIndex={2}
-                    type="text" 
-                    value={editFormData.username} 
-                    onChange={e => setEditFormData({...editFormData, username: e.target.value})} 
-                    className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold-focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono transition-all" 
-                    dir="ltr" 
+                    type="text"
+                    value={editFormData.username}
+                    onChange={e => setEditFormData({ ...editFormData, username: e.target.value })}
+                    className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold-focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono transition-all"
+                    dir="ltr"
                   />
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">PIN</label>
-                  <input 
+                  <input
                     tabIndex={3}
-                    type="text" 
-                    maxLength={4} 
-                    value={editFormData.systemPin} 
-                    onChange={e => setEditFormData({...editFormData, systemPin: e.target.value})} 
-                    className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-center tracking-widest transition-all" 
+                    type="text"
+                    maxLength={4}
+                    value={editFormData.systemPin}
+                    onChange={e => setEditFormData({ ...editFormData, systemPin: e.target.value })}
+                    className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-center tracking-widest transition-all"
                   />
                 </div>
               </div>
@@ -1580,11 +1584,11 @@ export default function UserManagement() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الدور', 'Role')}</label>
-                  <select 
+                  <select
                     tabIndex={4}
-                    disabled={ROOT_EMAILS.includes(selectedUser.email) || selectedUser.isRoot} 
-                    value={editFormData.role} 
-                    onChange={e => setEditFormData({...editFormData, role: e.target.value})} 
+                    disabled={ROOT_EMAILS.includes(selectedUser.email) || selectedUser.isRoot}
+                    value={editFormData.role}
+                    onChange={e => setEditFormData({ ...editFormData, role: e.target.value })}
                     className="w-full bg-black/50 border border-slate-800 text-white rounded-xl py-3 px-4 focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed font-sans transition-all"
                   >
                     {roles.filter(r => r.id !== 'courier' && r.id !== 'Courier').map(r => <option key={r.id} value={r.id}>{r.title || r.id}</option>)}
@@ -1592,26 +1596,26 @@ export default function UserManagement() {
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('عمولة%', 'Commission%')}</label>
-                  <input 
+                  <input
                     tabIndex={5}
-                    type="number" 
-                    min="0" 
-                    max="100" 
-                    step="0.1" 
-                    value={editFormData.commissionRate} 
-                    onChange={e => setEditFormData({...editFormData, commissionRate: parseFloat(e.target.value) || 0})} 
-                    className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono transition-all" 
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    value={editFormData.commissionRate}
+                    onChange={e => setEditFormData({ ...editFormData, commissionRate: parseFloat(e.target.value) || 0 })}
+                    className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono transition-all"
                   />
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الراتب الشهري', 'Monthly Salary')}</label>
-                  <input 
+                  <input
                     tabIndex={6}
-                    type="number" 
-                    min="0" 
-                    value={editFormData.monthlySalary} 
-                    onChange={e => setEditFormData({...editFormData, monthlySalary: parseFloat(e.target.value) || 0})} 
-                    className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono transition-all" 
+                    type="number"
+                    min="0"
+                    value={editFormData.monthlySalary}
+                    onChange={e => setEditFormData({ ...editFormData, monthlySalary: parseFloat(e.target.value) || 0 })}
+                    className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono transition-all"
                   />
                 </div>
               </div>
@@ -1619,7 +1623,7 @@ export default function UserManagement() {
               {!ROOT_EMAILS.includes(selectedUser.email) && !selectedUser.isRoot && (
                 <div className="bg-black/30 border border-slate-800 rounded-xl p-4 shrink-0">
                   <label className="flex items-center gap-3 cursor-pointer">
-                    <div onClick={() => setEditFormData({...editFormData, disabled: !editFormData.disabled})}
+                    <div onClick={() => setEditFormData({ ...editFormData, disabled: !editFormData.disabled })}
                       className={`w-11 h-6 rounded-full border transition-all flex items-center relative cursor-pointer ${editFormData.disabled ? 'bg-rose-900/30 border-rose-700/40' : 'bg-slate-800 border-slate-700'}`}>
                       <span className={`w-4 h-4 rounded-full transition-all absolute ${editFormData.disabled ? 'bg-rose-400 right-1' : 'bg-slate-500 left-1'}`}></span>
                     </div>
@@ -1708,11 +1712,11 @@ export default function UserManagement() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('اسم الدور', 'Role Name')} *</label>
-                    <input required type="text" placeholder={t('مثل: مشرف المستودع', 'e.g. Warehouse Supervisor')} value={roleFormData.title} onChange={e => setRoleFormData({...roleFormData, title: e.target.value})} className="w-full border border-slate-800 rounded-xl p-3 bg-black/50 text-white focus:border-[#d4af37]/60 outline-none text-xs font-bold" />
+                    <input required type="text" placeholder={t('مثل: مشرف المستودع', 'e.g. Warehouse Supervisor')} value={roleFormData.title} onChange={e => setRoleFormData({ ...roleFormData, title: e.target.value })} className="w-full border border-slate-800 rounded-xl p-3 bg-black/50 text-white focus:border-[#d4af37]/60 outline-none text-xs font-bold" />
                   </div>
                   <div>
                     <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('المعرّف (بالإنجليزي)', 'ID (English)')} *</label>
-                    <input required disabled={!!selectedRole} type="text" placeholder="Warehouse_Supervisor" value={roleFormData.id} onChange={e => setRoleFormData({...roleFormData, id: e.target.value})} className="w-full border border-slate-800 rounded-xl p-3 bg-black/50 text-white focus:border-[#d4af37]/60 outline-none text-xs font-bold font-mono disabled:opacity-40 disabled:cursor-not-allowed" dir="ltr" />
+                    <input required disabled={!!selectedRole} type="text" placeholder="Warehouse_Supervisor" value={roleFormData.id} onChange={e => setRoleFormData({ ...roleFormData, id: e.target.value })} className="w-full border border-slate-800 rounded-xl p-3 bg-black/50 text-white focus:border-[#d4af37]/60 outline-none text-xs font-bold font-mono disabled:opacity-40 disabled:cursor-not-allowed" dir="ltr" />
                   </div>
                 </div>
 

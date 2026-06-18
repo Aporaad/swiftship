@@ -26,6 +26,7 @@ export default function Notifications() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const { role, hasPermission, loading: roleLoading } = useRole();
   const canSendNotif = role === 'Admin' || hasPermission('send_notifications');
+  const canManageWhatsApp = role === 'Admin' || hasPermission('view_edit_notification_settings');
   const [loadingAlerts, setLoadingAlerts] = useState(true);
   
   // WhatsApp Settings state
@@ -159,7 +160,7 @@ export default function Notifications() {
   // Save WhatsApp Webhook/Config — guarded by manage_whatsapp
   const handleSaveWhatsAppConfig = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (role !== 'Admin' && !hasPermission('manage_whatsapp')) {
+    if (!canManageWhatsApp) {
       toast.error(isAr ? 'لا تملك صلاحية تعديل إعدادات WhatsApp' : 'No permission to edit WhatsApp settings');
       return;
     }
@@ -208,7 +209,7 @@ export default function Notifications() {
 
   // Trigger dummy credential connections test to active provider
   const handleTestConnection = async () => {
-    if (role !== 'Admin' && !hasPermission('manage_whatsapp')) {
+    if (!canManageWhatsApp) {
       toast.error(isAr ? 'لا تملك صلاحية تعديل إعدادات WhatsApp' : 'No permission to edit WhatsApp settings');
       return;
     }
@@ -330,7 +331,7 @@ export default function Notifications() {
               )}
             </button>
             
-            {(role === 'Admin' || hasPermission('manage_whatsapp')) && (
+            {canManageWhatsApp && (
               <>
                 <button 
                   type="button"
@@ -421,7 +422,7 @@ export default function Notifications() {
       )}
 
       {/* 2. WhatsApp Settings & Template Builder Tab content */}
-      {activeTab === 'settings' && (role === 'Admin' || hasPermission('manage_whatsapp')) && (
+      {activeTab === 'settings' && canManageWhatsApp && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
           {/* Settings Parameters Form - ColSpan 2 */}
@@ -1038,7 +1039,7 @@ export default function Notifications() {
       )}
 
       {/* 3. Delivery Logs Tab content */}
-      {activeTab === 'logs' && (role === 'Admin' || hasPermission('manage_whatsapp')) && (
+      {activeTab === 'logs' && canManageWhatsApp && (
         <div className="space-y-4">
           
           <div className="flex justify-between items-center px-1">

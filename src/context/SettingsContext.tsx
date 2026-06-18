@@ -61,6 +61,7 @@ export interface Settings {
   defaultAppDuration?: number;
   defaultFactoryDuration?: number;
   defaultYemenDeliveryDuration?: number;
+  defaultShippingDuration?: number;
 
   // Factory / Manufacturer Order Defaults
   defaultProfitPerKg?: number;          // نسبة الربح للكيلو (SAR/kg) للمصنع
@@ -97,11 +98,11 @@ const defaultSettings: Settings = {
   language: 'ar',
   theme: 'dark',
   fontSize: 'md',
-  systemName: 'SwiftShip',
+  systemName: 'ALX',
   systemLogo: '',
   orderPrefix: 'ALX',
   orderStartNumber: 1001,
-  companyName: 'لوجي-تراك',
+  companyName: 'الكس-تراك',
   companyPhone: '',
   companyEmail: '',
   companyWebsite: '',
@@ -135,6 +136,7 @@ const defaultSettings: Settings = {
   defaultAppDuration: 10,
   defaultFactoryDuration: 20,
   defaultYemenDeliveryDuration: 5,
+  defaultShippingDuration: 15,
   defaultProfitPerKg: 19,
   defaultCbmShippingRate: 1400,
   cbmShippingRateApiUrl: '',

@@ -20,6 +20,7 @@ export default function Orders() {
   const { role, hasPermission, profile, loading: roleLoading } = useRole();
   const canManageOrders = role === 'Admin' || hasPermission('edit_orders');
   const canAddOrders = role === 'Admin' || hasPermission('add_orders');
+  const canEditOrderDefaultsCreation = role === 'Admin' || hasPermission('edit_order_defaults_creation');
   const isAr = settings.language === 'ar';
 
   // Core Data States
@@ -144,13 +145,15 @@ export default function Orders() {
           shippingDate: new Date().toISOString().split('T')[0],
           shippingDuration: String(
             formData.orderSourceType === 'SHEIN' ? (settings.defaultSheinDuration ?? 12) :
-            formData.orderSourceType === 'Factory' ? (settings.defaultFactoryDuration ?? 20) :
-            (settings.defaultAppDuration ?? 10)
+              formData.orderSourceType === 'Factory' ? (settings.defaultFactoryDuration ?? 20) :
+                formData.orderSourceType === 'App' ? (settings.defaultAppDuration ?? 10) :
+                  (settings.defaultShippingDuration ?? 15)
           ),
           expectedArrival: (() => {
             const dur = formData.orderSourceType === 'SHEIN' ? (settings.defaultSheinDuration ?? 12) :
               formData.orderSourceType === 'Factory' ? (settings.defaultFactoryDuration ?? 20) :
-              (settings.defaultAppDuration ?? 10);
+                formData.orderSourceType === 'App' ? (settings.defaultAppDuration ?? 10) :
+                  (settings.defaultShippingDuration ?? 15);
             const d = new Date();
             d.setDate(d.getDate() + dur);
             return d.toISOString().split('T')[0];
@@ -2106,7 +2109,8 @@ export default function Orders() {
       const defaultDuration =
         formData.orderSourceType === 'SHEIN' ? (settings.defaultSheinDuration ?? 12) :
           formData.orderSourceType === 'Factory' ? (settings.defaultFactoryDuration ?? 20) :
-            (settings.defaultAppDuration ?? 10);
+            formData.orderSourceType === 'App' ? (settings.defaultAppDuration ?? 10) :
+              (settings.defaultShippingDuration ?? 15);
 
       setShippings(prev => {
         return prev.map(sh => {
@@ -2115,7 +2119,8 @@ export default function Orders() {
             !sh.shippingDuration ||
             sh.shippingDuration === String(settings.defaultSheinDuration ?? 12) ||
             sh.shippingDuration === String(settings.defaultFactoryDuration ?? 20) ||
-            sh.shippingDuration === String(settings.defaultAppDuration ?? 10);
+            sh.shippingDuration === String(settings.defaultAppDuration ?? 10) ||
+            sh.shippingDuration === String(settings.defaultShippingDuration ?? 15);
 
           if (isDurationDefault) {
             const newDuration = String(defaultDuration);
@@ -3268,7 +3273,7 @@ export default function Orders() {
               <div className="p-3 bg-blue-950/20 border border-blue-900/30 rounded-2xl flex items-center gap-3">
                 <div className="p-2 bg-blue-500/10 text-blue-400 rounded-xl"><DollarSign className="w-5 h-5" /></div>
                 <div className="text-start">
-                  <span className="block text-[9px] font-black text-slate-500 uppercase tracking-wider">{isAr ? 'صافي ربح الشركة المتوقع' : 'Estimated Net Profit'}</span>
+                  <span className="block text-[9px] font-black text-slate-500 uppercase tracking-wider">{isAr ? 'رسوم اخرى' : 'Other Fees'}</span>
                   <span className="text-sm font-mono font-black text-blue-400">
                     {calcs.profitCompanySAR.toLocaleString()} SAR
                   </span>
@@ -3720,15 +3725,22 @@ export default function Orders() {
                           id="bank-comm-check"
                           checked={bankCommissionEnabled}
                           onChange={(e) => setBankCommissionEnabled(e.target.checked)}
-                          className="rounded bg-slate-950 border-slate-800 text-yellow-600 focus:ring-0 w-4 h-4 cursor-pointer"
+                          //disabled={!canEditOrderDefaultsCreation}
+                          className="rounded bg-slate-950 border-slate-800 text-yellow-600 focus:ring-0 w-4 h-4 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         />
-                        <label htmlFor="bank-comm-check" className="text-[11px] font-bold text-slate-350 cursor-pointer">{isAr ? 'عمولة بنك (%)' : 'Bank Comm (%)'}</label>
+                        <label
+                          htmlFor="bank-comm-check"
+                          className={`text-[11px] font-bold text-slate-350 ${!canEditOrderDefaultsCreation ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                        >
+                          {isAr ? 'عمولة بنك (%)' : 'Bank Comm (%)'}
+                        </label>
                         {bankCommissionEnabled && (
                           <input
                             type="number"
                             value={bankCommissionRate}
-                            onChange={(e) => setBankCommissionRate(parseFloat(e.target.value) || 0)}
-                            className="w-12 bg-slate-950 border border-slate-800 text-white rounded-xl p-1 text-center font-mono font-bold text-[10px]"
+                            onChange={(e) => canEditOrderDefaultsCreation && setBankCommissionRate(parseFloat(e.target.value) || 0)}
+                            //disabled={!canEditOrderDefaultsCreation}
+                            className="w-12 bg-slate-950 border border-slate-800 text-white rounded-xl p-1 text-center font-mono font-bold text-[10px] disabled:opacity-50 disabled:cursor-not-allowed"
                           />
                         )}
                       </div>
@@ -4057,16 +4069,23 @@ export default function Orders() {
                       id="packaging-fee-check"
                       checked={packagingFeeEnabled}
                       onChange={(e) => setPackagingFeeEnabled(e.target.checked)}
-                      className="rounded bg-slate-950 border-slate-800 text-yellow-600 focus:ring-0 w-4 h-4 cursor-pointer"
+                      //disabled={!canEditOrderDefaultsCreation}
+                      className="rounded bg-slate-950 border-slate-800 text-yellow-600 focus:ring-0 w-4 h-4 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     />
-                    <label htmlFor="packaging-fee-check" className="text-[11px] font-bold text-slate-350 cursor-pointer">{isAr ? 'إضافة رسوم تغليف شركة الشحن (ريال ثابت)' : 'Add carrier packaging fee (fixed SAR)'}</label>
+                    <label
+                      htmlFor="packaging-fee-check"
+                      className={`text-[11px] font-bold text-slate-350 ${!canEditOrderDefaultsCreation ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                    >
+                      {isAr ? 'إضافة رسوم تغليف شركة الشحن (ريال ثابت)' : 'Add carrier packaging fee (fixed SAR)'}
+                    </label>
                     {packagingFeeEnabled && (
                       <div className="flex items-center gap-1">
                         <input
                           type="number"
                           value={packagingFeeRate}
-                          onChange={(e) => setPackagingFeeRate(parseFloat(e.target.value) || 0)}
-                          className="w-20 bg-slate-950 border border-slate-800 text-white rounded-xl p-1.5 text-center font-mono font-bold text-[11px]"
+                          onChange={(e) => canEditOrderDefaultsCreation && setPackagingFeeRate(parseFloat(e.target.value) || 0)}
+                          disabled={!canEditOrderDefaultsCreation}
+                          className="w-20 bg-slate-950 border border-slate-800 text-white rounded-xl p-1.5 text-center font-mono font-bold text-[11px] disabled:opacity-50 disabled:cursor-not-allowed"
                           placeholder="0"
                         />
                         <span className="text-[10px] text-slate-500 font-bold">SAR</span>
@@ -4077,7 +4096,7 @@ export default function Orders() {
               )}
 
               {/* Section 4: Couriers & Local Logistics Drivers */}
-              <div className="space-y-4 bg-slate-950/20 border border-slate-800 p-5 rounded-3xl">
+              <div className="space-y-4 bg-slate-955/20 border border-slate-800 p-5 rounded-3xl">
                 <span className="block text-xs font-black text-white text-start mb-2">{isAr ? 'المناديب واللوجستيات الميدانية' : 'Field Logistics Drivers'}</span>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-[11px] text-start font-bold">
@@ -4135,7 +4154,8 @@ export default function Orders() {
                       type="number"
                       value={formData.deliveryCourierFee}
                       onChange={(e) => setFormData({ ...formData, deliveryCourierFee: parseFloat(e.target.value) || 0 })}
-                      className="w-full bg-slate-950 border border-slate-855 text-white rounded-xl p-3 outline-none font-mono text-xs text-center"
+                      disabled={!canEditOrderDefaultsCreation}
+                      className="w-full bg-slate-950 border border-slate-855 text-white rounded-xl p-3 outline-none font-mono text-xs text-center disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                   </div>
                 </div>
@@ -4178,7 +4198,8 @@ export default function Orders() {
                           step="any"
                           value={profitPerKgRate}
                           onChange={(e) => setProfitPerKgRate(parseFloat(e.target.value) || 0)}
-                          className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none font-mono text-[11px]"
+                          disabled={!canEditOrderDefaultsCreation}
+                          className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none font-mono text-[11px] disabled:opacity-50 disabled:cursor-not-allowed"
                         />
                       </div>
                       <div>
@@ -4191,7 +4212,8 @@ export default function Orders() {
                             step="any"
                             value={cbmShippingRateValue}
                             onChange={(e) => setCbmShippingRateValue(parseFloat(e.target.value) || 0)}
-                            className="flex-1 bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none font-mono text-[11px]"
+                            disabled={!canEditOrderDefaultsCreation}
+                            className="flex-1 bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none font-mono text-[11px] disabled:opacity-50 disabled:cursor-not-allowed"
                           />
                           {settings.cbmShippingRateApiUrl && (
                             <button
@@ -4212,7 +4234,8 @@ export default function Orders() {
                                   alert((isAr ? '❌ خطأ: ' : '❌ Error: ') + err.message);
                                 }
                               }}
-                              className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-xl text-xs flex items-center justify-center transition"
+                              disabled={!canEditOrderDefaultsCreation}
+                              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white p-2 rounded-xl text-xs flex items-center justify-center transition"
                             >
                               <RefreshCw className="w-4 h-4" />
                             </button>
@@ -4223,12 +4246,13 @@ export default function Orders() {
                   )}
 
                   <div>
-                    <label className="block text-[10px] text-slate-500 uppercase tracking-widest block leading-none mb-1.5">{isAr ? 'رسوم التغليف العامة (SAR)' : 'KSA Wrapping Fee (SAR)'}</label>
+                    <label className="block text-[10px] text-slate-500 uppercase tracking-widest block leading-none mb-1.5">{isAr ? 'رسوم تغليف وشحن محلي (SAR)' : 'KSA Wrapping Fee and local shipping (SAR)'}</label>
                     <input
                       type="number"
                       value={formData.packagingFee || ''}
                       onChange={(e) => setFormData({ ...formData, packagingFee: parseFloat(e.target.value) || 0 })}
-                      className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none font-mono text-[11px]"
+                      disabled={!canEditOrderDefaultsCreation}
+                      className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none font-mono text-[11px] disabled:opacity-50 disabled:cursor-not-allowed"
                       placeholder="0.00"
                     />
                   </div>
@@ -4258,7 +4282,8 @@ export default function Orders() {
                           setFormData({ ...formData, exchangeRateYER: val });
                         }
                       }}
-                      className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none font-mono text-[11px] text-center"
+                      disabled={!canEditOrderDefaultsCreation}
+                      className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none font-mono text-[11px] text-center disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                   </div>
 

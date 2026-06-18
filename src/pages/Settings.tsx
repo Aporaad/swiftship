@@ -125,6 +125,8 @@ export default function Settings() {
   const canEditGeneral = role === 'Admin' || hasPermission('edit_general_settings');
   const canEditCompany = role === 'Admin' || hasPermission('edit_company_info');
   const canEditRates = role === 'Admin' || hasPermission('edit_exchange_rates');
+  // view_order_defaults: can VIEW the section (read-only). edit_order_defaults: can EDIT fields.
+  const canViewOrderDefaults = role === 'Admin' || hasPermission('view_order_defaults') || hasPermission('edit_order_defaults');
   const canEditOrderDefaults = role === 'Admin' || hasPermission('edit_order_defaults');
   const canManageBackup = role === 'Admin' || hasPermission('manage_backup');
   const canManageAdmin = role === 'Admin';
@@ -539,7 +541,7 @@ export default function Settings() {
       const backupDoc = snap.docs.find(d => d.id === backupId);
       if (!backupDoc) throw new Error('Backup not found');
       const data = backupDoc.data();
-      
+
       if (data.settings) await updateSettings(data.settings);
       if (data.data) {
         for (const colName in data.data) {
@@ -741,8 +743,8 @@ export default function Settings() {
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all whitespace-nowrap flex-1 justify-center ${isActive
-                  ? 'bg-gradient-to-r from-[#d4af37]/20 to-transparent text-white border border-[#d4af37]/30 shadow-inner'
-                  : 'text-slate-500 hover:text-white hover:bg-white/[0.03]'
+                ? 'bg-gradient-to-r from-[#d4af37]/20 to-transparent text-white border border-[#d4af37]/30 shadow-inner'
+                : 'text-slate-500 hover:text-white hover:bg-white/[0.03]'
                 }`}
             >
               <Icon className={`w-4 h-4 ${isActive ? 'text-[#d4af37]' : ''}`} />
@@ -1111,7 +1113,7 @@ export default function Settings() {
         <div className="space-y-5 animate-fade-slide-in">
 
           {/* Order Defaults */}
-          {canEditOrderDefaults && (
+          {canViewOrderDefaults && (
             <SectionCard title={t('orderDefaults')} icon={Package}>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 {[
@@ -1122,9 +1124,17 @@ export default function Settings() {
                   { key: 'defaultCourierCommissionRate', label: t('defaultCourierCommission'), unit: '%' },
                 ].map(f => (
                   <div key={f.key}>
-                    <FieldLabel>{f.label}</FieldLabel>
+                    <FieldLabel locked={!canEditOrderDefaults}>{f.label}</FieldLabel>
                     <div className="relative">
-                      <FieldInput type="number" step="any" value={(localSettings as any)[f.key] ?? 0} onChange={e => setLocalSettings({ ...localSettings, [f.key]: parseFloat(e.target.value) || 0 })} className="font-mono pr-12" dir="ltr" />
+                      <FieldInput
+                        type="number"
+                        step="any"
+                        value={(localSettings as any)[f.key] ?? 0}
+                        onChange={e => canEditOrderDefaults && setLocalSettings({ ...localSettings, [f.key]: parseFloat(e.target.value) || 0 })}
+                        disabled={!canEditOrderDefaults}
+                        className="font-mono pr-12"
+                        dir="ltr"
+                      />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-[#d4af37] bg-[#d4af37]/10 px-1.5 py-0.5 rounded">{f.unit}</span>
                     </div>
                   </div>
@@ -1133,23 +1143,36 @@ export default function Settings() {
               <div className="mt-4 p-3 bg-[#d4af37]/5 border border-[#d4af37]/15 rounded-xl text-[10px] text-slate-400 font-bold">
                 💡 {isAr ? 'هذه القيم ستُملأ تلقائياً عند إنشاء أي طلب جديد.' : 'These defaults auto-fill when creating new orders.'}
               </div>
+              {!canEditOrderDefaults && (
+                <div className="mt-3 p-3 bg-amber-950/20 border border-amber-900/30 rounded-xl text-[10px] text-amber-400 font-bold flex items-center gap-2">
+                  🔒 {isAr ? 'لديك صلاحية العرض فقط. تواصل مع المدير لتعديل هذه الإعدادات.' : 'You have view-only access. Contact an admin to modify these settings.'}
+                </div>
+              )}
             </SectionCard>
           )}
 
           {/* Default Shipping Durations */}
-          {canEditOrderDefaults && (
+          {canViewOrderDefaults && (
             <SectionCard title={isAr ? 'مدد الشحن الافتراضية للطلبات (أيام)' : 'Default Order Shipping Durations (Days)'} icon={Clock}>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5">
                 {[
                   { key: 'defaultSheinDuration', label: isAr ? 'مدة شي ان' : 'SHEIN Duration' },
                   { key: 'defaultAppDuration', label: isAr ? 'مدة التطبيقات' : 'Apps Duration' },
                   { key: 'defaultFactoryDuration', label: isAr ? 'مدة المصانع' : 'Factory Duration' },
                   { key: 'defaultYemenDeliveryDuration', label: isAr ? 'مدة التوصيل لليمن' : 'Yemen Delivery Duration' },
+                  { key: 'defaultShippingDuration', label: isAr ? 'مدة الشحن الافتراضية للطلبات' : 'Default Order Duration' },
                 ].map(f => (
                   <div key={f.key}>
-                    <FieldLabel>{f.label}</FieldLabel>
+                    <FieldLabel locked={!canEditOrderDefaults}>{f.label}</FieldLabel>
                     <div className="relative">
-                      <FieldInput type="number" value={(localSettings as any)[f.key] ?? 0} onChange={e => setLocalSettings({ ...localSettings, [f.key]: parseInt(e.target.value) || 0 })} className="font-mono pr-16" dir="ltr" />
+                      <FieldInput
+                        type="number"
+                        value={(localSettings as any)[f.key] ?? 0}
+                        onChange={e => canEditOrderDefaults && setLocalSettings({ ...localSettings, [f.key]: parseInt(e.target.value) || 0 })}
+                        disabled={!canEditOrderDefaults}
+                        className="font-mono pr-16"
+                        dir="ltr"
+                      />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-[#d4af37] bg-[#d4af37]/10 px-1.5 py-0.5 rounded">{isAr ? 'يوم' : 'Days'}</span>
                     </div>
                   </div>
@@ -1159,7 +1182,7 @@ export default function Settings() {
           )}
 
           {/* Factory / Manufacturer Order Defaults */}
-          {(role === 'Admin' || hasPermission('edit_profit_per_kg') || hasPermission('edit_cbm_shipping_rate')) && (
+          {canViewOrderDefaults && (
             <SectionCard
               title={isAr ? 'إعدادات طلبات المصنع والمورد الدولي' : 'Factory & International Supplier Defaults'}
               icon={Package}
@@ -1168,16 +1191,16 @@ export default function Settings() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 {/* Profit per KG */}
                 <div>
-                  <FieldLabel locked={!(role === 'Admin' || hasPermission('edit_profit_per_kg'))}>
+                  <FieldLabel locked={!canEditOrderDefaults}>
                     {isAr ? 'نسبة الربح للكيلو (SAR/كجم)' : 'Profit Rate per KG (SAR/kg)'}
                   </FieldLabel>
                   <div className="relative">
                     <FieldInput
                       type="number"
                       step="any"
-                      disabled={!(role === 'Admin' || hasPermission('edit_profit_per_kg'))}
+                      disabled={!canEditOrderDefaults}
                       value={localSettings.defaultProfitPerKg ?? 19}
-                      onChange={e => setLocalSettings({ ...localSettings, defaultProfitPerKg: parseFloat(e.target.value) || 0 })}
+                      onChange={e => canEditOrderDefaults && setLocalSettings({ ...localSettings, defaultProfitPerKg: parseFloat(e.target.value) || 0 })}
                       className="font-mono pr-16"
                       dir="ltr"
                     />
@@ -1190,16 +1213,16 @@ export default function Settings() {
 
                 {/* CBM Shipping Rate */}
                 <div>
-                  <FieldLabel locked={!(role === 'Admin' || hasPermission('edit_cbm_shipping_rate'))}>
+                  <FieldLabel locked={!canEditOrderDefaults}>
                     {isAr ? 'سعر شحن الـ CBM الحالي (دولار USD/m³)' : 'Current CBM Shipping Rate (USD/m³)'}
                   </FieldLabel>
                   <div className="relative">
                     <FieldInput
                       type="number"
                       step="any"
-                      disabled={!(role === 'Admin' || hasPermission('edit_cbm_shipping_rate'))}
+                      disabled={!canEditOrderDefaults}
                       value={localSettings.defaultCbmShippingRate ?? 1400}
-                      onChange={e => setLocalSettings({ ...localSettings, defaultCbmShippingRate: parseFloat(e.target.value) || 0 })}
+                      onChange={e => canEditOrderDefaults && setLocalSettings({ ...localSettings, defaultCbmShippingRate: parseFloat(e.target.value) || 0 })}
                       className="font-mono pr-20"
                       dir="ltr"
                     />
@@ -1211,7 +1234,7 @@ export default function Settings() {
                 </div>
 
                 {/* CBM Rate API URL */}
-                {(role === 'Admin' || hasPermission('edit_cbm_shipping_rate')) && (
+                {canEditOrderDefaults && (
                   <div className="md:col-span-2">
                     <FieldLabel>
                       {isAr ? 'رابط API لتحديث سعر الـ CBM تلقائياً (اختياري)' : 'API URL for auto-updating CBM rate (optional)'}
@@ -1220,7 +1243,7 @@ export default function Settings() {
                       <FieldInput
                         type="text"
                         value={localSettings.cbmShippingRateApiUrl || ''}
-                        onChange={e => setLocalSettings({ ...localSettings, cbmShippingRateApiUrl: e.target.value })}
+                        onChange={e => canEditOrderDefaults && setLocalSettings({ ...localSettings, cbmShippingRateApiUrl: e.target.value })}
                         placeholder="https://api.example.com/cbm-rate"
                         dir="ltr"
                         className="font-mono flex-1"
