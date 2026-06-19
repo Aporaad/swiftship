@@ -3131,7 +3131,7 @@ export default function Orders() {
                         </button>
                       )}
 
-                    {role === 'Admin' && (
+                    {(role === 'Admin' || hasPermission('delete_orders')) && (
                       <button
                         onClick={() => handleDeleteOrderClick(ord)}
                         className="bg-rose-950/20 text-rose-400 hover:bg-rose-900 hover:text-white px-2.5 py-1.5 rounded-lg transition-all text-[10px] flex items-center gap-1 font-bold border border-rose-900/30 cursor-pointer"

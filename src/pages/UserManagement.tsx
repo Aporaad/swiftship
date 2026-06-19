@@ -103,7 +103,7 @@ const PERMISSION_GROUPS = (isAr: boolean) => [
       { id: 'view_notifications', label: isAr ? 'عرض صفحة الإشعارات' : 'View Notifications' },
       { id: 'send_notifications', label: isAr ? 'إرسال إشعارات مخصصة وتجريبية' : 'Send Custom Notifications' },
       { id: 'manage_notifications', label: isAr ? 'إدارة وحذف الإشعارات' : 'Manage & Delete Notifications' },
-      { id: 'manage_notification_settings', label: isAr ? 'عرض وتعديل إعدادات الإشعارات (قوالب WhatsApp)' : 'View & Edit Notification Settings (WhatsApp Templates)' },
+      { id: 'view_edit_notification_settings', label: isAr ? 'عرض وتعديل إعدادات الإشعارات (قوالب WhatsApp)' : 'View & Edit Notification Settings (WhatsApp Templates)' },
       { id: 'notify_orders', label: isAr ? 'استقبال إشعارات الطلبات' : 'Receive Order Notifications' },
       { id: 'notify_finance', label: isAr ? 'استقبال إشعارات المالية' : 'Receive Finance Notifications' },
       { id: 'notify_system', label: isAr ? 'استقبال إشعارات النظام والأمان' : 'Receive System & Security Notifications' },
@@ -135,6 +135,8 @@ const PERMISSION_GROUPS = (isAr: boolean) => [
     group: isAr ? '⚙️ الإعدادات' : '⚙️ Settings',
     perms: [
       { id: 'settings', label: isAr ? 'الوصول لإعدادات النظام' : 'Access System Settings' },
+      { id: 'edit_interface_settings', label: isAr ? 'إدارة التنسيق والواجهات واللغة' : 'Configure Themes & Locale' },
+      { id: 'edit_general_settings', label: isAr ? 'تعديل الإعدادات العامة للنظام' : 'Edit General Settings' },
       { id: 'edit_company_info', label: isAr ? 'تعديل معلومات الشركة' : 'Edit Company Information' },
       { id: 'view_order_defaults', label: isAr ? 'عرض الإعدادات الافتراضية للطلبات' : 'View Default Order Settings' },
       { id: 'edit_order_defaults', label: isAr ? 'تعديل الإعدادات الافتراضية للطلبات' : 'Edit Default Order Settings' },
@@ -672,7 +674,10 @@ export default function UserManagement() {
   // ROLE ACTIONS
   // ══════════════════════════════════════════════════════════
   const handleOpenAddRole = () => { setSelectedRole(null); setRoleFormData({ id: '', title: '', permissions: [] }); setIsRoleModalOpen(true); };
-  const handleOpenEditRole = (r: any) => { setSelectedRole(r); setRoleFormData({ id: r.id, title: r.title || r.id, permissions: r.permissions || [] }); setIsRoleModalOpen(true); };
+  const handleOpenEditRole = (r: any) => {
+    if (r.id === 'Admin') return notificationService.notify({ title: t('محمي', 'Protected'), message: t('لا يمكن تعديل صلاحيات مدير النظام', 'Cannot edit System Admin permissions'), type: 'error', category: 'system' });
+    setSelectedRole(r); setRoleFormData({ id: r.id, title: r.title || r.id, permissions: r.permissions || [] }); setIsRoleModalOpen(true);
+  };
 
   const togglePermission = (permId: string) => {
     setRoleFormData(prev => {
@@ -702,6 +707,7 @@ export default function UserManagement() {
   const handleSaveRole = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!roleFormData.id) return notificationService.notify({ title: t('خطأ', 'Error'), message: t('يرجى إدخال معرّف الدور', 'Please enter role ID'), type: 'error', category: 'system' });
+    if (roleFormData.id === 'Admin') return notificationService.notify({ title: t('محمي', 'Protected'), message: t('لا يمكن تعديل صلاحيات مدير النظام', 'Cannot edit System Admin permissions'), type: 'error', category: 'system' });
     try {
       await setDoc(doc(db, 'roles', roleFormData.id), { title: roleFormData.title, permissions: roleFormData.permissions, updatedAt: Date.now() });
       await activityLogService.log(selectedRole ? 'edit_role' : 'add_role', roleFormData.title, { id: roleFormData.id, permCount: roleFormData.permissions.length });

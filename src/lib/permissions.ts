@@ -31,6 +31,10 @@ export type PermissionKey =
   | 'disable_accounts'
   | 'terminate_sessions'
   | 'view_activity_log'
+  | 'view_roles'
+  | 'add_roles'
+  | 'edit_roles'
+  | 'delete_roles'
   | 'view_finance'
   | 'add_finance'
   | 'edit_finance'
@@ -91,6 +95,7 @@ export const ALL_PERMISSIONS: PermissionDefinition[] = [
   { id: 'view_orders', labelAr: 'عرض سجل الطلبات', labelEn: 'View Orders list', category: 'orders' },
   { id: 'add_orders', labelAr: 'إنشاء وإضافة طلبات جديدة', labelEn: 'Create New Orders', category: 'orders' },
   { id: 'edit_orders', labelAr: 'تعديل بيانات وتفاصيل الطلب', labelEn: 'Edit Existing Orders', category: 'orders' },
+  { id: 'edit_order_defaults_creation', labelAr: 'تعديل الأسعار الافتراضية عند إنشاء طلب', labelEn: 'Edit Default Prices When Creating Order', category: 'orders' },
   { id: 'update_order_status', labelAr: 'تغيير حالة الطلب فقط بحدود اللوجستيات', labelEn: 'Update Status Only', category: 'orders' },
   { id: 'delete_orders', labelAr: 'حذف وتصفية الطلبات السابقة', labelEn: 'Delete Orders', category: 'orders' },
   { id: 'delete_paid_orders', labelAr: 'تفويض حذف طلب مدفوع بالكامل', labelEn: 'Authorize Deleting Paid Orders', category: 'orders' },
@@ -125,6 +130,12 @@ export const ALL_PERMISSIONS: PermissionDefinition[] = [
   { id: 'disable_accounts', labelAr: 'توقيف نشاط أو تمطير حساب موظف', labelEn: 'Deactivate Staff permissions or suspend', category: 'staff' },
   { id: 'terminate_sessions', labelAr: 'فرض تسجيل خروج خارق وجبري على موظف', labelEn: 'Enforce Session Termination', category: 'staff' },
   { id: 'view_activity_log', labelAr: 'قراءة وفحص دفتر السجلات الشامل للنظام والتحركات', labelEn: 'View System activity & changes tracker log', category: 'staff' },
+
+  // Roles
+  { id: 'view_roles', labelAr: 'عرض الصلاحيات والأدوار', labelEn: 'View Roles & Permissions', category: 'staff' },
+  { id: 'add_roles', labelAr: 'إنشاء أدوار وصلاحيات جديدة', labelEn: 'Create New Roles', category: 'staff' },
+  { id: 'edit_roles', labelAr: 'تعديل الأدوار والصلاحيات', labelEn: 'Edit Roles & Permissions', category: 'staff' },
+  { id: 'delete_roles', labelAr: 'حذف الأدوار', labelEn: 'Delete Roles', category: 'staff' },
 
   // Accounting and Expenses
   { id: 'view_finance', labelAr: 'عرض الدفاتر المالية وسندات القبض وبنود الصندوق', labelEn: 'View General Ledger & Cash vaults', category: 'accounting' },

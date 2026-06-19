@@ -688,7 +688,7 @@ export default function Settings() {
     { id: 'interface', label: t('tabInterface'), icon: Palette, show: true },
     { id: 'general', label: t('tabGeneral'), icon: Settings2, show: true },
     { id: 'currency', label: t('tabCurrency'), icon: DollarSign, show: true },
-    { id: 'admin', label: t('tabAdmin'), icon: Shield, show: canManageAdmin },
+    { id: 'admin', label: t('tabAdmin'), icon: Shield, show: canManageAdmin || canManageBackup || canViewOrderDefaults },
     { id: 'logistics', label: isAr ? 'الربط اللوجستي' : 'Logistics API', icon: Globe, show: canManageAdmin }
   ];
 
