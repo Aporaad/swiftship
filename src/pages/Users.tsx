@@ -72,6 +72,9 @@ export default function Users() {
   });
 
   const [addLoading, setAddLoading] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
+  const addBlockRef = React.useRef(false);
+  const editBlockRef = React.useRef(false);
 
   useEffect(() => {
     if (roleLoading) return;
@@ -108,13 +111,19 @@ export default function Users() {
 
   const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (editLoading || editBlockRef.current) return;
     if (!selectedUser) return;
+    
+    editBlockRef.current = true;
+    setEditLoading(true);
     
     // Check if username is taken if changed
     if (editFormData.username && editFormData.username !== selectedUser.username) {
       const q = query(collection(db, 'users'), where('username', '==', editFormData.username));
       const snap = await getDocs(q);
       if (!snap.empty && snap.docs[0].id !== selectedUser.id) {
+        setEditLoading(false);
+        editBlockRef.current = false;
         return notificationService.notify({
           title: isAr ? 'خطأ بالتحقق' : 'Unique ID Conflict',
           message: isAr ? 'اسم المستخدم هذا مستخدم ومقيد مسبقاً' : 'This ID/Username is already taken globally',
@@ -147,6 +156,9 @@ export default function Users() {
       setSelectedUser(null);
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, 'users');
+    } finally {
+      setEditLoading(false);
+      editBlockRef.current = false;
     }
   };
 
@@ -221,7 +233,8 @@ export default function Users() {
 
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (addLoading) return;
+    if (addLoading || addBlockRef.current) return;
+    addBlockRef.current = true;
     setAddLoading(true);
     let secondaryApp;
     try {
@@ -287,6 +300,7 @@ export default function Users() {
       });
     } finally {
       setAddLoading(false);
+      addBlockRef.current = false;
       if (secondaryApp) {
         await deleteApp(secondaryApp);
       }
@@ -737,9 +751,10 @@ export default function Users() {
                 </button>
                 <button 
                   type="submit" 
-                  className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black text-xs rounded-xl shadow-md transition-all h-max"
+                  disabled={editLoading}
+                  className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] disabled:opacity-50 text-black font-black text-xs rounded-xl shadow-md transition-all h-max"
                 >
-                  {isAr ? 'حفظ الحماية والتأمين' : 'Update settings'}
+                  {editLoading ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'حفظ الحماية والتأمين' : 'Update settings')}
                 </button>
               </div>
             </form>

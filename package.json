@@ -2,9 +2,9 @@
   "name": "swiftship",
   "private": true,
   "version": "1.0.0",
-  "description": "SwiftShip — نظام إدارة الشحنات والتوصيل",
+  "description": "alx — نظام إدارة الشحنات والتوصيل",
   "author": {
-    "name": "SwiftShip",
+    "name": "alx",
     "email": "support@swiftship.app"
   },
   "type": "module",
@@ -22,8 +22,8 @@
   },
   "build": {
     "appId": "com.swiftship.app",
-    "productName": "SwiftShip",
-    "copyright": "Copyright © 2026 SwiftShip",
+    "productName": "alx",
+    "copyright": "Copyright © 2026 alx",
     "directories": {
       "output": "dist-electron",
       "buildResources": "electron/assets"
@@ -76,13 +76,13 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "SwiftShip",
+      "shortcutName": "alx",
       "installerIcon": "electron/assets/icon.ico",
       "uninstallerIcon": "electron/assets/icon.ico",
       "installerHeaderIcon": "electron/assets/icon.ico",
       "deleteAppDataOnUninstall": false,
       "runAfterFinish": true,
-      "menuCategory": "SwiftShip"
+      "menuCategory": "alx"
     },
     "asar": true,
     "asarUnpack": [

@@ -61,7 +61,7 @@ interface PrintTemplateSettings {
 
 const DEFAULT_PRINT_SETTINGS: PrintTemplateSettings = {
   headerTitleAr: 'سويفت شيب للخدمات اللوجستية ش.م.م',
-  headerTitleEn: 'SwiftShip Logistics L.L.C',
+  headerTitleEn: 'alx Logistics L.L.C',
   subtitleAr: 'الشحن السريع • النقل البري • التجميع الذكي',
   subtitleEn: 'Express Cargo & Procurement Services',
   footerTextAr: 'يسرنا خدمتكم دائماً. يرجى مراجعة محتويات السند والتوقيع فور الاستلام.',
@@ -92,7 +92,7 @@ const COLORS = ['#d4af37', '#10b981', '#ef4444', '#3b82f6', '#8b5cf6', '#f59e0b'
 const REPORT_TYPES = [
   { id: 'financial_overview', labelAr: 'التحليل المالي والأرباح العام', labelEn: 'Financial Overview & Profits', icon: TrendingUp },
   { id: 'expenses', labelAr: 'تقرير المصروفات التفصيلي', labelEn: 'Detailed Expenses', icon: FileText },
-  { id: 'packaging', labelAr: 'تقرير رسوم التغليف وتكاليف أخرى', labelEn: 'Packaging & Other Costs', icon: Package },
+  { id: 'packaging', labelAr: 'تقرير رسوم التغليف وتكاليف شحن محلي', labelEn: 'Packaging & Other Costs', icon: Package },
   { id: 'orders_cost', labelAr: 'تقرير تكاليف الطلبات والشحنات', labelEn: 'Orders Cost Analysis', icon: ShoppingCart },
   { id: 'shipping_companies', labelAr: 'تقرير شركات الشحن والعمولات', labelEn: 'Shipping Companies Report', icon: Truck },
   { id: 'customers', labelAr: 'تقرير كشف العملاء والذمم والمديونيات', labelEn: 'Customers Ledger & Balances', icon: Users },
@@ -155,6 +155,7 @@ export default function Reports() {
 
   // Active Print Slips Preview Modal
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [printZoomScale, setPrintZoomScale] = useState(0.8);
 
   // Drilldown Selected States
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -322,20 +323,18 @@ export default function Reports() {
   // Fetch detailed account transactions when account ID is selected or packaging report is active
   useEffect(() => {
     const isPackagingReport = activeReport === 'packaging';
-    if (!filters.accountId && !filters.entityId && !isPackagingReport) {
+    const isAccountLedgerReport = activeReport === 'account_ledger';
+    const hasActiveDrilldown = !!(selectedCustomerId || selectedCourierId || selectedUserId || selectedOrderId);
+    
+    if (!filters.accountId && !filters.entityId && !isPackagingReport && !hasActiveDrilldown) {
       setAccountTransactions([]);
       return;
     }
 
     const packagingAccountId = accounts.find(a => a.entityId === 'sys_packaging_fees')?.id;
     const targetAccountId = filters.accountId || 
-      (filters.entityId ? accounts.find(a => a.entityId === filters.entityId)?.id : null) ||
+      (filters.entityId && isAccountLedgerReport ? accounts.find(a => a.entityId === filters.entityId)?.id : null) ||
       (isPackagingReport ? packagingAccountId : null);
-
-    if (!targetAccountId) {
-      setAccountTransactions([]);
-      return;
-    }
 
     const qTx = query(
       collection(db, 'account_transactions'),
@@ -345,19 +344,47 @@ export default function Reports() {
     const unsub = onSnapshot(qTx, (snap) => {
       const allTxs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
       const filtered = allTxs.filter((tx: any) => {
-        const matchesAccount = tx.accountId === targetAccountId || tx.entityId === 'sys_packaging_fees' || (packagingAccountId && tx.accountId === packagingAccountId);
-        if (!matchesAccount) return false;
-        
         const txDate = new Date(tx.createdAt);
         const start = startOfDay(new Date(filters.startDate));
         const end = endOfDay(new Date(filters.endDate));
-        return isWithinInterval(txDate, { start, end });
+        const dateInRange = isWithinInterval(txDate, { start, end });
+        if (!dateInRange) return false;
+
+        const selectedAccount = targetAccountId ? accounts.find(a => a.id === targetAccountId) : null;
+        if (targetAccountId && (
+          tx.accountId === targetAccountId || 
+          (selectedAccount && (tx.entityId === selectedAccount.entityId || tx.accountId === selectedAccount.entityId))
+        )) return true;
+        
+        const activeEntityId = filters.entityId || selectedCustomerId || selectedCourierId || selectedUserId;
+        if (activeEntityId && (tx.entityId === activeEntityId || tx.accountId === activeEntityId)) return true;
+
+        if (selectedOrderId) {
+          const o = orders.find(ord => ord.id === selectedOrderId || ord.orderNumber === selectedOrderId);
+          if (o && (tx.refNumber === o.orderNumber || tx.description?.includes(o.orderNumber))) {
+            return true;
+          }
+        }
+
+        if (selectedCustomerId) {
+          const cust = customers.find(c => c.id === selectedCustomerId);
+          if (cust && (tx.description?.includes(cust.fullName) || (cust.phone && tx.description?.includes(cust.phone)))) return true;
+        }
+
+        if (selectedUserId) {
+          const u = users.find(usr => usr.id === selectedUserId);
+          if (u && (tx.description?.includes(u.fullName) || tx.description?.includes(u.displayName))) return true;
+        }
+
+        if (isPackagingReport && (tx.accountId === packagingAccountId || tx.entityId === 'sys_packaging_fees')) return true;
+
+        return false;
       });
       setAccountTransactions(filtered);
     });
 
     return () => unsub();
-  }, [filters.accountId, filters.entityId, filters.startDate, filters.endDate, accounts, activeReport]);
+  }, [filters.accountId, filters.entityId, filters.startDate, filters.endDate, accounts, activeReport, selectedCustomerId, selectedCourierId, selectedUserId, selectedOrderId, orders, customers, users]);
 
   // Save changes to print settings template in Firestore 
   const handleSavePrintSettings = async () => {
@@ -402,8 +429,19 @@ export default function Reports() {
     }
 
     // Secondary filters depending on report
+    let fCustomers = customers;
     if (activeReport === 'customers' && filters.entityId) {
-      // Just that individual customer is reported
+      fCustomers = customers.filter(c => c.id === filters.entityId);
+    }
+
+    let fCouriers = couriers;
+    if (activeReport === 'couriers' && filters.entityId) {
+      fCouriers = couriers.filter(co => co.id === filters.entityId);
+    }
+
+    let fUsers = users;
+    if (activeReport === 'users' && filters.entityId) {
+      fUsers = users.filter(u => u.id === filters.entityId);
     }
 
     // Apply Sorting
@@ -420,11 +458,12 @@ export default function Reports() {
     return {
       orders: fOrders.sort(sortFn),
       expenses: fExpenses.sort(sortFn),
-      couriers,
-      customers,
+      couriers: fCouriers,
+      customers: fCustomers,
+      users: fUsers,
       shippingCompanies
     };
-  }, [orders, expenses, couriers, customers, shippingCompanies, filters, sortOrder, sortBy, activeReport]);
+  }, [orders, expenses, couriers, customers, users, shippingCompanies, filters, sortOrder, sortBy, activeReport]);
 
   const reportMetrics = useMemo(() => {
     const ordersList = filteredData.orders;
@@ -493,7 +532,7 @@ export default function Reports() {
   }, [reportMetrics, isAr]);
 
   // Export Report to XLSX natively (fully supports Arabic because of modern XML sheet representation)
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     let dataToExport: any[] = [];
     let title = activeReport;
 
@@ -524,7 +563,7 @@ export default function Reports() {
         };
       });
     } else if (activeReport === 'customers') {
-      dataToExport = customers.map(c => ({
+      dataToExport = filteredData.customers.map(c => ({
         [isAr ? 'اسم العميل' : 'Customer']: c.fullName,
         [isAr ? 'الهاتف' : 'Phone']: c.phone || '-',
         [isAr ? 'العنوان' : 'Address']: c.address || '-',
@@ -532,7 +571,7 @@ export default function Reports() {
         [isAr ? 'رصيد الحساب المالي' : 'Balance']: c.financialBalance || 0
       }));
     } else if (activeReport === 'couriers') {
-      dataToExport = couriers.map(c => ({
+      dataToExport = filteredData.couriers.map(c => ({
         [isAr ? 'اسم المندوب' : 'Courier Name']: c.fullName,
         [isAr ? 'الهاتف' : 'Phone']: c.phone || '-',
         [isAr ? 'طريقة الحساب' : 'Type']: c.courierType === 'sourcing' ? (isAr ? 'تجميع (سعودي)' : 'Sourcing') : (isAr ? 'توزيع (محلي)' : 'Local'),
@@ -541,13 +580,13 @@ export default function Reports() {
         [isAr ? 'العملة' : 'Currency']: c.financialCurrency || 'SAR'
       }));
     } else if (activeReport === 'shipping_companies') {
-      dataToExport = shippingCompanies.map(sc => ({
+      dataToExport = filteredData.shippingCompanies.map(sc => ({
         [isAr ? 'شركة الشحن' : 'Shipping Co']: sc.name,
         [isAr ? 'الهاتف' : 'Phone']: sc.phone || '-',
         [isAr ? 'الموقع' : 'Type']: sc.type || '-'
       }));
     } else if (activeReport === 'users') {
-      dataToExport = users.map(u => ({
+      dataToExport = filteredData.users.map(u => ({
         [isAr ? 'الاسم الكامل' : 'Staff Name']: u.fullName || u.displayName || '-',
         [isAr ? 'البريد الإلكتروني' : 'Email']: u.email || '-',
         [isAr ? 'الصلاحية وظيفة' : 'Role']: u.role || '-',
@@ -596,7 +635,50 @@ export default function Reports() {
     if (isAr) {
       ws['!dir'] = 'rtl';
     }
-    XLSX.writeFile(wb, `SwiftShip_Report_${title}_${filters.startDate}.xlsx`);
+
+    const fileName = `alx_Report_${title}_${filters.startDate}.xlsx`;
+
+    // ─── Electron: use native Save dialog ──────────────────────────────
+    const electronAPI = (window as any).electronAPI;
+    if (electronAPI?.saveFile) {
+      try {
+        // XLSX.write returns a Uint8Array buffer
+        const buffer: Uint8Array = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
+        const result = await electronAPI.saveFile({
+          defaultName: fileName,
+          filters: [
+            { name: 'Excel Files', extensions: ['xlsx'] },
+            { name: 'All Files',   extensions: ['*'] }
+          ],
+          buffer: Array.from(buffer)  // Transfer as plain array via IPC
+        });
+
+        if (!result.success) {
+          if (result.reason !== 'canceled') {
+            notificationService.notify({
+              title: isAr ? 'خطأ في الحفظ' : 'Save Error',
+              message: result.reason || (isAr ? 'فشل حفظ الملف' : 'Failed to save file'),
+              type: 'error'
+            });
+          }
+          return;
+        }
+
+        notificationService.notify({
+          title: isAr ? 'تم تصدير الدفتر بنجاح' : 'Export Successful',
+          message: isAr
+            ? `تم إنشاء كشوف السجلات وحفظها بنجاح في: ${result.filePath}`
+            : `Financial spreadsheet saved to: ${result.filePath}`,
+          type: 'success'
+        });
+        return;
+      } catch (ipcErr: any) {
+        console.warn('[Export] Electron IPC save failed, falling back to browser download:', ipcErr);
+      }
+    }
+
+    // ─── Browser fallback (web / dev mode) ─────────────────────────────
+    XLSX.writeFile(wb, fileName);
     
     notificationService.notify({
       title: isAr ? 'تم تصدير الدفتر بنجاح' : 'Success',
@@ -605,8 +687,38 @@ export default function Reports() {
     });
   };
 
-  // Modern Native Print implementation
-  const triggerNativePrint = () => {
+  // Modern Native Print implementation — Electron aware
+  const triggerNativePrint = async () => {
+    const electronAPI = (window as any).electronAPI;
+
+    // ─── Electron: use WebContents print API ───────────────────────────
+    if (electronAPI?.printPage) {
+      try {
+        // Determine page settings from printSettings
+        const isLandscape = (printSettings.paperSize as string) === 'A4_Landscape';
+        const isReceipt   = printSettings.paperSize === '80mm' || printSettings.paperSize === '58mm';
+        const result = await electronAPI.printPage({
+          silent:       false,
+          printBackground: true,
+          pageSize:     isReceipt ? 'A5' : 'A4',
+          landscape:    isLandscape,
+          marginTop:    printSettings.margins === 'none' ? 0 : printSettings.margins === 'minimal' ? 5 : 10,
+          marginBottom: printSettings.margins === 'none' ? 0 : printSettings.margins === 'minimal' ? 5 : 10,
+          marginLeft:   printSettings.margins === 'none' ? 0 : printSettings.margins === 'minimal' ? 5 : 10,
+          marginRight:  printSettings.margins === 'none' ? 0 : printSettings.margins === 'minimal' ? 5 : 10,
+        });
+        if (!result.success) {
+          console.warn('[Print] Electron print failed:', result.reason);
+          // Fallback to window.print()
+          window.print();
+        }
+        return;
+      } catch (err) {
+        console.warn('[Print] Electron IPC print failed, fallback:', err);
+      }
+    }
+
+    // ─── Browser fallback ───────────────────────────────────────────────
     window.print();
   };
 
@@ -1581,24 +1693,41 @@ export default function Reports() {
                                 </td>
                               </tr>
                             ) : (
-                              accountTransactions.map((tx) => (
-                                <tr key={tx.id} className="hover:bg-slate-950/20 font-medium">
-                                  <td className="py-3 px-3 text-slate-500">{format(new Date(tx.createdAt), 'yyyy-MM-dd HH:mm')}</td>
-                                  <td className="py-3 px-3 font-mono font-bold text-slate-300">{tx.refNumber || '-'}</td>
-                                  <td className="py-3 px-3 text-center">
-                                    <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${tx.type === 'Debit' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}`}>
-                                      {tx.type === 'Debit' ? (isAr ? 'مدين / صادر' : 'DEBIT') : (isAr ? 'دائن / وارد' : 'CREDIT')}
-                                    </span>
-                                  </td>
-                                  <td className="py-3 px-3 text-white max-w-xs truncate">{tx.description}</td>
-                                  <td className="py-3 px-3 text-right font-mono font-black text-rose-400">
-                                    {tx.type === 'Debit' ? `${(parseFloat(tx.amount) || 0).toLocaleString()} ${tx.currencyOriginal || 'SAR'}` : '-'}
-                                  </td>
-                                  <td className="py-3 px-3 text-right font-mono font-black text-emerald-400">
-                                    {tx.type === 'Credit' ? `${(parseFloat(tx.amount) || 0).toLocaleString()} ${tx.currencyOriginal || 'SAR'}` : '-'}
-                                  </td>
-                                </tr>
-                              ))
+                              accountTransactions.map((tx) => {
+                                const acc = accounts.find(a => a.id === filters.accountId);
+                                return (
+                                  <tr key={tx.id} className="hover:bg-slate-950/20 font-medium">
+                                    <td className="py-3 px-3 text-slate-500">{format(new Date(tx.createdAt), 'yyyy-MM-dd HH:mm')}</td>
+                                    <td className="py-3 px-3 font-mono font-bold text-slate-300">{tx.refNumber || '-'}</td>
+                                    <td className="py-3 px-3 text-center">
+                                      <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${tx.type === 'Debit' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}`}>
+                                        {tx.type === 'Debit' ? (isAr ? 'مدين / صادر' : 'DEBIT') : (isAr ? 'دائن / وارد' : 'CREDIT')}
+                                      </span>
+                                    </td>
+                                    <td className="py-3 px-3 text-white max-w-xs truncate">{tx.description}</td>
+                                    <td className="py-3 px-3 text-right font-mono font-black text-rose-400">
+                                      {tx.type === 'Debit' ? (
+                                        <div className="flex flex-col items-end">
+                                          <span>{(parseFloat(tx.amountOriginal || tx.amount) || 0).toLocaleString()} {tx.currencyOriginal || 'SAR'}</span>
+                                          {tx.currencyOriginal && tx.currencyOriginal !== (acc?.currency || 'SAR') && (
+                                            <span className="text-[10px] text-slate-500 font-normal">≈ {(parseFloat(tx.amount) || 0).toLocaleString()} {acc?.currency || 'SAR'}</span>
+                                          )}
+                                        </div>
+                                      ) : '-'}
+                                    </td>
+                                    <td className="py-3 px-3 text-right font-mono font-black text-emerald-400">
+                                      {tx.type === 'Credit' ? (
+                                        <div className="flex flex-col items-end">
+                                          <span>{(parseFloat(tx.amountOriginal || tx.amount) || 0).toLocaleString()} {tx.currencyOriginal || 'SAR'}</span>
+                                          {tx.currencyOriginal && tx.currencyOriginal !== (acc?.currency || 'SAR') && (
+                                            <span className="text-[10px] text-slate-500 font-normal">≈ {(parseFloat(tx.amount) || 0).toLocaleString()} {acc?.currency || 'SAR'}</span>
+                                          )}
+                                        </div>
+                                      ) : '-'}
+                                    </td>
+                                  </tr>
+                                );
+                              })
                             )}
                           </tbody>
                         </table>
@@ -1875,7 +2004,7 @@ export default function Reports() {
                     <div className="space-y-6">
                       {(() => {
                         const sc = shippingCompanies.find(c => c.name === selectedCompanyId || c.id === selectedCompanyId) || { name: selectedCompanyId, type: 'INTERNATIONAL', phone: '-', dueAmount: 0 };
-                        const coOrders = orders.filter(o => o.shippingCompany === sc.name || o.shippingCompanyId === sc.id);
+                        const coOrders = filteredData.orders.filter(o => o.shippingCompany === sc.name || o.shippingCompanyId === sc.id);
                         const totalSum = coOrders.reduce((sum, o) => sum + (parseFloat(o.totalPrice) || 0), 0);
                         const paidSum = coOrders.reduce((sum, o) => sum + (parseFloat(o.amountPaid) || 0), 0);
                         const linkedTxs = accountTransactions.filter(tx => tx.description?.toLowerCase().includes((sc?.name || '').toLowerCase()) || tx.description?.includes(sc?.name || ''));
@@ -2012,7 +2141,7 @@ export default function Reports() {
                         const cust = customers.find(c => c.id === selectedCustomerId);
                         if (!cust) return <p className="text-slate-500">Customer not found.</p>;
 
-                        const custOrders = orders.filter(o => o.customerId === cust.id || o.customerName === cust.fullName || o.customerPhone === cust.phone);
+                        const custOrders = filteredData.orders.filter(o => o.customerId === cust.id || o.customerName === cust.fullName || o.customerPhone === cust.phone);
                         const grossSum = custOrders.reduce((sum, o) => sum + (parseFloat(o.totalPrice) || 0), 0);
                         const paidSum = custOrders.reduce((sum, o) => sum + (parseFloat(o.amountPaid) || 0), 0);
                         const remainDebt = custOrders.reduce((sum, o) => sum + (parseFloat(o.amountRemaining) || 0), 0);
@@ -2162,7 +2291,7 @@ export default function Reports() {
                         const courier = couriers.find(c => c.id === selectedCourierId);
                         if (!courier) return <p className="text-slate-500">Courier not found.</p>;
 
-                        const coOrders = orders.filter(o => o.shippingCourierId === courier.id || o.deliveryCourierId === courier.id);
+                        const coOrders = filteredData.orders.filter(o => o.shippingCourierId === courier.id || o.deliveryCourierId === courier.id || o.courierId === courier.id);
                         const totalAssigned = coOrders.length;
                         const deliveredCo = coOrders.filter(o => ['Completed', 'Delivered', 'تم التسليم'].includes(o.orderStatus));
                         const successRate = totalAssigned > 0 ? Math.round((deliveredCo.length / totalAssigned) * 105) : 0;
@@ -2278,7 +2407,7 @@ export default function Reports() {
                             </tr>
                           </thead>
                           <tbody>
-                            {searchMatchList(users, 'fullName').map((u) => (
+                            {searchMatchList(filteredData.users, 'fullName').map((u) => (
                               <tr key={u.id} className="bg-slate-900/10 hover:bg-slate-900/30 rounded-xl cursor-pointer transition animate-fade-in" onClick={() => setSelectedUserId(u.id)}>
                                 <td className="py-3 px-3 font-bold text-white text-start">{u.fullName || u.displayName}</td>
                                 <td className="py-3 px-3 text-slate-500 font-mono font-bold">{u.email || '-'}</td>
@@ -2983,12 +3112,72 @@ export default function Reports() {
               </button>
             </div>
 
+            {/* Zoom / Scale Controller Overlay */}
+            <div className="bg-slate-950 px-5 py-2.5 border-b border-slate-850 flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0 text-xs text-slate-350">
+              <div className="flex items-center gap-2">
+                <span className="text-slate-450 font-bold">{isAr ? 'مستوى تكبير/تصغير المعاينة بالملفات الشاشة:' : 'Screen Zoom Level:'}</span>
+                <span className="font-mono text-[#d4af37] font-black">{Math.round(printZoomScale * 100)}%</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPrintZoomScale(prev => Math.max(0.4, prev - 0.05))}
+                  className="w-7 h-7 bg-slate-900 rounded-lg flex items-center justify-center font-bold text-white border border-slate-800 hover:border-[#d4af37]/35 transition text-xs select-none"
+                >
+                  -
+                </button>
+                <input
+                  type="range"
+                  min="0.3"
+                  max="1.5"
+                  step="0.05"
+                  value={printZoomScale}
+                  onChange={(e) => setPrintZoomScale(parseFloat(e.target.value))}
+                  className="w-28 sm:w-40 accent-[#d4af37]"
+                />
+                <button
+                  type="button"
+                  onClick={() => setPrintZoomScale(prev => Math.min(1.5, prev + 0.05))}
+                  className="w-7 h-7 bg-slate-900 rounded-lg flex items-center justify-center font-bold text-white border border-slate-800 hover:border-[#d4af37]/35 transition text-xs select-none"
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPrintZoomScale(0.85)}
+                  className="px-2 py-1 bg-slate-900 border border-slate-800 text-slate-300 font-bold hover:text-white rounded text-[10px]"
+                >
+                  {isAr ? 'إعادة ضبط' : 'Reset'}
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={triggerNativePrint}
+                className="flex items-center gap-1.5 px-4 py-1.5 bg-[#d4af37] hover:bg-yellow-500 text-black font-black rounded-xl text-xs transition shadow-md"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                {isAr ? 'طباعة المستند الآن' : 'Print Document'}
+              </button>
+            </div>
+
             {/* Printable Frame content */}
-            <div className="flex-1 overflow-y-auto p-8 flex justify-center bg-slate-950/40">
+            <div className="flex-1 overflow-x-auto overflow-y-auto p-4 md:p-8 flex justify-center bg-slate-950/40">
               
-              {/* PRINT CANVAS TARGET: Will be the unique component shown on print */}
+              {/* Scale container wrapping the target print canvas */}
               <div 
-                id="print-invoice-canvas"
+                style={{ 
+                  transform: `scale(${printZoomScale})`, 
+                  transformOrigin: 'top center',
+                  transition: 'transform 0.1s ease-out',
+                  height: `${297 * printZoomScale}mm`,
+                  width: printSettings.paperSize === '80mm' ? '80mm' : printSettings.paperSize === '58mm' ? '58mm' : '210mm'
+                }} 
+                className="shrink-0 animate-fade-in"
+              >
+                
+                {/* PRINT CANVAS TARGET: Will be the unique component shown on print */}
+                <div 
+                  id="print-invoice-canvas"
                 className="bg-white text-black p-8 shadow-2xl relative border border-slate-300 text-start"
                 style={{ 
                   width: printSettings.paperSize === '80mm' ? '80mm' : printSettings.paperSize === '58mm' ? '58mm' : '100%',
@@ -3045,12 +3234,12 @@ export default function Reports() {
                         return selectedExpenseCategory ? (isAr ? `كشف مصرفات ونفقات فئة: ${selectedExpenseCategory}` : `Categorized Expense Statement: ${selectedExpenseCategory}`) : (isAr ? 'تقرير المصروفات والمدفوعات المتنوعة المجمعة' : 'Operating Expenses Ledger Dashboard');
                       }
                       if (activeReport === 'packaging') {
-                        return (isAr ? 'تقرير رسوم التغليف والتعبئة والتكاليف الأخرى' : 'Packaging and wrapping fees statement');
+                        return (isAr ? 'تقرير رسوم التغليف والتعبئة وتكاليف شحن محلي' : 'Packaging and wrapping fees statement');
                       }
                       if (activeReport === 'account_ledger') {
                         return (isAr ? 'كشف الحساب التفصيلي للتدقيق المحاسبي الموحد' : 'Unified Accounting Ledger General Audit');
                       }
-                      return (isAr ? 'تقرير نظام سويفت شيب للخدمات اللوجستية' : 'SwiftShip Logistics Custom Export Document');
+                      return (isAr ? 'تقرير نظام ألكس للخدمات اللوجستية' : 'alx Logistics Custom Export Document');
                     })()}
                   </span>
                 </div>
@@ -3130,7 +3319,7 @@ export default function Reports() {
                     if (activeReport === 'customers' && selectedCustomerId !== null) {
                       const cust = customers.find(c => c.id === selectedCustomerId);
                       if (!cust) return <p className="text-center py-4 font-bold text-slate-500">Customer not found</p>;
-                      const custOrders = orders.filter(o => o.customerId === cust.id || o.customerName === cust.fullName || o.customerPhone === cust.phone);
+                      const custOrders = filteredData.orders.filter(o => o.customerId === cust.id || o.customerName === cust.fullName || o.customerPhone === cust.phone);
                       const grossSum = custOrders.reduce((sum, o) => sum + (parseFloat(o.totalPrice) || 0), 0);
                       const paidSum = custOrders.reduce((sum, o) => sum + (parseFloat(o.amountPaid) || 0), 0);
                       return (
@@ -3184,7 +3373,7 @@ export default function Reports() {
                     if (activeReport === 'couriers' && selectedCourierId !== null) {
                       const courier = couriers.find(c => c.id === selectedCourierId);
                       if (!courier) return <p className="text-center py-4 font-bold text-slate-500">Courier not found</p>;
-                      const coOrders = orders.filter(o => o.courierId === courier.id || o.courierName === courier.fullName);
+                      const coOrders = filteredData.orders.filter(o => o.shippingCourierId === courier.id || o.deliveryCourierId === courier.id || o.courierId === courier.id || o.courierName === courier.fullName);
                       return (
                         <div className="space-y-4 text-xs">
                           <h4 className="font-extrabold text-[#000] border-b pb-1 text-sm">{isAr ? `مسند تصفية العهد والمالية للمندوب: ${courier.fullName}` : `Courier Debt & Custody Settlement: ${courier.fullName}`}</h4>
@@ -3228,7 +3417,7 @@ export default function Reports() {
                     // 4. Shipping Carriers view print details
                     if (activeReport === 'shipping_companies' && selectedCompanyId !== null) {
                       const sc = shippingCompanies.find(c => c.name === selectedCompanyId || c.id === selectedCompanyId) || { name: selectedCompanyId, type: 'INTERNATIONAL', phone: '-', dueAmount: 0 };
-                      const coOrders = orders.filter(o => o.shippingCompany === sc.name || o.shippingCompanyId === sc.id);
+                      const coOrders = filteredData.orders.filter(o => o.shippingCompany === sc.name || o.shippingCompanyId === sc.id);
                       return (
                         <div className="space-y-4 text-xs">
                           <h4 className="font-extrabold text-[#000] border-b pb-1 text-sm">{isAr ? `كشف أداء وحساب شركة الشحن والمسار: ${sc.name}` : `Shipping Carrier Auditing: ${sc.name}`}</h4>
@@ -3417,12 +3606,12 @@ export default function Reports() {
                                   <td className="p-3 border-r border-slate-300 text-center uppercase text-[10px]">{tx.type}</td>
                                   <td className="p-3 border-r border-slate-300">{tx.description}</td>
                                   <td className="p-3 text-right font-mono font-black">
-                                    {tx.type === 'Debit' ? '+' : '-'}{tx.amount?.toLocaleString()} {tx.currencyOriginal || 'SAR'}
+                                    {tx.type === 'Debit' ? '+' : '-'}{(tx.amountOriginal || tx.amount)?.toLocaleString()} {tx.currencyOriginal || 'SAR'}
                                   </td>
                                 </tr>
                               ))
                             ) : activeReport === 'customers' ? (
-                              customers.map(c => (
+                              filteredData.customers.map(c => (
                                 <tr key={c.id} className="border-b border-slate-300 font-medium">
                                   <td className="p-3 border-r border-slate-300 font-bold">{c.fullName}</td>
                                   <td className="p-3 border-r border-slate-300 font-mono">{c.phone || '-'}</td>
@@ -3431,7 +3620,7 @@ export default function Reports() {
                                 </tr>
                               ))
                             ) : activeReport === 'couriers' ? (
-                              couriers.map(c => (
+                              filteredData.couriers.map(c => (
                                 <tr key={c.id} className="border-b border-slate-300 font-medium">
                                   <td className="p-3 border-r border-slate-300 font-bold">{c.fullName}</td>
                                   <td className="p-3 border-r border-slate-300">{c.courierType === 'sourcing' ? (isAr ? 'تجميع خارجي' : 'Sourcing') : (isAr ? 'توزيع داخلي' : 'Local')}</td>
@@ -3541,6 +3730,8 @@ export default function Reports() {
               </div>
 
             </div>
+
+          </div>
 
             {/* Print and Export Controls */}
             <div className="p-4 bg-black/40 border-t border-slate-850 flex justify-end gap-3 shrink-0">

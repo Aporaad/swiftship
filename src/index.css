@@ -33,6 +33,12 @@
     font-family: var(--font-sans);
     font-size: var(--system-font-size, 14px);
   }
+
+  /* Force elements to be selectable for effortless copying */
+  p, span, h1, h2, h3, h4, h5, h6, td, th, input, textarea, code, pre, label, .selectable-text {
+    user-select: text !important;
+    -webkit-user-select: text !important;
+  }
 }
 
 /* ─────────────────────────────────────── */

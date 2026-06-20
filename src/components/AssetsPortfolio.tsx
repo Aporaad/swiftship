@@ -558,7 +558,7 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
   };
 
   return (
-    <div className="space-y-6 pt-2 select-none animate-fade-in text-start">
+    <div className="space-y-6 pt-2 animate-fade-in text-start">
       
       {/* Bento Grid Metrics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

@@ -1418,11 +1418,11 @@ async function startServer() {
       app.get('*', (req, res) => {
         res.status(503).send(`
           <!DOCTYPE html><html dir="rtl" lang="ar">
-          <head><meta charset="UTF-8"><title>SwiftShip</title>
+          <head><meta charset="UTF-8"><title>alx</title>
           <style>body{font-family:sans-serif;background:#0a0f1e;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;flex-direction:column}
           h1{color:#f59e0b}p{color:#94a3b8;max-width:400px;text-align:center}</style></head>
           <body><h1>⚠️ خطأ في التثبيت</h1>
-          <p>ملفات التطبيق مفقودة. يرجى إعادة تثبيت SwiftShip.</p>
+          <p>ملفات التطبيق مفقودة. يرجى إعادة تثبيت alx.</p>
           <p style="font-size:12px;color:#475569">dist not found in: ${possibleDistPaths.join(', ')}</p>
           </body></html>`);
       });

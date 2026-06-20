@@ -265,6 +265,11 @@ export default function UserManagement() {
   const [sessionTargetUser, setSessionTargetUser] = useState<any>(null);
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [addLoading, setAddLoading] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
+  const [savingRole, setSavingRole] = useState(false);
+  const addBlockRef = React.useRef(false);
+  const editBlockRef = React.useRef(false);
+  const roleBlockRef = React.useRef(false);
 
   // -- Multidevice Sessions --
   const [dbSessions, setDbSessions] = useState<any[]>([]);
@@ -418,11 +423,16 @@ export default function UserManagement() {
 
   const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (editLoading || editBlockRef.current) return;
     if (!selectedUser) return;
+    editBlockRef.current = true;
+    setEditLoading(true);
     if (editFormData.username && editFormData.username !== selectedUser.username) {
       const q = query(collection(db, 'users'), where('username', '==', editFormData.username));
       const snap = await getDocs(q);
       if (!snap.empty && snap.docs[0].id !== selectedUser.id) {
+        setEditLoading(false);
+        editBlockRef.current = false;
         return notificationService.notify({ title: t('خطأ', 'Error'), message: t('اسم المستخدم مستخدم مسبقاً', 'Username already taken'), type: 'error', category: 'system' });
       }
     }
@@ -447,7 +457,12 @@ export default function UserManagement() {
       await activityLogService.log('edit_user', editFormData.fullName, { userId: selectedUser.id });
       notificationService.notify({ title: t('تم التحديث', 'Updated'), message: t(`تم تحديث ${editFormData.fullName}`, `${editFormData.fullName} updated`), type: 'info', category: 'system' });
       setIsEditModalOpen(false); setSelectedUser(null);
-    } catch (err) { handleSupabaseError(err, OperationType.UPDATE, 'users'); }
+    } catch (err) { 
+      handleSupabaseError(err, OperationType.UPDATE, 'users'); 
+    } finally {
+      setEditLoading(false);
+      editBlockRef.current = false;
+    }
   };
 
   const handleToggleStatus = async (user: any) => {
@@ -561,7 +576,8 @@ export default function UserManagement() {
 
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (addLoading) return;
+    if (addLoading || addBlockRef.current) return;
+    addBlockRef.current = true;
     setAddLoading(true);
     let secondaryApp: any;
     try {
@@ -609,6 +625,7 @@ export default function UserManagement() {
       notificationService.notify({ title: t('خطأ', 'Error'), message: msg, type: 'error', category: 'system' });
     } finally {
       setAddLoading(false);
+      addBlockRef.current = false;
       if (secondaryApp) await deleteApp(secondaryApp);
     }
   };
@@ -674,9 +691,9 @@ export default function UserManagement() {
   // ROLE ACTIONS
   // ══════════════════════════════════════════════════════════
   const handleOpenAddRole = () => { setSelectedRole(null); setRoleFormData({ id: '', title: '', permissions: [] }); setIsRoleModalOpen(true); };
-  const handleOpenEditRole = (r: any) => {
+  const handleOpenEditRole = (r: any) => { 
     if (r.id === 'Admin') return notificationService.notify({ title: t('محمي', 'Protected'), message: t('لا يمكن تعديل صلاحيات مدير النظام', 'Cannot edit System Admin permissions'), type: 'error', category: 'system' });
-    setSelectedRole(r); setRoleFormData({ id: r.id, title: r.title || r.id, permissions: r.permissions || [] }); setIsRoleModalOpen(true);
+    setSelectedRole(r); setRoleFormData({ id: r.id, title: r.title || r.id, permissions: r.permissions || [] }); setIsRoleModalOpen(true); 
   };
 
   const togglePermission = (permId: string) => {
@@ -706,14 +723,22 @@ export default function UserManagement() {
 
   const handleSaveRole = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (savingRole || roleBlockRef.current) return;
     if (!roleFormData.id) return notificationService.notify({ title: t('خطأ', 'Error'), message: t('يرجى إدخال معرّف الدور', 'Please enter role ID'), type: 'error', category: 'system' });
     if (roleFormData.id === 'Admin') return notificationService.notify({ title: t('محمي', 'Protected'), message: t('لا يمكن تعديل صلاحيات مدير النظام', 'Cannot edit System Admin permissions'), type: 'error', category: 'system' });
+    roleBlockRef.current = true;
+    setSavingRole(true);
     try {
       await setDoc(doc(db, 'roles', roleFormData.id), { title: roleFormData.title, permissions: roleFormData.permissions, updatedAt: Date.now() });
       await activityLogService.log(selectedRole ? 'edit_role' : 'add_role', roleFormData.title, { id: roleFormData.id, permCount: roleFormData.permissions.length });
       notificationService.notify({ title: t('تم الحفظ', 'Saved'), message: t(`تم حفظ دور ${roleFormData.title}`, `Role ${roleFormData.title} saved`), type: 'success', category: 'system' });
       setIsRoleModalOpen(false);
-    } catch (err) { handleSupabaseError(err, OperationType.UPDATE, 'roles'); }
+    } catch (err) { 
+      handleSupabaseError(err, OperationType.UPDATE, 'roles'); 
+    } finally {
+      setSavingRole(false);
+      roleBlockRef.current = false;
+    }
   };
 
   const handleDeleteRole = (id: string, title: string) => {
@@ -1643,7 +1668,9 @@ export default function UserManagement() {
 
               <div className="pt-4 flex justify-end gap-3 border-t border-slate-800/50 shrink-0">
                 <button type="button" onClick={() => { setIsEditModalOpen(false); setSelectedUser(null); }} className="px-5 py-2.5 text-slate-400 font-bold bg-slate-900 border border-slate-800 hover:bg-slate-850 rounded-xl text-xs transition active:scale-95">{t('إلغاء', 'Cancel')}</button>
-                <button type="submit" className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black text-xs rounded-xl shadow-md transition active:scale-95">{t('حفظ التغييرات', 'Save Changes')}</button>
+                <button type="submit" disabled={editLoading} className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] disabled:opacity-50 text-black font-black text-xs rounded-xl shadow-md transition active:scale-95">
+                  {editLoading ? t('جاري الحفظ...', 'Saving...') : t('حفظ التغييرات', 'Save Changes')}
+                </button>
               </div>
             </form>
           </div>
@@ -1795,8 +1822,8 @@ export default function UserManagement() {
               </div>
               <div className="p-5 border-t border-slate-800/50 bg-black/40 flex justify-end gap-3 shrink-0">
                 <button type="button" onClick={() => setIsRoleModalOpen(false)} className="px-5 py-2.5 text-slate-400 font-bold bg-slate-900 border border-slate-800 hover:bg-slate-800 rounded-xl text-xs">{t('إلغاء', 'Cancel')}</button>
-                <button type="submit" className="px-6 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl shadow-lg transition-all active:scale-[0.98] text-xs">
-                  {t('حفظ الدور والصلاحيات', 'Save Role & Permissions')}
+                <button type="submit" disabled={savingRole} className="px-6 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl shadow-lg transition-all active:scale-[0.98] text-xs disabled:opacity-50">
+                  {savingRole ? t('جاري الحفظ...', 'Saving...') : t('حفظ الدور والصلاحيات', 'Save Role & Permissions')}
                 </button>
               </div>
             </form>

@@ -629,7 +629,7 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
   };
 
   return (
-    <div className="space-y-6 pt-2 animate-fade-in select-none">
+    <div className="space-y-6 pt-2 animate-fade-in">
       
       {/* 📊 Control & Filter Grid Dashboard */}
       <div className="bg-[#121215] border border-slate-850 p-6 rounded-3xl flex flex-col gap-6 shadow-xl">

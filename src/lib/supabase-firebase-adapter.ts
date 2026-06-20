@@ -81,16 +81,83 @@ const collectionListeners: { [table: string]: Set<() => void> } = {};
 let currentSession: any = null;
 let loggedInUser: any = null;
 
-supabase.auth.getSession().then(({ data }) => {
-  currentSession = data.session;
-  if (data.session?.user) {
-    loggedInUser = mapUser(data.session.user);
+function getSavedUser() {
+  try {
+    const savedUser = safeLocalStorage.getItem('swiftship_persisted_user');
+    if (savedUser) {
+      const parsed = JSON.parse(savedUser);
+      if (parsed && parsed.uid) {
+        return {
+          ...parsed,
+          getIdToken: async () => 'session_token'
+        };
+      }
+    }
+  } catch (e) {
+    console.warn('[Supabase Adapter] Failed to parse swiftship_persisted_user:', e);
   }
+  return null;
+}
+
+loggedInUser = getSavedUser();
+
+let authInitialized = false;
+
+const initPromise = supabase.auth.getSession().then(({ data }) => {
+  if (!authInitialized) {
+    currentSession = data.session;
+    
+    const localUser = getSavedUser();
+    if (data.session?.user) {
+      loggedInUser = mapUser(data.session.user);
+      if (loggedInUser) {
+        safeLocalStorage.setItem('swiftship_persisted_user', JSON.stringify({
+          uid: loggedInUser.uid,
+          email: loggedInUser.email,
+          displayName: loggedInUser.displayName,
+          emailVerified: loggedInUser.emailVerified
+        }));
+      }
+    } else if (localUser) {
+      loggedInUser = localUser;
+    } else {
+      loggedInUser = null;
+      safeLocalStorage.removeItem('swiftship_persisted_user');
+    }
+    
+    authInitialized = true;
+    authListeners.forEach(cb => cb(loggedInUser));
+  }
+  return loggedInUser;
 });
+
 supabase.auth.onAuthStateChange((event, session) => {
   currentSession = session;
-  loggedInUser = session?.user ? mapUser(session.user) : null;
-  authListeners.forEach(cb => cb(loggedInUser));
+  
+  if (session?.user) {
+    loggedInUser = mapUser(session.user);
+    if (loggedInUser) {
+      safeLocalStorage.setItem('swiftship_persisted_user', JSON.stringify({
+        uid: loggedInUser.uid,
+        email: loggedInUser.email,
+        displayName: loggedInUser.displayName,
+        emailVerified: loggedInUser.emailVerified
+      }));
+    }
+  } else {
+    // Check if we have a locally saved user to protect against unintentional sign-outs on page load
+    const localUser = getSavedUser();
+    if (localUser) {
+      loggedInUser = localUser;
+    } else {
+      loggedInUser = null;
+      safeLocalStorage.removeItem('swiftship_persisted_user');
+    }
+  }
+  
+  if (authInitialized) {
+    authListeners.forEach(cb => cb(loggedInUser));
+  }
 });
 
 const authListeners = new Set<(user: any) => void>();
@@ -311,7 +378,32 @@ export interface User {
 }
 
 // Firebase SDK implementation
-export const db = { type: 'firestore' };
+export const db: any = {
+  type: 'firestore',
+  collection(path: string) {
+    return {
+      doc(id: string) {
+        const ref = new DocRef(path, id);
+        return {
+          id,
+          path: `${path}/${id}`,
+          set: async (docData: any, options?: any) => {
+            await setDoc(ref, docData, options);
+          },
+          update: async (docData: any) => {
+            await updateDoc(ref, docData);
+          },
+          get: async () => {
+            return await getDoc(ref);
+          },
+          delete: async () => {
+            await deleteDoc(ref);
+          }
+        };
+      }
+    };
+  }
+};
 
 export function initializeApp(...args: any[]): any {
   return { 
@@ -740,7 +832,15 @@ export function onAuthStateChanged(...args: any[]) {
   const callback = typeof args[1] === 'function' ? args[1] : args[0];
   if (typeof callback === 'function') {
     authListeners.add(callback);
-    callback(auth.currentUser);
+    if (authInitialized) {
+      callback(auth.currentUser);
+    } else {
+      initPromise.then((user) => {
+        if (authListeners.has(callback)) {
+          callback(user);
+        }
+      });
+    }
     return () => {
       authListeners.delete(callback);
     };
@@ -975,8 +1075,10 @@ export async function signInWithCustomToken(...args: any[]) {
 export async function signOut(...args: any[]) {
   // Clear any emergency offline flags
   setOfflineMode(false);
+  safeLocalStorage.removeItem('swiftship_persisted_user');
   await supabase.auth.signOut();
   currentSession = null;
+  loggedInUser = null;
 }
 
 export async function updatePassword(...args: any[]) {

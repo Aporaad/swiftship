@@ -33,6 +33,7 @@ export default function Roles() {
     permissions: [] as string[]
   });
   const [saving, setSaving] = useState(false);
+  const saveBlockRef = React.useRef(false);
 
   useEffect(() => {
     if (roleLoading) return;
@@ -114,7 +115,7 @@ export default function Roles() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (saving) return;
+    if (saving || saveBlockRef.current) return;
     if (!formData.id) {
       notificationService.notify({
         title: settings.language === 'ar' ? 'خطأ بالبيانات' : 'Data Error',
@@ -124,6 +125,7 @@ export default function Roles() {
       return;
     }
     
+    saveBlockRef.current = true;
     setSaving(true);
     try {
       await setDoc(doc(db, 'roles', formData.id), {
@@ -141,6 +143,7 @@ export default function Roles() {
       handleFirestoreError(err, OperationType.UPDATE, 'roles');
     } finally {
       setSaving(false);
+      saveBlockRef.current = false;
     }
   };
 

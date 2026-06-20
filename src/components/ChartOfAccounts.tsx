@@ -448,7 +448,7 @@ export default function ChartOfAccounts({
   };
 
   return (
-    <div className="space-y-6 pt-2 select-none animate-fade-in">
+    <div className="space-y-6 pt-2 animate-fade-in">
       
       {/* Upper Dual Trial Balance KPI Block */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

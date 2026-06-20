@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { collection, onSnapshot, query, limit, orderBy, addDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, limit, orderBy, addDoc, where } from 'firebase/firestore';
 import { db, auth, safeToDate } from '../lib/firebase';
+import { financialAccountService } from '../services/financialAccountService';
 import { 
   Package, 
   Truck, 
@@ -74,6 +75,7 @@ export default function Dashboard() {
   const [couriersCount, setCouriersCount] = useState(0);
   const [expensesCount, setExpensesCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [profitAccount, setProfitAccount] = useState<any>(null);
 
   // Computed Stats
   const [stats, setStats] = useState({
@@ -147,20 +149,34 @@ export default function Dashboard() {
       console.warn("Activity logs subscript error (expected first run):", err);
     });
 
+    // Listen to company profit account
+    const qProfitAcc = query(collection(db, 'accounts'), where('entityId', '==', 'sys_profit_account'));
+    const unsubProfitAcc = onSnapshot(qProfitAcc, (snap) => {
+      if (!snap.empty) {
+        setProfitAccount({ id: snap.docs[0].id, ...snap.docs[0].data() });
+      } else {
+        financialAccountService.ensureSystemAccounts(settings.currency || 'SAR').catch(err => {
+          console.warn("Could not ensure system accounts:", err);
+        });
+      }
+    });
+
     return () => {
       unsubCustomers();
       unsubCouriers();
       unsubExpenses();
       unsubOrders();
       unsubLogs();
+      unsubProfitAcc();
     };
-  }, [role, roleLoading]);
+  }, [role, roleLoading, settings?.currency]);
 
   // Dynamically compute stats from real DB
   useEffect(() => {
     let computedTotalOrders = orders.length;
     let computedRevenues = 0;
     let computedProfit = 0;
+    let computedRealizedProfit = 0;
     let computedActive = 0;
     let computedDelayed = 0;
     let computedPaid = 0;
@@ -177,10 +193,24 @@ export default function Dashboard() {
       const remaining = parseFloat(o.amountRemaining || '0');
       computedRemaining += remaining;
 
-      const profitVal = parseFloat(o.companyCommission || o.companyCommissionYER || '0');
+      let profitVal = 0;
+      const profitCompanySAR = parseFloat(o.profitCompanySAR || '0');
+      if (profitCompanySAR > 0) {
+        const rate = parseFloat(o.exchangeRateYER || settings.exchangeRateSAR || '140');
+        profitVal = profitCompanySAR * rate;
+      } else {
+        profitVal = parseFloat(o.companyCommissionYER || o.companyCommission || '0');
+      }
       computedProfit += profitVal;
 
       const status = o.orderStatus || o.order_status || 'Processing';
+      
+      // Calculate ONLY delivered profits as realized net profit
+      const isDelivered = ['تم التسليم', 'Delivered', 'Completed'].includes(status);
+      if (isDelivered) {
+        computedRealizedProfit += profitVal;
+      }
+
       if (['Shipped', 'In Transit', 'Out For Delivery', 'In Local Warehouse', 'جاري التوصيل', 'قيد الشحن', 'وصل المخزن'].includes(status)) {
         computedActive++;
       }
@@ -189,10 +219,31 @@ export default function Dashboard() {
       }
     });
 
-    // Subtract actual total expenses to find real company Net Profit
-    const totalExpensesAmount = expenses.reduce((acc, curr) => acc + (parseFloat(curr.amount || '0')), 0);
-    const realNetProfit = computedProfit - totalExpensesAmount;
+    // Subtract actual operational expenses (excluding Custody) to find real company Net Profit
+    const totalOperatingExpenses = expenses.reduce((acc, curr) => {
+      // Custody (العهدة) is NOT an operational expense. It represents temporary balances with couriers.
+      if (curr.type === 'Custody') return acc;
 
+      const amt = parseFloat(curr.amount || '0');
+      const cur = curr.currency || 'YER';
+      let converted = amt;
+      if (cur === 'USD') {
+        converted = amt * (settings.exchangeRateUSD || 535);
+      } else if (cur === 'SAR') {
+        converted = amt * (settings.exchangeRateSAR || 140);
+      }
+      return acc + converted;
+    }, 0);
+    
+    let realNetProfit = 0;
+    
+    if (profitAccount) {
+      realNetProfit = parseFloat(profitAccount.balance || '0');
+    } else {
+      realNetProfit = computedRealizedProfit;
+    }
+
+    // 4. Update stats with the realized net profit
     setStats({
       totalOrders: computedTotalOrders,
       totalRevenues: computedRevenues,
@@ -203,7 +254,7 @@ export default function Dashboard() {
       amountRemaining: computedRemaining,
       amountPaid: computedPaid,
     });
-  }, [orders, customersCount, expenses]);
+  }, [orders, customersCount, expenses, profitAccount, settings]);
 
   // Generate daily shipping volume dynamically
   const volumeChartData = React.useMemo(() => {
@@ -713,7 +764,7 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="space-y-6 pb-12 text-[#cacfd2] select-none text-right font-sans" dir={isAr ? 'rtl' : 'ltr'}>
+    <div className="space-y-6 pb-12 text-[#cacfd2] text-right font-sans" dir={isAr ? 'rtl' : 'ltr'}>
       
       {/* 👑 Dashboard Customizer Controls Header Block */}
       <div className="bg-black/40 backdrop-blur-md border border-[#d4af37]/20 p-5 rounded-3xl shadow-lg shadow-black/35 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">

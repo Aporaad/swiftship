@@ -490,7 +490,7 @@ export default function Settings() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `SwiftShip_Backup_${new Date().toISOString().split('T')[0]}.csv`;
+        a.download = `alx_Backup_${new Date().toISOString().split('T')[0]}.csv`;
         a.click();
         URL.revokeObjectURL(url);
       } else {
@@ -498,7 +498,7 @@ export default function Settings() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `SwiftShip_Backup_${new Date().toISOString().split('T')[0]}.json`;
+        a.download = `alx_Backup_${new Date().toISOString().split('T')[0]}.json`;
         a.click();
         URL.revokeObjectURL(url);
       }
@@ -819,7 +819,7 @@ export default function Settings() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="md:col-span-2">
                 <FieldLabel>{t('systemName')}</FieldLabel>
-                <FieldInput type="text" disabled={!canEditGeneral} value={localSettings.systemName || ''} onChange={e => setLocalSettings({ ...localSettings, systemName: e.target.value })} placeholder="SwiftShip" />
+                <FieldInput type="text" disabled={!canEditGeneral} value={localSettings.systemName || ''} onChange={e => setLocalSettings({ ...localSettings, systemName: e.target.value })} placeholder="alx" />
               </div>
               <div>
                 <FieldLabel>{t('systemLogo')}</FieldLabel>
@@ -1327,6 +1327,25 @@ export default function Settings() {
             <SectionCard title={t('securitySettings')} icon={Shield}>
               <div className="space-y-4">
                 <ToggleSwitch checked={localSettings.protectSensitiveOrderDelete || false} onChange={v => setLocalSettings({ ...localSettings, protectSensitiveOrderDelete: v })} label={t('protectOrderDelete')} description={isAr ? 'منع حذف الطلبات ذات المدفوعات إلا بعد إدخال رمز PIN' : 'Prevent deletion of orders with payments without PIN'} icon={Shield} />
+                
+                <div className="pt-2">
+                  <FieldLabel>{isAr ? 'مهلة جلسة المستخدم (بالدقائق - 0 للتعطيل)' : 'User Session Timeout (Minutes - 0 to disable)'}</FieldLabel>
+                  <FieldInput 
+                    type="number" 
+                    min="0"
+                    placeholder="30"
+                    value={localSettings.userSessionTimeout !== undefined ? localSettings.userSessionTimeout : ''} 
+                    onChange={e => {
+                      const val = parseInt(e.target.value, 10);
+                      setLocalSettings({ ...localSettings, userSessionTimeout: isNaN(val) ? 0 : val });
+                    }} 
+                  />
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    {isAr 
+                      ? 'عند تفعيل الخيار، سيتم تسجيل خروج الموظف تلقائياً في حال عدم لمس النظام أو القيام بأي نشاط طوال هذه المدة.' 
+                      : 'When enabled, the user will be automatically logged out after this period of inactivity/idleness.'}
+                  </p>
+                </div>
               </div>
             </SectionCard>
           )}
@@ -1560,7 +1579,7 @@ export default function Settings() {
                 </p>
                 <p className="text-[10px] text-slate-400 font-medium">
                   {isAr
-                    ? 'عند تفعيل الخيار، سيقوم خادم SwiftShip بالاتصال بالـ API الخارجي تلقائياً لجلب المسارات بمجرد إدخال رقم تتبع صالح.'
+                    ? 'عند تفعيل الخيار، سيقوم خادم alx بالاتصال بالـ API الخارجي تلقائياً لجلب المسارات بمجرد إدخال رقم تتبع صالح.'
                     : 'Once enabled, our internal server orchestrator automatically maps global checkpoints when queried.'}
                 </p>
               </div>

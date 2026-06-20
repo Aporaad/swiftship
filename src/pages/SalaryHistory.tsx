@@ -336,7 +336,7 @@ export default function SalaryHistory() {
               
               {/* Receipt Top Header */}
               <div className="text-center pb-6 border-b border-slate-300">
-                <h2 className="text-lg font-black tracking-wider text-slate-800">{settings.systemName || settings.companyName || 'SwiftShip Tracking'}</h2>
+                <h2 className="text-lg font-black tracking-wider text-slate-800">{settings.systemName || settings.companyName || 'alx Tracking'}</h2>
                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">{isAr ? 'سند صرف رواتب الموظفين' : 'Salary Payout Receipt'}</p>
                 <p className="text-[9px] font-mono text-slate-400 mt-0.5">{selectedVoucher.voucherCode}</p>
               </div>

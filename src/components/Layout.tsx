@@ -133,9 +133,36 @@ export default function Layout() {
       const docs = snap.docs.map(doc => doc.data());
 
       const active = docs.filter(o => o.orderStatus !== 'تم التسليم' && o.orderStatus !== 'ملغي' && o.orderStatus !== 'Delivered' && o.orderStatus !== 'Cancelled').length;
-      const delayed = docs.filter(o => o.orderStatus === 'متأخر' || o.orderStatus === 'Delayed' || o.orderStatus?.toLowerCase() === 'delayed').length;
-      const ongoing = docs.filter(o => ['في الطريق', 'قيد الشحن', 'شحن دولي', 'وصل مركز التوزيع في اليمن', 'In Transit', 'In Local Warehouse', 'Shipped', 'Cargo'].includes(o.orderStatus)).length;
-      const unpaid = docs.filter(o => parseFloat(o.amountRemaining || 0) > 0).length;
+      
+      const todayStr = new Date().toISOString().split('T')[0];
+      const delayed = docs.filter(o => {
+        if (o.orderStatus === 'متأخر' || o.orderStatus === 'Delayed' || o.orderStatus?.toLowerCase() === 'delayed') {
+          return true;
+        }
+        const isCompleted = o.orderStatus === 'تم التسليم' || o.orderStatus === 'Delivered' || o.orderStatus === 'ملغي' || o.orderStatus === 'Cancelled';
+        if (!isCompleted && Array.isArray(o.shippingDetails)) {
+          return o.shippingDetails.some((sh: any) => sh.expectedArrival && sh.expectedArrival < todayStr);
+        }
+        return false;
+      }).length;
+
+      const ongoing = docs.filter(o => [
+        'وصل مستودع السعودية',
+        'جاري الشحن لليمن',
+        'في التخليص الجمركي',
+        'وصل مركز التوزيع في اليمن',
+        'مع المندوب للتوصيل',
+        'في الطريق',
+        'قيد الشحن',
+        'جاري التوصيل',
+        'وصل المخزن',
+        'In Transit',
+        'In Local Warehouse',
+        'Shipped',
+        'Cargo'
+      ].includes(o.orderStatus)).length;
+
+      const unpaid = docs.filter(o => o.orderStatus !== 'ملغي' && o.orderStatus !== 'Cancelled' && parseFloat(o.amountRemaining || 0) > 0).length;
 
       let status: 'good' | 'warning' | 'error' = 'good';
       if (delayed > 0) {
@@ -156,19 +183,20 @@ export default function Layout() {
       console.error("Error listening to orders for sidebar stats:", error);
     });
 
-    const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
-      const count = snap.docs.length;
+    const unsubSessions = onSnapshot(collection(db, 'sessions'), (snap) => {
+      const docs = snap.docs.map(doc => doc.data() as any);
+      const activeSessionsCount = docs.filter((s: any) => s.lastSeen && (Date.now() - s.lastSeen) < 3 * 60 * 1000).length;
       setSystemStats(prev => ({
         ...prev,
-        onlineStaff: Math.max(1, Math.min(count, 3))
+        onlineStaff: Math.max(1, activeSessionsCount)
       }));
     }, (error) => {
-      console.error("Error listening to users for sidebar stats:", error);
+      console.error("Error listening to sessions for sidebar stats:", error);
     });
 
     return () => {
       unsubOrders();
-      unsubUsers();
+      unsubSessions();
     };
   }, [role, roleLoading]);
 
@@ -217,6 +245,48 @@ export default function Layout() {
 
     return () => unsub();
   }, [role, roleLoading, hasPermission]);
+
+  // Inactivity/Idle session automatic logout
+  useEffect(() => {
+    const timeoutMinutes = settings.userSessionTimeout;
+    if (!timeoutMinutes || timeoutMinutes <= 0 || !auth.currentUser) return;
+
+    const timeoutMs = timeoutMinutes * 60 * 1000;
+    let lastActivity = Date.now();
+
+    const updateActivity = () => {
+      lastActivity = Date.now();
+    };
+
+    const activityEvents = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
+    activityEvents.forEach(evt => window.addEventListener(evt, updateActivity, { passive: true }));
+
+    const checkInterval = setInterval(() => {
+      const elapsed = Date.now() - lastActivity;
+      if (elapsed >= timeoutMs) {
+        clearInterval(checkInterval);
+        activityEvents.forEach(evt => window.removeEventListener(evt, updateActivity));
+        
+        console.log(`[Auto Logout] Idle for ${timeoutMinutes} minutes. Triggering logout...`);
+        
+        notificationService.notify({
+          title: isAr ? 'انتهاء الجلسة' : 'Session Expired',
+          message: isAr 
+            ? 'تم تسجيل خروجك تلقائياً لعدم وجود أي نشاط خلال المدة المحددة.' 
+            : 'You have been logged out automatically due to inactivity.',
+          type: 'info',
+          category: 'system'
+        });
+
+        handleLogout();
+      }
+    }, 5000); // Check every 5 seconds
+
+    return () => {
+      clearInterval(checkInterval);
+      activityEvents.forEach(evt => window.removeEventListener(evt, updateActivity));
+    };
+  }, [settings.userSessionTimeout, auth.currentUser, isAr]);
 
   // Log logout & sign out
   const handleLogout = async () => {
@@ -443,14 +513,30 @@ export default function Layout() {
   });
 
   return (
-    <div className="flex bg-luxury-black text-slate-300 overflow-hidden h-screen font-sans selection:bg-[#d4af37]/30 select-none antialiased">
-      <Toaster position={isAr ? "top-left" : "top-right"} toastOptions={{
-        style: {
-          background: '#0d0d0f',
-          color: '#fff',
-          border: '1px solid rgba(212, 175, 55, 0.2)'
-        }
-      }} />
+    <div className="flex bg-luxury-black text-slate-300 overflow-hidden h-screen font-sans selection:bg-[#d4af37]/30 antialiased">
+      <Toaster
+        position={isAr ? "top-left" : "top-right"}
+        containerStyle={{ zIndex: 99999 }}
+        toastOptions={{
+          duration: 4500,
+          style: {
+            background: '#0d0d0f',
+            color: '#fff',
+            border: '1px solid rgba(212, 175, 55, 0.2)',
+            borderRadius: '12px',
+            fontSize: '13px',
+            fontWeight: 700,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+            zIndex: 99999,
+          },
+          success: {
+            iconTheme: { primary: '#10b981', secondary: '#0d0d0f' },
+          },
+          error: {
+            iconTheme: { primary: '#ef4444', secondary: '#0d0d0f' },
+          },
+        }}
+      />
 
       {/* Sidebar - Desktop Layout */}
       <aside className="w-72 bg-luxury-black border-r border-[#d4af37]/15 flex flex-col shrink-0 hidden md:flex relative z-20 backdrop-blur-md">
@@ -480,7 +566,7 @@ export default function Layout() {
           </div>
 
           <h1 className="text-lg font-extrabold tracking-[0.1em] text-[#d4af37] uppercase text-center mt-1 luxury-glow-neon select-none">
-            {settings.systemName || settings.companyName || 'SwiftShip'}
+            {settings.systemName || settings.companyName || 'alx'}
           </h1>
           <p className="text-[9px] font-black tracking-[0.3em] text-slate-500 uppercase mt-0.5 select-none">
             {isAr ? 'نظام إدارة اللوجستية' : 'Logistics & ERP'}
@@ -875,7 +961,7 @@ export default function Layout() {
                       {isAr ? 'معلومات النظام والمطور والبرمج الكفء' : 'System & Developer Profile'}
                     </h3>
                     <p className="text-[10px] text-slate-500 font-extrabold uppercase mt-0.5">
-                      SwiftShip Core Gateway v1
+                      alx Core Gateway v1
                     </p>
                   </div>
                 </div>
@@ -896,7 +982,7 @@ export default function Layout() {
                   <div className="bg-[#050507]/80 border border-[#d4af37]/10 p-4 rounded-xl text-start">
                     <h4 className="text-xs font-black text-white mb-1.5 flex items-center gap-2">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                      {isAr ? 'نظام SwiftShip v1 لإدارة الطلبات والشحنات' : 'SwiftShip v1 • Order & Shipment Management ERP'}
+                      {isAr ? 'نظام alx v1 لإدارة الطلبات والشحنات' : 'alx v1 • Order & Shipment Management ERP'}
                     </h4>
                     <p className="text-[11px] text-slate-400 font-bold leading-relaxed">
                       {isAr

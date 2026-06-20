@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import CopyToClipboard from '../components/CopyToClipboard';
 import { 
   Package, 
   Search, 
@@ -515,13 +516,7 @@ export default function Tracking() {
                   <span className="text-[9px] font-black tracking-widest text-[#d4af37] uppercase block">{isAr ? 'رقم التتبع المكتشف' : 'LOGISTICS WAYBILL'}</span>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="font-mono text-base font-black text-white">{trackingData.trackingNumber.toUpperCase()}</span>
-                    <button 
-                      onClick={copyToClipboard}
-                      className="p-1.5 hover:bg-slate-800 rounded transition-colors text-slate-500 hover:text-white"
-                      title="نسخ الكود"
-                    >
-                      {copied ? <Check className="w-3.5 h-3.5 text-[#d4af37]" /> : <Copy className="w-3.5 h-3.5" />}
-                    </button>
+                    <CopyToClipboard text={trackingData.trackingNumber.toUpperCase()} showIconOnly={true} iconSize={13} className="h-7 w-7" />
                   </div>
                   <span className="text-[10px] text-slate-500 block font-bold font-mono mt-0.5">&gt; ORDER_REF: {trackingData.orderNumber || '—'}</span>
                 </div>
@@ -807,7 +802,7 @@ export default function Tracking() {
                 href={`https://wa.me/967777777777?text=${encodeURIComponent(
                   isAr 
                     ? `أهلاً، أود الاستعلام عن تحديثات إضافية بخصوص الشحنة الخاصة بي رقم: (${trackingData.trackingNumber}) وحالة الدفع.`
-                    : `Hi SwiftShip team, I would like to inquire about my package ${trackingData.trackingNumber}.`
+                    : `Hi alx team, I would like to inquire about my package ${trackingData.trackingNumber}.`
                 )}`}
                 target="_blank"
                 rel="noreferrer"

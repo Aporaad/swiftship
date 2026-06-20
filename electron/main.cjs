@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, shell, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, dialog, Notification } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const http = require('http');
@@ -93,7 +93,7 @@ function startExpressServer() {
       log(`[Electron] Server exited — code=${code} signal=${signal}`);
       if (code !== 0 && code !== null && mainWindow) {
         dialog.showErrorBox(
-          'SwiftShip — خطأ في الخادم',
+          'alx — خطأ في الخادم',
           `توقّف الخادم الداخلي بشكل غير متوقع (كود الخروج: ${code}).\nيرجى إعادة تشغيل البرنامج.\n\nملف السجل: ${LOG_FILE}`
         );
       }
@@ -149,7 +149,7 @@ function createWindow() {
     minWidth:  1024,
     minHeight: 700,
     show:  false,   // نخفيها حتى تكتمل لتجنب الوميض
-    title: 'SwiftShip — نظام إدارة الشحنات',
+    title: 'alx — نظام إدارة الشحنات',
     backgroundColor: '#0f172a',
     icon: fs.existsSync(iconPath) ? iconPath : undefined,
 
@@ -197,7 +197,7 @@ app.whenReady().then(async () => {
   } catch (err) {
     log(`[Electron] FATAL: ${err.message}`);
     dialog.showErrorBox(
-      'SwiftShip — فشل التشغيل',
+      'alx — فشل التشغيل',
       `تعذّر تشغيل الخادم الداخلي:\n\n${err.message}\n\nيرجى مراجعة ملف السجل:\n${LOG_FILE}`
     );
     app.quit();
@@ -226,3 +226,91 @@ app.on('window-all-closed', () => {
 // ============================================================
 ipcMain.handle('app:version',  () => app.getVersion());
 ipcMain.handle('app:log-path', () => LOG_FILE);
+
+// ─── Save File Dialog (لحفظ ملفات XLSX / CSV) ───────────────
+ipcMain.handle('dialog:save-file', async (_event, { defaultName, filters, buffer }) => {
+  try {
+    const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
+      title: 'حفظ الملف — Save File',
+      defaultPath: defaultName || 'export.xlsx',
+      filters: filters || [
+        { name: 'Excel Files', extensions: ['xlsx'] },
+        { name: 'CSV Files',   extensions: ['csv']  },
+        { name: 'All Files',   extensions: ['*']    }
+      ]
+    });
+
+    if (canceled || !filePath) return { success: false, reason: 'canceled' };
+
+    // buffer هو Uint8Array ممرر من Renderer
+    const data = Buffer.from(buffer);
+    fs.writeFileSync(filePath, data);
+    log(`[IPC] File saved: ${filePath}`);
+    return { success: true, filePath };
+  } catch (err) {
+    log(`[IPC] Save file error: ${err.message}`);
+    return { success: false, reason: err.message };
+  }
+});
+
+// ─── Native Windows Notification ─────────────────────────────
+ipcMain.handle('notify:show', (_event, { title, body, type }) => {
+  try {
+    if (Notification.isSupported()) {
+      const n = new Notification({
+        title: title || 'alx',
+        body:  body  || '',
+        silent: type === 'info'
+      });
+      n.show();
+      return { success: true };
+    }
+    return { success: false, reason: 'not-supported' };
+  } catch (err) {
+    log(`[IPC] Notification error: ${err.message}`);
+    return { success: false, reason: err.message };
+  }
+});
+
+// ─── Print via Electron WebContents ──────────────────────────
+ipcMain.handle('print:page', async (_event, options) => {
+  try {
+    if (!mainWindow) return { success: false, reason: 'no-window' };
+    await new Promise((resolve, reject) => {
+      mainWindow.webContents.print(
+        {
+          silent:            options?.silent ?? false,
+          printBackground:   true,
+          pageSize:          options?.pageSize || 'A4',
+          landscape:         options?.landscape ?? false,
+          margins: {
+            marginType: 'custom',
+            top:    options?.marginTop    ?? 10,
+            bottom: options?.marginBottom ?? 10,
+            left:   options?.marginLeft   ?? 10,
+            right:  options?.marginRight  ?? 10,
+          }
+        },
+        (success, errorType) => {
+          if (success) resolve(true);
+          else reject(new Error(errorType || 'print-failed'));
+        }
+      );
+    });
+    log('[IPC] Print job dispatched successfully');
+    return { success: true };
+  } catch (err) {
+    log(`[IPC] Print error: ${err.message}`);
+    return { success: false, reason: err.message };
+  }
+});
+
+// ─── Open folder in Explorer ──────────────────────────────────
+ipcMain.handle('shell:open-path', (_event, targetPath) => {
+  try {
+    shell.openPath(targetPath);
+    return { success: true };
+  } catch (err) {
+    return { success: false, reason: err.message };
+  }
+});

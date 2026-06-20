@@ -250,9 +250,9 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
         entityType: tx.entityType,
         type: tx.type, // 'Debit' | 'Credit'
         amount: tx.amount || 0,
-        currency: isSourcing ? 'SAR' : (settings.currency || 'YER'),
+        currency: tx.currency || (isSourcing ? 'SAR' : (settings.currency || 'YER')),
         amountOriginal: tx.amountOriginal || tx.amount || 0,
-        currencyOriginal: isSourcing ? 'SAR' : (tx.currencyOriginal || 'YER'),
+        currencyOriginal: tx.currencyOriginal || (isSourcing ? 'SAR' : 'YER'),
         module: tx.module || 'adjustment',
         isSourcing
       });
@@ -476,35 +476,36 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
   // Dynamic P&L Trial Balance Summary metrics (All values converted to YER for consistent financial scope)
   const financialTrialMetrics = useMemo(() => {
     let totalCustomerRevenue = 0;
-    let totalAdjustInflows = 0;
-    let operatingExpenses = 0;
-    let chinaRemittance = 0;
-    let custodyOutstanding_YER = 0;
+    orders.forEach(o => {
+      const paid = parseFloat(o.amountPaid || o.paidAmount || '0');
+      const remain = parseFloat(o.amountRemaining || '0');
+      const price = parseFloat(o.totalPrice || o.totalCostYER || (paid + remain) || '0');
+      totalCustomerRevenue += price;
+    });
 
+    let totalAdjustInflows = 0;
     ledgerEntries.forEach(e => {
-      const amtYER = e.amount;
-      if (e.type === 'Debit') {
-        if (e.module === 'order') totalCustomerRevenue += amtYER;
-        else if (e.module === 'adjustment') totalAdjustInflows += amtYER;
-      } else {
-        if (e.module === 'expense' && e.refNumber?.startsWith('EXP-')) operatingExpenses += amtYER;
-        else if (e.module === 'custody') custodyOutstanding_YER += amtYER; // initial outflow
+      if (e.type === 'Debit' && e.module === 'adjustment') {
+        totalAdjustInflows += e.amount;
       }
     });
 
-    const netOperatingCosts = operatingExpenses;
+    // Sum all non-custody expenses directly from the expenses database converted to YER
+    const netOperatingCosts = expenses
+      .filter(e => e.type !== 'Custody')
+      .reduce((sum, e) => sum + convertToYER(e.amount || 0, e.currency || 'YER'), 0);
+
     const netReceivables = orders.reduce((sum, o) => sum + parseFloat(o.amountRemaining || 0), 0);
     const activeCustodyLiabilities = expenses
       .filter(e => e.type === 'Custody' && e.status === 'Pending')
-      .reduce((sum, e) => sum + convertToYER(e.amount, e.currency), 0);
+      .reduce((sum, e) => sum + convertToYER(e.amount || 0, e.currency || 'YER'), 0);
 
     // Properly compute net profit from orders explicit profit margins
     let accumulatedOrdersProfitYER = 0;
     orders.forEach(o => {
       const profitSAR = parseFloat(o.profitCompanySAR || 0);
       if (profitSAR > 0) {
-        // approximate YER conversion based on order's rate or general default
-        const rate = parseFloat(o.exchangeRateYER || settings.exchangeRateYER || 390);
+        const rate = parseFloat(o.exchangeRateYER || settings.exchangeRateSAR || 140);
         accumulatedOrdersProfitYER += (profitSAR * rate);
       }
     });
@@ -518,7 +519,7 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
       activeCustodyLiabilities,
       netReceivables,
       netProfit,
-      operatingMargin: totalCustomerRevenue > 0 ? Math.round((netProfit / totalCustomerRevenue) * 100) : 0
+      operatingMargin: totalCustomerRevenue > 0 ? parseFloat(((netProfit / totalCustomerRevenue) * 100).toFixed(2)) : 0
     };
   }, [ledgerEntries, orders, expenses, settings]);
 
@@ -1510,7 +1511,7 @@ Continue?`
   };
 
   return (
-    <div className="space-y-6 pt-2 animate-fade-in text-start select-none">
+    <div className="space-y-6 pt-2 animate-fade-in text-start">
       
       {/* 4 Cards Quick Financial Dashboard Summary metrics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -1585,7 +1586,7 @@ Continue?`
             <span className="text-[10px] text-slate-550 font-black uppercase tracking-wider">{isAr ? 'العائد الصافي التشغيلي' : 'Treasury Balance Net'}</span>
           </div>
           <p className="text-xl font-mono font-black text-emerald-400 leading-tight">
-            {financialTrialMetrics.netProfit.toLocaleString()} YER
+            {(parseFloat(financialAccounts.find(a => a.entityId === 'sys_profit_account')?.balance || '0')).toLocaleString()} YER
           </p>
           <div className="mt-3 flex items-center justify-between text-[10px] text-slate-400 font-bold">
             <span>{isAr ? 'الهامش الربحي المتوقع:' : 'Net margin rate:'}</span>
@@ -3097,7 +3098,7 @@ Continue?`
                   </div>
                   <div className="p-8 space-y-6 text-start flex-1 overflow-y-auto bg-white text-black font-sans leading-relaxed select-all">
                     <div className="text-center pb-6 border-b border-slate-300">
-                      <h2 className="text-lg font-black tracking-wider text-slate-800">{settings.systemName || settings.companyName || 'SwiftShip'}</h2>
+                      <h2 className="text-lg font-black tracking-wider text-slate-800">{settings.systemName || settings.companyName || 'alx'}</h2>
                       <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">{isAr ? 'سند صرف رواتب الموظفين' : 'Salary Payout Receipt'}</p>
                       <p className="text-[9px] font-mono text-slate-400 mt-0.5">{selectedSalaryVoucher.voucherCode}</p>
                     </div>
@@ -3613,7 +3614,7 @@ Continue?`
 
                 <div className="flex justify-between items-start border-b border-slate-805 pb-4">
                   <div>
-                    <h4 className="text-sm font-black text-white">{isAr ? 'سويفت شيب للخدمات اللوجستية' : 'SwiftShip Logistics'}</h4>
+                    <h4 className="text-sm font-black text-white">{isAr ? 'ألكس للخدمات اللوجستية' : 'alx Logistics'}</h4>
                     <p className="text-[10px] text-slate-500 font-medium">{isAr ? 'قسم الشؤون المالية والحسابات' : 'Finance & Accounts Division'}</p>
                   </div>
                   <div className="text-right">
@@ -3736,7 +3737,7 @@ Continue?`
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '3px double #d4af37', paddingBottom: '15px', marginBottom: '20px' }}>
               <div>
                 <h1 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold' }}>
-                  {isAr ? 'سويفت شيب للخدمات اللوجستية وتوصيل الطرود' : 'SwiftShip Cargo & Logistics Co.'}
+                  {isAr ? 'ألكس للخدمات اللوجستية وتوصيل الطرود' : 'alx Cargo & Logistics Co.'}
                 </h1>
                 <p style={{ margin: '5px 0 0 0', fontSize: '11px', color: '#555' }}>
                   {isAr ? 'الجمهورية اليمنية - صنعاء | مستند مقيد آلياً' : 'Republic of Yemen - Sanaa | Electronically Posted Document'}
@@ -3839,7 +3840,7 @@ Continue?`
             </div>
 
             <div style={{ marginTop: '60px', borderTop: '1px solid #eee', paddingTop: '10px', textAlign: 'center', fontSize: '10px', color: '#777' }}>
-              <p>{isAr ? 'تم إنشاء السند ماليًا وتوثيقه آليًا عبر نظام سويفت شيب اللوجستي الموحد.' : 'This document was electronically processed and archived via SwiftShip Consolidated Ledger.'}</p>
+              <p>{isAr ? 'تم إنشاء السند ماليًا وتوثيقه آليًا عبر نظام ألكس اللوجستي الموحد.' : 'This document was electronically processed and archived via alx Consolidated Ledger.'}</p>
             </div>
           </div>
         )}

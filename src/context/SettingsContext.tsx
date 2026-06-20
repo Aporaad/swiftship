@@ -72,6 +72,7 @@ export interface Settings {
 
   // Security & Protection
   protectSensitiveOrderDelete?: boolean;
+  userSessionTimeout?: number;
 
   // Backup System
   autoBackupEnabled?: boolean;
@@ -143,6 +144,7 @@ const defaultSettings: Settings = {
   lastCbmRateUpdate: '',
   lastCbmRateUpdatedBy: '',
   protectSensitiveOrderDelete: true,
+  userSessionTimeout: 0,
   autoBackupEnabled: false,
   backupSchedule: 'daily',
   backupRetentionDays: 30,
@@ -193,7 +195,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     document.documentElement.style.fontSize = size;
 
     // Apply document title
-    document.title = settings.systemName || settings.companyName || 'SwiftShip';
+    document.title = settings.systemName || settings.companyName || 'alx';
   }, [settings.language, settings.theme, settings.fontSize, settings.systemName, settings.companyName]);
 
   useEffect(() => {

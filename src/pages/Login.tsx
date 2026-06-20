@@ -47,8 +47,8 @@ export default function Login() {
         if (isTargetAdmin) {
           isOfflineAuth = true;
         } else {
-          throw new Error(isAr
-            ? 'عذراً، تعذر الاتصال بخادم التحقق من الهوية (الخلفي). يرجى التأكد من تشغيل الخادم بالكامل ومن سلامة اتصالك بالإنترنت.'
+          throw new Error(isAr 
+            ? 'عذراً، تعذر الاتصال بخادم التحقق من الهوية (الخلفي). يرجى التأكد من تشغيل الخادم بالكامل ومن سلامة اتصالك بالإنترنت.' 
             : 'Could not connect to the authentication server is offline. Please verify that your backend server is running and reachable.');
         }
       }
@@ -59,8 +59,8 @@ export default function Login() {
           if (isTargetAdmin) {
             isOfflineAuth = true;
           } else {
-            throw new Error(isAr
-              ? 'خطأ في الاستجابة: أرجع الخادم صفحة ويب (HTML) بدلاً من بيانات (JSON). للتصحيح: تأكد من تشغيل خادم Express، وتأكد من عدم رفع الموقع كصفحة ساكنة فقط، أو افحص سجلات الخوادم.'
+            throw new Error(isAr 
+              ? 'خطأ في الاستجابة: أرجع الخادم صفحة ويب (HTML) بدلاً من بيانات (JSON). للتصحيح: تأكد من تشغيل خادم Express، وتأكد من عدم رفع الموقع كصفحة ساكنة فقط، أو افحص سجلات الخوادم.' 
               : 'Server Error: The backend returned an HTML document instead of JSON. Ensure your Express server is running, and that you did not deploy as static-only.');
           }
         } else {
@@ -83,7 +83,7 @@ export default function Login() {
         const { simpleHashPassword, decryptDataLocal, encryptDataLocal, enableEmergencyOfflineSession } = await import('../lib/supabase-firebase-adapter');
         let localHash = localStorage.getItem('swiftship_emergency_admin_hash');
         let localProfileCipher = localStorage.getItem('swiftship_emergency_admin_profile');
-
+        
         // Auto-seed default offline system admin credentials if none exist yet, allowing the system admin to log in using standard system passwords
         if (!localHash || !localProfileCipher) {
           const acceptablePasswords = [SHARED_SYSTEM_AUTH_PASSWORD, 'password123', 'admin', '000000'];
@@ -109,7 +109,7 @@ export default function Login() {
             }
           }
         }
-
+        
         if (localHash && localProfileCipher && simpleHashPassword(password) === localHash) {
           const decryptedProfileText = decryptDataLocal(localProfileCipher, password);
           if (decryptedProfileText) {
@@ -119,11 +119,11 @@ export default function Login() {
               navigate('/');
               setLoading(false);
               return;
-            } catch (_) { }
+            } catch (_) {}
           }
         }
-        throw new Error(isAr
-          ? 'تعذر الاتصال بقاعدة البيانات/الخادم، والبيانات المحلية المدخلة لمدير النظام غير متطابقة.'
+        throw new Error(isAr 
+          ? 'تعذر الاتصال بقاعدة البيانات/الخادم، والبيانات المحلية المدخلة لمدير النظام غير متطابقة.' 
           : 'Failed to reach database/server, and local emergency credentials mismatch.');
       }
 
@@ -134,7 +134,7 @@ export default function Login() {
         console.log('User has no password in Firestore (legacy/root). Authenticating on Auth with actual entered password...');
         try {
           result = await signInWithEmailAndPassword(auth, email, password);
-
+          
           // Auto-align Firebase Auth password to SHARED_SYSTEM_AUTH_PASSWORD to keep central system auth password standard
           try {
             await updatePassword(result.user, SHARED_SYSTEM_AUTH_PASSWORD);
@@ -155,8 +155,8 @@ export default function Login() {
                   throw new Error(isAr ? 'بيانات الدخول غير صحيحة.' : 'Invalid login credentials.');
                 }
                 if (regErr.code === 'auth/operation-not-allowed') {
-                  throw new Error(isAr
-                    ? 'يرجى تفعيل "Email/Password" في إعدادات Firebase Console Authentication.'
+                  throw new Error(isAr 
+                    ? 'يرجى تفعيل "Email/Password" في إعدادات Firebase Console Authentication.' 
                     : 'Please enable "Email/Password" sign-in method in Firebase Console Authentication.');
                 }
                 throw regErr;
@@ -219,8 +219,8 @@ export default function Login() {
                   throw new Error(isAr ? 'بيانات الدخول غير صحيحة.' : 'Invalid login credentials.');
                 }
                 if (regErr.code === 'auth/operation-not-allowed') {
-                  throw new Error(isAr
-                    ? 'يرجى تفعيل "Email/Password" في إعدادات Firebase Console Authentication.'
+                  throw new Error(isAr 
+                    ? 'يرجى تفعيل "Email/Password" في إعدادات Firebase Console Authentication.' 
                     : 'Please enable "Email/Password" sign-in method in Firebase Console Authentication.');
                 }
                 throw regErr;
@@ -231,7 +231,7 @@ export default function Login() {
           }
         }
       }
-
+      
       // 3. User is now authenticated, we can safely query/update their doc
       const userDocRef = doc(db, 'users', result.user.uid);
       const userSnap = await getDoc(userDocRef);
@@ -270,8 +270,8 @@ export default function Login() {
 
       if (userData && (userData.role === 'Courier' || userData.roleId === 'courier' || userData.role === 'courier')) {
         await signOut(auth);
-        throw new Error(isAr
-          ? 'عذراً، هذا الحساب مخصص للمناديب الخارجيين فقط ولا يمكنه تسجيل الدخول بأي صلاحية.'
+        throw new Error(isAr 
+          ? 'عذراً، هذا الحساب مخصص للمناديب الخارجيين فقط ولا يمكنه تسجيل الدخول بأي صلاحية.' 
           : 'Access Denied: Courier accounts are external and not permitted to log in.');
       }
 
@@ -289,7 +289,7 @@ export default function Login() {
           email: result.user.email,
           loginAt: new Date().toISOString(),
         });
-      } catch (_) { }
+      } catch (_) {}
 
       navigate('/');
     } catch (err: any) {
@@ -319,7 +319,7 @@ export default function Login() {
       <div className="min-h-screen flex items-center justify-center bg-luxury-black py-12 px-4 sm:px-6 lg:px-8 font-sans select-none text-right" dir={isAr ? 'rtl' : 'ltr'}>
         <div className="max-w-md w-full space-y-8 bg-gradient-to-b from-[#121215] to-[#08080a] p-8 sm:p-12 rounded-2xl border border-[#d4af37]/20 text-center shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 inset-x-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#d4af37]/40 to-transparent"></div>
-
+          
           <div className="w-16 h-16 bg-[#d4af37]/5 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-[#d4af37]/25 shadow-[0_0_20px_rgba(212,175,55,0.1)]">
             <Lock className="h-8 w-8 text-[#d4af37]" />
           </div>
@@ -345,7 +345,7 @@ export default function Login() {
               className="block w-full px-4 py-4 rounded-xl border border-slate-900 bg-black text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/60 outline-none transition-all font-mono text-3xl tracking-[1em] text-center"
               placeholder="••••••"
             />
-
+            
             <button
               onClick={verifyPin}
               className="w-full flex justify-center py-4 px-4 rounded-xl shadow-md text-xs font-black text-black bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] focus:outline-none transition-all active:scale-95 gap-2 items-center uppercase tracking-widest cursor-pointer shadow-yellow-950/20"
@@ -371,10 +371,10 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-luxury-black py-12 px-4 sm:px-6 lg:px-8 font-sans select-none text-right" dir={isAr ? 'rtl' : 'ltr'}>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-luxury-black py-8 px-4 sm:px-6 lg:px-8 font-sans overflow-y-auto select-none text-right" dir={isAr ? 'rtl' : 'ltr'}>
       <div className="max-w-md w-full space-y-8 bg-gradient-to-b from-[#121215] to-[#08080a] p-8 sm:p-12 rounded-2xl border border-[#d4af37]/20 shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 inset-x-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#d4af37]/45 to-transparent"></div>
-
+        
         <div className="text-center">
           <div className="w-20 h-20 bg-gradient-to-b from-[#d4af37]/10 to-yellow-950/20 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-[#d4af37]/20 shadow-[0_0_20px_rgba(212,175,55,0.1)] relative group">
             {settings.systemLogo ? (
@@ -395,13 +395,13 @@ export default function Login() {
             </span>
           </div>
           <h2 className="text-3xl font-extrabold text-white tracking-widest uppercase mb-1">
-            {settings.systemName || settings.companyName || 'SwiftShip'}
+            {settings.systemName || settings.companyName || 'alx'}
           </h2>
           <p className="text-[10px] text-slate-500 font-extrabold uppercase tracking-[0.3em] inline-block border-y border-slate-900 py-1.5 px-4 mt-1">
             {t('systemAdminPanel')}
           </p>
         </div>
-
+        
         {error && (
           <div className="bg-rose-950/20 text-rose-400 p-3 rounded-xl text-[11px] border border-rose-900/40 font-bold text-center">
             [ACCESS_DENIED]: {error}
@@ -462,58 +462,96 @@ export default function Login() {
 
         <div className="text-center pt-6 border-t border-slate-900/60">
           <p className="text-[8px] text-[#62748E] font-medium leading-relaxed mb-4">
-            {isAr
-              ? 'يجب أن يكون حسابك مسجلاً مسبقاً من قبل الإدارة الفنية للمتابعة.'
+            {isAr 
+              ? 'يجب أن يكون حسابك مسجلاً مسبقاً من قبل الإدارة الفنية للمتابعة.' 
               : 'Restricted system. Access attempts logged natively.'}
           </p>
 
-          {/* Interactive Developer Card */}
-          <div className="bg-transparent border border-slate-900 p-3 rounded-xl text-center relative" dir={isAr ? 'rtl' : 'ltr'}>
-
-            <div className="flex flex-col items-center justify-center pb-2 border-b border-slate-900/40">
-              <span className="text-[14px] font-bold text-[#D4AF37] leading-[12px] mb-1">
-                {isAr ? 'المطور: أرْسَلَان الشَّمَّارِي' : 'Developer: Arslan Al-Shamari'}
-              </span>
-              <span className="text-[8.5px] text-slate-500 font-normal">
-                {isAr ? 'مبرمج أنظمة ومهندس شبكات وأمن سيبراني' : 'Systems Architect & Cybersecurity Engineer'}
+          {/* Company Inquiry and Support Card */}
+          <div className="bg-transparent border border-slate-900 p-4 rounded-xl text-center relative" dir={isAr ? 'rtl' : 'ltr'}>
+            <div className="flex flex-col items-center justify-center pb-2 border-b border-slate-900/40 mb-3">
+              <span className="text-[12px] font-black text-[#D4AF37] tracking-wider uppercase">
+                {isAr ? 'للتواصل والاستفسار' : 'Inquiries & Support'}
               </span>
             </div>
 
-            <div className="flex items-center justify-center gap-4 pt-2.5">
-              <a
-                href="https://wa.me/967776422777"
+            <div className="flex items-center justify-center gap-6 py-1">
+              {/* Phone item */}
+              <a 
+                href="tel:785557070"
+                className="p-3 bg-[#d4af37]/5 text-[#d4af37] hover:bg-[#d4af37]/15 hover:text-white border border-[#d4af37]/20 hover:border-[#d4af37]/45 rounded-xl transition-all duration-300 transform hover:scale-105 active:scale-95"
+                title={isAr ? 'رقم الهاتف: 785557070' : 'Phone: 785557070'}
+              >
+                <Phone className="w-5 h-5" />
+              </a>
+
+              {/* Email item */}
+              <a 
+                href="mailto:alxdelivery777@gmail.com"
+                className="p-3 bg-blue-500/5 text-blue-400 hover:bg-blue-500/15 hover:text-white border border-blue-500/20 hover:border-blue-500/45 rounded-xl transition-all duration-300 transform hover:scale-105 active:scale-95"
+                title={isAr ? 'البريد الإلكتروني: alxdelivery777@gmail.com' : 'Email: alxdelivery777@gmail.com'}
+              >
+                <Mail className="w-5 h-5" />
+              </a>
+
+              {/* WhatsApp item */}
+              <a 
+                href="https://wa.me/967785557070"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="p-1.5 text-[#25D366] hover:bg-[#25D366]/10 rounded-full transition-colors active:scale-95"
-                title={isAr ? 'واتسـاب' : 'WhatsApp'}
+                className="p-3 bg-green-500/5 text-green-400 hover:bg-green-500/15 hover:text-white border border-green-500/20 hover:border-green-500/45 rounded-xl transition-all duration-300 transform hover:scale-105 active:scale-95"
+                title={isAr ? 'الدردشة على واتساب' : 'WhatsApp Chat'}
               >
-                <MessageCircle className="w-4.5 h-4.5" />
-              </a>
-              <a
-                href="https://t.me/Arslan_ALShamari"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-1.5 text-[#2CA5E0] hover:bg-[#2CA5E0]/10 rounded-full transition-colors active:scale-95"
-                title={isAr ? 'تلقـرام' : 'Telegram'}
-              >
-                <Send className="w-4.5 h-4.5" />
-              </a>
-              <a
-                href="mailto:arslan.alshamari@gmail.com"
-                className="p-1.5 text-[#EA4335] hover:bg-[#EA4335]/10 rounded-full transition-colors active:scale-95"
-                title={isAr ? 'الإيميل' : 'Email'}
-              >
-                <Mail className="w-4.5 h-4.5" />
-              </a>
-              <a
-                href="tel:+967776422777"
-                className="p-1.5 text-[#05C46B] hover:bg-[#05C46B]/10 rounded-full transition-colors active:scale-95"
-                title={isAr ? 'اتصال هاتف' : 'Call'}
-              >
-                <Phone className="w-4.5 h-4.5" />
+                <MessageCircle className="w-5 h-5" />
               </a>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Subtly crafted tech-themed developer badge */}
+      <div className="mt-8 flex flex-col items-center justify-center gap-2 text-[10px] text-slate-500 font-mono tracking-wider opacity-55 hover:opacity-100 transition-opacity duration-300" dir="ltr">
+        <div className="flex items-center gap-2">
+          <span className="text-slate-700 font-bold">&lt;/&gt;</span>
+          <span className="text-[10px] font-black tracking-wide text-slate-400 hover:text-[#d4af37] transition-colors">
+            {isAr ? 'المطور: ارسلان الشماري' : 'Developer: Arslan Al-Shamari'}
+          </span>
+          <span className="inline-block w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
+        </div>
+        
+        <div className="flex items-center gap-2.5">
+          <a 
+            href="https://wa.me/967776422777" 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="p-1 px-1.5 text-slate-500 hover:text-[#25D366] hover:bg-[#25D366]/5 rounded-md transition-all"
+            title={isAr ? 'واتساب المطور' : 'WhatsApp Developer'}
+          >
+            <MessageCircle className="w-3.5 h-3.5" />
+          </a>
+          <a 
+            href="https://t.me/Arslan_ALShamari" 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="p-1 px-1.5 text-slate-500 hover:text-[#2CA5E0] hover:bg-[#2CA5E0]/5 rounded-md transition-all"
+            title={isAr ? 'تلجرام المطور' : 'Telegram Developer'}
+          >
+            <Send className="w-3.5 h-3.5" />
+          </a>
+          <a 
+            href="mailto:arslan.alshamari@gmail.com" 
+            className="p-1 px-1.5 text-slate-500 hover:text-[#EA4335] hover:bg-[#EA4335]/5 rounded-md transition-all"
+            title={isAr ? 'إيميل المطور' : 'Email Developer'}
+          >
+            <Mail className="w-3.5 h-3.5" />
+          </a>
+          <a 
+            href="tel:+967776422777" 
+            className="p-1 px-1.5 text-slate-500 hover:text-[#05C46B] hover:bg-[#05C46B]/5 rounded-md transition-all"
+            title={isAr ? 'اتصال بالمطور' : 'Call Developer'}
+          >
+            <Phone className="w-3.5 h-3.5" />
+          </a>
         </div>
       </div>
     </div>

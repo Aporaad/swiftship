@@ -19,7 +19,7 @@ export const EXPENSE_CATEGORIES = [
   { id: 'custody', labelAr: 'عهد مالية لمندوب', labelEn: 'Courier Custody', icon: '🔑' },
   { id: 'salary', labelAr: 'صرف رواتب الموظفين', labelEn: 'Staff Salary Payments', icon: '👤' },
   { id: 'wages', labelAr: 'أجور ومكافآت', labelEn: 'Wages & Bonuses', icon: '💵' },
-  { id: 'factory', labelAr: 'سداد مصنع الصين', labelEn: 'Offshore Factory Trade', icon: '🏭' },
+  { id: 'factory', labelAr: 'سداد تكاليف طلبات وشحن', labelEn: 'Order & Shipping Payments', icon: '📦' },
   { id: 'other', labelAr: 'مصروفات أخرى', labelEn: 'Other Expenses', icon: '📝' }
 ];
 
@@ -680,8 +680,21 @@ export default function Expenses() {
     .reduce((sum, e) => sum + convertToYER(e.amount || 0, e.currency), 0);
 
   const totalGeneralExpensesUSD = allowedExpenses
-    .filter(e => e.type === 'General' || e.type === 'FactoryPayment')
-    .reduce((sum, e) => sum + (e.currency === 'USD' ? (e.amount || 0) : convertToYER(e.amount || 0, e.currency) / (settings.exchangeRateUSD || 535)), 0);
+    .filter(e => e.category === 'factory')
+    .reduce((sum, e) => {
+      const amt = parseFloat(e.amount || '0');
+      if (e.currency === 'USD') return sum + amt;
+      if (e.currency === 'YER') {
+        const rateUSD = parseFloat(settings.exchangeRateUSD as any || '535');
+        return sum + (amt / rateUSD);
+      }
+      if (e.currency === 'SAR') {
+        const rateSAR = parseFloat(settings.exchangeRateSAR as any || '140');
+        const rateUSD = parseFloat(settings.exchangeRateUSD as any || '535');
+        return sum + ((amt * rateSAR) / rateUSD);
+      }
+      return sum + amt;
+    }, 0);
 
   const totalPendingCustodies = allowedExpenses
     .filter(e => e.type === 'Custody' && e.status === 'Pending')
@@ -1091,9 +1104,11 @@ export default function Expenses() {
         {canViewGeneralExpenses && (
           <div className="bg-gradient-to-br from-[#121215] to-[#070708] border border-slate-850 p-4 rounded-2xl relative overflow-hidden shadow">
             <span className="text-[9px] text-slate-500 font-black uppercase block tracking-wider mb-2">
-              {isAr ? 'سداد فواتير الصين وحجم العمل (USD)' : 'Offshore Expenses (USD)'}
+              {isAr ? 'سداد تكاليف طلبات وشحن (USD)' : 'Paying Order & Shipping Costs (USD)'}
             </span>
-            <span className="text-lg font-mono font-black text-emerald-400">${totalGeneralExpensesUSD.toLocaleString()} USD</span>
+            <span className="text-lg font-mono font-black text-emerald-400">
+              ${totalGeneralExpensesUSD.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
+            </span>
             <div className="absolute top-2.5 right-2.5 p-1 text-emerald-400 bg-emerald-950/20 rounded-lg border border-emerald-900/30">
               <Coins className="w-3.5 h-3.5" />
             </div>

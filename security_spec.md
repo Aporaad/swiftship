@@ -1,4 +1,4 @@
-# Security Specification for SwiftShip
+# Security Specification for alx
 
 ## Data Invariants
 1. A user must be authenticated to access any part of the system (except public tracking).

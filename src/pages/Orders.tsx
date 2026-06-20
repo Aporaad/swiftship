@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import CopyToClipboard from '../components/CopyToClipboard';
 import { collection, onSnapshot, orderBy, query, where, addDoc, doc, updateDoc, getDoc, getDocs, deleteDoc, db, auth, handleSupabaseError, OperationType, safeToDate } from '../lib/supabase';
 import { useSettings } from '../context/SettingsContext';
 import { useRole } from '../hooks/useRole';
@@ -705,7 +706,7 @@ export default function Orders() {
     const footerNotes = settings.invoiceNotes || 'Thank you for choosing Swift Ship! Generated automatically by Swift Ship Logistics Engine.';
     doc.text(footerNotes, 15, 285);
 
-    doc.save(`SwiftShip_Invoice_${order.orderNumber || order.id}.pdf`);
+    doc.save(`alx_Invoice_${order.orderNumber || order.id}.pdf`);
     activityLogService.log('export_orders_pdf', order.orderNumber || order.id, { singleOrder: true });
   };
 
@@ -776,7 +777,7 @@ export default function Orders() {
     } else {
       // Shopping (App)
       const rawProfitSAR = productsSum * ((parseFloat(formData.companyProfitRate as any) || 12) / 100);
-      shippingCostSAR = addShippingEnabled ? totalShippingsCost : 0;
+      shippingCostSAR = (addShippingEnabled || shippings.length > 0) ? totalShippingsCost : 0;
       const generalPackagingFee = parseFloat(formData.packagingFee as any) || 0;
       // Customer pays productsSum + bankCommValue (without coupon reduction) + raw profit + shipping + packaging
       totalOrderSAR = (productsSum + bankCommValue) + rawProfitSAR + shippingCostSAR + generalPackagingFee;
@@ -1044,7 +1045,7 @@ export default function Orders() {
 
       // For App orders with shipping: sourcing cost = products cost + shipping cost - coupon discount
       const sourcingCostAmount = formData.orderSourceType === 'App'
-        ? currentCalcs.totalProductsCostWithAdjustments + (addShippingEnabled ? currentCalcs.shippingCostSAR : 0)
+        ? currentCalcs.totalProductsCostWithAdjustments + currentCalcs.shippingCostSAR
         : (currentCalcs.productsSum - currentCalcs.couponValue);
 
       const sourcingCostConverted = financialAccountService.convertToDefaultCurrency(
@@ -1157,8 +1158,14 @@ export default function Orders() {
         }
       }
 
-      // Record Shipping Cost Debit (for Factory only)
-      if (formData.orderSourceType === 'Factory' && currentCalcs.shippingCostSAR > 0 && systemAccs['sys_shipping_costs']) {
+      // Record Shipping Cost Debit (for any order type with shipping cost)
+      // Only apply if deduction on courier is not set, and shipping costs are not merged with product costs
+      if (
+        currentCalcs.shippingCostSAR > 0 && 
+        systemAccs['sys_shipping_costs'] && 
+        !formData.deductSourcingCostFromCourier &&
+        formData.orderSourceType !== 'SHEIN' // Assuming SHEIN means merged based on code logic
+      ) {
         try {
           const shipCostConverted = financialAccountService.convertToDefaultCurrency(
             currentCalcs.shippingCostSAR,
@@ -1851,7 +1858,7 @@ export default function Orders() {
               createdAt: Date.now()
             });
           } catch (txErr) {
-            console.warn('[Orders] Could not record delivery wage on courier financial account:', txErr);
+            console.warn('[Orders] Could not record delivery wage transactions:', txErr);
           }
         }
       }
@@ -1963,7 +1970,7 @@ export default function Orders() {
               entityType: 'system',
               entityId: 'sys_profit_account',
               entityName: 'حساب أرباح الشركة',
-              type: 'Credit',
+              type: 'Debit',
               amount: profitConverted,
               amountOriginal: profitValSAR,
               currencyOriginal: 'SAR',
@@ -2082,6 +2089,9 @@ export default function Orders() {
       packagingFees: 0
       // Note: deliveryDate is NOT stored per-row; it's shown in the order details view as a computed field
     }]);
+    if (formData.orderSourceType === 'App') {
+      setAddShippingEnabled(true);
+    }
   };
 
 
@@ -2174,6 +2184,9 @@ export default function Orders() {
   const removeShippingRow = (idx: number) => {
     if (shippings.length === 1) {
       setShippings([]);
+      if (formData.orderSourceType === 'App') {
+        setAddShippingEnabled(false);
+      }
       return;
     }
     setShippings(shippings.filter((_, i) => i !== idx));
@@ -2451,8 +2464,32 @@ export default function Orders() {
                 createdByName: profile?.fullName || 'System Auto-Wage',
                 createdAt: Date.now()
               });
+
+              // Also record Debit on Company's Delivery Expense Account (sys_delivery_cost)
+              const sysAccs = await financialAccountService.ensureSystemAccounts(settings.currency || 'SAR');
+              if (sysAccs['sys_delivery_cost']) {
+                await financialAccountService.recordTransaction(sysAccs['sys_delivery_cost'], {
+                  accountId: sysAccs['sys_delivery_cost'],
+                  accountCode: 'EXP-DELIVERY',
+                  entityType: 'system',
+                  entityId: 'sys_delivery_cost',
+                  entityName: 'حساب مصروفات التوصيل',
+                  type: 'Debit',
+                  amount: convertedFee,
+                  amountOriginal: deliveryFee,
+                  currencyOriginal: 'YER',
+                  description: isAr
+                    ? `أجور توصيل تلقائية لتسليم الطلب رقم: ${ord.orderNumber}`
+                    : `Auto-wage for delivery of order: ${ord.orderNumber}`,
+                  refNumber: wageNumber,
+                  module: 'expense',
+                  createdByUid: auth.currentUser?.uid || 'system',
+                  createdByName: profile?.fullName || 'System Auto-Wage',
+                  createdAt: Date.now()
+                });
+              }
             } catch (txErr) {
-              console.warn('[Orders] Could not record delivery wage on courier financial account:', txErr);
+              console.warn('[Orders] Could not record delivery wage transactions in bulk update:', txErr);
             }
           }
         }
@@ -5220,12 +5257,13 @@ export default function Orders() {
                   </p>
 
                   <div className="pt-1 flex flex-wrap justify-center md:justify-start gap-2">
-                    <button
-                      onClick={() => copyToClipboard(selectedOrder.trackingNumber || selectedOrder.orderNumber || '')}
-                      className="bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white px-3 py-1.5 rounded-lg border border-slate-705 flex items-center gap-1.5 font-bold cursor-pointer transition text-[10px]"
-                    >
-                      {isAr ? 'نسخ رمز التتبع الموحد' : 'Copy Tracking ID'}
-                    </button>
+                    <CopyToClipboard 
+                      text={selectedOrder.trackingNumber || selectedOrder.orderNumber || ''} 
+                      showIconOnly={false} 
+                      label={isAr ? 'نسخ رمز التتبع الموحد' : 'Copy Tracking ID'}
+                      labelCopied={isAr ? 'تم نسخ الرمز!' : 'Copied Tracking ID!'}
+                      className="px-4 py-2.5 text-[11px] rounded-xl font-black"
+                    />
                   </div>
                 </div>
 
