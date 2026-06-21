@@ -4,17 +4,17 @@ const { app, BrowserWindow, shell, ipcMain, dialog, Notification } = require('el
 const path = require('path');
 const { spawn } = require('child_process');
 const http = require('http');
-const fs   = require('fs');
+const fs = require('fs');
 
 // ============================================================
 // CONFIG
 // ============================================================
-const SERVER_PORT = 3000;
-const SERVER_URL  = `http://localhost:${SERVER_PORT}`;
-const IS_DEV      = process.env.NODE_ENV === 'development';
+const SERVER_PORT = 3001;
+const SERVER_URL = `http://localhost:${SERVER_PORT}`;
+const IS_DEV = process.env.NODE_ENV === 'development';
 const MAX_WAIT_MS = 30000; // 30 ثانية للانتظار حتى يجهز السيرفر
 
-let mainWindow    = null;
+let mainWindow = null;
 let serverProcess = null;
 
 // ============================================================
@@ -30,7 +30,7 @@ try {
 function log(msg) {
   const line = `[${new Date().toISOString()}] ${msg}\n`;
   process.stdout.write(line);
-  try { fs.appendFileSync(LOG_FILE, line); } catch (_) {}
+  try { fs.appendFileSync(LOG_FILE, line); } catch (_) { }
 }
 
 // ============================================================
@@ -44,13 +44,13 @@ function startExpressServer() {
 
     if (IS_DEV) {
       // ── وضع التطوير: تشغيل server.ts عبر tsx ─────────────
-      const appRoot    = path.join(__dirname, '..');
+      const appRoot = path.join(__dirname, '..');
       const serverFile = path.join(appRoot, 'server.ts');
-      command   = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-      args      = ['tsx', serverFile];
+      command = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+      args = ['tsx', serverFile];
       spawnOpts = {
-        cwd:   appRoot,
-        env:   { ...process.env, NODE_ENV: 'development', PORT: String(SERVER_PORT) },
+        cwd: appRoot,
+        env: { ...process.env, NODE_ENV: 'development', PORT: String(SERVER_PORT) },
         stdio: ['ignore', 'pipe', 'pipe'],
         shell: false,
       };
@@ -62,18 +62,18 @@ function startExpressServer() {
       log(`[Electron] Server exists: ${fs.existsSync(serverFile)}`);
 
       // استخدام node الموجود في مسار النظام
-      command   = process.platform === 'win32' ? 'node.exe' : 'node';
-      args      = [serverFile];
+      command = process.platform === 'win32' ? 'node.exe' : 'node';
+      args = [serverFile];
       spawnOpts = {
-        cwd:   path.join(process.resourcesPath, 'app'),
-        env:   {
+        cwd: path.join(process.resourcesPath, 'app'),
+        env: {
           ...process.env,
-          NODE_ENV:       'production',
-          PORT:           String(SERVER_PORT),
+          NODE_ENV: 'production',
+          PORT: String(SERVER_PORT),
           RESOURCES_PATH: process.resourcesPath,
         },
-        stdio:    ['ignore', 'pipe', 'pipe'],
-        shell:    false,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        shell: false,
         detached: false,
       };
     }
@@ -144,27 +144,27 @@ function createWindow() {
   const iconPath = path.join(__dirname, 'assets', 'icon.ico');
 
   mainWindow = new BrowserWindow({
-    width:     1400,
-    height:    900,
-    minWidth:  1024,
+    width: 1400,
+    height: 900,
+    minWidth: 1024,
     minHeight: 700,
-    show:  false,   // نخفيها حتى تكتمل لتجنب الوميض
+    show: false,   // نخفيها حتى تكتمل لتجنب الوميض
     title: 'alx — نظام إدارة الشحنات',
     backgroundColor: '#0f172a',
     icon: fs.existsSync(iconPath) ? iconPath : undefined,
 
     webPreferences: {
       // ✅ المسار الصحيح للـ preload بامتداد .cjs
-      preload:          path.join(__dirname, 'preload.cjs'),
+      preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
-      nodeIntegration:  false,
-      sandbox:          false,
-      webSecurity:      true,
+      nodeIntegration: false,
+      sandbox: false,
+      webSecurity: true,
     },
 
-    frame:           true,
+    frame: true,
     autoHideMenuBar: true,
-    titleBarStyle:   'default',
+    titleBarStyle: 'default',
   });
 
   mainWindow.loadURL(SERVER_URL);
@@ -212,7 +212,7 @@ app.whenReady().then(async () => {
 app.on('before-quit', () => {
   log('[Electron] App quitting — stopping server...');
   if (serverProcess) {
-    try { serverProcess.kill('SIGTERM'); } catch (_) {}
+    try { serverProcess.kill('SIGTERM'); } catch (_) { }
     serverProcess = null;
   }
 });
@@ -224,7 +224,7 @@ app.on('window-all-closed', () => {
 // ============================================================
 // IPC Handlers
 // ============================================================
-ipcMain.handle('app:version',  () => app.getVersion());
+ipcMain.handle('app:version', () => app.getVersion());
 ipcMain.handle('app:log-path', () => LOG_FILE);
 
 // ─── Save File Dialog (لحفظ ملفات XLSX / CSV) ───────────────
@@ -235,8 +235,8 @@ ipcMain.handle('dialog:save-file', async (_event, { defaultName, filters, buffer
       defaultPath: defaultName || 'export.xlsx',
       filters: filters || [
         { name: 'Excel Files', extensions: ['xlsx'] },
-        { name: 'CSV Files',   extensions: ['csv']  },
-        { name: 'All Files',   extensions: ['*']    }
+        { name: 'CSV Files', extensions: ['csv'] },
+        { name: 'All Files', extensions: ['*'] }
       ]
     });
 
@@ -259,7 +259,7 @@ ipcMain.handle('notify:show', (_event, { title, body, type }) => {
     if (Notification.isSupported()) {
       const n = new Notification({
         title: title || 'alx',
-        body:  body  || '',
+        body: body || '',
         silent: type === 'info'
       });
       n.show();
@@ -279,16 +279,16 @@ ipcMain.handle('print:page', async (_event, options) => {
     await new Promise((resolve, reject) => {
       mainWindow.webContents.print(
         {
-          silent:            options?.silent ?? false,
-          printBackground:   true,
-          pageSize:          options?.pageSize || 'A4',
-          landscape:         options?.landscape ?? false,
+          silent: options?.silent ?? false,
+          printBackground: true,
+          pageSize: options?.pageSize || 'A4',
+          landscape: options?.landscape ?? false,
           margins: {
             marginType: 'custom',
-            top:    options?.marginTop    ?? 10,
+            top: options?.marginTop ?? 10,
             bottom: options?.marginBottom ?? 10,
-            left:   options?.marginLeft   ?? 10,
-            right:  options?.marginRight  ?? 10,
+            left: options?.marginLeft ?? 10,
+            right: options?.marginRight ?? 10,
           }
         },
         (success, errorType) => {

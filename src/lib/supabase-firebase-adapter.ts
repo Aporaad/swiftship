@@ -20,15 +20,37 @@ function getSupabaseAnonKey(): string {
          "";
 }
 
-const resolvedUrl = getSupabaseUrl();
-const resolvedKey = getSupabaseAnonKey();
+let actualSupabaseClient: any = null;
 
-console.log('[Supabase Adapter] Initializing with URL:', resolvedUrl ? 'PRESENT' : 'MISSING');
+function getSupabaseClient() {
+  if (!actualSupabaseClient) {
+    const resolvedUrl = getSupabaseUrl();
+    const resolvedKey = getSupabaseAnonKey();
+    
+    if (!resolvedUrl || resolvedUrl === "https://placeholder-project.supabase.co") {
+      console.warn('[Supabase Adapter] Warning: Supabase URL is missing or placeholder. Environment variables might not be loaded yet.');
+    } else {
+      console.log('[Supabase Adapter] Lazily initializing Supabase client with URL:', resolvedUrl);
+    }
+    
+    actualSupabaseClient = createClient(
+      resolvedUrl || "https://placeholder-project.supabase.co",
+      resolvedKey || "placeholder-key"
+    );
+  }
+  return actualSupabaseClient;
+}
 
-export const supabase = createClient(
-  resolvedUrl || "https://placeholder-project.supabase.co",
-  resolvedKey || "placeholder-key"
-);
+export const supabase = new Proxy({}, {
+  get(target, prop, receiver) {
+    const client = getSupabaseClient();
+    const value = Reflect.get(client, prop);
+    if (typeof value === 'function') {
+      return value.bind(client);
+    }
+    return value;
+  }
+}) as any;
 
 const isServer = typeof window === 'undefined';
 

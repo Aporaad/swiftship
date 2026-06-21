@@ -16,7 +16,7 @@
     "build:all": "npm run build && npm run build:server",
     "start": "cross-env NODE_ENV=production node dist/server.cjs",
     "lint": "tsc --noEmit",
-    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3000 && cross-env NODE_ENV=development electron .\"",
+    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3001 && cross-env NODE_ENV=development electron .\"",
     "electron:build": "npm run build:all && electron-builder --win",
     "electron:build:dir": "npm run build:all && electron-builder --win --dir"
   },
