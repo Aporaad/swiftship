@@ -148,14 +148,19 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
 
     filteredExpenses.forEach(exp => {
       const convertedAmt = convertToYER(exp.amount || 0, exp.currency);
+      const isManualDebit = exp.notes && (exp.notes.includes('[MANUAL-DEBIT]') || exp.notes.includes('قيد تسوية مدين'));
       
       if (exp.type === 'General') {
-        totalGeneralExpensesYER += convertedAmt;
+        if (!isManualDebit) {
+          totalGeneralExpensesYER += convertedAmt;
+        }
       } else if (exp.type === 'FactoryPayment') {
         if (exp.currency === 'USD') {
           totalChinaFactoryUSD += parseFloat(exp.amount || 0);
         } else {
-          totalGeneralExpensesYER += convertedAmt;
+          if (!isManualDebit) {
+            totalGeneralExpensesYER += convertedAmt;
+          }
         }
       } else if (exp.type === 'Custody') {
         totalCourierCustodyIssuedYER += convertedAmt;

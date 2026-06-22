@@ -473,16 +473,37 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
     };
   }, [ledgerEntries, settings]);
 
-  // Dynamic P&L Trial Balance Summary metrics (All values converted to YER for consistent financial scope)
+  // Dynamic P&L Trial Balance Summary metrics — all values in YER for consistent financial scope
+  // These metrics directly feed ChartOfAccounts' system account balances.
+  //
+  // Accounting flow:
+  //   4100 (Revenue)  = sum of all order totalPrice converted to YER
+  //   4200 (Adj In)   = sum of all manual Debit adjustments from ledger
+  //   5000 (Expenses) = sum of all non-custody expenses converted to YER
+  //   1120 (Recv)     = sum of all unpaid order amounts (amountRemaining)
+  //   2110 (Custody)  = sum of pending custody expenses converted to YER
+  //   3200 (Profit)   = (4100 + 4200) - 5000
   const financialTrialMetrics = useMemo(() => {
+    // ── 4100: Revenues from shipping orders ──────────────────────────────
     let totalCustomerRevenue = 0;
     orders.forEach(o => {
-      const paid = parseFloat(o.amountPaid || o.paidAmount || '0');
-      const remain = parseFloat(o.amountRemaining || '0');
-      const price = parseFloat(o.totalPrice || o.totalCostYER || (paid + remain) || '0');
-      totalCustomerRevenue += price;
+      const price = parseFloat(
+        o.totalPrice   ||
+        o.totalCostYER ||
+        ((parseFloat(o.amountPaid || '0') + parseFloat(o.amountRemaining || '0'))) ||
+        '0'
+      );
+      // Orders can be in SAR or YER — convert everything to YER
+      if (o.currency === 'SAR' || (!o.currency && o.profitCompanySAR)) {
+        totalCustomerRevenue += price * (parseFloat(o.exchangeRateYER || settings.exchangeRateSAR || 140));
+      } else if (o.currency === 'USD') {
+        totalCustomerRevenue += price * (settings.exchangeRateUSD || 535);
+      } else {
+        totalCustomerRevenue += price;
+      }
     });
 
+    // ── 4200: Manual debit (inflow) adjustments ──────────────────────────
     let totalAdjustInflows = 0;
     ledgerEntries.forEach(e => {
       if (e.type === 'Debit' && e.module === 'adjustment') {
@@ -490,27 +511,31 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
       }
     });
 
-    // Sum all non-custody expenses directly from the expenses database converted to YER
+    // ── 5000: All operating expenses (excluding custody) ─────────────────
     const netOperatingCosts = expenses
-      .filter(e => e.type !== 'Custody')
+      .filter(e => e.type !== 'Custody' && !(e.notes && (e.notes.includes('[MANUAL-DEBIT]') || e.notes.includes('قيد تسوية مدين'))))
       .reduce((sum, e) => sum + convertToYER(e.amount || 0, e.currency || 'YER'), 0);
 
-    const netReceivables = orders.reduce((sum, o) => sum + parseFloat(o.amountRemaining || 0), 0);
+    // ── 1120: Receivables = sum of all unpaid amounts per order ──────────
+    const netReceivables = orders.reduce((sum, o) => {
+      const remaining = parseFloat(o.amountRemaining || '0');
+      if (o.currency === 'SAR') return sum + remaining * (parseFloat(o.exchangeRateYER || settings.exchangeRateSAR || 140));
+      if (o.currency === 'USD') return sum + remaining * (settings.exchangeRateUSD || 535);
+      return sum + remaining;
+    }, 0);
+
+    // ── 2110: Active custody liabilities ─────────────────────────────────
     const activeCustodyLiabilities = expenses
       .filter(e => e.type === 'Custody' && e.status === 'Pending')
       .reduce((sum, e) => sum + convertToYER(e.amount || 0, e.currency || 'YER'), 0);
 
-    // Properly compute net profit from orders explicit profit margins
-    let accumulatedOrdersProfitYER = 0;
-    orders.forEach(o => {
-      const profitSAR = parseFloat(o.profitCompanySAR || 0);
-      if (profitSAR > 0) {
-        const rate = parseFloat(o.exchangeRateYER || settings.exchangeRateSAR || 140);
-        accumulatedOrdersProfitYER += (profitSAR * rate);
-      }
-    });
+    // ── 3200: Net Profit = Revenue + AdjInflows - Costs ──────────────────
+    // This figure is carried into 3200 (Retained Earnings) in the balance sheet
+    const netProfit = (totalCustomerRevenue + totalAdjustInflows) - netOperatingCosts;
 
-    const netProfit = (accumulatedOrdersProfitYER + totalAdjustInflows) - netOperatingCosts;
+    const operatingMargin = totalCustomerRevenue > 0
+      ? parseFloat(((netProfit / totalCustomerRevenue) * 100).toFixed(2))
+      : 0;
 
     return {
       totalCustomerRevenue,
@@ -519,9 +544,10 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
       activeCustodyLiabilities,
       netReceivables,
       netProfit,
-      operatingMargin: totalCustomerRevenue > 0 ? parseFloat(((netProfit / totalCustomerRevenue) * 100).toFixed(2)) : 0
+      operatingMargin
     };
   }, [ledgerEntries, orders, expenses, settings]);
+
 
   const handleEditJournalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1274,6 +1300,11 @@ Continue?`
         }
       }
 
+      // --- Register Credit in Customer's Financial Account ---
+      const customerRecord = customerLedgerDetails.customer;
+      const linkedAccountId = customerRecord.financialAccountId;
+      const linkedAccountCode = customerRecord.financialAccountCode;
+
       // Record cash inflow adjustment voucher in ledger safe box
       const randStr = Math.floor(1000 + Math.random() * 9000);
       const voucherNum = `RCV-${randStr}`;
@@ -1291,15 +1322,12 @@ Continue?`
         createdByUid: auth.currentUser?.uid || 'system',
         createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
         createdByName: 'Finance Auditor',
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        financialAccountId: linkedAccountId || null,
+        financialAccountCode: linkedAccountCode || null
       };
 
       await addDoc(adjustmentsRef, payload);
-
-      // --- Register Credit in Customer's Financial Account ---
-      const customerRecord = customerLedgerDetails.customer;
-      const linkedAccountId = customerRecord.financialAccountId;
-      const linkedAccountCode = customerRecord.financialAccountCode;
 
       if (linkedAccountId) {
         const convertedPaid = financialAccountService.convertToDefaultCurrency(

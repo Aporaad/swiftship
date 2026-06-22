@@ -1970,7 +1970,7 @@ export default function Orders() {
               entityType: 'system',
               entityId: 'sys_profit_account',
               entityName: 'حساب أرباح الشركة',
-              type: 'Debit',
+              type: 'Credit',
               amount: profitConverted,
               amountOriginal: profitValSAR,
               currencyOriginal: 'SAR',

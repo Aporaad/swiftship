@@ -1,9 +1,15 @@
 /**
  * Financial Account Service
  * خدمة الحسابات المالية المركزية
- * 
- * Manages creation and management of financial sub-accounts
- * for customers (1130-xxxx), couriers (2120-xxxx), employees (2130-xxxx)
+ *
+ * Manages creation and management of financial sub-accounts:
+ *   Customers  → prefix 1130  (Asset — Accounts Receivable)
+ *   Couriers   → prefix 2120  (Liability — Courier Ledger)
+ *   Employees  → prefix 2130  (Liability — Employee Ledger)
+ *
+ * Every transaction that touches an account is atomically written to
+ * `account_transactions` and the account balance is updated via
+ * Firestore increment() to guarantee consistency.
  */
 
 import {
@@ -16,7 +22,6 @@ import {
   where,
   orderBy,
   increment,
-  serverTimestamp,
   getDoc,
   writeBatch
 } from 'firebase/firestore';
@@ -65,11 +70,15 @@ export interface AccountTransaction {
 }
 
 // Account prefix ranges per entity type
+// Customer accounts are ASSETS (owed to us)    → 1130
+// Courier accounts are LIABILITIES (we owe or they hold custody) → 2120
+// Employee accounts are LIABILITIES (salary obligations) → 2130
+// System utility accounts                         → varies, default 5000
 const ACCOUNT_PREFIXES: Record<AccountEntityType, string> = {
   customer: '1130',
   courier: '2120',
   employee: '2130',
-  system: '4000'
+  system: '5000'
 };
 
 class FinancialAccountService {
@@ -191,6 +200,18 @@ class FinancialAccountService {
     }
   }
 
+  private getAccountTypeByCode(code: string): string {
+    const firstChar = code.trim().charAt(0);
+    switch (firstChar) {
+      case '1': return 'Asset';
+      case '2': return 'Liability';
+      case '3': return 'Equity';
+      case '4': return 'Revenue';
+      case '5': return 'Expense';
+      default: return 'Asset';
+    }
+  }
+
   /**
    * Record a true double-entry transaction (Debit one account, Credit another)
    */
@@ -212,14 +233,25 @@ class FinancialAccountService {
     const debitAmount = this.convertToTargetCurrency(transactionData.amountOriginal, transactionData.currencyOriginal, debitAccount.currency, exchangeRates);
     const creditAmount = this.convertToTargetCurrency(transactionData.amountOriginal, transactionData.currencyOriginal, creditAccount.currency, exchangeRates);
 
+    const debitAccountType = this.getAccountTypeByCode(debitAccount.accountCode);
+    const creditAccountType = this.getAccountTypeByCode(creditAccount.accountCode);
+
+    const isDebitNormalDebit = debitAccountType === 'Asset' || debitAccountType === 'Expense';
+    const isCreditNormalDebit = creditAccountType === 'Asset' || creditAccountType === 'Expense';
+
+    const debitDelta = isDebitNormalDebit ? debitAmount : -debitAmount;
+    const creditDelta = isCreditNormalDebit ? -creditAmount : creditAmount;
+
     // --- DEBIT LEG ---
     const debitTxRef = doc(collection(db, 'account_transactions'));
     const debitData = { 
       ...transactionData, 
       type: 'Debit', 
       accountId: debitAccountId, 
-      entityType: 'system',
-      entityId: 'system',
+      accountCode: debitAccount.accountCode,
+      entityType: debitAccount.entityType,
+      entityId: debitAccount.entityId,
+      entityName: debitAccount.entityName,
       amount: debitAmount,
       createdAt: now 
     };
@@ -227,19 +259,29 @@ class FinancialAccountService {
 
     const debitAccountRef = doc(db, 'accounts', debitAccountId);
     batch.update(debitAccountRef, {
-      balance: increment(debitAmount),
+      balance: increment(debitDelta),
       debitTotal: increment(debitAmount),
       updatedAt: now
     });
 
     // --- CREDIT LEG ---
     const creditTxRef = doc(collection(db, 'account_transactions'));
-    const creditData = { ...transactionData, type: 'Credit', accountId: creditAccountId, amount: creditAmount, createdAt: now };
+    const creditData = { 
+      ...transactionData, 
+      type: 'Credit', 
+      accountId: creditAccountId, 
+      accountCode: creditAccount.accountCode,
+      entityType: creditAccount.entityType,
+      entityId: creditAccount.entityId,
+      entityName: creditAccount.entityName,
+      amount: creditAmount, 
+      createdAt: now 
+    };
     batch.set(creditTxRef, creditData);
 
     const creditAccountRef = doc(db, 'accounts', creditAccountId);
     batch.update(creditAccountRef, {
-      balance: increment(-creditAmount),
+      balance: increment(creditDelta),
       creditTotal: increment(creditAmount),
       updatedAt: now
     });
@@ -260,8 +302,19 @@ class FinancialAccountService {
   }
 
   /**
-   * Record a financial transaction on an account (Debit or Credit)
-   * Uses writeBatch to ensure atomicity: updates both account balance and transaction log
+   * Record a financial transaction on a single account (Debit or Credit).
+   *
+   * Atomically:
+   *  1. Writes a new document to `account_transactions`
+   *  2. Updates `accounts/{accountId}`.balance / debitTotal / creditTotal
+   *  3. Optionally updates the parent entity document's `financialBalance` field
+   *
+   * Balance convention (matching the chart of accounts):
+   *   Asset accounts  (1xxx) — Debit increases balance, Credit decreases
+   *   Liability (2xxx) — Credit increases balance, Debit decreases
+   *   Equity    (3xxx) — Credit increases balance, Debit decreases
+   *   Revenue   (4xxx) — Credit increases balance, Debit decreases
+   *   Expense   (5xxx) — Debit increases balance, Credit decreases
    */
   async recordTransaction(
     accountId: string,
@@ -273,35 +326,58 @@ class FinancialAccountService {
     const exchangeRates = providedRates || (await this.getExchangeRates());
 
     const account = await this.getAccountById(accountId);
-    if (!account) throw new Error('Account not found');
-    
+    if (!account) throw new Error(`Account not found: ${accountId}`);
+
+    // Convert the original amount to the account's native currency
     const baseAmount = this.convertToTargetCurrency(
-      transactionData.amountOriginal, 
-      transactionData.currencyOriginal, 
-      account.currency, 
+      transactionData.amountOriginal,
+      transactionData.currencyOriginal,
+      account.currency,
       exchangeRates
     );
 
-    // 1. Create transaction record
+    // 1. Write transaction record
     const txRef = doc(collection(db, 'account_transactions'));
-    batch.set(txRef, { 
-        ...transactionData, 
-        amount: baseAmount,
-        createdAt: now 
+    batch.set(txRef, {
+      ...transactionData,
+      amount: baseAmount,
+      createdAt: transactionData.createdAt || now,
+      accountId,
+      accountCode: transactionData.accountCode || account.accountCode
     });
 
     // 2. Update account balance
-    const accountRef = doc(db, 'accounts', accountId);
+    const accountType = this.getAccountTypeByCode(account.accountCode);
+    const isNormalDebit = accountType === 'Asset' || accountType === 'Expense';
     const balanceDelta = transactionData.type === 'Debit'
-      ? baseAmount
-      : -baseAmount;
-    
+      ? (isNormalDebit ? baseAmount : -baseAmount)
+      : (isNormalDebit ? -baseAmount : baseAmount);
+
+    const accountRef = doc(db, 'accounts', accountId);
     batch.update(accountRef, {
       balance: increment(balanceDelta),
-      debitTotal: transactionData.type === 'Debit' ? increment(baseAmount) : increment(0),
+      debitTotal:  transactionData.type === 'Debit'  ? increment(baseAmount) : increment(0),
       creditTotal: transactionData.type === 'Credit' ? increment(baseAmount) : increment(0),
       updatedAt: now
     });
+
+    // 3. Also update the parent entity's `financialBalance` so dashboards stay in sync
+    if (
+      transactionData.entityId &&
+      transactionData.entityType &&
+      transactionData.entityType !== 'system'
+    ) {
+      try {
+        const entityCollection = this.getEntityCollection(transactionData.entityType);
+        const entityRef = doc(db, entityCollection, transactionData.entityId);
+        batch.update(entityRef, {
+          financialBalance: increment(balanceDelta),
+          updatedAt: now
+        });
+      } catch (_) {
+        // Non-fatal: entity update is best-effort
+      }
+    }
 
     await batch.commit();
 
@@ -309,10 +385,10 @@ class FinancialAccountService {
       'financial_transaction' as any,
       transactionData.entityName,
       {
-        accountCode: transactionData.accountCode,
+        accountCode: transactionData.accountCode || account.accountCode,
         type: transactionData.type,
         amount: baseAmount,
-        currency: account.currency, // Store currency of the account
+        currency: account.currency,
         description: transactionData.description,
         refNumber: transactionData.refNumber
       }
@@ -630,16 +706,55 @@ class FinancialAccountService {
     }
   }
   /**
-   * Ensures essential system accounts exist and returns their IDs
+   * Compute a ledger summary for a given account (total debit, credit, net balance)
+   * by summing all account_transactions for that account.
+   * Useful for reconciliation and audit reports.
    */
-  async ensureSystemAccounts(currency: string = 'SAR'): Promise<Record<string, string>> {
+  async getLedgerSummary(accountId: string): Promise<{ debit: number; credit: number; net: number; count: number }> {
+    try {
+      const q = query(
+        collection(db, 'account_transactions'),
+        where('accountId', '==', accountId),
+        orderBy('createdAt', 'desc')
+      );
+      const snap = await getDocs(q);
+      let debit = 0, credit = 0;
+      snap.docs.forEach(d => {
+        const data = d.data();
+        if (data.type === 'Debit') debit += data.amount || 0;
+        else credit += data.amount || 0;
+      });
+      return { debit, credit, net: debit - credit, count: snap.size };
+    } catch (error) {
+      console.error('[FinancialAccountService] Error computing ledger summary:', error);
+      return { debit: 0, credit: 0, net: 0, count: 0 };
+    }
+  }
+
+  /**
+   * Ensures essential system accounts exist and returns their IDs.
+   *
+   * Each system account uses the EXACT code from the chart of accounts:
+   *   sys_profit_account  → 4000-0001  (Revenue — Company Profit)
+   *   sys_delivery_cost   → 5000-2788  (Expense — Delivery Costs)
+   *   sys_sourcing_cost   → 5100-4483  (Expense — Import/Sourcing Costs)
+   *   sys_local_shipping  → 5100-7119  (Expense — Local Shipping)
+   *   sys_packaging_fees  → 5100-7355  (Expense — Packaging Fees)
+   *   sys_shipping_costs  → 5300-7118  (Expense — International Shipping)
+   *   sys_cash_account    → 1111-0     (Asset — General Cash Box)
+   */
+  async ensureSystemAccounts(currency: string = 'YER'): Promise<Record<string, string>> {
     const sysAccounts = [
-      { id: 'sys_profit_account',   name: 'حساب أرباح الشركة',                      prefix: '4000' },
-      { id: 'sys_delivery_cost',    name: 'حساب مصروفات التوصيل',                   prefix: '5000' },
-      { id: 'sys_sourcing_cost',    name: 'حساب تكاليف الاستيراد التشغيلية',        prefix: '5100' },
-      { id: 'sys_packaging_fees',   name: 'حساب رسوم التغليف والتعبئة',            prefix: '5200' },
-      { id: 'sys_shipping_costs',   name: 'حساب تكاليف الشحن الدولي',              prefix: '5300' },
-      { id: 'sys_cash_account',     name: 'حساب الصندوق العام (كاش)',               prefix: '1000' },
+      // Revenues (4xxx)
+      { id: 'sys_profit_account',   name: 'حساب أرباح الشركة',                   prefix: '4000', accountCode: '4000-0001' },
+      // Expenses (5xxx)
+      { id: 'sys_delivery_cost',    name: 'حساب مصروفات التوصيل',                prefix: '5000', accountCode: '5000-2788' },
+      { id: 'sys_sourcing_cost',    name: 'حساب تكاليف الاستيراد التشغيلية',     prefix: '5100', accountCode: '5100-4483' },
+      { id: 'sys_local_shipping',   name: 'حساب تكاليف الشحن المحلي',            prefix: '5100', accountCode: '5100-7119' },
+      { id: 'sys_packaging_fees',   name: 'حساب رسوم التغليف والتعبئة',          prefix: '5100', accountCode: '5100-7355' },
+      { id: 'sys_shipping_costs',   name: 'حساب تكاليف الشحن الدولي',            prefix: '5300', accountCode: '5300-7118' },
+      // Assets (1xxx)
+      { id: 'sys_cash_account',     name: 'حساب الصندوق العام (كاش)',             prefix: '1110', accountCode: '1111-0' },
     ];
 
     const sysIds: Record<string, string> = {};
@@ -649,11 +764,11 @@ class FinancialAccountService {
       if (existing && existing.id) {
         sysIds[acc.id] = existing.id;
       } else {
-        const accountNumber = Math.floor(1000 + Math.random() * 9000).toString();
+        // Use the predefined accountCode matching the chart of accounts exactly
         const accountData: FinancialAccount = {
-          accountCode: `${acc.prefix}-${accountNumber}`,
+          accountCode: acc.accountCode,
           accountPrefix: acc.prefix,
-          accountNumber: accountNumber,
+          accountNumber: acc.accountCode.split('-').slice(1).join('-') || '0000',
           entityType: 'system',
           entityId: acc.id,
           entityName: acc.name,
