@@ -33,3 +33,27 @@ export interface Courier {
   createdAt?: number;
   updatedAt?: number;
 }
+
+export interface Transaction {
+  id?: string;
+  date: number; // Date of transaction (timestamp)
+  description: string;
+  module: string;
+  refNumber: string;
+  amount: number;
+  currency: string;
+  debitAccount: {
+    id: string;
+    code: string;
+    name?: string;
+  };
+  creditAccount: {
+    id: string;
+    code: string;
+    name?: string;
+  };
+  createdByName: string;
+  createdByUid: string;
+  attachments?: string[];
+  notes?: string;
+}

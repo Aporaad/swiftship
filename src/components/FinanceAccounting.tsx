@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { 
-  FileText, Search, CreditCard, ShieldAlert, CheckCircle, Wallet, ArrowUpRight, 
+import {
+  FileText, Search, CreditCard, ShieldAlert, CheckCircle, Wallet, ArrowUpRight,
   ArrowDownLeft, HelpCircle, User, Truck, Calendar, Printer, Download, Star, ExternalLink,
   DollarSign, Activity, FileSpreadsheet, PlusCircle, Scale, Receipt, Sparkles, TrendingUp, RefreshCw, X,
   FolderTree, Wrench, Users, Coins, UserCheck, Eye, ChevronDown, ChevronUp, Edit2
@@ -10,7 +10,8 @@ import { collection, addDoc, doc, updateDoc, writeBatch, onSnapshot, query, orde
 import { notificationService } from '../services/notificationService';
 import ChartOfAccounts from './ChartOfAccounts';
 import AssetsPortfolio from './AssetsPortfolio';
-import { EXPENSE_CATEGORIES } from '../pages/Expenses';
+import AutoVoucherRulesManager from './AutoVoucherRulesManager';
+import { useExpenseCategories } from '../hooks/useExpenseCategories';
 import { financialAccountService } from '../services/financialAccountService';
 import { useRole } from '../hooks/useRole';
 
@@ -25,8 +26,10 @@ interface FinanceAccountingProps {
 }
 
 export default function FinanceAccounting({ orders, expenses, couriers, customers, isAr, settings, initialTab }: FinanceAccountingProps) {
+  const EXPENSE_CATEGORIES_DYNAMIC = useExpenseCategories();
+
   // Navigation tabs for accounting
-  const [accountingTab, setAccountingTab] = useState<'general_ledger' | 'courier_audit' | 'customer_audit' | 'chart_of_accounts' | 'assets_management' | 'financial_accounts' | 'salary_history'>('general_ledger');
+  const [accountingTab, setAccountingTab] = useState<'general_ledger' | 'courier_audit' | 'customer_audit' | 'chart_of_accounts' | 'assets_management' | 'financial_accounts' | 'salary_history' | 'auto_voucher_rules'>('general_ledger');
 
   // Auto-switch to a requested tab when mounted via deep-link (e.g. sidebar ?subtab=salary)
   useEffect(() => {
@@ -62,7 +65,7 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
     }
     return formatted;
   };
-  
+
   // Real-time assets sync for dynamic pricing in Chart of Accounts
   const [assets, setAssets] = useState<any[]>([]);
   // Real-time financial accounts sync
@@ -85,7 +88,7 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
     });
     return () => unsub();
   }, []);
-  
+
   // Selection states
   const [auditedCourierId, setAuditedCourierId] = useState('');
   const [auditedCustomerId, setAuditedCustomerId] = useState('');
@@ -102,12 +105,17 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
   const [typeFilter, setTypeFilter] = useState<'all' | 'Debit' | 'Credit'>('all');
   const [currencyFilter, setCurrencyFilter] = useState<'all' | 'YER' | 'USD' | 'SAR'>('all');
   const [selectedLedgerEntry, setSelectedLedgerEntry] = useState<any | null>(null);
-  
+
   // Target sub-account selection state for manual adjustment modal
   const [targetType, setTargetType] = useState<'general' | 'customer' | 'courier' | 'employee' | 'system' | string>('general');
-  const [selectedAccountId, setSelectedAccountId] = useState('');
-  const [accountSearchQuery, setAccountSearchQuery] = useState(''); // NEW SEARCH STATE
-  const [isAccountDropdownOpen, setIsAccountDropdownOpen] = useState(false); // NEW DROPDOWN STATE
+
+  // NEW: Double-Entry Manual Adjustment States
+  const [sourceAccountId, setSourceAccountId] = useState('');
+  const [sourceSearchQuery, setSourceSearchQuery] = useState('');
+  const [isSourceDropdownOpen, setIsSourceDropdownOpen] = useState(false);
+  const [targetAccountId, setTargetAccountId] = useState('');
+  const [targetSearchQuery, setTargetSearchQuery] = useState('');
+  const [isTargetDropdownOpen, setIsTargetDropdownOpen] = useState(false);
 
   // Quick manual adjustment voucher modal state
   const [isAdjustmentModalOpen, setIsAdjustmentModalOpen] = useState(false);
@@ -137,7 +145,7 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
   const [selectedSalaryVoucher, setSelectedSalaryVoucher] = useState<any>(null);
   // Employee Statement sub-view
   const [employeeStatementId, setEmployeeStatementId] = useState<string | null>(null);
-  const [empStmtDateFilter, setEmpStmtDateFilter] = useState<'all'|'30days'|'custom'>('all');
+  const [empStmtDateFilter, setEmpStmtDateFilter] = useState<'all' | '30days' | 'custom'>('all');
   const [empStmtStartDate, setEmpStmtStartDate] = useState('');
   const [empStmtEndDate, setEmpStmtEndDate] = useState('');
 
@@ -285,7 +293,7 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
           module: 'adjustment'
         });
       } else {
-        const catObj = EXPENSE_CATEGORIES.find(c => c.id === exp.category) || EXPENSE_CATEGORIES.find(c => c.id === 'other');
+        const catObj = EXPENSE_CATEGORIES_DYNAMIC.find(c => c.id === exp.category) || EXPENSE_CATEGORIES_DYNAMIC.find(c => c.id === 'other');
         const catLabel = catObj ? (isAr ? catObj.labelAr : catObj.labelEn) : (isAr ? 'مصروف تشغيلي' : 'Operational Expense');
         entries.push({
           id: `EXP-UNLINKED-${exp.id}`,
@@ -308,7 +316,7 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
 
     // Sort chronologically (oldest to newest for correct running balances, then reverse for display)
     const sorted = entries.sort((a, b) => a.date.getTime() - b.date.getTime());
-    
+
     // Compute running balance
     let currentBalance = 0;
     const computed = sorted.map(entry => {
@@ -394,16 +402,16 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
     return financialAccounts.filter(acc => {
       // 1. Filter by entity type
       if (accountTypeFilter !== 'all' && acc.entityType !== accountTypeFilter) return false;
-      
+
       // 2. Filter by search query
       const query = searchAccountQuery.trim().toLowerCase();
       if (query) {
-        const matchesQuery = 
+        const matchesQuery =
           (acc.accountCode || '').toLowerCase().includes(query) ||
           (acc.entityName || '').toLowerCase().includes(query);
         if (!matchesQuery) return false;
       }
-      
+
       return true;
     });
   }, [financialAccounts, accountTypeFilter, searchAccountQuery]);
@@ -414,55 +422,27 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
     let usdIn = 0, usdOut = 0;
     let sarIn = 0, sarOut = 0;
 
-    // Direct sum parsing of native original currencies in ledger
-    ledgerEntries.forEach(e => {
-      const cur = e.currencyOriginal || 'YER';
-      const amt = parseFloat(e.amountOriginal || e.amount || 0);
+    const cashAccount = financialAccounts.find(a => a.entityId === 'sys_cash_account');
+    if (cashAccount) {
+      // Loop over transactions for the cash account to determine currency breakdown
+      accountTransactions.forEach(tx => {
+        if (tx.accountId === cashAccount.id) {
+          const amt = parseFloat(tx.amountOriginal || tx.amount || 0);
+          const cur = tx.currencyOriginal || tx.currency || 'YER';
 
-      let isSafeBoxInflow = false;
-      let isSafeBoxOutflow = false;
-
-      if (e.id.toString().startsWith('EXP-UNLINKED')) {
-        if (e.type === 'Debit') isSafeBoxInflow = true;
-        if (e.type === 'Credit') isSafeBoxOutflow = true;
-      } else {
-        // Linked account transactions
-        if (e.module === 'payment') {
-           if (e.type === 'Credit') isSafeBoxInflow = true; // Customer paid us
-           else isSafeBoxOutflow = true; // We refunded customer
-        } else if (e.module === 'custody') {
-           // Custody granted (Debit to courier account): Courier collects from customer. Cash box is UNTOUCHED.
-           // Custody settled (Credit to courier account): Courier hands cash to cashier => Cash Inflow
-           if (e.type === 'Credit') {
-               isSafeBoxInflow = true;
-           }
-        } else if (e.module === 'expense' && e.refNumber?.startsWith('EXP-')) {
-           // Manual expense from expenses page
-           if (e.type === 'Credit') isSafeBoxOutflow = true;
-           else if (e.type === 'Debit') isSafeBoxInflow = true;
-        } else if (e.module === 'adjustment') {
-           // Manual adjustment from Accounting page
-           if (e.type === 'Debit') isSafeBoxInflow = true;
-           else if (e.type === 'Credit') isSafeBoxOutflow = true;
-        } else if (e.entityId === 'sys_sourcing_cost') {
-           if (e.type === 'Debit') {
-             isSafeBoxOutflow = true;
-           }
+          if (cur === 'YER') {
+            if (tx.type === 'Debit') yerIn += amt;
+            if (tx.type === 'Credit') yerOut += amt;
+          } else if (cur === 'USD') {
+            if (tx.type === 'Debit') usdIn += amt;
+            if (tx.type === 'Credit') usdOut += amt;
+          } else if (cur === 'SAR') {
+            if (tx.type === 'Debit') sarIn += amt;
+            if (tx.type === 'Credit') sarOut += amt;
+          }
         }
-        // order, wage, auto-commission (COM-*) do NOT affect safe box directly.
-      }
-
-      if (cur === 'YER') {
-        if (isSafeBoxInflow) yerIn += amt;
-        if (isSafeBoxOutflow) yerOut += amt;
-      } else if (cur === 'USD') {
-        if (isSafeBoxInflow) usdIn += amt;
-        if (isSafeBoxOutflow) usdOut += amt;
-      } else if (cur === 'SAR') {
-        if (isSafeBoxInflow) sarIn += amt;
-        if (isSafeBoxOutflow) sarOut += amt;
-      }
-    });
+      });
+    }
 
     return {
       yer: { in: yerIn, out: yerOut, balance: yerIn - yerOut },
@@ -471,67 +451,39 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
       totalIn_YER: yerIn + convertToYER(usdIn, 'USD') + convertToYER(sarIn, 'SAR'),
       totalOut_YER: yerOut + convertToYER(usdOut, 'USD') + convertToYER(sarOut, 'SAR')
     };
-  }, [ledgerEntries, settings]);
+  }, [accountTransactions, financialAccounts, settings]);
 
   // Dynamic P&L Trial Balance Summary metrics — all values in YER for consistent financial scope
-  // These metrics directly feed ChartOfAccounts' system account balances.
-  //
-  // Accounting flow:
-  //   4100 (Revenue)  = sum of all order totalPrice converted to YER
-  //   4200 (Adj In)   = sum of all manual Debit adjustments from ledger
-  //   5000 (Expenses) = sum of all non-custody expenses converted to YER
-  //   1120 (Recv)     = sum of all unpaid order amounts (amountRemaining)
-  //   2110 (Custody)  = sum of pending custody expenses converted to YER
-  //   3200 (Profit)   = (4100 + 4200) - 5000
+  // These metrics directly feed from the ChartOfAccounts' system account balances.
   const financialTrialMetrics = useMemo(() => {
     // ── 4100: Revenues from shipping orders ──────────────────────────────
-    let totalCustomerRevenue = 0;
-    orders.forEach(o => {
-      const price = parseFloat(
-        o.totalPrice   ||
-        o.totalCostYER ||
-        ((parseFloat(o.amountPaid || '0') + parseFloat(o.amountRemaining || '0'))) ||
-        '0'
-      );
-      // Orders can be in SAR or YER — convert everything to YER
-      if (o.currency === 'SAR' || (!o.currency && o.profitCompanySAR)) {
-        totalCustomerRevenue += price * (parseFloat(o.exchangeRateYER || settings.exchangeRateSAR || 140));
-      } else if (o.currency === 'USD') {
-        totalCustomerRevenue += price * (settings.exchangeRateUSD || 535);
-      } else {
-        totalCustomerRevenue += price;
-      }
-    });
+    // Sum of all accounts starting with 4 (Revenues)//convertToYER(a.balance, 'USD') + convertToYER(sarIn, 'SAR'),
+    const totalCustomerRevenue = financialAccounts
+      .filter(a => a.accountCode?.startsWith('4') || a.accountCode?.startsWith('REV'))
+      .reduce((sum, a) => sum + (parseFloat(convertToYER(a.balance, a.currency) as any) || 0), 0);
 
     // ── 4200: Manual debit (inflow) adjustments ──────────────────────────
-    let totalAdjustInflows = 0;
-    ledgerEntries.forEach(e => {
-      if (e.type === 'Debit' && e.module === 'adjustment') {
-        totalAdjustInflows += e.amount;
-      }
-    });
+    const totalAdjustInflows = 0; // Handled implicitly in account balances
 
-    // ── 5000: All operating expenses (excluding custody) ─────────────────
-    const netOperatingCosts = expenses
-      .filter(e => e.type !== 'Custody' && !(e.notes && (e.notes.includes('[MANUAL-DEBIT]') || e.notes.includes('قيد تسوية مدين'))))
-      .reduce((sum, e) => sum + convertToYER(e.amount || 0, e.currency || 'YER'), 0);
+    // ── 5000: All operating expenses ─────────────────────────────────────
+    // Sum of all accounts starting with 5 (Expenses)
+    const netOperatingCosts = financialAccounts
+      .filter(a => a.accountCode?.startsWith('5') || a.accountCode?.startsWith('EXP'))
+      .reduce((sum, a) => sum + (parseFloat(convertToYER(a.balance, a.currency) as any) || 0), 0);
 
-    // ── 1120: Receivables = sum of all unpaid amounts per order ──────────
-    const netReceivables = orders.reduce((sum, o) => {
-      const remaining = parseFloat(o.amountRemaining || '0');
-      if (o.currency === 'SAR') return sum + remaining * (parseFloat(o.exchangeRateYER || settings.exchangeRateSAR || 140));
-      if (o.currency === 'USD') return sum + remaining * (settings.exchangeRateUSD || 535);
-      return sum + remaining;
-    }, 0);
+    // ── 1130: Receivables = sum of customer balances ─────────────────────
+    const netReceivables = financialAccounts
+      .filter(a => a.entityType === 'customer' || a.accountCode?.startsWith('1130'))
+      .reduce((sum, a) => sum + (parseFloat(convertToYER(a.balance, a.currency) as any) || 0), 0);
 
     // ── 2110: Active custody liabilities ─────────────────────────────────
-    const activeCustodyLiabilities = expenses
-      .filter(e => e.type === 'Custody' && e.status === 'Pending')
-      .reduce((sum, e) => sum + convertToYER(e.amount || 0, e.currency || 'YER'), 0);
+    const activeCustodyLiabilities = financialAccounts
+      .filter(a => a.entityType === 'courier' || a.accountCode?.startsWith('2120'))
+      .reduce((sum, a) => sum + (parseFloat(convertToYER(a.balance, a.currency) as any) || 0), 0);
 
-    // ── 3200: Net Profit = Revenue + AdjInflows - Costs ──────────────────
-    // This figure is carried into 3200 (Retained Earnings) in the balance sheet
-    const netProfit = (totalCustomerRevenue + totalAdjustInflows) - netOperatingCosts;
+    // ── 3200: Net Profit = Revenue - Costs ───────────────────────────────
+    // Directly pull from computed Revenue - Costs per accounting standards
+    const netProfit = totalCustomerRevenue - netOperatingCosts;
 
     const operatingMargin = totalCustomerRevenue > 0
       ? parseFloat(((netProfit / totalCustomerRevenue) * 100).toFixed(2))
@@ -546,7 +498,7 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
       netProfit,
       operatingMargin
     };
-  }, [ledgerEntries, orders, expenses, settings]);
+  }, [financialAccounts]);
 
 
   const handleEditJournalSubmit = async (e: React.FormEvent) => {
@@ -568,7 +520,7 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
         settings.currency || 'YER',
         { USD: settings.exchangeRateUSD || 535, SAR: settings.exchangeRateSAR || 140 }
       );
-      
+
       const parsedCreatedAt = editJournalData.createdAt ? new Date(editJournalData.createdAt).getTime() : Date.now();
       const batch = writeBatch(db);
 
@@ -577,7 +529,7 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
       if (isUnlinked) {
         const expId = selectedEditEntry.id.replace('EXP-UNLINKED-', '');
         const expRef = doc(db, 'expenses', expId);
-        
+
         batch.update(expRef, {
           amount: rawAmt,
           currency: editJournalData.currencyOriginal,
@@ -590,13 +542,13 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
         const txId = selectedEditEntry.id;
         const txQuery = query(collection(db, 'account_transactions'), where('__name__', '==', txId));
         const txSnap = await getDocs(txQuery);
-        
+
         if (!txSnap.empty) {
           const txDoc = txSnap.docs[0];
           const txData = txDoc.data();
           const diffVal = convertedAmt - (txData.amount || 0);
           const delta = txData.type === 'Debit' ? diffVal : -diffVal;
-          
+
           batch.update(txDoc.ref, {
             amount: convertedAmt,
             amountOriginal: rawAmt,
@@ -604,7 +556,7 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
             description: editJournalData.notes,
             createdAt: parsedCreatedAt
           });
-          
+
           if (txData.accountId) {
             const accRef = doc(db, 'accounts', txData.accountId);
             batch.update(accRef, {
@@ -614,7 +566,7 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
               updatedAt: Date.now()
             });
           }
-          
+
           if (txData.entityType && txData.entityType !== 'system' && txData.entityId) {
             const entityCollection = financialAccountService.getEntityCollection(txData.entityType);
             const entityRef = doc(db, entityCollection, txData.entityId);
@@ -623,26 +575,26 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
               updatedAt: Date.now()
             });
           }
-          
+
           if (txData.refNumber) {
-             const expQ = query(collection(db, 'expenses'), where('expenseNumber', '==', txData.refNumber));
-             const expSnaps = await getDocs(expQ);
-             if (!expSnaps.empty) {
-                 expSnaps.forEach(expDoc => {
-                     batch.update(expDoc.ref, {
-                         amount: rawAmt,
-                         currency: editJournalData.currencyOriginal,
-                         amountInDefaultCurrency: convertedAmt,
-                         notes: editJournalData.notes,
-                         createdAt: parsedCreatedAt,
-                         updatedAt: Date.now()
-                     });
-                 });
-             }
+            const expQ = query(collection(db, 'expenses'), where('expenseNumber', '==', txData.refNumber));
+            const expSnaps = await getDocs(expQ);
+            if (!expSnaps.empty) {
+              expSnaps.forEach(expDoc => {
+                batch.update(expDoc.ref, {
+                  amount: rawAmt,
+                  currency: editJournalData.currencyOriginal,
+                  amountInDefaultCurrency: convertedAmt,
+                  notes: editJournalData.notes,
+                  createdAt: parsedCreatedAt,
+                  updatedAt: Date.now()
+                });
+              });
+            }
           }
         }
       }
-      
+
       await batch.commit();
 
       notificationService.notify({
@@ -677,10 +629,19 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
       return;
     }
 
-    if (!selectedAccountId) {
+    if (!sourceAccountId || !targetAccountId) {
       notificationService.notify({
-        title: isAr ? 'الحساب غير محدد' : 'Account Required',
-        message: isAr ? 'يرجى تحديد الحساب المالي المستهدف للتسوية.' : 'Please select the target financial account.',
+        title: isAr ? 'الحسابات غير محددة' : 'Accounts Required',
+        message: isAr ? 'يجب تحديد الحساب المصدر (الدائن) والحساب المستهدف (المدين) لإجراء القيد المزدوج.' : 'Please select both source and target accounts to complete the transaction.',
+        type: 'error'
+      });
+      return;
+    }
+
+    if (sourceAccountId === targetAccountId) {
+      notificationService.notify({
+        title: isAr ? 'تطابق الحسابات' : 'Identical Accounts',
+        message: isAr ? 'لا يمكن أن يكون الحساب المصدر والحساب المستهدف متطابقين.' : 'Source and target accounts cannot be the same.',
         type: 'error'
       });
       return;
@@ -698,12 +659,18 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
 
       const timestamp = Date.now();
       const randStr = Math.floor(1000 + Math.random() * 9000);
-      const targetAccount = financialAccounts.find(a => a.id === selectedAccountId);
-      
-      if (!targetAccount) return;
+
+      const srcAccount = financialAccounts.find(a => a.id === sourceAccountId);
+      const trgAccount = financialAccounts.find(a => a.id === targetAccountId);
+
+      if (!srcAccount || !trgAccount) {
+        throw new Error(isAr ? 'أحد الحسابات المحددة غير موجود في الدفاتر.' : 'Selected accounts not found.');
+      }
+
+      const voucherCode = `ADJ-${new Date().getFullYear().toString().slice(-2)}-${randStr}`;
 
       // 1. If it is a Salary Payment, invoke the atomic recordSalaryPayment service
-      if (isSalaryPayment && targetType === 'employee' && targetAccount) {
+      if (isSalaryPayment && targetType === 'employee') {
         if (!adjustSalaryMonth) {
           notificationService.notify({
             title: isAr ? 'الشهر غير محدد' : 'Month Required',
@@ -714,11 +681,11 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
           return;
         }
 
-        const voucherCode = await financialAccountService.recordSalaryPayment({
-          employeeId: targetAccount.entityId,
-          employeeName: targetAccount.entityName,
-          accountId: selectedAccountId,
-          accountCode: targetAccount.accountCode,
+        await financialAccountService.recordSalaryPayment({
+          employeeId: trgAccount.entityId,
+          employeeName: trgAccount.entityName,
+          accountId: targetAccountId,
+          accountCode: trgAccount.accountCode,
           amount: convertedAmt,
           currency: adjustData.currency,
           salaryMonth: adjustSalaryMonth,
@@ -726,85 +693,60 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
           createdByUid: auth.currentUser?.uid || 'system',
           createdByName: auth.currentUser?.email?.split('@')[0] || 'Finance Auditor'
         });
-
-        // Insert safebox / expense entry to display in general daily ledger
-        const payload = {
-          expenseNumber: voucherCode,
-          category: 'salary',
-          type: 'Salary',
-          amount: amountVal,
-          currency: adjustData.currency,
-          amountInDefaultCurrency: convertedAmt,
-          recipientId: targetAccount.entityId,
-          recipientEntityId: targetAccount.entityId,
-          recipientEntityType: 'employee',
-          recipientName: targetAccount.entityName,
-          notes: `صرف راتب شهر ${adjustSalaryMonth} — ${targetAccount.entityName}`,
-          remarks: adjustData.notes || '',
-          status: 'Completed',
-          createdByUid: auth.currentUser?.uid || 'system',
-          createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
-          createdByName: auth.currentUser?.email?.split('@')[0] || 'Finance Auditor',
-          createdAt: timestamp,
-          financialAccountId: selectedAccountId,
-          financialAccountCode: targetAccount.accountCode,
-          salaryMonth: adjustSalaryMonth
-        };
-
-        await addDoc(collection(db, 'expenses'), payload);
-
-      } else {
-        // 2. Regular adjustment double entry
-        const voucherCode = `ADJ-${new Date().getFullYear().toString().slice(-2)}-${randStr}`;
-
-        if (targetAccount) {
-          await financialAccountService.recordTransaction(selectedAccountId, {
-            accountId: selectedAccountId,
-            accountCode: targetAccount.accountCode,
-            entityType: targetAccount.entityType,
-            entityId: targetAccount.entityId,
-            entityName: targetAccount.entityName,
-            type: adjustData.type as 'Debit' | 'Credit',
-            amount: convertedAmt,
-            amountOriginal: amountVal,
-            currencyOriginal: adjustData.currency,
-            description: adjustData.title,
-            refNumber: voucherCode,
-            module: 'adjustment',
-            createdAt: timestamp,
-            createdByUid: auth.currentUser?.uid || 'system',
-            createdByName: auth.currentUser?.email?.split('@')[0] || 'Finance Auditor'
-          });
-        }
-
-        // Insert safe box / expense entry so it shows in the general daily ledger
-        const typeLabel = adjustData.type === 'Debit' ? '[MANUAL-DEBIT]' : '[MANUAL-CREDIT]';
-        const accountInfo = targetAccount ? ` (الحساب المالي: ${targetAccount.accountCode} - ${targetAccount.entityName})` : '';
-        const notesLabel = `${typeLabel} ${adjustData.title}${accountInfo}`;
-
-        const payload = {
-          expenseNumber: voucherCode,
-          type: 'General',
-          amount: amountVal,
-          currency: adjustData.currency,
-          recipientId: targetAccount ? targetAccount.entityId : 'adjustment',
-          recipientName: adjustData.recipientName || (isAr ? 'التعديلات المحاسبية' : 'Ledger Adjustments'),
-          notes: notesLabel + (adjustData.notes ? ` : ${adjustData.notes}` : ''),
-          status: 'Completed',
-          createdByUid: auth.currentUser?.uid || 'system',
-          createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
-          createdByName: auth.currentUser?.email?.split('@')[0] || 'Finance Auditor',
-          createdAt: timestamp,
-          financialAccountId: selectedAccountId || null,
-          financialAccountCode: targetAccount ? targetAccount.accountCode : null
-        };
-
-        await addDoc(collection(db, 'expenses'), payload);
       }
+
+      // 2. Perform double-entry transaction posting (Debit trgAccount, Credit srcAccount)
+      await financialAccountService.recordDoubleEntryTransaction(
+        targetAccountId,
+        sourceAccountId,
+        {
+          accountId: targetAccountId,
+          accountCode: trgAccount.accountCode,
+          entityType: trgAccount.entityType,
+          entityId: trgAccount.entityId,
+          entityName: trgAccount.entityName,
+          amount: convertedAmt,
+          amountOriginal: amountVal,
+          currencyOriginal: adjustData.currency,
+          description: adjustData.title || (isAr ? `قيد تسوية مزدوج: ${voucherCode}` : `Double-entry adjustment: ${voucherCode}`),
+          refNumber: voucherCode,
+          module: 'adjustment',
+          createdAt: timestamp,
+          createdByUid: auth.currentUser?.uid || 'system',
+          createdByName: auth.currentUser?.email?.split('@')[0] || 'Finance Auditor'
+        }
+      );
+
+      // 3. Insert into general daily ledger expense/cash flow so it displays correctly
+      const trgName = trgAccount.nameAr || trgAccount.entityName;
+      const srcName = srcAccount.nameAr || srcAccount.entityName;
+      const notesLabel = `[DOUBLE-ENTRY] ${adjustData.title || (isAr ? 'قيد تسوية' : 'Adjustment Voucher')} (من حـ/: ${trgAccount.accountCode} - ${trgName} -> إلى حـ/: ${srcAccount.accountCode} - ${srcName})`;
+
+      const payload = {
+        expenseNumber: voucherCode,
+        category: isSalaryPayment ? 'salary' : 'accounting',
+        type: isSalaryPayment ? 'Salary' : 'General',
+        amount: amountVal,
+        currency: adjustData.currency,
+        amountInDefaultCurrency: convertedAmt,
+        recipientId: trgAccount.entityId || 'adjustment',
+        recipientName: trgAccount.entityName || (isAr ? 'التعديلات المحاسبية' : 'Ledger Adjustments'),
+        notes: notesLabel + (adjustData.notes ? ` : ${adjustData.notes}` : ''),
+        status: 'Completed',
+        createdByUid: auth.currentUser?.uid || 'system',
+        createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
+        createdByName: auth.currentUser?.email?.split('@')[0] || 'Finance Auditor',
+        createdAt: timestamp,
+        financialAccountId: targetAccountId,
+        financialAccountCode: trgAccount.accountCode,
+        salaryMonth: isSalaryPayment ? adjustSalaryMonth : null
+      };
+
+      await addDoc(collection(db, 'expenses'), payload);
 
       notificationService.notify({
         title: isAr ? 'تم تقييد القيد بنجاح' : 'Adjustment Logged',
-        message: isAr ? 'تم حفظ قيد تسويقي وترحيله بنجاح' : 'Journal voucher registered and ledger synchronized.',
+        message: isAr ? 'تم حفظ القيد المزدوج ترحيله إلى اليومية المساعدة بنجاح.' : 'Double-entry journal voucher registered successfully.',
         type: 'success'
       });
 
@@ -818,7 +760,8 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
         notes: ''
       });
       setTargetType('general');
-      setSelectedAccountId('');
+      setSourceAccountId('');
+      setTargetAccountId('');
       setIsSalaryPayment(false);
     } catch (err: any) {
       console.error(err);
@@ -840,7 +783,7 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
 
     // Custodies assigned
     const courierExpenses = expenses.filter(e => e.type === 'Custody' && e.recipientId === auditedCourierId);
-    
+
     // Shipments handled
     const courierOrders = orders.filter(o => o.deliveryCourierId === auditedCourierId || o.shippingCourierId === auditedCourierId);
 
@@ -859,8 +802,8 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
     const totalUnremittedCashValueInTargetCurrency = currency === 'SAR' ? totalUnremittedCashValue / (settings.exchangeRateSAR || 140) : totalUnremittedCashValue;
 
     const totalOrdersDelivered = courierOrders.filter(o => o.orderStatus === 'تم التسليم' || o.orderStatus === 'Delivered').length;
-    const successRate = courierOrders.length > 0 
-      ? Math.round((totalOrdersDelivered / courierOrders.length) * 100) 
+    const successRate = courierOrders.length > 0
+      ? Math.round((totalOrdersDelivered / courierOrders.length) * 100)
       : 0;
 
     return {
@@ -890,9 +833,9 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
       let title = tx.description || tx.module || '';
 
       if (tx.module === 'custody') {
-        const isSettlement = (tx.description || '').includes('تسوية') || 
-                             (tx.description || '').includes('سداد') || 
-                             (tx.description || '').toLowerCase().includes('settle');
+        const isSettlement = (tx.description || '').includes('تسوية') ||
+          (tx.description || '').includes('سداد') ||
+          (tx.description || '').toLowerCase().includes('settle');
         if (isSettlement) {
           type = 'Credit';
           title = isAr ? 'تسوية وسداد عهدة مالية' : 'Custody Settlement / Return';
@@ -927,8 +870,8 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
     if (!courierAuditSheet) return;
     const cour = courierAuditSheet.courier;
     const currentBalance = cour.financialBalance || 0;
-    
-    if (!window.confirm(isAr 
+
+    if (!window.confirm(isAr
       ? `تحذير: هل أنت متأكد من تصفية ذمة المندوب (${cour.fullName}) بالكامل؟
 سيقوم هذا الإجراء بـ:
 1. تصفير رصيد الحساب المالي الحالي (${currentBalance.toLocaleString()} YER) بقيد محاسبي تعويضي.
@@ -950,6 +893,8 @@ Continue?`
       const randStr = Math.floor(1000 + Math.random() * 9000);
       const mainVoucherCode = `AUDIT-${randStr}`;
 
+      const systemAccs = await financialAccountService.ensureSystemAccounts('YER');
+
       // 1. Reconcile current financial balance if not zero
       if (currentBalance !== 0) {
         const linkedAccountId = cour.financialAccountId;
@@ -959,24 +904,23 @@ Continue?`
           const type = currentBalance > 0 ? 'Credit' : 'Debit'; // Credit to reduce balance, Debit to increase it
           const amount = Math.abs(currentBalance);
 
-          await financialAccountService.recordTransaction(linkedAccountId, {
-            accountId: linkedAccountId,
-            accountCode: linkedAccountCode || '',
-            entityType: 'courier',
-            entityId: cour.id,
-            entityName: cour.fullName,
-            type,
-            amount,
-            amountOriginal: amount,
-            currencyOriginal: 'YER',
-            description: isAr 
-              ? `قيد تسوية لمطابقة وتصفير الحساب المالي للمندوب — قيد إقفال` 
+          await financialAccountService.recordTransaction({
+            date: timestamp,
+            description: isAr
+              ? `قيد تسوية لمطابقة وتصفير الحساب المالي للمندوب — قيد إقفال`
               : `Offsetting adjustment to zero out courier account balance`,
-            refNumber: mainVoucherCode,
             module: 'adjustment',
+            refNumber: mainVoucherCode,
+            amount,
+            currency: 'YER',
+            debitAccount: type === 'Debit'
+              ? { id: linkedAccountId, code: linkedAccountCode || '2120' }
+              : { id: systemAccs['sys_cash_account'], code: '1111-0' },
+            creditAccount: type === 'Credit'
+              ? { id: linkedAccountId, code: linkedAccountCode || '2120' }
+              : { id: systemAccs['sys_cash_account'], code: '1111-0' },
             createdByUid: auth.currentUser?.uid || 'system',
-            createdByName: 'Finance Auditor',
-            createdAt: timestamp
+            createdByName: 'Finance Auditor'
           });
         }
       }
@@ -999,22 +943,17 @@ Continue?`
             settings.currency || 'SAR',
             { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
           );
-          await financialAccountService.recordTransaction(exp.linkedAccountId, {
-            accountId: exp.linkedAccountId,
-            accountCode: exp.linkedAccountCode || '',
-            entityType: 'courier',
-            entityId: cour.id,
-            entityName: cour.fullName,
-            type: 'Debit', // Reversal
-            amount: settledAmount,
-            amountOriginal: parseFloat(exp.amount || 0),
-            currencyOriginal: exp.currency || 'YER',
+          await financialAccountService.recordTransaction({
+            date: timestamp,
             description: isAr ? `تسوية عهدة تلقائية: ${exp.expenseNumber}` : `Auto custody settlement: ${exp.expenseNumber}`,
-            refNumber: `${exp.expenseNumber}-SET`,
             module: 'custody',
+            refNumber: `${exp.expenseNumber}-SET`,
+            amount: settledAmount,
+            currency: 'YER',
+            debitAccount: { id: exp.linkedAccountId, code: exp.linkedAccountCode || '2120' },
+            creditAccount: { id: systemAccs['sys_cash_account'], code: '1111-0' },
             createdByUid: auth.currentUser?.uid || 'system',
-            createdByName: 'Finance Auditor',
-            createdAt: timestamp
+            createdByName: 'Finance Auditor'
           });
         }
       }
@@ -1054,8 +993,8 @@ Continue?`
 
       notificationService.notify({
         title: isAr ? 'نجاح مطابقة الذمة بالكامل' : 'Full Audit Reconciled',
-        message: isAr 
-          ? `تم تصفير رصيد المندوب وتصفية كافة العهد وتحصيلات الشحنات بنجاح!` 
+        message: isAr
+          ? `تم تصفير رصيد المندوب وتصفية كافة العهد وتحصيلات الشحنات بنجاح!`
           : `Audit successful: All custodies, cargo collections, and balances resolved to 0 YER for ${cour.fullName}.`,
         type: 'success'
       });
@@ -1075,22 +1014,22 @@ Continue?`
   const [cargoRemitLoading, setCargoRemitLoading] = useState(false);
   const handleBulkRemitCourierCash = async () => {
     if (!courierAuditSheet || courierAuditSheet.currentUnremittedCargoCash.length === 0) return;
-    
+
     const isSourcing = courierAuditSheet.courier.courierType === 'sourcing';
     const currency = isSourcing ? 'SAR' : 'YER';
-    const amountLabel = isSourcing 
+    const amountLabel = isSourcing
       ? `${courierAuditSheet.totalUnremittedCashValue.toLocaleString()} SAR`
       : `${courierAuditSheet.totalUnremittedCashValue.toLocaleString()} YER`;
 
-    if (!window.confirm(isAr 
-      ? `هل تريد تصفية كافة مستحقات الشحن المحصلة بذمة المندوب (${amountLabel}) وتوريدها للخزينة؟` 
+    if (!window.confirm(isAr
+      ? `هل تريد تصفية كافة مستحقات الشحن المحصلة بذمة المندوب (${amountLabel}) وتوريدها للخزينة؟`
       : `Confirm remittance of ${amountLabel} held by ${courierAuditSheet.courier.fullName}?`
     )) return;
 
     setCargoRemitLoading(true);
     try {
       const batch = writeBatch(db);
-      
+
       // Update each unremitted cargo invoice
       courierAuditSheet.currentUnremittedCargoCash.forEach(ord => {
         const orderRef = doc(db, 'orders', ord.id);
@@ -1109,13 +1048,13 @@ Continue?`
       const randStr = Math.floor(1000 + Math.random() * 9000);
       const voucherCode = `REMIT-${randStr}`;
       const remitsRef = collection(db, 'expenses');
-      
+
       const payload = {
         expenseNumber: voucherCode,
         type: 'General',
         amount: courierAuditSheet.totalUnremittedCashValue,
         currency: currency,
-        amountInDefaultCurrency: isSourcing 
+        amountInDefaultCurrency: isSourcing
           ? courierAuditSheet.totalUnremittedCashValue * (settings.exchangeRateSAR || 140)
           : courierAuditSheet.totalUnremittedCashValue,
         recipientId: courierAuditSheet.courier.id,
@@ -1133,8 +1072,8 @@ Continue?`
 
       notificationService.notify({
         title: isAr ? 'تم توريد التحصيلات وتصفير الذمة' : 'Cargo Cash Remitted',
-        message: isAr 
-          ? `تم تصفير ذمة المندوب وتوريد مبلغ ${amountLabel} للخزينة بنجاح!` 
+        message: isAr
+          ? `تم تصفير ذمة المندوب وتوريد مبلغ ${amountLabel} للخزينة بنجاح!`
           : `Remittance logged: safely deposited ${amountLabel} from Courier collections.`,
         type: 'success'
       });
@@ -1152,8 +1091,8 @@ Continue?`
 
   // Live Settle specific Custody record from the interactive sheet
   const handleDirectSettleCustody = async (custodyDocId: string, recipientName: string) => {
-    if (!window.confirm(isAr 
-      ? `هل أنت متأكد من مراجعة وتصفية هذا السند العهدة؟` 
+    if (!window.confirm(isAr
+      ? `هل أنت متأكد من مراجعة وتصفية هذا السند العهدة؟`
       : `Are you sure you want to discharge and settle this custody entry?`
     )) return;
 
@@ -1168,8 +1107,8 @@ Continue?`
 
       notificationService.notify({
         title: isAr ? 'تم تسوية وتصفير العهدة' : 'Custody Discharged',
-        message: isAr 
-          ? `تم إبراء المندوب ${recipientName} من العهدة وتسجيل الإرجاع.` 
+        message: isAr
+          ? `تم إبراء المندوب ${recipientName} من العهدة وتسجيل الإرجاع.`
           : `Disgorged open trust for courier ${recipientName}. Safebox recalculated.`,
         type: 'success'
       });
@@ -1309,7 +1248,7 @@ Continue?`
       const randStr = Math.floor(1000 + Math.random() * 9000);
       const voucherNum = `RCV-${randStr}`;
       const adjustmentsRef = collection(db, 'expenses');
-      
+
       const payload = {
         expenseNumber: voucherNum,
         type: 'General',
@@ -1337,24 +1276,21 @@ Continue?`
           { USD: settings.exchangeRateUSD || 535, SAR: settings.exchangeRateSAR || 140 }
         );
 
-        await financialAccountService.recordTransaction(linkedAccountId, {
-          accountId: linkedAccountId,
-          accountCode: linkedAccountCode || '',
-          entityType: 'customer',
-          entityId: auditedCustomerId,
-          entityName: customerRecord.fullName,
-          type: 'Credit', // Credit transaction to reflect cash received
-          amount: convertedPaid,
-          amountOriginal: amountVal,
-          currencyOriginal: 'YER',
-          description: isAr 
-            ? `دفعة نقدية مستلمة على الحساب كشف حساب: ${payNotes || ''}` 
+        const systemAccs = await financialAccountService.ensureSystemAccounts('YER');
+
+        await financialAccountService.recordTransaction({
+          date: Date.now(),
+          description: isAr
+            ? `دفعة نقدية مستلمة على الحساب كشف حساب: ${payNotes || ''}`
             : `Cash payment received on account statement: ${payNotes || ''}`,
-          refNumber: voucherNum,
           module: 'payment',
+          refNumber: voucherNum,
+          amount: convertedPaid,
+          currency: 'YER',
+          debitAccount: { id: systemAccs['sys_cash_account'], code: '1111-0' },
+          creditAccount: { id: linkedAccountId, code: linkedAccountCode || '1130' },
           createdByUid: auth.currentUser?.uid || 'system',
-          createdByName: 'Finance Auditor',
-          createdAt: Date.now()
+          createdByName: 'Finance Auditor'
         });
       }
 
@@ -1362,8 +1298,8 @@ Continue?`
 
       notificationService.notify({
         title: isAr ? 'تم استلام وتوريد المبلغ' : 'Payment Deposited',
-        message: isAr 
-          ? `تم استلام وتحصيل ${amountVal.toLocaleString()} YER وتطبيقها على أقدم الفواتير المستحقة.` 
+        message: isAr
+          ? `تم استلام وتحصيل ${amountVal.toLocaleString()} YER وتطبيقها على أقدم الفواتير المستحقة.`
           : `FIFO accounting applied: Applied ${amountVal.toLocaleString()} YER to chronological outstanding invoices.`,
         type: 'success'
       });
@@ -1387,9 +1323,9 @@ Continue?`
   const exportLedgerToCSV = () => {
     try {
       let csvContent = "data:text/csv;charset=utf-8,";
-      
+
       // Headers
-      csvContent += isAr 
+      csvContent += isAr
         ? "تاريخ القيد,رقم سند النقر المرجعي,البيان وتفاصيل الحساب,المستفيد,مدين (+),دائن (-),رصيد المتوقع YER\n"
         : "Date/Time,Voucher ID,Particulars/Annotations,Counterparty,Debit (+),Credit (-),Running Balance YER\n";
 
@@ -1425,7 +1361,7 @@ Continue?`
     if (!printWindow) return;
 
     const content = document.getElementById(contentId)?.innerHTML || '';
-    
+
     printWindow.document.write(`
       <html>
         <head>
@@ -1540,10 +1476,10 @@ Continue?`
 
   return (
     <div className="space-y-6 pt-2 animate-fade-in text-start">
-      
+
       {/* 4 Cards Quick Financial Dashboard Summary metrics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        
+
         {/* Card 1: Cash Box Vaults */}
         <div className="bg-black/40 backdrop-blur-md border border-slate-850 p-5 rounded-3xl relative overflow-hidden group hover:border-[#d4af37]/30 transition-all">
           <div className="absolute top-0 right-0 w-32 h-32 bg-[#d4af37]/5 rounded-bl-full filter blur-xl group-hover:bg-[#d4af37]/10 transition-all pointer-events-none" />
@@ -1614,7 +1550,7 @@ Continue?`
             <span className="text-[10px] text-slate-550 font-black uppercase tracking-wider">{isAr ? 'العائد الصافي التشغيلي' : 'Treasury Balance Net'}</span>
           </div>
           <p className="text-xl font-mono font-black text-emerald-400 leading-tight">
-            {(parseFloat(financialAccounts.find(a => a.entityId === 'sys_profit_account')?.balance || '0')).toLocaleString()} YER
+            {financialTrialMetrics.netProfit.toLocaleString()} YER
           </p>
           <div className="mt-3 flex items-center justify-between text-[10px] text-slate-400 font-bold">
             <span>{isAr ? 'الهامش الربحي المتوقع:' : 'Net margin rate:'}</span>
@@ -1628,59 +1564,54 @@ Continue?`
       <div className="flex flex-wrap border-b border-slate-850 gap-4 mb-2">
         <button
           onClick={() => setAccountingTab('general_ledger')}
-          className={`pb-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 flex items-center gap-1.5 ${
-            accountingTab === 'general_ledger' 
-              ? 'border-[#d4af37] text-white' 
-              : 'border-transparent text-slate-500 hover:text-slate-350'
-          }`}
+          className={`pb-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 flex items-center gap-1.5 ${accountingTab === 'general_ledger'
+            ? 'border-[#d4af37] text-white'
+            : 'border-transparent text-slate-500 hover:text-slate-350'
+            }`}
         >
           <Scale className="w-3.5 h-3.5 animate-pulse" />
           {isAr ? '⚖️ الدفتر اليومي والمقاصة' : 'Daily Double-Entry Ledger'}
         </button>
         <button
           onClick={() => setAccountingTab('courier_audit')}
-          className={`pb-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 flex items-center gap-1.5 ${
-            accountingTab === 'courier_audit' 
-              ? 'border-[#d4af37] text-white' 
-              : 'border-transparent text-slate-500 hover:text-slate-350'
-          }`}
+          className={`pb-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 flex items-center gap-1.5 ${accountingTab === 'courier_audit'
+            ? 'border-[#d4af37] text-white'
+            : 'border-transparent text-slate-500 hover:text-slate-350'
+            }`}
         >
           <Truck className="w-3.5 h-3.5" />
           {isAr ? '🔑 كاشف ومطابقة حسابات المناديب' : 'Courier Custody Statement'}
         </button>
         <button
           onClick={() => setAccountingTab('customer_audit')}
-          className={`pb-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 flex items-center gap-1.5 ${
-            accountingTab === 'customer_audit' 
-              ? 'border-[#d4af37] text-white' 
-              : 'border-transparent text-slate-500 hover:text-slate-350'
-          }`}
+          className={`pb-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 flex items-center gap-1.5 ${accountingTab === 'customer_audit'
+            ? 'border-[#d4af37] text-white'
+            : 'border-transparent text-slate-500 hover:text-slate-350'
+            }`}
         >
           <User className="w-3.5 h-3.5" />
           {isAr ? '👥 كشف حساب ومطابقات العملاء' : 'Customer Account Audits'}
         </button>
-        
+
         {/* Tab 4: Chart of Accounts */}
         <button
           onClick={() => setAccountingTab('chart_of_accounts')}
-          className={`pb-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 flex items-center gap-1.5 ${
-            accountingTab === 'chart_of_accounts' 
-              ? 'border-[#d4af37] text-white' 
-              : 'border-transparent text-slate-500 hover:text-slate-350'
-          }`}
+          className={`pb-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 flex items-center gap-1.5 ${accountingTab === 'chart_of_accounts'
+            ? 'border-[#d4af37] text-white'
+            : 'border-transparent text-slate-500 hover:text-slate-350'
+            }`}
         >
           <FolderTree className="w-3.5 h-3.5 text-[#d4af37]" />
           {isAr ? '🌳 الشجرة المحاسبية (COA)' : 'Chart of Accounts'}
         </button>
-        
+
         {/* Tab 5: Financial Accounts Dashboard */}
         <button
           onClick={() => setAccountingTab('financial_accounts')}
-          className={`pb-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 flex items-center gap-1.5 ${
-            accountingTab === 'financial_accounts' 
-              ? 'border-[#d4af37] text-white' 
-              : 'border-transparent text-slate-500 hover:text-slate-350'
-          }`}
+          className={`pb-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 flex items-center gap-1.5 ${accountingTab === 'financial_accounts'
+            ? 'border-[#d4af37] text-white'
+            : 'border-transparent text-slate-500 hover:text-slate-350'
+            }`}
         >
           <Wallet className="w-3.5 h-3.5 text-[#d4af37]" />
           {isAr ? '💳 إدارة الحسابات المالية' : 'Financial Accounts'}
@@ -1689,11 +1620,10 @@ Continue?`
         {/* Tab 6: Assets Management */}
         <button
           onClick={() => setAccountingTab('assets_management')}
-          className={`pb-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 flex items-center gap-1.5 ${
-            accountingTab === 'assets_management' 
-              ? 'border-[#d4af37] text-white' 
-              : 'border-transparent text-slate-500 hover:text-slate-350'
-          }`}
+          className={`pb-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 flex items-center gap-1.5 ${accountingTab === 'assets_management'
+            ? 'border-[#d4af37] text-white'
+            : 'border-transparent text-slate-500 hover:text-slate-350'
+            }`}
         >
           <Wrench className="w-3.5 h-3.5 text-[#d4af37]" />
           {isAr ? '📦 سجل الأصول والثابتة وصيانتها' : 'Assets & Maintenance Portfolio'}
@@ -1702,21 +1632,32 @@ Continue?`
         {/* Tab 7: Salary History & Employee Statements */}
         <button
           onClick={() => setAccountingTab('salary_history')}
-          className={`pb-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 flex items-center gap-1.5 ${
-            accountingTab === 'salary_history' 
-              ? 'border-[#d4af37] text-white' 
-              : 'border-transparent text-slate-500 hover:text-slate-350'
-          }`}
+          className={`pb-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 flex items-center gap-1.5 ${accountingTab === 'salary_history'
+            ? 'border-[#d4af37] text-white'
+            : 'border-transparent text-slate-500 hover:text-slate-350'
+            }`}
         >
           <Users className="w-3.5 h-3.5 text-[#d4af37]" />
           {isAr ? '💼 سجل الرواتب وكشف حساب الموظفين' : 'Salary History & Staff Statements'}
+        </button>
+
+        {/* Tab 8: Automatic Posting Rules Manager */}
+        <button
+          onClick={() => setAccountingTab('auto_voucher_rules')}
+          className={`pb-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 flex items-center gap-1.5 ${accountingTab === 'auto_voucher_rules'
+            ? 'border-[#d4af37] text-white'
+            : 'border-transparent text-slate-500 hover:text-slate-350'
+            }`}
+        >
+          <Activity className="w-3.5 h-3.5 text-[#d4af37]" />
+          {isAr ? '⚙️ تهيئة قيود الطلبات التلقائية' : 'Configure Auto Vouchers'}
         </button>
       </div>
 
       {/* RENDER TAB 1: GENERAL DOUBLE-ENTRY LEDGER */}
       {accountingTab === 'general_ledger' && (
         <div className="space-y-6">
-          
+
           {/* Advanced Multi-Filters Desk && Quick voucher adjustment trigger */}
           <div className="bg-[#121215] border border-slate-850 p-5 rounded-3xl space-y-4">
             <div className="flex flex-col lg:flex-row gap-4 justify-between items-start lg:items-center">
@@ -1724,7 +1665,7 @@ Continue?`
                 <h3 className="text-xs font-black text-white uppercase tracking-wider mb-1">{isAr ? 'مرشحات المراجعة المالية المتقدمة' : 'Advanced Accounting Audit Bench'}</h3>
                 <p className="text-[10px] text-slate-550 font-medium">{isAr ? 'قم بفلترة قيود الخزينة وميزان المراجعة تزامناً مع الدفاتر.' : 'Filter daily cash books and compute targeted balances live.'}</p>
               </div>
-              
+
               <div className="flex flex-wrap gap-2.5 w-full lg:w-auto">
                 {/* Export Link */}
                 <button
@@ -1756,7 +1697,7 @@ Continue?`
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 bg-black/20 p-4 rounded-2xl border border-slate-900">
-              
+
               {/* Type Filter */}
               <div>
                 <label className="block text-[9px] text-slate-500 font-extrabold uppercase mb-1">{isAr ? 'نوع القيد الدفتري' : 'Transaction Type'}</label>
@@ -1864,15 +1805,15 @@ Continue?`
 
           {/* Ledger Table Section */}
           <div className="bg-[#121215] border border-slate-850 rounded-2xl overflow-hidden shadow-xl" id="ledger-print-wrapper">
-            
+
             {/* PDF/Print Custom Header - Hidden in Standard view */}
             <div className="hidden print:block p-4 border-b border-black">
               <h2 className="text-sm font-bold">{isAr ? 'مراجع دفتر اليومية العام' : 'Consolidated General Ledger Feed'}</h2>
               <p className="text-xs">
                 {isAr ? `تصفية المرشحات: نوع القيد [${typeFilter}] العملة [${currencyFilter}] الفترة [${dateFilter}]`
-                      : `Filters applied: Module [${typeFilter}] Currency [${currencyFilter}] Range [${dateFilter}]`}
+                  : `Filters applied: Module [${typeFilter}] Currency [${currencyFilter}] Range [${dateFilter}]`}
               </p>
-              <br/>
+              <br />
             </div>
 
             <div className="overflow-x-auto">
@@ -1933,11 +1874,11 @@ Continue?`
                           <span className="text-[9px] text-slate-500 block font-normal">{e.notes}</span>
                         </td>
                         <td className="p-4 text-slate-350">
-                          <span 
+                          <span
                             onClick={() => {
                               if (e.entityId && (e.entityType === 'customer' || e.entityType === 'courier')) {
-                                window.dispatchEvent(new CustomEvent('open-entity-ledger', { 
-                                  detail: { entityId: e.entityId, entityType: e.entityType } 
+                                window.dispatchEvent(new CustomEvent('open-entity-ledger', {
+                                  detail: { entityId: e.entityId, entityType: e.entityType }
                                 }));
                               }
                             }}
@@ -2045,7 +1986,7 @@ Continue?`
 
           {courierAuditSheet ? (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" id="courier-print-wrapper">
-              
+
               {/* Liabilities profile & metrics */}
               <div className="bg-[#121215] border border-slate-850 p-5 rounded-3xl text-start shadow-md space-y-4 lg:col-span-1">
                 <div className="flex items-center gap-3 border-b border-slate-850 pb-3">
@@ -2064,7 +2005,7 @@ Continue?`
                     <span className="text-[10px] text-slate-500 uppercase block font-black">{isAr ? 'العهد المالية الإجمالية المستلمة' : 'Gross Custodies Issued'}</span>
                     <span className="text-base font-mono font-black text-white">{formatCurrencyWithYerEquiv(courierAuditSheet.totalCustodyIssued, courierAuditSheet.currency)}</span>
                   </div>
-                  
+
                   <div>
                     <span className="text-[10px] text-slate-500 uppercase block font-black">{isAr ? 'العهد المصفاة والمسلمة' : 'Reconciled & Settled'}</span>
                     <span className="text-base font-mono font-black text-emerald-450">{formatCurrencyWithYerEquiv(courierAuditSheet.totalCustodySettled, courierAuditSheet.currency)}</span>
@@ -2102,7 +2043,7 @@ Continue?`
                           {isAr ? 'توريد النقدية وتصفير تحصيلات الطرود' : 'Deposit COD Collections Cash'}
                         </button>
                       )}
-                      
+
                       <button
                         onClick={handleFullCourierReconciliation}
                         disabled={bulkReconciliationLoading}
@@ -2127,13 +2068,13 @@ Continue?`
 
               {/* Transactions list & cash holding table */}
               <div className="bg-[#121215] border border-slate-850 p-5 rounded-3xl text-start shadow-md lg:col-span-2 space-y-6">
-                
+
                 {/* 1. Custodies Ledger section */}
                 <div className="space-y-3">
                   <h3 className="text-xs font-black text-white uppercase tracking-wider border-b border-slate-850 pb-2">
                     {isAr ? 'أولاً: تفاصيل العهد التشغيلية المسلمة وتصفيتها' : 'I. Office Custody Slips & Reconciliations'}
                   </h3>
-                  
+
                   <div className="divide-y divide-slate-850 space-y-2.5 max-h-60 overflow-y-auto pr-1">
                     {courierAuditSheet.custodies.map((cust) => {
                       const isSettled = cust.status === 'Settled';
@@ -2148,7 +2089,7 @@ Continue?`
                               بواسطة: {cust.createdByName || 'المسؤول'} • {cust.createdAt?.toDate ? cust.createdAt.toDate().toLocaleDateString() : new Date(cust.createdAt || Date.now()).toLocaleDateString()}
                             </span>
                           </div>
-                          
+
                           <div className="text-right flex items-center gap-3">
                             <div>
                               <span className="text-[#d4af37] font-mono font-black block">{formatAmountWithEquiv(cust.amount || 0, cust.currency || 'YER')}</span>
@@ -2184,7 +2125,7 @@ Continue?`
                   <h3 className="text-xs font-black text-white uppercase tracking-wider pb-2 border-b border-slate-850">
                     {isAr ? 'ثانياً: المعاملات المالية والحركات المقيدة على الحساب' : 'II. Financial Transactions Sub-Ledger'}
                   </h3>
-                  
+
                   <div className="divide-y divide-slate-850 space-y-2 max-h-60 overflow-y-auto pr-1">
                     {courierTransactions.map((tx) => {
                       const isCredit = tx.type === 'Credit';
@@ -2199,7 +2140,7 @@ Continue?`
                               {tx.createdAt ? new Date(tx.createdAt).toLocaleDateString() : ''}
                             </span>
                           </div>
-                          
+
                           <div className="text-right">
                             <div className={`font-mono font-black ${isCredit ? 'text-emerald-400' : 'text-rose-500'}`}>
                               {isCredit ? '+' : '-'}{formatAmountWithEquiv(tx.amountOriginal || tx.amount || 0, tx.currencyOriginal || 'YER')}
@@ -2319,7 +2260,7 @@ Continue?`
 
           {customerLedgerDetails ? (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" id="customer-print-wrapper">
-              
+
               {/* Detailed Client ledger summary cards */}
               <div className="bg-[#121215] border border-slate-850 p-5 rounded-3xl text-start shadow-md space-y-4 lg:col-span-1">
                 <div className="flex items-center gap-3 border-b border-slate-850 pb-3">
@@ -2338,7 +2279,7 @@ Continue?`
                     <span className="text-[10px] text-slate-500 uppercase block font-black">{isAr ? 'إجمالي قيمة تعاملات الشحن المدين' : 'Gross Purchases / Cargo Debits'}</span>
                     <span className="text-base font-mono font-black text-white">{customerLedgerDetails.grossFreightValuation.toLocaleString()} YER</span>
                   </div>
-                  
+
                   <div>
                     <span className="text-[10px] text-slate-500 uppercase block font-black">{isAr ? 'المبالغ المسددة والمقيدة كداين' : 'Settle Paid Revenues'}</span>
                     <span className="text-base font-mono font-black text-emerald-400">{customerLedgerDetails.netPaidRevenues.toLocaleString()} YER</span>
@@ -2366,7 +2307,7 @@ Continue?`
                   <span>{isAr ? 'السجل التفصيلي لقيود حساب العميل' : 'Customer Account Timeline Sub-Ledger'}</span>
                   <span className="text-[10px] text-[#d4af37] font-mono">({customerLedgerDetails.accountingTimeline.length} entries)</span>
                 </h3>
-                
+
                 <div className="overflow-x-auto flex-1 max-h-96">
                   <table className="w-full text-start text-[11px]">
                     <thead className="bg-[#0b0b0e] text-slate-500 text-[9px] font-bold uppercase border-b border-slate-850">
@@ -2419,7 +2360,7 @@ Continue?`
             </div>
           ) : (
             <div className="p-16 text-center text-slate-500 font-black font-mono text-[10px] uppercase border border-dashed border-slate-850 rounded-3xl">
-              [ {isAr ? 'يرجى اختيار العميل من القائمة أعلاه لسحب ومطابقة كشوفات ذمته التفصيلية' : 'select_buyer_from_selector_to_render_standing_account' } ]
+              [ {isAr ? 'يرجى اختيار العميل من القائمة أعلاه لسحب ومطابقة كشوفات ذمته التفصيلية' : 'select_buyer_from_selector_to_render_standing_account'} ]
             </div>
           )}
         </div>
@@ -2435,8 +2376,8 @@ Continue?`
                   {isAr ? 'لوحة التحكم بالحسابات المالية' : 'Financial Accounts Dashboard'}
                 </h3>
                 <p className="text-[10px] text-slate-550 font-medium">
-                  {isAr 
-                    ? 'إدارة ومطابقة أرصدة حسابات العملاء، المناديب، والموظفين مباشرة مع التحويل الفوري للعملات.' 
+                  {isAr
+                    ? 'إدارة ومطابقة أرصدة حسابات العملاء، المناديب، والموظفين مباشرة مع التحويل الفوري للعملات.'
                     : 'Manage and reconcile balances for customers, couriers, and staff with real-time exchange rates.'}
                 </p>
               </div>
@@ -2452,7 +2393,8 @@ Continue?`
                       notes: ''
                     });
                     setTargetType('general');
-                    setSelectedAccountId('');
+                    setSourceAccountId('');
+                    setTargetAccountId('');
                     setIsAdjustmentModalOpen(true);
                   }}
                   className="flex items-center gap-1.5 bg-[#d4af37]/15 hover:bg-[#d4af37]/25 border border-[#d4af37]/35 text-[#d4af37] px-4 py-2 rounded-xl text-xs font-black transition-all"
@@ -2543,7 +2485,7 @@ Continue?`
                   {filteredAccountsList.map((acc) => {
                     const balanceInUSD = getDisplayEquivalent(acc.balance || 0, 'USD');
                     const balanceInSAR = getDisplayEquivalent(acc.balance || 0, 'SAR');
-                    
+
                     return (
                       <tr key={acc.id} className="hover:bg-slate-950/40 transition-colors">
                         <td className="p-4">
@@ -2552,11 +2494,11 @@ Continue?`
                           </span>
                         </td>
                         <td className="p-4 text-white text-xs font-black">
-                          <span 
+                          <span
                             onClick={() => {
                               if (acc.entityId && (acc.entityType === 'customer' || acc.entityType === 'courier')) {
-                                window.dispatchEvent(new CustomEvent('open-entity-ledger', { 
-                                  detail: { entityId: acc.entityId, entityType: acc.entityType } 
+                                window.dispatchEvent(new CustomEvent('open-entity-ledger', {
+                                  detail: { entityId: acc.entityId, entityType: acc.entityType }
                                 }));
                               }
                             }}
@@ -2570,12 +2512,11 @@ Continue?`
                           </span>
                         </td>
                         <td className="p-4">
-                          <span className={`text-[8px] uppercase font-black px-2 py-0.5 rounded ${
-                            acc.entityType === 'customer' ? 'bg-indigo-950/40 text-indigo-400 border border-indigo-900/20' :
+                          <span className={`text-[8px] uppercase font-black px-2 py-0.5 rounded ${acc.entityType === 'customer' ? 'bg-indigo-950/40 text-indigo-400 border border-indigo-900/20' :
                             acc.entityType === 'courier' ? 'bg-amber-950/40 text-amber-400 border border-amber-900/20' :
-                            'bg-[#d4af37]/10 text-[#d4af37] border border-[#d4af37]/10'
-                          }`}>
-                            {isAr 
+                              'bg-[#d4af37]/10 text-[#d4af37] border border-[#d4af37]/10'
+                            }`}>
+                            {isAr
                               ? (acc.entityType === 'customer' ? 'عميل' : acc.entityType === 'courier' ? 'مندوب' : 'موظف')
                               : acc.entityType
                             }
@@ -2593,9 +2534,8 @@ Continue?`
                         <td className="p-4 text-slate-400 font-mono">
                           {acc.currency}
                         </td>
-                        <td className={`p-4 font-mono font-black ${
-                          (acc.balance || 0) >= 0 ? 'text-emerald-400' : 'text-rose-500'
-                        }`}>
+                        <td className={`p-4 font-mono font-black ${(acc.balance || 0) >= 0 ? 'text-emerald-400' : 'text-rose-500'
+                          }`}>
                           {acc.currency === 'SAR' ? (
                             <div>
                               <span>SR {balanceInSAR.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
@@ -2625,14 +2565,15 @@ Continue?`
                                 notes: ''
                               });
                               setTargetType(acc.entityType);
-                              setSelectedAccountId(acc.id);
+                              setSourceAccountId('');
+                              setTargetAccountId(acc.id);
                               setIsAdjustmentModalOpen(true);
                             }}
                             className="bg-[#d4af37]/10 hover:bg-[#d4af37]/20 border border-[#d4af37]/25 text-[#d4af37] px-2 py-1 rounded-lg text-[10px] transition-all"
                           >
                             {isAr ? 'تسوية' : 'Reconcile'}
                           </button>
-                          
+
                           {acc.entityType === 'customer' && (
                             <button
                               onClick={() => {
@@ -2644,7 +2585,7 @@ Continue?`
                               {isAr ? 'كشف الحساب' : 'Statement'}
                             </button>
                           )}
-                          
+
                           {acc.entityType === 'courier' && (
                             <button
                               onClick={() => {
@@ -2751,7 +2692,8 @@ Continue?`
         return (
           <div className="space-y-6 pb-10">
             {/* Print CSS */}
-            <style dangerouslySetInnerHTML={{__html: `
+            <style dangerouslySetInnerHTML={{
+              __html: `
               @media print {
                 body * { visibility: hidden; }
                 #salary-print-modal, #salary-print-modal * { visibility: visible; }
@@ -2764,11 +2706,10 @@ Continue?`
             <div className="flex items-center gap-3 flex-wrap">
               <button
                 onClick={() => setEmployeeStatementId(null)}
-                className={`text-[11px] font-black uppercase tracking-wider px-4 py-2 rounded-xl border transition-all flex items-center gap-1.5 ${
-                  !employeeStatementId
-                    ? 'bg-[#d4af37]/15 border-[#d4af37]/40 text-[#d4af37]'
-                    : 'bg-black/30 border-slate-800 text-slate-400 hover:text-slate-200'
-                }`}
+                className={`text-[11px] font-black uppercase tracking-wider px-4 py-2 rounded-xl border transition-all flex items-center gap-1.5 ${!employeeStatementId
+                  ? 'bg-[#d4af37]/15 border-[#d4af37]/40 text-[#d4af37]'
+                  : 'bg-black/30 border-slate-800 text-slate-400 hover:text-slate-200'
+                  }`}
               >
                 <Receipt className="w-3.5 h-3.5" />
                 {isAr ? 'سجل الرواتب' : 'Salary History'}
@@ -2996,11 +2937,10 @@ Continue?`
                     <button
                       key={opt}
                       onClick={() => setEmpStmtDateFilter(opt)}
-                      className={`text-[11px] font-black px-3 py-1.5 rounded-lg border transition-all ${
-                        empStmtDateFilter === opt
-                          ? 'bg-[#d4af37]/15 border-[#d4af37]/40 text-[#d4af37]'
-                          : 'bg-black/30 border-slate-800 text-slate-500 hover:text-slate-300'
-                      }`}
+                      className={`text-[11px] font-black px-3 py-1.5 rounded-lg border transition-all ${empStmtDateFilter === opt
+                        ? 'bg-[#d4af37]/15 border-[#d4af37]/40 text-[#d4af37]'
+                        : 'bg-black/30 border-slate-800 text-slate-500 hover:text-slate-300'
+                        }`}
                     >
                       {opt === 'all' ? (isAr ? 'الكل' : 'All Time') : opt === '30days' ? (isAr ? 'آخر 30 يوم' : 'Last 30 Days') : (isAr ? 'نطاق مخصص' : 'Custom Range')}
                     </button>
@@ -3052,17 +2992,16 @@ Continue?`
                               </span>
                             </td>
                             <td className="p-4 text-start">
-                              <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg border ${
-                                tx.module === 'salary'
-                                  ? 'bg-purple-950/30 text-purple-400 border-purple-900/30'
-                                  : tx.module === 'order'
+                              <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg border ${tx.module === 'salary'
+                                ? 'bg-purple-950/30 text-purple-400 border-purple-900/30'
+                                : tx.module === 'order'
                                   ? 'bg-blue-950/30 text-blue-400 border-blue-900/30'
                                   : 'bg-slate-900 text-slate-500 border-slate-800'
-                              }`}>
+                                }`}>
                                 {tx.module === 'salary' ? (isAr ? 'راتب' : 'Salary') :
-                                 tx.module === 'order' ? (isAr ? 'طلب' : 'Order') :
-                                 tx.module === 'expenses' ? (isAr ? 'مصروف' : 'Expense') :
-                                 tx.module || '—'}
+                                  tx.module === 'order' ? (isAr ? 'طلب' : 'Order') :
+                                    tx.module === 'expenses' ? (isAr ? 'مصروف' : 'Expense') :
+                                      tx.module || '—'}
                               </span>
                             </td>
                             <td className="p-4 text-center font-mono font-black text-emerald-400">
@@ -3111,72 +3050,76 @@ Continue?`
         );
       })()}
 
-            {/* ════════════ SALARY SLIP VOUCHER MODAL ════════════ */}
-            {selectedSalaryVoucher && (
-              <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 no-print">
-                <div className="bg-[#0c0c0f] border border-[#d4af37]/25 rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden flex flex-col font-sans" id="salary-print-modal">
-                  <div className="bg-black/40 p-5 border-b border-slate-850 flex justify-between items-center shrink-0 no-print">
-                    <h3 className="font-black text-white text-xs uppercase tracking-widest flex items-center gap-2">
-                      <Receipt className="w-4 h-4 text-[#d4af37]" />
-                      {isAr ? 'سند صرف راتب شهري رسمي' : 'Official Salary Slip Voucher'}
-                    </h3>
-                    <button onClick={() => setSelectedSalaryVoucher(null)} className="text-slate-500 hover:text-white p-1 bg-slate-900 border border-slate-800 rounded-lg">
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <div className="p-8 space-y-6 text-start flex-1 overflow-y-auto bg-white text-black font-sans leading-relaxed select-all">
-                    <div className="text-center pb-6 border-b border-slate-300">
-                      <h2 className="text-lg font-black tracking-wider text-slate-800">{settings.systemName || settings.companyName || 'alx'}</h2>
-                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">{isAr ? 'سند صرف رواتب الموظفين' : 'Salary Payout Receipt'}</p>
-                      <p className="text-[9px] font-mono text-slate-400 mt-0.5">{selectedSalaryVoucher.voucherCode}</p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4 text-xs">
-                      <div>
-                        <span className="text-slate-500 block text-[9px] uppercase font-bold">{isAr ? 'الموظف المستلم' : 'Staff Member'}</span>
-                        <span className="font-extrabold text-slate-800 text-sm mt-0.5 block">{selectedSalaryVoucher.employeeName}</span>
-                        <span className="text-[10px] font-mono text-slate-600 block mt-0.5">{isAr ? 'حساب: ' : 'A/C: '}{selectedSalaryVoucher.accountCode}</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-slate-500 block text-[9px] uppercase font-bold">{isAr ? 'تاريخ الصرف' : 'Payment Date'}</span>
-                        <span className="font-bold text-slate-700 mt-0.5 block font-mono">
-                          {new Date(selectedSalaryVoucher.paidAt || selectedSalaryVoucher.createdAt).toLocaleString(isAr ? 'ar-YE' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="bg-slate-100 border border-slate-200 rounded-xl p-4 space-y-2.5">
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="text-slate-500 font-bold">{isAr ? 'الشهر المستحق' : 'Salary Period'}</span>
-                        <span className="font-mono font-black text-slate-800 bg-slate-200 px-2 py-0.5 rounded">{selectedSalaryVoucher.salaryMonth}</span>
-                      </div>
-                      <div className="border-t border-slate-200/80 my-2 pt-2 flex justify-between items-center text-sm font-black">
-                        <span className="text-slate-800">{isAr ? 'المبلغ الصافي المصروف' : 'Net Amount Disbursed'}</span>
-                        <span className="font-mono text-lg text-emerald-600">{(selectedSalaryVoucher.amount || 0).toLocaleString()} {selectedSalaryVoucher.currency || settings.currency}</span>
-                      </div>
-                    </div>
-                    <div className="text-xs">
-                      <span className="text-slate-500 block text-[9px] uppercase font-bold mb-1">{isAr ? 'البيان' : 'Narrative'}</span>
-                      <p className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 italic font-bold">
-                        {selectedSalaryVoucher.notes || (isAr ? `صرف راتب شهر ${selectedSalaryVoucher.salaryMonth}` : `Salary paid for ${selectedSalaryVoucher.salaryMonth}`)}
-                      </p>
-                    </div>
-                    <div className="grid grid-cols-3 gap-4 text-center pt-8 border-t border-slate-200/80 text-[10px] font-bold text-slate-600">
-                      <div className="space-y-8"><span>{isAr ? 'توقيع أمين الصندوق' : 'Cashier'}</span><div className="border-b border-slate-300 w-3/4 mx-auto"></div></div>
-                      <div className="space-y-8"><span>{isAr ? 'توقيع المحاسب' : 'Accountant'}</span><div className="border-b border-slate-300 w-3/4 mx-auto"></div></div>
-                      <div className="space-y-8"><span>{isAr ? 'توقيع المستلم' : 'Recipient'}</span><div className="border-b border-slate-300 w-3/4 mx-auto"></div></div>
-                    </div>
-                  </div>
-                  <div className="p-4 bg-black/40 border-t border-slate-850 flex justify-end gap-3 shrink-0 no-print">
-                    <button type="button" onClick={() => setSelectedSalaryVoucher(null)} className="px-5 py-2.5 text-slate-400 font-bold hover:bg-slate-850/40 rounded-xl transition">
-                      {isAr ? 'إغلاق' : 'Close'}
-                    </button>
-                    <button onClick={() => window.print()} className="px-6 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl shadow-lg transition flex items-center gap-1.5">
-                      <Printer className="w-4 h-4" /> {isAr ? 'طباعة السند' : 'Print Voucher'}
-                    </button>
-                  </div>
+      {accountingTab === 'auto_voucher_rules' && (
+        <AutoVoucherRulesManager isAr={isAr} settings={settings} />
+      )}
+
+      {/* ════════════ SALARY SLIP VOUCHER MODAL ════════════ */}
+      {selectedSalaryVoucher && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 no-print">
+          <div className="bg-[#0c0c0f] border border-[#d4af37]/25 rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden flex flex-col font-sans" id="salary-print-modal">
+            <div className="bg-black/40 p-5 border-b border-slate-850 flex justify-between items-center shrink-0 no-print">
+              <h3 className="font-black text-white text-xs uppercase tracking-widest flex items-center gap-2">
+                <Receipt className="w-4 h-4 text-[#d4af37]" />
+                {isAr ? 'سند صرف راتب شهري رسمي' : 'Official Salary Slip Voucher'}
+              </h3>
+              <button onClick={() => setSelectedSalaryVoucher(null)} className="text-slate-500 hover:text-white p-1 bg-slate-900 border border-slate-800 rounded-lg">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-8 space-y-6 text-start flex-1 overflow-y-auto bg-white text-black font-sans leading-relaxed select-all">
+              <div className="text-center pb-6 border-b border-slate-300">
+                <h2 className="text-lg font-black tracking-wider text-slate-800">{settings.systemName || settings.companyName || 'alx'}</h2>
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">{isAr ? 'سند صرف رواتب الموظفين' : 'Salary Payout Receipt'}</p>
+                <p className="text-[9px] font-mono text-slate-400 mt-0.5">{selectedSalaryVoucher.voucherCode}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-4 text-xs">
+                <div>
+                  <span className="text-slate-500 block text-[9px] uppercase font-bold">{isAr ? 'الموظف المستلم' : 'Staff Member'}</span>
+                  <span className="font-extrabold text-slate-800 text-sm mt-0.5 block">{selectedSalaryVoucher.employeeName}</span>
+                  <span className="text-[10px] font-mono text-slate-600 block mt-0.5">{isAr ? 'حساب: ' : 'A/C: '}{selectedSalaryVoucher.accountCode}</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-slate-500 block text-[9px] uppercase font-bold">{isAr ? 'تاريخ الصرف' : 'Payment Date'}</span>
+                  <span className="font-bold text-slate-700 mt-0.5 block font-mono">
+                    {new Date(selectedSalaryVoucher.paidAt || selectedSalaryVoucher.createdAt).toLocaleString(isAr ? 'ar-YE' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </span>
                 </div>
               </div>
-            )}
-                           {/* MODAL 1: PRECISE MANUAL JOURNAL ENTRY ADJUSTMENT ADJUSTMENT */}
+              <div className="bg-slate-100 border border-slate-200 rounded-xl p-4 space-y-2.5">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-slate-500 font-bold">{isAr ? 'الشهر المستحق' : 'Salary Period'}</span>
+                  <span className="font-mono font-black text-slate-800 bg-slate-200 px-2 py-0.5 rounded">{selectedSalaryVoucher.salaryMonth}</span>
+                </div>
+                <div className="border-t border-slate-200/80 my-2 pt-2 flex justify-between items-center text-sm font-black">
+                  <span className="text-slate-800">{isAr ? 'المبلغ الصافي المصروف' : 'Net Amount Disbursed'}</span>
+                  <span className="font-mono text-lg text-emerald-600">{(selectedSalaryVoucher.amount || 0).toLocaleString()} {selectedSalaryVoucher.currency || settings.currency}</span>
+                </div>
+              </div>
+              <div className="text-xs">
+                <span className="text-slate-500 block text-[9px] uppercase font-bold mb-1">{isAr ? 'البيان' : 'Narrative'}</span>
+                <p className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 italic font-bold">
+                  {selectedSalaryVoucher.notes || (isAr ? `صرف راتب شهر ${selectedSalaryVoucher.salaryMonth}` : `Salary paid for ${selectedSalaryVoucher.salaryMonth}`)}
+                </p>
+              </div>
+              <div className="grid grid-cols-3 gap-4 text-center pt-8 border-t border-slate-200/80 text-[10px] font-bold text-slate-600">
+                <div className="space-y-8"><span>{isAr ? 'توقيع أمين الصندوق' : 'Cashier'}</span><div className="border-b border-slate-300 w-3/4 mx-auto"></div></div>
+                <div className="space-y-8"><span>{isAr ? 'توقيع المحاسب' : 'Accountant'}</span><div className="border-b border-slate-300 w-3/4 mx-auto"></div></div>
+                <div className="space-y-8"><span>{isAr ? 'توقيع المستلم' : 'Recipient'}</span><div className="border-b border-slate-300 w-3/4 mx-auto"></div></div>
+              </div>
+            </div>
+            <div className="p-4 bg-black/40 border-t border-slate-850 flex justify-end gap-3 shrink-0 no-print">
+              <button type="button" onClick={() => setSelectedSalaryVoucher(null)} className="px-5 py-2.5 text-slate-400 font-bold hover:bg-slate-850/40 rounded-xl transition">
+                {isAr ? 'إغلاق' : 'Close'}
+              </button>
+              <button onClick={() => window.print()} className="px-6 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl shadow-lg transition flex items-center gap-1.5">
+                <Printer className="w-4 h-4" /> {isAr ? 'طباعة السند' : 'Print Voucher'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* MODAL 1: PRECISE MANUAL JOURNAL ENTRY ADJUSTMENT ADJUSTMENT */}
       {isAdjustmentModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 text-start">
           <form onSubmit={handleAddAdjustment} className="bg-[#121215] border border-slate-850 w-full max-w-md rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] font-sans">
@@ -3190,7 +3133,7 @@ Continue?`
                   {isAr ? 'لتسوية أرصدة العملات أو عوائد غير تشغيلية.' : 'Manually adjust cash balance for capital assets or currency offsets.'}
                 </p>
               </div>
-              <button 
+              <button
                 type="button"
                 onClick={() => setIsAdjustmentModalOpen(false)}
                 className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-500 hover:text-white transition-colors"
@@ -3200,80 +3143,147 @@ Continue?`
             </div>
 
             <div className="p-6 space-y-4 overflow-y-auto flex-1">
-              {/* Type Select */}
-              <div>
-                <label className="block text-[9.5px] font-black text-slate-500 mb-1 uppercase">{isAr ? 'اتجاه حركة النقدية' : 'Accounting safe action'}</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setAdjustData(prev => ({ ...prev, type: 'Debit' }))}
-                    className={`py-2 px-3 rounded-xl text-xs font-black border transition-all ${
-                      adjustData.type === 'Debit'
-                        ? 'bg-emerald-500/15 border-emerald-500/25 text-emerald-400'
-                        : 'bg-black/20 border-slate-850 text-slate-400'
-                    }`}
-                  >
-                    {isAr ? 'وارد / مدين (+)' : 'Receipt (Debit Inflow +)'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAdjustData(prev => ({ ...prev, type: 'Credit' }))}
-                    className={`py-2 px-3 rounded-xl text-xs font-black border transition-all ${
-                      adjustData.type === 'Credit'
-                        ? 'bg-rose-500/15 border-rose-500/25 text-rose-452 text-rose-400'
-                        : 'bg-black/20 border-slate-850 text-slate-400'
-                    }`}
-                  >
-                    {isAr ? 'صادر / دائن (-)' : 'Payment (Credit Outflow -)'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Target Chart of Account */}
+              {/* SOURCE/CREDIT ACCOUNT SELECTOR */}
               <div className="relative">
-                <label className="block text-[9.5px] font-black text-slate-500 mb-1 uppercase">
-                  {isAr ? 'اختر الحساب المستهدف للتسوية' : 'Select Target Financial Account'}
+                <label className="block text-[9.5px] font-black text-rose-400 mb-1.5 uppercase">
+                  {isAr ? 'حساب المصدر (الدائن)  *' : 'Source Account (Credit - From) *'}
                 </label>
-                
+
                 {/* Account Selection Trigger */}
-                <div 
-                  onClick={() => setIsAccountDropdownOpen(!isAccountDropdownOpen)}
+                <div
+                  onClick={() => setIsSourceDropdownOpen(!isSourceDropdownOpen)}
                   className="w-full bg-black/40 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer flex justify-between items-center"
                 >
                   <span className="truncate">
-                    {selectedAccountId ? (
+                    {sourceAccountId ? (
                       (() => {
-                        const acc = financialAccounts.find(a => a.id === selectedAccountId);
-                        if (!acc) return isAr ? '-- اختر حساب التوجيه المحاسبي --' : '-- Choose Ledger Account --';
+                        const acc = financialAccounts.find(a => a.id === sourceAccountId);
+                        if (!acc) return isAr ? '-- اختر حساب المصدر (الدائن) --' : '-- Choose Source Account --';
                         return `[${acc.code || acc.accountCode || 'Sys'}] - ${isAr ? acc.nameAr || acc.entityName : acc.nameEn || acc.entityName} ${acc.balance !== undefined ? `(${acc.balance.toLocaleString()} YER)` : ''}`;
                       })()
                     ) : (
-                      <span className="text-slate-500">{isAr ? '-- اختر حساب التوجيه المحاسبي --' : '-- Choose Ledger Account --'}</span>
+                      <span className="text-slate-500">{isAr ? '-- اختر حساب المصدر (الدائن) --' : '-- Choose Source Account --'}</span>
                     )}
                   </span>
-                  <svg className={`w-4 h-4 text-slate-500 transition-transform ${isAccountDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                  <svg className={`w-4 h-4 text-slate-500 transition-transform ${isSourceDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                 </div>
-                
+
                 {/* Custom Dropdown Content */}
-                {isAccountDropdownOpen && (
+                {isSourceDropdownOpen && (
+                  <div className="absolute z-55 mt-2 w-full bg-[#121215] border border-slate-850 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-64">
+                    {/* Account Search Input */}
+                    <div className="p-2 border-b border-slate-850 bg-black/40 sticky top-0">
+                      <input
+                        type="text"
+                        placeholder={isAr ? "🔎 ابحث بالاسم أو الكود..." : "🔎 Search by name or code..."}
+                        value={sourceSearchQuery}
+                        onChange={(e) => setSourceSearchQuery(e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-full bg-black/50 border border-slate-800 text-white rounded-lg p-2 outline-none text-xs font-bold focus:border-[#d4af37]/50"
+                        autoFocus
+                      />
+                    </div>
+
+                    <div className="overflow-y-auto p-1 custom-scrollbar">
+                      {(() => {
+                        const filteredAccounts = financialAccounts.filter(acc => {
+                          const q = sourceSearchQuery.toLowerCase().trim();
+                          if (!q) return true;
+                          return (
+                            (acc.accountCode && acc.accountCode.toLowerCase().includes(q)) ||
+                            (acc.code && acc.code.toLowerCase().includes(q)) ||
+                            (acc.nameAr && acc.nameAr.toLowerCase().includes(q)) ||
+                            (acc.nameEn && acc.nameEn.toLowerCase().includes(q)) ||
+                            (acc.entityName && acc.entityName.toLowerCase().includes(q))
+                          );
+                        });
+
+                        const grouped: Record<string, any[]> = {};
+                        filteredAccounts.forEach(acc => {
+                          const type = acc.type || 'Other';
+                          const entityType = acc.entityType || 'system';
+                          let groupKey = type;
+                          if (entityType === 'customer') groupKey = isAr ? 'العملاء (Customer)' : 'Customer';
+                          else if (entityType === 'courier') groupKey = isAr ? 'المناديب (Courier)' : 'Courier';
+                          else if (entityType === 'employee') groupKey = isAr ? 'الموظفين (Employee)' : 'Employee';
+                          if (!grouped[groupKey]) grouped[groupKey] = [];
+                          grouped[groupKey].push(acc);
+                        });
+
+                        return Object.entries(grouped).map(([type, accs]) => (
+                          <div key={type} className="mb-2">
+                            <span className="text-[10px] font-black text-slate-400 px-2 py-1 uppercase">{type}</span>
+                            {accs.map(a => (
+                              <div
+                                key={a.id}
+                                onClick={() => {
+                                  setSourceAccountId(a.id);
+                                  setIsSourceDropdownOpen(false);
+                                  setSourceSearchQuery('');
+                                }}
+                                className={`px-2 py-1.5 hover:bg-white/5 cursor-pointer rounded-lg flex justify-between items-center ${sourceAccountId === a.id ? 'bg-[#d4af37]/15 text-[#d4af37]' : ''}`}
+                              >
+                                <div className="flex flex-col">
+                                  <span className="text-xs font-bold text-slate-200">
+                                    {isAr ? a.nameAr || a.entityName : a.nameEn || a.entityName}
+                                  </span>
+                                  <span className="font-mono text-[9px] text-slate-500">{a.accountCode || a.code || 'Sys'}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* TARGET/DEBIT ACCOUNT SELECTOR */}
+              <div className="relative">
+                <label className="block text-[9.5px] font-black text-emerald-400 mb-1.5 uppercase">
+                  {isAr ? 'الحساب المستهدف (المدين) *' : 'Target Account (Debit - To) *'}
+                </label>
+
+                {/* Account Selection Trigger */}
+                <div
+                  onClick={() => setIsTargetDropdownOpen(!isTargetDropdownOpen)}
+                  className="w-full bg-black/40 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer flex justify-between items-center"
+                >
+                  <span className="truncate">
+                    {targetAccountId ? (
+                      (() => {
+                        const acc = financialAccounts.find(a => a.id === targetAccountId);
+                        if (!acc) return isAr ? '-- اختر الحساب المستهدف --' : '-- Choose Target Account --';
+                        return `[${acc.code || acc.accountCode || 'Sys'}] - ${isAr ? acc.nameAr || acc.entityName : acc.nameEn || acc.entityName} ${acc.balance !== undefined ? `(${acc.balance.toLocaleString()} YER)` : ''}`;
+                      })()
+                    ) : (
+                      <span className="text-slate-500">{isAr ? '-- اختر الحساب المستهدف (المدين) --' : '-- Choose Target Account --'}</span>
+                    )}
+                  </span>
+                  <svg className={`w-4 h-4 text-slate-500 transition-transform ${isTargetDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                </div>
+
+                {/* Custom Dropdown Content */}
+                {isTargetDropdownOpen && (
                   <div className="absolute z-50 mt-2 w-full bg-[#121215] border border-slate-850 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-64">
                     {/* Account Search Input */}
                     <div className="p-2 border-b border-slate-850 bg-black/40 sticky top-0">
                       <input
                         type="text"
                         placeholder={isAr ? "🔎 ابحث بالاسم أو الكود..." : "🔎 Search by name or code..."}
-                        value={accountSearchQuery}
-                        onChange={(e) => setAccountSearchQuery(e.target.value)}
+                        value={targetSearchQuery}
+                        onChange={(e) => setTargetSearchQuery(e.target.value)}
                         onClick={(e) => e.stopPropagation()}
                         className="w-full bg-black/50 border border-slate-800 text-white rounded-lg p-2 outline-none text-xs font-bold focus:border-[#d4af37]/50"
                         autoFocus
                       />
                     </div>
-                    
+
                     <div className="overflow-y-auto p-1 custom-scrollbar">
                       {(() => {
                         const filteredAccounts = financialAccounts.filter(acc => {
-                          const q = accountSearchQuery.toLowerCase().trim();
+                          const q = targetSearchQuery.toLowerCase().trim();
                           if (!q) return true;
                           return (
                             (acc.accountCode && acc.accountCode.toLowerCase().includes(q)) ||
@@ -3295,123 +3305,123 @@ Continue?`
                           if (!grouped[groupKey]) grouped[groupKey] = [];
                           grouped[groupKey].push(acc);
                         });
-                        
+
                         if (Object.keys(grouped).length === 0) {
                           return <div className="p-4 text-center text-slate-500 text-xs font-bold">{isAr ? 'لا توجد نتائج' : 'No results found'}</div>;
                         }
 
                         return Object.entries(grouped).map(([type, accs]) => {
-                           let iconColor = 'text-slate-400 font-black';
-                           let iconSvg = <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" /></svg>;
-                           
-                           if (type.includes('Asset')) {
-                              iconColor = 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20';
-                              iconSvg = <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>;
-                           } else if (type.includes('Liability')) {
-                              iconColor = 'text-rose-400 bg-rose-500/10 border border-rose-500/20';
-                              iconSvg = <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
-                           } else if (type.includes('Equity')) {
-                              iconColor = 'text-purple-400 bg-purple-500/10 border border-purple-500/20';
-                              iconSvg = <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" /></svg>;
-                           } else if (type.includes('Revenue')) {
-                              iconColor = 'text-blue-400 bg-blue-500/10 border border-blue-500/20';
-                              iconSvg = <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>;
-                           } else if (type.includes('Expense')) {
-                              iconColor = 'text-orange-400 bg-orange-500/10 border border-orange-500/20';
-                              iconSvg = <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0v-8m0 8l-8-8-4 4-6-6" /></svg>;
-                           }
+                          let iconColor = 'text-slate-400 font-black';
+                          let iconSvg = <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" /></svg>;
 
-                           let label = type === 'Asset' ? (isAr ? 'أصول (Asset)' : 'Asset') :
-                                       type === 'Liability' ? (isAr ? 'خصوم (Liability)' : 'Liability') :
-                                       type === 'Equity' ? (isAr ? 'حقوق ملكية (Equity)' : 'Equity') :
-                                       type === 'Revenue' ? (isAr ? 'إيرادات (Revenue)' : 'Revenue') :
-                                       type === 'Expense' ? (isAr ? 'مصروفات (Expense)' : 'Expense') : type;
-                           
-                           return (
-                             <div key={type} className="mb-2">
-                               <div className="px-2 py-1.5 flex items-center gap-1.5">
-                                 <div className={`p-1 rounded-md ${iconColor}`}>
-                                   {iconSvg}
-                                 </div>
-                                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">{label}</span>
-                               </div>
-                               {accs.sort((a,b) => (a.code || a.accountCode || '').localeCompare(b.code || b.accountCode || '')).map(a => (
-                                 <div 
-                                   key={a.id} 
-                                   onClick={() => {
-                                      setSelectedAccountId(a.id);
-                                      setTargetType(a.entityType || 'system');
-                                      setAdjustData(prev => ({
-                                        ...prev,
-                                        recipientName: a.nameAr || a.entityName || ''
-                                      }));
-                                      setIsAccountDropdownOpen(false);
-                                      setAccountSearchQuery('');
-                                   }}
-                                   className={`px-3 py-2.5 mx-1 mb-0.5 mt-0 hover:bg-white/5 cursor-pointer rounded-lg flex justify-between items-center transition-colors ${selectedAccountId === a.id ? 'bg-[#d4af37]/10 border border-[#d4af37]/30' : ''}`}
-                                 >
-                                   <div className="flex flex-col gap-0.5">
-                                     <span className={`text-xs font-bold ${selectedAccountId === a.id ? 'text-[#d4af37]' : 'text-slate-200'}`}>
-                                       {isAr ? a.nameAr || a.entityName : a.nameEn || a.entityName}
-                                     </span>
-                                     <span className="font-mono text-[9px] text-slate-500">{a.code || a.accountCode || 'Sys'}</span>
-                                   </div>
-                                   {a.balance !== undefined && (
-                                     <span className="font-mono text-[10px] font-black tracking-tighter text-slate-400 bg-black/40 px-1.5 py-0.5 rounded border border-slate-800">
-                                       {a.balance.toLocaleString()}
-                                     </span>
-                                   )}
-                                 </div>
-                               ))}
-                             </div>
-                           );
+                          if (type.includes('Asset')) {
+                            iconColor = 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20';
+                            iconSvg = <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>;
+                          } else if (type.includes('Liability')) {
+                            iconColor = 'text-rose-400 bg-rose-500/10 border border-rose-500/20';
+                            iconSvg = <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
+                          } else if (type.includes('Equity')) {
+                            iconColor = 'text-purple-400 bg-purple-500/10 border border-purple-500/20';
+                            iconSvg = <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" /></svg>;
+                          } else if (type.includes('Revenue')) {
+                            iconColor = 'text-blue-400 bg-blue-500/10 border border-blue-500/20';
+                            iconSvg = <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>;
+                          } else if (type.includes('Expense')) {
+                            iconColor = 'text-orange-400 bg-orange-500/10 border border-orange-500/20';
+                            iconSvg = <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0v-8m0 8l-8-8-4 4-6-6" /></svg>;
+                          }
+
+                          let label = type === 'Asset' ? (isAr ? 'أصول (Asset)' : 'Asset') :
+                            type === 'Liability' ? (isAr ? 'خصوم (Liability)' : 'Liability') :
+                              type === 'Equity' ? (isAr ? 'حقوق ملكية (Equity)' : 'Equity') :
+                                type === 'Revenue' ? (isAr ? 'إيرادات (Revenue)' : 'Revenue') :
+                                  type === 'Expense' ? (isAr ? 'مصروفات (Expense)' : 'Expense') : type;
+
+                          return (
+                            <div key={type} className="mb-2">
+                              <div className="px-2 py-1.5 flex items-center gap-1.5">
+                                <div className={`p-1 rounded-md ${iconColor}`}>
+                                  {iconSvg}
+                                </div>
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">{label}</span>
+                              </div>
+                              {accs.sort((a, b) => (a.code || a.accountCode || '').localeCompare(b.code || b.accountCode || '')).map(a => (
+                                <div
+                                  key={a.id}
+                                  onClick={() => {
+                                    setTargetAccountId(a.id);
+                                    setTargetType(a.entityType || 'system');
+                                    setAdjustData(prev => ({
+                                      ...prev,
+                                      recipientName: a.nameAr || a.entityName || ''
+                                    }));
+                                    setIsTargetDropdownOpen(false);
+                                    setTargetSearchQuery('');
+                                  }}
+                                  className={`px-3 py-2.5 mx-1 mb-0.5 mt-0 hover:bg-white/5 cursor-pointer rounded-lg flex justify-between items-center transition-colors ${targetAccountId === a.id ? 'bg-[#d4af37]/10 border border-[#d4af37]/30' : ''}`}
+                                >
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className={`text-xs font-bold ${targetAccountId === a.id ? 'text-[#d4af37]' : 'text-slate-200'}`}>
+                                      {isAr ? a.nameAr || a.entityName : a.nameEn || a.entityName}
+                                    </span>
+                                    <span className="font-mono text-[9px] text-slate-500">{a.code || a.accountCode || 'Sys'}</span>
+                                  </div>
+                                  {a.balance !== undefined && (
+                                    <span className="font-mono text-[10px] font-black tracking-tighter text-slate-400 bg-black/40 px-1.5 py-0.5 rounded border border-slate-800">
+                                      {a.balance.toLocaleString()}
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          );
                         });
                       })()}
                     </div>
                   </div>
                 )}
-                
-                {selectedAccountId && (
+
+                {targetAccountId && (
                   <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
                     {(() => {
-                        const targetAcc = financialAccounts.find(a => a.id === selectedAccountId);
-                        const adjustAmt = parseFloat(adjustData.amount) || 0;
-                        if (targetAcc && typeof targetAcc.balance === 'number') {
-                           // If it's a Credit adjustment out of an Asset, balance reduces
-                           // If we add this logic, maybe simple alert:
-                           let willBeNegative = false;
-                           if (adjustData.type === 'Credit' && targetAcc.balance - adjustAmt < 0 && adjustAmt > 0) {
-                              willBeNegative = true;
-                           } else if (adjustData.type === 'Debit' && targetAcc.balance + adjustAmt < 0 && adjustAmt < 0) {
-                              willBeNegative = true; 
-                           }
-                           
-                           if (willBeNegative) {
-                              return (
-                                <div className="w-full mt-1.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[10px] p-2 rounded-lg flex items-start gap-1.5 animate-pulse">
-                                  <svg className="w-3.5 h-3.5 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                                  <span>{isAr ? 'تنبيه: هذا القيد سيؤدي لتجاوز الرصيد الحالي للحساب وسيصبح بالسالب أو يخل بالميزانية.' : 'Alert: This entry will exceed the current balance or budget, causing it to go negative.'}</span>
-                                </div>
-                              );
-                           }
+                      const targetAcc = financialAccounts.find(a => a.id === targetAccountId);
+                      const adjustAmt = parseFloat(adjustData.amount) || 0;
+                      if (targetAcc && typeof targetAcc.balance === 'number') {
+                        // If it's a Credit adjustment out of an Asset, balance reduces
+                        // If we add this logic, maybe simple alert:
+                        let willBeNegative = false;
+                        if (adjustData.type === 'Credit' && targetAcc.balance - adjustAmt < 0 && adjustAmt > 0) {
+                          willBeNegative = true;
+                        } else if (adjustData.type === 'Debit' && targetAcc.balance + adjustAmt < 0 && adjustAmt < 0) {
+                          willBeNegative = true;
                         }
-                        return null;
+
+                        if (willBeNegative) {
+                          return (
+                            <div className="w-full mt-1.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[10px] p-2 rounded-lg flex items-start gap-1.5 animate-pulse">
+                              <svg className="w-3.5 h-3.5 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                              <span>{isAr ? 'تنبيه: هذا القيد سيؤدي لتجاوز الرصيد الحالي للحساب وسيصبح بالسالب أو يخل بالميزانية.' : 'Alert: This entry will exceed the current balance or budget, causing it to go negative.'}</span>
+                            </div>
+                          );
+                        }
+                      }
+                      return null;
                     })()}
                   </div>
                 )}
               </div>
 
               {/* If targetType is employee, show option for Salary Payment */}
-              {targetType === 'employee' && selectedAccountId && (
+              {targetType === 'employee' && targetAccountId && (
                 <div className="bg-black/30 border border-slate-850 rounded-xl p-3 space-y-3">
                   <label className="flex items-center gap-2 cursor-pointer">
-                    <input 
+                    <input
                       type="checkbox"
                       checked={isSalaryPayment}
                       onChange={e => {
                         const checked = e.target.checked;
                         setIsSalaryPayment(checked);
-                        const acc = financialAccounts.find(a => a.id === selectedAccountId);
+                        const acc = financialAccounts.find(a => a.id === targetAccountId);
                         if (checked && acc && acc.monthlySalary) {
                           setAdjustData(prev => ({ ...prev, amount: String(acc.monthlySalary) }));
                         }
@@ -3422,11 +3432,11 @@ Continue?`
                       {isAr ? 'صرف كراتب شهري رسمي' : 'File as Official Monthly Salary'}
                     </span>
                   </label>
-                  
+
                   {isSalaryPayment && (
                     <div className="animate-fade-in">
                       <label className="block text-[9px] font-black text-slate-500 mb-1.5 uppercase">{isAr ? 'الشهر المستحق للراتب *' : 'Salary Month *'}</label>
-                      <input 
+                      <input
                         type="month"
                         required
                         value={adjustSalaryMonth}
@@ -3527,7 +3537,7 @@ Continue?`
       {isPayModalOpen && customerLedgerDetails && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 text-start">
           <div className="bg-[#121215] border border-slate-850 w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl relative animate-fade-in">
-            <button 
+            <button
               onClick={() => setIsPayModalOpen(false)}
               className="absolute top-4 right-4 p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-500 hover:text-white transition-all pointer-events-auto cursor-pointer"
             >
@@ -3545,7 +3555,7 @@ Continue?`
             </div>
 
             <form onSubmit={handleCustomerFIFOPayment} className="p-6 space-y-4">
-              
+
               {/* Debt Warning Box */}
               <div className="bg-[#d4af37]/5 border border-[#d4af37]/15 p-3.5 rounded-2xl flex justify-between items-center text-xs">
                 <div>
@@ -3612,7 +3622,7 @@ Continue?`
       {selectedLedgerEntry && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 text-start font-sans">
           <div className="bg-[#121215] border border-slate-850 w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
-            
+
             {/* Header */}
             <div className="p-5 border-b border-slate-850 flex justify-between items-center bg-[#07070a]/40 shrink-0">
               <div>
@@ -3624,7 +3634,7 @@ Continue?`
                   {isAr ? `رمز المستند المالي المرجعي: ${selectedLedgerEntry.refNumber}` : `Voucher Ref Node: ${selectedLedgerEntry.refNumber}`}
                 </p>
               </div>
-              <button 
+              <button
                 type="button"
                 onClick={() => setSelectedLedgerEntry(null)}
                 className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-500 hover:text-white transition-colors cursor-pointer"
@@ -3647,13 +3657,12 @@ Continue?`
                   </div>
                   <div className="text-right">
                     <span className="text-slate-500 text-[9px] uppercase block font-black">{isAr ? 'نوع المستند' : 'Voucher Type'}</span>
-                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${
-                      selectedLedgerEntry.type === 'Debit' 
-                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
-                        : 'bg-rose-500/10 text-rose-452 border border-rose-500/20 text-rose-400'
-                    }`}>
-                      {selectedLedgerEntry.type === 'Debit' 
-                        ? (isAr ? 'سند قبض / مدين' : 'Receipt / Debit') 
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${selectedLedgerEntry.type === 'Debit'
+                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                      : 'bg-rose-500/10 text-rose-452 border border-rose-500/20 text-rose-400'
+                      }`}>
+                      {selectedLedgerEntry.type === 'Debit'
+                        ? (isAr ? 'سند قبض / مدين' : 'Receipt / Debit')
                         : (isAr ? 'سند صرف / دائن' : 'Payment / Credit')
                       }
                     </span>
@@ -3684,8 +3693,40 @@ Continue?`
                     </div>
                   )}
 
+                  {/* Balanced Double-Entry Accounts representation */}
+                  {(() => {
+                    const oppositeLeg = accountTransactions.find(t =>
+                      t.refNumber === selectedLedgerEntry.refNumber &&
+                      t.id !== selectedLedgerEntry.id &&
+                      t.type !== selectedLedgerEntry.type
+                    );
+                    const debitParty = selectedLedgerEntry.type === 'Debit'
+                      ? (selectedLedgerEntry.party || (isAr ? 'الخزينة العامة' : 'General Treasury'))
+                      : (oppositeLeg ? (oppositeLeg.entityName || oppositeLeg.accountCode) : (isAr ? 'الخزينة العامة' : 'General Treasury'));
+                    const creditParty = selectedLedgerEntry.type === 'Credit'
+                      ? (selectedLedgerEntry.party || (isAr ? 'الخزينة العامة' : 'General Treasury'))
+                      : (oppositeLeg ? (oppositeLeg.entityName || oppositeLeg.accountCode) : (isAr ? 'الخزينة العامة' : 'General Treasury'));
+
+                    return (
+                      <div className="col-span-2 grid grid-cols-2 gap-3 bg-black/40 p-4 rounded-2xl border border-slate-850/80">
+                        <div>
+                          <span className="text-emerald-400 text-[9.5px] uppercase block font-black mb-1 tracking-wider">{isAr ? 'الطرف المدين (من حـ/)' : 'Debit Account (Dr.)'}</span>
+                          <span className="text-slate-100 font-bold text-xs select-all block mt-1">
+                            {debitParty}
+                          </span>
+                        </div>
+                        <div className="border-r border-slate-800 pr-3">
+                          <span className="text-rose-400 text-[9.5px] uppercase block font-black mb-1 tracking-wider">{isAr ? 'الطرف الدائن (إلى حـ/)' : 'Credit Account (Cr.)'}</span>
+                          <span className="text-slate-100 font-bold text-xs select-all block mt-1">
+                            {creditParty}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   <div>
-                    <span className="text-slate-500 text-[10px] uppercase block font-medium mb-1">{isAr ? 'الطرف المستفيد / الحساب المساعد' : 'Account Subsidiary / Counterparty'}</span>
+                    <span className="text-slate-500 text-[10px] uppercase block font-medium mb-1">{isAr ? 'التصنيف والمساعد' : 'Account Subsidiary / Counterparty'}</span>
                     <span className="text-slate-100 font-extrabold block mt-0.5">{selectedLedgerEntry.party || (isAr ? 'الخزينة العامة' : 'General Treasury')}</span>
                   </div>
                   <div>
@@ -3697,9 +3738,8 @@ Continue?`
                 <div className="bg-slate-950 border border-slate-850 p-4 rounded-2xl flex justify-between items-center">
                   <div>
                     <span className="text-slate-500 text-[9px] uppercase block font-black mb-0.5">{isAr ? 'إجمالي المبلغ المقيد' : 'Net Book Value YER'}</span>
-                    <span className={`text-lg font-mono font-black ${
-                      selectedLedgerEntry.type === 'Debit' ? 'text-emerald-400' : 'text-rose-500'
-                    }`}>
+                    <span className={`text-lg font-mono font-black ${selectedLedgerEntry.type === 'Debit' ? 'text-emerald-400' : 'text-rose-500'
+                      }`}>
                       {selectedLedgerEntry.type === 'Debit' ? '+' : '-'}{selectedLedgerEntry.amount.toLocaleString()} YER
                     </span>
                   </div>
@@ -3773,8 +3813,8 @@ Continue?`
               </div>
               <div style={{ textAlign: isAr ? 'left' : 'right' }}>
                 <h2 style={{ margin: 0, fontSize: '16px', color: '#d4af37', fontWeight: '900' }}>
-                  {selectedLedgerEntry.type === 'Debit' 
-                    ? (isAr ? 'سند قبض / قيد مدين' : 'RECEIPT VOUCHER / DEBIT') 
+                  {selectedLedgerEntry.type === 'Debit'
+                    ? (isAr ? 'سند قبض / قيد مدين' : 'RECEIPT VOUCHER / DEBIT')
                     : (isAr ? 'سند صرف / قيد دائن' : 'PAYMENT VOUCHER / CREDIT')
                   }
                 </h2>
@@ -3882,7 +3922,7 @@ Continue?`
                 <Edit2 className="w-4 h-4 text-[#d4af37]" />
                 {isAr ? 'تعديل بيانات القيد المالي' : 'Modify Financial Entry'}
               </h3>
-              <button 
+              <button
                 type="button"
                 onClick={() => {
                   setIsEditJournalOpen(false);
@@ -3904,22 +3944,22 @@ Continue?`
               <div className="grid grid-cols-3 gap-2.5">
                 <div className="col-span-2 text-start">
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'المبلغ' : 'Amount'}</label>
-                  <input 
-                    required 
-                    type="number" 
+                  <input
+                    required
+                    type="number"
                     min="0"
                     step="0.01"
-                    value={editJournalData.amountOriginal} 
-                    onChange={(e) => setEditJournalData({...editJournalData, amountOriginal: e.target.value})}
+                    value={editJournalData.amountOriginal}
+                    onChange={(e) => setEditJournalData({ ...editJournalData, amountOriginal: e.target.value })}
                     placeholder="25000"
                     className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-start"
                   />
                 </div>
                 <div className="text-start">
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'العملة' : 'Currency'}</label>
-                  <select 
-                    value={editJournalData.currencyOriginal} 
-                    onChange={(e) => setEditJournalData({...editJournalData, currencyOriginal: e.target.value})}
+                  <select
+                    value={editJournalData.currencyOriginal}
+                    onChange={(e) => setEditJournalData({ ...editJournalData, currencyOriginal: e.target.value })}
                     className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer font-mono bg-[#121215]"
                   >
                     <option value="YER">YER</option>
@@ -3931,20 +3971,20 @@ Continue?`
 
               <div className="text-start">
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'تاريخ ووقت السند' : 'Effective Date'}</label>
-                <input 
-                  type="datetime-local" 
-                  value={editJournalData.createdAt} 
-                  onChange={(e) => setEditJournalData({...editJournalData, createdAt: e.target.value})}
+                <input
+                  type="datetime-local"
+                  value={editJournalData.createdAt}
+                  onChange={(e) => setEditJournalData({ ...editJournalData, createdAt: e.target.value })}
                   className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold font-mono text-center"
                 />
               </div>
 
               <div className="text-start">
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'الوصف والبيان' : 'Particulars / Notes'}</label>
-                <textarea 
-                  required 
-                  value={editJournalData.notes} 
-                  onChange={(e) => setEditJournalData({...editJournalData, notes: e.target.value})}
+                <textarea
+                  required
+                  value={editJournalData.notes}
+                  onChange={(e) => setEditJournalData({ ...editJournalData, notes: e.target.value })}
                   className="w-full bg-[#121215] border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none h-24 text-start"
                   placeholder={isAr ? "البيان لتعديل القيد المالي..." : "Enter particulars for this financial entry..."}
                 ></textarea>
@@ -3952,18 +3992,18 @@ Continue?`
             </div>
 
             <div className="p-4 border-t border-slate-850 bg-[#07070a]/40 flex justify-end gap-3 shrink-0">
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => {
                   setIsEditJournalOpen(false);
                   setSelectedEditEntry(null);
-                }} 
+                }}
                 className="px-5 py-2.5 text-slate-400 font-bold bg-slate-900 border border-slate-850 hover:bg-slate-850 rounded-xl text-xs transition-colors cursor-pointer"
               >
                 {isAr ? 'إلغاء' : 'Cancel'}
               </button>
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 disabled={editJournalLoading}
                 className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black text-xs rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-40 cursor-pointer"
               >

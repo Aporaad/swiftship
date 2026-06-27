@@ -8,20 +8,13 @@ import { activityLogService } from '../services/activityLogService';
 import { financialAccountService } from '../services/financialAccountService';
 import { Plus, Search, Wallet, DollarSign, Calendar, RefreshCw, Layers, CheckCircle2, AlertTriangle, User, FileText, ArrowUpRight, ArrowDownLeft, Crown, ShieldAlert, Coins, X, Printer, Activity, Edit2 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import FinanceReports from '../components/FinanceReports';
-import FinanceAccounting from '../components/FinanceAccounting';
+import ExpenseCategoriesManager from '../components/ExpenseCategoriesManager';
+import { useExpenseCategories, DEFAULT_EXPENSE_CATEGORIES } from '../hooks/useExpenseCategories';
 
-export const EXPENSE_CATEGORIES = [
-  { id: 'marketing', labelAr: 'إعلانات وتسويق', labelEn: 'Advertising & Marketing', icon: '📣' },
-  { id: 'packaging', labelAr: 'تغليف وكرتون', labelEn: 'Packaging & Cardboard', icon: '📦' },
-  { id: 'telecom', labelAr: 'اتصالات وإنترنت', labelEn: 'Communications & Internet', icon: '🌐' },
-  { id: 'custody', labelAr: 'عهد مالية لمندوب', labelEn: 'Courier Custody', icon: '🔑' },
-  { id: 'salary', labelAr: 'صرف رواتب الموظفين', labelEn: 'Staff Salary Payments', icon: '👤' },
-  { id: 'wages', labelAr: 'أجور ومكافآت', labelEn: 'Wages & Bonuses', icon: '💵' },
-  { id: 'factory', labelAr: 'سداد تكاليف طلبات وشحن', labelEn: 'Order & Shipping Payments', icon: '📦' },
-  { id: 'other', labelAr: 'مصروفات أخرى', labelEn: 'Other Expenses', icon: '📝' }
-];
+// Keep this export for backward compatibility for now if needed, but components should transition to the hook
+export const EXPENSE_CATEGORIES = DEFAULT_EXPENSE_CATEGORIES;
 
 export default function Expenses() {
   const { settings, t } = useSettings();
@@ -48,13 +41,46 @@ export default function Expenses() {
   const [searchText, setSearchText] = useState('');
   const [accountSearchQuery, setAccountSearchQuery] = useState(''); // NEW SEARCH STATE
   const [isAccountDropdownOpen, setIsAccountDropdownOpen] = useState(false); // NEW DROPDOWN STATE
+  const [creditAccountSearchQuery, setCreditAccountSearchQuery] = useState(''); // FOR SOURCE/CREDIT ACCOUNT
+  const [isCreditAccountDropdownOpen, setIsCreditAccountDropdownOpen] = useState(false); // FOR SOURCE/CREDIT ACCOUNT
   const [typeFilter, setTypeFilter] = useState('all');
   const isAr = settings.language === 'ar';
 
   const location = useLocation();
+  const navigate = useNavigate();
   const queryParams = new URLSearchParams(location.search);
-  const activeTab = queryParams.get('tab') || 'expenses'; // 'expenses', 'reports', 'accounting'
+  const activeTab = queryParams.get('tab') || 'expenses'; // 'expenses', 'reports', 'accounting', 'category_manager'
   const activeSubTab = queryParams.get('subtab') || undefined; // e.g. 'salary'
+  const EXPENSE_CATEGORIES_DYNAMIC = useExpenseCategories();
+
+  const handleTabChange = (tab: string) => {
+    navigate(`/expenses?tab=${tab}`);
+  };
+
+  const navTabs = [
+    { id: 'expenses', labelAr: 'سجل الخزينة والمصروفات', labelEn: 'Expenses Ledger', icon: Wallet, access: canViewGeneralExpenses || canViewCustody },
+    { id: 'reports', labelAr: 'تقارير مالية', labelEn: 'Financial Reports', icon: Activity, access: canViewReports },
+    { id: 'category_manager', labelAr: 'تهيئة الفئات', labelEn: 'Expense Categories', icon: Layers, access: canViewFinance }
+  ];
+
+  const renderNavTabs = () => (
+    <div className="flex gap-2 overflow-x-auto pb-2 mb-6 hide-scrollbar border-b border-slate-800">
+      {navTabs.filter(t => t.access).map(tab => (
+        <button
+          key={tab.id}
+          onClick={() => handleTabChange(tab.id)}
+          className={`px-4 py-3 text-xs font-black rounded-t-xl flex items-center gap-2 whitespace-nowrap transition-colors ${
+            activeTab === tab.id 
+              ? 'bg-[#d4af37]/10 text-[#d4af37] border-b-2 border-[#d4af37]' 
+              : 'text-slate-400 hover:bg-slate-900 hover:text-white'
+          }`}
+        >
+          <tab.icon className="w-4 h-4" />
+          {isAr ? tab.labelAr : tab.labelEn}
+        </button>
+      ))}
+    </div>
+  );
 
   const [formData, setFormData] = useState({
     category: 'marketing',
@@ -65,10 +91,12 @@ export default function Expenses() {
     notes: '', // البيان أو الشرح
     remarks: '', // ملاحظات
     factoryName: '',
-    linkedAccountId: '',       // NEW: linked financial account ID
+    linkedAccountId: '',       // NEW: linked financial account ID (Debit Account)
     linkedAccountCode: '',     // NEW: linked financial account code
     linkedAccountEntityType: '' as '' | 'customer' | 'courier' | 'employee',
-    salaryMonth: ''            // NEW: salary payment month YYYY-MM
+    salaryMonth: '',            // NEW: salary payment month YYYY-MM
+    creditAccountId: '',       // NEW: source financial account ID (Credit Account)
+    creditAccountCode: ''      // NEW: source financial account code
   });
   const [selectedDateTime, setSelectedDateTime] = useState('');
 
@@ -177,6 +205,20 @@ export default function Expenses() {
     };
   }, [roleLoading]);
 
+  // Auto-populate credit account (Source) with General Cash Box when adding a new voucher/expense
+  useEffect(() => {
+    if (isAddOpen && !formData.creditAccountId && financialAccounts.length > 0) {
+      const cashbox = financialAccounts.find(a => a.entityId === 'sys_cash_account' || a.accountCode === '1111-0');
+      if (cashbox) {
+        setFormData(prev => ({
+          ...prev,
+          creditAccountId: cashbox.id || '',
+          creditAccountCode: cashbox.accountCode || cashbox.code || ''
+        }));
+      }
+    }
+  }, [isAddOpen, financialAccounts]);
+
   const generateExpenseNumber = async () => {
     try {
       const expensesRef = collection(db, 'expenses');
@@ -256,7 +298,7 @@ export default function Expenses() {
           recipientName = formData.recipientName || recipientName;
         }
       } else {
-        const catObj = EXPENSE_CATEGORIES.find(c => c.id === formData.category);
+        const catObj = EXPENSE_CATEGORIES_DYNAMIC.find(c => c.id === formData.category);
         recipientName = catObj ? (isAr ? catObj.labelAr : catObj.labelEn) : (isAr ? 'المكتب الرئيسي' : 'Head Office');
         if (linkedAccountId && formData.recipientId) {
           recipientEntityId = formData.recipientId;
@@ -302,7 +344,28 @@ export default function Expenses() {
       await addDoc(collection(db, 'expenses'), payload);
 
       // --- Financial Account Impact ---
-      if (formData.category === 'salary' && linkedAccountId && recipientEntityId) {
+      if (!linkedAccountId || !formData.creditAccountId) {
+        throw new Error(isAr ? 'خطأ في تحديد الحسابات المزدوجة.' : 'Source and target accounts must be selected.');
+      }
+
+      // Record true standard double-entry transaction:
+      // Debit targets/expenses (destination), Credit source (fund source/Cash)
+      await financialAccountService.recordTransaction({
+        date: parsedCreatedAt,
+        description: formData.notes || (isAr ? `سند مصروف: ${expenseNumber}` : `Expense voucher: ${expenseNumber}`),
+        module: type === 'Custody' ? 'custody' : (type === 'Salary' ? 'salary' : 'expense'),
+        refNumber: expenseNumber,
+        amount: rawAmount,
+        currency: formData.currency,
+        debitAccount: { id: linkedAccountId, code: linkedAccountCode },
+        creditAccount: { id: formData.creditAccountId, code: '' },
+        createdByUid: auth.currentUser?.uid || 'system',
+        createdByName: profile?.fullName || 'Root Admin',
+        notes: formData.notes
+      });
+
+      // Record in salary history if it is a salary payment (for reports and history tab)
+      if (formData.category === 'salary' && recipientEntityId) {
         try {
           await financialAccountService.recordSalaryPayment({
             employeeId: recipientEntityId,
@@ -317,62 +380,31 @@ export default function Expenses() {
             createdByName: profile?.fullName || 'Root Admin'
           });
         } catch (txErr) {
-          console.warn('[Expenses] Could not record salary payment transaction:', txErr);
+          console.warn('[Expenses] Could not record salary payment history:', txErr);
         }
-      } else if (linkedAccountId && recipientEntityId && recipientEntityType && recipientEntityType !== 'employee') {
+      }
+
+      // Automatically settle pending custodies if this was a Credit on courier (meaning courier received cash/paying something)
+      // or if custody is released, we handle it
+      if (type !== 'Custody' && recipientEntityType === 'courier') {
         try {
-          let ledgerAmount = convertedAmount;
-          if (recipientEntityType === 'courier') {
-            const targetCourier = couriers.find(c => c.id === recipientEntityId);
-            const accountCurrency = targetCourier?.financialCurrency || 'YER';
-            if (accountCurrency !== (settings.currency || 'YER')) {
-              ledgerAmount = financialAccountService.convertToDefaultCurrency(
-                rawAmount,
-                formData.currency,
-                accountCurrency,
-                { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
-              );
-            }
-          }
-
-          await financialAccountService.recordTransaction(linkedAccountId, {
-            accountId: linkedAccountId,
-            accountCode: linkedAccountCode,
-            entityType: recipientEntityType,
-            entityId: recipientEntityId,
-            entityName: recipientName,
-            type: type === 'Custody' ? 'Debit' : 'Credit', // Debit courier for custody (as they owe it), otherwise Credit
-            amount: ledgerAmount,
-            amountOriginal: rawAmount,
-            currencyOriginal: formData.currency,
-            description: formData.notes || (isAr ? `سند مصروف: ${expenseNumber}` : `Expense voucher: ${expenseNumber}`),
-            refNumber: expenseNumber,
-            module: type === 'Custody' ? 'custody' : 'expense',
-            createdByUid: auth.currentUser?.uid || 'system',
-            createdByName: profile?.fullName || 'Root Admin',
-            createdAt: parsedCreatedAt
-          });
-
-          // Automatically settle pending custodies if this was a Credit transaction (liability reduction)
-          if (type !== 'Custody' && recipientEntityType === 'courier') {
-            await financialAccountService.settlePendingCustodies(
-              recipientEntityId,
-              rawAmount,
-              formData.currency
-            );
-          }
-        } catch (txErr) {
-          console.warn('[Expenses] Could not record financial account transaction:', txErr);
+          await financialAccountService.settlePendingCustodies(
+            recipientEntityId,
+            rawAmount,
+            formData.currency
+          );
+        } catch (custErr) {
+          console.warn('[Expenses] Settle pending custody error:', custErr);
         }
       }
 
       activityLogService.log('add_expense', expenseNumber, { ...payload });
 
       notificationService.notify({
-        title: isAr ? 'تم تقييد السند بالخزينة' : 'Voucher Logged',
+        title: isAr ? 'تم تقييد السند بالخزينة بشكل مزدوج' : 'Double-Entry Voucher Logged',
         message: isAr 
-          ? `تم تسجيل السند برقم: ${expenseNumber}${linkedAccountCode ? ` (مرتبط بحساب ${linkedAccountCode})` : ''}` 
-          : `Transaction recorded: ${expenseNumber}${linkedAccountCode ? ` (linked to account ${linkedAccountCode})` : ''}`,
+          ? `تم صرف وتسجيل القيد في دفاتر الحسابات برقم: ${expenseNumber}` 
+          : `Double-entry transaction recorded successfully: ${expenseNumber}`,
         type: 'success',
         category: 'finance'
       });
@@ -390,7 +422,9 @@ export default function Expenses() {
         linkedAccountId: '',
         linkedAccountCode: '',
         linkedAccountEntityType: '',
-        salaryMonth: ''
+        salaryMonth: '',
+        creditAccountId: '',
+        creditAccountCode: ''
       });
     } catch (err) {
       console.error(err);
@@ -575,34 +609,19 @@ export default function Expenses() {
       // --- Financial Account Reversal: Debit on courier's account (returning the custody) ---
       if (exp.linkedAccountId && exp.recipientEntityId) {
         try {
-          let settleLedgerAmount = settledAmountInDefaultCurrency;
-          const targetCourier = couriers.find(c => c.id === exp.recipientEntityId);
-          const accountCurrency = targetCourier?.financialCurrency || 'YER';
-          if (accountCurrency !== (settings.currency || 'YER')) {
-            settleLedgerAmount = financialAccountService.convertToDefaultCurrency(
-              amountToRemit,
-              exp.currency || 'YER',
-              accountCurrency,
-              { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
-            );
-          }
+          const systemAccs = await financialAccountService.ensureSystemAccounts('YER');
 
-          await financialAccountService.recordTransaction(exp.linkedAccountId, {
-            accountId: exp.linkedAccountId,
-            accountCode: exp.linkedAccountCode || '',
-            entityType: 'courier',
-            entityId: exp.recipientEntityId,
-            entityName: exp.recipientName,
-            type: 'Credit', // Reversal: money returned / settled
-            amount: settleLedgerAmount,
-            amountOriginal: amountToRemit,
-            currencyOriginal: exp.currency || 'YER',
+          await financialAccountService.recordTransaction({
+            date: Date.now(),
             description: isAr ? `تسوية/سداد عهدة (${amountToRemit} ${exp.currency || ''}): ${exp.expenseNumber}` : `Custody settlement (${amountToRemit} ${exp.currency}): ${exp.expenseNumber}`,
-            refNumber: `${exp.expenseNumber}-SETTLE-${Math.floor(Math.random()*1000)}`,
             module: 'custody',
+            refNumber: `${exp.expenseNumber}-SETTLE-${Math.floor(Math.random()*1000)}`,
+            amount: amountToRemit,
+            currency: exp.currency || 'YER',
+            debitAccount: { id: systemAccs['sys_cash_account'], code: '1111-0' }, // Returned to cash box
+            creditAccount: { id: exp.linkedAccountId, code: exp.linkedAccountCode || '2120' }, // Credited from courier
             createdByUid: auth.currentUser?.uid || 'system',
-            createdByName: profile?.fullName || 'Root Admin',
-            createdAt: Date.now()
+            createdByName: profile?.fullName || 'Root Admin'
           });
         } catch (txErr) {
           console.warn('[Expenses] Could not record settlement on financial account:', txErr);
@@ -654,6 +673,8 @@ export default function Expenses() {
   const allowedExpenses = expenses.filter(exp => {
     if (exp.type === 'Custody' && !canViewCustody) return false;
     if ((exp.type === 'General' || exp.type === 'FactoryPayment' || exp.type === 'Salary') && !canViewGeneralExpenses) return false;
+    // Strictly hide external general entries that are not mapped to an expense category
+    if (!EXPENSE_CATEGORIES_DYNAMIC.some(c => c.id === exp.category)) return false;
     return true;
   });
 
@@ -671,7 +692,7 @@ export default function Expenses() {
       else if (exp.type === 'FactoryPayment') catId = 'factory';
       else catId = 'other';
     }
-    return EXPENSE_CATEGORIES.find(c => c.id === catId) || EXPENSE_CATEGORIES[EXPENSE_CATEGORIES.length - 1];
+    return EXPENSE_CATEGORIES_DYNAMIC.find(c => c.id === catId) || EXPENSE_CATEGORIES_DYNAMIC[EXPENSE_CATEGORIES_DYNAMIC.length - 1];
   };
 
   // Calculations for stats using dynamic currency exchange rates
@@ -953,6 +974,7 @@ export default function Expenses() {
     }
     return (
       <div className="space-y-6 pb-20 text-start font-sans">
+        {renderNavTabs()}
         {/* Reports Header */}
         <div className="flex justify-between items-center bg-black/40 backdrop-blur-md border border-[#d4af37]/20 p-5 rounded-3xl shadow-lg relative overflow-hidden">
           <div className="flex items-center gap-3">
@@ -983,52 +1005,27 @@ export default function Expenses() {
     );
   }
 
-  if (activeTab === 'accounting') {
+  if (activeTab === 'category_manager') {
     if (!canViewFinance) {
       return (
         <div className="flex flex-col items-center justify-center p-12 bg-gradient-to-br from-[#121215] to-[#070708] rounded-3xl border border-slate-850 shadow-xl text-center select-none">
           <ShieldAlert className="w-16 h-16 text-rose-500 mb-6 animate-pulse" />
           <h2 className="text-2xl font-black text-[#d4af37] mb-2 uppercase tracking-wide text-center">{t('accessDenied')}</h2>
-          <p className="text-slate-500 dark:text-slate-400 max-w-md mb-6">{isAr ? 'ليس لديك صلاحية لعرض مطابقة الحسابات والقيود المحاسبية.' : 'You do not have permission to view the accounting ledger and double-entry adjustments.'}</p>
+          <p className="text-slate-500 dark:text-slate-400 max-w-md mb-6">{isAr ? 'ليس لديك صلاحية لإدارة المحاسبة وشجرة الحسابات.' : 'You do not have permission to manage the system chart of accounts.'}</p>
         </div>
       );
     }
     return (
       <div className="space-y-6 pb-20 text-start font-sans">
-        {/* Accounting Header */}
-        <div className="flex justify-between items-center bg-black/40 backdrop-blur-md border border-[#d4af37]/20 p-5 rounded-3xl shadow-lg relative overflow-hidden">
-          <div className="flex items-center gap-3">
-            <div className="bg-[#d4af37]/10 border border-[#d4af37]/25 p-2.5 rounded-2xl text-[#d4af37]">
-              <FileText className="w-6 h-6 animate-pulse" />
-            </div>
-            <div>
-              <h1 className="text-xl font-black text-white leading-none mb-1">
-                {isAr ? 'القيود المحاسبية ومطابقة الحسابات' : 'Double-Entry Ledger & Adjustments'}
-              </h1>
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                {isAr ? 'كشوف حسابات العملاء • تسوية العهد • توازن قبوضات الصندوق' : 'Ledger audits • Courier liability accounts • Balancing sheets'}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Accounting Component */}
-        <FinanceAccounting 
-          orders={orders}
-          expenses={expenses}
-          couriers={couriers}
-          customers={customers}
-          isAr={isAr}
-          settings={settings}
-          initialTab={activeSubTab}
-        />
+        {renderNavTabs()}
+        <ExpenseCategoriesManager isAr={isAr} />
       </div>
     );
   }
 
   return (
     <div className="space-y-6 pb-20 text-start transition-colors font-sans selection:bg-[#d4af37]/30">
-      
+      {renderNavTabs()}
       {/* Upper header */}
       <div className="flex justify-between items-center bg-black/40 backdrop-blur-md border border-[#d4af37]/20 p-5 rounded-3xl shadow-lg shadow-black/3c">
         <div className="flex items-center gap-3">
@@ -1175,7 +1172,7 @@ export default function Expenses() {
               <option value="Custody">{isAr ? 'سندات عهد المناديب' : 'Courier Custody Slips'}</option>
             )}
             <option disabled>── {isAr ? 'الفئات التفصيلية' : 'Detailed Categories'} ──</option>
-            {EXPENSE_CATEGORIES.map(cat => (
+            {EXPENSE_CATEGORIES_DYNAMIC.map(cat => (
               <option key={cat.id} value={cat.id}>{cat.icon} {isAr ? cat.labelAr : cat.labelEn}</option>
             ))}
           </select>
@@ -1452,7 +1449,7 @@ export default function Expenses() {
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-2 uppercase tracking-wider">{isAr ? 'بند المصروف' : 'Expense Category'}</label>
                 <div className="grid grid-cols-2 gap-2">
-                  {EXPENSE_CATEGORIES.map(cat => {
+                  {EXPENSE_CATEGORIES_DYNAMIC.map(cat => {
                     if (cat.id === 'custody' && !canViewCustody) return null;
                     if (cat.id !== 'custody' && !canViewGeneralExpenses) return null;
                     const isActive = formData.category === cat.id;
@@ -1460,7 +1457,14 @@ export default function Expenses() {
                       <button
                         key={cat.id}
                         type="button"
-                        onClick={() => setFormData({...formData, category: cat.id})}
+                        onClick={() => {
+                          setFormData({
+                            ...formData, 
+                            category: cat.id, 
+                            linkedAccountId: cat.accountId || formData.linkedAccountId,
+                            linkedAccountCode: cat.accountCode || formData.linkedAccountCode
+                          });
+                        }}
                         className={`p-2 rounded-xl border text-start flex items-center gap-1.5 transition active:scale-95 cursor-pointer ${
                           isActive 
                             ? 'bg-[#d4af37]/15 border-[#d4af37] text-white font-black' 
@@ -1486,6 +1490,108 @@ export default function Expenses() {
                   placeholder="25000"
                   className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-start"
                 />
+              </div>
+
+              {/* SOURCE/CREDIT LEDGER SELECTION */}
+              <div className="relative">
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
+                  {isAr ? 'حساب الدفع المصدر (الخزينة/البنك - دائن) *' : 'Source Payment Account (Cash/Bank - Credit) *'}
+                </label>
+                
+                {/* Account Selection Trigger */}
+                <div 
+                  onClick={() => setIsCreditAccountDropdownOpen(!isCreditAccountDropdownOpen)}
+                  className="w-full bg-black/40 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer flex justify-between items-center"
+                >
+                  <span className="truncate">
+                    {formData.creditAccountId ? (
+                      (() => {
+                        const acc = financialAccounts.find(a => a.id === formData.creditAccountId);
+                        if (!acc) return isAr ? '-- اختر حساب النقدية/البنك --' : '-- Choose Cash/Bank Account --';
+                        return `[${acc.code || acc.accountCode || 'Sys'}] - ${isAr ? acc.nameAr || acc.entityName : acc.nameEn || acc.entityName} ${acc.balance !== undefined ? `(${acc.balance.toLocaleString()} YER)` : ''}`;
+                      })()
+                    ) : (
+                      <span className="text-slate-500">{isAr ? '-- اختر حساب النقدية/البنك --' : '-- Choose Cash/Bank Account --'}</span>
+                    )}
+                  </span>
+                  <svg className={`w-4 h-4 text-slate-500 transition-transform ${isCreditAccountDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                </div>
+                
+                {/* Custom Dropdown Content */}
+                {isCreditAccountDropdownOpen && (
+                  <div className="absolute z-50 mt-2 w-full bg-[#121215] border border-slate-850 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-64">
+                    {/* Account Search Input */}
+                    <div className="p-2 border-b border-slate-850 bg-black/40 sticky top-0">
+                      <input
+                        type="text"
+                        placeholder={isAr ? "🔎 ابحث بالاسم أو الكود..." : "🔎 Search by name or code..."}
+                        value={creditAccountSearchQuery}
+                        onChange={(e) => setCreditAccountSearchQuery(e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-full bg-black/50 border border-slate-800 text-white rounded-lg p-2 outline-none text-xs font-bold focus:border-[#d4af37]/50"
+                        autoFocus
+                      />
+                    </div>
+                    
+                    <div className="overflow-y-auto p-1 custom-scrollbar">
+                      {(() => {
+                        const filteredAccounts = financialAccounts.filter(acc => {
+                          const q = creditAccountSearchQuery.toLowerCase().trim();
+                          if (!q) {
+                            // Suggest safe boxes / bank accounts by default
+                            return acc.accountCode?.startsWith('111') || acc.accountCode?.startsWith('112') || acc.entityId === 'sys_cash_account';
+                          }
+                          return (
+                            (acc.accountCode && acc.accountCode.toLowerCase().includes(q)) ||
+                            (acc.code && acc.code.toLowerCase().includes(q)) ||
+                            (acc.nameAr && acc.nameAr.toLowerCase().includes(q)) ||
+                            (acc.nameEn && acc.nameEn.toLowerCase().includes(q)) ||
+                            (acc.entityName && acc.entityName.toLowerCase().includes(q))
+                          );
+                        });
+
+                        const grouped: Record<string, any[]> = {};
+                        filteredAccounts.forEach(acc => {
+                          const type = acc.type || 'Other';
+                          if (!grouped[type]) grouped[type] = [];
+                          grouped[type].push(acc);
+                        });
+                        
+                        if (Object.keys(grouped).length === 0) {
+                          return <div className="p-4 text-center text-slate-500 text-xs font-bold">{isAr ? 'لا توجد نتائج' : 'No results found'}</div>;
+                        }
+
+                        return Object.entries(grouped).map(([type, accs]) => (
+                          <div key={type} className="mb-2">
+                            <span className="text-[10px] font-black text-slate-400 px-2 py-1 uppercase">{type}</span>
+                            {accs.map(a => (
+                              <div 
+                                key={a.id} 
+                                onClick={() => {
+                                  setFormData({
+                                    ...formData, 
+                                    creditAccountId: a.id,
+                                    creditAccountCode: a.accountCode || a.code || ''
+                                  });
+                                  setIsCreditAccountDropdownOpen(false);
+                                  setCreditAccountSearchQuery('');
+                                }}
+                                className={`px-3 py-2 hover:bg-white/5 cursor-pointer rounded-lg flex justify-between items-center ${formData.creditAccountId === a.id ? 'bg-[#d4af37]/10' : ''}`}
+                              >
+                                <div className="flex flex-col">
+                                  <span className="text-xs font-bold text-slate-200">
+                                    {isAr ? a.nameAr || a.entityName : a.nameEn || a.entityName}
+                                  </span>
+                                  <span className="font-mono text-[9px] text-slate-500">{a.accountCode || a.code || 'Sys'}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* UNIFIED LEDGER SELECTION FOR ALL EXPENSE CATEGORIES */}
@@ -1772,7 +1878,7 @@ export default function Expenses() {
                   onChange={(e) => setEditFormData({...editFormData, category: e.target.value})}
                   className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer text-start bg-[#121215]"
                 >
-                  {EXPENSE_CATEGORIES.map(cat => (
+                  {EXPENSE_CATEGORIES_DYNAMIC.map(cat => (
                     <option key={cat.id} value={cat.id}>{cat.icon} {isAr ? cat.labelAr : cat.labelEn}</option>
                   ))}
                 </select>

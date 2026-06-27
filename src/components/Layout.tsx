@@ -18,6 +18,7 @@ import {
   RotateCw,
   Wallet,
   FileText,
+  BookOpen,
   Plus,
   Crown,
   Menu,
@@ -31,7 +32,8 @@ import {
   MessageCircle,
   AlertTriangle,
   Download,
-  Upload
+  Upload,
+  LayoutList
 } from 'lucide-react';
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
@@ -415,7 +417,7 @@ export default function Layout() {
     { name: isAr ? 'العملاء' : 'Customers', path: '/customers', icon: Users, permission: 'view_customers' },
     { name: isAr ? 'المناديب' : 'Couriers', path: '/couriers', icon: Truck, permission: 'view_couriers' },
     { name: isAr ? 'المصروفات والعهد' : 'Expenses & Custody', path: '/expenses', icon: Wallet, permission: 'view_finance' },
-    { name: isAr ? 'المحاسبة' : 'Accounting', path: '/expenses?tab=accounting', icon: FileText, permission: 'view_finance' },
+    { name: isAr ? 'المحاسبة' : 'Accounting', path: '/accounting', icon: BookOpen, permission: 'view_finance' },
     { name: isAr ? 'المصادر' : 'Sources', path: '/sources', icon: MapPin, permission: 'view_sources' },
     { name: isAr ? 'التقارير' : 'Reports', path: '/reports', icon: FileText, permission: 'view_reports' },
     { name: isAr ? 'المستخدمون والأدوار' : 'Users & Roles', path: '/user-management', icon: UserCog, permission: 'view_users' },
@@ -430,7 +432,7 @@ export default function Layout() {
     return hasPermission(item.permission);
   });
 
-  const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'engaporaad1@gmail.com', 'admin@swiftship.system'];
+  const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'engaporaad1@gmail.com', 'admin@swiftship.system', 'apo.1.read@gmail.com'];
   const userEmail = auth.currentUser?.email?.toLowerCase();
   const isRootAdmin = userEmail && ROOT_EMAILS.includes(userEmail);
 
@@ -486,7 +488,7 @@ export default function Layout() {
         if (itemPath === '/expenses') {
           // If the item path is just /expenses, don't match if we are on a tab query
           const tab = new URLSearchParams(location.search).get('tab');
-          if (tab === 'reports' || tab === 'accounting') {
+          if (tab === 'reports') {
             return false;
           }
         }

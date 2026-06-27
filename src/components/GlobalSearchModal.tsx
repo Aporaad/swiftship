@@ -24,7 +24,8 @@ import {
   Mail,
   ArrowLeft,
   ArrowRight,
-  Crown
+  Crown,
+  Settings
 } from 'lucide-react';
 
 interface GlobalSearchModalProps {
@@ -33,7 +34,7 @@ interface GlobalSearchModalProps {
   searchQuery: string;
 }
 
-type SearchCategory = 'all' | 'orders' | 'users' | 'customers' | 'couriers' | 'sources' | 'expenses';
+type SearchCategory = 'all' | 'orders' | 'users' | 'customers' | 'couriers' | 'sources' | 'expenses' | 'accounting' | 'system';
 
 export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: GlobalSearchModalProps) {
   const { settings } = useSettings();
@@ -53,17 +54,39 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
   const [couriersData, setCouriersData] = useState<any[]>([]);
   const [sourcesData, setSourcesData] = useState<any[]>([]);
   const [expensesData, setExpensesData] = useState<any[]>([]);
+  const [accountsData, setAccountsData] = useState<any[]>([]);
+  const [journalData, setJournalData] = useState<any[]>([]);
+  const [salaryData, setSalaryData] = useState<any[]>([]);
+  const [rolesData, setRolesData] = useState<any[]>([]);
+  const [activityData, setActivityData] = useState<any[]>([]);
 
   const fetchAllSystemData = async () => {
     setLoading(true);
     try {
-      const [ordersSnap, usersSnap, customersSnap, couriersSnap, sourcesSnap, expensesSnap] = await Promise.all([
+      const [
+        ordersSnap, 
+        usersSnap, 
+        customersSnap, 
+        couriersSnap, 
+        sourcesSnap, 
+        expensesSnap,
+        accountsSnap,
+        journalSnap,
+        salarySnap,
+        rolesSnap,
+        activitySnap
+      ] = await Promise.all([
         getDocs(collection(db, 'orders')),
         getDocs(collection(db, 'users')),
         getDocs(collection(db, 'customers')),
         getDocs(collection(db, 'couriers')),
         getDocs(collection(db, 'sources')),
-        getDocs(collection(db, 'expenses'))
+        getDocs(collection(db, 'expenses')),
+        getDocs(collection(db, 'accounts')),
+        getDocs(collection(db, 'journal_entries')),
+        getDocs(collection(db, 'salary_history')),
+        getDocs(collection(db, 'roles')),
+        getDocs(collection(db, 'activity_logs'))
       ]);
 
       const ords = ordersSnap.docs.map(d => ({ id: d.id, _searchType: 'order', ...d.data() }));
@@ -72,6 +95,11 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
       const crs = couriersSnap.docs.map(d => ({ id: d.id, _searchType: 'courier', ...d.data() }));
       const srcs = sourcesSnap.docs.map(d => ({ id: d.id, _searchType: 'source', ...d.data() }));
       const exps = expensesSnap.docs.map(d => ({ id: d.id, _searchType: 'expense', ...d.data() }));
+      const accs = accountsSnap.docs.map(d => ({ id: d.id, _searchType: 'account', ...d.data() }));
+      const jour = journalSnap.docs.map(d => ({ id: d.id, _searchType: 'journal', ...d.data() }));
+      const sals = salarySnap.docs.map(d => ({ id: d.id, _searchType: 'salary', ...d.data() }));
+      const rls = rolesSnap.docs.map(d => ({ id: d.id, _searchType: 'role', ...d.data() }));
+      const acts = activitySnap.docs.map(d => ({ id: d.id, _searchType: 'activity', ...d.data() }));
 
       setOrdersData(ords);
       setUsersData(usrs);
@@ -79,6 +107,11 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
       setCouriersData(crs);
       setSourcesData(srcs);
       setExpensesData(exps);
+      setAccountsData(accs);
+      setJournalData(jour);
+      setSalaryData(sals);
+      setRolesData(rls);
+      setActivityData(acts);
     } catch (err) {
       console.error("Error pre-loading system search data:", err);
     } finally {
@@ -97,6 +130,11 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
       setCouriersData([]);
       setSourcesData([]);
       setExpensesData([]);
+      setAccountsData([]);
+      setJournalData([]);
+      setSalaryData([]);
+      setRolesData([]);
+      setActivityData([]);
       setSelectedItem(null);
     }
   }, [isOpen, searchQuery]);
@@ -172,14 +210,90 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
     );
   });
 
-  // Combined Results list sorted by relevance (mostly Order, then User, then Customer, then Courier)
+  const matchedAccounts = accountsData.filter(a => {
+    if (!cleanText) return true;
+    return (
+      (a.accountCode || '').toLowerCase().includes(cleanText) ||
+      (a.entityName || '').toLowerCase().includes(cleanText) ||
+      (a.entityType || '').toLowerCase().includes(cleanText)
+    );
+  });
+
+  const matchedJournal = journalData.filter(j => {
+    if (!cleanText) return true;
+    return (
+      (j.entryNumber || '').toLowerCase().includes(cleanText) ||
+      (j.description || '').toLowerCase().includes(cleanText) ||
+      (j.debitAccountName || '').toLowerCase().includes(cleanText) ||
+      (j.creditAccountName || '').toLowerCase().includes(cleanText) ||
+      (j.amount || '').toString().includes(cleanText)
+    );
+  });
+
+  const matchedSalary = salaryData.filter(s => {
+    if (!cleanText) return true;
+    return (
+      (s.employeeName || '').toLowerCase().includes(cleanText) ||
+      (s.salaryMonth || '').toLowerCase().includes(cleanText) ||
+      (s.voucherCode || '').toLowerCase().includes(cleanText)
+    );
+  });
+
+  const matchedRoles = rolesData.filter(r => {
+    if (!cleanText) return true;
+    return (
+      (r.nameAr || '').toLowerCase().includes(cleanText) ||
+      (r.nameEn || '').toLowerCase().includes(cleanText) ||
+      (r.description || '').toLowerCase().includes(cleanText)
+    );
+  });
+
+  const matchedActivity = activityData.filter(act => {
+    if (!cleanText) return true;
+    return (
+      (act.action || '').toLowerCase().includes(cleanText) ||
+      (act.performedBy || '').toLowerCase().includes(cleanText) ||
+      (act.details || '').toLowerCase().includes(cleanText)
+    );
+  });
+
+  const systemFeatures = [
+    { id: 'dashboard', nameAr: 'لوحة التحكم', nameEn: 'Dashboard', path: '/' },
+    { id: 'orders', nameAr: 'إدارة الطلبات', nameEn: 'Order Management', path: '/orders' },
+    { id: 'customers', nameAr: 'العملاء', nameEn: 'Customers', path: '/customers' },
+    { id: 'sources', nameAr: 'مصادر الطلبات', nameEn: 'Order Sources', path: '/sources' },
+    { id: 'users', nameAr: 'المستخدمين', nameEn: 'Users', path: '/users' },
+    { id: 'couriers', nameAr: 'المناديب', nameEn: 'Couriers', path: '/couriers' },
+    { id: 'roles', nameAr: 'الصلاحيات والأدوار', nameEn: 'Roles & Permissions', path: '/roles' },
+    { id: 'settings', nameAr: 'الإعدادات', nameEn: 'Settings', path: '/settings' },
+    { id: 'expenses', nameAr: 'المصروفات والعهد', nameEn: 'Expenses & Custody', path: '/expenses' },
+    { id: 'accounting', nameAr: 'المحاسبة والقيود', nameEn: 'Accounting & Ledger', path: '/accounting' },
+    { id: 'reports', nameAr: 'التقارير والإحصائيات', nameEn: 'Reports & Statistics', path: '/reports' },
+    { id: 'notifications', nameAr: 'الإشعارات', nameEn: 'Notifications', path: '/notifications' },
+    { id: 'salary-history', nameAr: 'سجل الرواتب', nameEn: 'Salary History', path: '/salary-history' },
+  ];
+
+  const matchedFeatures = systemFeatures.filter(f => {
+    if (!cleanText) return true;
+    return (
+      (f.nameAr || '').toLowerCase().includes(cleanText) ||
+      (f.nameEn || '').toLowerCase().includes(cleanText)
+    );
+  });
+
+  // Combined Results list
   const combinedResults = [
     ...matchedOrders.map(o => ({ ...o, _displayType: isAr ? 'شحنة/طلب' : 'Order', _color: 'cyan' })),
     ...matchedUsers.map(u => ({ ...u, _displayType: isAr ? 'موظف' : 'Staff', _color: 'purple' })),
     ...matchedCustomers.map(c => ({ ...c, _displayType: isAr ? 'عميل كلي' : 'Customer', _color: 'emerald' })),
     ...matchedCouriers.map(cr => ({ ...cr, _displayType: isAr ? 'مندوب توزيع' : 'Courier', _color: 'amber' })),
     ...matchedSources.map(s => ({ ...s, _displayType: isAr ? 'مصدر توريد' : 'Source', _color: 'blue' })),
-    ...matchedExpenses.map(ex => ({ ...ex, _displayType: isAr ? 'حركة مالية' : 'Finance', _color: 'rose' }))
+    ...matchedExpenses.map(ex => ({ ...ex, _displayType: isAr ? 'حركة مالية' : 'Finance', _color: 'rose' })),
+    ...matchedAccounts.map(a => ({ ...a, _displayType: isAr ? 'حساب مالي' : 'Account', _color: 'indigo' })),
+    ...matchedJournal.map(j => ({ ...j, _displayType: isAr ? 'قيد محاسبي' : 'Journal Entry', _color: 'violet' })),
+    ...matchedSalary.map(s => ({ ...s, _displayType: isAr ? 'سند راتب' : 'Salary Record', _color: 'lime' })),
+    ...matchedRoles.map(r => ({ ...r, _displayType: isAr ? 'صلاحية/دور' : 'Role', _color: 'fuchsia' })),
+    ...matchedFeatures.map(f => ({ ...f, _searchType: 'system', _displayType: isAr ? 'واجهة/قسم' : 'System Feature', _color: 'gold' })),
   ];
 
   // Helper translations and colors
@@ -267,6 +381,16 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
       case 'couriers': return matchedCouriers.map(cr => ({ ...cr, _displayType: isAr ? 'مندوب توزيع' : 'Courier', _color: 'amber' }));
       case 'sources': return matchedSources.map(s => ({ ...s, _displayType: isAr ? 'مصدر توريد' : 'Source', _color: 'blue' }));
       case 'expenses': return matchedExpenses.map(ex => ({ ...ex, _displayType: isAr ? 'حركة مالية' : 'Finance', _color: 'rose' }));
+      case 'accounting': return [
+        ...matchedAccounts.map(a => ({ ...a, _displayType: isAr ? 'حساب مالي' : 'Account', _color: 'indigo' })),
+        ...matchedJournal.map(j => ({ ...j, _displayType: isAr ? 'قيد محاسبي' : 'Journal Entry', _color: 'violet' })),
+        ...matchedSalary.map(s => ({ ...s, _displayType: isAr ? 'سند راتب' : 'Salary Record', _color: 'lime' }))
+      ];
+      case 'system': return [
+        ...matchedRoles.map(r => ({ ...r, _displayType: isAr ? 'صلاحية/دور' : 'Role', _color: 'fuchsia' })),
+        ...matchedFeatures.map(f => ({ ...f, _searchType: 'system', _displayType: isAr ? 'واجهة/قسم' : 'System Feature', _color: 'gold' })),
+        ...matchedActivity.slice(0, 50).map(act => ({ ...act, _searchType: 'activity', _displayType: isAr ? 'سجل عمليات' : 'Activity Log', _color: 'slate' }))
+      ];
       default: return combinedResults;
     }
   })();
@@ -277,8 +401,9 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
     { key: 'users', ar: 'الموظفين', en: 'Staff', count: matchedUsers.length, color: 'purple-400' },
     { key: 'customers', ar: 'العملاء', en: 'Customers', count: matchedCustomers.length, color: 'emerald-400' },
     { key: 'couriers', ar: 'المندوبين', en: 'Couriers', count: matchedCouriers.length, color: 'amber-400' },
-    { key: 'sources', ar: 'المصادر', en: 'Sources', count: matchedSources.length, color: 'blue-400' },
-    { key: 'expenses', ar: 'المصروفات', en: 'Expenses', count: matchedExpenses.length, color: 'rose-400' }
+    { key: 'accounting', ar: 'المحاسبة', en: 'Accounting', count: matchedAccounts.length + matchedJournal.length + matchedSalary.length, color: 'indigo-400' },
+    { key: 'expenses', ar: 'المصروفات', en: 'Expenses', count: matchedExpenses.length, color: 'rose-400' },
+    { key: 'system', ar: 'النظام', en: 'System', count: matchedRoles.length + matchedFeatures.length + Math.min(50, matchedActivity.length), color: 'gold-400' }
   ];
 
   const getIcon = (type: string) => {
@@ -289,6 +414,12 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
       case 'courier': return <Truck className="w-4 h-4 text-amber-400" />;
       case 'source': return <Globe className="w-4 h-4 text-blue-400" />;
       case 'expense': return <Wallet className="w-4 h-4 text-rose-400" />;
+      case 'account': return <DollarSign className="w-4 h-4 text-indigo-400" />;
+      case 'journal': return <FileText className="w-4 h-4 text-violet-400" />;
+      case 'salary': return <Wallet className="w-4 h-4 text-lime-400" />;
+      case 'role': return <ShieldCheck className="w-4 h-4 text-fuchsia-400" />;
+      case 'activity': return <RefreshCw className="w-4 h-4 text-slate-400" />;
+      case 'system': return <Settings className="w-4 h-4 text-gold-400" />;
       default: return <Search className="w-4 h-4 text-[#d4af37]" />;
     }
   };
@@ -448,6 +579,12 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
                               {type === 'courier' && item.fullName}
                               {type === 'source' && (item.source_name || item.name)}
                               {type === 'expense' && (item.notes ? item.notes.substring(0, 30) + '...' : item.recipientName || (isAr ? 'مصروف عام' : 'Expense'))}
+                              {type === 'account' && item.entityName}
+                              {type === 'journal' && item.description}
+                              {type === 'salary' && item.employeeName}
+                              {type === 'role' && (isAr ? item.nameAr : item.nameEn)}
+                              {type === 'system' && (isAr ? item.nameAr : item.nameEn)}
+                              {type === 'activity' && item.action}
                             </p>
                             
                             <p className="text-[10px] text-slate-500 font-semibold truncate font-mono mt-0.5">
@@ -457,6 +594,12 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
                               {type === 'courier' && item.phone}
                               {type === 'source' && (item.location || '—')}
                               {type === 'expense' && `${isAr ? 'بواسطة' : 'By'}: ${item.createdByName || '—'}`}
+                              {type === 'account' && item.accountCode}
+                              {type === 'journal' && item.entryNumber}
+                              {type === 'salary' && item.salaryMonth}
+                              {type === 'role' && item.id}
+                              {type === 'system' && item.path}
+                              {type === 'activity' && item.performedBy}
                             </p>
                           </div>
                         </div>
@@ -473,6 +616,12 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
                             else if (type === 'courier') targetPath = '/couriers';
                             else if (type === 'source') targetPath = '/sources';
                             else if (type === 'expense') targetPath = '/expenses';
+                            else if (type === 'account') targetPath = '/accounting';
+                            else if (type === 'journal') targetPath = '/accounting';
+                            else if (type === 'salary') targetPath = '/salary-history';
+                            else if (type === 'role') targetPath = '/roles';
+                            else if (type === 'system') targetPath = item.path;
+                            else if (type === 'activity') targetPath = '/settings';
                             
                             navigate(targetPath, { state: { selectedId: item.id } });
                             onClose();

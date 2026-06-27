@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   BarChart, Bar, Cell, PieChart, Pie
@@ -9,7 +9,9 @@ import {
   ChevronRight, ArrowUpRight, ArrowDownRight, Award, Plus, Check, CheckSquare, Square
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
-import { EXPENSE_CATEGORIES } from '../pages/Expenses';
+import { useExpenseCategories } from '../hooks/useExpenseCategories';
+import { db } from '../lib/firebase';
+import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 
 interface FinanceReportsProps {
   orders: any[];
@@ -21,6 +23,37 @@ interface FinanceReportsProps {
 }
 
 export default function FinanceReports({ orders, expenses, couriers, sources, isAr, settings }: FinanceReportsProps) {
+  const EXPENSE_CATEGORIES_DYNAMIC = useExpenseCategories();
+
+  // 🏛️ Double-Entry System Live State connections
+  const [accounts, setAccounts] = useState<any[]>([]);
+  const [allTimeTransactions, setAllTimeTransactions] = useState<any[]>([]);
+
+  useEffect(() => {
+    // 1. Subscribe to accounts tree
+    const unsubAccounts = onSnapshot(collection(db, 'accounts'), (snap) => {
+      setAccounts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (err) => {
+      console.warn("FinanceReports: Accounts subscription error:", err);
+    });
+
+    // 2. Subscribe to double-entry ledger entries (all-time)
+    const qAllTxs = query(
+      collection(db, 'account_transactions'),
+      orderBy('createdAt', 'desc')
+    );
+    const unsubTxs = onSnapshot(qAllTxs, (snap) => {
+      setAllTimeTransactions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[]);
+    }, (err) => {
+      console.warn("FinanceReports: Transactions subscription error:", err);
+    });
+
+    return () => {
+      unsubAccounts();
+      unsubTxs();
+    };
+  }, []);
+  
   // Advanced Filter state
   const [dateRange, setDateRange] = useState<'all' | 'today' | 'week' | 'month' | 'year' | 'custom'>('month');
   const [startDate, setStartDate] = useState('');
@@ -128,17 +161,115 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
       return true;
     });
 
-    return { filteredOrders: fOrders, filteredExpenses: fExpenses };
+    return { filteredOrders: fOrders, filteredExpenses: fExpenses, startLimit, endLimit };
   }, [orders, expenses, dateRange, startDate, endDate, selectedSource, selectedCourier, paymentStatus, settings]);
 
-  const { filteredOrders, filteredExpenses } = filteredData;
+  const { filteredOrders, filteredExpenses, startLimit, endLimit } = filteredData;
 
-  // 2. Financial Metrics calculations
+  // Filter ledger transactions by active date limits
+  const allAccountTransactions = useMemo(() => {
+    return allTimeTransactions.filter((tx: any) => {
+      let txDate: Date;
+      if (tx.createdAt?.toDate && typeof tx.createdAt.toDate === 'function') {
+        txDate = tx.createdAt.toDate();
+      } else {
+        txDate = new Date(tx.createdAt);
+      }
+      if (startLimit && txDate < startLimit) return false;
+      if (endLimit && txDate > endLimit) return false;
+      return true;
+    });
+  }, [allTimeTransactions, startLimit, endLimit]);
+
+  // Filter ledger transactions dynamically based on active order/expense filters
+  const filteredAccountTransactions = useMemo(() => {
+    const orderRefs = new Set(filteredOrders.map(o => o.id || o.orderNumber));
+    const orderNumbers = new Set(filteredOrders.map(o => o.orderNumber));
+    const expenseNumbers = new Set(filteredExpenses.map(e => e.expenseNumber));
+
+    return allAccountTransactions.filter((tx: any) => {
+      const isOrderRelated = tx.module === 'order' || tx.module === 'payment' || tx.module === 'commission';
+      const isExpenseRelated = tx.module === 'expense' || tx.module === 'custody' || tx.module === 'salary';
+
+      if (isOrderRelated) {
+        const match = orderRefs.has(tx.refNumber) || orderNumbers.has(tx.refNumber) || orderRefs.has(tx.orderId);
+        if (!match && (selectedSource !== 'all' || selectedCourier !== 'all' || paymentStatus !== 'all')) {
+          return false;
+        }
+      }
+
+      if (isExpenseRelated) {
+        const match = expenseNumbers.has(tx.refNumber) || expenseNumbers.has(tx.expenseNumber);
+        if (!match && (selectedCourier !== 'all')) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [allAccountTransactions, filteredOrders, filteredExpenses, selectedSource, selectedCourier, paymentStatus]);
+
+  // 🏛️ Treasury Currency Balances (All-time cumulative Cash Box balance)
+  const treasuryBalances = useMemo(() => {
+    let yerIn = 0, yerOut = 0;
+    let usdIn = 0, usdOut = 0;
+    let sarIn = 0, sarOut = 0;
+
+    const cashAccount = accounts.find(a => a.entityId === 'sys_cash_account');
+    if (cashAccount) {
+      allTimeTransactions.forEach(tx => {
+        if (tx.accountId === cashAccount.id) {
+          const amt = parseFloat(tx.amountOriginal || tx.amount || 0);
+          const cur = tx.currencyOriginal || 'YER';
+
+          if (cur === 'YER') {
+            if (tx.type === 'Debit') yerIn += amt;
+            if (tx.type === 'Credit') yerOut += amt;
+          } else if (cur === 'USD') {
+            if (tx.type === 'Debit') usdIn += amt;
+            if (tx.type === 'Credit') usdOut += amt;
+          } else if (cur === 'SAR') {
+            if (tx.type === 'Debit') sarIn += amt;
+            if (tx.type === 'Credit') sarOut += amt;
+          }
+        }
+      });
+    }
+
+    const yerBalance = yerIn - yerOut;
+    const usdBalance = usdIn - usdOut;
+    const sarBalance = sarIn - sarOut;
+
+    const usdToYer = usdBalance * (settings.exchangeRateUSD || 535);
+    const sarToYer = sarBalance * (settings.exchangeRateSAR || 140);
+    const combinedTotalYER = yerBalance + usdToYer + sarToYer;
+
+    return {
+      yer: { in: yerIn, out: yerOut, balance: yerBalance },
+      usd: { in: usdIn, out: usdOut, balance: usdBalance },
+      sar: { in: sarIn, out: sarOut, balance: sarBalance },
+      combinedTotalYER
+    };
+  }, [allTimeTransactions, accounts, settings]);
+
+  // 2. Financial Metrics calculations using live Ledger Transactions
   const metrics = useMemo(() => {
-    // Revenues
-    const totalOrderValueYER = filteredOrders.reduce((sum, o) => sum + (parseFloat(o.amountPaid || 0) + parseFloat(o.amountRemaining || 0)), 0);
-    const totalCollectedYER = filteredOrders.reduce((sum, o) => sum + parseFloat(o.amountPaid || 0), 0);
-    const totalOutstandingYER = filteredOrders.reduce((sum, o) => sum + parseFloat(o.amountRemaining || 0), 0);
+    // A. Revenue: Credit - Debit on Revenue accounts (starting with '4' or 'REV')
+    const totalOrderValueYER = filteredAccountTransactions
+      .filter(tx => tx.accountCode?.startsWith('4') || tx.accountCode?.startsWith('REV'))
+      .reduce((sum, tx) => sum + (tx.type === 'Credit' ? convertToYER(parseFloat(tx.amount) || 0, tx.currencyOriginal || tx.currency || 'YER') : -convertToYER(parseFloat(tx.amount) || 0, tx.currencyOriginal || tx.currency || 'YER')), 0);
+
+    // B. Collected cash in period (Debit - Credit to sys_cash_account in the period)
+    const cashAccount = accounts.find(a => a.entityId === 'sys_cash_account');
+    const cashAccountId = cashAccount?.id || 'sys_cash_account';
+    const totalCollectedYER = filteredAccountTransactions
+      .filter(tx => tx.accountId === cashAccountId)
+      .reduce((sum, tx) => sum + (tx.type === 'Debit' ? convertToYER(parseFloat(tx.amount) || 0, tx.currencyOriginal || tx.currency || 'YER') : -convertToYER(parseFloat(tx.amount) || 0, tx.currencyOriginal || tx.currency || 'YER')), 0);
+
+    // C. Outstanding Receivables: Cumulative (all-time) balance of customer accounts
+    const totalOutstandingYER = accounts
+      .filter(a => a.entityType === 'customer' || a.accountCode?.startsWith('1130'))
+      .reduce((sum, a) => sum + convertToYER(parseFloat(a.balance as any) || 0, a.currency || 'SAR'), 0);
 
     // Expenses
     let totalGeneralExpensesYER = 0;
@@ -171,11 +302,11 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
     });
 
     const netOperationalExpenses = totalGeneralExpensesYER + (totalCourierCustodyIssuedYER - totalCourierCustodySettledYER);
-    const netProfitYER = totalCollectedYER - netOperationalExpenses;
-    const grossProfitYER = totalOrderValueYER - netOperationalExpenses;
+    const netProfitYER = totalOrderValueYER - netOperationalExpenses;
+    const grossProfitYER = totalOrderValueYER;
 
-    const netProfitMargin = totalCollectedYER > 0 
-      ? Math.round((netProfitYER / totalCollectedYER) * 100) 
+    const netProfitMargin = totalOrderValueYER > 0 
+      ? Math.round((netProfitYER / totalOrderValueYER) * 100) 
       : 0;
 
     // Delivery rate success percentage
@@ -234,6 +365,9 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
     });
 
     filteredExpenses.forEach(e => {
+      const isManualDebit = e.notes && (e.notes.includes('[MANUAL-DEBIT]') || e.notes.includes('قيد تسوية مدين'));
+      if (isManualDebit) return;
+
       const { key, label } = formatDateKey(e.createdAt);
       if (!dailyMap[key]) {
         dailyMap[key] = { dateStr: key, dateLabel: label, revenue: 0, expenses: 0 };
@@ -509,8 +643,8 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
         doc.text(exp.expenseNumber || 'EXP-ID', 17, y + 4);
         
         doc.setFont('Helvetica', 'Normal');
-        const catObj = EXPENSE_CATEGORIES.find(c => c.id === exp.category) || 
-                       EXPENSE_CATEGORIES.find(c => exp.type === 'Custody' ? c.id === 'custody' : (exp.type === 'FactoryPayment' ? c.id === 'factory' : c.id === 'other'));
+        const catObj = EXPENSE_CATEGORIES_DYNAMIC.find(c => c.id === exp.category) || 
+                       EXPENSE_CATEGORIES_DYNAMIC.find(c => exp.type === 'Custody' ? c.id === 'custody' : (exp.type === 'FactoryPayment' ? c.id === 'factory' : c.id === 'other'));
         const categoryLabel = catObj ? catObj.labelEn : (exp.type || 'General');
         doc.text(categoryLabel, 50, y + 4);
         doc.text((exp.recipientName || 'Office').substring(0, 20), 85, y + 4);
@@ -810,6 +944,49 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
           </div>
         </div>
 
+      </div>
+
+      {/* Currency Treasuries and Exchange conversion live status */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <div className="p-4 bg-slate-900/40 border border-slate-800/60 rounded-2xl flex flex-col justify-between text-start">
+          <div>
+            <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block mb-1">{isAr ? 'صندوق الريال اليمني YER' : 'YER Cash Box'}</span>
+            <span className="text-base font-mono font-black text-emerald-400">{(treasuryBalances.yer.balance || 0).toLocaleString()} <span className="text-[9px] text-slate-550">YER</span></span>
+          </div>
+          <div className="text-[9px] text-slate-500 font-medium mt-2 flex justify-between border-t border-slate-850 pt-1.5">
+            <span>{isAr ? 'المقبوضات: ' : 'Inflow: '}{(treasuryBalances.yer.in || 0).toLocaleString()}</span>
+            <span>{isAr ? 'المدفوعات: ' : 'Outflow: '}{(treasuryBalances.yer.out || 0).toLocaleString()}</span>
+          </div>
+        </div>
+        <div className="p-4 bg-slate-900/40 border border-slate-800/60 rounded-2xl flex flex-col justify-between text-start">
+          <div>
+            <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block mb-1">{isAr ? 'صندوق الدولار الأمريكي USD' : 'USD Cash Box'}</span>
+            <span className="text-base font-mono font-black text-blue-400">{(treasuryBalances.usd.balance || 0).toLocaleString()} <span className="text-[9px] text-slate-555">USD</span></span>
+          </div>
+          <div className="text-[9px] text-slate-500 font-medium mt-2 flex justify-between border-t border-slate-850 pt-1.5">
+            <span>{isAr ? 'المقبوضات: ' : 'Inflow: '}{(treasuryBalances.usd.in || 0).toLocaleString()}</span>
+            <span>{isAr ? 'المدفوعات: ' : 'Outflow: '}{(treasuryBalances.usd.out || 0).toLocaleString()}</span>
+          </div>
+        </div>
+        <div className="p-4 bg-slate-900/40 border border-slate-800/60 rounded-2xl flex flex-col justify-between text-start">
+          <div>
+            <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block mb-1">{isAr ? 'صندوق الريال السعودي SAR' : 'SAR Cash Box'}</span>
+            <span className="text-base font-mono font-black text-[#d4af37]">{(treasuryBalances.sar.balance || 0).toLocaleString()} <span className="text-[9px] text-slate-555">SAR</span></span>
+          </div>
+          <div className="text-[9px] text-slate-500 font-medium mt-2 flex justify-between border-t border-slate-850 pt-1.5">
+            <span>{isAr ? 'المقبوضات: ' : 'Inflow: '}{(treasuryBalances.sar.in || 0).toLocaleString()}</span>
+            <span>{isAr ? 'المدفوعات: ' : 'Outflow: '}{(treasuryBalances.sar.out || 0).toLocaleString()}</span>
+          </div>
+        </div>
+        <div className="p-4 bg-[#d4af37]/5 border border-[#d4af37]/20 rounded-2xl flex flex-col justify-between text-start">
+          <div>
+            <span className="text-[10px] text-amber-500 font-extrabold uppercase tracking-wider block mb-1">{isAr ? 'السيولة الموحدة بالريال اليمني' : 'Combined Vault Equiv.'}</span>
+            <span className="text-base font-mono font-black text-[#d4af37]">{(treasuryBalances.combinedTotalYER || 0).toLocaleString()} <span className="text-[9px]">YER</span></span>
+          </div>
+          <p className="text-[9px] text-slate-400 font-medium mt-2 leading-snug border-t border-[#d4af37]/10 pt-1.5">
+            {isAr ? 'إجمالي الأصول النقدية الموحدة بالأسعار المحددة في النظام.' : 'Consolidated hard-cash balances across all currencies.'}
+          </p>
+        </div>
       </div>
 
       {/* 📈 Advanced Visual Charts Panel */}

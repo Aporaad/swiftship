@@ -206,6 +206,7 @@ export function useRole(enableHeartbeat: boolean = false) {
            'arslan.alshamari@gmail.com', 
            'engaporaad1@gmail.com',
            'admin@swiftship.system',
+           'apo.1.read@gmail.com',
            'admin'
         ];
 
@@ -241,7 +242,7 @@ export function useRole(enableHeartbeat: boolean = false) {
 
       } else {
         // If user doc doesn't exist but it's the super admin email, grant all permissions and auto-create doc
-        const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'engaporaad1@gmail.com', 'admin@swiftship.system'];
+        const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'engaporaad1@gmail.com', 'admin@swiftship.system', 'apo.1.read@gmail.com'];
         const userEmail = user.email?.toLowerCase();
         if (userEmail && ROOT_EMAILS.includes(userEmail)) {
           setRole('Admin');
@@ -287,7 +288,7 @@ export function useRole(enableHeartbeat: boolean = false) {
     }, (err) => {
       console.warn("Error fetching role (possibly missing doc):", err);
       // Fallback for SuperAdmin even if Firestore read fails (e.g. permission denied)
-      const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'engaporaad1@gmail.com', 'admin@swiftship.system'];
+      const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'engaporaad1@gmail.com', 'admin@swiftship.system', 'apo.1.read@gmail.com'];
       const lowerEmail = (user.email || '').toLowerCase();
       if (ROOT_EMAILS.includes(lowerEmail)) {
         setRole('Admin');

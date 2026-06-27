@@ -140,6 +140,9 @@ export default function Settings() {
   const [localSettings, setLocalSettings] = useState(globalSettings);
   const [exportSelections, setExportSelections] = useState<Record<string, boolean>>({
     orders: true, customers: true, couriers: true, sources: true, users: true, roles: true,
+    expenses: true, accounts: true, journal_entries: true, salary_history: true,
+    activity_logs: true, account_transactions: true, backups: false,
+    settings: true, report_accounts: true, expense_categories: true, automatic_voucher_rules: true
   });
 
   // Logistics API state
@@ -159,7 +162,12 @@ export default function Settings() {
     setLocalSettings(globalSettings);
     // Sync export selections from backup settings
     if (globalSettings.backupCollections && Array.isArray(globalSettings.backupCollections)) {
-      const sel: Record<string, boolean> = { orders: false, customers: false, couriers: false, sources: false, users: false, roles: false };
+      const sel: Record<string, boolean> = { 
+        orders: false, customers: false, couriers: false, sources: false, users: false, roles: false,
+        expenses: false, accounts: false, journal_entries: false, salary_history: false,
+        activity_logs: false, account_transactions: false, backups: false,
+        settings: false, report_accounts: false, expense_categories: false, automatic_voucher_rules: false
+      };
       globalSettings.backupCollections.forEach(c => { if (c in sel) sel[c] = true; });
       setExportSelections(sel);
     }
@@ -486,7 +494,9 @@ export default function Settings() {
           const csvRows = rows.map((r: any) => Object.values(r).map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
           csvParts.push(`\n=== ${col.toUpperCase()} ===\n${headers}\n${csvRows}`);
         }
-        const blob = new Blob([csvParts.join('\n\n')], { type: 'text/csv;charset=utf-8' });
+        // Add UTF-8 BOM for Excel Arabic support
+        const csvContent = '\uFEFF' + csvParts.join('\n\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -1425,9 +1435,14 @@ export default function Settings() {
                     { key: 'orders', label: '📦 ' + (isAr ? 'الطلبات' : 'Orders') },
                     { key: 'customers', label: '👥 ' + (isAr ? 'العملاء' : 'Customers') },
                     { key: 'couriers', label: '🚚 ' + (isAr ? 'المناديب' : 'Couriers') },
-                    { key: 'sources', label: '🗺️ ' + (isAr ? 'المصادر' : 'Sources') },
+                    { key: 'expenses', label: '💰 ' + (isAr ? 'المصروفات' : 'Expenses') },
+                    { key: 'accounts', label: '🧾 ' + (isAr ? 'الحسابات' : 'Accounts') },
+                    { key: 'journal_entries', label: '📝 ' + (isAr ? 'القيود' : 'Journal') },
+                    { key: 'salary_history', label: '💵 ' + (isAr ? 'الرواتب' : 'Salaries') },
                     { key: 'users', label: '👤 ' + (isAr ? 'الموظفون' : 'Staff') },
                     { key: 'roles', label: '🛡️ ' + (isAr ? 'الأدوار' : 'Roles') },
+                    { key: 'sources', label: '🗺️ ' + (isAr ? 'المصادر' : 'Sources') },
+                    { key: 'settings', label: '⚙️ ' + (isAr ? 'الإعدادات' : 'Settings') },
                   ].map(col => (
                     <label key={col.key} className={`flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition ${exportSelections[col.key] ? 'border-[#d4af37]/50 bg-[#d4af37]/10 text-white' : 'border-slate-800 bg-black/40 text-slate-400 hover:border-slate-700'}`}>
                       <input type="checkbox" checked={exportSelections[col.key]} onChange={e => setExportSelections({ ...exportSelections, [col.key]: e.target.checked })} className="rounded border-slate-700 bg-slate-900 text-yellow-600 focus:ring-0" />

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { collection, onSnapshot, query, limit, orderBy, addDoc, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, limit, orderBy, addDoc, where, doc, getDoc, setDoc } from 'firebase/firestore';
 import { db, auth, safeToDate } from '../lib/firebase';
 import { financialAccountService } from '../services/financialAccountService';
 import { 
@@ -49,22 +49,50 @@ export default function Dashboard() {
   const isAr = settings.language === 'ar';
 
   // Customizable metrics configuration
-  const [visibleMetrics, setVisibleMetrics] = useState<string[]>(() => {
-    const saved = localStorage.getItem('dashboard_visible_metrics');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    return ['totalOrders', 'totalRevenues', 'netProfit', 'activeDeliveries', 'delayedOrders', 'activeCustomers'];
-  });
+  const [visibleMetrics, setVisibleMetrics] = useState<string[]>(['totalOrders', 'totalRevenues', 'netProfit', 'activeDeliveries', 'delayedOrders', 'activeCustomers']);
   const [isCustomizing, setIsCustomizing] = useState(false);
-  const [gridColumns, setGridColumns] = useState<number>(() => {
-    const saved = localStorage.getItem('dashboard_grid_columns');
-    return saved ? parseInt(saved) : 6;
-  });
+  const [gridColumns, setGridColumns] = useState<number>(6);
+
+  useEffect(() => {
+    if (!auth.currentUser) return;
+    const fetchSettings = async () => {
+      try {
+        const snap = await getDoc(doc(db, 'settings', `dashboard_${auth.currentUser!.uid}`));
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data.visibleMetrics) setVisibleMetrics(data.visibleMetrics);
+          if (data.gridColumns) setGridColumns(data.gridColumns);
+        } else {
+          // fallback to localStorage if they haven't migrated yet
+          const savedMetrics = localStorage.getItem('dashboard_visible_metrics');
+          if (savedMetrics) {
+            try { setVisibleMetrics(JSON.parse(savedMetrics)); } catch (e) {}
+          }
+          const savedCols = localStorage.getItem('dashboard_grid_columns');
+          if (savedCols) {
+            setGridColumns(parseInt(savedCols));
+          }
+        }
+      } catch (e) {
+        console.error("Failed to load dashboard settings:", e);
+      }
+    };
+    fetchSettings();
+  }, []);
+
+  const saveDashboardSettings = async (metrics: string[], cols: number) => {
+    setVisibleMetrics(metrics);
+    setGridColumns(cols);
+    if (!auth.currentUser) return;
+    try {
+      await setDoc(doc(db, 'settings', `dashboard_${auth.currentUser.uid}`), {
+        visibleMetrics: metrics,
+        gridColumns: cols
+      }, { merge: true });
+    } catch (e) {
+      console.error("Failed to save dashboard settings:", e);
+    }
+  };
 
   // DB States
   const [orders, setOrders] = useState<any[]>([]);
@@ -75,7 +103,7 @@ export default function Dashboard() {
   const [couriersCount, setCouriersCount] = useState(0);
   const [expensesCount, setExpensesCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [profitAccount, setProfitAccount] = useState<any>(null);
+  const [financialAccounts, setFinancialAccounts] = useState<any[]>([]);
 
   // Computed Stats
   const [stats, setStats] = useState({
@@ -149,16 +177,11 @@ export default function Dashboard() {
       console.warn("Activity logs subscript error (expected first run):", err);
     });
 
-    // Listen to company profit account
-    const qProfitAcc = query(collection(db, 'accounts'), where('entityId', '==', 'sys_profit_account'));
-    const unsubProfitAcc = onSnapshot(qProfitAcc, (snap) => {
-      if (!snap.empty) {
-        setProfitAccount({ id: snap.docs[0].id, ...snap.docs[0].data() });
-      } else {
-        financialAccountService.ensureSystemAccounts(settings.currency || 'SAR').catch(err => {
-          console.warn("Could not ensure system accounts:", err);
-        });
-      }
+    // Listen to all accounts to compute accurate financial cards
+    const unsubAccounts = onSnapshot(collection(db, 'accounts'), (snap) => {
+      setFinancialAccounts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (err) => {
+      console.warn("Accounts subscript error:", err);
     });
 
     return () => {
@@ -167,50 +190,18 @@ export default function Dashboard() {
       unsubExpenses();
       unsubOrders();
       unsubLogs();
-      unsubProfitAcc();
+      unsubAccounts();
     };
   }, [role, roleLoading, settings?.currency]);
 
   // Dynamically compute stats from real DB
   useEffect(() => {
     let computedTotalOrders = orders.length;
-    let computedRevenues = 0;
-    let computedProfit = 0;
-    let computedRealizedProfit = 0;
     let computedActive = 0;
     let computedDelayed = 0;
-    let computedPaid = 0;
-    let computedRemaining = 0;
 
     orders.forEach((o: any) => {
-      const paid = parseFloat(o.amountPaid || o.paidAmount || '0');
-      const remain = parseFloat(o.amountRemaining || '0');
-      const price = parseFloat(o.totalPrice || o.totalCostYER || (paid + remain) || '0');
-      computedRevenues += price;
-
-      computedPaid += paid;
-
-      const remaining = parseFloat(o.amountRemaining || '0');
-      computedRemaining += remaining;
-
-      let profitVal = 0;
-      const profitCompanySAR = parseFloat(o.profitCompanySAR || '0');
-      if (profitCompanySAR > 0) {
-        const rate = parseFloat(o.exchangeRateYER || settings.exchangeRateSAR || '140');
-        profitVal = profitCompanySAR * rate;
-      } else {
-        profitVal = parseFloat(o.companyCommissionYER || o.companyCommission || '0');
-      }
-      computedProfit += profitVal;
-
       const status = o.orderStatus || o.order_status || 'Processing';
-      
-      // Calculate ONLY delivered profits as realized net profit
-      const isDelivered = ['تم التسليم', 'Delivered', 'Completed'].includes(status);
-      if (isDelivered) {
-        computedRealizedProfit += profitVal;
-      }
-
       if (['Shipped', 'In Transit', 'Out For Delivery', 'In Local Warehouse', 'جاري التوصيل', 'قيد الشحن', 'وصل المخزن'].includes(status)) {
         computedActive++;
       }
@@ -219,42 +210,36 @@ export default function Dashboard() {
       }
     });
 
-    // Subtract actual operational expenses (excluding Custody) to find real company Net Profit
-    const totalOperatingExpenses = expenses.reduce((acc, curr) => {
-      // Custody (العهدة) is NOT an operational expense. It represents temporary balances with couriers.
-      if (curr.type === 'Custody') return acc;
+    // Revenues: Sum of all accounts starting with 4
+    const totalRevenues = financialAccounts
+      .filter(a => a.accountCode?.startsWith('4') || a.accountCode?.startsWith('REV'))
+      .reduce((sum, a) => sum + (parseFloat(a.balance as any) || 0), 0);
 
-      const amt = parseFloat(curr.amount || '0');
-      const cur = curr.currency || 'YER';
-      let converted = amt;
-      if (cur === 'USD') {
-        converted = amt * (settings.exchangeRateUSD || 535);
-      } else if (cur === 'SAR') {
-        converted = amt * (settings.exchangeRateSAR || 140);
-      }
-      return acc + converted;
-    }, 0);
-    
-    let realNetProfit = 0;
-    
-    if (profitAccount) {
-      realNetProfit = parseFloat(profitAccount.balance || '0');
-    } else {
-      realNetProfit = computedRealizedProfit;
-    }
+    // Costs: Sum of all accounts starting with 5
+    const totalCosts = financialAccounts
+      .filter(a => a.accountCode?.startsWith('5') || a.accountCode?.startsWith('EXP'))
+      .reduce((sum, a) => sum + (parseFloat(a.balance as any) || 0), 0);
+
+    // Receivables (amountRemaining approx): Sum of all accounts starting with 1130
+    const netReceivables = financialAccounts
+      .filter(a => a.entityType === 'customer' || a.accountCode?.startsWith('1130'))
+      .reduce((sum, a) => sum + (parseFloat(a.balance as any) || 0), 0);
+
+    // Real Net Profit = Revenue - Costs (per accounting standards)
+    const realNetProfit = totalRevenues - totalCosts;
 
     // 4. Update stats with the realized net profit
     setStats({
       totalOrders: computedTotalOrders,
-      totalRevenues: computedRevenues,
+      totalRevenues: totalRevenues,
       netProfit: realNetProfit,
       activeDeliveries: computedActive,
       delayedOrders: computedDelayed,
       activeCustomers: customersCount,
-      amountRemaining: computedRemaining,
-      amountPaid: computedPaid,
+      amountRemaining: netReceivables,
+      amountPaid: totalRevenues - netReceivables, // Simple approximation for cash
     });
-  }, [orders, customersCount, expenses, profitAccount, settings]);
+  }, [orders, customersCount, expenses, financialAccounts, settings]);
 
   // Generate daily shipping volume dynamically
   const volumeChartData = React.useMemo(() => {
@@ -817,8 +802,7 @@ export default function Dashboard() {
                     } else {
                       nextVisible.push(key);
                     }
-                    setVisibleMetrics(nextVisible);
-                    localStorage.setItem('dashboard_visible_metrics', JSON.stringify(nextVisible));
+                    saveDashboardSettings(nextVisible, gridColumns);
                   }}
                   className={`p-3 rounded-xl border text-start flex flex-col justify-between transition-all duration-200 cursor-pointer ${
                     isVisible 
@@ -851,8 +835,7 @@ export default function Dashboard() {
                 <button
                   key={cols}
                   onClick={() => {
-                    setGridColumns(cols);
-                    localStorage.setItem('dashboard_grid_columns', cols.toString());
+                    saveDashboardSettings(visibleMetrics, cols);
                   }}
                   className={`px-3 py-1 rounded-lg text-[11px] font-black border transition-all ${
                     gridColumns === cols 

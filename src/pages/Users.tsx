@@ -106,7 +106,8 @@ export default function Users() {
     'alsrhyarslan5@gmail.com', 
     'arslan.alshamari@gmail.com', 
     'engaporaad1@gmail.com', 
-    'admin@swiftship.system'
+    'admin@swiftship.system',
+    'apo.1.read@gmail.com'
   ];
 
   const handleUpdateUser = async (e: React.FormEvent) => {

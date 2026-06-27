@@ -398,7 +398,7 @@ async function startServer() {
       const idLower = identifier.toLowerCase();
       let email = idLower;
 
-      const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'engaporaad1@gmail.com', 'admin@swiftship.system'];
+      const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'engaporaad1@gmail.com', 'admin@swiftship.system', 'apo.1.read@gmail.com'];
       if (idLower === 'admin') {
         email = 'admin@swiftship.system';
       }

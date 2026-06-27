@@ -83,6 +83,8 @@ export default function Orders() {
   const [sourceFilter, setSourceFilter] = useState('all');
   const [sortBy, setSortBy] = useState('date-desc');
 
+  const [autoVoucherRules, setAutoVoucherRules] = useState<any[]>([]);
+
   // Multi-item sub table state for creation
   const [items, setItems] = useState<any[]>([
     { productName: '', productUrl: '', quantity: 1, productPrice: 0, weight: 0, cbm: 0, length: 0, width: 0, height: 0, trackingNumber: '' }
@@ -96,6 +98,7 @@ export default function Orders() {
   // Products Adjustments
   const [bankCommissionEnabled, setBankCommissionEnabled] = useState(false);
   const [bankCommissionRate, setBankCommissionRate] = useState(3);
+  const [bankCommissionType, setBankCommissionType] = useState<'percentage' | 'fixed'>('percentage');
   const [couponEnabled, setCouponEnabled] = useState(false);
   const [couponRate, setCouponRate] = useState(0);
   const [cartShareCode, setCartShareCode] = useState('');
@@ -275,6 +278,16 @@ export default function Orders() {
     const unsubSources = onSnapshot(collection(db, 'sources'), (snap) => {
       setSources(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
+    
+    // Fetch Auto Voucher Rules
+    const unsubAutoVoucherRules = onSnapshot(doc(db, 'settings', 'automatic_voucher_rules'), (snap) => {
+      if (snap.exists()) {
+        const d = snap.data();
+        if (d && d.data && Array.isArray(d.data)) {
+          setAutoVoucherRules(d.data);
+        }
+      }
+    });
 
     // Fetch shipping companies
     const unsubShippingCompanies = onSnapshot(collection(db, 'shipping_companies'), (snap) => {
@@ -291,6 +304,7 @@ export default function Orders() {
       unsubCustomers();
       unsubCouriers();
       unsubSources();
+      unsubAutoVoucherRules();
       unsubShippingCompanies();
     };
   }, [roleLoading]);
@@ -731,9 +745,13 @@ export default function Orders() {
     const totalCBM = items.reduce((sum, i) => sum + (parseFloat(i.quantity || 0) * parseFloat(i.cbm || 0)), 0);
 
     // Apply Bank Commission and Coupon to products cost
-    const bankCommValue = bankCommissionEnabled ? (productsSum * (bankCommissionRate / 100)) : 0;
+    const bankCommValue = bankCommissionEnabled 
+      ? (bankCommissionType === 'percentage' 
+          ? (productsSum * (parseFloat(bankCommissionRate as any) / 100)) 
+          : (parseFloat(bankCommissionRate as any) || 0)) 
+      : 0;
     const couponValue = couponEnabled ? couponRate : 0; // couponRate is now treated as a fixed amount in SAR
-    const totalProductsCostWithAdjustments = productsSum + bankCommValue - couponValue;
+    const totalProductsCostWithAdjustments = productsSum - couponValue;
 
     let priceSAR = totalProductsCostWithAdjustments;
     let shippingCostSAR = 0;
@@ -755,7 +773,7 @@ export default function Orders() {
       // Customer pays SHEIN Red Price + packaging fee (coupon is not deducted from what customer pays)
       totalOrderSAR = redPrice + generalPackagingFee;
 
-      const rawProfitSAR = redPrice - productsSum;
+      const rawProfitSAR = redPrice - (productsSum + bankCommValue + generalPackagingFee);
       const saudiCourier = couriers.find(c => c.id === formData.shippingCourierId);
       const saudiRate = (saudiCourier && saudiCourier.commissionRate !== undefined) ? parseFloat(saudiCourier.commissionRate) : 0;
       profitSaudiSAR = rawProfitSAR * (saudiRate / 100);
@@ -776,11 +794,16 @@ export default function Orders() {
       profitCompanySAR = (rawProfitSAR - profitSaudiSAR) + couponValue;
     } else {
       // Shopping (App)
-      const rawProfitSAR = productsSum * ((parseFloat(formData.companyProfitRate as any) || 12) / 100);
+      let rawProfitSAR = productsSum * ((parseFloat(formData.companyProfitRate as any) || 12) / 100);
+      // Deduct bank commission from profit
+      rawProfitSAR = rawProfitSAR - bankCommValue;
+
       shippingCostSAR = (addShippingEnabled || shippings.length > 0) ? totalShippingsCost : 0;
       const generalPackagingFee = parseFloat(formData.packagingFee as any) || 0;
-      // Customer pays productsSum + bankCommValue (without coupon reduction) + raw profit + shipping + packaging
-      totalOrderSAR = (productsSum + bankCommValue) + rawProfitSAR + shippingCostSAR + generalPackagingFee;
+      // Customer pays productsSum + raw profit BEFORE bank deduction (Wait, if customer pays original raw profit, then total is productsSum + originalRawProfit... But we just deducted it. Let's recalculate what the customer pays)
+      // Actually, if Bank Commission is DEDUCTED from profit, it means the customer pays the original price.
+      const originalRawProfitSAR = productsSum * ((parseFloat(formData.companyProfitRate as any) || 12) / 100);
+      totalOrderSAR = productsSum + originalRawProfitSAR + shippingCostSAR + generalPackagingFee;
 
       const saudiCourier = couriers.find(c => c.id === formData.shippingCourierId);
       const saudiRate = (saudiCourier && saudiCourier.commissionRate !== undefined) ? parseFloat(saudiCourier.commissionRate) : 30;
@@ -889,6 +912,7 @@ export default function Orders() {
         exchangeRateYER: formData.exchangeRateYER,
         exchangeRateUSD: formData.exchangeRateUSD,
         bankCommissionRate: formData.bankCommissionRate,
+        bankCommissionType,
         companyProfitRate: formData.companyProfitRate,
         packagingFee: parseFloat(formData.packagingFee as any) || 0,
         sheinRedPrice: parseFloat(formData.sheinRedPrice as any) || 0,
@@ -970,23 +994,16 @@ export default function Orders() {
             { USD: formData.exchangeRateUSD, SAR: formData.exchangeRateYER }
           );
 
-          await financialAccountService.recordTransaction(linkedAccountId, {
-            accountId: linkedAccountId,
-            accountCode: linkedAccountCode || '',
-            entityType: 'customer',
-            entityId: formData.customerId,
-            entityName: formData.customerName,
-            type: 'Debit', // Debiting customer for the total order amount
-            amount: convertedOrderAmount,
-            amountOriginal: totalBilledOriginal,
-            currencyOriginal: 'YER',
-            description: isAr ? `قيد قيمة الطلب رقم: ${orderNumber}` : `Charge for order: ${orderNumber}`,
-            refNumber: orderNumber,
-            module: 'order',
-            createdByUid: auth.currentUser?.uid || 'system',
-            createdByName: profile?.fullName || 'Root Admin',
-            createdAt: Date.now()
-          });
+          await financialAccountService.triggerAutomaticVoucher(
+            'order_charge',
+            { orderNumber },
+            {
+              customer: customerRecord,
+              isAr,
+              rawAmount: convertedOrderAmount,
+              profileName: profile?.fullName || 'Root Admin'
+            }
+          );
 
           const paidVal = parseFloat(formData.amountPaid as any) || 0;
           if (paidVal > 0) {
@@ -997,46 +1014,16 @@ export default function Orders() {
               { USD: formData.exchangeRateUSD, SAR: formData.exchangeRateYER }
             );
 
-            if (systemAccs['sys_cash_account']) {
-              await financialAccountService.recordDoubleEntryTransaction(
-                systemAccs['sys_cash_account'], // Debit Cash
-                linkedAccountId, // Credit Customer
-                {
-                  accountCode: linkedAccountCode || '',
-                  entityType: 'customer',
-                  accountId: linkedAccountId,
-                  entityId: formData.customerId,
-                  entityName: formData.customerName,
-                  amount: convertedPaid,
-                  amountOriginal: paidVal,
-                  currencyOriginal: 'YER',
-                  description: isAr ? `دفعة مقدمة للطلب رقم: ${orderNumber}` : `Down payment for order: ${orderNumber}`,
-                  refNumber: orderNumber,
-                  module: 'payment',
-                  createdByUid: auth.currentUser?.uid || 'system',
-                  createdByName: profile?.fullName || 'Root Admin',
-                  createdAt: Date.now()
-                }
-              );
-            } else {
-              await financialAccountService.recordTransaction(linkedAccountId, {
-                accountId: linkedAccountId,
-                accountCode: linkedAccountCode || '',
-                entityType: 'customer',
-                entityId: formData.customerId,
-                entityName: formData.customerName,
-                type: 'Credit', // Crediting customer for downpayment
-                amount: convertedPaid,
-                amountOriginal: paidVal,
-                currencyOriginal: 'YER',
-                description: isAr ? `دفعة مقدمة للطلب رقم: ${orderNumber}` : `Down payment for order: ${orderNumber}`,
-                refNumber: orderNumber,
-                module: 'payment',
-                createdByUid: auth.currentUser?.uid || 'system',
-                createdByName: profile?.fullName || 'Root Admin',
-                createdAt: Date.now()
-              });
-            }
+            await financialAccountService.triggerAutomaticVoucher(
+              'order_down_payment',
+              { orderNumber },
+              {
+                customer: customerRecord,
+                isAr,
+                rawAmount: convertedPaid,
+                profileName: profile?.fullName || 'Root Admin'
+              }
+            );
           }
         } catch (txErr) {
           console.error('[Orders] Error registering financial account transactions:', txErr);
@@ -1069,23 +1056,16 @@ export default function Orders() {
               { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
             );
 
-            await financialAccountService.recordTransaction(saudiCourier.financialAccountId, {
-              accountId: saudiCourier.financialAccountId,
-              accountCode: saudiCourier.financialAccountCode || '',
-              entityType: 'courier',
-              entityId: saudiCourier.id,
-              entityName: saudiCourier.fullName,
-              type: 'Credit',
-              amount: amountInCourierCurrency,
-              amountOriginal: sourcingCostAmount,
-              currencyOriginal: 'SAR',
-              description: isAr ? `إضافة تكاليف المنتجات الأصلية للطلب للمندوب: ${orderNumber}` : `Adding sourcing products cost for order to agent: ${orderNumber}`,
-              refNumber: orderNumber,
-              module: 'expense',
-              createdByUid: auth.currentUser?.uid || 'system',
-              createdByName: profile?.fullName || 'Root Admin',
-              createdAt: Date.now()
-            });
+            await financialAccountService.triggerAutomaticVoucher(
+              'sourcing_cost_courier',
+              { orderNumber },
+              {
+                courier: saudiCourier,
+                isAr,
+                rawAmount: amountInCourierCurrency,
+                profileName: profile?.fullName || 'Root Admin'
+              }
+            );
 
             // Automatically settle pending custodies
             await financialAccountService.settlePendingCustodies(
@@ -1100,23 +1080,15 @@ export default function Orders() {
       } else if (systemAccs['sys_sourcing_cost']) {
         // Debit Sourcing Costs Account (Instead of Courier)
         try {
-          await financialAccountService.recordTransaction(systemAccs['sys_sourcing_cost'], {
-            accountId: systemAccs['sys_sourcing_cost'],
-            accountCode: 'EXP-SRC',
-            entityType: 'system',
-            entityId: 'sys_sourcing_cost',
-            entityName: 'حساب تكاليف الاستيراد التشغيلية',
-            type: 'Debit',
-            amount: sourcingCostConverted,
-            amountOriginal: sourcingCostAmount,
-            currencyOriginal: 'SAR',
-            description: isAr ? `تكلفة شراء منتجات الطلب: ${orderNumber}` : `Sourcing products cost for order: ${orderNumber}`,
-            refNumber: orderNumber,
-            module: 'expense',
-            createdByUid: auth.currentUser?.uid || 'system',
-            createdByName: profile?.fullName || 'Root Admin',
-            createdAt: Date.now()
-          });
+          await financialAccountService.triggerAutomaticVoucher(
+            'sourcing_cost_system',
+            { orderNumber },
+            {
+              isAr,
+              rawAmount: sourcingCostConverted,
+              profileName: profile?.fullName || 'Root Admin'
+            }
+          );
         } catch (e) {
           console.error('Failed to deduct sourcing from system account', e);
         }
@@ -1136,23 +1108,15 @@ export default function Orders() {
             settings.currency || 'YER',
             { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
           );
-          await financialAccountService.recordTransaction(systemAccs['sys_packaging_fees'], {
-            accountId: systemAccs['sys_packaging_fees'],
-            accountCode: 'REV-PKG',
-            entityType: 'system',
-            entityId: 'sys_packaging_fees',
-            entityName: 'حساب رسوم التغليف والتعبئة',
-            type: 'Credit',
-            amount: pkgConverted,
-            amountOriginal: packagingFeeSAR,
-            currencyOriginal: 'SAR',
-            description: isAr ? `رسوم تغليف للطلب: ${orderNumber}` : `Packaging fee for order: ${orderNumber}`,
-            refNumber: orderNumber,
-            module: 'order',
-            createdByUid: auth.currentUser?.uid || 'system',
-            createdByName: profile?.fullName || 'Root Admin',
-            createdAt: Date.now()
-          });
+          await financialAccountService.triggerAutomaticVoucher(
+            'packaging_fee',
+            { orderNumber },
+            {
+              isAr,
+              rawAmount: pkgConverted,
+              profileName: profile?.fullName || 'Root Admin'
+            }
+          );
         } catch (e) {
           console.error('Failed to log packaging fee', e);
         }
@@ -1173,23 +1137,15 @@ export default function Orders() {
             settings.currency || 'YER',
             { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
           );
-          await financialAccountService.recordTransaction(systemAccs['sys_shipping_costs'], {
-            accountId: systemAccs['sys_shipping_costs'],
-            accountCode: 'EXP-SHIP',
-            entityType: 'system',
-            entityId: 'sys_shipping_costs',
-            entityName: 'حساب تكاليف الشحن الدولي',
-            type: 'Debit',
-            amount: shipCostConverted,
-            amountOriginal: currentCalcs.shippingCostSAR,
-            currencyOriginal: 'SAR',
-            description: isAr ? `تكلفة الشحن الدولي للطلب: ${orderNumber}` : `International shipping cost for order: ${orderNumber}`,
-            refNumber: orderNumber,
-            module: 'expense',
-            createdByUid: auth.currentUser?.uid || 'system',
-            createdByName: profile?.fullName || 'Root Admin',
-            createdAt: Date.now()
-          });
+          await financialAccountService.triggerAutomaticVoucher(
+            'international_shipping',
+            { orderNumber },
+            {
+              isAr,
+              rawAmount: shipCostConverted,
+              profileName: profile?.fullName || 'Root Admin'
+            }
+          );
         } catch (e) {
           console.error('Failed to log shipping cost', e);
         }
@@ -1605,25 +1561,18 @@ export default function Orders() {
             { USD: selectedOrder.exchangeRateUSD || settings.exchangeRateUSD, SAR: selectedOrder.exchangeRateYER || settings.exchangeRateSAR }
           );
 
-          await financialAccountService.recordTransaction(linkedAccountId, {
-            accountId: linkedAccountId,
-            accountCode: linkedAccountCode || '',
-            entityType: 'customer',
-            entityId: selectedOrder.customerId,
-            entityName: selectedOrder.customerName,
-            type: 'Credit', // Crediting customer for payment received
-            amount: convertedPaid,
-            amountOriginal: paidVal,
-            currencyOriginal: 'YER',
-            description: isAr
-              ? `دفعة للطلب رقم: ${selectedOrder.orderNumber} (طريقة الدفع: ${paymentFormData.method})`
-              : `Payment for order: ${selectedOrder.orderNumber} (via ${paymentFormData.method})`,
-            refNumber: selectedOrder.orderNumber,
-            module: 'payment',
-            createdByUid: auth.currentUser?.uid || 'system',
-            createdByName: profile?.fullName || 'Root Admin',
-            createdAt: Date.now()
-          });
+          const systemAccs = await financialAccountService.ensureSystemAccounts('YER');
+
+          await financialAccountService.triggerAutomaticVoucher(
+            'order_payment',
+            { orderNumber: selectedOrder.orderNumber },
+            {
+              customer: customerRecord,
+              isAr,
+              rawAmount: convertedPaid,
+              profileName: profile?.fullName || 'Root Admin'
+            }
+          );
         } catch (txErr) {
           console.error('[Orders] Error registering payment transaction on financial account:', txErr);
         }
@@ -1702,83 +1651,48 @@ export default function Orders() {
           { USD: selectedOrder.exchangeRateUSD || settings.exchangeRateUSD, SAR: selectedOrder.exchangeRateYER || settings.exchangeRateSAR }
         );
 
-        const custodyPayload = {
-          expenseNumber,
-          category: 'custody',
-          type: 'Custody',
-          amount: remainingVal,
-          currency: 'YER',
-          amountInDefaultCurrency: convertedRemainingVal,
-          recipientId: courierId,
-          recipientEntityId: courierId,
-          recipientEntityType: 'courier',
-          recipientName: courierName,
-          linkedAccountId,
-          linkedAccountCode,
-          notes: isAr
-            ? `عهدة تلقائية مرحلة من تسليم الطلب رقم: ${selectedOrder.orderNumber}`
-            : `Auto-custody generated from delivery of order: ${selectedOrder.orderNumber}`,
-          status: 'Pending',
-          createdByUid: auth.currentUser?.uid || 'system',
-          createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
-          createdByName: profile?.fullName || 'System Auto-Custody',
-          createdAt: Date.now()
-        };
-
-        await addDoc(collection(db, 'expenses'), custodyPayload);
-
-        // --- Courier Financial Account Transaction ---
-        if (linkedAccountId) {
-          try {
-            await financialAccountService.recordTransaction(linkedAccountId, {
-              accountId: linkedAccountId,
-              accountCode: linkedAccountCode || '',
-              entityType: 'courier',
-              entityId: courierId,
-              entityName: courierName,
-              type: 'Debit', // Charging custody to courier
-              amount: convertedRemainingVal,
-              amountOriginal: remainingVal,
-              currencyOriginal: 'YER',
-              description: isAr
-                ? `عهدة تلقائية مرحلة من تسليم الطلب رقم: ${selectedOrder.orderNumber}`
-                : `Auto-custody generated from delivery of order: ${selectedOrder.orderNumber}`,
-              refNumber: expenseNumber,
-              module: 'custody',
-              createdByUid: auth.currentUser?.uid || 'system',
-              createdByName: profile?.fullName || 'System Auto-Custody',
-              createdAt: Date.now()
-            });
-          } catch (txErr) {
-            console.warn('[Orders] Could not record auto-custody on courier financial account:', txErr);
-          }
+        const custodyRule = autoVoucherRules.find(r => r.id === 'custody_payment');
+        if (!custodyRule || custodyRule.isActive !== false) {
+          const custodyPayload = {
+            expenseNumber,
+            category: 'custody',
+            type: 'Custody',
+            amount: remainingVal,
+            currency: 'YER',
+            amountInDefaultCurrency: convertedRemainingVal,
+            recipientId: courierId,
+            recipientEntityId: courierId,
+            recipientEntityType: 'courier',
+            recipientName: courierName,
+            linkedAccountId,
+            linkedAccountCode,
+            notes: isAr
+              ? `عهدة تلقائية مرحلة من تسليم الطلب رقم: ${selectedOrder.orderNumber}`
+              : `Auto-custody generated from delivery of order: ${selectedOrder.orderNumber}`,
+            status: 'Pending',
+            createdByUid: auth.currentUser?.uid || 'system',
+            createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
+            createdByName: profile?.fullName || 'System Auto-Custody',
+            createdAt: Date.now()
+          };
+          
+          await addDoc(collection(db, 'expenses'), custodyPayload);
         }
 
-        // --- Customer Financial Account Transaction ---
+        // --- Combined Courier Custody & Customer Payment transaction ---
         const customerRecord = customers.find(c => c.id === selectedOrder.customerId);
-        if (customerRecord?.financialAccountId) {
+        if (linkedAccountId && customerRecord?.financialAccountId) {
           try {
-            await financialAccountService.recordTransaction(customerRecord.financialAccountId, {
-              accountId: customerRecord.financialAccountId,
-              accountCode: customerRecord.financialAccountCode || '',
-              entityType: 'customer',
-              entityId: selectedOrder.customerId,
-              entityName: selectedOrder.customerName,
-              type: 'Credit', // Customer paid the courier
-              amount: convertedRemainingVal,
-              amountOriginal: remainingVal,
-              currencyOriginal: 'YER',
-              description: isAr
-                ? `تسوية تلقائية لتسليم الطلب رقم: ${selectedOrder.orderNumber} (مع المندوب)`
-                : `Auto credit for delivery of order: ${selectedOrder.orderNumber} (via courier)`,
-              refNumber: selectedOrder.orderNumber,
-              module: 'payment',
-              createdByUid: auth.currentUser?.uid || 'system',
-              createdByName: profile?.fullName || 'System Auto-Custody',
-              createdAt: Date.now()
+            await financialAccountService.triggerAutomaticVoucher('custody_payment', selectedOrder, {
+              courier: { financialAccountId: linkedAccountId, financialAccountCode: linkedAccountCode },
+              customer: customerRecord,
+              isAr,
+              rawAmount: convertedRemainingVal,
+              expenseNumber,
+              profileName: profile?.fullName || 'System Auto-Custody'
             });
           } catch (txErr) {
-            console.warn('[Orders] Could not record auto-payment on customer financial account:', txErr);
+            console.warn('[Orders] Could not record auto-custody/payment transactions:', txErr);
           }
         }
 
@@ -1811,51 +1725,42 @@ export default function Orders() {
           { USD: selectedOrder.exchangeRateUSD || settings.exchangeRateUSD, SAR: selectedOrder.exchangeRateYER || settings.exchangeRateSAR }
         );
 
-        const wagePayload = {
-          expenseNumber: wageNumber,
-          category: 'wage',
-          type: 'Wage',
-          amount: deliveryFee,
-          currency: 'YER',
-          amountInDefaultCurrency: convertedFee,
-          recipientId: courierId,
-          recipientEntityId: courierId,
-          recipientEntityType: 'courier',
-          recipientName: courierName,
-          linkedAccountId,
-          linkedAccountCode,
-          notes: isAr
-            ? `أجور توصيل تلقائية لتسليم الطلب رقم: ${selectedOrder.orderNumber}`
-            : `Auto-wage for delivery of order: ${selectedOrder.orderNumber}`,
-          status: 'Approved',
-          createdByUid: auth.currentUser?.uid || 'system',
-          createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
-          createdByName: profile?.fullName || 'System Auto-Wage',
-          createdAt: Date.now()
-        };
+        const wageRule = autoVoucherRules.find(r => r.id === 'delivery_wage');
+        if (!wageRule || wageRule.isActive !== false) {
+          const wagePayload = {
+            expenseNumber: wageNumber,
+            category: 'wage',
+            type: 'Wage',
+            amount: deliveryFee,
+            currency: 'YER',
+            amountInDefaultCurrency: convertedFee,
+            recipientId: courierId,
+            recipientEntityId: courierId,
+            recipientEntityType: 'courier',
+            recipientName: courierName,
+            linkedAccountId,
+            linkedAccountCode,
+            notes: isAr
+              ? `أجور توصيل تلقائية لتسليم الطلب رقم: ${selectedOrder.orderNumber}`
+              : `Auto-wage for delivery of order: ${selectedOrder.orderNumber}`,
+            status: 'Approved',
+            createdByUid: auth.currentUser?.uid || 'system',
+            createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
+            createdByName: profile?.fullName || 'System Auto-Wage',
+            createdAt: Date.now()
+          };
 
-        await addDoc(collection(db, 'expenses'), wagePayload);
+          await addDoc(collection(db, 'expenses'), wagePayload);
+        }
 
         if (linkedAccountId) {
           try {
-            await financialAccountService.recordTransaction(linkedAccountId, {
-              accountId: linkedAccountId,
-              accountCode: linkedAccountCode || '',
-              entityType: 'courier',
-              entityId: courierId,
-              entityName: courierName,
-              type: 'Credit',
-              amount: convertedFee,
-              amountOriginal: deliveryFee,
-              currencyOriginal: 'YER',
-              description: isAr
-                ? `أجور توصيل تلقائية لتسليم الطلب رقم: ${selectedOrder.orderNumber}`
-                : `Auto-wage for delivery of order: ${selectedOrder.orderNumber}`,
-              refNumber: wageNumber,
-              module: 'expense',
-              createdByUid: auth.currentUser?.uid || 'system',
-              createdByName: profile?.fullName || 'System Auto-Wage',
-              createdAt: Date.now()
+            await financialAccountService.triggerAutomaticVoucher('delivery_wage', selectedOrder, {
+              courier: { financialAccountId: linkedAccountId, financialAccountCode: linkedAccountCode },
+              isAr,
+              rawAmount: convertedFee,
+              expenseNumber: wageNumber,
+              profileName: profile?.fullName || 'System Auto-Wage'
             });
           } catch (txErr) {
             console.warn('[Orders] Could not record delivery wage transactions:', txErr);
@@ -1894,51 +1799,42 @@ export default function Orders() {
               { USD: selectedOrder.exchangeRateUSD || settings.exchangeRateUSD, SAR: selectedOrder.exchangeRateYER || settings.exchangeRateSAR }
             );
 
-            const commissionPayload = {
-              expenseNumber: commissionNumber,
-              category: 'wage',
-              type: 'Wage',
-              amount: commissionProfit,
-              currency: finalCurrency,
-              amountInDefaultCurrency: convertedCommission,
-              recipientId: shippingCourierId,
-              recipientEntityId: shippingCourierId,
-              recipientEntityType: 'courier',
-              recipientName: courierName,
-              linkedAccountId,
-              linkedAccountCode,
-              notes: isAr
-                ? `عمولة شحن تلقائية (${courierRecord.commissionRate}%) للطلب رقم: ${selectedOrder.orderNumber}`
-                : `Auto-commission (${courierRecord.commissionRate}%) for order: ${selectedOrder.orderNumber}`,
-              status: 'Approved',
-              createdByUid: auth.currentUser?.uid || 'system',
-              createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
-              createdByName: profile?.fullName || 'System Auto-Commission',
-              createdAt: Date.now()
-            };
+            const commissionRule = autoVoucherRules.find(r => r.id === 'courier_commission');
+            if (!commissionRule || commissionRule.isActive !== false) {
+              const commissionPayload = {
+                expenseNumber: commissionNumber,
+                category: 'wage',
+                type: 'Wage',
+                amount: commissionProfit,
+                currency: finalCurrency,
+                amountInDefaultCurrency: convertedCommission,
+                recipientId: shippingCourierId,
+                recipientEntityId: shippingCourierId,
+                recipientEntityType: 'courier',
+                recipientName: courierName,
+                linkedAccountId,
+                linkedAccountCode,
+                notes: isAr
+                  ? `عمولة شحن تلقائية (${courierRecord.commissionRate}%) للطلب رقم: ${selectedOrder.orderNumber}`
+                  : `Auto-commission (${courierRecord.commissionRate}%) for order: ${selectedOrder.orderNumber}`,
+                status: 'Approved',
+                createdByUid: auth.currentUser?.uid || 'system',
+                createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
+                createdByName: profile?.fullName || 'System Auto-Commission',
+                createdAt: Date.now()
+              };
 
-            await addDoc(collection(db, 'expenses'), commissionPayload);
+              await addDoc(collection(db, 'expenses'), commissionPayload);
+            }
 
             if (linkedAccountId) {
               try {
-                await financialAccountService.recordTransaction(linkedAccountId, {
-                  accountId: linkedAccountId,
-                  accountCode: linkedAccountCode || '',
-                  entityType: 'courier',
-                  entityId: shippingCourierId,
-                  entityName: courierName,
-                  type: 'Credit',
-                  amount: commissionProfit,
-                  amountOriginal: commissionProfitOriginal,
-                  currencyOriginal: 'SAR',
-                  description: isAr
-                    ? `عمولة شحن تلقائية (${courierRecord.commissionRate}%) للطلب رقم: ${selectedOrder.orderNumber}`
-                    : `Auto-commission (${courierRecord.commissionRate}%) for order: ${selectedOrder.orderNumber}`,
-                  refNumber: commissionNumber,
-                  module: 'expense',
-                  createdByUid: auth.currentUser?.uid || 'system',
-                  createdByName: profile?.fullName || 'System Auto-Commission',
-                  createdAt: Date.now()
+                await financialAccountService.triggerAutomaticVoucher('courier_commission', selectedOrder, {
+                  courier: courierRecord,
+                  isAr,
+                  rawAmount: convertedCommission,
+                  expenseNumber: commissionNumber,
+                  profileName: profile?.fullName || 'System Auto-Commission'
                 });
               } catch (txErr) {
                 console.warn('[Orders] Could not record commission wage on collection courier financial account:', txErr);
@@ -1954,34 +1850,19 @@ export default function Orders() {
 
       if (isStrictlyDelivered && !wasStrictlyDelivered && parseFloat(selectedOrder.profitCompanySAR || '0') > 0) {
         try {
-          const sysAccounts = await financialAccountService.ensureSystemAccounts(settings.currency || 'SAR');
-          if (sysAccounts['sys_profit_account']) {
-            const profitValSAR = parseFloat(selectedOrder.profitCompanySAR || '0');
-            const profitConverted = financialAccountService.convertToDefaultCurrency(
-              profitValSAR,
-              'SAR',
-              settings.currency || 'YER',
-              { USD: selectedOrder.exchangeRateUSD || settings.exchangeRateUSD || 535, SAR: selectedOrder.exchangeRateYER || settings.exchangeRateSAR || 140 }
-            );
+          const profitValSAR = parseFloat(selectedOrder.profitCompanySAR || '0');
+          const profitConverted = financialAccountService.convertToDefaultCurrency(
+            profitValSAR,
+            'SAR',
+            settings.currency || 'YER',
+            { USD: selectedOrder.exchangeRateUSD || settings.exchangeRateUSD || 535, SAR: selectedOrder.exchangeRateYER || settings.exchangeRateSAR || 140 }
+          );
 
-            await financialAccountService.recordTransaction(sysAccounts['sys_profit_account'], {
-              accountId: sysAccounts['sys_profit_account'],
-              accountCode: 'REV-PRFT',
-              entityType: 'system',
-              entityId: 'sys_profit_account',
-              entityName: 'حساب أرباح الشركة',
-              type: 'Credit',
-              amount: profitConverted,
-              amountOriginal: profitValSAR,
-              currencyOriginal: 'SAR',
-              description: isAr ? `صافي أرباح الشركة للطلب: ${selectedOrder.orderNumber}` : `Company profit for order: ${selectedOrder.orderNumber}`,
-              refNumber: selectedOrder.orderNumber || '',
-              module: 'order',
-              createdByUid: auth.currentUser?.uid || 'system',
-              createdByName: profile?.fullName || 'System Auto-Profit',
-              createdAt: Date.now()
-            });
-          }
+          await financialAccountService.triggerAutomaticVoucher('company_profit', selectedOrder, {
+            isAr,
+            rawAmount: profitConverted,
+            profileName: profile?.fullName || 'System Auto-Profit'
+          });
         } catch (e) {
           console.warn('[Orders] Could not record company profit on status transition:', e);
         }
@@ -2310,83 +2191,48 @@ export default function Orders() {
             { USD: ord.exchangeRateUSD || settings.exchangeRateUSD, SAR: ord.exchangeRateYER || settings.exchangeRateSAR }
           );
 
-          const custodyPayload = {
-            expenseNumber,
-            category: 'custody',
-            type: 'Custody',
-            amount: remainingVal,
-            currency: 'YER',
-            amountInDefaultCurrency: convertedRemainingVal,
-            recipientId: courierId,
-            recipientEntityId: courierId,
-            recipientEntityType: 'courier',
-            recipientName: courierName,
-            linkedAccountId,
-            linkedAccountCode,
-            notes: isAr
-              ? `عهدة تلقائية مرحلة من تسليم الطلب رقم: ${ord.orderNumber}`
-              : `Auto-custody generated from delivery of order: ${ord.orderNumber}`,
-            status: 'Pending',
-            createdByUid: auth.currentUser?.uid || 'system',
-            createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
-            createdByName: profile?.fullName || 'System Auto-Custody',
-            createdAt: Date.now()
-          };
+          const custodyRule = autoVoucherRules.find(r => r.id === 'custody_payment');
+          if (!custodyRule || custodyRule.isActive !== false) {
+            const custodyPayload = {
+              expenseNumber,
+              category: 'custody',
+              type: 'Custody',
+              amount: remainingVal,
+              currency: 'YER',
+              amountInDefaultCurrency: convertedRemainingVal,
+              recipientId: courierId,
+              recipientEntityId: courierId,
+              recipientEntityType: 'courier',
+              recipientName: courierName,
+              linkedAccountId,
+              linkedAccountCode,
+              notes: isAr
+                ? `عهدة تلقائية مرحلة من تسليم الطلب رقم: ${ord.orderNumber}`
+                : `Auto-custody generated from delivery of order: ${ord.orderNumber}`,
+              status: 'Pending',
+              createdByUid: auth.currentUser?.uid || 'system',
+              createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
+              createdByName: profile?.fullName || 'System Auto-Custody',
+              createdAt: Date.now()
+            };
 
-          await addDoc(collection(db, 'expenses'), custodyPayload);
-
-          // --- Courier Financial Account Transaction ---
-          if (linkedAccountId) {
-            try {
-              await financialAccountService.recordTransaction(linkedAccountId, {
-                accountId: linkedAccountId,
-                accountCode: linkedAccountCode || '',
-                entityType: 'courier',
-                entityId: courierId,
-                entityName: courierName,
-                type: 'Debit', // Charging custody to courier
-                amount: convertedRemainingVal,
-                amountOriginal: remainingVal,
-                currencyOriginal: 'YER',
-                description: isAr
-                  ? `عهدة تلقائية مرحلة من تسليم الطلب رقم: ${ord.orderNumber}`
-                  : `Auto-custody generated from delivery of order: ${ord.orderNumber}`,
-                refNumber: expenseNumber,
-                module: 'custody',
-                createdByUid: auth.currentUser?.uid || 'system',
-                createdByName: profile?.fullName || 'System Auto-Custody',
-                createdAt: Date.now()
-              });
-            } catch (txErr) {
-              console.warn('[Orders] Could not record auto-custody on courier financial account:', txErr);
-            }
+            await addDoc(collection(db, 'expenses'), custodyPayload);
           }
 
-          // --- Customer Financial Account Transaction ---
+          // --- Combined Courier Custody & Customer Payment transaction ---
           const customerRecord = customers.find(c => c.id === ord.customerId);
-          if (customerRecord?.financialAccountId) {
+          if (linkedAccountId && customerRecord?.financialAccountId) {
             try {
-              await financialAccountService.recordTransaction(customerRecord.financialAccountId, {
-                accountId: customerRecord.financialAccountId,
-                accountCode: customerRecord.financialAccountCode || '',
-                entityType: 'customer',
-                entityId: ord.customerId,
-                entityName: ord.customerName,
-                type: 'Credit', // Customer paid the courier
-                amount: convertedRemainingVal,
-                amountOriginal: remainingVal,
-                currencyOriginal: 'YER',
-                description: isAr
-                  ? `تسوية تلقائية لتسليم الطلب رقم: ${ord.orderNumber} (مع المندوب)`
-                  : `Auto credit for delivery of order: ${ord.orderNumber} (via courier)`,
-                refNumber: ord.orderNumber,
-                module: 'payment',
-                createdByUid: auth.currentUser?.uid || 'system',
-                createdByName: profile?.fullName || 'System Auto-Custody',
-                createdAt: Date.now()
+              await financialAccountService.triggerAutomaticVoucher('custody_payment', ord, {
+                courier: { financialAccountId: linkedAccountId, financialAccountCode: linkedAccountCode },
+                customer: customerRecord,
+                isAr,
+                rawAmount: convertedRemainingVal,
+                expenseNumber,
+                profileName: profile?.fullName || 'System Auto-Custody'
               });
             } catch (txErr) {
-              console.warn('[Orders] Could not record auto-payment on customer financial account:', txErr);
+              console.warn('[Orders] Could not record auto-custody/payment transactions in batch:', txErr);
             }
           }
 
@@ -2418,76 +2264,43 @@ export default function Orders() {
             { USD: ord.exchangeRateUSD || settings.exchangeRateUSD, SAR: ord.exchangeRateYER || settings.exchangeRateSAR }
           );
 
-          const wagePayload = {
-            expenseNumber: wageNumber,
-            category: 'wage',
-            type: 'Wage',
-            amount: deliveryFee,
-            currency: 'YER',
-            amountInDefaultCurrency: convertedFee,
-            recipientId: courierId,
-            recipientEntityId: courierId,
-            recipientEntityType: 'courier',
-            recipientName: courierName,
-            linkedAccountId,
-            linkedAccountCode,
-            notes: isAr
-              ? `أجور توصيل تلقائية لتسليم الطلب رقم: ${ord.orderNumber}`
-              : `Auto-wage for delivery of order: ${ord.orderNumber}`,
-            status: 'Approved',
-            createdByUid: auth.currentUser?.uid || 'system',
-            createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
-            createdByName: profile?.fullName || 'System Auto-Wage',
-            createdAt: Date.now()
-          };
+          const wageRule = autoVoucherRules.find(r => r.id === 'delivery_wage');
+          if (!wageRule || wageRule.isActive !== false) {
+            const wagePayload = {
+              expenseNumber: wageNumber,
+              category: 'wage',
+              type: 'Wage',
+              amount: deliveryFee,
+              currency: 'YER',
+              amountInDefaultCurrency: convertedFee,
+              recipientId: courierId,
+              recipientEntityId: courierId,
+              recipientEntityType: 'courier',
+              recipientName: courierName,
+              linkedAccountId,
+              linkedAccountCode,
+              notes: isAr
+                ? `أجور توصيل تلقائية لتسليم الطلب رقم: ${ord.orderNumber}`
+                : `Auto-wage for delivery of order: ${ord.orderNumber}`,
+              status: 'Approved',
+              createdByUid: auth.currentUser?.uid || 'system',
+              createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
+              createdByName: profile?.fullName || 'System Auto-Wage',
+              createdAt: Date.now()
+            };
 
-          await addDoc(collection(db, 'expenses'), wagePayload);
+            await addDoc(collection(db, 'expenses'), wagePayload);
+          }
 
           if (linkedAccountId) {
             try {
-              await financialAccountService.recordTransaction(linkedAccountId, {
-                accountId: linkedAccountId,
-                accountCode: linkedAccountCode || '',
-                entityType: 'courier',
-                entityId: courierId,
-                entityName: courierName,
-                type: 'Credit',
-                amount: convertedFee,
-                amountOriginal: deliveryFee,
-                currencyOriginal: 'YER',
-                description: isAr
-                  ? `أجور توصيل تلقائية لتسليم الطلب رقم: ${ord.orderNumber}`
-                  : `Auto-wage for delivery of order: ${ord.orderNumber}`,
-                refNumber: wageNumber,
-                module: 'expense',
-                createdByUid: auth.currentUser?.uid || 'system',
-                createdByName: profile?.fullName || 'System Auto-Wage',
-                createdAt: Date.now()
+              await financialAccountService.triggerAutomaticVoucher('delivery_wage', ord, {
+                courier: { financialAccountId: linkedAccountId, financialAccountCode: linkedAccountCode },
+                isAr,
+                rawAmount: convertedFee,
+                expenseNumber: wageNumber,
+                profileName: profile?.fullName || 'System Auto-Wage'
               });
-
-              // Also record Debit on Company's Delivery Expense Account (sys_delivery_cost)
-              const sysAccs = await financialAccountService.ensureSystemAccounts(settings.currency || 'SAR');
-              if (sysAccs['sys_delivery_cost']) {
-                await financialAccountService.recordTransaction(sysAccs['sys_delivery_cost'], {
-                  accountId: sysAccs['sys_delivery_cost'],
-                  accountCode: 'EXP-DELIVERY',
-                  entityType: 'system',
-                  entityId: 'sys_delivery_cost',
-                  entityName: 'حساب مصروفات التوصيل',
-                  type: 'Debit',
-                  amount: convertedFee,
-                  amountOriginal: deliveryFee,
-                  currencyOriginal: 'YER',
-                  description: isAr
-                    ? `أجور توصيل تلقائية لتسليم الطلب رقم: ${ord.orderNumber}`
-                    : `Auto-wage for delivery of order: ${ord.orderNumber}`,
-                  refNumber: wageNumber,
-                  module: 'expense',
-                  createdByUid: auth.currentUser?.uid || 'system',
-                  createdByName: profile?.fullName || 'System Auto-Wage',
-                  createdAt: Date.now()
-                });
-              }
             } catch (txErr) {
               console.warn('[Orders] Could not record delivery wage transactions in bulk update:', txErr);
             }
@@ -2525,51 +2338,42 @@ export default function Orders() {
                 { USD: ord.exchangeRateUSD || settings.exchangeRateUSD, SAR: ord.exchangeRateYER || settings.exchangeRateSAR }
               );
 
-              const commissionPayload = {
-                expenseNumber: commissionNumber,
-                category: 'wage',
-                type: 'Wage',
-                amount: commissionProfit,
-                currency: finalCurrency,
-                amountInDefaultCurrency: convertedCommission,
-                recipientId: shippingCourierId,
-                recipientEntityId: shippingCourierId,
-                recipientEntityType: 'courier',
-                recipientName: courierName,
-                linkedAccountId,
-                linkedAccountCode,
-                notes: isAr
-                  ? `عمولة شحن تلقائية (${courierRecord.commissionRate}%) للطلب رقم: ${ord.orderNumber}`
-                  : `Auto-commission (${courierRecord.commissionRate}%) for order: ${ord.orderNumber}`,
-                status: 'Approved',
-                createdByUid: auth.currentUser?.uid || 'system',
-                createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
-                createdByName: profile?.fullName || 'System Auto-Commission',
-                createdAt: Date.now()
-              };
+              const commissionRule = autoVoucherRules.find(r => r.id === 'courier_commission');
+              if (!commissionRule || commissionRule.isActive !== false) {
+                const commissionPayload = {
+                  expenseNumber: commissionNumber,
+                  category: 'wage',
+                  type: 'Wage',
+                  amount: commissionProfit,
+                  currency: finalCurrency,
+                  amountInDefaultCurrency: convertedCommission,
+                  recipientId: shippingCourierId,
+                  recipientEntityId: shippingCourierId,
+                  recipientEntityType: 'courier',
+                  recipientName: courierName,
+                  linkedAccountId,
+                  linkedAccountCode,
+                  notes: isAr
+                    ? `عمولة شحن تلقائية (${courierRecord.commissionRate}%) للطلب رقم: ${ord.orderNumber}`
+                    : `Auto-commission (${courierRecord.commissionRate}%) for order: ${ord.orderNumber}`,
+                  status: 'Approved',
+                  createdByUid: auth.currentUser?.uid || 'system',
+                  createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
+                  createdByName: profile?.fullName || 'System Auto-Commission',
+                  createdAt: Date.now()
+                };
 
-              await addDoc(collection(db, 'expenses'), commissionPayload);
+                await addDoc(collection(db, 'expenses'), commissionPayload);
+              }
 
               if (linkedAccountId) {
                 try {
-                  await financialAccountService.recordTransaction(linkedAccountId, {
-                    accountId: linkedAccountId,
-                    accountCode: linkedAccountCode || '',
-                    entityType: 'courier',
-                    entityId: shippingCourierId,
-                    entityName: courierName,
-                    type: 'Credit',
-                    amount: commissionProfit,
-                    amountOriginal: commissionProfitOriginal,
-                    currencyOriginal: 'SAR',
-                    description: isAr
-                      ? `عمولة شحن تلقائية (${courierRecord.commissionRate}%) للطلب رقم: ${ord.orderNumber}`
-                      : `Auto-commission (${courierRecord.commissionRate}%) for order: ${ord.orderNumber}`,
-                    refNumber: commissionNumber,
-                    module: 'expense',
-                    createdByUid: auth.currentUser?.uid || 'system',
-                    createdByName: profile?.fullName || 'System Auto-Commission',
-                    createdAt: Date.now()
+                  await financialAccountService.triggerAutomaticVoucher('courier_commission', ord, {
+                    courier: courierRecord,
+                    isAr,
+                    rawAmount: convertedCommission,
+                    expenseNumber: commissionNumber,
+                    profileName: profile?.fullName || 'System Auto-Commission'
                   });
                 } catch (txErr) {
                   console.warn('[Orders] Could not record commission wage on collection courier financial account:', txErr);
@@ -3755,30 +3559,41 @@ export default function Orders() {
                 {(formData.orderSourceType === 'App' || formData.orderSourceType === 'SHEIN') && (
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-3 border-t border-slate-850/65">
                     {/* Bank Commission Checkbox & Rate */}
-                    {formData.orderSourceType === 'App' ? (
-                      <div className="flex items-center gap-3 bg-slate-900/40 p-3 rounded-2xl border border-slate-850">
-                        <input
-                          type="checkbox"
-                          id="bank-comm-check"
-                          checked={bankCommissionEnabled}
-                          onChange={(e) => setBankCommissionEnabled(e.target.checked)}
-                          //disabled={!canEditOrderDefaultsCreation}
-                          className="rounded bg-slate-950 border-slate-800 text-yellow-600 focus:ring-0 w-4 h-4 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                        />
-                        <label
-                          htmlFor="bank-comm-check"
-                          className={`text-[11px] font-bold text-slate-350 ${!canEditOrderDefaultsCreation ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-                        >
-                          {isAr ? 'عمولة بنك (%)' : 'Bank Comm (%)'}
-                        </label>
-                        {bankCommissionEnabled && (
+                    {formData.orderSourceType === 'App' || formData.orderSourceType === 'SHEIN' ? (
+                      <div className="flex flex-col gap-2 bg-slate-900/40 p-3 rounded-2xl border border-slate-850">
+                        <div className="flex items-center gap-3">
                           <input
-                            type="number"
-                            value={bankCommissionRate}
-                            onChange={(e) => canEditOrderDefaultsCreation && setBankCommissionRate(parseFloat(e.target.value) || 0)}
-                            //disabled={!canEditOrderDefaultsCreation}
-                            className="w-12 bg-slate-950 border border-slate-800 text-white rounded-xl p-1 text-center font-mono font-bold text-[10px] disabled:opacity-50 disabled:cursor-not-allowed"
+                            type="checkbox"
+                            id="bank-comm-check"
+                            checked={bankCommissionEnabled}
+                            onChange={(e) => setBankCommissionEnabled(e.target.checked)}
+                            className="rounded bg-slate-950 border-slate-800 text-yellow-600 focus:ring-0 w-4 h-4 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                           />
+                          <label
+                            htmlFor="bank-comm-check"
+                            className={`text-[11px] font-bold text-slate-350 cursor-pointer`}
+                          >
+                            {isAr ? 'عمولة البنك' : 'Bank Commission'}
+                          </label>
+                        </div>
+                        {bankCommissionEnabled && (
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={bankCommissionType}
+                              onChange={(e) => setBankCommissionType(e.target.value as 'percentage' | 'fixed')}
+                              className="bg-slate-950 border border-slate-800 text-slate-300 rounded-xl p-1 text-[10px] focus:ring-[#d4af37] focus:border-[#d4af37]"
+                            >
+                              <option value="percentage">{isAr ? 'نسبة (%)' : 'Percentage (%)'}</option>
+                              <option value="fixed">{isAr ? 'مبلغ ثابت' : 'Fixed Amount'}</option>
+                            </select>
+                            <input
+                              type="number"
+                              value={bankCommissionRate}
+                              onChange={(e) => setBankCommissionRate(parseFloat(e.target.value) || 0)}
+                              className="w-16 bg-slate-950 border border-slate-800 text-white rounded-xl p-1 text-center font-mono font-bold text-[10px] focus:ring-[#d4af37] focus:border-[#d4af37]"
+                              placeholder={bankCommissionType === 'percentage' ? '%' : 'SAR'}
+                            />
+                          </div>
                         )}
                       </div>
                     ) : (
@@ -4359,10 +4174,14 @@ export default function Orders() {
                     {/* Bank Commission section */}
                     {bankCommissionEnabled && calcs.bankCommissionSAR > 0 && (
                       <div className="flex justify-between items-center text-amber-500/80">
-                        <span className="font-medium">{isAr ? `عمولة الدفع الإلكتروني (${bankCommissionRate}%):` : `Bank Fee (${bankCommissionRate}%):`}</span>
+                        <span className="font-medium">
+                          {isAr 
+                            ? `عمولة البنك (${bankCommissionType === 'percentage' ? bankCommissionRate + '%' : bankCommissionRate + ' SAR'}):` 
+                            : `Bank Fee (${bankCommissionType === 'percentage' ? bankCommissionRate + '%' : bankCommissionRate + ' SAR'}):`}
+                        </span>
                         <div className="text-right">
-                          <span className="font-mono block">+{calcs.bankCommissionSAR.toLocaleString()} SAR</span>
-                          <span className="font-mono text-[9px] opacity-70 block">+{(calcs.bankCommissionSAR * (formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER)).toLocaleString()} YER</span>
+                          <span className="font-mono block">-{calcs.bankCommissionSAR.toLocaleString()} SAR</span>
+                          <span className="font-mono text-[9px] opacity-70 block">-{(calcs.bankCommissionSAR * (formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER)).toLocaleString()} YER</span>
                         </div>
                       </div>
                     )}

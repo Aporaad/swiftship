@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   collection, onSnapshot, query, orderBy, getDocs, doc, setDoc, getDoc, where, addDoc, deleteDoc
 } from 'firebase/firestore';
@@ -20,6 +21,7 @@ import {
 import { format, startOfDay, endOfDay, subDays, isWithinInterval } from 'date-fns';
 import * as XLSX from 'xlsx';
 import { notificationService } from '../services/notificationService';
+import { useExpenseCategories } from '../hooks/useExpenseCategories';
 
 // Interfaces
 interface ReportFilter {
@@ -101,18 +103,212 @@ const REPORT_TYPES = [
   { id: 'account_ledger', labelAr: 'تقرير تفصيلي لأي حساب (شجرة الحسابات)', labelEn: 'Detailed Account Ledger', icon: Layers },
 ];
 
-const EXPENSE_CATEGORIES = [
-  { id: 'all', labelAr: 'جميع التصنيفات', labelEn: 'All Categories' },
-  { id: 'OPERATIONAL', labelAr: 'مصاريف تشغيلية', labelEn: 'Operational' },
-  { id: 'FUEL', labelAr: 'بنزين ومحروقات', labelEn: 'Fuel' },
-  { id: 'SALARY', labelAr: 'رواتب وأجور', labelEn: 'Salaries' },
-  { id: 'PACKAGING', labelAr: 'تغليف وتعبئة', labelEn: 'Packaging' },
-  { id: 'RENT', labelAr: 'إيجارات ومكاتب', labelEn: 'Rent' },
-  { id: 'OTHER', labelAr: 'مصروفات أخرى', labelEn: 'Other' },
-];
+interface MultiAccountSelectorProps {
+  selectedIds: string[];
+  setSelectedIds: React.Dispatch<React.SetStateAction<string[]>>;
+  labelAr: string;
+  labelEn: string;
+  accounts: any[];
+  isAr: boolean;
+  onSave?: () => void;
+}
+
+const MultiAccountSelector: React.FC<MultiAccountSelectorProps> = ({
+  selectedIds,
+  setSelectedIds,
+  labelAr,
+  labelEn,
+  accounts,
+  isAr,
+  onSave
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [filterQuery, setFilterQuery] = useState('');
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const filteredAccounts = accounts.filter(acc => 
+    (acc.name || '').toLowerCase().includes(filterQuery.toLowerCase()) ||
+    (acc.accountCode || '').toLowerCase().includes(filterQuery.toLowerCase()) ||
+    (acc.entityName || '').toLowerCase().includes(filterQuery.toLowerCase())
+  );
+
+  const toggleSelection = (id: string) => {
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const selectAll = () => {
+    const allFilteredIds = filteredAccounts.map(a => a.id);
+    setSelectedIds(prev => {
+      const otherSelected = prev.filter(id => !allFilteredIds.includes(id));
+      return [...otherSelected, ...allFilteredIds];
+    });
+  };
+
+  const deselectAll = () => {
+    const allFilteredIds = filteredAccounts.map(a => a.id);
+    setSelectedIds(prev => prev.filter(id => !allFilteredIds.includes(id)));
+  };
+
+  const selectedAccounts = accounts.filter(acc => selectedIds.includes(acc.id));
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <span className="text-[10px] text-slate-400 font-bold block uppercase mb-1.5 tracking-wider">
+        {isAr ? labelAr : labelEn}
+      </span>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className={`w-full bg-slate-950 border rounded-2xl px-4 py-3 text-start flex justify-between items-center transition-all cursor-pointer shadow-inner relative focus:outline-none focus:ring-2 focus:ring-[#d4af37]/20 ${
+          isOpen ? 'border-[#d4af37] ring-2 ring-[#d4af37]/10' : 'border-slate-800 hover:border-slate-700'
+        }`}
+      >
+        <div className="flex flex-wrap items-center gap-1.5 overflow-hidden flex-1 select-none">
+          {selectedAccounts.length === 0 ? (
+            <span className="text-xs text-slate-500 font-bold italic">
+              {isAr ? 'اضغط لتحديد الحسابات من الشجرة ماليًا...' : 'Click to select accounts...'}
+            </span>
+          ) : (
+            <>
+              <span className="bg-[#d4af37]/25 text-[#d4af37] text-[10px] px-2 py-0.5 rounded-full font-black font-mono shrink-0">
+                {selectedAccounts.length}
+              </span>
+              <div className="flex flex-wrap gap-1">
+                {selectedAccounts.slice(0, 4).map(acc => (
+                  <span key={acc.id} className="bg-[#d4af37]/10 text-[#d4af37] border border-[#d4af37]/20 px-2 py-0.5 rounded-lg text-[9px] font-bold flex items-center gap-1">
+                    {acc.entityName || acc.name}
+                    <span className="text-slate-500 text-[8px] font-mono">[{acc.accountCode}]</span>
+                  </span>
+                ))}
+                {selectedAccounts.length > 4 && (
+                  <span className="bg-slate-900 border border-slate-800 text-slate-400 px-1.5 py-0.5 rounded-lg text-[8.5px] font-black">
+                    +{selectedAccounts.length - 4} {isAr ? 'حسابات إضافية' : 'others'}
+                  </span>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 shrink-0 ${isOpen ? 'rotate-180 text-[#d4af37]' : ''}`} />
+      </button>
+
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -8, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.96 }}
+            transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+            className="absolute z-[100] left-0 right-0 mt-2 bg-slate-950/98 backdrop-blur-md border border-slate-800 rounded-2xl shadow-2xl overflow-hidden p-3.5 space-y-3"
+          >
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                placeholder={isAr ? 'البحث باسم الحساب أو كود الدليل...' : 'Search by account name or code...'}
+                value={filterQuery}
+                onChange={e => setFilterQuery(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-850 rounded-xl pl-9 pr-4 py-2 text-[11px] text-white outline-none focus:border-[#d4af37]/45 focus:bg-slate-900 transition-all font-bold placeholder:text-slate-550"
+              />
+            </div>
+
+            <div className="flex justify-between items-center text-[10px] border-b border-slate-900 pb-2 px-1">
+              <span className="text-slate-500 font-bold">
+                {isAr ? `${filteredAccounts.length} حساب متاح` : `${filteredAccounts.length} accounts available`}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={selectAll}
+                  className="text-[#d4af37] hover:text-[#e4cf67] font-black transition-colors"
+                >
+                  {isAr ? 'تحديد الكل' : 'Select All'}
+                </button>
+                <span className="text-slate-800">|</span>
+                <button
+                  type="button"
+                  onClick={deselectAll}
+                  className="text-slate-400 hover:text-slate-300 font-black transition-colors"
+                >
+                  {isAr ? 'إلغاء التحديد' : 'Clear All'}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1 max-h-[190px] overflow-y-auto pr-1">
+              {filteredAccounts.map(acc => {
+                const isSelected = selectedIds.includes(acc.id);
+                return (
+                  <div
+                    key={acc.id}
+                    onClick={() => toggleSelection(acc.id)}
+                    className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border text-[11px] font-bold cursor-pointer transition-all select-none ${
+                      isSelected
+                        ? 'bg-[#d4af37]/10 text-[#d4af37] border-[#d4af37]/35'
+                        : 'bg-slate-900/10 text-slate-400 border-transparent hover:bg-slate-900/40 hover:text-white'
+                    }`}
+                  >
+                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all shrink-0 ${
+                      isSelected ? 'bg-[#d4af37] border-[#d4af37] text-black animate-scale-in' : 'border-slate-800 bg-slate-950'
+                    }`}>
+                      {isSelected && <Check className="w-3 h-3 stroke-[3.5]" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="truncate">{acc.entityName || acc.name}</span>
+                        <span className="font-mono text-[9px] text-[#d4af37] shrink-0 font-black">[{acc.accountCode}]</span>
+                      </div>
+                      <div className="flex justify-between items-center text-[9px] text-slate-500 mt-0.5 font-mono">
+                        <span>{isAr ? 'الرصيد الحالي:' : 'Current Balance:'} {(acc.balance || 0).toLocaleString()} {acc.currency || 'SAR'}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {filteredAccounts.length === 0 && (
+                <p className="text-[10px] text-slate-500 italic text-center py-4">{isAr ? 'لا توجد حسابات مطابقة للبحث' : 'No matching accounts found.'}</p>
+              )}
+            </div>
+
+            {onSave && (
+              <div className="pt-2 border-t border-slate-900">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSave();
+                    setIsOpen(false);
+                  }}
+                  className="w-full bg-[#d4af37] hover:bg-[#c49f27] text-black text-[11px] font-black py-2 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 group"
+                >
+                  <Save className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                  {isAr ? 'حفظ التغييرات ومزامنة البيانات' : 'Save & Sync Changes'}
+                </button>
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
 
 export default function Reports() {
   const { settings } = useSettings();
+  const EXPENSE_CATEGORIES_DYNAMIC = useExpenseCategories();
   const { role, hasPermission, loading: roleLoading } = useRole();
   const isAr = settings.language === 'ar';
 
@@ -126,6 +322,8 @@ export default function Reports() {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [shippingCompanies, setShippingCompanies] = useState<any[]>([]);
   const [accountTransactions, setAccountTransactions] = useState<any[]>([]);
+  const [allAccountTransactions, setAllAccountTransactions] = useState<any[]>([]);
+  const [allTimeTransactions, setAllTimeTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Tabs layout
@@ -153,6 +351,96 @@ export default function Reports() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(true);
 
+  // Multi-account selection state variables for the reports requested
+  const [selectedPackagingAccountIds, setSelectedPackagingAccountIds] = useState<string[]>([]);
+  const [selectedOrdersCostAccountIds, setSelectedOrdersCostAccountIds] = useState<string[]>([]);
+  const [selectedShippingCompaniesAccountIds, setSelectedShippingCompaniesAccountIds] = useState<string[]>([]);
+  const [reportSettingsLoaded, setReportSettingsLoaded] = useState(false);
+
+  // Load saved account selections from database (Real-time sync)
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'settings', 'report_accounts'), snap => {
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data.packaging) setSelectedPackagingAccountIds(data.packaging || []);
+        if (data.orders_cost) setSelectedOrdersCostAccountIds(data.orders_cost || []);
+        if (data.shipping_companies) setSelectedShippingCompaniesAccountIds(data.shipping_companies || []);
+      }
+    });
+
+    // Set loaded flag after a brief delay to allow snapshots to arrive
+    const timer = setTimeout(() => setReportSettingsLoaded(true), 1000);
+
+    return () => {
+      unsub();
+      clearTimeout(timer);
+    };
+  }, []);
+
+  // Automatically initialize defaults ONLY if nothing is loaded from DB and reportSettingsLoaded is true
+  useEffect(() => {
+    if (accounts.length > 0 && reportSettingsLoaded) {
+      if (selectedPackagingAccountIds.length === 0) {
+        const pkgAcc = accounts.find(a => a.entityId === 'sys_packaging_fees' || a.accountCode === '5100-7355' || (a.name || '').includes('تغليف'));
+        if (pkgAcc) {
+          setSelectedPackagingAccountIds([pkgAcc.id]);
+        }
+      }
+      if (selectedOrdersCostAccountIds.length === 0) {
+        const defaults = accounts
+          .filter(a => ['sys_sourcing_cost', 'sys_shipping_costs', 'sys_delivery_cost'].includes(a.entityId || '') || 
+                       ['5100-4483', '5000-1122', '5300-7118', '5000-2788'].includes(a.accountCode || '') ||
+                       (a.name || '').includes('تجميع') || (a.name || '').includes('شحن') || (a.name || '').includes('توصيل'))
+          .map(a => a.id);
+        if (defaults.length > 0) {
+          setSelectedOrdersCostAccountIds(defaults);
+        }
+      }
+      if (selectedShippingCompaniesAccountIds.length === 0) {
+        const defaults = accounts
+          .filter(a => a.entityType === 'shipping_company' || 
+                       (a.name || '').includes('عمول') || (a.name || '').includes('شحن') || (a.accountCode || '').startsWith('5300'))
+          .map(a => a.id);
+        if (defaults.length > 0) {
+          setSelectedShippingCompaniesAccountIds(defaults);
+        }
+      }
+    }
+  }, [accounts, reportSettingsLoaded]);
+
+  const handleSaveAccountSelection = async (reportType: string) => {
+    try {
+      let selectedIds: string[] = [];
+      if (reportType === 'packaging') selectedIds = selectedPackagingAccountIds;
+      else if (reportType === 'orders_cost') selectedIds = selectedOrdersCostAccountIds;
+      else if (reportType === 'shipping_companies') selectedIds = selectedShippingCompaniesAccountIds;
+
+      // Use a single document in 'settings' collection for all report account selections
+      const docRef = doc(db, 'settings', 'report_accounts');
+      const snap = await getDoc(docRef);
+      const existingData = snap.exists() ? snap.data() : {};
+      
+      await setDoc(docRef, {
+        ...existingData,
+        [reportType]: selectedIds,
+        updatedAt: Date.now()
+      });
+
+      notificationService.notify({
+        title: isAr ? 'تم الحفظ والمزامنة' : 'Saved & Synced',
+        message: isAr ? 'تم حفظ ومزامنة الحسابات المحددة في جدول الإعدادات بنجاح' : 'Selected accounts saved and synced to settings table successfully',
+        type: 'success'
+      });
+    } catch (err: any) {
+      console.error(err);
+      notificationService.notify({
+        title: isAr ? 'خطأ في المزامنة' : 'Sync Error',
+        message: err.message,
+        type: 'error'
+      });
+    }
+  };
+
   // Active Print Slips Preview Modal
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [printZoomScale, setPrintZoomScale] = useState(0.8);
@@ -164,6 +452,54 @@ export default function Reports() {
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedExpenseCategory, setSelectedExpenseCategory] = useState<string | null>(null);
+
+  const convertToYER = (amount: number, currency: string) => {
+    const amt = parseFloat(String(amount || 0));
+    if (currency === 'USD') return amt * (settings.exchangeRateUSD || 535);
+    if (currency === 'SAR') return amt * (settings.exchangeRateSAR || 140);
+    return amt;
+  };
+
+  const convertCurrency = (amount: number, from: string, to: string) => {
+    const amt = parseFloat(String(amount || 0));
+    const normalizedFrom = (from || 'YER').toUpperCase();
+    const normalizedTo = (to || 'YER').toUpperCase();
+    if (normalizedFrom === normalizedTo) return amt;
+    
+    // first convert to YER
+    let inYER = amt;
+    if (normalizedFrom === 'USD') inYER = amt * (settings.exchangeRateUSD || 535);
+    else if (normalizedFrom === 'SAR') inYER = amt * (settings.exchangeRateSAR || 140);
+
+    // then convert from YER to target
+    if (normalizedTo === 'YER') return inYER;
+    if (normalizedTo === 'USD') return inYER / (settings.exchangeRateUSD || 535);
+    if (normalizedTo === 'SAR') return inYER / (settings.exchangeRateSAR || 140);
+    return amt;
+  };
+
+  // Fetch ALL account transactions for general financial metrics calculation
+  useEffect(() => {
+    const qAllTxs = query(
+      collection(db, 'account_transactions'),
+      orderBy('createdAt', 'desc')
+    );
+
+    const unsub = onSnapshot(qAllTxs, (snap) => {
+      const allTxs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+      setAllTimeTransactions(allTxs);
+      // Filter by active start/end date range
+      const filtered = allTxs.filter((tx: any) => {
+        const txDate = new Date(tx.createdAt);
+        const start = startOfDay(new Date(filters.startDate));
+        const end = endOfDay(new Date(filters.endDate));
+        return isWithinInterval(txDate, { start, end });
+      });
+      setAllAccountTransactions(filtered);
+    });
+
+    return () => unsub();
+  }, [filters.startDate, filters.endDate]);
 
   // Custom presets handlers
   const handleSaveFilterTemplate = async () => {
@@ -320,13 +656,15 @@ export default function Reports() {
     };
   }, [roleLoading]);
 
-  // Fetch detailed account transactions when account ID is selected or packaging report is active
+  // Fetch detailed account transactions when account ID is selected or packaging/orders_cost/shipping_companies report is active
   useEffect(() => {
     const isPackagingReport = activeReport === 'packaging';
+    const isOrdersCostReport = activeReport === 'orders_cost';
+    const isShippingCompaniesReport = activeReport === 'shipping_companies';
     const isAccountLedgerReport = activeReport === 'account_ledger';
-    const hasActiveDrilldown = !!(selectedCustomerId || selectedCourierId || selectedUserId || selectedOrderId);
+    const hasActiveDrilldown = !!(selectedCustomerId || selectedCourierId || selectedUserId || selectedOrderId || selectedExpenseCategory);
     
-    if (!filters.accountId && !filters.entityId && !isPackagingReport && !hasActiveDrilldown) {
+    if (!filters.accountId && !filters.entityId && !isPackagingReport && !isOrdersCostReport && !isShippingCompaniesReport && !hasActiveDrilldown) {
       setAccountTransactions([]);
       return;
     }
@@ -353,30 +691,84 @@ export default function Reports() {
         const selectedAccount = targetAccountId ? accounts.find(a => a.id === targetAccountId) : null;
         if (targetAccountId && (
           tx.accountId === targetAccountId || 
+          tx.accountId === 'sys_packaging_fees' ||
           (selectedAccount && (tx.entityId === selectedAccount.entityId || tx.accountId === selectedAccount.entityId))
         )) return true;
         
         const activeEntityId = filters.entityId || selectedCustomerId || selectedCourierId || selectedUserId;
-        if (activeEntityId && (tx.entityId === activeEntityId || tx.accountId === activeEntityId)) return true;
+        const activeEntityAccIds = accounts.filter(a => a.entityId === activeEntityId || a.id === activeEntityId).map(a => a.id);
+        if (activeEntityId && (
+          tx.entityId === activeEntityId || 
+          tx.accountId === activeEntityId ||
+          activeEntityAccIds.includes(tx.accountId)
+        )) return true;
 
         if (selectedOrderId) {
           const o = orders.find(ord => ord.id === selectedOrderId || ord.orderNumber === selectedOrderId);
-          if (o && (tx.refNumber === o.orderNumber || tx.description?.includes(o.orderNumber))) {
+          if (tx.refNumber === selectedOrderId || tx.description?.includes(selectedOrderId) || (o && (tx.refNumber === o.orderNumber || tx.description?.includes(o.orderNumber)))) {
             return true;
           }
         }
 
         if (selectedCustomerId) {
           const cust = customers.find(c => c.id === selectedCustomerId);
-          if (cust && (tx.description?.includes(cust.fullName) || (cust.phone && tx.description?.includes(cust.phone)))) return true;
+          const custAccIds = accounts.filter(a => a.entityType === 'customer' && a.entityId === selectedCustomerId).map(a => a.id);
+          if (cust && (
+            tx.entityId === selectedCustomerId ||
+            custAccIds.includes(tx.accountId) ||
+            tx.description?.includes(cust.fullName) || 
+            (cust.phone && tx.description?.includes(cust.phone))
+          )) return true;
+        }
+
+        if (selectedCourierId) {
+          const cour = couriers.find(c => c.id === selectedCourierId);
+          const courAccIds = accounts.filter(a => a.entityType === 'courier' && a.entityId === selectedCourierId).map(a => a.id);
+          if (cour && (
+            tx.entityId === selectedCourierId ||
+            courAccIds.includes(tx.accountId) ||
+            tx.description?.includes(cour.fullName) || 
+            (cour.phone && tx.description?.includes(cour.phone))
+          )) return true;
         }
 
         if (selectedUserId) {
           const u = users.find(usr => usr.id === selectedUserId);
-          if (u && (tx.description?.includes(u.fullName) || tx.description?.includes(u.displayName))) return true;
+          const userAccIds = accounts.filter(a => a.entityType === 'employee' && a.entityId === selectedUserId).map(a => a.id);
+          if (u && (
+            tx.entityId === selectedUserId ||
+            userAccIds.includes(tx.accountId) ||
+            tx.description?.includes(u.fullName) || 
+            tx.description?.includes(u.displayName)
+          )) return true;
         }
 
-        if (isPackagingReport && (tx.accountId === packagingAccountId || tx.entityId === 'sys_packaging_fees')) return true;
+        if (selectedExpenseCategory) {
+          const catObj = EXPENSE_CATEGORIES_DYNAMIC.find(c => c.id === selectedExpenseCategory);
+          const linkedAccount = accounts.find(a => 
+            (catObj?.accountId && (a.id === catObj.accountId || a.entityId === catObj.accountId)) || 
+            (catObj?.accountCode && a.accountCode === catObj.accountCode)
+          );
+          if (linkedAccount && (tx.accountId === linkedAccount.id || tx.entityId === linkedAccount.entityId || tx.accountId === linkedAccount.entityId)) {
+            return true;
+          }
+        }
+
+        if (isPackagingReport && (
+          selectedPackagingAccountIds.includes(tx.accountId) ||
+          tx.accountId === packagingAccountId || 
+          tx.accountId === 'sys_packaging_fees' || 
+          tx.entityId === 'sys_packaging_fees' || 
+          tx.accountCode === '5100-7355'
+        )) return true;
+
+        if (isOrdersCostReport && (
+          selectedOrdersCostAccountIds.includes(tx.accountId)
+        )) return true;
+
+        if (isShippingCompaniesReport && (
+          selectedShippingCompaniesAccountIds.includes(tx.accountId)
+        )) return true;
 
         return false;
       });
@@ -384,7 +776,7 @@ export default function Reports() {
     });
 
     return () => unsub();
-  }, [filters.accountId, filters.entityId, filters.startDate, filters.endDate, accounts, activeReport, selectedCustomerId, selectedCourierId, selectedUserId, selectedOrderId, orders, customers, users]);
+  }, [filters.accountId, filters.entityId, filters.startDate, filters.endDate, accounts, activeReport, selectedCustomerId, selectedCourierId, selectedUserId, selectedOrderId, selectedExpenseCategory, orders, customers, users, EXPENSE_CATEGORIES_DYNAMIC, selectedPackagingAccountIds, selectedOrdersCostAccountIds, selectedShippingCompaniesAccountIds]);
 
   // Save changes to print settings template in Firestore 
   const handleSavePrintSettings = async () => {
@@ -466,51 +858,106 @@ export default function Reports() {
   }, [orders, expenses, couriers, customers, users, shippingCompanies, filters, sortOrder, sortBy, activeReport]);
 
   const reportMetrics = useMemo(() => {
-    const ordersList = filteredData.orders;
-    const expensesList = filteredData.expenses;
-    
-    // Revenue calculations: Gross revenue of orders that are not Cancelled
-    const revenue = ordersList
-      .filter(o => o.orderStatus !== 'Cancelled')
-      .reduce((sum, o) => sum + (parseFloat(o.totalPrice) || 0), 0);
-      
-    // Total cost from expenses list
-    const costs = expensesList.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+    // 1. Identify specific system account IDs and codes
+    const profitAcc = accounts.find(a => a.entityId === 'sys_profit_account');
+    const pkgAcc = accounts.find(a => a.entityId === 'sys_packaging_fees');
+    const sourcingAcc = accounts.find(a => a.entityId === 'sys_sourcing_cost');
+    const shippingAcc = accounts.find(a => a.entityId === 'sys_shipping_costs');
+    const deliveryAcc = accounts.find(a => a.entityId === 'sys_delivery_cost');
+
+    const profitAccId = profitAcc?.id || 'sys_profit_account';
+    const pkgAccId = pkgAcc?.id || 'sys_packaging_fees';
+    const sourcingAccId = sourcingAcc?.id || 'sys_sourcing_cost';
+    const shippingAccId = shippingAcc?.id || 'sys_shipping_costs';
+    const deliveryAccId = deliveryAcc?.id || 'sys_delivery_cost';
+
+    // 2. Compute Revenue (Credit - Debit on Revenue accounts)
+    const revenue = allAccountTransactions
+      .filter(tx => tx.accountCode?.startsWith('4') || tx.accountCode?.startsWith('REV'))
+      .reduce((sum, tx) => sum + (tx.type === 'Credit' ? convertToYER(parseFloat(tx.amount) || 0, tx.currencyOriginal || tx.currency || 'YER') : -convertToYER(parseFloat(tx.amount) || 0, tx.currencyOriginal || tx.currency || 'YER')), 0);
+
+    // 3. Compute Costs (Debit - Credit on Expense accounts)
+    const costs = allAccountTransactions
+      .filter(tx => tx.accountCode?.startsWith('5') || tx.accountCode?.startsWith('EXP'))
+      .reduce((sum, tx) => sum + (tx.type === 'Debit' ? convertToYER(parseFloat(tx.amount) || 0, tx.currencyOriginal || tx.currency || 'YER') : -convertToYER(parseFloat(tx.amount) || 0, tx.currencyOriginal || tx.currency || 'YER')), 0);
+
     const profit = revenue - costs;
-    
-    // Individual costs for specific items
-    const defaultPackaging = expensesList
-      .filter(e => e.category === 'PACKAGING')
-      .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
 
-    const operationalCosts = expensesList
-      .filter(e => e.category === 'OPERATIONAL' || e.category === 'FUEL' || e.category === 'RENT')
-      .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+    // 4. Compute specific sub-costs for charts with proper fallbacks
+    const sourcingCosts = allAccountTransactions
+      .filter(tx => tx.accountId === sourcingAccId || tx.accountCode === '5100-4483')
+      .reduce((sum, tx) => sum + (tx.type === 'Debit' ? convertToYER(parseFloat(tx.amount) || 0, tx.currencyOriginal || tx.currency || 'YER') : -convertToYER(parseFloat(tx.amount) || 0, tx.currencyOriginal || tx.currency || 'YER')), 0);
 
-    const salaryCosts = expensesList
-      .filter(e => e.category === 'SALARY')
-      .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+    const shippingCosts = allAccountTransactions
+      .filter(tx => tx.accountId === shippingAccId || tx.accountCode === '5000-1122' || tx.accountCode === '5300-7118')
+      .reduce((sum, tx) => sum + (tx.type === 'Debit' ? convertToYER(parseFloat(tx.amount) || 0, tx.currencyOriginal || tx.currency || 'YER') : -convertToYER(parseFloat(tx.amount) || 0, tx.currencyOriginal || tx.currency || 'YER')), 0);
 
-    // Sum up custom packaging fee stored on actual order documents
-    const totalOrderPackagingFees = ordersList
-      .filter(o => o.orderStatus !== 'Cancelled')
-      .reduce((sum, o) => sum + (parseFloat(o.packagingFee) || 0), 0);
+    const deliveryCosts = allAccountTransactions
+      .filter(tx => tx.accountId === deliveryAccId || tx.accountCode === '5000-2788')
+      .reduce((sum, tx) => sum + (tx.type === 'Debit' ? convertToYER(parseFloat(tx.amount) || 0, tx.currencyOriginal || tx.currency || 'YER') : -convertToYER(parseFloat(tx.amount) || 0, tx.currencyOriginal || tx.currency || 'YER')), 0);
 
-    // Sum up shipping company actual costs
-    const shippingCosts = expensesList
-      .filter(e => e.category === 'OTHER' && (e.notes?.includes('شحن') || e.recipientName?.includes('شركة')))
-      .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+    const packagingCosts = allAccountTransactions
+      .filter(tx => tx.accountId === pkgAccId || tx.accountCode === '5100-7355')
+      .reduce((sum, tx) => sum + (tx.type === 'Credit' ? convertToYER(parseFloat(tx.amount) || 0, tx.currencyOriginal || tx.currency || 'YER') : -convertToYER(parseFloat(tx.amount) || 0, tx.currencyOriginal || tx.currency || 'YER')), 0); // Treated as collected revenue offset
+
+    const salaryCosts = allAccountTransactions
+      .filter(tx => tx.module === 'salary' || tx.accountCode?.startsWith('2130'))
+      .reduce((sum, tx) => sum + (tx.type === 'Debit' ? convertToYER(parseFloat(tx.amount) || 0, tx.currencyOriginal || tx.currency || 'YER') : -convertToYER(parseFloat(tx.amount) || 0, tx.currencyOriginal || tx.currency || 'YER')), 0);
+
+    const operationalCosts = Math.max(0, costs - (sourcingCosts + shippingCosts + deliveryCosts + salaryCosts));
 
     return { 
       revenue, 
       costs, 
       profit, 
-      packagingCosts: defaultPackaging || totalOrderPackagingFees, 
+      packagingCosts, 
       operationalCosts, 
       shippingCosts, 
       salaryCosts 
     };
-  }, [filteredData]);
+  }, [allAccountTransactions, accounts]);
+
+  const treasuryBalances = useMemo(() => {
+    let yerIn = 0, yerOut = 0;
+    let usdIn = 0, usdOut = 0;
+    let sarIn = 0, sarOut = 0;
+
+    const cashAccount = accounts.find(a => a.entityId === 'sys_cash_account');
+    if (cashAccount) {
+      allTimeTransactions.forEach(tx => {
+        if (tx.accountId === cashAccount.id) {
+          const amt = parseFloat(tx.amountOriginal || tx.amount || 0);
+          const cur = tx.currencyOriginal || tx.currency || 'YER';
+
+          if (cur === 'YER') {
+            if (tx.type === 'Debit') yerIn += amt;
+            if (tx.type === 'Credit') yerOut += amt;
+          } else if (cur === 'USD') {
+            if (tx.type === 'Debit') usdIn += amt;
+            if (tx.type === 'Credit') usdOut += amt;
+          } else if (cur === 'SAR') {
+            if (tx.type === 'Debit') sarIn += amt;
+            if (tx.type === 'Credit') sarOut += amt;
+          }
+        }
+      });
+    }
+
+    const yerBalance = yerIn - yerOut;
+    const usdBalance = usdIn - usdOut;
+    const sarBalance = sarIn - sarOut;
+
+    const usdToYer = usdBalance * (settings.exchangeRateUSD || 535);
+    const sarToYer = sarBalance * (settings.exchangeRateSAR || 140);
+    const combinedTotalYER = yerBalance + usdToYer + sarToYer;
+
+    return {
+      yer: { in: yerIn, out: yerOut, balance: yerBalance },
+      usd: { in: usdIn, out: usdOut, balance: usdBalance },
+      sar: { in: sarIn, out: sarOut, balance: sarBalance },
+      combinedTotalYER
+    };
+  }, [allTimeTransactions, accounts, settings]);
 
   // Derived charts and tables lists based on search parameter 
   const searchMatchList = (list: any[], keyField: string) => {
@@ -1015,7 +1462,8 @@ export default function Reports() {
                       onChange={e => setFilters(prev => ({ ...prev, type: e.target.value }))}
                       className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-[#d4af37]/45"
                     >
-                      {EXPENSE_CATEGORIES.map(cat => (
+                      <option value="all">{isAr ? 'جميع التصنيفات' : 'All Categories'}</option>
+                      {EXPENSE_CATEGORIES_DYNAMIC.map(cat => (
                         <option key={cat.id} value={cat.id}>{isAr ? cat.labelAr : cat.labelEn}</option>
                       ))}
                     </select>
@@ -1113,7 +1561,7 @@ export default function Reports() {
                   {/* KPI card decks */}
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div className="p-4 bg-gradient-to-br from-blue-950/20 to-slate-950 border border-blue-900/30 rounded-2xl relative">
-                      <span className="text-[10px] text-slate-500 font-black block uppercase mb-1">{isAr ? 'إجمالي المبيعات' : 'Gross Revenue'}</span>
+                      <span className="text-[10px] text-slate-500 font-black block uppercase mb-1">{isAr ? 'إجمالي الايرادات' : 'Gross Revenue'}</span>
                       <span className="text-lg font-mono font-black text-blue-400">{reportMetrics.revenue.toLocaleString()} <span className="text-[9px] text-slate-500">YER</span></span>
                       <div className="flex items-center gap-1.5 text-[9px] text-slate-400 mt-2">
                         <TrendingUp className="w-3.5 h-3.5 text-blue-400" />
@@ -1144,6 +1592,49 @@ export default function Reports() {
                       <div className="flex items-center gap-1.5 text-[9px] text-slate-500 mt-2">
                         <span>{isAr ? 'الكفاءة الهامشية' : 'Corporate performance'}</span>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Currency Treasuries and Exchange conversion live status */}
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 pt-1">
+                    <div className="p-4 bg-slate-900/40 border border-slate-800/60 rounded-2xl flex flex-col justify-between">
+                      <div>
+                        <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block mb-1">{isAr ? 'صندوق الريال اليمني YER' : 'YER Cash Box'}</span>
+                        <span className="text-base font-mono font-black text-emerald-400">{(treasuryBalances.yer.balance || 0).toLocaleString()} <span className="text-[9px] text-slate-500">YER</span></span>
+                      </div>
+                      <div className="text-[9px] text-slate-500 font-medium mt-2 flex justify-between border-t border-slate-850 pt-1.5">
+                        <span>{isAr ? 'المقبوضات: ' : 'Inflow: '}{(treasuryBalances.yer.in || 0).toLocaleString()}</span>
+                        <span>{isAr ? 'المدفوعات: ' : 'Outflow: '}{(treasuryBalances.yer.out || 0).toLocaleString()}</span>
+                      </div>
+                    </div>
+                    <div className="p-4 bg-slate-900/40 border border-slate-800/60 rounded-2xl flex flex-col justify-between">
+                      <div>
+                        <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block mb-1">{isAr ? 'صندوق الدولار الأمريكي USD' : 'USD Cash Box'}</span>
+                        <span className="text-base font-mono font-black text-blue-400">{(treasuryBalances.usd.balance || 0).toLocaleString()} <span className="text-[9px] text-slate-550">USD</span></span>
+                      </div>
+                      <div className="text-[9px] text-slate-500 font-medium mt-2 flex justify-between border-t border-slate-850 pt-1.5">
+                        <span>{isAr ? 'المقبوضات: ' : 'Inflow: '}{(treasuryBalances.usd.in || 0).toLocaleString()}</span>
+                        <span>{isAr ? 'المدفوعات: ' : 'Outflow: '}{(treasuryBalances.usd.out || 0).toLocaleString()}</span>
+                      </div>
+                    </div>
+                    <div className="p-4 bg-slate-900/40 border border-slate-800/60 rounded-2xl flex flex-col justify-between">
+                      <div>
+                        <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block mb-1">{isAr ? 'صندوق الريال السعودي SAR' : 'SAR Cash Box'}</span>
+                        <span className="text-base font-mono font-black text-[#d4af37]">{(treasuryBalances.sar.balance || 0).toLocaleString()} <span className="text-[9px] text-slate-550">SAR</span></span>
+                      </div>
+                      <div className="text-[9px] text-slate-500 font-medium mt-2 flex justify-between border-t border-slate-850 pt-1.5">
+                        <span>{isAr ? 'المقبوضات: ' : 'Inflow: '}{(treasuryBalances.sar.in || 0).toLocaleString()}</span>
+                        <span>{isAr ? 'المدفوعات: ' : 'Outflow: '}{(treasuryBalances.sar.out || 0).toLocaleString()}</span>
+                      </div>
+                    </div>
+                    <div className="p-4 bg-[#d4af37]/5 border border-[#d4af37]/20 rounded-2xl flex flex-col justify-between">
+                      <div>
+                        <span className="text-[10px] text-amber-500 font-extrabold uppercase tracking-wider block mb-1">{isAr ? 'السيولة الموحدة بالريال اليمني' : 'Combined Vault Equiv.'}</span>
+                        <span className="text-base font-mono font-black text-[#d4af37]">{(treasuryBalances.combinedTotalYER || 0).toLocaleString()} <span className="text-[9px]">YER</span></span>
+                      </div>
+                      <p className="text-[9px] text-slate-400 font-medium mt-2 leading-snug border-t border-slate-850/50 pt-1.5">
+                        {isAr ? 'إجمالي الأصول النقدية الموحدة بالأسعار المحددة في النظام.' : 'Consolidated hard-cash balances across all currencies.'}
+                      </p>
                     </div>
                   </div>
 
@@ -1239,9 +1730,9 @@ export default function Reports() {
 
                       {/* Categories grid Cards */}
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                        {EXPENSE_CATEGORIES.filter(cat => cat.id !== 'all').map(cat => {
+                        {EXPENSE_CATEGORIES_DYNAMIC.filter(cat => cat.id !== 'all').map(cat => {
                           const catExpenses = filteredData.expenses.filter(e => e.category === cat.id);
-                          const catSum = catExpenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+                          const catSum = catExpenses.reduce((sum, e) => sum + convertToYER(parseFloat(e.amount) || 0, e.currency || 'YER'), 0);
                           return (
                             <button
                               key={cat.id}
@@ -1276,7 +1767,7 @@ export default function Reports() {
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-850/30">
-                              {searchMatchList(filteredData.expenses, 'recipientName').map((exp) => (
+                              {searchMatchList(filteredData.expenses.filter(e => EXPENSE_CATEGORIES_DYNAMIC.some(c => c.id === e.category)), 'recipientName').map((exp) => (
                                 <tr key={exp.id} className="bg-slate-900/10 hover:bg-slate-900/30 rounded-xl transition-all">
                                   <td className="py-3 px-3 font-mono font-black text-[#d4af37]">{exp.expenseNumber || 'EXP-XXX'}</td>
                                   <td className="py-3 px-3 text-slate-500">{format(new Date(exp.createdAt || Date.now()), 'yyyy-MM-dd')}</td>
@@ -1297,10 +1788,16 @@ export default function Reports() {
                     // SELECTED EXPENSE CATEGORY DETAILED VIEW
                     <div className="space-y-6">
                       {(() => {
-                        const catObj = EXPENSE_CATEGORIES.find(c => c.id === selectedExpenseCategory);
+                        const catObj = EXPENSE_CATEGORIES_DYNAMIC.find(c => c.id === selectedExpenseCategory);
                         const catExpenses = filteredData.expenses.filter(e => e.category === selectedExpenseCategory);
-                        const catSum = catExpenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
-                        const matchedTxs = accountTransactions.filter(tx => tx.description?.toLowerCase().includes((selectedExpenseCategory || '').toLowerCase()) || tx.description?.includes(catObj?.labelAr || ''));
+                        const catSum = catExpenses.reduce((sum, e) => sum + convertToYER(parseFloat(e.amount) || 0, e.currency || 'YER'), 0);
+                        
+                        const linkedAccount = accounts.find(a => 
+                          (catObj?.accountId && (a.id === catObj.accountId || a.entityId === catObj.accountId)) || 
+                          (catObj?.accountCode && a.accountCode === catObj.accountCode)
+                        );
+                        
+                        const matchedTxs = linkedAccount ? accountTransactions.filter(tx => tx.accountId === linkedAccount.id) : [];
 
                         return (
                           <div className="space-y-6">
@@ -1323,7 +1820,7 @@ export default function Reports() {
                             </div>
 
                             {/* Category Stats */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                               <div className="p-4 bg-rose-500/5 border border-rose-500/15 rounded-2xl">
                                 <span className="text-[10px] text-rose-400 font-bold block mb-1">{isAr ? 'إجمالي المنصرف لهذه الفئة' : 'Total Category Spending'}</span>
                                 <span className="text-lg font-mono font-black text-rose-400">{catSum.toLocaleString()} YER</span>
@@ -1335,12 +1832,21 @@ export default function Reports() {
                                 <span className="text-[9px] text-slate-550 block mt-1">{isAr ? 'سجل تحليلي كامل بفترة الفلترة' : 'Filtered inside your specified dates.'}</span>
                               </div>
                               <div className="p-4 bg-slate-900/40 border border-slate-850 rounded-2xl">
-                                <span className="text-[10px] text-slate-500 font-bold block mb-1">{isAr ? 'معدل الحركة الواحدة' : 'Average value per ticket'}</span>
+                                <span className="text-[10px] text-slate-550 font-bold block mb-1">{isAr ? 'معدل الحركة الواحدة' : 'Average value per ticket'}</span>
                                 <span className="text-lg font-mono font-black text-[#d4af37]">
                                   {catExpenses.length > 0 ? Math.round(catSum / catExpenses.length).toLocaleString() : 0} YER
                                 </span>
                                 <span className="text-[9px] text-slate-550 block mt-1">{isAr ? 'متوسط قيمة المعاملة الواحدة المقدر' : 'Arithmetic mean value.'}</span>
                               </div>
+                              {linkedAccount && (
+                                <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-2xl">
+                                  <span className="text-[10px] text-emerald-400 font-bold block mb-1">{isAr ? 'رصيد الحساب المالي المرتبط' : 'Linked Account Balance'}</span>
+                                  <span className="text-lg font-mono font-black text-emerald-400">
+                                    {(parseFloat(linkedAccount.balance as any) || 0).toLocaleString()} {linkedAccount.currency || 'YER'}
+                                  </span>
+                                  <span className="text-[9px] text-slate-550 block mt-1 truncate">{linkedAccount.nameAr || linkedAccount.nameEn} ({linkedAccount.accountCode})</span>
+                                </div>
+                              )}
                             </div>
 
                             {/* Filtered category registry Table */}
@@ -1422,61 +1928,98 @@ export default function Reports() {
               {activeReport === 'packaging' && (
                 <div className="space-y-6">
                   {(() => {
-                    const pkgAcc = accounts.find(a => a.entityId === 'sys_packaging_fees');
+                    const selectedAccounts = accounts.filter(a => selectedPackagingAccountIds.includes(a.id));
+                    const displayAccounts = selectedAccounts.length > 0 ? selectedAccounts : (accounts.find(a => a.entityId === 'sys_packaging_fees') ? [accounts.find(a => a.entityId === 'sys_packaging_fees')!] : []);
                     
+                    const displayCurrency = displayAccounts[0]?.currency || 'SAR';
+                    const alternativeCurrency = displayCurrency === 'SAR' ? 'YER' : 'SAR';
+
+                    const totalConsolidatedBalance = displayAccounts.reduce((sum, a) => sum + convertCurrency(parseFloat(a.balance as any) || 0, a.currency || 'SAR', displayCurrency), 0);
+
                     // 1. Calculate Income (Credit - Collected fees from orders)
-                    // We sum up active orders packaging fees in SAR and convert to default YER
+                    // We sum up active orders packaging fees in SAR and convert to displayCurrency
                     const totalOrderPackagingFees = filteredData.orders
                       .filter(o => o.orderStatus !== 'Cancelled')
                       .reduce((sum, o) => sum + (parseFloat(o.packagingFee as any) || 0), 0);
+                    const totalOrderPackagingFeesInDisplay = convertCurrency(totalOrderPackagingFees, 'SAR', displayCurrency);
 
-                    // Alternatively, we sum up credit transactions on the Packaging Account
-                    const totalCreditTxs = accountTransactions
+                    // We sum up credit transactions on any of the selected Accounts
+                    const selectedAccountIds = displayAccounts.map(a => a.id);
+                    const pkgTxs = accountTransactions.filter(tx => selectedAccountIds.includes(tx.accountId) || selectedAccountIds.includes(tx.entityId));
+                    
+                    const totalCreditTxs = pkgTxs
                       .filter(tx => tx.type === 'Credit')
-                      .reduce((sum, tx) => sum + (parseFloat(tx.amount) || 0), 0);
+                      .reduce((sum, tx) => {
+                        const txAcc = accounts.find(a => a.id === tx.accountId);
+                        const txCurrency = txAcc?.currency || tx.currency || 'SAR';
+                        return sum + convertCurrency(parseFloat(tx.amount) || 0, txCurrency, displayCurrency);
+                      }, 0);
 
-                    const packagingIncome = totalCreditTxs || (totalOrderPackagingFees * (settings.exchangeRateSAR || 1));
+                    const packagingIncome = totalCreditTxs > 0 ? totalCreditTxs : totalOrderPackagingFeesInDisplay;
 
                     // 2. Calculate Expenses (Debit - direct expenses or manual adjustments)
                     const directPackagingExpenses = filteredData.expenses
-                      .filter(e => e.category === 'PACKAGING')
-                      .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+                      .filter(e => e.category === 'PACKAGING' || e.notes?.toLowerCase().includes('تغليف'))
+                      .reduce((sum, e) => sum + convertCurrency(parseFloat(e.amount) || 0, e.currency || 'YER', displayCurrency), 0);
 
-                    const totalDebitTxs = accountTransactions
+                    const totalDebitTxs = pkgTxs
                       .filter(tx => tx.type === 'Debit')
-                      .reduce((sum, tx) => sum + (parseFloat(tx.amount) || 0), 0);
+                      .reduce((sum, tx) => {
+                        const txAcc = accounts.find(a => a.id === tx.accountId);
+                        const txCurrency = txAcc?.currency || tx.currency || 'SAR';
+                        return sum + convertCurrency(parseFloat(tx.amount) || 0, txCurrency, displayCurrency);
+                      }, 0);
 
-                    const packagingOutgoings = directPackagingExpenses || totalDebitTxs;
+                    const packagingOutgoings = totalDebitTxs > 0 ? totalDebitTxs : directPackagingExpenses;
 
                     // 3. Difference
                     const packagingMargin = packagingIncome - packagingOutgoings;
 
+                    const packagingIncomeAlternative = convertCurrency(packagingIncome, displayCurrency, alternativeCurrency);
+                    const packagingOutgoingsAlternative = convertCurrency(packagingOutgoings, displayCurrency, alternativeCurrency);
+                    const packagingMarginAlternative = convertCurrency(packagingMargin, displayCurrency, alternativeCurrency);
+
                     return (
                       <div className="space-y-6">
+                        <MultiAccountSelector
+                          selectedIds={selectedPackagingAccountIds}
+                          setSelectedIds={setSelectedPackagingAccountIds}
+                          labelAr="اختر حسابات رسوم التغليف والتكاليف المرتبطة لتضمينها في هذا التقرير وتوليد كشف مالي موحد تلقائياً"
+                          labelEn="Select packaging fees and associated accounts to compile in this report"
+                          accounts={accounts}
+                          isAr={isAr}
+                          onSave={() => handleSaveAccountSelection('packaging')}
+                        />
+
                         {/* Financial Header linked to Chart of Accounts */}
-                        <div className="p-5 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 border border-slate-800 rounded-2xl relative overflow-hidden">
+                        <div className="p-5 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 border border-slate-800 rounded-2xl relative overflow-hidden space-y-4">
                           <div className="absolute top-0 right-0 w-32 h-32 bg-[#d4af37]/5 rounded-full blur-2xl pointer-events-none" />
                           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                             <div className="space-y-1">
                               <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider block w-fit">
-                                {isAr ? 'الحساب المالي المرتبط بشجرة الحسابات' : 'Linked Account Node'}
+                                {isAr ? 'الحسابات المالية المحددة من شجرة الحسابات' : 'Selected Chart of Accounts Nodes'}
                               </span>
-                              <h4 className="text-sm font-black text-white flex items-center gap-2">
-                                <span className="text-[#d4af37]">[{pkgAcc?.accountCode || '5200-0001'}]</span>
-                                {pkgAcc?.entityName || (isAr ? 'حساب رسوم التغليف والتعبئة' : 'Packaging & Wrapping Fees Account')}
-                              </h4>
+                              <div className="flex flex-wrap gap-2 pt-1">
+                                {displayAccounts.map(acc => (
+                                  <span key={acc.id} className="bg-slate-950/80 border border-slate-850 px-3 py-1 rounded-xl text-xs font-black text-white flex items-center gap-1.5">
+                                    <span className="text-[#d4af37]">[{acc.accountCode}]</span>
+                                    {acc.entityName || acc.name}
+                                    <span className="text-slate-500 text-[10px] font-mono">({(acc.balance || 0).toLocaleString()} {acc.currency})</span>
+                                  </span>
+                                ))}
+                              </div>
                               <p className="text-[11px] text-slate-400 leading-relaxed max-w-xl">
                                 {isAr 
-                                  ? 'يتم ربط هذا التقرير تلقائياً بحساب "رسوم التغليف والتعبئة" في النظام. ترحل إليه رسوم تغليف شحنات العملاء كحركات دائنة (دخل)، ومصاريف كرتون التغليف كحركات مدينة (منصرف/خرج).' 
-                                  : 'This report automatically syncs with the central chart. Order wrapping fees map as Credits (Income) and wrapping supply cardboard purchases record as Debits (Opex).'}
+                                  ? 'يتم دمج ومطابقة بيانات جميع هذه الحسابات المحددة تلقائياً في التقرير وكشف الحركة ومجموع المصروفات والواردات.' 
+                                  : 'This report aggregates and matches data from all selected accounts, including ledger balances, credits, and debits.'}
                               </p>
                             </div>
-                            <div className="p-4 bg-slate-950/80 border border-slate-850 rounded-xl text-end self-stretch md:self-auto min-w-[140px]">
-                              <span className="text-[10px] text-slate-500 block font-bold mb-0.5 font-sans">
-                                {isAr ? 'الرصيد التراكمي الإجمالي:' : 'Total Ledger Balance:'}
+                            <div className="p-4 bg-slate-950/80 border border-slate-850 rounded-xl text-end self-stretch md:self-auto min-w-[160px]">
+                              <span className="text-[10px] text-slate-550 block font-bold mb-0.5 font-sans">
+                                {isAr ? 'الرصيد التراكمي المدمج:' : 'Consolidated Balance:'}
                               </span>
-                              <span className={`text-md font-mono font-black ${pkgAcc?.balance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                {pkgAcc?.balance?.toLocaleString() || 0} {pkgAcc?.currency || 'SAR'}
+                              <span className={`text-md font-mono font-black ${totalConsolidatedBalance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                {totalConsolidatedBalance.toLocaleString(undefined, {maximumFractionDigits: 2})} {displayCurrency}
                               </span>
                             </div>
                           </div>
@@ -1489,8 +2032,11 @@ export default function Reports() {
                               {isAr ? 'الوارد / الدخل من الرسوم المجمعة (+)' : 'Packaging Income (Credit)'}
                             </span>
                             <span className="text-lg font-mono font-black text-emerald-400">
-                              {packagingIncome.toLocaleString()} <span className="text-[10px] font-sans">YER</span>
+                              {packagingIncome.toLocaleString(undefined, {maximumFractionDigits: 2})} <span className="text-[10px] font-sans">{displayCurrency}</span>
                             </span>
+                            <p className="text-[10px] font-mono text-slate-400 font-bold mt-0.5">
+                              ≈ {packagingIncomeAlternative.toLocaleString(undefined, {maximumFractionDigits: 0})} {alternativeCurrency}
+                            </p>
                             <p className="text-[9px] text-slate-500 mt-1 font-bold">
                               {isAr 
                                 ? `مجموع قيم المبيعات المخصصة للتغليف بالفترة (${totalOrderPackagingFees.toLocaleString()} SAR)` 
@@ -1503,8 +2049,11 @@ export default function Reports() {
                               {isAr ? 'الخرج / النفقات ومشتريات الكرتون (-)' : 'Packaging OpEx (Debit)'}
                             </span>
                             <span className="text-lg font-mono font-black text-rose-400">
-                              {packagingOutgoings.toLocaleString()} <span className="text-[10px] font-sans">YER</span>
+                              {packagingOutgoings.toLocaleString(undefined, {maximumFractionDigits: 2})} <span className="text-[10px] font-sans">{displayCurrency}</span>
                             </span>
+                            <p className="text-[10px] font-mono text-slate-400 font-bold mt-0.5">
+                              ≈ {packagingOutgoingsAlternative.toLocaleString(undefined, {maximumFractionDigits: 0})} {alternativeCurrency}
+                            </p>
                             <p className="text-[9px] text-slate-500 mt-1 font-bold">
                               {isAr 
                                 ? 'تكلفة المواد المشتراة أو الحركات المدينة المصروفة للتغليف' 
@@ -1517,8 +2066,11 @@ export default function Reports() {
                               {isAr ? 'صافي الفارق والوفرة المالية (الفارق)' : 'Net Operating Variance'}
                             </span>
                             <span className={`text-lg font-mono font-black ${packagingMargin >= 0 ? 'text-[#d4af37]' : 'text-rose-400'}`}>
-                              {packagingMargin.toLocaleString()} <span className="text-[10px] font-sans">YER</span>
+                              {packagingMargin.toLocaleString(undefined, {maximumFractionDigits: 2})} <span className="text-[10px] font-sans">{displayCurrency}</span>
                             </span>
+                            <p className="text-[10px] font-mono text-slate-400 font-bold mt-0.5">
+                              ≈ {packagingMarginAlternative.toLocaleString(undefined, {maximumFractionDigits: 0})} {alternativeCurrency}
+                            </p>
                             <p className="text-[9px] text-slate-550 mt-1 font-bold">
                               {isAr 
                                 ? 'الفائض التشغيلي لقسم التعبئة والتغليف (الدخل - المصاريف)' 
@@ -1619,7 +2171,61 @@ export default function Reports() {
                               </table>
                             </div>
                           </div>
+                        </div>
 
+                        {/* 3. Ledger Entries Table (قيود الحساب) */}
+                        <div className="space-y-3 bg-slate-900/10 p-5 border border-slate-850/50 rounded-2xl">
+                          <div className="flex justify-between items-center border-b border-slate-850 pb-2">
+                            <span className="text-xs font-black text-white">
+                              {isAr ? 'سجل القيود المحاسبية التفصيلية (حساب التغليف)' : 'Packaging Account Detailed Ledger'}
+                            </span>
+                            <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded font-black">
+                              {pkgTxs.length} {isAr ? 'حركات' : 'Entries'}
+                            </span>
+                          </div>
+
+                          <div className="overflow-x-auto w-full max-w-full pb-2">
+                            <table className="w-full text-xs text-start border-separate border-spacing-y-1 min-w-[600px]">
+                              <thead>
+                                <tr className="text-slate-550 font-black">
+                                  <th className="py-1 px-2 text-start">{isAr ? 'رقم القيد' : 'Ref No'}</th>
+                                  <th className="py-1 px-2 text-start">{isAr ? 'التاريخ' : 'Date'}</th>
+                                  <th className="py-1 px-2 text-start">{isAr ? 'البيان والتفاصيل' : 'Description'}</th>
+                                  <th className="py-1 px-2 text-right">{isAr ? 'مدين (Debit)' : 'Debit'}</th>
+                                  <th className="py-1 px-2 text-right">{isAr ? 'دائن (Credit)' : 'Credit'}</th>
+                                  <th className="py-1 px-2 text-right">{isAr ? 'رصيد القيد' : 'Balance'}</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {pkgTxs.length === 0 ? (
+                                  <tr>
+                                    <td colSpan={6} className="text-center py-6 text-slate-600 font-bold italic">
+                                      {isAr ? 'لا توجد قيود مالية مسجلة في دفتر حساب التغليف لهذه الفترة' : 'No ledger entries recorded for packaging account in this period.'}
+                                    </td>
+                                  </tr>
+                                ) : (
+                                  pkgTxs.map(tx => (
+                                    <tr key={tx.id} className="bg-slate-900/20 hover:bg-slate-900/40 rounded-lg">
+                                      <td className="py-2.5 px-2 font-mono font-black text-slate-400">{tx.refNumber || '-'}</td>
+                                      <td className="py-2.5 px-2 text-slate-400 font-mono">{tx.createdAt ? format(new Date(tx.createdAt), 'yyyy-MM-dd') : '-'}</td>
+                                      <td className="py-2.5 px-2 text-slate-300 font-bold max-w-[200px] truncate" title={tx.description}>
+                                        {tx.description}
+                                      </td>
+                                      <td className="py-2.5 px-2 text-right font-mono font-bold text-rose-400">
+                                        {tx.type === 'Debit' ? `${(parseFloat(tx.amount) || 0).toLocaleString()} ${accounts.find(a => a.id === tx.accountId)?.currency || 'SAR'}` : '-'}
+                                      </td>
+                                      <td className="py-2.5 px-2 text-right font-mono font-bold text-emerald-400">
+                                        {tx.type === 'Credit' ? `${(parseFloat(tx.amount) || 0).toLocaleString()} ${accounts.find(a => a.id === tx.accountId)?.currency || 'SAR'}` : '-'}
+                                      </td>
+                                      <td className="py-2.5 px-2 text-right font-mono font-black text-[#d4af37]">
+                                        {tx.balanceAfter ? `${(parseFloat(tx.balanceAfter as any) || 0).toLocaleString()}` : '-'}
+                                      </td>
+                                    </tr>
+                                  ))
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
                         </div>
                       </div>
                     );
@@ -1740,12 +2346,144 @@ export default function Reports() {
               {/* Order Cost report */}
               {activeReport === 'orders_cost' && (
                 <div className="space-y-6">
-                  {selectedOrderId === null ? (
-                    <div className="space-y-4">
-                      <div>
-                        <h4 className="text-sm font-black text-white">{isAr ? 'تكاليف الطلبات والشحنات اللوجستية' : 'Orders & Shipments Cost Report'}</h4>
-                        <p className="text-[11px] text-slate-500 mt-0.5">{isAr ? 'اختر أي شحنة للوصول الفوري لبيانات الدفاتر وحركات الذمم وسجل المندوبين المتكامل' : 'Select an order to analyze its financial journal, customers, and couriers.'}</p>
-                      </div>
+                  {(() => {
+                    const displayAccounts = accounts.filter(a => selectedOrdersCostAccountIds.includes(a.id));
+                    const displayCurrency = displayAccounts[0]?.currency || 'SAR';
+                    const alternativeCurrency = displayCurrency === 'SAR' ? 'YER' : 'SAR';
+
+                    const totalConsolidatedBalance = displayAccounts.reduce(
+                      (sum, a) => sum + convertCurrency(parseFloat(a.balance as any) || 0, a.currency || 'SAR', displayCurrency),
+                      0
+                    );
+
+                    // Aggregation from active orders
+                    const totalDirectShippingCostSAR = filteredData.orders
+                      .filter(o => o.orderStatus !== 'Cancelled')
+                      .reduce((sum, o) => sum + (parseFloat(o.shippingCostSAR as any) || 0), 0);
+                    const totalDirectShippingCostDisplay = convertCurrency(totalDirectShippingCostSAR, 'SAR', displayCurrency);
+
+                    const totalDirectPackagingFeeSAR = filteredData.orders
+                      .filter(o => o.orderStatus !== 'Cancelled')
+                      .reduce((sum, o) => sum + (parseFloat(o.packagingFee as any) || 0), 0);
+                    const totalDirectPackagingFeeDisplay = convertCurrency(totalDirectPackagingFeeSAR, 'SAR', displayCurrency);
+
+                    // Transactions on selected cost accounts
+                    const costAccountIds = displayAccounts.map(a => a.id);
+                    const costTxs = accountTransactions.filter(tx => costAccountIds.includes(tx.accountId) || costAccountIds.includes(tx.entityId));
+
+                    const totalCostDebit = costTxs
+                      .filter(tx => tx.type === 'Debit')
+                      .reduce((sum, tx) => {
+                        const txAcc = accounts.find(a => a.id === tx.accountId);
+                        const txCurrency = txAcc?.currency || tx.currency || 'SAR';
+                        return sum + convertCurrency(parseFloat(tx.amount) || 0, txCurrency, displayCurrency);
+                      }, 0);
+
+                    const totalCostCredit = costTxs
+                      .filter(tx => tx.type === 'Credit')
+                      .reduce((sum, tx) => {
+                        const txAcc = accounts.find(a => a.id === tx.accountId);
+                        const txCurrency = txAcc?.currency || tx.currency || 'SAR';
+                        return sum + convertCurrency(parseFloat(tx.amount) || 0, txCurrency, displayCurrency);
+                      }, 0);
+
+                    const netCostFromLedger = totalCostDebit - totalCostCredit;
+
+                    const totalDirectShippingCostAlternative = convertCurrency(totalDirectShippingCostDisplay, displayCurrency, alternativeCurrency);
+                    const netCostFromLedgerAlternative = convertCurrency(netCostFromLedger, displayCurrency, alternativeCurrency);
+                    const totalConsolidatedBalanceAlternative = convertCurrency(totalConsolidatedBalance, displayCurrency, alternativeCurrency);
+
+                    return (
+                      <div className="space-y-6">
+                        <MultiAccountSelector
+                          selectedIds={selectedOrdersCostAccountIds}
+                          setSelectedIds={setSelectedOrdersCostAccountIds}
+                          labelAr="حدد حسابات تكاليف الطلبات والشحن من شجرة الحسابات لعرض تفاصيلها والعمليات المرتبطة بها تلقائياً"
+                          labelEn="Select orders and shipping costs accounts from the chart of accounts"
+                          accounts={accounts}
+                          isAr={isAr}
+                          onSave={() => handleSaveAccountSelection('orders_cost')}
+                        />
+
+                        {/* Interactive Financial Card Header */}
+                        {displayAccounts.length > 0 && (
+                          <div className="p-5 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 border border-slate-800 rounded-2xl relative overflow-hidden space-y-4">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-[#d4af37]/5 rounded-full blur-2xl pointer-events-none" />
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                              <div className="space-y-1">
+                                <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider block w-fit">
+                                  {isAr ? 'الحسابات المالية المحددة لتكاليف الطلبات والشحن' : 'Selected Orders Cost Ledger Nodes'}
+                                </span>
+                                <div className="flex flex-wrap gap-2 pt-1">
+                                  {displayAccounts.map(acc => (
+                                    <span key={acc.id} className="bg-slate-950/80 border border-slate-850 px-3 py-1 rounded-xl text-xs font-black text-white flex items-center gap-1.5">
+                                      <span className="text-[#d4af37]">[{acc.accountCode}]</span>
+                                      {acc.entityName || acc.name}
+                                      <span className="text-slate-500 text-[10px] font-mono">({(acc.balance || 0).toLocaleString()} {acc.currency})</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="p-4 bg-slate-950/80 border border-slate-850 rounded-xl text-end self-stretch md:self-auto min-w-[160px]">
+                                <span className="text-[10px] text-slate-550 block font-bold mb-0.5">
+                                  {isAr ? 'الرصيد التراكمي المدمج:' : 'Consolidated Balance:'}
+                                </span>
+                                <span className={`text-md font-mono font-black ${totalConsolidatedBalance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                  {totalConsolidatedBalance.toLocaleString(undefined, {maximumFractionDigits: 2})} {displayCurrency}
+                                </span>
+                                <p className="text-[9px] font-mono text-slate-500 mt-0.5">
+                                  ≈ {totalConsolidatedBalanceAlternative.toLocaleString(undefined, {maximumFractionDigits: 0})} {alternativeCurrency}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Stats grids for costs */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                              <div className="p-3.5 bg-rose-500/5 border border-rose-500/10 rounded-xl">
+                                <span className="text-[10px] text-rose-400 font-bold block mb-1">
+                                  {isAr ? 'تكاليف الشحن من الشحنات المباشرة (SAR)' : 'Direct Shipments Shipping Cost (SAR)'}
+                                </span>
+                                <span className="text-md font-mono font-black text-rose-400">
+                                  {totalDirectShippingCostSAR.toLocaleString()} <span className="text-[10px]">SAR</span>
+                                </span>
+                                <p className="text-[9px] text-slate-500 mt-1">
+                                  ≈ {totalDirectShippingCostDisplay.toLocaleString(undefined, {maximumFractionDigits: 2})} {displayCurrency}
+                                </p>
+                              </div>
+
+                              <div className="p-3.5 bg-slate-900/60 border border-slate-850 rounded-xl">
+                                <span className="text-[10px] text-slate-400 font-bold block mb-1">
+                                  {isAr ? 'إجمالي المدفوعات المسجلة للناقلين (Ledger Debits)' : 'Total Carrier Ledger Debits'}
+                                </span>
+                                <span className="text-md font-mono font-black text-white">
+                                  {totalCostDebit.toLocaleString(undefined, {maximumFractionDigits: 2})} <span className="text-[10px]">{displayCurrency}</span>
+                                </span>
+                                <p className="text-[9px] text-slate-550 mt-1">
+                                  {isAr ? `تتضمن دفعات شركات الشحن والتوصيل بالفترة` : `Payments registered on transport ledgers.`}
+                                </p>
+                              </div>
+
+                              <div className="p-3.5 bg-amber-500/5 border border-amber-500/10 rounded-xl">
+                                <span className="text-[10px] text-amber-400 font-bold block mb-1">
+                                  {isAr ? 'صافي فارق تكاليف الشحن الدفتري' : 'Net Book Shipping Variance'}
+                                </span>
+                                <span className="text-md font-mono font-black text-amber-400">
+                                  {netCostFromLedger.toLocaleString(undefined, {maximumFractionDigits: 2})} <span className="text-[10px]">{displayCurrency}</span>
+                                </span>
+                                <p className="text-[9px] text-slate-550 mt-1">
+                                  ≈ {netCostFromLedgerAlternative.toLocaleString(undefined, {maximumFractionDigits: 0})} {alternativeCurrency}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {selectedOrderId === null ? (
+                          <div className="space-y-4">
+                            <div>
+                              <h4 className="text-sm font-black text-white">{isAr ? 'تكاليف الطلبات والشحنات اللوجستية' : 'Orders & Shipments Cost Report'}</h4>
+                              <p className="text-[11px] text-slate-500 mt-0.5">{isAr ? 'اختر أي شحنة للوصول الفوري لبيانات الدفاتر وحركات الذمم وسجل المندوبين المتكامل' : 'Select an order to analyze its financial journal, customers, and couriers.'}</p>
+                            </div>
 
                       <div className="overflow-x-auto w-full max-w-full pb-2">
                         <table className="w-full text-xs text-start border-separate border-spacing-y-1 min-w-[700px]">
@@ -1755,7 +2493,7 @@ export default function Reports() {
                               <th className="py-2 px-3">{isAr ? 'العميل' : 'Customer'}</th>
                               <th className="py-2 px-3">{isAr ? 'تاريخ الإنشاء' : 'Created At'}</th>
                               <th className="py-2 px-3">{isAr ? 'حالة الشحن' : 'Status'}</th>
-                              <th className="py-2 px-3 text-right">{isAr ? 'التأمين الكلي' : 'Total Insurance'}</th>
+                              <th className="py-2 px-3 text-right">{isAr ? 'رسوم الشحن' : 'Shipping Cost'}</th>
                               <th className="py-2 px-3 text-right">{isAr ? 'رسوم التغليف' : 'Packaging'}</th>
                               <th className="py-2 px-3 text-right">{isAr ? 'صافي القيمة المستحقة' : 'Net Price'}</th>
                               <th className="py-2 px-3 text-center">{isAr ? 'الإجراء' : 'Actions'}</th>
@@ -1770,9 +2508,9 @@ export default function Reports() {
                                 <td className="py-3 px-3">
                                   <span className="px-2 py-0.5 rounded-full text-[9px] bg-slate-950 text-slate-400 border border-slate-850 font-bold">{o.orderStatus}</span>
                                 </td>
-                                <td className="py-3 px-3 text-right font-mono text-slate-500">{o.insuranceAmount?.toLocaleString() || 0}</td>
+                                <td className="py-3 px-3 text-right font-mono text-slate-500">{o.shippingCostSAR?.toLocaleString() || 0}</td>
                                 <td className="py-3 px-3 text-right font-mono text-slate-500">{o.packagingFee?.toLocaleString() || 0}</td>
-                                <td className="py-3 px-3 text-right font-mono font-black text-emerald-400">{o.totalPrice?.toLocaleString()} YER</td>
+                                <td className="py-3 px-3 text-right font-mono font-black text-emerald-400">{o.totalCostYER?.toLocaleString() || o.totalPrice?.toLocaleString()} YER</td>
                                 <td className="py-3 px-3 text-center">
                                   <button className="p-1 px-2.5 bg-[#d4af37]/10 border border-[#d4af37]/20 text-xs font-black text-[#d4af37] rounded-lg hover:bg-[#d4af37]/25 transition">
                                     {isAr ? 'تحليل السجل' : 'Analyze'}
@@ -1865,19 +2603,19 @@ export default function Reports() {
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                               <div className="p-4 bg-slate-900/60 border border-slate-850 rounded-xl">
                                 <span className="text-[10px] text-slate-500 font-black block uppercase mb-1">{isAr ? 'قيمة الشحنة والمبيعات' : 'Order Cargo Value'}</span>
-                                <span className="text-md font-mono font-black text-white">{o.netPrice?.toLocaleString() || 0} <span className="text-[10px] text-slate-500">SAR</span></span>
+                                <span className="text-md font-mono font-black text-white">{((parseFloat(o.totalCostSAR) || 0) - (parseFloat(o.shippingCostSAR) || 0) - (parseFloat(o.packagingFee) || 0)).toLocaleString() || 0} <span className="text-[10px] text-slate-500">SAR</span></span>
                                 <p className="text-[9px] text-slate-550 mt-1">{isAr ? 'القيمة بدون احتساب الرسوم الإضافية' : 'Base inventory shipping value'}</p>
                               </div>
                               <div className="p-4 bg-slate-900/60 border border-slate-850 rounded-xl">
-                                <span className="text-[10px] text-slate-500 font-black block uppercase mb-1">{isAr ? 'رسوم التأمين والتغليف المضافة' : 'Surcharges (Ins & Pkg)'}</span>
+                                <span className="text-[10px] text-slate-500 font-black block uppercase mb-1">{isAr ? 'رسوم الشحن والتغليف المضافة' : 'Surcharges (Shipping & Pkg)'}</span>
                                 <span className="text-md font-mono font-black text-[#d4af37]">
-                                  {((o.insuranceAmount || 0) + (o.packagingFee || 0)).toLocaleString()} <span className="text-[10px]">SAR</span>
+                                  {((o.shippingCostSAR || 0) + (o.packagingFee || 0)).toLocaleString()} <span className="text-[10px]">SAR</span>
                                 </span>
-                                <p className="text-[9px] text-slate-550 mt-1">{isAr ? `تأمين: ${o.insuranceAmount || 0} / تغليف: ${o.packagingFee || 0}` : 'Aggregated surcharges sum'}</p>
+                                <p className="text-[9px] text-slate-550 mt-1">{isAr ? `شحن: ${o.shippingCostSAR || 0} / تغليف: ${o.packagingFee || 0}` : 'Aggregated surcharges sum'}</p>
                               </div>
                               <div className="p-4 bg-slate-900/60 border border-slate-850 rounded-xl">
                                 <span className="text-[10px] text-slate-550 font-black block uppercase mb-1">{isAr ? 'مجموع المقدار المستحق الكلي' : 'Total Price (YER)'}</span>
-                                <span className="text-md font-mono font-black text-rose-400">{o.totalPrice?.toLocaleString() || 0} <span className="text-[10px]">YER</span></span>
+                                <span className="text-md font-mono font-black text-rose-400">{(o.totalCostYER || o.totalPrice)?.toLocaleString() || 0} <span className="text-[10px]">YER</span></span>
                                 <p className="text-[9px] text-slate-550 mt-1">{isAr ? 'بعد التحويل للصرف اليمني المحلي' : 'Calculated through active exchange rate.'}</p>
                               </div>
                               <div className="p-4 bg-emerald-500/5 border border-emerald-500/15 rounded-xl">
@@ -1955,18 +2693,79 @@ export default function Reports() {
                       })()}
                     </div>
                   )}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 
               {/* Shipping companies */}
               {activeReport === 'shipping_companies' && (
                 <div className="space-y-6">
-                  {selectedCompanyId === null ? (
-                    <div className="space-y-4">
-                      <div>
-                        <h4 className="text-sm font-black text-white">{isAr ? 'شركات الشحن والعمولات اللوجستية' : 'Partner Shipping Companies & Commissions'}</h4>
-                        <p className="text-[11px] text-slate-500 mt-0.5">{isAr ? 'اضغط على تظليل أي شركة شحن لعرض الشحنات المرتبطة والتكاليف المفصلة كليا' : 'Click on any shipping partner to display linked orders, cost schedules, and ledger transits.'}</p>
-                      </div>
+                  {(() => {
+                    const displayAccounts = accounts.filter(a => selectedShippingCompaniesAccountIds.includes(a.id));
+                    const displayCurrency = displayAccounts[0]?.currency || 'SAR';
+                    const alternativeCurrency = displayCurrency === 'SAR' ? 'YER' : 'SAR';
+
+                    const totalConsolidatedBalance = displayAccounts.reduce(
+                      (sum, a) => sum + convertCurrency(parseFloat(a.balance as any) || 0, a.currency || 'SAR', displayCurrency),
+                      0
+                    );
+
+                    const totalConsolidatedBalanceAlternative = convertCurrency(totalConsolidatedBalance, displayCurrency, alternativeCurrency);
+
+                    return (
+                      <div className="space-y-6">
+                        <MultiAccountSelector
+                          selectedIds={selectedShippingCompaniesAccountIds}
+                          setSelectedIds={setSelectedShippingCompaniesAccountIds}
+                          labelAr="حدد حسابات شركات الشحن والعمولات والذمم الدائنة/المدينة المرتبطة من شجرة الحسابات لعرض تفاصيلها"
+                          labelEn="Select shipping companies, commissions, and payables accounts from the chart of accounts"
+                          accounts={accounts}
+                          isAr={isAr}
+                          onSave={() => handleSaveAccountSelection('shipping_companies')}
+                        />
+
+                        {/* Interactive Financial Card Header */}
+                        {displayAccounts.length > 0 && (
+                          <div className="p-5 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 border border-slate-800 rounded-2xl relative overflow-hidden space-y-4">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-[#d4af37]/5 rounded-full blur-2xl pointer-events-none" />
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                              <div className="space-y-1">
+                                <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider block w-fit">
+                                  {isAr ? 'الحسابات المالية المحددة لشركات الشحن والعمولات والذمم' : 'Selected Shipping Accounts'}
+                                </span>
+                                <div className="flex flex-wrap gap-2 pt-1">
+                                  {displayAccounts.map(acc => (
+                                    <span key={acc.id} className="bg-slate-950/80 border border-slate-850 px-3 py-1 rounded-xl text-xs font-black text-white flex items-center gap-1.5">
+                                      <span className="text-[#d4af37]">[{acc.accountCode}]</span>
+                                      {acc.entityName || acc.name}
+                                      <span className="text-slate-500 text-[10px] font-mono">({(acc.balance || 0).toLocaleString()} {acc.currency})</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="p-4 bg-slate-950/80 border border-slate-850 rounded-xl text-end self-stretch md:self-auto min-w-[160px]">
+                                <span className="text-[10px] text-slate-550 block font-bold mb-0.5">
+                                  {isAr ? 'الرصيد المدمج (الذمم المستحقة):' : 'Consolidated Payables Balance:'}
+                                </span>
+                                <span className={`text-md font-mono font-black ${totalConsolidatedBalance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                  {totalConsolidatedBalance.toLocaleString(undefined, {maximumFractionDigits: 2})} {displayCurrency}
+                                </span>
+                                <p className="text-[9px] font-mono text-slate-500 mt-0.5">
+                                  ≈ {totalConsolidatedBalanceAlternative.toLocaleString(undefined, {maximumFractionDigits: 0})} {alternativeCurrency}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {selectedCompanyId === null ? (
+                          <div className="space-y-4">
+                            <div>
+                              <h4 className="text-sm font-black text-white">{isAr ? 'شركات الشحن والعمولات اللوجستية' : 'Partner Shipping Companies & Commissions'}</h4>
+                              <p className="text-[11px] text-slate-500 mt-0.5">{isAr ? 'اضغط على تظليل أي شركة شحن لعرض الشحنات المرتبطة والتكاليف المفصلة كليا' : 'Click on any shipping partner to display linked orders, cost schedules, and ledger transits.'}</p>
+                            </div>
 
                       <div className="overflow-x-auto w-full max-w-full pb-2">
                         <table className="w-full text-xs text-start border-separate border-spacing-y-1 min-w-[650px]">
@@ -2009,6 +2808,14 @@ export default function Reports() {
                         const paidSum = coOrders.reduce((sum, o) => sum + (parseFloat(o.amountPaid) || 0), 0);
                         const linkedTxs = accountTransactions.filter(tx => tx.description?.toLowerCase().includes((sc?.name || '').toLowerCase()) || tx.description?.includes(sc?.name || ''));
 
+                        const scDueInDisplay = convertCurrency(sc.dueAmount || 0, 'YER', displayCurrency);
+                        const totalSumInDisplay = convertCurrency(totalSum, 'YER', displayCurrency);
+                        const paidSumInDisplay = convertCurrency(paidSum, 'YER', displayCurrency);
+
+                        const scDueAlternative = convertCurrency(sc.dueAmount || 0, 'YER', alternativeCurrency);
+                        const totalSumAlternative = convertCurrency(totalSum, 'YER', alternativeCurrency);
+                        const paidSumAlternative = convertCurrency(paidSum, 'YER', alternativeCurrency);
+
                         return (
                           <div className="space-y-6">
                             <div className="flex justify-between items-center bg-slate-950 p-4 rounded-2xl border border-slate-850">
@@ -2033,15 +2840,30 @@ export default function Reports() {
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                               <div className="p-4 bg-slate-900/60 border border-slate-850 rounded-2xl">
                                 <span className="text-[10.5px] text-slate-500 font-bold block mb-1">{isAr ? 'المستحق الحسابي (الذمة للشركة)' : 'Outstanding Carrier due'}</span>
-                                <span className="text-md font-mono font-black text-rose-400">{(sc.dueAmount || 0).toLocaleString()} YER</span>
+                                <span className="text-md font-mono font-black text-rose-400">
+                                  {scDueInDisplay.toLocaleString(undefined, {maximumFractionDigits: 2})} {displayCurrency}
+                                </span>
+                                <p className="text-[9px] font-mono text-slate-500 mt-1">
+                                  ≈ {scDueAlternative.toLocaleString(undefined, {maximumFractionDigits: 0})} {alternativeCurrency}
+                                </p>
                               </div>
                               <div className="p-4 bg-slate-900/60 border border-slate-850 rounded-2xl">
-                                <span className="text-[10.5px] text-slate-500 font-bold block mb-1">{isAr ? 'حجم المبيعات الكلي (YER)' : 'Gross Volume (YER)'}</span>
-                                <span className="text-md font-mono font-black text-white">{totalSum.toLocaleString()} YER</span>
+                                <span className="text-[10.5px] text-slate-500 font-bold block mb-1">{isAr ? 'حجم المبيعات الكلي' : 'Gross Volume'}</span>
+                                <span className="text-md font-mono font-black text-white">
+                                  {totalSumInDisplay.toLocaleString(undefined, {maximumFractionDigits: 2})} {displayCurrency}
+                                </span>
+                                <p className="text-[9px] font-mono text-slate-500 mt-1">
+                                  ≈ {totalSumAlternative.toLocaleString(undefined, {maximumFractionDigits: 0})} {alternativeCurrency}
+                                </p>
                               </div>
                               <div className="p-4 bg-slate-900/60 border border-slate-850 rounded-2xl">
-                                <span className="text-[10.5px] text-slate-500 font-bold block mb-1">{isAr ? 'المسدد فعليا (YER)' : 'Paid / Settled YER'}</span>
-                                <span className="text-md font-mono font-black text-emerald-400">{paidSum.toLocaleString()} YER</span>
+                                <span className="text-[10.5px] text-slate-500 font-bold block mb-1">{isAr ? 'المسدد فعليا' : 'Paid / Settled'}</span>
+                                <span className="text-md font-mono font-black text-emerald-400">
+                                  {paidSumInDisplay.toLocaleString(undefined, {maximumFractionDigits: 2})} {displayCurrency}
+                                </span>
+                                <p className="text-[9px] font-mono text-slate-500 mt-1">
+                                  ≈ {paidSumAlternative.toLocaleString(undefined, {maximumFractionDigits: 0})} {alternativeCurrency}
+                                </p>
                               </div>
                               <div className="p-4 bg-slate-900/60 border border-slate-850 rounded-2xl">
                                 <span className="text-[10.5px] text-slate-500 font-bold block mb-1">{isAr ? 'إجمالي الطلبات المنقولة' : 'Shipped orders count'}</span>
@@ -2092,6 +2914,9 @@ export default function Reports() {
                       })()}
                     </div>
                   )}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -2117,19 +2942,24 @@ export default function Reports() {
                             </tr>
                           </thead>
                           <tbody>
-                            {searchMatchList(filteredData.customers, 'fullName').map((c) => (
-                              <tr key={c.id} className="bg-slate-900/10 hover:bg-slate-900/30 rounded-xl cursor-pointer transition animate-fade-in" onClick={() => setSelectedCustomerId(c.id)}>
-                                <td className="py-3 px-3 font-bold text-white text-start">{c.fullName}</td>
-                                <td className="py-3 px-3 text-slate-450 font-mono font-bold">{c.phone || '-'}</td>
-                                <td className="py-3 px-3 text-[10px] text-center font-black text-slate-400 uppercase">{c.financialCurrency || 'SAR'}</td>
-                                <td className="py-3 px-3 text-right font-mono font-black text-emerald-400">{c.financialBalance?.toLocaleString() || 0} {c.financialCurrency || 'SAR'}</td>
-                                <td className="py-3 px-3 text-center">
-                                  <button className="p-1 px-2.5 bg-[#d4af37]/10 text-[#d4af37] border border-[#d4af37]/20 rounded-md text-[10px] font-black">
-                                    {isAr ? 'كشف حساب' : 'Extract'}
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
+                            {searchMatchList(filteredData.customers, 'fullName').map((c) => {
+                              const acc = accounts.find(a => a.entityType === 'customer' && a.entityId === c.id);
+                              const bal = acc ? acc.balance : (c.financialBalance || 0);
+                              const cur = acc ? acc.currency : (c.financialCurrency || 'SAR');
+                              return (
+                                <tr key={c.id} className="bg-slate-900/10 hover:bg-slate-900/30 rounded-xl cursor-pointer transition animate-fade-in" onClick={() => setSelectedCustomerId(c.id)}>
+                                  <td className="py-3 px-3 font-bold text-white text-start">{c.fullName}</td>
+                                  <td className="py-3 px-3 text-slate-450 font-mono font-bold">{c.phone || '-'}</td>
+                                  <td className="py-3 px-3 text-[10px] text-center font-black text-slate-400 uppercase">{cur}</td>
+                                  <td className="py-3 px-3 text-right font-mono font-black text-emerald-400">{bal.toLocaleString()} {cur}</td>
+                                  <td className="py-3 px-3 text-center">
+                                    <button className="p-1 px-2.5 bg-[#d4af37]/10 text-[#d4af37] border border-[#d4af37]/20 rounded-md text-[10px] font-black">
+                                      {isAr ? 'كشف حساب' : 'Extract'}
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
@@ -2141,11 +2971,20 @@ export default function Reports() {
                         const cust = customers.find(c => c.id === selectedCustomerId);
                         if (!cust) return <p className="text-slate-500">Customer not found.</p>;
 
+                        const custAcc = accounts.find(a => a.entityType === 'customer' && a.entityId === cust.id);
                         const custOrders = filteredData.orders.filter(o => o.customerId === cust.id || o.customerName === cust.fullName || o.customerPhone === cust.phone);
                         const grossSum = custOrders.reduce((sum, o) => sum + (parseFloat(o.totalPrice) || 0), 0);
                         const paidSum = custOrders.reduce((sum, o) => sum + (parseFloat(o.amountPaid) || 0), 0);
                         const remainDebt = custOrders.reduce((sum, o) => sum + (parseFloat(o.amountRemaining) || 0), 0);
-                        const statementsTxs = accountTransactions.filter(tx => tx.description?.includes(cust.fullName) || tx.description?.includes(cust.phone || 'xx'));
+                        const statementsTxs = accountTransactions.filter(tx => 
+                          (custAcc && tx.accountId === custAcc.id) || 
+                          tx.entityId === cust.id ||
+                          tx.description?.includes(cust.fullName) || 
+                          (cust.phone && tx.description?.includes(cust.phone))
+                        );
+
+                        const custBalance = custAcc ? custAcc.balance : (cust.financialBalance || 0);
+                        const custCurrency = custAcc ? custAcc.currency : (cust.financialCurrency || 'SAR');
 
                         return (
                           <div className="space-y-6">
@@ -2171,7 +3010,7 @@ export default function Reports() {
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                               <div className="p-4 bg-emerald-500/5 border border-emerald-500/15 rounded-2xl text-start">
                                 <span className="text-[10px] text-slate-500 font-bold block mb-1">{isAr ? 'الرصيد الدفتري الحالي' : 'Book Account Balance'}</span>
-                                <span className="text-lg font-mono font-black text-emerald-400">{(cust.financialBalance || 0).toLocaleString()} {cust.financialCurrency || 'SAR'}</span>
+                                <span className="text-lg font-mono font-black text-emerald-400">{custBalance.toLocaleString()} {custCurrency}</span>
                                 <p className="text-[9px] text-slate-550 mt-1">{isAr ? 'أرصدة جارية نشطة في الدفتر المركزي' : 'Active currency credit weight'}</p>
                               </div>
                               <div className="p-4 bg-slate-900/40 border border-slate-850 rounded-2xl text-start">
@@ -2190,43 +3029,81 @@ export default function Reports() {
                             </div>
 
                             {/* related client transactions/orders */}
-                            <div className="space-y-3">
-                              <span className="text-xs font-black text-white block">{isAr ? 'سجل فواتير شحنات العميل التفصيلية' : 'Comprehensive order history statement'}</span>
-                              <div className="overflow-x-auto">
-                                <table className="w-full text-xs text-start border-separate border-spacing-y-1">
-                                  <thead>
-                                    <tr className="text-slate-550 font-bold border-b border-slate-800 pb-1.5 uppercase">
-                                      <th className="py-2 px-3 text-start">{isAr ? 'رقم الشحنة' : 'Order ID'}</th>
-                                      <th className="py-2 px-3">{isAr ? 'تاريخ المعاملة' : 'Date'}</th>
-                                      <th className="py-2 px-3 text-right">{isAr ? 'صافي القيمة المستحقة' : 'Cargo Cost'}</th>
-                                      <th className="py-2 px-3 text-right">{isAr ? 'المبلغ المسدد' : 'Paid'}</th>
-                                      <th className="py-2 px-3 text-right">{isAr ? 'الذمة المتبقية' : 'Outstanding Bal'}</th>
-                                      <th className="py-2 px-3 text-center">{isAr ? 'حالتها الاستحقاقية' : 'Transport Status'}</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {custOrders.length === 0 ? (
-                                      <tr>
-                                        <td colSpan={6} className="text-center py-6 text-slate-650 italic font-bold">
-                                          {isAr ? 'لا توجد أي شحنات مسجلة لهذا العميل في قواعد البيانات' : 'No order logs recorded for this client.'}
-                                        </td>
+                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                              <div className="space-y-3">
+                                <span className="text-xs font-black text-white block">{isAr ? 'سجل فواتير شحنات العميل التفصيلية' : 'Comprehensive order history statement'}</span>
+                                <div className="overflow-x-auto bg-slate-900/10 rounded-2xl border border-slate-850/50">
+                                  <table className="w-full text-xs text-start border-separate border-spacing-y-1 p-2">
+                                    <thead>
+                                      <tr className="text-slate-550 font-bold border-b border-slate-800 pb-1.5 uppercase">
+                                        <th className="py-2 px-3 text-start">{isAr ? 'رقم الشحنة' : 'Order ID'}</th>
+                                        <th className="py-2 px-3">{isAr ? 'التاريخ' : 'Date'}</th>
+                                        <th className="py-2 px-3 text-right">{isAr ? 'القيمة' : 'Cost'}</th>
+                                        <th className="py-2 px-3 text-right">{isAr ? 'المسدد' : 'Paid'}</th>
+                                        <th className="py-2 px-3 text-right">{isAr ? 'المتبقي' : 'Bal'}</th>
+                                        <th className="py-2 px-3 text-center">{isAr ? 'الحالة' : 'Status'}</th>
                                       </tr>
-                                    ) : (
-                                      custOrders.map(o => (
-                                        <tr key={o.id} className="bg-slate-900/10 hover:bg-slate-900/30 rounded-xl">
-                                          <td className="py-3 px-3 font-mono font-black text-[#d4af37]">{o.orderNumber}</td>
-                                          <td className="py-3 px-3 text-slate-500 font-mono">{o.createdAt ? format(new Date(o.createdAt), 'yyyy-MM-dd') : '-'}</td>
-                                          <td className="py-3 px-3 text-right font-mono font-bold text-white">{o.totalPrice?.toLocaleString()} YER</td>
-                                          <td className="py-3 px-3 text-right font-mono text-emerald-400 font-bold">{(o.amountPaid || 0).toLocaleString()} YER</td>
-                                          <td className="py-3 px-3 text-right font-mono text-rose-400 font-bold">{(o.amountRemaining || 0).toLocaleString()} YER</td>
-                                          <td className="py-3 px-3 text-center">
-                                            <span className="px-2 py-0.5 rounded text-[9.5px] bg-slate-950 text-slate-400 border border-slate-850 font-bold">{o.orderStatus}</span>
+                                    </thead>
+                                    <tbody>
+                                      {custOrders.length === 0 ? (
+                                        <tr>
+                                          <td colSpan={6} className="text-center py-6 text-slate-650 italic font-bold">
+                                            {isAr ? 'لا توجد أي شحنات مسجلة لهذا العميل في قواعد البيانات' : 'No order logs recorded for this client.'}
                                           </td>
                                         </tr>
-                                      ))
-                                    )}
-                                  </tbody>
-                                </table>
+                                      ) : (
+                                        custOrders.map(o => (
+                                          <tr key={o.id} className="bg-slate-900/20 hover:bg-slate-900/50 rounded-xl">
+                                            <td className="py-3 px-3 font-mono font-black text-[#d4af37]">{o.orderNumber}</td>
+                                            <td className="py-3 px-3 text-slate-500 font-mono">{o.createdAt ? format(new Date(o.createdAt), 'yyyy-MM-dd') : '-'}</td>
+                                            <td className="py-3 px-3 text-right font-mono font-bold text-white">{o.totalPrice?.toLocaleString()} YER</td>
+                                            <td className="py-3 px-3 text-right font-mono text-emerald-400 font-bold">{(o.amountPaid || 0).toLocaleString()} YER</td>
+                                            <td className="py-3 px-3 text-right font-mono text-rose-400 font-bold">{(o.amountRemaining || 0).toLocaleString()} YER</td>
+                                            <td className="py-3 px-3 text-center">
+                                              <span className="px-2 py-0.5 rounded text-[9.5px] bg-slate-950 text-slate-400 border border-slate-850 font-bold truncate max-w-[80px] inline-block">{o.orderStatus}</span>
+                                            </td>
+                                          </tr>
+                                        ))
+                                      )}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+
+                              <div className="space-y-3">
+                                <span className="text-xs font-black text-white block">{isAr ? 'سجل الحركات والقيود المحاسبية للعميل' : 'Customer Accounting Ledger'}</span>
+                                <div className="overflow-x-auto bg-slate-900/10 rounded-2xl border border-slate-850/50">
+                                  <table className="w-full text-xs text-start border-separate border-spacing-y-1 p-2">
+                                    <thead>
+                                      <tr className="text-slate-550 font-bold border-b border-slate-800 pb-1.5 uppercase">
+                                        <th className="py-2 px-3 text-start">{isAr ? 'رقم القيد' : 'Ref'}</th>
+                                        <th className="py-2 px-3">{isAr ? 'التاريخ' : 'Date'}</th>
+                                        <th className="py-2 px-3">{isAr ? 'الشرح' : 'Description'}</th>
+                                        <th className="py-2 px-3 text-right">{isAr ? 'القيمة' : 'Amount'}</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {statementsTxs.length === 0 ? (
+                                        <tr>
+                                          <td colSpan={4} className="text-center py-6 text-slate-650 italic font-bold">
+                                            {isAr ? 'لا توجد قيود مالية مسجلة' : 'No financial ledger entries found.'}
+                                          </td>
+                                        </tr>
+                                      ) : (
+                                        statementsTxs.map(tx => (
+                                          <tr key={tx.id} className="bg-slate-900/20 hover:bg-slate-900/50 rounded-xl">
+                                            <td className="py-3 px-3 font-mono text-slate-400">{tx.refNumber || '-'}</td>
+                                            <td className="py-3 px-3 text-slate-500 font-mono">{tx.createdAt ? format(new Date(tx.createdAt), 'yyyy-MM-dd') : '-'}</td>
+                                            <td className="py-3 px-3 text-slate-300 max-w-[150px] truncate">{tx.description}</td>
+                                            <td className={`py-3 px-3 text-right font-mono font-bold ${tx.type === 'Debit' ? 'text-rose-400' : 'text-emerald-400'}`}>
+                                              {tx.type === 'Debit' ? '+' : '-'}{(parseFloat(tx.amount) || 0).toLocaleString()} {tx.currencyOriginal || 'SAR'}
+                                            </td>
+                                          </tr>
+                                        ))
+                                      )}
+                                    </tbody>
+                                  </table>
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -2259,27 +3136,35 @@ export default function Reports() {
                             </tr>
                           </thead>
                           <tbody>
-                            {searchMatchList(filteredData.couriers, 'fullName').map((c) => (
-                              <tr key={c.id} className="bg-slate-900/10 hover:bg-slate-900/30 rounded-xl text-center cursor-pointer transition" onClick={() => setSelectedCourierId(c.id)}>
-                                <td className="py-3 px-3 font-bold text-white text-start">{c.fullName}</td>
-                                <td className="py-3 px-3 text-center">
-                                  <span className="px-2 py-0.5 bg-blue-500/5 text-blue-400 border border-blue-500/20 rounded-md text-[9.5px] font-extrabold uppercase">
-                                    {c.courierType === 'sourcing' ? (isAr ? 'مندوب تجميع خارجي' : 'External Sourcing') : (isAr ? 'تحديث وتوزيع داخلي' : 'Local Delivery')}
-                                  </span>
-                                </td>
-                                <td className="py-3 px-3 font-mono font-black text-amber-500">
-                                  {(c.outstandingCustody || 0).toLocaleString()} {c.financialCurrency || 'SAR'}
-                                </td>
-                                <td className="py-3 px-3 text-right font-mono font-black text-emerald-400">
-                                  {(c.financialBalance || 0).toLocaleString()} {c.financialCurrency || 'SAR'}
-                                </td>
-                                <td className="py-3 px-3 text-center">
-                                  <button className="p-1 px-2.5 bg-[#d4af37]/10 text-[#d4af37] border border-[#d4af37]/20 rounded-md text-[10px] font-black">
-                                    {isAr ? 'تحليل الأداء' : 'Stat analysis'}
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
+                            {searchMatchList(filteredData.couriers, 'fullName').map((c) => {
+                              const acc = accounts.find(a => a.entityType === 'courier' && a.entityId === c.id);
+                              const bal = acc ? acc.balance : (c.financialBalance || 0);
+                              const cur = acc ? acc.currency : (c.financialCurrency || 'SAR');
+                              const pendingCustody = expenses
+                                .filter(e => e.recipientEntityId === c.id && e.type === 'Custody' && e.status === 'Pending')
+                                .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+                              return (
+                                <tr key={c.id} className="bg-slate-900/10 hover:bg-slate-900/30 rounded-xl text-center cursor-pointer transition" onClick={() => setSelectedCourierId(c.id)}>
+                                  <td className="py-3 px-3 font-bold text-white text-start">{c.fullName}</td>
+                                  <td className="py-3 px-3 text-center">
+                                    <span className="px-2 py-0.5 bg-blue-500/5 text-blue-400 border border-blue-500/20 rounded-md text-[9.5px] font-extrabold uppercase">
+                                      {c.courierType === 'sourcing' ? (isAr ? 'مندوب تجميع خارجي' : 'External Sourcing') : (isAr ? 'تحديث وتوزيع داخلي' : 'Local Delivery')}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-3 font-mono font-black text-amber-500">
+                                    {pendingCustody.toLocaleString()} {cur}
+                                  </td>
+                                  <td className="py-3 px-3 text-right font-mono font-black text-emerald-400">
+                                    {bal.toLocaleString()} {cur}
+                                  </td>
+                                  <td className="py-3 px-3 text-center">
+                                    <button className="p-1 px-2.5 bg-[#d4af37]/10 text-[#d4af37] border border-[#d4af37]/20 rounded-md text-[10px] font-black">
+                                      {isAr ? 'تحليل الأداء' : 'Stat analysis'}
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
@@ -2295,7 +3180,9 @@ export default function Reports() {
                         const totalAssigned = coOrders.length;
                         const deliveredCo = coOrders.filter(o => ['Completed', 'Delivered', 'تم التسليم'].includes(o.orderStatus));
                         const successRate = totalAssigned > 0 ? Math.round((deliveredCo.length / totalAssigned) * 105) : 0;
-                        const pendingCustody = courier.outstandingCustody || 0;
+                        const pendingCustody = expenses
+                          .filter(e => e.recipientEntityId === courier.id && e.type === 'Custody' && e.status === 'Pending')
+                          .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
 
                         return (
                           <div className="space-y-6">
@@ -2321,12 +3208,17 @@ export default function Reports() {
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                               <div className="p-4 bg-amber-500/5 border border-amber-500/15 rounded-2xl">
                                 <span className="text-[10px] text-amber-500 font-bold block mb-1">{isAr ? 'العهدة المالية المعلقة بذمته' : 'Pending Custody Owed'}</span>
-                                <span className="text-lg font-mono font-black text-amber-500">{pendingCustody.toLocaleString()} {courier.financialCurrency || 'SAR'}</span>
+                                <span className="text-lg font-mono font-black text-amber-500">{pendingCustody.toLocaleString()} {(() => { const acc = accounts.find(a => a.entityType === 'courier' && a.entityId === courier.id); return acc ? acc.currency : (courier.financialCurrency || 'SAR'); })()}</span>
                                 <p className="text-[9px] text-slate-655 mt-1">{isAr ? 'مبالغ تحت التسوية والمحاسبة اليومية' : 'Unsettled cash from deliveries'}</p>
                               </div>
                               <div className="p-4 bg-emerald-500/5 border border-emerald-500/15 rounded-2xl">
                                 <span className="text-[10px] text-emerald-400 font-bold block mb-1">{isAr ? 'الرصيد الجاري المستحق' : 'Aggregate Account Balance'}</span>
-                                <span className="text-lg font-mono font-black text-emerald-400">{(courier.financialBalance || 0).toLocaleString()} {courier.financialCurrency || 'SAR'}</span>
+                                <span className="text-lg font-mono font-black text-emerald-400">{(() => {
+                                  const acc = accounts.find(a => a.entityType === 'courier' && a.entityId === courier.id);
+                                  const bal = acc ? acc.balance : (courier.financialBalance || 0);
+                                  const cur = acc ? acc.currency : (courier.financialCurrency || 'SAR');
+                                  return `${bal.toLocaleString()} ${cur}`;
+                                })()}</span>
                               </div>
                               <div className="p-4 bg-slate-900/60 border border-slate-850 rounded-2xl">
                                 <span className="text-[10px] text-slate-500 font-bold block mb-1">{isAr ? 'معدل نجاح الشحنات الموكلة' : 'Successful Delivery Rate'}</span>
@@ -2342,39 +3234,87 @@ export default function Reports() {
                             </div>
 
                             {/* linked courier orders log */}
-                            <div className="space-y-3">
-                              <span className="text-xs font-black text-white block">{isAr ? 'سجل حركات شحنات المندوب المقترنة' : 'Assigned order manifest log'}</span>
-                              <div className="overflow-x-auto">
-                                <table className="w-full text-xs text-start border-separate border-spacing-y-1">
-                                  <thead>
-                                    <tr className="text-slate-550 border-b border-slate-850 pb-2 font-bold uppercase">
-                                      <th className="py-2.5 px-3 text-start">{isAr ? 'رقم الشحنة' : 'Order ID'}</th>
-                                      <th className="py-2.5 px-3">{isAr ? 'المستلم' : 'Customer'}</th>
-                                      <th className="py-2.5 px-3 text-right">{isAr ? 'صافي المال المطلوب تحصيله' : 'Required collection'}</th>
-                                      <th className="py-2.5 px-3 text-center">{isAr ? 'حالتها الاستحقاقية' : 'Logistics status'}</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {coOrders.length === 0 ? (
-                                      <tr>
-                                        <td colSpan={4} className="text-center py-6 text-slate-650 italic font-bold">
-                                          {isAr ? 'لا توجد شحنات مرتبطة بهذا المندوب حاليا' : 'No orders linked against this courier.'}
-                                        </td>
+                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                              <div className="space-y-3">
+                                <span className="text-xs font-black text-white block">{isAr ? 'سجل حركات شحنات المندوب المقترنة' : 'Assigned order manifest log'}</span>
+                                <div className="overflow-x-auto bg-slate-900/10 rounded-2xl border border-slate-850/50">
+                                  <table className="w-full text-xs text-start border-separate border-spacing-y-1 p-2">
+                                    <thead>
+                                      <tr className="text-slate-550 border-b border-slate-850 pb-2 font-bold uppercase">
+                                        <th className="py-2.5 px-3 text-start">{isAr ? 'رقم الشحنة' : 'Order ID'}</th>
+                                        <th className="py-2.5 px-3">{isAr ? 'المستلم' : 'Customer'}</th>
+                                        <th className="py-2.5 px-3 text-right">{isAr ? 'المطلوب تحصيله' : 'Required'}</th>
+                                        <th className="py-2.5 px-3 text-center">{isAr ? 'حالتها' : 'Status'}</th>
                                       </tr>
-                                    ) : (
-                                      coOrders.map(o => (
-                                        <tr key={o.id} className="bg-slate-900/10 hover:bg-slate-900/30 rounded-xl">
-                                          <td className="py-3 px-3 font-mono font-black text-[#d4af37]">{o.orderNumber}</td>
-                                          <td className="py-3 px-3 font-bold text-white">{o.customerName}</td>
-                                          <td className="py-3 px-3 text-right font-mono text-emerald-450 font-black">{o.totalPrice?.toLocaleString()} YER</td>
-                                          <td className="py-3 px-3 text-center">
-                                            <span className="px-2 py-0.5 rounded text-[9px] bg-slate-950 border border-slate-850 text-slate-400 font-bold">{o.orderStatus}</span>
+                                    </thead>
+                                    <tbody>
+                                      {coOrders.length === 0 ? (
+                                        <tr>
+                                          <td colSpan={4} className="text-center py-6 text-slate-650 italic font-bold">
+                                            {isAr ? 'لا توجد شحنات مرتبطة بهذا المندوب حاليا' : 'No orders linked against this courier.'}
                                           </td>
                                         </tr>
-                                      ))
-                                    )}
-                                  </tbody>
-                                </table>
+                                      ) : (
+                                        coOrders.map(o => (
+                                          <tr key={o.id} className="bg-slate-900/20 hover:bg-slate-900/50 rounded-xl">
+                                            <td className="py-3 px-3 font-mono font-black text-[#d4af37]">{o.orderNumber}</td>
+                                            <td className="py-3 px-3 font-bold text-white max-w-[120px] truncate">{o.customerName}</td>
+                                            <td className="py-3 px-3 text-right font-mono text-emerald-450 font-black">{o.totalPrice?.toLocaleString()} YER</td>
+                                            <td className="py-3 px-3 text-center">
+                                              <span className="px-2 py-0.5 rounded text-[9.5px] bg-slate-950 text-slate-400 border border-slate-850 font-bold truncate max-w-[80px] inline-block">{o.orderStatus}</span>
+                                            </td>
+                                          </tr>
+                                        ))
+                                      )}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+
+                              <div className="space-y-3">
+                                <span className="text-xs font-black text-white block">{isAr ? 'سجل الحركات والقيود المحاسبية للمندوب' : 'Courier Accounting Ledger'}</span>
+                                <div className="overflow-x-auto bg-slate-900/10 rounded-2xl border border-slate-850/50">
+                                  <table className="w-full text-xs text-start border-separate border-spacing-y-1 p-2">
+                                    <thead>
+                                      <tr className="text-slate-550 border-b border-slate-850 pb-2 font-bold uppercase">
+                                        <th className="py-2.5 px-3 text-start">{isAr ? 'رقم القيد' : 'Ref'}</th>
+                                        <th className="py-2.5 px-3">{isAr ? 'التاريخ' : 'Date'}</th>
+                                        <th className="py-2.5 px-3">{isAr ? 'الشرح' : 'Description'}</th>
+                                        <th className="py-2.5 px-3 text-right">{isAr ? 'القيمة' : 'Amount'}</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {(() => {
+                                        const staffTxs = accountTransactions.filter(tx => 
+                                          (courier.financialAccountId && tx.accountId === courier.financialAccountId) ||
+                                          tx.description?.includes(courier.fullName) || 
+                                          tx.description?.includes(courier.displayName || '---')
+                                        );
+
+                                        if (staffTxs.length === 0) {
+                                          return (
+                                            <tr>
+                                              <td colSpan={4} className="text-center py-6 text-slate-650 italic font-bold">
+                                                {isAr ? 'لا توجد قيود مالية مسجلة' : 'No financial ledger entries found.'}
+                                              </td>
+                                            </tr>
+                                          );
+                                        }
+
+                                        return staffTxs.map(tx => (
+                                          <tr key={tx.id} className="bg-slate-900/20 hover:bg-slate-900/50 rounded-xl">
+                                            <td className="py-3 px-3 font-mono text-slate-400">{tx.refNumber || '-'}</td>
+                                            <td className="py-3 px-3 text-slate-500 font-mono">{tx.createdAt ? format(new Date(tx.createdAt), 'yyyy-MM-dd') : '-'}</td>
+                                            <td className="py-3 px-3 text-slate-300 max-w-[150px] truncate">{tx.description}</td>
+                                            <td className={`py-3 px-3 text-right font-mono font-bold ${tx.type === 'Debit' ? 'text-rose-400' : 'text-emerald-400'}`}>
+                                              {tx.type === 'Debit' ? '+' : '-'}{(parseFloat(tx.amount) || 0).toLocaleString()} {tx.currencyOriginal || 'SAR'}
+                                            </td>
+                                          </tr>
+                                        ));
+                                      })()}
+                                    </tbody>
+                                  </table>
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -3496,7 +4436,7 @@ export default function Reports() {
                     // 6. Expense category breakdown printout card
                     if (activeReport === 'expenses' && selectedExpenseCategory !== null) {
                       const catExpenses = filteredData.expenses.filter(e => e.category === selectedExpenseCategory);
-                      const catSum = catExpenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+                      const catSum = catExpenses.reduce((sum, e) => sum + convertToYER(parseFloat(e.amount) || 0, e.currency || 'YER'), 0);
                       return (
                         <div className="space-y-4 text-xs">
                           <h4 className="font-extrabold text-[#000] border-b pb-1 text-sm">{isAr ? `كشف تفصيلي لمصروفات تصنيف: ${selectedExpenseCategory}` : `Expense Statement Category: ${selectedExpenseCategory}`}</h4>

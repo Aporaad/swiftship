@@ -21,6 +21,7 @@ import Sources from './pages/Sources';
 import Settings from './pages/Settings';
 import Notifications from './pages/Notifications';
 import Expenses from './pages/Expenses';
+import Accounting from './pages/Accounting';
 import SalaryHistory from './pages/SalaryHistory';
 import Reports from './pages/Reports';
 
@@ -144,6 +145,7 @@ export default function App() {
             <Route path="user-management" element={<UserManagement />} />
             <Route path="couriers" element={<Couriers />} />
             <Route path="expenses" element={<Expenses />} />
+            <Route path="accounting" element={<Accounting />} />
             <Route path="reports" element={<Reports />} />
             <Route path="roles" element={<Roles />} />
             <Route path="settings" element={<Settings />} />
