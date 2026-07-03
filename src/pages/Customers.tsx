@@ -24,6 +24,7 @@ import {
   Wallet,
   TrendingUp
 } from 'lucide-react';
+import { printContent } from '../lib/printUtils';
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
 import { notificationService } from '../services/notificationService';
@@ -479,8 +480,8 @@ export default function Customers() {
                 </tr>
               </thead>
               <tbody className="text-xs divide-y divide-slate-850/60 bg-black/10">
-                {filteredCustomers.map(customer => (
-                  <tr key={customer.id} className="hover:bg-slate-950/40 transition-all">
+                {filteredCustomers.map((customer, idx) => (
+                  <tr key={`${customer.id}-${idx}`} className="hover:bg-slate-950/40 transition-all">
                     <td className="p-4" onClick={() => handleOpenDetails(customer)}>
                       <div className="flex items-center gap-3 cursor-pointer group">
                         <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#121215] to-[#070708] border border-slate-800 text-[#d4af37] flex items-center justify-center font-black text-xs shrink-0 group-hover:border-[#d4af37] transition-all shadow-inner">
@@ -698,7 +699,7 @@ export default function Customers() {
             </div>
 
             {/* Scrollable Modal Content */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <div className="flex-1 overflow-y-auto p-6 space-y-6" id="customer-ledger-content">
 
               {/* Financial Account Info Card */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1001,7 +1002,7 @@ export default function Customers() {
                  CONFIDENTIAL REPORT STAMP: {new Date().toLocaleString(isAr ? 'ar-YE' : 'en-US')}
                </div>
                <button 
-                onClick={() => window.print()} 
+                onClick={() => printContent(isAr ? `كشف الحساب المالي لعميل: ${selectedCustomer.fullName}` : 'Client Account Sub-Ledger', 'customer-ledger-content', isAr)} 
                 className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black rounded-xl font-black text-xs transition-all flex items-center gap-2 shadow-md active:scale-95"
                >
                  <Printer className="w-4 h-4" /> {isAr ? 'طباعة كشف مالي للعميل' : 'Print Customer Statement'}

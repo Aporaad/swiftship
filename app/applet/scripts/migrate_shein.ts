@@ -4,9 +4,14 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const configPath = path.resolve(__dirname, '../firebase-applet-config.json');
+const currentFilePath = (typeof import.meta !== 'undefined' && import.meta.url) 
+  ? fileURLToPath(import.meta.url) 
+  : (typeof __filename !== 'undefined' ? __filename : '');
+
+const currentDirPath = (currentFilePath) 
+  ? path.dirname(currentFilePath) 
+  : (typeof __dirname !== 'undefined' ? __dirname : process.cwd());
+const configPath = path.resolve(currentDirPath, '../firebase-applet-config.json');
 
 let config;
 try {

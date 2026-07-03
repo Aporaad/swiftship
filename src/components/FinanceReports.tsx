@@ -8,10 +8,11 @@ import {
   AlertTriangle, RefreshCw, Layers, DollarSign, Wallet, Truck, 
   ChevronRight, ArrowUpRight, ArrowDownRight, Award, Plus, Check, CheckSquare, Square
 } from 'lucide-react';
-import { jsPDF } from 'jspdf';
+import { printContent } from '../lib/printUtils';
 import { useExpenseCategories } from '../hooks/useExpenseCategories';
 import { db } from '../lib/firebase';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { financialAccountService } from '../services/financialAccountService';
 
 interface FinanceReportsProps {
   orders: any[];
@@ -74,10 +75,12 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
 
   // Calculate Exchange conversions
   const convertToYER = (amount: number, currency: string) => {
-    const amt = parseFloat(String(amount || 0));
-    if (currency === 'USD') return amt * (settings.exchangeRateUSD || 535);
-    if (currency === 'SAR') return amt * (settings.exchangeRateSAR || 140);
-    return amt;
+    return financialAccountService.convertToDefaultCurrency(
+      amount,
+      currency,
+      settings.currency || 'YER',
+      { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+    );
   };
 
   // 1. Core filtered dataset
@@ -424,351 +427,15 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
     };
   }, [filteredOrders, filteredExpenses, isAr, metrics]);
 
-  // 4. Advanced jsPDF generator implementation
+  // 4. Advanced print generator implementation
   const handleExportPDF = () => {
-    // Page setup
-    const doc = new jsPDF('p', 'mm', 'a4');
-    const width = doc.internal.pageSize.getWidth();
-    const height = doc.internal.pageSize.getHeight();
-    
-    // Aesthetic Colors
-    const primaryGold = [178, 143, 40]; // #d28f28 ALX Gold
-    const charCoal = [15, 15, 18];      // Deep luxury black
-    const whitePaper = [255, 255, 255];
-    const borderGray = [230, 230, 235];
-    
-    let y = 15;
-
-    // Helper functions
-    const drawDivider = () => {
-      doc.setDrawColor(borderGray[0], borderGray[1], borderGray[2]);
-      doc.setLineWidth(0.25);
-      doc.line(15, y, width - 15, y);
-      y += 8;
-    };
-
-    const addHeaderBlock = () => {
-      // Background Accent bar
-      doc.setFillColor(charCoal[0], charCoal[1], charCoal[2]);
-      doc.rect(12, 12, width - 24, 25, 'F');
-
-      // Title
-      doc.setTextColor(212, 175, 55);
-      doc.setFont('Helvetica', 'Bold');
-      doc.setFontSize(14);
-      doc.text(settings.companyName || 'ALX SYSTEM FINANCE', 16, 21);
-      
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(10);
-      doc.text('ANALYTICS & EXECUTIVE ACCOUNTING STATEMENT', 16, 26);
-      
-      // Date and Metadata
-      doc.setTextColor(212, 175, 55);
-      doc.setFontSize(8);
-      const todayStr = new Date().toLocaleDateString();
-      doc.text(`REPORT PRINT DATE: ${todayStr}`, width - 16, 21, { align: 'right' });
-      doc.setTextColor(200, 200, 200);
-      doc.text(`DATE COVERS: [ ${dateRange.toUpperCase()} ] RANGE`, width - 16, 26, { align: 'right' });
-      doc.text(`SYSTEM REG: ${settings.taxId || 'SECURE_HASH'}`, width - 16, 31, { align: 'right' });
-
-      y = 44;
-    };
-
-    const addPageIfNeeded = () => {
-      if (y > height - 25) {
-        doc.addPage();
-        addHeaderBlock();
-      }
-    };
-
-    // Draw page elements
-    // A. Page 1 Header
-    addHeaderBlock();
-
-    // Company profile letterhead
-    doc.setTextColor(100, 100, 110);
-    doc.setFontSize(8.5);
-    doc.setFont('Helvetica', 'Normal');
-    doc.text(`Tel: ${settings.companyPhone || '—'}   Email: ${settings.companyEmail || '—'}   City: ${settings.companyAddress || 'Yemen Hub'}`, 15, y);
-    y += 5;
-    drawDivider();
-
-    // B. Executive Summary Card
-    if (pdfOptions.includeExecutiveSummary) {
-      addPageIfNeeded();
-      doc.setFillColor(248, 248, 250);
-      doc.rect(15, y, width - 30, 38, 'F');
-      
-      // Gold side bar
-      doc.setFillColor(primaryGold[0], primaryGold[1], primaryGold[2]);
-      doc.rect(15, y, 2.5, 38, 'F');
-
-      doc.setTextColor(30, 30, 35);
-      doc.setFont('Helvetica', 'Bold');
-      doc.setFontSize(10);
-      doc.text('I. EXECUTIVE FINANCIAL SUMMARY STATEMENT', 22, y + 6);
-
-      // 3 block statistics
-      doc.setFontSize(8.5);
-      doc.setTextColor(100, 100, 100);
-      doc.text('TOTAL DECLARED REVENUE (YER)', 22, y + 15);
-      doc.text('OPERATIONAL EXPENDITURES (YER)', 85, y + 15);
-      doc.text('NET COMPANY SAVINGS (YER)', 148, y + 15);
-
-      doc.setFont('Helvetica', 'Bold');
-      doc.setFontSize(10.5);
-      doc.setTextColor(16, 185, 129); // Success Green
-      doc.text(`${metrics.totalCollectedYER.toLocaleString()} YER`, 22, y + 21);
-      
-      doc.setTextColor(239, 68, 68); // Expense Red
-      doc.text(`${metrics.netOperationalExpenses.toLocaleString()} YER`, 85, y + 21);
-      
-      doc.setTextColor(178, 143, 40); // Gold
-      doc.text(`${metrics.netProfitYER.toLocaleString()} YER`, 148, y + 21);
-
-      // Success Rate subtext
-      doc.setFont('Helvetica', 'Normal');
-      doc.setFontSize(8);
-      doc.setTextColor(120, 120, 130);
-      doc.text(`Operational ROI Margin: %${metrics.netProfitMargin}  •  Overall Delivery Success Rate: %${metrics.deliverySuccessRate} (based on ${metrics.totalOrders} total logs)`, 22, y + 31);
-
-      y += 45;
-    }
-
-    // C. Shipped Orders database section
-    if (pdfOptions.includeOrdersLedger) {
-      addPageIfNeeded();
-      doc.setTextColor(charCoal[0], charCoal[1], charCoal[2]);
-      doc.setFont('Helvetica', 'Bold');
-      doc.setFontSize(9.5);
-      doc.text('II. CURRENT SYSTEM ORDERS MOVEMENT LEDGER', 15, y);
-      y += 4.5;
-
-      // Table Header row
-      doc.setFillColor(240, 240, 245);
-      doc.rect(15, y, width - 30, 5.5, 'F');
-      doc.setFontSize(7.5);
-      doc.setTextColor(80, 80, 90);
-      doc.text('ORDER CODE', 17, y + 4);
-      doc.text('BOOKING DATE', 45, y + 4);
-      doc.text('CUSTOMER / ROUTE', 75, y + 4);
-      doc.text('TOTAL CHARGED', 123, y + 4);
-      doc.text('PAID CASH', 150, y + 4);
-      doc.text('STATUS', 175, y + 4);
-      
-      y += 6;
-
-      // Render up to 15 order logs to fit beautifully
-      const ordersToPrint = filteredOrders.slice(0, 15);
-      ordersToPrint.forEach(ord => {
-        addPageIfNeeded();
-        doc.setTextColor(50, 50, 55);
-        doc.setFont('Helvetica', 'Bold');
-        doc.setFontSize(7.5);
-        doc.text(ord.orderNumber || 'ALX-CODE', 17, y + 4);
-        
-        doc.setFont('Helvetica', 'Normal');
-        const d = ord.createdAt?.toDate ? ord.createdAt.toDate() : new Date(ord.createdAt || Date.now());
-        doc.text(d.toLocaleDateString(), 45, y + 4);
-        
-        const customerSafe = (ord.customerName || '').substring(0, 22);
-        const routeSafe = `${ord.orderSourceName || 'HUB'} -> ${ord.locationYemen || 'YER'}`.substring(0, 22);
-        doc.text(customerSafe, 75, y + 3);
-        doc.setFontSize(6.5);
-        doc.setTextColor(130, 130, 140);
-        doc.text(routeSafe, 75, y + 5.5);
-        
-        doc.setFontSize(7.5);
-        doc.setTextColor(50, 50, 55);
-        doc.text(`${(parseFloat(ord.amountPaid || 0) + parseFloat(ord.amountRemaining || 0)).toLocaleString()} YER`, 123, y + 4);
-        doc.text(`${(ord.amountPaid || 0).toLocaleString()} YER`, 150, y + 4);
-        
-        // Status badge color help
-        const stat = ord.orderStatus || 'Pending';
-        if (stat === 'تم التسليم' || stat === 'Delivered') {
-          doc.setTextColor(16, 185, 129);
-        } else if (stat === 'ملغي' || stat === 'Cancelled') {
-          doc.setTextColor(239, 68, 68);
-        } else {
-          doc.setTextColor(245, 158, 11);
-        }
-        doc.setFont('Helvetica', 'Bold');
-        doc.text(stat.substring(0, 15), 175, y + 4);
-
-        doc.setDrawColor(240, 240, 245);
-        doc.setLineWidth(0.15);
-        doc.line(15, y + 6.5, width - 15, y + 6.5);
-
-        y += 7.5;
-      });
-
-      if (filteredOrders.length === 0) {
-        doc.setFont('Helvetica', 'Normal');
-        doc.setFontSize(8);
-        doc.setTextColor(160, 160, 170);
-        doc.text('[ No order logs correspond directly with filter ]', 20, y + 5);
-        y += 10;
-      }
-      y += 5;
-    }
-
-    // D. Corporate general expenditures
-    if (pdfOptions.includeExpensesLedger) {
-      addPageIfNeeded();
-      doc.setTextColor(charCoal[0], charCoal[1], charCoal[2]);
-      doc.setFont('Helvetica', 'Bold');
-      doc.setFontSize(9.5);
-      doc.text('III. GENERAL EXPENDITURES & IN-HOUSE OUTFLOWS', 15, y);
-      y += 4.5;
-
-      // Table Header row
-      doc.setFillColor(240, 240, 245);
-      doc.rect(15, y, width - 30, 5.5, 'F');
-      doc.setFontSize(7.5);
-      doc.setTextColor(80, 80, 90);
-      doc.text('VOUCHER ID', 17, y + 4);
-      doc.text('CATEGORY TYPE', 50, y + 4);
-      doc.text('RECIPIENT PARTY', 85, y + 4);
-      doc.text('AUTHORIZED BY', 125, y + 4);
-      doc.text('VALUATION AMOUNT', 165, y + 4);
-      
-      y += 6;
-
-      const expensesToPrint = filteredExpenses.slice(0, 12);
-      expensesToPrint.forEach(exp => {
-        addPageIfNeeded();
-        doc.setTextColor(50, 50, 55);
-        doc.setFont('Helvetica', 'Bold');
-        doc.setFontSize(7.5);
-        doc.text(exp.expenseNumber || 'EXP-ID', 17, y + 4);
-        
-        doc.setFont('Helvetica', 'Normal');
-        const catObj = EXPENSE_CATEGORIES_DYNAMIC.find(c => c.id === exp.category) || 
-                       EXPENSE_CATEGORIES_DYNAMIC.find(c => exp.type === 'Custody' ? c.id === 'custody' : (exp.type === 'FactoryPayment' ? c.id === 'factory' : c.id === 'other'));
-        const categoryLabel = catObj ? catObj.labelEn : (exp.type || 'General');
-        doc.text(categoryLabel, 50, y + 4);
-        doc.text((exp.recipientName || 'Office').substring(0, 20), 85, y + 4);
-        doc.text((exp.createdByName || 'Manager').substring(0, 18), 125, y + 4);
-        
-        doc.setFont('Helvetica', 'Bold');
-        doc.setTextColor(178, 143, 40);
-        doc.text(`${(exp.amount || 0).toLocaleString()} ${exp.currency || 'YER'}`, 165, y + 4);
-
-        doc.setDrawColor(240, 240, 245);
-        doc.setLineWidth(0.15);
-        doc.line(15, y + 6.5, width - 15, y + 6.5);
-
-        y += 7.5;
-      });
-
-      if (filteredExpenses.length === 0) {
-        doc.setFont('Helvetica', 'Normal');
-        doc.setFontSize(8);
-        doc.setTextColor(160, 160, 170);
-        doc.text('[ No ledger custody records correspond with filters ]', 20, y + 5);
-        y += 10;
-      }
-      y += 5;
-    }
-
-    // E. Courier custody section
-    if (pdfOptions.includeCourierStanding) {
-      addPageIfNeeded();
-      doc.setTextColor(charCoal[0], charCoal[1], charCoal[2]);
-      doc.setFont('Helvetica', 'Bold');
-      doc.setFontSize(9.5);
-      doc.text('IV. COURIER IN-COOP CUSTODIAL DIRECTORY BALANCES', 15, y);
-      y += 4.5;
-
-      // Table Header row
-      doc.setFillColor(240, 240, 245);
-      doc.rect(15, y, width - 30, 5.5, 'F');
-      doc.setFontSize(7.5);
-      doc.setTextColor(80, 80, 90);
-      doc.text('COURIER NAME', 17, y + 4);
-      doc.text('REG ID / CODE', 60, y + 4);
-      doc.text('TOTAL CUSTODY RECEIVED', 95, y + 4);
-      doc.text('TOTAL SETTLED CASH', 140, y + 4);
-      doc.text('LOCKED ACTIVE TRUST', 178, y + 4);
-      
-      y += 6;
-
-      // Courier math mapping
-      const activeCouriers = couriers.slice(0, 8);
-      activeCouriers.forEach(cour => {
-        addPageIfNeeded();
-        
-        // Calculate custody for this specific courier
-        const courExpenses = expenses.filter(e => e.type === 'Custody' && e.recipientId === cour.id);
-        const totalCust = courExpenses.reduce((sum, e) => sum + convertToYER(e.amount || 0, e.currency), 0);
-        const totalSet = courExpenses.filter(e => e.status === 'Settled').reduce((sum, e) => sum + convertToYER(e.amount || 0, e.currency), 0);
-        const outstanding = totalCust - totalSet;
-
-        doc.setTextColor(50, 50, 55);
-        doc.setFont('Helvetica', 'Bold');
-        doc.setFontSize(7.5);
-        doc.text((cour.fullName || '—').substring(0, 22), 17, y + 4);
-        
-        doc.setFont('Helvetica', 'Normal');
-        doc.text(cour.courierCustomId || 'ALX-C', 60, y + 4);
-        doc.text(`${totalCust.toLocaleString()} YER`, 95, y + 4);
-        doc.text(`${totalSet.toLocaleString()} YER`, 140, y + 4);
-        
-        doc.setFont('Helvetica', 'Bold');
-        if (outstanding > 0) {
-          doc.setTextColor(239, 68, 68);
-        } else {
-          doc.setTextColor(16, 185, 129);
-        }
-        doc.text(`${outstanding.toLocaleString()} YER`, 178, y + 4);
-
-        doc.setDrawColor(240, 240, 245);
-        doc.setLineWidth(0.15);
-        doc.line(15, y + 6.5, width - 15, y + 6.5);
-
-        y += 7.5;
-      });
-      y += 8;
-    }
-
-    // F. Safe closing & official signoff box
-    if (pdfOptions.includeSignatureBox) {
-      addPageIfNeeded();
-      y += 5;
-      doc.setDrawColor(178, 143, 40);
-      doc.setLineWidth(0.5);
-      doc.line(15, y, width - 15, y);
-      y += 10;
-
-      doc.setTextColor(120, 120, 130);
-      doc.setFont('Helvetica', 'Normal');
-      doc.setFontSize(7.5);
-      doc.text('CONFIDENTIALITY AND LEGAL COMPLIANCE DISCLAIMER:', 15, y);
-      doc.text('This ledger statement compiles raw operational databases in real time. It serves as an official company audit file for tax and bank liabilities.', 15, y + 4);
-
-      // Signature structures
-      y += 12;
-      doc.setDrawColor(200, 200, 200);
-      doc.setLineWidth(0.2);
-      
-      // Box 1
-      doc.line(20, y, 75, y);
-      doc.setFont('Helvetica', 'Bold');
-      doc.setFontSize(8);
-      doc.setTextColor(50, 50, 55);
-      doc.text('CHIEF FINANCIAL AUDITOR', 20, y + 4);
-
-      // Box 2
-      doc.line(width - 75, y, width - 20, y);
-      doc.text('CORPORATE GENERAL MANAGER', width - 75, y + 4);
-    }
-
-    // Download Statement
-    doc.save(`${settings.companyName || 'ALX'}_FINANCIAL_EXECUTIVE_STATEMENT_${new Date().toISOString().split('T')[0]}.pdf`);
+    // Using robust HTML print instead of broken jsPDF for Arabic support
+    const reportTitle = isAr ? 'تقرير الأداء المالي والتحليل التشغيلي' : 'Finance & Performance Report';
+    printContent(reportTitle, 'finance-report-content', isAr);
   };
 
   return (
-    <div className="space-y-6 pt-2 animate-fade-in">
+    <div className="space-y-6 pt-2 animate-fade-in" id="finance-report-content">
       
       {/* 📊 Control & Filter Grid Dashboard */}
       <div className="bg-[#121215] border border-slate-850 p-6 rounded-3xl flex flex-col gap-6 shadow-xl">
@@ -883,7 +550,7 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
         {/* KPI 1 */}
         <div className="bg-gradient-to-br from-[#121215] to-[#070708] border border-slate-850 p-4 rounded-3xl relative overflow-hidden shadow-md text-start">
           <span className="text-[9px] text-slate-500 font-black uppercase tracking-wider block mb-1">
-            {isAr ? 'إجمالي فواتير الشحنات (العائد المالي)' : 'Gross Declared Revenue (YER)'}
+            {isAr ? `إجمالي فواتير الشحنات (${settings.currency || 'YER'})` : `Gross Declared Revenue (${settings.currency || 'YER'})`}
           </span>
           <span className="text-xl font-mono font-black text-[#d4af37] block">
             {metrics.totalOrderValueYER.toLocaleString()}
@@ -899,7 +566,7 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
         {/* KPI 2 */}
         <div className="bg-gradient-to-br from-[#121215] to-[#070708] border border-slate-850 p-4 rounded-3xl relative overflow-hidden shadow-md text-start">
           <span className="text-[9px] text-slate-500 font-black uppercase tracking-wider block mb-1">
-            {isAr ? 'السيولة المستلمة المحبوسة' : 'Revenues Collected (YER)'}
+            {isAr ? `السيولة المستلمة (${settings.currency || 'YER'})` : `Revenues Collected (${settings.currency || 'YER'})`}
           </span>
           <span className="text-xl font-mono font-black text-emerald-400 block">
             {metrics.totalCollectedYER.toLocaleString()}
@@ -915,12 +582,12 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
         {/* KPI 3 */}
         <div className="bg-gradient-to-br from-[#121215] to-[#070708] border border-slate-850 p-4 rounded-3xl relative overflow-hidden shadow-md text-start">
           <span className="text-[9px] text-slate-500 font-black uppercase tracking-wider block mb-1">
-            {isAr ? 'الذمم المستحقة طرف العملاء' : 'Outstanding Receivables (YER)'}
+            {isAr ? `الذمم المستحقة طرف العملاء (${settings.currency || 'YER'})` : `Outstanding Receivables (${settings.currency || 'YER'})`}
           </span>
           <span className="text-xl font-mono font-black text-amber-500 block">
             {metrics.totalOutstandingYER.toLocaleString()}
           </span>
-          <span className="text-[9px] text-slate-550 font-sans block mt-1">
+          <span className="text-[9px] text-slate-555 font-sans block mt-1">
             {isAr ? 'الديون المتبقية خارج الصندوق للتحصيل' : 'Debts in hand of buyers pending collection'}
           </span>
           <div className="absolute top-3 right-3 p-1.5 text-amber-500 bg-amber-950/20 border border-amber-900/30 rounded-xl">
@@ -931,7 +598,7 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
         {/* KPI 4 */}
         <div className="bg-gradient-to-br from-[#121215] to-[#070708] border border-slate-850 p-4 rounded-3xl relative overflow-hidden shadow-md text-start">
           <span className="text-[9px] text-slate-500 font-black uppercase tracking-wider block mb-1">
-            {isAr ? 'صافي أرباح الصندوق التشغيلية' : 'Net Company Profit (YER)'}
+            {isAr ? `صافي أرباح الصندوق (${settings.currency || 'YER'})` : `Net Company Profit (${settings.currency || 'YER'})`}
           </span>
           <span className="text-xl font-mono font-black text-cyan-400 block animate-pulse">
             {metrics.netProfitYER.toLocaleString()}
@@ -980,8 +647,8 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
         </div>
         <div className="p-4 bg-[#d4af37]/5 border border-[#d4af37]/20 rounded-2xl flex flex-col justify-between text-start">
           <div>
-            <span className="text-[10px] text-amber-500 font-extrabold uppercase tracking-wider block mb-1">{isAr ? 'السيولة الموحدة بالريال اليمني' : 'Combined Vault Equiv.'}</span>
-            <span className="text-base font-mono font-black text-[#d4af37]">{(treasuryBalances.combinedTotalYER || 0).toLocaleString()} <span className="text-[9px]">YER</span></span>
+            <span className="text-[10px] text-amber-500 font-extrabold uppercase tracking-wider block mb-1">{isAr ? `السيولة الموحدة ب${settings.currency || 'YER'}` : `Combined Vault (${settings.currency || 'YER'}) Equiv.`}</span>
+            <span className="text-base font-mono font-black text-[#d4af37]">{(treasuryBalances.combinedTotalYER || 0).toLocaleString()} <span className="text-[9px]">{settings.currency || 'YER'}</span></span>
           </div>
           <p className="text-[9px] text-slate-400 font-medium mt-2 leading-snug border-t border-[#d4af37]/10 pt-1.5">
             {isAr ? 'إجمالي الأصول النقدية الموحدة بالأسعار المحددة في النظام.' : 'Consolidated hard-cash balances across all currencies.'}

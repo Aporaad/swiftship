@@ -45,50 +45,20 @@ const LOCKED = '🔒 مقيد';
 export default function Dashboard() {
   const navigate = useNavigate();
   const { role, hasPermission, profile, loading: roleLoading } = useRole();
-  const { settings, t } = useSettings();
+  const { settings, updateSettings, t } = useSettings();
   const isAr = settings.language === 'ar';
 
   // Customizable metrics configuration
-  const [visibleMetrics, setVisibleMetrics] = useState<string[]>(['totalOrders', 'totalRevenues', 'netProfit', 'activeDeliveries', 'delayedOrders', 'activeCustomers']);
+  const visibleMetrics = settings.visibleMetrics || ['totalOrders', 'totalRevenues', 'netProfit', 'activeDeliveries', 'delayedOrders', 'activeCustomers'];
   const [isCustomizing, setIsCustomizing] = useState(false);
-  const [gridColumns, setGridColumns] = useState<number>(6);
-
-  useEffect(() => {
-    if (!auth.currentUser) return;
-    const fetchSettings = async () => {
-      try {
-        const snap = await getDoc(doc(db, 'settings', `dashboard_${auth.currentUser!.uid}`));
-        if (snap.exists()) {
-          const data = snap.data();
-          if (data.visibleMetrics) setVisibleMetrics(data.visibleMetrics);
-          if (data.gridColumns) setGridColumns(data.gridColumns);
-        } else {
-          // fallback to localStorage if they haven't migrated yet
-          const savedMetrics = localStorage.getItem('dashboard_visible_metrics');
-          if (savedMetrics) {
-            try { setVisibleMetrics(JSON.parse(savedMetrics)); } catch (e) {}
-          }
-          const savedCols = localStorage.getItem('dashboard_grid_columns');
-          if (savedCols) {
-            setGridColumns(parseInt(savedCols));
-          }
-        }
-      } catch (e) {
-        console.error("Failed to load dashboard settings:", e);
-      }
-    };
-    fetchSettings();
-  }, []);
+  const gridColumns = settings.dashboardGridColumns || 6;
 
   const saveDashboardSettings = async (metrics: string[], cols: number) => {
-    setVisibleMetrics(metrics);
-    setGridColumns(cols);
-    if (!auth.currentUser) return;
     try {
-      await setDoc(doc(db, 'settings', `dashboard_${auth.currentUser.uid}`), {
+      await updateSettings({
         visibleMetrics: metrics,
-        gridColumns: cols
-      }, { merge: true });
+        dashboardGridColumns: cols
+      });
     } catch (e) {
       console.error("Failed to save dashboard settings:", e);
     }
@@ -213,17 +183,44 @@ export default function Dashboard() {
     // Revenues: Sum of all accounts starting with 4
     const totalRevenues = financialAccounts
       .filter(a => a.accountCode?.startsWith('4') || a.accountCode?.startsWith('REV'))
-      .reduce((sum, a) => sum + (parseFloat(a.balance as any) || 0), 0);
+      .reduce((sum, a) => {
+        const balance = parseFloat(a.balance as any) || 0;
+        const converted = financialAccountService.convertToDefaultCurrency(
+          balance,
+          a.currency || 'YER',
+          settings.currency || 'YER',
+          { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+        );
+        return sum + converted;
+      }, 0);
 
     // Costs: Sum of all accounts starting with 5
     const totalCosts = financialAccounts
       .filter(a => a.accountCode?.startsWith('5') || a.accountCode?.startsWith('EXP'))
-      .reduce((sum, a) => sum + (parseFloat(a.balance as any) || 0), 0);
+      .reduce((sum, a) => {
+        const balance = parseFloat(a.balance as any) || 0;
+        const converted = financialAccountService.convertToDefaultCurrency(
+          balance,
+          a.currency || 'YER',
+          settings.currency || 'YER',
+          { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+        );
+        return sum + converted;
+      }, 0);
 
     // Receivables (amountRemaining approx): Sum of all accounts starting with 1130
     const netReceivables = financialAccounts
       .filter(a => a.entityType === 'customer' || a.accountCode?.startsWith('1130'))
-      .reduce((sum, a) => sum + (parseFloat(a.balance as any) || 0), 0);
+      .reduce((sum, a) => {
+        const balance = parseFloat(a.balance as any) || 0;
+        const converted = financialAccountService.convertToDefaultCurrency(
+          balance,
+          a.currency || 'YER',
+          settings.currency || 'YER',
+          { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+        );
+        return sum + converted;
+      }, 0);
 
     // Real Net Profit = Revenue - Costs (per accounting standards)
     const realNetProfit = totalRevenues - totalCosts;
@@ -632,7 +629,7 @@ export default function Dashboard() {
     totalRevenues: {
       titleAr: 'إجمالي الإيرادات',
       titleEn: 'Total Revenue',
-      value: canViewStats ? `${stats.totalRevenues.toLocaleString()} YER` : LOCKED,
+      value: canViewStats ? `${stats.totalRevenues.toLocaleString()} ${settings.currency || 'YER'}` : LOCKED,
       changeAr: '+18.7% من أمس',
       changeEn: '+18.7% vs yesterday',
       isPositive: true,
@@ -644,7 +641,7 @@ export default function Dashboard() {
     netProfit: {
       titleAr: 'صافي أرباح الشركة',
       titleEn: 'Net Profits',
-      value: canViewStats ? `${stats.netProfit.toLocaleString()} YER` : LOCKED,
+      value: canViewStats ? `${stats.netProfit.toLocaleString()} ${settings.currency || 'YER'}` : LOCKED,
       changeAr: '+15.2% من أمس',
       changeEn: '+15.2% vs yesterday',
       isPositive: true,
@@ -692,7 +689,7 @@ export default function Dashboard() {
     amountPaid: {
       titleAr: 'المبالغ المحصلة كاش',
       titleEn: 'Cash Collected',
-      value: canViewStats ? `${stats.amountPaid.toLocaleString()} YER` : LOCKED,
+      value: canViewStats ? `${stats.amountPaid.toLocaleString()} ${settings.currency || 'YER'}` : LOCKED,
       changeAr: '+14.2% مؤشر ممتاز',
       changeEn: '+14.2% healthy level',
       isPositive: true,
@@ -704,7 +701,7 @@ export default function Dashboard() {
     amountRemaining: {
       titleAr: 'المبالغ المتبقية والمديونيات',
       titleEn: 'Outstanding Debts',
-      value: canViewStats ? `${stats.amountRemaining.toLocaleString()} YER` : LOCKED,
+      value: canViewStats ? `${stats.amountRemaining.toLocaleString()} ${settings.currency || 'YER'}` : LOCKED,
       changeAr: '+2.1% معلق للتحصيل',
       changeEn: '+2.1% pending collect',
       isPositive: false,
@@ -744,6 +741,7 @@ export default function Dashboard() {
       case 2: return 'grid-cols-1 sm:grid-cols-2';
       case 3: return 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3';
       case 4: return 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4';
+      case 5: return 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5';
       default: return 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6';
     }
   };
@@ -831,7 +829,7 @@ export default function Dashboard() {
           <div className="border-t border-slate-900 pt-3 flex flex-wrap gap-4 items-center">
             <span className="text-xs font-bold text-slate-400">{isAr ? 'تقسيم شبكة العرض (أعمدة):' : 'Grid Column Layout:'}</span>
             <div className="flex gap-2">
-              {[2, 3, 4, 6].map((cols) => (
+              {[2, 3, 4, 5, 6].map((cols) => (
                 <button
                   key={cols}
                   onClick={() => {

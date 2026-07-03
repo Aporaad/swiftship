@@ -4,6 +4,7 @@ import { collection, onSnapshot, orderBy, query, where, addDoc, doc, updateDoc, 
 import { useSettings } from '../context/SettingsContext';
 import { useRole } from '../hooks/useRole';
 import { notificationService } from '../services/notificationService';
+import toast from 'react-hot-toast';
 import { activityLogService } from '../services/activityLogService';
 import { whatsappService } from '../services/whatsappService';
 import ConfirmModal from '../components/ConfirmModal';
@@ -14,7 +15,18 @@ import {
   User, Mail, Phone, Coins, Calendar
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
+import { printContent } from '../lib/printUtils';
 import QRCode from 'qrcode';
+
+const ORDER_STATUS_FLOW = [
+  'تم تسجيل الطلب',
+  'وصل مستودع السعودية',
+  'جاري الشحن لليمن',
+  'في التخليص الجمركي',
+  'وصل مركز التوزيع في اليمن',
+  'مع المندوب للتوصيل',
+  'تم التسليم'
+];
 
 export default function Orders() {
   const { settings, t } = useSettings();
@@ -343,16 +355,28 @@ export default function Orders() {
     seedDefaultCarriers();
   }, [roleLoading]);
 
-  // Handle URL query parameter ?new=true to automatically open Create Order modal
+  // Handle URL query parameter ?new=true or ?id=ORDER_ID
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('new') === 'true') {
+    const newFlag = params.get('new');
+    const orderId = params.get('id');
+
+    if (newFlag === 'true') {
       setIsAddModalOpen(true);
       // Clean up the URL parameter silently
       const newUrl = window.location.pathname + window.location.hash;
       window.history.replaceState({}, '', newUrl);
+    } else if (orderId && orders.length > 0) {
+      const order = orders.find(o => o.id === orderId);
+      if (order) {
+        setSelectedOrder(order);
+        setIsDetailsModalOpen(true);
+        // Clean up URL
+        const newUrl = window.location.pathname + window.location.hash;
+        window.history.replaceState({}, '', newUrl);
+      }
     }
-  }, []);
+  }, [orders]);
 
   // Handle customer unpaid alert
   useEffect(() => {
@@ -475,252 +499,94 @@ export default function Orders() {
 
   const generateOrderInvoicePDF = (order: any) => {
     if (!order) return;
-    const doc = new jsPDF('p', 'mm', 'a4');
+    
+    const invoiceHtml = `
+      <div style="font-family: 'Cairo', sans-serif; color: #111;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 30px; border-bottom: 3px double #d4af37; padding-bottom: 20px;">
+          <div>
+            <h1 style="margin: 0; color: #111; font-size: 28px;">${isAr ? 'فاتورة ضريبية' : 'Tax Invoice'}</h1>
+            <p style="margin: 8px 0; font-size: 14px;"><strong>${isAr ? 'رقم الطلب' : 'Order #'}:</strong> <span style="font-family: monospace;">${order.orderNumber || '—'}</span></p>
+            <p style="margin: 8px 0; font-size: 14px;"><strong>${isAr ? 'التاريخ' : 'Date'}:</strong> ${new Date(order.createdAt || Date.now()).toLocaleDateString()}</p>
+          </div>
+          <div style="text-align: right;">
+             <h2 style="margin: 0; color: #d4af37; font-size: 24px;">${settings.systemName || settings.companyName || 'AL-XPRESS'}</h2>
+             <p style="margin: 5px 0; font-size: 13px;">${settings.companyPhone || ''}</p>
+             <p style="margin: 5px 0; font-size: 13px;">${settings.companyEmail || ''}</p>
+             <p style="margin: 5px 0; font-size: 13px;">${settings.companyAddress || ''}</p>
+          </div>
+        </div>
 
-    // Top banner block (luxury charcoal gray)
-    doc.setFillColor(15, 15, 18);
-    doc.rect(0, 0, 210, 40, 'F');
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 40px;">
+          <div style="background: #f8f8fa; padding: 20px; border-radius: 12px; border-right: 4px solid #d4af37;">
+            <h3 style="margin-top: 0; border-bottom: 1px solid #ddd; padding-bottom: 10px; font-size: 16px;">${isAr ? 'بيانات العميل المستلم' : 'Bill To (Recipient)'}</h3>
+            <p style="margin: 8px 0;"><strong>${isAr ? 'الاسم' : 'Name'}:</strong> ${order.customerName || '—'}</p>
+            <p style="margin: 8px 0;"><strong>${isAr ? 'الهاتف' : 'Phone'}:</strong> ${order.customerPhone || '—'}</p>
+            <p style="margin: 8px 0;"><strong>${isAr ? 'العنوان' : 'Address'}:</strong> ${order.customerAddress || '—'}</p>
+          </div>
+          <div style="background: #f8f8fa; padding: 20px; border-radius: 12px; border-right: 4px solid #334155;">
+            <h3 style="margin-top: 0; border-bottom: 1px solid #ddd; padding-bottom: 10px; font-size: 16px;">${isAr ? 'تفاصيل الشحن واللوجستيات' : 'Shipping & Logistics'}</h3>
+            <p style="margin: 8px 0;"><strong>${isAr ? 'الحالة' : 'Status'}:</strong> ${order.orderStatus || '—'}</p>
+            <p style="margin: 8px 0;"><strong>${isAr ? 'المصدر' : 'Source'}:</strong> ${order.orderSourceName || '—'}</p>
+            <p style="margin: 8px 0;"><strong>${isAr ? 'رقم التتبع' : 'Tracking'}:</strong> <span style="font-family: monospace;">${order.trackingNumber || '—'}</span></p>
+          </div>
+        </div>
 
-    // Gold separator strip
-    doc.setFillColor(212, 175, 55);
-    doc.rect(0, 40, 210, 2, 'F');
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
+          <thead>
+            <tr style="background: #1e293b; color: white;">
+              <th style="padding: 12px; border: 1px solid #334155; text-align: ${isAr ? 'right' : 'left'};">${isAr ? 'وصف المنتج' : 'Item Description'}</th>
+              <th style="padding: 12px; border: 1px solid #334155; text-align: center;">${isAr ? 'الكمية' : 'Qty'}</th>
+              <th style="padding: 12px; border: 1px solid #334155; text-align: center;">${isAr ? 'سعر الوحدة' : 'Unit Price'}</th>
+              <th style="padding: 12px; border: 1px solid #334155; text-align: center;">${isAr ? 'الإجمالي' : 'Subtotal'}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${(order.items || []).length > 0 ? (order.items || []).map((item: any) => `
+              <tr>
+                <td style="padding: 12px; border: 1px solid #eee;">${item.productName || item.name || '—'}</td>
+                <td style="padding: 12px; border: 1px solid #eee; text-align: center;">${item.quantity || 1}</td>
+                <td style="padding: 12px; border: 1px solid #eee; text-align: center;">${(parseFloat(item.productPrice || item.price || 0)).toLocaleString()} SAR</td>
+                <td style="padding: 12px; border: 1px solid #eee; text-align: center;">${((item.quantity || 1) * (parseFloat(item.productPrice || item.price || 0))).toLocaleString()} SAR</td>
+              </tr>
+            `).join('') : `
+              <tr>
+                <td colspan="4" style="padding: 20px; text-align: center; color: #999;">${isAr ? 'لا توجد أصناف مسجلة' : 'No items registered'}</td>
+              </tr>
+            `}
+          </tbody>
+        </table>
 
-    // Header texts
-    if (settings.invoiceLogo) {
-      try {
-        doc.addImage(settings.invoiceLogo, 'PNG', 15, 5, 25, 25, undefined, 'FAST');
+        <div style="margin-right: auto; margin-left: ${isAr ? '0' : 'auto'}; width: 350px; background: #f8f8fa; padding: 20px; border-radius: 12px; border: 1px solid #eee;">
+           <div style="display: flex; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid #ddd; padding-bottom: 8px;">
+             <span style="font-weight: 700;">${isAr ? 'إجمالي المنتجات (SAR):' : 'Products Total (SAR):'}</span>
+             <span>${(order.totalCostSAR || 0).toLocaleString()} SAR</span>
+           </div>
+           ${parseFloat(order.shippingCostSAR || 0) > 0 ? `
+           <div style="display: flex; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid #ddd; padding-bottom: 8px;">
+             <span>${isAr ? 'تكلفة الشحن الدولي (SAR):' : 'International Shipping (SAR):'}</span>
+             <span>${parseFloat(order.shippingCostSAR || 0).toLocaleString()} SAR</span>
+           </div>` : ''}
+           <div style="display: flex; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid #ddd; padding-bottom: 8px; font-weight: 800; font-size: 18px; color: #111;">
+             <span>${isAr ? 'الإجمالي الكلي (YER):' : 'Grand Total (YER):'}</span>
+             <span>${(parseFloat(order.amountPaid || 0) + parseFloat(order.amountRemaining || 0)).toLocaleString()} YER</span>
+           </div>
+           <div style="display: flex; justify-content: space-between; margin-bottom: 10px; color: #059669; font-weight: 800;">
+             <span>${isAr ? 'المبلغ المدفوع (YER):' : 'Amount Paid (YER):'}</span>
+             <span>${parseFloat(order.amountPaid || 0).toLocaleString()} YER</span>
+           </div>
+           <div style="display: flex; justify-content: space-between; margin-top: 5px; color: #dc2626; font-weight: 800; font-size: 20px; border-top: 2px solid #dc2626; padding-top: 10px;">
+             <span>${isAr ? 'المبلغ المتبقي (YER):' : 'Balance Due (YER):'}</span>
+             <span>${parseFloat(order.amountRemaining || 0).toLocaleString()} YER</span>
+           </div>
+        </div>
+        
+        <div style="margin-top: 50px; text-align: center; color: #666; font-size: 12px; border-top: 1px solid #eee; padding-top: 20px;">
+          <p>${settings.invoiceNotes || (isAr ? 'شكراً لتعاملكم معنا! تم إنشاء هذه الفاتورة آلياً.' : 'Thank you for your business! Generated automatically.')}</p>
+        </div>
+      </div>
+    `;
 
-        doc.setTextColor(212, 175, 55);
-        doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(16);
-        doc.text(settings.systemName || settings.companyName || 'SWIFT SHIP', 45, 18);
-
-        doc.setTextColor(180, 180, 180);
-        doc.setFontSize(8);
-        doc.setFont('Helvetica', 'normal');
-        doc.text('FREIGHT CARGO INVOICE & MANIFEST RECEIPTS', 45, 24);
-
-        doc.setTextColor(130, 130, 130);
-        doc.setFontSize(7.5);
-        doc.text(`Invoice Date: ${new Date(order.createdAt || Date.now()).toLocaleDateString()} | Order Code: ${order.orderNumber || ''}`, 45, 30);
-      } catch (err) {
-        console.warn("Failed to add invoice logo to PDF:", err);
-        // Fallback if logo rendering fails
-        doc.setTextColor(212, 175, 55);
-        doc.setFont('Helvetica', 'bold');
-        doc.setFontSize(18);
-        doc.text(settings.systemName || settings.companyName || 'SWIFT SHIP', 15, 18);
-
-        doc.setTextColor(180, 180, 180);
-        doc.setFontSize(9);
-        doc.setFont('Helvetica', 'normal');
-        doc.text('FREIGHT CARGO INVOICE & MANIFEST RECEIPTS', 15, 25);
-
-        doc.setTextColor(130, 130, 130);
-        doc.setFontSize(7.5);
-        doc.text(`Invoice Date: ${new Date(order.createdAt || Date.now()).toLocaleDateString()} | Order Code: ${order.orderNumber || ''}`, 15, 32);
-      }
-    } else {
-      doc.setTextColor(212, 175, 55);
-      doc.setFont('Helvetica', 'bold');
-      doc.setFontSize(18);
-      doc.text(settings.systemName || settings.companyName || 'SWIFT SHIP', 15, 18);
-
-      doc.setTextColor(180, 180, 180);
-      doc.setFontSize(9);
-      doc.setFont('Helvetica', 'normal');
-      doc.text('FREIGHT CARGO INVOICE & MANIFEST RECEIPTS', 15, 25);
-
-      doc.setTextColor(130, 130, 130);
-      doc.setFontSize(7.5);
-      doc.text(`Invoice Date: ${new Date(order.createdAt || Date.now()).toLocaleDateString()} | Order Code: ${order.orderNumber || ''}`, 15, 32);
-    }
-
-    // Embed QR code from canvas if available
-    if (qrCanvasRef.current) {
-      try {
-        const qrDataUrl = qrCanvasRef.current.toDataURL('image/png');
-        doc.addImage(qrDataUrl, 'PNG', 165, 5, 30, 30);
-      } catch (err) {
-        console.warn("Failed to add QR to PDF:", err);
-      }
-    }
-
-    // Customer & Logistics Info Block
-    doc.setFillColor(245, 245, 247);
-    doc.roundedRect(12, 48, 186, 32, 3, 3, 'F');
-
-    doc.setFontSize(9);
-    doc.setFont('Helvetica', 'bold');
-    doc.setTextColor(15, 15, 18);
-    doc.text('BILL TO (CUSTOMER):', 16, 54);
-    doc.text('LOGISTICS ROUTE INFO:', 110, 54);
-
-    doc.setFont('Helvetica', 'normal');
-    doc.setTextColor(50, 50, 50);
-    doc.text(`Name: ${order.customerName || ''}`, 16, 61);
-    doc.text(`Phone: ${order.customerPhone || ''}`, 16, 67);
-    doc.text(`Address: ${order.customerAddress || ''}`, 16, 73);
-
-    doc.text(`Order Status: ${order.orderStatus || ''}`, 110, 61);
-    doc.text(`Source Channel: ${order.orderSourceName || order.orderSourceType || ''}`, 110, 67);
-    doc.text(`Tracking ID: ${order.trackingNumber || ''}`, 110, 73);
-
-    // Products table header
-    doc.setFillColor(24, 24, 27);
-    doc.rect(12, 86, 186, 7, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(8.5);
-    doc.setFont('Helvetica', 'bold');
-    doc.text('PRODUCT / DESCRIPTION', 15, 91);
-    doc.text('PRICE', 120, 91);
-    doc.text('QTY', 150, 91);
-    doc.text('TOTAL', 175, 91);
-
-    let yIdx = 99;
-    const itemsList = order.items || [];
-    itemsList.forEach((it: any, index: number) => {
-      if (index % 2 === 0) {
-        doc.setFillColor(248, 249, 250);
-        doc.rect(12, yIdx - 4, 186, 6.5, 'F');
-      }
-      doc.setTextColor(40, 40, 43);
-      doc.setFont('Helvetica', 'normal');
-      doc.setFontSize(8);
-
-      const pName = it.productName || `Item #${index + 1}`;
-      doc.text(pName.length > 50 ? `${pName.substring(0, 47)}...` : pName, 15, yIdx);
-
-      const price = parseFloat(it.productPrice || 0);
-      const qty = parseInt(it.quantity || 1);
-      doc.text(`${price.toLocaleString()} SAR`, 120, yIdx);
-      doc.text(`${qty}`, 150, yIdx);
-      doc.text(`${(price * qty).toLocaleString()} SAR`, 175, yIdx);
-
-      doc.setDrawColor(235, 235, 240);
-      doc.setLineWidth(0.1);
-      doc.line(12, yIdx + 2.5, 198, yIdx + 2.5);
-      yIdx += 7;
-    });
-
-    // Check if we need a new page for shipping and totals
-    if (yIdx > 190) {
-      doc.addPage();
-      yIdx = 20;
-    }
-
-    // Shipping manifest section
-    const shippingList = order.shippingDetails || [];
-    if (shippingList.length > 0) {
-      doc.setFillColor(24, 24, 27);
-      doc.rect(12, yIdx, 186, 7, 'F');
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(8.5);
-      doc.setFont('Helvetica', 'bold');
-      doc.text('SHIPPING CARRIER', 15, yIdx + 5);
-      doc.text('ROUTE', 70, yIdx + 5);
-      doc.text('TRACKING', 125, yIdx + 5);
-      doc.text('COST', 175, yIdx + 5);
-
-      yIdx += 12;
-      shippingList.forEach((sh: any, index: number) => {
-        if (index % 2 === 0) {
-          doc.setFillColor(248, 249, 250);
-          doc.rect(12, yIdx - 4, 186, 6.5, 'F');
-        }
-        doc.setTextColor(40, 40, 43);
-        doc.setFont('Helvetica', 'normal');
-        doc.setFontSize(8);
-
-        doc.text(`${sh.shippingCompany || ''} (${sh.shippingType || ''})`, 15, yIdx);
-        doc.text(`${sh.shippingSource || ''} -> ${sh.shippingDestination || ''}`, 70, yIdx);
-        doc.text(`${sh.trackingNumber || '—'}`, 125, yIdx);
-        doc.text(`${(parseFloat(sh.shippingCost || 0) + parseFloat(sh.packagingFees || 0)).toLocaleString()} SAR`, 175, yIdx);
-
-        doc.setDrawColor(235, 235, 240);
-        doc.setLineWidth(0.1);
-        doc.line(12, yIdx + 2.5, 198, yIdx + 2.5);
-        yIdx += 7;
-      });
-    }
-
-    yIdx += 5;
-    // Summary values card
-    doc.setFillColor(245, 245, 247);
-    doc.roundedRect(110, yIdx, 88, 55, 2, 2, 'F');
-
-    doc.setFontSize(8);
-    doc.setTextColor(80, 80, 80);
-
-    // calculations subtotal
-    doc.text('Products Subtotal:', 114, yIdx + 7);
-    doc.text(`${(order.totalWeight ? (order.items || []).reduce((sum: number, it: any) => sum + (parseFloat(it.productPrice || 0) * parseInt(it.quantity || 1)), 0) : order.totalCostSAR).toLocaleString()} SAR`, 170, yIdx + 7);
-
-    let offset = 13;
-    if (order.bankCommissionEnabled) {
-      doc.text('Bank Commission:', 114, yIdx + 7 + offset);
-      const bRate = order.bankCommissionRate || 3;
-      const sub = (order.items || []).reduce((sum: number, it: any) => sum + (parseFloat(it.productPrice || 0) * parseInt(it.quantity || 1)), 0);
-      doc.text(`+${(sub * (bRate / 100)).toLocaleString()} SAR`, 170, yIdx + 7 + offset);
-      offset += 6;
-    }
-
-    /*
-    if (order.couponEnabled) {
-      doc.text('Coupon Discount (Amount):', 114, yIdx + 7 + offset);
-      const cRate = order.couponRate || 0;
-      doc.text(`-${cRate.toLocaleString()} SAR`, 170, yIdx + 7 + offset);
-      offset += 6;
-    }
-    */
-
-    if (parseFloat(order.shippingCostSAR || '0') > 0) {
-      doc.text('Shipping/Freight:', 114, yIdx + 7 + offset);
-      doc.text(`${parseFloat(order.shippingCostSAR || '0').toLocaleString()} SAR`, 170, yIdx + 7 + offset);
-      offset += 6;
-    }
-
-    const companyProfit = parseFloat(order.profitCompanySAR || '0');
-    if (companyProfit > 0) {
-      doc.text('App Commission (عمولة التطبيق):', 114, yIdx + 7 + offset);
-      doc.text(`${companyProfit.toLocaleString()} SAR`, 170, yIdx + 7 + offset);
-      offset += 6;
-    }
-
-    doc.text('Yemen Delivery Fee:', 114, yIdx + 7 + offset);
-    doc.text(`${(parseFloat(order.deliveryCourierFee) || 0).toLocaleString()} YER`, 170, yIdx + 7 + offset);
-    offset += 8;
-
-    doc.setDrawColor(200, 200, 200);
-    doc.line(112, yIdx + offset, 196, yIdx + offset);
-    offset += 5;
-
-    doc.setFont('Helvetica', 'bold');
-    doc.setTextColor(15, 15, 18);
-    doc.text('Total Invoice (YER):', 114, yIdx + offset);
-    const invoiceTotalYER = parseFloat(order.amountRemaining || 0) + parseFloat(order.amountPaid || 0);
-    doc.text(`${Math.ceil(invoiceTotalYER).toLocaleString()} YER`, 170, yIdx + offset);
-
-    // Paid & Remaining text
-    doc.setFont('Helvetica', 'normal');
-    doc.setFontSize(8.5);
-    doc.setTextColor(40, 40, 43);
-    doc.text(`Payment Status: ${order.paymentStatus || ''}`, 15, yIdx + 8);
-    doc.text(`Payment Method: ${order.paymentMethod || 'Cash'}`, 15, yIdx + 15);
-    doc.text(`Paid Amount: ${parseFloat(order.amountPaid || 0).toLocaleString()} YER`, 15, yIdx + 22);
-
-    doc.setFont('Helvetica', 'bold');
-    doc.setTextColor(180, 40, 40);
-    doc.text(`Remaining Balance: ${parseFloat(order.amountRemaining || 0).toLocaleString()} YER`, 15, yIdx + 30);
-
-    // Page footer indicator block
-    doc.setTextColor(140, 140, 140);
-    doc.setFontSize(7);
-    doc.setFont('Helvetica', 'normal');
-    const footerNotes = settings.invoiceNotes || 'Thank you for choosing Swift Ship! Generated automatically by Swift Ship Logistics Engine.';
-    doc.text(footerNotes, 15, 285);
-
-    doc.save(`alx_Invoice_${order.orderNumber || order.id}.pdf`);
+    printContent(isAr ? 'فاتورة طلب' : 'Order Invoice', invoiceHtml, isAr);
     activityLogService.log('export_orders_pdf', order.orderNumber || order.id, { singleOrder: true });
   };
 
@@ -761,7 +627,7 @@ export default function Orders() {
 
     // Sum up shipping cost from shippings table
     // packagingFeeRate is now a fixed SAR amount (not a percentage)
-    const shippingsCostSum = shippings.reduce((sum, s) => sum + parseFloat(s.shippingCost || 0), 0);
+    const shippingsCostSum = shippings.reduce((sum, s) => sum + parseFloat(s.shippingCost || 0) + parseFloat(s.packagingFees || 0), 0);
     const shippingPackagingFixed = packagingFeeEnabled ? (parseFloat(packagingFeeRate as any) || 0) : 0;
     const totalShippingsCost = shippingsCostSum + shippingPackagingFixed;
 
@@ -889,6 +755,11 @@ export default function Orders() {
           ? 'Partial Paid'
           : 'Unpaid';
 
+      const initialFiredTriggers = ['order_charge'];
+      if (parseFloat(formData.amountPaid as any) > 0) {
+        initialFiredTriggers.push('order_down_payment');
+      }
+
       const payload = {
         orderNumber,
         customerId: formData.customerId,
@@ -901,12 +772,12 @@ export default function Orders() {
         externalOrderNumber: formData.externalOrderNumber,
         trackingNumber: formData.trackingNumber || orderNumber,
         shippingCompany: formData.shippingCompany,
-
+ 
         // Couriers
         shippingCourierId: formData.shippingCourierId,
         deliveryCourierId: formData.deliveryCourierId,
         deliveryCourierFee: parseFloat(formData.deliveryCourierFee as any) || 0,
-
+ 
         // Financial definitions
         currency: formData.currency,
         exchangeRateYER: formData.exchangeRateYER,
@@ -916,7 +787,7 @@ export default function Orders() {
         companyProfitRate: formData.companyProfitRate,
         packagingFee: parseFloat(formData.packagingFee as any) || 0,
         sheinRedPrice: parseFloat(formData.sheinRedPrice as any) || 0,
-
+ 
         // New fields
         cartShareCode,
         bankCommissionEnabled,
@@ -926,7 +797,7 @@ export default function Orders() {
         productsSum: currentCalcs.productsSum,
         packagingFeeEnabled,
         packagingFeeRate,
-
+ 
         // Calculated values
         totalWeight: currentCalcs.totalWeight,
         totalCBM: currentCalcs.totalCBM,
@@ -935,27 +806,28 @@ export default function Orders() {
         amountPaid: parseFloat(formData.amountPaid as any) || 0,
         amountRemaining: currentCalcs.remainingYER,
         paymentStatus: payStatus,
-
+ 
         // Add details from source types
         profitPerKgRate: parseFloat(profitPerKgRate as any) || 19,
         cbmShippingRateValue: parseFloat(cbmShippingRateValue as any) || 1400,
         addShippingEnabled: addShippingEnabled,
         shippingCostSAR: currentCalcs.shippingCostSAR,
-
+ 
         // Profit distribution
         profitSaudiSAR: currentCalcs.profitSaudiSAR,
         profitCompanySAR: currentCalcs.profitCompanySAR,
-
+ 
         // Items nested list
         items,
-
+ 
         // Shipping details nested list
         shippingDetails: formData.orderSourceType === 'SHEIN' ? [] : (shippings || []),
-
+ 
         // Lifecycles status
         orderStatus: 'تم تسجيل الطلب',
         deliveryStatus: 'في الانتظار',
         locationYemen: 'مركز التوزيع الرئيسي',
+        firedTriggers: initialFiredTriggers,
 
         createdByEmail: auth.currentUser?.email || 'admin',
         createdByName: profile?.fullName || 'Root Admin',
@@ -1030,10 +902,10 @@ export default function Orders() {
         }
       }
 
-      // For App orders with shipping: sourcing cost = products cost + shipping cost - coupon discount
-      const sourcingCostAmount = formData.orderSourceType === 'App'
+      // For App and Factory orders with shipping: sourcing cost = products cost + shipping cost - coupon discount
+      const sourcingCostAmount = (formData.orderSourceType === 'App' || formData.orderSourceType === 'Factory')
         ? currentCalcs.totalProductsCostWithAdjustments + currentCalcs.shippingCostSAR
-        : (currentCalcs.productsSum - currentCalcs.couponValue);
+        : currentCalcs.totalProductsCostWithAdjustments;
 
       const sourcingCostConverted = financialAccountService.convertToDefaultCurrency(
         sourcingCostAmount,
@@ -1063,6 +935,8 @@ export default function Orders() {
                 courier: saudiCourier,
                 isAr,
                 rawAmount: amountInCourierCurrency,
+                amountOriginal: sourcingCostAmount,
+                currencyOriginal: 'SAR',
                 profileName: profile?.fullName || 'Root Admin'
               }
             );
@@ -1086,6 +960,8 @@ export default function Orders() {
             {
               isAr,
               rawAmount: sourcingCostConverted,
+              amountOriginal: sourcingCostAmount,
+              currencyOriginal: 'SAR',
               profileName: profile?.fullName || 'Root Admin'
             }
           );
@@ -1095,10 +971,10 @@ export default function Orders() {
       }
 
       // Record Packaging Fees Credit
-      const shippingsCostSum = shippings.reduce((sum, s) => sum + parseFloat(s.shippingCost || 0), 0);
+      const shippingsCostSum = shippings.reduce((sum, s) => sum + parseFloat(s.shippingCost || 0) + parseFloat(s.packagingFees || 0), 0);
       // packagingFeeRate is now a fixed SAR amount (not percentage)
       const shippingPackagingFixed = packagingFeeEnabled ? (parseFloat(packagingFeeRate as any) || 0) : 0;
-      const packagingFeeSAR = parseFloat(formData.packagingFee as any || 0) + (formData.orderSourceType !== 'SHEIN' ? shippingPackagingFixed : 0);
+      const packagingFeeSAR = parseFloat(formData.packagingFee as any || 0);
 
       if (packagingFeeSAR > 0 && systemAccs['sys_packaging_fees']) {
         try {
@@ -1114,6 +990,8 @@ export default function Orders() {
             {
               isAr,
               rawAmount: pkgConverted,
+              amountOriginal: packagingFeeSAR,
+              currencyOriginal: 'SAR',
               profileName: profile?.fullName || 'Root Admin'
             }
           );
@@ -1128,7 +1006,9 @@ export default function Orders() {
         currentCalcs.shippingCostSAR > 0 && 
         systemAccs['sys_shipping_costs'] && 
         !formData.deductSourcingCostFromCourier &&
-        formData.orderSourceType !== 'SHEIN' // Assuming SHEIN means merged based on code logic
+        formData.orderSourceType !== 'SHEIN' &&
+        formData.orderSourceType !== 'App' &&
+        formData.orderSourceType !== 'Factory'
       ) {
         try {
           const shipCostConverted = financialAccountService.convertToDefaultCurrency(
@@ -1143,6 +1023,8 @@ export default function Orders() {
             {
               isAr,
               rawAmount: shipCostConverted,
+              amountOriginal: currentCalcs.shippingCostSAR,
+              currencyOriginal: 'SAR',
               profileName: profile?.fullName || 'Root Admin'
             }
           );
@@ -1626,15 +1508,116 @@ export default function Orders() {
 
     setIsSubmitting(true);
     try {
-      const isDelivered = ['تم التسليم', 'مع المندوب للتوصيل'].includes(updateFormData.orderStatus);
-      const wasDelivered = ['تم التسليم', 'مع المندوب للتوصيل'].includes(selectedOrder.orderStatus || '');
+      const currentStatus = selectedOrder.orderStatus || 'تم تسجيل الطلب';
+      const newStatus = updateFormData.orderStatus;
+      const firedTriggers = selectedOrder.firedTriggers || [];
+      const newFiredTriggers = [...firedTriggers];
+      
+      const currentIndex = ORDER_STATUS_FLOW.indexOf(currentStatus);
+      const newIndex = ORDER_STATUS_FLOW.indexOf(newStatus);
+      
       const remainingVal = parseFloat(selectedOrder.amountRemaining || '0');
       const courierId = updateFormData.deliveryCourierId || selectedOrder.deliveryCourierId;
-
+      const shippingCourierId = updateFormData.shippingCourierId || selectedOrder.shippingCourierId;
+      
       let extraUpdateFields: any = {};
 
-      if (isDelivered && !wasDelivered && remainingVal > 0 && courierId) {
-        // Create auto-custody for courier
+      // Helper to check if a trigger should fire
+      const shouldFire = (triggerId: string, minStatus: string) => {
+        if (firedTriggers.includes(triggerId)) return false;
+        if (newStatus === 'ملغي') return false;
+        
+        const minIndex = ORDER_STATUS_FLOW.indexOf(minStatus);
+        const newIndex = ORDER_STATUS_FLOW.indexOf(newStatus);
+        // Fire if new status is at or beyond the required status
+        return newIndex >= minIndex;
+      };
+
+      // Status change trigger - to prevent duplicate notifications
+      const statusTriggerId = `status_notified_${newStatus}`;
+      const isAlreadyNotified = firedTriggers.includes(statusTriggerId);
+
+      if (isAlreadyNotified && newStatus !== 'ملغي' && newStatus !== currentStatus) {
+        toast.error(isAr 
+          ? `تنبيه: تم إرسال إشعار بهذه الحالة (${newStatus}) للعميل مسبقاً. لن يتم تكرار الإرسال.` 
+          : `Warning: A notification for this status (${newStatus}) has already been sent. WhatsApp will not be resent.`
+        );
+      }
+
+      // 1. courier_commission trigger
+      if (shouldFire('courier_commission', 'وصل مركز التوزيع في اليمن') && shippingCourierId) {
+        const courierRecord = couriers.find(c => c.id === shippingCourierId);
+        if (courierRecord) {
+          const isSourcing = courierRecord.courierType === 'sourcing';
+          const exchangeRate = parseFloat(selectedOrder.exchangeRateYER || settings.exchangeRateYER || 390);
+          const commissionProfitOriginal = parseFloat(selectedOrder.profitSaudiSAR || '0');
+          const commissionProfit = isSourcing ? commissionProfitOriginal : (commissionProfitOriginal * exchangeRate);
+          const finalCurrency = isSourcing ? 'SAR' : 'YER';
+
+          if (commissionProfit > 0) {
+            const YY = String(new Date().getFullYear()).slice(-2);
+            const MM = String(new Date().getMonth() + 1).padStart(2, '0');
+            const commissionNumber = `COM-${YY}${MM}-${Math.floor(1000 + Math.random() * 9000)}`;
+            const courierName = courierRecord.fullName;
+            const linkedAccountId = courierRecord.financialAccountId || null;
+            const linkedAccountCode = courierRecord.financialAccountCode || null;
+
+            const convertedCommission = financialAccountService.convertToDefaultCurrency(
+              commissionProfit,
+              finalCurrency,
+              settings.currency || 'YER',
+              { USD: selectedOrder.exchangeRateUSD || settings.exchangeRateUSD, SAR: selectedOrder.exchangeRateYER || settings.exchangeRateSAR }
+            );
+
+            const commissionRule = autoVoucherRules.find(r => r.id === 'courier_commission');
+            if (!commissionRule || commissionRule.isActive !== false) {
+              const commissionPayload = {
+                expenseNumber: commissionNumber,
+                category: 'wage',
+                type: 'Wage',
+                amount: commissionProfit,
+                currency: finalCurrency,
+                amountInDefaultCurrency: convertedCommission,
+                recipientId: shippingCourierId,
+                recipientEntityId: shippingCourierId,
+                recipientEntityType: 'courier',
+                recipientName: courierName,
+                linkedAccountId,
+                linkedAccountCode,
+                notes: isAr
+                  ? `عمولة شحن تلقائية (${courierRecord.commissionRate}%) للطلب رقم: ${selectedOrder.orderNumber}`
+                  : `Auto-commission (${courierRecord.commissionRate}%) for order: ${selectedOrder.orderNumber}`,
+                status: 'Approved',
+                createdByUid: auth.currentUser?.uid || 'system',
+                createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
+                createdByName: profile?.fullName || 'System Auto-Commission',
+                createdAt: Date.now()
+              };
+              await addDoc(collection(db, 'expenses'), commissionPayload);
+            }
+
+            if (linkedAccountId) {
+              try {
+                await financialAccountService.triggerAutomaticVoucher('courier_commission', selectedOrder, {
+                  courier: courierRecord,
+                  isAr,
+                  rawAmount: convertedCommission,
+                  amountOriginal: commissionProfit,
+                  currencyOriginal: finalCurrency,
+                  expenseNumber: commissionNumber,
+                  profileName: profile?.fullName || 'System Auto-Commission'
+                });
+              } catch (txErr) {
+                console.warn('[Orders] Could not record commission wage:', txErr);
+              }
+            }
+            newFiredTriggers.push('courier_commission');
+          }
+        }
+      }
+
+      // 2. custody_payment trigger
+      if (shouldFire('custody_payment', 'مع المندوب للتوصيل') && remainingVal > 0 && courierId) {
         const YY = String(new Date().getFullYear()).slice(-2);
         const MM = String(new Date().getMonth() + 1).padStart(2, '0');
         const expenseNumber = `EXP-${YY}${MM}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -1675,11 +1658,9 @@ export default function Orders() {
             createdByName: profile?.fullName || 'System Auto-Custody',
             createdAt: Date.now()
           };
-          
           await addDoc(collection(db, 'expenses'), custodyPayload);
         }
 
-        // --- Combined Courier Custody & Customer Payment transaction ---
         const customerRecord = customers.find(c => c.id === selectedOrder.customerId);
         if (linkedAccountId && customerRecord?.financialAccountId) {
           try {
@@ -1688,27 +1669,28 @@ export default function Orders() {
               customer: customerRecord,
               isAr,
               rawAmount: convertedRemainingVal,
+              amountOriginal: remainingVal,
+              currencyOriginal: 'YER',
               expenseNumber,
               profileName: profile?.fullName || 'System Auto-Custody'
             });
           } catch (txErr) {
-            console.warn('[Orders] Could not record auto-custody/payment transactions:', txErr);
+            console.warn('[Orders] Could not record auto-custody/payment:', txErr);
           }
         }
 
-        // Update order payment status to paid since it is now in the courier's custody
         extraUpdateFields = {
+          ...extraUpdateFields,
           amountPaid: parseFloat(selectedOrder.amountPaid || '0') + remainingVal,
           amountRemaining: 0,
           paymentStatus: 'Paid'
         };
+        newFiredTriggers.push('custody_payment');
       }
 
-      // Create auto-wage for Delivery Courier
+      // 3. delivery_wage trigger
       const deliveryFee = parseFloat(selectedOrder.deliveryCourierFee || updateFormData.deliveryCourierFee || '0');
-      const isStrictlyDeliveredStatus = updateFormData.orderStatus === 'تم التسليم';
-      const wasStrictlyDeliveredStatus = (selectedOrder.orderStatus || '') === 'تم التسليم';
-      if (isStrictlyDeliveredStatus && !wasStrictlyDeliveredStatus && courierId && deliveryFee > 0) {
+      if (shouldFire('delivery_wage', 'تم التسليم') && courierId && deliveryFee > 0) {
         const YY = String(new Date().getFullYear()).slice(-2);
         const MM = String(new Date().getMonth() + 1).padStart(2, '0');
         const wageNumber = `WGE-${YY}${MM}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -1749,7 +1731,6 @@ export default function Orders() {
             createdByName: profile?.fullName || 'System Auto-Wage',
             createdAt: Date.now()
           };
-
           await addDoc(collection(db, 'expenses'), wagePayload);
         }
 
@@ -1759,96 +1740,20 @@ export default function Orders() {
               courier: { financialAccountId: linkedAccountId, financialAccountCode: linkedAccountCode },
               isAr,
               rawAmount: convertedFee,
+              amountOriginal: deliveryFee,
+              currencyOriginal: 'YER',
               expenseNumber: wageNumber,
               profileName: profile?.fullName || 'System Auto-Wage'
             });
           } catch (txErr) {
-            console.warn('[Orders] Could not record delivery wage transactions:', txErr);
+            console.warn('[Orders] Could not record delivery wage:', txErr);
           }
         }
+        newFiredTriggers.push('delivery_wage');
       }
 
-      // Create auto-wage for Collection Courier
-      const isArrivedYemen = updateFormData.orderStatus === 'وصل مركز التوزيع في اليمن';
-      const wasArrivedYemen = selectedOrder.orderStatus === 'وصل مركز التوزيع في اليمن';
-      const shippingCourierId = updateFormData.shippingCourierId || selectedOrder.shippingCourierId;
-
-      if (isArrivedYemen && !wasArrivedYemen && shippingCourierId) {
-        const courierRecord = couriers.find(c => c.id === shippingCourierId);
-
-        if (courierRecord) {
-          const isSourcing = courierRecord.courierType === 'sourcing';
-          const exchangeRate = parseFloat(selectedOrder.exchangeRateYER || settings.exchangeRateYER || 390);
-          const commissionProfitOriginal = parseFloat(selectedOrder.profitSaudiSAR || '0');
-          const commissionProfit = isSourcing ? commissionProfitOriginal : (commissionProfitOriginal * exchangeRate);
-          const finalCurrency = isSourcing ? 'SAR' : 'YER';
-
-          if (commissionProfit > 0) {
-            const YY = String(new Date().getFullYear()).slice(-2);
-            const MM = String(new Date().getMonth() + 1).padStart(2, '0');
-            const commissionNumber = `COM-${YY}${MM}-${Math.floor(1000 + Math.random() * 9000)}`;
-
-            const courierName = courierRecord.fullName;
-            const linkedAccountId = courierRecord.financialAccountId || null;
-            const linkedAccountCode = courierRecord.financialAccountCode || null;
-
-            const convertedCommission = financialAccountService.convertToDefaultCurrency(
-              commissionProfit,
-              finalCurrency,
-              settings.currency || 'YER',
-              { USD: selectedOrder.exchangeRateUSD || settings.exchangeRateUSD, SAR: selectedOrder.exchangeRateYER || settings.exchangeRateSAR }
-            );
-
-            const commissionRule = autoVoucherRules.find(r => r.id === 'courier_commission');
-            if (!commissionRule || commissionRule.isActive !== false) {
-              const commissionPayload = {
-                expenseNumber: commissionNumber,
-                category: 'wage',
-                type: 'Wage',
-                amount: commissionProfit,
-                currency: finalCurrency,
-                amountInDefaultCurrency: convertedCommission,
-                recipientId: shippingCourierId,
-                recipientEntityId: shippingCourierId,
-                recipientEntityType: 'courier',
-                recipientName: courierName,
-                linkedAccountId,
-                linkedAccountCode,
-                notes: isAr
-                  ? `عمولة شحن تلقائية (${courierRecord.commissionRate}%) للطلب رقم: ${selectedOrder.orderNumber}`
-                  : `Auto-commission (${courierRecord.commissionRate}%) for order: ${selectedOrder.orderNumber}`,
-                status: 'Approved',
-                createdByUid: auth.currentUser?.uid || 'system',
-                createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
-                createdByName: profile?.fullName || 'System Auto-Commission',
-                createdAt: Date.now()
-              };
-
-              await addDoc(collection(db, 'expenses'), commissionPayload);
-            }
-
-            if (linkedAccountId) {
-              try {
-                await financialAccountService.triggerAutomaticVoucher('courier_commission', selectedOrder, {
-                  courier: courierRecord,
-                  isAr,
-                  rawAmount: convertedCommission,
-                  expenseNumber: commissionNumber,
-                  profileName: profile?.fullName || 'System Auto-Commission'
-                });
-              } catch (txErr) {
-                console.warn('[Orders] Could not record commission wage on collection courier financial account:', txErr);
-              }
-            }
-          }
-        }
-      }
-
-      // Add Company Profit trigger strictly for 'تم التسليم' status
-      const isStrictlyDelivered = updateFormData.orderStatus === 'تم التسليم';
-      const wasStrictlyDelivered = selectedOrder.orderStatus === 'تم التسليم';
-
-      if (isStrictlyDelivered && !wasStrictlyDelivered && parseFloat(selectedOrder.profitCompanySAR || '0') > 0) {
+      // 4. company_profit trigger
+      if (shouldFire('company_profit', 'تم التسليم') && parseFloat(selectedOrder.profitCompanySAR || '0') > 0) {
         try {
           const profitValSAR = parseFloat(selectedOrder.profitCompanySAR || '0');
           const profitConverted = financialAccountService.convertToDefaultCurrency(
@@ -1861,11 +1766,18 @@ export default function Orders() {
           await financialAccountService.triggerAutomaticVoucher('company_profit', selectedOrder, {
             isAr,
             rawAmount: profitConverted,
+            amountOriginal: profitValSAR,
+            currencyOriginal: 'SAR',
             profileName: profile?.fullName || 'System Auto-Profit'
           });
+          newFiredTriggers.push('company_profit');
         } catch (e) {
-          console.warn('[Orders] Could not record company profit on status transition:', e);
+          console.warn('[Orders] Could not record company profit:', e);
         }
+      }
+
+      if (!isAlreadyNotified && newStatus !== 'ملغي') {
+        newFiredTriggers.push(statusTriggerId);
       }
 
       await updateDoc(doc(db, 'orders', selectedOrder.id), {
@@ -1876,6 +1788,7 @@ export default function Orders() {
         shippingCourierId: updateFormData.shippingCourierId || '',
         deliveryCourierId: updateFormData.deliveryCourierId || '',
         shippingDetails: updateShippings || [],
+        firedTriggers: newFiredTriggers,
         updatedAt: Date.now(),
         ...extraUpdateFields
       });
@@ -1887,38 +1800,48 @@ export default function Orders() {
         locationYemen: updateFormData.locationYemen
       });
 
-      await notificationService.notify({
-        title: isAr ? 'حالة التحديث' : 'Status Updated',
-        message: isAr ? 'تم تحديث البيانات اللوجيستية للشحنة وترحيلها' : 'Logistic parameters recorded',
-        type: 'info',
-        category: 'order',
-        orderId: selectedOrder.orderNumber || selectedOrder.id
-      });
+      if (!isAlreadyNotified && newStatus !== 'ملغي') {
+        await notificationService.notify({
+          title: isAr ? 'حالة التحديث' : 'Status Updated',
+          message: isAr ? 'تم تحديث البيانات اللوجيستية للشحنة وترحيلها' : 'Logistic parameters recorded',
+          type: 'info',
+          category: 'order',
+          orderId: selectedOrder.orderNumber || selectedOrder.id
+        });
 
-      // Automatically dispatch real WhatsApp status update message
-      try {
-        const payloadObject = {
-          ...selectedOrder,
-          orderStatus: updateFormData.orderStatus,
-          locationYemen: updateFormData.locationYemen
-        };
-        await whatsappService.triggerNotification('onOrderStatusChanged', payloadObject);
-      } catch (whatsappErr) {
-        console.error('Failed to trigger real WhatsApp status update:', whatsappErr);
+        // Automatically dispatch real WhatsApp status update message
+        try {
+          const payloadObject = {
+            ...selectedOrder,
+            orderStatus: updateFormData.orderStatus,
+            locationYemen: updateFormData.locationYemen
+          };
+          await whatsappService.triggerNotification('onOrderStatusChanged', payloadObject);
+        } catch (whatsappErr) {
+          console.error('Failed to trigger real WhatsApp status update:', whatsappErr);
+        }
+
+        // Automatically dispatch simulated status update notification via WhatsApp + SMS
+        const smsMessage = isAr
+          ? `عزيزنا العميل ${selectedOrder.customerName}، تم تحديث حالة شحنتك رقم: (${selectedOrder.orderNumber || selectedOrder.id}) إلى: *${updateFormData.orderStatus}*. وموقع الشحنة حالياً: *${updateFormData.locationYemen || 'قيد النقل'}*. المتبقي عليك: ${remainingVal.toLocaleString()} YER. شكراً لتعاملك معنا.`
+          : `Dear ${selectedOrder.customerName}, the status of your order (${selectedOrder.orderNumber || selectedOrder.id}) update to: *${updateFormData.orderStatus}*. Current position: *${updateFormData.locationYemen || 'In-transit'}*. Bal: ${remainingVal.toLocaleString()} YER. Thank you for choosing us!`;
+
+        await notificationService.notify({
+          title: isAr ? '📲 تحديث تلقائي (WhatsApp + SMS)' : '📲 Auto Status WhatsApp / SMS Sent',
+          message: smsMessage,
+          type: 'success',
+          orderId: selectedOrder.orderNumber || selectedOrder.id,
+          category: 'order'
+        });
+      } else if (newStatus !== 'ملغي') {
+        // Just a simple local notification for the admin that it was updated but no messages sent
+        await notificationService.notify({
+          title: isAr ? 'تحديث صامت' : 'Silent Update',
+          message: isAr ? 'تم تحديث البيانات (بدون إرسال إشعارات للعميل لتكرار الحالة)' : 'Data updated (no customer notifications sent for repeated status)',
+          type: 'info',
+          category: 'system'
+        });
       }
-
-      // Automatically dispatch simulated status update notification via WhatsApp + SMS
-      const smsMessage = isAr
-        ? `عزيزنا العميل ${selectedOrder.customerName}، تم تحديث حالة شحنتك رقم: (${selectedOrder.orderNumber || selectedOrder.id}) إلى: *${updateFormData.orderStatus}*. وموقع الشحنة حالياً: *${updateFormData.locationYemen || 'قيد النقل'}*. المتبقي عليك: ${remainingVal.toLocaleString()} YER. شكراً لتعاملك معنا.`
-        : `Dear ${selectedOrder.customerName}, the status of your order (${selectedOrder.orderNumber || selectedOrder.id}) update to: *${updateFormData.orderStatus}*. Current position: *${updateFormData.locationYemen || 'In-transit'}*. Bal: ${remainingVal.toLocaleString()} YER. Thank you for choosing us!`;
-
-      await notificationService.notify({
-        title: isAr ? '📲 تحديث تلقائي (WhatsApp + SMS)' : '📲 Auto Status WhatsApp / SMS Sent',
-        message: smsMessage,
-        type: 'success',
-        orderId: selectedOrder.orderNumber || selectedOrder.id,
-        category: 'order'
-      });
 
       setIsUpdateModalOpen(false);
       setSelectedOrder(null);
@@ -2166,15 +2089,97 @@ export default function Orders() {
         const ord = orders.find(o => o.id === orderId);
         if (!ord) return;
 
-        const wasDelivered = ['تم التسليم', 'مع المندوب للتوصيل'].includes(ord.orderStatus || '');
-        const isDelivered = ['تم التسليم', 'مع المندوب للتوصيل'].includes(newStatus);
+        const firedTriggers = ord.firedTriggers || [];
+        const newFiredTriggers = [...firedTriggers];
+        
+        const currentIndex = ORDER_STATUS_FLOW.indexOf(ord.orderStatus || 'تم تسجيل الطلب');
+        const newIndex = ORDER_STATUS_FLOW.indexOf(newStatus);
+        
         const remainingVal = parseFloat(ord.amountRemaining || '0');
         const courierId = ord.deliveryCourierId;
+        const shippingCourierId = ord.shippingCourierId;
 
         let extraUpdateFields: any = {};
 
-        if (isDelivered && !wasDelivered && remainingVal > 0 && courierId) {
-          // Create auto-custody for courier
+        const shouldFire = (triggerId: string, minStatus: string) => {
+          if (firedTriggers.includes(triggerId)) return false;
+          if (newStatus === 'ملغي') return false;
+          const minIndex = ORDER_STATUS_FLOW.indexOf(minStatus);
+          return newIndex >= minIndex;
+        };
+
+        // 1. courier_commission trigger
+        if (shouldFire('courier_commission', 'وصل مركز التوزيع في اليمن') && shippingCourierId) {
+          const courierRecord = couriers.find(c => c.id === shippingCourierId);
+          if (courierRecord) {
+            const isSourcing = courierRecord.courierType === 'sourcing';
+            const exchangeRate = parseFloat(ord.exchangeRateYER || settings.exchangeRateYER || 390);
+            const commissionProfitOriginal = parseFloat(ord.profitSaudiSAR || '0');
+            const commissionProfit = isSourcing ? commissionProfitOriginal : (commissionProfitOriginal * exchangeRate);
+            const finalCurrency = isSourcing ? 'SAR' : 'YER';
+
+            if (commissionProfit > 0) {
+              const YY = String(new Date().getFullYear()).slice(-2);
+              const MM = String(new Date().getMonth() + 1).padStart(2, '0');
+              const commissionNumber = `COM-${YY}${MM}-${Math.floor(1000 + Math.random() * 9000)}`;
+              const courierName = courierRecord.fullName;
+              const linkedAccountId = courierRecord.financialAccountId || null;
+              const linkedAccountCode = courierRecord.financialAccountCode || null;
+
+              const convertedCommission = financialAccountService.convertToDefaultCurrency(
+                commissionProfit,
+                finalCurrency,
+                settings.currency || 'YER',
+                { USD: ord.exchangeRateUSD || settings.exchangeRateUSD, SAR: ord.exchangeRateYER || settings.exchangeRateSAR }
+              );
+
+              const commissionRule = autoVoucherRules.find(r => r.id === 'courier_commission');
+              if (!commissionRule || commissionRule.isActive !== false) {
+                const commissionPayload = {
+                  expenseNumber: commissionNumber,
+                  category: 'wage',
+                  type: 'Wage',
+                  amount: commissionProfit,
+                  currency: finalCurrency,
+                  amountInDefaultCurrency: convertedCommission,
+                  recipientId: shippingCourierId,
+                  recipientEntityId: shippingCourierId,
+                  recipientEntityType: 'courier',
+                  recipientName: courierName,
+                  linkedAccountId,
+                  linkedAccountCode,
+                  notes: isAr
+                    ? `عمولة شحن تلقائية (${courierRecord.commissionRate}%) للطلب رقم: ${ord.orderNumber}`
+                    : `Auto-commission (${courierRecord.commissionRate}%) for order: ${ord.orderNumber}`,
+                  status: 'Approved',
+                  createdByUid: auth.currentUser?.uid || 'system',
+                  createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
+                  createdByName: profile?.fullName || 'System Auto-Commission',
+                  createdAt: Date.now()
+                };
+                await addDoc(collection(db, 'expenses'), commissionPayload);
+              }
+
+              if (linkedAccountId) {
+                try {
+                  await financialAccountService.triggerAutomaticVoucher('courier_commission', ord, {
+                    courier: courierRecord,
+                    isAr,
+                    rawAmount: convertedCommission,
+                    expenseNumber: commissionNumber,
+                    profileName: profile?.fullName || 'System Auto-Commission'
+                  });
+                } catch (txErr) {
+                  console.warn('[Orders] Could not record commission wage in batch:', txErr);
+                }
+              }
+              newFiredTriggers.push('courier_commission');
+            }
+          }
+        }
+
+        // 2. custody_payment trigger
+        if (shouldFire('custody_payment', 'مع المندوب للتوصيل') && remainingVal > 0 && courierId) {
           const YY = String(new Date().getFullYear()).slice(-2);
           const MM = String(new Date().getMonth() + 1).padStart(2, '0');
           const expenseNumber = `EXP-${YY}${MM}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -2215,11 +2220,9 @@ export default function Orders() {
               createdByName: profile?.fullName || 'System Auto-Custody',
               createdAt: Date.now()
             };
-
             await addDoc(collection(db, 'expenses'), custodyPayload);
           }
 
-          // --- Combined Courier Custody & Customer Payment transaction ---
           const customerRecord = customers.find(c => c.id === ord.customerId);
           if (linkedAccountId && customerRecord?.financialAccountId) {
             try {
@@ -2232,22 +2235,22 @@ export default function Orders() {
                 profileName: profile?.fullName || 'System Auto-Custody'
               });
             } catch (txErr) {
-              console.warn('[Orders] Could not record auto-custody/payment transactions in batch:', txErr);
+              console.warn('[Orders] Could not record auto-custody/payment in batch:', txErr);
             }
           }
 
           extraUpdateFields = {
+            ...extraUpdateFields,
             amountPaid: parseFloat(ord.amountPaid || '0') + remainingVal,
             amountRemaining: 0,
             paymentStatus: 'Paid'
           };
+          newFiredTriggers.push('custody_payment');
         }
 
-        // Create auto-wage for Delivery Courier
+        // 3. delivery_wage trigger
         const deliveryFee = parseFloat(ord.deliveryCourierFee || '0');
-        const isStrictlyDeliveredStatus = newStatus === 'تم التسليم';
-        const wasStrictlyDeliveredStatus = (ord.orderStatus || '') === 'تم التسليم';
-        if (isStrictlyDeliveredStatus && !wasStrictlyDeliveredStatus && courierId && deliveryFee > 0) {
+        if (shouldFire('delivery_wage', 'تم التسليم') && courierId && deliveryFee > 0) {
           const YY = String(new Date().getFullYear()).slice(-2);
           const MM = String(new Date().getMonth() + 1).padStart(2, '0');
           const wageNumber = `WGE-${YY}${MM}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -2288,7 +2291,6 @@ export default function Orders() {
               createdByName: profile?.fullName || 'System Auto-Wage',
               createdAt: Date.now()
             };
-
             await addDoc(collection(db, 'expenses'), wagePayload);
           }
 
@@ -2302,93 +2304,67 @@ export default function Orders() {
                 profileName: profile?.fullName || 'System Auto-Wage'
               });
             } catch (txErr) {
-              console.warn('[Orders] Could not record delivery wage transactions in bulk update:', txErr);
+              console.warn('[Orders] Could not record delivery wage in batch:', txErr);
             }
+          }
+          newFiredTriggers.push('delivery_wage');
+        }
+
+        // 4. company_profit trigger
+        if (shouldFire('company_profit', 'تم التسليم') && parseFloat(ord.profitCompanySAR || '0') > 0) {
+          try {
+            const profitValSAR = parseFloat(ord.profitCompanySAR || '0');
+            const profitConverted = financialAccountService.convertToDefaultCurrency(
+              profitValSAR,
+              'SAR',
+              settings.currency || 'YER',
+              { USD: ord.exchangeRateUSD || settings.exchangeRateUSD || 535, SAR: ord.exchangeRateYER || settings.exchangeRateSAR || 140 }
+            );
+
+            await financialAccountService.triggerAutomaticVoucher('company_profit', ord, {
+              isAr,
+              rawAmount: profitConverted,
+              profileName: profile?.fullName || 'System Auto-Profit'
+            });
+            newFiredTriggers.push('company_profit');
+          } catch (e) {
+            console.warn('[Orders] Could not record company profit in batch:', e);
           }
         }
 
-        // Create auto-wage for Collection Courier
-        const isArrivedYemen = newStatus === 'وصل مركز التوزيع في اليمن';
-        const wasArrivedYemen = ord.orderStatus === 'وصل مركز التوزيع في اليمن';
-        const shippingCourierId = ord.shippingCourierId;
+        const statusTriggerId = `status_notified_${newStatus}`;
+        const isAlreadyNotified = firedTriggers.includes(statusTriggerId);
 
-        if (isArrivedYemen && !wasArrivedYemen && shippingCourierId) {
-          const courierRecord = couriers.find(c => c.id === shippingCourierId);
+        if (isAlreadyNotified && newStatus !== 'ملغي') {
+          // Just skip firing but maybe log or notify once per batch if needed
+          // For batch, we don't want to show 100 toasts, so we'll just handle it in the final notification message
+        }
 
-          if (courierRecord) {
-            const isSourcing = courierRecord.courierType === 'sourcing';
-            const exchangeRate = parseFloat(ord.exchangeRateYER || settings.exchangeRateYER || 390);
-            const commissionProfitOriginal = parseFloat(ord.profitSaudiSAR || '0');
-            const commissionProfit = isSourcing ? commissionProfitOriginal : (commissionProfitOriginal * exchangeRate);
-            const finalCurrency = isSourcing ? 'SAR' : 'YER';
-
-            if (commissionProfit > 0) {
-              const YY = String(new Date().getFullYear()).slice(-2);
-              const MM = String(new Date().getMonth() + 1).padStart(2, '0');
-              const commissionNumber = `COM-${YY}${MM}-${Math.floor(1000 + Math.random() * 9000)}`;
-
-              const courierName = courierRecord.fullName;
-              const linkedAccountId = courierRecord.financialAccountId || null;
-              const linkedAccountCode = courierRecord.financialAccountCode || null;
-
-              const convertedCommission = financialAccountService.convertToDefaultCurrency(
-                commissionProfit,
-                finalCurrency,
-                settings.currency || 'YER',
-                { USD: ord.exchangeRateUSD || settings.exchangeRateUSD, SAR: ord.exchangeRateYER || settings.exchangeRateSAR }
-              );
-
-              const commissionRule = autoVoucherRules.find(r => r.id === 'courier_commission');
-              if (!commissionRule || commissionRule.isActive !== false) {
-                const commissionPayload = {
-                  expenseNumber: commissionNumber,
-                  category: 'wage',
-                  type: 'Wage',
-                  amount: commissionProfit,
-                  currency: finalCurrency,
-                  amountInDefaultCurrency: convertedCommission,
-                  recipientId: shippingCourierId,
-                  recipientEntityId: shippingCourierId,
-                  recipientEntityType: 'courier',
-                  recipientName: courierName,
-                  linkedAccountId,
-                  linkedAccountCode,
-                  notes: isAr
-                    ? `عمولة شحن تلقائية (${courierRecord.commissionRate}%) للطلب رقم: ${ord.orderNumber}`
-                    : `Auto-commission (${courierRecord.commissionRate}%) for order: ${ord.orderNumber}`,
-                  status: 'Approved',
-                  createdByUid: auth.currentUser?.uid || 'system',
-                  createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
-                  createdByName: profile?.fullName || 'System Auto-Commission',
-                  createdAt: Date.now()
-                };
-
-                await addDoc(collection(db, 'expenses'), commissionPayload);
-              }
-
-              if (linkedAccountId) {
-                try {
-                  await financialAccountService.triggerAutomaticVoucher('courier_commission', ord, {
-                    courier: courierRecord,
-                    isAr,
-                    rawAmount: convertedCommission,
-                    expenseNumber: commissionNumber,
-                    profileName: profile?.fullName || 'System Auto-Commission'
-                  });
-                } catch (txErr) {
-                  console.warn('[Orders] Could not record commission wage on collection courier financial account:', txErr);
-                }
-              }
-            }
-          }
+        if (!isAlreadyNotified && newStatus !== 'ملغي') {
+          newFiredTriggers.push(statusTriggerId);
         }
 
         await updateDoc(doc(db, 'orders', orderId), {
           orderStatus: newStatus,
           locationYemen: defaultLocation,
+          firedTriggers: newFiredTriggers,
           updatedAt: Date.now(),
           ...extraUpdateFields
         });
+
+        // Dispatch real WhatsApp notifications for each order status change in the batch
+        if (!isAlreadyNotified && newStatus !== 'ملغي') {
+          try {
+            const updatedOrderObj = {
+              ...ord,
+              orderStatus: newStatus,
+              locationYemen: defaultLocation
+            };
+            await whatsappService.triggerNotification('onOrderStatusChanged', updatedOrderObj);
+          } catch (whatsappErr) {
+            console.error('Failed to dispatch batch WhatsApp notification:', whatsappErr);
+          }
+        }
       });
       await Promise.all(promises);
 
@@ -2397,30 +2373,11 @@ export default function Orders() {
         newStatus: newStatus
       });
 
-      // Dispatch real WhatsApp notifications for each order status change in the batch
-      try {
-        selectedOrderIds.forEach(async (orderId) => {
-          const fullOrder = orders.find(o => o.id === orderId);
-          if (fullOrder) {
-            const defaultLocation = newStatus === 'وصل مستودع السعودية' ? 'مستودع السعودية للتعبئة' :
-              newStatus === 'وصل مركز التوزيع في اليمن' ? 'مستودع صنعاء الرئيسي' : 'قيد النقل';
-            const updatedOrderObj = {
-              ...fullOrder,
-              orderStatus: newStatus,
-              locationYemen: defaultLocation
-            };
-            await whatsappService.triggerNotification('onOrderStatusChanged', updatedOrderObj);
-          }
-        });
-      } catch (whatsappErr) {
-        console.error('Failed to dispatch batch WhatsApp notifications:', whatsappErr);
-      }
-
       notificationService.notify({
         title: isAr ? 'تم التحديث بنجاح' : 'Batch Status Updated',
         message: isAr
-          ? `تم تغيير حالة عدد ${selectedOrderIds.length} شحنات إلى: [ ${newStatus} ]`
-          : `Updated status of ${selectedOrderIds.length} orders to: [ ${newStatus} ]`,
+          ? `تم تغيير حالة عدد ${selectedOrderIds.length} شحنات إلى: [ ${newStatus} ] (تم تجاوز الإشعارات للحالات المتكررة)`
+          : `Updated status of ${selectedOrderIds.length} orders to: [ ${newStatus} ] (Duplicate notifications skipped)`,
         type: 'success',
         category: 'order'
       });
@@ -2465,152 +2422,9 @@ export default function Orders() {
   };
 
   const exportOrdersToPDF = () => {
-    const doc = new jsPDF('p', 'mm', 'a4');
-
-    // Top banner block (luxury charcoal gray)
-    doc.setFillColor(15, 15, 18);
-    doc.rect(0, 0, 210, 36, 'F');
-
-    // Gold separator strip
-    doc.setFillColor(212, 175, 55);
-    doc.rect(0, 36, 210, 2, 'F');
-
-    // Header texts
-    doc.setTextColor(212, 175, 55);
-    doc.setFont('Helvetica', 'bold');
-    doc.setFontSize(16);
-    doc.text('AL-XPRESS LOGISTICS LEDGER', 15, 16);
-
-    doc.setTextColor(180, 180, 180);
-    doc.setFontSize(8);
-    doc.setFont('Helvetica', 'normal');
-    doc.text('SMART FREIGHT TRACKING & FINANCIAL LEDGERS', 15, 23);
-
-    doc.setTextColor(130, 130, 130);
-    doc.setFontSize(7);
-    doc.text(`Generated: ${new Date().toLocaleString()} | User: ${profile?.fullName || profile?.email || 'Administrator'}`, 15, 29);
-
-    // Quick statistics summary block
-    doc.setFillColor(245, 245, 247);
-    doc.roundedRect(12, 44, 186, 22, 3, 3, 'F');
-
-    doc.setFontSize(8);
-    doc.setFont('Helvetica', 'bold');
-    doc.setTextColor(120, 120, 120);
-    doc.text('TOTAL DECLARED REVENUE', 20, 51);
-    doc.text('TOTAL LOAD COUNT', 85, 51);
-    doc.text('PENDING CASH BALANCE', 140, 51);
-
-    // Calculate metrics
-    const totalRevenue = filteredOrdersList.reduce((sum, o) => sum + (parseFloat(o.amountPaid || 0) + parseFloat(o.amountRemaining || 0)), 0);
-    const pendingBalance = filteredOrdersList.reduce((sum, o) => sum + parseFloat(o.amountRemaining || 0), 0);
-
-    doc.setFontSize(11);
-    doc.setTextColor(15, 15, 18);
-    doc.text(`${totalRevenue.toLocaleString()} YER`, 20, 59);
-    doc.text(`${filteredOrdersList.length} Orders`, 85, 59);
-    doc.text(`${pendingBalance.toLocaleString()} YER`, 140, 59);
-
-    // Headers of main data grid
-    doc.setFillColor(24, 24, 27);
-    doc.rect(12, 72, 186, 8, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(8);
-    doc.setFont('Helvetica', 'bold');
-    doc.text('SMART ID', 15, 77);
-    doc.text('CUSTOMER / ACCOUNT', 48, 77);
-    doc.text('ROUTE STATUS', 105, 77);
-    doc.text('COST (YER)', 150, 77);
-    doc.text('BAL (YER)', 175, 77);
-
-    let yIdx = 87;
-    // Walk through sorted & filtered list
-    filteredOrdersList.forEach((ord, index) => {
-      // PDF line limit per page
-      if (yIdx > 275) {
-        doc.addPage();
-
-        // Dynamic continued header
-        doc.setFillColor(15, 15, 18);
-        doc.rect(0, 0, 210, 18, 'F');
-        doc.setFillColor(212, 175, 55);
-        doc.rect(0, 18, 210, 1.5, 'F');
-        doc.setTextColor(212, 175, 55);
-        doc.setFontSize(10);
-        doc.setFont('Helvetica', 'bold');
-        doc.text('AL-XPRESS LOGISTICS LEDGER (CONTINUED)', 15, 11);
-
-        doc.setFillColor(24, 24, 27);
-        doc.rect(12, 24, 186, 8, 'F');
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(8);
-        doc.text('SMART ID', 15, 29);
-        doc.text('CUSTOMER / ACCOUNT', 48, 29);
-        doc.text('ROUTE STATUS', 105, 29);
-        doc.text('COST (YER)', 150, 29);
-        doc.text('BAL (YER)', 175, 29);
-
-        yIdx = 39;
-      }
-
-      // Zebra alternate background striping
-      if (index % 2 === 0) {
-        doc.setFillColor(248, 249, 250);
-        doc.rect(12, yIdx - 4.5, 186, 8, 'F');
-      }
-
-      doc.setTextColor(40, 40, 43);
-      doc.setFont('Helvetica', 'normal');
-      doc.setFontSize(8);
-
-      // Order Smart ID
-      doc.setFont('Helvetica', 'bold');
-      doc.text(ord.orderNumber || 'ALX-PENDING', 15, yIdx);
-      doc.setFont('Helvetica', 'normal');
-
-      // Customer Account transliterated nicely
-      const customerText = transliterateArabic(ord.customerName || 'Walk-In Customer');
-      doc.text(customerText.length > 28 ? `${customerText.substring(0, 26)}...` : customerText, 48, yIdx);
-
-      // Status
-      const statusLabel = ord.orderStatus || 'Pending';
-      const transliteratedStatus = transliterateArabic(statusLabel);
-      doc.text(transliteratedStatus, 105, yIdx);
-
-      // Total Cost
-      const costRaw = parseFloat(ord.amountPaid || 0) + parseFloat(ord.amountRemaining || 0);
-      doc.text(costRaw.toLocaleString(), 150, yIdx);
-
-      // Remaining Bal
-      const balRaw = parseFloat(ord.amountRemaining || 0);
-      if (balRaw > 0) {
-        doc.setTextColor(190, 40, 40);
-        doc.setFont('Helvetica', 'bold');
-        doc.text(balRaw.toLocaleString(), 175, yIdx);
-        doc.setFont('Helvetica', 'normal');
-        doc.setTextColor(40, 40, 43);
-      } else {
-        doc.setTextColor(16, 124, 65);
-        doc.text('PAID', 175, yIdx);
-        doc.setTextColor(40, 40, 43);
-      }
-
-      // Grid bottom indicator divider
-      doc.setDrawColor(235, 235, 240);
-      doc.setLineWidth(0.15);
-      doc.line(12, yIdx + 3.5, 198, yIdx + 3.5);
-
-      yIdx += 8.5;
-    });
-
-    // Page footer indicator block
-    doc.setTextColor(140, 140, 140);
-    doc.setFontSize(6.5);
-    doc.setFont('Helvetica', 'normal');
-    doc.text('System generated administrative logistics report. Confidential document designed for Al-Xpress Corp ledger.', 15, 288);
-    doc.text(`Doc Ref: ALX-${new Date().getFullYear()}/LEDG`, 175, 288);
-
-    doc.save(`AlXpress_Orders_Ledger_${new Date().toISOString().split('T')[0]}.pdf`);
+    const reportTitle = isAr ? 'كشف حركة الشحنات والطلبيات' : 'Logistics Orders Ledger';
+    printContent(reportTitle, 'orders-ledger-table', isAr);
+    
     activityLogService.log('export_orders_pdf', `Orders list report`, {
       count: filteredOrdersList.length
     });
@@ -2662,10 +2476,10 @@ export default function Orders() {
 
   const filteredOrdersList = orders
     .filter(o => {
-      const num = (o.orderNumber || '').toUpperCase();
-      const customer = (o.customerName || '').toLowerCase();
-      const phone = (o.customerPhone || '');
-      const track = (o.trackingNumber || '').toUpperCase();
+      const num = String(o.orderNumber || '').toUpperCase();
+      const customer = String(o.customerName || '').toLowerCase();
+      const phone = String(o.customerPhone || '');
+      const track = String(o.trackingNumber || '').toUpperCase();
       const q = searchText.toLowerCase();
 
       const matchSearch = num.includes(q.toUpperCase()) || customer.includes(q) || phone.includes(searchText) || track.includes(q.toUpperCase());
@@ -2756,7 +2570,7 @@ export default function Orders() {
           { title: isAr ? 'الطلبات النشطة اليوم' : 'Active Orders Today', val: orders.filter(o => o.orderStatus !== 'تم التسليم' && o.orderStatus !== 'ملغي').length, color: 'text-[#d4af37] bg-[#d4af37]/10' },
           { title: isAr ? 'بانتظار التوزيع لليمن' : 'In Local Dist', val: orders.filter(o => o.orderStatus === 'وصل مركز التوزيع في اليمن').length, color: 'text-amber-400 bg-amber-950/20' },
           { title: isAr ? 'شحنات سلمت بنجاح' : 'Delivered Ledger', val: orders.filter(o => o.orderStatus === 'تم التسليم').length, color: 'text-emerald-400 bg-emerald-950/20' },
-          { title: isAr ? 'مبالغ معلقة للتحصيل' : 'Remaining To Collect', val: orders.reduce((sum, o) => sum + (parseFloat(o.amountRemaining || '0')), 0).toLocaleString() + ' YER', color: 'text-rose-400 bg-rose-950/20' }
+          { title: isAr ? 'مبالغ معلقة للتحصيل' : 'Remaining To Collect', val: orders.reduce((sum, o) => sum + financialAccountService.convertToDefaultCurrency(parseFloat(o.amountRemaining || '0'), o.currency || 'YER', settings.currency || 'YER', { USD: o.exchangeRateUSD || settings.exchangeRateUSD, SAR: o.exchangeRateSAR || settings.exchangeRateSAR }), 0).toLocaleString() + ' ' + (settings.currency || 'YER'), color: 'text-rose-400 bg-rose-950/20' }
         ].map((k, i) => (
           <div key={i} className="bg-gradient-to-b from-[#0d0d10] to-[#070709] border border-[#d4af37]/15 p-4 rounded-2xl relative overflow-hidden shadow-md">
             <div className="absolute right-0 top-0 w-16 h-16 bg-gradient-to-br from-[#d4af37]/5 to-transparent rounded-full blur-xl"></div>
@@ -2806,7 +2620,7 @@ export default function Orders() {
         </div>
 
         {/* Ledger Table */}
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto" id="orders-ledger-table">
           <table className="w-full text-start">
             <thead className="bg-slate-950/45 text-slate-400 text-[10px] font-black uppercase tracking-wider border-b border-slate-800">
               <tr>
@@ -2826,8 +2640,8 @@ export default function Orders() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-850 text-xs text-slate-300">
-              {filteredOrdersList.map((ord) => (
-                <tr key={ord.id} className="hover:bg-slate-955 transition-all">
+              {filteredOrdersList.map((ord, idx) => (
+                <tr key={`${ord.id}-${idx}`} className="hover:bg-slate-955 transition-all">
 
                   {/* Checkbox Selector */}
                   <td className="p-4 w-12 text-center">
@@ -4599,7 +4413,11 @@ export default function Orders() {
                     <select
                       value={updateFormData.orderStatus}
                       onChange={e => setUpdateFormData({ ...updateFormData, orderStatus: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 outline-none text-xs"
+                      className={`w-full bg-slate-950 border text-white rounded-xl p-3 outline-none text-xs transition-colors ${
+                        (selectedOrder.firedTriggers || []).includes(`status_notified_${updateFormData.orderStatus}`)
+                          ? 'border-yellow-500/50 focus:border-yellow-500'
+                          : 'border-slate-800'
+                      }`}
                     >
                       <option value="تم تسجيل الطلب">{isAr ? 'تم تسجيل الطلب واستخلاص الفاتورة' : 'Invoice saved'}</option>
                       <option value="وصل مستودع السعودية">{isAr ? 'وصل مستودع السعودية للتعبئة' : 'Arrived Saudi packaging HUB'}</option>
@@ -4610,6 +4428,16 @@ export default function Orders() {
                       <option value="تم التسليم">{isAr ? 'تم التسليم وتفصيل العهد الموردة' : 'Delivered successfully'}</option>
                       <option value="ملغي">{isAr ? 'ملغي' : 'Cancelled'}</option>
                     </select>
+                    {(selectedOrder.firedTriggers || []).includes(`status_notified_${updateFormData.orderStatus}`) && updateFormData.orderStatus !== 'ملغي' && (
+                      <div className="mt-2 p-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg flex items-center gap-2 text-yellow-500 text-[10px] animate-pulse">
+                        <AlertCircle className="w-3 h-3" />
+                        <span>
+                          {isAr 
+                            ? 'لقد وصل الطلب لهذه الحالة مسبقاً. لن يتم تكرار القيود المحاسبية أو إرسال إشعارات للعميل.' 
+                            : 'This status was already reached. Financial entries and customer notifications will not be repeated.'}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 

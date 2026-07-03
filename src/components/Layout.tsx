@@ -33,7 +33,15 @@ import {
   AlertTriangle,
   Download,
   Upload,
-  LayoutList
+  LayoutList,
+  Info,
+  Building2,
+  Cpu,
+  Globe,
+  User,
+  Activity,
+  Code2,
+  ExternalLink
 } from 'lucide-react';
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
@@ -773,14 +781,14 @@ export default function Layout() {
               dir={isAr ? 'rtl' : 'ltr'}
             />
             {/* Ctrl + K Shortcut layout display as requested */}
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none select-none">
-              <kbd className="bg-slate-900 border border-slate-800 text-[10px] text-[#d4af37]/80 px-2 py-0.5 rounded-md font-mono select-none">
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 select-none">
+              <kbd className="bg-slate-900 border border-slate-800 text-[10px] text-[#d4af37]/80 px-2 py-0.5 rounded-md font-mono select-none pointer-events-none">
                 Ctrl + K
               </kbd>
               {searchText.trim() && (
                 <button
                   onClick={() => setIsSearchOpen(true)}
-                  className="bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black px-3 py-1 text-[9px] font-black rounded-lg transition-all shadow-md select-all"
+                  className="bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black px-3 py-1 text-[9px] font-black rounded-lg transition-all shadow-md select-all cursor-pointer pointer-events-auto"
                 >
                   {isAr ? 'ابحث' : 'Find'}
                 </button>
@@ -943,132 +951,215 @@ export default function Layout() {
 
         {/* System & Developer Information Modal */}
         {isSystemDevModalOpen && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setIsSystemDevModalOpen(false)}>
+          <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setIsSystemDevModalOpen(false)}>
             <div
-              className="w-full max-w-lg bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/25 rounded-2xl shadow-2xl relative overflow-hidden text-right leading-relaxed p-6 sm:p-8"
+              className="w-full max-w-2xl bg-gradient-to-b from-[#0d0d0f] to-[#050507] border border-[#d4af37]/30 rounded-[2rem] shadow-[0_0_50px_rgba(0,0,0,0.8)] relative overflow-hidden flex flex-col max-h-[90vh]"
               onClick={(e) => e.stopPropagation()}
               dir={isAr ? 'rtl' : 'ltr'}
             >
-              <div className="absolute top-0 inset-x-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#d4af37]/45 to-transparent"></div>
-              <div className="absolute -top-12 -right-12 w-40 h-40 bg-[#d4af37]/3 rounded-full blur-3xl pointer-events-none"></div>
+              {/* Luxury Accent Lines */}
+              <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-[#d4af37]/50 to-transparent"></div>
+              <div className="absolute -top-24 -right-24 w-64 h-64 bg-[#d4af37]/5 rounded-full blur-[100px] pointer-events-none"></div>
+              <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-blue-500/5 rounded-full blur-[100px] pointer-events-none"></div>
 
               {/* Modal Header */}
-              <div className="flex items-center justify-between pb-4 border-b border-white/[0.04] mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#d4af37]/10 border border-[#d4af37]/25 flex items-center justify-center shrink-0">
-                    <HelpCircle className="w-5 h-5 text-[#d4af37]" />
+              <div className="px-8 py-6 border-b border-white/[0.05] flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#d4af37]/20 to-amber-900/20 border border-[#d4af37]/30 flex items-center justify-center shadow-lg shadow-black/20">
+                    <ShieldCheck className="w-6 h-6 text-[#d4af37]" />
                   </div>
                   <div className="text-start">
-                    <h3 className="text-sm font-black text-white uppercase tracking-wider">
-                      {isAr ? 'معلومات النظام والمطور والبرمج الكفء' : 'System & Developer Profile'}
+                    <h3 className="text-lg font-black text-white tracking-tight leading-none">
+                      {isAr ? 'مركز معلومات النظام والمطور' : 'System Intelligence Hub'}
                     </h3>
-                    <p className="text-[10px] text-slate-500 font-extrabold uppercase mt-0.5">
-                      alx Core Gateway v1
+                    <p className="text-[10px] text-[#d4af37] font-black uppercase tracking-[0.2em] mt-1.5">
+                      Enterprise Enterprise V4 • Global Edition
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={() => setIsSystemDevModalOpen(false)}
-                  className="px-2.5 py-1 text-[10px] border border-slate-800 bg-slate-900/50 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer font-extrabold"
+                  className="w-10 h-10 flex items-center justify-center border border-white/[0.05] bg-white/[0.02] text-slate-400 hover:text-white rounded-xl transition-all hover:bg-white/[0.05] active:scale-95"
                 >
-                  {isAr ? 'إغلاق ✕' : 'Close ✕'}
+                  <Plus className="w-5 h-5 rotate-45" />
                 </button>
               </div>
 
-              {/* Modal Content - System Details */}
-              <div className="space-y-6">
-                <div>
-                  <span className="text-[9px] font-black text-[#d4af37] uppercase tracking-widest block mb-2 text-start">
-                    {isAr ? '💻 معلومات النظام' : 'SYSTEM DETAILS'}
-                  </span>
-                  <div className="bg-[#050507]/80 border border-[#d4af37]/10 p-4 rounded-xl text-start">
-                    <h4 className="text-xs font-black text-white mb-1.5 flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                      {isAr ? 'نظام alx v1 لإدارة الطلبات والشحنات' : 'alx v1 • Order & Shipment Management ERP'}
-                    </h4>
-                    <p className="text-[11px] text-slate-400 font-bold leading-relaxed">
-                      {isAr
-                        ? 'منصة لوجستية متكاملة عالية الأداء تم بناؤها لتسهيل تتبع الشحنات، إدارة نفقات التصنيفات، عهد المناديب والمصادر والمحاسبة المالية الموحدة مع تأمين فائق للبيانات وسرعة مزامنة المعاملات وقابلية التوسع.'
-                        : 'A state-of-the-art enterprise-grade logistics platform engineered for real-time shipment dispatching, ledger account tracing, courier custody matching, expense classification, and automated analytical reports.'}
-                    </p>
+              {/* Modal Content - Scrollable Area */}
+              <div className="flex-1 overflow-y-auto p-8 space-y-10 custom-scrollbar">
+                
+                {/* 1. System Overview Section */}
+                <section className="space-y-4">
+                  <div className="flex items-center gap-2 text-[#d4af37]">
+                    <Cpu className="w-4 h-4" />
+                    <span className="text-[11px] font-black uppercase tracking-[0.2em]">
+                      {isAr ? 'نظرة عامة على النظام' : 'System Overview'}
+                    </span>
                   </div>
-                </div>
+                  <div className="bg-[#0a0a0c] border border-white/[0.03] p-6 rounded-3xl relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                      <Activity className="w-20 h-20 text-[#d4af37]" />
+                    </div>
+                    <h4 className="text-sm font-black text-white mb-3 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]"></span>
+                      {isAr ? 'SwiftShip Enterprise V4 - بنية لوجستية معيارية' : 'SwiftShip Enterprise V4 - Logistics Infrastructure'}
+                    </h4>
+                    <p className="text-xs text-slate-400 font-bold leading-relaxed text-start">
+                      {isAr
+                        ? 'منظومة SwiftShip Enterprise V4 التقنية: بنية برمجية متطورة مخصصة لأتمتة سلاسل التوريد وإدارة الأصول اللوجستية. تعتمد المنظومة بروتوكولات تشفير معيارية ومعايير حوكمة مالية متكاملة لضمان دقة البيانات وكفاءة الأداء في البيئات التشغيلية عالية الكثافة.'
+                        : 'SwiftShip Enterprise V4: An advanced technical framework dedicated to supply chain automation and logistics asset management. Utilizing standardized encryption protocols and integrated financial governance to ensure data precision and operational efficiency in high-concurrency environments.'}
+                    </p>
+                    <div className="mt-4 flex gap-3">
+                      <span className="px-3 py-1 bg-white/[0.03] border border-white/[0.05] rounded-full text-[9px] font-black text-slate-500 uppercase tracking-tighter">
+                        Build 2026.07.V4
+                      </span>
+                      <span className="px-3 py-1 bg-[#d4af37]/5 border border-[#d4af37]/10 rounded-full text-[9px] font-black text-[#d4af37] uppercase tracking-tighter">
+                        Active Support
+                      </span>
+                    </div>
+                  </div>
+                </section>
 
-                {/* Developer Details */}
-                <div>
-                  <span className="text-[9px] font-black text-[#d4af37] uppercase tracking-widest block mb-1.5 text-start">
-                    {isAr ? '👑 معلومات مبرمج ومطور النظام' : 'DEVELOPER PROFILE'}
-                  </span>
-                  <div className="bg-[#050507]/80 border border-[#d4af37]/10 p-5 rounded-xl space-y-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-start border-b border-white/[0.04] pb-3">
-                      <div>
-                        <h4 className="text-sm font-black text-white flex items-center gap-1.5">
+                {/* 2. Company Overview Section */}
+                <section className="space-y-4">
+                  <div className="flex items-center gap-2 text-[#d4af37]">
+                    <Building2 className="w-4 h-4" />
+                    <span className="text-[11px] font-black uppercase tracking-[0.2em]">
+                      {isAr ? 'نبذة عن الشركة' : 'Company Overview'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="bg-[#0a0a0c] border border-white/[0.03] p-5 rounded-3xl space-y-3 text-start">
+                      <h5 className="text-xs font-black text-white">
+                        {settings.companyName || (isAr ? 'الكس-تراك للحلول اللوجستية' : 'Al-Xpress Logistics')}
+                      </h5>
+                      <p className="text-[11px] text-slate-500 font-bold leading-relaxed">
+                        {isAr 
+                          ? 'شركة رائدة في تقديم الحلول اللوجستية المتكاملة وخدمات النقل الذكي، نعتمد على الابتكار التقني لرفع كفاءة سلاسل التوريد في المنطقة.' 
+                          : 'A leading provider of integrated logistics solutions and smart transportation services, leveraging technical innovation to enhance supply chain efficiency.'}
+                      </p>
+                    </div>
+                    <div className="bg-[#0a0a0c] border border-white/[0.03] p-5 rounded-3xl space-y-3 text-start">
+                      <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                        <MapPin className="w-3.5 h-3.5 text-[#d4af37]" />
+                        <span>{settings.companyAddress || (isAr ? 'المركز الرئيسي - اليمن / المملكة العربية السعودية' : 'Headquarters - Yemen / KSA')}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                        <Phone className="w-3.5 h-3.5 text-[#d4af37]" />
+                        <span dir="ltr">{settings.companyPhone || '+967 77X XXX XXX'}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                        <Globe className="w-3.5 h-3.5 text-[#d4af37]" />
+                        <span>{settings.companyWebsite || 'www.al-xpress.com'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                {/* 3. Developer & Technical Support Section */}
+                <section className="space-y-4">
+                  <div className="flex items-center gap-2 text-[#d4af37]">
+                    <Code2 className="w-4 h-4" />
+                    <span className="text-[11px] font-black uppercase tracking-[0.2em]">
+                      {isAr ? 'المطور والدعم الفني' : 'Dev & Tech Support'}
+                    </span>
+                  </div>
+                  <div className="bg-gradient-to-br from-[#0a0a0c] to-[#0d0d10] border border-[#d4af37]/10 p-6 rounded-3xl relative group">
+                    <div className="flex flex-col sm:flex-row items-center gap-5 text-start">
+                      <div className="w-20 h-20 rounded-2xl bg-gradient-to-b from-[#d4af37] to-amber-700 p-[1px] shadow-lg shadow-[#d4af37]/5 shrink-0">
+                        <div className="w-full h-full rounded-2xl bg-black flex items-center justify-center overflow-hidden">
+                          <User className="w-10 h-10 text-[#d4af37]/20" />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                          <span className="absolute bottom-2 inset-x-0 text-center text-[9px] font-black text-[#d4af37] uppercase">Lead</span>
+                        </div>
+                      </div>
+                      <div className="flex-1 space-y-1">
+                        <h4 className="text-lg font-black text-white flex items-center gap-2">
                           {isAr ? 'أرسلان الشماري' : 'Arslan ALShamari'}
-                          <span className="text-[8.5px] px-1.5 py-0.5 bg-[#d4af37]/10 text-[#d4af37] border border-[#d4af37]/20 rounded-md font-bold">
-                            Lead Architect
-                          </span>
+                          <div className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-md text-[8px] font-black uppercase">
+                            Available for Support
+                          </div>
                         </h4>
-                        <p className="text-[11.5px] text-[#d4af37] font-extrabold mt-1">
-                          {isAr ? 'مبرمج أنظمة ومهندس شبكات وأمن سيبراني' : 'Systems Developer, Network Engineer & Cybersecurity Specialist'}
+                        <p className="text-xs text-[#d4af37] font-black uppercase tracking-wide">
+                          {isAr ? 'كبير مهندسي البرمجيات وأمن المعلومات' : 'Senior Software Architect & InfoSec Specialist'}
+                        </p>
+                        <p className="text-[11px] text-slate-500 font-bold max-w-md">
+                          {isAr 
+                            ? 'لطلب الدعم الفني المباشر، الاستشارات التقنية، أو طلب تعديلات وتطويرات مخصصة للنظام، يرجى استخدام وسائل التواصل الرسمية أدناه.' 
+                            : 'For direct technical support, technical consultations, or custom system modifications and developments, please use the official contact methods below.'}
                         </p>
                       </div>
                     </div>
 
-                    {/* Developer Contact Info details */}
-                    <div className="space-y-2 text-xs">
-                      <div className="flex items-center justify-between text-start text-[11px] font-bold py-1.5 border-b border-white/[0.02]">
-                        <span className="text-slate-500">{isAr ? 'هاتف مباشر Contact Phone:' : 'Direct Phone Link:'}</span>
-                        <a href="tel:+967776422777" dir="ltr" className="text-slate-300 hover:text-white font-mono flex items-center gap-1 hover:underline">
-                          <Phone className="w-3.5 h-3.5 text-[#d4af37]" />
-                          <span>+967 776 422 777</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-8">
+                      <div className="space-y-2">
+                        <a 
+                          href="tel:+967776422777" 
+                          className="flex items-center justify-between p-3 bg-white/[0.02] border border-white/[0.05] rounded-2xl group/link hover:bg-[#d4af37]/10 hover:border-[#d4af37]/30 transition-all cursor-pointer shadow-sm active:scale-[0.98] relative z-10"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-xl bg-slate-900 flex items-center justify-center border border-slate-800 group-hover/link:border-[#d4af37]/40 transition-colors">
+                              <Phone className="w-3.5 h-3.5 text-slate-500 group-hover/link:text-[#d4af37] transition-colors" />
+                            </div>
+                            <span className="text-[10px] font-bold text-slate-400 group-hover/link:text-slate-300 transition-colors">{isAr ? 'اتصال مباشر' : 'Direct Call'}</span>
+                          </div>
+                          <span dir="ltr" className="text-xs font-mono font-black text-white group-hover/link:text-[#d4af37] transition-colors">+967 776 422 777</span>
+                        </a>
+                        <a 
+                          href="mailto:arslan.alshamari@gmail.com" 
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-between p-3 bg-white/[0.02] border border-white/[0.05] rounded-2xl group/link hover:bg-[#d4af37]/10 hover:border-[#d4af37]/30 transition-all cursor-pointer shadow-sm active:scale-[0.98] relative z-10"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-xl bg-slate-900 flex items-center justify-center border border-slate-800 group-hover/link:border-[#d4af37]/40 transition-colors">
+                              <Mail className="w-3.5 h-3.5 text-slate-500 group-hover/link:text-[#d4af37] transition-colors" />
+                            </div>
+                            <span className="text-[10px] font-bold text-slate-400 group-hover/link:text-slate-300 transition-colors">{isAr ? 'البريد الرسمي' : 'Official Email'}</span>
+                          </div>
+                          <span className="text-[10px] font-black text-white group-hover/link:text-[#d4af37] transition-colors">arslan.alshamari@gmail.com</span>
                         </a>
                       </div>
-
-                      <div className="flex items-center justify-between text-start text-[11px] font-bold py-1.5 border-b border-[#0f0f12]">
-                        <span className="text-slate-500">{isAr ? 'البريد الإلكتروني Email:' : 'Official Email Address:'}</span>
-                        <a href="mailto:arslan.alshamari@gmail.com" className="text-slate-200 hover:text-[#d4af37] flex items-center gap-1 hover:underline">
-                          <Mail className="w-3.5 h-3.5 text-[#d4af37]" />
-                          <span>arslan.alshamari@gmail.com</span>
+                      <div className="grid grid-cols-2 gap-3">
+                        <a 
+                          href="https://wa.me/967776422777" 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="flex flex-col items-center justify-center gap-2 bg-emerald-500/5 border border-emerald-500/10 hover:bg-emerald-500/20 hover:border-emerald-500/30 rounded-2xl transition-all p-4 group/btn cursor-pointer shadow-sm active:scale-95 relative z-10"
+                        >
+                          <MessageCircle className="w-6 h-6 text-emerald-400 group-hover/btn:scale-110 transition-transform shadow-emerald-500/20" />
+                          <span className="text-[9px] font-black uppercase text-emerald-400 tracking-wider">WhatsApp</span>
+                        </a>
+                        <a 
+                          href="https://t.me/Arslan_ALShamari" 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="flex flex-col items-center justify-center gap-2 bg-sky-500/5 border border-sky-500/10 hover:bg-sky-500/20 hover:border-sky-500/30 rounded-2xl transition-all p-4 group/btn cursor-pointer shadow-sm active:scale-95 relative z-10"
+                        >
+                          <Send className="w-6 h-6 text-sky-400 group-hover/btn:scale-110 transition-transform shadow-sky-500/20" />
+                          <span className="text-[9px] font-black uppercase text-sky-400 tracking-wider">Telegram</span>
                         </a>
                       </div>
-                    </div>
-
-                    {/* Action Hub buttons */}
-                    <div className="grid grid-cols-3 gap-2 pt-2 border-t border-white/[0.02]">
-                      <a
-                        href="https://wa.me/967776422777"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-2.5 bg-emerald-500/5 hover:bg-emerald-500/15 border border-emerald-500/15 text-emerald-400 text-xs font-black rounded-xl flex items-center justify-center gap-1.5 transition duration-205 active:scale-95 cursor-pointer"
-                      >
-                        <MessageCircle className="w-4 h-4 shrink-0" />
-                        <span>{isAr ? 'واتسـاب' : 'WhatsApp'}</span>
-                      </a>
-                      <a
-                        href="https://t.me/Arslan_ALShamari"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-2.5 bg-sky-500/5 hover:bg-sky-500/15 border border-sky-500/15 text-sky-400 text-xs font-black rounded-xl flex items-center justify-center gap-1.5 transition duration-205 active:scale-95 cursor-pointer"
-                      >
-                        <Send className="w-4 h-4 shrink-0" />
-                        <span>{isAr ? 'تلقـرام' : 'Telegram'}</span>
-                      </a>
-                      <a
-                        href="mailto:arslan.alshamari@gmail.com"
-                        className="p-2.5 bg-[#d4af37]/5 hover:bg-[#d4af37]/15 border border-[#d4af37]/15 text-[#d4af37] text-xs font-black rounded-xl flex items-center justify-center gap-1.5 transition duration-205 active:scale-95 cursor-pointer"
-                      >
-                        <Mail className="w-4 h-4 shrink-0" />
-                        <span>{isAr ? 'الإيميل' : 'Email Dev'}</span>
-                      </a>
                     </div>
                   </div>
-                </div>
+                </section>
               </div>
 
-              {/* Security signature footer */}
-              <div className="mt-6 pt-4 border-t border-white/[0.04] flex items-center justify-between text-[9px] text-slate-500 font-bold select-none">
-                <span>SYSTEM ID: SWIFTSHIP-ERP-V1</span>
-                <span>SECURED AES-256 SYSTEM</span>
+              {/* Modal Footer */}
+              <div className="px-8 py-4 border-t border-white/[0.05] bg-black/40 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#d4af37] animate-pulse"></div>
+                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                      System Online & Secure
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] font-black text-white/20 tracking-[0.3em]">AES-256</span>
+                  <div className="h-3 w-[1px] bg-white/10"></div>
+                  <span className="text-[10px] font-black text-[#d4af37]/40 tracking-[0.2em]">ALX-V4-2026</span>
+                </div>
               </div>
             </div>
           </div>

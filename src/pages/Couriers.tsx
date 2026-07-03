@@ -29,6 +29,7 @@ import {
   ArrowDownRight,
   ArrowUpLeft
 } from 'lucide-react';
+import { printContent } from '../lib/printUtils';
 import { jsPDF } from 'jspdf';
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
@@ -1109,7 +1110,7 @@ export default function Couriers() {
             </div>
 
             {/* Scrollable Content inside Details portal */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#0a0a0c]">
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#0a0a0c]" id="courier-ledger-content">
               
               {selectedCourier.notes && (
                 <div className="bg-amber-950/10 border border-amber-950/40 p-4 rounded-xl text-start">
@@ -1517,7 +1518,7 @@ export default function Couriers() {
                </div>
                <div className="flex gap-2">
                  <button 
-                  onClick={() => window.print()} 
+                  onClick={() => printContent(isAr ? `كشف حساب المندوب: ${selectedCourier.fullName}` : 'Courier Liability Statement', 'courier-ledger-content', isAr)} 
                   className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black rounded-xl font-black text-xs transition-all flex items-center gap-2 shadow-md active:scale-95"
                  >
                    <Printer className="w-4 h-4" /> {isAr ? 'طباعة تقرير المصادقة اليدوية' : 'Print Statement & Incentives'}

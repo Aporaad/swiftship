@@ -2,16 +2,15 @@ import './loadEnv'; // Loaded first to populate process.env before other modules
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
 
-// CJS-safe __dirname — works in both CommonJS (esbuild output) and ESM
-declare const __dirname: string;
-const _dirname: string =
-  typeof __dirname !== 'undefined'
-    ? __dirname
-    : (() => {
-      const { fileURLToPath } = require('url');
-      return path.dirname(fileURLToPath((import.meta as any).url));
-    })();
+const currentFilePath = (typeof import.meta !== 'undefined' && typeof import.meta.url === 'string') 
+  ? fileURLToPath(import.meta.url) 
+  : (typeof __filename !== 'undefined' ? __filename : '');
+
+const currentDirPath = (currentFilePath) 
+  ? path.dirname(currentFilePath) 
+  : (typeof __dirname !== 'undefined' ? __dirname : process.cwd());
 
 
 import admin, {
@@ -63,268 +62,265 @@ async function startServer() {
     console.error('Backend Adapter Client SDK init failed:', e.message);
   }
 
-  // Authenticate, seed, and register database trigger listeners asynchronously in the background so they do not block server port binding
-  (async () => {
-    // Authenticate the server session using system administrative account to secure backend operations
-    const systemEmail = 'admin@swiftship.system';
-    const systemPassword = 'swiftship@system_pw_2026'; // Standard master password for system synchronization
+  // Authenticate the server session using system administrative account to secure backend operations
+  const systemEmail = 'admin@swiftship.system';
+  const systemPassword = 'swiftship@system_pw_2026'; // Standard master password for system synchronization
+  
+  if (auth && db) {
+    try {
+      await signInWithEmailAndPassword(auth, systemEmail, systemPassword);
+      console.log('Backend server authenticated securely as admin@swiftship.system using Web SDK');
+    } catch (authErr: any) {
+      console.warn('Backend failed standard authentication with system master password:', authErr.message);
+      if (authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/user-not-found') {
+        try {
+          const { createUserWithEmailAndPassword } = await import('./src/lib/supabase-firebase-adapter');
+          await createUserWithEmailAndPassword(auth, systemEmail, systemPassword);
+          console.log('Backend server successfully registered admin@swiftship.system on-the-fly');
 
-    if (auth && db) {
-      try {
-        await signInWithEmailAndPassword(auth, systemEmail, systemPassword);
-        console.log('Backend server authenticated securely as admin@swiftship.system using Web SDK');
-      } catch (authErr: any) {
-        console.warn('Backend failed standard authentication with system master password:', authErr.message);
-        if (authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/user-not-found') {
+          // Auto-seed admin user document in Firestore to enable immediate resolve-identifier and verify-login lookup list
           try {
-            const { createUserWithEmailAndPassword } = await import('./src/lib/supabase-firebase-adapter');
-            await createUserWithEmailAndPassword(auth, systemEmail, systemPassword);
-            console.log('Backend server successfully registered admin@swiftship.system on-the-fly');
-
-            // Auto-seed admin user document in Firestore to enable immediate resolve-identifier and verify-login lookup list
-            try {
-              const { doc: fDoc, setDoc } = await import('./src/lib/supabase-firebase-adapter');
-              await setDoc(fDoc(db, 'users', auth.currentUser!.uid), {
-                email: systemEmail,
-                username: 'admin',
-                fullName: 'System Root Administrator',
-                role: 'Admin',
-                isRoot: true,
-                disabled: false,
-                systemPin: '000000',
-                password: systemPassword,
-                createdAt: Date.now()
-              });
-              console.log('Successfully seeded admin user doc on startup');
-            } catch (seedErr: any) {
-              console.error('Could not seed admin user doc on startup:', seedErr.message);
-            }
-          } catch (regErr: any) {
-            console.error('Backend failed to register administrative account:', regErr.message);
-            // Fallback: Try legacy standard password
-            try {
-              await signInWithEmailAndPassword(auth, systemEmail, 'password123');
-              console.log('Backend server authenticated securely using legacy password123');
-            } catch (legacyErr: any) {
-              console.error('Backend fallback authentication failed:', legacyErr.message);
-            }
+            const { doc: fDoc, setDoc } = await import('./src/lib/supabase-firebase-adapter');
+            await setDoc(fDoc(db, 'users', auth.currentUser!.uid), {
+              email: systemEmail,
+              username: 'admin',
+              fullName: 'System Root Administrator',
+              role: 'Admin',
+              isRoot: true,
+              disabled: false,
+              systemPin: '000000',
+              password: systemPassword,
+              createdAt: Date.now()
+            });
+            console.log('Successfully seeded admin user doc on startup');
+          } catch (seedErr: any) {
+            console.error('Could not seed admin user doc on startup:', seedErr.message);
+          }
+        } catch (regErr: any) {
+          console.error('Backend failed to register administrative account:', regErr.message);
+          // Fallback: Try legacy standard password
+          try {
+            await signInWithEmailAndPassword(auth, systemEmail, 'password123');
+            console.log('Backend server authenticated securely using legacy password123');
+          } catch (legacyErr: any) {
+            console.error('Backend fallback authentication failed:', legacyErr.message);
           }
         }
       }
     }
+  }
 
-    // --- EMULATED CLOUD FUNCTIONS (FIREBASE FUNCTIONS TRIGGERS) ---
-    if (db) {
-      try {
-        console.log('[System Triggers] Setting up emulated real-time Firebase Cloud Functions on server backend...');
-
-        const getExchangeRatesBackend = async () => {
-          try {
-            const snap = await getDoc(doc(db, 'settings', 'general'));
-            if (snap.exists()) {
-              const data = snap.data();
-              return {
-                USD: data.exchangeRateUSD || 535,
-                SAR: data.exchangeRateSAR || 140,
-                YER: 1
-              };
-            }
-          } catch (e) {
-            console.warn('Could not fetch exchange rates on server, using defaults', e);
+  // --- EMULATED CLOUD FUNCTIONS (FIREBASE FUNCTIONS TRIGGERS) ---
+  if (db) {
+    try {
+      console.log('[System Triggers] Setting up emulated real-time Firebase Cloud Functions on server backend...');
+      
+      const getExchangeRatesBackend = async () => {
+        try {
+          const snap = await getDoc(doc(db, 'settings', 'general'));
+          if (snap.exists()) {
+            const data = snap.data();
+            return {
+              USD: data.exchangeRateUSD || 535,
+              SAR: data.exchangeRateSAR || 140,
+              YER: 1
+            };
           }
-          return { USD: 535, SAR: 140, YER: 1 };
-        };
+        } catch (e) {
+          console.warn('Could not fetch exchange rates on server, using defaults', e);
+        }
+        return { USD: 535, SAR: 140, YER: 1 };
+      };
 
-        const convertToTargetCurrencyBackend = (
-          amount: number,
-          fromCurrency: string,
-          targetCurrency: string,
-          exchangeRates: { USD?: number; SAR?: number; YER?: number }
-        ): number => {
-          if (fromCurrency === targetCurrency) return amount;
-          let baseAmountYER = amount;
-          if (fromCurrency === 'USD') baseAmountYER = amount * (exchangeRates.USD || 535);
-          else if (fromCurrency === 'SAR') baseAmountYER = amount * (exchangeRates.SAR || 140);
-          else if (fromCurrency === 'YER') baseAmountYER = amount;
+      const convertToTargetCurrencyBackend = (
+        amount: number,
+        fromCurrency: string,
+        targetCurrency: string,
+        exchangeRates: { USD?: number; SAR?: number; YER?: number }
+      ): number => {
+        if (fromCurrency === targetCurrency) return amount;
+        let baseAmountYER = amount;
+        if (fromCurrency === 'USD') baseAmountYER = amount * (exchangeRates.USD || 535);
+        else if (fromCurrency === 'SAR') baseAmountYER = amount * (exchangeRates.SAR || 140);
+        else if (fromCurrency === 'YER') baseAmountYER = amount;
 
-          if (targetCurrency === 'USD') return baseAmountYER / (exchangeRates.USD || 535);
-          if (targetCurrency === 'SAR') return baseAmountYER / (exchangeRates.SAR || 140);
-          if (targetCurrency === 'YER') return baseAmountYER;
-          return baseAmountYER;
-        };
+        if (targetCurrency === 'USD') return baseAmountYER / (exchangeRates.USD || 535);
+        if (targetCurrency === 'SAR') return baseAmountYER / (exchangeRates.SAR || 140);
+        if (targetCurrency === 'YER') return baseAmountYER;
+        return baseAmountYER;
+      };
 
-        const settlePendingCustodiesForCourierBackend = async (courierId: string, amountToSettle: number, currency: string) => {
-          if (amountToSettle <= 0) return;
-          try {
-            const exchangeRates = await getExchangeRatesBackend();
-            const q = query(
-              collection(db, 'expenses'),
-              where('recipientEntityId', '==', courierId),
-              where('status', '==', 'Pending')
+      const settlePendingCustodiesForCourierBackend = async (courierId: string, amountToSettle: number, currency: string) => {
+        if (amountToSettle <= 0) return;
+        try {
+          const exchangeRates = await getExchangeRatesBackend();
+          const q = query(
+            collection(db, 'expenses'),
+            where('recipientEntityId', '==', courierId),
+            where('status', '==', 'Pending')
+          );
+          const snap = await getDocs(q);
+          const pending = snap.docs
+            .map(d => ({id: d.id, ...d.data()} as any))
+            .filter((e: any) => e.type === 'Custody')
+            .sort((a: any, b: any) => a.createdAt - b.createdAt);
+
+          console.log(`[System Triggers] Found ${pending.length} pending custodies for courier ${courierId}. Amount to settle: ${amountToSettle} ${currency}`);
+
+          let remainingToSettle = amountToSettle;
+          let settled = false;
+
+          for (const expense of pending) {
+            if (remainingToSettle <= 0) break;
+
+            const expenseCurrency = expense.currency || 'YER';
+            const currentRemitted = parseFloat(expense.remittedAmount) || 0;
+            const totalAmount = parseFloat(expense.amount) || 0;
+            const availableToSettleExpenseCurrency = totalAmount - currentRemitted;
+            
+            if (availableToSettleExpenseCurrency <= 0) continue;
+
+            const availableToSettleBudgetCurrency = convertToTargetCurrencyBackend(
+              availableToSettleExpenseCurrency,
+              expenseCurrency,
+              currency,
+              exchangeRates
             );
-            const snap = await getDocs(q);
-            const pending = snap.docs
-              .map(d => ({ id: d.id, ...d.data() } as any))
-              .filter((e: any) => e.type === 'Custody')
-              .sort((a: any, b: any) => a.createdAt - b.createdAt);
 
-            console.log(`[System Triggers] Found ${pending.length} pending custodies for courier ${courierId}. Amount to settle: ${amountToSettle} ${currency}`);
+            const settleAmountBudgetCurrency = Math.min(remainingToSettle, availableToSettleBudgetCurrency);
+            
+            const settleAmountExpenseCurrency = convertToTargetCurrencyBackend(
+              settleAmountBudgetCurrency,
+              currency,
+              expenseCurrency,
+              exchangeRates
+            );
+            
+            const newRemitted = currentRemitted + settleAmountExpenseCurrency;
+            const isFullySettled = newRemitted >= totalAmount - 0.01;
 
-            let remainingToSettle = amountToSettle;
-            let settled = false;
+            console.log(`[System Triggers] Auto-Settling custody expense ${expense.id}: settling ${settleAmountBudgetCurrency} ${currency} (${settleAmountExpenseCurrency} ${expenseCurrency}). New remitted: ${newRemitted}. Fully settled: ${isFullySettled}`);
 
-            for (const expense of pending) {
-              if (remainingToSettle <= 0) break;
+            await updateDoc(doc(db, 'expenses', expense.id), {
+              status: isFullySettled ? 'Settled' : 'Pending',
+              remittedAmount: newRemitted,
+              updatedAt: Date.now()
+            });
 
-              const expenseCurrency = expense.currency || 'YER';
-              const currentRemitted = parseFloat(expense.remittedAmount) || 0;
-              const totalAmount = parseFloat(expense.amount) || 0;
-              const availableToSettleExpenseCurrency = totalAmount - currentRemitted;
+            remainingToSettle -= settleAmountBudgetCurrency;
+            settled = true;
 
-              if (availableToSettleExpenseCurrency <= 0) continue;
+            // Log activity log
+            try {
+              await addDoc(collection(db, 'activity_logs'), {
+                action: 'settle_custody',
+                targetId: expense.id,
+                metadata: { 
+                   amount: settleAmountBudgetCurrency, 
+                   currency,
+                   automated: true,
+                   source: 'System Trigger on Credit Transaction'
+                },
+                createdAt: Date.now(),
+                userId: 'system'
+              });
+            } catch (logErr) {
+              console.error('[System Triggers] Failed to save activity log for auto-settle:', logErr);
+            }
+          }
+        } catch (settleErr: any) {
+          console.error('[System Triggers] Error in auto-settling pending custodies:', settleErr.message);
+        }
+      };
 
-              const availableToSettleBudgetCurrency = convertToTargetCurrencyBackend(
-                availableToSettleExpenseCurrency,
-                expenseCurrency,
-                currency,
-                exchangeRates
-              );
+      // Reconciles an account's balances when its account_transactions are written, deleted, or updated.
+      onSnapshot(collection(db, 'account_transactions'), async (snapshot) => {
+        const changes = snapshot.docChanges();
+        if (changes.length === 0) return;
+        
+        console.log(`[System Triggers] Detected ${changes.length} change(s) in account_transactions`);
+        
+        const affectedAccountIds = new Set<string>();
+        for (const change of changes) {
+          const data = change.doc.data();
+          if (data && data.accountId) {
+            affectedAccountIds.add(data.accountId);
 
-              const settleAmountBudgetCurrency = Math.min(remainingToSettle, availableToSettleBudgetCurrency);
-
-              const settleAmountExpenseCurrency = convertToTargetCurrencyBackend(
-                settleAmountBudgetCurrency,
-                currency,
-                expenseCurrency,
-                exchangeRates
-              );
-
-              const newRemitted = currentRemitted + settleAmountExpenseCurrency;
-              const isFullySettled = newRemitted >= totalAmount - 0.01;
-
-              console.log(`[System Triggers] Auto-Settling custody expense ${expense.id}: settling ${settleAmountBudgetCurrency} ${currency} (${settleAmountExpenseCurrency} ${expenseCurrency}). New remitted: ${newRemitted}. Fully settled: ${isFullySettled}`);
-
-              await updateDoc(doc(db, 'expenses', expense.id), {
-                status: isFullySettled ? 'Settled' : 'Pending',
-                remittedAmount: newRemitted,
+            // Auto-settle custody if a NEW Credit transaction is added
+            if (change.type === 'added' && data.type === 'Credit') {
+              try {
+                const accountRef = doc(db, 'accounts', data.accountId);
+                const accountSnap = await getDoc(accountRef);
+                if (accountSnap.exists()) {
+                  const accountData = accountSnap.data();
+                  if (accountData.entityType === 'courier') {
+                    const courierId = accountData.entityId;
+                    const txAmount = parseFloat(data.amountOriginal) || parseFloat(data.amount) || 0;
+                    const txCurrency = data.currencyOriginal || accountData.currency || 'YER';
+                    
+                    console.log(`[System Triggers] Credit transaction of ${txAmount} ${txCurrency} registered on Courier: ${accountData.entityName}. ID: ${courierId}. Processing automatic custody settlement...`);
+                    
+                    await settlePendingCustodiesForCourierBackend(courierId, txAmount, txCurrency);
+                  }
+                }
+              } catch (cErr: any) {
+                console.error('[System Triggers] Error checking courier for custody settlement:', cErr.message);
+              }
+            }
+          }
+        }
+        
+        for (const accountId of affectedAccountIds) {
+          try {
+            console.log(`[System Triggers] Reconciling ledger account ID: ${accountId}`);
+            
+            // Query all transactions for this accountId
+            const txsQuery = query(collection(db, 'account_transactions'), where('accountId', '==', accountId));
+            const txsSnap = await getDocs(txsQuery);
+            
+            let debitTotal = 0;
+            let creditTotal = 0;
+            
+            txsSnap.forEach(txDoc => {
+              const tx = txDoc.data();
+              const amt = parseFloat(tx.amount) || 0;
+              if (tx.type === 'Debit') {
+                debitTotal += amt;
+              } else if (tx.type === 'Credit') {
+                creditTotal += amt;
+              }
+            });
+            
+            // Read account information
+            const accountRef = doc(db, 'accounts', accountId);
+            const accountSnap = await getDoc(accountRef);
+            
+            if (accountSnap.exists()) {
+              const accountData = accountSnap.data();
+              const prefix = accountData.accountPrefix || '';
+              
+              const isAsset = prefix.startsWith('1');
+              const balance = isAsset ? (debitTotal - creditTotal) : (creditTotal - debitTotal);
+              
+              console.log(`[System Triggers] Reconciled and Synced Account ${accountData.accountCode} (${accountData.entityName}): Balance=${balance}, DebitTotal=${debitTotal}, CreditTotal=${creditTotal}`);
+              
+              await updateDoc(accountRef, {
+                balance,
+                debitTotal,
+                creditTotal,
                 updatedAt: Date.now()
               });
-
-              remainingToSettle -= settleAmountBudgetCurrency;
-              settled = true;
-
-              // Log activity log
-              try {
-                await addDoc(collection(db, 'activity_logs'), {
-                  action: 'settle_custody',
-                  targetId: expense.id,
-                  metadata: {
-                    amount: settleAmountBudgetCurrency,
-                    currency,
-                    automated: true,
-                    source: 'System Trigger on Credit Transaction'
-                  },
-                  createdAt: Date.now(),
-                  userId: 'system'
-                });
-              } catch (logErr) {
-                console.error('[System Triggers] Failed to save activity log for auto-settle:', logErr);
-              }
             }
-          } catch (settleErr: any) {
-            console.error('[System Triggers] Error in auto-settling pending custodies:', settleErr.message);
+          } catch (reconErr: any) {
+            console.error(`[System Triggers] Reconcile error for account ${accountId}:`, reconErr.message);
           }
-        };
-
-        // Reconciles an account's balances when its account_transactions are written, deleted, or updated.
-        onSnapshot(collection(db, 'account_transactions'), async (snapshot) => {
-          const changes = snapshot.docChanges();
-          if (changes.length === 0) return;
-
-          console.log(`[System Triggers] Detected ${changes.length} change(s) in account_transactions`);
-
-          const affectedAccountIds = new Set<string>();
-          for (const change of changes) {
-            const data = change.doc.data();
-            if (data && data.accountId) {
-              affectedAccountIds.add(data.accountId);
-
-              // Auto-settle custody if a NEW Credit transaction is added
-              if (change.type === 'added' && data.type === 'Credit') {
-                try {
-                  const accountRef = doc(db, 'accounts', data.accountId);
-                  const accountSnap = await getDoc(accountRef);
-                  if (accountSnap.exists()) {
-                    const accountData = accountSnap.data();
-                    if (accountData.entityType === 'courier') {
-                      const courierId = accountData.entityId;
-                      const txAmount = parseFloat(data.amountOriginal) || parseFloat(data.amount) || 0;
-                      const txCurrency = data.currencyOriginal || accountData.currency || 'YER';
-
-                      console.log(`[System Triggers] Credit transaction of ${txAmount} ${txCurrency} registered on Courier: ${accountData.entityName}. ID: ${courierId}. Processing automatic custody settlement...`);
-
-                      await settlePendingCustodiesForCourierBackend(courierId, txAmount, txCurrency);
-                    }
-                  }
-                } catch (cErr: any) {
-                  console.error('[System Triggers] Error checking courier for custody settlement:', cErr.message);
-                }
-              }
-            }
-          }
-
-          for (const accountId of affectedAccountIds) {
-            try {
-              console.log(`[System Triggers] Reconciling ledger account ID: ${accountId}`);
-
-              // Query all transactions for this accountId
-              const txsQuery = query(collection(db, 'account_transactions'), where('accountId', '==', accountId));
-              const txsSnap = await getDocs(txsQuery);
-
-              let debitTotal = 0;
-              let creditTotal = 0;
-
-              txsSnap.forEach(txDoc => {
-                const tx = txDoc.data();
-                const amt = parseFloat(tx.amount) || 0;
-                if (tx.type === 'Debit') {
-                  debitTotal += amt;
-                } else if (tx.type === 'Credit') {
-                  creditTotal += amt;
-                }
-              });
-
-              // Read account information
-              const accountRef = doc(db, 'accounts', accountId);
-              const accountSnap = await getDoc(accountRef);
-
-              if (accountSnap.exists()) {
-                const accountData = accountSnap.data();
-                const prefix = accountData.accountPrefix || '';
-
-                const isAsset = prefix.startsWith('1');
-                const balance = isAsset ? (debitTotal - creditTotal) : (creditTotal - debitTotal);
-
-                console.log(`[System Triggers] Reconciled and Synced Account ${accountData.accountCode} (${accountData.entityName}): Balance=${balance}, DebitTotal=${debitTotal}, CreditTotal=${creditTotal}`);
-
-                await updateDoc(accountRef, {
-                  balance,
-                  debitTotal,
-                  creditTotal,
-                  updatedAt: Date.now()
-                });
-              }
-            } catch (reconErr: any) {
-              console.error(`[System Triggers] Reconcile error for account ${accountId}:`, reconErr.message);
-            }
-          }
-        });
-
-      } catch (triggerErr: any) {
-        console.error('[System Triggers] Could not start real-time Firebase Triggers:', triggerErr.message);
-      }
+        }
+      });
+      
+    } catch (triggerErr: any) {
+      console.error('[System Triggers] Could not start real-time Firebase Triggers:', triggerErr.message);
     }
-  })();
+  }
 
   // API Routes
   // Middleware to ensure database is online and initialized before performing database-driven API calls
@@ -333,8 +329,8 @@ async function startServer() {
       return next();
     }
     if (!db || !auth) {
-      return res.status(503).json({
-        error: 'خدمات قاعدة البيانات غير مهيأة أو غير متصلة بالإنترنت حالياً. يرجى التأكد من تهيئة Supabase بشكل صحيح عبر متغيرات البيئة.'
+      return res.status(503).json({ 
+        error: 'خدمات قاعدة البيانات غير مهيأة أو غير متصلة بالإنترنت حالياً. يرجى التأكد من تهيئة Supabase بشكل صحيح عبر متغيرات البيئة.' 
       });
     }
     next();
@@ -348,12 +344,12 @@ async function startServer() {
 
       // Hardcoded fallback for root admin
       if (idLower === 'admin') {
-        return res.json({ email: 'admin@swiftship.system' });
+         return res.json({ email: 'admin@swiftship.system' });
       }
 
       // If it looks like an email, we just return it
       if (idLower.includes('@')) {
-        return res.json({ email: idLower });
+         return res.json({ email: idLower });
       }
 
       // Lookup username in Firestore via Client SDK
@@ -407,7 +403,7 @@ async function startServer() {
       const idLower = identifier.toLowerCase();
       let email = idLower;
 
-      const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'engaporaad1@gmail.com', 'admin@swiftship.system'];
+      const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'engaporaad1@gmail.com', 'admin@swiftship.system', 'apo.1.read@gmail.com'];
       if (idLower === 'admin') {
         email = 'admin@swiftship.system';
       }
@@ -575,7 +571,7 @@ async function startServer() {
       } catch (tokenErr: any) {
         console.warn('Could not generate customToken for legacy/root:', tokenErr.message);
       }
-
+      
       if (customToken) {
         return res.json({ success: true, customToken, email: email });
       } else {
@@ -762,7 +758,7 @@ async function startServer() {
         // Dummy call to check instance status instead of sending a message
         const url = `https://api.ultramsg.com/${instanceId}/instance/status?token=${token}`;
         const apiRes = await fetch(url);
-
+        
         if (!apiRes.ok) {
           throw new Error(`UltraMsg returned HTTP error status ${apiRes.status}`);
         }
@@ -772,8 +768,8 @@ async function startServer() {
           throw new Error(apiJson.error || apiJson.message || 'Invalid UltraMsg Instance ID or Token');
         }
 
-        return res.json({
-          success: true,
+        return res.json({ 
+          success: true, 
           message: 'UltraMsg connection verified successfully! Settings and Token are valid.',
           details: apiJson
         });
@@ -926,214 +922,214 @@ async function startServer() {
   };
 
   function normalizeStatus(status: string | undefined): string {
-    if (!status) return 'تم تسجيل الطلب';
-    // Direct lookup
-    if (STATUS_MAP_TO_AR[status]) return STATUS_MAP_TO_AR[status];
-    // Case insensitive check
-    for (const key of Object.keys(STATUS_MAP_TO_AR)) {
-      if (status.toLowerCase().includes(key.toLowerCase())) return STATUS_MAP_TO_AR[key];
-    }
-    return status; // Fallback to original
+      if (!status) return 'تم تسجيل الطلب';
+      // Direct lookup
+      if (STATUS_MAP_TO_AR[status]) return STATUS_MAP_TO_AR[status];
+      // Case insensitive check
+      for (const key of Object.keys(STATUS_MAP_TO_AR)) {
+          if (status.toLowerCase().includes(key.toLowerCase())) return STATUS_MAP_TO_AR[key];
+      }
+      return status; // Fallback to original
   }
-
+  
   async function fetchExternalTracking(trackingNumber: string, apiConfig: any) {
-    if (!apiConfig || !apiConfig.enabled) return null;
+      if (!apiConfig || !apiConfig.enabled) return null;
+      
+      let externalHistory: any[] | null = null;
+      let externalStatus: string | null = null;
+      let externalLocation: string | null = null;
 
-    let externalHistory: any[] | null = null;
-    let externalStatus: string | null = null;
-    let externalLocation: string | null = null;
-
-    try {
-      // AfterShip
-      if (!externalHistory && apiConfig.provider === 'aftership' && apiConfig.apiKey) {
-        const response = await fetch(`https://api.aftership.com/v4/trackings/${trackingNumber}`, {
-          headers: { 'aftership-api-key': apiConfig.apiKey, 'Content-Type': 'application/json' }
-        });
-        if (response.ok) {
-          const json = await response.json() as any;
-          if (json.data && json.data.tracking) {
-            const t = json.data.tracking;
-            externalHistory = t.checkpoints.map((c: any) => ({
-              status: c.tag || 'Processing',
-              timestamp: new Date(c.checkpoint_time).getTime(),
-              location: [c.city, c.state, c.country_name].filter(Boolean).join(', ') || 'Global Transit Hub',
-              notes: c.message,
-              coordinates: c.coordinates || null
-            }));
-            if (externalHistory && externalHistory.length > 0) {
-              externalStatus = t.tag;
-              externalLocation = externalHistory[externalHistory.length - 1].location;
+      try {
+          // AfterShip
+          if (!externalHistory && apiConfig.provider === 'aftership' && apiConfig.apiKey) {
+            const response = await fetch(`https://api.aftership.com/v4/trackings/${trackingNumber}`, {
+              headers: { 'aftership-api-key': apiConfig.apiKey, 'Content-Type': 'application/json' }
+            });
+            if (response.ok) {
+              const json = await response.json() as any;
+              if (json.data && json.data.tracking) {
+                 const t = json.data.tracking;
+                 externalHistory = t.checkpoints.map((c: any) => ({
+                    status: c.tag || 'Processing',
+                    timestamp: new Date(c.checkpoint_time).getTime(),
+                    location: [c.city, c.state, c.country_name].filter(Boolean).join(', ') || 'Global Transit Hub',
+                    notes: c.message,
+                    coordinates: c.coordinates || null 
+                 }));
+                 if (externalHistory && externalHistory.length > 0) {
+                     externalStatus = t.tag;
+                     externalLocation = externalHistory[externalHistory.length-1].location;
+                 }
+              }
             }
           }
-        }
-      }
 
-      // 17TRACK
-      if (!externalHistory && apiConfig.provider === '17track' && apiConfig.apiKey) {
-        const headers = { '17token': apiConfig.apiKey, 'Content-Type': 'application/json' };
-        const body = JSON.stringify([{ number: trackingNumber }]);
-        let response = await fetch(`https://api.17track.net/track/v2.2/gettrackinfo`, { method: 'POST', headers, body });
-        let json = await response.json() as any;
+          // 17TRACK
+          if (!externalHistory && apiConfig.provider === '17track' && apiConfig.apiKey) {
+            const headers = { '17token': apiConfig.apiKey, 'Content-Type': 'application/json' };
+            const body = JSON.stringify([{ number: trackingNumber }]);
+            let response = await fetch(`https://api.17track.net/track/v2.2/gettrackinfo`, { method: 'POST', headers, body });
+            let json = await response.json() as any;
 
-        if (json?.data?.accepted?.[0]?.track?.z1?.length > 0) {
-          const t = json.data.accepted[0].track;
-          externalHistory = t.z1.map((c: any) => ({
-            status: c.z || 'Processing',
-            timestamp: c.a ? new Date(c.a.replace(' ', 'T') + ':00Z').getTime() : Date.now(),
-            location: c.c || 'Global Transit Hub',
-            notes: c.z || '',
-            coordinates: null
-          })).sort((a: any, b: any) => a.timestamp - b.timestamp);
-
-          externalStatus = t.e === 10 ? 'Delivered' : (t.e === 30 || t.e === 40 ? 'InTransit' : 'Processing');
-          externalLocation = externalHistory && externalHistory.length > 0 ? externalHistory[externalHistory.length - 1].location : 'Unknown';
-        }
-      }
-
-      // TrackingMore
-      if (!externalHistory && apiConfig.provider === 'trackingmore' && apiConfig.apiKey) {
-        const response = await fetch(`https://api.trackingmore.com/v4/trackings/get?tracking_numbers=${trackingNumber}`, {
-          headers: { 'Tracking-Api-Key': apiConfig.apiKey, 'Content-Type': 'application/json' }
-        });
-        if (response.ok) {
-          const json = await response.json() as any;
-          const t = json.data?.[0];
-          if (t?.tracking_detail?.length > 0) {
-            externalHistory = t.tracking_detail.map((c: any) => ({
-              status: c.sub_status_id || c.status || 'Processing',
-              timestamp: new Date(c.checkpoint_date).getTime(),
-              location: c.location || 'Global Transit Hub',
-              notes: c.checkpoint_status || '',
-              coordinates: null
-            })).sort((a: any, b: any) => a.timestamp - b.timestamp);
-            externalStatus = t.delivery_status || 'InTransit';
-            externalLocation = externalHistory && externalHistory.length > 0 ? externalHistory[externalHistory.length - 1].location : 'Unknown';
-          }
-        }
-      }
-
-      // ParcelsApp v3 Integration
-      if (!externalHistory && apiConfig.provider === 'parcelsapp' && apiConfig.apiKey) {
-        const destCountry = apiConfig.defaultDestinationCountry || 'Yemen';
-
-        // Phase 1: Initiate Tracking Request
-        const initResponse = await fetch(`https://parcelsapp.com/api/v3/shipments/tracking`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            shipments: [{ trackingId: trackingNumber, destinationCountry: destCountry }],
-            language: 'en',
-            apiKey: apiConfig.apiKey
-          })
-        });
-
-        if (initResponse.ok) {
-          let json = await initResponse.json() as any;
-
-          // Phase 2: Polling if not done (Limit attempts to avoid hanging the request)
-          let uuid = json.uuid;
-          let attempts = 0;
-          const maxAttempts = 6;
-
-          while (!json.done && uuid && attempts < maxAttempts) {
-            await new Promise(r => setTimeout(r, 1500));
-            const pollRes = await fetch(`https://parcelsapp.com/api/v3/shipments/tracking?apiKey=${apiConfig.apiKey}&uuid=${uuid}`);
-            if (pollRes.ok) {
-              json = await pollRes.json();
-            } else {
-              break;
+            if (json?.data?.accepted?.[0]?.track?.z1?.length > 0) {
+                const t = json.data.accepted[0].track;
+                externalHistory = t.z1.map((c: any) => ({
+                    status: c.z || 'Processing',
+                    timestamp: c.a ? new Date(c.a.replace(' ', 'T') + ':00Z').getTime() : Date.now(),
+                    location: c.c || 'Global Transit Hub',
+                    notes: c.z || '',
+                    coordinates: null 
+                })).sort((a: any, b: any) => a.timestamp - b.timestamp);
+                
+                externalStatus = t.e === 10 ? 'Delivered' : (t.e === 30 || t.e === 40 ? 'InTransit' : 'Processing');
+                externalLocation = externalHistory && externalHistory.length > 0 ? externalHistory[externalHistory.length-1].location : 'Unknown';
             }
-            attempts++;
           }
 
-          const shipment = json.shipments?.find((s: any) => s.trackingId.toUpperCase() === trackingNumber.toUpperCase());
-
-          if (shipment && shipment.states && shipment.states.length > 0) {
-            externalHistory = shipment.states.map((s: any) => ({
-              status: s.state || s.status || s.header || s.description || 'Processing',
-              timestamp: s.date ? new Date(s.date).getTime() : Date.now(),
-              location: s.location || 'Global Transit Hub',
-              notes: s.info || s.header || s.description || '',
-              coordinates: s.coordinates || null
-            })).sort((a: any, b: any) => a.timestamp - b.timestamp);
-
-            externalStatus = shipment.status || (shipment.states && shipment.states.length > 0 ? (shipment.states[shipment.states.length - 1].state || shipment.states[shipment.states.length - 1].status) : 'InTransit');
-            externalLocation = externalHistory && externalHistory.length > 0 ? externalHistory[externalHistory.length - 1].location : 'Unknown';
+          // TrackingMore
+          if (!externalHistory && apiConfig.provider === 'trackingmore' && apiConfig.apiKey) {
+            const response = await fetch(`https://api.trackingmore.com/v4/trackings/get?tracking_numbers=${trackingNumber}`, {
+              headers: { 'Tracking-Api-Key': apiConfig.apiKey, 'Content-Type': 'application/json' }
+            });
+            if (response.ok) {
+              const json = await response.json() as any;
+              const t = json.data?.[0];
+              if (t?.tracking_detail?.length > 0) {
+                 externalHistory = t.tracking_detail.map((c: any) => ({
+                    status: c.sub_status_id || c.status || 'Processing',
+                    timestamp: new Date(c.checkpoint_date).getTime(),
+                    location: c.location || 'Global Transit Hub',
+                    notes: c.checkpoint_status || '',
+                    coordinates: null 
+                 })).sort((a: any, b: any) => a.timestamp - b.timestamp);
+                 externalStatus = t.delivery_status || 'InTransit';
+                 externalLocation = externalHistory && externalHistory.length > 0 ? externalHistory[externalHistory.length-1].location : 'Unknown';
+              }
+            }
           }
-        }
+
+          // ParcelsApp v3 Integration
+          if (!externalHistory && apiConfig.provider === 'parcelsapp' && apiConfig.apiKey) {
+            const destCountry = apiConfig.defaultDestinationCountry || 'Yemen';
+            
+            // Phase 1: Initiate Tracking Request
+            const initResponse = await fetch(`https://parcelsapp.com/api/v3/shipments/tracking`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                shipments: [{ trackingId: trackingNumber, destinationCountry: destCountry }], 
+                language: 'en', 
+                apiKey: apiConfig.apiKey 
+              })
+            });
+
+            if (initResponse.ok) {
+              let json = await initResponse.json() as any;
+              
+              // Phase 2: Polling if not done (Limit attempts to avoid hanging the request)
+              let uuid = json.uuid;
+              let attempts = 0;
+              const maxAttempts = 6; 
+              
+              while (!json.done && uuid && attempts < maxAttempts) {
+                await new Promise(r => setTimeout(r, 1500));
+                const pollRes = await fetch(`https://parcelsapp.com/api/v3/shipments/tracking?apiKey=${apiConfig.apiKey}&uuid=${uuid}`);
+                if (pollRes.ok) {
+                   json = await pollRes.json();
+                } else {
+                   break;
+                }
+                attempts++;
+              }
+
+              const shipment = json.shipments?.find((s: any) => s.trackingId.toUpperCase() === trackingNumber.toUpperCase());
+              
+              if (shipment && shipment.states && shipment.states.length > 0) {
+                 externalHistory = shipment.states.map((s: any) => ({
+                    status: s.state || s.status || s.header || s.description || 'Processing',
+                    timestamp: s.date ? new Date(s.date).getTime() : Date.now(),
+                    location: s.location || 'Global Transit Hub',
+                    notes: s.info || s.header || s.description || '',
+                    coordinates: s.coordinates || null
+                 })).sort((a: any, b: any) => a.timestamp - b.timestamp);
+                 
+                 externalStatus = shipment.status || (shipment.states && shipment.states.length > 0 ? (shipment.states[shipment.states.length-1].state || shipment.states[shipment.states.length-1].status) : 'InTransit');
+                 externalLocation = externalHistory && externalHistory.length > 0 ? externalHistory[externalHistory.length-1].location : 'Unknown';
+              }
+            }
+          }
+
+      } catch (err: any) {
+          console.error(`Fetch external tracking error (${trackingNumber}):`, err.message);
       }
 
-    } catch (err: any) {
-      console.error(`Fetch external tracking error (${trackingNumber}):`, err.message);
-    }
-
-    if (externalHistory) {
-      return { history: externalHistory, status: externalStatus, location: externalLocation };
-    }
-    return null;
+      if (externalHistory) {
+          return { history: externalHistory, status: externalStatus, location: externalLocation };
+      }
+      return null;
   }
 
   // ========== PERIODIC BACKGROUND SYNC TASK ==========
 
   async function syncActiveOrders() {
-    console.log('[Sync] Starting periodic tracking synchronization...');
-    try {
-      const configSnap = await getDoc(doc(db, 'settings', 'logistics_api'));
-      const apiConfig = configSnap.exists() ? configSnap.data() : null;
-      if (!apiConfig || !apiConfig.enabled) return;
+      console.log('[Sync] Starting periodic tracking synchronization...');
+      try {
+          const configSnap = await getDoc(doc(db, 'settings', 'logistics_api'));
+          const apiConfig = configSnap.exists() ? configSnap.data() : null;
+          if (!apiConfig || !apiConfig.enabled) return;
 
-      const activeStatuses = ['تم تسجيل الطلب', 'جاري الشحن لليمن', 'في التخليص الجمركي', 'مع المندوب للتوصيل'];
-      const ordersSnap = await getDocs(query(collection(db, 'orders'), where('orderStatus', 'in', activeStatuses)));
+          const activeStatuses = ['تم تسجيل الطلب', 'جاري الشحن لليمن', 'في التخليص الجمركي', 'مع المندوب للتوصيل'];
+          const ordersSnap = await getDocs(query(collection(db, 'orders'), where('orderStatus', 'in', activeStatuses)));
+          
+          if (ordersSnap.empty) return;
 
-      if (ordersSnap.empty) return;
+          for (const orderDoc of ordersSnap.docs) {
+              const data = orderDoc.data();
+              const trackingNumber = data.trackingNumber;
+              if (!trackingNumber) continue;
 
-      for (const orderDoc of ordersSnap.docs) {
-        const data = orderDoc.data();
-        const trackingNumber = data.trackingNumber;
-        if (!trackingNumber) continue;
+              const result = await fetchExternalTracking(trackingNumber, apiConfig);
+              if (result) {
+                  const normalizedStatus = normalizeStatus(result.status);
+                  const historyChanged = (result.history.length > (data.history?.length || 0));
+                  const statusChanged = normalizedStatus !== data.orderStatus;
 
-        const result = await fetchExternalTracking(trackingNumber, apiConfig);
-        if (result) {
-          const normalizedStatus = normalizeStatus(result.status);
-          const historyChanged = (result.history.length > (data.history?.length || 0));
-          const statusChanged = normalizedStatus !== data.orderStatus;
+                  if (historyChanged || statusChanged) {
+                      const updatePayload: any = {
+                          history: result.history,
+                          updatedAt: Date.now()
+                      };
+                      updatePayload.orderStatus = normalizedStatus;
+                      if (result.location) updatePayload.locationYemen = result.location;
 
-          if (historyChanged || statusChanged) {
-            const updatePayload: any = {
-              history: result.history,
-              updatedAt: Date.now()
-            };
-            updatePayload.orderStatus = normalizedStatus;
-            if (result.location) updatePayload.locationYemen = result.location;
+                      await updateDoc(doc(db, 'orders', orderDoc.id), updatePayload);
 
-            await updateDoc(doc(db, 'orders', orderDoc.id), updatePayload);
-
-            const publicRef = doc(db, 'public_tracking', trackingNumber.toUpperCase());
-            const publicSnap = await getDoc(publicRef);
-            if (publicSnap.exists()) {
-              await updateDoc(publicRef, {
-                status: normalizedStatus,
-                locationYemen: result.location || publicSnap.data().locationYemen,
-                history: result.history,
-                updatedAt: Date.now()
-              });
-            }
+                      const publicRef = doc(db, 'public_tracking', trackingNumber.toUpperCase());
+                      const publicSnap = await getDoc(publicRef);
+                      if (publicSnap.exists()) {
+                          await updateDoc(publicRef, {
+                              status: normalizedStatus,
+                              locationYemen: result.location || publicSnap.data().locationYemen,
+                              history: result.history,
+                              updatedAt: Date.now()
+                          });
+                      }
+                  }
+              }
+              await new Promise(r => setTimeout(r, 500));
           }
-        }
-        await new Promise(r => setTimeout(r, 500));
+          console.log('[Sync] Synchronization cycle completed.');
+      } catch (err: any) {
+          console.error('[Sync] Background synchronization failed:', err.message);
       }
-      console.log('[Sync] Synchronization cycle completed.');
-    } catch (err: any) {
-      console.error('[Sync] Background synchronization failed:', err.message);
-    }
   }
 
   // Start background sync loop (6 hours for full sweep)
   setInterval(syncActiveOrders, 6 * 60 * 60 * 1000);
-  setTimeout(syncActiveOrders, 10000);
+  setTimeout(syncActiveOrders, 10000); 
 
   // ========== TRACKING AND LOGISTICS API INTEGRATION ==========
-
+  
   // Real-time tracking resolution and telemetry fetch API
   // This acts as a proxy to third-party shipping APIs (like AfterShip, 17Track) 
   // safely obscuring API Keys from the frontend client.
@@ -1147,75 +1143,75 @@ async function startServer() {
       let internalDocData: any = null;
       const publicRef = await getDoc(doc(db, 'public_tracking', trackingNumber));
       if (publicRef.exists()) {
-        internalDocData = publicRef.data();
+          internalDocData = publicRef.data();
       } else {
-        // Robust query supporting case insensitivity by trying exact match and upper case
-        const ordersSnap = await getDocs(query(collection(db, 'orders'), where('trackingNumber', 'in', [trackingId, trackingNumber]), limit(1)));
-        if (!ordersSnap.empty) internalDocData = ordersSnap.docs[0].data();
+          // Robust query supporting case insensitivity by trying exact match and upper case
+          const ordersSnap = await getDocs(query(collection(db, 'orders'), where('trackingNumber', 'in', [trackingId, trackingNumber]), limit(1)));
+          if (!ordersSnap.empty) internalDocData = ordersSnap.docs[0].data();
       }
 
       // 2. Fetch external data using shared helper
       const configSnap = await getDoc(doc(db, 'settings', 'logistics_api'));
-      const apiConfig = configSnap.exists() ? configSnap.data() : { enabled: false, provider: 'none' };
-
+      const apiConfig = configSnap.exists() ? configSnap.data() : { enabled: false, provider: 'none' }; 
+      
       const externalResult = await fetchExternalTracking(trackingNumber, apiConfig);
 
       // 3. Synthesize
       let trackingData: any = null;
       if (internalDocData || externalResult) {
-        const statusToUse = normalizeStatus(externalResult?.status || internalDocData?.status || internalDocData?.orderStatus);
-        const historyToUse = externalResult?.history || internalDocData?.history || [];
+          const statusToUse = normalizeStatus(externalResult?.status || internalDocData?.status || internalDocData?.orderStatus);
+          const historyToUse = externalResult?.history || internalDocData?.history || [];
+          
+          trackingData = {
+             status: statusToUse,
+             currentLocation: externalResult?.location || internalDocData?.locationYemen || internalDocData?.location || 'مستودع الفرز والتبريد',
+             history: historyToUse,
+             isLiveApi: !!externalResult,
+             docData: internalDocData || null 
+          };
 
-        trackingData = {
-          status: statusToUse,
-          currentLocation: externalResult?.location || internalDocData?.locationYemen || internalDocData?.location || 'مستودع الفرز والتبريد',
-          history: historyToUse,
-          isLiveApi: !!externalResult,
-          docData: internalDocData || null
-        };
+          // AUTO-SYNC: Persist external updates back to the primary record immediately
+          if (externalResult && internalDocData) {
+              try {
+                  const historyChanged = (externalResult.history.length > (internalDocData.history?.length || 0));
+                  const statusChanged = (statusToUse !== (internalDocData.status || internalDocData.orderStatus));
+                  
+                  if (historyChanged || statusChanged) {
+                      const updatePayload: any = {
+                          history: externalResult.history,
+                          orderStatus: statusToUse,
+                          updatedAt: Date.now()
+                      };
+                      if (externalResult.location) updatePayload.locationYemen = externalResult.location;
 
-        // AUTO-SYNC: Persist external updates back to the primary record immediately
-        if (externalResult && internalDocData) {
-          try {
-            const historyChanged = (externalResult.history.length > (internalDocData.history?.length || 0));
-            const statusChanged = (statusToUse !== (internalDocData.status || internalDocData.orderStatus));
+                      // Update the order if it was an order doc
+                      const ordersSnap = await getDocs(query(collection(db, 'orders'), where('trackingNumber', '==', trackingNumber), limit(1)));
+                      if (!ordersSnap.empty) {
+                          await updateDoc(doc(db, 'orders', ordersSnap.docs[0].id), updatePayload);
+                      }
 
-            if (historyChanged || statusChanged) {
-              const updatePayload: any = {
-                history: externalResult.history,
-                orderStatus: statusToUse,
-                updatedAt: Date.now()
-              };
-              if (externalResult.location) updatePayload.locationYemen = externalResult.location;
-
-              // Update the order if it was an order doc
-              const ordersSnap = await getDocs(query(collection(db, 'orders'), where('trackingNumber', '==', trackingNumber), limit(1)));
-              if (!ordersSnap.empty) {
-                await updateDoc(doc(db, 'orders', ordersSnap.docs[0].id), updatePayload);
+                      // Update public tracking doc
+                      const publicRef = doc(db, 'public_tracking', trackingNumber.toUpperCase());
+                      const publicData = (await getDoc(publicRef));
+                      if (publicData.exists()) {
+                          await updateDoc(publicRef, {
+                              ...updatePayload,
+                              status: statusToUse // alignment
+                          });
+                      }
+                      console.log(`[AutoSync] Live update persisted for ${trackingNumber}`);
+                  }
+              } catch (persistenceErr: any) {
+                  console.error('[AutoSync] Failed to persist live update:', persistenceErr.message);
               }
-
-              // Update public tracking doc
-              const publicRef = doc(db, 'public_tracking', trackingNumber.toUpperCase());
-              const publicData = (await getDoc(publicRef));
-              if (publicData.exists()) {
-                await updateDoc(publicRef, {
-                  ...updatePayload,
-                  status: statusToUse // alignment
-                });
-              }
-              console.log(`[AutoSync] Live update persisted for ${trackingNumber}`);
-            }
-          } catch (persistenceErr: any) {
-            console.error('[AutoSync] Failed to persist live update:', persistenceErr.message);
           }
-        }
       } else if (externalResult) {
-        trackingData = {
-          status: externalResult.status || 'Processing',
-          currentLocation: externalResult.location || 'Unknown',
-          history: externalResult.history,
-          isLiveApi: true
-        };
+          trackingData = {
+             status: externalResult.status || 'Processing',
+             currentLocation: externalResult.location || 'Unknown',
+             history: externalResult.history,
+             isLiveApi: true
+          };
       }
 
       if (!trackingData) return res.status(404).json({ error: 'Tracking not found neither externally nor internally.' });
@@ -1224,36 +1220,36 @@ async function startServer() {
       // Real tracking APIs usually only return text ("Riyadh", "Sanaa"). We need Lat/Lng for Maps.
       // So we map common hubs to coordinates.
       const locationMap: Record<string, [number, number]> = {
-        'جدة': [21.4858, 39.1925],
-        'مستودع السعودية': [21.4858, 39.1925],
-        'مستودع الشحن الرئيسي (جدة - الرياض)': [24.7136, 46.6753],
-        'أوتوستراد حرض': [16.4026, 43.1099],
-        'في التخليص الجمركي': [16.4820, 42.9230], // الوديعة 
-        'صنعاء': [15.3694, 44.1910],
-        'مركز التوزيع في اليمن': [15.3694, 44.1910],
-        'مستودع الفرز والترحيل': [15.4, 44.2],
-        'تم التسليم': [15.3500, 44.2000],
+          'جدة': [21.4858, 39.1925],
+          'مستودع السعودية': [21.4858, 39.1925],
+          'مستودع الشحن الرئيسي (جدة - الرياض)': [24.7136, 46.6753],
+          'أوتوستراد حرض': [16.4026, 43.1099],
+          'في التخليص الجمركي': [16.4820, 42.9230], // الوديعة 
+          'صنعاء': [15.3694, 44.1910],
+          'مركز التوزيع في اليمن': [15.3694, 44.1910],
+          'مستودع الفرز والترحيل': [15.4, 44.2],
+          'تم التسليم': [15.3500, 44.2000],
       };
 
       // Best effort attach coordinates to live history array
       let currentLocCoords: [number, number] | null = null;
       if (trackingData.history && trackingData.history.length > 0) {
-        trackingData.history = trackingData.history.map((h: any) => {
-          let coords = h.coordinates || null;
-          if (!coords) {
-            // Try exact or partial match
-            const locText = ((h.location || '') + ' ' + (h.status || '') + ' ' + (h.notes || '')).toLowerCase();
-            for (const key of Object.keys(locationMap)) {
-              if (locText.includes(key.toLowerCase())) {
-                coords = locationMap[key];
-                break;
-              }
-            }
-          }
-          if (coords) currentLocCoords = coords;
+         trackingData.history = trackingData.history.map((h: any) => {
+             let coords = h.coordinates || null;
+             if (!coords) {
+                 // Try exact or partial match
+                 const locText = ((h.location || '') + ' ' + (h.status || '') + ' ' + (h.notes || '')).toLowerCase();
+                 for (const key of Object.keys(locationMap)) {
+                     if (locText.includes(key.toLowerCase())) {
+                         coords = locationMap[key];
+                         break;
+                     }
+                 }
+             }
+             if (coords) currentLocCoords = coords;
 
-          return { ...h, coordinates: coords };
-        });
+             return { ...h, coordinates: coords };
+         });
       }
 
       trackingData.currentCoordinates = currentLocCoords || [15.3694, 44.1910]; // Default to Sanaa
@@ -1269,66 +1265,66 @@ async function startServer() {
   app.post('/api/tracking/webhook', async (req, res) => {
     // Return 200 immediately to acknowledge webhook receipt
     res.status(200).json({ received: true });
-
+    
     // Process payload asynchronously to avoid timeouts
     (async () => {
-      try {
-        const payload = req.body;
-        // Example AfterShip webhook format: payload.msg.tracking_number, payload.msg.tag
-        if (!payload || !payload.msg || !payload.msg.tracking_number) return;
-
-        const trackingNumber = payload.msg.tracking_number;
-        const newTag = payload.msg.tag; // 'Delivered', 'InTransit'
-        const locationStr = payload.msg.checkpoint?.location || 'Unknown Checkpoint';
-
-        // Query the order
-        const ordersSnap = await getDocs(query(collection(db, 'orders'), where('trackingNumber', '==', trackingNumber), limit(1)));
-        if (ordersSnap.empty) return;
-
-        const orderDoc = ordersSnap.docs[0];
-        const orderData = orderDoc.data();
-
-        // Standardise tracking phase translation
-        const historyMap: Record<string, string> = {
-          'InfoReceived': 'تم تسجيل الطلب',
-          'InTransit': 'جاري الشحن لليمن',
-          'OutForDelivery': 'مع المندوب للتوصيل',
-          'Delivered': 'تم التسليم',
-          'Exception': 'ملغي'
-        };
-        const newStatusMap = historyMap[newTag] || 'جاري الشحن لليمن';
-        const newHistoryEntry = {
-          status: newStatusMap,
-          location: locationStr,
-          timestamp: Date.now(),
-          notes: payload.msg.checkpoint?.message || 'Automatic third-party checkpoint update',
-          createdBy: 'API_WEBHOOK'
-        };
-        const updatedHistory = [...(orderData.history || []), newHistoryEntry];
-        // Update secured backend Order document
-        await updateDoc(doc(db, 'orders', orderDoc.id), {
-          orderStatus: newStatusMap,
-          locationYemen: locationStr,
-          history: updatedHistory,
-          updatedAt: Date.now()
-        });
-
-        // If tracking interface was public, update that too
-        const publicRef = doc(db, 'public_tracking', trackingNumber.toUpperCase());
-        const publicSnap = await getDoc(publicRef);
-        if (publicSnap.exists()) {
-          await updateDoc(publicRef, {
-            status: newStatusMap,
-            locationYemen: locationStr,
-            history: updatedHistory,
-            updatedAt: Date.now()
-          });
+       try {
+           const payload = req.body;
+           // Example AfterShip webhook format: payload.msg.tracking_number, payload.msg.tag
+           if (!payload || !payload.msg || !payload.msg.tracking_number) return;
+           
+           const trackingNumber = payload.msg.tracking_number;
+           const newTag = payload.msg.tag; // 'Delivered', 'InTransit'
+           const locationStr = payload.msg.checkpoint?.location || 'Unknown Checkpoint';
+           
+           // Query the order
+           const ordersSnap = await getDocs(query(collection(db, 'orders'), where('trackingNumber', '==', trackingNumber), limit(1)));
+           if (ordersSnap.empty) return;
+           
+           const orderDoc = ordersSnap.docs[0];
+           const orderData = orderDoc.data();
+           
+           // Standardise tracking phase translation
+           const historyMap: Record<string, string> = {
+                'InfoReceived': 'تم تسجيل الطلب',
+                'InTransit': 'جاري الشحن لليمن',
+                'OutForDelivery': 'مع المندوب للتوصيل',
+                'Delivered': 'تم التسليم',
+                'Exception': 'ملغي'
+            };
+            const newStatusMap = historyMap[newTag] || 'جاري الشحن لليمن';
+            const newHistoryEntry = {
+                status: newStatusMap,
+                location: locationStr,
+                timestamp: Date.now(),
+                notes: payload.msg.checkpoint?.message || 'Automatic third-party checkpoint update',
+                createdBy: 'API_WEBHOOK'
+            };
+            const updatedHistory = [...(orderData.history || []), newHistoryEntry];
+            // Update secured backend Order document
+            await updateDoc(doc(db, 'orders', orderDoc.id), {
+                orderStatus: newStatusMap,
+                locationYemen: locationStr,
+                history: updatedHistory,
+                updatedAt: Date.now()
+            });
+            
+            // If tracking interface was public, update that too
+            const publicRef = doc(db, 'public_tracking', trackingNumber.toUpperCase());
+            const publicSnap = await getDoc(publicRef);
+            if (publicSnap.exists()) {
+                await updateDoc(publicRef, {
+                    status: newStatusMap,
+                    locationYemen: locationStr,
+                    history: updatedHistory,
+                    updatedAt: Date.now()
+                });
+            }
+            console.log(`[Webhook] Tracking ${trackingNumber} state machine advanced to ${newStatusMap}`);
+        } catch (err: any) {
+            console.error('[Webhook] Failed to process logistics update:', err.message);
         }
-        console.log(`[Webhook] Tracking ${trackingNumber} state machine advanced to ${newStatusMap}`);
-      } catch (err: any) {
-        console.error('[Webhook] Failed to process logistics update:', err.message);
-      }
-    })();
+     })();
   });
 
   // Secure Logistics Credentials Test Connection
@@ -1343,10 +1339,10 @@ async function startServer() {
         const response = await fetch(`https://parcelsapp.com/api/v3/shipments/tracking`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            shipments: [{ trackingId: 'PING_TEST_AUTH_CHECK', destinationCountry: defaultDestinationCountry || 'Yemen' }],
-            language: 'en',
-            apiKey
+          body: JSON.stringify({ 
+            shipments: [{ trackingId: 'PING_TEST_AUTH_CHECK', destinationCountry: defaultDestinationCountry || 'Yemen' }], 
+            language: 'en', 
+            apiKey 
           })
         });
 
@@ -1367,7 +1363,7 @@ async function startServer() {
           throw new Error(json.meta?.message || 'AfterShip authentication failed');
         }
       } else if (provider === 'sandbox') {
-        return res.json({ success: true, message: 'Sandbox mode is virtualized and always ready.' });
+         return res.json({ success: true, message: 'Sandbox mode is virtualized and always ready.' });
       }
 
       return res.status(400).json({ error: 'Provider test not yet implemented' });
@@ -1401,9 +1397,9 @@ async function startServer() {
       // المسار الأساسي: resources/app/dist/ (extraResource)
       resourcesPath2 ? path.join(resourcesPath2, 'app', 'dist') : '',
       // نفس مجلد server.cjs → resources/app/dist/
-      path.join(__dirname, 'dist'),
+      path.join(currentDirPath, 'dist'),
       // مستوى أعلى → resources/dist/
-      path.join(__dirname, '..', 'dist'),
+      path.join(currentDirPath, '..', 'dist'),
       // CWD
       path.resolve(process.cwd(), 'dist'),
     ].filter(Boolean);
@@ -1439,8 +1435,8 @@ async function startServer() {
   }
 
 
-  app.listen(3001, '0.0.0.0', () => {
-    console.log('Server running on port 3001');
+  app.listen(3000, '0.0.0.0', () => {
+    console.log('Server running on port 3000');
   });
 }
 

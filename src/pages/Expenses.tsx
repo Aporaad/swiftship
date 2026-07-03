@@ -8,6 +8,7 @@ import { activityLogService } from '../services/activityLogService';
 import { financialAccountService } from '../services/financialAccountService';
 import { Plus, Search, Wallet, DollarSign, Calendar, RefreshCw, Layers, CheckCircle2, AlertTriangle, User, FileText, ArrowUpRight, ArrowDownLeft, Crown, ShieldAlert, Coins, X, Printer, Activity, Edit2 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
+import { printContent } from '../lib/printUtils';
 import { useLocation, useNavigate } from 'react-router-dom';
 import FinanceReports from '../components/FinanceReports';
 import ExpenseCategoriesManager from '../components/ExpenseCategoriesManager';
@@ -452,11 +453,17 @@ export default function Expenses() {
     setEditLoading(true);
     try {
       const rawAmount = parseFloat(editFormData.amount);
+      const exchangeRates = { 
+        USD: settings.exchangeRateUSD || 535, 
+        SAR: settings.exchangeRateSAR || 140,
+        YER: 1
+      };
+      
       const convertedAmount = financialAccountService.convertToDefaultCurrency(
         rawAmount,
         editFormData.currency,
-        settings.currency || 'SAR',
-        { USD: settings.exchangeRateUSD || 535, SAR: settings.exchangeRateSAR || 140 }
+        settings.currency || 'YER',
+        exchangeRates
       );
       
       const parsedCreatedAt = editFormData.createdAt ? new Date(editFormData.createdAt).getTime() : Date.now();
@@ -470,15 +477,25 @@ export default function Expenses() {
 
         txSnap.docs.forEach((txDoc) => {
           const txData = txDoc.data();
-          const diffVal = convertedAmount - (txData.amount || 0);
+          
+          // CRITICAL: Calculate new amount in the account's specific currency
+          const legNewAmount = financialAccountService.convertToTargetCurrency(
+            rawAmount,
+            editFormData.currency,
+            txData.currency || 'YER',
+            exchangeRates
+          );
+
+          const diffVal = legNewAmount - (txData.amount || 0);
           const delta = txData.type === 'Debit' ? diffVal : -diffVal;
 
           batch.update(txDoc.ref, {
-            amount: convertedAmount,
+            amount: legNewAmount,
             amountOriginal: rawAmount,
             currencyOriginal: editFormData.currency,
             description: editFormData.notes || txData.description,
-            createdAt: parsedCreatedAt
+            createdAt: parsedCreatedAt,
+            updatedAt: Date.now()
           });
 
           // Update Account Balance
@@ -679,10 +696,12 @@ export default function Expenses() {
   });
 
   const convertToYER = (amount: number, currency: string) => {
-    const amt = parseFloat(String(amount || 0));
-    if (currency === 'USD') return amt * (settings.exchangeRateUSD || 535);
-    if (currency === 'SAR') return amt * (settings.exchangeRateSAR || 140);
-    return amt;
+    return financialAccountService.convertToDefaultCurrency(
+      amount,
+      currency,
+      settings.currency || 'YER',
+      { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+    );
   };
 
   const getCategoryDetails = (exp: any) => {
@@ -738,149 +757,12 @@ export default function Expenses() {
   };
 
   const exportExpensesToPDF = () => {
-    const doc = new jsPDF('p', 'mm', 'a4');
+    const reportTitle = isAr ? 'كشف المصروفات والعهد المالية' : 'Administrative Expenses Ledger';
+    printContent(reportTitle, 'expenses-ledger-table', isAr);
     
-    // Top banner block (luxury charcoal gray)
-    doc.setFillColor(15, 15, 18);
-    doc.rect(0, 0, 210, 36, 'F');
-    
-    // Gold separator strip
-    doc.setFillColor(212, 175, 55);
-    doc.rect(0, 36, 210, 2, 'F');
-    
-    // Header texts
-    doc.setTextColor(212, 175, 55);
-    doc.setFont('Helvetica', 'bold');
-    doc.setFontSize(16);
-    doc.text('AL-XPRESS EXPENSES & CUSTODIES', 15, 16);
-    
-    doc.setTextColor(180, 180, 180);
-    doc.setFontSize(8);
-    doc.setFont('Helvetica', 'normal');
-    doc.text('ADMINISTRATIVE EXPENSE DEK & DISBURSEMENTS', 15, 23);
-    
-    doc.setTextColor(130, 130, 130);
-    doc.setFontSize(7);
-    doc.text(`Generated: ${new Date().toLocaleString()} | User: ${profile?.fullName || profile?.email || 'Administrator'}`, 15, 29);
-    
-    // Quick statistics summary block
-    doc.setFillColor(245, 245, 247);
-    doc.roundedRect(12, 44, 186, 22, 3, 3, 'F');
-    
-    doc.setFontSize(8);
-    doc.setFont('Helvetica', 'bold');
-    doc.setTextColor(120, 120, 120);
-    doc.text('GENERAL EXPENSES (YER)', 20, 51);
-    doc.text('CUSTODIES PENDING', 90, 51);
-    doc.text('CUSTODIES SETTLED', 145, 51);
-    
-    doc.setFontSize(11);
-    doc.setTextColor(15, 15, 18);
-    doc.text(`${totalGeneralExpensesYER.toLocaleString()} YER`, 20, 59);
-    doc.text(`${totalPendingCustodies.toLocaleString()} YER`, 90, 59);
-    doc.text(`${totalSettledCustodies.toLocaleString()} YER`, 145, 59);
-    
-    // Headers of main data grid
-    doc.setFillColor(24, 24, 27);
-    doc.rect(12, 72, 186, 8, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(8);
-    doc.setFont('Helvetica', 'bold');
-    doc.text('VOUCHER #', 15, 77);
-    doc.text('CATEGORY', 43, 77);
-    doc.text('STATEMENT / NOTES', 85, 77);
-    doc.text('AMOUNT', 145, 77);
-    doc.text('STATUS', 178, 77);
-    
-    let yIdx = 87;
-    // Walk through sorted & filtered list
-    filteredExpenses.forEach((exp, index) => {
-      // PDF line limit per page
-      if (yIdx > 275) {
-        doc.addPage();
-        
-        // Dynamic continued header
-        doc.setFillColor(15, 15, 18);
-        doc.rect(0, 0, 210, 18, 'F');
-        doc.setFillColor(212, 175, 55);
-        doc.rect(0, 18, 210, 1.5, 'F');
-        doc.setTextColor(212, 175, 55);
-        doc.setFontSize(10);
-        doc.setFont('Helvetica', 'bold');
-        doc.text('AL-XPRESS EXPENSES (CONTINUED)', 15, 11);
-        
-        doc.setFillColor(24, 24, 27);
-        doc.rect(12, 24, 186, 8, 'F');
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(8);
-        doc.text('VOUCHER #', 15, 29);
-        doc.text('CATEGORY', 43, 29);
-        doc.text('STATEMENT / NOTES', 85, 29);
-        doc.text('AMOUNT', 145, 29);
-        doc.text('STATUS', 178, 29);
-        
-        yIdx = 39;
-      }
-      
-      // Zebra alternate background striping
-      if (index % 2 === 0) {
-        doc.setFillColor(248, 249, 250);
-        doc.rect(12, yIdx - 4.5, 186, 8, 'F');
-      }
-      
-      doc.setTextColor(40, 40, 43);
-      doc.setFont('Helvetica', 'normal');
-      doc.setFontSize(8);
-      
-      // Voucher ID
-      doc.setFont('Helvetica', 'bold');
-      doc.text(exp.expenseNumber || 'EXP-PENDING', 15, yIdx);
-      doc.setFont('Helvetica', 'normal');
-      
-      // Category Text
-      const catObj = getCategoryDetails(exp);
-      const categoryText = catObj.labelEn;
-      doc.text(categoryText, 43, yIdx);
-      
-      // Statement / Notes
-      const stmtText = transliterateArabic(exp.notes || '').slice(0, 32);
-      doc.text(stmtText, 85, yIdx);
-      
-      // Cost
-      const amtRaw = parseFloat(exp.amount || 0);
-      const currencyLabel = exp.currency || 'YER';
-      doc.text(`${amtRaw.toLocaleString()} ${currencyLabel}`, 145, yIdx);
-      
-      // Status
-      const statusLabel = exp.status === 'Settled' ? 'SETTLED' : (exp.status === 'Pending' ? 'PENDING' : 'RELEASED');
-      if (statusLabel === 'PENDING') {
-        doc.setTextColor(190, 40, 40);
-        doc.setFont('Helvetica', 'bold');
-        doc.text(statusLabel, 178, yIdx);
-        doc.setFont('Helvetica', 'normal');
-        doc.setTextColor(40, 40, 43);
-      } else {
-        doc.setTextColor(16, 124, 65);
-        doc.text(statusLabel, 178, yIdx);
-        doc.setTextColor(40, 40, 43);
-      }
-      
-      // Grid bottom indicator divider
-      doc.setDrawColor(235, 235, 240);
-      doc.setLineWidth(0.15);
-      doc.line(12, yIdx + 3.5, 198, yIdx + 3.5);
-      
-      yIdx += 8.5;
+    activityLogService.log('export_pdf', `Expenses list report`, {
+      count: filteredExpenses.length
     });
-    
-    // Page footer indicator block
-    doc.setTextColor(140, 140, 140);
-    doc.setFontSize(6.5);
-    doc.setFont('Helvetica', 'normal');
-    doc.text('System generated administrative expense ledger. Designed for Al-Xpress Corporate ledger integration.', 15, 288);
-    doc.text(`Doc Ref: ALX-${new Date().getFullYear()}/EXP`, 175, 288);
-    
-    doc.save(`AlXpress_Expenses_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   const exportExpensesToCSV = () => {
@@ -1088,9 +970,9 @@ export default function Expenses() {
         {canViewGeneralExpenses && (
           <div className="bg-gradient-to-br from-[#121215] to-[#070708] border border-slate-850 p-4 rounded-2xl relative overflow-hidden shadow">
             <span className="text-[9px] text-slate-500 font-black uppercase block tracking-wider mb-2">
-              {isAr ? 'المصروفات العامة والتشغيلية (YER)' : 'General Expenses (YER)'}
+              {isAr ? `المصروفات العامة والتشغيلية (${settings.currency || 'YER'})` : `General Expenses (${settings.currency || 'YER'})`}
             </span>
-            <span className="text-lg font-mono font-black text-[#d4af37]">{totalGeneralExpensesYER.toLocaleString()} YER</span>
+            <span className="text-lg font-mono font-black text-[#d4af37]">{totalGeneralExpensesYER.toLocaleString()} {settings.currency || 'YER'}</span>
             <div className="absolute top-2.5 right-2.5 p-1 text-rose-500 bg-rose-950/20 rounded-lg border border-rose-900/30">
               <ArrowUpRight className="w-3.5 h-3.5" />
             </div>
@@ -1118,7 +1000,7 @@ export default function Expenses() {
             <span className="text-[9px] text-slate-500 font-black uppercase block tracking-wider mb-2">
               {isAr ? 'العهد المستلمة للمناديب العالقة' : 'Active Custody in Hand'}
             </span>
-            <span className="text-lg font-mono font-black text-amber-500">{totalPendingCustodies.toLocaleString()} YER</span>
+            <span className="text-lg font-mono font-black text-amber-500">{totalPendingCustodies.toLocaleString()} {settings.currency || 'YER'}</span>
             <div className="absolute top-2.5 right-2.5 p-1 text-[#d4af37] bg-yellow-950/20 rounded-lg border border-yellow-900/30">
               <Calendar className="w-3.5 h-3.5" />
             </div>
@@ -1131,7 +1013,7 @@ export default function Expenses() {
             <span className="text-[9px] text-slate-500 font-black uppercase block tracking-wider mb-2">
               {isAr ? 'العهد المالية التي تمت تصفيتها' : 'Gross Settled Custodies'}
             </span>
-            <span className="text-lg font-mono font-black text-emerald-400">{totalSettledCustodies.toLocaleString()} YER</span>
+            <span className="text-lg font-mono font-black text-emerald-400">{totalSettledCustodies.toLocaleString()} {settings.currency || 'YER'}</span>
             <div className="absolute top-2.5 right-2.5 p-1 text-emerald-400 bg-emerald-950/20 rounded-lg border border-emerald-900/30">
               <CheckCircle2 className="w-3.5 h-3.5" />
             </div>
@@ -1179,7 +1061,7 @@ export default function Expenses() {
         </div>
 
         {/* Table logs */}
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto" id="expenses-ledger-table">
           <table className="w-full text-start">
             <thead className="bg-[#0a0a0d] text-slate-500 text-[10px] font-black uppercase tracking-wider border-b border-slate-850">
               <tr>
@@ -1193,11 +1075,11 @@ export default function Expenses() {
               </tr>
             </thead>
             <tbody className="text-xs divide-y divide-slate-850 bg-black/10">
-              {filteredExpenses.map((exp) => {
+              {filteredExpenses.map((exp, idx) => {
                 const isSettleBtnVisible = exp.type === 'Custody' && exp.status === 'Pending' && canEditExpenses;
                 const formattedDate = new Date(exp.createdAt || Date.now()).toLocaleString(isAr ? 'ar-YE' : 'en-US', { dateStyle: 'short', timeStyle: 'short' });
                 return (
-                  <tr key={exp.id} className="hover:bg-slate-950/40 transition-colors">
+                  <tr key={`${exp.id}-${idx}`} className="hover:bg-slate-950/40 transition-colors">
                     <td className="p-4 font-mono font-black text-slate-400">
                       <div className="flex flex-col gap-1 text-start">
                         <span className="bg-slate-900 border border-slate-800 text-[#d4af37] px-2.5 py-0.5 rounded text-[10px] font-black w-max">
@@ -1458,11 +1340,17 @@ export default function Expenses() {
                         key={cat.id}
                         type="button"
                         onClick={() => {
+                          const resolvedAcc = financialAccounts.find(a => 
+                            a.id === cat.accountId || 
+                            a.entityId === cat.accountId || 
+                            (a.accountCode && a.accountCode === cat.accountId) ||
+                            (a.code && a.code === cat.accountId)
+                          );
                           setFormData({
                             ...formData, 
                             category: cat.id, 
-                            linkedAccountId: cat.accountId || formData.linkedAccountId,
-                            linkedAccountCode: cat.accountCode || formData.linkedAccountCode
+                            linkedAccountId: resolvedAcc ? resolvedAcc.id : (cat.accountId || formData.linkedAccountId),
+                            linkedAccountCode: resolvedAcc ? (resolvedAcc.accountCode || resolvedAcc.code) : (cat.accountCode || formData.linkedAccountCode)
                           });
                         }}
                         className={`p-2 rounded-xl border text-start flex items-center gap-1.5 transition active:scale-95 cursor-pointer ${
@@ -1506,7 +1394,12 @@ export default function Expenses() {
                   <span className="truncate">
                     {formData.creditAccountId ? (
                       (() => {
-                        const acc = financialAccounts.find(a => a.id === formData.creditAccountId);
+                        const acc = financialAccounts.find(a => 
+                          a.id === formData.creditAccountId || 
+                          a.entityId === formData.creditAccountId ||
+                          (a.accountCode && a.accountCode === formData.creditAccountId) ||
+                          (a.code && a.code === formData.creditAccountId)
+                        );
                         if (!acc) return isAr ? '-- اختر حساب النقدية/البنك --' : '-- Choose Cash/Bank Account --';
                         return `[${acc.code || acc.accountCode || 'Sys'}] - ${isAr ? acc.nameAr || acc.entityName : acc.nameEn || acc.entityName} ${acc.balance !== undefined ? `(${acc.balance.toLocaleString()} YER)` : ''}`;
                       })()
@@ -1516,6 +1409,39 @@ export default function Expenses() {
                   </span>
                   <svg className={`w-4 h-4 text-slate-500 transition-transform ${isCreditAccountDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                 </div>
+                
+                {formData.creditAccountCode && (
+                  <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                    {(() => {
+                        const targetAcc = financialAccounts.find(a => a.id === formData.creditAccountId);
+                        const expAmt = parseFloat(formData.amount) || 0;
+                        if (targetAcc && typeof targetAcc.balance === 'number' && expAmt > 0) {
+                           // Convert transaction amount to account currency
+                           const convertedExpAmt = financialAccountService.convertToTargetCurrency(
+                             expAmt,
+                             formData.currency,
+                             targetAcc.currency || settings.currency || 'SAR',
+                             { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+                           );
+
+                           // Credit Account is being CREDITED
+                           const firstChar = (targetAcc.accountCode || targetAcc.code || '1').trim().charAt(0);
+                           const isDebitNormal = firstChar === '1' || firstChar === '5';
+                           
+                           // If it's a Debit-Normal account (Asset/Expense), Crediting reduces balance
+                           if (isDebitNormal && targetAcc.balance - convertedExpAmt < 0) {
+                              return (
+                                <div className="w-full mt-1 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[10px] p-2 rounded-lg flex items-start gap-1.5 animate-pulse font-bold">
+                                  <svg className="w-3.5 h-3.5 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                  <span>{isAr ? 'تنبيه: رصيد حساب الدفع المختار غير كافي وسيصبح بالسالب.' : 'Alert: Selected source account balance is insufficient.'}</span>
+                                </div>
+                              );
+                           }
+                        }
+                        return null;
+                    })()}
+                  </div>
+                )}
                 
                 {/* Custom Dropdown Content */}
                 {isCreditAccountDropdownOpen && (
@@ -1542,11 +1468,11 @@ export default function Expenses() {
                             return acc.accountCode?.startsWith('111') || acc.accountCode?.startsWith('112') || acc.entityId === 'sys_cash_account';
                           }
                           return (
-                            (acc.accountCode && acc.accountCode.toLowerCase().includes(q)) ||
-                            (acc.code && acc.code.toLowerCase().includes(q)) ||
-                            (acc.nameAr && acc.nameAr.toLowerCase().includes(q)) ||
-                            (acc.nameEn && acc.nameEn.toLowerCase().includes(q)) ||
-                            (acc.entityName && acc.entityName.toLowerCase().includes(q))
+                            (acc.accountCode && String(acc.accountCode).toLowerCase().includes(q)) ||
+                            (acc.code && String(acc.code).toLowerCase().includes(q)) ||
+                            (acc.nameAr && String(acc.nameAr).toLowerCase().includes(q)) ||
+                            (acc.nameEn && String(acc.nameEn).toLowerCase().includes(q)) ||
+                            (acc.entityName && String(acc.entityName).toLowerCase().includes(q))
                           );
                         });
 
@@ -1608,7 +1534,12 @@ export default function Expenses() {
                   <span className="truncate">
                     {formData.linkedAccountId ? (
                       (() => {
-                        const acc = financialAccounts.find(a => a.id === formData.linkedAccountId);
+                        const acc = financialAccounts.find(a => 
+                          a.id === formData.linkedAccountId || 
+                          a.entityId === formData.linkedAccountId ||
+                          (a.accountCode && a.accountCode === formData.linkedAccountId) ||
+                          (a.code && a.code === formData.linkedAccountId)
+                        );
                         if (!acc) return isAr ? '-- اختر حساب التوجيه المحاسبي --' : '-- Choose Ledger Account --';
                         return `[${acc.code || acc.accountCode || 'Sys'}] - ${isAr ? acc.nameAr || acc.entityName : acc.nameEn || acc.entityName} ${acc.balance !== undefined ? `(${acc.balance.toLocaleString()} YER)` : ''}`;
                       })()
@@ -1645,11 +1576,11 @@ export default function Expenses() {
                             return true;
                           }
                           return (
-                            (acc.accountCode && acc.accountCode.toLowerCase().includes(q)) ||
-                            (acc.code && acc.code.toLowerCase().includes(q)) ||
-                            (acc.nameAr && acc.nameAr.toLowerCase().includes(q)) ||
-                            (acc.nameEn && acc.nameEn.toLowerCase().includes(q)) ||
-                            (acc.entityName && acc.entityName.toLowerCase().includes(q))
+                            (acc.accountCode && String(acc.accountCode).toLowerCase().includes(q)) ||
+                            (acc.code && String(acc.code).toLowerCase().includes(q)) ||
+                            (acc.nameAr && String(acc.nameAr).toLowerCase().includes(q)) ||
+                            (acc.nameEn && String(acc.nameEn).toLowerCase().includes(q)) ||
+                            (acc.entityName && String(acc.entityName).toLowerCase().includes(q))
                           );
                         });
 
@@ -1754,11 +1685,28 @@ export default function Expenses() {
                     <span className="font-mono font-black text-[#d4af37] text-[10px] bg-[#d4af37]/10 border border-[#d4af37]/20 px-2 py-0.5 rounded">{formData.linkedAccountCode}</span>
                     
                     {(() => {
-                        const targetAcc = financialAccounts.find(a => a.id === formData.linkedAccountId);
+                        const targetAcc = financialAccounts.find(a => 
+                          a.id === formData.linkedAccountId || 
+                          a.entityId === formData.linkedAccountId ||
+                          (a.accountCode && a.accountCode === formData.linkedAccountId) ||
+                          (a.code && a.code === formData.linkedAccountId)
+                        );
                         const expAmt = parseFloat(formData.amount) || 0;
-                        if (targetAcc && typeof targetAcc.balance === 'number') {
-                           // If paying out reduces the balance below 0 for an Asset (like employee advance or just normal account)
-                           if (targetAcc.balance - expAmt < 0 && expAmt > 0) {
+                        if (targetAcc && typeof targetAcc.balance === 'number' && expAmt > 0) {
+                           // Convert transaction amount to account currency for accurate comparison
+                           const convertedExpAmt = financialAccountService.convertToTargetCurrency(
+                             expAmt,
+                             formData.currency,
+                             targetAcc.currency || settings.currency || 'SAR',
+                             { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+                           );
+
+                           // Linked Account is being DEBITED
+                           const firstChar = (targetAcc.accountCode || targetAcc.code || '1').trim().charAt(0);
+                           const isCreditNormal = firstChar === '2' || firstChar === '3' || firstChar === '4';
+                           
+                           // If it's a Credit-Normal account (Liability/Equity/Revenue), Debiting reduces balance
+                           if (isCreditNormal && targetAcc.balance - convertedExpAmt < 0) {
                               return (
                                 <div className="w-full mt-1.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[10px] p-2 rounded-lg flex items-start gap-1.5 animate-pulse">
                                   <svg className="w-3.5 h-3.5 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>

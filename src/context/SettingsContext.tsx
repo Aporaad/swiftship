@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { doc, onSnapshot, setDoc, collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { doc, onSnapshot, setDoc, collection, getDocs, query, orderBy, limit, onAuthStateChanged, auth, db } from '../lib/firebase';
 import { translations, Language, TranslationKey } from '../translations';
 
 // Custom currency definition
@@ -86,6 +85,10 @@ export interface Settings {
 
   // Notifications
   autoNotification?: boolean;
+
+  // Dashboard Settings (User Specific)
+  dashboardGridColumns?: number;
+  visibleMetrics?: string[];
 }
 
 interface SettingsContextType {
@@ -156,6 +159,14 @@ const defaultSettings: Settings = {
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
+const USER_SPECIFIC_KEYS: (keyof Settings)[] = [
+  'language', 
+  'theme', 
+  'fontSize', 
+  'dashboardGridColumns', 
+  'visibleMetrics'
+];
+
 const FONT_SIZE_MAP: Record<string, string> = {
   sm: '13px',
   md: '14px',
@@ -164,12 +175,30 @@ const FONT_SIZE_MAP: Record<string, string> = {
 };
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
-  const [settings, setSettings] = useState<Settings>(defaultSettings);
+  const [globalSettings, setGlobalSettings] = useState<Settings>(defaultSettings);
+  const [userSettings, setUserSettings] = useState<Partial<Settings>>({});
   const [loading, setLoading] = useState(true);
+  const [userLoading, setUserLoading] = useState(false);
+  const [user, setUser] = useState<any>(null);
+
+  // Combine global and user settings
+  const settings = { ...globalSettings, ...userSettings };
 
   const t = (key: TranslationKey): string => {
     return translations[settings.language]?.[key] || key;
   };
+
+  // Auth listener to trigger user settings fetch
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      if (!u) {
+        setUserSettings({});
+        setUserLoading(false);
+      }
+    });
+    return unsub;
+  }, []);
 
   // Synchronize document direction, language, theme, and font-size whenever settings change
   useEffect(() => {
@@ -210,7 +239,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     const unsub = onSnapshot(doc(db, 'settings', 'general'), (snap) => {
       if (snap.exists()) {
         const data = snap.data() as Settings;
-        setSettings(prev => ({ ...prev, ...data }));
+        setGlobalSettings(prev => ({ ...prev, ...data }));
       }
       setLoading(false);
       clearTimeout(timeout);
@@ -226,11 +255,54 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  // Effect to load user-specific settings
+  useEffect(() => {
+    if (!user) return;
+
+    setUserLoading(true);
+    const unsub = onSnapshot(doc(db, 'user_settings', user.uid), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data() as Partial<Settings>;
+        setUserSettings(data);
+      }
+      setUserLoading(false);
+    }, (error) => {
+      console.warn('User settings fetch warning:', error);
+      setUserLoading(false);
+    });
+
+    return () => unsub();
+  }, [user]);
+
   const updateSettings = async (newSettings: Partial<Settings>) => {
-    const updated = { ...settings, ...newSettings };
-    await setDoc(doc(db, 'settings', 'general'), updated);
-    // Optimistic update
-    setSettings(updated);
+    const userUpdates: Partial<Settings> = {};
+    const globalUpdates: Partial<Settings> = {};
+
+    Object.keys(newSettings).forEach((key) => {
+      const k = key as keyof Settings;
+      if (USER_SPECIFIC_KEYS.includes(k)) {
+        (userUpdates as any)[k] = newSettings[k];
+      } else {
+        (globalUpdates as any)[k] = newSettings[k];
+      }
+    });
+
+    // Save global updates if any
+    if (Object.keys(globalUpdates).length > 0) {
+      await setDoc(doc(db, 'settings', 'general'), globalUpdates, { merge: true });
+      setGlobalSettings(prev => ({ ...prev, ...globalUpdates }));
+    }
+
+    // Save user updates if any and logged in
+    if (Object.keys(userUpdates).length > 0) {
+      if (user) {
+        await setDoc(doc(db, 'user_settings', user.uid), userUpdates, { merge: true });
+        setUserSettings(prev => ({ ...prev, ...userUpdates }));
+      } else {
+        // Fallback to local state if not logged in (e.g. login screen language)
+        setUserSettings(prev => ({ ...prev, ...userUpdates }));
+      }
+    }
   };
 
   // Auto-update exchange rates on startup if enabled

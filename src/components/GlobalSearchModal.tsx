@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, query, orderBy, limit } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { db } from '../lib/firebase';
@@ -63,6 +63,22 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
   const fetchAllSystemData = async () => {
     setLoading(true);
     try {
+      const results = await Promise.allSettled([
+        getDocs(collection(db, 'orders')),
+        getDocs(collection(db, 'users')),
+        getDocs(collection(db, 'customers')),
+        getDocs(collection(db, 'couriers')),
+        getDocs(collection(db, 'sources')),
+        getDocs(collection(db, 'expenses')),
+        getDocs(collection(db, 'accounts')),
+        getDocs(collection(db, 'journal_entries')),
+        getDocs(collection(db, 'salary_history')),
+        getDocs(collection(db, 'roles')),
+        getDocs(query(collection(db, 'activity_logs'), orderBy('createdAt', 'desc'), limit(100)))
+      ]);
+
+      const dataSet: any[] = results.map(res => res.status === 'fulfilled' ? res.value : null);
+
       const [
         ordersSnap, 
         usersSnap, 
@@ -75,43 +91,19 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
         salarySnap,
         rolesSnap,
         activitySnap
-      ] = await Promise.all([
-        getDocs(collection(db, 'orders')),
-        getDocs(collection(db, 'users')),
-        getDocs(collection(db, 'customers')),
-        getDocs(collection(db, 'couriers')),
-        getDocs(collection(db, 'sources')),
-        getDocs(collection(db, 'expenses')),
-        getDocs(collection(db, 'accounts')),
-        getDocs(collection(db, 'journal_entries')),
-        getDocs(collection(db, 'salary_history')),
-        getDocs(collection(db, 'roles')),
-        getDocs(collection(db, 'activity_logs'))
-      ]);
+      ] = dataSet;
 
-      const ords = ordersSnap.docs.map(d => ({ id: d.id, _searchType: 'order', ...d.data() }));
-      const usrs = usersSnap.docs.map(d => ({ id: d.id, _searchType: 'user', ...d.data() }));
-      const custs = customersSnap.docs.map(d => ({ id: d.id, _searchType: 'customer', ...d.data() }));
-      const crs = couriersSnap.docs.map(d => ({ id: d.id, _searchType: 'courier', ...d.data() }));
-      const srcs = sourcesSnap.docs.map(d => ({ id: d.id, _searchType: 'source', ...d.data() }));
-      const exps = expensesSnap.docs.map(d => ({ id: d.id, _searchType: 'expense', ...d.data() }));
-      const accs = accountsSnap.docs.map(d => ({ id: d.id, _searchType: 'account', ...d.data() }));
-      const jour = journalSnap.docs.map(d => ({ id: d.id, _searchType: 'journal', ...d.data() }));
-      const sals = salarySnap.docs.map(d => ({ id: d.id, _searchType: 'salary', ...d.data() }));
-      const rls = rolesSnap.docs.map(d => ({ id: d.id, _searchType: 'role', ...d.data() }));
-      const acts = activitySnap.docs.map(d => ({ id: d.id, _searchType: 'activity', ...d.data() }));
-
-      setOrdersData(ords);
-      setUsersData(usrs);
-      setCustomersData(custs);
-      setCouriersData(crs);
-      setSourcesData(srcs);
-      setExpensesData(exps);
-      setAccountsData(accs);
-      setJournalData(jour);
-      setSalaryData(sals);
-      setRolesData(rls);
-      setActivityData(acts);
+      if (ordersSnap) setOrdersData(ordersSnap.docs.map((d: any) => ({ id: d.id, _searchType: 'order', ...d.data() })));
+      if (usersSnap) setUsersData(usersSnap.docs.map((d: any) => ({ id: d.id, _searchType: 'user', ...d.data() })));
+      if (customersSnap) setCustomersData(customersSnap.docs.map((d: any) => ({ id: d.id, _searchType: 'customer', ...d.data() })));
+      if (couriersSnap) setCouriersData(couriersSnap.docs.map((d: any) => ({ id: d.id, _searchType: 'courier', ...d.data() })));
+      if (sourcesSnap) setSourcesData(sourcesSnap.docs.map((d: any) => ({ id: d.id, _searchType: 'source', ...d.data() })));
+      if (expensesSnap) setExpensesData(expensesSnap.docs.map((d: any) => ({ id: d.id, _searchType: 'expense', ...d.data() })));
+      if (accountsSnap) setAccountsData(accountsSnap.docs.map((d: any) => ({ id: d.id, _searchType: 'account', ...d.data() })));
+      if (journalSnap) setJournalData(journalSnap.docs.map((d: any) => ({ id: d.id, _searchType: 'journal', ...d.data() })));
+      if (salarySnap) setSalaryData(salarySnap.docs.map((d: any) => ({ id: d.id, _searchType: 'salary', ...d.data() })));
+      if (rolesSnap) setRolesData(rolesSnap.docs.map((d: any) => ({ id: d.id, _searchType: 'role', ...d.data() })));
+      if (activitySnap) setActivityData(activitySnap.docs.map((d: any) => ({ id: d.id, _searchType: 'activity', ...d.data() })));
     } catch (err) {
       console.error("Error pre-loading system search data:", err);
     } finally {
@@ -147,113 +139,113 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
   const matchedOrders = ordersData.filter(ord => {
     if (!cleanText) return true;
     return (
-      (ord.orderNumber || '').toLowerCase().includes(cleanText) ||
-      (ord.customerName || '').toLowerCase().includes(cleanText) ||
-      (ord.customerPhone || '').toLowerCase().includes(cleanText) ||
-      (ord.trackingNumber || '').toLowerCase().includes(cleanText) ||
-      (ord.externalOrderNumber || '').toLowerCase().includes(cleanText) ||
-      (ord.shippingCompany || '').toLowerCase().includes(cleanText) ||
-      (ord.orderSource || '').toLowerCase().includes(cleanText) ||
-      (ord.orderStatus || '').toLowerCase().includes(cleanText)
+      String(ord.orderNumber || '').toLowerCase().includes(cleanText) ||
+      String(ord.customerName || '').toLowerCase().includes(cleanText) ||
+      String(ord.customerPhone || '').toLowerCase().includes(cleanText) ||
+      String(ord.trackingNumber || '').toLowerCase().includes(cleanText) ||
+      String(ord.externalOrderNumber || '').toLowerCase().includes(cleanText) ||
+      String(ord.shippingCompany || '').toLowerCase().includes(cleanText) ||
+      String(ord.orderSource || '').toLowerCase().includes(cleanText) ||
+      String(ord.orderStatus || '').toLowerCase().includes(cleanText)
     );
   });
 
   const matchedUsers = usersData.filter(u => {
     if (!cleanText) return true;
     return (
-      (u.fullName || '').toLowerCase().includes(cleanText) ||
-      (u.username || '').toLowerCase().includes(cleanText) ||
-      (u.email || '').toLowerCase().includes(cleanText) ||
-      (u.role || '').toLowerCase().includes(cleanText)
+      String(u.fullName || '').toLowerCase().includes(cleanText) ||
+      String(u.username || '').toLowerCase().includes(cleanText) ||
+      String(u.email || '').toLowerCase().includes(cleanText) ||
+      String(u.role || '').toLowerCase().includes(cleanText)
     );
   });
 
   const matchedCustomers = customersData.filter(c => {
     if (!cleanText) return true;
     return (
-      (c.fullName || '').toLowerCase().includes(cleanText) ||
-      (c.phone || '').toLowerCase().includes(cleanText) ||
-      (c.email || '').toLowerCase().includes(cleanText) ||
-      (c.address || '').toLowerCase().includes(cleanText) ||
-      (c.notes || '').toLowerCase().includes(cleanText)
+      String(c.fullName || '').toLowerCase().includes(cleanText) ||
+      String(c.phone || '').toLowerCase().includes(cleanText) ||
+      String(c.email || '').toLowerCase().includes(cleanText) ||
+      String(c.address || '').toLowerCase().includes(cleanText) ||
+      String(c.notes || '').toLowerCase().includes(cleanText)
     );
   });
 
   const matchedCouriers = couriersData.filter(cr => {
     if (!cleanText) return true;
     return (
-      (cr.fullName || '').toLowerCase().includes(cleanText) ||
-      (cr.phone || '').toLowerCase().includes(cleanText) ||
-      (cr.email || '').toLowerCase().includes(cleanText) ||
-      (cr.address || '').toLowerCase().includes(cleanText)
+      String(cr.fullName || '').toLowerCase().includes(cleanText) ||
+      String(cr.phone || '').toLowerCase().includes(cleanText) ||
+      String(cr.email || '').toLowerCase().includes(cleanText) ||
+      String(cr.address || '').toLowerCase().includes(cleanText)
     );
   });
 
   const matchedSources = sourcesData.filter(s => {
     if (!cleanText) return true;
     return (
-      (s.source_name || '').toLowerCase().includes(cleanText) ||
-      (s.location || '').toLowerCase().includes(cleanText) ||
-      (s.contact_info || '').toLowerCase().includes(cleanText) ||
-      (s.notes || '').toLowerCase().includes(cleanText)
+      String(s.source_name || '').toLowerCase().includes(cleanText) ||
+      String(s.location || '').toLowerCase().includes(cleanText) ||
+      String(s.contact_info || '').toLowerCase().includes(cleanText) ||
+      String(s.notes || '').toLowerCase().includes(cleanText)
     );
   });
 
   const matchedExpenses = expensesData.filter(ex => {
     if (!cleanText) return true;
     return (
-      (ex.recipientName || '').toLowerCase().includes(cleanText) ||
-      (ex.notes || '').toLowerCase().includes(cleanText) ||
-      (ex.createdByName || '').toLowerCase().includes(cleanText) ||
-      (ex.amount || '').toString().includes(cleanText) ||
-      (ex.type || '').toLowerCase().includes(cleanText)
+      String(ex.recipientName || '').toLowerCase().includes(cleanText) ||
+      String(ex.notes || '').toLowerCase().includes(cleanText) ||
+      String(ex.createdByName || '').toLowerCase().includes(cleanText) ||
+      String(ex.amount || '').toLowerCase().includes(cleanText) ||
+      String(ex.type || '').toLowerCase().includes(cleanText)
     );
   });
 
   const matchedAccounts = accountsData.filter(a => {
     if (!cleanText) return true;
     return (
-      (a.accountCode || '').toLowerCase().includes(cleanText) ||
-      (a.entityName || '').toLowerCase().includes(cleanText) ||
-      (a.entityType || '').toLowerCase().includes(cleanText)
+      String(a.accountCode || '').toLowerCase().includes(cleanText) ||
+      String(a.entityName || '').toLowerCase().includes(cleanText) ||
+      String(a.entityType || '').toLowerCase().includes(cleanText)
     );
   });
 
   const matchedJournal = journalData.filter(j => {
     if (!cleanText) return true;
     return (
-      (j.entryNumber || '').toLowerCase().includes(cleanText) ||
-      (j.description || '').toLowerCase().includes(cleanText) ||
-      (j.debitAccountName || '').toLowerCase().includes(cleanText) ||
-      (j.creditAccountName || '').toLowerCase().includes(cleanText) ||
-      (j.amount || '').toString().includes(cleanText)
+      String(j.entryNumber || '').toLowerCase().includes(cleanText) ||
+      String(j.description || '').toLowerCase().includes(cleanText) ||
+      String(j.debitAccountName || '').toLowerCase().includes(cleanText) ||
+      String(j.creditAccountName || '').toLowerCase().includes(cleanText) ||
+      String(j.amount || '').toLowerCase().includes(cleanText)
     );
   });
 
   const matchedSalary = salaryData.filter(s => {
     if (!cleanText) return true;
     return (
-      (s.employeeName || '').toLowerCase().includes(cleanText) ||
-      (s.salaryMonth || '').toLowerCase().includes(cleanText) ||
-      (s.voucherCode || '').toLowerCase().includes(cleanText)
+      String(s.employeeName || '').toLowerCase().includes(cleanText) ||
+      String(s.salaryMonth || '').toLowerCase().includes(cleanText) ||
+      String(s.voucherCode || '').toLowerCase().includes(cleanText)
     );
   });
 
   const matchedRoles = rolesData.filter(r => {
     if (!cleanText) return true;
     return (
-      (r.nameAr || '').toLowerCase().includes(cleanText) ||
-      (r.nameEn || '').toLowerCase().includes(cleanText) ||
-      (r.description || '').toLowerCase().includes(cleanText)
+      String(r.nameAr || '').toLowerCase().includes(cleanText) ||
+      String(r.nameEn || '').toLowerCase().includes(cleanText) ||
+      String(r.description || '').toLowerCase().includes(cleanText)
     );
   });
 
   const matchedActivity = activityData.filter(act => {
     if (!cleanText) return true;
     return (
-      (act.action || '').toLowerCase().includes(cleanText) ||
-      (act.performedBy || '').toLowerCase().includes(cleanText) ||
-      (act.details || '').toLowerCase().includes(cleanText)
+      String(act.action || '').toLowerCase().includes(cleanText) ||
+      String(act.performedBy || '').toLowerCase().includes(cleanText) ||
+      String(act.details || '').toLowerCase().includes(cleanText)
     );
   });
 

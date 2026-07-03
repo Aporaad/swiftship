@@ -7,8 +7,13 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { config as dotenvConfig } from 'dotenv';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const currentFilePath = (typeof import.meta !== 'undefined' && typeof import.meta.url === 'string') 
+  ? fileURLToPath(import.meta.url) 
+  : (typeof __filename !== 'undefined' ? __filename : '');
+
+const currentDirPath = (currentFilePath) 
+  ? path.dirname(currentFilePath) 
+  : (typeof __dirname !== 'undefined' ? __dirname : process.cwd());
 
 const resourcesPath = process.env.RESOURCES_PATH ?? '';
 
@@ -16,9 +21,9 @@ const envPaths = [
   // Electron production: resources/app/.env (مُمرَّر من main.cjs)
   resourcesPath ? path.join(resourcesPath, 'app', '.env') : '',
   // نفس مجلد server.cjs عند التشغيل مباشرةً
-  path.join(__dirname, '.env'),
+  path.join(currentDirPath, '.env'),
   // مجلد أعلى (resources/) احتياطي
-  path.join(__dirname, '..', '.env'),
+  path.join(currentDirPath, '..', '.env'),
   // CWD
   path.join(process.cwd(), '.env'),
 ].filter(Boolean);

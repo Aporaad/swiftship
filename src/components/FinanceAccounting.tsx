@@ -242,10 +242,13 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
     // A. Push all transactions from account_transactions
     accountTransactions.forEach(tx => {
       const date = tx.createdAt ? new Date(tx.createdAt) : new Date();
+      const acc = financialAccounts.find(a => a.id === tx.accountId);
       const isSourcing = tx.entityType === 'courier' && (() => {
         const c = couriers.find(currCourier => currCourier.id === tx.entityId || currCourier.financialAccountId === tx.accountId);
         return c?.courierType === 'sourcing' || c?.financialCurrency === 'SAR';
-      })() || tx.currencyOriginal === 'SAR';
+      })() || tx.currencyOriginal === 'SAR' || acc?.currency === 'SAR';
+
+      const accountCurrency = tx.currency || acc?.currency || (isSourcing ? 'SAR' : (settings.currency || 'YER'));
 
       entries.push({
         id: tx.id || `TX-${Math.random()}`,
@@ -258,9 +261,9 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
         entityType: tx.entityType,
         type: tx.type, // 'Debit' | 'Credit'
         amount: tx.amount || 0,
-        currency: tx.currency || (isSourcing ? 'SAR' : (settings.currency || 'YER')),
-        amountOriginal: tx.amountOriginal || tx.amount || 0,
-        currencyOriginal: tx.currencyOriginal || (isSourcing ? 'SAR' : 'YER'),
+        currency: accountCurrency,
+        amountOriginal: tx.amountOriginal !== undefined ? tx.amountOriginal : (tx.amount || 0),
+        currencyOriginal: tx.currencyOriginal || tx.currency || accountCurrency,
         module: tx.module || 'adjustment',
         isSourcing
       });
@@ -333,7 +336,7 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
 
     // Return reversed (newest first for feed view)
     return computed.reverse();
-  }, [accountTransactions, expenses, isAr, settings]);
+  }, [accountTransactions, expenses, isAr, settings, financialAccounts]);
 
   // Apply filters to ledger
   const filteredLedgerEntries = useMemo(() => {
@@ -418,49 +421,45 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
 
   // Dynamic Multi-Currency Cash Box Vault Balances
   const vaultBalances = useMemo(() => {
-    let yerIn = 0, yerOut = 0;
-    let usdIn = 0, usdOut = 0;
-    let sarIn = 0, sarOut = 0;
+    // 1. Identify all accounts under "Cash & Safes" category (Code 1110)
+    const cashAccounts = financialAccounts.filter(a => 
+      a.accountCode === '1110' || 
+      a.parentCode === '1110' || 
+      a.accountCode?.startsWith('111')
+    );
 
-    const cashAccount = financialAccounts.find(a => a.entityId === 'sys_cash_account');
-    if (cashAccount) {
-      // Loop over transactions for the cash account to determine currency breakdown
-      accountTransactions.forEach(tx => {
-        if (tx.accountId === cashAccount.id) {
-          const amt = parseFloat(tx.amountOriginal || tx.amount || 0);
-          const cur = tx.currencyOriginal || tx.currency || 'YER';
+    // 2. Calculate actual YER balance from all YER-denominated cash accounts
+    const yerCashAccounts = cashAccounts.filter(a => a.currency === 'YER');
+    const totalYerBalance = yerCashAccounts.reduce((sum, a) => sum + (parseFloat(a.balance as any) || 0), 0);
 
-          if (cur === 'YER') {
-            if (tx.type === 'Debit') yerIn += amt;
-            if (tx.type === 'Credit') yerOut += amt;
-          } else if (cur === 'USD') {
-            if (tx.type === 'Debit') usdIn += amt;
-            if (tx.type === 'Credit') usdOut += amt;
-          } else if (cur === 'SAR') {
-            if (tx.type === 'Debit') sarIn += amt;
-            if (tx.type === 'Credit') sarOut += amt;
-          }
-        }
-      });
-    }
+    // 3. Foreign Currencies Card: Show the equivalent value of the YER treasury in USD and SAR as requested
+    const usdEquivalent = totalYerBalance / (settings.exchangeRateUSD || 535);
+    const sarEquivalent = totalYerBalance / (settings.exchangeRateSAR || 140);
 
     return {
-      yer: { in: yerIn, out: yerOut, balance: yerIn - yerOut },
-      usd: { in: usdIn, out: usdOut, balance: usdIn - usdOut },
-      sar: { in: sarIn, out: sarOut, balance: sarIn - sarOut },
-      totalIn_YER: yerIn + convertToYER(usdIn, 'USD') + convertToYER(sarIn, 'SAR'),
-      totalOut_YER: yerOut + convertToYER(usdOut, 'USD') + convertToYER(sarOut, 'SAR')
+      yer: { in: 0, out: 0, balance: totalYerBalance },
+      usd: { in: 0, out: 0, balance: usdEquivalent },
+      sar: { in: 0, out: 0, balance: sarEquivalent },
+      totalIn_YER: totalYerBalance,
+      totalOut_YER: 0
     };
-  }, [accountTransactions, financialAccounts, settings]);
+  }, [financialAccounts, settings]);
 
   // Dynamic P&L Trial Balance Summary metrics — all values in YER for consistent financial scope
   // These metrics directly feed from the ChartOfAccounts' system account balances.
   const financialTrialMetrics = useMemo(() => {
-    // ── 4100: Revenues from shipping orders ──────────────────────────────
-    // Sum of all accounts starting with 4 (Revenues)//convertToYER(a.balance, 'USD') + convertToYER(sarIn, 'SAR'),
+    // Revenues: Sum of all accounts starting with 4 (Revenues)
     const totalCustomerRevenue = financialAccounts
       .filter(a => a.accountCode?.startsWith('4') || a.accountCode?.startsWith('REV'))
-      .reduce((sum, a) => sum + (parseFloat(convertToYER(a.balance, a.currency) as any) || 0), 0);
+      .reduce((sum, a) => {
+        const balance = parseFloat(a.balance as any) || 0;
+        return sum + financialAccountService.convertToDefaultCurrency(
+          balance,
+          a.currency || 'YER',
+          settings.currency || 'YER',
+          { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+        );
+      }, 0);
 
     // ── 4200: Manual debit (inflow) adjustments ──────────────────────────
     const totalAdjustInflows = 0; // Handled implicitly in account balances
@@ -469,17 +468,41 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
     // Sum of all accounts starting with 5 (Expenses)
     const netOperatingCosts = financialAccounts
       .filter(a => a.accountCode?.startsWith('5') || a.accountCode?.startsWith('EXP'))
-      .reduce((sum, a) => sum + (parseFloat(convertToYER(a.balance, a.currency) as any) || 0), 0);
+      .reduce((sum, a) => {
+        const balance = parseFloat(a.balance as any) || 0;
+        return sum + financialAccountService.convertToDefaultCurrency(
+          balance,
+          a.currency || 'YER',
+          settings.currency || 'YER',
+          { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+        );
+      }, 0);
 
     // ── 1130: Receivables = sum of customer balances ─────────────────────
     const netReceivables = financialAccounts
       .filter(a => a.entityType === 'customer' || a.accountCode?.startsWith('1130'))
-      .reduce((sum, a) => sum + (parseFloat(convertToYER(a.balance, a.currency) as any) || 0), 0);
+      .reduce((sum, a) => {
+        const balance = parseFloat(a.balance as any) || 0;
+        return sum + financialAccountService.convertToDefaultCurrency(
+          balance,
+          a.currency || 'YER',
+          settings.currency || 'YER',
+          { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+        );
+      }, 0);
 
     // ── 2110: Active custody liabilities ─────────────────────────────────
     const activeCustodyLiabilities = financialAccounts
       .filter(a => a.entityType === 'courier' || a.accountCode?.startsWith('2120'))
-      .reduce((sum, a) => sum + (parseFloat(convertToYER(a.balance, a.currency) as any) || 0), 0);
+      .reduce((sum, a) => {
+        const balance = parseFloat(a.balance as any) || 0;
+        return sum + financialAccountService.convertToDefaultCurrency(
+          balance,
+          a.currency || 'YER',
+          settings.currency || 'YER',
+          { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+        );
+      }, 0);
 
     // ── 3200: Net Profit = Revenue - Costs ───────────────────────────────
     // Directly pull from computed Revenue - Costs per accounting standards
@@ -540,56 +563,79 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
         });
       } else {
         const txId = selectedEditEntry.id;
-        const txQuery = query(collection(db, 'account_transactions'), where('__name__', '==', txId));
+        const refNum = selectedEditEntry.refNumber;
+        
+        // Find ALL transaction legs related to this voucher/journal entry
+        const txQuery = refNum 
+          ? query(collection(db, 'account_transactions'), where('refNumber', '==', refNum))
+          : query(collection(db, 'account_transactions'), where('__name__', '==', txId));
+          
         const txSnap = await getDocs(txQuery);
+        const exchangeRates = { 
+          USD: settings.exchangeRateUSD || 535, 
+          SAR: settings.exchangeRateSAR || 140,
+          YER: 1
+        };
 
         if (!txSnap.empty) {
-          const txDoc = txSnap.docs[0];
-          const txData = txDoc.data();
-          const diffVal = convertedAmt - (txData.amount || 0);
-          const delta = txData.type === 'Debit' ? diffVal : -diffVal;
+          for (const txDoc of txSnap.docs) {
+            const txData = txDoc.data();
+            
+            // CRITICAL: Calculate new amount in the account's specific currency
+            const legNewAmount = financialAccountService.convertToTargetCurrency(
+              rawAmt,
+              editJournalData.currencyOriginal,
+              txData.currency || 'YER',
+              exchangeRates
+            );
 
-          batch.update(txDoc.ref, {
-            amount: convertedAmt,
-            amountOriginal: rawAmt,
-            currencyOriginal: editJournalData.currencyOriginal,
-            description: editJournalData.notes,
-            createdAt: parsedCreatedAt
-          });
+            const diffVal = legNewAmount - (txData.amount || 0);
+            const delta = txData.type === 'Debit' ? diffVal : -diffVal;
 
-          if (txData.accountId) {
-            const accRef = doc(db, 'accounts', txData.accountId);
-            batch.update(accRef, {
-              balance: increment(delta),
-              debitTotal: txData.type === 'Debit' ? increment(diffVal) : increment(0),
-              creditTotal: txData.type === 'Credit' ? increment(diffVal) : increment(0),
+            batch.update(txDoc.ref, {
+              amount: legNewAmount,
+              amountOriginal: rawAmt,
+              currencyOriginal: editJournalData.currencyOriginal,
+              description: editJournalData.notes,
+              createdAt: parsedCreatedAt,
               updatedAt: Date.now()
             });
-          }
 
-          if (txData.entityType && txData.entityType !== 'system' && txData.entityId) {
-            const entityCollection = financialAccountService.getEntityCollection(txData.entityType);
-            const entityRef = doc(db, entityCollection, txData.entityId);
-            batch.update(entityRef, {
-              financialBalance: increment(delta),
-              updatedAt: Date.now()
-            });
-          }
-
-          if (txData.refNumber) {
-            const expQ = query(collection(db, 'expenses'), where('expenseNumber', '==', txData.refNumber));
-            const expSnaps = await getDocs(expQ);
-            if (!expSnaps.empty) {
-              expSnaps.forEach(expDoc => {
-                batch.update(expDoc.ref, {
-                  amount: rawAmt,
-                  currency: editJournalData.currencyOriginal,
-                  amountInDefaultCurrency: convertedAmt,
-                  notes: editJournalData.notes,
-                  createdAt: parsedCreatedAt,
-                  updatedAt: Date.now()
-                });
+            if (txData.accountId) {
+              const accRef = doc(db, 'accounts', txData.accountId);
+              batch.update(accRef, {
+                balance: increment(delta),
+                debitTotal: txData.type === 'Debit' ? increment(diffVal) : increment(0),
+                creditTotal: txData.type === 'Credit' ? increment(diffVal) : increment(0),
+                updatedAt: Date.now()
               });
+            }
+
+            if (txData.entityType && txData.entityType !== 'system' && txData.entityId) {
+              const entityCollection = financialAccountService.getEntityCollection(txData.entityType);
+              const entityRef = doc(db, entityCollection, txData.entityId);
+              batch.update(entityRef, {
+                financialBalance: increment(delta),
+                updatedAt: Date.now()
+              });
+            }
+
+            // If this tx is linked to an expense record, update it too
+            if (txData.refNumber) {
+              const expQ = query(collection(db, 'expenses'), where('expenseNumber', '==', txData.refNumber));
+              const expSnaps = await getDocs(expQ);
+              if (!expSnaps.empty) {
+                expSnaps.forEach(expDoc => {
+                  batch.update(expDoc.ref, {
+                    amount: rawAmt,
+                    currency: editJournalData.currencyOriginal,
+                    amountInDefaultCurrency: convertedAmt,
+                    notes: editJournalData.notes,
+                    createdAt: parsedCreatedAt,
+                    updatedAt: Date.now()
+                  });
+                });
+              }
             }
           }
         }
@@ -660,8 +706,8 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
       const timestamp = Date.now();
       const randStr = Math.floor(1000 + Math.random() * 9000);
 
-      const srcAccount = financialAccounts.find(a => a.id === sourceAccountId);
-      const trgAccount = financialAccounts.find(a => a.id === targetAccountId);
+      const srcAccount = financialAccounts.find(a => a.id === sourceAccountId || a.entityId === sourceAccountId);
+      const trgAccount = financialAccounts.find(a => a.id === targetAccountId || a.entityId === targetAccountId);
 
       if (!srcAccount || !trgAccount) {
         throw new Error(isAr ? 'أحد الحسابات المحددة غير موجود في الدفاتر.' : 'Selected accounts not found.');
@@ -787,7 +833,7 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
     // Shipments handled
     const courierOrders = orders.filter(o => o.deliveryCourierId === auditedCourierId || o.shippingCourierId === auditedCourierId);
 
-    const linkedAccount = financialAccounts.find(a => a.id === cour.financialAccountId);
+    const linkedAccount = financialAccounts.find(a => a.id === cour.financialAccountId || a.entityId === cour.financialAccountId);
     const currency = linkedAccount?.currency || cour.financialCurrency || 'YER';
 
     const totalCustodyIssued = courierExpenses.reduce((sum, exp) => sum + convertToYER(exp.amount || 0, exp.currency), 0);
@@ -1152,7 +1198,9 @@ Continue?`
         description: tx.description || (isDebit ? (isAr ? 'قيد مدين' : 'Debit Entry') : (isAr ? 'قيد دائن' : 'Credit Entry')),
         debit: isDebit ? amt : 0,
         credit: !isDebit ? amt : 0,
-        balance: cumulativeBalance
+        balance: cumulativeBalance,
+        amountOriginal: tx.amountOriginal || amt,
+        currencyOriginal: tx.currencyOriginal || tx.currency || (settings.currency || 'YER')
       });
     });
 
@@ -1509,17 +1557,17 @@ Continue?`
           </div>
           <div className="space-y-1 font-mono text-xs font-black text-slate-200">
             <p className="flex justify-between">
-              <span>USD Box:</span>
-              <span className="text-white">${vaultBalances.usd.balance.toLocaleString()}</span>
+              <span>{isAr ? 'الموازي بالدولار USD:' : 'USD Equivalent:'}</span>
+              <span className="text-white">${vaultBalances.usd.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </p>
             <p className="flex justify-between">
-              <span>SAR Box:</span>
-              <span className="text-white">SR {vaultBalances.sar.balance.toLocaleString()}</span>
+              <span>{isAr ? 'الموازي بالسعودي SAR:' : 'SAR Equivalent:'}</span>
+              <span className="text-white">{vaultBalances.sar.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} SAR</span>
             </p>
           </div>
           <div className="mt-1.5 pt-1.5 border-t border-slate-850/60 flex justify-between text-[9px] text-[#d4af37] font-bold">
-            <span>{isAr ? 'إجمالي الموازي لليمني:' : 'Total Equivalent:'}</span>
-            <span>{(vaultBalances.totalIn_YER - vaultBalances.totalOut_YER).toLocaleString()} YER</span>
+            <span>{isAr ? 'إجمالي رصيد الخزينة (YER):' : 'Total Treasury (YER):'}</span>
+            <span>{vaultBalances.yer.balance.toLocaleString()} YER</span>
           </div>
         </div>
 
@@ -1893,37 +1941,27 @@ Continue?`
                         </td>
                         <td className="p-4 font-mono font-black text-emerald-400">
                           {isDebit ? (
-                            e.isSourcing || e.currencyOriginal === 'SAR' ? (
-                              <div className="flex flex-col">
-                                <span>+{e.amountOriginal.toLocaleString()} SAR</span>
+                            <div className="flex flex-col">
+                              <span>+{e.amount.toLocaleString()} {e.currency}</span>
+                              {e.currencyOriginal && e.currencyOriginal !== e.currency && (
                                 <span className="text-[10px] text-slate-500 font-normal mt-0.5" dir="ltr">
-                                  (≈ {e.amount.toLocaleString()} YER)
+                                  / {e.amountOriginal.toLocaleString()} {e.currencyOriginal}
                                 </span>
-                              </div>
-                            ) : (
-                              `+${e.amount.toLocaleString()} YER`
-                            )
+                              )}
+                            </div>
                           ) : '—'}
-                          {isDebit && !(e.isSourcing || e.currencyOriginal === 'SAR') && e.amountOriginal && e.currencyOriginal !== 'YER' && (
-                            <span className="text-[9px] text-slate-500 block font-normal">({e.amountOriginal} {e.currencyOriginal})</span>
-                          )}
                         </td>
                         <td className="p-4 font-mono font-black text-rose-500">
                           {!isDebit ? (
-                            e.isSourcing || e.currencyOriginal === 'SAR' ? (
-                              <div className="flex flex-col">
-                                <span>-{e.amountOriginal.toLocaleString()} SAR</span>
+                            <div className="flex flex-col">
+                              <span>-{e.amount.toLocaleString()} {e.currency}</span>
+                              {e.currencyOriginal && e.currencyOriginal !== e.currency && (
                                 <span className="text-[10px] text-slate-500 font-normal mt-0.5" dir="ltr">
-                                  (≈ {e.amount.toLocaleString()} YER)
+                                  / {e.amountOriginal.toLocaleString()} {e.currencyOriginal}
                                 </span>
-                              </div>
-                            ) : (
-                              `-${e.amount.toLocaleString()} YER`
-                            )
+                              )}
+                            </div>
                           ) : '—'}
-                          {!isDebit && !(e.isSourcing || e.currencyOriginal === 'SAR') && e.amountOriginal && e.currencyOriginal !== 'YER' && (
-                            <span className="text-[9px] text-slate-500 block font-normal">({e.amountOriginal} {e.currencyOriginal})</span>
-                          )}
                         </td>
                         <td className="p-4 text-left font-mono font-black text-slate-300">
                           {e.runningBalance.toLocaleString()} YER
@@ -2277,18 +2315,18 @@ Continue?`
                 <div className="space-y-4 pt-1">
                   <div>
                     <span className="text-[10px] text-slate-500 uppercase block font-black">{isAr ? 'إجمالي قيمة تعاملات الشحن المدين' : 'Gross Purchases / Cargo Debits'}</span>
-                    <span className="text-base font-mono font-black text-white">{customerLedgerDetails.grossFreightValuation.toLocaleString()} YER</span>
+                    <span className="text-base font-mono font-black text-white">{customerLedgerDetails.grossFreightValuation.toLocaleString()} {customerLedgerDetails.customer.financialCurrency || settings.currency || 'YER'}</span>
                   </div>
 
                   <div>
                     <span className="text-[10px] text-slate-500 uppercase block font-black">{isAr ? 'المبالغ المسددة والمقيدة كداين' : 'Settle Paid Revenues'}</span>
-                    <span className="text-base font-mono font-black text-emerald-400">{customerLedgerDetails.netPaidRevenues.toLocaleString()} YER</span>
+                    <span className="text-base font-mono font-black text-emerald-400">{customerLedgerDetails.netPaidRevenues.toLocaleString()} {customerLedgerDetails.customer.financialCurrency || settings.currency || 'YER'}</span>
                   </div>
 
                   {/* Cumulative Ledger Net balance */}
                   <div className="bg-amber-500/5 p-4 rounded-3xl border border-amber-500/10">
                     <span className="text-[10px] text-amber-500 uppercase block font-black">{isAr ? 'رصيد الحساب المتبقي بذمته (مطالبة مالية)' : 'Actual Outstanding Debit Balance'}</span>
-                    <span className="text-xl font-mono font-black text-amber-500">{customerLedgerDetails.currentOutstandingBalance.toLocaleString()} YER</span>
+                    <span className="text-xl font-mono font-black text-amber-500">{customerLedgerDetails.currentOutstandingBalance.toLocaleString()} {customerLedgerDetails.customer.financialCurrency || settings.currency || 'YER'}</span>
                     <span className="text-[8.5px] text-slate-500 block mt-1 leading-snug">
                       {isAr ? 'حاصل المديونية التراكمي المتبقي بذمة هذا الحساب عن شحنات الشحن والرسوم المعلقة.' : 'Cumulative balanced outstanding cargo debts waiting for collections.'}
                     </span>
@@ -2335,13 +2373,27 @@ Continue?`
                             {row.description}
                           </td>
                           <td className="p-3 text-right font-mono text-rose-452 text-rose-400">
-                            {row.debit > 0 ? `+${row.debit.toLocaleString()}` : '—'}
+                            {row.debit > 0 ? (
+                              <div className="flex flex-col items-end">
+                                <span>+{(row.amountOriginal || row.debit).toLocaleString()} {row.currencyOriginal || (customerLedgerDetails.customer.financialCurrency || settings.currency || 'YER')}</span>
+                                {row.currencyOriginal && row.currencyOriginal !== (customerLedgerDetails.customer.financialCurrency || settings.currency || 'YER') && (
+                                  <span className="text-[8px] text-slate-500 font-normal">≈ {row.debit.toLocaleString()} {customerLedgerDetails.customer.financialCurrency || settings.currency || 'YER'}</span>
+                                )}
+                              </div>
+                            ) : '—'}
                           </td>
                           <td className="p-3 text-right font-mono text-emerald-400">
-                            {row.credit > 0 ? `-${row.credit.toLocaleString()}` : '—'}
+                            {row.credit > 0 ? (
+                              <div className="flex flex-col items-end">
+                                <span>-{(row.amountOriginal || row.credit).toLocaleString()} {row.currencyOriginal || (customerLedgerDetails.customer.financialCurrency || settings.currency || 'YER')}</span>
+                                {row.currencyOriginal && row.currencyOriginal !== (customerLedgerDetails.customer.financialCurrency || settings.currency || 'YER') && (
+                                  <span className="text-[8px] text-slate-500 font-normal">≈ {row.credit.toLocaleString()} {customerLedgerDetails.customer.financialCurrency || settings.currency || 'YER'}</span>
+                                )}
+                              </div>
+                            ) : '—'}
                           </td>
                           <td className="p-3 text-left font-mono font-black text-slate-200">
-                            {row.balance.toLocaleString()} YER
+                            {row.balance.toLocaleString()} {customerLedgerDetails.customer.financialCurrency || settings.currency || 'YER'}
                           </td>
                         </tr>
                       ))}
@@ -2445,19 +2497,19 @@ Continue?`
                 <div className="text-center">
                   <span className="block text-[8px] text-slate-500 font-black">{isAr ? 'إجمالي العملاء' : 'Cust Bal'}</span>
                   <span className="font-mono text-[10px] font-bold text-white block">
-                    {financialAccounts.filter(a => a.entityType === 'customer').reduce((sum, a) => sum + (a.balance || 0), 0).toLocaleString()} YER
+                    {financialAccounts.filter(a => a.entityType === 'customer').reduce((sum, a) => sum + financialAccountService.convertToDefaultCurrency(a.balance || 0, a.currency || 'YER', settings.currency || 'YER', { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }), 0).toLocaleString()} {settings.currency || 'YER'}
                   </span>
                 </div>
                 <div className="text-center border-l border-r border-slate-850 px-3">
                   <span className="block text-[8px] text-slate-500 font-black">{isAr ? 'إجمالي المناديب' : 'Courier Bal'}</span>
                   <span className="font-mono text-[10px] font-bold text-amber-500 block">
-                    {financialAccounts.filter(a => a.entityType === 'courier').reduce((sum, a) => sum + (a.balance || 0), 0).toLocaleString()} YER
+                    {financialAccounts.filter(a => a.entityType === 'courier').reduce((sum, a) => sum + financialAccountService.convertToDefaultCurrency(a.balance || 0, a.currency || 'YER', settings.currency || 'YER', { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }), 0).toLocaleString()} {settings.currency || 'YER'}
                   </span>
                 </div>
                 <div className="text-center">
                   <span className="block text-[8px] text-slate-500 font-black">{isAr ? 'إجمالي الموظفين' : 'Staff Bal'}</span>
                   <span className="font-mono text-[10px] font-bold text-indigo-400 block">
-                    {financialAccounts.filter(a => a.entityType === 'employee').reduce((sum, a) => sum + (a.balance || 0), 0).toLocaleString()} YER
+                    {financialAccounts.filter(a => a.entityType === 'employee').reduce((sum, a) => sum + financialAccountService.convertToDefaultCurrency(a.balance || 0, a.currency || 'YER', settings.currency || 'YER', { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }), 0).toLocaleString()} {settings.currency || 'YER'}
                   </span>
                 </div>
               </div>
@@ -2482,12 +2534,12 @@ Continue?`
                   </tr>
                 </thead>
                 <tbody className="text-xs divide-y divide-slate-805 bg-black/10 font-bold">
-                  {filteredAccountsList.map((acc) => {
+                  {filteredAccountsList.map((acc, idx) => {
                     const balanceInUSD = getDisplayEquivalent(acc.balance || 0, 'USD');
                     const balanceInSAR = getDisplayEquivalent(acc.balance || 0, 'SAR');
 
                     return (
-                      <tr key={acc.id} className="hover:bg-slate-950/40 transition-colors">
+                      <tr key={`${acc.id}-${idx}`} className="hover:bg-slate-950/40 transition-colors">
                         <td className="p-4">
                           <span className="bg-slate-900 border border-slate-800 text-[#d4af37] px-2.5 py-1 rounded-lg text-[9.5px] font-mono">
                             {acc.accountCode}
@@ -2536,9 +2588,13 @@ Continue?`
                         </td>
                         <td className={`p-4 font-mono font-black ${(acc.balance || 0) >= 0 ? 'text-emerald-400' : 'text-rose-500'
                           }`}>
-                          {acc.currency === 'SAR' ? (
+                          {acc.currency && acc.currency !== 'YER' ? (
                             <div>
-                              <span>SR {balanceInSAR.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                              <span>
+                                {acc.currency === 'SAR' ? 'SR' : acc.currency === 'USD' ? '$' : acc.currency} {
+                                  (acc.currency === 'SAR' ? balanceInSAR : balanceInUSD).toLocaleString(undefined, { maximumFractionDigits: 2 })
+                                }
+                              </span>
                               <span className="block text-[10px] text-slate-500 font-normal mt-0.5">
                                 (≈ {acc.balance?.toLocaleString()} YER)
                               </span>
@@ -3157,9 +3213,9 @@ Continue?`
                   <span className="truncate">
                     {sourceAccountId ? (
                       (() => {
-                        const acc = financialAccounts.find(a => a.id === sourceAccountId);
+                        const acc = financialAccounts.find(a => a.id === sourceAccountId || a.entityId === sourceAccountId);
                         if (!acc) return isAr ? '-- اختر حساب المصدر (الدائن) --' : '-- Choose Source Account --';
-                        return `[${acc.code || acc.accountCode || 'Sys'}] - ${isAr ? acc.nameAr || acc.entityName : acc.nameEn || acc.entityName} ${acc.balance !== undefined ? `(${acc.balance.toLocaleString()} YER)` : ''}`;
+                        return `[${acc.code || acc.accountCode || 'Sys'}] - ${isAr ? acc.nameAr || acc.entityName : acc.nameEn || acc.entityName} ${acc.balance !== undefined ? `(${acc.balance.toLocaleString()} ${acc.currency || 'YER'})` : ''}`;
                       })()
                     ) : (
                       <span className="text-slate-500">{isAr ? '-- اختر حساب المصدر (الدائن) --' : '-- Choose Source Account --'}</span>
@@ -3190,11 +3246,11 @@ Continue?`
                           const q = sourceSearchQuery.toLowerCase().trim();
                           if (!q) return true;
                           return (
-                            (acc.accountCode && acc.accountCode.toLowerCase().includes(q)) ||
-                            (acc.code && acc.code.toLowerCase().includes(q)) ||
-                            (acc.nameAr && acc.nameAr.toLowerCase().includes(q)) ||
-                            (acc.nameEn && acc.nameEn.toLowerCase().includes(q)) ||
-                            (acc.entityName && acc.entityName.toLowerCase().includes(q))
+                            (acc.accountCode && String(acc.accountCode).toLowerCase().includes(q)) ||
+                            (acc.code && String(acc.code).toLowerCase().includes(q)) ||
+                            (acc.nameAr && String(acc.nameAr).toLowerCase().includes(q)) ||
+                            (acc.nameEn && String(acc.nameEn).toLowerCase().includes(q)) ||
+                            (acc.entityName && String(acc.entityName).toLowerCase().includes(q))
                           );
                         });
 
@@ -3253,9 +3309,9 @@ Continue?`
                   <span className="truncate">
                     {targetAccountId ? (
                       (() => {
-                        const acc = financialAccounts.find(a => a.id === targetAccountId);
+                        const acc = financialAccounts.find(a => a.id === targetAccountId || a.entityId === targetAccountId);
                         if (!acc) return isAr ? '-- اختر الحساب المستهدف --' : '-- Choose Target Account --';
-                        return `[${acc.code || acc.accountCode || 'Sys'}] - ${isAr ? acc.nameAr || acc.entityName : acc.nameEn || acc.entityName} ${acc.balance !== undefined ? `(${acc.balance.toLocaleString()} YER)` : ''}`;
+                        return `[${acc.code || acc.accountCode || 'Sys'}] - ${isAr ? acc.nameAr || acc.entityName : acc.nameEn || acc.entityName} ${acc.balance !== undefined ? `(${acc.balance.toLocaleString()} ${acc.currency || 'YER'})` : ''}`;
                       })()
                     ) : (
                       <span className="text-slate-500">{isAr ? '-- اختر الحساب المستهدف (المدين) --' : '-- Choose Target Account --'}</span>
@@ -3286,11 +3342,11 @@ Continue?`
                           const q = targetSearchQuery.toLowerCase().trim();
                           if (!q) return true;
                           return (
-                            (acc.accountCode && acc.accountCode.toLowerCase().includes(q)) ||
-                            (acc.code && acc.code.toLowerCase().includes(q)) ||
-                            (acc.nameAr && acc.nameAr.toLowerCase().includes(q)) ||
-                            (acc.nameEn && acc.nameEn.toLowerCase().includes(q)) ||
-                            (acc.entityName && acc.entityName.toLowerCase().includes(q))
+                            (acc.accountCode && String(acc.accountCode).toLowerCase().includes(q)) ||
+                            (acc.code && String(acc.code).toLowerCase().includes(q)) ||
+                            (acc.nameAr && String(acc.nameAr).toLowerCase().includes(q)) ||
+                            (acc.nameEn && String(acc.nameEn).toLowerCase().includes(q)) ||
+                            (acc.entityName && String(acc.entityName).toLowerCase().includes(q))
                           );
                         });
 
@@ -3368,7 +3424,7 @@ Continue?`
                                   </div>
                                   {a.balance !== undefined && (
                                     <span className="font-mono text-[10px] font-black tracking-tighter text-slate-400 bg-black/40 px-1.5 py-0.5 rounded border border-slate-800">
-                                      {a.balance.toLocaleString()}
+                                      {a.balance.toLocaleString()} {a.currency || 'YER'}
                                     </span>
                                   )}
                                 </div>
@@ -3382,25 +3438,60 @@ Continue?`
                 )}
 
                 {targetAccountId && (
-                  <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                  <div className="mt-1.5 flex flex-col gap-1.5">
                     {(() => {
-                      const targetAcc = financialAccounts.find(a => a.id === targetAccountId);
+                      const targetAcc = financialAccounts.find(a => a.id === targetAccountId || a.entityId === targetAccountId);
                       const adjustAmt = parseFloat(adjustData.amount) || 0;
-                      if (targetAcc && typeof targetAcc.balance === 'number') {
-                        // If it's a Credit adjustment out of an Asset, balance reduces
-                        // If we add this logic, maybe simple alert:
-                        let willBeNegative = false;
-                        if (adjustData.type === 'Credit' && targetAcc.balance - adjustAmt < 0 && adjustAmt > 0) {
-                          willBeNegative = true;
-                        } else if (adjustData.type === 'Debit' && targetAcc.balance + adjustAmt < 0 && adjustAmt < 0) {
-                          willBeNegative = true;
-                        }
+                      if (targetAcc && typeof targetAcc.balance === 'number' && adjustAmt > 0) {
+                        // Convert transaction amount to account currency
+                        const convertedAdjustAmt = financialAccountService.convertToTargetCurrency(
+                          adjustAmt,
+                          adjustData.currency,
+                          targetAcc.currency || settings.currency || 'SAR',
+                          { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+                        );
 
-                        if (willBeNegative) {
+                        // Target Account is being DEBITED
+                        const firstChar = (targetAcc.accountCode || targetAcc.code || '1').trim().toUpperCase();
+                        const isCreditNormal = firstChar.startsWith('2') || firstChar.startsWith('3') || firstChar.startsWith('4') || firstChar.startsWith('REV') || firstChar.startsWith('LIAB') || firstChar.startsWith('EQU');
+                        
+                        // If it's a Credit-Normal account (Liability/Equity/Revenue), Debiting reduces balance
+                        // Add a small epsilon (0.01) to avoid warnings on floating point imprecision
+                        if (isCreditNormal && targetAcc.balance - convertedAdjustAmt < -0.01) {
                           return (
-                            <div className="w-full mt-1.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[10px] p-2 rounded-lg flex items-start gap-1.5 animate-pulse">
+                            <div className="w-full bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[10px] p-2 rounded-lg flex items-start gap-1.5 animate-pulse">
                               <svg className="w-3.5 h-3.5 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                              <span>{isAr ? 'تنبيه: هذا القيد سيؤدي لتجاوز الرصيد الحالي للحساب وسيصبح بالسالب أو يخل بالميزانية.' : 'Alert: This entry will exceed the current balance or budget, causing it to go negative.'}</span>
+                              <span>{isAr ? 'تنبيه: هذا القيد سيؤدي لتجاوز الرصيد الحالي للحساب المستهدف وسيصبح بالسالب.' : 'Alert: This entry will exceed the current balance of the target account.'}</span>
+                            </div>
+                          );
+                        }
+                      }
+                      return null;
+                    })()}
+
+                    {(() => {
+                      const sourceAcc = financialAccounts.find(a => a.id === sourceAccountId || a.entityId === sourceAccountId);
+                      const adjustAmt = parseFloat(adjustData.amount) || 0;
+                      if (sourceAcc && typeof sourceAcc.balance === 'number' && adjustAmt > 0) {
+                        // Convert transaction amount to account currency
+                        const convertedAdjustAmt = financialAccountService.convertToTargetCurrency(
+                          adjustAmt,
+                          adjustData.currency,
+                          sourceAcc.currency || settings.currency || 'SAR',
+                          { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+                        );
+
+                        // Source Account is being CREDITED
+                        const firstChar = (sourceAcc.accountCode || sourceAcc.code || '1').trim().toUpperCase();
+                        const isDebitNormal = firstChar.startsWith('1') || firstChar.startsWith('5') || firstChar.startsWith('EXP') || firstChar.startsWith('AST') || firstChar.startsWith('ASS');
+                        
+                        // If it's a Debit-Normal account (Asset/Expense), Crediting reduces balance
+                        // Add a small epsilon (0.01) to avoid warnings on floating point imprecision
+                        if (isDebitNormal && sourceAcc.balance - convertedAdjustAmt < -0.01) {
+                          return (
+                            <div className="w-full bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[10px] p-2 rounded-lg flex items-start gap-1.5 animate-pulse">
+                              <svg className="w-3.5 h-3.5 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                              <span>{isAr ? 'تنبيه: هذا القيد سيؤدي لتجاوز الرصيد الحالي لحساب المصدر وسيصبح بالسالب.' : 'Alert: This entry will exceed the current balance of the source account.'}</span>
                             </div>
                           );
                         }
@@ -3421,7 +3512,7 @@ Continue?`
                       onChange={e => {
                         const checked = e.target.checked;
                         setIsSalaryPayment(checked);
-                        const acc = financialAccounts.find(a => a.id === targetAccountId);
+                        const acc = financialAccounts.find(a => a.id === targetAccountId || a.entityId === targetAccountId);
                         if (checked && acc && acc.monthlySalary) {
                           setAdjustData(prev => ({ ...prev, amount: String(acc.monthlySalary) }));
                         }

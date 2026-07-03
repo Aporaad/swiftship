@@ -42,6 +42,8 @@ export interface Transaction {
   refNumber: string;
   amount: number;
   currency: string;
+  amountOriginal?: number;
+  currencyOriginal?: string;
   debitAccount: {
     id: string;
     code: string;

@@ -463,7 +463,7 @@ export default function ChartOfAccounts({
           <span className="text-base font-mono font-black text-white">
             {Math.round(totals.assets).toLocaleString()}
           </span>
-          <span className="text-[9px] text-slate-500 ml-1">YER</span>
+          <span className="text-[9px] text-slate-500 ml-1">{settings.currency || 'YER'}</span>
         </div>
 
         {/* Liabilities */}
@@ -474,7 +474,7 @@ export default function ChartOfAccounts({
           <span className="text-base font-mono font-black text-white">
             {Math.round(totals.liab).toLocaleString()}
           </span>
-          <span className="text-[9px] text-slate-500 ml-1">YER</span>
+          <span className="text-[9px] text-slate-500 ml-1">{settings.currency || 'YER'}</span>
         </div>
 
         {/* Equity */}
@@ -485,7 +485,7 @@ export default function ChartOfAccounts({
           <span className="text-base font-mono font-black text-white">
             {Math.round(totals.equity).toLocaleString()}
           </span>
-          <span className="text-[9px] text-slate-500 ml-1">YER</span>
+          <span className="text-[9px] text-slate-500 ml-1">{settings.currency || 'YER'}</span>
         </div>
 
         {/* Net Income */}
@@ -496,7 +496,7 @@ export default function ChartOfAccounts({
           <span className={`text-base font-mono font-black ${totals.netIncome >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
             {totals.netIncome >= 0 ? '+' : ''}{Math.round(totals.netIncome).toLocaleString()}
           </span>
-          <span className="text-[9px] text-slate-500 ml-1">YER</span>
+          <span className="text-[9px] text-slate-500 ml-1">{settings.currency || 'YER'}</span>
         </div>
 
         {/* Balance Status */}
@@ -511,7 +511,7 @@ export default function ChartOfAccounts({
             </span>
           ) : (
             <span className="text-[9px] bg-rose-950/40 text-rose-400 border border-rose-500/20 px-2 py-0.5 rounded-lg font-bold">
-              {isAr ? `فارق: ${Math.round(totals.gap).toLocaleString()} YER` : `Gap: ${Math.round(totals.gap).toLocaleString()} YER`}
+              {isAr ? `فارق: ${Math.round(totals.gap).toLocaleString()} ${settings.currency || 'YER'}` : `Gap: ${Math.round(totals.gap).toLocaleString()} ${settings.currency || 'YER'}`}
             </span>
           )}
           <span className="text-[8px] text-slate-600 mt-1 font-mono">
@@ -533,7 +533,7 @@ export default function ChartOfAccounts({
         </span>
         <span className="text-slate-600">=</span>
         <span className={`font-black ${totals.isBalanced ? 'text-emerald-400' : 'text-rose-400'}`}>
-          {Math.round(totals.rightSide).toLocaleString()} YER {totals.isBalanced ? '✓' : '✗'}
+          {Math.round(totals.rightSide).toLocaleString()} {settings.currency || 'YER'} {totals.isBalanced ? '✓' : '✗'}
         </span>
       </div>
 
@@ -545,7 +545,7 @@ export default function ChartOfAccounts({
               {isAr ? 'مستكشف الدليل والشجرة المحاسبية الرسمية' : 'Corporate Chart of Accounts Navigator'}
             </h3>
             <p className="text-[10px] text-slate-550 font-medium">
-              {isAr ? 'الأرصدة الموضحة مُجمَّعة تلقائياً بالريال اليمني (YER).' : 'Balances auto-aggregated to YER. Expand nodes to drill down.'}
+              {isAr ? `الأرصدة الموضحة مُجمَّعة تلقائياً ب${settings.currency || 'YER'}.` : `Balances auto-aggregated to ${settings.currency || 'YER'}. Expand nodes to drill down.`}
             </p>
           </div>
           <div className="flex gap-2">
@@ -637,13 +637,19 @@ export default function ChartOfAccounts({
                   {/* Balance + actions */}
                   <div className="col-span-3 flex items-center justify-end gap-2">
                     <div className="text-right">
-                      <span className={`font-mono font-black text-[11px] ${isRoot ? 'text-[#d4af37]' : balYER < 0 ? 'text-rose-400' : 'text-white'}`}>
-                        {Math.round(balYER).toLocaleString()}
-                        <span className="text-[8px] text-slate-500 font-normal ml-0.5">YER</span>
-                      </span>
-                      {node.currency && node.currency !== 'YER' && node.balance !== undefined && (
-                        <span className="block text-[8px] text-slate-500 font-mono">
-                          ({(node.balance || 0).toLocaleString()} {node.currency})
+                      {node.currency && node.currency !== (settings.currency || 'YER') ? (
+                        <div className="flex flex-col items-end">
+                          <span className="font-mono font-black text-[11px] text-white">
+                            {(node.balance || 0).toLocaleString()} <span className="text-[8px] text-slate-500 font-normal ml-0.5">{node.currency}</span>
+                          </span>
+                          <span className="text-[9px] text-slate-500 font-mono">
+                            ≈ {Math.round(balYER).toLocaleString()} {settings.currency || 'YER'}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className={`font-mono font-black text-[11px] ${isRoot ? 'text-[#d4af37]' : balYER < 0 ? 'text-rose-400' : 'text-white'}`}>
+                          {Math.round(balYER).toLocaleString()}
+                          <span className="text-[8px] text-slate-500 font-normal ml-0.5">{settings.currency || 'YER'}</span>
                         </span>
                       )}
                     </div>
@@ -848,7 +854,14 @@ export default function ChartOfAccounts({
                 <div className="text-right">
                   <span className="block text-[9px] text-slate-500 uppercase font-black">{isAr ? 'الرصيد الإجمالي' : 'Balance'}</span>
                   <span className="text-lg font-mono font-black text-[#d4af37]">
-                    {Math.round(reportAccount.balance || 0).toLocaleString()} YER
+                    {reportAccount.currency && reportAccount.currency !== (settings.currency || 'YER') ? (
+                      <div className="flex flex-col items-end">
+                        <span>{(reportAccount.balance || 0).toLocaleString()} {reportAccount.currency}</span>
+                        <span className="text-[10px] text-slate-500 font-normal">≈ {Math.round(reportAccount.balance || 0).toLocaleString()} {settings.currency || 'YER'}</span>
+                      </div>
+                    ) : (
+                      `${Math.round(reportAccount.balance || 0).toLocaleString()} ${settings.currency || 'YER'}`
+                    )}
                   </span>
                 </div>
               </div>
@@ -858,13 +871,13 @@ export default function ChartOfAccounts({
                   <div className="bg-emerald-950/20 border border-emerald-900/20 rounded-xl p-2 text-center">
                     <span className="block text-[8px] text-emerald-400 font-black uppercase">{isAr ? 'إجمالي المدين' : 'Total Debit'}</span>
                     <span className="text-xs font-mono font-black text-emerald-400">
-                      {reportTransactions.filter(t => t.type === 'Debit').reduce((s, t) => s + (t.amount || 0), 0).toLocaleString()} YER
+                      {reportTransactions.filter(t => t.type === 'Debit').reduce((s, t) => s + (t.amount || 0), 0).toLocaleString()} {settings.currency || 'YER'}
                     </span>
                   </div>
                   <div className="bg-rose-950/20 border border-rose-900/20 rounded-xl p-2 text-center">
                     <span className="block text-[8px] text-rose-400 font-black uppercase">{isAr ? 'إجمالي الدائن' : 'Total Credit'}</span>
                     <span className="text-xs font-mono font-black text-rose-400">
-                      {reportTransactions.filter(t => t.type === 'Credit').reduce((s, t) => s + (t.amount || 0), 0).toLocaleString()} YER
+                      {reportTransactions.filter(t => t.type === 'Credit').reduce((s, t) => s + (t.amount || 0), 0).toLocaleString()} {settings.currency || 'YER'}
                     </span>
                   </div>
                   <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-2 text-center">
@@ -905,10 +918,24 @@ export default function ChartOfAccounts({
                           <span className="text-[8px] bg-slate-900 text-slate-500 border border-slate-800 px-1.5 py-0.5 rounded uppercase font-black">{tx.module || '—'}</span>
                         </td>
                         <td className="p-2 text-right text-[10px] font-mono text-emerald-400 font-black">
-                          {tx.type === 'Debit' ? `${(tx.amountOriginal || tx.amount || 0).toLocaleString()} ${tx.currencyOriginal || 'YER'}` : '—'}
+                          {tx.type === 'Debit' ? (
+                            <div className="flex flex-col items-end">
+                              <span>{(tx.amountOriginal || tx.amount || 0).toLocaleString()} {tx.currencyOriginal || (settings.currency || 'YER')}</span>
+                              {tx.currencyOriginal && tx.currencyOriginal !== (settings.currency || 'YER') && (
+                                <span className="text-[8px] text-slate-500 font-normal">≈ {(tx.amount || 0).toLocaleString()} {settings.currency || 'YER'}</span>
+                              )}
+                            </div>
+                          ) : '—'}
                         </td>
                         <td className="p-2 text-right text-[10px] font-mono text-rose-400 font-black">
-                          {tx.type === 'Credit' ? `${(tx.amountOriginal || tx.amount || 0).toLocaleString()} ${tx.currencyOriginal || 'YER'}` : '—'}
+                          {tx.type === 'Credit' ? (
+                            <div className="flex flex-col items-end">
+                              <span>{(tx.amountOriginal || tx.amount || 0).toLocaleString()} {tx.currencyOriginal || (settings.currency || 'YER')}</span>
+                              {tx.currencyOriginal && tx.currencyOriginal !== (settings.currency || 'YER') && (
+                                <span className="text-[8px] text-slate-500 font-normal">≈ {(tx.amount || 0).toLocaleString()} {settings.currency || 'YER'}</span>
+                              )}
+                            </div>
+                          ) : '—'}
                         </td>
                       </tr>
                     ))}
@@ -947,7 +974,7 @@ export default function ChartOfAccounts({
                     <body onload="window.print()">
                     <h2>[${reportAccount.code}] ${isAr ? reportAccount.nameAr : reportAccount.nameEn}</h2>
                     <p>${reportAccount.type} | ${new Date().toLocaleString()}</p>
-                    <p class="bal">${isAr ? 'الرصيد:' : 'Balance:'} ${Math.round(reportAccount.balance || 0).toLocaleString()} YER</p>
+                    <p class="bal">${isAr ? 'الرصيد:' : 'Balance:'} ${Math.round(reportAccount.balance || 0).toLocaleString()} ${settings.currency || 'YER'}</p>
                     <table><thead><tr><th>${isAr ? 'التاريخ' : 'Date'}</th><th>${isAr ? 'القيد' : 'Ref'}</th><th>${isAr ? 'البيان' : 'Desc'}</th><th>${isAr ? 'الوحدة' : 'Module'}</th><th style="color:green">${isAr ? 'مدين' : 'Debit'}</th><th style="color:red">${isAr ? 'دائن' : 'Credit'}</th></tr></thead><tbody>${rows}</tbody></table>
                     </body></html>`);
                   win.document.close();

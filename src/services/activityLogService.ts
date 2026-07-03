@@ -41,6 +41,7 @@ export type ActivityAction =
   | 'mark_all_read'
   | 'export_orders_pdf'
   | 'export_orders_csv'
+  | 'export_pdf'
   | 'add_payment'
   | 'add_shipping_company'
   | 'edit_shipping_company'

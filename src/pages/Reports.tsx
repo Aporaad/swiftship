@@ -18,6 +18,7 @@ import {
   Save, CheckCircle2, ChevronDown, Check, Coins, Eye, ShoppingCart, UserCheck,
   Bookmark, Trash2, Palette, Sparkles
 } from 'lucide-react';
+import { printContent } from '../lib/printUtils';
 import { format, startOfDay, endOfDay, subDays, isWithinInterval } from 'date-fns';
 import * as XLSX from 'xlsx';
 import { notificationService } from '../services/notificationService';
@@ -1166,7 +1167,8 @@ export default function Reports() {
     }
 
     // ─── Browser fallback ───────────────────────────────────────────────
-    window.print();
+    const reportTitle = isAr ? 'تقرير نظام ALX' : 'ALX System Report';
+    printContent(reportTitle, 'print-invoice-canvas', isAr);
   };
 
   if (loading || roleLoading) {
@@ -2110,8 +2112,8 @@ export default function Reports() {
                                       </td>
                                     </tr>
                                   ) : (
-                                    filteredData.orders.filter(o => o.orderStatus !== 'Cancelled' && (parseFloat(o.packagingFee) || 0) > 0).slice(0, 100).map(o => (
-                                      <tr key={o.id} className="bg-slate-900/20 hover:bg-slate-900/40 rounded-lg">
+                                    filteredData.orders.filter(o => o.orderStatus !== 'Cancelled' && (parseFloat(o.packagingFee) || 0) > 0).slice(0, 100).map((o, idx) => (
+                                      <tr key={`${o.id}-${idx}`} className="bg-slate-900/20 hover:bg-slate-900/40 rounded-lg">
                                         <td className="py-2.5 px-2 font-mono font-black text-[#d4af37]">{o.orderNumber}</td>
                                         <td className="py-2.5 px-2 text-slate-300 font-bold max-w-[120px] truncate" title={o.customerName}>
                                           {o.customerName}
@@ -2155,8 +2157,8 @@ export default function Reports() {
                                       </td>
                                     </tr>
                                   ) : (
-                                    filteredData.expenses.filter(e => e.category === 'PACKAGING').map(e => (
-                                      <tr key={e.id} className="bg-slate-900/20 hover:bg-slate-900/40 rounded-lg">
+                                    filteredData.expenses.filter(e => e.category === 'PACKAGING').map((e, idx) => (
+                                      <tr key={`${e.id}-${idx}`} className="bg-slate-900/20 hover:bg-slate-900/40 rounded-lg">
                                         <td className="py-2.5 px-2 font-mono font-black text-[#d4af37]">{e.expenseNumber}</td>
                                         <td className="py-2.5 px-2 text-slate-300 max-w-[120px] truncate" title={e.notes || e.recipientName}>
                                           {e.notes || e.recipientName}
@@ -2204,8 +2206,8 @@ export default function Reports() {
                                     </td>
                                   </tr>
                                 ) : (
-                                  pkgTxs.map(tx => (
-                                    <tr key={tx.id} className="bg-slate-900/20 hover:bg-slate-900/40 rounded-lg">
+                                  pkgTxs.map((tx, idx) => (
+                                    <tr key={`${tx.id}-${idx}`} className="bg-slate-900/20 hover:bg-slate-900/40 rounded-lg">
                                       <td className="py-2.5 px-2 font-mono font-black text-slate-400">{tx.refNumber || '-'}</td>
                                       <td className="py-2.5 px-2 text-slate-400 font-mono">{tx.createdAt ? format(new Date(tx.createdAt), 'yyyy-MM-dd') : '-'}</td>
                                       <td className="py-2.5 px-2 text-slate-300 font-bold max-w-[200px] truncate" title={tx.description}>
@@ -2299,10 +2301,10 @@ export default function Reports() {
                                 </td>
                               </tr>
                             ) : (
-                              accountTransactions.map((tx) => {
+                              accountTransactions.map((tx, idx) => {
                                 const acc = accounts.find(a => a.id === filters.accountId);
                                 return (
-                                  <tr key={tx.id} className="hover:bg-slate-950/20 font-medium">
+                                  <tr key={`${tx.id}-${idx}`} className="hover:bg-slate-950/20 font-medium">
                                     <td className="py-3 px-3 text-slate-500">{format(new Date(tx.createdAt), 'yyyy-MM-dd HH:mm')}</td>
                                     <td className="py-3 px-3 font-mono font-bold text-slate-300">{tx.refNumber || '-'}</td>
                                     <td className="py-3 px-3 text-center">
@@ -2500,8 +2502,8 @@ export default function Reports() {
                             </tr>
                           </thead>
                           <tbody>
-                            {searchMatchList(filteredData.orders, 'customerName').map((o) => (
-                              <tr key={o.id} className="bg-slate-900/10 hover:bg-slate-900/30 rounded-xl transition cursor-pointer" onClick={() => setSelectedOrderId(o.orderNumber || o.id)}>
+                            {searchMatchList(filteredData.orders, 'customerName').map((o, idx) => (
+                              <tr key={`${o.id}-${idx}`} className="bg-slate-900/10 hover:bg-slate-900/30 rounded-xl transition cursor-pointer" onClick={() => setSelectedOrderId(o.orderNumber || o.id)}>
                                 <td className="py-3 px-3 font-mono font-black text-[#d4af37]">{o.orderNumber}</td>
                                 <td className="py-3 px-3 font-bold text-white">{o.customerName}</td>
                                 <td className="py-3 px-3 text-slate-500 font-mono">{o.createdAt ? format(new Date(o.createdAt), 'yyyy-MM-dd') : '-'}</td>
@@ -2804,8 +2806,8 @@ export default function Reports() {
                       {(() => {
                         const sc = shippingCompanies.find(c => c.name === selectedCompanyId || c.id === selectedCompanyId) || { name: selectedCompanyId, type: 'INTERNATIONAL', phone: '-', dueAmount: 0 };
                         const coOrders = filteredData.orders.filter(o => o.shippingCompany === sc.name || o.shippingCompanyId === sc.id);
-                        const totalSum = coOrders.reduce((sum, o) => sum + (parseFloat(o.totalPrice) || 0), 0);
-                        const paidSum = coOrders.reduce((sum, o) => sum + (parseFloat(o.amountPaid) || 0), 0);
+                        const totalSum = coOrders.reduce((sum, o) => sum + convertCurrency(parseFloat(o.totalPrice) || 0, o.currency || 'YER', 'YER'), 0);
+                        const paidSum = coOrders.reduce((sum, o) => sum + convertCurrency(parseFloat(o.amountPaid) || 0, o.currency || 'YER', 'YER'), 0);
                         const linkedTxs = accountTransactions.filter(tx => tx.description?.toLowerCase().includes((sc?.name || '').toLowerCase()) || tx.description?.includes(sc?.name || ''));
 
                         const scDueInDisplay = convertCurrency(sc.dueAmount || 0, 'YER', displayCurrency);
@@ -2973,9 +2975,9 @@ export default function Reports() {
 
                         const custAcc = accounts.find(a => a.entityType === 'customer' && a.entityId === cust.id);
                         const custOrders = filteredData.orders.filter(o => o.customerId === cust.id || o.customerName === cust.fullName || o.customerPhone === cust.phone);
-                        const grossSum = custOrders.reduce((sum, o) => sum + (parseFloat(o.totalPrice) || 0), 0);
-                        const paidSum = custOrders.reduce((sum, o) => sum + (parseFloat(o.amountPaid) || 0), 0);
-                        const remainDebt = custOrders.reduce((sum, o) => sum + (parseFloat(o.amountRemaining) || 0), 0);
+                        const grossSum = custOrders.reduce((sum, o) => sum + convertCurrency(parseFloat(o.totalPrice) || 0, o.currency || 'YER', 'YER'), 0);
+                        const paidSum = custOrders.reduce((sum, o) => sum + convertCurrency(parseFloat(o.amountPaid) || 0, o.currency || 'YER', 'YER'), 0);
+                        const remainDebt = custOrders.reduce((sum, o) => sum + convertCurrency(parseFloat(o.amountRemaining) || 0, o.currency || 'YER', 'YER'), 0);
                         const statementsTxs = accountTransactions.filter(tx => 
                           (custAcc && tx.accountId === custAcc.id) || 
                           tx.entityId === cust.id ||
@@ -4260,8 +4262,8 @@ export default function Reports() {
                       const cust = customers.find(c => c.id === selectedCustomerId);
                       if (!cust) return <p className="text-center py-4 font-bold text-slate-500">Customer not found</p>;
                       const custOrders = filteredData.orders.filter(o => o.customerId === cust.id || o.customerName === cust.fullName || o.customerPhone === cust.phone);
-                      const grossSum = custOrders.reduce((sum, o) => sum + (parseFloat(o.totalPrice) || 0), 0);
-                      const paidSum = custOrders.reduce((sum, o) => sum + (parseFloat(o.amountPaid) || 0), 0);
+                      const grossSum = custOrders.reduce((sum, o) => sum + convertCurrency(parseFloat(o.totalPrice) || 0, o.currency || 'YER', 'YER'), 0);
+                      const paidSum = custOrders.reduce((sum, o) => sum + convertCurrency(parseFloat(o.amountPaid) || 0, o.currency || 'YER', 'YER'), 0);
                       return (
                         <div className="space-y-4 text-xs">
                           <h4 className="font-extrabold text-[#000] border-b pb-1 text-sm">{isAr ? `كشف حساب تفصيلي للعميل: ${cust.fullName}` : `Statement Of Account: ${cust.fullName}`}</h4>

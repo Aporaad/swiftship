@@ -59,9 +59,10 @@ export interface AccountTransaction {
   entityId: string;
   entityName: string;
   type: "Debit" | "Credit";
-  amount: number; // Amount in default currency
-  amountOriginal: number; // Amount in original currency
-  currencyOriginal: string; // Original currency (YER, USD, SAR)
+  amount: number; // Amount in target account currency
+  currency: string; // Account currency (YER, USD, SAR)
+  amountOriginal: number; // Amount in original voucher currency
+  currencyOriginal: string; // Original voucher currency
   description: string; // Transaction description
   refNumber: string; // Reference number (expense/order/adjustment)
   module:
@@ -242,8 +243,11 @@ class FinancialAccountService {
   async getAccountById(accountId: string): Promise<FinancialAccount | null> {
     try {
       const docRef = await getDoc(doc(db, "accounts", accountId));
-      if (!docRef.exists()) return null;
-      return { id: docRef.id, ...docRef.data() } as FinancialAccount;
+      if (docRef.exists()) {
+        return { id: docRef.id, ...docRef.data() } as FinancialAccount;
+      }
+      // Fallback: search by entityId if not found by primary doc ID
+      return this.getAccountByEntityId(accountId);
     } catch (error) {
       console.error(
         "[FinancialAccountService] Error fetching account by ID:",
@@ -254,7 +258,15 @@ class FinancialAccountService {
   }
 
   private getAccountTypeByCode(code: string): string {
-    const firstChar = code.trim().charAt(0);
+    const cleanCode = code.trim().toUpperCase();
+    if (cleanCode.startsWith("REV")) return "Revenue";
+    if (cleanCode.startsWith("EXP")) return "Expense";
+    if (cleanCode.startsWith("AST") || cleanCode.startsWith("ASS"))
+      return "Asset";
+    if (cleanCode.startsWith("LIAB")) return "Liability";
+    if (cleanCode.startsWith("EQU")) return "Equity";
+
+    const firstChar = cleanCode.charAt(0);
     switch (firstChar) {
       case "1":
         return "Asset";
@@ -347,6 +359,7 @@ class FinancialAccountService {
       entityName: debitAccount.entityName,
       type: "Debit",
       amount: debitAmount,
+      currency: debitAccount.currency,
       amountOriginal: entry.amount,
       currencyOriginal: entry.currency,
       description: entry.description,
@@ -395,6 +408,7 @@ class FinancialAccountService {
       entityName: creditAccount.entityName,
       type: "Credit",
       amount: creditAmount,
+      currency: creditAccount.currency,
       amountOriginal: entry.amount,
       currencyOriginal: entry.currency,
       description: entry.description,
@@ -456,7 +470,7 @@ class FinancialAccountService {
   async recordDoubleEntryTransaction(
     debitAccountId: string,
     creditAccountId: string,
-    transactionData: Omit<AccountTransaction, "id" | "type">,
+    transactionData: Omit<AccountTransaction, "id" | "type" | "currency">,
     providedRates?: { USD?: number; SAR?: number; YER?: number },
   ): Promise<void> {
     const debitAccount = await this.getAccountById(debitAccountId);
@@ -1125,9 +1139,9 @@ class FinancialAccountService {
           type: "dynamic",
         },
         descriptionTempAr:
-          "إضافة تكاليف المنتجات الأصلية للطلب للمندوب: {orderNumber}",
+          "إضافة تكاليف المنتجات الأصلية والشحن للطلب للمندوب: {orderNumber}",
         descriptionTempEn:
-          "Adding sourcing products cost to courier: {orderNumber}",
+          "Adding sourcing products and shipping cost to courier: {orderNumber}",
       },
       {
         id: "sourcing_cost_system",
@@ -1146,8 +1160,8 @@ class FinancialAccountService {
           name: "حساب الصندوق/الخزينة (نظامي)",
           type: "system",
         },
-        descriptionTempAr: "تكلفة شراء منتجات الطلب: {orderNumber}",
-        descriptionTempEn: "Sourcing products cost for order: {orderNumber}",
+        descriptionTempAr: "تكلفة شراء منتجات الطلب وشحنه: {orderNumber}",
+        descriptionTempEn: "Sourcing products and shipping cost for order: {orderNumber}",
       },
       {
         id: "packaging_fee",
@@ -1339,6 +1353,8 @@ class FinancialAccountService {
       customer?: any;
       isAr?: boolean;
       rawAmount?: number;
+      amountOriginal?: number;
+      currencyOriginal?: string;
       expenseNumber?: string;
       profileName?: string;
     },
@@ -1350,7 +1366,7 @@ class FinancialAccountService {
       if (ruleDoc.exists()) {
         const d = ruleDoc.data();
         if (d && d.data && Array.isArray(d.data)) {
-          rule = d.data.find(r => r.id === ruleId) || null;
+          rule = d.data.find((r) => r.id === ruleId) || null;
         }
       }
 
@@ -1373,6 +1389,7 @@ class FinancialAccountService {
         return;
       }
 
+      // Use a consistent default currency if not specified, but prefer settings if available
       const systemAccs = await this.ensureSystemAccounts("YER");
 
       // Resolve Debit Account
@@ -1503,8 +1520,8 @@ class FinancialAccountService {
         description,
         module: moduleAssign,
         refNumber,
-        amount: entities.rawAmount ?? 0,
-        currency: "YER",
+        amount: entities.amountOriginal !== undefined ? entities.amountOriginal : (entities.rawAmount ?? 0),
+        currency: entities.currencyOriginal || "YER",
         debitAccount: { id: debitId, code: debitCode },
         creditAccount: { id: creditId, code: creditCode },
         createdByUid: auth.currentUser?.uid || "system",
