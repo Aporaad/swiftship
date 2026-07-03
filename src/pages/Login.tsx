@@ -178,7 +178,7 @@ export default function Login() {
               navigate("/");
               setLoading(false);
               return;
-            } catch (_) {}
+            } catch (_) { }
           }
         }
         throw new Error(
@@ -443,7 +443,7 @@ export default function Login() {
             loginAt: new Date().toISOString(),
           },
         );
-      } catch (_) {}
+      } catch (_) { }
 
       navigate("/");
     } catch (err: any) {
@@ -716,7 +716,7 @@ export default function Login() {
       </div>
 
       {/* Subtly crafted tech-themed developer badge */}
-      <div
+      {/* <div
         className="mt-8 flex flex-col items-center justify-center gap-2 text-[10px] text-slate-500 font-mono tracking-wider opacity-55 hover:opacity-100 transition-opacity duration-300"
         dir="ltr"
       >
@@ -762,7 +762,7 @@ export default function Login() {
             <Phone className="w-3.5 h-3.5" />
           </a>
         </div>
-      </div>
+      </div> */}
     </div>
   );
 }
