@@ -8,8 +8,13 @@
  *   Employees  → prefix 2130  (Liability — Employee Ledger)
  *
  * Every transaction that touches an account is atomically written to
- * `account_transactions` and the account balance is updated via
- * Firestore increment() to guarantee consistency.
+ * `account_transactions`. The balance field is kept updated via increment()
+ * for real-time convenience, but the authoritative balance is always
+ * the sum of account_transactions (Debit − Credit for Assets/Expenses,
+ * Credit − Debit for Liabilities/Equity/Revenue).
+ *
+ * Use recalculateAndSyncBalance(accountId) to reconcile the stored balance
+ * against the live transaction history.
  */
 
 import {
@@ -25,8 +30,8 @@ import {
   increment,
   getDoc,
   writeBatch,
-} from "firebase/firestore";
-import { db, auth } from "../lib/firebase";
+} from "../lib/supabase-firebase-adapter";
+import { db, auth } from "../lib/supabase-firebase-adapter";
 import { activityLogService } from "./activityLogService";
 import { Transaction } from "../types";
 
@@ -66,13 +71,13 @@ export interface AccountTransaction {
   description: string; // Transaction description
   refNumber: string; // Reference number (expense/order/adjustment)
   module:
-    | "expense"
-    | "order"
-    | "adjustment"
-    | "custody"
-    | "payment"
-    | "salary"
-    | string;
+  | "expense"
+  | "order"
+  | "adjustment"
+  | "custody"
+  | "payment"
+  | "salary"
+  | string;
   salaryMonth?: string; // e.g. '2026-06' for salary payments
   createdAt: number;
   createdByUid?: string;
@@ -449,6 +454,12 @@ class FinancialAccountService {
 
     await batch.commit();
 
+    // Trigger asynchronous full balance recalculation of both accounts in background to ensure perfect database state
+    setTimeout(() => {
+      this.recalculateAndSyncBalance(entry.debitAccountId).catch(console.error);
+      this.recalculateAndSyncBalance(entry.creditAccountId).catch(console.error);
+    }, 1000);
+
     activityLogService.log(
       "financial_transaction" as any,
       debitAccount.entityName + " / " + creditAccount.entityName,
@@ -665,10 +676,10 @@ class FinancialAccountService {
     try {
       const q = employeeId
         ? query(
-            collection(db, "salary_history"),
-            where("employeeId", "==", employeeId),
-            orderBy("createdAt", "desc"),
-          )
+          collection(db, "salary_history"),
+          where("employeeId", "==", employeeId),
+          orderBy("createdAt", "desc"),
+        )
         : query(collection(db, "salary_history"), orderBy("createdAt", "desc"));
 
       const snap = await getDocs(q);
@@ -980,6 +991,177 @@ class FinancialAccountService {
       );
       return { debit: 0, credit: 0, net: 0, count: 0 };
     }
+  }
+
+  /**
+   * recalculateAndSyncBalance
+   * ──────────────────────────────────────────────────────────────────────
+   * Re-computes the authoritative balance for an account from scratch
+   * by summing ALL account_transactions, then writes the corrected value
+   * back to the accounts document.
+   *
+   * Accounting formula applied:
+   *   Asset  / Expense   → balance = Σ Debit − Σ Credit  (normal debit balance)
+   *   Liab   / Equity    → balance = Σ Credit − Σ Debit   (normal credit balance)
+   *   Revenue            → balance = Σ Credit − Σ Debit   (normal credit balance)
+   *
+   * @param accountId  - Firestore document ID in the `accounts` collection
+   * @returns corrected balance (in account's native currency)
+   */
+  async recalculateAndSyncBalance(accountId: string): Promise<number> {
+    try {
+      // 1. Load the account document to know its type and code
+      const accountDoc = await getDoc(doc(db, "accounts", accountId));
+      if (!accountDoc.exists()) {
+        console.warn(
+          `[recalculateAndSyncBalance] Account ${accountId} not found.`,
+        );
+        return 0;
+      }
+      const account = accountDoc.data() as FinancialAccount & { type?: string };
+      const accountCode: string = account.accountCode || "";
+
+      // 2. Determine account type from stored type field or code prefix
+      const rawType: string = account.type || this.getAccountTypeByCode(accountCode);
+      // Normal debit accounts: Asset, Expense
+      // Normal credit accounts: Liability, Equity, Revenue
+      const isDebitNormal =
+        rawType === "Asset" || rawType === "Expense";
+
+      // 3. Sum all transactions by accountId or accountCode
+      const qById = query(
+        collection(db, "account_transactions"),
+        where("accountId", "==", accountId),
+      );
+      const qByCode = query(
+        collection(db, "account_transactions"),
+        where("accountCode", "==", accountCode),
+      );
+
+      const [snapById, snapByCode] = await Promise.all([
+        getDocs(qById),
+        getDocs(qByCode),
+      ]);
+
+      // Merge and deduplicate by transaction ID
+      const txMap = new Map<string, any>();
+      snapById.docs.forEach((d) => txMap.set(d.id, d.data()));
+      snapByCode.docs.forEach((d) => {
+        if (!txMap.has(d.id)) txMap.set(d.id, d.data());
+      });
+
+      const exchangeRates = await this.getExchangeRates();
+      const accountCurrency = account.currency || "YER";
+
+      let totalDebit = 0;
+      let totalCredit = 0;
+      txMap.forEach((tx) => {
+        let amt = parseFloat(tx.amount) || 0;
+        const txCurrency = tx.currency || accountCurrency;
+
+        // If transaction currency differs from the account's currency, perform conversion
+        if (txCurrency !== accountCurrency) {
+          const origAmt = parseFloat(tx.amountOriginal) || amt;
+          const origCurr = tx.currencyOriginal || txCurrency;
+          amt = this.convertToTargetCurrency(
+            origAmt,
+            origCurr,
+            accountCurrency,
+            exchangeRates,
+          );
+        }
+
+        if (tx.type === "Debit") totalDebit += amt;
+        else if (tx.type === "Credit") totalCredit += amt;
+      });
+
+      // 4. Apply accounting formula
+      const correctBalance = isDebitNormal
+        ? totalDebit - totalCredit
+        : totalCredit - totalDebit;
+
+      // 5. Write corrected balance back to the accounts document
+      await updateDoc(doc(db, "accounts", accountId), {
+        balance: correctBalance,
+        debitTotal: totalDebit,
+        creditTotal: totalCredit,
+        updatedAt: Date.now(),
+        lastRecalculatedAt: Date.now(),
+      });
+
+      // 6. Write corrected balance to parent entity if it exists (syncing customers, couriers, users)
+      if (
+        account.entityType &&
+        account.entityType !== "system" &&
+        account.entityId
+      ) {
+        try {
+          const entityCol = this.getEntityCollection(account.entityType);
+          const entityRef = doc(db, entityCol, account.entityId);
+          await updateDoc(entityRef, {
+            financialBalance: correctBalance,
+            updatedAt: Date.now(),
+          });
+          console.log(
+            `[recalculateAndSyncBalance] Synced financialBalance for parent entity ${account.entityType} (${account.entityId}) to ${correctBalance}`
+          );
+        } catch (err) {
+          console.warn("Silent parent entity balance sync warning:", err);
+        }
+      }
+
+      console.log(
+        `[recalculateAndSyncBalance] Account ${accountCode} (${accountId}): ` +
+        `debit=${totalDebit}, credit=${totalCredit}, balance=${correctBalance} (${rawType})`,
+      );
+
+      return correctBalance;
+    } catch (error) {
+      console.error(
+        "[recalculateAndSyncBalance] Error:",
+        error,
+      );
+      return 0;
+    }
+  }
+
+  /**
+   * Recalculate and sync ALL accounts in the system.
+   * Returns a summary of accounts processed and any errors encountered.
+   * Useful for migration / reconciliation runs.
+   */
+  async recalculateAllBalances(): Promise<{
+    processed: number;
+    errors: number;
+    results: Array<{ accountId: string; accountCode: string; oldBalance: number; newBalance: number }>;
+  }> {
+    const results: Array<{ accountId: string; accountCode: string; oldBalance: number; newBalance: number }> = [];
+    let errors = 0;
+
+    try {
+      const snap = await getDocs(collection(db, "accounts"));
+      for (const d of snap.docs) {
+        const data = d.data() as FinancialAccount;
+        const oldBalance = data.balance || 0;
+        try {
+          const newBalance = await this.recalculateAndSyncBalance(d.id);
+          results.push({
+            accountId: d.id,
+            accountCode: data.accountCode || data.accountCode || d.id,
+            oldBalance,
+            newBalance,
+          });
+        } catch (err) {
+          errors++;
+          console.error(`[recalculateAllBalances] Error on account ${d.id}:`, err);
+        }
+      }
+    } catch (err) {
+      console.error("[recalculateAllBalances] Fatal error loading accounts:", err);
+    }
+
+    console.log(`[recalculateAllBalances] Done. Processed: ${results.length}, Errors: ${errors}`);
+    return { processed: results.length, errors, results };
   }
 
   /**

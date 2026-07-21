@@ -1,7 +1,7 @@
 {
   "name": "swiftship",
   "private": true,
-  "version": "1.0.0",
+  "version": "4.0.0",
   "description": "alx — نظام إدارة الشحنات والتوصيل",
   "author": {
     "name": "alx",

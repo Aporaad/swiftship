@@ -716,10 +716,10 @@ export default function Login() {
       </div>
 
       {/* Subtly crafted tech-themed developer badge */}
-      {/* <div
+      {/*<div>  
         className="mt-8 flex flex-col items-center justify-center gap-2 text-[10px] text-slate-500 font-mono tracking-wider opacity-55 hover:opacity-100 transition-opacity duration-300"
         dir="ltr"
-      >
+      &gt;
         <div className="flex items-center gap-2">
           <span className="text-slate-700 font-bold">&lt;/&gt;</span>
           <span className="text-[10px] font-black tracking-wide text-slate-400 hover:text-[#d4af37] transition-colors">
@@ -762,7 +762,7 @@ export default function Login() {
             <Phone className="w-3.5 h-3.5" />
           </a>
         </div>
-      </div> */}
+      </div>*/}
     </div>
   );
 }

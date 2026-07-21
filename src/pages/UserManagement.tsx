@@ -22,6 +22,7 @@ import { activityLogService } from '../services/activityLogService';
 import ConfirmModal from '../components/ConfirmModal';
 import { financialAccountService } from '../services/financialAccountService';
 import { DEFAULT_ROLE_PERMISSIONS } from '../lib/permissions';
+import { useAccountBalances } from '../hooks/useAccountBalances';
 
 // ══════════════════════════════════════════════════════════════
 // PERMISSIONS — FULL SYSTEM COVERAGE
@@ -248,9 +249,13 @@ export default function UserManagement() {
 
   // ── Data ─────────────────────────────────────────────────
   const [users, setUsers] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);  // financial accounts for employees
   const [roles, setRoles] = useState<any[]>([]);
   const [activityLogs, setActivityLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // ── Live transaction-based balances (real-time from account_transactions) ────
+  const liveBalances = useAccountBalances();
 
   // ── Users filters ────────────────────────────────────────
   const [search, setSearch] = useState('');
@@ -382,6 +387,15 @@ export default function UserManagement() {
       setLoading(false);
     }, err => handleSupabaseError(err, OperationType.LIST, 'users'));
     return unsub;
+  }, [roleLoading]);
+
+  // ── Subscribe to financial accounts (for employee balance display) ────────────
+  useEffect(() => {
+    if (roleLoading) return;
+    const unsub = onSnapshot(collection(db, 'accounts'), (snap: any) => {
+      setAccounts(snap.docs.map((d: any) => ({ id: d.id, ...d.data() })));
+    }, (err: any) => console.warn('[UserManagement] Could not load accounts:', err));
+    return () => unsub();
   }, [roleLoading]);
 
   useEffect(() => {
@@ -790,7 +804,32 @@ export default function UserManagement() {
     return t(`${hrs}س ${mins}د`, `${hrs}h ${mins}m`);
   };
 
-  const filteredUsers = users
+  // ── Merge each user with their live financial balance ─────────────────────────────────
+  // Priority: live byCode → live byId → stored acc.balance → user.financialBalance (legacy)
+  const usersWithLiveBalance = React.useMemo(() => {
+    return users.map(u => {
+      // Find the linked financial account (employee account: prefix 2130)
+      const acc = accounts.find(a =>
+        a.entityId === u.id ||
+        a.id === u.financialAccountId ||
+        a.id === u.accountId
+      );
+
+      const liveByCode = acc?.accountCode ? liveBalances.byCode[acc.accountCode] : undefined;
+      const liveById   = acc?.id          ? liveBalances.byId[acc.id]            : undefined;
+      const liveBalance = liveByCode ?? liveById ?? (acc ? acc.balance : undefined) ?? u.financialBalance ?? 0;
+
+      return {
+        ...u,
+        financialAccountId:   acc?.id          || u.financialAccountId   || null,
+        financialAccountCode: acc?.accountCode || u.financialAccountCode || null,
+        financialBalance: liveBalance,
+        financialCurrency: acc?.currency || u.financialCurrency || settings.currency || 'YER',
+      };
+    });
+  }, [users, accounts, liveBalances, settings.currency]);
+
+  const filteredUsers = usersWithLiveBalance
     .filter(u => {
       const ms = (u.fullName || '').toLowerCase().includes(search.toLowerCase()) ||
         (u.email || '').toLowerCase().includes(search.toLowerCase()) ||

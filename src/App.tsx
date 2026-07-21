@@ -26,6 +26,7 @@ import SalaryHistory from './pages/SalaryHistory';
 import Reports from './pages/Reports';
 
 import { SettingsProvider } from './context/SettingsContext';
+import { financialAccountService } from './services/financialAccountService';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(() => {
@@ -69,6 +70,26 @@ export default function App() {
     });
     return unsubscribe;
   }, []);
+
+  // ── Automatic full balance recalculation & periodic sync on system startup ──
+  useEffect(() => {
+    if (!user) return;
+
+    // Trigger immediately on app startup / user login
+    financialAccountService.recalculateAllBalances().catch(err => {
+      console.warn("Auto recalculation on app launch failed:", err);
+    });
+
+    // Setup background periodic synchronization every 10 minutes
+    const interval = setInterval(() => {
+      console.log("[App] Periodic background balance verification running...");
+      financialAccountService.recalculateAllBalances().catch(err => {
+        console.warn("Periodic background recalculation failed:", err);
+      });
+    }, 10 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [user]);
 
   if (loading) {
     return (

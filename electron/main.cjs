@@ -9,10 +9,10 @@ const fs = require('fs');
 // ============================================================
 // CONFIG
 // ============================================================
-const SERVER_PORT = 3001;
+const SERVER_PORT = 3000;  // السيرفر يعمل دائماً على 3000
 const SERVER_URL = `http://localhost:${SERVER_PORT}`;
 const IS_DEV = process.env.NODE_ENV === 'development';
-const MAX_WAIT_MS = 30000; // 30 ثانية للانتظار حتى يجهز السيرفر
+const MAX_WAIT_MS = 60000; // 60 ثانية للانتظار حتى يجهز السيرفر
 
 let mainWindow = null;
 let serverProcess = null;
@@ -175,10 +175,14 @@ function createWindow() {
     log('[Electron] Main window shown');
   });
 
-  // فتح الروابط الخارجية في المتصفح الافتراضي
+  // فتح الروابط الخارجية في المتصفح الافتراضي أو السماح بالنوافذ المنبثقة للطباعة والروابط المحلية
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('http://localhost')) return { action: 'allow' };
-    shell.openExternal(url);
+    if (url.startsWith('http://localhost') || url === 'about:blank' || url === '') {
+      return { action: 'allow' };
+    }
+    if (url.startsWith('http') || url.startsWith('https')) {
+      shell.openExternal(url);
+    }
     return { action: 'deny' };
   });
 

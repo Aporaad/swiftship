@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { collection, addDoc, doc, updateDoc, onSnapshot, deleteDoc, query, where, orderBy, getDocs } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { collection, addDoc, doc, updateDoc, onSnapshot, deleteDoc, query, where, orderBy, getDocs } from '../lib/supabase-firebase-adapter';
+import { db } from '../lib/supabase-firebase-adapter';
+import { handleFirestoreError, OperationType } from '../lib/firebase';
 import { 
   Plus, 
   Search, 
@@ -30,6 +31,7 @@ import { useSettings } from '../context/SettingsContext';
 import { notificationService } from '../services/notificationService';
 import { activityLogService } from '../services/activityLogService';
 import { financialAccountService } from '../services/financialAccountService';
+import { useAccountBalances } from '../hooks/useAccountBalances';
 import ConfirmModal from '../components/ConfirmModal';
 
 export default function Customers() {
@@ -38,6 +40,9 @@ export default function Customers() {
   const [customers, setCustomers] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // ── Live transaction-based balances (real-time from account_transactions) ────
+  const liveBalances = useAccountBalances();
   const [showModal, setShowModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -275,25 +280,34 @@ export default function Customers() {
 
   const customersWithAccounts = React.useMemo(() => {
     return customers.map(c => {
-      const acc = accounts.find(a => 
-        a.entityId === c.id || 
-        a.id === c.accountId || 
+      const acc = accounts.find(a =>
+        a.entityId === c.id ||
+        a.id === c.accountId ||
         a.id === c.financialAccountId
       );
+
+      // ── Live balance: priority chain ────────────────────────────────────────────
+      // 1. Live from account_transactions by accountCode (most accurate)
+      // 2. Live from account_transactions by account document ID
+      // 3. Stored balance field (fallback if no transactions yet)
+      const liveByCode = acc?.accountCode ? liveBalances.byCode[acc.accountCode] : undefined;
+      const liveById   = acc?.id          ? liveBalances.byId[acc.id]            : undefined;
+      const liveBalance = liveByCode ?? liveById ?? (acc ? acc.balance : 0) ?? 0;
+
       return {
         ...c,
         financialAccountId: acc?.id || c.financialAccountId || null,
         accountId: acc?.id || c.accountId || null,
         financialAccountCode: acc?.accountCode || c.financialAccountCode || null,
-        financialBalance: acc ? acc.balance : 0,
+        financialBalance: liveBalance,
         financialCurrency: acc ? acc.currency : (c.financialCurrency || settings.currency || 'YER'),
-        walletBalance: acc ? acc.balance : 0,
+        walletBalance: liveBalance,
         wallet: {
-          balance: acc ? acc.balance : 0
+          balance: liveBalance
         }
       };
     });
-  }, [customers, accounts, settings.currency]);
+  }, [customers, accounts, settings.currency, liveBalances]);
 
   const activeCustomer = React.useMemo(() => {
     if (!selectedCustomer) return null;

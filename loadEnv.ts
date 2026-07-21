@@ -7,12 +7,12 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { config as dotenvConfig } from 'dotenv';
 
-const currentFilePath = (typeof import.meta !== 'undefined' && typeof import.meta.url === 'string') 
-  ? fileURLToPath(import.meta.url) 
+const currentFilePath = (typeof import.meta !== 'undefined' && typeof import.meta.url === 'string')
+  ? fileURLToPath(import.meta.url)
   : (typeof __filename !== 'undefined' ? __filename : '');
 
-const currentDirPath = (currentFilePath) 
-  ? path.dirname(currentFilePath) 
+const currentDirPath = (currentFilePath)
+  ? path.dirname(currentFilePath)
   : (typeof __dirname !== 'undefined' ? __dirname : process.cwd());
 
 const resourcesPath = process.env.RESOURCES_PATH ?? '';

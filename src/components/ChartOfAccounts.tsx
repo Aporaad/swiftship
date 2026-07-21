@@ -5,9 +5,11 @@ import {
   TrendingUp, TrendingDown, DollarSign, ArrowUpRight, ArrowDownLeft
 } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
-import { db } from '../lib/firebase';
-import { collection, addDoc, doc, deleteDoc, updateDoc, onSnapshot, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { db } from '../lib/supabase-firebase-adapter';
+import { collection, addDoc, doc, deleteDoc, updateDoc, onSnapshot, query, where, getDocs, orderBy } from '../lib/supabase-firebase-adapter';
 import { notificationService } from '../services/notificationService';
+import { useAccountBalances, computeAccountBalance, guessAccountTypeFromCode, AccountType } from '../hooks/useAccountBalances';
+import { financialAccountService } from '../services/financialAccountService';
 
 interface ChartOfAccountsProps {
   isAr: boolean;
@@ -54,6 +56,9 @@ export default function ChartOfAccounts({
   officeAssetsTotal
 }: ChartOfAccountsProps) {
   const [customAccounts, setCustomAccounts] = useState<AccountNode[]>([]);
+
+  // ── Live transaction-based balances (real-time from Supabase) ──────────────
+  const liveBalances = useAccountBalances();
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -110,15 +115,17 @@ export default function ChartOfAccounts({
     '5300': true,
   });
 
-  // Sync custom accounts from DB
+  // Sync custom accounts from DB (Supabase real-time via adapter)
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'accounts'), (snap) => {
-      setCustomAccounts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)));
-    }, (error) => {
+    const unsub = onSnapshot(collection(db, 'accounts'), (snap: any) => {
+      setCustomAccounts(snap.docs.map((d: any) => ({ id: d.id, ...d.data() } as any)));
+    }, (error: any) => {
       console.error("Error loading custom accounts:", error);
     });
     return () => unsub();
   }, []);
+
+
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Static/Dynamic System-default accounts — built from live props
@@ -177,7 +184,7 @@ export default function ChartOfAccounts({
       if (!code) return;
       if (combined.some(sa => sa.code === code)) return; // already present
 
-      let type = ca.type || 'Asset';
+      let type: AccountType = ca.type || 'Asset';
       if (ca.entityType === 'customer') type = 'Asset';
       else if (ca.entityType === 'courier' || ca.entityType === 'employee') type = 'Liability';
       else if (ca.entityType === 'system') {
@@ -191,6 +198,25 @@ export default function ChartOfAccounts({
 
       const parentCode = ca.accountPrefix || ca.parentCode || null;
 
+      // ── Live balance from account_transactions ───────────────────────────
+      // Priority: liveBalances.byCode → liveBalances.byId → stored balance
+      const liveByCode = liveBalances.byCode[code];
+      const liveById = ca.id ? liveBalances.byId[ca.id] : undefined;
+      let computedBalance: number;
+
+      if (liveByCode !== undefined) {
+        // Use live transaction balance — already computed with correct accounting sign
+        computedBalance = liveByCode;
+      } else if (liveById !== undefined) {
+        // Use live balance by account ID, apply proper sign for account type
+        const rawNet = liveById; // raw = debit - credit
+        const normalSide = (type === 'Asset' || type === 'Expense') ? 1 : -1;
+        computedBalance = normalSide === 1 ? rawNet : -rawNet;
+      } else {
+        // Fallback to stored balance (no transactions yet)
+        computedBalance = ca.balance || 0;
+      }
+
       combined.push({
         id: ca.id,
         code,
@@ -198,7 +224,7 @@ export default function ChartOfAccounts({
         nameEn: ca.entityName || ca.nameEn || '',
         type: type as any,
         parentCode: parentCode || null,
-        balance: ca.balance || 0,
+        balance: computedBalance,
         currency: ca.currency || 'YER',
         isSystem: false
       });
@@ -208,22 +234,29 @@ export default function ChartOfAccounts({
     combined.sort((a, b) => (a.code || '').localeCompare(b.code || ''));
 
     // ── Recursive balance rollup ──────────────────────────────────────────────
-    // Leaf node: return its stored balance converted to YER
-    // Parent node: sum all children recursively
+    // Leaf account: use live computed balance (already set above for custom accounts)
+    //               or the system prop-based value (for system accounts).
+    // Branch/parent account: always sum children recursively — never use a fixed value.
     const calculateBalance = (nodeCode: string): number => {
       const node = combined.find(a => a.code === nodeCode);
       if (!node) return 0;
 
       const children = combined.filter(a => a.parentCode === nodeCode);
       if (children.length === 0) {
-        // Leaf: convert to YER if needed (for tree display everything is in YER)
+        // ── Leaf node ──
+        // If a live transaction balance exists for this code, use it (signed correctly)
+        const liveVal = liveBalances.byCode[nodeCode];
+        if (liveVal !== undefined) {
+          node.balance = liveVal;
+        }
+        // Convert to YER for rollup
         const rawBal = node.balance || 0;
         return node.currency && node.currency !== 'YER'
           ? convertToYER(rawBal, node.currency)
           : rawBal;
       }
 
-      // Branch: sum children
+      // ── Branch node: always sum children (ignores any stored/prop balance) ──
       let sum = 0;
       children.forEach(child => {
         sum += calculateBalance(child.code);
@@ -238,7 +271,7 @@ export default function ChartOfAccounts({
     });
 
     return combined;
-  }, [systemAccounts, customAccounts, settings]);
+  }, [systemAccounts, customAccounts, settings, liveBalances]);
 
   // Filtered list for search
   const filteredAccounts = useMemo(() => {
@@ -256,12 +289,12 @@ export default function ChartOfAccounts({
   // Assets = Liabilities + Equity + (Revenues − Expenses)
   // ─────────────────────────────────────────────────────────────────────────────
   const totals = useMemo(() => {
-    const assets    = allAccounts.find(a => a.code === '1000')?.balance || 0;
-    const liab      = allAccounts.find(a => a.code === '2000')?.balance || 0;
-    const equity    = allAccounts.find(a => a.code === '3000')?.balance || 0;
-    const capital   = allAccounts.find(a => a.code === '3100')?.balance || 0;
-    const revenues  = allAccounts.find(a => a.code === '4000')?.balance || 0;
-    const expenses  = allAccounts.find(a => a.code === '5000')?.balance || 0;
+    const assets = allAccounts.find(a => a.code === '1000')?.balance || 0;
+    const liab = allAccounts.find(a => a.code === '2000')?.balance || 0;
+    const equity = allAccounts.find(a => a.code === '3000')?.balance || 0;
+    const capital = allAccounts.find(a => a.code === '3100')?.balance || 0;
+    const revenues = allAccounts.find(a => a.code === '4000')?.balance || 0;
+    const expenses = allAccounts.find(a => a.code === '5000')?.balance || 0;
 
     // Net income is added to equity side for balance check
     const netIncome = revenues - expenses;
@@ -434,11 +467,11 @@ export default function ChartOfAccounts({
   // RENDER
   // ─────────────────────────────────────────────────────────────────────────────
   const typeColors: Record<string, string> = {
-    Asset:     'bg-indigo-950/40 text-indigo-400 border-indigo-900/20',
+    Asset: 'bg-indigo-950/40 text-indigo-400 border-indigo-900/20',
     Liability: 'bg-amber-950/40 text-amber-400 border-amber-900/20',
-    Equity:    'bg-teal-950/40 text-[#d4af37] border-[#d4af37]/10',
-    Revenue:   'bg-emerald-950/40 text-emerald-400 border-emerald-900/20',
-    Expense:   'bg-rose-950/40 text-rose-400 border-rose-900/20',
+    Equity: 'bg-teal-950/40 text-[#d4af37] border-[#d4af37]/10',
+    Revenue: 'bg-emerald-950/40 text-emerald-400 border-emerald-900/20',
+    Expense: 'bg-rose-950/40 text-rose-400 border-rose-900/20',
   };
 
   const typeLabel: Record<string, string> = {
@@ -541,11 +574,25 @@ export default function ChartOfAccounts({
       <div className="bg-[#0d0d10] border border-slate-850 rounded-3xl p-5 space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h3 className="text-xs font-black text-white uppercase tracking-wider mb-1">
+            <h3 className="text-xs font-black text-white uppercase tracking-wider mb-1 flex items-center gap-2">
               {isAr ? 'مستكشف الدليل والشجرة المحاسبية الرسمية' : 'Corporate Chart of Accounts Navigator'}
+              {/* Live balance indicator */}
+              {liveBalances.loading ? (
+                <span className="flex items-center gap-1 text-[8px] bg-amber-950/40 text-amber-400 border border-amber-800/30 px-1.5 py-0.5 rounded font-normal">
+                  <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                  {isAr ? 'تحميل الأرصدة...' : 'Loading balances...'}
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-[8px] bg-emerald-950/40 text-emerald-500 border border-emerald-800/30 px-1.5 py-0.5 rounded font-normal">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" />
+                  {isAr ? 'أرصدة حية من القيود' : 'Live from Transactions'}
+                </span>
+              )}
             </h3>
             <p className="text-[10px] text-slate-550 font-medium">
-              {isAr ? `الأرصدة الموضحة مُجمَّعة تلقائياً ب${settings.currency || 'YER'}.` : `Balances auto-aggregated to ${settings.currency || 'YER'}. Expand nodes to drill down.`}
+              {isAr
+                ? `الأرصدة تُحتسب تلقائياً من حركة القيود (مدين − دائن) وتتجمع للأعلى بـ${settings.currency || 'YER'}.`
+                : `Balances computed live from account_transactions (Debit−Credit) and rolled up to ${settings.currency || 'YER'}.`}
             </p>
           </div>
           <div className="flex gap-2">
@@ -560,14 +607,37 @@ export default function ChartOfAccounts({
               />
             </div>
             <button
+              onClick={async () => {
+                try {
+                  await financialAccountService.recalculateAllBalances();
+                  notificationService.notify({
+                    title: isAr ? 'تم التحديث' : 'Balances Updated',
+                    message: isAr
+                      ? 'تمت إعادة احتساب ومطابقة جميع أرصدة الحسابات والكيانات بنجاح'
+                      : 'All account balances and entity ledgers recalculated and matched successfully',
+                    type: 'success'
+                  });
+                } catch (err) {
+                  console.error("Manual recalculation failed:", err);
+                }
+              }}
+              title={isAr ? 'إعادة احتساب كافة الأرصدة والعهد وتصفيتها' : 'Recalculate all ledger balances & custodies'}
+              className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-white px-3 py-2 rounded-xl text-xs font-black transition-all cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              {isAr ? 'تحديث ومطابقة الأرصدة' : 'Recalculate & Sync'}
+            </button>
+
+            <button
               onClick={() => setIsAddOpen(true)}
-              className="flex items-center gap-1.5 bg-[#d4af37]/15 hover:bg-[#d4af37]/25 border border-[#d4af37]/30 text-[#d4af37] px-3 py-2 rounded-xl text-xs font-black transition-all"
+              className="flex items-center gap-1.5 bg-[#d4af37]/15 hover:bg-[#d4af37]/25 border border-[#d4af37]/30 text-[#d4af37] px-3 py-2 rounded-xl text-xs font-black transition-all cursor-pointer"
             >
               <PlusCircle className="w-3.5 h-3.5" />
               {isAr ? 'حساب جديد' : 'New Account'}
             </button>
           </div>
         </div>
+
 
         {/* Tree table */}
         <div className="border border-slate-850 rounded-2xl overflow-x-auto bg-black/10">
