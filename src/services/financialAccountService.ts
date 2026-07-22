@@ -29,6 +29,7 @@ import {
   orderBy,
   increment,
   getDoc,
+  deleteDoc,
   writeBatch,
 } from "../lib/supabase-firebase-adapter";
 import { db, auth } from "../lib/supabase-firebase-adapter";
@@ -344,15 +345,8 @@ class FinancialAccountService {
     const debitDelta = isDebitNormalDebit ? debitAmount : -debitAmount;
     const creditDelta = isCreditNormalDebit ? -creditAmount : creditAmount;
 
-    // A. Write master Unified Journal Voucher entry document
-    const jvRef = doc(collection(db, "journal_entries"));
-    const completeEntry: JournalEntry = {
-      ...entry,
-      createdAt: now,
-      amountDebitCurrency: debitAmount,
-      amountCreditCurrency: creditAmount,
-    };
-    batch.set(jvRef, completeEntry);
+    // Generate a unique voucher ID for linking double-entry transaction legs
+    const jvId = `JV-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
 
     // B. Write legacy/sub-ledger target DEBIT transaction leg for reports & accounts audits
     const debitTxRef = doc(collection(db, "account_transactions"));
@@ -373,7 +367,7 @@ class FinancialAccountService {
       createdAt: now,
       createdByUid: entry.createdByUid || "system",
       createdByName: entry.createdByName || "Audit Engine",
-      journalEntryId: jvRef.id,
+      journalEntryId: jvId,
       journalEntryNumber: entry.entryNumber,
     };
     batch.set(debitTxRef, debitTxData);
@@ -422,7 +416,7 @@ class FinancialAccountService {
       createdAt: now,
       createdByUid: entry.createdByUid || "system",
       createdByName: entry.createdByName || "Audit Engine",
-      journalEntryId: jvRef.id,
+      journalEntryId: jvId,
       journalEntryNumber: entry.entryNumber,
     };
     batch.set(creditTxRef, creditTxData);
@@ -454,11 +448,10 @@ class FinancialAccountService {
 
     await batch.commit();
 
-    // Trigger asynchronous full balance recalculation of both accounts in background to ensure perfect database state
-    setTimeout(() => {
-      this.recalculateAndSyncBalance(entry.debitAccountId).catch(console.error);
-      this.recalculateAndSyncBalance(entry.creditAccountId).catch(console.error);
-    }, 1000);
+    // Use debounced recalculation — balance already updated via increment() above.
+    // Debounce prevents cascade calls when multiple entries are posted rapidly.
+    this.recalculateAndSyncBalanceDebounced(entry.debitAccountId, 3000);
+    this.recalculateAndSyncBalanceDebounced(entry.creditAccountId, 3000);
 
     activityLogService.log(
       "financial_transaction" as any,
@@ -472,7 +465,7 @@ class FinancialAccountService {
       },
     );
 
-    return jvRef.id;
+    return jvId;
   }
 
   /**
@@ -1008,67 +1001,58 @@ class FinancialAccountService {
    * @param accountId  - Firestore document ID in the `accounts` collection
    * @returns corrected balance (in account's native currency)
    */
+  // Debounce map: prevents cascade recalculations within 2 seconds for same account
+  private _recalcDebounce: Map<string, ReturnType<typeof setTimeout>> = new Map();
+  // Cache exchange rates to avoid re-fetching for each account during bulk recalculation
+  private _cachedRates: { USD: number; SAR: number; YER: number } | null = null;
+  private _cachedRatesTs = 0;
+
+  private async getCachedExchangeRates(): Promise<{ USD: number; SAR: number; YER: number }> {
+    const now = Date.now();
+    if (this._cachedRates && now - this._cachedRatesTs < 60000) {
+      return this._cachedRates;
+    }
+    this._cachedRates = await this.getExchangeRates();
+    this._cachedRatesTs = now;
+    return this._cachedRates!;
+  }
+
   async recalculateAndSyncBalance(accountId: string): Promise<number> {
     try {
       // 1. Load the account document to know its type and code
       const accountDoc = await getDoc(doc(db, "accounts", accountId));
       if (!accountDoc.exists()) {
-        console.warn(
-          `[recalculateAndSyncBalance] Account ${accountId} not found.`,
-        );
+        console.warn(`[recalculateAndSyncBalance] Account ${accountId} not found.`);
         return 0;
       }
       const account = accountDoc.data() as FinancialAccount & { type?: string };
       const accountCode: string = account.accountCode || "";
 
-      // 2. Determine account type from stored type field or code prefix
+      // 2. Determine account type
       const rawType: string = account.type || this.getAccountTypeByCode(accountCode);
-      // Normal debit accounts: Asset, Expense
-      // Normal credit accounts: Liability, Equity, Revenue
-      const isDebitNormal =
-        rawType === "Asset" || rawType === "Expense";
+      const isDebitNormal = rawType === "Asset" || rawType === "Expense";
 
-      // 3. Sum all transactions by accountId or accountCode
+      // 3. Single query by accountId only (all new transactions include accountId)
       const qById = query(
         collection(db, "account_transactions"),
         where("accountId", "==", accountId),
       );
-      const qByCode = query(
-        collection(db, "account_transactions"),
-        where("accountCode", "==", accountCode),
-      );
+      const snapById = await getDocs(qById);
 
-      const [snapById, snapByCode] = await Promise.all([
-        getDocs(qById),
-        getDocs(qByCode),
-      ]);
-
-      // Merge and deduplicate by transaction ID
-      const txMap = new Map<string, any>();
-      snapById.docs.forEach((d) => txMap.set(d.id, d.data()));
-      snapByCode.docs.forEach((d) => {
-        if (!txMap.has(d.id)) txMap.set(d.id, d.data());
-      });
-
-      const exchangeRates = await this.getExchangeRates();
+      const exchangeRates = await this.getCachedExchangeRates();
       const accountCurrency = account.currency || "YER";
 
       let totalDebit = 0;
       let totalCredit = 0;
-      txMap.forEach((tx) => {
+      snapById.docs.forEach((d) => {
+        const tx = d.data();
         let amt = parseFloat(tx.amount) || 0;
         const txCurrency = tx.currency || accountCurrency;
 
-        // If transaction currency differs from the account's currency, perform conversion
         if (txCurrency !== accountCurrency) {
           const origAmt = parseFloat(tx.amountOriginal) || amt;
           const origCurr = tx.currencyOriginal || txCurrency;
-          amt = this.convertToTargetCurrency(
-            origAmt,
-            origCurr,
-            accountCurrency,
-            exchangeRates,
-          );
+          amt = this.convertToTargetCurrency(origAmt, origCurr, accountCurrency, exchangeRates);
         }
 
         if (tx.type === "Debit") totalDebit += amt;
@@ -1089,12 +1073,8 @@ class FinancialAccountService {
         lastRecalculatedAt: Date.now(),
       });
 
-      // 6. Write corrected balance to parent entity if it exists (syncing customers, couriers, users)
-      if (
-        account.entityType &&
-        account.entityType !== "system" &&
-        account.entityId
-      ) {
+      // 6. Write corrected balance to parent entity if exists
+      if (account.entityType && account.entityType !== "system" && account.entityId) {
         try {
           const entityCol = this.getEntityCollection(account.entityType);
           const entityRef = doc(db, entityCol, account.entityId);
@@ -1102,27 +1082,31 @@ class FinancialAccountService {
             financialBalance: correctBalance,
             updatedAt: Date.now(),
           });
-          console.log(
-            `[recalculateAndSyncBalance] Synced financialBalance for parent entity ${account.entityType} (${account.entityId}) to ${correctBalance}`
-          );
         } catch (err) {
           console.warn("Silent parent entity balance sync warning:", err);
         }
       }
 
-      console.log(
-        `[recalculateAndSyncBalance] Account ${accountCode} (${accountId}): ` +
-        `debit=${totalDebit}, credit=${totalCredit}, balance=${correctBalance} (${rawType})`,
-      );
-
       return correctBalance;
     } catch (error) {
-      console.error(
-        "[recalculateAndSyncBalance] Error:",
-        error,
-      );
+      console.error("[recalculateAndSyncBalance] Error:", error);
       return 0;
     }
+  }
+
+  /**
+   * Debounced recalculateAndSyncBalance — safe to call many times quickly.
+   * Only executes once per accountId within a 2-second window.
+   */
+  recalculateAndSyncBalanceDebounced(accountId: string, delayMs = 2000): void {
+    if (this._recalcDebounce.has(accountId)) {
+      clearTimeout(this._recalcDebounce.get(accountId)!);
+    }
+    const timer = setTimeout(() => {
+      this._recalcDebounce.delete(accountId);
+      this.recalculateAndSyncBalance(accountId).catch(console.error);
+    }, delayMs);
+    this._recalcDebounce.set(accountId, timer);
   }
 
   /**
@@ -1139,22 +1123,32 @@ class FinancialAccountService {
     let errors = 0;
 
     try {
+      // Pre-warm the exchange rates cache once for all accounts
+      await this.getCachedExchangeRates();
+
       const snap = await getDocs(collection(db, "accounts"));
-      for (const d of snap.docs) {
-        const data = d.data() as FinancialAccount;
-        const oldBalance = data.balance || 0;
-        try {
-          const newBalance = await this.recalculateAndSyncBalance(d.id);
-          results.push({
-            accountId: d.id,
-            accountCode: data.accountCode || data.accountCode || d.id,
-            oldBalance,
-            newBalance,
-          });
-        } catch (err) {
-          errors++;
-          console.error(`[recalculateAllBalances] Error on account ${d.id}:`, err);
-        }
+      const docs = snap.docs;
+
+      // Process in parallel batches of 5 to avoid overwhelming the DB while still being fast
+      const BATCH_SIZE = 5;
+      for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+        const batch = docs.slice(i, i + BATCH_SIZE);
+        await Promise.all(batch.map(async (d) => {
+          const data = d.data() as FinancialAccount;
+          const oldBalance = data.balance || 0;
+          try {
+            const newBalance = await this.recalculateAndSyncBalance(d.id);
+            results.push({
+              accountId: d.id,
+              accountCode: data.accountCode || d.id,
+              oldBalance,
+              newBalance,
+            });
+          } catch (err) {
+            errors++;
+            console.error(`[recalculateAllBalances] Error on account ${d.id}:`, err);
+          }
+        }));
       }
     } catch (err) {
       console.error("[recalculateAllBalances] Fatal error loading accounts:", err);
@@ -1718,6 +1712,173 @@ class FinancialAccountService {
         `[AutomaticVouchers] Failed to fire automatic voucher rule: ${ruleId}`,
         err,
       );
+    }
+  }
+
+  /**
+   * Completely purges a financial entity (customer, courier, or user) and all its financial footprint.
+   * Steps:
+   * 1. Finds the associated account in `accounts` table.
+   * 2. If account exists, finds all `account_transactions` legs linked to this account.
+   * 3. For each transaction leg:
+   *    - Collects the opposite account ID (if it's a double-entry with another account).
+   *    - Deletes both legs of the double entry (or the entire transaction group by journalEntryId or refNumber).
+  /**
+   * Completely purges a financial entity (customer, courier, or user) and all its financial footprint.
+   * Steps:
+   * 1. Finds all associated financial accounts for this entity (by entityId or account ID match).
+   * 2. PASS A: Finds all `account_transactions` legs linked directly to the entity, account ID, or account code.
+   * 3. PASS B: Finds all OPPOSITE double-entry transaction legs sharing journalEntryId, refNumber, or journalEntryNumber.
+   * 4. PASS C: Finds all related `expenses` documents (by recipientId, entityId, courierId, customerId, userId, createdBy, linkedAccountId, financialAccountId, or expenseNumber).
+   * 5. Deletes all collected transaction legs, expenses, accounts, and the primary entity doc cleanly.
+   * 6. Recalculates and synces balances for all opposite/affected accounts in background.
+   */
+  async purgeEntityAndFinancialFootprint(
+    entityType: 'customer' | 'courier' | 'user',
+    entityId: string
+  ): Promise<void> {
+    try {
+      console.log(`[purgeEntityAndFinancialFootprint] Starting comprehensive purge for ${entityType} ID: ${entityId}`);
+      
+      const affectedAccountIds = new Set<string>();
+      const txDocsToDelete = new Map<string, any>(); // id -> docRef
+      const expenseDocsToDelete = new Map<string, any>(); // id -> docRef
+      const refNumbersToMatch = new Set<string>();
+      const journalEntryIdsToMatch = new Set<string>();
+
+      // 1. Find all associated financial accounts for this entity
+      const accountsToPurge: any[] = [];
+      const accountSnap = await getDocs(
+        query(collection(db, "accounts"), where("entityId", "==", entityId))
+      );
+      accountSnap.docs.forEach(d => accountsToPurge.push({ id: d.id, ...d.data() }));
+
+      // Also check by direct document ID match if entityId equals account ID
+      try {
+        const directAccSnap = await getDoc(doc(db, "accounts", entityId));
+        if (directAccSnap.exists() && !accountsToPurge.some(a => a.id === entityId)) {
+          accountsToPurge.push({ id: directAccSnap.id, ...directAccSnap.data() });
+        }
+      } catch (_) {}
+
+      const accountIdsToMatch = new Set<string>(accountsToPurge.map(a => a.id));
+      const accountCodesToMatch = new Set<string>(accountsToPurge.map(a => a.accountCode).filter(Boolean));
+
+      console.log(`[purgeEntityAndFinancialFootprint] Linked accounts:`, Array.from(accountIdsToMatch));
+
+      // 2. Fetch all transaction legs to perform complete multi-pass matching
+      const allTxSnap = await getDocs(collection(db, "account_transactions"));
+      
+      // PASS A: Find direct transaction legs
+      allTxSnap.docs.forEach(d => {
+        const tx = d.data();
+        const matchesEntity = tx.entityId === entityId;
+        const matchesAccount = tx.accountId && accountIdsToMatch.has(tx.accountId);
+        const matchesCode = tx.accountCode && accountCodesToMatch.has(tx.accountCode);
+
+        if (matchesEntity || matchesAccount || matchesCode) {
+          txDocsToDelete.set(d.id, d.ref);
+          if (tx.refNumber) refNumbersToMatch.add(tx.refNumber);
+          if (tx.journalEntryId) journalEntryIdsToMatch.add(tx.journalEntryId);
+          if (tx.journalEntryNumber) refNumbersToMatch.add(tx.journalEntryNumber);
+        }
+      });
+
+      console.log(`[purgeEntityAndFinancialFootprint] Direct transaction legs found: ${txDocsToDelete.size}`);
+
+      // PASS B: Find all OPPOSITE double-entry transaction legs sharing journalEntryId, refNumber, or journalEntryNumber
+      if (refNumbersToMatch.size > 0 || journalEntryIdsToMatch.size > 0) {
+        allTxSnap.docs.forEach(d => {
+          const tx = d.data();
+          const matchesRef = tx.refNumber && refNumbersToMatch.has(tx.refNumber);
+          const matchesJvId = tx.journalEntryId && journalEntryIdsToMatch.has(tx.journalEntryId);
+          const matchesJvNum = tx.journalEntryNumber && refNumbersToMatch.has(tx.journalEntryNumber);
+
+          if (matchesRef || matchesJvId || matchesJvNum) {
+            txDocsToDelete.set(d.id, d.ref);
+            if (tx.accountId && !accountIdsToMatch.has(tx.accountId)) {
+              affectedAccountIds.add(tx.accountId);
+            }
+          }
+        });
+      }
+
+      console.log(`[purgeEntityAndFinancialFootprint] Total transaction legs (including double entries): ${txDocsToDelete.size}`);
+      console.log(`[purgeEntityAndFinancialFootprint] Affected opposite accounts:`, Array.from(affectedAccountIds));
+
+      // 3. PASS C: Find all related Expenses
+      const allExpSnap = await getDocs(collection(db, "expenses"));
+      allExpSnap.docs.forEach(d => {
+        const exp = d.data();
+        const matchesEntity = 
+          exp.recipientId === entityId || 
+          exp.entityId === entityId || 
+          exp.courierId === entityId || 
+          exp.customerId === entityId || 
+          exp.userId === entityId || 
+          exp.createdBy === entityId;
+          
+        const matchesAccount = 
+          (exp.linkedAccountId && accountIdsToMatch.has(exp.linkedAccountId)) || 
+          (exp.financialAccountId && accountIdsToMatch.has(exp.financialAccountId));
+          
+        const matchesRef = exp.expenseNumber && refNumbersToMatch.has(exp.expenseNumber);
+
+        if (matchesEntity || matchesAccount || matchesRef) {
+          expenseDocsToDelete.set(d.id, d.ref);
+          if (exp.financialAccountId && !accountIdsToMatch.has(exp.financialAccountId)) {
+            affectedAccountIds.add(exp.financialAccountId);
+          }
+          if (exp.linkedAccountId && !accountIdsToMatch.has(exp.linkedAccountId)) {
+            affectedAccountIds.add(exp.linkedAccountId);
+          }
+        }
+      });
+
+      console.log(`[purgeEntityAndFinancialFootprint] Related expenses to delete: ${expenseDocsToDelete.size}`);
+
+      // 4. Perform deletions cleanly
+      for (const [id, ref] of txDocsToDelete.entries()) {
+        await deleteDoc(ref).catch(err => console.warn(`Error deleting tx leg ${id}:`, err));
+      }
+
+      for (const [id, ref] of expenseDocsToDelete.entries()) {
+        await deleteDoc(ref).catch(err => console.warn(`Error deleting expense ${id}:`, err));
+      }
+
+      // Delete financial accounts
+      for (const acc of accountsToPurge) {
+        await deleteDoc(doc(db, "accounts", acc.id)).catch(err => console.warn(`Error deleting account ${acc.id}:`, err));
+      }
+
+      // Delete primary entity document
+      const collectionName = this.getEntityCollection(entityType === 'user' ? 'employee' : entityType);
+      await deleteDoc(doc(db, collectionName, entityId)).catch(err => console.warn(`Error deleting core entity ${entityId}:`, err));
+
+      console.log(`[purgeEntityAndFinancialFootprint] Purge completed successfully for entity: ${entityId}`);
+
+      // 5. Recalculate & sync balances for ALL opposite/affected accounts
+      if (affectedAccountIds.size > 0) {
+        console.log(`[purgeEntityAndFinancialFootprint] Recalculating balances for affected accounts:`, Array.from(affectedAccountIds));
+        for (const accId of Array.from(affectedAccountIds)) {
+          try {
+            await this.recalculateAndSyncBalance(accId);
+          } catch (err) {
+            console.error(`Error recalculating account ${accId} during purge:`, err);
+          }
+        }
+      }
+
+      // 6. Global sync calculation to guarantee all balances across system match exact transactions
+      try {
+        await this.recalculateAllBalances();
+      } catch (err) {
+        console.warn("Silent recalculateAllBalances warning:", err);
+      }
+
+    } catch (err) {
+      console.error(`[purgeEntityAndFinancialFootprint] Purge failed:`, err);
+      throw err;
     }
   }
 }

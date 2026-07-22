@@ -96,166 +96,148 @@ export function guessAccountTypeFromCode(code: string): AccountType {
   }
 }
 
+// ── Singleton state shared across all hook consumers ──────────────────────────
+// Subscriptions are created once and shared; no duplicate listeners per component.
+let _singleton: AccountBalancesMap = {
+  byCode: {},
+  byId: {},
+  loading: true,
+  updatedAt: 0,
+};
+const _subscribers = new Set<() => void>();
+let _initialized = false;
+
+function _notifySubscribers() {
+  _subscribers.forEach(cb => cb());
+}
+
+function _initSingleton() {
+  if (_initialized) return;
+  _initialized = true;
+
+  let exchangeRates = { USD: 535, SAR: 140, YER: 1 };
+  let accountRegistry: Record<string, { currency: string; type: AccountType }> = {};
+  let txDocs: any[] = [];
+  let initialLoaded = { settings: false, accounts: false, txs: false };
+
+  const checkAndCompute = () => {
+    const debitByCode: Record<string, number> = {};
+    const creditByCode: Record<string, number> = {};
+    const debitById: Record<string, number> = {};
+    const creditById: Record<string, number> = {};
+
+    txDocs.forEach((tx: any) => {
+      const code: string = tx.accountCode || '';
+      const id: string   = tx.accountId  || '';
+      const txCurrency   = tx.currency   || 'YER';
+      const accountCurrency = accountRegistry[code]?.currency || accountRegistry[id]?.currency || 'YER';
+
+      let amt: number = parseFloat(tx.amount) || 0;
+      if (txCurrency !== accountCurrency) {
+        const origAmt = parseFloat(tx.amountOriginal) || amt;
+        const origCurr = tx.currencyOriginal || txCurrency;
+        amt = convertCurrency(origAmt, origCurr, accountCurrency, exchangeRates);
+      }
+
+      if (tx.type === 'Debit') {
+        if (code) debitByCode[code] = (debitByCode[code] || 0) + amt;
+        if (id)   debitById[id]     = (debitById[id]   || 0) + amt;
+      } else if (tx.type === 'Credit') {
+        if (code) creditByCode[code] = (creditByCode[code] || 0) + amt;
+        if (id)   creditById[id]     = (creditById[id]   || 0) + amt;
+      }
+    });
+
+    const byCode: Record<string, number> = {};
+    const byId:   Record<string, number> = {};
+
+    const allCodes = new Set([...Object.keys(debitByCode), ...Object.keys(creditByCode)]);
+    allCodes.forEach(code => {
+      const type = accountRegistry[code]?.type ?? guessAccountTypeFromCode(code);
+      byCode[code] = computeAccountBalance(debitByCode[code] || 0, creditByCode[code] || 0, type);
+    });
+
+    const allIds = new Set([...Object.keys(debitById), ...Object.keys(creditById)]);
+    allIds.forEach(id => {
+      const type = accountRegistry[id]?.type ?? 'Asset';
+      byId[id] = computeAccountBalance(debitById[id] || 0, creditById[id] || 0, type);
+    });
+
+    _singleton = {
+      byCode,
+      byId,
+      loading: !(initialLoaded.settings && initialLoaded.accounts && initialLoaded.txs),
+      updatedAt: Date.now(),
+    };
+    _notifySubscribers();
+  };
+
+  // 1. Subscribe to exchange rates (single global listener)
+  onSnapshot(doc(db, 'settings', 'general'), (snap: any) => {
+    if (snap.exists()) {
+      const d = snap.data();
+      exchangeRates = { USD: d.exchangeRateUSD || 535, SAR: d.exchangeRateSAR || 140, YER: 1 };
+    }
+    initialLoaded.settings = true;
+    checkAndCompute();
+  }, () => { initialLoaded.settings = true; checkAndCompute(); });
+
+  // 2. Subscribe to accounts to build type & currency registry (single global listener)
+  onSnapshot(collection(db, 'accounts'), (snap: any) => {
+    const reg: Record<string, { currency: string; type: AccountType }> = {};
+    snap.docs.forEach((d: any) => {
+      const acc = d.data();
+      const code = acc.accountCode || acc.code;
+      const id = d.id;
+      const currency = acc.currency || 'YER';
+      let typeStr = acc.type || guessAccountTypeFromCode(code);
+      if (typeStr === 'REV') typeStr = 'Revenue';
+      if (typeStr === 'EXP') typeStr = 'Expense';
+      if (typeStr === 'AST') typeStr = 'Asset';
+      const type = typeStr as AccountType;
+      if (code) reg[code] = { currency, type };
+      if (id)   reg[id]   = { currency, type };
+    });
+    accountRegistry = reg;
+    initialLoaded.accounts = true;
+    checkAndCompute();
+  }, () => { initialLoaded.accounts = true; checkAndCompute(); });
+
+  // 3. Subscribe to transactions (single global listener — this is the heavy one)
+  onSnapshot(collection(db, 'account_transactions'), (snap: any) => {
+    txDocs = snap.docs.map((d: any) => d.data());
+    initialLoaded.txs = true;
+    checkAndCompute();
+  }, (error: any) => {
+    console.error('[useAccountBalances] Snapshot error:', error);
+    initialLoaded.txs = true;
+    _singleton = { ..._singleton, loading: false };
+    _notifySubscribers();
+  });
+}
+
 /**
  * useAccountBalances
- *
- * @param accountTypesMap - Optional map of accountCode → AccountType to apply
- *                          proper accounting formula. If not provided, type will
- *                          be fetched from the database or guessed.
+ * Singleton pattern: all components share a single set of Supabase listeners.
+ * No duplicate subscriptions regardless of how many components use this hook.
  */
 export function useAccountBalances(
-  accountTypesMap?: Record<string, AccountType>,
+  _accountTypesMap?: Record<string, AccountType>,
 ): AccountBalancesMap {
-  const [result, setResult] = useState<AccountBalancesMap>({
-    byCode: {},
-    byId: {},
-    loading: true,
-    updatedAt: 0,
-  });
+  const [, forceUpdate] = useState(0);
 
   useEffect(() => {
-    let exchangeRates = { USD: 535, SAR: 140, YER: 1 };
-    let accountRegistry: Record<string, { currency: string; type: AccountType }> = {};
-    let txDocs: any[] = [];
-    let initialLoaded = { settings: false, accounts: false, txs: false };
+    // Initialize singleton listeners on first use
+    _initSingleton();
 
-    const checkAndCompute = () => {
-      // Accumulate debit / credit totals per account
-      const debitByCode: Record<string, number> = {};
-      const creditByCode: Record<string, number> = {};
-      const debitById: Record<string, number> = {};
-      const creditById: Record<string, number> = {};
+    // Subscribe this component to singleton updates
+    const cb = () => forceUpdate(n => n + 1);
+    _subscribers.add(cb);
+    return () => { _subscribers.delete(cb); };
+  }, []);
 
-      txDocs.forEach((tx: any) => {
-        const code: string = tx.accountCode || '';
-        const id: string   = tx.accountId  || '';
-        const txCurrency   = tx.currency   || 'YER';
-        
-        // Resolve account currency from registry (fallback to YER)
-        const accountCurrency = accountRegistry[code]?.currency || accountRegistry[id]?.currency || 'YER';
-
-        // Read transaction amount
-        let amt: number = parseFloat(tx.amount) || 0;
-
-        // Verify currency alignment: if transaction currency does not match account currency, convert it
-        if (txCurrency !== accountCurrency) {
-          const origAmt = parseFloat(tx.amountOriginal) || amt;
-          const origCurr = tx.currencyOriginal || txCurrency;
-          amt = convertCurrency(origAmt, origCurr, accountCurrency, exchangeRates);
-        }
-
-        if (tx.type === 'Debit') {
-          if (code) debitByCode[code] = (debitByCode[code] || 0) + amt;
-          if (id)   debitById[id]     = (debitById[id]   || 0) + amt;
-        } else if (tx.type === 'Credit') {
-          if (code) creditByCode[code] = (creditByCode[code] || 0) + amt;
-          if (id)   creditById[id]     = (creditById[id]   || 0) + amt;
-        }
-      });
-
-      // Compute net balance per code
-      const byCode: Record<string, number> = {};
-      const byId:   Record<string, number> = {};
-
-      const allCodes = new Set([
-        ...Object.keys(debitByCode),
-        ...Object.keys(creditByCode),
-      ]);
-
-      allCodes.forEach(code => {
-        const type = accountTypesMap?.[code] ?? accountRegistry[code]?.type ?? guessAccountTypeFromCode(code);
-        byCode[code] = computeAccountBalance(
-          debitByCode[code]  || 0,
-          creditByCode[code] || 0,
-          type,
-        );
-      });
-
-      const allIds = new Set([
-        ...Object.keys(debitById),
-        ...Object.keys(creditById),
-      ]);
-
-      allIds.forEach(id => {
-        const type = accountRegistry[id]?.type ?? 'Asset';
-        byId[id] = computeAccountBalance(
-          debitById[id]  || 0,
-          creditById[id] || 0,
-          type,
-        );
-      });
-
-      setResult({
-        byCode,
-        byId,
-        loading: !(initialLoaded.settings && initialLoaded.accounts && initialLoaded.txs),
-        updatedAt: Date.now(),
-      });
-    };
-
-    // 1. Subscribe to exchange rates
-    const unsubSettings = onSnapshot(doc(db, 'settings', 'general'), (snap: any) => {
-      if (snap.exists()) {
-        const d = snap.data();
-        exchangeRates = {
-          USD: d.exchangeRateUSD || 535,
-          SAR: d.exchangeRateSAR || 140,
-          YER: 1
-        };
-      }
-      initialLoaded.settings = true;
-      checkAndCompute();
-    }, () => {
-      initialLoaded.settings = true;
-      checkAndCompute();
-    });
-
-    // 2. Subscribe to accounts to build type & currency registry
-    const unsubAccounts = onSnapshot(collection(db, 'accounts'), (snap: any) => {
-      const reg: Record<string, { currency: string; type: AccountType }> = {};
-      snap.docs.forEach((d: any) => {
-        const acc = d.data();
-        const code = acc.accountCode || acc.code;
-        const id = d.id;
-        const currency = acc.currency || 'YER';
-        
-        let typeStr = acc.type || guessAccountTypeFromCode(code);
-        if (typeStr === 'REV') typeStr = 'Revenue';
-        if (typeStr === 'EXP') typeStr = 'Expense';
-        if (typeStr === 'AST') typeStr = 'Asset';
-        
-        const type = typeStr as AccountType;
-
-        if (code) reg[code] = { currency, type };
-        if (id)   reg[id]   = { currency, type };
-      });
-      accountRegistry = reg;
-      initialLoaded.accounts = true;
-      checkAndCompute();
-    }, () => {
-      initialLoaded.accounts = true;
-      checkAndCompute();
-    });
-
-    // 3. Subscribe to transactions
-    const unsubTxs = onSnapshot(collection(db, 'account_transactions'), (snap: any) => {
-      txDocs = snap.docs.map((d: any) => d.data());
-      initialLoaded.txs = true;
-      checkAndCompute();
-    }, (error: any) => {
-      console.error('[useAccountBalances] Snapshot error:', error);
-      initialLoaded.txs = true;
-      setResult(prev => ({ ...prev, loading: false }));
-    });
-
-    return () => {
-      unsubSettings();
-      unsubAccounts();
-      unsubTxs();
-    };
-  }, [accountTypesMap]);
-
-  return result;
+  return _singleton;
 }
 
 export default useAccountBalances;
+

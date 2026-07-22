@@ -20,6 +20,7 @@ import { useSettings } from '../context/SettingsContext';
 import { notificationService } from '../services/notificationService';
 import { activityLogService } from '../services/activityLogService';
 import ConfirmModal from '../components/ConfirmModal';
+import ConfirmDeletePinModal from '../components/ConfirmDeletePinModal';
 import { financialAccountService } from '../services/financialAccountService';
 import { DEFAULT_ROLE_PERMISSIONS } from '../lib/permissions';
 import { useAccountBalances } from '../hooks/useAccountBalances';
@@ -256,6 +257,12 @@ export default function UserManagement() {
 
   // ── Live transaction-based balances (real-time from account_transactions) ────
   const liveBalances = useAccountBalances();
+
+  const [deletePinConfig, setDeletePinConfig] = useState({
+    isOpen: false,
+    entityId: '',
+    entityName: ''
+  });
 
   // ── Users filters ────────────────────────────────────────
   const [search, setSearch] = useState('');
@@ -500,15 +507,10 @@ export default function UserManagement() {
     if (targetUser && (ROOT_EMAILS.includes(targetUser.email) || targetUser.isRoot)) {
       return notificationService.notify({ title: t('محمي', 'Protected'), message: t('لا يمكن حذف المسؤول الرئيسي', 'Cannot delete root admin'), type: 'error', category: 'system' });
     }
-    setConfirmConfig({
-      isOpen: true, type: 'danger',
-      title: t('حذف موظف نهائياً', 'Delete User Permanently'),
-      message: t(`هل أنت متأكد من حذف ${name}؟ لا يمكن التراجع.`, `Permanently delete ${name}? This cannot be undone.`),
-      onConfirm: async () => {
-        await deleteDoc(doc(db, 'users', id));
-        await activityLogService.log('delete_user', name, { userId: id });
-        notificationService.notify({ title: t('تم الحذف', 'Deleted'), message: t(`تم حذف ${name}`, `${name} deleted`), type: 'error', category: 'system' });
-      }
+    setDeletePinConfig({
+      isOpen: true,
+      entityId: id,
+      entityName: name
     });
   };
 
@@ -1877,6 +1879,25 @@ export default function UserManagement() {
         title={confirmConfig.title}
         message={confirmConfig.message}
         type={confirmConfig.type}
+      />
+
+      <ConfirmDeletePinModal
+        isOpen={deletePinConfig.isOpen}
+        onClose={() => setDeletePinConfig({ ...deletePinConfig, isOpen: false })}
+        title={isAr ? 'حذف ملف موظف نهائياً' : 'Expel User Permanently'}
+        message={isAr 
+          ? `هل أنت متأكد من طرد وحذف المستخدم ${deletePinConfig.entityName}؟ هذا الإجراء سيقوم بحذف حسابه المالي وكافة قيوده المزدوجة والمصروفات المرتبطة به نهائياً.`
+          : `Are you sure you want to permanently delete user ${deletePinConfig.entityName}? This will purge their financial account, journal transactions, and associated expenses from the database.`}
+        isAr={isAr}
+        onConfirm={async () => {
+          await financialAccountService.purgeEntityAndFinancialFootprint('user', deletePinConfig.entityId);
+          await activityLogService.log('delete_user', deletePinConfig.entityName, { id: deletePinConfig.entityId });
+          notificationService.notify({
+            title: isAr ? 'تم الحذف' : 'User Purged',
+            message: isAr ? `تم حذف الموظف ${deletePinConfig.entityName} وسجلاته المالية بنجاح` : `User ${deletePinConfig.entityName} purged successfully`,
+            type: 'warning'
+          });
+        }}
       />
     </div>
   );

@@ -6,6 +6,9 @@ import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
 import { notificationService } from '../services/notificationService';
 import ConfirmModal from '../components/ConfirmModal';
+import ConfirmDeletePinModal from '../components/ConfirmDeletePinModal';
+import { financialAccountService } from '../services/financialAccountService';
+import { activityLogService } from '../services/activityLogService';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 
@@ -30,6 +33,12 @@ export default function Users() {
     message: '',
     onConfirm: () => {},
     type: 'danger'
+  });
+
+  const [deletePinConfig, setDeletePinConfig] = useState({
+    isOpen: false,
+    entityId: '',
+    entityName: ''
   });
 
   useEffect(() => {
@@ -207,28 +216,10 @@ export default function Users() {
         type: 'error'
       });
     }
-    setConfirmConfig({
+    setDeletePinConfig({
       isOpen: true,
-      title: isAr ? 'حذف ملف موظف نهائياً' : 'Expel User',
-      message: isAr ? `هل أنت متأكد من طرد وحذف المستخدم ${name}؟ لا يمكن استرجاع هذا المعرف.` : `Under penalty of loss, expel user ${name} configuration node permanently?`,
-      type: 'danger',
-      onConfirm: async () => {
-        try {
-          await deleteDoc(doc(db, 'users', id));
-          notificationService.notify({
-            title: isAr ? 'تم حذف المستخدم من السكايب' : 'Node Terminated',
-            message: isAr ? `تم حذف الموظف ${name} وسحب ترخيصه` : `User ${name} purged from database`,
-            type: 'error'
-          });
-        } catch(err: any) {
-          console.error(err);
-          notificationService.notify({
-            title: isAr ? 'فشل الشطب' : 'Writedown Error',
-            message: isAr ? `تعذر كشط المعرفات: ${err.message}` : `Purge failed: ${err.message}`,
-            type: 'error'
-          });
-        }
-      }
+      entityId: id,
+      entityName: name
     });
   };
 
@@ -770,6 +761,25 @@ export default function Users() {
         title={confirmConfig.title}
         message={confirmConfig.message}
         type={confirmConfig.type}
+      />
+
+      <ConfirmDeletePinModal
+        isOpen={deletePinConfig.isOpen}
+        onClose={() => setDeletePinConfig({ ...deletePinConfig, isOpen: false })}
+        title={isAr ? 'حذف ملف موظف نهائياً' : 'Expel User Permanently'}
+        message={isAr 
+          ? `هل أنت متأكد من طرد وحذف المستخدم ${deletePinConfig.entityName}؟ هذا الإجراء سيقوم بحذف حسابه المالي وكافة قيوده المزدوجة والمصروفات المرتبطة به نهائياً.`
+          : `Are you sure you want to permanently delete user ${deletePinConfig.entityName}? This will purge their financial account, journal transactions, and associated expenses from the database.`}
+        isAr={isAr}
+        onConfirm={async () => {
+          await financialAccountService.purgeEntityAndFinancialFootprint('user', deletePinConfig.entityId);
+          await activityLogService.log('delete_user', deletePinConfig.entityName, { id: deletePinConfig.entityId });
+          notificationService.notify({
+            title: isAr ? 'تم الحذف' : 'User Purged',
+            message: isAr ? `تم حذف الموظف ${deletePinConfig.entityName} وسجلاته المالية بنجاح` : `User ${deletePinConfig.entityName} purged successfully`,
+            type: 'warning'
+          });
+        }}
       />
     </div>
   );

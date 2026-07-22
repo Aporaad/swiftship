@@ -197,14 +197,14 @@ function mapUser(sbUser: any) {
 
 // Populate collection cache and listen to realtime updates from Supabase
 const lastFetchTimestamps: { [table: string]: number } = {};
-const CACHE_TTL_MS = typeof window === 'undefined' ? 0 : 1500; // 0 on backend server-side (always fresh), 1.5s in browser
+const CACHE_TTL_MS = typeof window === 'undefined' ? 0 : 60000; // 0 on backend (always fresh), 60s in browser (realtime channel handles live updates)
 const activeFetches: { [table: string]: Promise<any[]> | null } = {};
 const collectionSubscribed: { [table: string]: boolean } = {};
 
 async function ensureCache(table: string): Promise<any[]> {
   const now = Date.now();
   const lastFetch = lastFetchTimestamps[table] || 0;
-  const isStale = now - lastFetch > CACHE_TTL_MS;
+  const isStale = (now - lastFetch > CACHE_TTL_MS) || (lastFetch === 0);
 
   if (!collectionCaches[table]) {
     // 1. Try to load from localStorage cache first so it's instantly available or when offline
@@ -212,7 +212,6 @@ async function ensureCache(table: string): Promise<any[]> {
       const savedData = safeLocalStorage.getItem(`swiftship_table_backup_${table}`);
       if (savedData) {
         collectionCaches[table] = JSON.parse(savedData);
-        console.log(`[Supabase Adapter] Restored table "${table}" cache from localStorage (${collectionCaches[table].length} rows)`);
       }
     } catch (e) {
       console.warn(`[Supabase Adapter] Error parsing cached local storage backup for ${table}:`, e);
@@ -223,12 +222,15 @@ async function ensureCache(table: string): Promise<any[]> {
     }
   }
 
-  // 2. Fetch from network if cache is empty, stale, or server-side
-  if ((isStale || collectionCaches[table].length === 0) && !isOfflineMode()) {
+  // 2. Fetch from network ONLY if cache is stale or has never fetched
+  if (isStale && !isOfflineMode()) {
     if (!activeFetches[table]) {
       activeFetches[table] = (async () => {
         try {
           const { data, error } = await supabase.from(table).select('*');
+          // Always mark fetch timestamp to prevent infinite network retry loops on empty or 404 tables
+          lastFetchTimestamps[table] = Date.now();
+
           if (error) {
             console.warn(`[Supabase Adapter] Failed to load table ${table} from remote: ${error.message}. Falling back to offline/local cache.`);
           } else {
@@ -237,7 +239,6 @@ async function ensureCache(table: string): Promise<any[]> {
               const normalized = normalizePayload(table, payload);
               return { id: row.id, ...normalized };
             });
-            lastFetchTimestamps[table] = Date.now();
 
             // Update local backup
             try {
@@ -252,6 +253,7 @@ async function ensureCache(table: string): Promise<any[]> {
             }
           }
         } catch (e: any) {
+          lastFetchTimestamps[table] = Date.now();
           console.warn(`[Supabase Adapter] Network/Database exception reading table ${table}: ${e.message}`);
         } finally {
           activeFetches[table] = null;

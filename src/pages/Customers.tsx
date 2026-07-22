@@ -33,6 +33,7 @@ import { activityLogService } from '../services/activityLogService';
 import { financialAccountService } from '../services/financialAccountService';
 import { useAccountBalances } from '../hooks/useAccountBalances';
 import ConfirmModal from '../components/ConfirmModal';
+import ConfirmDeletePinModal from '../components/ConfirmDeletePinModal';
 
 export default function Customers() {
   const { role, hasPermission, loading: roleLoading } = useRole();
@@ -90,6 +91,12 @@ export default function Customers() {
     message: '',
     onConfirm: () => {},
     type: 'danger'
+  });
+
+  const [deletePinConfig, setDeletePinConfig] = useState({
+    isOpen: false,
+    entityId: '',
+    entityName: ''
   });
 
   const [formData, setFormData] = useState({
@@ -252,29 +259,38 @@ export default function Customers() {
   };
 
   const handleDeleteCustomer = async (id: string, name: string) => {
-    setConfirmConfig({
-      isOpen: true,
-      title: isAr ? 'حذف عميل' : 'Delete Customer',
-      message: isAr ? `هل أنت متأكد من رغبتك في حذف العميل ${name}؟ لا يمكن التراجع عن ذلك.` : `Are you sure you want to delete customer ${name}? This action cannot be undone.`,
-      type: 'danger',
-      onConfirm: async () => {
-        try {
-          await deleteDoc(doc(db, 'customers', id));
-          activityLogService.log('delete_customer', name, { id });
-          notificationService.notify({
-            title: isAr ? 'حذف عميل' : 'Customer Deleted',
-            message: isAr ? `تم حذف العميل ${name} بنجاح` : `Customer ${name} deleted successfully`,
-            type: 'warning'
-          });
-        } catch (err: any) {
-          console.error(err);
-          notificationService.notify({
-            title: isAr ? 'خطأ في الحذف' : 'Delete Error',
-            message: isAr ? `تعذر حذف العميل: ${err.message}` : `Could not delete customer: ${err.message}`,
-            type: 'error'
-          });
+    // 1. Check if customer is linked to any orders in the orders collection
+    try {
+      const qOrders1 = query(collection(db, 'orders'), where('customerId', '==', id));
+      const snapOrders1 = await getDocs(qOrders1);
+      
+      let hasOrders = !snapOrders1.empty;
+      if (!hasOrders) {
+        const custObj = customers.find(c => c.id === id);
+        if (custObj?.phone) {
+          const qOrders2 = query(collection(db, 'orders'), where('customerPhone', '==', custObj.phone));
+          const snapOrders2 = await getDocs(qOrders2);
+          hasOrders = !snapOrders2.empty;
         }
       }
+
+      if (hasOrders) {
+        return notificationService.notify({
+          title: isAr ? 'تعذر حذف العميل' : 'Cannot Delete Customer',
+          message: isAr 
+            ? 'العميل مرتبط بطلبات، يرجى فك الارتباط أو حذف الطلبات والمحاولة مرة أخرى' 
+            : 'Customer is linked to existing orders. Please unlink or delete the orders first and try again.',
+          type: 'warning'
+        });
+      }
+    } catch (err) {
+      console.warn("Error checking customer orders before delete:", err);
+    }
+
+    setDeletePinConfig({
+      isOpen: true,
+      entityId: id,
+      entityName: name
     });
   };
 
@@ -1034,6 +1050,25 @@ export default function Customers() {
         title={confirmConfig.title}
         message={confirmConfig.message}
         type={confirmConfig.type}
+      />
+
+      <ConfirmDeletePinModal
+        isOpen={deletePinConfig.isOpen}
+        onClose={() => setDeletePinConfig({ ...deletePinConfig, isOpen: false })}
+        title={isAr ? 'حذف العميل نهائياً' : 'Delete Customer Permanently'}
+        message={isAr 
+          ? `هل أنت متأكد من رغبتك في حذف العميل ${deletePinConfig.entityName}؟ هذا الإجراء سيقوم بشطب حسابه المالي وحذف جميع قيود المزدوجة والمصروفات المرتبطة به نهائياً.`
+          : `Are you sure you want to permanently delete customer ${deletePinConfig.entityName}? This will purge their financial account, journal transactions, and associated expenses from the database.`}
+        isAr={isAr}
+        onConfirm={async () => {
+          await financialAccountService.purgeEntityAndFinancialFootprint('customer', deletePinConfig.entityId);
+          await activityLogService.log('delete_customer', deletePinConfig.entityName, { id: deletePinConfig.entityId });
+          notificationService.notify({
+            title: isAr ? 'تم الحذف' : 'Customer Deleted',
+            message: isAr ? `تم حذف العميل ${deletePinConfig.entityName} بنجاح` : `Customer ${deletePinConfig.entityName} deleted successfully`,
+            type: 'warning'
+          });
+        }}
       />
     </div>
   );

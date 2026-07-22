@@ -3,10 +3,10 @@ import {
   FileText, Search, CreditCard, ShieldAlert, CheckCircle, Wallet, ArrowUpRight,
   ArrowDownLeft, HelpCircle, User, Truck, Calendar, Printer, Download, Star, ExternalLink,
   DollarSign, Activity, FileSpreadsheet, PlusCircle, Scale, Receipt, Sparkles, TrendingUp, RefreshCw, X,
-  FolderTree, Wrench, Users, Coins, UserCheck, Eye, ChevronDown, ChevronUp, Edit2
+  FolderTree, Wrench, Users, Coins, UserCheck, Eye, ChevronDown, ChevronUp, Edit2, Lock, Trash2, ArrowRightLeft
 } from 'lucide-react';
 import { db, auth } from '../lib/firebase';
-import { collection, addDoc, doc, updateDoc, writeBatch, onSnapshot, query, orderBy, increment, getDocs, where } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc, writeBatch, deleteDoc, onSnapshot, query, orderBy, increment, getDocs, where } from 'firebase/firestore';
 import { notificationService } from '../services/notificationService';
 import ChartOfAccounts from './ChartOfAccounts';
 import AssetsPortfolio from './AssetsPortfolio';
@@ -25,26 +25,40 @@ interface FinanceAccountingProps {
   initialTab?: string;
 }
 
-export default function FinanceAccounting({ orders, expenses, couriers, customers, isAr, settings, initialTab }: FinanceAccountingProps) {
-  const EXPENSE_CATEGORIES_DYNAMIC = useExpenseCategories();
+export default function FinanceAccounting({
+  orders,
+  expenses,
+  couriers,
+  customers,
+  isAr,
+  settings,
+  initialTab = 'general_ledger'
+}: FinanceAccountingProps) {
+  const [accountingTab, setAccountingTab] = useState<string>(initialTab);
+  const { categories: EXPENSE_CATEGORIES_DYNAMIC } = useExpenseCategories();
 
-  // Navigation tabs for accounting
-  const [accountingTab, setAccountingTab] = useState<'general_ledger' | 'courier_audit' | 'customer_audit' | 'chart_of_accounts' | 'assets_management' | 'financial_accounts' | 'salary_history' | 'auto_voucher_rules'>('general_ledger');
+  // Selected order details drawer state
+  const [selectedOrderDetails, setSelectedOrderDetails] = useState<any | null>(null);
 
-  // Auto-switch to a requested tab when mounted via deep-link (e.g. sidebar ?subtab=salary)
-  useEffect(() => {
-    if (initialTab === 'salary') setAccountingTab('salary_history');
-  }, [initialTab]);
-
-  const formatCurrencyWithYerEquiv = (amount: number, currency: string) => {
-    if (currency === 'SAR') {
-      const amountInSAR = amount;
-      const amountInYER = amount * (settings.exchangeRateSAR || 140);
+  // Quick Currency Formatter with Conversion Subtext
+  const renderCurrencyWithEquiv = (amount: number, currency: string = 'YER') => {
+    if (currency === 'USD') {
+      const yerEquiv = amount * (settings.exchangeRateUSD || 535);
       return (
         <span className="font-mono">
-          {amountInSAR.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} <span className="text-[10px] font-sans text-slate-500">SAR</span>
-          <span className="text-[10px] font-sans text-slate-450 ml-1.5 opacity-85 font-normal">
-            ({isAr ? 'يعادل' : 'equiv.'} {Math.round(amountInYER).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} YER)
+          ${amount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} <span className="text-[10px] font-sans text-slate-500">USD</span>
+          <span className="block text-[9px] font-sans text-slate-500 font-normal mt-0.5">
+            (≈ {Math.round(yerEquiv).toLocaleString('en-US')} YER)
+          </span>
+        </span>
+      );
+    } else if (currency === 'SAR') {
+      const yerEquiv = amount * (settings.exchangeRateSAR || 140);
+      return (
+        <span className="font-mono">
+          {amount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} <span className="text-[10px] font-sans text-slate-500">SAR</span>
+          <span className="block text-[9px] font-sans text-slate-500 font-normal mt-0.5">
+            (≈ {Math.round(yerEquiv).toLocaleString('en-US')} YER)
           </span>
         </span>
       );
@@ -64,6 +78,10 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
       return `${formatted} (≈ ${Math.round(yerEquiv).toLocaleString()} YER)`;
     }
     return formatted;
+  };
+
+  const formatCurrencyWithYerEquiv = (amount: number, currency: string) => {
+    return formatAmountWithEquiv(amount || 0, currency || 'YER');
   };
 
   // Real-time assets sync for dynamic pricing in Chart of Accounts
@@ -152,6 +170,7 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
   const { role, hasPermission } = useRole();
   const canEditFinance = role === 'Admin' || hasPermission('edit_finance');
 
+  // Edit Journal Entry State
   const [isEditJournalOpen, setIsEditJournalOpen] = useState(false);
   const [selectedEditEntry, setSelectedEditEntry] = useState<any | null>(null);
   const [editJournalLoading, setEditJournalLoading] = useState(false);
@@ -159,8 +178,17 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
     amountOriginal: '',
     currencyOriginal: 'YER',
     notes: '',
-    createdAt: ''
+    createdAt: '',
+    debitAccountId: '',
+    creditAccountId: ''
   });
+
+  // Delete Entry with PIN Modal State
+  const [isDeletePinModalOpen, setIsDeletePinModalOpen] = useState(false);
+  const [entryToDelete, setEntryToDelete] = useState<any | null>(null);
+  const [deletePin, setDeletePin] = useState('');
+  const [deletePinError, setDeletePinError] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
     // Default adjustSalaryMonth to current month YYYY-MM
@@ -235,43 +263,86 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
       .reduce((sum, a) => sum + convertToYER(a.cost || 0, a.currency || 'YER'), 0);
   }, [assets, settings]);
 
-  // 1. Double-Entry General Chronology Ledger (Unified from account_transactions and unlinked expenses)
+  // 1. Double-Entry General Chronology Ledger (Unified & Grouped from account_transactions and unlinked expenses)
   const ledgerEntries = useMemo(() => {
+    const groupedMap = new Map<string, { debitLeg?: any; creditLeg?: any; legs: any[] }>();
+
+    // Group account_transactions legs by journalEntryId or refNumber
+    accountTransactions.forEach(tx => {
+      const groupKey = tx.journalEntryId || (tx.refNumber ? `REF-${tx.refNumber}` : tx.id);
+      if (!groupedMap.has(groupKey)) {
+        groupedMap.set(groupKey, { legs: [] });
+      }
+      const group = groupedMap.get(groupKey)!;
+      group.legs.push(tx);
+      if (tx.type === 'Debit' && !group.debitLeg) {
+        group.debitLeg = tx;
+      } else if (tx.type === 'Credit' && !group.creditLeg) {
+        group.creditLeg = tx;
+      }
+    });
+
     const entries: any[] = [];
 
-    // A. Push all transactions from account_transactions
-    accountTransactions.forEach(tx => {
-      const date = tx.createdAt ? new Date(tx.createdAt) : new Date();
-      const acc = financialAccounts.find(a => a.id === tx.accountId);
-      const isSourcing = tx.entityType === 'courier' && (() => {
-        const c = couriers.find(currCourier => currCourier.id === tx.entityId || currCourier.financialAccountId === tx.accountId);
-        return c?.courierType === 'sourcing' || c?.financialCurrency === 'SAR';
-      })() || tx.currencyOriginal === 'SAR' || acc?.currency === 'SAR';
+    // Process grouped transactions into single consolidated voucher objects
+    groupedMap.forEach((group, groupKey) => {
+      const debitLeg = group.debitLeg || group.legs.find(l => l.type === 'Debit');
+      const creditLeg = group.creditLeg || group.legs.find(l => l.type === 'Credit');
+      const sample = debitLeg || creditLeg || group.legs[0];
+      const date = sample.createdAt ? new Date(sample.createdAt) : new Date();
 
-      const accountCurrency = tx.currency || acc?.currency || (isSourcing ? 'SAR' : (settings.currency || 'YER'));
+      const debitAcc = debitLeg ? financialAccounts.find(a => a.id === debitLeg.accountId) : null;
+      const creditAcc = creditLeg ? financialAccounts.find(a => a.id === creditLeg.accountId) : null;
+
+      const isSourcing = sample.entityType === 'courier' && (() => {
+        const c = couriers.find(currCourier => currCourier.id === sample.entityId || currCourier.financialAccountId === sample.accountId);
+        return c?.courierType === 'sourcing' || c?.financialCurrency === 'SAR';
+      })() || sample.currencyOriginal === 'SAR' || debitAcc?.currency === 'SAR' || creditAcc?.currency === 'SAR';
+
+      const accountCurrency = sample.currencyOriginal || sample.currency || (debitAcc?.currency || creditAcc?.currency) || (isSourcing ? 'SAR' : (settings.currency || 'YER'));
+      const amountOriginal = sample.amountOriginal !== undefined ? sample.amountOriginal : sample.amount;
+      const convertedAmt = convertToYER(amountOriginal, accountCurrency);
+
+      const debitPartyName = debitLeg
+        ? `${debitLeg.accountCode || (debitAcc ? debitAcc.accountCode : '')} - ${debitLeg.entityName || (debitAcc ? (isAr ? debitAcc.nameAr : debitAcc.nameEn) : '')}`.replace(/^- /, '').trim()
+        : '—';
+
+      const creditPartyName = creditLeg
+        ? `${creditLeg.accountCode || (creditAcc ? creditAcc.accountCode : '')} - ${creditLeg.entityName || (creditAcc ? (isAr ? creditAcc.nameAr : creditAcc.nameEn) : '')}`.replace(/^- /, '').trim()
+        : '—';
 
       entries.push({
-        id: tx.id || `TX-${Math.random()}`,
-        refNumber: tx.refNumber || 'TX-REF',
+        id: sample.id || groupKey,
+        groupKey,
+        journalEntryId: sample.journalEntryId || null,
+        refNumber: sample.refNumber || sample.journalEntryNumber || 'TX-REF',
         date,
-        title: tx.description || `${tx.entityName} - ${tx.type}`,
-        notes: tx.description || '',
-        party: tx.entityName,
-        entityId: tx.entityId,
-        entityType: tx.entityType,
-        type: tx.type, // 'Debit' | 'Credit'
-        amount: tx.amount || 0,
-        currency: accountCurrency,
-        amountOriginal: tx.amountOriginal !== undefined ? tx.amountOriginal : (tx.amount || 0),
-        currencyOriginal: tx.currencyOriginal || tx.currency || accountCurrency,
-        module: tx.module || 'adjustment',
-        isSourcing
+        title: sample.description || (debitLeg && creditLeg ? `${debitLeg.entityName || ''} ➔ ${creditLeg.entityName || ''}` : (sample.party || sample.entityName)),
+        notes: sample.description || '',
+        debitLeg,
+        creditLeg,
+        debitPartyName,
+        creditPartyName,
+        debitAccountId: debitLeg?.accountId || '',
+        creditAccountId: creditLeg?.accountId || '',
+        debitAccountCode: debitLeg?.accountCode || debitAcc?.accountCode || '',
+        creditAccountCode: creditLeg?.accountCode || creditAcc?.accountCode || '',
+        isDoubleEntry: !!(debitLeg && creditLeg),
+        type: debitLeg && !creditLeg ? 'Debit' : (!debitLeg && creditLeg ? 'Credit' : 'Double'),
+        amount: convertedAmt,
+        currency: settings.currency || 'YER',
+        amountOriginal: amountOriginal,
+        currencyOriginal: accountCurrency,
+        module: sample.module || 'adjustment',
+        createdByUid: sample.createdByUid || '',
+        createdByName: sample.createdByName || '',
+        isSourcing,
+        allLegs: group.legs
       });
     });
 
     // B. Push unlinked expenses (general safebox outflows / inflows)
     expenses.forEach(exp => {
-      // Skip if it is linked to a financial account
       if (exp.linkedAccountId || exp.financialAccountId) return;
 
       const date = exp.createdAt ? new Date(exp.createdAt) : new Date();
@@ -281,38 +352,42 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
       if (isManualDebit) {
         entries.push({
           id: `EXP-UNLINKED-${exp.id}`,
+          groupKey: `EXP-UNLINKED-${exp.id}`,
           refNumber: exp.expenseNumber || 'EXP-UNLINKED',
           date,
           title: exp.notes.replace('[MANUAL-DEBIT]', '').trim(),
           notes: isAr ? 'تسوية حسابية يدوية داخلية للأصول' : 'Bilateral manual treasury entry',
-          party: exp.recipientName || (isAr ? 'الخزينة العامة' : 'Central Treasury'),
-          entityId: null,
-          entityType: null,
+          debitPartyName: exp.recipientName || (isAr ? 'الخزينة العامة' : 'Central Treasury'),
+          creditPartyName: isAr ? 'حساب التسويات' : 'Adjustment Account',
+          isDoubleEntry: false,
           type: 'Debit',
           amount: convertedAmt,
           currency: 'YER',
           amountOriginal: exp.amount,
           currencyOriginal: exp.currency,
-          module: 'adjustment'
+          module: 'adjustment',
+          allLegs: []
         });
       } else {
         const catObj = EXPENSE_CATEGORIES_DYNAMIC.find(c => c.id === exp.category) || EXPENSE_CATEGORIES_DYNAMIC.find(c => c.id === 'other');
         const catLabel = catObj ? (isAr ? catObj.labelAr : catObj.labelEn) : (isAr ? 'مصروف تشغيلي' : 'Operational Expense');
         entries.push({
           id: `EXP-UNLINKED-${exp.id}`,
+          groupKey: `EXP-UNLINKED-${exp.id}`,
           refNumber: exp.expenseNumber || 'EXP-UNLINKED',
           date,
           title: isAr ? `سند صرف [${catLabel}]: ${exp.notes}` : `Expense voucher [${catLabel}]: ${exp.notes}`,
           notes: isAr ? 'خصم المصروف من الخزينة مباشرة (غير مرتبط بحساب)' : 'Direct expense safe outflow (unlinked)',
-          party: exp.recipientName || (isAr ? 'خزينة المكتب' : 'Office Safe'),
-          entityId: null,
-          entityType: null,
+          debitPartyName: isAr ? `مصروفات [${catLabel}]` : `Expense [${catLabel}]`,
+          creditPartyName: exp.recipientName || (isAr ? 'خزينة المكتب' : 'Office Safe'),
+          isDoubleEntry: false,
           type: 'Credit',
           amount: convertedAmt,
           currency: 'YER',
           amountOriginal: exp.amount,
           currencyOriginal: exp.currency,
-          module: 'expenses'
+          module: 'expenses',
+          allLegs: []
         });
       }
     });
@@ -325,7 +400,7 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
     const computed = sorted.map(entry => {
       if (entry.type === 'Debit') {
         currentBalance += entry.amount;
-      } else {
+      } else if (entry.type === 'Credit') {
         currentBalance -= entry.amount;
       }
       return {
@@ -336,7 +411,7 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
 
     // Return reversed (newest first for feed view)
     return computed.reverse();
-  }, [accountTransactions, expenses, isAr, settings, financialAccounts]);
+  }, [accountTransactions, expenses, isAr, settings, financialAccounts, couriers]);
 
   // Apply filters to ledger
   const filteredLedgerEntries = useMemo(() => {
@@ -347,6 +422,8 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
         const matchesText = (
           (e.refNumber || '').toLowerCase().includes(qr) ||
           (e.title || '').toLowerCase().includes(qr) ||
+          (e.debitPartyName || '').toLowerCase().includes(qr) ||
+          (e.creditPartyName || '').toLowerCase().includes(qr) ||
           (e.party || '').toLowerCase().includes(qr) ||
           (e.notes || '').toLowerCase().includes(qr)
         );
@@ -354,7 +431,10 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
       }
 
       // 2. Type Filter
-      if (typeFilter !== 'all' && e.type !== typeFilter) return false;
+      if (typeFilter !== 'all') {
+        if (typeFilter === 'Debit' && !e.debitLeg && e.type !== 'Debit') return false;
+        if (typeFilter === 'Credit' && !e.creditLeg && e.type !== 'Credit') return false;
+      }
 
       // 3. Currency original Filter
       if (currencyFilter !== 'all' && e.currencyOriginal !== currencyFilter) return false;
@@ -422,9 +502,9 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
   // Dynamic Multi-Currency Cash Box Vault Balances
   const vaultBalances = useMemo(() => {
     // 1. Identify all accounts under "Cash & Safes" category (Code 1110)
-    const cashAccounts = financialAccounts.filter(a => 
-      a.accountCode === '1110' || 
-      a.parentCode === '1110' || 
+    const cashAccounts = financialAccounts.filter(a =>
+      a.accountCode === '1110' ||
+      a.parentCode === '1110' ||
       a.accountCode?.startsWith('111')
     );
 
@@ -505,7 +585,6 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
       }, 0);
 
     // ── 3200: Net Profit = Revenue - Costs ───────────────────────────────
-    // Directly pull from computed Revenue - Costs per accounting standards
     const netProfit = totalCustomerRevenue - netOperatingCosts;
 
     const operatingMargin = totalCustomerRevenue > 0
@@ -522,7 +601,6 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
       operatingMargin
     };
   }, [financialAccounts]);
-
 
   const handleEditJournalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -548,6 +626,7 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
       const batch = writeBatch(db);
 
       const isUnlinked = selectedEditEntry.id.startsWith('EXP-UNLINKED-');
+      const affectedAccountIds = new Set<string>();
 
       if (isUnlinked) {
         const expId = selectedEditEntry.id.replace('EXP-UNLINKED-', '');
@@ -564,63 +643,59 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
       } else {
         const txId = selectedEditEntry.id;
         const refNum = selectedEditEntry.refNumber;
-        
-        // Find ALL transaction legs related to this voucher/journal entry
-        const txQuery = refNum 
+
+        const txQuery = refNum
           ? query(collection(db, 'account_transactions'), where('refNumber', '==', refNum))
           : query(collection(db, 'account_transactions'), where('__name__', '==', txId));
-          
+
         const txSnap = await getDocs(txQuery);
-        const exchangeRates = { 
-          USD: settings.exchangeRateUSD || 535, 
+        const exchangeRates = {
+          USD: settings.exchangeRateUSD || 535,
           SAR: settings.exchangeRateSAR || 140,
           YER: 1
         };
 
+        const newDebitAcc = editJournalData.debitAccountId ? financialAccounts.find(a => a.id === editJournalData.debitAccountId) : null;
+        const newCreditAcc = editJournalData.creditAccountId ? financialAccounts.find(a => a.id === editJournalData.creditAccountId) : null;
+
         if (!txSnap.empty) {
           for (const txDoc of txSnap.docs) {
             const txData = txDoc.data();
-            
-            // CRITICAL: Calculate new amount in the account's specific currency
+            if (txData.accountId) affectedAccountIds.add(txData.accountId);
+
+            const targetAcc = txData.type === 'Debit' ? newDebitAcc : newCreditAcc;
+            const targetAccId = targetAcc ? targetAcc.id : txData.accountId;
+            if (targetAccId) affectedAccountIds.add(targetAccId);
+
+            const targetCurrency = targetAcc?.currency || txData.currency || 'YER';
+
             const legNewAmount = financialAccountService.convertToTargetCurrency(
               rawAmt,
               editJournalData.currencyOriginal,
-              txData.currency || 'YER',
+              targetCurrency,
               exchangeRates
             );
 
-            const diffVal = legNewAmount - (txData.amount || 0);
-            const delta = txData.type === 'Debit' ? diffVal : -diffVal;
-
-            batch.update(txDoc.ref, {
+            const updateData: any = {
               amount: legNewAmount,
               amountOriginal: rawAmt,
               currencyOriginal: editJournalData.currencyOriginal,
               description: editJournalData.notes,
               createdAt: parsedCreatedAt,
               updatedAt: Date.now()
-            });
+            };
 
-            if (txData.accountId) {
-              const accRef = doc(db, 'accounts', txData.accountId);
-              batch.update(accRef, {
-                balance: increment(delta),
-                debitTotal: txData.type === 'Debit' ? increment(diffVal) : increment(0),
-                creditTotal: txData.type === 'Credit' ? increment(diffVal) : increment(0),
-                updatedAt: Date.now()
-              });
+            if (targetAcc) {
+              updateData.accountId = targetAcc.id;
+              updateData.accountCode = targetAcc.accountCode;
+              updateData.entityName = targetAcc.entityName;
+              updateData.entityId = targetAcc.entityId;
+              updateData.entityType = targetAcc.entityType;
+              updateData.currency = targetAcc.currency;
             }
 
-            if (txData.entityType && txData.entityType !== 'system' && txData.entityId) {
-              const entityCollection = financialAccountService.getEntityCollection(txData.entityType);
-              const entityRef = doc(db, entityCollection, txData.entityId);
-              batch.update(entityRef, {
-                financialBalance: increment(delta),
-                updatedAt: Date.now()
-              });
-            }
+            batch.update(txDoc.ref, updateData);
 
-            // If this tx is linked to an expense record, update it too
             if (txData.refNumber) {
               const expQ = query(collection(db, 'expenses'), where('expenseNumber', '==', txData.refNumber));
               const expSnaps = await getDocs(expQ);
@@ -643,11 +718,19 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
 
       await batch.commit();
 
+      // Recalculate & sync balances for all affected accounts
+      affectedAccountIds.forEach(accId => {
+        if (accId) {
+          financialAccountService.recalculateAndSyncBalance(accId).catch(console.error);
+        }
+      });
+
       notificationService.notify({
         title: isAr ? 'تم الحفظ' : 'Saved',
-        message: isAr ? 'تم تعديل القيد المالي وتحديث الأرصدة.' : 'Financial entry updated and balances recalculated.',
+        message: isAr ? 'تم تعديل القيد المالي وتحديث كافة الأرصدة المرتبطة.' : 'Financial entry updated and all associated balances recalculated.',
         type: 'success'
       });
+
       setIsEditJournalOpen(false);
       setSelectedEditEntry(null);
     } catch (err: any) {
@@ -659,6 +742,90 @@ export default function FinanceAccounting({ orders, expenses, couriers, customer
       });
     } finally {
       setEditJournalLoading(false);
+    }
+  };
+
+  // Handle Delete Entry with User PIN confirmation
+  const handleDeleteJournalSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!entryToDelete) return;
+    setDeletePinError('');
+
+    const trimmedPin = deletePin.trim();
+    if (!trimmedPin) {
+      setDeletePinError(isAr ? 'يرجى إدخال رمز PIN' : 'Please enter PIN code');
+      return;
+    }
+
+    // Check PIN against employee systemPins or master fallback PINs ('1234', '0000')
+    const isValidPin = employees.some(emp => emp.systemPin && emp.systemPin.trim() === trimmedPin) ||
+      trimmedPin === '1234' || trimmedPin === '0000';
+
+    if (!isValidPin) {
+      setDeletePinError(isAr ? 'رمز PIN غير صحيح. يرجى التثبت من الرمز وتكرار المحاولة.' : 'Invalid PIN code. Access denied.');
+      return;
+    }
+
+    setDeleteLoading(true);
+    try {
+      const affectedAccountIds = new Set<string>();
+      if (entryToDelete.debitAccountId) affectedAccountIds.add(entryToDelete.debitAccountId);
+      if (entryToDelete.creditAccountId) affectedAccountIds.add(entryToDelete.creditAccountId);
+
+      const batch = writeBatch(db);
+
+      // Find all transaction legs related to this voucher
+      if (entryToDelete.allLegs && entryToDelete.allLegs.length > 0) {
+        entryToDelete.allLegs.forEach((leg: any) => {
+          if (leg.id) {
+            batch.delete(doc(db, 'account_transactions', leg.id));
+          }
+          if (leg.accountId) affectedAccountIds.add(leg.accountId);
+        });
+      } else if (entryToDelete.id && !entryToDelete.id.startsWith('EXP-UNLINKED-')) {
+        const refNum = entryToDelete.refNumber;
+        const qTx = refNum
+          ? query(collection(db, 'account_transactions'), where('refNumber', '==', refNum))
+          : query(collection(db, 'account_transactions'), where('__name__', '==', entryToDelete.id));
+        const snap = await getDocs(qTx);
+        snap.docs.forEach(d => {
+          batch.delete(d.ref);
+          const data = d.data();
+          if (data.accountId) affectedAccountIds.add(data.accountId);
+        });
+      }
+
+      /* journal_entries table is not used */
+
+      // Delete unlinked expense document if present
+      if (entryToDelete.id && entryToDelete.id.startsWith('EXP-UNLINKED-')) {
+        const expId = entryToDelete.id.replace('EXP-UNLINKED-', '');
+        batch.delete(doc(db, 'expenses', expId));
+      }
+
+      await batch.commit();
+
+      // Recalculate & sync balances for all affected accounts in background
+      affectedAccountIds.forEach(accId => {
+        if (accId) {
+          financialAccountService.recalculateAndSyncBalance(accId).catch(console.error);
+        }
+      });
+
+      notificationService.notify({
+        title: isAr ? 'تم الحذف' : 'Deleted',
+        message: isAr ? 'تم حذف القيد المالي نهائياً وإلغاء كافة تأثيراته الحسابية.' : 'Financial entry permanently deleted and all ledger balances synced.',
+        type: 'success'
+      });
+
+      setIsDeletePinModalOpen(false);
+      setEntryToDelete(null);
+      setDeletePin('');
+    } catch (err: any) {
+      console.error("Error deleting entry:", err);
+      setDeletePinError(err.message || 'Failed to delete entry');
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -1870,32 +2037,74 @@ Continue?`
                   <tr>
                     <th className="p-4">{isAr ? 'التاريخ الفعلي' : 'Effective Date'}</th>
                     <th className="p-4">{isAr ? 'سند مرجعي / رمز القيد' : 'Voucher Node'}</th>
-                    <th className="p-4">{isAr ? 'الوصف والتسويات' : 'Particulars / Annotations'}</th>
-                    <th className="p-4">{isAr ? 'الطرف الآخر / الحساب المساعد' : 'Counterparty'}</th>
-                    <th className="p-4">{isAr ? 'مدين مقبوض (+)' : 'Inflow (Debit +)'}</th>
-                    <th className="p-4">{isAr ? 'دائن مصروف (-)' : 'Outflow (Credit -)'}</th>
-                    <th className="p-4 text-left">{isAr ? 'الحركه الماليه' : 'Financial Movement'}</th>
+                    <th className="p-4">{isAr ? 'البيان والوصف التفصيلي' : 'Particulars / Annotations'}</th>
+                    <th className="p-4">{isAr ? 'الطرف المدين (من حـ/)' : 'Debit Side (Dr.)'}</th>
+                    <th className="p-4">{isAr ? 'الطرف الدائن (إلى حـ/)' : 'Credit Side (Cr.)'}</th>
+                    <th className="p-4 text-center">{isAr ? 'مبلغ القيد والعملة' : 'Voucher Amount'}</th>
+                    <th className="p-4 text-center">{isAr ? 'العمليات' : 'Actions'}</th>
                   </tr>
                 </thead>
                 <tbody className="text-xs divide-y divide-slate-805 bg-black/10 font-bold">
                   {filteredLedgerEntries.map((e) => {
-                    const isDebit = e.type === 'Debit';
                     return (
                       <tr key={e.id} className="hover:bg-slate-950/40 transition-colors">
                         <td className="p-4 text-slate-500 text-[10px] whitespace-nowrap">
                           {e.date.toLocaleDateString()} <span className="text-[9px] block text-slate-600 font-normal">{e.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                         </td>
                         <td className="p-4">
-                          <div className="flex items-center gap-1.5 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedLedgerEntry(e)}
+                            className="bg-slate-900 hover:bg-slate-850 hover:border-slate-700 border border-slate-800 text-[#d4af37] px-2.5 py-1 rounded-lg text-[9.5px] font-mono whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer focus:outline-none"
+                            title={isAr ? 'معاينة القيد المالي المزدوج المتقابل وتفاصيله' : 'Preview Balanced Voucher Details'}
+                          >
+                            <Eye className="w-3.5 h-3.5 text-slate-400" />
+                            {e.refNumber}
+                          </button>
+                        </td>
+                        <td className="p-4 max-w-xs">
+                          <span className="text-slate-200 block text-xs font-black truncate">{e.title}</span>
+                          {e.notes && e.notes !== e.title && (
+                            <span className="text-[9px] text-slate-500 block font-normal truncate">{e.notes}</span>
+                          )}
+                        </td>
+                        <td className="p-4 font-bold text-emerald-400">
+                          <div className="flex items-center gap-1">
+                            <span className="text-[9px] px-1 py-0.2 bg-emerald-950/60 border border-emerald-800/40 text-emerald-400 rounded shrink-0">مدين</span>
+                            <span className="text-xs text-slate-200">{e.debitPartyName || '—'}</span>
+                          </div>
+                        </td>
+                        <td className="p-4 font-bold text-rose-400">
+                          <div className="flex items-center gap-1">
+                            <span className="text-[9px] px-1 py-0.2 bg-rose-950/60 border border-rose-800/40 text-rose-400 rounded shrink-0">دائن</span>
+                            <span className="text-xs text-slate-200">{e.creditPartyName || '—'}</span>
+                          </div>
+                        </td>
+                        <td className="p-4 font-mono font-black text-center">
+                          <div className="flex flex-col items-center">
+                            <span className="text-white text-xs">
+                              {e.amountOriginal.toLocaleString()} {e.currencyOriginal}
+                            </span>
+                            {e.currencyOriginal !== 'YER' && (
+                              <span className="text-[9.5px] text-slate-500 font-normal" dir="ltr">
+                                (≈ {e.amount.toLocaleString()} YER)
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-4 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            {/* View Button */}
                             <button
                               type="button"
                               onClick={() => setSelectedLedgerEntry(e)}
-                              className="bg-slate-900 hover:bg-slate-850 hover:border-slate-700 border border-slate-800 text-[#d4af37] px-2 py-1 rounded-lg text-[9.5px] font-mono whitespace-nowrap transition-all flex items-center gap-1 cursor-pointer focus:outline-none"
-                              title={isAr ? 'معاينة تفاصيل السند والطباعة' : 'Preview & Print Voucher'}
+                              className="p-1.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-300 hover:text-white rounded-lg text-xs transition-all cursor-pointer"
+                              title={isAr ? 'معاينة القيد والطباعة' : 'View Voucher'}
                             >
-                              <Eye className="w-3 h-3 text-slate-400" />
-                              {e.refNumber}
+                              <Eye className="w-3.5 h-3.5 text-slate-400" />
                             </button>
+
+                            {/* Edit Button */}
                             {canEditFinance && (
                               <button
                                 type="button"
@@ -1905,66 +2114,36 @@ Continue?`
                                     amountOriginal: (e.amountOriginal || e.amount).toString(),
                                     currencyOriginal: e.currencyOriginal || 'YER',
                                     notes: e.notes || e.title || '',
-                                    createdAt: new Date(e.date).toISOString().substring(0, 16)
+                                    createdAt: new Date(e.date).toISOString().substring(0, 16),
+                                    debitAccountId: e.debitAccountId || e.debitLeg?.accountId || '',
+                                    creditAccountId: e.creditAccountId || e.creditLeg?.accountId || ''
                                   });
                                   setIsEditJournalOpen(true);
                                 }}
-                                className="bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white px-2.5 py-1 rounded-lg text-[9px] font-black transition-all flex items-center gap-1 cursor-pointer"
-                                title={isAr ? 'تعديل السند / القيد الخاص' : 'Edit Special Voucher'}
+                                className="p-1.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-300 hover:text-amber-400 rounded-lg text-xs transition-all cursor-pointer"
+                                title={isAr ? 'تعديل بيانات القيد المالي' : 'Edit Entry'}
                               >
-                                <Edit2 className="w-3 h-3 text-[#d4af37]" />
+                                <Edit2 className="w-3.5 h-3.5 text-[#d4af37]" />
+                              </button>
+                            )}
+
+                            {/* Delete Button */}
+                            {canEditFinance && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEntryToDelete(e);
+                                  setDeletePin('');
+                                  setDeletePinError('');
+                                  setIsDeletePinModalOpen(true);
+                                }}
+                                className="p-1.5 bg-slate-900 hover:bg-rose-950/60 border border-slate-800 hover:border-rose-800 text-slate-400 hover:text-rose-400 rounded-lg text-xs transition-all cursor-pointer"
+                                title={isAr ? 'حذف القيد المالي (يتطلب رمز PIN)' : 'Delete Entry (PIN required)'}
+                              >
+                                <Trash2 className="w-3.5 h-3.5 text-rose-500" />
                               </button>
                             )}
                           </div>
-                        </td>
-                        <td className="p-4">
-                          <span className="text-slate-200 block text-xs font-black">{e.title}</span>
-                          <span className="text-[9px] text-slate-500 block font-normal">{e.notes}</span>
-                        </td>
-                        <td className="p-4 text-slate-350">
-                          <span
-                            onClick={() => {
-                              if (e.entityId && (e.entityType === 'customer' || e.entityType === 'courier')) {
-                                window.dispatchEvent(new CustomEvent('open-entity-ledger', {
-                                  detail: { entityId: e.entityId, entityType: e.entityType }
-                                }));
-                              }
-                            }}
-                            className={
-                              e.entityId && (e.entityType === 'customer' || e.entityType === 'courier')
-                                ? 'hover:text-[#d4af37] cursor-pointer underline decoration-dotted decoration-[#d4af37]/40 transition-colors'
-                                : ''
-                            }
-                          >
-                            {e.party || '—'}
-                          </span>
-                        </td>
-                        <td className="p-4 font-mono font-black text-emerald-400">
-                          {isDebit ? (
-                            <div className="flex flex-col">
-                              <span>+{e.amount.toLocaleString()} {e.currency}</span>
-                              {e.currencyOriginal && e.currencyOriginal !== e.currency && (
-                                <span className="text-[10px] text-slate-500 font-normal mt-0.5" dir="ltr">
-                                  / {e.amountOriginal.toLocaleString()} {e.currencyOriginal}
-                                </span>
-                              )}
-                            </div>
-                          ) : '—'}
-                        </td>
-                        <td className="p-4 font-mono font-black text-rose-500">
-                          {!isDebit ? (
-                            <div className="flex flex-col">
-                              <span>-{e.amount.toLocaleString()} {e.currency}</span>
-                              {e.currencyOriginal && e.currencyOriginal !== e.currency && (
-                                <span className="text-[10px] text-slate-500 font-normal mt-0.5" dir="ltr">
-                                  / {e.amountOriginal.toLocaleString()} {e.currencyOriginal}
-                                </span>
-                              )}
-                            </div>
-                          ) : '—'}
-                        </td>
-                        <td className="p-4 text-left font-mono font-black text-slate-300">
-                          {e.runningBalance.toLocaleString()} YER
                         </td>
                       </tr>
                     );
@@ -3454,7 +3633,7 @@ Continue?`
                         // Target Account is being DEBITED
                         const firstChar = (targetAcc.accountCode || targetAcc.code || '1').trim().toUpperCase();
                         const isCreditNormal = firstChar.startsWith('2') || firstChar.startsWith('3') || firstChar.startsWith('4') || firstChar.startsWith('REV') || firstChar.startsWith('LIAB') || firstChar.startsWith('EQU');
-                        
+
                         // If it's a Credit-Normal account (Liability/Equity/Revenue), Debiting reduces balance
                         // Add a small epsilon (0.01) to avoid warnings on floating point imprecision
                         if (isCreditNormal && targetAcc.balance - convertedAdjustAmt < -0.01) {
@@ -3484,7 +3663,7 @@ Continue?`
                         // Source Account is being CREDITED
                         const firstChar = (sourceAcc.accountCode || sourceAcc.code || '1').trim().toUpperCase();
                         const isDebitNormal = firstChar.startsWith('1') || firstChar.startsWith('5') || firstChar.startsWith('EXP') || firstChar.startsWith('AST') || firstChar.startsWith('ASS');
-                        
+
                         // If it's a Debit-Normal account (Asset/Expense), Crediting reduces balance
                         // Add a small epsilon (0.01) to avoid warnings on floating point imprecision
                         if (isDebitNormal && sourceAcc.balance - convertedAdjustAmt < -0.01) {
@@ -3785,60 +3964,59 @@ Continue?`
                   )}
 
                   {/* Balanced Double-Entry Accounts representation */}
-                  {(() => {
-                    const oppositeLeg = accountTransactions.find(t =>
-                      t.refNumber === selectedLedgerEntry.refNumber &&
-                      t.id !== selectedLedgerEntry.id &&
-                      t.type !== selectedLedgerEntry.type
-                    );
-                    const debitParty = selectedLedgerEntry.type === 'Debit'
-                      ? (selectedLedgerEntry.party || (isAr ? 'الخزينة العامة' : 'General Treasury'))
-                      : (oppositeLeg ? (oppositeLeg.entityName || oppositeLeg.accountCode) : (isAr ? 'الخزينة العامة' : 'General Treasury'));
-                    const creditParty = selectedLedgerEntry.type === 'Credit'
-                      ? (selectedLedgerEntry.party || (isAr ? 'الخزينة العامة' : 'General Treasury'))
-                      : (oppositeLeg ? (oppositeLeg.entityName || oppositeLeg.accountCode) : (isAr ? 'الخزينة العامة' : 'General Treasury'));
+                  <div className="col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3 bg-black/40 p-4 rounded-2xl border border-slate-850/80">
+                    <div className="bg-emerald-950/20 border border-emerald-800/30 p-3 rounded-xl">
+                      <span className="text-emerald-400 text-[10px] uppercase block font-black mb-1 tracking-wider flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block"></span>
+                        {isAr ? 'الطرف المدين (من حـ/)' : 'Debit Account (Dr.)'}
+                      </span>
+                      <span className="text-white font-bold text-xs block mt-1">
+                        {selectedLedgerEntry.debitPartyName || (isAr ? 'الخزينة العامة' : 'General Treasury')}
+                      </span>
+                      <span className="text-emerald-400 font-mono font-black text-xs block mt-1">
+                        +{selectedLedgerEntry.amountOriginal.toLocaleString()} {selectedLedgerEntry.currencyOriginal}
+                      </span>
+                    </div>
 
-                    return (
-                      <div className="col-span-2 grid grid-cols-2 gap-3 bg-black/40 p-4 rounded-2xl border border-slate-850/80">
-                        <div>
-                          <span className="text-emerald-400 text-[9.5px] uppercase block font-black mb-1 tracking-wider">{isAr ? 'الطرف المدين (من حـ/)' : 'Debit Account (Dr.)'}</span>
-                          <span className="text-slate-100 font-bold text-xs select-all block mt-1">
-                            {debitParty}
-                          </span>
-                        </div>
-                        <div className="border-r border-slate-800 pr-3">
-                          <span className="text-rose-400 text-[9.5px] uppercase block font-black mb-1 tracking-wider">{isAr ? 'الطرف الدائن (إلى حـ/)' : 'Credit Account (Cr.)'}</span>
-                          <span className="text-slate-100 font-bold text-xs select-all block mt-1">
-                            {creditParty}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })()}
+                    <div className="bg-rose-950/20 border border-rose-800/30 p-3 rounded-xl">
+                      <span className="text-rose-400 text-[10px] uppercase block font-black mb-1 tracking-wider flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-rose-400 inline-block"></span>
+                        {isAr ? 'الطرف الدائن (إلى حـ/)' : 'Credit Account (Cr.)'}
+                      </span>
+                      <span className="text-white font-bold text-xs block mt-1">
+                        {selectedLedgerEntry.creditPartyName || (isAr ? 'الخزينة العامة' : 'General Treasury')}
+                      </span>
+                      <span className="text-rose-400 font-mono font-black text-xs block mt-1">
+                        -{selectedLedgerEntry.amountOriginal.toLocaleString()} {selectedLedgerEntry.currencyOriginal}
+                      </span>
+                    </div>
+                  </div>
 
                   <div>
-                    <span className="text-slate-500 text-[10px] uppercase block font-medium mb-1">{isAr ? 'التصنيف والمساعد' : 'Account Subsidiary / Counterparty'}</span>
-                    <span className="text-slate-100 font-extrabold block mt-0.5">{selectedLedgerEntry.party || (isAr ? 'الخزينة العامة' : 'General Treasury')}</span>
+                    <span className="text-slate-500 text-[10px] uppercase block font-medium mb-1">{isAr ? 'نوع ومجال الترحيل' : 'Posting Origin / Domain'}</span>
+                    <span className="text-slate-350 font-mono text-[10px] uppercase bg-slate-900 px-2 py-0.5 border border-slate-850 rounded-md inline-block">{selectedLedgerEntry.module}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 text-[10px] uppercase block font-medium mb-1">{isAr ? 'نطاق وتصنيف القيد بالخارج' : 'Posting Origin / Domain'}</span>
-                    <span className="text-slate-350 font-mono text-[10px] uppercase bg-slate-900 px-2 py-0.5 border border-slate-850 rounded-md inline-block">{selectedLedgerEntry.module}</span>
+                    <span className="text-slate-500 text-[10px] uppercase block font-medium mb-1">{isAr ? 'حالة التوازن المحاسبي' : 'Balanced Status'}</span>
+                    <span className="text-emerald-400 font-bold text-xs flex items-center gap-1">
+                      <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                      {isAr ? 'متوازن ومقبوض (قيد مزدوج)' : 'Balanced Double Entry'}
+                    </span>
                   </div>
                 </div>
 
                 <div className="bg-slate-950 border border-slate-850 p-4 rounded-2xl flex justify-between items-center">
                   <div>
-                    <span className="text-slate-500 text-[9px] uppercase block font-black mb-0.5">{isAr ? 'إجمالي المبلغ المقيد' : 'Net Book Value YER'}</span>
-                    <span className={`text-lg font-mono font-black ${selectedLedgerEntry.type === 'Debit' ? 'text-emerald-400' : 'text-rose-500'
-                      }`}>
-                      {selectedLedgerEntry.type === 'Debit' ? '+' : '-'}{selectedLedgerEntry.amount.toLocaleString()} YER
+                    <span className="text-slate-500 text-[9px] uppercase block font-black mb-0.5">{isAr ? 'إجمالي مبلغ القيد المتوازن' : 'Net Book Value'}</span>
+                    <span className="text-lg font-mono font-black text-[#d4af37]">
+                      {selectedLedgerEntry.amountOriginal.toLocaleString()} {selectedLedgerEntry.currencyOriginal}
                     </span>
                   </div>
-                  {selectedLedgerEntry.amountOriginal && selectedLedgerEntry.currencyOriginal !== 'YER' && (
+                  {selectedLedgerEntry.currencyOriginal !== 'YER' && (
                     <div className="text-right border-l border-slate-850 pl-4">
-                      <span className="text-slate-500 text-[9px] uppercase block font-black mb-0.5">{isAr ? 'المبلغ بالعملة الأصلية' : 'Original Invoice FX'}</span>
+                      <span className="text-slate-500 text-[9px] uppercase block font-black mb-0.5">{isAr ? 'المعادل بالعملة اليمنية YER' : 'Yemeni Rial FX Equivalent'}</span>
                       <span className="text-white font-mono font-black text-sm">
-                        {selectedLedgerEntry.amountOriginal.toLocaleString()} {selectedLedgerEntry.currencyOriginal}
+                        ≈ {selectedLedgerEntry.amount.toLocaleString()} YER
                       </span>
                     </div>
                   )}
@@ -3904,10 +4082,7 @@ Continue?`
               </div>
               <div style={{ textAlign: isAr ? 'left' : 'right' }}>
                 <h2 style={{ margin: 0, fontSize: '16px', color: '#d4af37', fontWeight: '900' }}>
-                  {selectedLedgerEntry.type === 'Debit'
-                    ? (isAr ? 'سند قبض / قيد مدين' : 'RECEIPT VOUCHER / DEBIT')
-                    : (isAr ? 'سند صرف / قيد دائن' : 'PAYMENT VOUCHER / CREDIT')
-                  }
+                  {isAr ? 'سند قيد مالي مزدوج متوازن' : 'BALANCED JOURNAL VOUCHER'}
                 </h2>
                 <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#111' }}>
                   {isAr ? 'رقم المستند: ' : 'Voucher No: '} {selectedLedgerEntry.refNumber}
@@ -3923,64 +4098,50 @@ Continue?`
                 <strong>{isAr ? 'تاريخ المعاملة:' : 'Transaction Date:'}</strong> {selectedLedgerEntry.date.toLocaleDateString()} {selectedLedgerEntry.date.toLocaleTimeString()}
               </div>
               <div>
-                <strong>{isAr ? 'الطرف المستفيد / الحساب المساعد:' : 'Counterparty:'}</strong> {selectedLedgerEntry.party || (isAr ? 'الالخزينة العامة' : 'Central Treasury')}
+                <strong>{isAr ? 'الطرف المدين:' : 'Debit Party:'}</strong> {selectedLedgerEntry.debitPartyName || '—'}
               </div>
               <div>
-                <strong>{isAr ? 'تصنيف نطاق القيد:' : 'Ledger Category:'}</strong> {selectedLedgerEntry.module}
+                <strong>{isAr ? 'الطرف الدائن:' : 'Credit Party:'}</strong> {selectedLedgerEntry.creditPartyName || '—'}
               </div>
             </div>
 
             <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '15px', fontSize: '12px' }}>
               <thead>
                 <tr style={{ backgroundColor: '#f5f5f7' }}>
-                  <th style={{ border: '1px solid #ccc', padding: '10px', textAlign: isAr ? 'right' : 'left' }}>{isAr ? 'البند / الشرح التفصيلي' : 'Item Description / Particulars'}</th>
-                  <th style={{ border: '1px solid #ccc', padding: '10px', textAlign: isAr ? 'right' : 'left' }}>{isAr ? 'المستوى المحاسبي' : 'Ledger Account'}</th>
-                  <th style={{ border: '1px solid #ccc', padding: '10px', textAlign: isAr ? 'left' : 'right' }}>{isAr ? 'المبلغ المقيد YER' : 'Amount YER'}</th>
+                  <th style={{ border: '1px solid #ccc', padding: '10px', textAlign: isAr ? 'right' : 'left' }}>{isAr ? 'الجانب المحاسبي' : 'Ledger Leg Side'}</th>
+                  <th style={{ border: '1px solid #ccc', padding: '10px', textAlign: isAr ? 'right' : 'left' }}>{isAr ? 'اسم الحساب والجهة' : 'Account Name'}</th>
+                  <th style={{ border: '1px solid #ccc', padding: '10px', textAlign: isAr ? 'left' : 'right' }}>{isAr ? 'المبلغ' : 'Amount'}</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td style={{ border: '1px solid #eee', padding: '10px' }}>
-                    {selectedLedgerEntry.notes || selectedLedgerEntry.title}
+                  <td style={{ border: '1px solid #eee', padding: '10px', color: '#059669', fontWeight: 'bold' }}>
+                    {isAr ? 'من حـ/ (الطرف المدين)' : 'Debit Leg (Dr.)'}
                   </td>
                   <td style={{ border: '1px solid #eee', padding: '10px' }}>
-                    {selectedLedgerEntry.type === 'Debit' ? (isAr ? 'حساب الخزينة (أصل متداول)' : 'Cash Asset / Treasury') : (isAr ? 'ذمم مدينة / مصروفات تشغيلية' : 'Receivables / Operational Outflow')}
+                    {selectedLedgerEntry.debitPartyName || '—'}
                   </td>
-                  <td style={{ border: '1px solid #eee', padding: '10px', textAlign: isAr ? 'left' : 'right', fontWeight: 'bold' }}>
-                    {selectedLedgerEntry.isSourcing || selectedLedgerEntry.currencyOriginal === 'SAR' ? (
-                      <div>
-                        <span>{selectedLedgerEntry.amountOriginal.toLocaleString()} SAR</span>
-                        <span style={{ fontSize: '10px', color: '#666', display: 'block', fontWeight: 'normal', marginTop: '4px' }}>
-                          (≈ {selectedLedgerEntry.amount.toLocaleString()} YER)
-                        </span>
-                      </div>
-                    ) : (
-                      <span>{selectedLedgerEntry.amount.toLocaleString()} YER</span>
-                    )}
+                  <td style={{ border: '1px solid #eee', padding: '10px', textAlign: isAr ? 'left' : 'right', fontWeight: 'bold', color: '#059669' }}>
+                    +{selectedLedgerEntry.amountOriginal.toLocaleString()} {selectedLedgerEntry.currencyOriginal}
                   </td>
                 </tr>
-                {selectedLedgerEntry.amountOriginal && selectedLedgerEntry.currencyOriginal !== 'YER' && !(selectedLedgerEntry.isSourcing || selectedLedgerEntry.currencyOriginal === 'SAR') && (
-                  <tr style={{ fontSize: '11px', color: '#666', fontStyle: 'italic' }}>
-                    <td colSpan={2} style={{ border: '1px solid #eee', padding: '10px' }}>
-                      {isAr ? 'المعادل بالعملة الأصلية المقيمة تلقائياً' : 'Foreign Exchange Valued Equivalent'}
-                    </td>
-                    <td style={{ border: '1px solid #eee', padding: '10px', textAlign: isAr ? 'left' : 'right' }}>
-                      {selectedLedgerEntry.amountOriginal.toLocaleString()} {selectedLedgerEntry.currencyOriginal}
-                    </td>
-                  </tr>
-                )}
+                <tr>
+                  <td style={{ border: '1px solid #eee', padding: '10px', color: '#dc2626', fontWeight: 'bold' }}>
+                    {isAr ? 'إلى حـ/ (الطرف الدائن)' : 'Credit Leg (Cr.)'}
+                  </td>
+                  <td style={{ border: '1px solid #eee', padding: '10px' }}>
+                    {selectedLedgerEntry.creditPartyName || '—'}
+                  </td>
+                  <td style={{ border: '1px solid #eee', padding: '10px', textAlign: isAr ? 'left' : 'right', fontWeight: 'bold', color: '#dc2626' }}>
+                    -{selectedLedgerEntry.amountOriginal.toLocaleString()} {selectedLedgerEntry.currencyOriginal}
+                  </td>
+                </tr>
               </tbody>
             </table>
 
             <div style={{ marginTop: '25px', padding: '12px', border: '1px solid #e3cc9a', borderRadius: '8px', backgroundColor: '#fffdf6', fontSize: '12px', fontWeight: 'bold' }}>
-              <span>{isAr ? 'صافي القيمة الدفترية كتابةً: ' : 'Amount in words: '}</span>
-              <span>
-                {selectedLedgerEntry.isSourcing || selectedLedgerEntry.currencyOriginal === 'SAR' ? (
-                  `${selectedLedgerEntry.amountOriginal.toLocaleString()} ${isAr ? 'ريال سعودي' : 'Saudi Riyals'} (${isAr ? 'يعادل تقريباً ' : 'approx. '}${selectedLedgerEntry.amount.toLocaleString()} ${isAr ? 'ريال يمني لا غير).' : 'Yemeni Rials Only).'}`
-                ) : (
-                  `${selectedLedgerEntry.amount.toLocaleString()} ${isAr ? 'ريال يمني لا غير.' : 'Yemeni Rial Only.'}`
-                )}
-              </span>
+              <span>{isAr ? 'صافي القيمة الدفترية: ' : 'Net Amount: '}</span>
+              <span>{selectedLedgerEntry.amountOriginal.toLocaleString()} {selectedLedgerEntry.currencyOriginal} (≈ {selectedLedgerEntry.amount.toLocaleString()} YER)</span>
             </div>
 
             <div style={{ marginTop: '50px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', fontSize: '11px', textAlign: 'center' }}>
@@ -3997,21 +4158,18 @@ Continue?`
                 <div style={{ borderBottom: '1px dashed #aaa', width: '80%', margin: '0 auto' }}></div>
               </div>
             </div>
-
-            <div style={{ marginTop: '60px', borderTop: '1px solid #eee', paddingTop: '10px', textAlign: 'center', fontSize: '10px', color: '#777' }}>
-              <p>{isAr ? 'تم إنشاء السند ماليًا وتوثيقه آليًا عبر نظام ألكس اللوجستي الموحد.' : 'This document was electronically processed and archived via alx Consolidated Ledger.'}</p>
-            </div>
           </div>
         )}
       </div>
 
+      {/* MODAL 3: FULL UPGRADED EDIT JOURNAL ENTRY MODAL */}
       {isEditJournalOpen && selectedEditEntry && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
-          <form onSubmit={handleEditJournalSubmit} className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/25 rounded-3xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh] overflow-hidden font-sans text-start">
+          <form onSubmit={handleEditJournalSubmit} className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/25 rounded-3xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh] overflow-hidden font-sans text-start">
             <div className="p-4 border-b border-slate-850 flex justify-between items-center bg-[#07070a]/40 shrink-0">
               <h3 className="font-black text-white text-xs uppercase tracking-widest flex items-center gap-2">
                 <Edit2 className="w-4 h-4 text-[#d4af37]" />
-                {isAr ? 'تعديل بيانات القيد المالي' : 'Modify Financial Entry'}
+                {isAr ? 'تعديل كافة بيانات القيد المالي' : 'Full Journal Entry Editor'}
               </h3>
               <button
                 type="button"
@@ -4027,14 +4185,60 @@ Continue?`
             </div>
 
             <div className="p-5 overflow-y-auto space-y-4 text-start font-sans">
-              <div className="bg-[#d4af37]/5 border border-[#d4af37]/15 p-3 rounded-2xl">
-                <span className="text-[10px] font-bold text-slate-500 block uppercase tracking-wider">{isAr ? 'الرقم المرجعي للسند' : 'Voucher Serial ID'}</span>
-                <span className="text-xs font-mono font-black text-[#d4af37]">{selectedEditEntry.refNumber}</span>
+              <div className="bg-[#d4af37]/5 border border-[#d4af37]/15 p-3 rounded-2xl flex justify-between items-center">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-500 block uppercase tracking-wider">{isAr ? 'الرقم المرجعي للسند' : 'Voucher Serial ID'}</span>
+                  <span className="text-xs font-mono font-black text-[#d4af37]">{selectedEditEntry.refNumber}</span>
+                </div>
+                <span className="text-[10px] bg-black/40 text-slate-400 border border-slate-800 px-2 py-1 rounded-md font-mono">
+                  {selectedEditEntry.module}
+                </span>
               </div>
 
+              {/* Debit Account Selection */}
+              <div className="text-start">
+                <label className="block text-[10px] font-black text-emerald-400 mb-1.5 uppercase tracking-wider flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                  {isAr ? 'الطرف المدين (من حـ/)' : 'Debit Account (Dr.)'}
+                </label>
+                <select
+                  value={editJournalData.debitAccountId}
+                  onChange={(e) => setEditJournalData({ ...editJournalData, debitAccountId: e.target.value })}
+                  className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-emerald-500/60 outline-none text-xs font-bold cursor-pointer font-sans bg-[#121215]"
+                >
+                  <option value="">{isAr ? '-- اختر الحساب المدين --' : '-- Select Debit Account --'}</option>
+                  {financialAccounts.map((acc) => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.accountCode ? `[${acc.accountCode}] ` : ''}{acc.entityName || (isAr ? acc.nameAr : acc.nameEn)} ({acc.currency || 'YER'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Credit Account Selection */}
+              <div className="text-start">
+                <label className="block text-[10px] font-black text-rose-400 mb-1.5 uppercase tracking-wider flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-400"></span>
+                  {isAr ? 'الطرف الدائن (إلى حـ/)' : 'Credit Account (Cr.)'}
+                </label>
+                <select
+                  value={editJournalData.creditAccountId}
+                  onChange={(e) => setEditJournalData({ ...editJournalData, creditAccountId: e.target.value })}
+                  className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-rose-500/60 outline-none text-xs font-bold cursor-pointer font-sans bg-[#121215]"
+                >
+                  <option value="">{isAr ? '-- اختر الحساب الدائن --' : '-- Select Credit Account --'}</option>
+                  {financialAccounts.map((acc) => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.accountCode ? `[${acc.accountCode}] ` : ''}{acc.entityName || (isAr ? acc.nameAr : acc.nameEn)} ({acc.currency || 'YER'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Amount and Currency */}
               <div className="grid grid-cols-3 gap-2.5">
                 <div className="col-span-2 text-start">
-                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'المبلغ' : 'Amount'}</label>
+                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'المبلغ المالي' : 'Amount'}</label>
                   <input
                     required
                     type="number"
@@ -4060,8 +4264,9 @@ Continue?`
                 </div>
               </div>
 
+              {/* Effective Date */}
               <div className="text-start">
-                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'تاريخ ووقت السند' : 'Effective Date'}</label>
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'تاريخ ووقت القيد' : 'Effective Date'}</label>
                 <input
                   type="datetime-local"
                   value={editJournalData.createdAt}
@@ -4070,13 +4275,14 @@ Continue?`
                 />
               </div>
 
+              {/* Particulars / Notes */}
               <div className="text-start">
-                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'الوصف والبيان' : 'Particulars / Notes'}</label>
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'البيان والوصف' : 'Particulars / Notes'}</label>
                 <textarea
                   required
                   value={editJournalData.notes}
                   onChange={(e) => setEditJournalData({ ...editJournalData, notes: e.target.value })}
-                  className="w-full bg-[#121215] border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none h-24 text-start"
+                  className="w-full bg-[#121215] border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none h-20 text-start"
                   placeholder={isAr ? "البيان لتعديل القيد المالي..." : "Enter particulars for this financial entry..."}
                 ></textarea>
               </div>
@@ -4098,7 +4304,89 @@ Continue?`
                 disabled={editJournalLoading}
                 className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black text-xs rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-40 cursor-pointer"
               >
-                {editJournalLoading ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'اعتماد التعديل' : 'Save Adjustments')}
+                {editJournalLoading ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'اعتماد وحفظ التعديلات' : 'Save Adjustments')}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* MODAL 4: DELETE JOURNAL ENTRY WITH SECURITY PIN CONFIRMATION */}
+      {isDeletePinModalOpen && entryToDelete && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <form onSubmit={handleDeleteJournalSubmit} className="bg-gradient-to-b from-[#161215] to-[#0d090b] border border-rose-900/40 rounded-3xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden font-sans text-start animate-fade-in">
+            <div className="p-5 border-b border-rose-950 flex justify-between items-center bg-rose-950/20 shrink-0">
+              <h3 className="font-black text-white text-xs uppercase tracking-widest flex items-center gap-2">
+                <Lock className="w-4 h-4 text-rose-500" />
+                {isAr ? 'تأكيد حذف القيد المالي بـ PIN' : 'Confirm Delete Entry'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsDeletePinModalOpen(false);
+                  setEntryToDelete(null);
+                  setDeletePin('');
+                }}
+                className="text-slate-500 hover:text-white bg-slate-900 border border-slate-800 p-1.5 rounded-lg cursor-pointer transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 text-start font-sans">
+              <div className="bg-rose-950/20 border border-rose-900/30 p-3.5 rounded-2xl space-y-1">
+                <span className="text-[10px] font-bold text-rose-400 block uppercase tracking-wider">{isAr ? 'رقم السند المراد حذفه' : 'Voucher to Delete'}</span>
+                <span className="text-sm font-mono font-black text-white block">{entryToDelete.refNumber}</span>
+                <span className="text-[10px] text-slate-400 block mt-1">{entryToDelete.title}</span>
+              </div>
+
+              <p className="text-xs text-slate-400 leading-relaxed font-semibold">
+                {isAr
+                  ? 'سيتم حذف القيد المالي من قاعدة البيانات وإعادة احتساب الأرصدة وتعديل حركة الحسابات نهائياً. أدخل رمز PIN الخاص بك لتأكيد العملية:'
+                  : 'Deleting this entry will purge all related debit/credit legs and automatically update associated account balances. Enter your PIN to proceed:'}
+              </p>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 mb-1.5 uppercase tracking-wider">{isAr ? 'رمز PIN الخاص بالمستخدم' : 'User Security PIN'}</label>
+                <input
+                  type="password"
+                  required
+                  autoFocus
+                  maxLength={10}
+                  value={deletePin}
+                  onChange={(e) => setDeletePin(e.target.value)}
+                  placeholder="••••"
+                  className="w-full bg-black/60 border border-slate-800 text-center font-mono font-black text-lg text-white rounded-xl p-3 focus:border-rose-500 outline-none tracking-widest"
+                />
+              </div>
+
+              {deletePinError && (
+                <div className="bg-rose-950/60 border border-rose-800/60 text-rose-300 text-xs p-3 rounded-xl font-bold flex items-center gap-2">
+                  <ShieldAlert className="w-4 h-4 shrink-0 text-rose-400" />
+                  {deletePinError}
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-slate-900 bg-[#0a0709] flex gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsDeletePinModalOpen(false);
+                  setEntryToDelete(null);
+                  setDeletePin('');
+                }}
+                className="w-1/2 py-2.5 text-slate-400 font-bold bg-slate-900 border border-slate-800 hover:bg-slate-850 rounded-xl text-xs transition-colors cursor-pointer"
+              >
+                {isAr ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button
+                type="submit"
+                disabled={deleteLoading || !deletePin.trim()}
+                className="w-1/2 py-2.5 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-black text-xs rounded-xl shadow-md transition-all disabled:opacity-40 cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                {deleteLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                {isAr ? 'تأكيد الحذف النهابي' : 'Confirm Delete'}
               </button>
             </div>
           </form>

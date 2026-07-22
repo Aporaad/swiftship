@@ -39,6 +39,7 @@ import { activityLogService } from '../services/activityLogService';
 import { financialAccountService } from '../services/financialAccountService';
 import { useAccountBalances } from '../hooks/useAccountBalances';
 import ConfirmModal from '../components/ConfirmModal';
+import ConfirmDeletePinModal from '../components/ConfirmDeletePinModal';
 
 export default function Couriers() {
   const { settings, t } = useSettings();
@@ -66,6 +67,12 @@ export default function Couriers() {
     message: '',
     onConfirm: () => { },
     type: 'danger'
+  });
+
+  const [deletePinConfig, setDeletePinConfig] = useState({
+    isOpen: false,
+    entityId: '',
+    entityName: ''
   });
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -474,25 +481,10 @@ export default function Couriers() {
   };
 
   const handleDeleteCourier = async (id: string, name: string) => {
-    setConfirmConfig({
+    setDeletePinConfig({
       isOpen: true,
-      title: isAr ? 'حذف كود المندوب' : 'Depricate Courier',
-      message: isAr ? `تحذير: هل أنت متأكد من حذف المندوب ${name} نهائيًا من الأنظمة المحاسبية؟` : `Are you sure you want to delete courier ${name} from the active ledger permanently?`,
-      type: 'danger',
-      onConfirm: async () => {
-        try {
-          await deleteDoc(doc(db, 'couriers', id));
-          activityLogService.log('delete_courier', name, { id });
-          notificationService.notify({
-            title: isAr ? 'تم الحذف' : 'Account Revoked',
-            message: isAr ? 'تم حذف حساب المندوب وسجلاته من النظام' : 'Courier record deleted successfully',
-            type: 'warning',
-            category: 'system'
-          });
-        } catch (err) {
-          handleFirestoreError(err, OperationType.DELETE, 'couriers');
-        }
-      }
+      entityId: id,
+      entityName: name
     });
   };
 
@@ -1702,6 +1694,25 @@ export default function Couriers() {
         title={confirmConfig.title}
         message={confirmConfig.message}
         type={confirmConfig.type}
+      />
+
+      <ConfirmDeletePinModal
+        isOpen={deletePinConfig.isOpen}
+        onClose={() => setDeletePinConfig({ ...deletePinConfig, isOpen: false })}
+        title={isAr ? 'حذف حساب المندوب نهائياً' : 'Delete Courier Permanently'}
+        message={isAr 
+          ? `هل أنت متأكد من رغبتك في حذف المندوب ${deletePinConfig.entityName}؟ هذا الإجراء سيقوم بحذف حسابه المالي وكافة قيوده ومصروفاته المفتوحة نهائياً من النظام.`
+          : `Are you sure you want to permanently delete courier ${deletePinConfig.entityName}? This will purge their financial account, journal transactions, and associated expenses from the database.`}
+        isAr={isAr}
+        onConfirm={async () => {
+          await financialAccountService.purgeEntityAndFinancialFootprint('courier', deletePinConfig.entityId);
+          await activityLogService.log('delete_courier', deletePinConfig.entityName, { id: deletePinConfig.entityId });
+          notificationService.notify({
+            title: isAr ? 'تم الحذف' : 'Courier Deleted',
+            message: isAr ? `تم حذف المندوب ${deletePinConfig.entityName} وسجلاته المالية بنجاح` : `Courier ${deletePinConfig.entityName} deleted successfully`,
+            type: 'warning'
+          });
+        }}
       />
     </div>
   );

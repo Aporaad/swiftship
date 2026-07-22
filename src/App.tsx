@@ -71,22 +71,17 @@ export default function App() {
     return unsubscribe;
   }, []);
 
-  // ── Automatic full balance recalculation & periodic sync on system startup ──
+  // ── Background periodic balance sync every 30 minutes ──
   useEffect(() => {
     if (!user) return;
 
-    // Trigger immediately on app startup / user login
-    financialAccountService.recalculateAllBalances().catch(err => {
-      console.warn("Auto recalculation on app launch failed:", err);
-    });
-
-    // Setup background periodic synchronization every 10 minutes
+    // Setup background periodic synchronization every 30 minutes
+    // Balance is maintained via increment() on each entry; this is just a safety net
     const interval = setInterval(() => {
-      console.log("[App] Periodic background balance verification running...");
       financialAccountService.recalculateAllBalances().catch(err => {
-        console.warn("Periodic background recalculation failed:", err);
+        console.warn("[App] Periodic background recalculation failed:", err);
       });
-    }, 10 * 60 * 1000);
+    }, 30 * 60 * 1000);
 
     return () => clearInterval(interval);
   }, [user]);
