@@ -303,11 +303,11 @@ export default function FinanceAccounting({
       const amountOriginal = sample.amountOriginal !== undefined ? sample.amountOriginal : sample.amount;
       const convertedAmt = convertToYER(amountOriginal, accountCurrency);
 
-      const debitPartyName = debitLeg
+      const debitPartyName = debitLeg 
         ? `${debitLeg.accountCode || (debitAcc ? debitAcc.accountCode : '')} - ${debitLeg.entityName || (debitAcc ? (isAr ? debitAcc.nameAr : debitAcc.nameEn) : '')}`.replace(/^- /, '').trim()
         : '—';
 
-      const creditPartyName = creditLeg
+      const creditPartyName = creditLeg 
         ? `${creditLeg.accountCode || (creditAcc ? creditAcc.accountCode : '')} - ${creditLeg.entityName || (creditAcc ? (isAr ? creditAcc.nameAr : creditAcc.nameEn) : '')}`.replace(/^- /, '').trim()
         : '—';
 
@@ -502,9 +502,9 @@ export default function FinanceAccounting({
   // Dynamic Multi-Currency Cash Box Vault Balances
   const vaultBalances = useMemo(() => {
     // 1. Identify all accounts under "Cash & Safes" category (Code 1110)
-    const cashAccounts = financialAccounts.filter(a =>
-      a.accountCode === '1110' ||
-      a.parentCode === '1110' ||
+    const cashAccounts = financialAccounts.filter(a => 
+      a.accountCode === '1110' || 
+      a.parentCode === '1110' || 
       a.accountCode?.startsWith('111')
     );
 
@@ -643,14 +643,14 @@ export default function FinanceAccounting({
       } else {
         const txId = selectedEditEntry.id;
         const refNum = selectedEditEntry.refNumber;
-
-        const txQuery = refNum
+        
+        const txQuery = refNum 
           ? query(collection(db, 'account_transactions'), where('refNumber', '==', refNum))
           : query(collection(db, 'account_transactions'), where('__name__', '==', txId));
-
+          
         const txSnap = await getDocs(txQuery);
-        const exchangeRates = {
-          USD: settings.exchangeRateUSD || 535,
+        const exchangeRates = { 
+          USD: settings.exchangeRateUSD || 535, 
           SAR: settings.exchangeRateSAR || 140,
           YER: 1
         };
@@ -662,7 +662,7 @@ export default function FinanceAccounting({
           for (const txDoc of txSnap.docs) {
             const txData = txDoc.data();
             if (txData.accountId) affectedAccountIds.add(txData.accountId);
-
+            
             const targetAcc = txData.type === 'Debit' ? newDebitAcc : newCreditAcc;
             const targetAccId = targetAcc ? targetAcc.id : txData.accountId;
             if (targetAccId) affectedAccountIds.add(targetAccId);
@@ -714,6 +714,20 @@ export default function FinanceAccounting({
             }
           }
         }
+
+        // Update master journal entry doc if exists
+        if (selectedEditEntry.journalEntryId) {
+          const jvRef = doc(db, 'journal_entries', selectedEditEntry.journalEntryId);
+          batch.update(jvRef, {
+            amount: rawAmt,
+            currency: editJournalData.currencyOriginal,
+            description: editJournalData.notes,
+            debitAccountId: editJournalData.debitAccountId || selectedEditEntry.debitAccountId,
+            creditAccountId: editJournalData.creditAccountId || selectedEditEntry.creditAccountId,
+            createdAt: parsedCreatedAt,
+            updatedAt: Date.now()
+          });
+        }
       }
 
       await batch.commit();
@@ -759,7 +773,7 @@ export default function FinanceAccounting({
 
     // Check PIN against employee systemPins or master fallback PINs ('1234', '0000')
     const isValidPin = employees.some(emp => emp.systemPin && emp.systemPin.trim() === trimmedPin) ||
-      trimmedPin === '1234' || trimmedPin === '0000';
+                       trimmedPin === '1234' || trimmedPin === '0000';
 
     if (!isValidPin) {
       setDeletePinError(isAr ? 'رمز PIN غير صحيح. يرجى التثبت من الرمز وتكرار المحاولة.' : 'Invalid PIN code. Access denied.');
@@ -784,7 +798,7 @@ export default function FinanceAccounting({
         });
       } else if (entryToDelete.id && !entryToDelete.id.startsWith('EXP-UNLINKED-')) {
         const refNum = entryToDelete.refNumber;
-        const qTx = refNum
+        const qTx = refNum 
           ? query(collection(db, 'account_transactions'), where('refNumber', '==', refNum))
           : query(collection(db, 'account_transactions'), where('__name__', '==', entryToDelete.id));
         const snap = await getDocs(qTx);
@@ -795,7 +809,10 @@ export default function FinanceAccounting({
         });
       }
 
-      /* journal_entries table is not used */
+      // Delete master journal entry document if present
+      if (entryToDelete.journalEntryId) {
+        batch.delete(doc(db, 'journal_entries', entryToDelete.journalEntryId));
+      }
 
       // Delete unlinked expense document if present
       if (entryToDelete.id && entryToDelete.id.startsWith('EXP-UNLINKED-')) {
@@ -3633,7 +3650,7 @@ Continue?`
                         // Target Account is being DEBITED
                         const firstChar = (targetAcc.accountCode || targetAcc.code || '1').trim().toUpperCase();
                         const isCreditNormal = firstChar.startsWith('2') || firstChar.startsWith('3') || firstChar.startsWith('4') || firstChar.startsWith('REV') || firstChar.startsWith('LIAB') || firstChar.startsWith('EQU');
-
+                        
                         // If it's a Credit-Normal account (Liability/Equity/Revenue), Debiting reduces balance
                         // Add a small epsilon (0.01) to avoid warnings on floating point imprecision
                         if (isCreditNormal && targetAcc.balance - convertedAdjustAmt < -0.01) {
@@ -3663,7 +3680,7 @@ Continue?`
                         // Source Account is being CREDITED
                         const firstChar = (sourceAcc.accountCode || sourceAcc.code || '1').trim().toUpperCase();
                         const isDebitNormal = firstChar.startsWith('1') || firstChar.startsWith('5') || firstChar.startsWith('EXP') || firstChar.startsWith('AST') || firstChar.startsWith('ASS');
-
+                        
                         // If it's a Debit-Normal account (Asset/Expense), Crediting reduces balance
                         // Add a small epsilon (0.01) to avoid warnings on floating point imprecision
                         if (isDebitNormal && sourceAcc.balance - convertedAdjustAmt < -0.01) {

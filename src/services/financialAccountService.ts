@@ -29,7 +29,6 @@ import {
   orderBy,
   increment,
   getDoc,
-  deleteDoc,
   writeBatch,
 } from "../lib/supabase-firebase-adapter";
 import { db, auth } from "../lib/supabase-firebase-adapter";
@@ -345,8 +344,15 @@ class FinancialAccountService {
     const debitDelta = isDebitNormalDebit ? debitAmount : -debitAmount;
     const creditDelta = isCreditNormalDebit ? -creditAmount : creditAmount;
 
-    // Generate a unique voucher ID for linking double-entry transaction legs
-    const jvId = `JV-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+    // A. Write master Unified Journal Voucher entry document
+    const jvRef = doc(collection(db, "journal_entries"));
+    const completeEntry: JournalEntry = {
+      ...entry,
+      createdAt: now,
+      amountDebitCurrency: debitAmount,
+      amountCreditCurrency: creditAmount,
+    };
+    batch.set(jvRef, completeEntry);
 
     // B. Write legacy/sub-ledger target DEBIT transaction leg for reports & accounts audits
     const debitTxRef = doc(collection(db, "account_transactions"));
@@ -367,7 +373,7 @@ class FinancialAccountService {
       createdAt: now,
       createdByUid: entry.createdByUid || "system",
       createdByName: entry.createdByName || "Audit Engine",
-      journalEntryId: jvId,
+      journalEntryId: jvRef.id,
       journalEntryNumber: entry.entryNumber,
     };
     batch.set(debitTxRef, debitTxData);
@@ -416,7 +422,7 @@ class FinancialAccountService {
       createdAt: now,
       createdByUid: entry.createdByUid || "system",
       createdByName: entry.createdByName || "Audit Engine",
-      journalEntryId: jvId,
+      journalEntryId: jvRef.id,
       journalEntryNumber: entry.entryNumber,
     };
     batch.set(creditTxRef, creditTxData);
@@ -465,7 +471,7 @@ class FinancialAccountService {
       },
     );
 
-    return jvId;
+    return jvRef.id;
   }
 
   /**
@@ -1723,159 +1729,160 @@ class FinancialAccountService {
    * 3. For each transaction leg:
    *    - Collects the opposite account ID (if it's a double-entry with another account).
    *    - Deletes both legs of the double entry (or the entire transaction group by journalEntryId or refNumber).
-  /**
-   * Completely purges a financial entity (customer, courier, or user) and all its financial footprint.
-   * Steps:
-   * 1. Finds all associated financial accounts for this entity (by entityId or account ID match).
-   * 2. PASS A: Finds all `account_transactions` legs linked directly to the entity, account ID, or account code.
-   * 3. PASS B: Finds all OPPOSITE double-entry transaction legs sharing journalEntryId, refNumber, or journalEntryNumber.
-   * 4. PASS C: Finds all related `expenses` documents (by recipientId, entityId, courierId, customerId, userId, createdBy, linkedAccountId, financialAccountId, or expenseNumber).
-   * 5. Deletes all collected transaction legs, expenses, accounts, and the primary entity doc cleanly.
-   * 6. Recalculates and synces balances for all opposite/affected accounts in background.
+   *    - Deletes the associated master `journal_entries` document.
+   *    - Deletes any `expenses` documents linked to this transaction refNumber or accountId.
+   * 4. Deletes the `accounts` document.
+   * 5. Deletes the core entity document (from `customers`, `couriers`, or `users`).
+   * 6. Recalculates and synces balances for all opposite accounts affected by the deletions.
    */
   async purgeEntityAndFinancialFootprint(
     entityType: 'customer' | 'courier' | 'user',
     entityId: string
   ): Promise<void> {
     try {
-      console.log(`[purgeEntityAndFinancialFootprint] Starting comprehensive purge for ${entityType} ID: ${entityId}`);
+      console.log(`[purgeEntityAndFinancialFootprint] Starting purge check for ${entityType} ID: ${entityId}`);
       
-      const affectedAccountIds = new Set<string>();
-      const txDocsToDelete = new Map<string, any>(); // id -> docRef
-      const expenseDocsToDelete = new Map<string, any>(); // id -> docRef
-      const refNumbersToMatch = new Set<string>();
-      const journalEntryIdsToMatch = new Set<string>();
-
-      // 1. Find all associated financial accounts for this entity
-      const accountsToPurge: any[] = [];
-      const accountSnap = await getDocs(
-        query(collection(db, "accounts"), where("entityId", "==", entityId))
-      );
-      accountSnap.docs.forEach(d => accountsToPurge.push({ id: d.id, ...d.data() }));
-
-      // Also check by direct document ID match if entityId equals account ID
-      try {
-        const directAccSnap = await getDoc(doc(db, "accounts", entityId));
-        if (directAccSnap.exists() && !accountsToPurge.some(a => a.id === entityId)) {
-          accountsToPurge.push({ id: directAccSnap.id, ...directAccSnap.data() });
+      // Step 0: Check if entity is linked to any orders in 'orders' collection
+      const ordersSnap = await getDocs(collection(db, "orders"));
+      const isLinkedToOrders = ordersSnap.docs.some(doc => {
+        const o = doc.data();
+        if (entityType === 'customer') {
+          return o.customerId === entityId || o.customer?.id === entityId;
+        } else if (entityType === 'courier') {
+          return o.courierId === entityId || o.driverId === entityId || o.courier?.id === entityId;
+        } else if (entityType === 'user') {
+          return o.createdByUid === entityId || o.userId === entityId || o.employeeId === entityId;
         }
-      } catch (_) {}
-
-      const accountIdsToMatch = new Set<string>(accountsToPurge.map(a => a.id));
-      const accountCodesToMatch = new Set<string>(accountsToPurge.map(a => a.accountCode).filter(Boolean));
-
-      console.log(`[purgeEntityAndFinancialFootprint] Linked accounts:`, Array.from(accountIdsToMatch));
-
-      // 2. Fetch all transaction legs to perform complete multi-pass matching
-      const allTxSnap = await getDocs(collection(db, "account_transactions"));
-      
-      // PASS A: Find direct transaction legs
-      allTxSnap.docs.forEach(d => {
-        const tx = d.data();
-        const matchesEntity = tx.entityId === entityId;
-        const matchesAccount = tx.accountId && accountIdsToMatch.has(tx.accountId);
-        const matchesCode = tx.accountCode && accountCodesToMatch.has(tx.accountCode);
-
-        if (matchesEntity || matchesAccount || matchesCode) {
-          txDocsToDelete.set(d.id, d.ref);
-          if (tx.refNumber) refNumbersToMatch.add(tx.refNumber);
-          if (tx.journalEntryId) journalEntryIdsToMatch.add(tx.journalEntryId);
-          if (tx.journalEntryNumber) refNumbersToMatch.add(tx.journalEntryNumber);
-        }
+        return false;
       });
 
-      console.log(`[purgeEntityAndFinancialFootprint] Direct transaction legs found: ${txDocsToDelete.size}`);
+      if (isLinkedToOrders) {
+        const label = entityType === 'customer' ? 'العميل' : (entityType === 'courier' ? 'المندوب' : 'المستخدم/الموظف');
+        throw new Error(`تعذر الحذف: هذا الـ (${label}) مرتبط بطلبات مسجلة في جدول الطلبات. يرجى فك ارتباط الطلبات أو حذفها أولاً والمحاولة مرة أخرى.`);
+      }
 
-      // PASS B: Find all OPPOSITE double-entry transaction legs sharing journalEntryId, refNumber, or journalEntryNumber
-      if (refNumbersToMatch.size > 0 || journalEntryIdsToMatch.size > 0) {
-        allTxSnap.docs.forEach(d => {
+      const batch = writeBatch(db);
+      const affectedAccountIds = new Set<string>();
+
+      // 1. Find the associated financial account
+      const accountQuery = query(
+        collection(db, "accounts"),
+        where("entityId", "==", entityId)
+      );
+      const accountSnap = await getDocs(accountQuery);
+      let accountId = "";
+      
+      if (!accountSnap.empty) {
+        const accountDoc = accountSnap.docs[0];
+        accountId = accountDoc.id;
+        console.log(`[purgeEntityAndFinancialFootprint] Found linked account ID: ${accountId}`);
+
+        // 2. Find all account_transactions legs linked to this account
+        const txQuery = query(
+          collection(db, "account_transactions"),
+          where("accountId", "==", accountId)
+        );
+        const txSnap = await getDocs(txQuery);
+        console.log(`[purgeEntityAndFinancialFootprint] Found ${txSnap.size} transaction legs`);
+
+        const refNumbers = new Set<string>();
+        const journalEntryIds = new Set<string>();
+
+        txSnap.docs.forEach((d) => {
           const tx = d.data();
-          const matchesRef = tx.refNumber && refNumbersToMatch.has(tx.refNumber);
-          const matchesJvId = tx.journalEntryId && journalEntryIdsToMatch.has(tx.journalEntryId);
-          const matchesJvNum = tx.journalEntryNumber && refNumbersToMatch.has(tx.journalEntryNumber);
-
-          if (matchesRef || matchesJvId || matchesJvNum) {
-            txDocsToDelete.set(d.id, d.ref);
-            if (tx.accountId && !accountIdsToMatch.has(tx.accountId)) {
-              affectedAccountIds.add(tx.accountId);
-            }
+          if (tx.journalEntryId) {
+            journalEntryIds.add(tx.journalEntryId);
+          }
+          if (tx.refNumber) {
+            refNumbers.add(tx.refNumber);
           }
         });
-      }
 
-      console.log(`[purgeEntityAndFinancialFootprint] Total transaction legs (including double entries): ${txDocsToDelete.size}`);
-      console.log(`[purgeEntityAndFinancialFootprint] Affected opposite accounts:`, Array.from(affectedAccountIds));
 
-      // 3. PASS C: Find all related Expenses
-      const allExpSnap = await getDocs(collection(db, "expenses"));
-      allExpSnap.docs.forEach(d => {
-        const exp = d.data();
-        const matchesEntity = 
-          exp.recipientId === entityId || 
-          exp.entityId === entityId || 
-          exp.courierId === entityId || 
-          exp.customerId === entityId || 
-          exp.userId === entityId || 
-          exp.createdBy === entityId;
-          
-        const matchesAccount = 
-          (exp.linkedAccountId && accountIdsToMatch.has(exp.linkedAccountId)) || 
-          (exp.financialAccountId && accountIdsToMatch.has(exp.financialAccountId));
-          
-        const matchesRef = exp.expenseNumber && refNumbersToMatch.has(exp.expenseNumber);
+        // 3. Fetch and delete all related transaction double-entry legs
+        const allTxDocsToDelete = new Map<string, any>(); // docId -> docRef
 
-        if (matchesEntity || matchesAccount || matchesRef) {
-          expenseDocsToDelete.set(d.id, d.ref);
-          if (exp.financialAccountId && !accountIdsToMatch.has(exp.financialAccountId)) {
-            affectedAccountIds.add(exp.financialAccountId);
-          }
-          if (exp.linkedAccountId && !accountIdsToMatch.has(exp.linkedAccountId)) {
-            affectedAccountIds.add(exp.linkedAccountId);
+        if (journalEntryIds.size > 0) {
+          const jvIdsArray = Array.from(journalEntryIds);
+          for (const jvId of jvIdsArray) {
+            const q = query(collection(db, "account_transactions"), where("journalEntryId", "==", jvId));
+            const snap = await getDocs(q);
+            snap.docs.forEach(docItem => {
+              allTxDocsToDelete.set(docItem.id, docItem.ref);
+              const txData = docItem.data();
+              if (txData.accountId && txData.accountId !== accountId) {
+                affectedAccountIds.add(txData.accountId);
+              }
+            });
           }
         }
-      });
 
-      console.log(`[purgeEntityAndFinancialFootprint] Related expenses to delete: ${expenseDocsToDelete.size}`);
+        if (refNumbers.size > 0) {
+          const refsArray = Array.from(refNumbers);
+          for (const refNo of refsArray) {
+            const q = query(collection(db, "account_transactions"), where("refNumber", "==", refNo));
+            const snap = await getDocs(q);
+            snap.docs.forEach(docItem => {
+              allTxDocsToDelete.set(docItem.id, docItem.ref);
+              const txData = docItem.data();
+              if (txData.accountId && txData.accountId !== accountId) {
+                affectedAccountIds.add(txData.accountId);
+              }
+            });
 
-      // 4. Perform deletions cleanly
-      for (const [id, ref] of txDocsToDelete.entries()) {
-        await deleteDoc(ref).catch(err => console.warn(`Error deleting tx leg ${id}:`, err));
+            // Delete associated expenses document if matches refNumber
+            const expQ = query(collection(db, "expenses"), where("expenseNumber", "==", refNo));
+            const expSnap = await getDocs(expQ);
+            expSnap.docs.forEach(d => {
+              batch.delete(d.ref);
+            });
+          }
+        }
+
+        // Add direct legs linked to this account
+        txSnap.docs.forEach(d => {
+          allTxDocsToDelete.set(d.id, d.ref);
+        });
+
+        // Delete all collected transaction leg documents using direct refs
+        allTxDocsToDelete.forEach(ref => {
+          batch.delete(ref);
+        });
+
+
+        // Delete any expenses directly linked to this account ID or entity ID
+        const expAccountQ = query(collection(db, "expenses"), where("linkedAccountId", "==", accountId));
+        const expAccountSnap = await getDocs(expAccountQ);
+        expAccountSnap.docs.forEach(d => {
+          batch.delete(d.ref);
+        });
+
+        const expFinancialQ = query(collection(db, "expenses"), where("financialAccountId", "==", accountId));
+        const expFinancialSnap = await getDocs(expFinancialQ);
+        expFinancialSnap.docs.forEach(d => {
+          batch.delete(d.ref);
+        });
+
+        const expRecipientQ = query(collection(db, "expenses"), where("recipientEntityId", "==", entityId));
+        const expRecipientSnap = await getDocs(expRecipientQ);
+        expRecipientSnap.docs.forEach(d => {
+          batch.delete(d.ref);
+        });
+
+        // Delete the main accounts document
+        batch.delete(accountDoc.ref);
       }
 
-      for (const [id, ref] of expenseDocsToDelete.entries()) {
-        await deleteDoc(ref).catch(err => console.warn(`Error deleting expense ${id}:`, err));
-      }
-
-      // Delete financial accounts
-      for (const acc of accountsToPurge) {
-        await deleteDoc(doc(db, "accounts", acc.id)).catch(err => console.warn(`Error deleting account ${acc.id}:`, err));
-      }
-
-      // Delete primary entity document
+      // 4. Delete the core entity document
       const collectionName = this.getEntityCollection(entityType === 'user' ? 'employee' : entityType);
-      await deleteDoc(doc(db, collectionName, entityId)).catch(err => console.warn(`Error deleting core entity ${entityId}:`, err));
+      batch.delete(doc(db, collectionName, entityId));
 
-      console.log(`[purgeEntityAndFinancialFootprint] Purge completed successfully for entity: ${entityId}`);
+      // 5. Commit all deletions
+      await batch.commit();
+      console.log(`[purgeEntityAndFinancialFootprint] Purge committed for entity: ${entityId}`);
 
-      // 5. Recalculate & sync balances for ALL opposite/affected accounts
-      if (affectedAccountIds.size > 0) {
-        console.log(`[purgeEntityAndFinancialFootprint] Recalculating balances for affected accounts:`, Array.from(affectedAccountIds));
-        for (const accId of Array.from(affectedAccountIds)) {
-          try {
-            await this.recalculateAndSyncBalance(accId);
-          } catch (err) {
-            console.error(`Error recalculating account ${accId} during purge:`, err);
-          }
-        }
-      }
-
-      // 6. Global sync calculation to guarantee all balances across system match exact transactions
-      try {
-        await this.recalculateAllBalances();
-      } catch (err) {
-        console.warn("Silent recalculateAllBalances warning:", err);
-      }
-
+      // 6. Recalculate & sync all financial balances system-wide
+      await this.recalculateAllBalances();
     } catch (err) {
       console.error(`[purgeEntityAndFinancialFootprint] Purge failed:`, err);
       throw err;

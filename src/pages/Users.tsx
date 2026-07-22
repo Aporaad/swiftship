@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, doc, updateDoc, setDoc, deleteDoc, query, where, getDocs } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType, auth } from '../lib/firebase';
+import { collection, onSnapshot, doc, updateDoc, setDoc, deleteDoc, query, where, getDocs } from '../lib/supabase-firebase-adapter';
+import { db } from '../lib/supabase-firebase-adapter';
+import { handleFirestoreError, OperationType, auth } from '../lib/firebase';
 import { Search, Edit2, X, Plus, UserX, UserCheck, Trash2, Users as UsersIcon, Shield, Lock, Eye, EyeOff, Crown, ShieldAlert, Coins } from 'lucide-react';
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
@@ -766,17 +767,17 @@ export default function Users() {
       <ConfirmDeletePinModal
         isOpen={deletePinConfig.isOpen}
         onClose={() => setDeletePinConfig({ ...deletePinConfig, isOpen: false })}
-        title={isAr ? 'حذف ملف موظف نهائياً' : 'Expel User Permanently'}
+        title={isAr ? 'حذف حساب الموظف نهائياً' : 'Delete Employee Account Permanently'}
         message={isAr 
-          ? `هل أنت متأكد من طرد وحذف المستخدم ${deletePinConfig.entityName}؟ هذا الإجراء سيقوم بحذف حسابه المالي وكافة قيوده المزدوجة والمصروفات المرتبطة به نهائياً.`
+          ? `هل أنت متأكد من رغبتك في حذف الموظف ${deletePinConfig.entityName}؟ هذا الإجراء سيقوم بحذف حسابه المالي وكافة قيوده ومصروفاته المرتبطة نهائياً.`
           : `Are you sure you want to permanently delete user ${deletePinConfig.entityName}? This will purge their financial account, journal transactions, and associated expenses from the database.`}
         isAr={isAr}
         onConfirm={async () => {
           await financialAccountService.purgeEntityAndFinancialFootprint('user', deletePinConfig.entityId);
-          await activityLogService.log('delete_user', deletePinConfig.entityName, { id: deletePinConfig.entityId });
+          await activityLogService.log('delete_user', deletePinConfig.entityName, { userId: deletePinConfig.entityId });
           notificationService.notify({
-            title: isAr ? 'تم الحذف' : 'User Purged',
-            message: isAr ? `تم حذف الموظف ${deletePinConfig.entityName} وسجلاته المالية بنجاح` : `User ${deletePinConfig.entityName} purged successfully`,
+            title: isAr ? 'تم الحذف' : 'User Deleted',
+            message: isAr ? `تم حذف الموظف ${deletePinConfig.entityName} وسجلاته المالية بنجاح` : `User ${deletePinConfig.entityName} deleted successfully`,
             type: 'warning'
           });
         }}

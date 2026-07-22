@@ -259,34 +259,6 @@ export default function Customers() {
   };
 
   const handleDeleteCustomer = async (id: string, name: string) => {
-    // 1. Check if customer is linked to any orders in the orders collection
-    try {
-      const qOrders1 = query(collection(db, 'orders'), where('customerId', '==', id));
-      const snapOrders1 = await getDocs(qOrders1);
-      
-      let hasOrders = !snapOrders1.empty;
-      if (!hasOrders) {
-        const custObj = customers.find(c => c.id === id);
-        if (custObj?.phone) {
-          const qOrders2 = query(collection(db, 'orders'), where('customerPhone', '==', custObj.phone));
-          const snapOrders2 = await getDocs(qOrders2);
-          hasOrders = !snapOrders2.empty;
-        }
-      }
-
-      if (hasOrders) {
-        return notificationService.notify({
-          title: isAr ? 'تعذر حذف العميل' : 'Cannot Delete Customer',
-          message: isAr 
-            ? 'العميل مرتبط بطلبات، يرجى فك الارتباط أو حذف الطلبات والمحاولة مرة أخرى' 
-            : 'Customer is linked to existing orders. Please unlink or delete the orders first and try again.',
-          type: 'warning'
-        });
-      }
-    } catch (err) {
-      console.warn("Error checking customer orders before delete:", err);
-    }
-
     setDeletePinConfig({
       isOpen: true,
       entityId: id,
