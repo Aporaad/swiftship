@@ -41,7 +41,8 @@ import {
   User,
   Activity,
   Code2,
-  ExternalLink
+  ExternalLink,
+  Briefcase
 } from 'lucide-react';
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
@@ -49,8 +50,11 @@ import { Toaster } from 'react-hot-toast';
 import GlobalSearchModal from './GlobalSearchModal';
 import GlobalEntityLedgerModal from './GlobalEntityLedgerModal';
 import QuickNavModal from './QuickNavModal';
+import PendingPortalApprovalsModal from './PendingPortalApprovalsModal';
+import JobApplicationsModal from './JobApplicationsModal';
 import { activityLogService } from '../services/activityLogService';
 import { notificationService } from '../services/notificationService';
+import { supabase } from '../lib/supabase-firebase-adapter';
 
 export default function Layout() {
   const navigate = useNavigate();
@@ -58,6 +62,10 @@ export default function Layout() {
   const { role, profile, hasPermission, loading: roleLoading, sessionId } = useRole(true);
   const { settings, updateSettings, t } = useSettings();
   const isAr = settings.language === 'ar';
+  const [isPortalApprovalsOpen, setIsPortalApprovalsOpen] = useState(false);
+  const [isJobApplicationsOpen, setIsJobApplicationsOpen] = useState(false);
+  const [pendingPortalCount, setPendingPortalCount] = useState(0);
+  const [pendingJobsCount, setPendingJobsCount] = useState(0);
   const isOfflineModeActive = (window as any).__isOfflineMode || false;
 
   const downloadBackup = () => {
@@ -209,6 +217,33 @@ export default function Layout() {
       unsubSessions();
     };
   }, [role, roleLoading]);
+
+  // Real-time Pending Web Portal Approvals & Job Applications count
+  useEffect(() => {
+    const fetchPendingPortal = async () => {
+      try {
+        const { data } = await supabase.from('portal_users').select('*');
+        const rows = (data || []).map((row: any) => {
+          const payload = typeof row.data === 'string' ? JSON.parse(row.data) : (row.data || {});
+          return { id: row.id, ...payload };
+        });
+        const pending = rows.filter((u: any) => u.approvalStatus === 'pending_approval' || u.approval_status === 'pending_approval');
+        setPendingPortalCount(pending.length);
+
+        const { data: jData } = await supabase.from('jobs_req').select('*');
+        const jRows = (jData || []).map((row: any) => {
+          const payload = typeof row.data === 'string' ? JSON.parse(row.data) : (row.data || {});
+          return { id: row.id, ...payload };
+        });
+        const jPending = jRows.filter((j: any) => (j.status || 'pending_review') === 'pending_review');
+        setPendingJobsCount(jPending.length);
+      } catch (_) {}
+    };
+
+    fetchPendingPortal();
+    const interval = setInterval(fetchPendingPortal, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Listen for Ctrl+K and Ctrl+T shortcuts
   useEffect(() => {
@@ -851,6 +886,40 @@ export default function Layout() {
               )}
             </Link>
 
+            {/* Web Portal Registration Approvals Button */}
+            <button
+              onClick={() => setIsPortalApprovalsOpen(true)}
+              className="p-2.5 rounded-xl hover:bg-amber-950/40 relative text-amber-400 transition-all bg-[#08080a] border border-amber-500/20 hover:border-amber-500/40 cursor-pointer"
+              title={isAr ? "طلبات البوابة المعلقة" : "Pending Web Portal Approvals"}
+            >
+              <Globe className="w-4 h-4" />
+              {pendingPortalCount > 0 && (
+                <span className="absolute -top-1 -left-1 flex h-4 w-4 items-center justify-center">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400/40 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-4 w-4 bg-amber-500 text-[8px] font-black text-black items-center justify-center">
+                    {pendingPortalCount}
+                  </span>
+                </span>
+              )}
+            </button>
+
+            {/* Job Applications Reception Button */}
+            <button
+              onClick={() => setIsJobApplicationsOpen(true)}
+              className="p-2.5 rounded-xl hover:bg-amber-950/40 relative text-amber-400 transition-all bg-[#08080a] border border-amber-500/20 hover:border-amber-500/40 cursor-pointer"
+              title={isAr ? "استقبال طلبات التوظيف (jobs_req)" : "Job Applications (jobs_req)"}
+            >
+              <Briefcase className="w-4 h-4 text-amber-400" />
+              {pendingJobsCount > 0 && (
+                <span className="absolute -top-1 -left-1 flex h-4 w-4 items-center justify-center">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400/40 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-4 w-4 bg-amber-500 text-[8px] font-black text-black items-center justify-center">
+                    {pendingJobsCount}
+                  </span>
+                </span>
+              )}
+            </button>
+
             {/* Quick Refresh Icon */}
             <button
               onClick={() => window.location.reload()}
@@ -1209,6 +1278,18 @@ export default function Layout() {
           </div>
         </div>
       )}
+
+      {/* Pending Portal Approvals Modal */}
+      <PendingPortalApprovalsModal
+        isOpen={isPortalApprovalsOpen}
+        onClose={() => setIsPortalApprovalsOpen(false)}
+      />
+
+      {/* Job Applications Reception Modal */}
+      <JobApplicationsModal
+        isOpen={isJobApplicationsOpen}
+        onClose={() => setIsJobApplicationsOpen(false)}
+      />
     </div>
   );
 }

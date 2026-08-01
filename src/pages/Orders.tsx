@@ -19,6 +19,7 @@ import { printContent } from '../lib/printUtils';
 import QRCode from 'qrcode';
 
 const ORDER_STATUS_FLOW = [
+  'معلق',
   'تم تسجيل الطلب',
   'وصل مستودع السعودية',
   'جاري الشحن لليمن',
@@ -1536,6 +1537,61 @@ export default function Orders() {
       // Status change trigger - to prevent duplicate notifications
       const statusTriggerId = `status_notified_${newStatus}`;
       const isAlreadyNotified = firedTriggers.includes(statusTriggerId);
+
+      // Pending Portal Order Approval Trigger (order_charge & order_down_payment)
+      if ((currentStatus === 'معلق' || selectedOrder.status === 'pending') && newStatus !== 'معلق' && newStatus !== 'ملغي') {
+        const customerRecord = customers.find(c => c.id === selectedOrder.customerId);
+        if (customerRecord && customerRecord.financialAccountId) {
+          try {
+            if (!firedTriggers.includes('order_charge')) {
+              const totalBilledOriginal = parseFloat(selectedOrder.totalCostYER || selectedOrder.totalOrderYER || '0');
+              const convertedOrderAmount = financialAccountService.convertToDefaultCurrency(
+                totalBilledOriginal,
+                'YER',
+                settings.currency || 'YER',
+                { USD: selectedOrder.exchangeRateUSD || 535, SAR: selectedOrder.exchangeRateYER || 390 }
+              );
+
+              await financialAccountService.triggerAutomaticVoucher(
+                'order_charge',
+                { orderNumber: selectedOrder.orderNumber },
+                {
+                  customer: customerRecord,
+                  isAr,
+                  rawAmount: convertedOrderAmount,
+                  profileName: profile?.fullName || 'Admin Approval'
+                }
+              );
+              newFiredTriggers.push('order_charge');
+            }
+
+            const paidVal = parseFloat(selectedOrder.amountPaid || '0');
+            if (paidVal > 0 && !firedTriggers.includes('order_down_payment')) {
+              const convertedPaid = financialAccountService.convertToDefaultCurrency(
+                paidVal,
+                'YER',
+                settings.currency || 'YER',
+                { USD: selectedOrder.exchangeRateUSD || 535, SAR: selectedOrder.exchangeRateYER || 390 }
+              );
+
+              await financialAccountService.triggerAutomaticVoucher(
+                'order_down_payment',
+                { orderNumber: selectedOrder.orderNumber },
+                {
+                  customer: customerRecord,
+                  isAr,
+                  rawAmount: convertedPaid,
+                  profileName: profile?.fullName || 'Admin Approval'
+                }
+              );
+              newFiredTriggers.push('order_down_payment');
+            }
+          } catch (txErr) {
+            console.error('[Orders] Error posting financial transactions on portal order approval:', txErr);
+          }
+        }
+        extraUpdateFields.status = 'accepted';
+      }
 
       if (isAlreadyNotified && newStatus !== 'ملغي' && newStatus !== currentStatus) {
         toast.error(isAr 

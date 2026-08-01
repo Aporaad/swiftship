@@ -130,24 +130,88 @@ const ACCOUNT_PREFIXES: Record<AccountEntityType, string> = {
 
 class FinancialAccountService {
   /**
-   * Generate next sequential account number for a given entity type
+   * Generates strictly unique, non-colliding account identifiers:
+   * accountNumber, accountCode, code, and accountId.
+   * Checks ALL existing accounts in database to ensure zero collisions.
    */
-  private async getNextAccountNumber(
+  private async getNextAccountIdentifiers(
     entityType: AccountEntityType,
-  ): Promise<string> {
-    const prefix = ACCOUNT_PREFIXES[entityType];
-    const q = query(
-      collection(db, "accounts"),
-      where("accountPrefix", "==", prefix),
-    );
-    const snap = await getDocs(q);
-    const nextNum = snap.size + 1;
-    return String(nextNum).padStart(4, "0");
+  ): Promise<{ prefix: string; accountNumber: string; accountCode: string; code: string; accountId: string }> {
+    const prefix = ACCOUNT_PREFIXES[entityType] || "5000";
+
+    let allAccounts: any[] = [];
+    try {
+      const snap = await getDocs(collection(db, "accounts"));
+      allAccounts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    } catch (e) {
+      console.warn("[FinancialAccountService] Error fetching existing accounts for uniqueness check:", e);
+    }
+
+    const existingIds = new Set<string>();
+    const existingCodes = new Set<string>();
+    const existingNumbersForPrefix = new Set<string>();
+
+    let maxSeq = 0;
+
+    for (const acc of allAccounts) {
+      if (acc.id) existingIds.add(String(acc.id));
+
+      const accCode = String(acc.accountCode || acc.code || '').trim();
+      if (accCode) existingCodes.add(accCode);
+
+      const rawCode = String(acc.code || '').trim();
+      if (rawCode) existingCodes.add(rawCode);
+
+      const accNum = String(acc.accountNumber || '').trim();
+      const accPrefix = String(acc.accountPrefix || acc.parentCode || '').trim();
+
+      if (accPrefix === prefix || accCode.startsWith(`${prefix}-`)) {
+        if (accNum) existingNumbersForPrefix.add(accNum);
+
+        const parts = accCode.split("-");
+        if (parts.length >= 2) {
+          const num = parseInt(parts[parts.length - 1], 10);
+          if (!isNaN(num) && num > maxSeq) {
+            maxSeq = num;
+          }
+        }
+        if (accNum) {
+          const num = parseInt(accNum, 10);
+          if (!isNaN(num) && num > maxSeq) {
+            maxSeq = num;
+          }
+        }
+      }
+    }
+
+    let candidateSeq = Math.max(maxSeq + 1, allAccounts.length + 1, 1);
+
+    while (true) {
+      const seqStr = String(candidateSeq).padStart(4, "0");
+      const candidateCode = `${prefix}-${seqStr}`;
+      const candidateId = `acc_${prefix}_${seqStr}`;
+
+      const isCodeTaken = existingCodes.has(candidateCode);
+      const isIdTaken = existingIds.has(candidateId);
+      const isNumTaken = existingNumbersForPrefix.has(seqStr);
+
+      if (!isCodeTaken && !isIdTaken && !isNumTaken) {
+        return {
+          prefix,
+          accountNumber: seqStr,
+          accountCode: candidateCode,
+          code: candidateCode,
+          accountId: candidateId,
+        };
+      }
+      candidateSeq++;
+    }
   }
 
   /**
    * Create a new financial account for an entity (customer/courier/employee)
-   * Called automatically when creating a new entity
+   * Called automatically when creating a new entity.
+   * Guarantees strict uniqueness for id, accountCode, code, and accountNumber.
    */
   async createAccountForEntity(
     entityType: AccountEntityType,
@@ -157,14 +221,27 @@ class FinancialAccountService {
     monthlySalary?: number,
   ): Promise<FinancialAccount> {
     try {
-      const prefix = ACCOUNT_PREFIXES[entityType];
-      const accountNumber = await this.getNextAccountNumber(entityType);
-      const accountCode = `${prefix}-${accountNumber}`;
+      // 1. Prevent duplicate account creation for the same entityId
+      const existing = await this.getAccountByEntityId(entityId);
+      if (existing && existing.id) {
+        console.log(
+          `[FinancialAccountService] Account already exists for entity ${entityId}:`,
+          existing.accountCode,
+        );
+        return existing;
+      }
+
+      // 2. Generate guaranteed unique account identifiers
+      const { prefix, accountNumber, accountCode, code, accountId } =
+        await this.getNextAccountIdentifiers(entityType);
 
       const now = Date.now();
       const accountData: FinancialAccount = {
+        id: accountId,
         accountCode,
+        code,
         accountPrefix: prefix,
+        parentCode: prefix,
         accountNumber,
         entityType,
         entityId,
@@ -178,21 +255,25 @@ class FinancialAccountService {
         updatedAt: now,
         notes: "",
         ...(monthlySalary !== undefined && { monthlySalary }),
-      };
+      } as any;
+
       console.log(
-        "DEBUG: Creating account in database with currency:",
-        currency,
+        "DEBUG: Creating unique account in database:",
+        accountCode,
+        "with ID:",
+        accountId,
       );
 
-      const ref = await addDoc(collection(db, "accounts"), accountData);
+      // Save document with explicit unique ID
+      await setDoc(doc(db, "accounts", accountId), accountData);
 
       // Update the entity's document with the account code reference
       if (entityType !== "system") {
         try {
           const entityCollection = this.getEntityCollection(entityType);
           const entityUpdateData: any = {
-            accountId: ref.id,
-            financialAccountId: ref.id,
+            accountId: accountId,
+            financialAccountId: accountId,
             financialAccountCode: accountCode,
             updatedAt: now,
           };
@@ -214,7 +295,7 @@ class FinancialAccountService {
         entityId,
       });
 
-      return { id: ref.id, ...accountData };
+      return { id: accountId, ...accountData };
     } catch (error) {
       console.error("[FinancialAccountService] Error creating account:", error);
       throw error;
