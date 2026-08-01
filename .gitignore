@@ -1,4 +1,5 @@
 node_modules/
+alx_web/
 coverage/
 .DS_Store
 *.log
