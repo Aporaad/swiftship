@@ -24,6 +24,7 @@ import Expenses from './pages/Expenses';
 import Accounting from './pages/Accounting';
 import SalaryHistory from './pages/SalaryHistory';
 import Reports from './pages/Reports';
+import WebsiteManagement from './pages/WebsiteManagement';
 
 import { SettingsProvider } from './context/SettingsContext';
 import { financialAccountService } from './services/financialAccountService';
@@ -167,6 +168,7 @@ export default function App() {
             <Route path="settings" element={<Settings />} />
             <Route path="notifications" element={<Notifications />} />
             <Route path="salary-history" element={<SalaryHistory />} />
+            <Route path="website-management" element={<WebsiteManagement />} />
           </Route>
         </Routes>
       </BrowserRouter>

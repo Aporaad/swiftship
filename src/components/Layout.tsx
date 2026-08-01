@@ -464,11 +464,15 @@ export default function Layout() {
     { name: isAr ? 'المصادر' : 'Sources', path: '/sources', icon: MapPin, permission: 'view_sources' },
     { name: isAr ? 'التقارير' : 'Reports', path: '/reports', icon: FileText, permission: 'view_reports' },
     { name: isAr ? 'المستخدمون والأدوار' : 'Users & Roles', path: '/user-management', icon: UserCog, permission: 'view_users' },
+    { name: isAr ? 'إدارة الموقع' : 'Website Management', path: '/website-management', icon: Globe, permission: 'view_website_management' },
     { name: isAr ? 'الإشعارات' : 'Notifications', path: '/notifications', icon: Bell, permission: 'view_notifications' },
     { name: isAr ? 'الإعدادات' : 'Settings', path: '/settings', icon: Settings, permission: 'settings' },
   ];
 
   const filteredNavItems = navItems.filter(item => {
+    if (item.path === '/website-management') {
+      return hasPermission('view_website_management') || role === 'Admin';
+    }
     if (item.path === '/expenses') {
       return hasPermission('view_finance') || hasPermission('view_expenses') || hasPermission('view_custody');
     }

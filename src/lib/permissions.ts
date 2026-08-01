@@ -64,7 +64,9 @@ export type PermissionKey =
   | 'view_financial_accounts'
   | 'manage_financial_accounts'
   | 'edit_profit_per_kg'
-  | 'edit_cbm_shipping_rate';
+  | 'edit_cbm_shipping_rate'
+  | 'view_website_management'
+  | 'manage_website';
 
 export interface PermissionDefinition {
   id: PermissionKey;
