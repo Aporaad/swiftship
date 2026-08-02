@@ -1,13 +1,18 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import {defineConfig} from 'vite';
+import { defineConfig } from 'vite';
 
 export default defineConfig(() => {
   return {
     // base: './' مطلوب حتى تعمل المسارات بشكل صحيح داخل Electron
     base: './',
     plugins: [react(), tailwindcss()],
+    preview: {
+      host: '0.0.0.0',
+      port: Number(process.env.PORT) || 4173,
+      allowedHosts: true as true,
+    },
     build: {
       outDir: 'dist',
       // تحسين الإنتاج
@@ -17,6 +22,7 @@ export default defineConfig(() => {
             vendor: ['react', 'react-dom', 'react-router-dom'],
             charts: ['recharts'],
             maps: ['leaflet', 'react-leaflet'],
+            supabase: ['@supabase/supabase-js'],
           },
         },
       },
@@ -46,6 +52,6 @@ export default defineConfig(() => {
       watch: process.env.DISABLE_HMR === 'true' ? null : {
         ignored: ['**/dist-electron/**', '**/dist/**']
       },
-    },
+    }
   };
 });
