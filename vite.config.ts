@@ -8,9 +8,20 @@ export default defineConfig(() => {
     // base: './' مطلوب حتى تعمل المسارات بشكل صحيح داخل Electron
     base: './',
     plugins: [react(), tailwindcss()],
+    server: {
+      // منفذ ثابت للـ dev server (Express يعمل على 3000)
+      port: 3000,
+      // HMR is disabled in AI Studio via DISABLE_HMR env var.
+      // Do not modify—file watching is disabled to prevent flickering during agent edits.
+      hmr: process.env.DISABLE_HMR !== 'true',
+      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
+      watch: process.env.DISABLE_HMR === 'true' ? null : {
+        ignored: ['**/dist-electron/**', '**/dist/**']
+      },
+    },
     preview: {
       host: '0.0.0.0',
-      port: Number(process.env.PORT) || 4173,
+      port: Number(process.env.PORT) || 3000,
       allowedHosts: true as true,
     },
     build: {
@@ -42,16 +53,5 @@ export default defineConfig(() => {
         '@google-cloud/firestore': path.resolve(process.cwd(), './src/lib/supabase-firebase-adapter.ts'),
       },
     },
-    server: {
-      // منفذ ثابت للـ dev server (Express يعمل على 3000)
-      port: 5173,
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modify—file watching is disabled to prevent flickering during agent edits.
-      hmr: process.env.DISABLE_HMR !== 'true',
-      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
-      watch: process.env.DISABLE_HMR === 'true' ? null : {
-        ignored: ['**/dist-electron/**', '**/dist/**']
-      },
-    }
   };
 });
