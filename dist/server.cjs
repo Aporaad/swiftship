@@ -46828,7 +46828,7 @@ async function getDocFromServer(docRef) {
 }
 async function addDoc(newID, collectionRef, rawData) {
   const table = collectionRef.path;
-  const id3 = newID ? newID : Math.random().toString(36).substring(2, 11) + Math.random().toString(36).substring(2, 11);
+  const id3 = newID ? newID : "noId_" + Math.random().toString(36).substring(2, 11) + Math.random().toString(36).substring(2, 11);
   const data = cleanData(rawData);
   if (!isOfflineMode()) {
     const { error: error3 } = await supabase.from(table).insert({ id: id3, data });

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { doc, onSnapshot, updateDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, db } from '../lib/firebase';
+import { clearAllLocalData } from '../lib/supabase-firebase-adapter';
 import { DEFAULT_ROLE_PERMISSIONS } from '../lib/permissions';
 
 const getDeviceAndBrowser = () => {
@@ -130,6 +131,7 @@ export function useRole(enableHeartbeat: boolean = false) {
           sessionStorage.removeItem(keyId);
           sessionStorage.removeItem(keyCreated);
           deleteDoc(sessionRef).catch(console.error);
+          clearAllLocalData();
           auth.signOut().catch(console.error);
         }
       }
@@ -178,12 +180,14 @@ export function useRole(enableHeartbeat: boolean = false) {
           // Clear the flag first, then sign out
           updateDoc(doc(db, 'users', user.uid), { forceLogout: false, forceLogoutAt: null })
             .catch(console.error);
+          clearAllLocalData();
           auth.signOut().catch(console.error);
           return;
         }
 
         // ── DISABLED: account was disabled while user was logged in ──
         if (userData.disabled === true) {
+          clearAllLocalData();
           auth.signOut().catch(console.error);
           return;
         }
@@ -194,6 +198,7 @@ export function useRole(enableHeartbeat: boolean = false) {
           setPermissions([]);
           setProfile(null);
           setLoading(false);
+          clearAllLocalData();
           auth.signOut().catch(console.error);
           return;
         }

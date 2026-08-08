@@ -1,9 +1,10 @@
-import React, { useState, useMemo, useEffect } from 'react';
+﻿import React, { useState, useMemo, useEffect } from 'react';
 import {
   FolderTree, Folder, FolderOpen, ChevronRight, ChevronDown, PlusCircle, Trash2,
   Search, Scale, X, Activity, ShieldCheck, RefreshCw, Edit2, FileText, FileSpreadsheet, Printer,
   TrendingUp, TrendingDown, DollarSign, ArrowUpRight, ArrowDownLeft
 } from 'lucide-react';
+import { format, startOfDay, endOfDay, subDays, isWithinInterval } from 'date-fns';
 import ConfirmModal from './ConfirmModal';
 import { db } from '../lib/supabase-firebase-adapter';
 import { collection, addDoc, doc, deleteDoc, updateDoc, onSnapshot, query, where, getDocs, orderBy } from '../lib/supabase-firebase-adapter';
@@ -373,23 +374,27 @@ export default function ChartOfAccounts({
       return;
     }
     setAccountLoading(true);
+    const newId = 'acc_' + newAccount.code;
     try {
       await addDoc(
-        null,
+        newId,
         collection(db, 'accounts'),
         {
           code: newAccount.code,
           accountCode: newAccount.code,
+          accountNumber: newAccount.code.split('-')[1].trim(),
           nameAr: newAccount.nameAr,
           nameEn: newAccount.nameEn,
           entityName: newAccount.nameAr,
           type: newAccount.type,
           entityType: 'system',
+          isActive: true,
           parentCode: newAccount.parentCode || null,
           accountPrefix: newAccount.parentCode || null,
           balance: parseFloat(newAccount.balance) || 0,
           currency: newAccount.currency,
-          createdAt: Date.now()
+          createdAt: format(Date.now(), 'yyyy-MM-dd_hh-mm-ss'),
+          //createdAt: new Intl.DateTimeFormat('ar-EG', { dateStyle: 'full' }).format(Date.now()),
         }
       );
       notificationService.notify({ title: isAr ? 'تم إضافة الحساب' : 'Account Created', message: isAr ? `تم إضافة الحساب [${newAccount.nameAr}] للشجرة.` : `Account [${newAccount.nameEn}] created.`, type: 'success' });

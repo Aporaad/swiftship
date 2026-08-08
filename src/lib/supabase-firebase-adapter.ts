@@ -543,7 +543,7 @@ export async function getDocFromServer(docRef: DocRef) {
 
 export async function addDoc(newID, collectionRef: FirebaseQuery, rawData: any) {
   const table = collectionRef.path;
-  const id = newID ? newID : Math.random().toString(36).substring(2, 11) + Math.random().toString(36).substring(2, 11);
+  const id = newID ? newID : 'noId_' + Math.random().toString(36).substring(2, 11) + Math.random().toString(36).substring(2, 11);
   const data = cleanData(rawData);
 
   if (!isOfflineMode()) {
@@ -1091,10 +1091,36 @@ export async function signInWithCustomToken(...args: any[]) {
   return { user: auth.currentUser };
 }
 
+/**
+ * Wipes ALL swiftship_ prefixed keys from localStorage and clears
+ * the in-memory collection caches. Must be called on every logout path.
+ */
+export function clearAllLocalData(): void {
+  if (isServer) return;
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('swiftship_')) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(key => localStorage.removeItem(key));
+  } catch (_) { /* ignore storage access errors */ }
+
+  // Also clear in-memory caches so stale data is never re-served after re-login
+  for (const table of Object.keys(collectionCaches)) {
+    delete collectionCaches[table];
+  }
+  for (const table of Object.keys(lastFetchTimestamps)) {
+    delete lastFetchTimestamps[table];
+  }
+}
+
 export async function signOut(...args: any[]) {
-  // Clear any emergency offline flags
+  // Wipe ALL swiftship_ localStorage data and in-memory caches on every logout
+  clearAllLocalData();
   setOfflineMode(false);
-  safeLocalStorage.removeItem('swiftship_persisted_user');
   await supabase.auth.signOut();
   currentSession = null;
   loggedInUser = null;

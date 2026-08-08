@@ -3,6 +3,7 @@ import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
 import { collection, query, where, onSnapshot, getDocs, writeBatch, doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
+import { clearAllLocalData } from '../lib/supabase-firebase-adapter';
 import {
   LayoutDashboard,
   Package,
@@ -355,6 +356,9 @@ export default function Layout() {
     } catch (err) {
       console.warn("Could not delete session on manual signout:", err);
     }
+
+    // Wipe all cached data from localStorage before signing out
+    clearAllLocalData();
 
     await signOut(auth);
     navigate('/login');

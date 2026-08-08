@@ -189,7 +189,7 @@ class FinancialAccountService {
     while (true) {
       const seqStr = String(candidateSeq).padStart(4, "0");
       const candidateCode = `${prefix}-${seqStr}`;
-      const candidateId = `acc_${prefix}_${seqStr}`;
+      const candidateId = `acc_${prefix}-${seqStr}`;
 
       const isCodeTaken = existingCodes.has(candidateCode);
       const isIdTaken = existingIds.has(candidateId);
@@ -711,24 +711,25 @@ class FinancialAccountService {
     */
 
     // 2. Record in salary_history collection for the dedicated salary history page
-    await addDoc({
-      newID: collection(db, "salary_history"), collectionRef: {
-        employeeId: params.employeeId,
-        employeeName: params.employeeName,
-        accountId: params.accountId,
-        accountCode: params.accountCode,
-        amount: params.amount,
-        currency: params.currency,
-        salaryMonth: params.salaryMonth,
-        voucherCode,
-        notes: params.notes || "",
-        status: "Paid",
-        paidAt: now,
-        createdByUid: params.createdByUid || "system",
-        createdByName: params.createdByName || "Admin",
-        createdAt: now,
-      }
-    });
+    const newId = `acc_${params.accountCode}`;
+    await addDoc(newId,
+      collection(db, "salary_history"), {
+      employeeId: params.employeeId,
+      employeeName: params.employeeName,
+      accountId: params.accountId,
+      accountCode: params.accountCode,
+      amount: params.amount,
+      currency: params.currency,
+      salaryMonth: params.salaryMonth,
+      voucherCode,
+      notes: params.notes || "",
+      status: "Paid",
+      paidAt: now,
+      createdByUid: params.createdByUid || "system",
+      createdByName: params.createdByName || "Admin",
+      createdAt: now,
+    }
+    );
 
     activityLogService.log("salary_payment" as any, params.employeeName, {
       salaryMonth: params.salaryMonth,
@@ -1308,7 +1309,7 @@ class FinancialAccountService {
           createdAt: Date.now(),
           updatedAt: Date.now(),
         };
-        const ref = await addDoc({ newID: collection(db, "accounts"), collectionRef: accountData });
+        const ref = await addDoc(accountData.id, collection(db, "accounts"), accountData);
         sysIds[acc.id] = ref.id;
       }
     }
