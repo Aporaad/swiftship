@@ -1,4 +1,4 @@
-﻿import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   FolderTree, Folder, FolderOpen, ChevronRight, ChevronDown, PlusCircle, Trash2,
   Search, Scale, X, Activity, ShieldCheck, RefreshCw, Edit2, FileText, FileSpreadsheet, Printer,
@@ -35,7 +35,6 @@ interface ChartOfAccountsProps {
 }
 
 export interface AccountNode {
-  [x: string]: string;
   code: string;
   nameAr: string;
   nameEn: string;
@@ -45,6 +44,11 @@ export interface AccountNode {
   isSystem?: boolean;
   currency?: string;
   id?: string;
+  // Extra fields from DB records (custom accounts from Supabase)
+  accountCode?: string;
+  entityType?: string;
+  accountPrefix?: string;
+  entityName?: string;
 }
 
 export default function ChartOfAccounts({
@@ -370,8 +374,10 @@ export default function ChartOfAccounts({
     }
     setAccountLoading(true);
     try {
-      await addDoc({
-        newID: collection(db, 'accounts'), collectionRef: {
+      await addDoc(
+        null,
+        collection(db, 'accounts'),
+        {
           code: newAccount.code,
           accountCode: newAccount.code,
           nameAr: newAccount.nameAr,
@@ -385,7 +391,7 @@ export default function ChartOfAccounts({
           currency: newAccount.currency,
           createdAt: Date.now()
         }
-      });
+      );
       notificationService.notify({ title: isAr ? 'تم إضافة الحساب' : 'Account Created', message: isAr ? `تم إضافة الحساب [${newAccount.nameAr}] للشجرة.` : `Account [${newAccount.nameEn}] created.`, type: 'success' });
       setIsAddOpen(false);
       setNewAccount({ code: '', nameAr: '', nameEn: '', type: 'Asset', parentCode: '', balance: '', currency: 'YER' });

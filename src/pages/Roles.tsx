@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, doc, updateDoc, addDoc, setDoc, deleteDoc, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, doc, updateDoc, addDoc, setDoc, deleteDoc, getDocs } from '../lib/firebase';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Search, Edit2, X, Plus, Trash2, Shield, CheckCircle2, RefreshCw } from 'lucide-react';
 import { useRole } from '../hooks/useRole';
@@ -37,11 +37,11 @@ export default function Roles() {
 
   useEffect(() => {
     if (roleLoading) return;
-    const unsub = onSnapshot(collection(db, 'roles'), (snap) => {
-      const fetchedRoles = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const unsub = onSnapshot(collection(db, 'roles'), (snap: any) => {
+      const fetchedRoles = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
       setRoles(fetchedRoles);
       setLoading(false);
-    }, (error) => {
+    }, (error: any) => {
       setLoading(false);
       handleFirestoreError(error, OperationType.LIST, 'roles');
     });
@@ -54,7 +54,7 @@ export default function Roles() {
     const initRoles = async () => {
       try {
         const snap = await getDocs(collection(db, 'roles'));
-        const fetchedRoles = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const fetchedRoles = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
         
         const defaultRoles = [
           { id: 'Admin', title: settings.language === 'ar' ? 'مدير النظام' : 'System Admin', permissions: ['*'] },
@@ -64,7 +64,7 @@ export default function Roles() {
         ];
 
         for (const dr of defaultRoles) {
-          if (!fetchedRoles.find(r => r.id === dr.id)) {
+          if (!fetchedRoles.find((r: any) => r.id === dr.id)) {
             try {
               await setDoc(doc(db, 'roles', dr.id), {
                 title: dr.title,
