@@ -1794,11 +1794,6 @@ class FinancialAccountService {
     entityId: string
   ): Promise<void> {
     try {
-      // 5. Commit all deletions
-      await batch.commit();
-
-      // 6. Recalculate & sync all financial balances system-wide
-
       // Step 0: Check if entity is linked to any orders in 'orders' collection
       const ordersSnap = await getDocs(collection(db, "orders"));
       const isLinkedToOrders = ordersSnap.docs.some(doc => {
@@ -1934,7 +1929,6 @@ class FinancialAccountService {
 
       // 5. Commit all deletions
       await batch.commit();
-      console.log(`[purgeEntityAndFinancialFootprint] Purge committed for entity: ${entityId}`);
 
       // 6. Recalculate & sync all financial balances system-wide
       await this.recalculateAllBalances();
