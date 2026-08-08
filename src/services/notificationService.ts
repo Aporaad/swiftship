@@ -48,12 +48,12 @@ export const notificationService = {
       if (!category) {
         const lowerTitle = title.toLowerCase();
         const lowerMessage = message.toLowerCase();
-        
+
         const financeKeywords = [
           'مالي', 'سند', 'الخزينة', 'سداد', 'العهد', 'الدفعة', 'دفع', 'مصروف', 'المحاسبة', 'التصفية', 'التسوية',
           'financial', 'payment', 'expenses', 'custody', 'voucher', 'reconciliation', 'settle', 'paid', 'collect'
         ];
-        
+
         const orderKeywords = [
           'طلب', 'شحن', 'مسار', 'تتبع', 'اللوجستية', 'فاتورة', 'طرد', 'المستودع', 'توصيل',
           'order', 'shipping', 'track', 'logistic', 'invoice', 'parcel', 'warehouse', 'delivery'
@@ -71,19 +71,21 @@ export const notificationService = {
 
       // 3. Save to Firestore for persistence only if the operator is authenticated
       if (auth.currentUser) {
-        await addDoc(collection(db, 'notifications'), {
-          title,
-          message,
-          type,
-          orderId: orderId || null,
-          userId: userId || 'global',
-          associatedUserIds: associatedUserIds || [],
-          isPublic,
-          read: false,
-          category: inferredCategory,
-          createdAt: Date.now(),
-          creatorId: auth.currentUser?.uid || 'system',
-          creatorName: auth.currentUser?.displayName || 'System'
+        await addDoc({
+          newID: collection(db, 'notifications'), collectionRef: {
+            title,
+            message,
+            type,
+            orderId: orderId || null,
+            userId: userId || 'global',
+            associatedUserIds: associatedUserIds || [],
+            isPublic,
+            read: false,
+            category: inferredCategory,
+            createdAt: Date.now(),
+            creatorId: auth.currentUser?.uid || 'system',
+            creatorName: auth.currentUser?.displayName || 'System'
+          }
         });
       }
     } catch (error) {

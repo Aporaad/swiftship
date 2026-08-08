@@ -2,23 +2,23 @@ import React, { useState, useEffect } from 'react';
 import { collection, addDoc, doc, updateDoc, onSnapshot, deleteDoc, query, where, orderBy, getDocs } from '../lib/supabase-firebase-adapter';
 import { db } from '../lib/supabase-firebase-adapter';
 import { handleFirestoreError, OperationType } from '../lib/firebase';
-import { 
-  Plus, 
-  Search, 
-  Edit2, 
-  Trash2, 
-  X, 
-  User, 
-  Phone, 
-  Mail, 
-  MapPin, 
-  Receipt, 
-  DollarSign, 
-  Package, 
-  AlertCircle, 
-  Crown, 
-  Coins, 
-  Check, 
+import {
+  Plus,
+  Search,
+  Edit2,
+  Trash2,
+  X,
+  User,
+  Phone,
+  Mail,
+  MapPin,
+  Receipt,
+  DollarSign,
+  Package,
+  AlertCircle,
+  Crown,
+  Coins,
+  Check,
   Printer,
   ShieldAlert,
   HelpCircle,
@@ -89,7 +89,7 @@ export default function Customers() {
     isOpen: false,
     title: '',
     message: '',
-    onConfirm: () => {},
+    onConfirm: () => { },
     type: 'danger'
   });
 
@@ -134,7 +134,7 @@ export default function Customers() {
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'customers');
     });
-    
+
     // Subscribe to accounts collection to obtain real-time financial balances and currencies
     const unsubAccounts = onSnapshot(collection(db, 'accounts'), (snap) => {
       setAccounts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -174,7 +174,7 @@ export default function Customers() {
     setFinModuleFilter('all');
     setShowDetailsModal(true);
     setOrdersLoading(true);
-    
+
     const q = query(
       collection(db, 'orders'),
       where('customerId', '==', customer.id),
@@ -219,7 +219,10 @@ export default function Customers() {
         });
       } else {
         // Step 1: Create the customer document
-        const newCustomerRef = await addDoc(collection(db, 'customers'), {
+        const { accountCode, code, accountId } =
+          await financialAccountService.getNextAccountIdentifiers('customer');
+        const newId = 'cust_' + accountCode;
+        const newCustomerRef = await addDoc(newId, collection(db, 'customers'), {
           fullName: formData.fullName,
           phone: formData.phone,
           email: formData.email,
@@ -244,8 +247,8 @@ export default function Customers() {
         activityLogService.log('add_customer', formData.fullName, { ...formData });
         notificationService.notify({
           title: isAr ? 'إضافة عميل' : 'Customer Added',
-          message: isAr 
-            ? `تمت إضافة العميل ${formData.fullName} وإنشاء حسابه المالي تلقائياً` 
+          message: isAr
+            ? `تمت إضافة العميل ${formData.fullName} وإنشاء حسابه المالي تلقائياً`
             : `Customer ${formData.fullName} added with auto-generated financial account`,
           type: 'success'
         });
@@ -279,7 +282,7 @@ export default function Customers() {
       // 2. Live from account_transactions by account document ID
       // 3. Stored balance field (fallback if no transactions yet)
       const liveByCode = acc?.accountCode ? liveBalances.byCode[acc.accountCode] : undefined;
-      const liveById   = acc?.id          ? liveBalances.byId[acc.id]            : undefined;
+      const liveById = acc?.id ? liveBalances.byId[acc.id] : undefined;
       const liveBalance = liveByCode ?? liveById ?? (acc ? acc.balance : 0) ?? 0;
 
       return {
@@ -302,8 +305,8 @@ export default function Customers() {
     return customersWithAccounts.find(c => c.id === selectedCustomer.id) || selectedCustomer;
   }, [selectedCustomer, customersWithAccounts]);
 
-  const filteredCustomers = customersWithAccounts.filter(c => 
-    (c.fullName && c.fullName.toLowerCase().includes(search.toLowerCase())) || 
+  const filteredCustomers = customersWithAccounts.filter(c =>
+    (c.fullName && c.fullName.toLowerCase().includes(search.toLowerCase())) ||
     (c.phone && c.phone.includes(search)) ||
     (c.id === searchCustomerId)
   );
@@ -332,8 +335,8 @@ export default function Customers() {
           amount: totalCost,
           module: 'order',
           title: isAr ? 'قيمة مبيعات / رسوم شحن' : 'Sales COD Charge',
-          description: isAr 
-            ? `قيمة الشحنة الموكلة رقم: ${order.orderNumber || 'ALX-CR'} (توجيه محلي)` 
+          description: isAr
+            ? `قيمة الشحنة الموكلة رقم: ${order.orderNumber || 'ALX-CR'} (توجيه محلي)`
             : `Gross COD for shipment #${order.orderNumber || 'ALX-CR'}`,
           ref: order.orderNumber || order.id
         });
@@ -342,7 +345,7 @@ export default function Customers() {
       // COD Paid (Credit - customer paid this amount)
       const orderPaymentTxs = customerTransactions.filter(tx => tx.module === 'payment' && (tx.refNumber === order.orderNumber || tx.refNumber === order.id));
       const sumOfRecordedTxs = orderPaymentTxs.reduce((sum, tx) => sum + (parseFloat(tx.amountOriginal || tx.amount || 0)), 0);
-      
+
       const unrecordedPayment = amtPaid - sumOfRecordedTxs;
 
       if (unrecordedPayment > 0.01) {
@@ -353,8 +356,8 @@ export default function Customers() {
           amount: unrecordedPayment,
           module: 'payment',
           title: isAr ? 'مقبوضات شحن مبدئية / غير مقيدة' : 'Initial COD Payment',
-          description: isAr 
-            ? `كاش سدد مسبقاً للشحنة رقم: ${order.orderNumber || 'ALX-CR'} ولم يُقيد بسند منفصل` 
+          description: isAr
+            ? `كاش سدد مسبقاً للشحنة رقم: ${order.orderNumber || 'ALX-CR'} ولم يُقيد بسند منفصل`
             : `Legacy cash paid for shipment #${order.orderNumber || 'ALX-CR'}`,
           ref: order.orderNumber || order.id
         });
@@ -373,7 +376,7 @@ export default function Customers() {
         amount: tx.amount || 0,
         module: tx.module || 'transaction',
         title: tx.description ? tx.description : (isAr ? (tx.type === 'Credit' ? 'إيداع نقدي للحساب' : 'سحب / تسوية من الحساب') : (tx.type === 'Credit' ? 'Account Deposit' : 'Account Withdrawal')),
-        description: isAr 
+        description: isAr
           ? `حركة حساب مركزية رقم القيد: ${tx.refNumber || tx.accountCode || 'Ledger-Tx'}`
           : `System journal entry ref: ${tx.refNumber || tx.accountCode || 'Ledger-Tx'}`,
         ref: tx.refNumber || tx.accountCode || ''
@@ -427,7 +430,7 @@ export default function Customers() {
 
   return (
     <div className="space-y-6 pb-20 text-start transition-colors font-sans selection:bg-[#d4af37]/30">
-      
+
       {/* Title & Header Panel */}
       <div className="flex justify-between items-center bg-black/40 backdrop-blur-md border border-[#d4af37]/20 p-5 rounded-3xl shadow-lg shadow-black/3c">
         <div className="flex items-center gap-3">
@@ -440,7 +443,7 @@ export default function Customers() {
           </div>
         </div>
         {role === 'Admin' || hasPermission('add_customers') ? (
-          <button 
+          <button
             onClick={handleOpenAdd}
             className="bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black px-6 py-2.5 rounded-xl flex items-center gap-2 font-black text-sm transition transform active:scale-95 shadow-md shadow-yellow-950/20"
           >
@@ -451,14 +454,14 @@ export default function Customers() {
 
       {/* Main Customers Hub Grid */}
       <div className="bg-[#121215] border border-slate-850 rounded-3xl overflow-hidden shadow-2xl flex flex-col">
-        
+
         {/* Search & Tool belt */}
         <div className="p-6 border-b border-slate-850/60 bg-black/30">
           <div className="relative max-w-md">
             <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
-            <input 
-              type="text" 
-              placeholder={isAr ? 'الأبحاث والتحري الذكي باسم العميل أو جواله...' : 'Advanced query by name, code or cellphone...'} 
+            <input
+              type="text"
+              placeholder={isAr ? 'الأبحاث والتحري الذكي باسم العميل أو جواله...' : 'Advanced query by name, code or cellphone...'}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pr-11 pl-4 py-3 bg-black/50 border border-slate-850 rounded-xl focus:border-[#d4af37]/60 outline-none text-xs text-white placeholder:text-slate-500 font-bold text-start transition-all"
@@ -505,10 +508,9 @@ export default function Customers() {
                           <span className="font-mono font-black text-[#d4af37] text-[10px] bg-[#d4af37]/10 border border-[#d4af37]/20 px-2 py-0.5 rounded-lg w-max">
                             {customer.financialAccountCode}
                           </span>
-                          <span className={`text-[10px] font-bold font-mono ${
-                            (customer.financialBalance || 0) > 0 ? 'text-rose-400' :
+                          <span className={`text-[10px] font-bold font-mono ${(customer.financialBalance || 0) > 0 ? 'text-rose-400' :
                             (customer.financialBalance || 0) < 0 ? 'text-emerald-400' : 'text-slate-500'
-                          }`}>
+                            }`}>
                             {(customer.financialBalance || 0) > 0 ? '▲' : (customer.financialBalance || 0) < 0 ? '▼' : '●'} {Math.abs(customer.financialBalance || 0).toLocaleString()} {customer.financialCurrency || settings.currency}
                           </span>
                         </div>
@@ -517,30 +519,30 @@ export default function Customers() {
                       )}
                     </td>
                     <td className="p-4 text-slate-400 max-w-xs truncate">
-                       <div className="font-bold text-slate-300 text-xs">{customer.address || '—'}</div>
-                       {customer.gps_location && (
-                         <div className="text-[10px] text-cyan-400 mt-0.5 truncate font-mono font-bold" dir="ltr">GPS: {customer.gps_location}</div>
-                       )}
+                      <div className="font-bold text-slate-300 text-xs">{customer.address || '—'}</div>
+                      {customer.gps_location && (
+                        <div className="text-[10px] text-cyan-400 mt-0.5 truncate font-mono font-bold" dir="ltr">GPS: {customer.gps_location}</div>
+                      )}
                     </td>
                     <td className="p-4 text-left flex justify-end gap-2">
-                      <button 
-                        onClick={() => handleOpenDetails(customer)} 
-                        title="كشف حساب العميل والتقارير" 
+                      <button
+                        onClick={() => handleOpenDetails(customer)}
+                        title="كشف حساب العميل والتقارير"
                         className="text-[#d4af37] bg-[#d4af37]/5 hover:bg-[#d4af37]/15 border border-[#d4af37]/15 p-2 rounded-xl transition duration-300"
                       >
                         <Receipt className="w-4 h-4" />
                       </button>
                       {role === 'Admin' || hasPermission('edit_customers') ? (
                         <>
-                          <button 
-                            onClick={() => handleOpenEdit(customer)} 
+                          <button
+                            onClick={() => handleOpenEdit(customer)}
                             className="text-white hover:text-[#d4af37] bg-slate-900 border border-slate-800 p-2 rounded-xl transition-all"
                           >
                             <Edit2 className="w-4 h-4" />
                           </button>
                           {hasPermission('delete_customers') && (
-                            <button 
-                              onClick={() => handleDeleteCustomer(customer.id, customer.fullName || 'العميل')} 
+                            <button
+                              onClick={() => handleDeleteCustomer(customer.id, customer.fullName || 'العميل')}
                               className="text-rose-500 hover:bg-rose-950/20 bg-rose-950/10 border border-rose-950/45 p-2 rounded-xl transition-all"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -575,19 +577,19 @@ export default function Customers() {
               </h2>
               <button type="button" onClick={() => setShowModal(false)} className="text-slate-550 hover:text-white bg-slate-900 border border-slate-800 p-1 rounded-lg transition-colors"><X className="w-4 h-4" /></button>
             </div>
-            
+
             <div className="p-6 space-y-4 overflow-y-auto flex-1 text-start">
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'الاسم الثلاثي أو الرباعي للعميل' : 'Full Patron Name'}</label>
                 <div className="relative">
                   <User className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#d4af37]" />
-                  <input 
-                    required 
-                    placeholder={isAr ? 'أدخل اسم العميل بالكامل...' : 'e.g. Abdullah bin Ali'} 
-                    type="text" 
-                    value={formData.fullName} 
-                    onChange={e => setFormData({...formData, fullName: e.target.value})} 
-                    className="w-full bg-black/50 border border-slate-850 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start transition-all" 
+                  <input
+                    required
+                    placeholder={isAr ? 'أدخل اسم العميل بالكامل...' : 'e.g. Abdullah bin Ali'}
+                    type="text"
+                    value={formData.fullName}
+                    onChange={e => setFormData({ ...formData, fullName: e.target.value })}
+                    className="w-full bg-black/50 border border-slate-850 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start transition-all"
                   />
                 </div>
               </div>
@@ -597,13 +599,13 @@ export default function Customers() {
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'رقم الهاتف (الواتساب)' : 'Cellphone Contact'}</label>
                   <div className="relative">
                     <Phone className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                    <input 
-                      required 
-                      type="text" 
+                    <input
+                      required
+                      type="text"
                       placeholder="+967..."
-                      value={formData.phone} 
-                      onChange={e => setFormData({...formData, phone: e.target.value})} 
-                      className="w-full bg-black/50 border border-slate-850 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-start" 
+                      value={formData.phone}
+                      onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                      className="w-full bg-black/50 border border-slate-850 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-start"
                     />
                   </div>
                 </div>
@@ -611,12 +613,12 @@ export default function Customers() {
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'البريد الإلكتروني' : 'Electronic Mail'}</label>
                   <div className="relative">
                     <Mail className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                    <input 
-                      type="email" 
+                    <input
+                      type="email"
                       placeholder="client@mail.com"
-                      value={formData.email} 
-                      onChange={e => setFormData({...formData, email: e.target.value})} 
-                      className="w-full bg-black/50 border border-slate-850 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-start" 
+                      value={formData.email}
+                      onChange={e => setFormData({ ...formData, email: e.target.value })}
+                      className="w-full bg-black/50 border border-slate-850 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-start"
                     />
                   </div>
                 </div>
@@ -626,48 +628,48 @@ export default function Customers() {
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'العنوان وتفاصيل التوزيع بليمن' : 'Yemen Handover Settlement Address'}</label>
                 <div className="relative">
                   <MapPin className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                  <input 
-                    placeholder={isAr ? 'المدينة • المديرية • الشارع • معلم بجانب المنزل' : 'Sanaa, Haddah, behind post office'} 
-                    type="text" 
-                    value={formData.address} 
-                    onChange={e => setFormData({...formData, address: e.target.value})} 
-                    className="w-full bg-black/50 border border-slate-850 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start" 
+                  <input
+                    placeholder={isAr ? 'المدينة • المديرية • الشارع • معلم بجانب المنزل' : 'Sanaa, Haddah, behind post office'}
+                    type="text"
+                    value={formData.address}
+                    onChange={e => setFormData({ ...formData, address: e.target.value })}
+                    className="w-full bg-black/50 border border-slate-850 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start"
                   />
                 </div>
               </div>
 
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'رابط الموقع الجغرافي الخرائط (GPS)' : 'Google Maps Embed/URL'}</label>
-                <input 
-                  placeholder="https://maps.google.com/?q=..." 
-                  type="text" 
-                  value={formData.gps_location} 
-                  onChange={e => setFormData({...formData, gps_location: e.target.value})} 
-                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-start" 
+                <input
+                  placeholder="https://maps.google.com/?q=..."
+                  type="text"
+                  value={formData.gps_location}
+                  onChange={e => setFormData({ ...formData, gps_location: e.target.value })}
+                  className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-start"
                 />
               </div>
 
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'ملاحظات وتصنيفات إدارية خاصة' : 'Administrative Confidential Annotations'}</label>
-                <textarea 
-                  rows={2} 
-                  value={formData.notes} 
-                  onChange={e => setFormData({...formData, notes: e.target.value})} 
+                <textarea
+                  rows={2}
+                  value={formData.notes}
+                  onChange={e => setFormData({ ...formData, notes: e.target.value })}
                   className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start"
                 ></textarea>
               </div>
             </div>
 
             <div className="p-4 border-t border-slate-850 bg-[#07070a]/40 flex justify-end gap-3 shrink-0">
-              <button 
-                type="button" 
-                onClick={() => setShowModal(false)} 
+              <button
+                type="button"
+                onClick={() => setShowModal(false)}
                 className="px-5 py-2.5 text-slate-400 font-bold hover:bg-slate-850 rounded-xl transition text-xs"
               >
                 {isAr ? 'إلغاء' : 'Cancel'}
               </button>
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 disabled={submitting}
                 className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black text-xs font-black rounded-xl transition shadow-md active:scale-95 disabled:opacity-40"
               >
@@ -682,22 +684,22 @@ export default function Customers() {
       {showDetailsModal && activeCustomer && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
           <div className="bg-[#0c0c0f] border border-[#d4af37]/25 rounded-3xl shadow-2xl max-w-4xl w-full h-[88vh] overflow-hidden flex flex-col">
-            
+
             {/* Modal Header */}
             <div className="bg-black/40 p-5 border-b border-slate-850/80 flex justify-between items-center shrink-0">
-               <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#121215] to-[#070708] border border-[#d4af37]/25 text-[#d4af37] flex items-center justify-center font-black text-lg shadow-inner">
-                    {activeCustomer.fullName?.substring(0, 1)}
-                  </div>
-                  <div className="text-start">
-                    <h2 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-1.5">
-                      {activeCustomer.fullName} 
-                      <Crown className="w-4 h-4 text-[#d4af37] animate-pulse" />
-                    </h2>
-                    <p className="text-[10px] text-[#d4af37] font-bold font-mono mt-0.5" dir="ltr">{activeCustomer.phone}</p>
-                  </div>
-               </div>
-               <button onClick={() => setShowDetailsModal(false)} className="bg-slate-900 hover:bg-slate-850 p-2 rounded-xl text-slate-500 hover:text-white border border-slate-800 transition duration-200"><X className="w-4.5 h-4.5" /></button>
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#121215] to-[#070708] border border-[#d4af37]/25 text-[#d4af37] flex items-center justify-center font-black text-lg shadow-inner">
+                  {activeCustomer.fullName?.substring(0, 1)}
+                </div>
+                <div className="text-start">
+                  <h2 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-1.5">
+                    {activeCustomer.fullName}
+                    <Crown className="w-4 h-4 text-[#d4af37] animate-pulse" />
+                  </h2>
+                  <p className="text-[10px] text-[#d4af37] font-bold font-mono mt-0.5" dir="ltr">{activeCustomer.phone}</p>
+                </div>
+              </div>
+              <button onClick={() => setShowDetailsModal(false)} className="bg-slate-900 hover:bg-slate-850 p-2 rounded-xl text-slate-500 hover:text-white border border-slate-800 transition duration-200"><X className="w-4.5 h-4.5" /></button>
             </div>
 
             {/* Scrollable Modal Content */}
@@ -718,18 +720,17 @@ export default function Customers() {
                     </div>
                     <div className="text-right">
                       <div className="text-[9px] font-black text-slate-500 uppercase tracking-wider mb-0.5">{isAr ? 'الرصيد الحالي' : 'Current Balance'}</div>
-                      <div className={`font-mono font-black text-base ${
-                        (activeCustomer.financialBalance || 0) > 0 ? 'text-rose-400' :
+                      <div className={`font-mono font-black text-base ${(activeCustomer.financialBalance || 0) > 0 ? 'text-rose-400' :
                         (activeCustomer.financialBalance || 0) < 0 ? 'text-emerald-400' : 'text-slate-400'
-                      }`}>
-                        {(activeCustomer.financialBalance || 0) > 0 ? isAr ? 'مدين: ' : 'Debit: ' : 
-                         (activeCustomer.financialBalance || 0) < 0 ? isAr ? 'دائن: ' : 'Credit: ' : ''}
+                        }`}>
+                        {(activeCustomer.financialBalance || 0) > 0 ? isAr ? 'مدين: ' : 'Debit: ' :
+                          (activeCustomer.financialBalance || 0) < 0 ? isAr ? 'دائن: ' : 'Credit: ' : ''}
                         {Math.abs(activeCustomer.financialBalance || 0).toLocaleString()} {activeCustomer.financialCurrency || settings.currency}
                       </div>
                     </div>
                   </div>
                 )}
-                
+
                 <div className="bg-gradient-to-r from-[#010c06] to-[#04160a] border border-emerald-500/20 rounded-2xl p-4 flex items-center justify-between shadow">
                   <div className="flex items-center gap-3">
                     <div className="bg-emerald-500/10 border border-emerald-500/25 p-2.5 rounded-xl text-emerald-400">
@@ -751,11 +752,10 @@ export default function Customers() {
                 <button
                   type="button"
                   onClick={() => setDetailTab('logistics')}
-                  className={`flex-1 py-2.5 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 ${
-                    detailTab === 'logistics'
-                      ? 'bg-[#d4af37]/15 border border-[#d4af37]/30 text-[#d4af37]'
-                      : 'border border-transparent text-slate-500 hover:text-slate-350'
-                  }`}
+                  className={`flex-1 py-2.5 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 ${detailTab === 'logistics'
+                    ? 'bg-[#d4af37]/15 border border-[#d4af37]/30 text-[#d4af37]'
+                    : 'border border-transparent text-slate-500 hover:text-slate-350'
+                    }`}
                 >
                   <Package className="w-4 h-4" />
                   {isAr ? 'سجل عمليات الشحنات واللوجيستيات' : 'Sales & Logistics Statement'}
@@ -763,11 +763,10 @@ export default function Customers() {
                 <button
                   type="button"
                   onClick={() => setDetailTab('financial')}
-                  className={`flex-1 py-2.5 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 ${
-                    detailTab === 'financial'
-                      ? 'bg-emerald-950/20 border border-emerald-900/30 text-emerald-400'
-                      : 'border border-transparent text-slate-500 hover:text-slate-350'
-                  }`}
+                  className={`flex-1 py-2.5 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 ${detailTab === 'financial'
+                    ? 'bg-emerald-950/20 border border-emerald-900/30 text-emerald-400'
+                    : 'border border-transparent text-slate-500 hover:text-slate-350'
+                    }`}
                 >
                   <Coins className="w-4 h-4" />
                   {isAr ? 'كشف الحساب المالي التفصيلي' : 'Detailed Financial Ledger'}
@@ -817,76 +816,76 @@ export default function Customers() {
 
                   {/* Order History Table */}
                   <div className="bg-[#121215] border border-slate-850 rounded-2xl overflow-hidden shadow-2xl">
-                     <div className="p-4 border-b border-slate-850 bg-black/40 flex justify-between items-center text-start">
-                        <h4 className="font-black text-xs text-[#d4af37] uppercase tracking-wider">{isAr ? 'سجل وكشف حساب المبيعات واللوجيستية للعميل' : 'Customer Account Orders Ledger'}</h4>
-                        <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 px-3 py-1 rounded-lg font-bold font-mono">COUNT: {customerOrders.length}</span>
-                     </div>
-                     
-                     {ordersLoading ? (
-                        <div className="p-12 text-center text-slate-500 font-bold font-mono uppercase tracking-wider">[ loading_order_indexes ]</div>
-                     ) : (
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-right text-xs">
-                            <thead className="bg-black/30 text-[10px] text-slate-500 uppercase tracking-widest font-black border-b border-slate-850">
-                              <tr>
-                                <th className="p-3">{isAr ? 'رمز الطلب الموحد' : 'Request Code'}</th>
-                                <th className="p-3">{isAr ? 'تاريخ المعاملة' : 'Posting Date'}</th>
-                                <th className="p-3">{isAr ? 'حالة الشحن' : 'Transit Status'}</th>
-                                <th className="p-3">{isAr ? 'إجمالي الرسوم' : 'Gross Total'}</th>
-                                <th className="p-3 text-emerald-400">{isAr ? 'المدفوع' : 'Matured'}</th>
-                                <th className="p-3 text-left">{isAr ? 'الرصيد المتبقي (الوضعية)' : 'Outstanding State'}</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-850 bg-[#08080a]/20">
-                              {customerOrders.map(order => {
-                                const tot = parseFloat(order.totalCostYER || order.totalPrice || 0);
-                                const paid = parseFloat(order.amountPaid || order.paidAmount || 0);
-                                const remaining = tot - paid;
-                                return (
-                                  <tr key={order.id} className="hover:bg-slate-950/40 transition-colors">
-                                    <td className="p-3 font-mono font-black text-[#d4af37]">
-                                      {order.orderNumber || 'ALX-XXXX-XXXX'}
-                                      {order.trackingNumber && (
-                                        <div className="text-[9px] text-slate-500 font-mono mt-0.5" dir="ltr">GLOBAL_TRACK: {order.trackingNumber}</div>
-                                      )}
-                                    </td>
-                                    <td className="p-3 text-slate-400 font-mono text-[10px]">{new Date(order.createdAt).toLocaleDateString(isAr ? 'ar-YE' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</td>
-                                    <td className="p-3">
-                                      <span className="px-2.5 py-0.5 rounded text-[9px] font-black uppercase tracking-tighter bg-slate-900 border border-slate-800 text-[#d4af37]">
-                                        {order.orderStatus || order.order_status || 'تم تسجيل الطلب'}
-                                      </span>
-                                    </td>
-                                    <td className="p-3 font-mono font-bold text-white">{tot.toLocaleString()} YER</td>
-                                    <td className="p-3 text-emerald-400 font-mono font-bold">{paid.toLocaleString()} YER</td>
-                                    <td className={`p-3 text-left font-mono font-bold ${remaining > 0 ? 'text-rose-400' : remaining < 0 ? 'text-cyan-400' : 'text-slate-500'}`}>
-                                      {remaining > 0 ? (
-                                        <span>{remaining.toLocaleString()} YER [عليه]</span>
-                                      ) : remaining < 0 ? (
-                                        <span>{Math.abs(remaining).toLocaleString()} YER [دائن]</span>
-                                      ) : (
-                                        <span className="text-emerald-500 font-sans font-black uppercase tracking-widest text-[9px]">&gt; PAID_IN_FULL</span>
-                                      )}
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                              {customerOrders.length === 0 && (
-                                <tr><td colSpan={6} className="p-16 text-center text-slate-600 italic font-bold select-none">[ no_orders_logged_to_this_patron ]</td></tr>
-                              )}
-                            </tbody>
-                          </table>
-                        </div>
-                     )}
+                    <div className="p-4 border-b border-slate-850 bg-black/40 flex justify-between items-center text-start">
+                      <h4 className="font-black text-xs text-[#d4af37] uppercase tracking-wider">{isAr ? 'سجل وكشف حساب المبيعات واللوجيستية للعميل' : 'Customer Account Orders Ledger'}</h4>
+                      <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 px-3 py-1 rounded-lg font-bold font-mono">COUNT: {customerOrders.length}</span>
+                    </div>
+
+                    {ordersLoading ? (
+                      <div className="p-12 text-center text-slate-500 font-bold font-mono uppercase tracking-wider">[ loading_order_indexes ]</div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-right text-xs">
+                          <thead className="bg-black/30 text-[10px] text-slate-500 uppercase tracking-widest font-black border-b border-slate-850">
+                            <tr>
+                              <th className="p-3">{isAr ? 'رمز الطلب الموحد' : 'Request Code'}</th>
+                              <th className="p-3">{isAr ? 'تاريخ المعاملة' : 'Posting Date'}</th>
+                              <th className="p-3">{isAr ? 'حالة الشحن' : 'Transit Status'}</th>
+                              <th className="p-3">{isAr ? 'إجمالي الرسوم' : 'Gross Total'}</th>
+                              <th className="p-3 text-emerald-400">{isAr ? 'المدفوع' : 'Matured'}</th>
+                              <th className="p-3 text-left">{isAr ? 'الرصيد المتبقي (الوضعية)' : 'Outstanding State'}</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-850 bg-[#08080a]/20">
+                            {customerOrders.map(order => {
+                              const tot = parseFloat(order.totalCostYER || order.totalPrice || 0);
+                              const paid = parseFloat(order.amountPaid || order.paidAmount || 0);
+                              const remaining = tot - paid;
+                              return (
+                                <tr key={order.id} className="hover:bg-slate-950/40 transition-colors">
+                                  <td className="p-3 font-mono font-black text-[#d4af37]">
+                                    {order.orderNumber || 'ALX-XXXX-XXXX'}
+                                    {order.trackingNumber && (
+                                      <div className="text-[9px] text-slate-500 font-mono mt-0.5" dir="ltr">GLOBAL_TRACK: {order.trackingNumber}</div>
+                                    )}
+                                  </td>
+                                  <td className="p-3 text-slate-400 font-mono text-[10px]">{new Date(order.createdAt).toLocaleDateString(isAr ? 'ar-YE' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</td>
+                                  <td className="p-3">
+                                    <span className="px-2.5 py-0.5 rounded text-[9px] font-black uppercase tracking-tighter bg-slate-900 border border-slate-800 text-[#d4af37]">
+                                      {order.orderStatus || order.order_status || 'تم تسجيل الطلب'}
+                                    </span>
+                                  </td>
+                                  <td className="p-3 font-mono font-bold text-white">{tot.toLocaleString()} YER</td>
+                                  <td className="p-3 text-emerald-400 font-mono font-bold">{paid.toLocaleString()} YER</td>
+                                  <td className={`p-3 text-left font-mono font-bold ${remaining > 0 ? 'text-rose-400' : remaining < 0 ? 'text-cyan-400' : 'text-slate-500'}`}>
+                                    {remaining > 0 ? (
+                                      <span>{remaining.toLocaleString()} YER [عليه]</span>
+                                    ) : remaining < 0 ? (
+                                      <span>{Math.abs(remaining).toLocaleString()} YER [دائن]</span>
+                                    ) : (
+                                      <span className="text-emerald-500 font-sans font-black uppercase tracking-widest text-[9px]">&gt; PAID_IN_FULL</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                            {customerOrders.length === 0 && (
+                              <tr><td colSpan={6} className="p-16 text-center text-slate-600 italic font-bold select-none">[ no_orders_logged_to_this_patron ]</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
                 </>
               ) : (
                 <div className="space-y-4 text-start">
-                  
+
                   {/* Ledger Filters */}
                   <div className="flex flex-col sm:flex-row gap-3 p-4 bg-black/45 border border-slate-850/60 rounded-2xl">
                     <div className="relative flex-1">
                       <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
-                      <input 
+                      <input
                         type="text"
                         placeholder={isAr ? 'البحث عن حركة بالرقم المرجعي أو البيان دائن/مدين...' : 'Filter ledger entries...'}
                         value={finSearch}
@@ -894,10 +893,10 @@ export default function Customers() {
                         className="w-full bg-black/50 border border-slate-850 rounded-xl py-2 px-9 text-xs font-bold text-white focus:border-[#d4af37]/50 outline-none text-start"
                       />
                     </div>
-                    
-                    <select 
-                      value={finModuleFilter} 
-                      onChange={e => setFinModuleFilter(e.target.value as any)} 
+
+                    <select
+                      value={finModuleFilter}
+                      onChange={e => setFinModuleFilter(e.target.value as any)}
                       className="bg-[#0e0e11] border border-slate-820 rounded-xl py-2 px-3 text-xs font-black text-slate-300 outline-none focus:border-[#d4af37]/50 cursor-pointer text-start"
                     >
                       <option value="all">{isAr ? 'كل قنوات موديولات الحركة' : 'All Ledger Modules'}</option>
@@ -936,9 +935,9 @@ export default function Customers() {
                           {getCustomerUnifiedLedger()
                             .filter(item => {
                               const q = finSearch.toLowerCase();
-                              const matchesSearch = !q || 
-                                (item.title || '').toLowerCase().includes(q) || 
-                                (item.description || '').toLowerCase().includes(q) || 
+                              const matchesSearch = !q ||
+                                (item.title || '').toLowerCase().includes(q) ||
+                                (item.description || '').toLowerCase().includes(q) ||
                                 (item.ref || '').toLowerCase().includes(q);
                               const matchesModule = finModuleFilter === 'all' || item.module === finModuleFilter;
                               return matchesSearch && matchesModule;
@@ -951,14 +950,13 @@ export default function Customers() {
                                     {new Date(item.date).toLocaleString(isAr ? 'ar-YE' : 'en-US', { year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
                                   </td>
                                   <td className="p-3 text-start">
-                                    <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${
-                                      item.module === 'order' ? 'bg-indigo-950/40 text-indigo-400 border border-indigo-900/20' :
+                                    <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${item.module === 'order' ? 'bg-indigo-950/40 text-indigo-400 border border-indigo-900/20' :
                                       item.module === 'payment' ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-900/20' :
-                                      'bg-amber-955/20 text-amber-500 border border-amber-950/20'
-                                    }`}>
+                                        'bg-amber-955/20 text-amber-500 border border-amber-950/20'
+                                      }`}>
                                       {item.module === 'order' ? (isAr ? 'قيمة مبيعات وتوصيل' : 'SalesCOD-Dr') :
-                                       item.module === 'payment' ? (isAr ? 'تحصيل كاش مسدد' : 'COD Settled-Cr') :
-                                       (isAr ? 'إيداع/تعديل' : 'Journal Entry')}
+                                        item.module === 'payment' ? (isAr ? 'تحصيل كاش مسدد' : 'COD Settled-Cr') :
+                                          (isAr ? 'إيداع/تعديل' : 'Journal Entry')}
                                     </span>
                                   </td>
                                   <td className="p-3 font-bold text-white text-start">
@@ -982,7 +980,7 @@ export default function Customers() {
                                 </tr>
                               );
                             })}
-                          
+
                           {getCustomerUnifiedLedger().length === 0 && (
                             <tr>
                               <td colSpan={7} className="p-16 text-center text-slate-650 italic font-bold">
@@ -997,25 +995,25 @@ export default function Customers() {
                 </div>
               )}
             </div>
-            
+
             {/* Modal Footer (with Printable actions) */}
             <div className="p-4 bg-black/40 border-t border-slate-850 flex justify-between items-center shrink-0">
-               <div className="text-[9px] font-mono text-slate-500 pr-2 uppercase select-none">
-                 CONFIDENTIAL REPORT STAMP: {new Date().toLocaleString(isAr ? 'ar-YE' : 'en-US')}
-               </div>
-               <button 
-                onClick={() => printContent(isAr ? `كشف الحساب المالي لعميل: ${selectedCustomer.fullName}` : 'Client Account Sub-Ledger', 'customer-ledger-content', isAr)} 
+              <div className="text-[9px] font-mono text-slate-500 pr-2 uppercase select-none">
+                CONFIDENTIAL REPORT STAMP: {new Date().toLocaleString(isAr ? 'ar-YE' : 'en-US')}
+              </div>
+              <button
+                onClick={() => printContent(isAr ? `كشف الحساب المالي لعميل: ${selectedCustomer.fullName}` : 'Client Account Sub-Ledger', 'customer-ledger-content', isAr)}
                 className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black rounded-xl font-black text-xs transition-all flex items-center gap-2 shadow-md active:scale-95"
-               >
-                 <Printer className="w-4 h-4" /> {isAr ? 'طباعة كشف مالي للعميل' : 'Print Customer Statement'}
-               </button>
+              >
+                <Printer className="w-4 h-4" /> {isAr ? 'طباعة كشف مالي للعميل' : 'Print Customer Statement'}
+              </button>
             </div>
           </div>
         </div>
       )}
 
       {/* Confirmation Frame */}
-      <ConfirmModal 
+      <ConfirmModal
         isOpen={confirmConfig.isOpen}
         onClose={() => setConfirmConfig({ ...confirmConfig, isOpen: false })}
         onConfirm={confirmConfig.onConfirm}
@@ -1028,7 +1026,7 @@ export default function Customers() {
         isOpen={deletePinConfig.isOpen}
         onClose={() => setDeletePinConfig({ ...deletePinConfig, isOpen: false })}
         title={isAr ? 'حذف العميل نهائياً' : 'Delete Customer Permanently'}
-        message={isAr 
+        message={isAr
           ? `هل أنت متأكد من رغبتك في حذف العميل ${deletePinConfig.entityName}؟ هذا الإجراء سيقوم بشطب حسابه المالي وحذف جميع قيود المزدوجة والمصروفات المرتبطة به نهائياً.`
           : `Are you sure you want to permanently delete customer ${deletePinConfig.entityName}? This will purge their financial account, journal transactions, and associated expenses from the database.`}
         isAr={isAr}

@@ -219,7 +219,7 @@ export default function Couriers() {
     const ledger: any[] = [];
     const isAr = settings.language === 'ar';
     const fCurrency = selectedCourier ? (selectedCourier.financialCurrency || 'YER') : 'YER';
-    const exchangeRateSAR = parseFloat(settings.exchangeRateSAR || 140);
+    const exchangeRateSAR = settings.exchangeRateSAR || 140;
 
     // 1. Map courierTransactions directly to preserve real double entries
     courierTransactions.forEach(tx => {
@@ -498,12 +498,13 @@ export default function Couriers() {
       const customId = `ALX-CR-${(courierCountSnap + 1).toString().padStart(3, '0')}`;
 
       const emailValue = addFormData.email || `${customId.toLowerCase()}@alx.delivery.net`;
-
+      const { accountCode, code, accountId } =
+        await financialAccountService.getNextAccountIdentifiers('courier');
+      const newId = 'cour_' + accountCode;
       // 2. Save directly to Couriers portfolio as a plain record with auto-ID
-      const newCourierRef = doc(collection(db, 'couriers'));
+      const newCourierRef = doc(collection(db, 'couriers'), newId);
       const type = addFormData.courierType === 'sourcing' ? 'sourcing' : 'local';
       const finCurrency = type === 'sourcing' ? 'SAR' : 'YER';
-      console.log('DEBUG: Creating courier, type:', type, 'Currency:', finCurrency);
       await setDoc(newCourierRef, {
         fullName: addFormData.fullName,
         phone: addFormData.phone,
@@ -519,7 +520,6 @@ export default function Couriers() {
       });
 
       // 3. Auto-create financial account (2120-xxxx)
-      console.log('DEBUG: Creating account for entity with currency:', type === 'sourcing' ? 'SAR' : 'YER');
       try {
         await financialAccountService.createAccountForEntity(
           'courier',
@@ -943,7 +943,7 @@ export default function Couriers() {
                                 {account.accountCode} <span className="bg-[#d4af37]/10 text-[#d4af37] px-1 rounded">{account.currency || 'YER'}</span>
                               </span>
                               <span className={`text-[9px] font-bold font-mono ${displayBalance > 0 ? 'text-rose-450' :
-                                  displayBalance < 0 ? 'text-emerald-400' : 'text-slate-500'
+                                displayBalance < 0 ? 'text-emerald-400' : 'text-slate-500'
                                 }`}>
                                 {displayBalance > 0 ? '▲' : displayBalance < 0 ? '▼' : '●'} {Math.abs(displayBalance).toLocaleString()} {account.currency || 'YER'}
                                 {account.currency === 'SAR' && (
@@ -1148,8 +1148,8 @@ export default function Couriers() {
                   type="button"
                   onClick={() => setDetailTab('logistics')}
                   className={`flex-1 py-1.5 rounded-xl text-[10px] sm:text-xs font-black transition flex items-center justify-center gap-1.5 ${detailTab === 'logistics'
-                      ? 'bg-[#d4af37]/15 border border-[#d4af37]/30 text-[#d4af37]'
-                      : 'border border-transparent text-slate-500 hover:text-slate-350'
+                    ? 'bg-[#d4af37]/15 border border-[#d4af37]/30 text-[#d4af37]'
+                    : 'border border-transparent text-slate-500 hover:text-slate-350'
                     }`}
                 >
                   <Package className="w-4 h-4" />
@@ -1159,8 +1159,8 @@ export default function Couriers() {
                   type="button"
                   onClick={() => setDetailTab('financial')}
                   className={`flex-1 py-1.5 rounded-xl text-[10px] sm:text-xs font-black transition flex items-center justify-center gap-1.5 ${detailTab === 'financial'
-                      ? 'bg-[#d4af37]/15 border border-[#d4af37]/30 text-[#d4af37]'
-                      : 'border border-transparent text-slate-500 hover:text-slate-350'
+                    ? 'bg-[#d4af37]/15 border border-[#d4af37]/30 text-[#d4af37]'
+                    : 'border border-transparent text-slate-500 hover:text-slate-350'
                     }`}
                 >
                   <Coins className="w-4 h-4" />
@@ -1321,7 +1321,7 @@ export default function Couriers() {
                 const liveById = account?.id ? liveBalances.byId[account.id] : undefined;
                 const netBalance = liveByCode ?? liveById ?? account?.balance ?? 0;
                 const fCurrency = account?.currency || selectedCourier.financialCurrency || 'YER';
-                const exchangeRateSAR = parseFloat(settings.exchangeRateSAR || 140);
+                const exchangeRateSAR = settings.exchangeRateSAR || 140;
 
                 const filteredLedger = ledgerData.filter(item => {
                   const q = finSearch.toLowerCase();
@@ -1455,8 +1455,8 @@ export default function Couriers() {
                                   </td>
                                   <td className="p-3 text-start">
                                     <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${item.module === 'order' ? 'bg-indigo-950/40 text-indigo-400 border border-indigo-900/20' :
-                                        item.module === 'expense' ? 'bg-amber-955/20 text-amber-500 border border-amber-950/20' :
-                                          'bg-purple-950/30 text-purple-400 border border-purple-950/20'
+                                      item.module === 'expense' ? 'bg-amber-955/20 text-amber-500 border border-amber-950/20' :
+                                        'bg-purple-950/30 text-purple-400 border border-purple-950/20'
                                       }`}>
                                       {item.module === 'order' ? (isAr ? 'تحصيل شحنة' : 'Shipment COD') :
                                         item.module === 'expense' ? (isAr ? 'عهد وسلف وأجور' : 'Disbursed') :
@@ -1700,7 +1700,7 @@ export default function Couriers() {
         isOpen={deletePinConfig.isOpen}
         onClose={() => setDeletePinConfig({ ...deletePinConfig, isOpen: false })}
         title={isAr ? 'حذف حساب المندوب نهائياً' : 'Delete Courier Permanently'}
-        message={isAr 
+        message={isAr
           ? `هل أنت متأكد من رغبتك في حذف المندوب ${deletePinConfig.entityName}؟ هذا الإجراء سيقوم بحذف حسابه المالي وكافة قيوده ومصروفاته المفتوحة نهائياً من النظام.`
           : `Are you sure you want to permanently delete courier ${deletePinConfig.entityName}? This will purge their financial account, journal transactions, and associated expenses from the database.`}
         isAr={isAr}

@@ -65,7 +65,6 @@ export default function Roles() {
 
         for (const dr of defaultRoles) {
           if (!fetchedRoles.find(r => r.id === dr.id)) {
-            console.log(`[Roles.tsx] Initializing missing default role in Firestore: ${dr.id}`);
             try {
               await setDoc(doc(db, 'roles', dr.id), {
                 title: dr.title,

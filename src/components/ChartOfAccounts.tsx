@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+﻿import React, { useState, useMemo, useEffect } from 'react';
 import {
   FolderTree, Folder, FolderOpen, ChevronRight, ChevronDown, PlusCircle, Trash2,
   Search, Scale, X, Activity, ShieldCheck, RefreshCw, Edit2, FileText, FileSpreadsheet, Printer,
@@ -35,6 +35,7 @@ interface ChartOfAccountsProps {
 }
 
 export interface AccountNode {
+  [x: string]: string;
   code: string;
   nameAr: string;
   nameEn: string;
@@ -369,19 +370,21 @@ export default function ChartOfAccounts({
     }
     setAccountLoading(true);
     try {
-      await addDoc(collection(db, 'accounts'), {
-        code: newAccount.code,
-        accountCode: newAccount.code,
-        nameAr: newAccount.nameAr,
-        nameEn: newAccount.nameEn,
-        entityName: newAccount.nameAr,
-        type: newAccount.type,
-        entityType: 'system',
-        parentCode: newAccount.parentCode || null,
-        accountPrefix: newAccount.parentCode || null,
-        balance: parseFloat(newAccount.balance) || 0,
-        currency: newAccount.currency,
-        createdAt: Date.now()
+      await addDoc({
+        newID: collection(db, 'accounts'), collectionRef: {
+          code: newAccount.code,
+          accountCode: newAccount.code,
+          nameAr: newAccount.nameAr,
+          nameEn: newAccount.nameEn,
+          entityName: newAccount.nameAr,
+          type: newAccount.type,
+          entityType: 'system',
+          parentCode: newAccount.parentCode || null,
+          accountPrefix: newAccount.parentCode || null,
+          balance: parseFloat(newAccount.balance) || 0,
+          currency: newAccount.currency,
+          createdAt: Date.now()
+        }
       });
       notificationService.notify({ title: isAr ? 'تم إضافة الحساب' : 'Account Created', message: isAr ? `تم إضافة الحساب [${newAccount.nameAr}] للشجرة.` : `Account [${newAccount.nameEn}] created.`, type: 'success' });
       setIsAddOpen(false);

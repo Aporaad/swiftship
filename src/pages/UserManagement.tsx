@@ -478,8 +478,8 @@ export default function UserManagement() {
       await activityLogService.log('edit_user', editFormData.fullName, { userId: selectedUser.id });
       notificationService.notify({ title: t('تم التحديث', 'Updated'), message: t(`تم تحديث ${editFormData.fullName}`, `${editFormData.fullName} updated`), type: 'info', category: 'system' });
       setIsEditModalOpen(false); setSelectedUser(null);
-    } catch (err) { 
-      handleSupabaseError(err, OperationType.UPDATE, 'users'); 
+    } catch (err) {
+      handleSupabaseError(err, OperationType.UPDATE, 'users');
     } finally {
       setEditLoading(false);
       editBlockRef.current = false;
@@ -563,7 +563,6 @@ export default function UserManagement() {
           localStorage.setItem('swiftship_emergency_admin_hash', hashVal);
           localStorage.setItem('swiftship_emergency_admin_profile', encryptDataLocal(JSON.stringify(adminProfile), newPasswordValue));
           localStorage.setItem('swiftship_emergency_admin_pwd', newPasswordValue);
-          console.log('[UserManagement] Successfully synchronized emergency local credentials for main admin.');
         } catch (lsErr) {
           console.warn('[UserManagement] Local storage credentials sync failed:', lsErr);
         }
@@ -605,16 +604,21 @@ export default function UserManagement() {
       }
       const secondaryAppName = `Secondary-${Date.now()}`;
       secondaryApp = initializeApp({}, secondaryAppName);
+      const { accountCode, code, accountId } =
+        await financialAccountService.getNextAccountIdentifiers('employee');
+      const newId = 'user_' + accountCode;
       const secondaryAuth = getAuth(secondaryApp);
       const SHARED_SYSTEM_AUTH_PASSWORD = 'swiftship@system_pw_2026';
-      const { user: newUser } = await createUserWithEmailAndPassword(secondaryAuth, addFormData.email.toLowerCase(), SHARED_SYSTEM_AUTH_PASSWORD);
+      const { user: newUser } = await createUserWithEmailAndPassword(secondaryAuth, newId, addFormData.email.toLowerCase(), SHARED_SYSTEM_AUTH_PASSWORD);
       await setDoc(doc(db, 'users', newUser.uid), {
         fullName: addFormData.fullName, email: addFormData.email.toLowerCase(),
         username: addFormData.username, systemPin: addFormData.systemPin,
         role: addFormData.role, commissionRate: addFormData.commissionRate,
         monthlySalary: addFormData.monthlySalary,
         password: addFormData.password,
-        disabled: false, createdAt: Date.now()
+        disabled: false, createdAt: Date.now(),
+        accountId: accountId,
+        financialAccountId: accountId
       });
 
       // Auto-create financial account for employee (2130-xxxx) with monthly salary
@@ -707,9 +711,9 @@ export default function UserManagement() {
   // ROLE ACTIONS
   // ══════════════════════════════════════════════════════════
   const handleOpenAddRole = () => { setSelectedRole(null); setRoleFormData({ id: '', title: '', permissions: [] }); setIsRoleModalOpen(true); };
-  const handleOpenEditRole = (r: any) => { 
+  const handleOpenEditRole = (r: any) => {
     if (r.id === 'Admin') return notificationService.notify({ title: t('محمي', 'Protected'), message: t('لا يمكن تعديل صلاحيات مدير النظام', 'Cannot edit System Admin permissions'), type: 'error', category: 'system' });
-    setSelectedRole(r); setRoleFormData({ id: r.id, title: r.title || r.id, permissions: r.permissions || [] }); setIsRoleModalOpen(true); 
+    setSelectedRole(r); setRoleFormData({ id: r.id, title: r.title || r.id, permissions: r.permissions || [] }); setIsRoleModalOpen(true);
   };
 
   const togglePermission = (permId: string) => {
@@ -749,8 +753,8 @@ export default function UserManagement() {
       await activityLogService.log(selectedRole ? 'edit_role' : 'add_role', roleFormData.title, { id: roleFormData.id, permCount: roleFormData.permissions.length });
       notificationService.notify({ title: t('تم الحفظ', 'Saved'), message: t(`تم حفظ دور ${roleFormData.title}`, `Role ${roleFormData.title} saved`), type: 'success', category: 'system' });
       setIsRoleModalOpen(false);
-    } catch (err) { 
-      handleSupabaseError(err, OperationType.UPDATE, 'roles'); 
+    } catch (err) {
+      handleSupabaseError(err, OperationType.UPDATE, 'roles');
     } finally {
       setSavingRole(false);
       roleBlockRef.current = false;
@@ -818,12 +822,12 @@ export default function UserManagement() {
       );
 
       const liveByCode = acc?.accountCode ? liveBalances.byCode[acc.accountCode] : undefined;
-      const liveById   = acc?.id          ? liveBalances.byId[acc.id]            : undefined;
+      const liveById = acc?.id ? liveBalances.byId[acc.id] : undefined;
       const liveBalance = liveByCode ?? liveById ?? (acc ? acc.balance : undefined) ?? u.financialBalance ?? 0;
 
       return {
         ...u,
-        financialAccountId:   acc?.id          || u.financialAccountId   || null,
+        financialAccountId: acc?.id || u.financialAccountId || null,
         financialAccountCode: acc?.accountCode || u.financialAccountCode || null,
         financialBalance: liveBalance,
         financialCurrency: acc?.currency || u.financialCurrency || settings.currency || 'YER',
@@ -1482,6 +1486,7 @@ export default function UserManagement() {
               <button type="button" onClick={() => setIsAddModalOpen(false)} className="text-slate-500 hover:text-white bg-slate-900 border border-slate-800 p-1.5 rounded-lg"><X className="w-4 h-4" /></button>
             </div>
             <form onSubmit={handleAddUser} className="p-6 space-y-4 overflow-y-auto flex-1 text-start" dir={isAr ? 'rtl' : 'ltr'}>
+              {/*name*/}
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الاسم الكامل', 'Full Name')} *</label>
                 <input
@@ -1493,7 +1498,7 @@ export default function UserManagement() {
                   className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none transition-all"
                 />
               </div>
-
+              {/*username*/}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('اسم المستخدم', 'Username')} *</label>
@@ -1521,7 +1526,7 @@ export default function UserManagement() {
                   />
                 </div>
               </div>
-
+              {/*email*/}
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('البريد الإلكتروني', 'Email')} *</label>
                 <input
@@ -1535,7 +1540,7 @@ export default function UserManagement() {
                   dir="ltr"
                 />
               </div>
-
+              {/*password*/}
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('كلمة المرور', 'Password')} *</label>
                 <div className="relative">
@@ -1554,7 +1559,7 @@ export default function UserManagement() {
                   </button>
                 </div>
               </div>
-
+              {/*role*/}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الدور', 'Role')}</label>
@@ -1592,7 +1597,7 @@ export default function UserManagement() {
                   />
                 </div>
               </div>
-
+              {/*end form fields */}
               <div className="pt-4 flex justify-end gap-3 border-t border-slate-800/50 shrink-0">
                 <button type="button" onClick={() => setIsAddModalOpen(false)} className="px-5 py-2.5 text-slate-400 font-bold bg-slate-900 border border-slate-800 hover:bg-slate-850 rounded-xl text-xs transition active:scale-95">{t('إلغاء', 'Cancel')}</button>
                 <button type="submit" disabled={addLoading} className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] disabled:opacity-50 text-black font-black text-xs rounded-xl shadow-md transition active:scale-95">
@@ -1885,7 +1890,7 @@ export default function UserManagement() {
         isOpen={deletePinConfig.isOpen}
         onClose={() => setDeletePinConfig({ ...deletePinConfig, isOpen: false })}
         title={isAr ? 'حذف حساب الموظف نهائياً' : 'Delete Employee Account Permanently'}
-        message={isAr 
+        message={isAr
           ? `هل أنت متأكد من رغبتك في حذف الموظف ${deletePinConfig.entityName}؟ هذا الإجراء سيقوم بحذف حسابه المالي وكافة قيوده ومصروفاته المرتبطة نهائياً.`
           : `Are you sure you want to permanently delete user ${deletePinConfig.entityName}? This will purge their financial account, journal transactions, and associated expenses from the database.`}
         isAr={isAr}

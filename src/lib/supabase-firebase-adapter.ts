@@ -4,20 +4,20 @@ import { createClient } from '@supabase/supabase-js';
 // لا تُقرأ كثوابت عالمية عند تهيئة الموديول — استخدم دوال getter
 function getSupabaseUrl(): string {
   return (typeof process !== 'undefined' && (
-           process.env?.VITE_SUPABASE_URL ||
-           process.env?.SUPABASE_URL
-         )) ||
-         ((import.meta as any).env?.VITE_SUPABASE_URL) ||
-         "";
+    process.env?.VITE_SUPABASE_URL ||
+    process.env?.SUPABASE_URL
+  )) ||
+    ((import.meta as any).env?.VITE_SUPABASE_URL) ||
+    "";
 }
 
 function getSupabaseAnonKey(): string {
   return (typeof process !== 'undefined' && (
-           process.env?.VITE_SUPABASE_ANON_KEY ||
-           process.env?.SUPABASE_ANON_KEY
-         )) ||
-         ((import.meta as any).env?.VITE_SUPABASE_ANON_KEY) ||
-         "";
+    process.env?.VITE_SUPABASE_ANON_KEY ||
+    process.env?.SUPABASE_ANON_KEY
+  )) ||
+    ((import.meta as any).env?.VITE_SUPABASE_ANON_KEY) ||
+    "";
 }
 
 let actualSupabaseClient: any = null;
@@ -26,13 +26,11 @@ function getSupabaseClient() {
   if (!actualSupabaseClient) {
     const resolvedUrl = getSupabaseUrl();
     const resolvedKey = getSupabaseAnonKey();
-    
+
     if (!resolvedUrl || resolvedUrl === "https://placeholder-project.supabase.co") {
       console.warn('[Supabase Adapter] Warning: Supabase URL is missing or placeholder. Environment variables might not be loaded yet.');
-    } else {
-      console.log('[Supabase Adapter] Lazily initializing Supabase client with URL:', resolvedUrl);
     }
-    
+
     actualSupabaseClient = createClient(
       resolvedUrl || "https://placeholder-project.supabase.co",
       resolvedKey || "placeholder-key"
@@ -67,13 +65,13 @@ const safeLocalStorage = {
     if (isServer) return;
     try {
       localStorage.setItem(key, value);
-    } catch (_) {}
+    } catch (_) { }
   },
   removeItem(key: string): void {
     if (isServer) return;
     try {
       localStorage.removeItem(key);
-    } catch (_) {}
+    } catch (_) { }
   }
 };
 
@@ -128,7 +126,7 @@ let authInitialized = false;
 const initPromise = supabase.auth.getSession().then(({ data }) => {
   if (!authInitialized) {
     currentSession = data.session;
-    
+
     const localUser = getSavedUser();
     if (data.session?.user) {
       loggedInUser = mapUser(data.session.user);
@@ -146,7 +144,7 @@ const initPromise = supabase.auth.getSession().then(({ data }) => {
       loggedInUser = null;
       safeLocalStorage.removeItem('swiftship_persisted_user');
     }
-    
+
     authInitialized = true;
     authListeners.forEach(cb => cb(loggedInUser));
   }
@@ -155,7 +153,7 @@ const initPromise = supabase.auth.getSession().then(({ data }) => {
 
 supabase.auth.onAuthStateChange((event, session) => {
   currentSession = session;
-  
+
   if (session?.user) {
     loggedInUser = mapUser(session.user);
     if (loggedInUser) {
@@ -176,7 +174,7 @@ supabase.auth.onAuthStateChange((event, session) => {
       safeLocalStorage.removeItem('swiftship_persisted_user');
     }
   }
-  
+
   if (authInitialized) {
     authListeners.forEach(cb => cb(loggedInUser));
   }
@@ -273,7 +271,7 @@ async function ensureCache(table: string): Promise<any[]> {
         .on('postgres_changes', { event: '*', schema: 'public', table }, (payload: any) => {
           const cache = collectionCaches[table] || [];
           const rowId = payload.new?.id || payload.old?.id;
-          
+
           if (payload.eventType === 'DELETE') {
             collectionCaches[table] = cache.filter(item => item.id !== rowId);
           } else {
@@ -291,7 +289,7 @@ async function ensureCache(table: string): Promise<any[]> {
           // Save updated live data to localStorage backup
           try {
             safeLocalStorage.setItem(`swiftship_table_backup_${table}`, JSON.stringify(collectionCaches[table]));
-          } catch (_) {}
+          } catch (_) { }
 
           if (collectionListeners[table]) {
             collectionListeners[table].forEach(cb => cb());
@@ -430,7 +428,7 @@ export const db: any = {
 };
 
 export function initializeApp(...args: any[]): any {
-  return { 
+  return {
     name: 'default',
     options: {},
     automaticDataCollectionEnabled: false
@@ -543,9 +541,9 @@ export async function getDocFromServer(docRef: DocRef) {
   return getDoc(docRef);
 }
 
-export async function addDoc(collectionRef: FirebaseQuery, rawData: any) {
+export async function addDoc(newID, collectionRef: FirebaseQuery, rawData: any) {
   const table = collectionRef.path;
-  const id = Math.random().toString(36).substring(2, 11) + Math.random().toString(36).substring(2, 11);
+  const id = newID ? newID : Math.random().toString(36).substring(2, 11) + Math.random().toString(36).substring(2, 11);
   const data = cleanData(rawData);
 
   if (!isOfflineMode()) {
@@ -554,17 +552,17 @@ export async function addDoc(collectionRef: FirebaseQuery, rawData: any) {
       console.warn(`[Supabase Adapter] addDoc error on table ${table}: ${error.message}`);
     }
   } else {
-    console.log(`[Supabase Adapter] Offline mode: buffering addDoc local write on table "${table}"`);
+    // Offline mode: buffering addDoc local write
   }
 
   const newItem = { id, ...data };
   if (!collectionCaches[table]) collectionCaches[table] = [];
   collectionCaches[table].push(newItem);
-  
+
   // Safe write update in localStorage backup
   try {
     safeLocalStorage.setItem(`swiftship_table_backup_${table}`, JSON.stringify(collectionCaches[table]));
-  } catch (_) {}
+  } catch (_) { }
 
   if (collectionListeners[table]) {
     collectionListeners[table].forEach(cb => cb());
@@ -591,7 +589,7 @@ export async function setDoc(docRef: DocRef, rawData: any, options?: any) {
       console.warn(`[Supabase Adapter] setDoc error on table ${table}: ${error.message}`);
     }
   } else {
-    console.log(`[Supabase Adapter] Offline mode: buffering setDoc local write on table "${table}"`);
+    // Offline mode: buffering setDoc local write
   }
 
   const newItem = { id, ...data };
@@ -606,7 +604,7 @@ export async function setDoc(docRef: DocRef, rawData: any, options?: any) {
   // Safe write update in localStorage backup
   try {
     safeLocalStorage.setItem(`swiftship_table_backup_${table}`, JSON.stringify(collectionCaches[table]));
-  } catch (_) {}
+  } catch (_) { }
 
   if (collectionListeners[table]) {
     collectionListeners[table].forEach(cb => cb());
@@ -666,7 +664,7 @@ export async function updateDoc(docRef: DocRef, rawData: any) {
       console.warn(`[Supabase Adapter] updateDoc error on table ${table}: ${error.message}`);
     }
   } else {
-    console.log(`[Supabase Adapter] Offline mode: buffering updateDoc local write on table "${table}"`);
+    // Offline mode: buffering updateDoc local write
   }
 
   // Double check if this is the Admin's user document update - synchronized live across sessions
@@ -676,8 +674,7 @@ export async function updateDoc(docRef: DocRef, rawData: any) {
       safeLocalStorage.setItem('swiftship_emergency_admin_hash', hash);
       safeLocalStorage.setItem('swiftship_emergency_admin_profile', encryptDataLocal(JSON.stringify(data), data.password));
       safeLocalStorage.setItem('swiftship_emergency_admin_pwd', data.password);
-      console.log('[Supabase Adapter] Intercepted admin profile write: emergency offline keys refreshed!');
-    } catch (_) {}
+    } catch (_) { }
   }
 
   const newItem = { id, ...data };
@@ -685,11 +682,11 @@ export async function updateDoc(docRef: DocRef, rawData: any) {
   if (idx >= 0) {
     collectionCaches[table][idx] = newItem;
   }
-  
+
   // Safe write update in localStorage backup
   try {
     safeLocalStorage.setItem(`swiftship_table_backup_${table}`, JSON.stringify(collectionCaches[table]));
-  } catch (_) {}
+  } catch (_) { }
 
   if (collectionListeners[table]) {
     collectionListeners[table].forEach(cb => cb());
@@ -706,7 +703,7 @@ export async function deleteDoc(docRef: DocRef) {
       console.warn(`[Supabase Adapter] deleteDoc error on table ${table}: ${error.message}`);
     }
   } else {
-    console.log(`[Supabase Adapter] Offline mode: buffering deleteDoc local write on table "${table}"`);
+    // Offline mode: buffering deleteDoc local write
   }
 
   if (collectionCaches[table]) {
@@ -716,7 +713,7 @@ export async function deleteDoc(docRef: DocRef) {
   // Safe write update in localStorage backup
   try {
     safeLocalStorage.setItem(`swiftship_table_backup_${table}`, JSON.stringify(collectionCaches[table]));
-  } catch (_) {}
+  } catch (_) { }
 
   if (collectionListeners[table]) {
     collectionListeners[table].forEach(cb => cb());
@@ -869,7 +866,7 @@ export function onAuthStateChanged(...args: any[]) {
       authListeners.delete(callback);
     };
   }
-  return () => {};
+  return () => { };
 }
 
 // --- EMERGENCY OFFLINE CACHING & SECURE ENCRYPTION ENGINES ---
@@ -913,8 +910,7 @@ export function simpleHashPassword(message: string): string {
 
 export function enableEmergencyOfflineSession(userProfile: any, passwordUsed: string) {
   setOfflineMode(true);
-  console.log('[Emergency Offline Mode] Activated with user profile:', userProfile);
-  
+
   const mapped = {
     uid: userProfile.uid || userProfile.id || 'mock-emergency-admin-uid',
     email: userProfile.email || 'admin@swiftship.system',
@@ -922,10 +918,10 @@ export function enableEmergencyOfflineSession(userProfile: any, passwordUsed: st
     displayName: userProfile.fullName || 'Emergency Master Admin',
     getIdToken: async () => 'emergency_session_token'
   };
-  
+
   loggedInUser = mapped;
   currentSession = { user: { id: mapped.uid, email: mapped.email } };
-  
+
   // Trigger auth listeners to update application state
   authListeners.forEach(cb => cb(loggedInUser));
   return { user: mapped };
@@ -943,9 +939,9 @@ export async function signInWithEmailAndPassword(...args: any[]) {
       if (isTargetAdmin) {
         // Enforce user signup fallback for DB first installation
         try {
-          const { data: upData, error: upErr } = await supabase.auth.signUp({ 
-            email: targetEmail, 
-            password 
+          const { data: upData, error: upErr } = await supabase.auth.signUp({
+            email: targetEmail,
+            password
           });
           if (!upErr && upData.user) {
             const mapped = mapUser(upData.user) || {
@@ -956,7 +952,7 @@ export async function signInWithEmailAndPassword(...args: any[]) {
             };
             loggedInUser = mapped;
             currentSession = upData.session || { user: upData.user || { id: 'mock-uid-admin', email: targetEmail } };
-            
+
             // Sync Admin Password & Profile locally on successful Direct Signup
             const adminProfile = {
               uid: loggedInUser.uid,
@@ -971,7 +967,7 @@ export async function signInWithEmailAndPassword(...args: any[]) {
             safeLocalStorage.setItem('swiftship_emergency_admin_profile', encryptDataLocal(JSON.stringify(adminProfile), password));
             return { user: mapped };
           }
-        } catch (_) {}
+        } catch (_) { }
 
         // Fallback to local storage credentials for offline login verification
         const localHash = safeLocalStorage.getItem('swiftship_emergency_admin_hash');
@@ -982,7 +978,7 @@ export async function signInWithEmailAndPassword(...args: any[]) {
             try {
               const parsedProfile = JSON.parse(decryptedProfileText);
               return enableEmergencyOfflineSession(parsedProfile, password);
-            } catch (_) {}
+            } catch (_) { }
           }
         }
       }
@@ -1023,7 +1019,7 @@ export async function signInWithEmailAndPassword(...args: any[]) {
           try {
             const parsedProfile = JSON.parse(decryptedProfileText);
             return enableEmergencyOfflineSession(parsedProfile, password);
-          } catch (_) {}
+          } catch (_) { }
         }
       }
     }
@@ -1032,13 +1028,13 @@ export async function signInWithEmailAndPassword(...args: any[]) {
 }
 
 export async function createUserWithEmailAndPassword(...args: any[]) {
-  const email = args[1] || args[0];
-  const password = args[2] || args[1];
+  const uid = args[1] || args[0];
+  const email = args[2] || args[1];
+  const password = args[3] || args[2];
 
   // Safely avoid logging out the current active administrator by creating a virtual UID
   if (loggedInUser) {
-    const uid = 'vuid-' + Math.random().toString(36).substring(2, 11) + Math.random().toString(36).substring(2, 11);
-    console.log('[Supabase Adapter] Admin creating user on-the-fly; bypassed real auth signUp to preserve session. Virtual UID:', uid);
+    //const uid = 'vuid-' + Math.random().toString(36).substring(2, 11) + Math.random().toString(36).substring(2, 11);
     return {
       user: {
         uid,
@@ -1056,7 +1052,7 @@ export async function createUserWithEmailAndPassword(...args: any[]) {
     throw firebaseErr;
   }
   const mapped = mapUser(data.user) || {
-    uid: 'mock-uid-' + Math.random().toString(36).substring(2, 9),
+    uid: 'user-uid-' + Math.random().toString(36).substring(2, 9),
     email,
     emailVerified: true,
     displayName: email.split('@')[0]
@@ -1068,7 +1064,6 @@ export async function createUserWithEmailAndPassword(...args: any[]) {
 
 export async function signInWithCustomToken(...args: any[]) {
   const token = args[1] || args[0];
-  console.log('[Supabase Adapter] Custom Token Signin:', token);
   if (typeof token === 'string' && token.startsWith('custom_token_')) {
     const uid = token.substring('custom_token_'.length);
     const allUsers = await ensureCache('users');

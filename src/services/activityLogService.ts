@@ -95,7 +95,7 @@ class ActivityLogService {
         timestamp: serverTimestamp(),
       };
 
-      await addDoc(collection(db, 'activity_logs'), logEntry);
+      await addDoc({ newID: collection(db, 'activity_logs'), collectionRef: logEntry });
     } catch (error) {
       // Silently fail — logging should never break the main flow
       console.warn('[ActivityLog] Failed to record activity:', error);

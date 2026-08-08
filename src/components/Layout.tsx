@@ -312,8 +312,6 @@ export default function Layout() {
         clearInterval(checkInterval);
         activityEvents.forEach(evt => window.removeEventListener(evt, updateActivity));
         
-        console.log(`[Auto Logout] Idle for ${timeoutMinutes} minutes. Triggering logout...`);
-        
         notificationService.notify({
           title: isAr ? 'انتهاء الجلسة' : 'Session Expired',
           message: isAr 
@@ -381,10 +379,8 @@ export default function Layout() {
         };
         for (const col of cols) {
           try {
-            console.log(`[AutoBackup] Fetching collection: ${col}`);
             const snap = await getDocs(collection(db, col));
             backupDoc.data[col] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            console.log(`[AutoBackup] Fecthed ${col} size: ${snap.size}`);
           } catch (colErr: any) {
             console.warn(`[AutoBackup] Ignored error reading collection ${col}:`, colErr.message || colErr);
           }
@@ -392,12 +388,10 @@ export default function Layout() {
         // Save backup as a Firestore document under /backups collection
         const backupId = `auto_${new Date().toISOString().split('T')[0]}`;
         try {
-          console.log(`[AutoBackup] Attempting to save document backups/${backupId}`);
           await setDoc(doc(db, 'backups', backupId), {
             ...backupDoc,
             savedAt: Date.now()
           });
-          console.log(`[AutoBackup] Saved document backups/${backupId} successfully`);
         } catch (setDocErr: any) {
           console.error('[AutoBackup] setDoc to backups collection failed:', setDocErr);
           throw setDocErr;
@@ -405,14 +399,12 @@ export default function Layout() {
 
         // Log activity and notify users
         try {
-          console.log('[AutoBackup] Attempting activityLogService.log');
           activityLogService.log('backup_export', 'Auto Backup: ' + cols.join(', '));
         } catch (actLogErr) {
           console.warn('[AutoBackup] activityLogService failed, continuing:', actLogErr);
         }
 
         try {
-          console.log('[AutoBackup] Attempting notificationService.notify');
           await notificationService.notify({
             title: settings.language === 'ar' ? 'النسخ الاحتياطي التلقائي' : 'Automatic System Backup',
             message: settings.language === 'ar'
@@ -421,7 +413,6 @@ export default function Layout() {
             type: 'success',
             category: 'system'
           });
-          console.log('[AutoBackup] notificationService.notify was successful');
         } catch (notifErr: any) {
           console.error('[AutoBackup] notificationService.notify failed:', notifErr);
           throw notifErr;
@@ -429,18 +420,14 @@ export default function Layout() {
 
         // Update lastAutoBackupAt
         try {
-          console.log('[AutoBackup] Attempting updateSettings');
           await updateSettings({
             lastAutoBackupAt: Date.now(),
             lastBackup: new Date().toLocaleString(settings.language === 'ar' ? 'ar-YE' : 'en-US')
           } as any);
-          console.log('[AutoBackup] updateSettings was successful');
         } catch (updateSetErr: any) {
           console.error('[AutoBackup] updateSettings failed:', updateSetErr);
           throw updateSetErr;
         }
-
-        console.log('[AutoBackup] Completed successfully');
       } catch (err: any) {
         console.error('[AutoBackup] General failure caught in runAutoBackup:', err.message || err);
       }

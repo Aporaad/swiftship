@@ -150,9 +150,6 @@ export default function Login() {
               localProfileCipher = localStorage.getItem(
                 "swiftship_emergency_admin_profile",
               );
-              console.log(
-                "[Login] Auto-seeded default emergency offline credentials.",
-              );
             } catch (seedErr) {
               console.warn(
                 "[Login] Local storage writing blocked or failed:",
@@ -191,17 +188,12 @@ export default function Login() {
       // 2. Perform Firebase Auth login using Custom Token, Standard System Password, or Client Fallback
       let result;
       if (verifyData && verifyData.isLegacyNoPasswordDoc) {
-        // Since there is no password in Firestore, we MUST verify using their entered password directly against Firebase Auth!
-        console.log(
-          "User has no password in Firestore (legacy/root). Authenticating on Auth with actual entered password...",
-        );
         try {
           result = await signInWithEmailAndPassword(auth, email, password);
 
           // Auto-align Firebase Auth password to SHARED_SYSTEM_AUTH_PASSWORD to keep central system auth password standard
           try {
             await updatePassword(result.user, SHARED_SYSTEM_AUTH_PASSWORD);
-            console.log("Aligned Auth password to system master.");
           } catch (spAlignErr) {
             console.warn(
               "Could not auto-align legacy auth password:",
@@ -227,9 +219,6 @@ export default function Login() {
                   auth,
                   email,
                   SHARED_SYSTEM_AUTH_PASSWORD,
-                );
-                console.log(
-                  "Root user registered with system password on-the-fly",
                 );
               } catch (regErr: any) {
                 if (regErr.code === "auth/email-already-in-use") {
@@ -258,7 +247,6 @@ export default function Login() {
       } else if (verifyData && verifyData.customToken) {
         try {
           result = await signInWithCustomToken(auth, verifyData.customToken);
-          console.log("Secure custom token login succeeded");
         } catch (tokenErr: any) {
           console.error(
             "Custom token sign-in failed, trying standard system password:",
@@ -270,18 +258,12 @@ export default function Login() {
               email,
               SHARED_SYSTEM_AUTH_PASSWORD,
             );
-            console.log(
-              "Signed in with shared system password after token failure",
-            );
           } catch (spErr) {
             result = await signInWithEmailAndPassword(auth, email, password);
             // Self-heal: Align Firebase Auth password to SHARED_SYSTEM_AUTH_PASSWORD
             try {
               if (result && result.user) {
                 await updatePassword(result.user, SHARED_SYSTEM_AUTH_PASSWORD);
-                console.log(
-                  "Successfully aligned Firebase Auth password to system master on login",
-                );
               }
             } catch (alignErr) {
               console.warn(
@@ -299,21 +281,13 @@ export default function Login() {
             email,
             SHARED_SYSTEM_AUTH_PASSWORD,
           );
-          console.log("Signed in with shared system password");
         } catch (spErr: any) {
-          console.log(
-            "Shared system password failed, trying user password as fallback...",
-            spErr.message,
-          );
           try {
             result = await signInWithEmailAndPassword(auth, email, password);
             // Self-heal: Align Firebase Auth password to SHARED_SYSTEM_AUTH_PASSWORD
             try {
               if (result && result.user) {
                 await updatePassword(result.user, SHARED_SYSTEM_AUTH_PASSWORD);
-                console.log(
-                  "Successfully aligned Firebase Auth password to system master on direct login",
-                );
               }
             } catch (alignErr) {
               console.warn(
@@ -332,9 +306,6 @@ export default function Login() {
                   auth,
                   email,
                   SHARED_SYSTEM_AUTH_PASSWORD,
-                );
-                console.log(
-                  "Verified database user registered with system password on-the-fly",
                 );
               } catch (regErr: any) {
                 if (regErr.code === "auth/email-already-in-use") {
@@ -391,9 +362,6 @@ export default function Login() {
         // Auto-migrate legacy user's password payload to Firestore on first successful login
         try {
           await updateDoc(userDocRef, { password: password });
-          console.log(
-            "Successfully migrated legacy user password fields directly in Firestore",
-          );
         } catch (migrateErr) {
           console.warn(
             "Failed to migrate password field, continuing anyway:",

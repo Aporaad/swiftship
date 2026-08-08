@@ -304,9 +304,7 @@ export default function Orders() {
 
     // Fetch shipping companies
     const unsubShippingCompanies = onSnapshot(collection(db, 'shipping_companies'), (snap) => {
-      console.log("SHIPPING COMPANIES SNAPSHOT RECEIVED, COUNT:", snap.size);
       const list = snap.docs.map(doc => ({ id: doc.id, name: doc.data().name || 'بدون اسم', ...doc.data() }));
-      console.log("SHIPPING COMPANIES FETCHED IN ORDERS.tsx:", list);
       setShippingCompanies(list);
     }, (error) => {
       console.error("FIRESTORE ERROR ON shipping_companies SNAPSHOT LISTENER IN ORDERS.tsx:", error);
@@ -345,7 +343,6 @@ export default function Orders() {
               notes: isAr ? 'تمت الإضافة تلقائياً كشركة شحن افتراضية' : 'Auto-seeded default carrier',
               createdAt: Date.now()
             });
-            console.log(`Auto-seeded default carrier in DB: ${carrier}`);
           }
         }
       } catch (err) {

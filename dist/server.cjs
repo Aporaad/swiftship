@@ -14561,12 +14561,15 @@ var require_json = __commonJS({
     var JSON_SYNTAX_REGEXP = /#+/g;
     function json(options2) {
       var opts = options2 || {};
-      var limit2 = typeof opts.limit !== "number" ? bytes.parse(opts.limit || "100kb") : opts.limit;
+      var limit2 = typeof opts.limit === "undefined" || opts.limit === null ? 102400 : bytes.parse(opts.limit);
       var inflate = opts.inflate !== false;
       var reviver = opts.reviver;
       var strict = opts.strict !== false;
       var type = opts.type || "application/json";
       var verify = opts.verify || false;
+      if (limit2 === null) {
+        throw new TypeError('option limit "' + String(opts.limit) + '" is invalid');
+      }
       if (verify !== false && typeof verify !== "function") {
         throw new TypeError("option verify must be function");
       }
@@ -14688,9 +14691,12 @@ var require_raw = __commonJS({
     function raw(options2) {
       var opts = options2 || {};
       var inflate = opts.inflate !== false;
-      var limit2 = typeof opts.limit !== "number" ? bytes.parse(opts.limit || "100kb") : opts.limit;
+      var limit2 = typeof opts.limit === "undefined" || opts.limit === null ? 102400 : bytes.parse(opts.limit);
       var type = opts.type || "application/octet-stream";
       var verify = opts.verify || false;
+      if (limit2 === null) {
+        throw new TypeError('option limit "' + String(opts.limit) + '" is invalid');
+      }
       if (verify !== false && typeof verify !== "function") {
         throw new TypeError("option verify must be function");
       }
@@ -14746,9 +14752,12 @@ var require_text = __commonJS({
       var opts = options2 || {};
       var defaultCharset = opts.defaultCharset || "utf-8";
       var inflate = opts.inflate !== false;
-      var limit2 = typeof opts.limit !== "number" ? bytes.parse(opts.limit || "100kb") : opts.limit;
+      var limit2 = typeof opts.limit === "undefined" || opts.limit === null ? 102400 : bytes.parse(opts.limit);
       var type = opts.type || "text/plain";
       var verify = opts.verify || false;
+      if (limit2 === null) {
+        throw new TypeError('option limit "' + String(opts.limit) + '" is invalid');
+      }
       if (verify !== false && typeof verify !== "function") {
         throw new TypeError("option verify must be function");
       }
@@ -17354,9 +17363,12 @@ var require_urlencoded = __commonJS({
       }
       var extended = opts.extended !== false;
       var inflate = opts.inflate !== false;
-      var limit2 = typeof opts.limit !== "number" ? bytes.parse(opts.limit || "100kb") : opts.limit;
+      var limit2 = typeof opts.limit === "undefined" || opts.limit === null ? 102400 : bytes.parse(opts.limit);
       var type = opts.type || "application/x-www-form-urlencoded";
       var verify = opts.verify || false;
+      if (limit2 === null) {
+        throw new TypeError('option limit "' + String(opts.limit) + '" is invalid');
+      }
       if (verify !== false && typeof verify !== "function") {
         throw new TypeError("option verify must be function");
       }
@@ -46816,9 +46828,9 @@ async function getDoc(docRef) {
 async function getDocFromServer(docRef) {
   return getDoc(docRef);
 }
-async function addDoc(collectionRef, rawData) {
+async function addDoc(newID, collectionRef, rawData) {
   const table = collectionRef.path;
-  const id3 = Math.random().toString(36).substring(2, 11) + Math.random().toString(36).substring(2, 11);
+  const id3 = newID ? newID : Math.random().toString(36).substring(2, 11) + Math.random().toString(36).substring(2, 11);
   const data = cleanData(rawData);
   if (!isOfflineMode()) {
     const { error: error3 } = await supabase.from(table).insert({ id: id3, data });
@@ -47195,10 +47207,10 @@ async function signInWithEmailAndPassword(...args) {
   }
 }
 async function createUserWithEmailAndPassword(...args) {
-  const email = args[1] || args[0];
-  const password = args[2] || args[1];
+  const uid = args[1] || args[0];
+  const email = args[2] || args[1];
+  const password = args[3] || args[2];
   if (loggedInUser) {
-    const uid = "vuid-" + Math.random().toString(36).substring(2, 11) + Math.random().toString(36).substring(2, 11);
     console.log("[Supabase Adapter] Admin creating user on-the-fly; bypassed real auth signUp to preserve session. Virtual UID:", uid);
     return {
       user: {
@@ -47216,7 +47228,7 @@ async function createUserWithEmailAndPassword(...args) {
     throw firebaseErr;
   }
   const mapped = mapUser(data.user) || {
-    uid: "mock-uid-" + Math.random().toString(36).substring(2, 9),
+    uid: "user-uid-" + Math.random().toString(36).substring(2, 9),
     email,
     emailVerified: true,
     displayName: email.split("@")[0]
@@ -57124,8 +57136,8 @@ is not a problem with esbuild. You need to fix your environment instead.
         if (isFirstPacket) {
           isFirstPacket = false;
           let binaryVersion = String.fromCharCode(...bytes);
-          if (binaryVersion !== "0.28.0") {
-            throw new Error(`Cannot start service: Host version "${"0.28.0"}" does not match binary version ${quote3(binaryVersion)}`);
+          if (binaryVersion !== "0.28.1") {
+            throw new Error(`Cannot start service: Host version "${"0.28.1"}" does not match binary version ${quote3(binaryVersion)}`);
           }
           return;
         }
@@ -58258,7 +58270,7 @@ for your current platform.`);
             "node_modules",
             ".cache",
             "esbuild",
-            `pnpapi-${pkg.replace("/", "-")}-${"0.28.0"}-${path8.basename(subpath)}`
+            `pnpapi-${pkg.replace("/", "-")}-${"0.28.1"}-${path8.basename(subpath)}`
           );
           if (!fs6.existsSync(binTargetPath)) {
             fs6.mkdirSync(path8.dirname(binTargetPath), { recursive: true });
@@ -58291,7 +58303,7 @@ for your current platform.`);
       }
     }
     var _a;
-    var isInternalWorkerThread = ((_a = worker_threads == null ? void 0 : worker_threads.workerData) == null ? void 0 : _a.esbuildVersion) === "0.28.0";
+    var isInternalWorkerThread = ((_a = worker_threads == null ? void 0 : worker_threads.workerData) == null ? void 0 : _a.esbuildVersion) === "0.28.1";
     var esbuildCommandAndArgs = () => {
       if ((!ESBUILD_BINARY_PATH || false) && (path22.basename(__filename) !== "main.js" || path22.basename(__dirname) !== "lib")) {
         throw new Error(
@@ -58358,7 +58370,7 @@ More information: The file containing the code for esbuild's JavaScript API (${_
         }
       }
     };
-    var version7 = "0.28.0";
+    var version7 = "0.28.1";
     var build4 = (options2) => ensureServiceIsRunning().build(options2);
     var context = (buildOptions) => ensureServiceIsRunning().context(buildOptions);
     var transform4 = (input, options2) => ensureServiceIsRunning().transform(input, options2);
@@ -58461,7 +58473,7 @@ More information: The file containing the code for esbuild's JavaScript API (${_
     var ensureServiceIsRunning = () => {
       if (longLivedService) return longLivedService;
       let [command, args] = esbuildCommandAndArgs();
-      let child = child_process.spawn(command, args.concat(`--service=${"0.28.0"}`, "--ping"), {
+      let child = child_process.spawn(command, args.concat(`--service=${"0.28.1"}`, "--ping"), {
         windowsHide: true,
         stdio: ["pipe", "pipe", "inherit"],
         cwd: defaultWD
@@ -58565,7 +58577,7 @@ More information: The file containing the code for esbuild's JavaScript API (${_
         esbuild: node_exports3
       });
       callback2(service);
-      let stdout = child_process.execFileSync(command, args.concat(`--service=${"0.28.0"}`), {
+      let stdout = child_process.execFileSync(command, args.concat(`--service=${"0.28.1"}`), {
         cwd: defaultWD,
         windowsHide: true,
         input: stdin,
@@ -58585,7 +58597,7 @@ More information: The file containing the code for esbuild's JavaScript API (${_
     var startWorkerThreadService = (worker_threads2) => {
       let { port1: mainPort, port2: workerPort } = new worker_threads2.MessageChannel();
       let worker = new worker_threads2.Worker(__filename, {
-        workerData: { workerPort, defaultWD, esbuildVersion: "0.28.0" },
+        workerData: { workerPort, defaultWD, esbuildVersion: "0.28.1" },
         transferList: [workerPort],
         // From node's documentation: https://nodejs.org/api/worker_threads.html
         //
@@ -103693,9 +103705,9 @@ var init_dep_3RmXg9uo = __esm({
   }
 });
 
-// node_modules/vite/dist/node/chunks/dep-4-IQbZQm.js
-var dep_4_IQbZQm_exports = {};
-__export(dep_4_IQbZQm_exports, {
+// node_modules/vite/dist/node/chunks/dep-CV-fz3CQ.js
+var dep_CV_fz3CQ_exports = {};
+__export(dep_CV_fz3CQ_exports, {
   i: () => index$1
 });
 function _mergeNamespaces2(n5, m5) {
@@ -104074,9 +104086,9 @@ function AtImport(options2) {
   };
 }
 var import_path7, import_node_module3, import_meta7, __require2, formatImportPrelude$2, formatImportPrelude$1, base64EncodedImport, base64EncodedConditionalImport2, applyConditions$1, applyRaws$1, applyStyles$1, anyDataURLRegexp, base64DataURLRegexp, plainDataURLRegexp, dataUrl, valueParser, stringify3, parseStatements$1, path$2, sugarss, processContent$1, path$1, dataURL, parseStatements2, processContent2, resolveId$1, formatImportPrelude2, parseStyles_1, path4, applyConditions2, applyRaws2, applyStyles2, loadContent, parseStyles, resolveId2, postcssImport, index, index$1;
-var init_dep_4_IQbZQm = __esm({
-  "node_modules/vite/dist/node/chunks/dep-4-IQbZQm.js"() {
-    init_dep_Dq2t6Dq0();
+var init_dep_CV_fz3CQ = __esm({
+  "node_modules/vite/dist/node/chunks/dep-CV-fz3CQ.js"() {
+    init_dep_Dm0c1Wj2();
     import_path7 = __toESM(require("path"), 1);
     init_dep_3RmXg9uo();
     import_node_module3 = require("node:module");
@@ -104748,6 +104760,7 @@ var require_stringifier = __commonJS({
     "use strict";
     var STYLE_TAG = /(<)(\/?style\b)/gi;
     var COMMENT_OPEN = /(<)(!--)/g;
+    var AT_NAME_END = /[\t\n\f\r "#'()/;[\\\]{}]/;
     function escapeHTMLInCSS(str2) {
       if (typeof str2 !== "string") return str2;
       if (!str2.includes("<")) return str2;
@@ -104770,24 +104783,69 @@ var require_stringifier = __commonJS({
     function capitalize3(str2) {
       return str2[0].toUpperCase() + str2.slice(1);
     }
-    var Stringifier = class {
+    function atruleStart(str2, node3) {
+      let name = "@" + node3.name;
+      let params = node3.params ? str2.rawValue(node3, "params") : "";
+      let afterName = node3.raws.afterName;
+      if (typeof afterName === "undefined") {
+        afterName = params ? " " : "";
+      } else if (afterName === "" && params && !AT_NAME_END.test(params[0])) {
+        afterName = " ";
+      }
+      return name + afterName + params;
+    }
+    function pushBody(str2, stack, node3) {
+      let nodes = node3.nodes;
+      let last = nodes.length - 1;
+      while (last > 0) {
+        if (nodes[last].type !== "comment") break;
+        last -= 1;
+      }
+      let semicolon4 = str2.raw(node3, "semicolon");
+      let isDocument = node3.type === "document";
+      for (let i5 = nodes.length - 1; i5 >= 0; i5--) {
+        let child = nodes[i5];
+        let childSemicolon = last !== i5 || semicolon4;
+        if (!childSemicolon && i5 < nodes.length - 1 && (child.type === "atrule" && !child.nodes || child.type === "decl" && child.prop.startsWith("--"))) {
+          childSemicolon = true;
+        }
+        stack.push({
+          document: isDocument,
+          node: child,
+          semicolon: childSemicolon
+        });
+      }
+    }
+    function pushBlock(str2, stack, node3, start) {
+      let between = str2.raw(node3, "between", "beforeOpen");
+      str2.builder(escapeHTMLInCSS(start + between) + "{", node3, "start");
+      let hasNodes = node3.nodes && node3.nodes.length;
+      let close2 = () => {
+        let after = hasNodes ? str2.raw(node3, "after") : str2.raw(node3, "after", "emptyBody");
+        if (after) str2.builder(escapeHTMLInCSS(after));
+        str2.builder("}", node3, "end");
+        if (node3.type === "rule" && node3.raws.ownSemicolon) {
+          str2.builder(escapeHTMLInCSS(node3.raws.ownSemicolon), node3, "end");
+        }
+      };
+      if (hasNodes) {
+        stack.push(close2);
+        pushBody(str2, stack, node3);
+      } else {
+        close2();
+      }
+    }
+    var Stringifier = class _Stringifier {
       constructor(builder) {
         this.builder = builder;
       }
       atrule(node3, semicolon4) {
-        let raws = node3.raws;
-        let name = "@" + node3.name;
-        let params = node3.params ? this.rawValue(node3, "params") : "";
-        if (typeof raws.afterName !== "undefined") {
-          name += raws.afterName;
-        } else if (params) {
-          name += " ";
-        }
+        let start = atruleStart(this, node3);
         if (node3.nodes) {
-          this.block(node3, name + params);
+          this.block(node3, start);
         } else {
-          let end = (raws.between || "") + (semicolon4 ? ";" : "");
-          this.builder(escapeHTMLInCSS(name + params + end), node3);
+          let end = (node3.raws.between || "") + (semicolon4 ? ";" : "");
+          this.builder(escapeHTMLInCSS(start + end), node3);
         }
       }
       beforeAfter(node3, detect) {
@@ -104829,19 +104887,30 @@ var require_stringifier = __commonJS({
         this.builder("}", node3, "end");
       }
       body(node3) {
-        let nodes = node3.nodes;
-        let last = nodes.length - 1;
-        while (last > 0) {
-          if (nodes[last].type !== "comment") break;
-          last -= 1;
-        }
-        let semicolon4 = this.raw(node3, "semicolon");
-        let isDocument = node3.type === "document";
-        for (let i5 = 0; i5 < nodes.length; i5++) {
-          let child = nodes[i5];
+        let proto2 = _Stringifier.prototype;
+        let expandable = ["atrule", "block", "body", "rule", "stringify"].every(
+          (method) => this[method] === proto2[method]
+        );
+        let stack = [];
+        pushBody(this, stack, node3);
+        while (stack.length > 0) {
+          let entry = stack.pop();
+          if (typeof entry === "function") {
+            entry();
+            continue;
+          }
+          let child = entry.node;
           let before = this.raw(child, "before");
-          if (before) this.builder(isDocument ? before : escapeHTMLInCSS(before));
-          this.stringify(child, last !== i5 || semicolon4);
+          if (before) {
+            this.builder(entry.document ? before : escapeHTMLInCSS(before));
+          }
+          if (expandable && child.type === "rule") {
+            pushBlock(this, stack, child, this.rawValue(child, "selector"));
+          } else if (expandable && child.type === "atrule" && child.nodes) {
+            pushBlock(this, stack, child, atruleStart(this, child));
+          } else {
+            this.stringify(child, entry.semicolon);
+          }
         }
       }
       comment(node3) {
@@ -105034,6 +105103,9 @@ var require_stringifier = __commonJS({
         return value2;
       }
       root(node3) {
+        if (node3.source && node3.source.input.hasBOM) {
+          this.builder("\uFEFF", node3, "start");
+        }
         this.body(node3);
         if (node3.raws.after) {
           let after = node3.raws.after;
@@ -105094,22 +105166,36 @@ var require_node5 = __commonJS({
     var { isClean, my } = require_symbols();
     function cloneNode(obj, parent) {
       let cloned = new obj.constructor();
-      for (let i5 in obj) {
-        if (!Object.prototype.hasOwnProperty.call(obj, i5)) {
-          continue;
-        }
-        if (i5 === "proxyCache") continue;
-        let value2 = obj[i5];
-        let type = typeof value2;
-        if (i5 === "parent" && type === "object") {
-          if (parent) cloned[i5] = parent;
-        } else if (i5 === "source") {
-          cloned[i5] = value2;
-        } else if (Array.isArray(value2)) {
-          cloned[i5] = value2.map((j2) => cloneNode(j2, cloned));
-        } else {
-          if (type === "object" && value2 !== null) value2 = cloneNode(value2);
-          cloned[i5] = value2;
+      let stack = [[obj, cloned, parent]];
+      while (stack.length > 0) {
+        let [source, target, targetParent] = stack.pop();
+        for (let i5 in source) {
+          if (!Object.prototype.hasOwnProperty.call(source, i5)) {
+            continue;
+          }
+          if (i5 === "proxyCache") continue;
+          let value2 = source[i5];
+          let type = typeof value2;
+          if (i5 === "parent" && type === "object") {
+            if (targetParent) target[i5] = targetParent;
+          } else if (i5 === "source") {
+            target[i5] = value2;
+          } else if (Array.isArray(value2)) {
+            let children = [];
+            target[i5] = children;
+            for (let j2 of value2) {
+              let childClone = new j2.constructor();
+              children.push(childClone);
+              stack.push([j2, childClone, target]);
+            }
+          } else {
+            if (type === "object" && value2 !== null) {
+              let valueClone = new value2.constructor();
+              stack.push([value2, valueClone, void 0]);
+              value2 = valueClone;
+            }
+            target[i5] = value2;
+          }
         }
       }
       return cloned;
@@ -105135,7 +105221,7 @@ var require_node5 = __commonJS({
       }
       return offset2;
     }
-    var Node2 = class {
+    var Node2 = class _Node {
       get proxyOf() {
         return this;
       }
@@ -105143,11 +105229,12 @@ var require_node5 = __commonJS({
         this.raws = {};
         this[isClean] = false;
         this[my] = true;
-        for (let name in defaults) {
+        for (let name of Object.keys(defaults)) {
+          if (name === "__proto__") continue;
           if (name === "nodes") {
             this.nodes = [];
             for (let node3 of defaults[name]) {
-              if (typeof node3.clone === "function") {
+              if (typeof node3.clone === "function" && node3.parent) {
                 this.append(node3.clone());
               } else {
                 this.append(node3);
@@ -105258,11 +105345,15 @@ var require_node5 = __commonJS({
         return this.parent.nodes[index4 + 1];
       }
       positionBy(opts = {}) {
-        let pos = this.source.start;
+        let inputString = "document" in this.source.input ? this.source.input.document : this.source.input.css;
+        let pos = {
+          column: this.source.start.column,
+          line: this.source.start.line,
+          offset: sourceOffset(inputString, this.source.start)
+        };
         if (opts.index) {
           pos = this.positionInside(opts.index);
         } else if (opts.word) {
-          let inputString = "document" in this.source.input ? this.source.input.document : this.source.input.css;
           let stringRepresentation = inputString.slice(
             sourceOffset(inputString, this.source.start),
             sourceOffset(inputString, this.source.end)
@@ -105334,7 +105425,7 @@ var require_node5 = __commonJS({
               line: opts.start.line,
               offset: sourceOffset(inputString, opts.start)
             };
-          } else if (opts.index) {
+          } else if (typeof opts.index === "number") {
             start = this.positionInside(opts.index);
           }
           if (opts.end) {
@@ -105345,7 +105436,7 @@ var require_node5 = __commonJS({
             };
           } else if (typeof opts.endIndex === "number") {
             end = this.positionInside(opts.endIndex);
-          } else if (opts.index) {
+          } else if (typeof opts.index === "number") {
             end = this.positionInside(opts.index + 1);
           }
         }
@@ -105397,43 +105488,59 @@ var require_node5 = __commonJS({
         return result;
       }
       toJSON(_, inputs) {
-        let fixed = {};
         let emitInputs = inputs == null;
         inputs = inputs || /* @__PURE__ */ new Map();
-        let inputsNextIndex = 0;
-        for (let name in this) {
-          if (!Object.prototype.hasOwnProperty.call(this, name)) {
-            continue;
-          }
-          if (name === "parent" || name === "proxyCache") continue;
-          let value2 = this[name];
-          if (Array.isArray(value2)) {
-            fixed[name] = value2.map((i5) => {
-              if (typeof i5 === "object" && i5.toJSON) {
-                return i5.toJSON(null, inputs);
-              } else {
-                return i5;
-              }
-            });
-          } else if (typeof value2 === "object" && value2.toJSON) {
-            fixed[name] = value2.toJSON(null, inputs);
-          } else if (name === "source") {
-            if (value2 == null) continue;
-            let inputId = inputs.get(value2.input);
-            if (inputId == null) {
-              inputId = inputsNextIndex;
-              inputs.set(value2.input, inputsNextIndex);
-              inputsNextIndex++;
+        let holderOfRoot = [];
+        let queue = [[this, holderOfRoot, 0]];
+        for (let step = 0; step < queue.length; step++) {
+          let [node3, holder, key] = queue[step];
+          let fixed2 = {};
+          holder[key] = fixed2;
+          for (let name in node3) {
+            if (!Object.prototype.hasOwnProperty.call(node3, name)) {
+              continue;
             }
-            fixed[name] = {
-              end: value2.end,
-              inputId,
-              start: value2.start
-            };
-          } else {
-            fixed[name] = value2;
+            if (name === "parent" || name === "proxyCache") continue;
+            let value2 = node3[name];
+            if (Array.isArray(value2)) {
+              let fixedArray = [];
+              fixed2[name] = fixedArray;
+              for (let i5 = 0; i5 < value2.length; i5++) {
+                let item = value2[i5];
+                if (typeof item === "object" && item.toJSON) {
+                  if (item.toJSON === _Node.prototype.toJSON) {
+                    queue.push([item, fixedArray, i5]);
+                  } else {
+                    fixedArray[i5] = item.toJSON(null, inputs);
+                  }
+                } else {
+                  fixedArray[i5] = item;
+                }
+              }
+            } else if (typeof value2 === "object" && value2.toJSON) {
+              if (value2.toJSON === _Node.prototype.toJSON) {
+                queue.push([value2, fixed2, name]);
+              } else {
+                fixed2[name] = value2.toJSON(null, inputs);
+              }
+            } else if (name === "source") {
+              if (value2 == null) continue;
+              let inputId = inputs.get(value2.input);
+              if (inputId == null) {
+                inputId = inputs.size;
+                inputs.set(value2.input, inputId);
+              }
+              fixed2[name] = {
+                end: value2.end,
+                inputId,
+                start: value2.start
+              };
+            } else {
+              fixed2[name] = value2;
+            }
           }
         }
+        let fixed = holderOfRoot[0];
         if (emitInputs) {
           fixed.inputs = [...inputs.keys()].map((input) => input.toJSON());
         }
@@ -105515,17 +105622,24 @@ var require_container = __commonJS({
     var Root2;
     var Rule2;
     function cleanSource(nodes) {
-      return nodes.map((i5) => {
-        if (i5.nodes) i5.nodes = cleanSource(i5.nodes);
-        delete i5.source;
-        return i5;
-      });
+      let stack = nodes.slice();
+      while (stack.length > 0) {
+        let node3 = stack.pop();
+        delete node3.source;
+        if (node3.nodes) {
+          node3.nodes = node3.nodes.slice();
+          for (let i5 of node3.nodes) stack.push(i5);
+        }
+      }
+      return nodes.slice();
     }
     function markTreeDirty(node3) {
-      node3[isClean] = false;
-      if (node3.proxyOf.nodes) {
-        for (let i5 of node3.proxyOf.nodes) {
-          markTreeDirty(i5);
+      let stack = [node3];
+      while (stack.length > 0) {
+        let next = stack.pop();
+        next[isClean] = false;
+        if (next.proxyOf.nodes) {
+          for (let i5 of next.proxyOf.nodes) stack.push(i5);
         }
       }
     }
@@ -105547,9 +105661,17 @@ var require_container = __commonJS({
         return this;
       }
       cleanRaws(keepBetween) {
-        super.cleanRaws(keepBetween);
-        if (this.nodes) {
-          for (let node3 of this.nodes) node3.cleanRaws(keepBetween);
+        let stack = [this];
+        while (stack.length > 0) {
+          let node3 = stack.pop();
+          if (node3 !== this && node3.cleanRaws !== _Container.prototype.cleanRaws) {
+            node3.cleanRaws(keepBetween);
+            continue;
+          }
+          Node2.prototype.cleanRaws.call(node3, keepBetween);
+          if (node3.nodes) {
+            for (let child of node3.nodes) stack.push(child);
+          }
         }
       }
       each(callback2) {
@@ -105764,18 +105886,38 @@ var require_container = __commonJS({
         return this.nodes.some(condition);
       }
       walk(callback2) {
-        return this.each((child, i5) => {
+        if (!this.proxyOf.nodes) return void 0;
+        let stack = [{ iterator: this.getIterator(), node: this.proxyOf }];
+        while (stack.length > 0) {
+          let { iterator, node: node3 } = stack[stack.length - 1];
+          let index4 = node3.indexes[iterator];
+          if (index4 >= node3.proxyOf.nodes.length) {
+            delete node3.indexes[iterator];
+            stack.pop();
+            let parent = stack[stack.length - 1];
+            if (parent) parent.node.indexes[parent.iterator] += 1;
+            continue;
+          }
+          let child = node3.proxyOf.nodes[index4];
           let result;
           try {
-            result = callback2(child, i5);
+            result = callback2(child, index4);
           } catch (e5) {
             throw child.addToError(e5);
           }
-          if (result !== false && child.walk) {
-            result = child.walk(callback2);
+          if (result === false) {
+            for (let opened of stack) {
+              delete opened.node.indexes[opened.iterator];
+            }
+            return false;
           }
-          return result;
-        });
+          if (child.walk && child.proxyOf.nodes) {
+            stack.push({ iterator: child.getIterator(), node: child });
+          } else {
+            node3.indexes[iterator] += 1;
+          }
+        }
+        return void 0;
       }
       walkAtRules(name, callback2) {
         if (!callback2) {
@@ -105866,22 +106008,24 @@ var require_container = __commonJS({
     module2.exports = Container2;
     Container2.default = Container2;
     Container2.rebuild = (node3) => {
-      if (node3.type === "atrule") {
-        Object.setPrototypeOf(node3, AtRule2.prototype);
-      } else if (node3.type === "rule") {
-        Object.setPrototypeOf(node3, Rule2.prototype);
-      } else if (node3.type === "decl") {
-        Object.setPrototypeOf(node3, Declaration2.prototype);
-      } else if (node3.type === "comment") {
-        Object.setPrototypeOf(node3, Comment2.prototype);
-      } else if (node3.type === "root") {
-        Object.setPrototypeOf(node3, Root2.prototype);
-      }
-      node3[my] = true;
-      if (node3.nodes) {
-        node3.nodes.forEach((child) => {
-          Container2.rebuild(child);
-        });
+      let stack = [node3];
+      while (stack.length > 0) {
+        let next = stack.pop();
+        if (next.type === "atrule") {
+          Object.setPrototypeOf(next, AtRule2.prototype);
+        } else if (next.type === "rule") {
+          Object.setPrototypeOf(next, Rule2.prototype);
+        } else if (next.type === "decl") {
+          Object.setPrototypeOf(next, Declaration2.prototype);
+        } else if (next.type === "comment") {
+          Object.setPrototypeOf(next, Comment2.prototype);
+        } else if (next.type === "root") {
+          Object.setPrototypeOf(next, Root2.prototype);
+        }
+        next[my] = true;
+        if (next.nodes) {
+          for (let child of next.nodes) stack.push(child);
+        }
       }
     };
   }
@@ -105950,7 +106094,7 @@ var require_non_secure = __commonJS({
       return (size = defaultSize) => {
         let id3 = "";
         let i5 = size | 0;
-        while (i5--) {
+        while (i5-- > 0) {
           id3 += alphabet[Math.random() * alphabet.length | 0];
         }
         return id3;
@@ -105959,7 +106103,7 @@ var require_non_secure = __commonJS({
     var nanoid2 = (size = 21) => {
       let id3 = "";
       let i5 = size | 0;
-      while (i5--) {
+      while (i5-- > 0) {
         id3 += urlAlphabet2[Math.random() * 64 | 0];
       }
       return id3;
@@ -107875,9 +108019,16 @@ var require_source_map = __commonJS({
 var require_previous_map = __commonJS({
   "node_modules/postcss/lib/previous-map.js"(exports2, module2) {
     "use strict";
-    var { existsSync: existsSync3, readFileSync: readFileSync3 } = require("fs");
-    var { dirname: dirname6, join: join3 } = require("path");
+    var { existsSync: existsSync3, readFileSync: readFileSync3, realpathSync: realpathSync2 } = require("fs");
+    var { dirname: dirname6, isAbsolute: isAbsolute6, join: join3, relative: relative5, sep: sep3 } = require("path");
     var { SourceMapConsumer, SourceMapGenerator } = require_source_map();
+    function realPath(path8) {
+      try {
+        return realpathSync2(path8);
+      } catch {
+        return path8;
+      }
+    }
     function fromBase64(str2) {
       if (Buffer) {
         return Buffer.from(str2, "base64").toString();
@@ -107940,7 +108091,10 @@ var require_previous_map = __commonJS({
       }
       loadFile(path8, cssFile, trusted) {
         if (!trusted && !this.unsafeMap) {
-          if (!/\.map$/i.test(path8)) {
+          if (!/\.map$/i.test(path8)) return void 0;
+          if (!cssFile) return void 0;
+          let rel = relative5(realPath(dirname6(cssFile)), realPath(path8));
+          if (rel === ".." || rel.startsWith(".." + sep3) || isAbsolute6(rel)) {
             return void 0;
           }
         }
@@ -108179,11 +108333,15 @@ var require_input = __commonJS({
       origin(line, column, endLine, endColumn) {
         if (!this.map) return false;
         let consumer = this.map.consumer();
-        let from = consumer.originalPositionFor({ column, line });
+        let from = consumer.originalPositionFor({ column: column - 1, line });
         if (!from.source) return false;
         let to;
         if (typeof endLine === "number") {
-          to = consumer.originalPositionFor({ column: endColumn, line: endLine });
+          let toPosition = consumer.originalPositionFor({
+            column: endColumn - 1,
+            line: endLine
+          });
+          if (toPosition.source) to = toPosition;
         }
         let fromUrl;
         if (isAbsolute6(from.source)) {
@@ -108195,8 +108353,8 @@ var require_input = __commonJS({
           );
         }
         let result = {
-          column: from.column,
-          endColumn: to && to.column,
+          column: from.column + 1,
+          endColumn: to && to.column + 1,
           endLine: to && to.line,
           line: from.line,
           url: fromUrl.toString()
@@ -108250,6 +108408,12 @@ var require_root = __commonJS({
         if (!this.nodes) this.nodes = [];
       }
       normalize(child, sample, type) {
+        let keepBefore = /* @__PURE__ */ new Set();
+        for (let node3 of Array.isArray(child) ? child : [child]) {
+          if (node3 && typeof node3 === "object" && !node3.parent && node3.raws && typeof node3.raws.before !== "undefined") {
+            keepBefore.add(node3.raws);
+          }
+        }
         let nodes = super.normalize(child);
         if (sample) {
           if (type === "prepend") {
@@ -108260,7 +108424,9 @@ var require_root = __commonJS({
             }
           } else if (this.first !== sample) {
             for (let node3 of nodes) {
-              node3.raws.before = sample.raws.before;
+              if (!keepBefore.has(node3.raws)) {
+                node3.raws.before = sample.raws.before;
+              }
             }
           }
         }
@@ -108303,6 +108469,7 @@ var require_list = __commonJS({
         return list2.split(string3, spaces2);
       },
       split(string3, separators, last) {
+        if (typeof string3 !== "string") return [];
         let array = [];
         let current = "";
         let split = false;
@@ -108384,25 +108551,23 @@ var require_fromJSON = __commonJS({
     var PreviousMap = require_previous_map();
     var Root2 = require_root();
     var Rule2 = require_rule();
-    function fromJSON2(json, inputs) {
-      if (Array.isArray(json)) return json.map((n5) => fromJSON2(n5));
-      let { inputs: ownInputs, ...defaults } = json;
-      if (ownInputs) {
-        inputs = [];
-        for (let input of ownInputs) {
-          let inputHydrated = { ...input, __proto__: Input2.prototype };
-          if (inputHydrated.map) {
-            inputHydrated.map = {
-              ...inputHydrated.map,
-              __proto__: PreviousMap.prototype
-            };
-          }
-          inputs.push(inputHydrated);
+    function hydrateInputs(json, inputs) {
+      if (!json.inputs) return inputs;
+      return json.inputs.map((input) => {
+        let inputHydrated = { ...input, __proto__: Input2.prototype };
+        if (inputHydrated.map) {
+          inputHydrated.map = {
+            ...inputHydrated.map,
+            __proto__: PreviousMap.prototype
+          };
         }
-      }
-      if (defaults.nodes) {
-        defaults.nodes = json.nodes.map((n5) => fromJSON2(n5, inputs));
-      }
+        return inputHydrated;
+      });
+    }
+    function constructNode(json, inputs, children) {
+      let defaults = { ...json };
+      delete defaults.inputs;
+      delete defaults.nodes;
       if (defaults.source) {
         let { inputId, ...source } = defaults.source;
         defaults.source = source;
@@ -108410,19 +108575,59 @@ var require_fromJSON = __commonJS({
           defaults.source.input = inputs[inputId];
         }
       }
+      let node3;
       if (defaults.type === "root") {
-        return new Root2(defaults);
+        node3 = new Root2(defaults);
       } else if (defaults.type === "decl") {
-        return new Declaration2(defaults);
+        node3 = new Declaration2(defaults);
       } else if (defaults.type === "rule") {
-        return new Rule2(defaults);
+        node3 = new Rule2(defaults);
       } else if (defaults.type === "comment") {
-        return new Comment2(defaults);
+        node3 = new Comment2(defaults);
       } else if (defaults.type === "atrule") {
-        return new AtRule2(defaults);
+        node3 = new AtRule2(defaults);
       } else {
         throw new Error("Unknown node type: " + json.type);
       }
+      if (children) {
+        node3.nodes = children;
+        for (let child of children) child.parent = node3;
+      }
+      return node3;
+    }
+    function fromJSON2(json, inputs) {
+      if (Array.isArray(json)) return json.map((n5) => fromJSON2(n5));
+      let result;
+      let stack = [
+        { childIndex: 0, children: [], inputs: hydrateInputs(json, inputs), json }
+      ];
+      while (stack.length > 0) {
+        let frame = stack[stack.length - 1];
+        let jsonNodes = frame.json.nodes;
+        if (jsonNodes && frame.childIndex < jsonNodes.length) {
+          let childJson = jsonNodes[frame.childIndex];
+          frame.childIndex += 1;
+          stack.push({
+            childIndex: 0,
+            children: [],
+            inputs: hydrateInputs(childJson, frame.inputs),
+            json: childJson
+          });
+          continue;
+        }
+        stack.pop();
+        let node3 = constructNode(
+          frame.json,
+          frame.inputs,
+          jsonNodes ? frame.children : void 0
+        );
+        if (stack.length > 0) {
+          stack[stack.length - 1].children.push(node3);
+        } else {
+          result = node3;
+        }
+      }
+      return result;
     }
     module2.exports = fromJSON2;
     fromJSON2.default = fromJSON2;
@@ -108775,6 +108980,11 @@ var require_parser = __commonJS({
         if (pos) return pos;
       }
     }
+    function tokensToString(tokens, from, to) {
+      let result = "";
+      for (let i5 = from; i5 < to; i5++) result += tokens[i5][1];
+      return result;
+    }
     var Parser3 = class {
       constructor(input) {
         this.input = input;
@@ -108937,44 +109147,45 @@ var require_parser = __commonJS({
           last[3] || last[2] || findLastWithPosition(tokens)
         );
         node3.source.end.offset++;
-        while (tokens[0][0] !== "word") {
-          if (tokens.length === 1) this.unknownWord(tokens);
-          node3.raws.before += tokens.shift()[1];
+        let start = 0;
+        while (tokens[start][0] !== "word") {
+          if (start === tokens.length - 1) this.unknownWord([tokens[start]]);
+          start++;
         }
-        node3.source.start = this.getPosition(tokens[0][2]);
-        node3.prop = "";
-        while (tokens.length) {
-          let type = tokens[0][0];
+        node3.raws.before += tokensToString(tokens, 0, start);
+        node3.source.start = this.getPosition(tokens[start][2]);
+        let propStart = start;
+        while (start < tokens.length) {
+          let type = tokens[start][0];
           if (type === ":" || type === "space" || type === "comment") {
             break;
           }
-          node3.prop += tokens.shift()[1];
+          start++;
         }
-        node3.raws.between = "";
+        node3.prop = tokensToString(tokens, propStart, start);
+        let betweenStart = start;
         let token;
-        while (tokens.length) {
-          token = tokens.shift();
-          if (token[0] === ":") {
-            node3.raws.between += token[1];
-            break;
-          } else {
-            if (token[0] === "word" && /\w/.test(token[1])) {
-              this.unknownWord([token]);
-            }
-            node3.raws.between += token[1];
+        while (start < tokens.length) {
+          token = tokens[start];
+          start++;
+          if (token[0] === ":") break;
+          if (token[0] === "word" && /\w/.test(token[1])) {
+            this.unknownWord([token]);
           }
         }
+        node3.raws.between = tokensToString(tokens, betweenStart, start);
         if (node3.prop[0] === "_" || node3.prop[0] === "*") {
           node3.raws.before += node3.prop[0];
           node3.prop = node3.prop.slice(1);
         }
-        let firstSpaces = [];
-        let next;
-        while (tokens.length) {
-          next = tokens[0][0];
+        let firstSpacesStart = start;
+        while (start < tokens.length) {
+          let next = tokens[start][0];
           if (next !== "space" && next !== "comment") break;
-          firstSpaces.push(tokens.shift());
+          start++;
         }
+        let firstSpaces = tokens.slice(firstSpacesStart, start);
+        tokens = tokens.slice(start);
         this.precheckMissedSemicolon(tokens);
         for (let i5 = tokens.length - 1; i5 >= 0; i5--) {
           token = tokens[i5];
@@ -109326,11 +109537,16 @@ var require_parse3 = __commonJS({
 var require_warning = __commonJS({
   "node_modules/postcss/lib/warning.js"(exports2, module2) {
     "use strict";
+    var Container2 = require_container();
+    var { my } = require_symbols();
     var Warning2 = class {
       constructor(text, opts = {}) {
         this.type = "warning";
         this.text = text;
         if (opts.node && opts.node.source) {
+          if (!opts.node[my]) {
+            Container2.rebuild(opts.node);
+          }
           let range2 = opts.node.rangeBy(opts);
           this.line = range2.start.line;
           this.column = range2.start.column;
@@ -109503,8 +109719,14 @@ var require_lazy_result = __commonJS({
       };
     }
     function cleanMarks(node3) {
-      node3[isClean] = false;
-      if (node3.nodes) node3.nodes.forEach((i5) => cleanMarks(i5));
+      let stack = [node3];
+      while (stack.length > 0) {
+        let next = stack.pop();
+        next[isClean] = false;
+        if (next.nodes) {
+          for (let i5 of next.nodes) stack.push(i5);
+        }
+      }
       return node3;
     }
     var postcss3 = {};
@@ -109834,14 +110056,19 @@ var require_lazy_result = __commonJS({
         }
         if (visit.iterator !== 0) {
           let iterator = visit.iterator;
+          if (visit.descending) {
+            visit.descending = false;
+            node3.indexes[iterator] += 1;
+          }
           let child;
           while (child = node3.nodes[node3.indexes[iterator]]) {
-            node3.indexes[iterator] += 1;
             if (!child[isClean]) {
               child[isClean] = true;
+              visit.descending = true;
               stack.push(toStack(child));
               return;
             }
+            node3.indexes[iterator] += 1;
           }
           visit.iterator = 0;
           delete node3.indexes[iterator];
@@ -109865,20 +110092,53 @@ var require_lazy_result = __commonJS({
       }
       walkSync(node3) {
         node3[isClean] = true;
-        let events2 = getEvents(node3);
-        for (let event of events2) {
-          if (event === CHILDREN) {
-            if (node3.nodes) {
-              node3.each((child) => {
-                if (!child[isClean]) this.walkSync(child);
-              });
+        let stack = [{ eventIndex: 0, events: getEvents(node3), iterator: 0, node: node3 }];
+        while (stack.length > 0) {
+          let visit = stack[stack.length - 1];
+          let visitNode = visit.node;
+          if (visit.iterator !== 0) {
+            let iterator = visit.iterator;
+            if (visit.descending) {
+              visit.descending = false;
+              visitNode.indexes[iterator] += 1;
             }
-          } else {
-            let visitors = this.listeners[event];
-            if (visitors) {
-              if (this.visitSync(visitors, node3.toProxy())) return;
+            let child;
+            let descended = false;
+            while (child = visitNode.nodes[visitNode.indexes[iterator]]) {
+              if (!child[isClean]) {
+                child[isClean] = true;
+                visit.descending = true;
+                stack.push({
+                  eventIndex: 0,
+                  events: getEvents(child),
+                  iterator: 0,
+                  node: child
+                });
+                descended = true;
+                break;
+              }
+              visitNode.indexes[iterator] += 1;
             }
+            if (descended) continue;
+            visit.iterator = 0;
+            delete visitNode.indexes[iterator];
           }
+          if (visit.eventIndex < visit.events.length) {
+            let event = visit.events[visit.eventIndex];
+            visit.eventIndex += 1;
+            if (event === CHILDREN) {
+              if (visitNode.nodes && visitNode.nodes.length) {
+                visit.iterator = visitNode.getIterator();
+              }
+            } else {
+              let visitors = this.listeners[event];
+              if (visitors) {
+                if (this.visitSync(visitors, visitNode.toProxy())) stack.pop();
+              }
+            }
+            continue;
+          }
+          stack.pop();
         }
       }
       warnings() {
@@ -110020,7 +110280,7 @@ var require_processor = __commonJS({
     var Root2 = require_root();
     var Processor2 = class {
       constructor(plugins2 = []) {
-        this.version = "8.5.14";
+        this.version = "8.5.26";
         this.plugins = this.normalize(plugins2);
       }
       normalize(plugins2) {
@@ -110217,9 +110477,9 @@ var init_postcss = __esm({
   }
 });
 
-// node_modules/vite/dist/node/chunks/dep-lpEPC2f9.js
-var dep_lpEPC2f9_exports = {};
-__export(dep_lpEPC2f9_exports, {
+// node_modules/vite/dist/node/chunks/dep-DDtvSN7_.js
+var dep_DDtvSN7_exports = {};
+__export(dep_DDtvSN7_exports, {
   i: () => index$12
 });
 function _mergeNamespaces3(n5, m5) {
@@ -111443,9 +111703,9 @@ function makePlugin(opts) {
   };
 }
 var import_fs5, import_path8, import_crypto, import_util2, build2, fs3, fileSystem, pluginFactory, unquote$1, reg, Parser$1, matchValueName, replaceValueSymbols$2, replaceValueSymbols_1, replaceValueSymbols$1, replaceSymbols$1, replaceSymbols_1, importPattern, balancedQuotes, getDeclsObject, extractICSS$2, extractICSS_1, createImports, createExports, createICSSRules$1, createICSSRules_1, replaceValueSymbols, replaceSymbols, extractICSS$1, createICSSRules, src$4, _icssUtils, importRegexp, Parser2, saveJSON$1, _fs$2, localsConvention, symbolTag, reAsciiWord, reLatin, rsAstralRange, rsComboMarksRange, rsComboSymbolsRange, rsDingbatRange, rsLowerRange, rsMathOpRange, rsNonCharRange, rsPunctuationRange, rsSpaceRange, rsUpperRange, rsVarRange, rsBreakRange, rsApos, rsAstral, rsBreak, rsCombo, rsDigits, rsDingbat, rsLower, rsMisc, rsFitz, rsModifier, rsNonAstral, rsRegional, rsSurrPair, rsUpper, rsZWJ, rsLowerMisc, rsUpperMisc, rsOptLowerContr, rsOptUpperContr, reOptMod, rsOptVar, rsOptJoin, rsSeq, rsEmoji, rsSymbol, reApos, reComboMark, reUnicode, reUnicodeWord, reHasUnicode, reHasUnicodeWord, deburredLetters, freeGlobal, freeSelf, root$2, deburrLetter, objectProto, objectToString, Symbol$1, symbolProto, symbolToString, camelCase, upperFirst, lodash_camelcase, _lodash, FileSystemLoader$1, _postcss$1, _path, _Parser$1, _fs$1, Core, traceKeySorter, FileSystemLoader, scoping, src$3, PERMANENT_MARKER, TEMPORARY_MARKER, topologicalSort_1, topologicalSort, matchImports$1, icssImport, VISITED_MARKER, srcExports$2, wasmHash, hasRequiredWasmHash, xxhash64_1, hasRequiredXxhash64, BatchedHash_1, hasRequiredBatchedHash, md4_1, hasRequiredMd4, BulkUpdateDecorator_1, hasRequiredBulkUpdateDecorator, baseEncodeTables, crypto2, createXXHash64, createMd4, BatchedHash, BulkUpdateDecorator, getHashDigest_1, path$12, getHashDigest, interpolateName_1, interpolateName, path5, genericNames, src$2, dist, processor, parser, root$1, container, node$1, util, unesc, unescExports, getProp, getPropExports, ensureObject, ensureObjectExports, stripComments, stripCommentsExports, _unesc, _getProp, _ensureObject, _stripComments, nodeExports, types, TAG, STRING, SELECTOR, ROOT, PSEUDO, NESTING, ID, COMMENT, COMBINATOR, CLASS, ATTRIBUTE, UNIVERSAL, containerExports, rootExports, selector$1, selectorExports, className$1, object, hasOwnProperty$1, merge, regexAnySingleEscape, regexSingleEscape, regexExcessiveSpaces, cssesc, cssesc_1, classNameExports, comment$2, commentExports, id$1, idExports, tag$1, namespace, namespaceExports, tagExports, string$1, stringExports, pseudo$1, pseudoExports, attribute$1, node, universal$1, universalExports, combinator$2, combinatorExports, nesting$1, nestingExports, sortAscending, sortAscendingExports, tokenize, tokenTypes, ampersand, asterisk, at3, comma4, colon2, semicolon2, openParenthesis, closeParenthesis, openSquare, closeSquare, dollar, tilde, caret, plus2, equals, pipe, greaterThan, space, singleQuote2, doubleQuote2, slash3, bang, backslash2, cr2, feed, newline, tab, str, comment$1, word, combinator$1, parserExports, processorExports, selectors, constructors, _attribute, _className, _combinator, _comment, _id, _nesting, _pseudo, _root, _selector, _string, _tag, _universal, attribute, className, combinator, comment2, id, nesting, pseudo, root2, selector, string, tag, universal, guards, _types, _IS_TYPE, IS_TYPE, isAttribute, isClassName, isCombinator, isComment, isIdentifier, isNesting, isPseudo, isRoot2, isSelector, isString, isTag, isUniversal, distExports, selectorParser$1, valueParser2, extractICSS, IGNORE_FILE_MARKER, IGNORE_NEXT_LINE_MARKER, isSpacing, isPureCheckDisabled, isPureSelectorSymbol, specialKeywords, validIdent, animationKeywords, isPureSelector, isNodeWithoutDeclarations, srcExports$1, selectorParser, hasOwnProperty, whitespace, unescapeRegExp, plugin2, src$1, stringHash, src, ICSSUtils, matchImports, matchValueDefinition, matchImport, srcExports, _postcssModulesExtractImports, _genericNames, _postcssModulesLocalByDefault, _postcssModulesScope, _stringHash, _postcssModulesValues, behaviours, _postcss, _unquote, _Parser, _saveJSON, _localsConvention, _FileSystemLoader, _scoping, PLUGIN_NAME, _fs, _fs2, _pluginFactory, postcss2, buildExports, index2, index$12;
-var init_dep_lpEPC2f9 = __esm({
-  "node_modules/vite/dist/node/chunks/dep-lpEPC2f9.js"() {
-    init_dep_Dq2t6Dq0();
+var init_dep_DDtvSN7 = __esm({
+  "node_modules/vite/dist/node/chunks/dep-DDtvSN7_.js"() {
+    init_dep_Dm0c1Wj2();
     import_fs5 = __toESM(require("fs"), 1);
     init_postcss();
     import_path8 = __toESM(require("path"), 1);
@@ -117138,7 +117398,7 @@ var init_false = __esm({
   }
 });
 
-// node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js
+// node_modules/vite/dist/node/chunks/dep-Dm0c1Wj2.js
 function getDefaultExportFromCjs2(x2) {
   return x2 && x2.__esModule && Object.prototype.hasOwnProperty.call(x2, "default") ? x2["default"] : x2;
 }
@@ -120617,7 +120877,7 @@ function processSrcSetSync(srcs, replacer) {
   );
 }
 function escapeToLinuxLikePath(path22) {
-  if (windowsDriveRE.test(path22)) {
+  if (windowsDriveRE$1.test(path22)) {
     return path22.replace(replaceWindowsDriveRE, "/windows/$1/");
   }
   if (linuxAbsolutePathRE.test(path22)) {
@@ -128250,19 +128510,107 @@ function parseInternal(string3, env4, opts) {
     return typeof arg === "undefined" ? prev : prev.concat(arg);
   }, []);
 }
+function getEditorFromMacProcesses(output) {
+  const processNames = Object.keys(COMMON_EDITORS_MACOS);
+  const processList = output.split("\n");
+  for (let i5 = 0; i5 < processNames.length; i5++) {
+    const processName = processNames[i5];
+    if (processList.includes(processName)) {
+      return COMMON_EDITORS_MACOS[processName];
+    }
+    const processNameWithoutApplications = processName.replace("/Applications", "");
+    if (output.indexOf(processNameWithoutApplications) !== -1) {
+      if (processName !== COMMON_EDITORS_MACOS[processName]) {
+        return COMMON_EDITORS_MACOS[processName];
+      }
+      const runningProcess = processList.find(
+        (procName) => procName.endsWith(processNameWithoutApplications)
+      );
+      if (runningProcess !== void 0) {
+        return runningProcess;
+      }
+    }
+  }
+  return void 0;
+}
+function getEditorFromWindowsProcesses(output) {
+  const runningProcesses = output.split("\r\n");
+  for (let i5 = 0; i5 < runningProcesses.length; i5++) {
+    const fullProcessPath = runningProcesses[i5].trim();
+    const shortProcessName = path$6.win32.basename(fullProcessPath);
+    if (COMMON_EDITORS_WIN.indexOf(shortProcessName) !== -1) {
+      return fullProcessPath;
+    }
+  }
+  return void 0;
+}
+function getEditorFromLinuxProcesses(output) {
+  const processNames = Object.keys(COMMON_EDITORS_LINUX);
+  for (let i5 = 0; i5 < processNames.length; i5++) {
+    const processName = processNames[i5];
+    if (output.indexOf(processName) !== -1) {
+      return COMMON_EDITORS_LINUX[processName];
+    }
+  }
+  return void 0;
+}
+function guessEditor$1(specifiedEditor) {
+  if (specifiedEditor) {
+    return shellQuote.parse(specifiedEditor);
+  }
+  if (process.env.LAUNCH_EDITOR) {
+    return [process.env.LAUNCH_EDITOR];
+  }
+  if (process.versions.webcontainer) {
+    return [process.env.EDITOR || "code"];
+  }
+  try {
+    if (process.platform === "darwin") {
+      const output = childProcess$1.execSync("ps x -o comm=", {
+        stdio: ["pipe", "pipe", "ignore"]
+      }).toString();
+      const editor = getEditorFromMacProcesses(output);
+      if (editor !== void 0) {
+        return [editor];
+      }
+    } else if (process.platform === "win32") {
+      const output = childProcess$1.execSync(
+        'powershell -NoProfile -Command "[Console]::OutputEncoding=[Text.Encoding]::UTF8;Get-CimInstance -Query \\"select executablepath from win32_process where executablepath is not null\\" | % { $_.ExecutablePath }"',
+        {
+          stdio: ["pipe", "pipe", "ignore"]
+        }
+      ).toString();
+      const editor = getEditorFromWindowsProcesses(output);
+      if (editor !== void 0) {
+        return [editor];
+      }
+    } else if (process.platform === "linux") {
+      const output = childProcess$1.execSync("ps x --no-heading -o comm --sort=comm", {
+        stdio: ["pipe", "pipe", "ignore"]
+      }).toString();
+      const editor = getEditorFromLinuxProcesses(output);
+      if (editor !== void 0) {
+        return [editor];
+      }
+    }
+  } catch (ignoreError) {
+  }
+  if (process.env.VISUAL) {
+    return [process.env.VISUAL];
+  } else if (process.env.EDITOR) {
+    return [process.env.EDITOR];
+  }
+  return [null];
+}
 function wrapErrorCallback(cb) {
   return (fileName, errorMessage) => {
     console.log();
-    console.log(
-      colors.red("Could not open " + path$4.basename(fileName) + " in the editor.")
-    );
+    console.log(colors.red("Could not open " + path$4.basename(fileName) + " in the editor."));
     if (errorMessage) {
       if (errorMessage[errorMessage.length - 1] !== ".") {
         errorMessage += ".";
       }
-      console.log(
-        colors.red("The editor process exited with an error: " + errorMessage)
-      );
+      console.log(colors.red("The editor process exited with an error: " + errorMessage));
     }
     console.log();
     if (cb) cb(fileName, errorMessage);
@@ -128295,6 +128643,12 @@ function launchEditor(file, specifiedEditor, onErrorCallback) {
   const parsed = parseFile(file);
   let { fileName } = parsed;
   const { lineNumber, columnNumber } = parsed;
+  if (process.platform === "win32" && path$4.resolve(fileName).startsWith("\\\\")) {
+    return onErrorCallback(
+      fileName,
+      "UNC paths are not supported on Windows to avoid security issues. See https://github.com/vitejs/launch-editor/tree/main/packages/launch-editor#unc-paths-on-windows for details."
+    );
+  }
   if (!fs$1.existsSync(fileName)) {
     return;
   }
@@ -128303,7 +128657,7 @@ function launchEditor(file, specifiedEditor, onErrorCallback) {
     specifiedEditor = void 0;
   }
   onErrorCallback = wrapErrorCallback(onErrorCallback);
-  const [editor, ...args] = guessEditor2(specifiedEditor);
+  const [editor, ...args] = guessEditor(specifiedEditor);
   if (!editor) {
     onErrorCallback(fileName, null);
     return;
@@ -128317,8 +128671,8 @@ function launchEditor(file, specifiedEditor, onErrorCallback) {
   } else {
     args.push(fileName);
   }
-  if (_childProcess && isTerminalEditor(editor)) {
-    _childProcess.kill("SIGKILL");
+  if (currentChildProcess && isTerminalEditor(editor)) {
+    currentChildProcess.kill("SIGKILL");
   }
   if (process.platform === "win32") {
     let escapeCmdArgs = function(cmdArgs) {
@@ -128332,20 +128686,20 @@ function launchEditor(file, specifiedEditor, onErrorCallback) {
       return str2;
     };
     const launchCommand = [editor, ...args.map(escapeCmdArgs)].map(doubleQuoteIfNeeded).join(" ");
-    _childProcess = childProcess.exec(launchCommand, {
+    currentChildProcess = childProcess.exec(launchCommand, {
       stdio: "inherit",
       shell: true
     });
   } else {
-    _childProcess = childProcess.spawn(editor, args, { stdio: "inherit" });
+    currentChildProcess = childProcess.spawn(editor, args, { stdio: "inherit" });
   }
-  _childProcess.on("exit", function(errorCode) {
-    _childProcess = null;
+  currentChildProcess.on("exit", function(errorCode) {
+    currentChildProcess = null;
     if (errorCode) {
       onErrorCallback(fileName, "(code " + errorCode + ")");
     }
   });
-  _childProcess.on("error", function(error3) {
+  currentChildProcess.on("error", function(error3) {
     let { code, message } = error3;
     if ("ENOENT" === code) {
       message = `${message} ('${editor}' command does not exist in 'PATH')`;
@@ -131563,6 +131917,14 @@ function isUriInFilePath(uri, filePath) {
 function isFileLoadingAllowed(config2, filePath) {
   const { fs: fs6 } = config2.server;
   if (!fs6.strict) return true;
+  if (isWindows$3 && filePath.includes("~")) {
+    return false;
+  }
+  const hasDriveLetter = isWindows$3 && windowsDriveRE.test(filePath);
+  const hasColon = (hasDriveLetter ? filePath.slice(2) : filePath).includes(":");
+  if (hasColon) {
+    return false;
+  }
   const filePathWithoutTrailingSlash = filePath.endsWith("/") ? filePath.slice(0, -1) : filePath;
   if (config2.fsDenyGlob(filePathWithoutTrailingSlash)) return false;
   if (config2.safeModulePaths.has(filePath)) return true;
@@ -142115,9 +142477,9 @@ function optimizeDepsDisabledBackwardCompatibility(resolved, optimizeDeps2, opti
     }
   }
 }
-var fs$8, import_node_fs4, import_node_path9, import_promises, import_node_url4, import_node_util2, import_node_perf_hooks2, import_node_module4, import_node_crypto2, import_picomatch2, import_esbuild3, import_path9, import_fs6, import_node_child_process, import_node_http, import_node_https, import_tty, import_util3, import_net, import_events2, import_url3, import_http, import_stream2, import_os3, import_child_process, import_node_os5, import_node_net2, import_node_dns, import_node_buffer, import_module3, import_node_readline, import_node_process4, import_node_events, import_crypto2, import_node_assert, import_node_v8, import_node_worker_threads, import_https, import_tls, import_zlib, import_buffer, import_assert, qs, import_node_zlib, import_node_module5, import_meta8, __require3, commonjsGlobal, picocolors2, p3, argv, env$1, isColorSupported, formatter, replaceClose, createColors, picocolorsExports2, colors$1, VALID_ID_PREFIX2, NULL_BYTE_PLACEHOLDER2, SOURCEMAPPING_URL3, MODULE_RUNNER_SOURCEMAPPING_SOURCE, ERR_OUTDATED_OPTIMIZED_DEP2, isWindows$3, windowsSlashRE2, postfixRE2, WalkerBase$1, SyncWalker$1, extractors2, extractAssignedNames3, blockDeclarations, Scope2, attachScopes, normalizePathRegExp2, normalizePath$5, createFilter$2, reservedWords2, builtins2, forbiddenIdentifiers2, makeLegalIdentifier, hasStringIsWellFormed, dataToEsm, path$a, commondir2, getCommonDir, comma5, semicolon3, chars$12, intToChar3, charToInt3, bufLength2, td2, StringWriter2, StringReader3, BitSet2, Chunk3, btoa$1, SourceMap$1, toString$1, wordRegex2, Mappings2, n$1, warned2, MagicString2, version$2, peerDependencies, firstpassGlobal, firstpassNoGlobal, getVirtualPathForDynamicRequirePath, FAILED_REQUIRE_ERROR, COMMONJS_REQUIRE_EXPORT, CREATE_COMMONJS_REQUIRE_EXPORT, isWrappedId, wrapId, unwrapId2, PROXY_SUFFIX, WRAPPED_SUFFIX, EXTERNAL_SUFFIX, EXPORTS_SUFFIX, MODULE_SUFFIX, ENTRY_SUFFIX, ES_IMPORT_SUFFIX, DYNAMIC_MODULES_ID, HELPERS_ID, IS_WRAPPED_COMMONJS, HELPERS, operators, KEY_COMPILED_ESM, reservedMethod, exportsPattern, functionType, PLUGIN_NAME2, schemeRegex, urlRegex, fileRegex, COLUMN$1, SOURCES_INDEX$1, SOURCE_LINE$1, SOURCE_COLUMN$1, NAMES_INDEX$1, found2, LINE_GTR_ZERO2, COL_GTR_EQ_ZERO2, LEAST_UPPER_BOUND2, GREATEST_LOWER_BOUND2, TraceMap, SetArray, COLUMN2, SOURCES_INDEX2, SOURCE_LINE2, SOURCE_COLUMN2, NAMES_INDEX2, NO_NAME, GenMapping, maybeAddSegment, SOURCELESS_MAPPING, EMPTY_SOURCES, SourceMap3, node$12, ms$1, hasRequiredMs, common$4, hasRequiredCommon, nodeExports$1, debug$j, pnp, createFilter$12, replaceSlashOrColonRE, replaceDotRE, replaceNestedIdRE, replaceHashRE, flattenId, FLATTEN_ID_HASH_LENGTH, FLATTEN_ID_MAX_FILE_LENGTH, limitFlattenIdLength, normalizeId, NODE_BUILTIN_NAMESPACE, NPM_BUILTIN_NAMESPACE, BUN_BUILTIN_NAMESPACE, nodeBuiltins2, isBuiltinCache, nodeLikeBuiltins, bareImportRE, deepImportRE, _require$1, _dirname, rollupVersion, filter, DEBUG, urlCanParse, isCaseInsensitiveFS, VOLUME_RE, externalRE, isExternalUrl, dataUrlRE, isDataUrl, virtualModuleRE, virtualModulePrefix, knownJsSrcRE, isJSRequest, importQueryRE, directRequestRE$1, internalPrefixes, InternalPrefixRE, trailingSeparatorRE, isImportRequest, isInternalRequest, urlRE$1, rawRE$1, timestampRE, splitRE, range, splitFirstDirRE, ERR_SYMLINK_IN_RECURSIVE_READDIR, safeRealpathSync, windowsNetworkMap, parseNetUseRE, firstSafeRealPathSyncRun, imageCandidateRegex, escapedSpaceCharacters, windowsDriveRE, replaceWindowsDriveRE, linuxAbsolutePathRE, revertWindowsDriveRE, nullSourceMap, multilineCommentsRE, singlelineCommentsRE, requestQuerySplitRE, requestQueryMaybeEscapedSplitRE, blankReplacer, hash$1, requireResolveFromRootWithFallback, windowsDrivePathPrefixRE, isNonDriveRelativeAbsolutePath, escapeRegexRE, sigtermCallbacks, parentSigtermCallback, setupSIGTERMListener, teardownSIGTERMListener, LogLevels, lastType, lastMsg, sameCount, timeFormatter, groups, COMPRESSIBLE_ASSETS_RE, POSIX_SEP_RE, NATIVE_SEP_RE, PATTERN_REGEX_CACHE, GLOB_ALL_PATTERN, TS_EXTENSIONS, JS_EXTENSIONS, TSJS_EXTENSIONS, TS_EXTENSIONS_RE_GROUP, TSJS_EXTENSIONS_RE_GROUP, IS_POSIX, isInNodeModules, posix2native, native2posix, resolve2posix, singleComment, multiComment, not_found_result, EXTENDABLE_KEYS, REBASE_KEYS, TSConfckParseError, DEFAULT_JSCONFIG_COMPILER_OPTIONS, TSConfckCache, debug$i, IIFE_BEGIN_RE, validExtensionRE, jsxExtensionsRE, defaultEsbuildSupported, rollupToEsbuildFormatMap, buildEsbuildPlugin, globalTSConfckCache, tsconfckCacheMap, AsyncFunction2, codeToDataUrl, viteSsrDynamicImport, Worker2, importRe, internalImportName, FakeWorker, WorkerWithFallback, terserPath, loadTerserPath, mimes, publicFilesMap, assetUrlRE, jsSourceMapRE, noInlineRE, inlineRE$3, svgExtRE, assetCache, cssEntriesMap, publicAssetUrlCache, publicAssetUrlRE, GIT_LFS_PREFIX, nestedQuotesRE, endsWithJSRE, dataUriRE, base64RE, dataUriPrefix, ImportType, A2, C3, E3, init, convertSourceMap$1, convertSourceMap, debug$h, virtualSourceRE, src$12, path$9, fs$7, os$2, url$4, fsReadFileAsync, jsonLoader, requireFunc, defaultLoadersSync, dynamicImport, defaultLoaders, makeEmplace, createRequire3, fileURLToPath4, pathToFileURL, TS_EXT_RE, tsx, jiti, importError, req_1, req$2, options_1, req$1, plugins_1, resolve7, config$1, loadOptions, loadPlugins, req, interopRequireDefault, yaml, withLoaders, src2, postcssrc, jsonExtRE, jsonObjRE, jsonLangs, jsonLangRE, isJSONRequest, HASH_RE, AMPERSAND_RE, SLASH_RE, EQUAL_RE, PLUS_RE, ENC_CARET_RE, ENC_BACKTICK_RE, ENC_PIPE_RE, ENC_SPACE_RE, own$1, classRegExp, kTypes, messages, nodeInternalPrefix, userStackTraceLimit, captureLargerStackTrace, ESM_STATIC_IMPORT_RE, TYPE_RE, ESM_RE, COMMENT_RE, externalWithConversionNamespace, convertedExternalPrefix, cjsExternalFacadeNamespace, nonFacadePrefix, externalTypes, matchesEntireLine, environmentColors, PartialEnvironment, BaseEnvironment, HashbangComment, Identifier3, JSXIdentifier2, JSXPunctuator, JSXString, JSXText2, KeywordsWithExpressionAfter, KeywordsWithNoLineTerminatorAfter, LineTerminatorSequence, MultiLineComment, Newline, NumericLiteral, Punctuator, RegularExpressionLiteral, SingleLineComment, StringLiteral, Template, TokensNotPrecedingObjectLiteral, TokensPrecedingExpression, WhiteSpace, jsTokens_1, jsTokens, importGlobRE, objectKeysRE, objectValuesRE, knownOptions, forceDefaultAs, importPrefix, basename4, dirname5, relative4, ScanEnvironment, debug$g, htmlTypesRE, importsRE, scriptRE, commentRE$1, srcRE, typeRE, langRE, svelteScriptModuleRE, svelteModuleRE, debug$f, jsExtensionRE, jsMapExtensionRE, firstLoadCachedDepOptimizationMetadata, lockfileFormats, lockfilePaths, MAX_TEMP_DIR_AGE_MS, GRACEFUL_RENAME_TIMEOUT, safeRename, debug$e, isExternalCache, normalizedClientEntry$1, normalizedEnvEntry$1, ERR_RESOLVE_PACKAGE_ENTRY_FAIL, browserExternalId, optionalPeerDepId, subpathImportsPrefix, startsWithWordCharRE, debug$d, knownTsOutputRE, isPossibleTsOutput, debug$c, main, version$1, require$$4, fs$6, path$8, os$1, crypto$1, packageJson, version5, LINE, DotenvModule, parse_1$22, expand_1$1, debug$b, docsURL, deprecationCode, deprecationMessages, _ignoreDeprecationWarnings, node2, debug$a, s4, m4, h3, d3, y2, ms, debugExports, nodeExports2, encodeurl, ENCODE_CHARS_REGEXP, UNMATCHED_SURROGATE_PAIR_REGEXP, UNMATCHED_SURROGATE_PAIR_REPLACE, matchHtmlRegExp, escapeHtml_1, escapeHtml$2, onFinished$2, eeFirst, first, defer$2, onFinishedExports, parseurl$1, url$3, parse$a, Url, parseurlExports, require$$0$13, codes, statuses$1, unpipe_1, debug$9, encodeUrl, escapeHtml, onFinished, parseUrl$2, statuses, unpipe, DOUBLE_SPACE_REGEXP, NEWLINE_REGEXP, defer$1, isFinished, finalhandler_1, utilsMerge, utilsMergeExports, debug$8, EventEmitter$3, finalhandler, http$4, merge3, parseUrl$1, connect, env3, proto, defer, connect$1, lib2, getOwnPropertySymbols, hasOwnProperty2, propIsEnumerable, objectAssign, vary$1, FIELD_NAME_REGEXP, varyExports, libExports, corsMiddleware, chokidar2, fs$5, Readable, sysPath$3, promisify$3, picomatch$12, readdir$1, stat$3, lstat$2, realpath$1, BANG$2, RECURSIVE_ERROR_CODE, NORMAL_FLOW_ERRORS, FILE_TYPE, DIR_TYPE, FILE_DIR_TYPE, EVERYTHING_TYPE, ALL_TYPES, isNormalFlowError, maj, min, wantBigintFsStats, normalizeFilter$1, ReaddirpStream, readdirp$1, readdirpPromise, readdirp_12, anymatch$2, normalizePath$2, anymatch_12, picomatch4, normalizePath$1, BANG$1, DEFAULT_OPTIONS, arrify$1, createPattern, matchPatterns, anymatch$1, anymatchExports, isExtglob$1, isExtglob3, chars3, strictCheck, relaxedCheck, isGlob$2, isGlob$1, pathPosixDirname, isWin32, slash4, backslash3, enclosure, globby, escaped, globParent$1, utils$3, utils$22, stringify$4, isNumber$2, isNumber$1, toRegexRange$1, toRegexRange_12, util2, toRegexRange, isObject2, transform3, isValidValue, isNumber3, zeros, stringify$3, pad, toMaxLen, toSequence, toRange, toRegex, rangeError, invalidRange, invalidStep, fillNumbers, fillLetters, fill$2, fillRange2, fill$1, utils$12, compile$1, compile_12, fill, stringify$2, utils3, append, expand$1, expand_12, constants$22, stringify$12, MAX_LENGTH, CHAR_BACKSLASH, CHAR_BACKTICK, CHAR_COMMA, CHAR_DOT, CHAR_LEFT_PARENTHESES, CHAR_RIGHT_PARENTHESES, CHAR_LEFT_CURLY_BRACE, CHAR_RIGHT_CURLY_BRACE, CHAR_LEFT_SQUARE_BRACKET, CHAR_RIGHT_SQUARE_BRACKET, CHAR_DOUBLE_QUOTE, CHAR_SINGLE_QUOTE, CHAR_NO_BREAK_SPACE, CHAR_ZERO_WIDTH_NOBREAK_SPACE, parse$8, parse_1$12, stringify5, compile, expand, parse$7, braces$1, braces_12, require$$03, binaryExtensions$1, path$7, binaryExtensions2, extensions, isBinaryPath$1, constants$12, fs$4, sysPath$2, promisify$2, isBinaryPath2, isWindows$2, isLinux, EMPTY_FN$2, EMPTY_STR$1, KEY_LISTENERS, KEY_ERR, KEY_RAW, HANDLER_KEYS, EV_CHANGE$2, EV_ADD$2, EV_ADD_DIR$2, EV_ERROR$2, STR_DATA$1, STR_END$2, BRACE_START$1, STAR, THROTTLE_MODE_WATCH, open$1, stat$2, lstat$1, close, fsrealpath, statMethods$1, foreach, addAndConvert, clearItem, delFromSet, isEmptySet, FsWatchInstances, fsWatchBroadcast, setFsWatchListener, FsWatchFileInstances, setFsWatchFileListener, NodeFsHandler$1, nodefsHandler2, fseventsHandler2, fs$3, sysPath$1, promisify$1, fsevents, EV_ADD$1, EV_CHANGE$1, EV_ADD_DIR$1, EV_UNLINK$1, EV_ERROR$1, STR_DATA, STR_END$1, FSEVENT_CREATED, FSEVENT_MODIFIED, FSEVENT_DELETED, FSEVENT_MOVED, FSEVENT_UNKNOWN, FSEVENT_FLAG_MUST_SCAN_SUBDIRS, FSEVENT_TYPE_FILE, FSEVENT_TYPE_DIRECTORY, FSEVENT_TYPE_SYMLINK, ROOT_GLOBSTAR, DIR_SUFFIX, DOT_SLASH, FUNCTION_TYPE$1, EMPTY_FN$1, IDENTITY_FN, Depth, stat$1, lstat, realpath2, statMethods, FSEventsWatchers, consolidateThreshhold, wrongEventFlags, createFSEventsInstance, couldConsolidate, canUse, calcDepth, sameTypes, FsEventsHandler$1, fseventsHandlerExports, EventEmitter$2, fs$2, sysPath, promisify, readdirp, anymatch2, globParent3, isGlob3, braces, normalizePath6, NodeFsHandler2, FsEventsHandler2, EV_ALL, EV_READY, EV_ADD, EV_CHANGE, EV_UNLINK, EV_ADD_DIR, EV_UNLINK_DIR, EV_RAW, EV_ERROR, STR_CLOSE, STR_END, BACK_SLASH_RE, DOUBLE_SLASH_RE, SLASH_OR_BACK_SLASH_RE, DOT_RE, REPLACER_RE, SLASH, SLASH_SLASH, BRACE_START, BANG, ONE_DOT, TWO_DOTS, GLOBSTAR, SLASH_GLOBSTAR, ANYMATCH_OPTS, STRING_TYPE, FUNCTION_TYPE, EMPTY_STR, EMPTY_FN, isWindows$1, isMacos, isIBMi, stat2, readdir2, arrify, flatten, unifyPaths, toUnix, normalizePathToUnix, normalizeIgnored, getAbsolutePath, undef, DirEntry, STAT_METHOD_F, STAT_METHOD_L, WatchHelper, FSWatcher, watch2, shellQuote$1, quote, CONTROL, controlRE, META, SINGLE_QUOTE, DOUBLE_QUOTE, hash2, SQ, DQ, DS, TOKEN, mult, i5, startsWithToken, parse$6, macos, linux, windows$1, path$6, shellQuote, childProcess$1, COMMON_EDITORS_MACOS, COMMON_EDITORS_LINUX, COMMON_EDITORS_WIN, guess, path$5, getArgs, fs$1, os2, path$4, colors, childProcess, guessEditor2, getArgumentsForPosition2, positionRE, _childProcess, launchEditor_1, url$2, path$3, launch, launchEditorMiddleware, launchEditorMiddleware$1, offset, rewroteStacktraces, prepareStackTrace2, createServerModuleRunnerTransport, SSRCompatModuleRunner, WalkerBase2, SyncWalker2, ssrModuleExportsKey2, ssrImportKey2, ssrDynamicImportKey2, ssrExportAllKey2, ssrImportMetaKey2, hashbangRE, isNodeInPatternWeakSet, setIsNodeInPattern, isNodeInPattern, isStaticProperty, isStaticPropertyKey, functionNodeTypeRE, blockNodeTypeRE, isDockerCached, cachedResult, hasContainerEnv, isWsl, isWsl$1, execFileAsync$3, execFileAsync$2, execFileAsync$1, windowsBrowserProgIds, UnknownBrowserError, execFileAsync, titleize, __dirname2, localXdgOpenPath, platform2, arch, getWslDrivesMountPoint, pTryEach, baseOpen, open, apps, crossSpawn, windows, hasRequiredWindows, mode, hasRequiredMode, core, isexe_1, isWindows2, path$22, COLON, isexe, getNotFoundError, getPathInfo, which$1, whichSync, which_1, pathKey$1, pathKey, pathKeyExports, path$13, which, getPathKey, resolveCommand_1, _escape, metaCharsRegExp, shebangRegex$1, shebangRegex, shebangCommand$1, fs4, shebangCommand, readShebang_1, path6, resolveCommand, escape$1, readShebang, isWin$1, isExecutableRegExp, isCmdShimRegExp, parse_13, isWin2, enoent$1, cp, parse$4, enoent, crossSpawnExports, spawn$1, supportedChromiumBrowsers, BASE_DEV_SHORTCUTS, BASE_PREVIEW_SHORTCUTS, NoopWatcher, bufferUtil$1, BINARY_TYPES$2, hasBlob$1, constants3, EMPTY_BUFFER$3, FastBuffer$2, bufferUtilExports, kDone, kRun, Limiter$1, limiter, zlib, bufferUtil, Limiter2, kStatusCode$2, FastBuffer$1, TRAILER, kPerMessageDeflate, kTotalLength, kCallback, kBuffers, kError$1, zlibLimiter, PerMessageDeflate$4, permessageDeflate, validation, isUtf8, hasBlob, tokenChars$2, validationExports, Writable$1, PerMessageDeflate$3, BINARY_TYPES$1, EMPTY_BUFFER$2, kStatusCode$1, kWebSocket$3, concat, toArrayBuffer, unmask, isValidStatusCode$1, isValidUTF8, FastBuffer, GET_INFO, GET_PAYLOAD_LENGTH_16, GET_PAYLOAD_LENGTH_64, GET_MASK, GET_DATA, INFLATING, DEFER_EVENT, Receiver$1, receiver, randomFillSync, PerMessageDeflate$2, EMPTY_BUFFER$1, kWebSocket$2, NOOP$2, isBlob$1, isValidStatusCode, applyMask, toBuffer$1, kByteLength, maskBuffer, RANDOM_POOL_SIZE, randomPool, randomPoolPointer, DEFAULT, DEFLATING, GET_BLOB_DATA, Sender$1, sender, kForOnEventAttribute$1, kListener$1, kCode, kData, kError, kMessage, kReason, kTarget, kType, kWasClean, Event$1, CloseEvent2, ErrorEvent, MessageEvent, EventTarget, eventTarget, tokenChars$1, extension$1, EventEmitter$1, https$2, http$3, net, tls, randomBytes, createHash$1, URL$2, PerMessageDeflate$1, Receiver2, Sender2, isBlob, BINARY_TYPES, EMPTY_BUFFER, GUID$1, kForOnEventAttribute, kListener, kStatusCode, kWebSocket$1, NOOP$1, addEventListener, removeEventListener, format, parse$2, toBuffer, closeTimeout, kAborted, protocolVersions, readyStates, subprotocolRegex, WebSocket$1, websocket, tokenChars, subprotocol$1, EventEmitter, http$2, createHash, extension, PerMessageDeflate2, subprotocol, WebSocket3, GUID, kWebSocket, keyRegex, RUNNING, CLOSING, CLOSED, WebSocketServer, websocketServer, WebSocketServerRaw_, allowedHostsServerCache, allowedHostsPreviewCache, isFileOrExtensionProtocolRE, WebSocketServerRaw, HMR_HEADER, isWebSocketServer, wsServerEvents, httpProxy$3, eventemitter3, eventemitter3Exports, common$3, requiresPort, url$1, common$2, redirectRegex, webOutgoing, followRedirects$1, debug$7, debug_1, url, URL$1, http$1, https$1, Writable, assert, debug$6, useNativeURL, preservedUrlFields, events, eventHandlers, InvalidUrlError, RedirectionError, TooManyRedirectsError, MaxBodyLengthExceededError, WriteAfterEndError, destroy, followRedirectsExports, httpNative, httpsNative, web_o, common$1, followRedirects, nativeAgents, webIncoming, http, https, common, wsIncoming, httpProxyExports, ProxyServer, httpProxy$2, httpProxy, httpProxy$1, debug$5, rewriteOriginHeader, debug$4, etag_1, crypto3, Stats, toString3, getEtag, debug$3, alias, noop2, ENCODING, knownJavascriptExtensionRE, ERR_DENIED_FILE, sirvOptions, ERR_LOAD_URL, ERR_LOAD_PUBLIC_URL, ERR_DENIED_ID, debugLoad, debugTransform, debugCache$1, ALLOWED_META_NAME, ALLOWED_META_PROPERTY, DEFAULT_HTML_ASSET_SOURCES, modulePreloadPolyfillId, resolvedModulePreloadPolyfillId, htmlProxyRE$1, isHtmlProxyRE, inlineCSSRE$1, inlineImportRE, htmlLangRE, spaceRe, importMapRE, moduleScriptRE, modulePreloadLinkRE, importMapAppendRE, isHTMLProxy, isHTMLRequest, htmlProxyMap, htmlProxyResult, noInlineLinkRels, isAsyncScriptMap, attrValueStartRE, elementsAllowedInHead, importRE, commentRE, headInjectRE, headPrependInjectRE, htmlInjectRE, htmlPrependInjectRE, bodyInjectRE, bodyPrependInjectRE, doctypePrependInjectRE, unaryTags, debugCache, knownIgnoreList, trailingQuerySeparatorsRE, urlRE, rawRE, inlineRE$2, svgRE, wordCharRE, processNodeUrl, devHtmlHook, logTime, EMPTY_OBJECT$1, ModuleNode, ModuleGraph, DualWeakMap, ROOT_FILES, usedConfigs, serverConfigDefaults, debugHmr, whitespaceRE, normalizedClientDir, normalizeHotChannel, sortedHotUpdatePluginsCache, nonJsRe, isNonJsRequest, importMetaEnvMarker, importMetaEnvKeyReCache, workerOrSharedWorkerRE, workerFileRE, inlineRE$1, WORKER_FILE_ID, workerCache, workerAssetUrlRE, debug$2, clientDir, skipRE, canSkipImportAnalysis, optimizedDepChunkRE, optimizedDepDynamicRE, hasViteIgnoreRE, urlIsStringRE, templateLiteralRE, interopHelper, normalizedClientEntry, normalizedEnvEntry, wasmHelperId, wasmInitRE, wasmHelper, wasmHelperCode, wasmHelperPlugin, wasmFallbackPlugin, VariableDynamicImportError, example, defaultProtocol, ignoredProtocols, dynamicImportHelperId, relativePathRE, hasDynamicImportRE, dynamicImportHelper, filterForPlugin, viteAliasCustomResolver, EMPTY_OBJECT2, debugSourcemapCombineFilter, debugSourcemapCombine, debugResolve, debugPluginResolve, debugPluginTransform, debugPluginContainerContext, ERR_CLOSED_SERVER, EnvironmentPluginContainer, MinimalPluginContext, PluginContext, ResolveIdContext, LoadPluginContext, TransformPluginContext, PluginContainer, decoder, cssConfigDefaults, cssModuleRE, directRequestRE, htmlProxyRE, htmlProxyIndexRE, commonjsProxyRE, inlineRE, inlineCSSRE, styleAttrRE, functionCallRE, transformOnlyRE, nonEscapedDoubleQuoteRe, defaultCssBundleName, isCSSRequest, isModuleCSSRequest, isDirectCSSRequest, isDirectRequest, cssModulesCache, removedPureCssFilesCache, cssBundleNameCache, postcssConfigCache, cssUrlAssetRE, fileURLWithWindowsDriveRE, configToAtImportResolvers, importPostcssImport, importPostcssModules, importPostcss, preprocessorWorkerControllerCache, alwaysFakeWorkerWorkerControllerCache, viteHashUpdateMarker, viteHashUpdateMarkerRE, cssUrlRE, cssDataUriRE, importCssRE, cssImageSetRE, UrlRewritePostcssPlugin, cssNotProcessedRE, atImportRE, atCharsetRE, loadedPreprocessorPath, cachedSss, makeScssWorker, makeModernScssWorker, makeModernCompilerScssWorker, scssProcessor, makeLessWorker, lessProcessor, makeStylWorker, stylProcessor, createPreprocessorWorkerController, normalizeMaxWorkers, preprocessorSet, importLightningCSS, map, esMap, esRE, versionRE, convertTargetsCache, convertTargets, isModernFlag, preloadMethod, preloadMarker, preloadHelperId, preloadMarkerRE, dynamicImportPrefixRE, dynamicImportTreeshakenRE, buildEnvironmentOptionsDefaults, warningIgnoreList, dynamicImportWarningIgnoreList, normalizeLog2, needsEscapeRegEx2, quoteNewlineRegEx2, backSlashRegEx2, getResolveUrl2, getRelativeUrlFromDocument2, getFileUrlFromFullPath2, getFileUrlFromRelativePath2, relativeUrlMechanisms2, customRelativeUrlMechanisms, toOutputFilePathInCss, toOutputFilePathInHtml, BuildEnvironment, builderOptionsDefaults, build$12, OTHER_SOURCE_MAP_REGEXP, debug$1, debounceMs, EnvironmentModuleNode, EnvironmentModuleGraph, DevEnvironment, callCrawlEndIfIdleAfterMs, RunnableDevEnvironment, NOOP, MIMES, ssrConfigDefaults, debug, promisifiedRealpath, SYMBOL_RESOLVED_CONFIG, configDefaults, clientAlias, _require;
-var init_dep_Dq2t6Dq0 = __esm({
-  "node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js"() {
+var fs$8, import_node_fs4, import_node_path9, import_promises, import_node_url4, import_node_util2, import_node_perf_hooks2, import_node_module4, import_node_crypto2, import_picomatch2, import_esbuild3, import_path9, import_fs6, import_node_child_process, import_node_http, import_node_https, import_tty, import_util3, import_net, import_events2, import_url3, import_http, import_stream2, import_os3, import_child_process, import_node_os5, import_node_net2, import_node_dns, import_node_buffer, import_module3, import_node_readline, import_node_process4, import_node_events, import_crypto2, import_node_assert, import_node_v8, import_node_worker_threads, import_https, import_tls, import_zlib, import_buffer, import_assert, qs, import_node_zlib, import_node_module5, import_meta8, __require3, commonjsGlobal, picocolors2, p3, argv, env$1, isColorSupported, formatter, replaceClose, createColors, picocolorsExports2, colors$1, VALID_ID_PREFIX2, NULL_BYTE_PLACEHOLDER2, SOURCEMAPPING_URL3, MODULE_RUNNER_SOURCEMAPPING_SOURCE, ERR_OUTDATED_OPTIMIZED_DEP2, isWindows$3, windowsSlashRE2, postfixRE2, WalkerBase$1, SyncWalker$1, extractors2, extractAssignedNames3, blockDeclarations, Scope2, attachScopes, normalizePathRegExp2, normalizePath$5, createFilter$2, reservedWords2, builtins2, forbiddenIdentifiers2, makeLegalIdentifier, hasStringIsWellFormed, dataToEsm, path$a, commondir2, getCommonDir, comma5, semicolon3, chars$12, intToChar3, charToInt3, bufLength2, td2, StringWriter2, StringReader3, BitSet2, Chunk3, btoa$1, SourceMap$1, toString$1, wordRegex2, Mappings2, n$1, warned2, MagicString2, version$2, peerDependencies, firstpassGlobal, firstpassNoGlobal, getVirtualPathForDynamicRequirePath, FAILED_REQUIRE_ERROR, COMMONJS_REQUIRE_EXPORT, CREATE_COMMONJS_REQUIRE_EXPORT, isWrappedId, wrapId, unwrapId2, PROXY_SUFFIX, WRAPPED_SUFFIX, EXTERNAL_SUFFIX, EXPORTS_SUFFIX, MODULE_SUFFIX, ENTRY_SUFFIX, ES_IMPORT_SUFFIX, DYNAMIC_MODULES_ID, HELPERS_ID, IS_WRAPPED_COMMONJS, HELPERS, operators, KEY_COMPILED_ESM, reservedMethod, exportsPattern, functionType, PLUGIN_NAME2, schemeRegex, urlRegex, fileRegex, COLUMN$1, SOURCES_INDEX$1, SOURCE_LINE$1, SOURCE_COLUMN$1, NAMES_INDEX$1, found2, LINE_GTR_ZERO2, COL_GTR_EQ_ZERO2, LEAST_UPPER_BOUND2, GREATEST_LOWER_BOUND2, TraceMap, SetArray, COLUMN2, SOURCES_INDEX2, SOURCE_LINE2, SOURCE_COLUMN2, NAMES_INDEX2, NO_NAME, GenMapping, maybeAddSegment, SOURCELESS_MAPPING, EMPTY_SOURCES, SourceMap3, node$12, ms$1, hasRequiredMs, common$4, hasRequiredCommon, nodeExports$1, debug$j, pnp, createFilter$12, replaceSlashOrColonRE, replaceDotRE, replaceNestedIdRE, replaceHashRE, flattenId, FLATTEN_ID_HASH_LENGTH, FLATTEN_ID_MAX_FILE_LENGTH, limitFlattenIdLength, normalizeId, NODE_BUILTIN_NAMESPACE, NPM_BUILTIN_NAMESPACE, BUN_BUILTIN_NAMESPACE, nodeBuiltins2, isBuiltinCache, nodeLikeBuiltins, bareImportRE, deepImportRE, _require$1, _dirname, rollupVersion, filter, DEBUG, urlCanParse, isCaseInsensitiveFS, VOLUME_RE, externalRE, isExternalUrl, dataUrlRE, isDataUrl, virtualModuleRE, virtualModulePrefix, knownJsSrcRE, isJSRequest, importQueryRE, directRequestRE$1, internalPrefixes, InternalPrefixRE, trailingSeparatorRE, isImportRequest, isInternalRequest, urlRE$1, rawRE$1, timestampRE, splitRE, range, splitFirstDirRE, ERR_SYMLINK_IN_RECURSIVE_READDIR, safeRealpathSync, windowsNetworkMap, parseNetUseRE, firstSafeRealPathSyncRun, imageCandidateRegex, escapedSpaceCharacters, windowsDriveRE$1, replaceWindowsDriveRE, linuxAbsolutePathRE, revertWindowsDriveRE, nullSourceMap, multilineCommentsRE, singlelineCommentsRE, requestQuerySplitRE, requestQueryMaybeEscapedSplitRE, blankReplacer, hash$1, requireResolveFromRootWithFallback, windowsDrivePathPrefixRE, isNonDriveRelativeAbsolutePath, escapeRegexRE, sigtermCallbacks, parentSigtermCallback, setupSIGTERMListener, teardownSIGTERMListener, LogLevels, lastType, lastMsg, sameCount, timeFormatter, groups, COMPRESSIBLE_ASSETS_RE, POSIX_SEP_RE, NATIVE_SEP_RE, PATTERN_REGEX_CACHE, GLOB_ALL_PATTERN, TS_EXTENSIONS, JS_EXTENSIONS, TSJS_EXTENSIONS, TS_EXTENSIONS_RE_GROUP, TSJS_EXTENSIONS_RE_GROUP, IS_POSIX, isInNodeModules, posix2native, native2posix, resolve2posix, singleComment, multiComment, not_found_result, EXTENDABLE_KEYS, REBASE_KEYS, TSConfckParseError, DEFAULT_JSCONFIG_COMPILER_OPTIONS, TSConfckCache, debug$i, IIFE_BEGIN_RE, validExtensionRE, jsxExtensionsRE, defaultEsbuildSupported, rollupToEsbuildFormatMap, buildEsbuildPlugin, globalTSConfckCache, tsconfckCacheMap, AsyncFunction2, codeToDataUrl, viteSsrDynamicImport, Worker2, importRe, internalImportName, FakeWorker, WorkerWithFallback, terserPath, loadTerserPath, mimes, publicFilesMap, assetUrlRE, jsSourceMapRE, noInlineRE, inlineRE$3, svgExtRE, assetCache, cssEntriesMap, publicAssetUrlCache, publicAssetUrlRE, GIT_LFS_PREFIX, nestedQuotesRE, endsWithJSRE, dataUriRE, base64RE, dataUriPrefix, ImportType, A2, C3, E3, init, convertSourceMap$1, convertSourceMap, debug$h, virtualSourceRE, src$12, path$9, fs$7, os$2, url$3, fsReadFileAsync, jsonLoader, requireFunc, defaultLoadersSync, dynamicImport, defaultLoaders, makeEmplace, createRequire3, fileURLToPath4, pathToFileURL, TS_EXT_RE, tsx, jiti, importError, req_1, req$2, options_1, req$1, plugins_1, resolve7, config$1, loadOptions, loadPlugins, req, interopRequireDefault, yaml, withLoaders, src2, postcssrc, jsonExtRE, jsonObjRE, jsonLangs, jsonLangRE, isJSONRequest, HASH_RE, AMPERSAND_RE, SLASH_RE, EQUAL_RE, PLUS_RE, ENC_CARET_RE, ENC_BACKTICK_RE, ENC_PIPE_RE, ENC_SPACE_RE, own$1, classRegExp, kTypes, messages, nodeInternalPrefix, userStackTraceLimit, captureLargerStackTrace, ESM_STATIC_IMPORT_RE, TYPE_RE, ESM_RE, COMMENT_RE, externalWithConversionNamespace, convertedExternalPrefix, cjsExternalFacadeNamespace, nonFacadePrefix, externalTypes, matchesEntireLine, environmentColors, PartialEnvironment, BaseEnvironment, HashbangComment, Identifier3, JSXIdentifier2, JSXPunctuator, JSXString, JSXText2, KeywordsWithExpressionAfter, KeywordsWithNoLineTerminatorAfter, LineTerminatorSequence, MultiLineComment, Newline, NumericLiteral, Punctuator, RegularExpressionLiteral, SingleLineComment, StringLiteral, Template, TokensNotPrecedingObjectLiteral, TokensPrecedingExpression, WhiteSpace, jsTokens_1, jsTokens, importGlobRE, objectKeysRE, objectValuesRE, knownOptions, forceDefaultAs, importPrefix, basename4, dirname5, relative4, ScanEnvironment, debug$g, htmlTypesRE, importsRE, scriptRE, commentRE$1, srcRE, typeRE, langRE, svelteScriptModuleRE, svelteModuleRE, debug$f, jsExtensionRE, jsMapExtensionRE, firstLoadCachedDepOptimizationMetadata, lockfileFormats, lockfilePaths, MAX_TEMP_DIR_AGE_MS, GRACEFUL_RENAME_TIMEOUT, safeRename, debug$e, isExternalCache, normalizedClientEntry$1, normalizedEnvEntry$1, ERR_RESOLVE_PACKAGE_ENTRY_FAIL, browserExternalId, optionalPeerDepId, subpathImportsPrefix, startsWithWordCharRE, debug$d, knownTsOutputRE, isPossibleTsOutput, debug$c, main, version$1, require$$4, fs$6, path$8, os$1, crypto$1, packageJson, version5, LINE, DotenvModule, parse_1$22, expand_1$1, debug$b, docsURL, deprecationCode, deprecationMessages, _ignoreDeprecationWarnings, node2, debug$a, s4, m4, h3, d3, y2, ms, debugExports, nodeExports2, encodeurl, ENCODE_CHARS_REGEXP, UNMATCHED_SURROGATE_PAIR_REGEXP, UNMATCHED_SURROGATE_PAIR_REPLACE, matchHtmlRegExp, escapeHtml_1, escapeHtml$2, onFinished$2, eeFirst, first, defer$2, onFinishedExports, parseurl$1, url$2, parse$a, Url, parseurlExports, require$$0$13, codes, statuses$1, unpipe_1, debug$9, encodeUrl, escapeHtml, onFinished, parseUrl$2, statuses, unpipe, DOUBLE_SPACE_REGEXP, NEWLINE_REGEXP, defer$1, isFinished, finalhandler_1, utilsMerge, utilsMergeExports, debug$8, EventEmitter$3, finalhandler, http$4, merge3, parseUrl$1, connect, env3, proto, defer, connect$1, lib2, getOwnPropertySymbols, hasOwnProperty2, propIsEnumerable, objectAssign, vary$1, FIELD_NAME_REGEXP, varyExports, libExports, corsMiddleware, chokidar2, fs$5, Readable, sysPath$3, promisify$3, picomatch$12, readdir$1, stat$3, lstat$2, realpath$1, BANG$2, RECURSIVE_ERROR_CODE, NORMAL_FLOW_ERRORS, FILE_TYPE, DIR_TYPE, FILE_DIR_TYPE, EVERYTHING_TYPE, ALL_TYPES, isNormalFlowError, maj, min, wantBigintFsStats, normalizeFilter$1, ReaddirpStream, readdirp$1, readdirpPromise, readdirp_12, anymatch$2, normalizePath$2, anymatch_12, picomatch4, normalizePath$1, BANG$1, DEFAULT_OPTIONS, arrify$1, createPattern, matchPatterns, anymatch$1, anymatchExports, isExtglob$1, isExtglob3, chars3, strictCheck, relaxedCheck, isGlob$2, isGlob$1, pathPosixDirname, isWin32, slash4, backslash3, enclosure, globby, escaped, globParent$1, utils$3, utils$22, stringify$4, isNumber$2, isNumber$1, toRegexRange$1, toRegexRange_12, util2, toRegexRange, isObject2, transform3, isValidValue, isNumber3, zeros, stringify$3, pad, toMaxLen, toSequence, toRange, toRegex, rangeError, invalidRange, invalidStep, fillNumbers, fillLetters, fill$2, fillRange2, fill$1, utils$12, compile$1, compile_12, fill, stringify$2, utils3, append, expand$1, expand_12, constants$22, stringify$12, MAX_LENGTH, CHAR_BACKSLASH, CHAR_BACKTICK, CHAR_COMMA, CHAR_DOT, CHAR_LEFT_PARENTHESES, CHAR_RIGHT_PARENTHESES, CHAR_LEFT_CURLY_BRACE, CHAR_RIGHT_CURLY_BRACE, CHAR_LEFT_SQUARE_BRACKET, CHAR_RIGHT_SQUARE_BRACKET, CHAR_DOUBLE_QUOTE, CHAR_SINGLE_QUOTE, CHAR_NO_BREAK_SPACE, CHAR_ZERO_WIDTH_NOBREAK_SPACE, parse$8, parse_1$12, stringify5, compile, expand, parse$7, braces$1, braces_12, require$$03, binaryExtensions$1, path$7, binaryExtensions2, extensions, isBinaryPath$1, constants$12, fs$4, sysPath$2, promisify$2, isBinaryPath2, isWindows$2, isLinux, EMPTY_FN$2, EMPTY_STR$1, KEY_LISTENERS, KEY_ERR, KEY_RAW, HANDLER_KEYS, EV_CHANGE$2, EV_ADD$2, EV_ADD_DIR$2, EV_ERROR$2, STR_DATA$1, STR_END$2, BRACE_START$1, STAR, THROTTLE_MODE_WATCH, open$1, stat$2, lstat$1, close, fsrealpath, statMethods$1, foreach, addAndConvert, clearItem, delFromSet, isEmptySet, FsWatchInstances, fsWatchBroadcast, setFsWatchListener, FsWatchFileInstances, setFsWatchFileListener, NodeFsHandler$1, nodefsHandler2, fseventsHandler2, fs$3, sysPath$1, promisify$1, fsevents, EV_ADD$1, EV_CHANGE$1, EV_ADD_DIR$1, EV_UNLINK$1, EV_ERROR$1, STR_DATA, STR_END$1, FSEVENT_CREATED, FSEVENT_MODIFIED, FSEVENT_DELETED, FSEVENT_MOVED, FSEVENT_UNKNOWN, FSEVENT_FLAG_MUST_SCAN_SUBDIRS, FSEVENT_TYPE_FILE, FSEVENT_TYPE_DIRECTORY, FSEVENT_TYPE_SYMLINK, ROOT_GLOBSTAR, DIR_SUFFIX, DOT_SLASH, FUNCTION_TYPE$1, EMPTY_FN$1, IDENTITY_FN, Depth, stat$1, lstat, realpath2, statMethods, FSEventsWatchers, consolidateThreshhold, wrongEventFlags, createFSEventsInstance, couldConsolidate, canUse, calcDepth, sameTypes, FsEventsHandler$1, fseventsHandlerExports, EventEmitter$2, fs$2, sysPath, promisify, readdirp, anymatch2, globParent3, isGlob3, braces, normalizePath6, NodeFsHandler2, FsEventsHandler2, EV_ALL, EV_READY, EV_ADD, EV_CHANGE, EV_UNLINK, EV_ADD_DIR, EV_UNLINK_DIR, EV_RAW, EV_ERROR, STR_CLOSE, STR_END, BACK_SLASH_RE, DOUBLE_SLASH_RE, SLASH_OR_BACK_SLASH_RE, DOT_RE, REPLACER_RE, SLASH, SLASH_SLASH, BRACE_START, BANG, ONE_DOT, TWO_DOTS, GLOBSTAR, SLASH_GLOBSTAR, ANYMATCH_OPTS, STRING_TYPE, FUNCTION_TYPE, EMPTY_STR, EMPTY_FN, isWindows$1, isMacos, isIBMi, stat2, readdir2, arrify, flatten, unifyPaths, toUnix, normalizePathToUnix, normalizeIgnored, getAbsolutePath, undef, DirEntry, STAT_METHOD_F, STAT_METHOD_L, WatchHelper, FSWatcher, watch2, guess, shellQuote$1, OPS, LINE_TERMINATORS, GLOB_SHELL_SPECIAL, quote, CONTROL, controlRE, META, SINGLE_QUOTE, DOUBLE_QUOTE, hash2, SQ, DQ, DS, TOKEN, mult, i5, startsWithToken, parse$6, macos, linux, windows$1, path$6, shellQuote, childProcess$1, COMMON_EDITORS_MACOS, COMMON_EDITORS_LINUX, COMMON_EDITORS_WIN, guessExports, path$5, getArgs, fs$1, os2, path$4, colors, childProcess, guessEditor, getArgumentsForPosition2, positionRE, currentChildProcess, launchEditor_1, path$3, launch, launchEditorMiddleware, launchEditorMiddleware$1, offset, rewroteStacktraces, prepareStackTrace2, createServerModuleRunnerTransport, SSRCompatModuleRunner, WalkerBase2, SyncWalker2, ssrModuleExportsKey2, ssrImportKey2, ssrDynamicImportKey2, ssrExportAllKey2, ssrImportMetaKey2, hashbangRE, isNodeInPatternWeakSet, setIsNodeInPattern, isNodeInPattern, isStaticProperty, isStaticPropertyKey, functionNodeTypeRE, blockNodeTypeRE, isDockerCached, cachedResult, hasContainerEnv, isWsl, isWsl$1, execFileAsync$3, execFileAsync$2, execFileAsync$1, windowsBrowserProgIds, UnknownBrowserError, execFileAsync, titleize, __dirname2, localXdgOpenPath, platform2, arch, getWslDrivesMountPoint, pTryEach, baseOpen, open, apps, crossSpawn, windows, hasRequiredWindows, mode, hasRequiredMode, core, isexe_1, isWindows2, path$22, COLON, isexe, getNotFoundError, getPathInfo, which$1, whichSync, which_1, pathKey$1, pathKey, pathKeyExports, path$13, which, getPathKey, resolveCommand_1, _escape, metaCharsRegExp, shebangRegex$1, shebangRegex, shebangCommand$1, fs4, shebangCommand, readShebang_1, path6, resolveCommand, escape$1, readShebang, isWin$1, isExecutableRegExp, isCmdShimRegExp, parse_13, isWin2, enoent$1, cp, parse$4, enoent, crossSpawnExports, spawn$1, supportedChromiumBrowsers, BASE_DEV_SHORTCUTS, BASE_PREVIEW_SHORTCUTS, NoopWatcher, bufferUtil$1, BINARY_TYPES$2, hasBlob$1, constants3, EMPTY_BUFFER$3, FastBuffer$2, bufferUtilExports, kDone, kRun, Limiter$1, limiter, zlib, bufferUtil, Limiter2, kStatusCode$2, FastBuffer$1, TRAILER, kPerMessageDeflate, kTotalLength, kCallback, kBuffers, kError$1, zlibLimiter, PerMessageDeflate$4, permessageDeflate, validation, isUtf8, hasBlob, tokenChars$2, validationExports, Writable$1, PerMessageDeflate$3, BINARY_TYPES$1, EMPTY_BUFFER$2, kStatusCode$1, kWebSocket$3, concat, toArrayBuffer, unmask, isValidStatusCode$1, isValidUTF8, FastBuffer, GET_INFO, GET_PAYLOAD_LENGTH_16, GET_PAYLOAD_LENGTH_64, GET_MASK, GET_DATA, INFLATING, DEFER_EVENT, Receiver$1, receiver, randomFillSync, PerMessageDeflate$2, EMPTY_BUFFER$1, kWebSocket$2, NOOP$2, isBlob$1, isValidStatusCode, applyMask, toBuffer$1, kByteLength, maskBuffer, RANDOM_POOL_SIZE, randomPool, randomPoolPointer, DEFAULT, DEFLATING, GET_BLOB_DATA, Sender$1, sender, kForOnEventAttribute$1, kListener$1, kCode, kData, kError, kMessage, kReason, kTarget, kType, kWasClean, Event$1, CloseEvent2, ErrorEvent, MessageEvent, EventTarget, eventTarget, tokenChars$1, extension$1, EventEmitter$1, https$2, http$3, net, tls, randomBytes, createHash$1, URL$2, PerMessageDeflate$1, Receiver2, Sender2, isBlob, BINARY_TYPES, EMPTY_BUFFER, GUID$1, kForOnEventAttribute, kListener, kStatusCode, kWebSocket$1, NOOP$1, addEventListener, removeEventListener, format, parse$2, toBuffer, closeTimeout, kAborted, protocolVersions, readyStates, subprotocolRegex, WebSocket$1, websocket, tokenChars, subprotocol$1, EventEmitter, http$2, createHash, extension, PerMessageDeflate2, subprotocol, WebSocket3, GUID, kWebSocket, keyRegex, RUNNING, CLOSING, CLOSED, WebSocketServer, websocketServer, WebSocketServerRaw_, allowedHostsServerCache, allowedHostsPreviewCache, isFileOrExtensionProtocolRE, WebSocketServerRaw, HMR_HEADER, isWebSocketServer, wsServerEvents, httpProxy$3, eventemitter3, eventemitter3Exports, common$3, requiresPort, url$1, common$2, redirectRegex, webOutgoing, followRedirects$1, debug$7, debug_1, url, URL$1, http$1, https$1, Writable, assert, debug$6, useNativeURL, preservedUrlFields, events, eventHandlers, InvalidUrlError, RedirectionError, TooManyRedirectsError, MaxBodyLengthExceededError, WriteAfterEndError, destroy, followRedirectsExports, httpNative, httpsNative, web_o, common$1, followRedirects, nativeAgents, webIncoming, http, https, common, wsIncoming, httpProxyExports, ProxyServer, httpProxy$2, httpProxy, httpProxy$1, debug$5, rewriteOriginHeader, debug$4, etag_1, crypto3, Stats, toString3, getEtag, debug$3, alias, noop2, ENCODING, knownJavascriptExtensionRE, ERR_DENIED_FILE, sirvOptions, windowsDriveRE, ERR_LOAD_URL, ERR_LOAD_PUBLIC_URL, ERR_DENIED_ID, debugLoad, debugTransform, debugCache$1, ALLOWED_META_NAME, ALLOWED_META_PROPERTY, DEFAULT_HTML_ASSET_SOURCES, modulePreloadPolyfillId, resolvedModulePreloadPolyfillId, htmlProxyRE$1, isHtmlProxyRE, inlineCSSRE$1, inlineImportRE, htmlLangRE, spaceRe, importMapRE, moduleScriptRE, modulePreloadLinkRE, importMapAppendRE, isHTMLProxy, isHTMLRequest, htmlProxyMap, htmlProxyResult, noInlineLinkRels, isAsyncScriptMap, attrValueStartRE, elementsAllowedInHead, importRE, commentRE, headInjectRE, headPrependInjectRE, htmlInjectRE, htmlPrependInjectRE, bodyInjectRE, bodyPrependInjectRE, doctypePrependInjectRE, unaryTags, debugCache, knownIgnoreList, trailingQuerySeparatorsRE, urlRE, rawRE, inlineRE$2, svgRE, wordCharRE, processNodeUrl, devHtmlHook, logTime, EMPTY_OBJECT$1, ModuleNode, ModuleGraph, DualWeakMap, ROOT_FILES, usedConfigs, serverConfigDefaults, debugHmr, whitespaceRE, normalizedClientDir, normalizeHotChannel, sortedHotUpdatePluginsCache, nonJsRe, isNonJsRequest, importMetaEnvMarker, importMetaEnvKeyReCache, workerOrSharedWorkerRE, workerFileRE, inlineRE$1, WORKER_FILE_ID, workerCache, workerAssetUrlRE, debug$2, clientDir, skipRE, canSkipImportAnalysis, optimizedDepChunkRE, optimizedDepDynamicRE, hasViteIgnoreRE, urlIsStringRE, templateLiteralRE, interopHelper, normalizedClientEntry, normalizedEnvEntry, wasmHelperId, wasmInitRE, wasmHelper, wasmHelperCode, wasmHelperPlugin, wasmFallbackPlugin, VariableDynamicImportError, example, defaultProtocol, ignoredProtocols, dynamicImportHelperId, relativePathRE, hasDynamicImportRE, dynamicImportHelper, filterForPlugin, viteAliasCustomResolver, EMPTY_OBJECT2, debugSourcemapCombineFilter, debugSourcemapCombine, debugResolve, debugPluginResolve, debugPluginTransform, debugPluginContainerContext, ERR_CLOSED_SERVER, EnvironmentPluginContainer, MinimalPluginContext, PluginContext, ResolveIdContext, LoadPluginContext, TransformPluginContext, PluginContainer, decoder, cssConfigDefaults, cssModuleRE, directRequestRE, htmlProxyRE, htmlProxyIndexRE, commonjsProxyRE, inlineRE, inlineCSSRE, styleAttrRE, functionCallRE, transformOnlyRE, nonEscapedDoubleQuoteRe, defaultCssBundleName, isCSSRequest, isModuleCSSRequest, isDirectCSSRequest, isDirectRequest, cssModulesCache, removedPureCssFilesCache, cssBundleNameCache, postcssConfigCache, cssUrlAssetRE, fileURLWithWindowsDriveRE, configToAtImportResolvers, importPostcssImport, importPostcssModules, importPostcss, preprocessorWorkerControllerCache, alwaysFakeWorkerWorkerControllerCache, viteHashUpdateMarker, viteHashUpdateMarkerRE, cssUrlRE, cssDataUriRE, importCssRE, cssImageSetRE, UrlRewritePostcssPlugin, cssNotProcessedRE, atImportRE, atCharsetRE, loadedPreprocessorPath, cachedSss, makeScssWorker, makeModernScssWorker, makeModernCompilerScssWorker, scssProcessor, makeLessWorker, lessProcessor, makeStylWorker, stylProcessor, createPreprocessorWorkerController, normalizeMaxWorkers, preprocessorSet, importLightningCSS, map, esMap, esRE, versionRE, convertTargetsCache, convertTargets, isModernFlag, preloadMethod, preloadMarker, preloadHelperId, preloadMarkerRE, dynamicImportPrefixRE, dynamicImportTreeshakenRE, buildEnvironmentOptionsDefaults, warningIgnoreList, dynamicImportWarningIgnoreList, normalizeLog2, needsEscapeRegEx2, quoteNewlineRegEx2, backSlashRegEx2, getResolveUrl2, getRelativeUrlFromDocument2, getFileUrlFromFullPath2, getFileUrlFromRelativePath2, relativeUrlMechanisms2, customRelativeUrlMechanisms, toOutputFilePathInCss, toOutputFilePathInHtml, BuildEnvironment, builderOptionsDefaults, build$12, OTHER_SOURCE_MAP_REGEXP, debug$1, debounceMs, EnvironmentModuleNode, EnvironmentModuleGraph, DevEnvironment, callCrawlEndIfIdleAfterMs, RunnableDevEnvironment, NOOP, MIMES, ssrConfigDefaults, debug, promisifiedRealpath, SYMBOL_RESOLVED_CONFIG, configDefaults, clientAlias, _require;
+var init_dep_Dm0c1Wj2 = __esm({
+  "node_modules/vite/dist/node/chunks/dep-Dm0c1Wj2.js"() {
     fs$8 = __toESM(require("node:fs"), 1);
     import_node_fs4 = __toESM(require("node:fs"), 1);
     import_node_path9 = __toESM(require("node:path"), 1);
@@ -144020,7 +144382,7 @@ export function getAugmentedNamespace(n) {
     firstSafeRealPathSyncRun = false;
     imageCandidateRegex = /(?:^|\s|(?<=,))(?<url>[\w-]+\([^)]*\)|"[^"]*"|'[^']*'|[^,]\S*[^,])\s*(?:\s(?<descriptor>\w[^,]+))?(?:,|$)/g;
     escapedSpaceCharacters = /(?: |\\t|\\n|\\f|\\r)+/g;
-    windowsDriveRE = /^[A-Z]:/;
+    windowsDriveRE$1 = /^[A-Z]:/;
     replaceWindowsDriveRE = /^([A-Z]):\//;
     linuxAbsolutePathRE = /^\/[^/]/;
     revertWindowsDriveRE = /^\/windows\/([A-Z])\//;
@@ -145229,7 +145591,7 @@ ${e5.message}`);
     path$9 = import_path9.default;
     fs$7 = import_fs6.default;
     os$2 = import_os3.default;
-    url$4 = import_url3.default;
+    url$3 = import_url3.default;
     fsReadFileAsync = fs$7.promises.readFile;
     jsonLoader = (_, content) => JSON.parse(content);
     requireFunc = typeof __webpack_require__ === "function" ? __non_webpack_require__ : __require3;
@@ -145242,7 +145604,7 @@ ${e5.message}`);
     src$12.defaultLoadersSync = defaultLoadersSync;
     dynamicImport = async (id3) => {
       try {
-        const fileUrl = url$4.pathToFileURL(id3).href;
+        const fileUrl = url$3.pathToFileURL(id3).href;
         const mod = await import(
           /* webpackIgnore: true */
           fileUrl
@@ -146811,9 +147173,9 @@ ${e5.message}`);
     };
     onFinishedExports = onFinished$2.exports;
     parseurl$1 = { exports: {} };
-    url$3 = import_url3.default;
-    parse$a = url$3.parse;
-    Url = url$3.Url;
+    url$2 = import_url3.default;
+    parse$a = url$2.parse;
+    Url = url$2.Url;
     parseurl$1.exports = parseurl;
     parseurl$1.exports.original = originalurl;
     parseurlExports = parseurl$1.exports;
@@ -150425,17 +150787,59 @@ ${e5.message}`);
       return watcher;
     };
     chokidar2.watch = watch2;
+    guess = { exports: {} };
     shellQuote$1 = {};
+    OPS = [
+      "||",
+      "&&",
+      ";;",
+      "|&",
+      "<(",
+      "<<<",
+      ">>",
+      ">&",
+      "<&",
+      "&",
+      ";",
+      "(",
+      ")",
+      "|",
+      "<",
+      ">"
+    ];
+    LINE_TERMINATORS = /[\n\r\u2028\u2029]/;
+    GLOB_SHELL_SPECIAL = /[\s#!"$&'():;<=>@\\^`|]/g;
     quote = function quote2(xs) {
       return xs.map(function(s5) {
         if (s5 === "") {
           return "''";
         }
         if (s5 && typeof s5 === "object") {
-          return s5.op.replace(/(.)/g, "\\$1");
+          if (s5.op === "glob") {
+            if (typeof s5.pattern !== "string") {
+              throw new TypeError("glob token requires a string `pattern`");
+            }
+            if (LINE_TERMINATORS.test(s5.pattern)) {
+              throw new TypeError("glob `pattern` must not contain line terminators");
+            }
+            return s5.pattern.replace(GLOB_SHELL_SPECIAL, "\\$&");
+          }
+          if (typeof s5.op === "string") {
+            if (OPS.indexOf(s5.op) < 0) {
+              throw new TypeError("invalid `op` value: " + JSON.stringify(s5.op));
+            }
+            return s5.op.replace(/[\s\S]/g, "\\$&");
+          }
+          if (typeof s5.comment === "string") {
+            if (LINE_TERMINATORS.test(s5.comment)) {
+              throw new TypeError("`comment` must not contain line terminators");
+            }
+            return "#" + s5.comment;
+          }
+          throw new TypeError("unrecognized object token shape");
         }
-        if (/["\s]/.test(s5) && !/'/.test(s5)) {
-          return "'" + s5.replace(/(['\\])/g, "\\$1") + "'";
+        if (/["\s\\]/.test(s5) && !/'/.test(s5)) {
+          return "'" + s5.replace(/(['])/g, "\\$1") + "'";
         }
         if (/["'\s]/.test(s5)) {
           return '"' + s5.replace(/(["\\$`!])/g, "\\$1") + '"';
@@ -150500,10 +150904,14 @@ ${e5.message}`);
       "/Applications/Sublime Text.app/Contents/MacOS/sublime_text": "/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl",
       "/Applications/Sublime Text 2.app/Contents/MacOS/Sublime Text 2": "/Applications/Sublime Text 2.app/Contents/SharedSupport/bin/subl",
       "/Applications/Sublime Text Dev.app/Contents/MacOS/Sublime Text": "/Applications/Sublime Text Dev.app/Contents/SharedSupport/bin/subl",
+      "/Applications/Visual Studio Code.app/Contents/MacOS/Code": "code",
       "/Applications/Visual Studio Code.app/Contents/MacOS/Electron": "code",
+      "/Applications/Visual Studio Code - Insiders.app/Contents/MacOS/Code - Insiders": "code-insiders",
       "/Applications/Visual Studio Code - Insiders.app/Contents/MacOS/Electron": "code-insiders",
       "/Applications/VSCodium.app/Contents/MacOS/Electron": "codium",
       "/Applications/Cursor.app/Contents/MacOS/Cursor": "cursor",
+      "/Applications/Trae.app/Contents/MacOS/Electron": "trae",
+      "/Applications/Antigravity.app/Contents/MacOS/Electron": "antigravity",
       "/Applications/AppCode.app/Contents/MacOS/appcode": "/Applications/AppCode.app/Contents/MacOS/appcode",
       "/Applications/CLion.app/Contents/MacOS/clion": "/Applications/CLion.app/Contents/MacOS/clion",
       "/Applications/IntelliJ IDEA.app/Contents/MacOS/idea": "/Applications/IntelliJ IDEA.app/Contents/MacOS/idea",
@@ -150526,6 +150934,9 @@ ${e5.message}`);
       code: "code",
       vscodium: "vscodium",
       codium: "codium",
+      cursor: "cursor",
+      trae: "trae",
+      antigravity: "antigravity",
       emacs: "emacs",
       gvim: "gvim",
       idea: "idea",
@@ -150543,7 +150954,8 @@ ${e5.message}`);
       goland: "goland",
       "goland.sh": "goland",
       rider: "rider",
-      "rider.sh": "rider"
+      "rider.sh": "rider",
+      zed: "zed"
     };
     windows$1 = [
       "Brackets.exe",
@@ -150569,7 +150981,10 @@ ${e5.message}`);
       "goland.exe",
       "goland64.exe",
       "rider.exe",
-      "rider64.exe"
+      "rider64.exe",
+      "Trae.exe",
+      "zed.exe",
+      "Antigravity.exe"
     ];
     path$6 = import_path9.default;
     shellQuote = shellQuote$1;
@@ -150577,75 +150992,11 @@ ${e5.message}`);
     COMMON_EDITORS_MACOS = macos;
     COMMON_EDITORS_LINUX = linux;
     COMMON_EDITORS_WIN = windows$1;
-    guess = function guessEditor(specifiedEditor) {
-      if (specifiedEditor) {
-        return shellQuote.parse(specifiedEditor);
-      }
-      if (process.env.LAUNCH_EDITOR) {
-        return [process.env.LAUNCH_EDITOR];
-      }
-      if (process.versions.webcontainer) {
-        return [process.env.EDITOR || "code"];
-      }
-      try {
-        if (process.platform === "darwin") {
-          const output = childProcess$1.execSync("ps x -o comm=", {
-            stdio: ["pipe", "pipe", "ignore"]
-          }).toString();
-          const processNames = Object.keys(COMMON_EDITORS_MACOS);
-          const processList = output.split("\n");
-          for (let i5 = 0; i5 < processNames.length; i5++) {
-            const processName = processNames[i5];
-            if (processList.includes(processName)) {
-              return [COMMON_EDITORS_MACOS[processName]];
-            }
-            const processNameWithoutApplications = processName.replace("/Applications", "");
-            if (output.indexOf(processNameWithoutApplications) !== -1) {
-              if (processName !== COMMON_EDITORS_MACOS[processName]) {
-                return [COMMON_EDITORS_MACOS[processName]];
-              }
-              const runningProcess = processList.find((procName) => procName.endsWith(processNameWithoutApplications));
-              if (runningProcess !== void 0) {
-                return [runningProcess];
-              }
-            }
-          }
-        } else if (process.platform === "win32") {
-          const output = childProcess$1.execSync(
-            'powershell -NoProfile -Command "[Console]::OutputEncoding=[Text.Encoding]::UTF8;Get-CimInstance -Query \\"select executablepath from win32_process where executablepath is not null\\" | % { $_.ExecutablePath }"',
-            {
-              stdio: ["pipe", "pipe", "ignore"]
-            }
-          ).toString();
-          const runningProcesses = output.split("\r\n");
-          for (let i5 = 0; i5 < runningProcesses.length; i5++) {
-            const fullProcessPath = runningProcesses[i5].trim();
-            const shortProcessName = path$6.basename(fullProcessPath);
-            if (COMMON_EDITORS_WIN.indexOf(shortProcessName) !== -1) {
-              return [fullProcessPath];
-            }
-          }
-        } else if (process.platform === "linux") {
-          const output = childProcess$1.execSync("ps x --no-heading -o comm --sort=comm", {
-            stdio: ["pipe", "pipe", "ignore"]
-          }).toString();
-          const processNames = Object.keys(COMMON_EDITORS_LINUX);
-          for (let i5 = 0; i5 < processNames.length; i5++) {
-            const processName = processNames[i5];
-            if (output.indexOf(processName) !== -1) {
-              return [COMMON_EDITORS_LINUX[processName]];
-            }
-          }
-        }
-      } catch (ignoreError) {
-      }
-      if (process.env.VISUAL) {
-        return [process.env.VISUAL];
-      } else if (process.env.EDITOR) {
-        return [process.env.EDITOR];
-      }
-      return [null];
-    };
+    guess.exports = guessEditor$1;
+    guess.exports.getEditorFromMacProcesses = getEditorFromMacProcesses;
+    guess.exports.getEditorFromWindowsProcesses = getEditorFromWindowsProcesses;
+    guess.exports.getEditorFromLinuxProcesses = getEditorFromLinuxProcesses;
+    guessExports = guess.exports;
     path$5 = import_path9.default;
     getArgs = function getArgumentsForPosition(editor, fileName, lineNumber, columnNumber = 1) {
       const editorBasename = path$5.basename(editor).replace(/\.(exe|cmd|bat)$/i, "");
@@ -150680,6 +151031,8 @@ ${e5.message}`);
         case "code-insiders":
         case "Code - Insiders":
         case "codium":
+        case "trae":
+        case "antigravity":
         case "cursor":
         case "vscodium":
         case "VSCodium":
@@ -150713,12 +151066,11 @@ ${e5.message}`);
     path$4 = import_path9.default;
     colors = picocolorsExports2;
     childProcess = import_child_process.default;
-    guessEditor2 = guess;
+    guessEditor = guessExports;
     getArgumentsForPosition2 = getArgs;
     positionRE = /:(\d+)(:(\d+))?$/;
-    _childProcess = null;
+    currentChildProcess = null;
     launchEditor_1 = launchEditor;
-    url$2 = import_url3.default;
     path$3 = import_path9.default;
     launch = launchEditor_1;
     launchEditorMiddleware = (specifiedEditor, srcRoot, onErrorCallback) => {
@@ -150732,12 +151084,22 @@ ${e5.message}`);
       }
       srcRoot = srcRoot || process.cwd();
       return function launchEditorMiddleware2(req2, res) {
-        const { file } = url$2.parse(req2.url, true).query || {};
+        let url2;
+        try {
+          const fullUrl = req2.url.startsWith("http") ? req2.url : `http://localhost${req2.url}`;
+          url2 = new URL(fullUrl);
+        } catch (_err) {
+          res.statusCode = 500;
+          res.end(`launch-editor-middleware: invalid URL.`);
+          return;
+        }
+        const file = url2.searchParams.get("file");
         if (!file) {
           res.statusCode = 500;
           res.end(`launch-editor-middleware: required query param "file" is missing.`);
         } else {
-          launch(path$3.resolve(srcRoot, file), specifiedEditor, onErrorCallback);
+          const resolved = file.startsWith("file://") ? file : path$3.resolve(srcRoot, file);
+          launch(resolved, specifiedEditor, onErrorCallback);
           res.end();
         }
       };
@@ -155368,6 +155730,7 @@ ${e5.message}`);
         }
       };
     };
+    windowsDriveRE = /^[A-Z]:/i;
     ERR_LOAD_URL = "ERR_LOAD_URL";
     ERR_LOAD_PUBLIC_URL = "ERR_LOAD_PUBLIC_URL";
     ERR_DENIED_ID = "ERR_DENIED_ID";
@@ -157203,10 +157566,10 @@ ${err22.stack || err22.message}
     cssUrlAssetRE = /__VITE_CSS_URL__([\da-f]+)__/g;
     fileURLWithWindowsDriveRE = /^file:\/\/\/[a-zA-Z]:\//;
     configToAtImportResolvers = /* @__PURE__ */ new WeakMap();
-    importPostcssImport = createCachedImport(() => Promise.resolve().then(() => (init_dep_4_IQbZQm(), dep_4_IQbZQm_exports)).then(function(n5) {
+    importPostcssImport = createCachedImport(() => Promise.resolve().then(() => (init_dep_CV_fz3CQ(), dep_CV_fz3CQ_exports)).then(function(n5) {
       return n5.i;
     }));
-    importPostcssModules = createCachedImport(() => Promise.resolve().then(() => (init_dep_lpEPC2f9(), dep_lpEPC2f9_exports)).then(function(n5) {
+    importPostcssModules = createCachedImport(() => Promise.resolve().then(() => (init_dep_DDtvSN7(), dep_DDtvSN7_exports)).then(function(n5) {
       return n5.i;
     }));
     importPostcss = createCachedImport(() => Promise.resolve().then(() => (init_postcss(), postcss_exports)));
@@ -158933,8 +159296,8 @@ var import_esbuild4, CSS_LANGS_RE2, isCSSRequest2, SplitVendorChunkCache, Fetcha
 var init_node2 = __esm({
   "node_modules/vite/dist/node/index.js"() {
     init_parseAst2();
-    init_dep_Dq2t6Dq0();
-    init_dep_Dq2t6Dq0();
+    init_dep_Dm0c1Wj2();
+    init_dep_Dm0c1Wj2();
     init_constants();
     import_esbuild4 = __toESM(require_main5(), 1);
     init_dist5();
@@ -160534,10 +160897,10 @@ rollup/dist/es/shared/watch.js:
    * Licensed under the MIT License.
    *)
 
-vite/dist/node/chunks/dep-lpEPC2f9.js:
+vite/dist/node/chunks/dep-DDtvSN7_.js:
   (*! https://mths.be/cssesc v3.0.0 by @mathias *)
 
-vite/dist/node/chunks/dep-Dq2t6Dq0.js:
+vite/dist/node/chunks/dep-Dm0c1Wj2.js:
   (**
    * Autoload Config for PostCSS
    *

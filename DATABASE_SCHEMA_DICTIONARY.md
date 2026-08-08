@@ -1,3 +1,28 @@
+قم بتعديل حقول وبيانات العملاء والمناديب والحسابات وايضا حقول قاعده البيانات 
+عند انشاء حساب جميع المعلومات تتسجل في جدول 
+customers / couriers ويتسجل حساب مالي له في accounts ويتسجل حساب مستخدم في portal_users
+ جدول العملاء  (customers)
+`id`,`fullName`,'username',`phone`,`email`,`address`,`gps\\\_location`,`notes`,`financialAccountId`,`financialAccountCode`,`financialBalance`,`financialCurrency`,`createdAt`,`updatedAt`
+جدول المناديب (couriers)
+`id`,`fullName`,`phone`,`email`,`address`,`gpsLocation`,`disabled`,`courierCustomId`,`commissionRate`,`courierType`,`notes`,`financialAccountId`,`financialAccountCode`,`financialBalance`,`financialCurrency`,`identityDocUrl`,`createdAt`,'updatedAt'
+ جدول مستخدمين الموقع ( portal_users)
+`uid`,'username',`phone`,`email`,'password',"portalRole","approvalStatus",'type',`linkedAccId`,`notes`,"createdAt",'updatedAt'
+ويتم انشاء حساب مالي في 
+جدول الحسابات المالية accounts
+"id","accountCode","accountNumber","accountPrefix",balance,code,"createdAt",currency,"entityId","entityName","entityType","isActive","nameAr","nameEn",notes,"parentCode",type,"updatedAt"
+ويتم الربط بين كلا من 
+(customers , couriers ) -> portal_users -> accounts
+بقيود وشروط
+
+قم باكمال المهمه السابقه وقم 
+تعديل واجهه انشاء حساب وتسجيل دخول لتواكب تغييرات حقول قاعده البيانات 
+
+بالنسبه لجدول portal_orders يتم ضمه و دمجه مع orders
+وكذالك تعديل واجهات انشاء طلبات في الموقع وجعلها شامله لكل عناصر واجهات الطلبات في النظام الاصلي ماعدا الحقول
+ المهمه والمرتبطه بالشركه واضهار للعميل العناصر التي تصلح له
+ وايضا ربط بيانات العميل تلقائيا في حسابه واظهارها عند انشاء طلب او في ملفه الشخصي 
+ويتم تحديث واجهات النظام الاصلي لتغيررات الموقع وتظهر البيانات  والعملاء والمستخدمين والمناديب وادارتهم واستقبال طلبات انشاؤ حساب 
+
 # 📘 الدليل المرجعي وقاموس جداول قاعدة البيانات وخريطة العلاقات الشاملة (Database Dictionary & ERD Map)
 ## نظام swiftship الأصلي + موقع الويب والبوابات الخارجية (ALX Web Portal)
 

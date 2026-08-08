@@ -134,7 +134,7 @@ class FinancialAccountService {
    * accountNumber, accountCode, code, and accountId.
    * Checks ALL existing accounts in database to ensure zero collisions.
    */
-  private async getNextAccountIdentifiers(
+  async getNextAccountIdentifiers(
     entityType: AccountEntityType,
   ): Promise<{ prefix: string; accountNumber: string; accountCode: string; code: string; accountId: string }> {
     const prefix = ACCOUNT_PREFIXES[entityType] || "5000";
@@ -224,10 +224,6 @@ class FinancialAccountService {
       // 1. Prevent duplicate account creation for the same entityId
       const existing = await this.getAccountByEntityId(entityId);
       if (existing && existing.id) {
-        console.log(
-          `[FinancialAccountService] Account already exists for entity ${entityId}:`,
-          existing.accountCode,
-        );
         return existing;
       }
 
@@ -256,13 +252,6 @@ class FinancialAccountService {
         notes: "",
         ...(monthlySalary !== undefined && { monthlySalary }),
       } as any;
-
-      console.log(
-        "DEBUG: Creating unique account in database:",
-        accountCode,
-        "with ID:",
-        accountId,
-      );
 
       // Save document with explicit unique ID
       await setDoc(doc(db, "accounts", accountId), accountData);
@@ -722,21 +711,23 @@ class FinancialAccountService {
     */
 
     // 2. Record in salary_history collection for the dedicated salary history page
-    await addDoc(collection(db, "salary_history"), {
-      employeeId: params.employeeId,
-      employeeName: params.employeeName,
-      accountId: params.accountId,
-      accountCode: params.accountCode,
-      amount: params.amount,
-      currency: params.currency,
-      salaryMonth: params.salaryMonth,
-      voucherCode,
-      notes: params.notes || "",
-      status: "Paid",
-      paidAt: now,
-      createdByUid: params.createdByUid || "system",
-      createdByName: params.createdByName || "Admin",
-      createdAt: now,
+    await addDoc({
+      newID: collection(db, "salary_history"), collectionRef: {
+        employeeId: params.employeeId,
+        employeeName: params.employeeName,
+        accountId: params.accountId,
+        accountCode: params.accountCode,
+        amount: params.amount,
+        currency: params.currency,
+        salaryMonth: params.salaryMonth,
+        voucherCode,
+        notes: params.notes || "",
+        status: "Paid",
+        paidAt: now,
+        createdByUid: params.createdByUid || "system",
+        createdByName: params.createdByName || "Admin",
+        createdAt: now,
+      }
     });
 
     activityLogService.log("salary_payment" as any, params.employeeName, {
@@ -944,13 +935,6 @@ class FinancialAccountService {
         .filter((e: any) => e.type === "Custody")
         .sort((a: any, b: any) => a.createdAt - b.createdAt);
 
-      console.log(
-        `[FinancialAccountService] Found ${snap.size} pending expenses for courier ${courierId}.`,
-      );
-      console.log(
-        `[FinancialAccountService] Found ${pending.length} pending custodies for courier ${courierId}. Amount to settle: ${amountToSettle} ${currency}`,
-      );
-
       let remainingToSettle = amountToSettle;
       const batch = writeBatch(db);
       let settled = false;
@@ -989,10 +973,6 @@ class FinancialAccountService {
         const newRemitted = currentRemitted + settleAmountExpenseCurrency;
         const isFullySettled = newRemitted >= totalAmount - 0.01; // Avoid floating point issues
 
-        console.log(
-          `[FinancialAccountService] Settling ${settleAmountBudgetCurrency} ${currency} (${settleAmountExpenseCurrency} ${expenseCurrency}) on expense ${expense.id}. New remitted: ${newRemitted}. Fully settled: ${isFullySettled}`,
-        );
-
         batch.update(doc(db, "expenses", expense.id), {
           status: isFullySettled ? "Settled" : "Pending",
           remittedAmount: newRemitted,
@@ -1011,9 +991,6 @@ class FinancialAccountService {
 
       if (settled) {
         await batch.commit();
-        console.log(`[FinancialAccountService] Settlement batch committed.`);
-      } else {
-        console.log(`[FinancialAccountService] No settlements needed.`);
       }
     } catch (error) {
       console.error(
@@ -1241,7 +1218,6 @@ class FinancialAccountService {
       console.error("[recalculateAllBalances] Fatal error loading accounts:", err);
     }
 
-    console.log(`[recalculateAllBalances] Done. Processed: ${results.length}, Errors: ${errors}`);
     return { processed: results.length, errors, results };
   }
 
@@ -1332,7 +1308,7 @@ class FinancialAccountService {
           createdAt: Date.now(),
           updatedAt: Date.now(),
         };
-        const ref = await addDoc(collection(db, "accounts"), accountData);
+        const ref = await addDoc({ newID: collection(db, "accounts"), collectionRef: accountData });
         sysIds[acc.id] = ref.id;
       }
     }
@@ -1791,9 +1767,6 @@ class FinancialAccountService {
         createdByName: entities.profileName || "System Auto",
       });
 
-      console.log(
-        `[AutomaticVouchers] Successfully posted automatic voucher for rule: ${ruleId} (${refNumber})`,
-      );
     } catch (err) {
       console.error(
         `[AutomaticVouchers] Failed to fire automatic voucher rule: ${ruleId}`,
@@ -1821,8 +1794,11 @@ class FinancialAccountService {
     entityId: string
   ): Promise<void> {
     try {
-      console.log(`[purgeEntityAndFinancialFootprint] Starting purge check for ${entityType} ID: ${entityId}`);
-      
+      // 5. Commit all deletions
+      await batch.commit();
+
+      // 6. Recalculate & sync all financial balances system-wide
+
       // Step 0: Check if entity is linked to any orders in 'orders' collection
       const ordersSnap = await getDocs(collection(db, "orders"));
       const isLinkedToOrders = ordersSnap.docs.some(doc => {
@@ -1852,11 +1828,10 @@ class FinancialAccountService {
       );
       const accountSnap = await getDocs(accountQuery);
       let accountId = "";
-      
+
       if (!accountSnap.empty) {
         const accountDoc = accountSnap.docs[0];
         accountId = accountDoc.id;
-        console.log(`[purgeEntityAndFinancialFootprint] Found linked account ID: ${accountId}`);
 
         // 2. Find all account_transactions legs linked to this account
         const txQuery = query(
@@ -1864,7 +1839,6 @@ class FinancialAccountService {
           where("accountId", "==", accountId)
         );
         const txSnap = await getDocs(txQuery);
-        console.log(`[purgeEntityAndFinancialFootprint] Found ${txSnap.size} transaction legs`);
 
         const refNumbers = new Set<string>();
         const journalEntryIds = new Set<string>();
