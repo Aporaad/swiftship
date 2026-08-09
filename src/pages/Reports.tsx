@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   collection, onSnapshot, query, orderBy, getDocs, doc, setDoc, getDoc, where, addDoc, deleteDoc
-} from 'firebase/firestore';
+} from '../lib/firebase';
 import { db } from '../lib/firebase';
 import { useSettings } from '../context/SettingsContext';
 import { useRole } from '../hooks/useRole';
@@ -485,7 +485,7 @@ export default function Reports() {
     );
 
     const unsub = onSnapshot(qAllTxs, (snap) => {
-      const allTxs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+      const allTxs = snap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) as any[];
       setAllTimeTransactions(allTxs);
       // Filter by active start/end date range
       const filtered = allTxs.filter((tx: any) => {
@@ -512,7 +512,7 @@ export default function Reports() {
     }
     setIsSavingFilterTemplate(true);
     try {
-      await addDoc(collection(db, 'report_templates'), {
+      await addDoc(null, collection(db, 'report_templates'), {
         name: newTemplateName.trim(),
         activeReport,
         filters,
@@ -603,34 +603,34 @@ export default function Reports() {
   useEffect(() => {
     if (roleLoading) return;
 
-    const unsubOrders = onSnapshot(collection(db, 'orders'), snap => {
-      setOrders(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    const unsubOrders = onSnapshot(collection(db, 'orders'), (snap: any) => {
+      setOrders(snap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })));
     });
-    const unsubExp = onSnapshot(collection(db, 'expenses'), snap => {
-      setExpenses(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    const unsubExp = onSnapshot(collection(db, 'expenses'), (snap: any) => {
+      setExpenses(snap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })));
     });
-    const unsubCouriers = onSnapshot(collection(db, 'couriers'), snap => {
-      setCouriers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    const unsubCouriers = onSnapshot(collection(db, 'couriers'), (snap: any) => {
+      setCouriers(snap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })));
     });
-    const unsubCustomers = onSnapshot(collection(db, 'customers'), snap => {
-      setCustomers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    const unsubCustomers = onSnapshot(collection(db, 'customers'), (snap: any) => {
+      setCustomers(snap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })));
     });
-    const unsubSources = onSnapshot(collection(db, 'sources'), snap => {
-      setSources(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    const unsubSources = onSnapshot(collection(db, 'sources'), (snap: any) => {
+      setSources(snap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })));
     });
-    const unsubUsers = onSnapshot(collection(db, 'users'), snap => {
-      setUsers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    const unsubUsers = onSnapshot(collection(db, 'users'), (snap: any) => {
+      setUsers(snap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })));
     });
-    const unsubAccounts = onSnapshot(collection(db, 'accounts'), snap => {
-      setAccounts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    const unsubAccounts = onSnapshot(collection(db, 'accounts'), (snap: any) => {
+      setAccounts(snap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })));
     });
-    const unsubShipping = onSnapshot(collection(db, 'shipping_companies'), snap => {
-      setShippingCompanies(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    const unsubShipping = onSnapshot(collection(db, 'shipping_companies'), (snap: any) => {
+      setShippingCompanies(snap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })));
     });
 
     // Fetch custom report templates
-    const unsubReportTemplates = onSnapshot(collection(db, 'report_templates'), snap => {
-      setSavedReportTemplates(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    const unsubReportTemplates = onSnapshot(collection(db, 'report_templates'), (snap: any) => {
+      setSavedReportTemplates(snap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })));
     });
 
     // Fetch Print Settings
@@ -679,7 +679,7 @@ export default function Reports() {
     );
 
     const unsub = onSnapshot(qTx, (snap) => {
-      const allTxs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+      const allTxs = snap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) as any[];
       const filtered = allTxs.filter((tx: any) => {
         const txDate = new Date(tx.createdAt);
         const start = startOfDay(new Date(filters.startDate));

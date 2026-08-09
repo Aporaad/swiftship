@@ -46484,6 +46484,7 @@ __export(supabase_firebase_adapter_exports, {
   arrayUnion: () => arrayUnion,
   auth: () => auth,
   cert: () => cert,
+  clearAllLocalData: () => clearAllLocalData,
   collection: () => collection,
   createUserWithEmailAndPassword: () => createUserWithEmailAndPassword,
   db: () => db,
@@ -47256,9 +47257,29 @@ async function signInWithCustomToken(...args) {
   }
   return { user: auth.currentUser };
 }
+function clearAllLocalData() {
+  if (isServer) return;
+  try {
+    const keysToRemove = [];
+    for (let i5 = 0; i5 < localStorage.length; i5++) {
+      const key = localStorage.key(i5);
+      if (key && key.startsWith("swiftship_")) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach((key) => localStorage.removeItem(key));
+  } catch (_) {
+  }
+  for (const table of Object.keys(collectionCaches)) {
+    delete collectionCaches[table];
+  }
+  for (const table of Object.keys(lastFetchTimestamps)) {
+    delete lastFetchTimestamps[table];
+  }
+}
 async function signOut(...args) {
+  clearAllLocalData();
   setOfflineMode(false);
-  safeLocalStorage.removeItem("swiftship_persisted_user");
   await supabase.auth.signOut();
   currentSession = null;
   loggedInUser = null;

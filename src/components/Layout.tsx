@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
-import { signOut } from 'firebase/auth';
-import { collection, query, where, onSnapshot, getDocs, writeBatch, doc, setDoc } from 'firebase/firestore';
+import { signOut } from '../lib/firebase';
+import { collection, query, where, onSnapshot, getDocs, writeBatch, doc, setDoc } from '../lib/firebase';
 import { auth, db } from '../lib/firebase';
 import { clearAllLocalData } from '../lib/supabase-firebase-adapter';
 import {
@@ -148,13 +148,13 @@ export default function Layout() {
   useEffect(() => {
     if (!auth.currentUser || roleLoading || !role) return;
 
-    const unsubOrders = onSnapshot(collection(db, 'orders'), (snap) => {
-      const docs = snap.docs.map(doc => doc.data());
+    const unsubOrders = onSnapshot(collection(db, 'orders'), (snap: any) => {
+      const docs = snap.docs.map((doc: any) => doc.data());
 
-      const active = docs.filter(o => o.orderStatus !== 'تم التسليم' && o.orderStatus !== 'ملغي' && o.orderStatus !== 'Delivered' && o.orderStatus !== 'Cancelled').length;
+      const active = docs.filter((o: any) => o.orderStatus !== 'تم التسليم' && o.orderStatus !== 'ملغي' && o.orderStatus !== 'Delivered' && o.orderStatus !== 'Cancelled').length;
       
       const todayStr = new Date().toISOString().split('T')[0];
-      const delayed = docs.filter(o => {
+      const delayed = docs.filter((o: any) => {
         if (o.orderStatus === 'متأخر' || o.orderStatus === 'Delayed' || o.orderStatus?.toLowerCase() === 'delayed') {
           return true;
         }
@@ -165,7 +165,7 @@ export default function Layout() {
         return false;
       }).length;
 
-      const ongoing = docs.filter(o => [
+      const ongoing = docs.filter((o: any) => [
         'وصل مستودع السعودية',
         'جاري الشحن لليمن',
         'في التخليص الجمركي',
@@ -181,7 +181,7 @@ export default function Layout() {
         'Cargo'
       ].includes(o.orderStatus)).length;
 
-      const unpaid = docs.filter(o => o.orderStatus !== 'ملغي' && o.orderStatus !== 'Cancelled' && parseFloat(o.amountRemaining || 0) > 0).length;
+      const unpaid = docs.filter((o: any) => o.orderStatus !== 'ملغي' && o.orderStatus !== 'Cancelled' && parseFloat(o.amountRemaining || 0) > 0).length;
 
       let status: 'good' | 'warning' | 'error' = 'good';
       if (delayed > 0) {
@@ -198,18 +198,18 @@ export default function Layout() {
         financiallyPending: unpaid,
         systemStatus: status
       }));
-    }, (error) => {
+    }, (error: any) => {
       console.error("Error listening to orders for sidebar stats:", error);
     });
 
-    const unsubSessions = onSnapshot(collection(db, 'sessions'), (snap) => {
-      const docs = snap.docs.map(doc => doc.data() as any);
+    const unsubSessions = onSnapshot(collection(db, 'sessions'), (snap: any) => {
+      const docs = snap.docs.map((doc: any) => doc.data() as any);
       const activeSessionsCount = docs.filter((s: any) => s.lastSeen && (Date.now() - s.lastSeen) < 3 * 60 * 1000).length;
       setSystemStats(prev => ({
         ...prev,
         onlineStaff: Math.max(1, activeSessionsCount)
       }));
-    }, (error) => {
+    }, (error: any) => {
       console.error("Error listening to sessions for sidebar stats:", error);
     });
 
@@ -269,8 +269,8 @@ export default function Layout() {
     if (!auth.currentUser || roleLoading || !role) return;
 
     const q = query(collection(db, 'notifications'), where('read', '==', false));
-    const unsub = onSnapshot(q, (snap) => {
-      const allowedDocs = snap.docs.filter(doc => {
+    const unsub = onSnapshot(q, (snap: any) => {
+      const allowedDocs = snap.docs.filter((doc: any) => {
         const data = doc.data();
         if (role !== 'Admin') {
           const isCreator = data.creatorId === auth.currentUser?.uid;
@@ -285,7 +285,7 @@ export default function Layout() {
         return true;
       });
       setUnreadCount(allowedDocs.length);
-    }, (error) => {
+    }, (error: any) => {
       console.error("Error listening to notifications:", error);
     });
 
@@ -341,7 +341,7 @@ export default function Layout() {
     try {
       const activeSessId = sessionId || sessionStorage.getItem('swiftship_session_id');
       if (activeSessId && activeSessId !== 'sess-loading' && activeSessId !== 'sess-loggedout') {
-        const { deleteDoc, doc } = await import('firebase/firestore');
+        const { deleteDoc, doc } = await import('../lib/firebase');
         await deleteDoc(doc(db, 'sessions', activeSessId));
       }
 
@@ -384,7 +384,7 @@ export default function Layout() {
         for (const col of cols) {
           try {
             const snap = await getDocs(collection(db, col));
-            backupDoc.data[col] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            backupDoc.data[col] = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
           } catch (colErr: any) {
             console.warn(`[AutoBackup] Ignored error reading collection ${col}:`, colErr.message || colErr);
           }
