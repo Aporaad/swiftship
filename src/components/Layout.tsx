@@ -4,6 +4,7 @@ import { signOut } from '../lib/firebase';
 import { collection, query, where, onSnapshot, getDocs, writeBatch, doc, setDoc } from '../lib/firebase';
 import { auth, db } from '../lib/firebase';
 import { clearAllLocalData } from '../lib/supabase-firebase-adapter';
+import { formatDate, formatDateTime, formatTime, now } from '../lib/dateUtils';
 import {
   LayoutDashboard,
   Package,
@@ -43,7 +44,8 @@ import {
   Activity,
   Code2,
   ExternalLink,
-  Briefcase
+  Briefcase,
+  Monitor
 } from 'lucide-react';
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
@@ -84,7 +86,7 @@ export default function Layout() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `swiftship_emergency_backup_${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `swiftship_emergency_backup_${formatDate()}.json`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
@@ -136,11 +138,11 @@ export default function Layout() {
   });
 
   // System Time State
-  const [systime, setSystime] = useState(new Date());
+  const [systime, setSystime] = useState(formatDate());
   const [isStatusExpanded, setIsStatusExpanded] = useState(false);
 
   useEffect(() => {
-    const timer = setInterval(() => setSystime(new Date()), 1000);
+    const timer = setInterval(() => setSystime(formatDate()), 1000);
     return () => clearInterval(timer);
   }, []);
 
@@ -153,7 +155,7 @@ export default function Layout() {
 
       const active = docs.filter((o: any) => o.orderStatus !== 'تم التسليم' && o.orderStatus !== 'ملغي' && o.orderStatus !== 'Delivered' && o.orderStatus !== 'Cancelled').length;
       
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = formatDate();
       const delayed = docs.filter((o: any) => {
         if (o.orderStatus === 'متأخر' || o.orderStatus === 'Delayed' || o.orderStatus?.toLowerCase() === 'delayed') {
           return true;
@@ -376,7 +378,7 @@ export default function Layout() {
         const cols = ['orders', 'customers', 'couriers', 'sources', 'users', 'roles'];
         const backupDoc: any = {
           version: '3.0',
-          timestamp: new Date().toISOString(),
+          timestamp: formatDateTime(),
           createdBy: auth.currentUser?.email || 'admin',
           type: 'auto',
           data: {}
@@ -390,7 +392,7 @@ export default function Layout() {
           }
         }
         // Save backup as a Firestore document under /backups collection
-        const backupId = `auto_${new Date().toISOString().split('T')[0]}`;
+        const backupId = `auto_${formatDate()}`;
         try {
           await setDoc(doc(db, 'backups', backupId), {
             ...backupDoc,
@@ -426,7 +428,7 @@ export default function Layout() {
         try {
           await updateSettings({
             lastAutoBackupAt: Date.now(),
-            lastBackup: new Date().toLocaleString(settings.language === 'ar' ? 'ar-YE' : 'en-US')
+            lastBackup: formatDateTime()
           } as any);
         } catch (updateSetErr: any) {
           console.error('[AutoBackup] updateSettings failed:', updateSetErr);
@@ -453,6 +455,7 @@ export default function Layout() {
     { name: isAr ? 'المصروفات والعهد' : 'Expenses & Custody', path: '/expenses', icon: Wallet, permission: 'view_finance' },
     { name: isAr ? 'المحاسبة' : 'Accounting', path: '/accounting', icon: BookOpen, permission: 'view_finance' },
     { name: isAr ? 'المصادر' : 'Sources', path: '/sources', icon: MapPin, permission: 'view_sources' },
+    { name: isAr ? 'متصفح المواقع' : 'Web Browser', path: '/browser', icon: Monitor, permission: 'view_browser' },
     { name: isAr ? 'التقارير' : 'Reports', path: '/reports', icon: FileText, permission: 'view_reports' },
     { name: isAr ? 'المستخدمون والأدوار' : 'Users & Roles', path: '/user-management', icon: UserCog, permission: 'view_users' },
     { name: isAr ? 'إدارة الموقع' : 'Website Management', path: '/website-management', icon: Globe, permission: 'view_website_management' },
@@ -463,6 +466,9 @@ export default function Layout() {
   const filteredNavItems = navItems.filter(item => {
     if (item.path === '/website-management') {
       return hasPermission('view_website_management') || role === 'Admin';
+    }
+    if (item.path === '/browser') {
+      return hasPermission('view_browser') || role === 'Admin' || true; // Accessible to all authenticated users
     }
     if (item.path === '/expenses') {
       return hasPermission('view_finance') || hasPermission('view_expenses') || hasPermission('view_custody');
@@ -540,17 +546,8 @@ export default function Layout() {
   const activeItem = filteredNavItems.find(i => isItemActive(i.path));
 
   // Multi-language system dates
-  const formattedDate = systime.toLocaleDateString(isAr ? 'ar-EG' : 'en-US', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric'
-  });
-  const formattedTime = systime.toLocaleTimeString(isAr ? 'ar-EG' : 'en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true
-  });
+  const formattedDate = formatDate();
+  const formattedTime = formatTime();
 
   return (
     <div className="flex bg-luxury-black text-slate-300 overflow-hidden h-screen font-sans selection:bg-[#d4af37]/30 antialiased">

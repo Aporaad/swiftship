@@ -14,6 +14,7 @@ import AutoVoucherRulesManager from './AutoVoucherRulesManager';
 import { useExpenseCategories } from '../hooks/useExpenseCategories';
 import { financialAccountService } from '../services/financialAccountService';
 import { useRole } from '../hooks/useRole';
+import { formatDate, formatDateTime, now } from '../lib/dateUtils';
 
 interface FinanceAccountingProps {
   orders: any[];
@@ -192,7 +193,7 @@ export default function FinanceAccounting({
 
   useEffect(() => {
     // Default adjustSalaryMonth to current month YYYY-MM
-    const now = new Date();
+    const now = formatDateTime();
     const YYYY = now.getFullYear();
     const MM = String(now.getMonth() + 1).padStart(2, '0');
     setAdjustSalaryMonth(`${YYYY}-${MM}`);
@@ -289,7 +290,7 @@ export default function FinanceAccounting({
       const debitLeg = group.debitLeg || group.legs.find(l => l.type === 'Debit');
       const creditLeg = group.creditLeg || group.legs.find(l => l.type === 'Credit');
       const sample = debitLeg || creditLeg || group.legs[0];
-      const date = sample.createdAt ? new Date(sample.createdAt) : new Date();
+      const date = new Date(new Date(sample.createdAt || Date.now()));
 
       const debitAcc = debitLeg ? financialAccounts.find(a => a.id === debitLeg.accountId) : null;
       const creditAcc = creditLeg ? financialAccounts.find(a => a.id === creditLeg.accountId) : null;
@@ -442,7 +443,7 @@ export default function FinanceAccounting({
       // 4. Date range filter
       if (dateFilter !== 'all') {
         const entryTime = e.date.getTime();
-        const now = new Date();
+        const now = formatDateTime();
         now.setHours(0, 0, 0, 0);
 
         if (dateFilter === 'today') {
@@ -1564,7 +1565,7 @@ Continue?`
       filteredLedgerEntries.forEach(e => {
         const isDebit = e.type === 'Debit';
         const row = [
-          e.date.toISOString().replace(/T/, ' ').replace(/\..+/, ''),
+          formatDateTime(e.date),
           `"${e.refNumber || ''}"`,
           `"${(e.title || '').replace(/"/g, '""')}"`,
           `"${(e.party || '').replace(/"/g, '""')}"`,
@@ -1578,7 +1579,7 @@ Continue?`
       const encodedUri = encodeURI(csvContent);
       const link = document.createElement("a");
       link.setAttribute("href", encodedUri);
-      link.setAttribute("download", `General_Ledger_Export_${new Date().toISOString().slice(0, 10)}.csv`);
+      link.setAttribute("download", `General_Ledger_Export_${formatDate()}.csv`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -1682,7 +1683,7 @@ Continue?`
           </div>
           <div class="meta-grid">
             <div>
-              <span class="meta-label">${isAr ? 'تاريخ التصدير:' : 'Date Issued:'}</span> ${new Date().toLocaleString()}
+              <span class="meta-label">${isAr ? 'تاريخ التصدير:' : 'Date Issued:'}</span> ${formatDateTime()}
             </div>
             <div>
               <span class="meta-label">${isAr ? 'المحاسب المسؤول:' : 'Approved by Email:'}</span> ${auth.currentUser?.email || 'admin@alxpress.system'}
