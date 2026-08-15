@@ -342,7 +342,7 @@ export default function Expenses() {
         createdAt: parsedCreatedAt
       };
 
-      await addDoc(collection(db, 'expenses'), payload);
+      await addDoc(expenseNumber, collection(db, 'expenses'), payload);
 
       // --- Financial Account Impact ---
       if (!linkedAccountId || !formData.creditAccountId) {

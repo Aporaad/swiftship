@@ -264,8 +264,7 @@ export default function Orders() {
     email: '',
     gps_location: '',
     address: '',
-    notes: '',
-    walletBalance: 0
+    notes: ''
   });
 
   useEffect(() => {
@@ -291,7 +290,7 @@ export default function Orders() {
     const unsubSources = onSnapshot(collection(db, 'sources'), (snap) => {
       setSources(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
-    
+
     // Fetch Auto Voucher Rules
     const unsubAutoVoucherRules = onSnapshot(doc(db, 'settings', 'automatic_voucher_rules'), (snap) => {
       if (snap.exists()) {
@@ -334,7 +333,7 @@ export default function Orders() {
 
         for (const carrier of defaults) {
           if (!existingNames.has(carrier.toLowerCase())) {
-            await addDoc(collection(db, 'shipping_companies'), {
+            await addDoc('ship_' + carrier, collection(db, 'shipping_companies'), {
               name: carrier,
               contact_person: isAr ? 'الناقل الرسمي' : 'Default Carrier',
               phone: '',
@@ -497,7 +496,7 @@ export default function Orders() {
 
   const generateOrderInvoicePDF = (order: any) => {
     if (!order) return;
-    
+
     const invoiceHtml = `
       <div style="font-family: 'Cairo', sans-serif; color: #111;">
         <div style="display: flex; justify-content: space-between; margin-bottom: 30px; border-bottom: 3px double #d4af37; padding-bottom: 20px;">
@@ -609,10 +608,10 @@ export default function Orders() {
     const totalCBM = items.reduce((sum, i) => sum + (parseFloat(i.quantity || 0) * parseFloat(i.cbm || 0)), 0);
 
     // Apply Bank Commission and Coupon to products cost
-    const bankCommValue = bankCommissionEnabled 
-      ? (bankCommissionType === 'percentage' 
-          ? (productsSum * (parseFloat(bankCommissionRate as any) / 100)) 
-          : (parseFloat(bankCommissionRate as any) || 0)) 
+    const bankCommValue = bankCommissionEnabled
+      ? (bankCommissionType === 'percentage'
+        ? (productsSum * (parseFloat(bankCommissionRate as any) / 100))
+        : (parseFloat(bankCommissionRate as any) || 0))
       : 0;
     const couponValue = couponEnabled ? couponRate : 0; // couponRate is now treated as a fixed amount in SAR
     const totalProductsCostWithAdjustments = productsSum - couponValue;
@@ -770,12 +769,12 @@ export default function Orders() {
         externalOrderNumber: formData.externalOrderNumber,
         trackingNumber: formData.trackingNumber || orderNumber,
         shippingCompany: formData.shippingCompany,
- 
+
         // Couriers
         shippingCourierId: formData.shippingCourierId,
         deliveryCourierId: formData.deliveryCourierId,
         deliveryCourierFee: parseFloat(formData.deliveryCourierFee as any) || 0,
- 
+
         // Financial definitions
         currency: formData.currency,
         exchangeRateYER: formData.exchangeRateYER,
@@ -785,7 +784,7 @@ export default function Orders() {
         companyProfitRate: formData.companyProfitRate,
         packagingFee: parseFloat(formData.packagingFee as any) || 0,
         sheinRedPrice: parseFloat(formData.sheinRedPrice as any) || 0,
- 
+
         // New fields
         cartShareCode,
         bankCommissionEnabled,
@@ -795,7 +794,7 @@ export default function Orders() {
         productsSum: currentCalcs.productsSum,
         packagingFeeEnabled,
         packagingFeeRate,
- 
+
         // Calculated values
         totalWeight: currentCalcs.totalWeight,
         totalCBM: currentCalcs.totalCBM,
@@ -804,23 +803,23 @@ export default function Orders() {
         amountPaid: parseFloat(formData.amountPaid as any) || 0,
         amountRemaining: currentCalcs.remainingYER,
         paymentStatus: payStatus,
- 
+
         // Add details from source types
         profitPerKgRate: parseFloat(profitPerKgRate as any) || 19,
         cbmShippingRateValue: parseFloat(cbmShippingRateValue as any) || 1400,
         addShippingEnabled: addShippingEnabled,
         shippingCostSAR: currentCalcs.shippingCostSAR,
- 
+
         // Profit distribution
         profitSaudiSAR: currentCalcs.profitSaudiSAR,
         profitCompanySAR: currentCalcs.profitCompanySAR,
- 
+
         // Items nested list
         items,
- 
+
         // Shipping details nested list
         shippingDetails: formData.orderSourceType === 'SHEIN' ? [] : (shippings || []),
- 
+
         // Lifecycles status
         orderStatus: 'تم تسجيل الطلب',
         deliveryStatus: 'في الانتظار',
@@ -833,7 +832,7 @@ export default function Orders() {
         updatedAt: Date.now()
       };
 
-      await addDoc(collection(db, 'orders'), payload);
+      await addDoc(payload.orderNumber, collection(db, 'orders'), payload);
 
       // Ensure system accounts exist
       let systemAccs: Record<string, string> = {};
@@ -1001,8 +1000,8 @@ export default function Orders() {
       // Record Shipping Cost Debit (for any order type with shipping cost)
       // Only apply if deduction on courier is not set, and shipping costs are not merged with product costs
       if (
-        currentCalcs.shippingCostSAR > 0 && 
-        systemAccs['sys_shipping_costs'] && 
+        currentCalcs.shippingCostSAR > 0 &&
+        systemAccs['sys_shipping_costs'] &&
         !formData.deductSourcingCostFromCourier &&
         formData.orderSourceType !== 'SHEIN' &&
         formData.orderSourceType !== 'App' &&
@@ -1211,7 +1210,10 @@ export default function Orders() {
     setIsSubmitting(true);
     try {
       // Step 1: Create the customer document
-      const docRef = await addDoc(collection(db, 'customers'), {
+      const { accountCode, code, accountId } =
+        await financialAccountService.getNextAccountIdentifiers('customer');
+      const newId = 'cust_' + accountCode;
+      const docRef = await addDoc(newId, collection(db, 'customers'), {
         fullName: customerFormData.fullName,
         phone: customerFormData.phone,
         email: customerFormData.email || '',
@@ -1280,7 +1282,8 @@ export default function Orders() {
 
     setIsSubmitting(true);
     try {
-      const docRef = await addDoc(collection(db, 'sources'), {
+      const srcId2 = 'source_' + sourceFormData.source_name
+      const docRef = await addDoc(srcId2, collection(db, 'sources'), {
         name: sourceFormData.source_name,
         source_name: sourceFormData.source_name,
         type: sourceFormData.type,
@@ -1334,7 +1337,7 @@ export default function Orders() {
 
     setIsSubmitting(true);
     try {
-      const docRef = await addDoc(collection(db, 'shipping_companies'), {
+      const docRef = await addDoc('shipping_comp_' + shippingCompanyFormData.name, collection(db, 'shipping_companies'), {
         name: shippingCompanyFormData.name,
         contact_person: shippingCompanyFormData.contact_person,
         phone: shippingCompanyFormData.phone,
@@ -1510,21 +1513,21 @@ export default function Orders() {
       const newStatus = updateFormData.orderStatus;
       const firedTriggers = selectedOrder.firedTriggers || [];
       const newFiredTriggers = [...firedTriggers];
-      
+
       const currentIndex = ORDER_STATUS_FLOW.indexOf(currentStatus);
       const newIndex = ORDER_STATUS_FLOW.indexOf(newStatus);
-      
+
       const remainingVal = parseFloat(selectedOrder.amountRemaining || '0');
       const courierId = updateFormData.deliveryCourierId || selectedOrder.deliveryCourierId;
       const shippingCourierId = updateFormData.shippingCourierId || selectedOrder.shippingCourierId;
-      
+
       let extraUpdateFields: any = {};
 
       // Helper to check if a trigger should fire
       const shouldFire = (triggerId: string, minStatus: string) => {
         if (firedTriggers.includes(triggerId)) return false;
         if (newStatus === 'ملغي') return false;
-        
+
         const minIndex = ORDER_STATUS_FLOW.indexOf(minStatus);
         const newIndex = ORDER_STATUS_FLOW.indexOf(newStatus);
         // Fire if new status is at or beyond the required status
@@ -1591,8 +1594,8 @@ export default function Orders() {
       }
 
       if (isAlreadyNotified && newStatus !== 'ملغي' && newStatus !== currentStatus) {
-        toast.error(isAr 
-          ? `تنبيه: تم إرسال إشعار بهذه الحالة (${newStatus}) للعميل مسبقاً. لن يتم تكرار الإرسال.` 
+        toast.error(isAr
+          ? `تنبيه: تم إرسال إشعار بهذه الحالة (${newStatus}) للعميل مسبقاً. لن يتم تكرار الإرسال.`
           : `Warning: A notification for this status (${newStatus}) has already been sent. WhatsApp will not be resent.`
         );
       }
@@ -1602,7 +1605,7 @@ export default function Orders() {
         const courierRecord = couriers.find(c => c.id === shippingCourierId);
         if (courierRecord) {
           const isSourcing = courierRecord.courierType === 'sourcing';
-          const exchangeRate = parseFloat(selectedOrder.exchangeRateYER || settings.exchangeRateYER || 390);
+          const exchangeRate = parseFloat(selectedOrder.exchangeRateYER || settings.exchangeRateSAR || 390);
           const commissionProfitOriginal = parseFloat(selectedOrder.profitSaudiSAR || '0');
           const commissionProfit = isSourcing ? commissionProfitOriginal : (commissionProfitOriginal * exchangeRate);
           const finalCurrency = isSourcing ? 'SAR' : 'YER';
@@ -1646,7 +1649,7 @@ export default function Orders() {
                 createdByName: profile?.fullName || 'System Auto-Commission',
                 createdAt: Date.now()
               };
-              await addDoc(collection(db, 'expenses'), commissionPayload);
+              await addDoc(commissionNumber, collection(db, 'expenses'), commissionPayload);
             }
 
             if (linkedAccountId) {
@@ -1711,7 +1714,7 @@ export default function Orders() {
             createdByName: profile?.fullName || 'System Auto-Custody',
             createdAt: Date.now()
           };
-          await addDoc(collection(db, 'expenses'), custodyPayload);
+          await addDoc(expenseNumber, collection(db, 'expenses'), custodyPayload);
         }
 
         const customerRecord = customers.find(c => c.id === selectedOrder.customerId);
@@ -1742,7 +1745,7 @@ export default function Orders() {
       }
 
       // 3. delivery_wage trigger
-      const deliveryFee = parseFloat(selectedOrder.deliveryCourierFee || updateFormData.deliveryCourierFee || '0');
+      const deliveryFee = parseFloat(selectedOrder.deliveryCourierFee || '0');
       if (shouldFire('delivery_wage', 'تم التسليم') && courierId && deliveryFee > 0) {
         const YY = String(new Date().getFullYear()).slice(-2);
         const MM = String(new Date().getMonth() + 1).padStart(2, '0');
@@ -1784,7 +1787,7 @@ export default function Orders() {
             createdByName: profile?.fullName || 'System Auto-Wage',
             createdAt: Date.now()
           };
-          await addDoc(collection(db, 'expenses'), wagePayload);
+          await addDoc(wageNumber, collection(db, 'expenses'), wagePayload);
         }
 
         if (linkedAccountId) {
@@ -2144,10 +2147,10 @@ export default function Orders() {
 
         const firedTriggers = ord.firedTriggers || [];
         const newFiredTriggers = [...firedTriggers];
-        
+
         const currentIndex = ORDER_STATUS_FLOW.indexOf(ord.orderStatus || 'تم تسجيل الطلب');
         const newIndex = ORDER_STATUS_FLOW.indexOf(newStatus);
-        
+
         const remainingVal = parseFloat(ord.amountRemaining || '0');
         const courierId = ord.deliveryCourierId;
         const shippingCourierId = ord.shippingCourierId;
@@ -2166,7 +2169,7 @@ export default function Orders() {
           const courierRecord = couriers.find(c => c.id === shippingCourierId);
           if (courierRecord) {
             const isSourcing = courierRecord.courierType === 'sourcing';
-            const exchangeRate = parseFloat(ord.exchangeRateYER || settings.exchangeRateYER || 390);
+            const exchangeRate = parseFloat(ord.exchangeRateYER || settings.exchangeRateSAR || 140);
             const commissionProfitOriginal = parseFloat(ord.profitSaudiSAR || '0');
             const commissionProfit = isSourcing ? commissionProfitOriginal : (commissionProfitOriginal * exchangeRate);
             const finalCurrency = isSourcing ? 'SAR' : 'YER';
@@ -2210,7 +2213,7 @@ export default function Orders() {
                   createdByName: profile?.fullName || 'System Auto-Commission',
                   createdAt: Date.now()
                 };
-                await addDoc(collection(db, 'expenses'), commissionPayload);
+                await addDoc(commissionNumber, collection(db, 'expenses'), commissionPayload);
               }
 
               if (linkedAccountId) {
@@ -2273,7 +2276,7 @@ export default function Orders() {
               createdByName: profile?.fullName || 'System Auto-Custody',
               createdAt: Date.now()
             };
-            await addDoc(collection(db, 'expenses'), custodyPayload);
+            await addDoc(expenseNumber, collection(db, 'expenses'), custodyPayload);
           }
 
           const customerRecord = customers.find(c => c.id === ord.customerId);
@@ -2344,7 +2347,7 @@ export default function Orders() {
               createdByName: profile?.fullName || 'System Auto-Wage',
               createdAt: Date.now()
             };
-            await addDoc(collection(db, 'expenses'), wagePayload);
+            await addDoc(wageNumber, collection(db, 'expenses'), wagePayload);
           }
 
           if (linkedAccountId) {
@@ -2447,7 +2450,7 @@ export default function Orders() {
       setIsBatchUpdating(false);
     }
   };
-
+  //اريد اضافه جدول مخصص لحالات الطلب في قاده البيانات وضافه واجهه مخصصه لاداره الحالات 
   const formatStatusLabel = (status: string) => {
     const translationAr: Record<string, string> = {
       'تم تسجيل الطلب': 'تم تسجيل الطلب',
@@ -2477,7 +2480,7 @@ export default function Orders() {
   const exportOrdersToPDF = () => {
     const reportTitle = isAr ? 'كشف حركة الشحنات والطلبيات' : 'Logistics Orders Ledger';
     printContent(reportTitle, 'orders-ledger-table', isAr);
-    
+
     activityLogService.log('export_orders_pdf', `Orders list report`, {
       count: filteredOrdersList.length
     });
@@ -4042,8 +4045,8 @@ export default function Orders() {
                     {bankCommissionEnabled && calcs.bankCommissionSAR > 0 && (
                       <div className="flex justify-between items-center text-amber-500/80">
                         <span className="font-medium">
-                          {isAr 
-                            ? `عمولة البنك (${bankCommissionType === 'percentage' ? bankCommissionRate + '%' : bankCommissionRate + ' SAR'}):` 
+                          {isAr
+                            ? `عمولة البنك (${bankCommissionType === 'percentage' ? bankCommissionRate + '%' : bankCommissionRate + ' SAR'}):`
                             : `Bank Fee (${bankCommissionType === 'percentage' ? bankCommissionRate + '%' : bankCommissionRate + ' SAR'}):`}
                         </span>
                         <div className="text-right">
@@ -4466,11 +4469,10 @@ export default function Orders() {
                     <select
                       value={updateFormData.orderStatus}
                       onChange={e => setUpdateFormData({ ...updateFormData, orderStatus: e.target.value })}
-                      className={`w-full bg-slate-950 border text-white rounded-xl p-3 outline-none text-xs transition-colors ${
-                        (selectedOrder.firedTriggers || []).includes(`status_notified_${updateFormData.orderStatus}`)
-                          ? 'border-yellow-500/50 focus:border-yellow-500'
-                          : 'border-slate-800'
-                      }`}
+                      className={`w-full bg-slate-950 border text-white rounded-xl p-3 outline-none text-xs transition-colors ${(selectedOrder.firedTriggers || []).includes(`status_notified_${updateFormData.orderStatus}`)
+                        ? 'border-yellow-500/50 focus:border-yellow-500'
+                        : 'border-slate-800'
+                        }`}
                     >
                       <option value="تم تسجيل الطلب">{isAr ? 'تم تسجيل الطلب واستخلاص الفاتورة' : 'Invoice saved'}</option>
                       <option value="وصل مستودع السعودية">{isAr ? 'وصل مستودع السعودية للتعبئة' : 'Arrived Saudi packaging HUB'}</option>
@@ -4485,8 +4487,8 @@ export default function Orders() {
                       <div className="mt-2 p-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg flex items-center gap-2 text-yellow-500 text-[10px] animate-pulse">
                         <AlertCircle className="w-3 h-3" />
                         <span>
-                          {isAr 
-                            ? 'لقد وصل الطلب لهذه الحالة مسبقاً. لن يتم تكرار القيود المحاسبية أو إرسال إشعارات للعميل.' 
+                          {isAr
+                            ? 'لقد وصل الطلب لهذه الحالة مسبقاً. لن يتم تكرار القيود المحاسبية أو إرسال إشعارات للعميل.'
                             : 'This status was already reached. Financial entries and customer notifications will not be repeated.'}
                         </span>
                       </div>
@@ -4957,9 +4959,9 @@ export default function Orders() {
                   </p>
 
                   <div className="pt-1 flex flex-wrap justify-center md:justify-start gap-2">
-                    <CopyToClipboard 
-                      text={selectedOrder.trackingNumber || selectedOrder.orderNumber || ''} 
-                      showIconOnly={false} 
+                    <CopyToClipboard
+                      text={selectedOrder.trackingNumber || selectedOrder.orderNumber || ''}
+                      showIconOnly={false}
                       label={isAr ? 'نسخ رمز التتبع الموحد' : 'Copy Tracking ID'}
                       labelCopied={isAr ? 'تم نسخ الرمز!' : 'Copied Tracking ID!'}
                       className="px-4 py-2.5 text-[11px] rounded-xl font-black"

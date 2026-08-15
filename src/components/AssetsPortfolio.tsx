@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
+import {
   Truck, Search, Wrench, X, PlusCircle, Trash2, Calendar, DollarSign,
   Activity, CheckCircle, AlertTriangle, ShieldCheck, RefreshCw, User, ClipboardList, Package, Printer
 } from 'lucide-react';
-import { db } from '../lib/firebase';
-import { collection, addDoc, doc, deleteDoc, updateDoc, onSnapshot } from 'firebase/firestore';
+import { addAssDoc, db } from '../lib/supabase-firebase-adapter';
+import { collection, addDoc, doc, deleteDoc, updateDoc, onSnapshot } from '../lib/supabase-firebase-adapter';
 import { notificationService } from '../services/notificationService';
 import { jsPDF } from 'jspdf';
+import { formatDate } from '../lib/dateUtils';
 
 interface AssetsPortfolioProps {
   isAr: boolean;
@@ -46,7 +47,7 @@ interface Asset {
 export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPortfolioProps) {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [assetsLoading, setAssetsLoading] = useState(true);
-  
+
   // Filtering & searching states
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -70,7 +71,7 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
     type: 'Fixed' as any,
     cost: '',
     currency: 'YER',
-    purchaseDate: new Date().toISOString().slice(0, 10),
+    purchaseDate: formatDate(),
     assignedCourierId: '',
     status: 'Active' as any,
     notes: ''
@@ -82,7 +83,7 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
     type: 'Preventive' as any,
     notes: '',
     doneBy: '',
-    date: new Date().toISOString().slice(0, 10),
+    date: formatDate(),
   });
 
   // Rates Converter helper
@@ -104,7 +105,7 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
   // Sync assets from DB
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'assets'), (snap) => {
-      setAssets(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Asset)));
+      setAssets(snap.docs.map((doc: { id: any; assetCode: any; data: () => Asset; }) => ({ id: doc.id, ...doc.data() } as Asset)));
       setAssetsLoading(false);
     }, (error) => {
       console.error("Error fetching assets:", error);
@@ -116,12 +117,12 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
   const filteredAssets = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return assets.filter(a => {
-      const matchQuery = !query || 
-        a.assetCode.toLowerCase().includes(query) || 
-        a.nameAr.toLowerCase().includes(query) || 
+      const matchQuery = !query ||
+        a.assetCode.toLowerCase().includes(query) ||
+        a.nameAr.toLowerCase().includes(query) ||
         a.nameEn.toLowerCase().includes(query) ||
         (a.assignedCourierName && a.assignedCourierName.toLowerCase().includes(query));
-      
+
       const matchCategory = categoryFilter === 'all' || a.category === categoryFilter;
       const matchStatus = statusFilter === 'all' || a.status === statusFilter;
 
@@ -184,7 +185,8 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
     setAssetRegisterLoading(true);
     try {
       const courierObj = couriers.find(c => c.id === newAsset.assignedCourierId);
-      await addDoc(collection(db, 'assets'), {
+      const newAssetId = 'asset' + newAsset.assetCode;
+      await addAssDoc(newAssetId, newAsset.assetCode, collection(db, 'assets'), {
         assetCode: newAsset.assetCode,
         nameAr: newAsset.nameAr,
         nameEn: newAsset.nameEn,
@@ -234,8 +236,8 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
   };
 
   const handleDeleteAsset = async (id: string, name: string) => {
-    if (!window.confirm(isAr 
-      ? `هل أنت متأكد من حذف وإخراج الأصل (${name}) من عهدة الشركة؟` 
+    if (!window.confirm(isAr
+      ? `هل أنت متأكد من حذف وإخراج الأصل (${name}) من عهدة الشركة؟`
       : `Are you sure you want to retire and delete physical asset (${name})?`
     )) return;
 
@@ -308,7 +310,7 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
       'د': 'D', 'ذ': 'Dh', 'ر': 'R', 'ز': 'Z', 'س': 'S', 'ش': 'Sh', 'ص': 'S', 'ض': 'D',
       'ط': 'T', 'ظ': 'Dh', 'ع': 'A', 'غ': 'Gh', 'ف': 'F', 'ق': 'Q', 'ك': 'K', 'ل': 'L',
       'م': 'M', 'ن': 'N', 'ه': 'H', 'و': 'W', 'ي': 'Y', 'ى': 'Y', 'ة': 'h', 'ئ': 'Y',
-      'ؤ': 'W', ' ': ' ', 'ﻻ': 'La', 'لأ': 'La', '٠': '0', '١': '1', '٢': '2', '٣': '3', 
+      'ؤ': 'W', ' ': ' ', 'ﻻ': 'La', 'لأ': 'La', '٠': '0', '١': '1', '٢': '2', '٣': '3',
       '٤': '4', '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9'
     };
     return text.split('').map(char => mapping[char] || char).join('');
@@ -424,12 +426,12 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
       fixedAssets.forEach((asset, idx) => {
         if (y > height - 25) {
           doc.addPage();
-          
+
           doc.setFillColor(15, 15, 18);
           doc.rect(0, 0, width, 18, 'F');
           doc.setFillColor(212, 175, 55);
           doc.rect(0, 18, width, 1.2, 'F');
-          
+
           doc.setTextColor(212, 175, 55);
           doc.setFontSize(9);
           doc.setFont('Helvetica', 'bold');
@@ -518,7 +520,7 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
       doc.setFontSize(7.5);
       doc.setFont('Helvetica', 'italic');
       doc.text('This property inventory matches system registers. Undergoing maintenance diagnostics are backed by audited physical repair bills.', 12, y);
-      
+
       y += 12;
       doc.setFont('Helvetica', 'bold');
       doc.setTextColor(50, 50, 55);
@@ -559,10 +561,10 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
 
   return (
     <div className="space-y-6 pt-2 animate-fade-in text-start">
-      
+
       {/* Bento Grid Metrics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        
+
         {/* Metric 1 */}
         <div className="bg-black/30 border border-slate-850 p-5 rounded-2xl">
           <span className="block text-[9px] text-slate-500 font-extrabold uppercase tracking-widest">{isAr ? 'إجمالي قيمة أصول الشركة الثابتة' : 'Fixed Book Assets Assets'}</span>
@@ -626,7 +628,7 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
           </div>
 
           <div className="flex flex-wrap gap-2">
-            
+
             {/* Search */}
             <div className="relative">
               <input
@@ -688,18 +690,18 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredAssets.map((asset) => {
             const isExpanded = expandedAssetId === asset.id;
-            
+
             // Calc total maint cost logged
             const totalMaintCost = (asset.maintenanceLogs || []).reduce((sum, log) => {
               return sum + convertToYER(log.cost, log.currency);
             }, 0);
 
             return (
-              <div 
+              <div
                 key={asset.id}
                 className="bg-[#121215] border border-slate-850 rounded-2xl overflow-hidden hover:border-[#d4af37]/35 transition-all text-start flex flex-col justify-between"
               >
-                
+
                 {/* Header card header */}
                 <div className="p-4 border-b border-slate-850 flex items-center justify-between bg-black/10">
                   <div className="flex items-center gap-2.5">
@@ -713,22 +715,21 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
                       </span>
                     </div>
                   </div>
-                  
+
                   {/* Status badge */}
-                  <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-lg text-center ${
-                    asset.status === 'Active' ? 'bg-emerald-950/45 text-emerald-400 border border-emerald-900/30' :
+                  <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-lg text-center ${asset.status === 'Active' ? 'bg-emerald-950/45 text-emerald-400 border border-emerald-900/30' :
                     asset.status === 'UnderMaintenance' ? 'bg-amber-950/45 text-amber-500 border border-amber-900/30 animate-pulse' :
-                    'bg-slate-900 text-slate-500 border border-slate-800'
-                  }`}>
+                      'bg-slate-900 text-slate-500 border border-slate-800'
+                    }`}>
                     {asset.status === 'Active' ? (isAr ? 'نشط تفعيل' : 'Active') :
-                     asset.status === 'UnderMaintenance' ? (isAr ? 'قيد صيانة' : 'Maintenance') :
-                     (isAr ? 'خارج الخدمة' : 'Retired')}
+                      asset.status === 'UnderMaintenance' ? (isAr ? 'قيد صيانة' : 'Maintenance') :
+                        (isAr ? 'خارج الخدمة' : 'Retired')}
                   </span>
                 </div>
 
                 {/* Info block */}
                 <div className="p-4 space-y-3 text-xs flex-1">
-                  
+
                   <div className="grid grid-cols-2 gap-2 text-[10px]">
                     <div>
                       <span className="text-slate-550 block font-bold">{isAr ? 'تكلفة الاقتناء' : 'Acquisition Cost'}</span>
@@ -827,8 +828,8 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
                           <div className="flex justify-between items-center text-[9px]">
                             <span className="font-black text-amber-500 bg-amber-950/40 px-1.5 rounded">
                               {log.type === 'Preventive' ? (isAr ? 'وقائية' : 'Preventive') :
-                               log.type === 'Repair' ? (isAr ? 'إصلاح عطل' : 'Repair') : 
-                               (isAr ? 'توضيب كامل' : 'Overhaul')}
+                                log.type === 'Repair' ? (isAr ? 'إصلاح عطل' : 'Repair') :
+                                  (isAr ? 'توضيب كامل' : 'Overhaul')}
                             </span>
                             <span className="font-mono text-slate-500 font-bold">
                               {log.date}
@@ -861,7 +862,7 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
 
           {filteredAssets.length === 0 && (
             <div className="p-16 text-center text-slate-500 font-semibold font-mono text-[10px] uppercase border border-dashed border-slate-850 rounded-2xl col-span-full">
-              [ {isAr ? 'لا يوجد أصول مطابقة لمعايير البحث.' : 'no_matching_assets_found_in_portfolio' } ]
+              [ {isAr ? 'لا يوجد أصول مطابقة لمعايير البحث.' : 'no_matching_assets_found_in_portfolio'} ]
             </div>
           )}
         </div>
@@ -872,8 +873,8 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
       {isAddOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 text-start">
           <div className="bg-[#121215] border border-slate-850 w-full max-w-md rounded-3xl overflow-hidden shadow-2xl relative animate-fade-in">
-            
-            <button 
+
+            <button
               onClick={() => setIsAddOpen(false)}
               className="absolute top-4 right-4 p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-500 hover:text-white transition-all"
             >
@@ -891,7 +892,7 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
             </div>
 
             <form onSubmit={handleRegisterAsset} className="p-6 space-y-4">
-              
+
               <div className="grid grid-cols-2 gap-3">
                 {/* Asset Code */}
                 <div>
@@ -1072,8 +1073,8 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
       {selectedAssetForMaint && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 text-start">
           <div className="bg-[#121215] border border-slate-850 w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl relative animate-fade-in">
-            
-            <button 
+
+            <button
               onClick={() => setSelectedAssetForMaint(null)}
               className="absolute top-4 right-4 p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-500 hover:text-white transition-all pointer-events-auto cursor-pointer"
             >
@@ -1091,7 +1092,7 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
             </div>
 
             <form onSubmit={handleAddMaintenance} className="p-6 space-y-4">
-              
+
               {/* Cost  */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="col-span-2">
@@ -1128,15 +1129,14 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
                       key={state}
                       type="button"
                       onClick={() => setNewMaint(prev => ({ ...prev, type: state }))}
-                      className={`text-[9.5px] font-black border py-2 rounded-xl transition-all ${
-                        newMaint.type === state
-                          ? 'bg-[#d4af37]/15 border-[#d4af37]/30 text-[#d4af37]'
-                          : 'bg-black/25 border-slate-850 text-slate-500 hover:text-slate-300'
-                      }`}
+                      className={`text-[9.5px] font-black border py-2 rounded-xl transition-all ${newMaint.type === state
+                        ? 'bg-[#d4af37]/15 border-[#d4af37]/30 text-[#d4af37]'
+                        : 'bg-black/25 border-slate-850 text-slate-500 hover:text-slate-300'
+                        }`}
                     >
                       {state === 'Preventive' ? (isAr ? 'دورية/وقائية' : 'Preventive') :
-                       state === 'Repair' ? (isAr ? 'إصلاح عطل' : 'Repair') : 
-                       (isAr ? 'توضيب ميكانيكي' : 'Overhaul')}
+                        state === 'Repair' ? (isAr ? 'إصلاح عطل' : 'Repair') :
+                          (isAr ? 'توضيب ميكانيكي' : 'Overhaul')}
                     </button>
                   ))}
                 </div>

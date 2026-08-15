@@ -20,7 +20,8 @@ export const activityService = {
       if (!user) return;
 
       // Dynamic path log
-      await addDoc(collection(db, 'activity_logs'), {
+      const logId = 'ACT-' + Math.random().toString(36).substring(2, 11);
+      await addDoc(logId, collection(db, 'activity_logs'), {
         userId: user.uid,
         userEmail: user.email || 'unknown',
         action,

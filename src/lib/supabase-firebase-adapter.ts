@@ -541,7 +541,7 @@ export async function getDocFromServer(docRef: DocRef) {
   return getDoc(docRef);
 }
 
-export async function addDoc(newID, collectionRef: FirebaseQuery, rawData: any) {
+export async function addDoc(newID: any, collectionRef: FirebaseQuery, rawData: any) {
   const table = collectionRef.path;
   const id = newID ? newID : 'noId_' + Math.random().toString(36).substring(2, 11) + Math.random().toString(36).substring(2, 11);
   const data = cleanData(rawData);
@@ -570,7 +570,36 @@ export async function addDoc(newID, collectionRef: FirebaseQuery, rawData: any) 
 
   return { id };
 }
+export async function addAssDoc(newID: any, arg1: any, collectionRef: FirebaseQuery, rawData: any) {
+  const table = collectionRef.path;
+  const id = newID ? newID : 'noId_' + Math.random().toString(36).substring(2, 11) + Math.random().toString(36).substring(2, 11);
+  const assetCode = arg1 ? arg1 : 'noAssetCode_' + Math.random().toString(36).substring(2, 11) + Math.random().toString(36).substring(2, 11);
+  const data = cleanData(rawData);
 
+  if (!isOfflineMode()) {
+    const { error } = await supabase.from(table).insert({ id, assetCode, data });
+    if (error) {
+      console.warn(`[Supabase Adapter] addDoc error on table ${table}: ${error.message}`);
+    }
+  } else {
+    // Offline mode: buffering addDoc local write
+  }
+
+  const newItem = { id, assetCode, ...data };
+  if (!collectionCaches[table]) collectionCaches[table] = [];
+  collectionCaches[table].push(newItem);
+
+  // Safe write update in localStorage backup
+  try {
+    safeLocalStorage.setItem(`swiftship_table_backup_${table}`, JSON.stringify(collectionCaches[table]));
+  } catch (_) { }
+
+  if (collectionListeners[table]) {
+    collectionListeners[table].forEach(cb => cb());
+  }
+
+  return { id };
+}
 export async function setDoc(docRef: DocRef, rawData: any, options?: any) {
   const table = docRef.path;
   const id = docRef.id;

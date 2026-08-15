@@ -127,7 +127,8 @@ export default function Sources() {
           type: 'info'
         });
       } else {
-        await addDoc(collection(db, 'shipping_companies'), {
+        const scId = 'SC-' + Math.random().toString(36).substring(2, 11);
+        await addDoc(scId, collection(db, 'shipping_companies'), {
           ...payload,
           createdAt: Date.now()
         });
@@ -222,7 +223,8 @@ export default function Sources() {
           type: 'info'
         });
       } else {
-        await addDoc(collection(db, 'sources'), {
+        const srcId = 'SRC-' + Math.random().toString(36).substring(2, 11);
+        await addDoc(srcId, collection(db, 'sources'), {
           ...payload,
           createdAt: Date.now()
         });

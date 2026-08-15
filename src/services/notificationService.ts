@@ -71,21 +71,20 @@ export const notificationService = {
 
       // 3. Save to Firestore for persistence only if the operator is authenticated
       if (auth.currentUser) {
-        await addDoc({
-          newID: collection(db, 'notifications'), collectionRef: {
-            title,
-            message,
-            type,
-            orderId: orderId || null,
-            userId: userId || 'global',
-            associatedUserIds: associatedUserIds || [],
-            isPublic,
-            read: false,
-            category: inferredCategory,
-            createdAt: Date.now(),
-            creatorId: auth.currentUser?.uid || 'system',
-            creatorName: auth.currentUser?.displayName || 'System'
-          }
+        const notifId = 'NOTIF-' + Math.random().toString(36).substring(2, 11);
+        await addDoc(notifId, collection(db, 'notifications'), {
+          title,
+          message,
+          type,
+          orderId: orderId || null,
+          userId: userId || 'global',
+          associatedUserIds: associatedUserIds || [],
+          isPublic,
+          read: false,
+          category: inferredCategory,
+          createdAt: Date.now(),
+          creatorId: auth.currentUser?.uid || 'system',
+          creatorName: auth.currentUser?.displayName || 'System'
         });
       }
     } catch (error) {

@@ -5,8 +5,8 @@ import {
   DollarSign, Activity, FileSpreadsheet, PlusCircle, Scale, Receipt, Sparkles, TrendingUp, RefreshCw, X,
   FolderTree, Wrench, Users, Coins, UserCheck, Eye, ChevronDown, ChevronUp, Edit2, Lock, Trash2, ArrowRightLeft
 } from 'lucide-react';
-import { db, auth } from '../lib/firebase';
-import { collection, addDoc, doc, updateDoc, writeBatch, deleteDoc, onSnapshot, query, orderBy, increment, getDocs, where } from 'firebase/firestore';
+import { db, auth } from '../lib/supabase-firebase-adapter';
+import { collection, addDoc, doc, updateDoc, writeBatch, deleteDoc, onSnapshot, query, orderBy, increment, getDocs, where } from '../lib/supabase-firebase-adapter';
 import { notificationService } from '../services/notificationService';
 import ChartOfAccounts from './ChartOfAccounts';
 import AssetsPortfolio from './AssetsPortfolio';
@@ -92,7 +92,7 @@ export default function FinanceAccounting({
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'assets'), (snap) => {
-      setAssets(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setAssets(snap.docs.map((doc: { id: any; data: () => any; }) => ({ id: doc.id, ...doc.data() })));
     }, (error) => {
       console.error("Error loading assets for balance list:", error);
     });
@@ -101,7 +101,7 @@ export default function FinanceAccounting({
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'accounts'), (snap) => {
-      setFinancialAccounts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setFinancialAccounts(snap.docs.map((doc: { id: any; data: () => any; }) => ({ id: doc.id, ...doc.data() })));
     }, (error) => {
       console.error("Error loading financial accounts:", error);
     });
@@ -193,14 +193,14 @@ export default function FinanceAccounting({
 
   useEffect(() => {
     // Default adjustSalaryMonth to current month YYYY-MM
-    const now = formatDateTime();
+    const now = new Date();
     const YYYY = now.getFullYear();
     const MM = String(now.getMonth() + 1).padStart(2, '0');
     setAdjustSalaryMonth(`${YYYY}-${MM}`);
 
     // Snapshot listener for account transactions
     const unsub = onSnapshot(collection(db, 'account_transactions'), (snap) => {
-      setAccountTransactions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setAccountTransactions(snap.docs.map((doc: { id: any; data: () => any; }) => ({ id: doc.id, ...doc.data() })));
     }, (error) => {
       console.error("Error loading account transactions:", error);
     });
@@ -211,11 +211,11 @@ export default function FinanceAccounting({
   useEffect(() => {
     const qHist = query(collection(db, 'salary_history'), orderBy('createdAt', 'desc'));
     const unsubH = onSnapshot(qHist, (snap) => {
-      setSalaryHistory(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      setSalaryHistory(snap.docs.map((d: { id: any; data: () => any; }) => ({ id: d.id, ...d.data() })));
     }, (err) => console.error('[SalaryTab] salary_history error:', err));
 
     const unsubE = onSnapshot(collection(db, 'users'), (snap) => {
-      setEmployees(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setEmployees(snap.docs.map((d: { id: any; data: () => any; }) => ({ id: d.id, ...d.data() })));
     }, (err) => console.error('[SalaryTab] users error:', err));
 
     return () => { unsubH(); unsubE(); };
@@ -304,11 +304,11 @@ export default function FinanceAccounting({
       const amountOriginal = sample.amountOriginal !== undefined ? sample.amountOriginal : sample.amount;
       const convertedAmt = convertToYER(amountOriginal, accountCurrency);
 
-      const debitPartyName = debitLeg 
+      const debitPartyName = debitLeg
         ? `${debitLeg.accountCode || (debitAcc ? debitAcc.accountCode : '')} - ${debitLeg.entityName || (debitAcc ? (isAr ? debitAcc.nameAr : debitAcc.nameEn) : '')}`.replace(/^- /, '').trim()
         : '—';
 
-      const creditPartyName = creditLeg 
+      const creditPartyName = creditLeg
         ? `${creditLeg.accountCode || (creditAcc ? creditAcc.accountCode : '')} - ${creditLeg.entityName || (creditAcc ? (isAr ? creditAcc.nameAr : creditAcc.nameEn) : '')}`.replace(/^- /, '').trim()
         : '—';
 
@@ -370,7 +370,7 @@ export default function FinanceAccounting({
           allLegs: []
         });
       } else {
-        const catObj = EXPENSE_CATEGORIES_DYNAMIC.find(c => c.id === exp.category) || EXPENSE_CATEGORIES_DYNAMIC.find(c => c.id === 'other');
+        const catObj = EXPENSE_CATEGORIES_DYNAMIC.find((c: { id: any; }) => c.id === exp.category) || EXPENSE_CATEGORIES_DYNAMIC.find((c: { id: string; }) => c.id === 'other');
         const catLabel = catObj ? (isAr ? catObj.labelAr : catObj.labelEn) : (isAr ? 'مصروف تشغيلي' : 'Operational Expense');
         entries.push({
           id: `EXP-UNLINKED-${exp.id}`,
@@ -443,7 +443,7 @@ export default function FinanceAccounting({
       // 4. Date range filter
       if (dateFilter !== 'all') {
         const entryTime = e.date.getTime();
-        const now = formatDateTime();
+        const now = new Date();
         now.setHours(0, 0, 0, 0);
 
         if (dateFilter === 'today') {
@@ -503,9 +503,9 @@ export default function FinanceAccounting({
   // Dynamic Multi-Currency Cash Box Vault Balances
   const vaultBalances = useMemo(() => {
     // 1. Identify all accounts under "Cash & Safes" category (Code 1110)
-    const cashAccounts = financialAccounts.filter(a => 
-      a.accountCode === '1110' || 
-      a.parentCode === '1110' || 
+    const cashAccounts = financialAccounts.filter(a =>
+      a.accountCode === '1110' ||
+      a.parentCode === '1110' ||
       a.accountCode?.startsWith('111')
     );
 
@@ -644,14 +644,14 @@ export default function FinanceAccounting({
       } else {
         const txId = selectedEditEntry.id;
         const refNum = selectedEditEntry.refNumber;
-        
-        const txQuery = refNum 
+
+        const txQuery = refNum
           ? query(collection(db, 'account_transactions'), where('refNumber', '==', refNum))
           : query(collection(db, 'account_transactions'), where('__name__', '==', txId));
-          
+
         const txSnap = await getDocs(txQuery);
-        const exchangeRates = { 
-          USD: settings.exchangeRateUSD || 535, 
+        const exchangeRates = {
+          USD: settings.exchangeRateUSD || 535,
           SAR: settings.exchangeRateSAR || 140,
           YER: 1
         };
@@ -663,7 +663,7 @@ export default function FinanceAccounting({
           for (const txDoc of txSnap.docs) {
             const txData = txDoc.data();
             if (txData.accountId) affectedAccountIds.add(txData.accountId);
-            
+
             const targetAcc = txData.type === 'Debit' ? newDebitAcc : newCreditAcc;
             const targetAccId = targetAcc ? targetAcc.id : txData.accountId;
             if (targetAccId) affectedAccountIds.add(targetAccId);
@@ -701,7 +701,7 @@ export default function FinanceAccounting({
               const expQ = query(collection(db, 'expenses'), where('expenseNumber', '==', txData.refNumber));
               const expSnaps = await getDocs(expQ);
               if (!expSnaps.empty) {
-                expSnaps.forEach(expDoc => {
+                expSnaps.forEach((expDoc) => {
                   batch.update(expDoc.ref, {
                     amount: rawAmt,
                     currency: editJournalData.currencyOriginal,
@@ -774,7 +774,7 @@ export default function FinanceAccounting({
 
     // Check PIN against employee systemPins or master fallback PINs ('1234', '0000')
     const isValidPin = employees.some(emp => emp.systemPin && emp.systemPin.trim() === trimmedPin) ||
-                       trimmedPin === '1234' || trimmedPin === '0000';
+      trimmedPin === '1234' || trimmedPin === '0000';
 
     if (!isValidPin) {
       setDeletePinError(isAr ? 'رمز PIN غير صحيح. يرجى التثبت من الرمز وتكرار المحاولة.' : 'Invalid PIN code. Access denied.');
@@ -799,7 +799,7 @@ export default function FinanceAccounting({
         });
       } else if (entryToDelete.id && !entryToDelete.id.startsWith('EXP-UNLINKED-')) {
         const refNum = entryToDelete.refNumber;
-        const qTx = refNum 
+        const qTx = refNum
           ? query(collection(db, 'account_transactions'), where('refNumber', '==', refNum))
           : query(collection(db, 'account_transactions'), where('__name__', '==', entryToDelete.id));
         const snap = await getDocs(qTx);
@@ -973,7 +973,7 @@ export default function FinanceAccounting({
         salaryMonth: isSalaryPayment ? adjustSalaryMonth : null
       };
 
-      await addDoc(collection(db, 'expenses'), payload);
+      await addDoc('exp_' + voucherCode, collection(db, 'expenses'), payload);
 
       notificationService.notify({
         title: isAr ? 'تم تقييد القيد بنجاح' : 'Adjustment Logged',
@@ -1205,7 +1205,7 @@ Continue?`
 
       // 4. Create one big adjustment document in expenses
       const expensesRef = collection(db, 'expenses');
-      await addDoc(expensesRef, {
+      await addDoc('exp_' + mainVoucherCode, expensesRef, {
         expenseNumber: mainVoucherCode,
         type: 'General',
         amount: Math.abs(currentBalance) + courierAuditSheet.totalUnremittedCashValue,
@@ -1298,7 +1298,7 @@ Continue?`
         createdAt: Date.now()
       };
 
-      await addDoc(remitsRef, payload);
+      await addDoc('exp_' + voucherCode, remitsRef, payload);
       await batch.commit();
 
       notificationService.notify({
@@ -1499,7 +1499,7 @@ Continue?`
         financialAccountCode: linkedAccountCode || null
       };
 
-      await addDoc(adjustmentsRef, payload);
+      await addDoc('exp_' + voucherNum, adjustmentsRef, payload);
 
       if (linkedAccountId) {
         const convertedPaid = financialAccountService.convertToDefaultCurrency(
@@ -3651,7 +3651,7 @@ Continue?`
                         // Target Account is being DEBITED
                         const firstChar = (targetAcc.accountCode || targetAcc.code || '1').trim().toUpperCase();
                         const isCreditNormal = firstChar.startsWith('2') || firstChar.startsWith('3') || firstChar.startsWith('4') || firstChar.startsWith('REV') || firstChar.startsWith('LIAB') || firstChar.startsWith('EQU');
-                        
+
                         // If it's a Credit-Normal account (Liability/Equity/Revenue), Debiting reduces balance
                         // Add a small epsilon (0.01) to avoid warnings on floating point imprecision
                         if (isCreditNormal && targetAcc.balance - convertedAdjustAmt < -0.01) {
@@ -3681,7 +3681,7 @@ Continue?`
                         // Source Account is being CREDITED
                         const firstChar = (sourceAcc.accountCode || sourceAcc.code || '1').trim().toUpperCase();
                         const isDebitNormal = firstChar.startsWith('1') || firstChar.startsWith('5') || firstChar.startsWith('EXP') || firstChar.startsWith('AST') || firstChar.startsWith('ASS');
-                        
+
                         // If it's a Debit-Normal account (Asset/Expense), Crediting reduces balance
                         // Add a small epsilon (0.01) to avoid warnings on floating point imprecision
                         if (isDebitNormal && sourceAcc.balance - convertedAdjustAmt < -0.01) {
