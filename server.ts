@@ -4,12 +4,12 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 
-const currentFilePath = (typeof import.meta !== 'undefined' && typeof import.meta.url === 'string') 
-  ? fileURLToPath(import.meta.url) 
+const currentFilePath = (typeof import.meta !== 'undefined' && typeof import.meta.url === 'string')
+  ? fileURLToPath(import.meta.url)
   : (typeof __filename !== 'undefined' ? __filename : '');
 
-const currentDirPath = (currentFilePath) 
-  ? path.dirname(currentFilePath) 
+const currentDirPath = (currentFilePath)
+  ? path.dirname(currentFilePath)
   : (typeof __dirname !== 'undefined' ? __dirname : process.cwd());
 
 
@@ -65,7 +65,7 @@ async function startServer() {
   // Authenticate the server session using system administrative account to secure backend operations
   const systemEmail = 'admin@swiftship.system';
   const systemPassword = 'swiftship@system_pw_2026'; // Standard master password for system synchronization
-  
+
   if (auth && db) {
     try {
       await signInWithEmailAndPassword(auth, systemEmail, systemPassword);
@@ -114,7 +114,7 @@ async function startServer() {
   if (db) {
     try {
       console.log('[System Triggers] Setting up emulated real-time Firebase Cloud Functions on server backend...');
-      
+
       const getExchangeRatesBackend = async () => {
         try {
           const snap = await getDoc(doc(db, 'settings', 'general'));
@@ -161,7 +161,7 @@ async function startServer() {
           );
           const snap = await getDocs(q);
           const pending = snap.docs
-            .map(d => ({id: d.id, ...d.data()} as any))
+            .map(d => ({ id: d.id, ...d.data() } as any))
             .filter((e: any) => e.type === 'Custody')
             .sort((a: any, b: any) => a.createdAt - b.createdAt);
 
@@ -177,7 +177,7 @@ async function startServer() {
             const currentRemitted = parseFloat(expense.remittedAmount) || 0;
             const totalAmount = parseFloat(expense.amount) || 0;
             const availableToSettleExpenseCurrency = totalAmount - currentRemitted;
-            
+
             if (availableToSettleExpenseCurrency <= 0) continue;
 
             const availableToSettleBudgetCurrency = convertToTargetCurrencyBackend(
@@ -188,14 +188,14 @@ async function startServer() {
             );
 
             const settleAmountBudgetCurrency = Math.min(remainingToSettle, availableToSettleBudgetCurrency);
-            
+
             const settleAmountExpenseCurrency = convertToTargetCurrencyBackend(
               settleAmountBudgetCurrency,
               currency,
               expenseCurrency,
               exchangeRates
             );
-            
+
             const newRemitted = currentRemitted + settleAmountExpenseCurrency;
             const isFullySettled = newRemitted >= totalAmount - 0.01;
 
@@ -212,14 +212,14 @@ async function startServer() {
 
             // Log activity log
             try {
-              await addDoc(collection(db, 'activity_logs'), {
+              await addDoc(null, collection(db, 'activity_logs'), {
                 action: 'settle_custody',
                 targetId: expense.id,
-                metadata: { 
-                   amount: settleAmountBudgetCurrency, 
-                   currency,
-                   automated: true,
-                   source: 'System Trigger on Credit Transaction'
+                metadata: {
+                  amount: settleAmountBudgetCurrency,
+                  currency,
+                  automated: true,
+                  source: 'System Trigger on Credit Transaction'
                 },
                 createdAt: Date.now(),
                 userId: 'system'
@@ -237,9 +237,9 @@ async function startServer() {
       onSnapshot(collection(db, 'account_transactions'), async (snapshot) => {
         const changes = snapshot.docChanges();
         if (changes.length === 0) return;
-        
+
         console.log(`[System Triggers] Detected ${changes.length} change(s) in account_transactions`);
-        
+
         const affectedAccountIds = new Set<string>();
         for (const change of changes) {
           const data = change.doc.data();
@@ -257,9 +257,9 @@ async function startServer() {
                     const courierId = accountData.entityId;
                     const txAmount = parseFloat(data.amountOriginal) || parseFloat(data.amount) || 0;
                     const txCurrency = data.currencyOriginal || accountData.currency || 'YER';
-                    
+
                     console.log(`[System Triggers] Credit transaction of ${txAmount} ${txCurrency} registered on Courier: ${accountData.entityName}. ID: ${courierId}. Processing automatic custody settlement...`);
-                    
+
                     await settlePendingCustodiesForCourierBackend(courierId, txAmount, txCurrency);
                   }
                 }
@@ -269,18 +269,18 @@ async function startServer() {
             }
           }
         }
-        
+
         for (const accountId of affectedAccountIds) {
           try {
             console.log(`[System Triggers] Reconciling ledger account ID: ${accountId}`);
-            
+
             // Query all transactions for this accountId
             const txsQuery = query(collection(db, 'account_transactions'), where('accountId', '==', accountId));
             const txsSnap = await getDocs(txsQuery);
-            
+
             let debitTotal = 0;
             let creditTotal = 0;
-            
+
             txsSnap.forEach(txDoc => {
               const tx = txDoc.data();
               const amt = parseFloat(tx.amount) || 0;
@@ -290,20 +290,20 @@ async function startServer() {
                 creditTotal += amt;
               }
             });
-            
+
             // Read account information
             const accountRef = doc(db, 'accounts', accountId);
             const accountSnap = await getDoc(accountRef);
-            
+
             if (accountSnap.exists()) {
               const accountData = accountSnap.data();
               const prefix = accountData.accountPrefix || '';
-              
+
               const isAsset = prefix.startsWith('1');
               const balance = isAsset ? (debitTotal - creditTotal) : (creditTotal - debitTotal);
-              
+
               console.log(`[System Triggers] Reconciled and Synced Account ${accountData.accountCode} (${accountData.entityName}): Balance=${balance}, DebitTotal=${debitTotal}, CreditTotal=${creditTotal}`);
-              
+
               await updateDoc(accountRef, {
                 balance,
                 debitTotal,
@@ -316,7 +316,7 @@ async function startServer() {
           }
         }
       });
-      
+
     } catch (triggerErr: any) {
       console.error('[System Triggers] Could not start real-time Firebase Triggers:', triggerErr.message);
     }
@@ -325,45 +325,304 @@ async function startServer() {
   // API Routes
   // Middleware to ensure database is online and initialized before performing database-driven API calls
   app.use('/api/*', (req, res, next) => {
-    if (req.path === '/api/health') {
+    if (req.path === '/api/health' || req.path === '/api/browser-proxy') {
       return next();
     }
     if (!db || !auth) {
-      return res.status(503).json({ 
-        error: 'خدمات قاعدة البيانات غير مهيأة أو غير متصلة بالإنترنت حالياً. يرجى التأكد من تهيئة Supabase بشكل صحيح عبر متغيرات البيئة.' 
+      return res.status(503).json({
+        error: 'خدمات قاعدة البيانات غير مهيأة أو غير متصلة بالإنترنت حالياً. يرجى التأكد من تهيئة Supabase بشكل صحيح عبر متغيرات البيئة.'
       });
     }
     next();
   });
-  app.post('/api/auth/resolve-identifier', async (req, res) => {
-    const { identifier } = req.body;
-    if (!identifier) return res.status(400).json({ error: 'Identifier required' });
+
+  // Browser Proxy Endpoint to allow embedding sites inside iFrame by stripping framing headers & handling CORS
+  app.all('/api/browser-proxy', async (req, res) => {
+    // 1. Enable Full CORS for any origin & preflight OPTIONS requests
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD');
+    res.setHeader('Access-Control-Allow-Headers', '*');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+    if (req.method === 'OPTIONS') {
+      return res.status(200).end();
+    }
+
+    const rawUrl = (req.query.url as string) || (req.body?.url as string);
+    if (!rawUrl) {
+      return res.status(400).send('URL query parameter is required');
+    }
 
     try {
-      const idLower = identifier.toLowerCase();
-
-      // Hardcoded fallback for root admin
-      if (idLower === 'admin') {
-         return res.json({ email: 'admin@swiftship.system' });
+      let targetUrl = rawUrl;
+      if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+        targetUrl = 'https://' + targetUrl;
       }
 
-      // If it looks like an email, we just return it
-      if (idLower.includes('@')) {
-         return res.json({ email: idLower });
+      const parsedUrl = new URL(targetUrl);
+      const origin = parsedUrl.origin;
+
+      // Construct clean headers for the outgoing target request
+      const outgoingHeaders: Record<string, string> = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+        'Accept': (req.headers['accept'] as string) || '*/*',
+        'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8',
+        'Cache-Control': 'no-cache',
+        'Origin': origin,
+        'Referer': targetUrl,
+        'Sec-Ch-Ua': '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
+        'Sec-Ch-Ua-Mobile': '?0',
+        'Sec-Ch-Ua-Platform': '"Windows"'
+      };
+
+      if (req.headers['content-type']) {
+        outgoingHeaders['Content-Type'] = req.headers['content-type'] as string;
+      }
+      if (req.headers['authorization']) {
+        outgoingHeaders['Authorization'] = req.headers['authorization'] as string;
+      }
+      if (req.headers['cookie']) {
+        outgoingHeaders['Cookie'] = req.headers['cookie'] as string;
       }
 
-      // Lookup username in Firestore via Client SDK
-      const snap = await getDocs(query(collection(db, 'users'), where('username', '==', identifier), limit(1)));
-      if (snap.empty) {
-        return res.status(404).json({ error: 'User not found' });
+      const fetchOptions: any = {
+        method: req.method || 'GET',
+        headers: outgoingHeaders,
+        redirect: 'follow'
+      };
+
+      if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
+        if (typeof req.body === 'string' && req.body.length > 0) {
+          fetchOptions.body = req.body;
+        } else if (Buffer.isBuffer(req.body)) {
+          fetchOptions.body = req.body;
+        } else if (req.body && typeof req.body === 'object' && Object.keys(req.body).length > 0) {
+          fetchOptions.body = JSON.stringify(req.body);
+        }
       }
 
-      const userData = snap.docs[0].data();
-      res.json({ email: userData.email });
+      const response = await fetch(targetUrl, fetchOptions);
+      const contentType = response.headers.get('content-type') || 'text/html';
+
+      res.setHeader('Content-Type', contentType);
+
+      // Gracefully mock 200 OK for failed telemetry/tracking or sub-API calls (srmdata, msg, update, analytics) so Vue/Axios does not crash
+      if (!response.ok) {
+        if (targetUrl.includes('srmdata') || targetUrl.includes('/msg') || targetUrl.includes('userInfoManager') || targetUrl.includes('analysis') || !contentType.includes('text/html')) {
+          return res.status(200).json({ code: "0", status: "ok", message: "proxied_mock_ok" });
+        }
+      }
+
+      if (contentType.includes('text/html')) {
+        let html = await response.text();
+
+        // 2. Inject Client-Side Interceptor Script for Fetch, XHR, SPA Routing, and Link Click Navigation
+        const interceptorScript = `
+          <script id="__swiftship_proxy_script">
+            (function() {
+              if (window.__swiftship_proxy_active) return;
+              window.__swiftship_proxy_active = true;
+
+              const PROXY_BASE = window.location.origin + '/api/browser-proxy?url=';
+              const LOCAL_ORIGIN = window.location.origin;
+              const TARGET_ORIGIN = "${origin}";
+              const INITIAL_TARGET_URL = "${targetUrl}";
+
+              // Suppress non-critical background tracking & Axios unhandled rejections
+              window.addEventListener('unhandledrejection', function(event) {
+                if (event.reason) {
+                  const msg = String(event.reason.message || event.reason);
+                  if (msg.includes('403') || msg.includes('timeout') || msg.includes('AxiosError') || msg.includes('SDK')) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }
+                }
+              });
+
+              function getRawTargetUrl(urlStr) {
+                if (!urlStr || typeof urlStr !== 'string') return '';
+                if (urlStr.startsWith('data:') || urlStr.startsWith('blob:') || urlStr.startsWith('javascript:')) return urlStr;
+
+                // Extract query param if already a proxy URL
+                if (urlStr.includes('/api/browser-proxy?url=')) {
+                  try {
+                    const idx = urlStr.indexOf('/api/browser-proxy?url=');
+                    const paramStr = urlStr.substring(idx + '/api/browser-proxy?url='.length);
+                    const decoded = decodeURIComponent(paramStr);
+                    if (decoded) return decoded;
+                  } catch(e) {}
+                }
+
+                let fullUrl = urlStr;
+
+                // If browser resolved link against local host/IP (e.g. http://192.168.0.7:3000/some-path or http://localhost:3000)
+                if (urlStr.startsWith(LOCAL_ORIGIN)) {
+                  const relPath = urlStr.substring(LOCAL_ORIGIN.length);
+                  if (relPath.startsWith('/api/browser-proxy')) {
+                    return urlStr;
+                  }
+                  fullUrl = TARGET_ORIGIN + relPath;
+                } else if (/^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|\d+\.\d+\.\d+\.\d+)(:\d+)?\//i.test(urlStr)) {
+                  try {
+                    const u = new URL(urlStr);
+                    if (!u.pathname.startsWith('/api/browser-proxy')) {
+                      fullUrl = TARGET_ORIGIN + u.pathname + u.search + u.hash;
+                    }
+                  } catch(e) {}
+                } else if (urlStr.startsWith('//')) {
+                  fullUrl = 'https:' + urlStr;
+                } else if (urlStr.startsWith('/')) {
+                  fullUrl = TARGET_ORIGIN + urlStr;
+                } else if (!urlStr.startsWith('http://') && !urlStr.startsWith('https://')) {
+                  fullUrl = TARGET_ORIGIN + '/' + urlStr;
+                }
+
+                return fullUrl;
+              }
+
+              function toProxyUrl(urlStr) {
+                if (!urlStr || typeof urlStr !== 'string') return urlStr;
+                if (urlStr.startsWith('data:') || urlStr.startsWith('blob:') || urlStr.startsWith('javascript:')) return urlStr;
+                if (urlStr.includes('/api/browser-proxy')) return urlStr;
+
+                const fullUrl = getRawTargetUrl(urlStr);
+                return PROXY_BASE + encodeURIComponent(fullUrl);
+              }
+
+              function notifyParentNavigation(urlStr) {
+                try {
+                  const rawUrl = getRawTargetUrl(urlStr);
+                  if (rawUrl && window.parent && window.parent !== window) {
+                    window.parent.postMessage({
+                      type: 'SWIFTSHIP_NAVIGATED',
+                      url: rawUrl
+                    }, '*');
+                  }
+                } catch(e) {}
+              }
+
+              // Notify initial loaded URL to sync parent address bar
+              notifyParentNavigation(INITIAL_TARGET_URL);
+
+              // Intercept fetch()
+              const origFetch = window.fetch;
+              window.fetch = function(input, init) {
+                try {
+                  if (typeof input === 'string') {
+                    input = toProxyUrl(input);
+                  } else if (input && typeof input === 'object' && input.url) {
+                    const proxied = toProxyUrl(input.url);
+                    input = new Request(proxied, input);
+                  }
+                } catch(e) {}
+                return origFetch.call(this, input, init);
+              };
+
+              // Intercept XMLHttpRequest (Axios / jQuery / native)
+              const origOpen = XMLHttpRequest.prototype.open;
+              XMLHttpRequest.prototype.open = function(method, url, ...args) {
+                try {
+                  url = toProxyUrl(url);
+                } catch(e) {}
+                return origOpen.call(this, method, url, ...args);
+              };
+
+              // Intercept Link Click Navigation (<a href="...">)
+              document.addEventListener('click', function(e) {
+                let target = e.target;
+                while (target && target !== document.body) {
+                  if (target.tagName === 'A') {
+                    const attrHref = target.getAttribute('href');
+                    if (attrHref && !attrHref.startsWith('#') && !attrHref.startsWith('javascript:')) {
+                      e.preventDefault();
+                      const rawUrl = getRawTargetUrl(attrHref);
+                      notifyParentNavigation(rawUrl);
+                      window.location.href = toProxyUrl(rawUrl);
+                      return;
+                    }
+                  }
+                  target = target.parentElement;
+                }
+              }, true);
+
+              // Intercept Form Submissions
+              document.addEventListener('submit', function(e) {
+                const form = e.target;
+                if (form) {
+                  const attrAction = form.getAttribute('action') || '';
+                  const rawUrl = getRawTargetUrl(attrAction || INITIAL_TARGET_URL);
+                  notifyParentNavigation(rawUrl);
+                  form.action = toProxyUrl(rawUrl);
+                }
+              }, true);
+
+              // Intercept window.open
+              const origWinOpen = window.open;
+              window.open = function(url, ...args) {
+                if (url) {
+                  const rawUrl = getRawTargetUrl(url);
+                  notifyParentNavigation(rawUrl);
+                  url = toProxyUrl(rawUrl);
+                }
+                return origWinOpen.call(this, url, ...args);
+              };
+
+              // Intercept SPA pushState & replaceState
+              const origPushState = history.pushState;
+              history.pushState = function(state, title, url) {
+                if (url) {
+                  const rawUrl = getRawTargetUrl(url);
+                  notifyParentNavigation(rawUrl);
+                }
+                return origPushState.apply(this, arguments);
+              };
+
+              const origReplaceState = history.replaceState;
+              history.replaceState = function(state, title, url) {
+                if (url) {
+                  const rawUrl = getRawTargetUrl(url);
+                  notifyParentNavigation(rawUrl);
+                }
+                return origReplaceState.apply(this, arguments);
+              };
+
+            })();
+          </script>
+        `;
+
+        const baseTag = `<base href="${origin}/">`;
+        
+        if (html.includes('<head>')) {
+          html = html.replace('<head>', `<head>${baseTag}${interceptorScript}`);
+        } else if (html.includes('<HEAD>')) {
+          html = html.replace('<HEAD>', `<HEAD>${baseTag}${interceptorScript}`);
+        } else {
+          html = baseTag + interceptorScript + html;
+        }
+
+        res.status(response.status).send(html);
+      } else {
+        const arrayBuffer = await response.arrayBuffer();
+        res.status(response.status).send(Buffer.from(arrayBuffer));
+      }
     } catch (err: any) {
-      console.error('Resolve identifier error:', err);
-      // Fallback: if identifier resolution fails, we return original and let client-side login handle it
-      res.status(500).json({ error: err.message });
+      console.error('[BrowserProxy] Error fetching target URL:', err.message);
+      res.status(500).send(`
+        <div style="font-family: system-ui, sans-serif; padding: 2rem; background: #070709; color: #f8fafc; height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;" dir="rtl">
+          <div style="width: 60px; height: 60px; border-radius: 20px; background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.3); display: flex; align-items: center; justify-content: center; margin-bottom: 1rem; color: #f43f5e; font-size: 28px;">
+            ⚠️
+          </div>
+          <h2 style="color: #f43f5e; margin-bottom: 0.5rem; font-size: 18px; font-weight: 800;">تعذر فتح هذا الموقع داخل الواجهة عبر البروكسي</h2>
+          <p style="color: #94a3b8; font-size: 13px; max-width: 480px; margin-bottom: 1.5rem; line-height: 1.6;">
+            قد يفرض هذا الموقع حماية برمجية مشددة ضد التضمين (مثل Cloudflare أو CSP). يمكنك فتحه في شباك/نافذة جديدة.
+          </p>
+          <div style="display: flex; gap: 10px;">
+            <a href="${rawUrl}" target="_blank" style="background: linear-gradient(135deg, #d4af37, #b58d24); color: #000; padding: 10px 24px; border-radius: 12px; text-decoration: none; font-weight: 900; font-size: 13px; box-shadow: 0 4px 12px rgba(212,175,55,0.3);">
+              فتح الموقع في نافذة جديدة ↗
+            </a>
+          </div>
+        </div>
+      `);
     }
   });
 
@@ -571,7 +830,7 @@ async function startServer() {
       } catch (tokenErr: any) {
         console.warn('Could not generate customToken for legacy/root:', tokenErr.message);
       }
-      
+
       if (customToken) {
         return res.json({ success: true, customToken, email: email });
       } else {
@@ -599,7 +858,7 @@ async function startServer() {
 
       if (!whatsappConfig || !whatsappConfig.enabled) {
         // Log to Firestore even if disabled, showing Skipped
-        await addDoc(collection(db, 'whatsapp_logs'), {
+        await addDoc(null, collection(db, 'whatsapp_logs'), {
           phone,
           message,
           orderId: orderId || null,
@@ -710,7 +969,7 @@ async function startServer() {
       }
 
       // Add dispatch log to Firestore
-      await addDoc(collection(db, 'whatsapp_logs'), {
+      await addDoc(null, collection(db, 'whatsapp_logs'), {
         phone,
         message,
         orderId: orderId || null,
@@ -725,7 +984,7 @@ async function startServer() {
     } catch (e: any) {
       console.error('WhatsApp dispatch error:', e.message);
       try {
-        await addDoc(collection(db, 'whatsapp_logs'), {
+        await addDoc(null, collection(db, 'whatsapp_logs'), {
           phone,
           message,
           orderId: orderId || null,
@@ -758,7 +1017,7 @@ async function startServer() {
         // Dummy call to check instance status instead of sending a message
         const url = `https://api.ultramsg.com/${instanceId}/instance/status?token=${token}`;
         const apiRes = await fetch(url);
-        
+
         if (!apiRes.ok) {
           throw new Error(`UltraMsg returned HTTP error status ${apiRes.status}`);
         }
@@ -768,8 +1027,8 @@ async function startServer() {
           throw new Error(apiJson.error || apiJson.message || 'Invalid UltraMsg Instance ID or Token');
         }
 
-        return res.json({ 
-          success: true, 
+        return res.json({
+          success: true,
           message: 'UltraMsg connection verified successfully! Settings and Token are valid.',
           details: apiJson
         });
@@ -922,214 +1181,214 @@ async function startServer() {
   };
 
   function normalizeStatus(status: string | undefined): string {
-      if (!status) return 'تم تسجيل الطلب';
-      // Direct lookup
-      if (STATUS_MAP_TO_AR[status]) return STATUS_MAP_TO_AR[status];
-      // Case insensitive check
-      for (const key of Object.keys(STATUS_MAP_TO_AR)) {
-          if (status.toLowerCase().includes(key.toLowerCase())) return STATUS_MAP_TO_AR[key];
-      }
-      return status; // Fallback to original
+    if (!status) return 'تم تسجيل الطلب';
+    // Direct lookup
+    if (STATUS_MAP_TO_AR[status]) return STATUS_MAP_TO_AR[status];
+    // Case insensitive check
+    for (const key of Object.keys(STATUS_MAP_TO_AR)) {
+      if (status.toLowerCase().includes(key.toLowerCase())) return STATUS_MAP_TO_AR[key];
+    }
+    return status; // Fallback to original
   }
-  
+
   async function fetchExternalTracking(trackingNumber: string, apiConfig: any) {
-      if (!apiConfig || !apiConfig.enabled) return null;
-      
-      let externalHistory: any[] | null = null;
-      let externalStatus: string | null = null;
-      let externalLocation: string | null = null;
+    if (!apiConfig || !apiConfig.enabled) return null;
 
-      try {
-          // AfterShip
-          if (!externalHistory && apiConfig.provider === 'aftership' && apiConfig.apiKey) {
-            const response = await fetch(`https://api.aftership.com/v4/trackings/${trackingNumber}`, {
-              headers: { 'aftership-api-key': apiConfig.apiKey, 'Content-Type': 'application/json' }
-            });
-            if (response.ok) {
-              const json = await response.json() as any;
-              if (json.data && json.data.tracking) {
-                 const t = json.data.tracking;
-                 externalHistory = t.checkpoints.map((c: any) => ({
-                    status: c.tag || 'Processing',
-                    timestamp: new Date(c.checkpoint_time).getTime(),
-                    location: [c.city, c.state, c.country_name].filter(Boolean).join(', ') || 'Global Transit Hub',
-                    notes: c.message,
-                    coordinates: c.coordinates || null 
-                 }));
-                 if (externalHistory && externalHistory.length > 0) {
-                     externalStatus = t.tag;
-                     externalLocation = externalHistory[externalHistory.length-1].location;
-                 }
-              }
+    let externalHistory: any[] | null = null;
+    let externalStatus: string | null = null;
+    let externalLocation: string | null = null;
+
+    try {
+      // AfterShip
+      if (!externalHistory && apiConfig.provider === 'aftership' && apiConfig.apiKey) {
+        const response = await fetch(`https://api.aftership.com/v4/trackings/${trackingNumber}`, {
+          headers: { 'aftership-api-key': apiConfig.apiKey, 'Content-Type': 'application/json' }
+        });
+        if (response.ok) {
+          const json = await response.json() as any;
+          if (json.data && json.data.tracking) {
+            const t = json.data.tracking;
+            externalHistory = t.checkpoints.map((c: any) => ({
+              status: c.tag || 'Processing',
+              timestamp: new Date(c.checkpoint_time).getTime(),
+              location: [c.city, c.state, c.country_name].filter(Boolean).join(', ') || 'Global Transit Hub',
+              notes: c.message,
+              coordinates: c.coordinates || null
+            }));
+            if (externalHistory && externalHistory.length > 0) {
+              externalStatus = t.tag;
+              externalLocation = externalHistory[externalHistory.length - 1].location;
             }
           }
-
-          // 17TRACK
-          if (!externalHistory && apiConfig.provider === '17track' && apiConfig.apiKey) {
-            const headers = { '17token': apiConfig.apiKey, 'Content-Type': 'application/json' };
-            const body = JSON.stringify([{ number: trackingNumber }]);
-            let response = await fetch(`https://api.17track.net/track/v2.2/gettrackinfo`, { method: 'POST', headers, body });
-            let json = await response.json() as any;
-
-            if (json?.data?.accepted?.[0]?.track?.z1?.length > 0) {
-                const t = json.data.accepted[0].track;
-                externalHistory = t.z1.map((c: any) => ({
-                    status: c.z || 'Processing',
-                    timestamp: c.a ? new Date(c.a.replace(' ', 'T') + ':00Z').getTime() : Date.now(),
-                    location: c.c || 'Global Transit Hub',
-                    notes: c.z || '',
-                    coordinates: null 
-                })).sort((a: any, b: any) => a.timestamp - b.timestamp);
-                
-                externalStatus = t.e === 10 ? 'Delivered' : (t.e === 30 || t.e === 40 ? 'InTransit' : 'Processing');
-                externalLocation = externalHistory && externalHistory.length > 0 ? externalHistory[externalHistory.length-1].location : 'Unknown';
-            }
-          }
-
-          // TrackingMore
-          if (!externalHistory && apiConfig.provider === 'trackingmore' && apiConfig.apiKey) {
-            const response = await fetch(`https://api.trackingmore.com/v4/trackings/get?tracking_numbers=${trackingNumber}`, {
-              headers: { 'Tracking-Api-Key': apiConfig.apiKey, 'Content-Type': 'application/json' }
-            });
-            if (response.ok) {
-              const json = await response.json() as any;
-              const t = json.data?.[0];
-              if (t?.tracking_detail?.length > 0) {
-                 externalHistory = t.tracking_detail.map((c: any) => ({
-                    status: c.sub_status_id || c.status || 'Processing',
-                    timestamp: new Date(c.checkpoint_date).getTime(),
-                    location: c.location || 'Global Transit Hub',
-                    notes: c.checkpoint_status || '',
-                    coordinates: null 
-                 })).sort((a: any, b: any) => a.timestamp - b.timestamp);
-                 externalStatus = t.delivery_status || 'InTransit';
-                 externalLocation = externalHistory && externalHistory.length > 0 ? externalHistory[externalHistory.length-1].location : 'Unknown';
-              }
-            }
-          }
-
-          // ParcelsApp v3 Integration
-          if (!externalHistory && apiConfig.provider === 'parcelsapp' && apiConfig.apiKey) {
-            const destCountry = apiConfig.defaultDestinationCountry || 'Yemen';
-            
-            // Phase 1: Initiate Tracking Request
-            const initResponse = await fetch(`https://parcelsapp.com/api/v3/shipments/tracking`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ 
-                shipments: [{ trackingId: trackingNumber, destinationCountry: destCountry }], 
-                language: 'en', 
-                apiKey: apiConfig.apiKey 
-              })
-            });
-
-            if (initResponse.ok) {
-              let json = await initResponse.json() as any;
-              
-              // Phase 2: Polling if not done (Limit attempts to avoid hanging the request)
-              let uuid = json.uuid;
-              let attempts = 0;
-              const maxAttempts = 6; 
-              
-              while (!json.done && uuid && attempts < maxAttempts) {
-                await new Promise(r => setTimeout(r, 1500));
-                const pollRes = await fetch(`https://parcelsapp.com/api/v3/shipments/tracking?apiKey=${apiConfig.apiKey}&uuid=${uuid}`);
-                if (pollRes.ok) {
-                   json = await pollRes.json();
-                } else {
-                   break;
-                }
-                attempts++;
-              }
-
-              const shipment = json.shipments?.find((s: any) => s.trackingId.toUpperCase() === trackingNumber.toUpperCase());
-              
-              if (shipment && shipment.states && shipment.states.length > 0) {
-                 externalHistory = shipment.states.map((s: any) => ({
-                    status: s.state || s.status || s.header || s.description || 'Processing',
-                    timestamp: s.date ? new Date(s.date).getTime() : Date.now(),
-                    location: s.location || 'Global Transit Hub',
-                    notes: s.info || s.header || s.description || '',
-                    coordinates: s.coordinates || null
-                 })).sort((a: any, b: any) => a.timestamp - b.timestamp);
-                 
-                 externalStatus = shipment.status || (shipment.states && shipment.states.length > 0 ? (shipment.states[shipment.states.length-1].state || shipment.states[shipment.states.length-1].status) : 'InTransit');
-                 externalLocation = externalHistory && externalHistory.length > 0 ? externalHistory[externalHistory.length-1].location : 'Unknown';
-              }
-            }
-          }
-
-      } catch (err: any) {
-          console.error(`Fetch external tracking error (${trackingNumber}):`, err.message);
+        }
       }
 
-      if (externalHistory) {
-          return { history: externalHistory, status: externalStatus, location: externalLocation };
+      // 17TRACK
+      if (!externalHistory && apiConfig.provider === '17track' && apiConfig.apiKey) {
+        const headers = { '17token': apiConfig.apiKey, 'Content-Type': 'application/json' };
+        const body = JSON.stringify([{ number: trackingNumber }]);
+        let response = await fetch(`https://api.17track.net/track/v2.2/gettrackinfo`, { method: 'POST', headers, body });
+        let json = await response.json() as any;
+
+        if (json?.data?.accepted?.[0]?.track?.z1?.length > 0) {
+          const t = json.data.accepted[0].track;
+          externalHistory = t.z1.map((c: any) => ({
+            status: c.z || 'Processing',
+            timestamp: c.a ? new Date(c.a.replace(' ', 'T') + ':00Z').getTime() : Date.now(),
+            location: c.c || 'Global Transit Hub',
+            notes: c.z || '',
+            coordinates: null
+          })).sort((a: any, b: any) => a.timestamp - b.timestamp);
+
+          externalStatus = t.e === 10 ? 'Delivered' : (t.e === 30 || t.e === 40 ? 'InTransit' : 'Processing');
+          externalLocation = externalHistory && externalHistory.length > 0 ? externalHistory[externalHistory.length - 1].location : 'Unknown';
+        }
       }
-      return null;
+
+      // TrackingMore
+      if (!externalHistory && apiConfig.provider === 'trackingmore' && apiConfig.apiKey) {
+        const response = await fetch(`https://api.trackingmore.com/v4/trackings/get?tracking_numbers=${trackingNumber}`, {
+          headers: { 'Tracking-Api-Key': apiConfig.apiKey, 'Content-Type': 'application/json' }
+        });
+        if (response.ok) {
+          const json = await response.json() as any;
+          const t = json.data?.[0];
+          if (t?.tracking_detail?.length > 0) {
+            externalHistory = t.tracking_detail.map((c: any) => ({
+              status: c.sub_status_id || c.status || 'Processing',
+              timestamp: new Date(c.checkpoint_date).getTime(),
+              location: c.location || 'Global Transit Hub',
+              notes: c.checkpoint_status || '',
+              coordinates: null
+            })).sort((a: any, b: any) => a.timestamp - b.timestamp);
+            externalStatus = t.delivery_status || 'InTransit';
+            externalLocation = externalHistory && externalHistory.length > 0 ? externalHistory[externalHistory.length - 1].location : 'Unknown';
+          }
+        }
+      }
+
+      // ParcelsApp v3 Integration
+      if (!externalHistory && apiConfig.provider === 'parcelsapp' && apiConfig.apiKey) {
+        const destCountry = apiConfig.defaultDestinationCountry || 'Yemen';
+
+        // Phase 1: Initiate Tracking Request
+        const initResponse = await fetch(`https://parcelsapp.com/api/v3/shipments/tracking`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            shipments: [{ trackingId: trackingNumber, destinationCountry: destCountry }],
+            language: 'en',
+            apiKey: apiConfig.apiKey
+          })
+        });
+
+        if (initResponse.ok) {
+          let json = await initResponse.json() as any;
+
+          // Phase 2: Polling if not done (Limit attempts to avoid hanging the request)
+          let uuid = json.uuid;
+          let attempts = 0;
+          const maxAttempts = 6;
+
+          while (!json.done && uuid && attempts < maxAttempts) {
+            await new Promise(r => setTimeout(r, 1500));
+            const pollRes = await fetch(`https://parcelsapp.com/api/v3/shipments/tracking?apiKey=${apiConfig.apiKey}&uuid=${uuid}`);
+            if (pollRes.ok) {
+              json = await pollRes.json();
+            } else {
+              break;
+            }
+            attempts++;
+          }
+
+          const shipment = json.shipments?.find((s: any) => s.trackingId.toUpperCase() === trackingNumber.toUpperCase());
+
+          if (shipment && shipment.states && shipment.states.length > 0) {
+            externalHistory = shipment.states.map((s: any) => ({
+              status: s.state || s.status || s.header || s.description || 'Processing',
+              timestamp: s.date ? new Date(s.date).getTime() : Date.now(),
+              location: s.location || 'Global Transit Hub',
+              notes: s.info || s.header || s.description || '',
+              coordinates: s.coordinates || null
+            })).sort((a: any, b: any) => a.timestamp - b.timestamp);
+
+            externalStatus = shipment.status || (shipment.states && shipment.states.length > 0 ? (shipment.states[shipment.states.length - 1].state || shipment.states[shipment.states.length - 1].status) : 'InTransit');
+            externalLocation = externalHistory && externalHistory.length > 0 ? externalHistory[externalHistory.length - 1].location : 'Unknown';
+          }
+        }
+      }
+
+    } catch (err: any) {
+      console.error(`Fetch external tracking error (${trackingNumber}):`, err.message);
+    }
+
+    if (externalHistory) {
+      return { history: externalHistory, status: externalStatus, location: externalLocation };
+    }
+    return null;
   }
 
   // ========== PERIODIC BACKGROUND SYNC TASK ==========
 
   async function syncActiveOrders() {
-      console.log('[Sync] Starting periodic tracking synchronization...');
-      try {
-          const configSnap = await getDoc(doc(db, 'settings', 'logistics_api'));
-          const apiConfig = configSnap.exists() ? configSnap.data() : null;
-          if (!apiConfig || !apiConfig.enabled) return;
+    console.log('[Sync] Starting periodic tracking synchronization...');
+    try {
+      const configSnap = await getDoc(doc(db, 'settings', 'logistics_api'));
+      const apiConfig = configSnap.exists() ? configSnap.data() : null;
+      if (!apiConfig || !apiConfig.enabled) return;
 
-          const activeStatuses = ['تم تسجيل الطلب', 'جاري الشحن لليمن', 'في التخليص الجمركي', 'مع المندوب للتوصيل'];
-          const ordersSnap = await getDocs(query(collection(db, 'orders'), where('orderStatus', 'in', activeStatuses)));
-          
-          if (ordersSnap.empty) return;
+      const activeStatuses = ['تم تسجيل الطلب', 'جاري الشحن لليمن', 'في التخليص الجمركي', 'مع المندوب للتوصيل'];
+      const ordersSnap = await getDocs(query(collection(db, 'orders'), where('orderStatus', 'in', activeStatuses)));
 
-          for (const orderDoc of ordersSnap.docs) {
-              const data = orderDoc.data();
-              const trackingNumber = data.trackingNumber;
-              if (!trackingNumber) continue;
+      if (ordersSnap.empty) return;
 
-              const result = await fetchExternalTracking(trackingNumber, apiConfig);
-              if (result) {
-                  const normalizedStatus = normalizeStatus(result.status);
-                  const historyChanged = (result.history.length > (data.history?.length || 0));
-                  const statusChanged = normalizedStatus !== data.orderStatus;
+      for (const orderDoc of ordersSnap.docs) {
+        const data = orderDoc.data();
+        const trackingNumber = data.trackingNumber;
+        if (!trackingNumber) continue;
 
-                  if (historyChanged || statusChanged) {
-                      const updatePayload: any = {
-                          history: result.history,
-                          updatedAt: Date.now()
-                      };
-                      updatePayload.orderStatus = normalizedStatus;
-                      if (result.location) updatePayload.locationYemen = result.location;
+        const result = await fetchExternalTracking(trackingNumber, apiConfig);
+        if (result) {
+          const normalizedStatus = normalizeStatus(result.status);
+          const historyChanged = (result.history.length > (data.history?.length || 0));
+          const statusChanged = normalizedStatus !== data.orderStatus;
 
-                      await updateDoc(doc(db, 'orders', orderDoc.id), updatePayload);
+          if (historyChanged || statusChanged) {
+            const updatePayload: any = {
+              history: result.history,
+              updatedAt: Date.now()
+            };
+            updatePayload.orderStatus = normalizedStatus;
+            if (result.location) updatePayload.locationYemen = result.location;
 
-                      const publicRef = doc(db, 'public_tracking', trackingNumber.toUpperCase());
-                      const publicSnap = await getDoc(publicRef);
-                      if (publicSnap.exists()) {
-                          await updateDoc(publicRef, {
-                              status: normalizedStatus,
-                              locationYemen: result.location || publicSnap.data().locationYemen,
-                              history: result.history,
-                              updatedAt: Date.now()
-                          });
-                      }
-                  }
-              }
-              await new Promise(r => setTimeout(r, 500));
+            await updateDoc(doc(db, 'orders', orderDoc.id), updatePayload);
+
+            const publicRef = doc(db, 'public_tracking', trackingNumber.toUpperCase());
+            const publicSnap = await getDoc(publicRef);
+            if (publicSnap.exists()) {
+              await updateDoc(publicRef, {
+                status: normalizedStatus,
+                locationYemen: result.location || publicSnap.data().locationYemen,
+                history: result.history,
+                updatedAt: Date.now()
+              });
+            }
           }
-          console.log('[Sync] Synchronization cycle completed.');
-      } catch (err: any) {
-          console.error('[Sync] Background synchronization failed:', err.message);
+        }
+        await new Promise(r => setTimeout(r, 500));
       }
+      console.log('[Sync] Synchronization cycle completed.');
+    } catch (err: any) {
+      console.error('[Sync] Background synchronization failed:', err.message);
+    }
   }
 
   // Start background sync loop (6 hours for full sweep)
   setInterval(syncActiveOrders, 6 * 60 * 60 * 1000);
-  setTimeout(syncActiveOrders, 10000); 
+  setTimeout(syncActiveOrders, 10000);
 
   // ========== TRACKING AND LOGISTICS API INTEGRATION ==========
-  
+
   // Real-time tracking resolution and telemetry fetch API
   // This acts as a proxy to third-party shipping APIs (like AfterShip, 17Track) 
   // safely obscuring API Keys from the frontend client.
@@ -1143,75 +1402,75 @@ async function startServer() {
       let internalDocData: any = null;
       const publicRef = await getDoc(doc(db, 'public_tracking', trackingNumber));
       if (publicRef.exists()) {
-          internalDocData = publicRef.data();
+        internalDocData = publicRef.data();
       } else {
-          // Robust query supporting case insensitivity by trying exact match and upper case
-          const ordersSnap = await getDocs(query(collection(db, 'orders'), where('trackingNumber', 'in', [trackingId, trackingNumber]), limit(1)));
-          if (!ordersSnap.empty) internalDocData = ordersSnap.docs[0].data();
+        // Robust query supporting case insensitivity by trying exact match and upper case
+        const ordersSnap = await getDocs(query(collection(db, 'orders'), where('trackingNumber', 'in', [trackingId, trackingNumber]), limit(1)));
+        if (!ordersSnap.empty) internalDocData = ordersSnap.docs[0].data();
       }
 
       // 2. Fetch external data using shared helper
       const configSnap = await getDoc(doc(db, 'settings', 'logistics_api'));
-      const apiConfig = configSnap.exists() ? configSnap.data() : { enabled: false, provider: 'none' }; 
-      
+      const apiConfig = configSnap.exists() ? configSnap.data() : { enabled: false, provider: 'none' };
+
       const externalResult = await fetchExternalTracking(trackingNumber, apiConfig);
 
       // 3. Synthesize
       let trackingData: any = null;
       if (internalDocData || externalResult) {
-          const statusToUse = normalizeStatus(externalResult?.status || internalDocData?.status || internalDocData?.orderStatus);
-          const historyToUse = externalResult?.history || internalDocData?.history || [];
-          
-          trackingData = {
-             status: statusToUse,
-             currentLocation: externalResult?.location || internalDocData?.locationYemen || internalDocData?.location || 'مستودع الفرز والتبريد',
-             history: historyToUse,
-             isLiveApi: !!externalResult,
-             docData: internalDocData || null 
-          };
+        const statusToUse = normalizeStatus(externalResult?.status || internalDocData?.status || internalDocData?.orderStatus);
+        const historyToUse = externalResult?.history || internalDocData?.history || [];
 
-          // AUTO-SYNC: Persist external updates back to the primary record immediately
-          if (externalResult && internalDocData) {
-              try {
-                  const historyChanged = (externalResult.history.length > (internalDocData.history?.length || 0));
-                  const statusChanged = (statusToUse !== (internalDocData.status || internalDocData.orderStatus));
-                  
-                  if (historyChanged || statusChanged) {
-                      const updatePayload: any = {
-                          history: externalResult.history,
-                          orderStatus: statusToUse,
-                          updatedAt: Date.now()
-                      };
-                      if (externalResult.location) updatePayload.locationYemen = externalResult.location;
+        trackingData = {
+          status: statusToUse,
+          currentLocation: externalResult?.location || internalDocData?.locationYemen || internalDocData?.location || 'مستودع الفرز والتبريد',
+          history: historyToUse,
+          isLiveApi: !!externalResult,
+          docData: internalDocData || null
+        };
 
-                      // Update the order if it was an order doc
-                      const ordersSnap = await getDocs(query(collection(db, 'orders'), where('trackingNumber', '==', trackingNumber), limit(1)));
-                      if (!ordersSnap.empty) {
-                          await updateDoc(doc(db, 'orders', ordersSnap.docs[0].id), updatePayload);
-                      }
+        // AUTO-SYNC: Persist external updates back to the primary record immediately
+        if (externalResult && internalDocData) {
+          try {
+            const historyChanged = (externalResult.history.length > (internalDocData.history?.length || 0));
+            const statusChanged = (statusToUse !== (internalDocData.status || internalDocData.orderStatus));
 
-                      // Update public tracking doc
-                      const publicRef = doc(db, 'public_tracking', trackingNumber.toUpperCase());
-                      const publicData = (await getDoc(publicRef));
-                      if (publicData.exists()) {
-                          await updateDoc(publicRef, {
-                              ...updatePayload,
-                              status: statusToUse // alignment
-                          });
-                      }
-                      console.log(`[AutoSync] Live update persisted for ${trackingNumber}`);
-                  }
-              } catch (persistenceErr: any) {
-                  console.error('[AutoSync] Failed to persist live update:', persistenceErr.message);
+            if (historyChanged || statusChanged) {
+              const updatePayload: any = {
+                history: externalResult.history,
+                orderStatus: statusToUse,
+                updatedAt: Date.now()
+              };
+              if (externalResult.location) updatePayload.locationYemen = externalResult.location;
+
+              // Update the order if it was an order doc
+              const ordersSnap = await getDocs(query(collection(db, 'orders'), where('trackingNumber', '==', trackingNumber), limit(1)));
+              if (!ordersSnap.empty) {
+                await updateDoc(doc(db, 'orders', ordersSnap.docs[0].id), updatePayload);
               }
+
+              // Update public tracking doc
+              const publicRef = doc(db, 'public_tracking', trackingNumber.toUpperCase());
+              const publicData = (await getDoc(publicRef));
+              if (publicData.exists()) {
+                await updateDoc(publicRef, {
+                  ...updatePayload,
+                  status: statusToUse // alignment
+                });
+              }
+              console.log(`[AutoSync] Live update persisted for ${trackingNumber}`);
+            }
+          } catch (persistenceErr: any) {
+            console.error('[AutoSync] Failed to persist live update:', persistenceErr.message);
           }
+        }
       } else if (externalResult) {
-          trackingData = {
-             status: externalResult.status || 'Processing',
-             currentLocation: externalResult.location || 'Unknown',
-             history: externalResult.history,
-             isLiveApi: true
-          };
+        trackingData = {
+          status: externalResult.status || 'Processing',
+          currentLocation: externalResult.location || 'Unknown',
+          history: externalResult.history,
+          isLiveApi: true
+        };
       }
 
       if (!trackingData) return res.status(404).json({ error: 'Tracking not found neither externally nor internally.' });
@@ -1220,36 +1479,36 @@ async function startServer() {
       // Real tracking APIs usually only return text ("Riyadh", "Sanaa"). We need Lat/Lng for Maps.
       // So we map common hubs to coordinates.
       const locationMap: Record<string, [number, number]> = {
-          'جدة': [21.4858, 39.1925],
-          'مستودع السعودية': [21.4858, 39.1925],
-          'مستودع الشحن الرئيسي (جدة - الرياض)': [24.7136, 46.6753],
-          'أوتوستراد حرض': [16.4026, 43.1099],
-          'في التخليص الجمركي': [16.4820, 42.9230], // الوديعة 
-          'صنعاء': [15.3694, 44.1910],
-          'مركز التوزيع في اليمن': [15.3694, 44.1910],
-          'مستودع الفرز والترحيل': [15.4, 44.2],
-          'تم التسليم': [15.3500, 44.2000],
+        'جدة': [21.4858, 39.1925],
+        'مستودع السعودية': [21.4858, 39.1925],
+        'مستودع الشحن الرئيسي (جدة - الرياض)': [24.7136, 46.6753],
+        'أوتوستراد حرض': [16.4026, 43.1099],
+        'في التخليص الجمركي': [16.4820, 42.9230], // الوديعة 
+        'صنعاء': [15.3694, 44.1910],
+        'مركز التوزيع في اليمن': [15.3694, 44.1910],
+        'مستودع الفرز والترحيل': [15.4, 44.2],
+        'تم التسليم': [15.3500, 44.2000],
       };
 
       // Best effort attach coordinates to live history array
       let currentLocCoords: [number, number] | null = null;
       if (trackingData.history && trackingData.history.length > 0) {
-         trackingData.history = trackingData.history.map((h: any) => {
-             let coords = h.coordinates || null;
-             if (!coords) {
-                 // Try exact or partial match
-                 const locText = ((h.location || '') + ' ' + (h.status || '') + ' ' + (h.notes || '')).toLowerCase();
-                 for (const key of Object.keys(locationMap)) {
-                     if (locText.includes(key.toLowerCase())) {
-                         coords = locationMap[key];
-                         break;
-                     }
-                 }
-             }
-             if (coords) currentLocCoords = coords;
+        trackingData.history = trackingData.history.map((h: any) => {
+          let coords = h.coordinates || null;
+          if (!coords) {
+            // Try exact or partial match
+            const locText = ((h.location || '') + ' ' + (h.status || '') + ' ' + (h.notes || '')).toLowerCase();
+            for (const key of Object.keys(locationMap)) {
+              if (locText.includes(key.toLowerCase())) {
+                coords = locationMap[key];
+                break;
+              }
+            }
+          }
+          if (coords) currentLocCoords = coords;
 
-             return { ...h, coordinates: coords };
-         });
+          return { ...h, coordinates: coords };
+        });
       }
 
       trackingData.currentCoordinates = currentLocCoords || [15.3694, 44.1910]; // Default to Sanaa
@@ -1265,66 +1524,66 @@ async function startServer() {
   app.post('/api/tracking/webhook', async (req, res) => {
     // Return 200 immediately to acknowledge webhook receipt
     res.status(200).json({ received: true });
-    
+
     // Process payload asynchronously to avoid timeouts
     (async () => {
-       try {
-           const payload = req.body;
-           // Example AfterShip webhook format: payload.msg.tracking_number, payload.msg.tag
-           if (!payload || !payload.msg || !payload.msg.tracking_number) return;
-           
-           const trackingNumber = payload.msg.tracking_number;
-           const newTag = payload.msg.tag; // 'Delivered', 'InTransit'
-           const locationStr = payload.msg.checkpoint?.location || 'Unknown Checkpoint';
-           
-           // Query the order
-           const ordersSnap = await getDocs(query(collection(db, 'orders'), where('trackingNumber', '==', trackingNumber), limit(1)));
-           if (ordersSnap.empty) return;
-           
-           const orderDoc = ordersSnap.docs[0];
-           const orderData = orderDoc.data();
-           
-           // Standardise tracking phase translation
-           const historyMap: Record<string, string> = {
-                'InfoReceived': 'تم تسجيل الطلب',
-                'InTransit': 'جاري الشحن لليمن',
-                'OutForDelivery': 'مع المندوب للتوصيل',
-                'Delivered': 'تم التسليم',
-                'Exception': 'ملغي'
-            };
-            const newStatusMap = historyMap[newTag] || 'جاري الشحن لليمن';
-            const newHistoryEntry = {
-                status: newStatusMap,
-                location: locationStr,
-                timestamp: Date.now(),
-                notes: payload.msg.checkpoint?.message || 'Automatic third-party checkpoint update',
-                createdBy: 'API_WEBHOOK'
-            };
-            const updatedHistory = [...(orderData.history || []), newHistoryEntry];
-            // Update secured backend Order document
-            await updateDoc(doc(db, 'orders', orderDoc.id), {
-                orderStatus: newStatusMap,
-                locationYemen: locationStr,
-                history: updatedHistory,
-                updatedAt: Date.now()
-            });
-            
-            // If tracking interface was public, update that too
-            const publicRef = doc(db, 'public_tracking', trackingNumber.toUpperCase());
-            const publicSnap = await getDoc(publicRef);
-            if (publicSnap.exists()) {
-                await updateDoc(publicRef, {
-                    status: newStatusMap,
-                    locationYemen: locationStr,
-                    history: updatedHistory,
-                    updatedAt: Date.now()
-                });
-            }
-            console.log(`[Webhook] Tracking ${trackingNumber} state machine advanced to ${newStatusMap}`);
-        } catch (err: any) {
-            console.error('[Webhook] Failed to process logistics update:', err.message);
+      try {
+        const payload = req.body;
+        // Example AfterShip webhook format: payload.msg.tracking_number, payload.msg.tag
+        if (!payload || !payload.msg || !payload.msg.tracking_number) return;
+
+        const trackingNumber = payload.msg.tracking_number;
+        const newTag = payload.msg.tag; // 'Delivered', 'InTransit'
+        const locationStr = payload.msg.checkpoint?.location || 'Unknown Checkpoint';
+
+        // Query the order
+        const ordersSnap = await getDocs(query(collection(db, 'orders'), where('trackingNumber', '==', trackingNumber), limit(1)));
+        if (ordersSnap.empty) return;
+
+        const orderDoc = ordersSnap.docs[0];
+        const orderData = orderDoc.data();
+
+        // Standardise tracking phase translation
+        const historyMap: Record<string, string> = {
+          'InfoReceived': 'تم تسجيل الطلب',
+          'InTransit': 'جاري الشحن لليمن',
+          'OutForDelivery': 'مع المندوب للتوصيل',
+          'Delivered': 'تم التسليم',
+          'Exception': 'ملغي'
+        };
+        const newStatusMap = historyMap[newTag] || 'جاري الشحن لليمن';
+        const newHistoryEntry = {
+          status: newStatusMap,
+          location: locationStr,
+          timestamp: Date.now(),
+          notes: payload.msg.checkpoint?.message || 'Automatic third-party checkpoint update',
+          createdBy: 'API_WEBHOOK'
+        };
+        const updatedHistory = [...(orderData.history || []), newHistoryEntry];
+        // Update secured backend Order document
+        await updateDoc(doc(db, 'orders', orderDoc.id), {
+          orderStatus: newStatusMap,
+          locationYemen: locationStr,
+          history: updatedHistory,
+          updatedAt: Date.now()
+        });
+
+        // If tracking interface was public, update that too
+        const publicRef = doc(db, 'public_tracking', trackingNumber.toUpperCase());
+        const publicSnap = await getDoc(publicRef);
+        if (publicSnap.exists()) {
+          await updateDoc(publicRef, {
+            status: newStatusMap,
+            locationYemen: locationStr,
+            history: updatedHistory,
+            updatedAt: Date.now()
+          });
         }
-     })();
+        console.log(`[Webhook] Tracking ${trackingNumber} state machine advanced to ${newStatusMap}`);
+      } catch (err: any) {
+        console.error('[Webhook] Failed to process logistics update:', err.message);
+      }
+    })();
   });
 
   // Secure Logistics Credentials Test Connection
@@ -1339,10 +1598,10 @@ async function startServer() {
         const response = await fetch(`https://parcelsapp.com/api/v3/shipments/tracking`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            shipments: [{ trackingId: 'PING_TEST_AUTH_CHECK', destinationCountry: defaultDestinationCountry || 'Yemen' }], 
-            language: 'en', 
-            apiKey 
+          body: JSON.stringify({
+            shipments: [{ trackingId: 'PING_TEST_AUTH_CHECK', destinationCountry: defaultDestinationCountry || 'Yemen' }],
+            language: 'en',
+            apiKey
           })
         });
 
@@ -1363,7 +1622,7 @@ async function startServer() {
           throw new Error(json.meta?.message || 'AfterShip authentication failed');
         }
       } else if (provider === 'sandbox') {
-         return res.json({ success: true, message: 'Sandbox mode is virtualized and always ready.' });
+        return res.json({ success: true, message: 'Sandbox mode is virtualized and always ready.' });
       }
 
       return res.status(400).json({ error: 'Provider test not yet implemented' });
