@@ -132,6 +132,24 @@ export default function Layout() {
     }
   });
   const [isNavCustomizerOpen, setIsNavCustomizerOpen] = useState(false);
+  const [showSystemStatus, setShowSystemStatus] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('swiftship_show_system_status');
+      return saved !== null ? saved === 'true' : true;
+    } catch (_) {
+      return true;
+    }
+  });
+
+  const toggleSystemStatusVisibility = () => {
+    setShowSystemStatus(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('swiftship_show_system_status', String(next));
+      } catch (_) { }
+      return next;
+    });
+  };
 
   // Global Search State
   const [searchText, setSearchText] = useState('');
@@ -170,7 +188,7 @@ export default function Layout() {
       const docs = snap.docs.map((doc: any) => doc.data());
 
       const active = docs.filter((o: any) => o.orderStatus !== 'تم التسليم' && o.orderStatus !== 'ملغي' && o.orderStatus !== 'Delivered' && o.orderStatus !== 'Cancelled').length;
-      
+
       const todayStr = formatDate();
       const delayed = docs.filter((o: any) => {
         if (o.orderStatus === 'متأخر' || o.orderStatus === 'Delayed' || o.orderStatus?.toLowerCase() === 'delayed') {
@@ -256,7 +274,7 @@ export default function Layout() {
         });
         const jPending = jRows.filter((j: any) => (j.status || 'pending_review') === 'pending_review');
         setPendingJobsCount(jPending.length);
-      } catch (_) {}
+      } catch (_) { }
     };
 
     fetchPendingPortal();
@@ -330,11 +348,11 @@ export default function Layout() {
       if (elapsed >= timeoutMs) {
         clearInterval(checkInterval);
         activityEvents.forEach(evt => window.removeEventListener(evt, updateActivity));
-        
+
         notificationService.notify({
           title: isAr ? 'انتهاء الجلسة' : 'Session Expired',
-          message: isAr 
-            ? 'تم تسجيل خروجك تلقائياً لعدم وجود أي نشاط خلال المدة المحددة.' 
+          message: isAr
+            ? 'تم تسجيل خروجك تلقائياً لعدم وجود أي نشاط خلال المدة المحددة.'
             : 'You have been logged out automatically due to inactivity.',
           type: 'info',
           category: 'system'
@@ -486,7 +504,7 @@ export default function Layout() {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
-    } catch (_) {}
+    } catch (_) { }
     return baseNavItems.map(item => ({ path: item.path, visible: true }));
   });
 
@@ -494,7 +512,7 @@ export default function Layout() {
     setNavOrderConfig(newConfig);
     try {
       localStorage.setItem('swiftship_sidebar_nav_config', JSON.stringify(newConfig));
-    } catch (_) {}
+    } catch (_) { }
   };
 
   const moveNavItemUp = (index: number) => {
@@ -523,6 +541,10 @@ export default function Layout() {
   const resetNavOrderConfig = () => {
     const defaultConfig = baseNavItems.map(item => ({ path: item.path, visible: true }));
     updateNavOrderConfig(defaultConfig);
+    setShowSystemStatus(true);
+    try {
+      localStorage.setItem('swiftship_show_system_status', 'true');
+    } catch (_) { }
   };
 
   const orderedNavItems = useMemo(() => {
@@ -654,9 +676,8 @@ export default function Layout() {
       />
 
       {/* Sidebar - Desktop Layout */}
-      <aside className={`bg-luxury-black border-r border-[#d4af37]/15 flex flex-col shrink-0 hidden md:flex relative z-20 backdrop-blur-md transition-all duration-300 ${
-        isSidebarCollapsed ? 'w-20' : 'w-72'
-      }`}>
+      <aside className={`bg-luxury-black border-r border-[#d4af37]/15 flex flex-col shrink-0 hidden md:flex relative z-20 backdrop-blur-md transition-all duration-300 ${isSidebarCollapsed ? 'w-20' : 'w-72'
+        }`}>
 
         {/* Dynamic Logo & System Name Block + Collapse Toggle */}
         <div className="p-4 pb-4 flex flex-col items-center justify-center border-b border-[#d4af37]/10 relative">
@@ -731,13 +752,11 @@ export default function Layout() {
                 key={item.path}
                 to={item.path}
                 title={isSidebarCollapsed ? item.name : undefined}
-                className={`flex items-center gap-3.5 px-3.5 py-3 rounded-xl transition-all duration-300 font-bold text-xs group relative ${
-                  isSidebarCollapsed ? 'justify-center' : 'text-right'
-                } ${
-                  isActive
+                className={`flex items-center gap-3.5 px-3.5 py-3 rounded-xl transition-all duration-300 font-bold text-xs group relative ${isSidebarCollapsed ? 'justify-center' : 'text-right'
+                  } ${isActive
                     ? 'bg-gradient-to-r from-[#d4af37]/15 to-transparent text-white border-l-2 border-[#d4af37] shadow-[inset_4px_0_15px_rgba(212,175,55,0.05)]'
                     : 'text-slate-400 hover:text-white hover:bg-white/[0.02]'
-                }`}
+                  }`}
               >
                 <Icon className={`w-4 h-4 shrink-0 transition-transform duration-300 group-hover:scale-110 ${isActive ? 'text-[#d4af37]' : 'text-slate-500 group-hover:text-[#d4af37]'}`} />
                 {!isSidebarCollapsed && <span className="flex-1">{item.name}</span>}
@@ -747,74 +766,71 @@ export default function Layout() {
               </Link>
             );
           })}
-          {/* System Status Toggle Entry - inside nav list */}
-          <div className="mt-1.5 border-t border-white/[0.04] pt-1.5">
-            <button
-              onClick={() => setIsStatusExpanded(prev => !prev)}
-              title={isAr ? 'شريط حالة النظام' : 'System Status'}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all duration-300 font-bold text-xs group cursor-pointer ${
-                isSidebarCollapsed ? 'justify-center' : 'text-start'
-              } ${
-                isStatusExpanded
-                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                  : 'text-slate-500 hover:text-white hover:bg-white/[0.02] border border-transparent'
-              }`}
-            >
-              <span className={`w-2 h-2 rounded-full shrink-0 animate-pulse ${
-                systemStats.systemStatus === 'good'
-                  ? 'bg-emerald-400 shadow-[0_0_6px_#10b981]'
-                  : systemStats.systemStatus === 'warning'
-                    ? 'bg-amber-400 shadow-[0_0_6px_#f59e0b]'
-                    : 'bg-rose-400 shadow-[0_0_6px_#ef4444]'
-              }`} />
-              {!isSidebarCollapsed && (
-                <>
-                  <span className="flex-1">{isAr ? 'حالة النظام' : 'System Status'}</span>
-                  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 ${
-                    isStatusExpanded ? 'rotate-180 text-emerald-400' : 'text-slate-600'
-                  }`} />
-                </>
-              )}
-            </button>
-          </div>
         </nav>
 
         {/* Bottom Status Panel */}
         <div className="p-3 border-t border-[#d4af37]/10 space-y-3 bg-[#08080a]">
-          {/* 🟢 ALX SYSTEM STATUS CARD */}
-          <div
-            onClick={() => setIsStatusExpanded(!isStatusExpanded)}
-            className={`p-4 rounded-2xl bg-gradient-to-br from-slate-950 via-[#0a0a0d] to-[#0c0c10] border transition-all duration-300 relative overflow-hidden select-none text-start cursor-pointer active:scale-[0.98] ${systemStats.systemStatus === 'good'
-                ? 'border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.05)] hover:border-emerald-500/40'
-                : systemStats.systemStatus === 'warning'
-                  ? 'border-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.05)] hover:border-amber-500/40'
-                  : 'border-rose-500/20 shadow-[0_0_15px_rgba(239,68,68,0.05)] hover:border-rose-500/40'
-              }`}
-          >
-            <div className="flex items-center justify-between pb-1">
-              <div className="flex flex-col">
-                <span className={`text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 ${systemStats.systemStatus === 'good'
-                    ? 'text-emerald-400'
+          {/* 🟢 ALX SYSTEM STATUS CARD - Controlled by showSystemStatus & Responsive to Collapse */}
+          {showSystemStatus && (
+            isSidebarCollapsed ? (
+              /* Collapsed View: Pulsing Status Light Icon Only */
+              <div className="flex justify-center items-center py-1">
+                <button
+                  onClick={() => setIsStatusExpanded(prev => !prev)}
+                  title={isAr
+                    ? `حالة النظام: ${systemStats.systemStatus === 'good' ? 'يعمل بكفاءة' : systemStats.systemStatus === 'warning' ? 'يحتاج متابعة' : 'تأخير بالمهام'}`
+                    : `System Status: ${systemStats.systemStatus}`
+                  }
+                  className={`p-3 rounded-2xl border transition-all cursor-pointer hover:scale-110 active:scale-95 flex items-center justify-center ${systemStats.systemStatus === 'good'
+                    ? 'bg-emerald-500/10 border-emerald-500/30 hover:border-emerald-500/60 shadow-[0_0_12px_rgba(16,185,129,0.15)]'
                     : systemStats.systemStatus === 'warning'
-                      ? 'text-amber-400'
-                      : 'text-rose-400'
-                  }`}>
-                  <span className={`w-2 h-2 rounded-full inline-block animate-pulse shrink-0 ${systemStats.systemStatus === 'good'
-                      ? 'bg-emerald-400 shadow-[0_0_8px_#10b981]'
-                      : systemStats.systemStatus === 'warning'
-                        ? 'bg-amber-400 shadow-[0_0_8px_#f59e0b]'
-                        : 'bg-rose-400 shadow-[0_0_8px_#ef4444]'
-                    }`}></span>
-                  🟢 ALX SYSTEM STATUS
-                </span>
-                <span className="text-[9px] text-[#d4af37] font-bold block mt-0.5">
-                  {isAr ? 'حالة النظام المباشرة' : 'Live System Status'}
-                </span>
+                      ? 'bg-amber-500/10 border-amber-500/30 hover:border-amber-500/60 shadow-[0_0_12px_rgba(245,158,11,0.15)]'
+                      : 'bg-rose-500/10 border-rose-500/30 hover:border-rose-500/60 shadow-[0_0_12px_rgba(239,68,68,0.15)]'
+                    }`}
+                >
+                  <span className={`w-3.5 h-3.5 rounded-full inline-block animate-pulse shrink-0 ${systemStats.systemStatus === 'good'
+                    ? 'bg-emerald-400 shadow-[0_0_10px_#10b981]'
+                    : systemStats.systemStatus === 'warning'
+                      ? 'bg-amber-400 shadow-[0_0_10px_#f59e0b]'
+                      : 'bg-rose-400 shadow-[0_0_10px_#ef4444]'
+                    }`} />
+                </button>
               </div>
-              <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform duration-300 ${isStatusExpanded ? 'rotate-180 text-[#d4af37]' : ''}`} />
-            </div>
+            ) : (
+              /* Expanded View: Full Status Card */
+              <div
+                onClick={() => setIsStatusExpanded(!isStatusExpanded)}
+                className={`p-4 rounded-2xl bg-gradient-to-br from-slate-950 via-[#0a0a0d] to-[#0c0c10] border transition-all duration-300 relative overflow-hidden select-none text-start cursor-pointer active:scale-[0.98] ${systemStats.systemStatus === 'good'
+                  ? 'border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.05)] hover:border-emerald-500/40'
+                  : systemStats.systemStatus === 'warning'
+                    ? 'border-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.05)] hover:border-amber-500/40'
+                    : 'border-rose-500/20 shadow-[0_0_15px_rgba(239,68,68,0.05)] hover:border-rose-500/40'
+                  }`}
+              >
+                <div className="flex items-center justify-between pb-1">
+                  <div className="flex flex-col">
+                    <span className={`text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 ${systemStats.systemStatus === 'good'
+                      ? 'text-emerald-400'
+                      : systemStats.systemStatus === 'warning'
+                        ? 'text-amber-400'
+                        : 'text-rose-400'
+                      }`}>
+                      <span className={`w-2 h-2 rounded-full inline-block animate-pulse shrink-0 ${systemStats.systemStatus === 'good'
+                        ? 'bg-emerald-400 shadow-[0_0_8px_#10b981]'
+                        : systemStats.systemStatus === 'warning'
+                          ? 'bg-amber-400 shadow-[0_0_8px_#f59e0b]'
+                          : 'bg-rose-400 shadow-[0_0_8px_#ef4444]'
+                        }`}></span>
+                      🟢 ALX SYSTEM STATUS
+                    </span>
+                    {/*<span className="text-[9px] text-[#d4af37] font-bold block mt-0.5">
+                      {isAr ? 'حالة النظام المباشرة' : 'Live System Status'}
+                    </span>*/}
+                  </div>
+                  <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform duration-300 ${isStatusExpanded ? 'rotate-180 text-[#d4af37]' : ''}`} />
+                </div>
 
-            {/* Quick Summary Badge for compact view */}
+                {/* Quick Summary Badge for compact view 
             {!isStatusExpanded && (
               <div className="mt-1.5 flex items-center justify-between text-[9px] text-slate-500 font-bold bg-black/30 px-2 py-1 rounded-lg border border-white/[0.01]">
                 <span>{isAr ? 'الحالة العامة:' : 'System overall:'}</span>
@@ -831,84 +847,113 @@ export default function Layout() {
                       : (isAr ? 'تأخير بالمهام' : 'Delay')}
                 </span>
               </div>
-            )}
+            )}*/}
 
-            {/* Metrics List displayed only when expanded */}
-            {isStatusExpanded && (
-              <div className="space-y-1 text-[10px] font-bold text-slate-400 mt-2.5 border-t border-white/[0.04] pt-2.5 animate-fade-in">
-                <div className="flex justify-between items-center bg-black/40 p-1.5 rounded-lg border border-white/[0.02]">
-                  <span className="text-slate-500 text-[9px]">{isAr ? 'حالة النظام ورسوخ العمل' : 'Status'}</span>
-                  <span className={`font-black tracking-tight text-[9px] ${systemStats.systemStatus === 'good'
-                      ? 'text-emerald-400'
-                      : systemStats.systemStatus === 'warning'
-                        ? 'text-amber-400'
-                        : 'text-rose-400'
-                    }`}>
-                    {systemStats.systemStatus === 'good'
-                      ? (isAr ? 'النظام يعمل بكفاءة' : 'System Healthy')
-                      : systemStats.systemStatus === 'warning'
-                        ? (isAr ? 'يرجى مراجعة المهام' : 'Attention Needed')
-                        : (isAr ? 'يوجد تأخير يتطلب حث' : 'Critical Delay')}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center py-1 border-b border-white/[0.02]">
-                  <span>{isAr ? 'الطلبات النشطة حالياً' : 'Active Orders Currently'}</span>
-                  <span className="font-mono text-white text-[11px] font-black">{systemStats.activeOrders}</span>
-                </div>
-                <div className="flex justify-between items-center py-1 border-b border-white/[0.02]">
-                  <span>{isAr ? 'الطلبات المتأخرة' : 'Delayed Orders'}</span>
-                  <span className={`font-mono text-[11px] font-black ${systemStats.delayedOrders > 0 ? 'text-rose-500 animate-pulse bg-rose-500/10 px-1.5 rounded' : 'text-slate-500'}`}>
-                    {systemStats.delayedOrders}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center py-1 border-b border-white/[0.02]">
-                  <span>{isAr ? 'الموظفين المتصلين الآن' : 'Staff Online'}</span>
-                  <span className="font-mono text-emerald-400 text-[11px] font-black">{systemStats.onlineStaff}</span>
-                </div>
-                <div className="flex justify-between items-center py-1 border-b border-white/[0.02]">
-                  <span>{isAr ? 'الشحنات الجارية' : 'Current Shipments'}</span>
-                  <span className="font-mono text-cyan-400 text-[11px] font-black">{systemStats.ongoingShipments}</span>
-                </div>
-                <div className="flex justify-between items-center py-1">
-                  <span>{isAr ? 'الطلبات المعلقة مالياً' : 'Financially Pending'}</span>
-                  <span className={`font-mono text-[11px] font-black ${systemStats.financiallyPending > 0 ? 'text-amber-400' : 'text-slate-500'}`}>
-                    {systemStats.financiallyPending}
-                  </span>
-                </div>
+                {/* Metrics List displayed only when expanded */}
+                {isStatusExpanded && (
+                  <div className="space-y-1 text-[10px] font-bold text-slate-400 mt-2.5 border-t border-white/[0.04] pt-2.5 animate-fade-in">
+                    <div className="flex justify-between items-center bg-black/40 p-1.5 rounded-lg border border-white/[0.02]">
+                      <span className="text-slate-500 text-[9px]">{isAr ? 'حالة النظام ورسوخ العمل' : 'Status'}</span>
+                      <span className={`font-black tracking-tight text-[9px] ${systemStats.systemStatus === 'good'
+                        ? 'text-emerald-400'
+                        : systemStats.systemStatus === 'warning'
+                          ? 'text-amber-400'
+                          : 'text-rose-400'
+                        }`}>
+                        {systemStats.systemStatus === 'good'
+                          ? (isAr ? 'النظام يعمل بكفاءة' : 'System Healthy')
+                          : systemStats.systemStatus === 'warning'
+                            ? (isAr ? 'يرجى مراجعة المهام' : 'Attention Needed')
+                            : (isAr ? 'يوجد تأخير يتطلب حث' : 'Critical Delay')}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center py-1 border-b border-white/[0.02]">
+                      <span>{isAr ? 'الطلبات النشطة حالياً' : 'Active Orders Currently'}</span>
+                      <span className="font-mono text-white text-[11px] font-black">{systemStats.activeOrders}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-1 border-b border-white/[0.02]">
+                      <span>{isAr ? 'الطلبات المتأخرة' : 'Delayed Orders'}</span>
+                      <span className={`font-mono text-[11px] font-black ${systemStats.delayedOrders > 0 ? 'text-rose-500 animate-pulse bg-rose-500/10 px-1.5 rounded' : 'text-slate-500'}`}>
+                        {systemStats.delayedOrders}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center py-1 border-b border-white/[0.02]">
+                      <span>{isAr ? 'الموظفين المتصلين الآن' : 'Staff Online'}</span>
+                      <span className="font-mono text-emerald-400 text-[11px] font-black">{systemStats.onlineStaff}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-1 border-b border-white/[0.02]">
+                      <span>{isAr ? 'الشحنات الجارية' : 'Current Shipments'}</span>
+                      <span className="font-mono text-cyan-400 text-[11px] font-black">{systemStats.ongoingShipments}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-1">
+                      <span>{isAr ? 'الطلبات المعلقة مالياً' : 'Financially Pending'}</span>
+                      <span className={`font-mono text-[11px] font-black ${systemStats.financiallyPending > 0 ? 'text-amber-400' : 'text-slate-500'}`}>
+                        {systemStats.financiallyPending}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            )
+          )}
 
-          {/* 2️⃣ Admin/Manager Privileges Card with تاج ذهبي (Gold Crown) */}
-          <div className="p-3.5 rounded-xl bg-gradient-to-r from-black via-slate-950 to-[#0e0e11] border border-[#d4af37]/5 flex items-center gap-3 group">
-            <div className="relative">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-b from-[#d4af37] to-amber-700 p-[1px] shadow-[0_0_10px_rgba(212,175,55,0.15)]">
-                <div className="w-full h-full rounded-full bg-[#050505] flex items-center justify-center font-black text-[11px] text-[#d4af37] uppercase">
-                  {profile?.fullName?.charAt(0) || 'SU'}
+          {/* 2️⃣ Admin/Manager Privileges Card - Responsive to Sidebar Collapse */}
+          {isSidebarCollapsed ? (
+            /* Collapsed View: Account Icon & Logout Button */
+            <div className="flex flex-col items-center justify-center py-1 gap-2">
+              <div
+                className="relative cursor-pointer group"
+                title={`${profile?.fullName || (isAr ? 'مدير النظام' : 'Admin User')} (${isAr ? 'صلاحيات كاملة' : 'Full Admin'})`}
+              >
+                <div className="w-9 h-9 rounded-full bg-gradient-to-b from-[#d4af37] to-amber-700 p-[1px] shadow-[0_0_10px_rgba(212,175,55,0.15)] group-hover:scale-105 transition-transform">
+                  <div className="w-full h-full rounded-full bg-[#050505] flex items-center justify-center font-black text-[11px] text-[#d4af37] uppercase">
+                    {profile?.fullName?.charAt(0) || 'SU'}
+                  </div>
                 </div>
+                <span className="absolute -top-1 -right-1 bg-gradient-to-r from-[#d4af37] to-yellow-600 text-black p-0.5 rounded-full select-none shadow-sm shadow-yellow-950" title="Full Superuser Rights">
+                  <Crown className="w-2.5 h-2.5" />
+                </span>
               </div>
-              <span className="absolute -top-1 -right-1 bg-gradient-to-r from-[#d4af37] to-yellow-600 text-black p-0.5 rounded-full select-none shadow-sm shadow-yellow-950" title="Full Superuser Rights">
-                <Crown className="w-2.5 h-2.5" />
-              </span>
+              <button
+                onClick={handleLogout}
+                className="text-slate-500 hover:text-red-400 p-1.5 rounded-xl hover:bg-red-950/20 transition-all cursor-pointer"
+                title={t('logout')}
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
             </div>
-
-            <div className="flex-1 min-w-0 text-start">
-              <div className="flex items-center gap-1">
-                <span className="text-xs font-black text-white truncate">{profile?.fullName || 'مدير النظام'}</span>
+          ) : (
+            /* Expanded View: Full Account Card */
+            <div className="p-3.5 rounded-xl bg-gradient-to-r from-black via-slate-950 to-[#0e0e11] border border-[#d4af37]/5 flex items-center gap-3 group">
+              <div className="relative">
+                <div className="w-9 h-9 rounded-full bg-gradient-to-b from-[#d4af37] to-amber-700 p-[1px] shadow-[0_0_10px_rgba(212,175,55,0.15)]">
+                  <div className="w-full h-full rounded-full bg-[#050505] flex items-center justify-center font-black text-[11px] text-[#d4af37] uppercase">
+                    {profile?.fullName?.charAt(0) || 'SU'}
+                  </div>
+                </div>
+                <span className="absolute -top-1 -right-1 bg-gradient-to-r from-[#d4af37] to-yellow-600 text-black p-0.5 rounded-full select-none shadow-sm shadow-yellow-950" title="Full Superuser Rights">
+                  <Crown className="w-2.5 h-2.5" />
+                </span>
               </div>
-              <span className="text-[9px] text-[#d4af37] font-black uppercase tracking-widest block mt-0.5">
-                {isAr ? 'صلاحيات كاملة 👑' : 'Full Admin Privileges'}
-              </span>
-            </div>
 
-            <button
-              onClick={handleLogout}
-              className="text-slate-500 hover:text-red-400 p-1.5 rounded-lg hover:bg-red-950/20 transition-all"
-              title={t('logout')}
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
+              <div className="flex-1 min-w-0 text-start">
+                <div className="flex items-center gap-1">
+                  <span className="text-xs font-black text-white truncate">{profile?.fullName || 'مدير النظام'}</span>
+                </div>
+                <span className="text-[9px] text-[#d4af37] font-black uppercase tracking-widest block mt-0.5">
+                  {isAr ? 'صلاحيات كاملة 👑' : 'Full Admin Privileges'}
+                </span>
+              </div>
+
+              <button
+                onClick={handleLogout}
+                className="text-slate-500 hover:text-red-400 p-1.5 rounded-lg hover:bg-red-950/20 transition-all cursor-pointer"
+                title={t('logout')}
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
       </aside>
 
@@ -1192,7 +1237,7 @@ export default function Layout() {
 
               {/* Modal Content - Scrollable Area */}
               <div className="flex-1 overflow-y-auto p-8 space-y-10 custom-scrollbar">
-                
+
                 {/* 1. System Overview Section */}
                 <section className="space-y-4">
                   <div className="flex items-center gap-2 text-[#d4af37]">
@@ -1239,8 +1284,8 @@ export default function Layout() {
                         {settings.companyName || (isAr ? 'الكس-تراك للحلول اللوجستية' : 'Al-Xpress Logistics')}
                       </h5>
                       <p className="text-[11px] text-slate-500 font-bold leading-relaxed">
-                        {isAr 
-                          ? 'شركة رائدة في تقديم الحلول اللوجستية المتكاملة وخدمات النقل الذكي، نعتمد على الابتكار التقني لرفع كفاءة سلاسل التوريد في المنطقة.' 
+                        {isAr
+                          ? 'شركة رائدة في تقديم الحلول اللوجستية المتكاملة وخدمات النقل الذكي، نعتمد على الابتكار التقني لرفع كفاءة سلاسل التوريد في المنطقة.'
                           : 'A leading provider of integrated logistics solutions and smart transportation services, leveraging technical innovation to enhance supply chain efficiency.'}
                       </p>
                     </div>
@@ -1289,8 +1334,8 @@ export default function Layout() {
                           {isAr ? 'كبير مهندسي البرمجيات وأمن المعلومات' : 'Senior Software Architect & InfoSec Specialist'}
                         </p>
                         <p className="text-[11px] text-slate-500 font-bold max-w-md">
-                          {isAr 
-                            ? 'لطلب الدعم الفني المباشر، الاستشارات التقنية، أو طلب تعديلات وتطويرات مخصصة للنظام، يرجى استخدام وسائل التواصل الرسمية أدناه.' 
+                          {isAr
+                            ? 'لطلب الدعم الفني المباشر، الاستشارات التقنية، أو طلب تعديلات وتطويرات مخصصة للنظام، يرجى استخدام وسائل التواصل الرسمية أدناه.'
                             : 'For direct technical support, technical consultations, or custom system modifications and developments, please use the official contact methods below.'}
                         </p>
                       </div>
@@ -1298,8 +1343,8 @@ export default function Layout() {
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-8">
                       <div className="space-y-2">
-                        <a 
-                          href="tel:+967776422777" 
+                        <a
+                          href="tel:+967776422777"
                           className="flex items-center justify-between p-3 bg-white/[0.02] border border-white/[0.05] rounded-2xl group/link hover:bg-[#d4af37]/10 hover:border-[#d4af37]/30 transition-all cursor-pointer shadow-sm active:scale-[0.98] relative z-10"
                         >
                           <div className="flex items-center gap-3">
@@ -1310,8 +1355,8 @@ export default function Layout() {
                           </div>
                           <span dir="ltr" className="text-xs font-mono font-black text-white group-hover/link:text-[#d4af37] transition-colors">+967 776 422 777</span>
                         </a>
-                        <a 
-                          href="mailto:arslan.alshamari@gmail.com" 
+                        <a
+                          href="mailto:arslan.alshamari@gmail.com"
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center justify-between p-3 bg-white/[0.02] border border-white/[0.05] rounded-2xl group/link hover:bg-[#d4af37]/10 hover:border-[#d4af37]/30 transition-all cursor-pointer shadow-sm active:scale-[0.98] relative z-10"
@@ -1326,19 +1371,19 @@ export default function Layout() {
                         </a>
                       </div>
                       <div className="grid grid-cols-2 gap-3">
-                        <a 
-                          href="https://wa.me/967776422777" 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
+                        <a
+                          href="https://wa.me/967776422777"
+                          target="_blank"
+                          rel="noopener noreferrer"
                           className="flex flex-col items-center justify-center gap-2 bg-emerald-500/5 border border-emerald-500/10 hover:bg-emerald-500/20 hover:border-emerald-500/30 rounded-2xl transition-all p-4 group/btn cursor-pointer shadow-sm active:scale-95 relative z-10"
                         >
                           <MessageCircle className="w-6 h-6 text-emerald-400 group-hover/btn:scale-110 transition-transform shadow-emerald-500/20" />
                           <span className="text-[9px] font-black uppercase text-emerald-400 tracking-wider">WhatsApp</span>
                         </a>
-                        <a 
-                          href="https://t.me/Arslan_ALShamari" 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
+                        <a
+                          href="https://t.me/Arslan_ALShamari"
+                          target="_blank"
+                          rel="noopener noreferrer"
                           className="flex flex-col items-center justify-center gap-2 bg-sky-500/5 border border-sky-500/10 hover:bg-sky-500/20 hover:border-sky-500/30 rounded-2xl transition-all p-4 group/btn cursor-pointer shadow-sm active:scale-95 relative z-10"
                         >
                           <Send className="w-6 h-6 text-sky-400 group-hover/btn:scale-110 transition-transform shadow-sky-500/20" />
@@ -1401,8 +1446,8 @@ export default function Layout() {
                     to={item.path}
                     onClick={() => setIsMobileMenuOpen(false)}
                     className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-bold text-xs ${isActive
-                        ? 'bg-[#d4af37]/10 text-white border-l-2 border-[#d4af37]'
-                        : 'text-slate-400 hover:text-white hover:bg-slate-900'
+                      ? 'bg-[#d4af37]/10 text-white border-l-2 border-[#d4af37]'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-900'
                       }`}
                   >
                     <Icon className="w-4 h-4 shrink-0 text-[#d4af37]" />
@@ -1436,8 +1481,33 @@ export default function Layout() {
 
             <div className="p-4 overflow-y-auto space-y-2 flex-1 text-xs">
               <p className="text-slate-400 font-bold text-[11px] mb-3">
-                {isAr ? 'يمكنك تقديم أو تأخير ترتيب الصفحات أو إخفاء الصفحات غير المستخدمة من اللوحة الجانبية:' : 'Reorder or hide navigation pages from your sidebar:'}
+                {isAr ? 'يمكنك تقديم أو تأخير ترتيب الصفحات أو إخفاء الصفحات وإظهار/إخفاء شريط حالة النظام:' : 'Reorder or hide navigation pages and toggle system status bar:'}
               </p>
+
+              {/* System Status Control Toggle Switch */}
+              <div className="p-3 bg-gradient-to-r from-[#d4af37]/10 via-black/40 to-black/40 border border-[#d4af37]/30 rounded-2xl flex items-center justify-between gap-3 mb-3 hover:border-[#d4af37]/50 transition shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                    <Activity className="w-4 h-4 text-emerald-400" />
+                  </div>
+                  <div>
+                    <span className="font-bold text-white text-xs block">{isAr ? 'شريط حالة النظام المباشرة' : 'Live System Status Bar'}</span>
+                    <span className="text-[10px] text-slate-400 block">{isAr ? 'إظهار أو إخفاء بطاقة ومؤشرات حالة النظام بالشريط الجانبي' : 'Toggle live system status indicator in sidebar'}</span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={toggleSystemStatusVisibility}
+                  className={`px-3 py-1.5 border rounded-xl font-bold text-xs transition cursor-pointer flex items-center gap-1.5 ${showSystemStatus
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                    : 'bg-slate-900 border-slate-800 text-slate-600'
+                    }`}
+                  title={showSystemStatus ? (isAr ? 'إخفاء شريط حالة النظام' : 'Hide System Status') : (isAr ? 'إظهار شريط حالة النظام' : 'Show System Status')}
+                >
+                  {showSystemStatus ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                  <span>{showSystemStatus ? (isAr ? 'ظاهر' : 'Visible') : (isAr ? 'مخفي' : 'Hidden')}</span>
+                </button>
+              </div>
 
               {navOrderConfig.map((conf, index) => {
                 const itemDef = baseNavItems.find(b => b.path === conf.path);
@@ -1472,11 +1542,10 @@ export default function Layout() {
 
                       <button
                         onClick={() => toggleNavItemVisibility(conf.path)}
-                        className={`p-1.5 border rounded-lg transition cursor-pointer ${
-                          conf.visible !== false
-                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                            : 'bg-slate-900 border-slate-800 text-slate-600'
-                        }`}
+                        className={`p-1.5 border rounded-lg transition cursor-pointer ${conf.visible !== false
+                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                          : 'bg-slate-900 border-slate-800 text-slate-600'
+                          }`}
                         title={conf.visible !== false ? (isAr ? 'إخفاء الصفحات' : 'Hide Page') : (isAr ? 'إظهار الصفحات' : 'Show Page')}
                       >
                         {conf.visible !== false ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
