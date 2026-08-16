@@ -79,7 +79,11 @@ export type PermissionKey =
   | 'add_auto_entries'
   | 'edit_auto_entries'
   | 'delete_auto_entries'
-  | 'track_order';
+  | 'track_order'
+  | 'view_shipping_companies'
+  | 'add_shipping_companies'
+  | 'edit_shipping_companies'
+  | 'delete_shipping_companies';
 
 export interface PermissionDefinition {
   id: PermissionKey;
@@ -95,8 +99,11 @@ export const PERMISSION_CATEGORIES = {
   auto_entries: { ar: 'القيود المحاسبية التلقائية', en: 'Auto Entry Rules' },
   customers: { ar: 'العملاء', en: 'Customers' },
   couriers: { ar: 'المناديب', en: 'Couriers' },
-  sources: { ar: 'المصادر', en: 'Order Sources' },
-  staff: { ar: 'الموظفين', en: 'Staff & Roles' },
+  sources: { ar: 'مصادر الشراء والتوريد', en: 'Purchase & Supply Sources' },
+  shipping_companies: { ar: 'شركات الشحن والنقل', en: 'Shipping Companies & Carriers' },
+  employees: { ar: 'سجل الموظفين', en: 'Employees Ledger' },
+  users: { ar: 'مستخدمو النظام', en: 'System Users (Dashboard Accounts)' },
+  roles: { ar: 'الأدوار والصلاحيات', en: 'Roles & Permissions' },
   accounting: { ar: 'المحاسبة والمالية', en: 'Accounting & Finance' },
   reports: { ar: 'التقارير', en: 'Reports' },
   admin: { ar: 'المسؤول وإعدادات النظام', en: 'System Administration' },
@@ -145,11 +152,17 @@ export const ALL_PERMISSIONS: PermissionDefinition[] = [
   { id: 'edit_couriers', labelAr: 'تعديل نسبة أو معلومات ملف المندوب', labelEn: 'Edit Courier Contracts', category: 'couriers' },
   { id: 'delete_couriers', labelAr: 'إلغاء التعامل وحساب المندوب من الواجهة', labelEn: 'Remove Registered Couriers', category: 'couriers' },
 
-  // Sources
-  { id: 'view_sources', labelAr: 'عرض وتتبع شركات الشحن والموردين والمصادر', labelEn: 'Manage Shipping carriers & Intake sources', category: 'sources' },
-  { id: 'add_sources', labelAr: 'إضافة شركة شحن أو مصدر توريد جديد', labelEn: 'Add New Carrier/Source', category: 'sources' },
-  { id: 'edit_sources', labelAr: 'تعديل عقد وتعريفات المصدر والشركة', labelEn: 'Edit Carrier/Source properties', category: 'sources' },
-  { id: 'delete_sources', labelAr: 'تكسير حبل الارتباط وحذف المصدر', labelEn: 'Delete Intake Carrier/Source', category: 'sources' },
+  // Purchase & Supply Sources (Sources tab in Sources.tsx)
+  { id: 'view_sources', labelAr: 'عرض مصادر الشراء والتوريد (تطبيقات التسوق والمصانع الصينية)', labelEn: 'View Purchase & Supply Sources (Apps & Factories)', category: 'sources' },
+  { id: 'add_sources', labelAr: 'إضافة مصدر شراء أو توريد جديد (تطبيق أو مصنع)', labelEn: 'Add New Purchase Source (App or Factory)', category: 'sources' },
+  { id: 'edit_sources', labelAr: 'تعديل بيانات وروابط مصدر الشراء والتوريد', labelEn: 'Edit Purchase Source Details & Links', category: 'sources' },
+  { id: 'delete_sources', labelAr: 'حذف مصدر شراء أو مصنع من النظام نهائياً', labelEn: 'Delete Purchase Source from System', category: 'sources' },
+
+  // Shipping Companies & Carriers (Shipping tab in Sources.tsx)
+  { id: 'view_shipping_companies', labelAr: 'عرض قائمة شركات الشحن وناقلي البضائع المسجلين', labelEn: 'View Registered Shipping Companies & Carriers', category: 'shipping_companies' },
+  { id: 'add_shipping_companies', labelAr: 'إضافة شركة شحن جديدة ورابط بوابة التتبع', labelEn: 'Add New Shipping Company & Tracking Portal', category: 'shipping_companies' },
+  { id: 'edit_shipping_companies', labelAr: 'تعديل بيانات شركة الشحن وجهات الاتصال', labelEn: 'Edit Shipping Company Details & Contacts', category: 'shipping_companies' },
+  { id: 'delete_shipping_companies', labelAr: 'حذف شركة شحن من سجل النظام نهائياً', labelEn: 'Delete Shipping Company from System', category: 'shipping_companies' },
 
   // Staff and Employees
   { id: 'view_employees', labelAr: 'رؤية كشف سجل الموظفين والمستحقات', labelEn: 'View Employees List', category: 'staff' },

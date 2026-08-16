@@ -11,6 +11,17 @@ import ConfirmModal from '../components/ConfirmModal';
 export default function Sources() {
   const { role, hasPermission, loading: roleLoading } = useRole();
   const { settings, t } = useSettings();
+  const isAdmin = role === 'Admin';
+  // Purchase Sources permissions
+  const canViewSources = isAdmin || hasPermission('view_sources');
+  const canAddSources = isAdmin || hasPermission('add_sources');
+  const canEditSources = isAdmin || hasPermission('edit_sources');
+  const canDeleteSources = isAdmin || hasPermission('delete_sources');
+  // Shipping Companies permissions
+  const canViewShipping = isAdmin || hasPermission('view_shipping_companies');
+  const canAddShipping = isAdmin || hasPermission('add_shipping_companies');
+  const canEditShipping = isAdmin || hasPermission('edit_shipping_companies');
+  const canDeleteShipping = isAdmin || hasPermission('delete_shipping_companies');
   const [sources, setSources] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -289,7 +300,7 @@ export default function Sources() {
     );
   }
 
-  if (!hasPermission('view_sources') && role !== 'Admin') {
+  if (!canViewSources && !canViewShipping) {
     return (
       <div className="flex flex-col items-center justify-center p-12 bg-gradient-to-br from-[#121215] to-[#070708] rounded-3xl border border-slate-850 shadow-xl text-center select-none">
         <ShieldAlert className="w-16 h-16 text-rose-500 mb-6 animate-pulse" />
@@ -320,42 +331,52 @@ export default function Sources() {
             </p>
           </div>
         </div>
-        {role === 'Admin' || hasPermission('add_sources') ? (
+        {activeTab === 'sources' && canAddSources && (
           <button 
-            onClick={activeTab === 'sources' ? handleOpenAdd : handleOpenAddShipping}
+            onClick={handleOpenAdd}
             className="bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black px-6 py-2.5 rounded-xl flex items-center gap-2 font-black text-sm transition transform active:scale-95 shadow-md shadow-yellow-950/20"
           >
-            <Plus className="w-4 h-4" /> 
-            {activeTab === 'sources' 
-              ? (isAr ? 'تقييد مصدر توريد جديد' : 'Incorporate Supply Source') 
-              : (isAr ? 'إضافة شركة شحن جديدة' : 'Add Shipping Company')
-            }
+            <Plus className="w-4 h-4" />
+            {isAr ? 'تقييد مصدر توريد جديد' : 'Incorporate Supply Source'}
           </button>
-        ) : null}
+        )}
+        {activeTab === 'shipping_companies' && canAddShipping && (
+          <button 
+            onClick={handleOpenAddShipping}
+            className="bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black px-6 py-2.5 rounded-xl flex items-center gap-2 font-black text-sm transition transform active:scale-95 shadow-md shadow-yellow-950/20"
+          >
+            <Plus className="w-4 h-4" />
+            {isAr ? 'إضافة شركة شحن جديدة' : 'Add Shipping Company'}
+          </button>
+        )}
       </div>
 
       {/* Tabs System */}
       <div className="flex gap-2 border-b border-slate-800 pb-px">
-        <button
-          onClick={() => setActiveTab('sources')}
-          className={`px-5 py-3 text-xs font-black uppercase tracking-wider border-b-2 transition-all duration-300 ${
-            activeTab === 'sources'
-              ? 'border-[#d4af37] text-white bg-[#d4af37]/5'
-              : 'border-transparent text-slate-500 hover:text-white'
-          }`}
-        >
-          {isAr ? '📦 مصادر الشراء (التوريد)' : '📦 Supply & Order Sources'}
-        </button>
-        <button
-          onClick={() => setActiveTab('shipping_companies')}
-          className={`px-5 py-3 text-xs font-black uppercase tracking-wider border-b-2 transition-all duration-300 ${
-            activeTab === 'shipping_companies'
-              ? 'border-[#d4af37] text-white bg-[#d4af37]/5'
-              : 'border-transparent text-slate-500 hover:text-white'
-          }`}
-        >
-          {isAr ? '🚛 شركات الشحن والنقل' : '🚛 Shipping & Carriers'}
-        </button>
+        {canViewSources && (
+          <button
+            onClick={() => setActiveTab('sources')}
+            className={`px-5 py-3 text-xs font-black uppercase tracking-wider border-b-2 transition-all duration-300 ${
+              activeTab === 'sources'
+                ? 'border-[#d4af37] text-white bg-[#d4af37]/5'
+                : 'border-transparent text-slate-500 hover:text-white'
+            }`}
+          >
+            {isAr ? '📦 مصادر الشراء والتوريد' : '📦 Supply & Order Sources'}
+          </button>
+        )}
+        {canViewShipping && (
+          <button
+            onClick={() => setActiveTab('shipping_companies')}
+            className={`px-5 py-3 text-xs font-black uppercase tracking-wider border-b-2 transition-all duration-300 ${
+              activeTab === 'shipping_companies'
+                ? 'border-[#d4af37] text-white bg-[#d4af37]/5'
+                : 'border-transparent text-slate-500 hover:text-white'
+            }`}
+          >
+            {isAr ? '🚛 شركات الشحن والنقل' : '🚛 Shipping & Carriers'}
+          </button>
+        )}
       </div>
 
       {activeTab === 'sources' ? (
@@ -432,15 +453,15 @@ export default function Sources() {
                       </td>
                       <td className="p-4 text-slate-400 text-[11px] text-start max-w-xs truncate">{source.notes || '—'}</td>
                       <td className="p-4 text-left flex justify-end gap-2">
-                        {role === 'Admin' || hasPermission('edit_sources') ? (
+                        {canEditSources && (
                           <button 
                             onClick={() => handleOpenEdit(source)} 
                             className="text-[#d4af37] bg-[#d4af37]/5 hover:bg-[#d4af37]/15 border border-[#d4af37]/15 p-2 rounded-xl transition duration-300"
                           >
                             <Edit2 className="w-4 h-4" />
                           </button>
-                        ) : null}
-                        {hasPermission('delete_sources') && (
+                        )}
+                        {canDeleteSources && (
                           <button 
                             onClick={() => handleDelete(source.id, source.source_name || (isAr ? 'المصدر' : 'Source'))} 
                             className="text-rose-500 hover:bg-rose-950/20 bg-rose-950/10 border border-rose-950/45 p-2 rounded-xl transition-all"
@@ -539,15 +560,15 @@ export default function Sources() {
                         {company.notes || '—'}
                       </td>
                       <td className="p-4 text-left flex justify-end gap-2">
-                        {role === 'Admin' || hasPermission('edit_sources') ? (
+                        {canEditShipping && (
                           <button 
                             onClick={() => handleOpenEditShipping(company)} 
                             className="text-[#d4af37] bg-[#d4af37]/5 hover:bg-[#d4af37]/15 border border-[#d4af37]/15 p-2 rounded-xl transition duration-300"
                           >
                             <Edit2 className="w-4 h-4" />
                           </button>
-                        ) : null}
-                        {hasPermission('delete_sources') && (
+                        )}
+                        {canDeleteShipping && (
                           <button 
                             onClick={() => handleDeleteShipping(company.id, company.name)} 
                             className="text-rose-500 hover:bg-rose-950/20 bg-rose-950/10 border border-rose-950/45 p-2 rounded-xl transition-all"

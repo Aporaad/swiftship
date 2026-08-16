@@ -110,12 +110,21 @@ const PERMISSION_GROUPS = (isAr: boolean) => [
     ]
   },
   {
-    group: isAr ? '🗺️ المصادر' : '🗺️ Sources',
+    group: isAr ? '\U0001f5fa\ufe0f مصادر الشراء والتوريد' : '\U0001f5fa\ufe0f Purchase & Supply Sources',
     perms: [
-      { id: 'view_sources', label: isAr ? 'عرض مصادر الطلبات' : 'View Order Sources' },
-      { id: 'add_sources', label: isAr ? 'إضافة مصادر الطلبات' : 'Add Order Sources' },
-      { id: 'edit_sources', label: isAr ? 'تعديل مصادر الطلبات' : 'Edit Order Sources' },
-      { id: 'delete_sources', label: isAr ? 'حذف مصادر الطلبات' : 'Delete Order Sources' },
+      { id: 'view_sources', label: isAr ? 'عرض مصادر الشراء (تطبيقات ومصانع)' : 'View Purchase Sources (Apps & Factories)' },
+      { id: 'add_sources', label: isAr ? 'إضافة مصدر شراء جديد' : 'Add New Purchase Source' },
+      { id: 'edit_sources', label: isAr ? 'تعديل بيانات مصدر الشراء' : 'Edit Purchase Source' },
+      { id: 'delete_sources', label: isAr ? 'حذف مصدر الشراء' : 'Delete Purchase Source' },
+    ]
+  },
+  {
+    group: isAr ? '\U0001f69b شركات الشحن والنقل' : '\U0001f69b Shipping Companies & Carriers',
+    perms: [
+      { id: 'view_shipping_companies', label: isAr ? 'عرض قائمة شركات الشحن والناقلين' : 'View Shipping Companies & Carriers' },
+      { id: 'add_shipping_companies', label: isAr ? 'إضافة شركة شحن جديدة' : 'Add New Shipping Company' },
+      { id: 'edit_shipping_companies', label: isAr ? 'تعديل بيانات شركة الشحن' : 'Edit Shipping Company' },
+      { id: 'delete_shipping_companies', label: isAr ? 'حذف شركة شحن من السجل' : 'Delete Shipping Company' },
     ]
   },
   {
