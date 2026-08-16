@@ -157,7 +157,7 @@ export default function App() {
           <Route path="/" element={user ? <Layout /> : <Navigate to="/login" />}>
             <Route index element={<Dashboard />} />
             <Route path="orders" element={<Orders />} />
-            <Route path="tracking" element={<Tracking />} />
+            <Route path="tracking" element={<Navigate to="/orders?tab=tracking" replace />} />
             <Route path="customers" element={<Customers />} />
             <Route path="sources" element={<Sources />} />
             <Route path="users" element={<Users />} />

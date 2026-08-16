@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { signOut } from '../lib/firebase';
 import { collection, query, where, onSnapshot, getDocs, writeBatch, doc, setDoc } from '../lib/firebase';
@@ -45,7 +45,15 @@ import {
   Code2,
   ExternalLink,
   Briefcase,
-  Monitor
+  Monitor,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  EyeOff,
+  ArrowUp,
+  ArrowDown,
+  SlidersHorizontal,
+  X
 } from 'lucide-react';
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
@@ -116,6 +124,14 @@ export default function Layout() {
 
   const [unreadCount, setUnreadCount] = useState(0);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('swiftship_sidebar_collapsed') === 'true';
+    } catch (_) {
+      return false;
+    }
+  });
+  const [isNavCustomizerOpen, setIsNavCustomizerOpen] = useState(false);
 
   // Global Search State
   const [searchText, setSearchText] = useState('');
@@ -446,30 +462,91 @@ export default function Layout() {
     updateSettings({ language: newLang });
   };
 
-  const navItems = [
-    { name: isAr ? 'الرئيسية' : 'Dashboard', path: '/', icon: LayoutDashboard, permission: 'view_dashboard' },
-    { name: isAr ? 'الطلبات' : 'Orders', path: '/orders', icon: Package, permission: 'view_orders' },
-    { name: isAr ? 'التتبع' : 'Tracking', path: '/tracking', icon: Truck, permission: 'view_orders' },
-    { name: isAr ? 'العملاء' : 'Customers', path: '/customers', icon: Users, permission: 'view_customers' },
-    { name: isAr ? 'المناديب' : 'Couriers', path: '/couriers', icon: Truck, permission: 'view_couriers' },
-    { name: isAr ? 'المصروفات والعهد' : 'Expenses & Custody', path: '/expenses', icon: Wallet, permission: 'view_finance' },
-    { name: isAr ? 'المحاسبة' : 'Accounting', path: '/accounting', icon: BookOpen, permission: 'view_finance' },
-    { name: isAr ? 'المصادر' : 'Sources', path: '/sources', icon: MapPin, permission: 'view_sources' },
-    { name: isAr ? 'متصفح المواقع' : 'Web Browser', path: '/browser', icon: Monitor, permission: 'view_browser' },
-    { name: isAr ? 'التقارير' : 'Reports', path: '/reports', icon: FileText, permission: 'view_reports' },
-    { name: isAr ? 'الموظفين' : 'Employees', path: '/employees', icon: Briefcase, permission: 'view_employees' },
-    { name: isAr ? 'المستخدمون والأدوار' : 'Users & Roles', path: '/user-management', icon: UserCog, permission: 'view_users' },
-    { name: isAr ? 'إدارة الموقع' : 'Website Management', path: '/website-management', icon: Globe, permission: 'view_website_management' },
-    { name: isAr ? 'الإشعارات' : 'Notifications', path: '/notifications', icon: Bell, permission: 'view_notifications' },
-    { name: isAr ? 'الإعدادات' : 'Settings', path: '/settings', icon: Settings, permission: 'settings' },
+  const baseNavItems = [
+    { id: 'dashboard', name: isAr ? 'الرئيسية' : 'Dashboard', path: '/', icon: LayoutDashboard, permission: 'view_dashboard' },
+    { id: 'orders', name: isAr ? 'الطلبات والشحنات' : 'Orders & Shipments', path: '/orders', icon: Package, permission: 'view_orders' },
+    { id: 'customers', name: isAr ? 'العملاء' : 'Customers', path: '/customers', icon: Users, permission: 'view_customers' },
+    { id: 'couriers', name: isAr ? 'المناديب' : 'Couriers', path: '/couriers', icon: Truck, permission: 'view_couriers' },
+    { id: 'expenses', name: isAr ? 'المصروفات والعهد' : 'Expenses & Custody', path: '/expenses', icon: Wallet, permission: 'view_finance' },
+    { id: 'accounting', name: isAr ? 'المحاسبة' : 'Accounting', path: '/accounting', icon: BookOpen, permission: 'view_finance' },
+    { id: 'sources', name: isAr ? 'المصادر' : 'Sources', path: '/sources', icon: MapPin, permission: 'view_sources' },
+    { id: 'browser', name: isAr ? 'متصفح المواقع' : 'Web Browser', path: '/browser', icon: Monitor, permission: 'view_browser' },
+    { id: 'reports', name: isAr ? 'التقارير' : 'Reports', path: '/reports', icon: FileText, permission: 'view_reports' },
+    { id: 'employees', name: isAr ? 'الموظفين' : 'Employees', path: '/employees', icon: Briefcase, permission: 'view_employees' },
+    { id: 'users', name: isAr ? 'المستخدمون والأدوار' : 'Users & Roles', path: '/user-management', icon: UserCog, permission: 'view_users' },
+    { id: 'website', name: isAr ? 'إدارة الموقع' : 'Website Management', path: '/website-management', icon: Globe, permission: 'view_website_management' },
+    { id: 'notifications', name: isAr ? 'الإشعارات' : 'Notifications', path: '/notifications', icon: Bell, permission: 'view_notifications' },
+    { id: 'settings', name: isAr ? 'الإعدادات' : 'Settings', path: '/settings', icon: Settings, permission: 'settings' },
   ];
 
-  const filteredNavItems = navItems.filter(item => {
+  const [navOrderConfig, setNavOrderConfig] = useState<{ path: string; visible: boolean }[]>(() => {
+    try {
+      const saved = localStorage.getItem('swiftship_sidebar_nav_config');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (_) {}
+    return baseNavItems.map(item => ({ path: item.path, visible: true }));
+  });
+
+  const updateNavOrderConfig = (newConfig: { path: string; visible: boolean }[]) => {
+    setNavOrderConfig(newConfig);
+    try {
+      localStorage.setItem('swiftship_sidebar_nav_config', JSON.stringify(newConfig));
+    } catch (_) {}
+  };
+
+  const moveNavItemUp = (index: number) => {
+    if (index <= 0) return;
+    const updated = [...navOrderConfig];
+    const temp = updated[index];
+    updated[index] = updated[index - 1];
+    updated[index - 1] = temp;
+    updateNavOrderConfig(updated);
+  };
+
+  const moveNavItemDown = (index: number) => {
+    if (index >= navOrderConfig.length - 1) return;
+    const updated = [...navOrderConfig];
+    const temp = updated[index];
+    updated[index] = updated[index + 1];
+    updated[index + 1] = temp;
+    updateNavOrderConfig(updated);
+  };
+
+  const toggleNavItemVisibility = (path: string) => {
+    const updated = navOrderConfig.map(c => c.path === path ? { ...c, visible: !c.visible } : c);
+    updateNavOrderConfig(updated);
+  };
+
+  const resetNavOrderConfig = () => {
+    const defaultConfig = baseNavItems.map(item => ({ path: item.path, visible: true }));
+    updateNavOrderConfig(defaultConfig);
+  };
+
+  const orderedNavItems = useMemo(() => {
+    const result: typeof baseNavItems = [];
+    navOrderConfig.forEach(conf => {
+      if (conf.visible !== false) {
+        const found = baseNavItems.find(b => b.path === conf.path);
+        if (found) result.push(found);
+      }
+    });
+    baseNavItems.forEach(b => {
+      if (!navOrderConfig.some(c => c.path === b.path)) {
+        result.push(b);
+      }
+    });
+    return result;
+  }, [navOrderConfig, isAr]);
+
+  const filteredNavItems = orderedNavItems.filter(item => {
     if (item.path === '/website-management') {
       return hasPermission('view_website_management') || role === 'Admin';
     }
     if (item.path === '/browser') {
-      return hasPermission('view_browser') || role === 'Admin' || true; // Accessible to all authenticated users
+      return hasPermission('view_browser') || role === 'Admin' || true;
     }
     if (item.path === '/expenses') {
       return hasPermission('view_finance') || hasPermission('view_expenses') || hasPermission('view_custody');
@@ -577,67 +654,133 @@ export default function Layout() {
       />
 
       {/* Sidebar - Desktop Layout */}
-      <aside className="w-72 bg-luxury-black border-r border-[#d4af37]/15 flex flex-col shrink-0 hidden md:flex relative z-20 backdrop-blur-md">
+      <aside className={`bg-luxury-black border-r border-[#d4af37]/15 flex flex-col shrink-0 hidden md:flex relative z-20 backdrop-blur-md transition-all duration-300 ${
+        isSidebarCollapsed ? 'w-20' : 'w-72'
+      }`}>
 
-        {/* Dynamic Logo & System Name Block */}
-        <div className="p-8 pb-6 flex flex-col items-center justify-center border-b border-[#d4af37]/10 relative">
-          <div className="absolute top-0 left-1/4 right-1/4 h-[1px] bg-gradient-to-r from-transparent via-[#d4af37]/45 to-transparent"></div>
-
-          <div className="relative group cursor-pointer mb-2">
-            <div className="absolute -inset-1 rounded-full bg-[#d4af37]/10 blur-md group-hover:bg-[#d4af37]/25 transition duration-500"></div>
-            {settings.systemLogo ? (
-              <img
-                src={settings.systemLogo}
-                alt={settings.systemName || 'Logo'}
-                className="w-16 h-12 object-contain transition-all duration-500 transform group-hover:scale-105"
-              />
-            ) : (
-              <svg className="w-16 h-12 text-[#d4af37] transition-all duration-500 transform group-hover:scale-105" viewBox="0 0 100 60" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M50 5 L75 55 L50 43 L25 55 Z" stroke="currentColor" strokeWidth="2.5" fill="rgba(212,175,55,0.08)" />
-                <path d="M50 5 L50 43" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 2" />
-                <path d="M25 55 C12 40 10 25 22 15 C30 20 40 32 50 43" stroke="currentColor" strokeWidth="1.5" />
-                <path d="M75 55 C88 40 90 25 78 15 C70 20 60 32 50 43" stroke="currentColor" strokeWidth="1.5" />
-                <circle cx="50" cy="5" r="3" fill="#fff" className="animate-ping" />
-                <circle cx="50" cy="5" r="2.5" fill="currentColor" />
-              </svg>
+        {/* Dynamic Logo & System Name Block + Collapse Toggle */}
+        <div className="p-4 pb-4 flex flex-col items-center justify-center border-b border-[#d4af37]/10 relative">
+          <div className="flex items-center justify-between w-full mb-1">
+            {!isSidebarCollapsed && (
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-2">
+                {isAr ? 'اللوحة الجانبية' : 'Sidebar Navigation'}
+              </span>
             )}
+            <div className="flex items-center gap-1.5 ms-auto">
+              {/* Small Customize Icon Button */}
+              {!isSidebarCollapsed && (
+                <button
+                  onClick={() => setIsNavCustomizerOpen(true)}
+                  className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-500 hover:text-[#d4af37] transition cursor-pointer"
+                  title={isAr ? 'تخصيص ترتيب الصفحات' : 'Customize Navigation Order'}
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5" />
+                </button>
+              )}
+              {/* Collapse/Expand Toggle */}
+              <button
+                onClick={() => {
+                  const next = !isSidebarCollapsed;
+                  setIsSidebarCollapsed(next);
+                  localStorage.setItem('swiftship_sidebar_collapsed', String(next));
+                }}
+                className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-400 hover:text-[#d4af37] transition cursor-pointer"
+                title={isSidebarCollapsed ? (isAr ? 'توسيع اللوحة الجانبية' : 'Expand Sidebar') : (isAr ? 'طي اللوحة الجانبية' : 'Collapse Sidebar')}
+              >
+                {isSidebarCollapsed ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
-          <h1 className="text-lg font-extrabold tracking-[0.1em] text-[#d4af37] uppercase text-center mt-1 luxury-glow-neon select-none">
-            {settings.systemName || settings.companyName || 'alx'}
-          </h1>
-          <p className="text-[9px] font-black tracking-[0.3em] text-slate-500 uppercase mt-0.5 select-none">
-            {isAr ? 'نظام إدارة اللوجستية' : 'Logistics & ERP'}
-          </p>
+          {!isSidebarCollapsed && (
+            <div className="text-center mt-2">
+              <div className="relative group cursor-pointer mb-2 inline-block">
+                <div className="absolute -inset-1 rounded-full bg-[#d4af37]/10 blur-md group-hover:bg-[#d4af37]/25 transition duration-500"></div>
+                {settings.systemLogo ? (
+                  <img
+                    src={settings.systemLogo}
+                    alt={settings.systemName || 'Logo'}
+                    className="w-16 h-12 object-contain transition-all duration-500 transform group-hover:scale-105"
+                  />
+                ) : (
+                  <svg className="w-16 h-12 text-[#d4af37] transition-all duration-500 transform group-hover:scale-105" viewBox="0 0 100 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M50 5 L75 55 L50 43 L25 55 Z" stroke="currentColor" strokeWidth="2.5" fill="rgba(212,175,55,0.08)" />
+                    <path d="M50 5 L50 43" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 2" />
+                    <circle cx="50" cy="5" r="2.5" fill="currentColor" />
+                  </svg>
+                )}
+              </div>
+
+              <h1 className="text-lg font-extrabold tracking-[0.1em] text-[#d4af37] uppercase text-center mt-1 luxury-glow-neon select-none">
+                {settings.systemName || settings.companyName || 'alx'}
+              </h1>
+              <p className="text-[9px] font-black tracking-[0.3em] text-slate-500 uppercase mt-0.5 select-none">
+                {isAr ? 'نظام إدارة اللوجستية' : 'Logistics & ERP'}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Scrollable Nav Items */}
-        <nav className="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto custom-scrollbar">
+        <nav className="flex-1 px-3 py-4 space-y-1.5 overflow-y-auto custom-scrollbar">
           {filteredNavItems.map((item) => {
             const Icon = item.icon;
-            // Support sub-routing match check
             const isActive = isItemActive(item.path);
             return (
               <Link
                 key={item.path}
                 to={item.path}
-                className={`flex items-center gap-3.5 px-4 py-3 rounded-xl transition-all duration-300 font-bold text-xs group relative text-right ${isActive
+                title={isSidebarCollapsed ? item.name : undefined}
+                className={`flex items-center gap-3.5 px-3.5 py-3 rounded-xl transition-all duration-300 font-bold text-xs group relative ${
+                  isSidebarCollapsed ? 'justify-center' : 'text-right'
+                } ${
+                  isActive
                     ? 'bg-gradient-to-r from-[#d4af37]/15 to-transparent text-white border-l-2 border-[#d4af37] shadow-[inset_4px_0_15px_rgba(212,175,55,0.05)]'
                     : 'text-slate-400 hover:text-white hover:bg-white/[0.02]'
-                  }`}
+                }`}
               >
                 <Icon className={`w-4 h-4 shrink-0 transition-transform duration-300 group-hover:scale-110 ${isActive ? 'text-[#d4af37]' : 'text-slate-500 group-hover:text-[#d4af37]'}`} />
-                <span className="flex-1">{item.name}</span>
+                {!isSidebarCollapsed && <span className="flex-1">{item.name}</span>}
                 {isActive && (
                   <span className="w-1.5 h-1.5 rounded-full bg-[#d4af37] shadow-[0_0_8px_#d4af37]"></span>
                 )}
               </Link>
             );
           })}
+          {/* System Status Toggle Entry - inside nav list */}
+          <div className="mt-1.5 border-t border-white/[0.04] pt-1.5">
+            <button
+              onClick={() => setIsStatusExpanded(prev => !prev)}
+              title={isAr ? 'شريط حالة النظام' : 'System Status'}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all duration-300 font-bold text-xs group cursor-pointer ${
+                isSidebarCollapsed ? 'justify-center' : 'text-start'
+              } ${
+                isStatusExpanded
+                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                  : 'text-slate-500 hover:text-white hover:bg-white/[0.02] border border-transparent'
+              }`}
+            >
+              <span className={`w-2 h-2 rounded-full shrink-0 animate-pulse ${
+                systemStats.systemStatus === 'good'
+                  ? 'bg-emerald-400 shadow-[0_0_6px_#10b981]'
+                  : systemStats.systemStatus === 'warning'
+                    ? 'bg-amber-400 shadow-[0_0_6px_#f59e0b]'
+                    : 'bg-rose-400 shadow-[0_0_6px_#ef4444]'
+              }`} />
+              {!isSidebarCollapsed && (
+                <>
+                  <span className="flex-1">{isAr ? 'حالة النظام' : 'System Status'}</span>
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 ${
+                    isStatusExpanded ? 'rotate-180 text-emerald-400' : 'text-slate-600'
+                  }`} />
+                </>
+              )}
+            </button>
+          </div>
         </nav>
 
-        {/* Bottom Sidebar Panels as requested */}
-        <div className="p-4 border-t border-[#d4af37]/10 space-y-3 bg-[#08080a]">
+        {/* Bottom Status Panel */}
+        <div className="p-3 border-t border-[#d4af37]/10 space-y-3 bg-[#08080a]">
           {/* 🟢 ALX SYSTEM STATUS CARD */}
           <div
             onClick={() => setIsStatusExpanded(!isStatusExpanded)}
@@ -1268,6 +1411,98 @@ export default function Layout() {
                 );
               })}
             </nav>
+          </div>
+        </div>
+      )}
+
+      {/* Sidebar Navigation Customizer Modal */}
+      {isNavCustomizerOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 text-start animate-fade-in">
+          <div className="bg-[#121215] border border-[#d4af37]/30 w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
+            <div className="p-4 border-b border-slate-850 flex justify-between items-center bg-[#07070a]">
+              <div className="flex items-center gap-2">
+                <SlidersHorizontal className="w-5 h-5 text-[#d4af37]" />
+                <h3 className="font-black text-white text-sm">
+                  {isAr ? 'تخصيص اللوحة الجانبية وترتيب الصفحات' : 'Customize Sidebar Links & Order'}
+                </h3>
+              </div>
+              <button
+                onClick={() => setIsNavCustomizerOpen(false)}
+                className="p-1.5 bg-slate-900 text-slate-400 hover:text-white rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 overflow-y-auto space-y-2 flex-1 text-xs">
+              <p className="text-slate-400 font-bold text-[11px] mb-3">
+                {isAr ? 'يمكنك تقديم أو تأخير ترتيب الصفحات أو إخفاء الصفحات غير المستخدمة من اللوحة الجانبية:' : 'Reorder or hide navigation pages from your sidebar:'}
+              </p>
+
+              {navOrderConfig.map((conf, index) => {
+                const itemDef = baseNavItems.find(b => b.path === conf.path);
+                if (!itemDef) return null;
+                const Icon = itemDef.icon;
+
+                return (
+                  <div key={conf.path} className="p-3 bg-black/40 border border-slate-850 rounded-2xl flex items-center justify-between gap-3 hover:border-slate-800 transition">
+                    <div className="flex items-center gap-3">
+                      <Icon className="w-4 h-4 text-[#d4af37]" />
+                      <span className="font-bold text-white text-xs">{itemDef.name}</span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => moveNavItemUp(index)}
+                        disabled={index === 0}
+                        className="p-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-lg text-slate-300 disabled:opacity-30 cursor-pointer"
+                        title={isAr ? 'تقديم لأعلى' : 'Move Up'}
+                      >
+                        <ArrowUp className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        onClick={() => moveNavItemDown(index)}
+                        disabled={index === navOrderConfig.length - 1}
+                        className="p-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-lg text-slate-300 disabled:opacity-30 cursor-pointer"
+                        title={isAr ? 'تأخير لأسفل' : 'Move Down'}
+                      >
+                        <ArrowDown className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        onClick={() => toggleNavItemVisibility(conf.path)}
+                        className={`p-1.5 border rounded-lg transition cursor-pointer ${
+                          conf.visible !== false
+                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                            : 'bg-slate-900 border-slate-800 text-slate-600'
+                        }`}
+                        title={conf.visible !== false ? (isAr ? 'إخفاء الصفحات' : 'Hide Page') : (isAr ? 'إظهار الصفحات' : 'Show Page')}
+                      >
+                        {conf.visible !== false ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="p-4 border-t border-slate-850 bg-[#07070a] flex justify-between items-center">
+              <button
+                onClick={resetNavOrderConfig}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-850 border border-slate-800 text-amber-400 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+              >
+                <RotateCw className="w-3.5 h-3.5" />
+                {isAr ? 'إعادة الترتيب الافتراضي' : 'Reset Defaults'}
+              </button>
+
+              <button
+                onClick={() => setIsNavCustomizerOpen(false)}
+                className="px-5 py-2 bg-[#d4af37] text-black font-black rounded-xl text-xs shadow hover:bg-yellow-500 transition cursor-pointer"
+              >
+                {isAr ? 'حفظ وإغلاق' : 'Save & Close'}
+              </button>
+            </div>
           </div>
         </div>
       )}

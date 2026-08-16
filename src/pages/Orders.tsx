@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import CopyToClipboard from '../components/CopyToClipboard';
 import { collection, onSnapshot, orderBy, query, where, addDoc, setDoc, doc, updateDoc, getDoc, getDocs, deleteDoc, db, auth, handleSupabaseError, OperationType, safeToDate } from '../lib/supabase';
 import { useSettings } from '../context/SettingsContext';
@@ -8,6 +9,7 @@ import toast from 'react-hot-toast';
 import { activityLogService } from '../services/activityLogService';
 import { whatsappService } from '../services/whatsappService';
 import ConfirmModal from '../components/ConfirmModal';
+import Tracking from './Tracking';
 import { financialAccountService } from '../services/financialAccountService';
 import {
   Plus, Search, Edit2, Truck, Activity, Trash2, DollarSign,
@@ -101,9 +103,28 @@ export default function Orders() {
   // Dedicated Products & Shipments Collections State
   const [allProducts, setAllProducts] = useState<any[]>([]);
   const [allShipments, setAllShipments] = useState<any[]>([]);
-  const [ordersTab, setOrdersTab] = useState<'orders' | 'shipments'>('orders');
+
+  const location = useLocation();
+  const [ordersTab, setOrdersTab] = useState<'orders' | 'shipments' | 'tracking'>(() => {
+    const params = new URLSearchParams(location.search);
+    const tab = params.get('tab');
+    if (tab === 'shipments') return 'shipments';
+    if (tab === 'tracking') return 'tracking';
+    return 'orders';
+  });
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tab = params.get('tab');
+    if (tab === 'tracking' && ordersTab !== 'tracking') {
+      setOrdersTab('tracking');
+    } else if (tab === 'shipments' && ordersTab !== 'shipments') {
+      setOrdersTab('shipments');
+    }
+  }, [location.search]);
 
   // Dedicated Shipments Studio Filters & Modals
+
   const [shipmentSearchQuery, setShipmentSearchQuery] = useState('');
   const [shipmentStatusFilter, setShipmentStatusFilter] = useState('all');
   const [shipmentCarrierFilter, setShipmentCarrierFilter] = useState('all');
@@ -2933,9 +2954,26 @@ export default function Orders() {
             {allShipments.length}
           </span>
         </button>
+
+        <button
+          onClick={() => setOrdersTab('tracking')}
+          className={`px-5 py-2.5 rounded-2xl font-black text-xs flex items-center gap-2 transition cursor-pointer ${
+            ordersTab === 'tracking'
+              ? 'bg-[#d4af37] text-black shadow-lg shadow-[#d4af37]/20 scale-102'
+              : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-850 border border-slate-800'
+          }`}
+        >
+          <MapPin className="w-4 h-4" />
+          {isAr ? '📍 التتبع المباشر والمعاينة' : '📍 Live Tracking & Telemetry'}
+        </button>
       </div>
 
-      {ordersTab === 'shipments' ? (
+      {ordersTab === 'tracking' ? (
+        /* Live Tracking View */
+        <div className="bg-[#121215] border border-slate-850 p-2 sm:p-6 rounded-3xl shadow-xl">
+          <Tracking />
+        </div>
+      ) : ordersTab === 'shipments' ? (
         /* Shipments Management Studio View */
         <div className="space-y-6">
           {/* Shipments Studio Header Metrics */}
