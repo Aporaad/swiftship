@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import CopyToClipboard from '../components/CopyToClipboard';
-import { collection, onSnapshot, orderBy, query, where, addDoc, doc, updateDoc, getDoc, getDocs, deleteDoc, db, auth, handleSupabaseError, OperationType, safeToDate } from '../lib/supabase';
+import { collection, onSnapshot, orderBy, query, where, addDoc, setDoc, doc, updateDoc, getDoc, getDocs, deleteDoc, db, auth, handleSupabaseError, OperationType, safeToDate } from '../lib/supabase';
 import { useSettings } from '../context/SettingsContext';
 import { useRole } from '../hooks/useRole';
 import { notificationService } from '../services/notificationService';
@@ -12,7 +12,7 @@ import { financialAccountService } from '../services/financialAccountService';
 import {
   Plus, Search, Edit2, Truck, Activity, Trash2, DollarSign,
   CreditCard, Printer, Calculator, Package, MapPin, X, AlertCircle, RefreshCw, UserPlus, Eye,
-  User, Mail, Phone, Coins, Calendar
+  User, Mail, Phone, Coins, Calendar, ExternalLink, Filter, Layers, CheckCircle2
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { printContent } from '../lib/printUtils';
@@ -97,6 +97,44 @@ export default function Orders() {
   const [sortBy, setSortBy] = useState('date-desc');
 
   const [autoVoucherRules, setAutoVoucherRules] = useState<any[]>([]);
+
+  // Dedicated Products & Shipments Collections State
+  const [allProducts, setAllProducts] = useState<any[]>([]);
+  const [allShipments, setAllShipments] = useState<any[]>([]);
+  const [ordersTab, setOrdersTab] = useState<'orders' | 'shipments'>('orders');
+
+  // Dedicated Shipments Studio Filters & Modals
+  const [shipmentSearchQuery, setShipmentSearchQuery] = useState('');
+  const [shipmentStatusFilter, setShipmentStatusFilter] = useState('all');
+  const [shipmentCarrierFilter, setShipmentCarrierFilter] = useState('all');
+  const [shipmentCourierFilter, setShipmentCourierFilter] = useState('all');
+  
+  // Shipments CRUD Modals State
+  const [isAddShipmentModalOpen, setIsAddShipmentModalOpen] = useState(false);
+  const [isEditShipmentModalOpen, setIsEditShipmentModalOpen] = useState(false);
+  const [isDeleteShipmentModalOpen, setIsDeleteShipmentModalOpen] = useState(false);
+  const [shipmentToEdit, setShipmentToEdit] = useState<any>(null);
+  const [shipmentToDelete, setShipmentToDelete] = useState<any>(null);
+
+  const [shipmentFormData, setShipmentFormData] = useState({
+    id: '',
+    orderId: '', // Optional! Can be empty for standalone shipment
+    trackingNumber: '',
+    shippingCompany: 'Aramex',
+    courierId: '',
+    shippingType: 'بري',
+    shippingSource: '',
+    shippingDestination: 'اليمن',
+    shipmentStatus: 'في الانتظار',
+    shippingCost: 0,
+    weight: 0,
+    packagingFees: 0,
+    shippingDate: new Date().toISOString().split('T')[0],
+    shippingDuration: '15',
+    expectedArrival: '',
+    deliveryDate: '',
+    notes: ''
+  });
 
   // Multi-item sub table state for creation
   const [items, setItems] = useState<any[]>([
@@ -309,6 +347,16 @@ export default function Orders() {
       console.error("FIRESTORE ERROR ON shipping_companies SNAPSHOT LISTENER IN ORDERS.tsx:", error);
     });
 
+    // Fetch products
+    const unsubProducts = onSnapshot(collection(db, 'products'), (snap) => {
+      setAllProducts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => handleSupabaseError(error, OperationType.LIST, 'products'));
+
+    // Fetch shipments
+    const unsubShipments = onSnapshot(collection(db, 'shipments'), (snap) => {
+      setAllShipments(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => handleSupabaseError(error, OperationType.LIST, 'shipments'));
+
     return () => {
       unsubOrders();
       unsubCustomers();
@@ -316,6 +364,8 @@ export default function Orders() {
       unsubSources();
       unsubAutoVoucherRules();
       unsubShippingCompanies();
+      unsubProducts();
+      unsubShipments();
     };
   }, [roleLoading]);
 
@@ -833,6 +883,53 @@ export default function Orders() {
       };
 
       await addDoc(payload.orderNumber, collection(db, 'orders'), payload);
+
+      // Save products to products table
+      if (items && items.length > 0) {
+        for (const item of items) {
+          const prodId = 'prod_' + Math.random().toString(36).substring(2, 11);
+          await addDoc(prodId, collection(db, 'products'), {
+            id: prodId,
+            orderId: payload.orderNumber,
+            productName: item.productName || item.name || 'منتج',
+            quantity: parseFloat(item.quantity || 1),
+            productPrice: parseFloat(item.productPrice || item.price || 0),
+            unitPrice: parseFloat(item.productPrice || item.price || 0),
+            totalPrice: (parseFloat(item.quantity || 1)) * (parseFloat(item.productPrice || item.price || 0)),
+            weight: parseFloat(item.weight || 0),
+            cbm: parseFloat(item.cbm || 0),
+            productUrl: item.productUrl || '',
+            trackingNumber: item.trackingNumber || '',
+            createdAt: Date.now()
+          });
+        }
+      }
+
+      // Save shipments to shipments table
+      const shippingsToSave = formData.orderSourceType === 'SHEIN' ? [] : (shippings || []);
+      for (const ship of shippingsToSave) {
+        const shipId = ship.id || ('sh_' + Math.random().toString(36).substring(2, 11));
+        await addDoc(shipId, collection(db, 'shipments'), {
+          id: shipId,
+          orderId: payload.orderNumber,
+          trackingNumber: ship.trackingNumber || payload.trackingNumber || payload.orderNumber,
+          shippingCompanyId: ship.shippingCompany || payload.shippingCompany || 'Aramex',
+          shippingCompany: ship.shippingCompany || payload.shippingCompany || 'Aramex',
+          courierId: formData.deliveryCourierId || formData.shippingCourierId || '',
+          shipmentStatus: 'تم تسجيل الطلب',
+          shippingCost: parseFloat(ship.shippingCost || 0),
+          weight: parseFloat(ship.weight || 0),
+          shippingType: ship.shippingType || 'بري',
+          shippingSource: ship.shippingSource || '',
+          shippingDestination: ship.shippingDestination || '',
+          shippingDate: ship.shippingDate || new Date().toISOString().split('T')[0],
+          shippingDuration: ship.shippingDuration || '15',
+          expectedArrival: ship.expectedArrival || '',
+          deliveryDate: ship.deliveryDate || '',
+          packagingFees: parseFloat(ship.packagingFees || 0),
+          createdAt: Date.now()
+        });
+      }
 
       // Ensure system accounts exist
       let systemAccs: Record<string, string> = {};
@@ -1849,6 +1946,33 @@ export default function Orders() {
         ...extraUpdateFields
       });
 
+      // Sync updateShippings to shipments collection
+      if (updateShippings && updateShippings.length > 0) {
+        for (const ship of updateShippings) {
+          const shipId = ship.id || ('sh_' + Math.random().toString(36).substring(2, 11));
+          await setDoc(doc(db, 'shipments', shipId), {
+            id: shipId,
+            orderId: selectedOrder.id,
+            trackingNumber: ship.trackingNumber || selectedOrder.trackingNumber || selectedOrder.id,
+            shippingCompanyId: ship.shippingCompany || selectedOrder.shippingCompany || 'Aramex',
+            shippingCompany: ship.shippingCompany || selectedOrder.shippingCompany || 'Aramex',
+            courierId: updateFormData.deliveryCourierId || updateFormData.shippingCourierId || selectedOrder.deliveryCourierId || '',
+            shipmentStatus: updateFormData.orderStatus || ship.shipmentStatus || 'تم تسجيل الطلب',
+            shippingCost: parseFloat(ship.shippingCost || 0),
+            weight: parseFloat(ship.weight || 0),
+            shippingType: ship.shippingType || 'بري',
+            shippingSource: ship.shippingSource || '',
+            shippingDestination: ship.shippingDestination || '',
+            shippingDate: ship.shippingDate || '',
+            shippingDuration: ship.shippingDuration || '',
+            expectedArrival: ship.expectedArrival || '',
+            deliveryDate: ship.deliveryDate || '',
+            packagingFees: parseFloat(ship.packagingFees || 0),
+            updatedAt: Date.now()
+          });
+        }
+      }
+
       activityLogService.log('edit_order', selectedOrder.orderNumber || selectedOrder.id, {
         previousStatus: selectedOrder.orderStatus,
         newStatus: updateFormData.orderStatus,
@@ -2450,6 +2574,164 @@ export default function Orders() {
       setIsBatchUpdating(false);
     }
   };
+  // ── Shipments Management Studio Helpers ──
+  const handleOpenAddShipmentModal = () => {
+    setShipmentFormData({
+      id: '',
+      orderId: '',
+      trackingNumber: '',
+      shippingCompany: 'Aramex',
+      courierId: '',
+      shippingType: 'بري',
+      shippingSource: '',
+      shippingDestination: 'اليمن',
+      shipmentStatus: 'في الانتظار',
+      shippingCost: 0,
+      weight: 0,
+      packagingFees: 0,
+      shippingDate: new Date().toISOString().split('T')[0],
+      shippingDuration: '15',
+      expectedArrival: '',
+      deliveryDate: '',
+      notes: ''
+    });
+    setIsAddShipmentModalOpen(true);
+  };
+
+  const handleOpenEditShipmentModal = (shipment: any) => {
+    setShipmentToEdit(shipment);
+    setShipmentFormData({
+      id: shipment.id,
+      orderId: shipment.orderId || shipment.order_id || '',
+      trackingNumber: shipment.trackingNumber || shipment.tracking_number || '',
+      shippingCompany: shipment.shippingCompany || shipment.shipping_company_id || 'Aramex',
+      courierId: shipment.courierId || shipment.courier_id || '',
+      shippingType: shipment.shippingType || 'بري',
+      shippingSource: shipment.shippingSource || '',
+      shippingDestination: shipment.shippingDestination || 'اليمن',
+      shipmentStatus: shipment.shipmentStatus || shipment.status || 'في الانتظار',
+      shippingCost: shipment.shippingCost || 0,
+      weight: shipment.weight || 0,
+      packagingFees: shipment.packagingFees || 0,
+      shippingDate: shipment.shippingDate || '',
+      shippingDuration: shipment.shippingDuration || '15',
+      expectedArrival: shipment.expectedArrival || '',
+      deliveryDate: shipment.deliveryDate || '',
+      notes: shipment.notes || ''
+    });
+    setIsEditShipmentModalOpen(true);
+  };
+
+  const handleSaveShipmentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!shipmentFormData.trackingNumber) {
+      return notificationService.notify({
+        title: isAr ? 'خطأ' : 'Error',
+        message: isAr ? 'يرجى إدخال رقم التتبع للشحنة' : 'Please enter tracking number',
+        type: 'error'
+      });
+    }
+
+    setIsSubmitting(true);
+    try {
+      const shipId = shipmentFormData.id || ('sh_' + Math.random().toString(36).substring(2, 11));
+      const payload = {
+        id: shipId,
+        orderId: shipmentFormData.orderId || '',
+        trackingNumber: shipmentFormData.trackingNumber,
+        shippingCompanyId: shipmentFormData.shippingCompany,
+        shippingCompany: shipmentFormData.shippingCompany,
+        courierId: shipmentFormData.courierId || '',
+        shipmentStatus: shipmentFormData.shipmentStatus,
+        shippingCost: parseFloat(shipmentFormData.shippingCost as any) || 0,
+        weight: parseFloat(shipmentFormData.weight as any) || 0,
+        packagingFees: parseFloat(shipmentFormData.packagingFees as any) || 0,
+        shippingType: shipmentFormData.shippingType,
+        shippingSource: shipmentFormData.shippingSource,
+        shippingDestination: shipmentFormData.shippingDestination,
+        shippingDate: shipmentFormData.shippingDate,
+        shippingDuration: shipmentFormData.shippingDuration,
+        expectedArrival: shipmentFormData.expectedArrival,
+        deliveryDate: shipmentFormData.deliveryDate,
+        notes: shipmentFormData.notes,
+        createdAt: shipmentToEdit?.createdAt || Date.now(),
+        updatedAt: Date.now()
+      };
+
+      await setDoc(doc(db, 'shipments', shipId), payload);
+
+      notificationService.notify({
+        title: isAr ? 'تم الحفظ' : 'Saved',
+        message: isAr ? 'تم حفظ سجل الشحنة بنجاح' : 'Shipment record saved successfully',
+        type: 'success'
+      });
+
+      setIsAddShipmentModalOpen(false);
+      setIsEditShipmentModalOpen(false);
+      setShipmentToEdit(null);
+    } catch (err: any) {
+      console.error(err);
+      notificationService.notify({
+        title: isAr ? 'خطأ' : 'Error',
+        message: err.message || 'Could not save shipment',
+        type: 'error'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleQuickShipmentStatusChange = async (shipmentId: string, newStatus: string) => {
+    try {
+      await updateDoc(doc(db, 'shipments', shipmentId), {
+        shipmentStatus: newStatus,
+        updatedAt: Date.now()
+      });
+      notificationService.notify({
+        title: isAr ? 'تم تحديث الحالة' : 'Status Updated',
+        message: isAr ? `تم تعديل حالة الشحنة إلى: ${newStatus}` : `Shipment status updated to: ${newStatus}`,
+        type: 'success'
+      });
+    } catch (err: any) {
+      console.error('Failed to quick update shipment status:', err);
+    }
+  };
+
+  const handleDeleteShipmentSubmit = async () => {
+    if (!shipmentToDelete) return;
+    setIsSubmitting(true);
+    try {
+      await deleteDoc(doc(db, 'shipments', shipmentToDelete.id));
+      notificationService.notify({
+        title: isAr ? 'تم الحذف' : 'Deleted',
+        message: isAr ? 'تم حذف سجل الشحنة بنجاح' : 'Shipment record deleted',
+        type: 'success'
+      });
+      setIsDeleteShipmentModalOpen(false);
+      setShipmentToDelete(null);
+    } catch (err: any) {
+      console.error('Failed to delete shipment:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Filtered shipments list for Shipments Studio tab
+  const filteredShipmentsList = useMemo(() => {
+    return allShipments.filter(sh => {
+      const trk = String(sh.trackingNumber || sh.tracking_number || '').toLowerCase();
+      const ordId = String(sh.orderId || sh.order_id || '').toLowerCase();
+      const q = shipmentSearchQuery.trim().toLowerCase();
+
+      if (q && !trk.includes(q) && !ordId.includes(q)) return false;
+      if (shipmentStatusFilter !== 'all' && (sh.shipmentStatus || sh.status) !== shipmentStatusFilter) return false;
+      if (shipmentCarrierFilter !== 'all' && (sh.shippingCompany || sh.shipping_company_id) !== shipmentCarrierFilter) return false;
+      if (shipmentCourierFilter !== 'all' && (sh.courierId || sh.courier_id) !== shipmentCourierFilter) return false;
+
+      return true;
+    }).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  }, [allShipments, shipmentSearchQuery, shipmentStatusFilter, shipmentCarrierFilter, shipmentCourierFilter]);
+
   //اريد اضافه جدول مخصص لحالات الطلب في قاده البيانات وضافه واجهه مخصصه لاداره الحالات 
   const formatStatusLabel = (status: string) => {
     const translationAr: Record<string, string> = {
@@ -2620,6 +2902,273 @@ export default function Orders() {
         </div>
       </div>
 
+      {/* Primary View Switcher Tabs */}
+      <div className="flex gap-2 border-b border-slate-800 pb-3">
+        <button
+          onClick={() => setOrdersTab('orders')}
+          className={`px-5 py-2.5 rounded-2xl font-black text-xs flex items-center gap-2 transition cursor-pointer ${
+            ordersTab === 'orders'
+              ? 'bg-[#d4af37] text-black shadow-lg shadow-[#d4af37]/20 scale-102'
+              : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-850 border border-slate-800'
+          }`}
+        >
+          <Package className="w-4 h-4" />
+          {isAr ? '📦 قائمة الطلبات والفواتير' : '📦 Orders & Invoices'}
+          <span className="bg-black/20 px-2 py-0.5 rounded-lg text-[10px] font-mono">
+            {orders.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setOrdersTab('shipments')}
+          className={`px-5 py-2.5 rounded-2xl font-black text-xs flex items-center gap-2 transition cursor-pointer ${
+            ordersTab === 'shipments'
+              ? 'bg-[#d4af37] text-black shadow-lg shadow-[#d4af37]/20 scale-102'
+              : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-850 border border-slate-800'
+          }`}
+        >
+          <Truck className="w-4 h-4" />
+          {isAr ? '🚚 استعراض وإدارة الشحنات' : '🚚 Shipments Management Studio'}
+          <span className="bg-black/20 px-2 py-0.5 rounded-lg text-[10px] font-mono">
+            {allShipments.length}
+          </span>
+        </button>
+      </div>
+
+      {ordersTab === 'shipments' ? (
+        /* Shipments Management Studio View */
+        <div className="space-y-6">
+          {/* Shipments Studio Header Metrics */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="bg-[#121215] border border-slate-850 p-4 rounded-3xl flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-bold text-slate-500 block uppercase">{isAr ? 'إجمالي الشحنات' : 'Total Shipments'}</span>
+                <span className="text-xl font-black text-white font-mono mt-0.5 block">{allShipments.length}</span>
+              </div>
+              <div className="p-3 bg-[#d4af37]/10 border border-[#d4af37]/20 rounded-2xl text-[#d4af37]">
+                <Truck className="w-5 h-5" />
+              </div>
+            </div>
+
+            <div className="bg-[#121215] border border-slate-850 p-4 rounded-3xl flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-bold text-slate-500 block uppercase">{isAr ? 'شحنات جارية' : 'In-Transit'}</span>
+                <span className="text-xl font-black text-amber-400 font-mono mt-0.5 block">
+                  {allShipments.filter(s => (s.shipmentStatus || s.status) !== 'تم التسليم' && (s.shipmentStatus || s.status) !== 'ملغي').length}
+                </span>
+              </div>
+              <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-amber-400">
+                <Activity className="w-5 h-5" />
+              </div>
+            </div>
+
+            <div className="bg-[#121215] border border-slate-850 p-4 rounded-3xl flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-bold text-slate-500 block uppercase">{isAr ? 'شحنات سلمت' : 'Delivered'}</span>
+                <span className="text-xl font-black text-emerald-400 font-mono mt-0.5 block">
+                  {allShipments.filter(s => (s.shipmentStatus || s.status) === 'تم التسليم').length}
+                </span>
+              </div>
+              <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-emerald-400">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
+            </div>
+
+            <div className="bg-[#121215] border border-slate-850 p-4 rounded-3xl flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-bold text-slate-500 block uppercase">{isAr ? 'شحنات مستقلة (بدون طلب)' : 'Standalone Shipments'}</span>
+                <span className="text-xl font-black text-cyan-400 font-mono mt-0.5 block">
+                  {allShipments.filter(s => !s.orderId && !s.order_id).length}
+                </span>
+              </div>
+              <div className="p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-2xl text-cyan-400">
+                <Layers className="w-5 h-5" />
+              </div>
+            </div>
+          </div>
+
+          {/* Shipments Studio Toolbar */}
+          <div className="bg-[#121215] border border-slate-850 p-4 rounded-3xl flex flex-wrap justify-between items-center gap-3">
+            <div className="flex flex-wrap gap-2 items-center flex-1">
+              <div className="relative min-w-[240px]">
+                <Search className="w-4 h-4 text-slate-500 absolute top-3 right-3" />
+                <input
+                  type="text"
+                  value={shipmentSearchQuery}
+                  onChange={(e) => setShipmentSearchQuery(e.target.value)}
+                  placeholder={isAr ? 'بحث برقم التتبع أو كود الطلب...' : 'Search by tracking or order code...'}
+                  className="w-full bg-black/40 border border-slate-800 rounded-xl pr-9 pl-3 py-2 text-xs font-bold text-white outline-none focus:border-[#d4af37]"
+                />
+              </div>
+
+              {/* Status Filter */}
+              <select
+                value={shipmentStatusFilter}
+                onChange={(e) => setShipmentStatusFilter(e.target.value)}
+                className="bg-black/40 border border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-300 outline-none cursor-pointer"
+              >
+                <option value="all">{isAr ? 'جميع الحالات' : 'All Statuses'}</option>
+                {ORDER_STATUS_FLOW.map(st => (
+                  <option key={st} value={st}>{st}</option>
+                ))}
+              </select>
+
+              {/* Carrier Filter */}
+              <select
+                value={shipmentCarrierFilter}
+                onChange={(e) => setShipmentCarrierFilter(e.target.value)}
+                className="bg-black/40 border border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-300 outline-none cursor-pointer"
+              >
+                <option value="all">{isAr ? 'جميع شركات الشحن' : 'All Carriers'}</option>
+                {shippingCompanies.map(sc => (
+                  <option key={sc.id} value={sc.name}>{sc.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              onClick={handleOpenAddShipmentModal}
+              className="bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black text-xs px-5 py-2.5 rounded-xl flex items-center gap-2 shadow-md transition active:scale-95 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              {isAr ? 'إضافة شحنة جديدة' : 'Add New Shipment'}
+            </button>
+          </div>
+
+          {/* Shipments Table */}
+          <div className="bg-[#121215] border border-slate-850 rounded-3xl overflow-hidden shadow-xl">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-start border-collapse">
+                <thead>
+                  <tr className="bg-black/50 text-slate-400 font-bold border-b border-slate-850">
+                    <th className="p-4">{isAr ? 'رقم التتبع والحالة' : 'Tracking & Status'}</th>
+                    <th className="p-4">{isAr ? 'الطلب / العميل' : 'Order & Customer'}</th>
+                    <th className="p-4">{isAr ? 'الناقل والمندوب' : 'Carrier & Courier'}</th>
+                    <th className="p-4">{isAr ? 'الوزن والتكلفة' : 'Weight & Cost'}</th>
+                    <th className="p-4">{isAr ? 'التواريخ والمتوقع' : 'Dates'}</th>
+                    <th className="p-4 text-center">{isAr ? 'إجراءات التحكم' : 'Actions'}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-850/60">
+                  {filteredShipmentsList.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-12 text-center text-slate-500 font-bold">
+                        {isAr ? 'لا توجد شحنات مطابقة للبحث' : 'No shipments found matching filters'}
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredShipmentsList.map((ship) => {
+                      const linkedOrd = orders.find(o => o.id === (ship.orderId || ship.order_id) || o.orderNumber === (ship.orderId || ship.order_id));
+                      const carrierName = ship.shippingCompany || ship.shipping_company_id || 'Aramex';
+                      const courierRecord = couriers.find(c => c.id === (ship.courierId || ship.courier_id));
+                      const statusVal = ship.shipmentStatus || ship.status || 'في الانتظار';
+
+                      return (
+                        <tr key={ship.id} className="hover:bg-slate-900/40 transition-colors">
+                          <td className="p-4">
+                            <div className="font-mono font-black text-white text-xs flex items-center gap-1.5">
+                              <span>{ship.trackingNumber || ship.tracking_number || ship.id}</span>
+                              <button
+                                onClick={() => copyToClipboard(ship.trackingNumber || ship.tracking_number)}
+                                className="text-slate-500 hover:text-[#d4af37] transition"
+                              >
+                                <ExternalLink className="w-3 h-3" />
+                              </button>
+                            </div>
+                            <span className={`mt-1 inline-block px-2 py-0.5 rounded-lg text-[10px] font-bold ${
+                              statusVal === 'تم التسليم' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' :
+                              statusVal === 'ملغي' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30' :
+                              'bg-[#d4af37]/10 text-[#d4af37] border border-[#d4af37]/30'
+                            }`}>
+                              {statusVal}
+                            </span>
+                          </td>
+
+                          <td className="p-4">
+                            {linkedOrd ? (
+                              <div>
+                                <span className="font-mono font-black text-[#d4af37] text-xs block">
+                                  {linkedOrd.orderNumber || linkedOrd.id}
+                                </span>
+                                <span className="text-slate-300 font-bold block text-[11px]">
+                                  {linkedOrd.customerName || 'عميل'}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 px-2 py-0.5 rounded-lg text-[10px] font-bold">
+                                🔗 {isAr ? 'شحنة مستقلة' : 'Standalone Shipment'}
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="p-4">
+                            <span className="font-bold text-white block">{carrierName}</span>
+                            <span className="text-[10px] text-slate-500 font-bold block">
+                              {courierRecord ? courierRecord.fullName : (isAr ? 'غير محدد' : 'Unassigned')}
+                            </span>
+                          </td>
+
+                          <td className="p-4 font-mono">
+                            <div className="text-slate-200 font-bold">
+                              ⚖️ {ship.weight || 0} <span className="text-[10px] text-slate-500">KG</span>
+                            </div>
+                            <div className="text-emerald-400 text-[11px] font-bold">
+                              💰 {ship.shippingCost || 0} <span className="text-[10px] text-slate-500">SAR</span>
+                            </div>
+                          </td>
+
+                          <td className="p-4 text-[11px] text-slate-400">
+                            <div>📅 {ship.shippingDate || '—'}</div>
+                            {ship.expectedArrival && (
+                              <div className="text-[#d4af37]">⏳ المتوقع: {ship.expectedArrival}</div>
+                            )}
+                          </td>
+
+                          <td className="p-4 text-center">
+                            <div className="flex justify-center gap-1.5">
+                              {/* Quick status updater */}
+                              <select
+                                value={statusVal}
+                                onChange={(e) => handleQuickShipmentStatusChange(ship.id, e.target.value)}
+                                className="bg-slate-900 border border-slate-800 text-slate-300 rounded-lg text-[10px] font-bold p-1 outline-none cursor-pointer"
+                              >
+                                {ORDER_STATUS_FLOW.map(st => (
+                                  <option key={st} value={st}>{st}</option>
+                                ))}
+                              </select>
+
+                              <button
+                                onClick={() => handleOpenEditShipmentModal(ship)}
+                                className="p-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white rounded-lg transition"
+                                title={isAr ? 'تعديل الشحنة' : 'Edit Shipment'}
+                              >
+                                <Edit2 className="w-3.5 h-3.5 text-[#d4af37]" />
+                              </button>
+
+                              <button
+                                onClick={() => {
+                                  setShipmentToDelete(ship);
+                                  setIsDeleteShipmentModalOpen(true);
+                                }}
+                                className="p-1.5 bg-rose-950/20 hover:bg-rose-900 border border-rose-900/30 text-rose-400 hover:text-white rounded-lg transition"
+                                title={isAr ? 'حذف الشحنة' : 'Delete Shipment'}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* Orders View & Filters */
+        <>
       {/* Stats Quick Grid */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {[
@@ -5380,6 +5929,200 @@ export default function Orders() {
             </div>
           </div>
         </div>
+      )}
+        </>
+      )}
+
+      {/* Add / Edit Shipment Modal */}
+      {(isAddShipmentModalOpen || isEditShipmentModalOpen) && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 text-start">
+          <form onSubmit={handleSaveShipmentSubmit} className="bg-[#121215] border border-[#d4af37]/30 w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="p-4 border-b border-slate-850 flex justify-between items-center bg-[#07070a]/40">
+              <div className="flex items-center gap-2">
+                <Truck className="w-4 h-4 text-[#d4af37]" />
+                <h3 className="font-black text-white text-xs uppercase tracking-widest">
+                  {isEditShipmentModalOpen ? (isAr ? 'تعديل تفاصيل الشحنة' : 'Edit Shipment Details') : (isAr ? 'إضافة شحنة جديدة' : 'Add New Shipment')}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setIsAddShipmentModalOpen(false); setIsEditShipmentModalOpen(false); }}
+                className="text-slate-500 hover:text-white p-1.5 bg-slate-900 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-4 flex-1 text-xs">
+              {/* Linked Order Optional Selector */}
+              <div className="space-y-1">
+                <label className="block text-[10px] font-black text-slate-400 uppercase">{isAr ? 'الطلب المرتبط بالشحنة (اختياري)' : 'Linked Order (Optional)'}</label>
+                <select
+                  value={shipmentFormData.orderId}
+                  onChange={(e) => setShipmentFormData({ ...shipmentFormData, orderId: e.target.value })}
+                  className="w-full bg-black/40 border border-slate-800 rounded-xl p-3 outline-none text-white font-bold cursor-pointer"
+                >
+                  <option value="">{isAr ? '-- شحنة مستقلة (بدون طلب) --' : '-- Standalone Shipment (No Order) --'}</option>
+                  {orders.map(o => (
+                    <option key={o.id} value={o.id}>
+                      [{o.orderNumber || o.id}] - {o.customerName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Tracking Number */}
+              <div className="space-y-1">
+                <label className="block text-[10px] font-black text-slate-400 uppercase">{isAr ? 'رقم التتبع *' : 'Tracking Number *'}</label>
+                <input
+                  type="text"
+                  required
+                  value={shipmentFormData.trackingNumber}
+                  onChange={(e) => setShipmentFormData({ ...shipmentFormData, trackingNumber: e.target.value })}
+                  placeholder="e.g. ARAMEX-9923841"
+                  className="w-full bg-black/40 border border-slate-800 rounded-xl p-3 outline-none text-white font-bold font-mono"
+                />
+              </div>
+
+              {/* Carrier & Courier Grid */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase">{isAr ? 'شركة الشحن' : 'Carrier'}</label>
+                  <select
+                    value={shipmentFormData.shippingCompany}
+                    onChange={(e) => setShipmentFormData({ ...shipmentFormData, shippingCompany: e.target.value })}
+                    className="w-full bg-black/40 border border-slate-800 rounded-xl p-3 outline-none text-white font-bold cursor-pointer"
+                  >
+                    {shippingCompanies.map(sc => (
+                      <option key={sc.id} value={sc.name}>{sc.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase">{isAr ? 'مندوب التوصيل' : 'Courier'}</label>
+                  <select
+                    value={shipmentFormData.courierId}
+                    onChange={(e) => setShipmentFormData({ ...shipmentFormData, courierId: e.target.value })}
+                    className="w-full bg-black/40 border border-slate-800 rounded-xl p-3 outline-none text-white font-bold cursor-pointer"
+                  >
+                    <option value="">{isAr ? '-- غير محدد --' : '-- Unassigned --'}</option>
+                    {couriers.map(c => (
+                      <option key={c.id} value={c.id}>{c.fullName}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Status & Type */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase">{isAr ? 'حالة الشحنة' : 'Shipment Status'}</label>
+                  <select
+                    value={shipmentFormData.shipmentStatus}
+                    onChange={(e) => setShipmentFormData({ ...shipmentFormData, shipmentStatus: e.target.value })}
+                    className="w-full bg-black/40 border border-slate-800 rounded-xl p-3 outline-none text-white font-bold cursor-pointer"
+                  >
+                    {ORDER_STATUS_FLOW.map(st => (
+                      <option key={st} value={st}>{st}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase">{isAr ? 'نوع الشحن' : 'Shipping Type'}</label>
+                  <select
+                    value={shipmentFormData.shippingType}
+                    onChange={(e) => setShipmentFormData({ ...shipmentFormData, shippingType: e.target.value })}
+                    className="w-full bg-black/40 border border-slate-800 rounded-xl p-3 outline-none text-white font-bold cursor-pointer"
+                  >
+                    <option value="بري">{isAr ? 'بري' : 'Land'}</option>
+                    <option value="جوي">{isAr ? 'جوي' : 'Air'}</option>
+                    <option value="بحري">{isAr ? 'بحري' : 'Sea'}</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Weight & Shipping Cost */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase">{isAr ? 'الوزن (كجم)' : 'Weight (KG)'}</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={shipmentFormData.weight}
+                    onChange={(e) => setShipmentFormData({ ...shipmentFormData, weight: parseFloat(e.target.value) || 0 })}
+                    className="w-full bg-black/40 border border-slate-800 rounded-xl p-3 outline-none text-white font-bold font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase">{isAr ? 'تكلفة الشحن (SAR)' : 'Shipping Cost (SAR)'}</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={shipmentFormData.shippingCost}
+                    onChange={(e) => setShipmentFormData({ ...shipmentFormData, shippingCost: parseFloat(e.target.value) || 0 })}
+                    className="w-full bg-black/40 border border-slate-800 rounded-xl p-3 outline-none text-white font-bold font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Shipping Date & Expected Arrival */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase">{isAr ? 'تاريخ الشحن' : 'Shipping Date'}</label>
+                  <input
+                    type="date"
+                    value={shipmentFormData.shippingDate}
+                    onChange={(e) => setShipmentFormData({ ...shipmentFormData, shippingDate: e.target.value })}
+                    className="w-full bg-black/40 border border-slate-800 rounded-xl p-3 outline-none text-white font-bold"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase">{isAr ? 'المتوقع لوصولها' : 'Expected Arrival'}</label>
+                  <input
+                    type="date"
+                    value={shipmentFormData.expectedArrival}
+                    onChange={(e) => setShipmentFormData({ ...shipmentFormData, expectedArrival: e.target.value })}
+                    className="w-full bg-black/40 border border-slate-800 rounded-xl p-3 outline-none text-white font-bold"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-850 bg-[#07070a]/40 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => { setIsAddShipmentModalOpen(false); setIsEditShipmentModalOpen(false); }}
+                className="px-4 py-2 text-slate-400 font-bold bg-slate-900 border border-slate-800 rounded-xl text-xs"
+              >
+                {isAr ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="px-5 py-2 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black text-xs rounded-xl shadow transition"
+              >
+                {isSubmitting ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'حفظ سجل الشحنة' : 'Save Shipment')}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Delete Shipment Confirm Modal */}
+      {isDeleteShipmentModalOpen && shipmentToDelete && (
+        <ConfirmModal
+          isOpen={isDeleteShipmentModalOpen}
+          onClose={() => setIsDeleteShipmentModalOpen(false)}
+          onConfirm={handleDeleteShipmentSubmit}
+          title={isAr ? 'حذف الشحنة' : 'Delete Shipment'}
+          message={isAr ? `هل أنت تأكد من حذف الشحنة رقم: (${shipmentToDelete.trackingNumber || shipmentToDelete.id})؟` : `Delete shipment ${shipmentToDelete.trackingNumber || shipmentToDelete.id}?`}
+          confirmText={isAr ? 'حذف نهائي' : 'Delete'}
+          type="danger"
+        />
       )}
 
     </div>

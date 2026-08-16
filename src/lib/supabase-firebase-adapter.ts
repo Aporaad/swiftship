@@ -563,7 +563,9 @@ const DIRECT_COLUMNS_MAP: Record<string, Record<string, string>> = {
   activity_logs: { userUid: 'userId', userId: 'userId', action: 'action', category: 'category', entityName: 'target', target: 'target', type: 'type', timestamp: 'createdAt', createdAt: 'createdAt' },
   jobs_req: { email: 'email', phone: 'phone', status: 'status', category: 'category', refCode: 'refCode', createdAt: 'createdAt' },
   announcements: { title: 'title', isActive: 'isActive', priority: 'priority', createdBy: 'createdBy', createdAt: 'createdAt' },
-  portal_tickets: { type: 'type', status: 'status', userUid: 'userUid', createdAt: 'createdAt' }
+  portal_tickets: { type: 'type', status: 'status', userUid: 'userUid', createdAt: 'createdAt' },
+  products: { orderId: 'order_id', productName: 'product_name', name: 'product_name', quantity: 'quantity', productPrice: 'unit_price', price: 'unit_price', unitPrice: 'unit_price', totalPrice: 'total_price', createdAt: 'createdAt' },
+  shipments: { orderId: 'order_id', trackingNumber: 'tracking_number', shippingCompany: 'shipping_company_id', shippingCompanyId: 'shipping_company_id', courierId: 'courier_id', shipmentStatus: 'shipment_status', status: 'shipment_status', shippingCost: 'shipping_cost', weight: 'weight', createdAt: 'createdAt' }
 };
 
 export function extractDirectColumns(table: string, data: Record<string, any>): Record<string, any> {
