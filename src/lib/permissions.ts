@@ -70,7 +70,16 @@ export type PermissionKey =
   | 'edit_profit_per_kg'
   | 'edit_cbm_shipping_rate'
   | 'view_website_management'
-  | 'manage_website';
+  | 'manage_website'
+  | 'view_order_statuses'
+  | 'add_order_statuses'
+  | 'edit_order_statuses'
+  | 'delete_order_statuses'
+  | 'view_auto_entries'
+  | 'add_auto_entries'
+  | 'edit_auto_entries'
+  | 'delete_auto_entries'
+  | 'track_order';
 
 export interface PermissionDefinition {
   id: PermissionKey;
@@ -81,7 +90,9 @@ export interface PermissionDefinition {
 
 export const PERMISSION_CATEGORIES = {
   general: { ar: 'عام', en: 'General' },
-  orders: { ar: 'الطلبات', en: 'Orders' },
+  orders: { ar: 'الطلبات والتتبع', en: 'Orders & Tracking' },
+  order_statuses: { ar: 'مراحل وحالات الطلب', en: 'Order Status Stages' },
+  auto_entries: { ar: 'القيود المحاسبية التلقائية', en: 'Auto Entry Rules' },
   customers: { ar: 'العملاء', en: 'Customers' },
   couriers: { ar: 'المناديب', en: 'Couriers' },
   sources: { ar: 'المصادر', en: 'Order Sources' },
@@ -97,9 +108,10 @@ export const ALL_PERMISSIONS: PermissionDefinition[] = [
   { id: 'view_dashboard', labelAr: 'عرض لوحة التحكم والإحصائيات الملخصة', labelEn: 'View Dashboard & Summaries', category: 'general' },
   { id: 'view_statistics', labelAr: 'عرض الرسوم والرسوم البيانية المالية المتقدمة', labelEn: 'View Advanced Analytical Graphs', category: 'general' },
 
-  // Orders
+  // Orders & Tracking
   { id: 'view_orders', labelAr: 'عرض سجل الطلبات', labelEn: 'View Orders list', category: 'orders' },
-  { id: 'add_orders', labelAr: 'إنشاء وإضافة طلبات جديدة', labelEn: 'Create New Orders', category: 'orders' },
+  { id: 'track_order', labelAr: 'تتبع الطلبات ', labelEn: 'Access Live Order Tracking Interface', category: 'orders' },
+  { id: 'add_orders', labelAr: 'إنشاء طلبات جديدة', labelEn: 'Create New Orders', category: 'orders' },
   { id: 'edit_orders', labelAr: 'تعديل بيانات وتفاصيل الطلب', labelEn: 'Edit Existing Orders', category: 'orders' },
   { id: 'edit_order_defaults_creation', labelAr: 'تعديل الأسعار الافتراضية عند إنشاء طلب', labelEn: 'Edit Default Prices When Creating Order', category: 'orders' },
   { id: 'update_order_status', labelAr: 'تغيير حالة الطلب فقط بحدود اللوجستيات', labelEn: 'Update Status Only', category: 'orders' },
@@ -108,6 +120,18 @@ export const ALL_PERMISSIONS: PermissionDefinition[] = [
   { id: 'edit_delivered_orders', labelAr: 'تعديل تفاصيل الطلب بعد وصوله للمستلم', labelEn: 'Edit Orders after Handover', category: 'orders' },
   { id: 'print_orders', labelAr: 'تصدير وتوليد فواتير للطباعة', labelEn: 'Generate & Print PDF Invoices', category: 'orders' },
   { id: 'export_orders', labelAr: 'تصدير بيانات الطلب بصيغة إلكترونية', labelEn: 'Export Excel/CSV Order datasets', category: 'orders' },
+
+  // Order Statuses
+  { id: 'view_order_statuses', labelAr: 'عرض واستعراض جدول مراحل الطلب', labelEn: 'View Order Status Stages', category: 'order_statuses' },
+  { id: 'add_order_statuses', labelAr: 'إنشاء وإضافة مرحلة طلب جديدة', labelEn: 'Add New Order Status Stage', category: 'order_statuses' },
+  { id: 'edit_order_statuses', labelAr: 'تعديل وإعادة ترتيب مراحل الطلب', labelEn: 'Edit Order Status Stages', category: 'order_statuses' },
+  { id: 'delete_order_statuses', labelAr: 'حذف مرحلة من مراحل الطلب', labelEn: 'Delete Order Status Stage', category: 'order_statuses' },
+
+  // Auto Entries
+  { id: 'view_auto_entries', labelAr: 'عرض كشف القيود التلقائية لمراحل الطلب', labelEn: 'View Auto Entry Rules', category: 'auto_entries' },
+  { id: 'add_auto_entries', labelAr: 'إنشاء وإضافة قيد تلقائي لمراحل الطلب', labelEn: 'Add Auto Entry Rule', category: 'auto_entries' },
+  { id: 'edit_auto_entries', labelAr: 'تعديل وتحديث القيود التلقائية لمراحل الطلب', labelEn: 'Edit Auto Entry Rules', category: 'auto_entries' },
+  { id: 'delete_auto_entries', labelAr: 'حذف قيد تلقائي من النظام', labelEn: 'Delete Auto Entry Rule', category: 'auto_entries' },
 
   // Customers
   { id: 'view_customers', labelAr: 'رؤية قائمة العملاء والملفات الشخصية', labelEn: 'View Customer directory', category: 'customers' },
@@ -192,6 +216,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
   Employee: [
     'view_dashboard',
     'view_orders',
+    'track_order',
     'add_orders',
     'edit_orders',
     'update_order_status',
@@ -212,6 +237,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
   Accountant: [
     'view_dashboard',
     'view_orders',
+    'track_order',
+    'view_order_statuses',
+    'view_auto_entries',
     'view_finance',
     'add_finance',
     'edit_finance',
@@ -231,6 +259,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
   ],
   Courier: [
     'view_orders',
+    'track_order',
     'update_order_status',
   ],
 };

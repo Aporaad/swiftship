@@ -37,9 +37,10 @@ const PERMISSION_GROUPS = (isAr: boolean) => [
     ]
   },
   {
-    group: isAr ? '📦 الطلبات' : '📦 Orders',
+    group: isAr ? '📦 الطلبات والتتبع' : '📦 Orders & Tracking',
     perms: [
-      { id: 'view_orders', label: isAr ? 'عرض الطلبات' : 'View Orders' },
+      { id: 'view_orders', label: isAr ? 'عرض قائمة الطلبات' : 'View Orders List' },
+      { id: 'track_order', label: isAr ? 'تتبع الطلبات' : 'Access Live Order Tracking' },
       { id: 'add_orders', label: isAr ? 'إضافة الطلبات' : 'Add Orders' },
       { id: 'edit_orders', label: isAr ? 'تعديل الطلبات' : 'Edit Orders' },
       { id: 'update_order_status', label: isAr ? 'تحديث حالة الطلب فقط' : 'Update Order Status Only' },
@@ -48,6 +49,24 @@ const PERMISSION_GROUPS = (isAr: boolean) => [
       { id: 'print_orders', label: isAr ? 'طباعة وتصدير الفواتير' : 'Print & Export Invoices' },
       { id: 'export_orders', label: isAr ? 'تصدير بيانات الطلبات' : 'Export Orders Data' },
       { id: 'edit_order_defaults_creation', label: isAr ? 'تعديل الأسعار الافتراضية عند إنشاء طلب' : 'Edit Default Prices When Creating Order' },
+    ]
+  },
+  {
+    group: isAr ? '⚙️ مراحل وحالات الطلب' : '⚙️ Order Status Stages',
+    perms: [
+      { id: 'view_order_statuses', label: isAr ? 'استعراض مراحل الطلب' : 'View Order Status Stages' },
+      { id: 'add_order_statuses', label: isAr ? 'إضافة مرحلة طلب جديدة' : 'Add New Order Status Stage' },
+      { id: 'edit_order_statuses', label: isAr ? 'تعديل مراحل الطلب' : 'Edit Order Status Stages' },
+      { id: 'delete_order_statuses', label: isAr ? 'حذف مراحل الطلب' : 'Delete Order Status Stage' },
+    ]
+  },
+  {
+    group: isAr ? '⚡ القيود التلقائية' : '⚡ Auto Entry Rules',
+    perms: [
+      { id: 'view_auto_entries', label: isAr ? 'عرض القيود التلقائية' : 'View Auto Entry Rules' },
+      { id: 'add_auto_entries', label: isAr ? 'إضافة قيد تلقائي' : 'Add Auto Entry Rule' },
+      { id: 'edit_auto_entries', label: isAr ? 'تعديل القيود التلقائية' : 'Edit Auto Entry Rules' },
+      { id: 'delete_auto_entries', label: isAr ? 'حذف قيد تلقائي' : 'Delete Auto Entry Rule' },
     ]
   },
   {
@@ -112,20 +131,29 @@ const PERMISSION_GROUPS = (isAr: boolean) => [
     ]
   },
   {
-    group: isAr ? '👤 إدارة الموظفين' : '👤 Staff Management',
+    group: isAr ? '\U0001f9d1\u200d\U0001f4bc سجل الموظفين' : '\U0001f9d1\u200d\U0001f4bc Employees Ledger',
     perms: [
-      { id: 'view_users', label: isAr ? 'عرض قائمة الموظفين والأدوار' : 'View Staff & Roles List' },
-      { id: 'add_users', label: isAr ? 'إضافة الموظفين' : 'Add Staff members' },
-      { id: 'edit_users', label: isAr ? 'تعديل الموظفين والأدوار' : 'Edit Staff & Roles' },
-      { id: 'delete_users', label: isAr ? 'حذف الموظفين' : 'Delete Staff Members' },
-      { id: 'reset_passwords', label: isAr ? 'إعادة تعيين كلمات المرور' : 'Reset User Passwords' },
-      { id: 'disable_accounts', label: isAr ? 'تعطيل وتفعيل الحسابات' : 'Disable & Enable Accounts' },
-      { id: 'terminate_sessions', label: isAr ? 'إنهاء جلسات المستخدمين' : 'Terminate User Sessions' },
-      { id: 'view_activity_log', label: isAr ? 'رؤية سجل النشاط الكامل' : 'View Full Activity Log' },
+      { id: 'view_employees', label: isAr ? 'عرض سجل الموظفين والرواتب' : 'View Employees & Salaries' },
+      { id: 'add_employees', label: isAr ? 'إضافة موظف جديد وإنشاء حسابه' : 'Enroll New Employee & Ledger' },
+      { id: 'edit_employees', label: isAr ? 'تعديل بيانات الموظف والراتب' : 'Edit Employee Details & Salary' },
+      { id: 'delete_employees', label: isAr ? 'حذف الموظف وحسابه المالي' : 'Delete Employee & Financial Account' },
     ]
   },
   {
-    group: isAr ? '🛡️ الأدوار والصلاحيات' : '🛡️ Roles & Permissions',
+    group: isAr ? '\U0001f464 مستخدمو النظام' : '\U0001f464 System Users (Dashboard Accounts)',
+    perms: [
+      { id: 'view_users', label: isAr ? 'عرض قائمة مستخدمي لوحة التحكم' : 'View Dashboard User Accounts' },
+      { id: 'add_users', label: isAr ? 'إنشاء حساب مستخدم جديد' : 'Create New Dashboard User' },
+      { id: 'edit_users', label: isAr ? 'تعديل دور ومعلومات المستخدم' : 'Edit User Role & Info' },
+      { id: 'delete_users', label: isAr ? 'حذف حساب مستخدم من النظام' : 'Delete Dashboard User Account' },
+      { id: 'reset_passwords', label: isAr ? 'إعادة تعيين كلمة مرور المستخدم' : 'Reset User Password' },
+      { id: 'disable_accounts', label: isAr ? 'تعطيل أو تفعيل حساب مستخدم' : 'Disable & Enable User Account' },
+      { id: 'terminate_sessions', label: isAr ? 'إنهاء جلسة مستخدم إجباراً' : 'Force Terminate User Session' },
+      { id: 'view_activity_log', label: isAr ? 'عرض سجل النشاط والمراجعة' : 'View Full Activity & Audit Log' },
+    ]
+  },
+  {
+    group: isAr ? '\U0001f6e1\ufe0f الأدوار والصلاحيات' : '\U0001f6e1\ufe0f Roles & Permissions',
     perms: [
       { id: 'view_roles', label: isAr ? 'عرض الأدوار والصلاحيات' : 'View Roles & Permissions' },
       { id: 'add_roles', label: isAr ? 'إنشاء أدوار جديدة' : 'Create New Roles' },

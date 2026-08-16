@@ -33,6 +33,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 
+import { useRole } from '../hooks/useRole';
+
 // Fix typical leaflet icon issues
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -52,6 +54,7 @@ interface TrackingUpdate {
 export default function Tracking() {
   const { settings, t } = useSettings();
   const navigate = useNavigate();
+  const { role, hasPermission, loading: roleLoading } = useRole();
   const isAr = settings.language === 'ar';
 
   const [trackingNumber, setTrackingNumber] = useState('');
@@ -88,10 +91,13 @@ export default function Tracking() {
       const user = auth.currentUser;
       if (user) {
         setIsStaff(true);
+        if (!roleLoading && role !== 'Admin' && !hasPermission('track_order')) {
+          navigate('/orders');
+        }
       }
     };
     checkStaffStatus();
-  }, []);
+  }, [role, roleLoading, hasPermission, navigate]);
 
   // Standard tracking translation lookup
   const statusTranslations: Record<string, string> = {

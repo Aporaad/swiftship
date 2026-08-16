@@ -1601,12 +1601,34 @@ class FinancialAccountService {
   ): Promise<void> {
     try {
       const isAr = entities.isAr ?? true;
-      const ruleDoc = await getDoc(doc(db, "settings", "automatic_voucher_rules"));
       let rule = null;
-      if (ruleDoc.exists()) {
-        const d = ruleDoc.data();
-        if (d && d.data && Array.isArray(d.data)) {
-          rule = d.data.find((r) => r.id === ruleId) || null;
+
+      // 1. Try to load from dedicated auto_entries table first
+      try {
+        const autoEntryDoc = await getDoc(doc(db, "auto_entries", ruleId));
+        if (autoEntryDoc.exists()) {
+          rule = { id: autoEntryDoc.id, ...autoEntryDoc.data() };
+        } else {
+          // Check query by id field in auto_entries
+          const qAuto = query(collection(db, "auto_entries"), where("id", "==", ruleId));
+          const autoSnap = await getDocs(qAuto);
+          if (!autoSnap.empty) {
+            const first = autoSnap.docs[0];
+            rule = { id: first.id, ...first.data() };
+          }
+        }
+      } catch (err) {
+        console.warn(`[AutomaticVouchers] Error reading auto_entries for ${ruleId}:`, err);
+      }
+
+      // 2. Fallback to settings/automatic_voucher_rules for backwards compatibility
+      if (!rule) {
+        const ruleDoc = await getDoc(doc(db, "settings", "automatic_voucher_rules"));
+        if (ruleDoc.exists()) {
+          const d = ruleDoc.data();
+          if (d && d.data && Array.isArray(d.data)) {
+            rule = d.data.find((r) => r.id === ruleId) || null;
+          }
         }
       }
 

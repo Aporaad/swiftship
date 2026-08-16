@@ -37,7 +37,7 @@ export default function QuickNavModal({ isOpen, onClose }: QuickNavModalProps) {
   const navItems = [
     { name: isAr ? 'الرئيسية' : 'Dashboard', path: '/', icon: LayoutDashboard, permission: 'view_dashboard', desc: isAr ? 'ملخص عام وإحصائيات النظام' : 'Overall summary & key metrics' },
     { name: isAr ? 'الطلبات' : 'Orders', path: '/orders', icon: Package, permission: 'view_orders', desc: isAr ? 'إدارة الشحنات والطرود والطلبات' : 'Manage shipments, packages & orders' },
-    { name: isAr ? 'التتبع' : 'Tracking', path: '/tracking', icon: Truck, permission: 'view_orders', desc: isAr ? 'حالة الشحن والتتبع الدولي' : 'Real-time transit state tracking' },
+    { name: isAr ? 'التتبع' : 'Tracking', path: '/tracking', icon: Truck, permission: 'track_order', desc: isAr ? 'حالة الشحن والتتبع الدولي' : 'Real-time transit state tracking' },
     { name: isAr ? 'العملاء' : 'Customers', path: '/customers', icon: Users, permission: 'view_customers', desc: isAr ? 'دليل وأرصدة ومحافظ العملاء' : 'Customer registry, ledgers & wallets' },
     { name: isAr ? 'المناديب' : 'Couriers', path: '/couriers', icon: Truck, permission: 'view_couriers', desc: isAr ? 'مناديب التوصيل المحلي والعهد' : 'Local couriers & settlement logs' },
     { name: isAr ? 'المصروفات والعهد' : 'Expenses & Custody', path: '/expenses', icon: Wallet, permission: 'view_finance', desc: isAr ? 'إدارة الحسابات المالية والعهد والمصروفات' : 'Global finance ledger, expenses & custody' },

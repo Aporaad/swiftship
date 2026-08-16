@@ -19,24 +19,19 @@ import {
 import { jsPDF } from 'jspdf';
 import { printContent } from '../lib/printUtils';
 import QRCode from 'qrcode';
-
-const ORDER_STATUS_FLOW = [
-  'معلق',
-  'تم تسجيل الطلب',
-  'وصل مستودع السعودية',
-  'جاري الشحن لليمن',
-  'في التخليص الجمركي',
-  'وصل مركز التوزيع في اليمن',
-  'مع المندوب للتوصيل',
-  'تم التسليم'
-];
+import { useOrderStatuses } from '../hooks/useOrderStatuses';
+import { autoEntryService } from '../services/autoEntryService';
+import OrderStatusManagementTab from '../components/OrderStatusManagementTab';
 
 export default function Orders() {
   const { settings, t } = useSettings();
   const { role, hasPermission, profile, loading: roleLoading } = useRole();
+  const { statuses: orderStatusesList, getStatusByName, getNextStatus } = useOrderStatuses();
   const canManageOrders = role === 'Admin' || hasPermission('edit_orders');
   const canAddOrders = role === 'Admin' || hasPermission('add_orders');
   const canEditOrderDefaultsCreation = role === 'Admin' || hasPermission('edit_order_defaults_creation');
+  const canTrackOrders = role === 'Admin' || hasPermission('track_order');
+  const canViewOrderStatuses = role === 'Admin' || hasPermission('view_order_statuses') || hasPermission('view_auto_entries');
   const isAr = settings.language === 'ar';
 
   // Core Data States
@@ -105,23 +100,30 @@ export default function Orders() {
   const [allShipments, setAllShipments] = useState<any[]>([]);
 
   const location = useLocation();
-  const [ordersTab, setOrdersTab] = useState<'orders' | 'shipments' | 'tracking'>(() => {
+  const [ordersTab, setOrdersTab] = useState<'orders' | 'shipments' | 'tracking' | 'statuses'>(() => {
     const params = new URLSearchParams(location.search);
     const tab = params.get('tab');
     if (tab === 'shipments') return 'shipments';
-    if (tab === 'tracking') return 'tracking';
+    if (tab === 'tracking' && (role === 'Admin' || hasPermission('track_order'))) return 'tracking';
+    if ((tab === 'statuses' || tab === 'order-statuses') && (role === 'Admin' || hasPermission('view_order_statuses') || hasPermission('view_auto_entries'))) return 'statuses';
     return 'orders';
   });
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const tab = params.get('tab');
-    if (tab === 'tracking' && ordersTab !== 'tracking') {
+    if (tab === 'tracking' && canTrackOrders && ordersTab !== 'tracking') {
       setOrdersTab('tracking');
     } else if (tab === 'shipments' && ordersTab !== 'shipments') {
       setOrdersTab('shipments');
+    } else if ((tab === 'statuses' || tab === 'order-statuses') && canViewOrderStatuses && ordersTab !== 'statuses') {
+      setOrdersTab('statuses');
+    } else if (ordersTab === 'tracking' && !canTrackOrders) {
+      setOrdersTab('orders');
+    } else if (ordersTab === 'statuses' && !canViewOrderStatuses) {
+      setOrdersTab('orders');
     }
-  }, [location.search]);
+  }, [location.search, canTrackOrders, canViewOrderStatuses, ordersTab]);
 
   // Dedicated Shipments Studio Filters & Modals
 
@@ -1632,8 +1634,11 @@ export default function Orders() {
       const firedTriggers = selectedOrder.firedTriggers || [];
       const newFiredTriggers = [...firedTriggers];
 
-      const currentIndex = ORDER_STATUS_FLOW.indexOf(currentStatus);
-      const newIndex = ORDER_STATUS_FLOW.indexOf(newStatus);
+      const currentStatusItem = orderStatusesList.find(s => s.nameAr === currentStatus || s.nameEn === currentStatus);
+      const newStatusItem = orderStatusesList.find(s => s.nameAr === newStatus || s.nameEn === newStatus) || orderStatusesList[0];
+
+      const currentStageId = currentStatusItem?.id || 1;
+      const newStageId = newStatusItem?.id || 1;
 
       const remainingVal = parseFloat(selectedOrder.amountRemaining || '0');
       const courierId = updateFormData.deliveryCourierId || selectedOrder.deliveryCourierId;
@@ -1641,15 +1646,18 @@ export default function Orders() {
 
       let extraUpdateFields: any = {};
 
-      // Helper to check if a trigger should fire
+      const getStageIdByName = (statusName: string) => {
+        const item = orderStatusesList.find(s => s.nameAr === statusName || s.nameEn === statusName || s.code === statusName);
+        return item ? item.id : 0;
+      };
+
+      // Helper to check if a trigger should fire based on stage sequence
       const shouldFire = (triggerId: string, minStatus: string) => {
         if (firedTriggers.includes(triggerId)) return false;
-        if (newStatus === 'ملغي') return false;
+        if (newStatus === 'ملغي' || newStatusItem?.code === 'cancelled') return false;
 
-        const minIndex = ORDER_STATUS_FLOW.indexOf(minStatus);
-        const newIndex = ORDER_STATUS_FLOW.indexOf(newStatus);
-        // Fire if new status is at or beyond the required status
-        return newIndex >= minIndex;
+        const minStageId = getStageIdByName(minStatus);
+        return newStageId >= minStageId;
       };
 
       // Status change trigger - to prevent duplicate notifications
@@ -2293,8 +2301,12 @@ export default function Orders() {
         const firedTriggers = ord.firedTriggers || [];
         const newFiredTriggers = [...firedTriggers];
 
-        const currentIndex = ORDER_STATUS_FLOW.indexOf(ord.orderStatus || 'تم تسجيل الطلب');
-        const newIndex = ORDER_STATUS_FLOW.indexOf(newStatus);
+        const ordStatus = ord.orderStatus || 'تم تسجيل الطلب';
+        const currentStatusItem = orderStatusesList.find(s => s.nameAr === ordStatus || s.nameEn === ordStatus);
+        const newStatusItem = orderStatusesList.find(s => s.nameAr === newStatus || s.nameEn === newStatus) || orderStatusesList[0];
+
+        const currentStageId = currentStatusItem?.id || 1;
+        const newStageId = newStatusItem?.id || 1;
 
         const remainingVal = parseFloat(ord.amountRemaining || '0');
         const courierId = ord.deliveryCourierId;
@@ -2302,11 +2314,16 @@ export default function Orders() {
 
         let extraUpdateFields: any = {};
 
+        const getStageIdByName = (statusName: string) => {
+          const item = orderStatusesList.find(s => s.nameAr === statusName || s.nameEn === statusName || s.code === statusName);
+          return item ? item.id : 0;
+        };
+
         const shouldFire = (triggerId: string, minStatus: string) => {
           if (firedTriggers.includes(triggerId)) return false;
-          if (newStatus === 'ملغي') return false;
-          const minIndex = ORDER_STATUS_FLOW.indexOf(minStatus);
-          return newIndex >= minIndex;
+          if (newStatus === 'ملغي' || newStatusItem?.code === 'cancelled') return false;
+          const minStageId = getStageIdByName(minStatus);
+          return newStageId >= minStageId;
         };
 
         // 1. courier_commission trigger
@@ -2955,20 +2972,42 @@ export default function Orders() {
           </span>
         </button>
 
-        <button
-          onClick={() => setOrdersTab('tracking')}
-          className={`px-5 py-2.5 rounded-2xl font-black text-xs flex items-center gap-2 transition cursor-pointer ${
-            ordersTab === 'tracking'
-              ? 'bg-[#d4af37] text-black shadow-lg shadow-[#d4af37]/20 scale-102'
-              : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-850 border border-slate-800'
-          }`}
-        >
-          <MapPin className="w-4 h-4" />
-          {isAr ? '📍 التتبع المباشر والمعاينة' : '📍 Live Tracking & Telemetry'}
-        </button>
+        {canTrackOrders && (
+          <button
+            onClick={() => setOrdersTab('tracking')}
+            className={`px-5 py-2.5 rounded-2xl font-black text-xs flex items-center gap-2 transition cursor-pointer ${
+              ordersTab === 'tracking'
+                ? 'bg-[#d4af37] text-black shadow-lg shadow-[#d4af37]/20 scale-102'
+                : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-850 border border-slate-800'
+            }`}
+          >
+            <MapPin className="w-4 h-4" />
+            {isAr ? '📍 التتبع المباشر والمعاينة' : '📍 Live Tracking & Telemetry'}
+          </button>
+        )}
+
+        {canViewOrderStatuses && (
+          <button
+            onClick={() => setOrdersTab('statuses')}
+            className={`px-5 py-2.5 rounded-2xl font-black text-xs flex items-center gap-2 transition cursor-pointer ${
+              ordersTab === 'statuses'
+                ? 'bg-[#d4af37] text-black shadow-lg shadow-[#d4af37]/20 scale-102'
+                : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-850 border border-slate-800'
+            }`}
+          >
+            <Layers className="w-4 h-4" />
+            {isAr ? '⚙️ حالات الطلب والقيود التلقائية' : '⚙️ Order Statuses & Auto Rules'}
+            <span className="bg-black/20 px-2 py-0.5 rounded-lg text-[10px] font-mono">
+              {orderStatusesList.length}
+            </span>
+          </button>
+        )}
       </div>
 
-      {ordersTab === 'tracking' ? (
+      {ordersTab === 'statuses' ? (
+        /* Order Statuses & Auto Entries Management Tab */
+        <OrderStatusManagementTab isAr={isAr} />
+      ) : ordersTab === 'tracking' ? (
         /* Live Tracking View */
         <div className="bg-[#121215] border border-slate-850 p-2 sm:p-6 rounded-3xl shadow-xl">
           <Tracking />
@@ -3046,8 +3085,8 @@ export default function Orders() {
                 className="bg-black/40 border border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-300 outline-none cursor-pointer"
               >
                 <option value="all">{isAr ? 'جميع الحالات' : 'All Statuses'}</option>
-                {ORDER_STATUS_FLOW.map(st => (
-                  <option key={st} value={st}>{st}</option>
+                {orderStatusesList.map(st => (
+                  <option key={st.id} value={st.nameAr}>{isAr ? st.nameAr : st.nameEn}</option>
                 ))}
               </select>
 
@@ -3170,8 +3209,8 @@ export default function Orders() {
                                 onChange={(e) => handleQuickShipmentStatusChange(ship.id, e.target.value)}
                                 className="bg-slate-900 border border-slate-800 text-slate-300 rounded-lg text-[10px] font-bold p-1 outline-none cursor-pointer"
                               >
-                                {ORDER_STATUS_FLOW.map(st => (
-                                  <option key={st} value={st}>{st}</option>
+                                {orderStatusesList.map(st => (
+                                  <option key={st.id} value={st.nameAr}>{isAr ? st.nameAr : st.nameEn}</option>
                                 ))}
                               </select>
 
@@ -6061,8 +6100,8 @@ export default function Orders() {
                     onChange={(e) => setShipmentFormData({ ...shipmentFormData, shipmentStatus: e.target.value })}
                     className="w-full bg-black/40 border border-slate-800 rounded-xl p-3 outline-none text-white font-bold cursor-pointer"
                   >
-                    {ORDER_STATUS_FLOW.map(st => (
-                      <option key={st} value={st}>{st}</option>
+                    {orderStatusesList.map(st => (
+                      <option key={st.id} value={st.nameAr}>{isAr ? st.nameAr : st.nameEn}</option>
                     ))}
                   </select>
                 </div>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { doc, onSnapshot, updateDoc, setDoc, deleteDoc } from 'firebase/firestore';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth, db } from '../lib/firebase';
+import { doc, onSnapshot, updateDoc, setDoc, deleteDoc } from '../lib/supabase-firebase-adapter';
+import { onAuthStateChanged, User } from 'supabase/auth';
+import { auth, db } from '../lib/supabase-firebase-adapter';;
 import { clearAllLocalData } from '../lib/supabase-firebase-adapter';
 import { DEFAULT_ROLE_PERMISSIONS } from '../lib/permissions';
 
@@ -81,7 +81,7 @@ export function useRole(enableHeartbeat: boolean = false) {
   // Session heartbeats: update /sessions/{sessionId} dynamically so the Admin knows which device/tab is active
   useEffect(() => {
     if (!enableHeartbeat || !user || loading || sessionId === 'sess-loading' || sessionId === 'sess-loggedout') return;
-    
+
     const updateSessionHeartbeat = async () => {
       try {
         const sessionRef = doc(db, 'sessions', sessionId);
@@ -90,7 +90,7 @@ export function useRole(enableHeartbeat: boolean = false) {
         if (!sessionStorage.getItem(createdTimeKey)) {
           sessionStorage.setItem(createdTimeKey, createdTime);
         }
-        
+
         const emailVal = profile?.email || user.email || '';
         const fullNameVal = profile?.fullName || user.displayName || (emailVal ? emailVal.split('@')[0] : 'User');
         const roleVal = profile?.role || role || 'Employee';
@@ -120,7 +120,7 @@ export function useRole(enableHeartbeat: boolean = false) {
   // Listen for individual session termination
   useEffect(() => {
     if (!enableHeartbeat || !user || sessionId === 'sess-loading' || sessionId === 'sess-loggedout') return;
-    
+
     const sessionRef = doc(db, 'sessions', sessionId);
     const unsubSession = onSnapshot(sessionRef, (sessionDoc) => {
       if (sessionDoc.exists()) {
@@ -147,7 +147,7 @@ export function useRole(enableHeartbeat: boolean = false) {
       updateDoc(doc(db, 'users', user.uid), {
         lastSeen: Date.now(),
         lastSeenAt: new Date().toISOString(),
-      }).catch(() => {/* silently ignore */});
+      }).catch(() => {/* silently ignore */ });
     };
     updateLastSeen(); // immediate on mount
     const interval = setInterval(updateLastSeen, 60_000);
@@ -207,12 +207,12 @@ export function useRole(enableHeartbeat: boolean = false) {
         setProfile(userData);
 
         const ROOT_EMAILS = [
-           'alsrhyarslan5@gmail.com', 
-           'arslan.alshamari@gmail.com', 
-           'engaporaad1@gmail.com',
-           'admin@swiftship.system',
-           'apo.1.read@gmail.com',
-           'admin'
+          'alsrhyarslan5@gmail.com',
+          'arslan.alshamari@gmail.com',
+          'engaporaad1@gmail.com',
+          'admin@swiftship.system',
+          'apo.1.read@gmail.com',
+          'admin'
         ];
 
         const lowerEmail = user.email?.toLowerCase() || '';
@@ -252,7 +252,7 @@ export function useRole(enableHeartbeat: boolean = false) {
         if (userEmail && ROOT_EMAILS.includes(userEmail)) {
           setRole('Admin');
           setPermissions(['*']);
-          
+
           // Auto-create the user document if it's missing (one-time check)
           import('firebase/firestore').then(({ setDoc, doc }) => {
             setDoc(doc(db, 'users', user.uid), {
@@ -284,7 +284,7 @@ export function useRole(enableHeartbeat: boolean = false) {
               }
             }).catch(console.error);
           });
-          
+
           setRole(null);
           setPermissions([]);
         }

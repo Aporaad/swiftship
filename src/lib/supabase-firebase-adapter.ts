@@ -565,7 +565,10 @@ const DIRECT_COLUMNS_MAP: Record<string, Record<string, string>> = {
   announcements: { title: 'title', isActive: 'isActive', priority: 'priority', createdBy: 'createdBy', createdAt: 'createdAt' },
   portal_tickets: { type: 'type', status: 'status', userUid: 'userUid', createdAt: 'createdAt' },
   products: { orderId: 'order_id', productName: 'product_name', name: 'product_name', quantity: 'quantity', productPrice: 'unit_price', price: 'unit_price', unitPrice: 'unit_price', totalPrice: 'total_price', createdAt: 'createdAt' },
-  shipments: { orderId: 'order_id', trackingNumber: 'tracking_number', shippingCompany: 'shipping_company_id', shippingCompanyId: 'shipping_company_id', courierId: 'courier_id', shipmentStatus: 'shipment_status', status: 'shipment_status', shippingCost: 'shipping_cost', weight: 'weight', createdAt: 'createdAt' }
+  shipments: { orderId: 'order_id', trackingNumber: 'tracking_number', shippingCompany: 'shipping_company_id', shippingCompanyId: 'shipping_company_id', courierId: 'courier_id', shipmentStatus: 'shipment_status', status: 'shipment_status', shippingCost: 'shipping_cost', weight: 'weight', createdAt: 'createdAt' },
+  order_status: { nameAr: 'name_ar', nameEn: 'name_en', isFirst: 'is_first', isLast: 'is_last', sortOrder: 'sort_order', color: 'color', code: 'code' },
+  auto_entries: { statusId: 'status_id', nameAr: 'name_ar', nameEn: 'name_en', isActive: 'is_active', amountSource: 'amount_source' },
+  autoEntry: { statusId: 'status_id', nameAr: 'name_ar', nameEn: 'name_en', isActive: 'is_active', amountSource: 'amount_source' }
 };
 
 export function extractDirectColumns(table: string, data: Record<string, any>): Record<string, any> {

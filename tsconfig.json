@@ -19,16 +19,66 @@
       "@/*": [
         "./*"
       ],
-      "firebase/app": ["./src/lib/supabase-firebase-adapter.ts"],
-      "firebase/auth": ["./src/lib/supabase-firebase-adapter.ts"],
-      "firebase/firestore": ["./src/lib/supabase-firebase-adapter.ts"],
-      "firebase/firestore/lite": ["./src/lib/supabase-firebase-adapter.ts"],
-      "firebase-admin": ["./src/lib/supabase-firebase-adapter.ts"],
-      "firebase-admin/firestore": ["./src/lib/supabase-firebase-adapter.ts"],
-      "firebase-admin/app": ["./src/lib/supabase-firebase-adapter.ts"],
-      "firebase-admin/auth": ["./src/lib/supabase-firebase-adapter.ts"],
-      "@firebase/firestore": ["./src/lib/supabase-firebase-adapter.ts"],
-      "@google-cloud/firestore": ["./src/lib/supabase-firebase-adapter.ts"]
+      "firebase/app": [
+        "./src/lib/supabase-firebase-adapter.ts"
+      ],
+      "firebase/auth": [
+        "./src/lib/supabase-firebase-adapter.ts"
+      ],
+      "firebase/firestore": [
+        "./src/lib/supabase-firebase-adapter.ts"
+      ],
+      "firebase/firestore/lite": [
+        "./src/lib/supabase-firebase-adapter.ts"
+      ],
+      "firebase-admin": [
+        "./src/lib/supabase-firebase-adapter.ts"
+      ],
+      "firebase-admin/firestore": [
+        "./src/lib/supabase-firebase-adapter.ts"
+      ],
+      "firebase-admin/app": [
+        "./src/lib/supabase-firebase-adapter.ts"
+      ],
+      "firebase-admin/auth": [
+        "./src/lib/supabase-firebase-adapter.ts"
+      ],
+      "@firebase/firestore": [
+        "./src/lib/supabase-firebase-adapter.ts"
+      ],
+      "@google-cloud/firestore": [
+        "./src/lib/supabase-firebase-adapter.ts"
+      ],
+      "supabase/app": [
+        "./src/lib/supabase-firebase-adapter.ts"
+      ],
+      "supabase/auth": [
+        "./src/lib/supabase-firebase-adapter.ts"
+      ],
+      "supabase/firestore": [
+        "./src/lib/supabase-firebase-adapter.ts"
+      ],
+      "supabase/firestore/lite": [
+        "./src/lib/supabase-firebase-adapter.ts"
+      ],
+      "supabase-admin": [
+        "./src/lib/supabase-firebase-adapter.ts"
+      ],
+      "supabase-admin/firestore": [
+        "./src/lib/supabase-firebase-adapter.ts"
+      ],
+      "supabase-admin/app": [
+        "./src/lib/supabase-firebase-adapter.ts"
+      ],
+      "supabase-admin/auth": [
+        "./src/lib/supabase-firebase-adapter.ts"
+      ],
+      "@supabase/firestore": [
+        "./src/lib/supabase-firebase-adapter.ts"
+      ],
+      "@google-cloud/firestore": [
+        "./src/lib/supabase-firebase-adapter.ts"
+      ]
     },
     "allowImportingTsExtensions": true,
     "noEmit": true

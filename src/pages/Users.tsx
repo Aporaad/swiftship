@@ -18,6 +18,10 @@ export default function Users() {
   const [users, setUsers] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
   const { role, hasPermission, profile: currentUserDoc, loading: roleLoading } = useRole();
+  const canAddUser = role === 'Admin' || hasPermission('add_users');
+  const canEditUser = role === 'Admin' || hasPermission('edit_users');
+  const canDeleteUser = role === 'Admin' || hasPermission('delete_users');
+  const canDisableAccount = role === 'Admin' || hasPermission('disable_accounts');
   const [showPassword, setShowPassword] = useState(false);
   const isAr = settings.language === 'ar';
 
@@ -323,7 +327,7 @@ export default function Users() {
     );
   }
 
-  if (role !== 'Admin' && !hasPermission('manage_users')) {
+  if (role !== 'Admin' && !hasPermission('view_users')) {
     return (
       <div className="flex flex-col items-center justify-center p-12 bg-gradient-to-br from-[#121215] to-[#070708] rounded-3xl border border-slate-850 shadow-xl text-center select-none">
         <ShieldAlert className="w-16 h-16 text-rose-500 mb-6 animate-pulse" />
@@ -365,7 +369,7 @@ export default function Users() {
         </div>
         <button 
           onClick={() => setIsAddModalOpen(true)}
-          className="bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black px-6 py-2.5 rounded-xl flex items-center gap-2 font-black text-sm transition transform active:scale-95 shadow-md shadow-yellow-950/20"
+          className={`bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black px-6 py-2.5 rounded-xl flex items-center gap-2 font-black text-sm transition transform active:scale-95 shadow-md shadow-yellow-950/20 ${!canAddUser ? 'hidden' : ''}`}
         >
           <Plus className="w-4 h-4" /> {isAr ? 'تسجيل وإعتماد موظف جديد' : 'Provision Staff Member'}
         </button>
@@ -464,22 +468,26 @@ export default function Users() {
                       )}
                     </td>
                     <td className="p-4 text-left flex justify-end gap-2">
-                      <button 
-                        onClick={() => handleToggleStatus(user)} 
-                        title={user.disabled ? (isAr ? 'تفعيل الحساب' : 'Unfreeze') : (isAr ? 'تجميد وحظر الوصول' : 'Freeze Access')}
-                        className={`p-2 rounded-xl border transition-all ${user.disabled ? 'text-emerald-400 bg-emerald-950/10 border-emerald-950/30' : 'text-rose-450 bg-rose-950/10 border-rose-950/40'}`}
-                      >
-                        {user.disabled ? <UserCheck className="w-4 h-4" /> : <UserX className="w-4 h-4" />}
-                      </button>
+                      {canDisableAccount && (
+                        <button 
+                          onClick={() => handleToggleStatus(user)} 
+                          title={user.disabled ? (isAr ? 'تفعيل الحساب' : 'Unfreeze') : (isAr ? 'تجميد وحظر الوصول' : 'Freeze Access')}
+                          className={`p-2 rounded-xl border transition-all ${user.disabled ? 'text-emerald-400 bg-emerald-950/10 border-emerald-950/30' : 'text-rose-450 bg-rose-950/10 border-rose-950/40'}`}
+                        >
+                          {user.disabled ? <UserCheck className="w-4 h-4" /> : <UserX className="w-4 h-4" />}
+                        </button>
+                      )}
                       
-                      <button 
-                        onClick={() => handleOpenEdit(user)} 
-                        className="text-white hover:text-[#d4af37] bg-slate-900 border border-slate-800 p-2 rounded-xl transition-all"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
+                      {canEditUser && (
+                        <button 
+                          onClick={() => handleOpenEdit(user)} 
+                          className="text-white hover:text-[#d4af37] bg-slate-900 border border-slate-800 p-2 rounded-xl transition-all"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                      )}
 
-                      {!isRootTarget && (
+                      {canDeleteUser && !isRootTarget && (
                         <button 
                           onClick={() => handleDeleteUser(user.id, user.fullName)} 
                           className="text-rose-500 hover:bg-rose-950/20 bg-rose-950/10 border border-rose-950/45 p-2 rounded-xl transition-all"
