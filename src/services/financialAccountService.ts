@@ -779,7 +779,7 @@ class FinancialAccountService {
         monthlySalary,
         updatedAt: Date.now(),
       });
-      await updateDoc(doc(db, "users", employeeId), {
+      await updateDoc(doc(db, "employees", employeeId), {
         monthlySalary,
         updatedAt: Date.now(),
       });
@@ -1012,7 +1012,7 @@ class FinancialAccountService {
       case "courier":
         return "couriers";
       case "employee":
-        return "users";
+        return "employees";
       case "system":
         return "system_accounts";
       default:
@@ -1791,7 +1791,7 @@ class FinancialAccountService {
    * 6. Recalculates and synces balances for all opposite accounts affected by the deletions.
    */
   async purgeEntityAndFinancialFootprint(
-    entityType: 'customer' | 'courier' | 'user',
+    entityType: 'customer' | 'courier' | 'user' | 'employee',
     entityId: string
   ): Promise<void> {
     try {
@@ -1803,7 +1803,7 @@ class FinancialAccountService {
           return o.customerId === entityId || o.customer?.id === entityId;
         } else if (entityType === 'courier') {
           return o.courierId === entityId || o.driverId === entityId || o.courier?.id === entityId;
-        } else if (entityType === 'user') {
+        } else if (entityType === 'user' || entityType === 'employee') {
           return o.createdByUid === entityId || o.userId === entityId || o.employeeId === entityId;
         }
         return false;
@@ -1925,7 +1925,7 @@ class FinancialAccountService {
       }
 
       // 4. Delete the core entity document
-      const collectionName = this.getEntityCollection(entityType === 'user' ? 'employee' : entityType);
+      const collectionName = entityType === 'user' ? 'users' : (entityType === 'employee' ? 'employees' : (entityType === 'courier' ? 'couriers' : 'customers'));
       batch.delete(doc(db, collectionName, entityId));
 
       // 5. Commit all deletions

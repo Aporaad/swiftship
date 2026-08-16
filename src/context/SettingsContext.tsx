@@ -114,8 +114,8 @@ const defaultSettings: Settings = {
   taxId: '',
   invoiceLogo: '',
   invoiceNotes: '',
-  currency: 'SAR',
-  currencySymbol: 'ر.س',
+  currency: 'YER',
+  currencySymbol: 'ر.ي',
   exchangeRateUSD: 535,
   exchangeRateSAR: 140,
   autoUpdateExchangeRates: false,
@@ -124,6 +124,7 @@ const defaultSettings: Settings = {
   lastExchangeRateUpdateTime: '',
   lastExchangeRateUpdatedBy: '',
   customCurrencies: [
+    { id: 'YER', code: 'YER', name: 'ريال يمني', symbol: 'ر.ي', flag: '🇾🇪', rateToYER: 1, isActive: true },
     { id: 'USD', code: 'USD', name: 'دولار أمريكي', symbol: '$', flag: '🇺🇸', rateToYER: 535, isActive: true },
     { id: 'SAR', code: 'SAR', name: 'ريال سعودي', symbol: 'ر.س', flag: '🇸🇦', rateToYER: 140, isActive: true },
     { id: 'EUR', code: 'EUR', name: 'يورو', symbol: '€', flag: '🇪🇺', rateToYER: 580, isActive: true },
@@ -160,10 +161,10 @@ const defaultSettings: Settings = {
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 const USER_SPECIFIC_KEYS: (keyof Settings)[] = [
-  'language', 
-  'theme', 
-  'fontSize', 
-  'dashboardGridColumns', 
+  'language',
+  'theme',
+  'fontSize',
+  'dashboardGridColumns',
   'visibleMetrics'
 ];
 

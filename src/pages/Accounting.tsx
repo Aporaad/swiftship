@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { collection, onSnapshot, query, orderBy } from '../lib/supabase-firebase-adapter';
+import { db } from '../lib/supabase-firebase-adapter';
 import { useSettings } from '../context/SettingsContext';
 import { useRole } from '../hooks/useRole';
 import { ShieldAlert, BookOpen } from 'lucide-react';
@@ -27,22 +27,22 @@ export default function Accounting() {
 
     // Fetch expenses
     const unsubExp = onSnapshot(query(collection(db, 'expenses'), orderBy('createdAt', 'desc')), (snap) => {
-      setExpenses(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setExpenses(snap.docs.map((doc: { id: any; data: () => any; }) => ({ id: doc.id, ...doc.data() })));
     });
 
     // Fetch couriers
     const unsubCouriers = onSnapshot(collection(db, 'couriers'), (snap) => {
-      setCouriers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setCouriers(snap.docs.map((doc: { id: any; data: () => any; }) => ({ id: doc.id, ...doc.data() })));
     });
 
     // Fetch orders
     const unsubOrders = onSnapshot(query(collection(db, 'orders'), orderBy('createdAt', 'desc')), (snap) => {
-      setOrders(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setOrders(snap.docs.map((doc: { id: any; data: () => any; }) => ({ id: doc.id, ...doc.data() })));
     });
 
     // Fetch customers
     const unsubCustomers = onSnapshot(collection(db, 'customers'), (snap) => {
-      setCustomers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setCustomers(snap.docs.map((doc: { id: any; data: () => any; }) => ({ id: doc.id, ...doc.data() })));
     });
 
     return () => {
@@ -91,7 +91,7 @@ export default function Accounting() {
       </div>
 
       {/* Accounting Component */}
-      <FinanceAccounting 
+      <FinanceAccounting
         orders={orders}
         expenses={expenses}
         couriers={couriers}

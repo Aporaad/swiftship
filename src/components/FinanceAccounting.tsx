@@ -36,7 +36,7 @@ export default function FinanceAccounting({
   initialTab = 'general_ledger'
 }: FinanceAccountingProps) {
   const [accountingTab, setAccountingTab] = useState<string>(initialTab);
-  const { categories: EXPENSE_CATEGORIES_DYNAMIC } = useExpenseCategories();
+  const EXPENSE_CATEGORIES_DYNAMIC = useExpenseCategories();
 
   // Selected order details drawer state
   const [selectedOrderDetails, setSelectedOrderDetails] = useState<any | null>(null);

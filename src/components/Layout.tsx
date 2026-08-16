@@ -457,6 +457,7 @@ export default function Layout() {
     { name: isAr ? 'المصادر' : 'Sources', path: '/sources', icon: MapPin, permission: 'view_sources' },
     { name: isAr ? 'متصفح المواقع' : 'Web Browser', path: '/browser', icon: Monitor, permission: 'view_browser' },
     { name: isAr ? 'التقارير' : 'Reports', path: '/reports', icon: FileText, permission: 'view_reports' },
+    { name: isAr ? 'الموظفين' : 'Employees', path: '/employees', icon: Briefcase, permission: 'view_employees' },
     { name: isAr ? 'المستخدمون والأدوار' : 'Users & Roles', path: '/user-management', icon: UserCog, permission: 'view_users' },
     { name: isAr ? 'إدارة الموقع' : 'Website Management', path: '/website-management', icon: Globe, permission: 'view_website_management' },
     { name: isAr ? 'الإشعارات' : 'Notifications', path: '/notifications', icon: Bell, permission: 'view_notifications' },

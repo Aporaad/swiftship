@@ -442,7 +442,7 @@ export default function Sources() {
                         ) : null}
                         {hasPermission('delete_sources') && (
                           <button 
-                            onClick={() => handleDelete(source.id, source.source_name || t('source'))} 
+                            onClick={() => handleDelete(source.id, source.source_name || (isAr ? 'المصدر' : 'Source'))} 
                             className="text-rose-500 hover:bg-rose-950/20 bg-rose-950/10 border border-rose-950/45 p-2 rounded-xl transition-all"
                           >
                             <Trash2 className="w-4 h-4" />

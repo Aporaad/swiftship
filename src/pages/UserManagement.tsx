@@ -251,6 +251,8 @@ export default function UserManagement() {
   // ── Data ─────────────────────────────────────────────────
   const [users, setUsers] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);  // financial accounts for employees
+  const [employeesList, setEmployeesList] = useState<any[]>([]);
+  const [couriersList, setCouriersList] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
   const [activityLogs, setActivityLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -296,11 +298,25 @@ export default function UserManagement() {
 
   // ── Forms ────────────────────────────────────────────────
   const [editFormData, setEditFormData] = useState({
-    fullName: '', role: '', disabled: false, commissionRate: 0, username: '', systemPin: '', monthlySalary: 0
+    fullName: '', role: '', disabled: false, commissionRate: 0, username: '', systemPin: '', monthlySalary: 0,
+    linkedType: 'none', linkedEntity: ''
   });
   const [addFormData, setAddFormData] = useState({
-    fullName: '', username: '', email: '', password: '', systemPin: '', role: 'Employee', commissionRate: 0, monthlySalary: 0
+    fullName: '', username: '', email: '', password: '', systemPin: '', role: 'Employee', commissionRate: 0, monthlySalary: 0,
+    linkedType: 'none', linkedEntity: ''
   });
+
+  // Listen to Employees and Couriers for dynamic user linking
+  useEffect(() => {
+    if (roleLoading) return;
+    const unsubEmp = onSnapshot(collection(db, 'employees'), snap => {
+      setEmployeesList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    const unsubCour = onSnapshot(collection(db, 'couriers'), snap => {
+      setCouriersList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return () => { unsubEmp(); unsubCour(); };
+  }, [roleLoading]);
 
   // ── Roles ────────────────────────────────────────────────
   const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
@@ -437,7 +453,9 @@ export default function UserManagement() {
       fullName: user.fullName || '', username: user.username || '',
       role: user.role || 'Employee', disabled: user.disabled || false,
       commissionRate: user.commissionRate || 0, systemPin: user.systemPin || '',
-      monthlySalary: user.monthlySalary || 0
+      monthlySalary: user.monthlySalary || 0,
+      linkedType: user.linkedType || (user.linkedEntity ? 'employee' : 'none'),
+      linkedEntity: user.linkedEntity || ''
     });
     setIsEditModalOpen(true);
   };
@@ -465,16 +483,10 @@ export default function UserManagement() {
         disabled: isRoot ? false : editFormData.disabled,
         commissionRate: editFormData.commissionRate, systemPin: editFormData.systemPin,
         monthlySalary: editFormData.monthlySalary,
+        linkedType: editFormData.linkedType !== 'none' ? editFormData.linkedType : null,
+        linkedEntity: editFormData.linkedType !== 'none' ? editFormData.linkedEntity : null,
         updatedAt: Date.now()
       });
-      // Sync financial account name if changed
-      if (editFormData.fullName !== selectedUser.fullName && selectedUser.financialAccountId) {
-        await financialAccountService.updateAccountEntityName(selectedUser.id, editFormData.fullName);
-      }
-      // Sync monthly salary change in financial account
-      if (editFormData.monthlySalary !== (selectedUser.monthlySalary || 0)) {
-        await financialAccountService.updateMonthlySalary(selectedUser.id, editFormData.monthlySalary);
-      }
       await activityLogService.log('edit_user', editFormData.fullName, { userId: selectedUser.id });
       notificationService.notify({ title: t('تم التحديث', 'Updated'), message: t(`تم تحديث ${editFormData.fullName}`, `${editFormData.fullName} updated`), type: 'info', category: 'system' });
       setIsEditModalOpen(false); setSelectedUser(null);
@@ -604,40 +616,24 @@ export default function UserManagement() {
       }
       const secondaryAppName = `Secondary-${Date.now()}`;
       secondaryApp = initializeApp({}, secondaryAppName);
-      const { accountCode, code, accountId } =
-        await financialAccountService.getNextAccountIdentifiers('employee');
-      const newId = 'user_' + accountCode;
       const secondaryAuth = getAuth(secondaryApp);
       const SHARED_SYSTEM_AUTH_PASSWORD = 'swiftship@system_pw_2026';
-      const { user: newUser } = await createUserWithEmailAndPassword(secondaryAuth, newId, addFormData.email.toLowerCase(), SHARED_SYSTEM_AUTH_PASSWORD);
+      const { user: newUser } = await createUserWithEmailAndPassword(secondaryAuth, addFormData.email.toLowerCase(), SHARED_SYSTEM_AUTH_PASSWORD);
       await setDoc(doc(db, 'users', newUser.uid), {
         fullName: addFormData.fullName, email: addFormData.email.toLowerCase(),
         username: addFormData.username, systemPin: addFormData.systemPin,
         role: addFormData.role, commissionRate: addFormData.commissionRate,
-        monthlySalary: addFormData.monthlySalary,
         password: addFormData.password,
-        disabled: false, createdAt: Date.now(),
-        accountId: accountId,
-        financialAccountId: accountId
+        disabled: false,
+        linkedType: addFormData.linkedType !== 'none' ? addFormData.linkedType : null,
+        linkedEntity: addFormData.linkedType !== 'none' ? addFormData.linkedEntity : null,
+        createdAt: Date.now()
       });
-
-      // Auto-create financial account for employee (2130-xxxx) with monthly salary
-      try {
-        await financialAccountService.createAccountForEntity(
-          'employee',
-          newUser.uid,
-          addFormData.fullName,
-          settings.currency || 'YER',
-          addFormData.monthlySalary
-        );
-      } catch (accErr) {
-        console.warn('[UserManagement] Could not create financial account for employee:', accErr);
-      }
 
       await activityLogService.log('add_user', addFormData.fullName, { email: addFormData.email, role: addFormData.role });
       notificationService.notify({ title: t('تم إنشاء الحساب', 'Account Created'), message: t(`تم إنشاء حساب ${addFormData.fullName}`, `${addFormData.fullName} account created`), type: 'success', category: 'system' });
       setIsAddModalOpen(false);
-      setAddFormData({ fullName: '', username: '', email: '', password: '', systemPin: '', role: 'Employee', commissionRate: 0, monthlySalary: 0 });
+      setAddFormData({ fullName: '', username: '', email: '', password: '', systemPin: '', role: 'Employee', commissionRate: 0, monthlySalary: 0, linkedType: 'none', linkedEntity: '' });
     } catch (err: any) {
       let msg = err.message;
       if (err.code === 'auth/email-already-in-use') msg = t('البريد مسجل في نظام المصادقة', 'Email already in auth system');
@@ -1034,6 +1030,16 @@ export default function UserManagement() {
                                 </>
                               )}
                             </div>
+                            {user.linkedEntity && (
+                              <div className="text-[9px] font-bold text-cyan-400 bg-cyan-950/40 border border-cyan-900/40 px-2 py-0.5 rounded-lg flex items-center gap-1 w-max mt-1">
+                                🔗 {user.linkedType === 'courier' ? t('مندوب:', 'Courier:') : t('موظف:', 'Employee:')}{' '}
+                                {
+                                  user.linkedType === 'courier'
+                                    ? couriersList.find(c => c.id === user.linkedEntity)?.fullName || user.linkedEntity
+                                    : employeesList.find(e => e.id === user.linkedEntity)?.fullName || user.linkedEntity
+                                }
+                              </div>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -1560,7 +1566,7 @@ export default function UserManagement() {
                 </div>
               </div>
               {/*role*/}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الدور', 'Role')}</label>
                   <select
@@ -1585,17 +1591,40 @@ export default function UserManagement() {
                     className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono transition-all"
                   />
                 </div>
+              </div>
+
+              {/* Entity Linking Block */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-black/40 p-3.5 rounded-xl border border-slate-800/80">
                 <div>
-                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الراتب الشهري', 'Monthly Salary')}</label>
-                  <input
-                    tabIndex={8}
-                    type="number"
-                    min="0"
-                    value={addFormData.monthlySalary}
-                    onChange={e => setAddFormData({ ...addFormData, monthlySalary: parseFloat(e.target.value) || 0 })}
-                    className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono transition-all"
-                  />
+                  <label className="block text-[10px] font-black text-[#d4af37] mb-1.5 uppercase tracking-wider">{t('الربط مع كيان (شخص/حساب)', 'Link User to Entity')}</label>
+                  <select
+                    value={addFormData.linkedType}
+                    onChange={e => setAddFormData({ ...addFormData, linkedType: e.target.value, linkedEntity: '' })}
+                    className="w-full bg-black/50 border border-slate-800 text-white rounded-xl p-2.5 outline-none text-xs font-bold"
+                  >
+                    <option value="none">{t('غير مرتبط (حساب مستقل)', 'Standalone User')}</option>
+                    <option value="employee">{t('موظف (Employee)', 'Employee')}</option>
+                    <option value="courier">{t('مندوب (Courier)', 'Courier')}</option>
+                  </select>
                 </div>
+                {addFormData.linkedType !== 'none' && (
+                  <div>
+                    <label className="block text-[10px] font-black text-[#d4af37] mb-1.5 uppercase tracking-wider">
+                      {addFormData.linkedType === 'employee' ? t('اختر الموظف المرتبط', 'Select Employee') : t('اختر المندوب المرتبط', 'Select Courier')}
+                    </label>
+                    <select
+                      value={addFormData.linkedEntity}
+                      onChange={e => setAddFormData({ ...addFormData, linkedEntity: e.target.value })}
+                      className="w-full bg-black/50 border border-slate-800 text-white rounded-xl p-2.5 outline-none text-xs font-bold"
+                    >
+                      <option value="">{t('اختر الكيان...', 'Select target...')}</option>
+                      {addFormData.linkedType === 'employee'
+                        ? employeesList.map(e => <option key={e.id} value={e.id}>{e.fullName} ({e.jobsType || 'موظف'})</option>)
+                        : couriersList.map(c => <option key={c.id} value={c.id}>{c.fullName || c.name} ({c.phone || ''})</option>)
+                      }
+                    </select>
+                  </div>
+                )}
               </div>
               {/*end form fields */}
               <div className="pt-4 flex justify-end gap-3 border-t border-slate-800/50 shrink-0">
@@ -1658,7 +1687,7 @@ export default function UserManagement() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الدور', 'Role')}</label>
                   <select
@@ -1684,17 +1713,40 @@ export default function UserManagement() {
                     className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono transition-all"
                   />
                 </div>
+              </div>
+
+              {/* Entity Linking Block */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-black/40 p-3.5 rounded-xl border border-slate-800/80">
                 <div>
-                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الراتب الشهري', 'Monthly Salary')}</label>
-                  <input
-                    tabIndex={6}
-                    type="number"
-                    min="0"
-                    value={editFormData.monthlySalary}
-                    onChange={e => setEditFormData({ ...editFormData, monthlySalary: parseFloat(e.target.value) || 0 })}
-                    className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono transition-all"
-                  />
+                  <label className="block text-[10px] font-black text-[#d4af37] mb-1.5 uppercase tracking-wider">{t('الربط مع كيان (شخص/حساب)', 'Link User to Entity')}</label>
+                  <select
+                    value={editFormData.linkedType}
+                    onChange={e => setEditFormData({ ...editFormData, linkedType: e.target.value, linkedEntity: '' })}
+                    className="w-full bg-black/50 border border-slate-800 text-white rounded-xl p-2.5 outline-none text-xs font-bold"
+                  >
+                    <option value="none">{t('غير مرتبط (حساب مستقل)', 'Standalone User')}</option>
+                    <option value="employee">{t('موظف (Employee)', 'Employee')}</option>
+                    <option value="courier">{t('مندوب (Courier)', 'Courier')}</option>
+                  </select>
                 </div>
+                {editFormData.linkedType !== 'none' && (
+                  <div>
+                    <label className="block text-[10px] font-black text-[#d4af37] mb-1.5 uppercase tracking-wider">
+                      {editFormData.linkedType === 'employee' ? t('اختر الموظف المرتبط', 'Select Employee') : t('اختر المندوب المرتبط', 'Select Courier')}
+                    </label>
+                    <select
+                      value={editFormData.linkedEntity}
+                      onChange={e => setEditFormData({ ...editFormData, linkedEntity: e.target.value })}
+                      className="w-full bg-black/50 border border-slate-800 text-white rounded-xl p-2.5 outline-none text-xs font-bold"
+                    >
+                      <option value="">{t('اختر الكيان...', 'Select target...')}</option>
+                      {editFormData.linkedType === 'employee'
+                        ? employeesList.map(e => <option key={e.id} value={e.id}>{e.fullName} ({e.jobsType || 'موظف'})</option>)
+                        : couriersList.map(c => <option key={c.id} value={c.id}>{c.fullName || c.name} ({c.phone || ''})</option>)
+                      }
+                    </select>
+                  </div>
+                )}
               </div>
 
               {!ROOT_EMAILS.includes(selectedUser.email) && !selectedUser.isRoot && (

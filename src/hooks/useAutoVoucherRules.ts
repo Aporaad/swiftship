@@ -9,8 +9,8 @@ export interface AutoVoucherRule {
   nameEn: string;
   descriptionTempAr: string;
   descriptionTempEn: string;
-  debitAccount: string;
-  creditAccount: string;
+  debitAccount: any;
+  creditAccount: any;
   isActive: boolean;
   requiredEntities: string[];
 }

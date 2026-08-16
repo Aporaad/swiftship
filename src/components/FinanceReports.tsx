@@ -1,17 +1,17 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { 
+import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   BarChart, Bar, Cell, PieChart, Pie
 } from 'recharts';
-import { 
-  FileText, Calendar, Filter, Download, Printer, TrendingUp, CheckCircle, 
-  AlertTriangle, RefreshCw, Layers, DollarSign, Wallet, Truck, 
+import {
+  FileText, Calendar, Filter, Download, Printer, TrendingUp, CheckCircle,
+  AlertTriangle, RefreshCw, Layers, DollarSign, Wallet, Truck,
   ChevronRight, ArrowUpRight, ArrowDownRight, Award, Plus, Check, CheckSquare, Square
 } from 'lucide-react';
 import { printContent } from '../lib/printUtils';
 import { useExpenseCategories } from '../hooks/useExpenseCategories';
-import { db } from '../lib/firebase';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { db } from '../lib/supabase-firebase-adapter';
+import { collection, onSnapshot, query, orderBy } from '../lib/supabase-firebase-adapter';
 import { financialAccountService } from '../services/financialAccountService';
 
 interface FinanceReportsProps {
@@ -33,7 +33,7 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
   useEffect(() => {
     // 1. Subscribe to accounts tree
     const unsubAccounts = onSnapshot(collection(db, 'accounts'), (snap) => {
-      setAccounts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setAccounts(snap.docs.map((doc: { id: any; data: () => any; }) => ({ id: doc.id, ...doc.data() })));
     }, (err) => {
       console.warn("FinanceReports: Accounts subscription error:", err);
     });
@@ -44,7 +44,7 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
       orderBy('createdAt', 'desc')
     );
     const unsubTxs = onSnapshot(qAllTxs, (snap) => {
-      setAllTimeTransactions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[]);
+      setAllTimeTransactions(snap.docs.map((doc: { id: any; data: () => any; }) => ({ id: doc.id, ...doc.data() })) as any[]);
     }, (err) => {
       console.warn("FinanceReports: Transactions subscription error:", err);
     });
@@ -54,7 +54,7 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
       unsubTxs();
     };
   }, []);
-  
+
   // Advanced Filter state
   const [dateRange, setDateRange] = useState<'all' | 'today' | 'week' | 'month' | 'year' | 'custom'>('month');
   const [startDate, setStartDate] = useState('');
@@ -93,7 +93,7 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
       const now = new Date();
       startLimit = new Date();
       startLimit.setHours(0, 0, 0, 0);
-      
+
       if (dateRange === 'today') {
         // startLimit is today 00:00:00
         endLimit = new Date();
@@ -109,10 +109,10 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
         startLimit.setDate(now.getDate() - 365);
       } else if (dateRange === 'custom') {
         startLimit = startDate ? new Date(startDate) : null;
-        if (startLimit) startLimit.setHours(0,0,0,0);
-        
+        if (startLimit) startLimit.setHours(0, 0, 0, 0);
+
         endLimit = endDate ? new Date(endDate) : null;
-        if (endLimit) endLimit.setHours(23,59,59,999);
+        if (endLimit) endLimit.setHours(23, 59, 59, 999);
       }
     }
 
@@ -283,7 +283,7 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
     filteredExpenses.forEach(exp => {
       const convertedAmt = convertToYER(exp.amount || 0, exp.currency);
       const isManualDebit = exp.notes && (exp.notes.includes('[MANUAL-DEBIT]') || exp.notes.includes('قيد تسوية مدين'));
-      
+
       if (exp.type === 'General') {
         if (!isManualDebit) {
           totalGeneralExpensesYER += convertedAmt;
@@ -308,8 +308,8 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
     const netProfitYER = totalOrderValueYER - netOperationalExpenses;
     const grossProfitYER = totalOrderValueYER;
 
-    const netProfitMargin = totalOrderValueYER > 0 
-      ? Math.round((netProfitYER / totalOrderValueYER) * 100) 
+    const netProfitMargin = totalOrderValueYER > 0
+      ? Math.round((netProfitYER / totalOrderValueYER) * 100)
       : 0;
 
     // Delivery rate success percentage
@@ -436,7 +436,7 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
 
   return (
     <div className="space-y-6 pt-2 animate-fade-in" id="finance-report-content">
-      
+
       {/* 📊 Control & Filter Grid Dashboard */}
       <div className="bg-[#121215] border border-slate-850 p-6 rounded-3xl flex flex-col gap-6 shadow-xl">
         <div className="flex items-center justify-between border-b border-white/[0.03] pb-4">
@@ -446,17 +446,16 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
               {isAr ? 'مرشحات وفلاتر تصدير التقارير الذكية' : 'Advanced Analytics filters'}
             </span>
           </div>
-          
+
           <div className="flex bg-[#08080a] border border-slate-900 rounded-xl p-0.5">
             {['today', 'week', 'month', 'year', 'all', 'custom'].map((mode) => (
               <button
                 key={mode}
                 onClick={() => setDateRange(mode as any)}
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
-                  dateRange === mode 
-                    ? 'bg-[#d4af37] text-black font-black' 
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${dateRange === mode
+                    ? 'bg-[#d4af37] text-black font-black'
                     : 'text-slate-400 hover:text-white'
-                }`}
+                  }`}
               >
                 {mode === 'today' && (isAr ? 'اليوم' : 'Today')}
                 {mode === 'week' && (isAr ? 'أسبوع' : 'Week')}
@@ -471,13 +470,13 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
 
         {/* Input parameters panel */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs font-bold text-slate-400">
-          
+
           {/* Custom Date Inputs */}
           {dateRange === 'custom' && (
             <div className="md:col-span-1 grid grid-cols-2 gap-2 text-[10px]">
               <div>
                 <label className="block text-slate-500 mb-1">{isAr ? 'من تاريخ:' : 'From:'}</label>
-                <input 
+                <input
                   type="date"
                   value={startDate}
                   onChange={e => setStartDate(e.target.value)}
@@ -486,7 +485,7 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
               </div>
               <div>
                 <label className="block text-slate-500 mb-1">{isAr ? 'إلى تاريخ:' : 'To:'}</label>
-                <input 
+                <input
                   type="date"
                   value={endDate}
                   onChange={e => setEndDate(e.target.value)}
@@ -546,7 +545,7 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
 
       {/* 🏛️ Beautiful Top KPI Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        
+
         {/* KPI 1 */}
         <div className="bg-gradient-to-br from-[#121215] to-[#070708] border border-slate-850 p-4 rounded-3xl relative overflow-hidden shadow-md text-start">
           <span className="text-[9px] text-slate-500 font-black uppercase tracking-wider block mb-1">
@@ -658,7 +657,7 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
 
       {/* 📈 Advanced Visual Charts Panel */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
+
         {/* Trend Area chart */}
         <div className="lg:col-span-2 bg-[#121215] border border-slate-850 p-5 rounded-3xl text-start shadow-md">
           <div className="flex items-center justify-between mb-6">
@@ -676,19 +675,19 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
               <AreaChart data={chartsData.trend} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.25}/>
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0.0}/>
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
                   </linearGradient>
                   <linearGradient id="colorExpenses" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.25}/>
-                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0.0}/>
+                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0.0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1d1d24" opacity={0.3} />
                 <XAxis dataKey="dateLabel" stroke="#4a5568" fontSize={9} />
                 <YAxis stroke="#4a5568" fontSize={9} />
-                <Tooltip 
-                  contentStyle={{ background: '#09090b', borderColor: 'rgba(212,175,55,0.2)', borderRadius: '12px' }} 
+                <Tooltip
+                  contentStyle={{ background: '#09090b', borderColor: 'rgba(212,175,55,0.2)', borderRadius: '12px' }}
                   labelClassName="text-[#d4af37] font-mono font-black text-[10px]"
                   itemStyle={{ fontSize: '10px', fontWeight: 'bold' }}
                 />
@@ -724,8 +723,8 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip 
-                    contentStyle={{ background: '#09090b', borderColor: 'rgba(212,175,55,0.2)', borderRadius: '12px' }} 
+                  <Tooltip
+                    contentStyle={{ background: '#09090b', borderColor: 'rgba(212,175,55,0.2)', borderRadius: '12px' }}
                     itemStyle={{ fontSize: '10px', color: '#fff' }}
                   />
                 </PieChart>
@@ -758,7 +757,7 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
 
       {/* 📦 Bottom Layout: Hub Performance Bar Chart & Interactive PDF Report Configurator */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
+
         {/* Origin share Bar chart */}
         <div className="bg-[#121215] border border-slate-850 p-5 rounded-3xl text-start shadow-md lg:col-span-1">
           <div>
@@ -773,8 +772,8 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
                   <CartesianGrid strokeDasharray="3 3" stroke="#1d1d24" opacity={0.3} />
                   <XAxis dataKey="name" stroke="#4a5568" fontSize={8.5} />
                   <YAxis stroke="#4a5568" fontSize={9} />
-                  <Tooltip 
-                    contentStyle={{ background: '#09090b', borderColor: 'rgba(212,175,55,0.2)', borderRadius: '12px' }} 
+                  <Tooltip
+                    contentStyle={{ background: '#09090b', borderColor: 'rgba(212,175,55,0.2)', borderRadius: '12px' }}
                     itemStyle={{ fontSize: '10px' }}
                   />
                   <Bar dataKey="value" fill="#d4af37" radius={[4, 4, 0, 0]}>
@@ -813,11 +812,11 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            
+
             {/* Options boxes */}
             <div className="space-y-2.5 text-[11px] font-bold text-slate-350">
-              
-              <button 
+
+              <button
                 type="button"
                 onClick={() => setPdfOptions({ ...pdfOptions, includeExecutiveSummary: !pdfOptions.includeExecutiveSummary })}
                 className="flex items-center gap-3 text-start w-full hover:bg-black/20 p-2 rounded-xl border border-white/[0.01]"
@@ -833,7 +832,7 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
                 </div>
               </button>
 
-              <button 
+              <button
                 type="button"
                 onClick={() => setPdfOptions({ ...pdfOptions, includeOrdersLedger: !pdfOptions.includeOrdersLedger })}
                 className="flex items-center gap-3 text-start w-full hover:bg-black/20 p-2 rounded-xl border border-white/[0.01]"
@@ -852,8 +851,8 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
             </div>
 
             <div className="space-y-2.5 text-[11px] font-bold text-slate-350">
-              
-              <button 
+
+              <button
                 type="button"
                 onClick={() => setPdfOptions({ ...pdfOptions, includeExpensesLedger: !pdfOptions.includeExpensesLedger })}
                 className="flex items-center gap-3 text-start w-full hover:bg-black/20 p-2 rounded-xl border border-white/[0.01]"
@@ -869,7 +868,7 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
                 </div>
               </button>
 
-              <button 
+              <button
                 type="button"
                 onClick={() => setPdfOptions({ ...pdfOptions, includeCourierStanding: !pdfOptions.includeCourierStanding })}
                 className="flex items-center gap-3 text-start w-full hover:bg-black/20 p-2 rounded-xl border border-white/[0.01]"
@@ -890,7 +889,7 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
           </div>
 
           <div className="pt-4 border-t border-slate-850 flex flex-wrap gap-3 items-center justify-between">
-            <button 
+            <button
               type="button"
               onClick={() => setPdfOptions({ ...pdfOptions, includeSignatureBox: !pdfOptions.includeSignatureBox })}
               className="flex items-center gap-2 text-[10px] font-bold text-slate-400"

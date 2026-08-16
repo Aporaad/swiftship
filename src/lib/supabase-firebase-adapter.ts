@@ -541,13 +541,58 @@ export async function getDocFromServer(docRef: DocRef) {
   return getDoc(docRef);
 }
 
+const DIRECT_COLUMNS_MAP: Record<string, Record<string, string>> = {
+  employees: { accountId: 'account_id', monthlySalary: 'monthlySalary', currency: 'currency', jobsType: 'jobsType', createdAt: 'createdAt', createdBy: 'createdBy' },
+  users: { role: 'role', username: 'username', email: 'email', disabled: 'disabled', linkedType: 'linkedType', linkedEntity: 'linkedEntity', accountId: 'linkedEntity' },
+  portal_users: { portalRole: 'portal_role', username: 'username', email: 'email', disabled: 'disabled', approvalStatus: 'approval_status', linkedAccId: 'linkedAccId', linkedCustomerId: 'linkedAccId' },
+  sessions: { userId: 'user_id', createdAt: 'createdAt', lastSeen: 'lastSeen', forceLogout: 'forceLogout' },
+  settings: { category: 'category' },
+  user_settings: { userId: 'userid' },
+  customers: { accountId: 'account_id', disabled: 'is_active', level: 'levels', levels: 'levels' },
+  couriers: { accountId: 'account_id', financialCurrency: 'currency', currency: 'currency', disabled: 'is_active', courierType: 'type', type: 'type', level: 'levels', levels: 'levels' },
+  accounts: { accountCode: 'account_code', code: 'account_code', currency: 'currency', entityId: 'entity_id', type: 'type', accountType: 'type' },
+  orders: { orderNumber: 'order_number', trackingNumber: 'tracking_number', customerId: 'customer_id', orderStatus: 'order_status', createdAt: 'createdAt' },
+  shipping_companies: { name: 'name', shippingCompanyUrl: 'shipping_company_url', trackingIDPrefix: 'trackingID_prefix', financialAccountId: 'account_id' },
+  sources: { name: 'name', supplierType: 'type', type: 'type', sourceUrl: 'source_url', financialAccountId: 'account_id' },
+  account_transactions: { type: 'type', accountId: 'account_id', journalEntryNumber: 'journalEntryNumber', journalEntryId: 'journalEntryNumber', module: 'module', currency: 'currency', createdAt: 'createdAt', amount: 'amount' },
+  expenses: { expenseNumber: 'expense_number', transactionsID: 'transactionsID', linkedAccountId: 'account_id', financialAccountId: 'account_id', accountId: 'account_id', category: 'category', amount: 'amount', currency: 'currency', createdAt: 'createdAt' },
+  salary_history: { transactionsID: 'transactionsID', financialAccountId: 'account_id', accountId: 'account_id', userId: 'user_id', amount: 'amount', currency: 'currency', salaryMonth: 'month', month: 'month', createdAt: 'createdAt' },
+  journal_entries: { transactionID: 'transactionID', accountId: 'account_id', createdByUid: 'created_by_uid' },
+  assets: { linkedAccountId: 'account_id', accountId: 'account_id', status: 'status', currency: 'currency', isActive: 'is_active', type: 'type' },
+  notifications: { userId: 'userId', category: 'category', isPublic: 'isPublic', read: 'read', type: 'type', createdAt: 'createdAt' },
+  activity_logs: { userUid: 'userId', userId: 'userId', action: 'action', category: 'category', entityName: 'target', target: 'target', type: 'type', timestamp: 'createdAt', createdAt: 'createdAt' },
+  jobs_req: { email: 'email', phone: 'phone', status: 'status', category: 'category', refCode: 'refCode', createdAt: 'createdAt' },
+  announcements: { title: 'title', isActive: 'isActive', priority: 'priority', createdBy: 'createdBy', createdAt: 'createdAt' },
+  portal_tickets: { type: 'type', status: 'status', userUid: 'userUid', createdAt: 'createdAt' }
+};
+
+export function extractDirectColumns(table: string, data: Record<string, any>): Record<string, any> {
+  const mapping = DIRECT_COLUMNS_MAP[table];
+  if (!mapping || !data || typeof data !== 'object') return {};
+  const extracted: Record<string, any> = {};
+  for (const [key, col] of Object.entries(mapping)) {
+    if (data[key] !== undefined) {
+      const val = data[key];
+      if (key === 'disabled' && (table === 'customers' || table === 'couriers')) {
+        extracted[col] = !val;
+      } else if ((col === 'createdAt' || col === 'lastSeen') && typeof val === 'number') {
+        extracted[col] = new Date(val).toISOString();
+      } else {
+        extracted[col] = val;
+      }
+    }
+  }
+  return extracted;
+}
+
 export async function addDoc(newID: any, collectionRef: FirebaseQuery, rawData: any) {
   const table = collectionRef.path;
   const id = newID ? newID : 'noId_' + Math.random().toString(36).substring(2, 11) + Math.random().toString(36).substring(2, 11);
   const data = cleanData(rawData);
 
   if (!isOfflineMode()) {
-    const { error } = await supabase.from(table).insert({ id, data });
+    const directCols = extractDirectColumns(table, data);
+    const { error } = await supabase.from(table).insert({ id, ...directCols, data });
     if (error) {
       console.warn(`[Supabase Adapter] addDoc error on table ${table}: ${error.message}`);
     }
@@ -577,7 +622,8 @@ export async function addAssDoc(newID: any, arg1: any, collectionRef: FirebaseQu
   const data = cleanData(rawData);
 
   if (!isOfflineMode()) {
-    const { error } = await supabase.from(table).insert({ id, assetCode, data });
+    const directCols = extractDirectColumns(table, data);
+    const { error } = await supabase.from(table).insert({ id, assetCode, ...directCols, data });
     if (error) {
       console.warn(`[Supabase Adapter] addDoc error on table ${table}: ${error.message}`);
     }
@@ -613,7 +659,8 @@ export async function setDoc(docRef: DocRef, rawData: any, options?: any) {
   }
 
   if (!isOfflineMode()) {
-    const { error } = await supabase.from(table).upsert({ id, data });
+    const directCols = extractDirectColumns(table, data);
+    const { error } = await supabase.from(table).upsert({ id, ...directCols, data });
     if (error) {
       console.warn(`[Supabase Adapter] setDoc error on table ${table}: ${error.message}`);
     }
@@ -688,7 +735,8 @@ export async function updateDoc(docRef: DocRef, rawData: any) {
   const data = { ...existingData, ...resolvedPayload };
 
   if (!isOfflineMode()) {
-    const { error } = await supabase.from(table).update({ data }).eq('id', id);
+    const directCols = extractDirectColumns(table, data);
+    const { error } = await supabase.from(table).update({ ...directCols, data }).eq('id', id);
     if (error) {
       console.warn(`[Supabase Adapter] updateDoc error on table ${table}: ${error.message}`);
     }

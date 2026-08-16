@@ -667,6 +667,7 @@ export default function Settings() {
       message: isAr
         ? 'هل أنت متأكد من إعادة ضبط عداد الطلبات؟ سيبدأ الترقيم من جديد وفق الإعدادات الجديدة.'
         : 'Reset order counter? New orders will be numbered from the configured start number.',
+      type: 'warning',
       onConfirm: async () => {
         await updateSettings({ orderStartNumber: localSettings.orderStartNumber });
 

@@ -24,6 +24,7 @@ import Expenses from './pages/Expenses';
 import Accounting from './pages/Accounting';
 import SalaryHistory from './pages/SalaryHistory';
 import Reports from './pages/Reports';
+import Employees from './pages/Employees';
 import WebsiteManagement from './pages/WebsiteManagement';
 import BrowserViewer from './pages/BrowserViewer';
 
@@ -161,6 +162,7 @@ export default function App() {
             <Route path="sources" element={<Sources />} />
             <Route path="users" element={<Users />} />
             <Route path="user-management" element={<UserManagement />} />
+            <Route path="employees" element={<Employees />} />
             <Route path="couriers" element={<Couriers />} />
             <Route path="expenses" element={<Expenses />} />
             <Route path="accounting" element={<Accounting />} />

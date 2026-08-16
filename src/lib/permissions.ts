@@ -19,6 +19,10 @@ export type PermissionKey =
   | 'add_couriers'
   | 'edit_couriers'
   | 'delete_couriers'
+  | 'view_employees'
+  | 'add_employees'
+  | 'edit_employees'
+  | 'delete_employees'
   | 'view_sources'
   | 'add_sources'
   | 'edit_sources'
@@ -123,8 +127,14 @@ export const ALL_PERMISSIONS: PermissionDefinition[] = [
   { id: 'edit_sources', labelAr: 'تعديل عقد وتعريفات المصدر والشركة', labelEn: 'Edit Carrier/Source properties', category: 'sources' },
   { id: 'delete_sources', labelAr: 'تكسير حبل الارتباط وحذف المصدر', labelEn: 'Delete Intake Carrier/Source', category: 'sources' },
 
+  // Staff and Employees
+  { id: 'view_employees', labelAr: 'رؤية كشف سجل الموظفين والمستحقات', labelEn: 'View Employees List', category: 'staff' },
+  { id: 'add_employees', labelAr: 'توظيف وتسجيل موظف جديد وإنشاء حسابه المالي', labelEn: 'Enroll New Employees', category: 'staff' },
+  { id: 'edit_employees', labelAr: 'تعديل بيانات وراتب الموظف', labelEn: 'Edit Employee Details & Salary', category: 'staff' },
+  { id: 'delete_employees', labelAr: 'إلغاء وفصل سجل الموظف وحسابه المالي', labelEn: 'Delete Employee Records', category: 'staff' },
+
   // Staff and Users
-  { id: 'view_users', labelAr: 'عرض شريط الموظفين داخل المنظمة', labelEn: 'View Employee structures', category: 'staff' },
+  { id: 'view_users', labelAr: 'عرض شريط المستخدمين داخل المنظمة', labelEn: 'View Employee structures', category: 'staff' },
   { id: 'add_users', labelAr: 'توظيف وإضافة مستخدم للوحة التحكم', labelEn: 'Recruit New Dashboard Staff', category: 'staff' },
   { id: 'edit_users', labelAr: 'تعديل أدوار أو مسمى وظيفي للمستخدم', labelEn: 'Amend Staff metadata & Access Roles', category: 'staff' },
   { id: 'delete_users', labelAr: 'سحب رتبة وفسخ عقد حساب مستخدم', labelEn: 'Purge Dashboard Staff records', category: 'staff' },
