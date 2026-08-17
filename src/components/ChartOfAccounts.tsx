@@ -84,7 +84,7 @@ export default function ChartOfAccounts({
   const convertToYER = (amount: number, currency: string): number => {
     const amt = parseFloat(String(amount || 0));
     if (!currency || currency === 'YER') return amt;
-    const rate = dbRates[currency] || (currency === 'USD' ? (settings.exchangeRateUSD || 535) : currency === 'SAR' ? (settings.exchangeRateSAR || 140) : 1);
+    const rate = dbRates[currency] || 1;
     return amt * rate;
   };
 

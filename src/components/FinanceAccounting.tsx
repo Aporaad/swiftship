@@ -1963,9 +1963,11 @@ Continue?`
                   className="bg-black/40 border border-slate-850 text-white rounded-lg px-3 py-1.5 text-xs font-bold outline-none focus:border-[#d4af37] w-full cursor-pointer"
                 >
                   <option value="all">{isAr ? 'جميع العملات' : 'All currencies'}</option>
-                  <option value="YER">{isAr ? 'ريال يمني YER' : 'Yemeni Rial'}</option>
-                  <option value="USD">{isAr ? 'دولار أمريكي USD' : 'US Dollar'}</option>
-                  <option value="SAR">{isAr ? 'ريال سعودي SAR' : 'Saudi Riyal'}</option>
+                  {activeCurrencies.map(c => (
+                    <option key={c.code} value={c.code}>
+                      {isAr ? (c.main_nameAR || c.sup_nameAR || c.code) : (c.main_nameEn || c.sup_nameEn || c.code)} ({c.code})
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -3747,9 +3749,11 @@ Continue?`
                     onChange={e => setAdjustData(prev => ({ ...prev, currency: e.target.value }))}
                     className="w-full bg-black/40 border border-slate-850 text-white rounded-xl px-3 py-2 text-xs font-black outline-none focus:border-[#d4af37] cursor-pointer"
                   >
-                    <option value="YER">YER</option>
-                    <option value="USD">USD</option>
-                    <option value="SAR">SAR</option>
+                    {activeCurrencies.map(c => (
+                      <option key={c.code} value={c.code}>
+                        {c.code}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -4266,9 +4270,11 @@ Continue?`
                     onChange={(e) => setEditJournalData({ ...editJournalData, currencyOriginal: e.target.value })}
                     className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer font-mono bg-[#121215]"
                   >
-                    <option value="YER">YER</option>
-                    <option value="USD">USD</option>
-                    <option value="SAR">SAR</option>
+                    {activeCurrencies.map(c => (
+                      <option key={c.code} value={c.code}>
+                        {c.code}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>

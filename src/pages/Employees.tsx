@@ -41,9 +41,11 @@ import ConfirmDeletePinModal from '../components/ConfirmDeletePinModal';
 import { financialAccountService } from '../services/financialAccountService';
 import { activityLogService } from '../services/activityLogService';
 import { useAccountBalances } from '../hooks/useAccountBalances';
+import { useExchangeRates } from '../hooks/useExchangeRates';
 
 export default function Employees() {
   const { settings, t } = useSettings();
+  const { activeCurrencies } = useExchangeRates();
   const { role, hasPermission, loading: roleLoading } = useRole();
   const canAddEmployee = role === 'Admin' || hasPermission('add_employees');
   const canEditEmployee = role === 'Admin' || hasPermission('edit_employees');
@@ -88,7 +90,7 @@ export default function Employees() {
     isOpen: false,
     title: '',
     message: '',
-    onConfirm: () => {},
+    onConfirm: () => { },
     type: 'danger'
   });
 
@@ -389,7 +391,7 @@ export default function Employees() {
 
   return (
     <div className="space-y-6 pb-20 text-start font-sans selection:bg-[#d4af37]/30">
-      
+
       {/* Title Header */}
       <div className="flex justify-between items-center bg-black/40 backdrop-blur-md border border-[#d4af37]/20 p-5 rounded-3xl shadow-lg">
         <div className="flex items-center gap-3">
@@ -411,7 +413,7 @@ export default function Employees() {
 
       {/* Main Table Container */}
       <div className="bg-[#121215] border border-slate-850 rounded-3xl overflow-hidden shadow-2xl flex flex-col">
-        
+
         {/* Filters bar */}
         <div className="p-4 border-b border-slate-850 bg-black/30 flex flex-wrap gap-3">
           <div className="relative flex-1 min-w-[200px]">
@@ -534,11 +536,10 @@ export default function Employees() {
                       <button
                         onClick={() => handleToggleStatus(emp)}
                         title={emp.disabled ? (isAr ? 'تفعيل' : 'Enable') : (isAr ? 'تعطيل' : 'Disable')}
-                        className={`p-2 rounded-xl border transition-all ${
-                          emp.disabled
-                            ? 'text-emerald-400 bg-emerald-950/10 border-emerald-950/30'
-                            : 'text-rose-450 bg-rose-950/10 border-rose-950/40'
-                        }`}
+                        className={`p-2 rounded-xl border transition-all ${emp.disabled
+                          ? 'text-emerald-400 bg-emerald-950/10 border-emerald-950/30'
+                          : 'text-rose-450 bg-rose-950/10 border-rose-950/40'
+                          }`}
                       >
                         {emp.disabled ? <UserCheck className="w-4 h-4" /> : <UserX className="w-4 h-4" />}
                       </button>
@@ -650,9 +651,11 @@ export default function Employees() {
                     onChange={(e) => setAddFormData({ ...addFormData, currency: e.target.value })}
                     className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer"
                   >
-                    <option value="YER">YER (ريال يمني)</option>
-                    <option value="SAR">SAR (ريال سعودي)</option>
-                    <option value="USD">USD (دولار أمريكي)</option>
+                    {activeCurrencies.map(c => (
+                      <option key={c.code} value={c.code}>
+                        {c.code} ({isAr ? (c.main_nameAR || c.sup_nameAR) : (c.main_nameEn || c.sup_nameEn)})
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -775,9 +778,11 @@ export default function Employees() {
                     onChange={(e) => setEditFormData({ ...editFormData, currency: e.target.value })}
                     className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer"
                   >
-                    <option value="YER">YER (ريال يمني)</option>
-                    <option value="SAR">SAR (ريال سعودي)</option>
-                    <option value="USD">USD (دولار أمريكي)</option>
+                    {activeCurrencies.map(c => (
+                      <option key={c.code} value={c.code}>
+                        {c.code} ({isAr ? (c.main_nameAR || c.sup_nameAR) : (c.main_nameEn || c.sup_nameEn)})
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -842,7 +847,7 @@ export default function Employees() {
       {statementModal.isOpen && statementModal.employee && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50">
           <div className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/30 rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden font-sans flex flex-col max-h-[90vh]">
-            
+
             <div className="p-4 border-b border-slate-850 flex justify-between items-center bg-[#07070a]/60 shrink-0">
               <div className="flex items-center gap-2">
                 <FileText className="w-5 h-5 text-[#d4af37]" />

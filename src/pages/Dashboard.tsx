@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
+import { useExchangeRates } from '../hooks/useExchangeRates';
 import { 
   ResponsiveContainer, 
   AreaChart, 
@@ -46,6 +47,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { role, hasPermission, profile, loading: roleLoading } = useRole();
   const { settings, updateSettings, t } = useSettings();
+  const { rates: dbRates } = useExchangeRates();
   const isAr = settings.language === 'ar';
 
   // Customizable metrics configuration
@@ -189,7 +191,7 @@ export default function Dashboard() {
           balance,
           a.currency || 'YER',
           settings.currency || 'YER',
-          { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+          { USD: dbRates.USD, SAR: dbRates.SAR }
         );
         return sum + converted;
       }, 0);
@@ -203,7 +205,7 @@ export default function Dashboard() {
           balance,
           a.currency || 'YER',
           settings.currency || 'YER',
-          { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+          { USD: dbRates.USD, SAR: dbRates.SAR }
         );
         return sum + converted;
       }, 0);
@@ -217,7 +219,7 @@ export default function Dashboard() {
           balance,
           a.currency || 'YER',
           settings.currency || 'YER',
-          { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+          { USD: dbRates.USD, SAR: dbRates.SAR }
         );
         return sum + converted;
       }, 0);

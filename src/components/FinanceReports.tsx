@@ -246,8 +246,8 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
     const usdBalance = usdIn - usdOut;
     const sarBalance = sarIn - sarOut;
 
-    const usdToYer = usdBalance * (dbRates.USD || settings.exchangeRateUSD || 535);
-    const sarToYer = sarBalance * (dbRates.SAR || settings.exchangeRateSAR || 140);
+    const usdToYer = usdBalance * (dbRates.USD || 1);
+    const sarToYer = sarBalance * (dbRates.SAR || 1);
     const combinedTotalYER = yerBalance + usdToYer + sarToYer;
 
     return {

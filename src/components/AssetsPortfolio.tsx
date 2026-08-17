@@ -8,6 +8,7 @@ import { collection, addDoc, doc, deleteDoc, updateDoc, onSnapshot } from '../li
 import { notificationService } from '../services/notificationService';
 import { jsPDF } from 'jspdf';
 import { formatDate } from '../lib/dateUtils';
+import { useExchangeRates } from '../hooks/useExchangeRates';
 
 interface AssetsPortfolioProps {
   isAr: boolean;
@@ -45,6 +46,7 @@ interface Asset {
 }
 
 export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPortfolioProps) {
+  const { activeCurrencies } = useExchangeRates();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [assetsLoading, setAssetsLoading] = useState(true);
 
@@ -969,9 +971,11 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
                     onChange={e => setNewAsset(prev => ({ ...prev, currency: e.target.value }))}
                     className="w-full bg-black/40 border border-[#1e1e24] text-white rounded-xl px-3 py-2 text-xs font-black cursor-pointer"
                   >
-                    <option value="YER">YER</option>
-                    <option value="USD">USD</option>
-                    <option value="SAR">SAR</option>
+                    {activeCurrencies.map(c => (
+                      <option key={c.code} value={c.code}>
+                        {c.code}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -1113,9 +1117,11 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
                     onChange={e => setNewMaint(prev => ({ ...prev, currency: e.target.value }))}
                     className="w-full bg-black/40 border border-slate-850 text-white rounded-xl px-2 py-2 text-[10px] font-black outline-none focus:border-[#d4af37] cursor-pointer"
                   >
-                    <option value="YER">YER</option>
-                    <option value="USD">USD</option>
-                    <option value="SAR">SAR</option>
+                    {activeCurrencies.map(c => (
+                      <option key={c.code} value={c.code}>
+                        {c.code}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>

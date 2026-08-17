@@ -40,9 +40,11 @@ import { financialAccountService } from '../services/financialAccountService';
 import { useAccountBalances } from '../hooks/useAccountBalances';
 import ConfirmModal from '../components/ConfirmModal';
 import ConfirmDeletePinModal from '../components/ConfirmDeletePinModal';
+import { useExchangeRates } from '../hooks/useExchangeRates';
 
 export default function Couriers() {
   const { settings, t } = useSettings();
+  const { rates: dbRates } = useExchangeRates();
   const [couriers, setCouriers] = useState<any[]>([]);
   const { role, hasPermission, profile, loading: roleLoading } = useRole();
   const [loading, setLoading] = useState(true);
@@ -143,7 +145,7 @@ export default function Couriers() {
   const getCourierCustodyStats = (courierId: string) => {
     const cour = couriers.find(c => c.id === courierId);
     const targetCurrency = cour?.courierType === 'sourcing' ? 'SAR' : 'YER';
-    const rates = { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR };
+    const rates = dbRates;
 
     const convertToCourierCurrency = (amount: number, fromCurrency?: string) => {
       return financialAccountService.convertToDefaultCurrency(
@@ -219,7 +221,7 @@ export default function Couriers() {
     const ledger: any[] = [];
     const isAr = settings.language === 'ar';
     const fCurrency = selectedCourier ? (selectedCourier.financialCurrency || 'YER') : 'YER';
-    const exchangeRateSAR = settings.exchangeRateSAR || 140;
+    const exchangeRateSAR = dbRates.SAR || 1;
 
     // 1. Map courierTransactions directly to preserve real double entries
     courierTransactions.forEach(tx => {
@@ -795,7 +797,7 @@ export default function Couriers() {
   const remainingCustodyInHand = activeStats ? activeStats.remainingCustody : 0;
 
   const totalCollectedFromCustomersInCourierCurrency = selectedCourier?.courierType === 'sourcing'
-    ? totalCollectedFromCustomers / (settings.exchangeRateSAR || 140)
+    ? totalCollectedFromCustomers / (dbRates.SAR || 1)
     : totalCollectedFromCustomers;
 
   const formatDetailCurrency = (amount: number) => {
@@ -803,7 +805,7 @@ export default function Couriers() {
     const curr = isSourcing ? 'SAR' : 'YER';
     const formatted = `${amount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ${curr}`;
     if (isSourcing) {
-      const yerEquiv = amount * (settings.exchangeRateSAR || 140);
+      const yerEquiv = amount * (dbRates.SAR || 1);
       return `${formatted} (≈ ${Math.round(yerEquiv).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} YER)`;
     }
     return formatted;
@@ -999,7 +1001,7 @@ export default function Couriers() {
                         </span>
                         {courier.financialCurrency === 'SAR' && (
                           <span className="text-[8.5px] text-slate-500 block mt-0.7 font-bold">
-                            (≈ {(cStats.remainingCustody * (settings.exchangeRateSAR || 140)).toLocaleString()} YER)
+                            (≈ {(cStats.remainingCustody * (dbRates.SAR || 1)).toLocaleString()} YER)
                           </span>
                         )}
                         {cStats.remainingCustody > 0 && (
@@ -1321,7 +1323,7 @@ export default function Couriers() {
                 const liveById = account?.id ? liveBalances.byId[account.id] : undefined;
                 const netBalance = liveByCode ?? liveById ?? account?.balance ?? 0;
                 const fCurrency = account?.currency || selectedCourier.financialCurrency || 'YER';
-                const exchangeRateSAR = settings.exchangeRateSAR || 140;
+                const exchangeRateSAR = dbRates.SAR || 1;
 
                 const filteredLedger = ledgerData.filter(item => {
                   const q = finSearch.toLowerCase();

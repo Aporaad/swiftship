@@ -988,8 +988,8 @@ export default function Reports() {
     const usdBalance = usdIn - usdOut;
     const sarBalance = sarIn - sarOut;
 
-    const usdToYer = usdBalance * (settings.exchangeRateUSD || 535);
-    const sarToYer = sarBalance * (settings.exchangeRateSAR || 140);
+    const usdToYer = usdBalance * (dbRates.USD || 1);
+    const sarToYer = sarBalance * (dbRates.SAR || 1);
     const combinedTotalYER = yerBalance + usdToYer + sarToYer;
 
     return {
