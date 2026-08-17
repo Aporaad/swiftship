@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { collection, doc, getDocs, setDoc, writeBatch, query, orderBy, deleteDoc, db, handleSupabaseError, OperationType } from '../lib/supabase';
+import { collection, doc, getDocs, setDoc, writeBatch, query, orderBy, deleteDoc, db, handleSupabaseError, OperationType } from '../lib/supabase-firebase-adapter';
 import {
   Save, Globe, Palette, Database, DollarSign, Building, X, Upload, CheckCircle,
   ShieldAlert, RefreshCw, Archive, Settings2, Shield, FileText, Image, Type,
@@ -12,7 +12,9 @@ import type { CustomCurrency } from '../context/SettingsContext';
 import ConfirmModal from '../components/ConfirmModal';
 import { activityLogService } from '../services/activityLogService';
 import { notificationService } from '../services/notificationService';
-import { auth } from '../lib/firebase';
+import { currencyService, Currency, CurPriceEntry } from '../services/currencyService';
+import { useExchangeRates } from '../hooks/useExchangeRates';
+import { auth } from '../lib/supabase-firebase-adapter';
 
 type SettingsTab = 'interface' | 'general' | 'currency' | 'admin' | 'logistics';
 
@@ -113,10 +115,39 @@ export default function Settings() {
   const [showBackupHistory, setShowBackupHistory] = useState(false);
   const [selectedRestoreId, setSelectedRestoreId] = useState<string | null>(null);
 
-  // Currency editor state
-  const [editingCurrency, setEditingCurrency] = useState<CustomCurrency | null>(null);
-  const [newCurrency, setNewCurrency] = useState<Partial<CustomCurrency>>({
-    code: '', name: '', symbol: '', flag: '', rateToYER: 0, isActive: true
+  // DB Currencies & Exchange Rates state from cur_price / currency tables
+  const { currencies: dbCurrencies, activeCurrencies, rates: dbRates } = useExchangeRates();
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [historyCurrency, setHistoryCurrency] = useState<Currency | null>(null);
+  const [historyEntries, setHistoryEntries] = useState<CurPriceEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Edit DB Currency Modal State
+  const [editingDbCurrency, setEditingDbCurrency] = useState<Currency | null>(null);
+  const [editDbCurrencyForm, setEditDbCurrencyForm] = useState<Partial<Currency & { newPrice?: number }>>({});
+  const [editDbCurrencyModalOpen, setEditDbCurrencyModalOpen] = useState(false);
+
+  // New DB Currency Form State
+  const [newCurrency, setNewCurrency] = useState<{
+    code: string;
+    main_nameAR: string;
+    sup_nameAR: string;
+    main_nameEn: string;
+    sup_nameEn: string;
+    symbol: string;
+    flag: string;
+    initialRate: number;
+    isActive: boolean;
+  }>({
+    code: '',
+    main_nameAR: '',
+    sup_nameAR: '',
+    main_nameEn: '',
+    sup_nameEn: '',
+    symbol: '',
+    flag: '',
+    initialRate: 0,
+    isActive: true,
   });
   const [showAddCurrency, setShowAddCurrency] = useState(false);
 
@@ -162,7 +193,7 @@ export default function Settings() {
     setLocalSettings(globalSettings);
     // Sync export selections from backup settings
     if (globalSettings.backupCollections && Array.isArray(globalSettings.backupCollections)) {
-      const sel: Record<string, boolean> = { 
+      const sel: Record<string, boolean> = {
         orders: false, customers: false, couriers: false, sources: false, users: false, roles: false,
         expenses: false, accounts: false, journal_entries: false, salary_history: false,
         activity_logs: false, account_transactions: false, backups: false,
@@ -369,84 +400,198 @@ export default function Settings() {
     reader.readAsDataURL(file);
   };
 
-  // ─── CUSTOM CURRENCY MANAGEMENT ─────
-  const handleAddCurrency = () => {
-    if (!newCurrency.code || !newCurrency.name || !newCurrency.symbol) {
-      alert(isAr ? 'يرجى ملء جميع الحقول الإلزامية (الكود، الاسم، الرمز)' : 'Please fill all required fields (code, name, symbol)');
-      return;
-    }
-    const existing = (localSettings.customCurrencies || []);
-    if (existing.find(c => c.code === newCurrency.code?.toUpperCase())) {
-      alert(isAr ? 'هذه العملة موجودة بالفعل!' : 'This currency already exists!');
-      return;
-    }
-    const currency: CustomCurrency = {
-      id: newCurrency.code!.toUpperCase(),
-      code: newCurrency.code!.toUpperCase(),
-      name: newCurrency.name!,
-      symbol: newCurrency.symbol!,
-      flag: newCurrency.flag || '🌍',
-      rateToYER: newCurrency.rateToYER || 0,
-      isActive: newCurrency.isActive !== false,
-    };
-    setLocalSettings(prev => ({
-      ...prev,
-      customCurrencies: [...(prev.customCurrencies || []), currency]
-    }));
+  // ─── CURRENCY & EXCHANGE RATE DATABASE MANAGEMENT ─────
 
+  const handleViewHistory = async (currency: Currency) => {
+    setHistoryLoading(true);
+    setHistoryCurrency(currency);
+    setHistoryModalOpen(true);
+    try {
+      const entries = await currencyService.getRateHistory(currency.cur_id);
+      setHistoryEntries(entries);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const handleAddCurrency = async () => {
+    if (!newCurrency.code || !newCurrency.main_nameAR || !newCurrency.symbol) {
+      alert(isAr ? 'يرجى ملء جميع الحقول الإلزامية (الكود، الاسم الرئيسي بالعربي، الرمز)' : 'Please fill all required fields (code, main_nameAR, symbol)');
+      return;
+    }
     const updaterName = profile?.fullName || auth.currentUser?.email || 'Unknown';
-    activityLogService.log('change_exchange_rate', `Add Currency: ${currency.code}`, { rate: currency.rateToYER });
+    const res = await currencyService.addCurrency(
+      {
+        code: newCurrency.code.toUpperCase(),
+        main_nameAR: newCurrency.main_nameAR,
+        sup_nameAR: newCurrency.sup_nameAR || '',
+        main_nameEn: newCurrency.main_nameEn || newCurrency.code.toUpperCase(),
+        sup_nameEn: newCurrency.sup_nameEn || '',
+        symbol: newCurrency.symbol,
+        flag: newCurrency.flag || '🌍',
+        isActive: newCurrency.isActive !== false,
+        initialRate: newCurrency.initialRate || 1,
+      },
+      updaterName
+    );
+
+    if (!res.success) {
+      alert(isAr ? `فشل إدراج العملة: ${res.error}` : `Failed to add currency: ${res.error}`);
+      return;
+    }
+
+    activityLogService.log('change_exchange_rate', `Add Currency: ${newCurrency.code}`, { rate: newCurrency.initialRate });
     notificationService.notify({
       title: isAr ? 'إضافة عملة جديدة' : 'New Currency Added',
       message: isAr
-        ? `تم إضافة العملة ${currency.code} (${currency.name}) بسعر صرف ${currency.rateToYER} YER بواسطة ${updaterName}`
-        : `Currency ${currency.code} (${currency.name}) added with rate ${currency.rateToYER} YER by ${updaterName}`,
+        ? `تم إضافة العملة ${newCurrency.code} (${newCurrency.main_nameAR}) بسعر صرف ${newCurrency.initialRate} YER بنجاح`
+        : `Currency ${newCurrency.code} added with rate ${newCurrency.initialRate} YER successfully`,
       type: 'success',
       category: 'finance'
     });
 
-    setNewCurrency({ code: '', name: '', symbol: '', flag: '', rateToYER: 0, isActive: true });
+    setNewCurrency({
+      code: '',
+      main_nameAR: '',
+      sup_nameAR: '',
+      main_nameEn: '',
+      sup_nameEn: '',
+      symbol: '',
+      flag: '',
+      initialRate: 0,
+      isActive: true,
+    });
     setShowAddCurrency(false);
   };
 
-  const handleUpdateCurrency = (id: string, updates: Partial<CustomCurrency>) => {
-    setLocalSettings(prev => ({
-      ...prev,
-      customCurrencies: (prev.customCurrencies || []).map(c => c.id === id ? { ...c, ...updates } : c)
-    }));
+  const handleOpenEditDbCurrencyModal = (cur: Currency) => {
+    setEditingDbCurrency(cur);
+    setEditDbCurrencyForm({
+      code: cur.code,
+      main_nameAR: cur.main_nameAR,
+      sup_nameAR: cur.sup_nameAR || '',
+      main_nameEn: cur.main_nameEn || '',
+      sup_nameEn: cur.sup_nameEn || '',
+      symbol: cur.symbol || '',
+      flag: cur.flag || '',
+      isActive: cur.isActive,
+      newPrice: cur.currentPrice || 0,
+    });
+    setEditDbCurrencyModalOpen(true);
+  };
 
+  const handleSaveEditDbCurrency = async () => {
+    if (!editingDbCurrency) return;
     const updaterName = profile?.fullName || auth.currentUser?.email || 'Unknown';
-    activityLogService.log('change_exchange_rate', `Update Currency: ${id}`, updates);
+
+    // 1. Update currency metadata
+    const updateRes = await currencyService.updateCurrency(editingDbCurrency.cur_id, {
+      code: editDbCurrencyForm.code?.toUpperCase(),
+      main_nameAR: editDbCurrencyForm.main_nameAR,
+      sup_nameAR: editDbCurrencyForm.sup_nameAR,
+      main_nameEn: editDbCurrencyForm.main_nameEn,
+      sup_nameEn: editDbCurrencyForm.sup_nameEn,
+      symbol: editDbCurrencyForm.symbol,
+      flag: editDbCurrencyForm.flag,
+      isActive: editDbCurrencyForm.isActive,
+    });
+
+    if (!updateRes.success) {
+      alert(isAr ? `فشل حفظ التعديلات: ${updateRes.error}` : `Update failed: ${updateRes.error}`);
+      return;
+    }
+
+    // 2. Update rate if modified
+    if (editDbCurrencyForm.newPrice && editDbCurrencyForm.newPrice !== editingDbCurrency.currentPrice && editingDbCurrency.code !== 'YER') {
+      await currencyService.addExchangeRatePrice(editingDbCurrency.cur_id, editDbCurrencyForm.newPrice, updaterName);
+    }
+
+    activityLogService.log('change_exchange_rate', `Edit Currency ${editingDbCurrency.code}`, editDbCurrencyForm);
     notificationService.notify({
-      title: isAr ? 'تحديث العملة' : 'Currency Updated',
+      title: isAr ? 'تعديل بيانات العملة' : 'Currency Metadata Updated',
       message: isAr
-        ? `تم تحديث بيانات العملة ${id} بواسطة ${updaterName}`
-        : `Currency ${id} updated by ${updaterName}`,
+        ? `تم تحديث بيانات العملة ${editingDbCurrency.code} بواسطة ${updaterName}`
+        : `Currency ${editingDbCurrency.code} metadata updated by ${updaterName}`,
+      type: 'info',
+      category: 'finance'
+    });
+
+    setEditDbCurrencyModalOpen(false);
+    setEditingDbCurrency(null);
+  };
+
+  const handleUpdateExchangeRatePrice = async (curId: number, code: string, newRate: number) => {
+    if (!newRate || newRate <= 0) return;
+    const updaterName = profile?.fullName || auth.currentUser?.email || 'Unknown';
+    const res = await currencyService.addExchangeRatePrice(curId, newRate, updaterName);
+
+    if (!res.success) {
+      alert(isAr ? `فشل تحديث سعر الصرف: ${res.error}` : `Failed to update rate: ${res.error}`);
+      return;
+    }
+
+    activityLogService.log('change_exchange_rate', `Update Rate ${code}`, { newRate, seq: res.newSeq, updatedBy: updaterName });
+    notificationService.notify({
+      title: isAr ? 'تحديث سعر الصرف' : 'Exchange Rate Updated',
+      message: isAr
+        ? `تم تحديث سعر صرف ${code} إلى ${newRate} (تسلسل #${res.newSeq}) بواسطة ${updaterName}`
+        : `Rate for ${code} updated to ${newRate} (seq #${res.newSeq}) by ${updaterName}`,
       type: 'info',
       category: 'finance'
     });
   };
 
-  const handleDeleteCurrency = (id: string) => {
-    const builtIn = ['USD', 'SAR'];
-    if (builtIn.includes(id)) {
-      alert(isAr ? 'لا يمكن حذف العملات الأساسية (USD, SAR)' : 'Cannot delete built-in currencies (USD, SAR)');
+  const handleToggleCurrencyActive = async (curId: number, code: string, currentActive: boolean) => {
+    const updaterName = profile?.fullName || auth.currentUser?.email || 'Unknown';
+    const res = await currencyService.toggleActive(curId, !currentActive);
+    if (!res.success) {
+      alert(isAr ? `فشل تغيير حالة التفعيل: ${res.error}` : `Failed to toggle active: ${res.error}`);
       return;
     }
-    setLocalSettings(prev => ({
-      ...prev,
-      customCurrencies: (prev.customCurrencies || []).filter(c => c.id !== id)
-    }));
 
-    const updaterName = profile?.fullName || auth.currentUser?.email || 'Unknown';
-    activityLogService.log('change_exchange_rate', `Delete Currency: ${id}`);
+    activityLogService.log('change_exchange_rate', `Toggle Active ${code}`, { active: !currentActive, updatedBy: updaterName });
     notificationService.notify({
-      title: isAr ? 'حذف عملة' : 'Currency Deleted',
+      title: isAr ? 'تغيير حالة العملة' : 'Currency Status Changed',
       message: isAr
-        ? `تم حذف العملة ${id} من النظام بواسطة ${updaterName}`
-        : `Currency ${id} deleted by ${updaterName}`,
+        ? `تم ${!currentActive ? 'تفعيل' : 'تعطيل'} العملة ${code} بواسطة ${updaterName}`
+        : `Currency ${code} was ${!currentActive ? 'enabled' : 'disabled'} by ${updaterName}`,
       type: 'warning',
       category: 'finance'
+    });
+  };
+
+  const handleDeleteCurrency = async (curId: number, code: string) => {
+    if (['USD', 'SAR', 'YER'].includes(code.toUpperCase())) {
+      alert(isAr ? 'لا يمكن حذف العملات الأساسية (YER, USD, SAR)' : 'Cannot delete built-in currencies (YER, USD, SAR)');
+      return;
+    }
+
+    setConfirmConfig({
+      isOpen: true,
+      title: isAr ? 'حذف العملة' : 'Delete Currency',
+      message: isAr
+        ? `هل أنت متأكد من حذف العملة ${code} وسجل أسعار الصرف الخاص بها نهائياً من قاعدة البيانات؟`
+        : `Are you sure you want to permanently delete currency ${code} and its rate history?`,
+      type: 'danger',
+      onConfirm: async () => {
+        const updaterName = profile?.fullName || auth.currentUser?.email || 'Unknown';
+        const res = await currencyService.deleteCurrency(curId);
+        if (!res.success) {
+          alert(isAr ? `تعذر الحذف: ${res.error}` : `Delete failed: ${res.error}`);
+          return;
+        }
+        activityLogService.log('change_exchange_rate', `Delete Currency: ${code}`);
+        notificationService.notify({
+          title: isAr ? 'حذف عملة' : 'Currency Deleted',
+          message: isAr
+            ? `تم حذف العملة ${code} وسجلها التاريخي بواسطة ${updaterName}`
+            : `Currency ${code} and its history deleted by ${updaterName}`,
+          type: 'warning',
+          category: 'finance'
+        });
+      }
     });
   };
 
@@ -890,6 +1035,7 @@ export default function Settings() {
       )}
 
       {/* ══════════════════════════════════ */}
+      {/* ══════════════════════════════════ */}
       {/* TAB 3: CURRENCIES & RATES         */}
       {/* ══════════════════════════════════ */}
       {activeTab === 'currency' && (
@@ -902,13 +1048,13 @@ export default function Settings() {
                 <FieldLabel locked={!canEditRates}>{t('mainCurrency')}</FieldLabel>
                 <select disabled={!canEditRates} value={localSettings.currency}
                   onChange={e => {
-                    const selected = currencies.find(c => c.code === e.target.value);
+                    const selected = dbCurrencies.find(c => c.code === e.target.value);
                     setLocalSettings({ ...localSettings, currency: e.target.value, currencySymbol: selected?.symbol || localSettings.currencySymbol });
                   }}
                   className="w-full bg-black/50 border border-slate-800 text-white rounded-xl p-3.5 text-xs font-bold outline-none focus:border-[#d4af37]/60 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {currencies.filter(c => c.isActive).map(c => (
-                    <option key={c.id} value={c.code}>{c.flag} {c.name} ({c.code})</option>
+                  {dbCurrencies.filter(c => c.isActive).map(c => (
+                    <option key={c.cur_id} value={c.code}>{c.flag} {c.main_nameAR} ({c.code})</option>
                   ))}
                 </select>
               </div>
@@ -919,8 +1065,8 @@ export default function Settings() {
             </div>
           </SectionCard>
 
-          {/* Exchange Rates Quick View */}
-          <SectionCard title={isAr ? 'أسعار الصرف الأساسية' : 'Core Exchange Rates'} icon={RefreshCw}>
+          {/* Exchange Rates Quick View & DB Sync */}
+          <SectionCard title={isAr ? 'أسعار الصرف الحية  ' : 'Core Live Exchange Rates'} icon={RefreshCw}>
             {!canEditRates && (
               <div className="flex items-center gap-2 text-amber-400 bg-amber-950/20 border border-amber-900/30 p-3 rounded-xl mb-4 text-xs font-bold">
                 <ShieldAlert className="w-4 h-4 shrink-0" />
@@ -928,93 +1074,137 @@ export default function Settings() {
               </div>
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div>
-                <FieldLabel locked={!canEditRates}>{t('exchangeRateSAR')}</FieldLabel>
-                <div className="relative">
-                  <FieldInput type="number" step="any" disabled={!canEditRates} value={localSettings.exchangeRateSAR ?? 140} onChange={e => setLocalSettings({ ...localSettings, exchangeRateSAR: parseFloat(e.target.value) || 0 })} className="font-mono pr-20" dir="ltr" />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-[#d4af37] bg-[#d4af37]/10 px-1.5 py-0.5 rounded">SAR→YER</span>
-                </div>
-              </div>
-              <div>
-                <FieldLabel locked={!canEditRates}>{t('exchangeRateUSD')}</FieldLabel>
-                <div className="relative">
-                  <FieldInput type="number" step="any" disabled={!canEditRates} value={localSettings.exchangeRateUSD ?? 535} onChange={e => setLocalSettings({ ...localSettings, exchangeRateUSD: parseFloat(e.target.value) || 0 })} className="font-mono pr-20" dir="ltr" />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-[#d4af37] bg-[#d4af37]/10 px-1.5 py-0.5 rounded">USD→YER</span>
-                </div>
-              </div>
-            </div>
-            {(localSettings.lastExchangeRateUpdate || localSettings.lastExchangeRateUpdatedBy) && (
-              <div className="mt-5 grid grid-cols-3 gap-3">
-                {[
-                  { icon: Clock, label: t('lastUpdateDate'), value: localSettings.lastExchangeRateUpdate || '—' },
-                  { icon: Clock, label: t('lastUpdateTime'), value: localSettings.lastExchangeRateUpdateTime || '—' },
-                  { icon: User, label: t('lastUpdatedBy'), value: localSettings.lastExchangeRateUpdatedBy || '—' },
-                ].map((item, idx) => (
-                  <div key={idx} className="bg-black/30 rounded-xl p-3 border border-slate-800/50 flex items-start gap-2">
-                    <item.icon className="w-3.5 h-3.5 text-[#d4af37] mt-0.5 shrink-0" />
-                    <div><div className="text-[9px] font-black text-slate-500 uppercase">{item.label}</div><div className="text-xs font-bold text-white font-mono mt-0.5">{item.value}</div></div>
+              {dbCurrencies.filter(c => c.code !== 'YER').map(cur => (
+                <div key={cur.cur_id} className="bg-black/30 p-4 rounded-2xl border border-slate-800 flex flex-col justify-between gap-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-white flex items-center gap-2">
+                      <span>{cur.flag || '🌍'}</span>
+                      <span>{cur.main_nameAR} ({cur.code})</span>
+                    </span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${cur.isActive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
+                      {cur.isActive ? (isAr ? 'نشطة' : 'Active') : (isAr ? 'معطلة' : 'Disabled')}
+                    </span>
                   </div>
-                ))}
-              </div>
-            )}
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        type="number"
+                        step="any"
+                        disabled={!canEditRates || !cur.isActive}
+                        defaultValue={cur.currentPrice || 0}
+                        key={`${cur.cur_id}_${cur.currentPrice}`}
+                        onBlur={e => {
+                          const val = parseFloat(e.target.value);
+                          if (val > 0 && val !== cur.currentPrice) {
+                            handleUpdateExchangeRatePrice(cur.cur_id, cur.code, val);
+                          }
+                        }}
+                        className="w-full bg-black/60 border border-slate-800 rounded-xl p-3 text-xs font-mono font-bold text-white focus:border-[#d4af37]/60 outline-none dir-ltr pr-20 disabled:opacity-40"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-[#d4af37] bg-[#d4af37]/10 px-1.5 py-0.5 rounded">
+                        {cur.code}→YER
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleViewHistory(cur)}
+                      className="p-3 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[#d4af37] rounded-xl text-xs font-bold transition flex items-center gap-1 shrink-0"
+                      title={isAr ? 'سجل أسعار الصرف التاريخي' : 'Rate History'}
+                    >
+                      <History className="w-4 h-4" />
+                      <span className="hidden sm:inline">{isAr ? 'السجل (seq)' : 'History'}</span>
+                    </button>
+                  </div>
+                  {cur.lastSeq && (
+                    <div className="text-[10px] text-slate-500 font-mono flex items-center justify-between border-t border-slate-850 pt-2">
+                      <span>{isAr ? `التسلسل الحالي: seq #${cur.lastSeq}` : `Seq #${cur.lastSeq}`}</span>
+                      <span>{cur.lastUpdateBy ? (isAr ? `بواسطة: ${cur.lastUpdateBy}` : `By: ${cur.lastUpdateBy}`) : ''}</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </SectionCard>
 
-          {/* ── ALL CURRENCIES LIST ─────────── */}
-          <SectionCard title={isAr ? 'قائمة العملات المدعومة' : 'Supported Currencies'} icon={DollarSign} badge={`${currencies.length} ${isAr ? 'عملة' : 'currencies'}`}>
-            <div className="space-y-2 mb-4">
-              {currencies.map(cur => (
-                <div key={cur.id} className={`flex items-center gap-3 p-3.5 rounded-2xl border transition-all ${cur.isActive ? 'border-slate-700 bg-black/40' : 'border-slate-800/40 bg-black/20 opacity-60'}`}>
-                  <span className="text-xl shrink-0">{cur.flag || '🌍'}</span>
+          {/* ── ALL CURRENCIES LIST FROM DATABASE ─────────── */}
+          <SectionCard title={isAr ? 'جدول العملات' : 'Database Currency Catalog'} icon={DollarSign} badge={`${dbCurrencies.length} ${isAr ? 'عملة' : 'currencies'}`}>
+            <div className="space-y-2.5 mb-4">
+              {dbCurrencies.map(cur => (
+                <div key={cur.cur_id} className={`flex items-center gap-3 p-4 rounded-2xl border transition-all ${cur.isActive ? 'border-slate-800 bg-black/40' : 'border-rose-950/30 bg-rose-950/10 opacity-75'}`}>
+                  <span className="text-2xl shrink-0">{cur.flag || '🌍'}</span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-black text-white font-mono">{cur.code}</span>
-                      <span className="text-[9px] text-slate-500 font-bold truncate">{cur.name}</span>
+                      <span className="text-[11px] text-slate-300 font-bold truncate">{cur.main_nameAR}</span>
+                      <span className="text-[9px] text-slate-500 font-mono">({cur.main_nameEn})</span>
+                      {cur.isDefault && (
+                        <span className="text-[9px] bg-[#d4af37]/20 text-[#d4af37] px-2 py-0.5 rounded-full font-black">
+                          {isAr ? 'العملة الأساسية' : 'Default'}
+                        </span>
+                      )}
+                      {!cur.isActive && (
+                        <span className="text-[9px] bg-rose-500/20 text-rose-400 px-2 py-0.5 rounded-full font-black">
+                          {isAr ? 'معطلة (لن تنشأ بها قيود)' : 'Disabled'}
+                        </span>
+                      )}
                     </div>
-                    <div className="flex items-center gap-3 mt-0.5">
-                      <span className="text-[10px] font-mono text-[#d4af37]">{cur.symbol}</span>
-                      {editingCurrency?.id === cur.id ? (
-                        <input
-                          type="number"
-                          value={editingCurrency.rateToYER}
-                          onChange={e => setEditingCurrency({ ...editingCurrency, rateToYER: parseFloat(e.target.value) || 0 })}
-                          className="w-28 bg-black/70 border border-[#d4af37]/50 rounded-lg px-2 py-0.5 text-[10px] font-mono text-white outline-none"
-                          dir="ltr"
-                        />
-                      ) : (
-                        <span className="text-[10px] text-slate-400 font-mono">1 {cur.code} = {cur.rateToYER} YER</span>
+                    <div className="flex items-center gap-3 mt-1 text-[11px]">
+                      <span className="font-mono text-[#d4af37] font-bold">{cur.symbol || cur.code}</span>
+                      <span className="text-slate-400 font-mono">
+                        {cur.code === 'YER' ? '1 YER (العملة المرجعية)' : `1 ${cur.code} = ${cur.currentPrice ?? '—'} YER`}
+                      </span>
+                      {cur.lastSeq && (
+                        <span className="text-[9px] text-slate-500 font-mono">
+                          (seq #{cur.lastSeq})
+                        </span>
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {/* Toggle Active */}
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    {/* View History */}
+                    <button
+                      type="button"
+                      onClick={() => handleViewHistory(cur)}
+                      className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-[#d4af37] hover:border-[#d4af37]/30 transition"
+                      title={isAr ? 'عرض سجل تغيير أسعار الصرف' : 'View Price History'}
+                    >
+                      <History className="w-4 h-4" />
+                    </button>
+
+                    {/* Edit Currency */}
                     {canEditRates && (
                       <button
-                        onClick={() => handleUpdateCurrency(cur.id, { isActive: !cur.isActive })}
-                        className={`p-1.5 rounded-lg transition ${cur.isActive ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25' : 'bg-slate-800 text-slate-500 hover:bg-slate-700'}`}
-                        title={cur.isActive ? (isAr ? 'تعطيل' : 'Disable') : (isAr ? 'تفعيل' : 'Enable')}
+                        type="button"
+                        onClick={() => handleOpenEditDbCurrencyModal(cur)}
+                        className="p-2 rounded-xl bg-blue-950/20 border border-blue-900/30 text-blue-400 hover:bg-blue-950/40 transition"
+                        title={isAr ? 'تعديل كافة بيانات العملة' : 'Edit Currency Specifications'}
                       >
-                        <Power className="w-3.5 h-3.5" />
+                        <Edit3 className="w-4 h-4" />
                       </button>
                     )}
-                    {/* Edit Rate */}
+
+                    {/* Toggle Active / Disabled */}
                     {canEditRates && (
-                      editingCurrency?.id === cur.id ? (
-                        <button
-                          onClick={() => { handleUpdateCurrency(cur.id, { rateToYER: editingCurrency.rateToYER }); setEditingCurrency(null); }}
-                          className="p-1.5 rounded-lg bg-[#d4af37]/15 text-[#d4af37] hover:bg-[#d4af37]/25 transition"
-                        >
-                          <CheckCircle className="w-3.5 h-3.5" />
-                        </button>
-                      ) : (
-                        <button onClick={() => setEditingCurrency(cur)} className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition">
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                      )
+                      <button
+                        type="button"
+                        onClick={() => handleToggleCurrencyActive(cur.cur_id, cur.code, cur.isActive)}
+                        className={`p-2 rounded-xl border transition-all ${cur.isActive ? 'bg-emerald-950/20 text-emerald-400 border-emerald-900/40 hover:bg-emerald-950/40' : 'bg-rose-950/30 text-rose-400 border-rose-900/50 hover:bg-rose-950/50'}`}
+                        title={cur.isActive ? (isAr ? 'تعطيل العملة' : 'Disable Currency') : (isAr ? 'تفعيل العملة' : 'Enable Currency')}
+                      >
+                        <Power className="w-4 h-4" />
+                      </button>
                     )}
-                    {/* Delete */}
-                    {canEditRates && !['USD', 'SAR'].includes(cur.id) && (
-                      <button onClick={() => handleDeleteCurrency(cur.id)} className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition">
-                        <Trash2 className="w-3.5 h-3.5" />
+
+                    {/* Delete Currency */}
+                    {canEditRates && !['USD', 'SAR', 'YER'].includes(cur.code.toUpperCase()) && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCurrency(cur.cur_id, cur.code)}
+                        className="p-2 rounded-xl bg-rose-950/20 border border-rose-900/30 text-rose-400 hover:bg-rose-950/40 transition"
+                        title={isAr ? 'حذف العملة' : 'Delete Currency'}
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     )}
                   </div>
@@ -1022,24 +1212,24 @@ export default function Settings() {
               ))}
             </div>
 
-            {/* Add New Currency */}
+            {/* Add New Currency Form */}
             {canEditRates && (
               <>
                 <button
                   type="button"
                   onClick={() => setShowAddCurrency(!showAddCurrency)}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border-2 border-dashed border-slate-700 hover:border-[#d4af37]/50 text-slate-500 hover:text-[#d4af37] text-xs font-black transition"
+                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl border-2 border-dashed border-slate-700 hover:border-[#d4af37]/50 text-slate-400 hover:text-[#d4af37] text-xs font-black transition"
                 >
                   <Plus className="w-4 h-4" />
-                  {isAr ? 'إضافة عملة جديدة' : 'Add New Currency'}
+                  {isAr ? 'إضافة عملة جديدة إلى جدول currency' : 'Add New Currency to Database'}
                 </button>
 
                 {showAddCurrency && (
-                  <div className="mt-4 p-4 bg-[#d4af37]/5 border border-[#d4af37]/20 rounded-2xl space-y-4 animate-fade-slide-in">
-                    <h4 className="text-xs font-black text-[#d4af37] uppercase tracking-wider">{isAr ? 'بيانات العملة الجديدة' : 'New Currency Details'}</h4>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div className="mt-4 p-5 bg-[#d4af37]/5 border border-[#d4af37]/20 rounded-2xl space-y-4 animate-fade-slide-in">
+                    <h4 className="text-xs font-black text-[#d4af37] uppercase tracking-wider">{isAr ? 'بيانات العملة الجديدة الكاملة (cur_id متسلسل تلقائياً)' : 'Full New Currency Specifications'}</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                       <div>
-                        <FieldLabel>{isAr ? 'الكود *' : 'Code *'}</FieldLabel>
+                        <FieldLabel>{isAr ? 'كود العملة (code) *' : 'Code *'}</FieldLabel>
                         <FieldInput
                           type="text"
                           maxLength={5}
@@ -1051,33 +1241,45 @@ export default function Settings() {
                         />
                       </div>
                       <div>
-                        <FieldLabel>{isAr ? 'الاسم *' : 'Name *'}</FieldLabel>
-                        <FieldInput type="text" placeholder={isAr ? 'يورو' : 'Euro'} value={newCurrency.name} onChange={e => setNewCurrency({ ...newCurrency, name: e.target.value })} />
+                        <FieldLabel>{isAr ? 'الاسم الرئيسي بالعربي (main_nameAR) *' : 'Main Name AR *'}</FieldLabel>
+                        <FieldInput type="text" placeholder="ريال يمني / يورو" value={newCurrency.main_nameAR} onChange={e => setNewCurrency({ ...newCurrency, main_nameAR: e.target.value })} />
                       </div>
                       <div>
-                        <FieldLabel>{isAr ? 'الرمز *' : 'Symbol *'}</FieldLabel>
-                        <FieldInput type="text" placeholder="€" maxLength={5} className="text-center font-mono" value={newCurrency.symbol} onChange={e => setNewCurrency({ ...newCurrency, symbol: e.target.value })} />
+                        <FieldLabel>{isAr ? 'اسم الفئة الفرعية بالعربي (sup_nameAR)' : 'Sub Name AR'}</FieldLabel>
+                        <FieldInput type="text" placeholder="فلس / سنت" value={newCurrency.sup_nameAR} onChange={e => setNewCurrency({ ...newCurrency, sup_nameAR: e.target.value })} />
                       </div>
                       <div>
-                        <FieldLabel>{isAr ? 'رمز الدولة' : 'Flag Emoji'}</FieldLabel>
-                        <FieldInput type="text" placeholder="🇪🇺" maxLength={4} className="text-center" value={newCurrency.flag} onChange={e => setNewCurrency({ ...newCurrency, flag: e.target.value })} />
+                        <FieldLabel>{isAr ? 'الاسم الرئيسي بالإنجليزي (main_nameEn)' : 'Main Name EN'}</FieldLabel>
+                        <FieldInput type="text" placeholder="Euro / Yemeni Rial" dir="ltr" value={newCurrency.main_nameEn} onChange={e => setNewCurrency({ ...newCurrency, main_nameEn: e.target.value })} />
                       </div>
                       <div>
-                        <FieldLabel>{isAr ? 'سعر الصرف (مقابل YER)' : 'Rate to YER'}</FieldLabel>
-                        <FieldInput type="number" step="any" placeholder="580" dir="ltr" className="font-mono" value={newCurrency.rateToYER || ''} onChange={e => setNewCurrency({ ...newCurrency, rateToYER: parseFloat(e.target.value) || 0 })} />
+                        <FieldLabel>{isAr ? 'اسم الفئة الفرعية بالإنجليزي (sup_nameEn)' : 'Sub Name EN'}</FieldLabel>
+                        <FieldInput type="text" placeholder="Cent / Fils" dir="ltr" value={newCurrency.sup_nameEn} onChange={e => setNewCurrency({ ...newCurrency, sup_nameEn: e.target.value })} />
                       </div>
-                      <div className="flex items-end">
-                        <label className="flex items-center gap-2 cursor-pointer pb-1">
+                      <div>
+                        <FieldLabel>{isAr ? 'الرمز (symbol) *' : 'Symbol *'}</FieldLabel>
+                        <FieldInput type="text" placeholder="€ / ر.ي / $" maxLength={6} className="text-center font-mono" value={newCurrency.symbol} onChange={e => setNewCurrency({ ...newCurrency, symbol: e.target.value })} />
+                      </div>
+                      <div>
+                        <FieldLabel>{isAr ? 'رمز علم الدولة (flag)' : 'Flag Emoji'}</FieldLabel>
+                        <FieldInput type="text" placeholder="🇪🇺 / 🇾🇪" maxLength={4} className="text-center" value={newCurrency.flag} onChange={e => setNewCurrency({ ...newCurrency, flag: e.target.value })} />
+                      </div>
+                      <div>
+                        <FieldLabel>{isAr ? 'سعر الصرف الأولي (initialRate) *' : 'Initial Rate to YER *'}</FieldLabel>
+                        <FieldInput type="number" step="any" placeholder="580" dir="ltr" className="font-mono" value={newCurrency.initialRate || ''} onChange={e => setNewCurrency({ ...newCurrency, initialRate: parseFloat(e.target.value) || 0 })} />
+                      </div>
+                      <div className="flex items-end md:col-span-4">
+                        <label className="flex items-center gap-2 cursor-pointer pb-1.5">
                           <input type="checkbox" checked={newCurrency.isActive !== false} onChange={e => setNewCurrency({ ...newCurrency, isActive: e.target.checked })} className="rounded border-slate-700 bg-slate-900 text-yellow-600 focus:ring-0" />
-                          <span className="text-xs font-black text-slate-400">{isAr ? 'تفعيل فوراً' : 'Enable Now'}</span>
+                          <span className="text-xs font-black text-slate-300">{isAr ? 'تفعيل العملة المباشر (isActive = true)' : 'Enable Active Status Immediately'}</span>
                         </label>
                       </div>
                     </div>
-                    <div className="flex gap-3">
-                      <button onClick={handleAddCurrency} className="flex-1 bg-[#d4af37] hover:bg-yellow-600 text-black py-2.5 rounded-xl font-black text-xs transition flex items-center justify-center gap-2">
-                        <Plus className="w-4 h-4" />{isAr ? 'إضافة العملة' : 'Add Currency'}
+                    <div className="flex gap-3 pt-2">
+                      <button onClick={handleAddCurrency} className="flex-1 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black py-3 rounded-xl font-black text-xs transition flex items-center justify-center gap-2 shadow-md cursor-pointer">
+                        <Plus className="w-4 h-4" />{isAr ? 'حفظ وإضافة العملة' : 'Save Currency'}
                       </button>
-                      <button onClick={() => { setShowAddCurrency(false); setNewCurrency({ code: '', name: '', symbol: '', flag: '', rateToYER: 0, isActive: true }); }} className="px-4 bg-black/40 border border-slate-800 text-slate-400 rounded-xl font-black text-xs transition hover:text-white">
+                      <button onClick={() => { setShowAddCurrency(false); setNewCurrency({ code: '', main_nameAR: '', sup_nameAR: '', main_nameEn: '', sup_nameEn: '', symbol: '', flag: '', initialRate: 0, isActive: true }); }} className="px-5 bg-black/40 border border-slate-800 text-slate-400 rounded-xl font-black text-xs transition hover:text-white cursor-pointer">
                         {isAr ? 'إلغاء' : 'Cancel'}
                       </button>
                     </div>
@@ -1338,22 +1540,22 @@ export default function Settings() {
             <SectionCard title={t('securitySettings')} icon={Shield}>
               <div className="space-y-4">
                 <ToggleSwitch checked={localSettings.protectSensitiveOrderDelete || false} onChange={v => setLocalSettings({ ...localSettings, protectSensitiveOrderDelete: v })} label={t('protectOrderDelete')} description={isAr ? 'منع حذف الطلبات ذات المدفوعات إلا بعد إدخال رمز PIN' : 'Prevent deletion of orders with payments without PIN'} icon={Shield} />
-                
+
                 <div className="pt-2">
                   <FieldLabel>{isAr ? 'مهلة جلسة المستخدم (بالدقائق - 0 للتعطيل)' : 'User Session Timeout (Minutes - 0 to disable)'}</FieldLabel>
-                  <FieldInput 
-                    type="number" 
+                  <FieldInput
+                    type="number"
                     min="0"
                     placeholder="30"
-                    value={localSettings.userSessionTimeout !== undefined ? localSettings.userSessionTimeout : ''} 
+                    value={localSettings.userSessionTimeout !== undefined ? localSettings.userSessionTimeout : ''}
                     onChange={e => {
                       const val = parseInt(e.target.value, 10);
                       setLocalSettings({ ...localSettings, userSessionTimeout: isNaN(val) ? 0 : val });
-                    }} 
+                    }}
                   />
                   <p className="mt-1 text-[11px] text-slate-500">
-                    {isAr 
-                      ? 'عند تفعيل الخيار، سيتم تسجيل خروج الموظف تلقائياً في حال عدم لمس النظام أو القيام بأي نشاط طوال هذه المدة.' 
+                    {isAr
+                      ? 'عند تفعيل الخيار، سيتم تسجيل خروج الموظف تلقائياً في حال عدم لمس النظام أو القيام بأي نشاط طوال هذه المدة.'
                       : 'When enabled, the user will be automatically logged out after this period of inactivity/idleness.'}
                   </p>
                 </div>
@@ -1705,6 +1907,232 @@ export default function Settings() {
         message={confirmConfig.message}
         type={confirmConfig.type}
       />
+
+      {/* ── RATE HISTORY MODAL (seq audit trail log) ── */}
+      {historyModalOpen && historyCurrency && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-slide-in">
+          <div className="bg-[#121215] border border-[#d4af37]/30 rounded-3xl p-6 max-w-xl w-full space-y-5 shadow-2xl flex flex-col max-h-[85vh]">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <span className="text-3xl">{historyCurrency.flag || '🌍'}</span>
+                <div>
+                  <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+                    <span>{isAr ? `سجل أسعار الصرف التاريخي (${historyCurrency.code})` : `Rate History - ${historyCurrency.code}`}</span>
+                    <span className="text-xs text-[#d4af37] font-mono font-bold">({historyCurrency.main_nameAR})</span>
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+                    {isAr ? `المعرف cur_id = ${historyCurrency.cur_id} • السلسلة التاريخية المتصاعدة seq` : `cur_id = ${historyCurrency.cur_id} • Ascending sequence audit trail`}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setHistoryModalOpen(false); setHistoryCurrency(null); }}
+                className="text-slate-400 hover:text-white p-1 rounded-lg bg-slate-900 border border-slate-800 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+              {historyLoading ? (
+                <div className="py-12 text-center text-xs font-mono text-[#d4af37] animate-pulse">
+                  {isAr ? 'جاري تحميل السجل التاريخي...' : 'Loading history log...'}
+                </div>
+              ) : historyEntries.length === 0 ? (
+                <div className="py-12 text-center text-xs font-mono text-slate-500">
+                  {isAr ? 'لا يوجد سجل أسعار صرف مسجل لهذه العملة.' : 'No rate history logged yet.'}
+                </div>
+              ) : (
+                historyEntries.map((entry, idx) => {
+                  const isLatest = idx === historyEntries.length - 1;
+                  return (
+                    <div
+                      key={entry.id || entry.seq}
+                      className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-4 ${isLatest
+                          ? 'bg-[#d4af37]/10 border-[#d4af37]/40 shadow-[0_0_15px_rgba(212,175,55,0.05)]'
+                          : 'bg-black/40 border-slate-850 hover:border-slate-800'
+                        }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className={`px-2.5 py-1 rounded-xl text-[10px] font-mono font-black ${isLatest ? 'bg-[#d4af37] text-black' : 'bg-slate-900 text-slate-400 border border-slate-800'
+                          }`}>
+                          seq #{entry.seq}
+                        </span>
+                        <div>
+                          <div className="text-xs font-black text-white font-mono dir-ltr">
+                            1 {historyCurrency.code} = <span className="text-[#d4af37] font-bold">{entry.price}</span> YER
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                            {isAr ? `تاريخ التعديل: ${new Date(entry.day_date || entry.createdAt).toLocaleString('ar-YE')}` : `Date: ${new Date(entry.day_date || entry.createdAt).toLocaleString()}`}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="text-right font-mono text-[10px] text-slate-400 shrink-0">
+                        <span className="block font-bold text-slate-300">{isAr ? `بواسطة: ${entry.updateBy || 'غير محدد'}` : `By: ${entry.updateBy || 'N/A'}`}</span>
+                        {isLatest && (
+                          <span className="inline-block mt-0.5 px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                            {isAr ? 'السعر الحالي' : 'Active Rate'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="pt-3 border-t border-slate-800 flex justify-end">
+              <button
+                type="button"
+                onClick={() => { setHistoryModalOpen(false); setHistoryCurrency(null); }}
+                className="px-6 py-2 bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-black transition cursor-pointer"
+              >
+                {isAr ? 'إغلاق' : 'Close'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── EDIT CURRENCY MODAL ── */}
+      {editDbCurrencyModalOpen && editingDbCurrency && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-slide-in">
+          <div className="bg-[#121215] border border-[#d4af37]/30 rounded-3xl p-6 max-w-2xl w-full space-y-5 shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-2 text-white">
+                <Edit3 className="w-5 h-5 text-[#d4af37]" />
+                <h3 className="text-sm font-black uppercase tracking-wider">
+                  {isAr
+                    ? `تعديل كافة بيانات العملة - ${editingDbCurrency.main_nameAR} (${editingDbCurrency.code})`
+                    : `Edit Currency Specifications - ${editingDbCurrency.code}`}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setEditDbCurrencyModalOpen(false); setEditingDbCurrency(null); }}
+                className="text-slate-400 hover:text-white p-1 rounded-lg bg-slate-900 border border-slate-800"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <FieldLabel>{isAr ? 'كود العملة (code) *' : 'Code *'}</FieldLabel>
+                <FieldInput
+                  type="text"
+                  maxLength={5}
+                  disabled={['USD', 'SAR', 'YER'].includes(editingDbCurrency.code.toUpperCase())}
+                  value={editDbCurrencyForm.code || ''}
+                  onChange={e => setEditDbCurrencyForm({ ...editDbCurrencyForm, code: e.target.value.toUpperCase() })}
+                  className="font-mono uppercase"
+                  dir="ltr"
+                />
+              </div>
+              <div>
+                <FieldLabel>{isAr ? 'الاسم الرئيسي بالعربي (main_nameAR) *' : 'Main Name AR *'}</FieldLabel>
+                <FieldInput
+                  type="text"
+                  value={editDbCurrencyForm.main_nameAR || ''}
+                  onChange={e => setEditDbCurrencyForm({ ...editDbCurrencyForm, main_nameAR: e.target.value })}
+                />
+              </div>
+              <div>
+                <FieldLabel>{isAr ? 'اسم الفئة الفرعية بالعربي (sup_nameAR)' : 'Sub Name AR'}</FieldLabel>
+                <FieldInput
+                  type="text"
+                  value={editDbCurrencyForm.sup_nameAR || ''}
+                  onChange={e => setEditDbCurrencyForm({ ...editDbCurrencyForm, sup_nameAR: e.target.value })}
+                />
+              </div>
+              <div>
+                <FieldLabel>{isAr ? 'الاسم الرئيسي بالإنجليزي (main_nameEn)' : 'Main Name EN'}</FieldLabel>
+                <FieldInput
+                  type="text"
+                  value={editDbCurrencyForm.main_nameEn || ''}
+                  onChange={e => setEditDbCurrencyForm({ ...editDbCurrencyForm, main_nameEn: e.target.value })}
+                  dir="ltr"
+                />
+              </div>
+              <div>
+                <FieldLabel>{isAr ? 'اسم الفئة الفرعية بالإنجليزي (sup_nameEn)' : 'Sub Name EN'}</FieldLabel>
+                <FieldInput
+                  type="text"
+                  value={editDbCurrencyForm.sup_nameEn || ''}
+                  onChange={e => setEditDbCurrencyForm({ ...editDbCurrencyForm, sup_nameEn: e.target.value })}
+                  dir="ltr"
+                />
+              </div>
+              <div>
+                <FieldLabel>{isAr ? 'الرمز (symbol) *' : 'Symbol *'}</FieldLabel>
+                <FieldInput
+                  type="text"
+                  maxLength={6}
+                  value={editDbCurrencyForm.symbol || ''}
+                  onChange={e => setEditDbCurrencyForm({ ...editDbCurrencyForm, symbol: e.target.value })}
+                  className="text-center font-mono"
+                />
+              </div>
+              <div>
+                <FieldLabel>{isAr ? 'رمز علم الدولة (flag)' : 'Flag Emoji'}</FieldLabel>
+                <FieldInput
+                  type="text"
+                  maxLength={4}
+                  value={editDbCurrencyForm.flag || ''}
+                  onChange={e => setEditDbCurrencyForm({ ...editDbCurrencyForm, flag: e.target.value })}
+                  className="text-center"
+                />
+              </div>
+              {editingDbCurrency.code !== 'YER' && (
+                <div>
+                  <FieldLabel>{isAr ? 'تحديث سعر الصرف (سيعمل تسلسل جديد seq+1)' : 'Update Exchange Rate (seq+1)'}</FieldLabel>
+                  <FieldInput
+                    type="number"
+                    step="any"
+                    value={editDbCurrencyForm.newPrice || ''}
+                    onChange={e => setEditDbCurrencyForm({ ...editDbCurrencyForm, newPrice: parseFloat(e.target.value) || 0 })}
+                    className="font-mono"
+                    dir="ltr"
+                  />
+                </div>
+              )}
+              <div className="md:col-span-2 pt-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editDbCurrencyForm.isActive !== false}
+                    onChange={e => setEditDbCurrencyForm({ ...editDbCurrencyForm, isActive: e.target.checked })}
+                    className="rounded border-slate-700 bg-slate-900 text-yellow-600 focus:ring-0"
+                  />
+                  <span className="text-xs font-black text-slate-300">
+                    {isAr ? 'حالة التفعيل (isActive) - السماح بأنشطة القيود والمعاملات المالية' : 'Active Status (isActive)'}
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-slate-800 flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => { setEditDbCurrencyModalOpen(false); setEditingDbCurrency(null); }}
+                className="px-5 py-2.5 bg-black/40 border border-slate-800 text-slate-400 rounded-xl text-xs font-bold transition hover:text-white"
+              >
+                {isAr ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveEditDbCurrency}
+                className="px-6 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl text-xs transition shadow-md flex items-center gap-2"
+              >
+                <Save className="w-4 h-4" />
+                {isAr ? 'حفظ التعديلات' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
