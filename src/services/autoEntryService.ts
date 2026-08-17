@@ -171,10 +171,11 @@ export const autoEntryService = {
   /**
    * Get auto entries linked to a specific statusId
    */
-  async getAutoEntriesForStatus(statusId: number): Promise<AutoEntryRule[]> {
+  async getAutoEntriesForStatus(statusId: number | string): Promise<AutoEntryRule[]> {
     try {
       const all = await this.ensureAutoEntries();
-      return all.filter(r => r.statusId === statusId && r.isActive);
+      const numId = typeof statusId === 'number' ? statusId : parseInt(String(statusId), 10);
+      return all.filter(r => (r.statusId === numId || String(r.statusId) === String(statusId)) && r.isActive);
     } catch (err) {
       console.error('[autoEntryService] getAutoEntriesForStatus failed:', err);
       return [];
@@ -204,7 +205,7 @@ export const autoEntryService = {
    * Execute auto entries for a given statusId when order transitions
    */
   async executeAutoEntriesForStatus(
-    statusId: number,
+    statusId: number | string,
     order: any,
     context: {
       courier?: any;
@@ -216,7 +217,8 @@ export const autoEntryService = {
   ): Promise<string[]> {
     const executedRuleIds: string[] = [];
     try {
-      const rules = await this.getAutoEntriesForStatus(statusId);
+      const resolvedStatusId = statusId ?? order?.order_status_id ?? order?.orderStatusId ?? 1;
+      const rules = await this.getAutoEntriesForStatus(resolvedStatusId);
       for (const rule of rules) {
         if (!rule.isActive) continue;
 

@@ -28,7 +28,7 @@ export default function Orders() {
   const { settings, t } = useSettings();
   const { activeCurrencies, rates: dbRates } = useExchangeRates();
   const { role, hasPermission, profile, loading: roleLoading } = useRole();
-  const { statuses: orderStatusesList, getStatusByName, getNextStatus } = useOrderStatuses();
+  const { statuses: orderStatusesList, getStatusByName, getStatusById, getStatusByAny, getNextStatus } = useOrderStatuses();
   const canManageOrders = role === 'Admin' || hasPermission('edit_orders');
   const canAddOrders = role === 'Admin' || hasPermission('add_orders');
   const canEditOrderDefaultsCreation = role === 'Admin' || hasPermission('edit_order_defaults_creation');
@@ -896,6 +896,8 @@ export default function Orders() {
         shippingDetails: formData.orderSourceType === 'SHEIN' ? [] : (shippings || []),
 
         // Lifecycles status
+        orderStatusId: '2',
+        order_status_id: '2',
         orderStatus: 'تم تسجيل الطلب',
         deliveryStatus: 'في الانتظار',
         locationYemen: 'مركز التوزيع الرئيسي',
@@ -1964,7 +1966,25 @@ export default function Orders() {
         newFiredTriggers.push(statusTriggerId);
       }
 
+      // Execute automated financial rules for new stage if configured
+      if (newStatusItem?.id) {
+        try {
+          const courierRecord = couriers.find(c => c.id === courierId || c.id === shippingCourierId);
+          const customerRecord = customers.find(c => c.id === selectedOrder.customerId);
+          await autoEntryService.executeAutoEntriesForStatus(newStatusItem.id, selectedOrder, {
+            courier: courierRecord,
+            customer: customerRecord,
+            isAr,
+            profileName: profile?.fullName || 'User Logistics Update'
+          });
+        } catch (autoErr) {
+          console.warn('[Orders] Auto entry execution exception on status update:', autoErr);
+        }
+      }
+
       await updateDoc(doc(db, 'orders', selectedOrder.id), {
+        orderStatusId: String(newStatusItem?.id || '2'),
+        order_status_id: String(newStatusItem?.id || '2'),
         orderStatus: updateFormData.orderStatus,
         deliveryStatus: updateFormData.deliveryStatus,
         locationYemen: updateFormData.locationYemen,
@@ -2564,7 +2584,24 @@ export default function Orders() {
           newFiredTriggers.push(statusTriggerId);
         }
 
+        if (newStatusItem?.id) {
+          try {
+            const courierRecord = couriers.find(c => c.id === ord.deliveryCourierId || c.id === ord.shippingCourierId);
+            const customerRecord = customers.find(c => c.id === ord.customerId);
+            await autoEntryService.executeAutoEntriesForStatus(newStatusItem.id, ord, {
+              courier: courierRecord,
+              customer: customerRecord,
+              isAr,
+              profileName: profile?.fullName || 'Batch Logistics Update'
+            });
+          } catch (autoErr) {
+            console.warn('[Orders] Batch auto entry execution exception:', autoErr);
+          }
+        }
+
         await updateDoc(doc(db, 'orders', orderId), {
+          orderStatusId: String(newStatusItem?.id || '2'),
+          order_status_id: String(newStatusItem?.id || '2'),
           orderStatus: newStatus,
           locationYemen: defaultLocation,
           firedTriggers: newFiredTriggers,
@@ -2861,7 +2898,7 @@ export default function Orders() {
       const q = searchText.toLowerCase();
 
       const matchSearch = num.includes(q.toUpperCase()) || customer.includes(q) || phone.includes(searchText) || track.includes(q.toUpperCase());
-      const matchStatus = statusFilter === 'all' || o.orderStatus === statusFilter;
+      const matchStatus = statusFilter === 'all' || String(o.order_status_id || o.orderStatusId) === String(statusFilter) || o.orderStatus === statusFilter;
       const matchCourier = courierFilter === 'all' || o.deliveryCourierId === courierFilter || o.shippingCourierId === courierFilter;
       const matchSource = sourceFilter === 'all' || o.orderSourceId === sourceFilter;
 
@@ -3277,11 +3314,9 @@ export default function Orders() {
 
               <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="bg-slate-950 border border-slate-800 text-slate-300 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-cyan-500">
                 <option value="all">{isAr ? 'جميع الحالات الكلية' : 'All States'}</option>
-                <option value="تم تسجيل الطلب">{isAr ? 'تم تسجيل الطلب' : 'Pending'}</option>
-                <option value="وصل مستودع السعودية">{isAr ? 'وصل مستودع السعودية' : 'In KSA Depot'}</option>
-                <option value="جاري الشحن لليمن">{isAr ? 'جاري الشحن لليمن' : 'In Route'}</option>
-                <option value="وصل مركز التوزيع في اليمن">{isAr ? 'وصل مركز التوزيع' : 'In Yemen Center'}</option>
-                <option value="تم التسليم">{isAr ? 'تم التسليم المسجلة' : 'Delivered'}</option>
+                {orderStatusesList.map(st => (
+                  <option key={st.id} value={String(st.id)}>{isAr ? st.nameAr : st.nameEn}</option>
+                ))}
               </select>
 
               <select value={courierFilter} onChange={e => setCourierFilter(e.target.value)} className="bg-slate-950 border border-slate-800 text-slate-300 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-cyan-500">

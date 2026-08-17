@@ -89,14 +89,25 @@ export function useOrderStatuses() {
   }, []);
 
   // Helper functions
-  const getStatusById = (id: number): OrderStatusItem | undefined => {
-    return statuses.find(s => s.id === id);
+  const getStatusById = (id: number | string | undefined | null): OrderStatusItem | undefined => {
+    if (id === undefined || id === null || id === '') return undefined;
+    const numId = typeof id === 'number' ? id : parseInt(String(id), 10);
+    if (!isNaN(numId)) {
+      const found = statuses.find(s => s.id === numId);
+      if (found) return found;
+    }
+    return statuses.find(s => String(s.id) === String(id));
   };
 
   const getStatusByName = (name: string): OrderStatusItem | undefined => {
     if (!name) return undefined;
     const clean = name.trim().toLowerCase();
     return statuses.find(s => s.nameAr.toLowerCase() === clean || s.nameEn.toLowerCase() === clean || s.code?.toLowerCase() === clean);
+  };
+
+  const getStatusByAny = (val: number | string | undefined | null): OrderStatusItem | undefined => {
+    if (val === undefined || val === null || val === '') return undefined;
+    return getStatusById(val) || getStatusByName(String(val));
   };
 
   const getFirstStatus = (): OrderStatusItem => {
@@ -108,13 +119,7 @@ export function useOrderStatuses() {
   };
 
   const getNextStatus = (currentStatusIdOrName: number | string): OrderStatusItem | undefined => {
-    let currentItem: OrderStatusItem | undefined;
-    if (typeof currentStatusIdOrName === 'number') {
-      currentItem = getStatusById(currentStatusIdOrName);
-    } else {
-      currentItem = getStatusByName(currentStatusIdOrName);
-    }
-
+    let currentItem: OrderStatusItem | undefined = getStatusByAny(currentStatusIdOrName);
     if (!currentItem) return undefined;
     const currentIndex = statuses.findIndex(s => s.id === currentItem!.id);
     if (currentIndex >= 0 && currentIndex < statuses.length - 1) {
@@ -128,6 +133,7 @@ export function useOrderStatuses() {
     loading,
     getStatusById,
     getStatusByName,
+    getStatusByAny,
     getFirstStatus,
     getLastStatus,
     getNextStatus

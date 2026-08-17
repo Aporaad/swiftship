@@ -116,12 +116,13 @@ ALTER TABLE accounts
   ADD COLUMN account_type TEXT NOT NULL DEFAULT 'Asset',
   ADD COLUMN entity_id    TEXT,
 
-  orders:(id,order_number,tracking_number,customer_id,order_status,createdAt,data{})
+  orders:(id,order_number,tracking_number,customer_id,order_status_id,order_status,createdAt,data{})
   ALTER TABLE orders
-  ADD COLUMN id        TEXT,
+  ADD COLUMN id              TEXT,
   ADD COLUMN order_number    TEXT UNIQUE,
   ADD COLUMN tracking_number TEXT UNIQUE,
   ADD COLUMN customer_id     TEXT REFERENCES customers(id),
+  ADD COLUMN order_status_id TEXT REFERENCES order_status(id),
   ADD COLUMN order_status    TEXT NOT NULL DEFAULT 'تم تسجيل الطلب',
   ADD COLUMN courier_id      TEXT REFERENCES couriers(id);
 

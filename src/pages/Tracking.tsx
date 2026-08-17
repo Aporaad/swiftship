@@ -34,6 +34,7 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet'
 import L from 'leaflet';
 
 import { useRole } from '../hooks/useRole';
+import { useOrderStatuses } from '../hooks/useOrderStatuses';
 
 // Fix typical leaflet icon issues
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -55,6 +56,7 @@ export default function Tracking() {
   const { settings, t } = useSettings();
   const navigate = useNavigate();
   const { role, hasPermission, loading: roleLoading } = useRole();
+  const { statuses: orderStatusesList } = useOrderStatuses();
   const isAr = settings.language === 'ar';
 
   const [trackingNumber, setTrackingNumber] = useState('');
@@ -337,7 +339,11 @@ export default function Tracking() {
         });
       } else if (resolvedSource === 'orders_db') {
         const docRef = doc(db, 'orders', trackingData.id);
+        const statusItem = orderStatusesList.find(s => s.nameAr === statusSelector || s.nameEn === statusSelector || s.code === statusSelector);
+        const statusIdStr = String(statusItem?.id || '2');
         await updateDoc(docRef, {
+          orderStatusId: statusIdStr,
+          order_status_id: statusIdStr,
           orderStatus: statusSelector,
           locationYemen: gpsLocation,
           history: revisedHistory,
@@ -864,14 +870,9 @@ export default function Tracking() {
                       onChange={e => setStatusSelector(e.target.value)}
                       className="w-full bg-black/60 border border-slate-800 rounded-xl p-3 text-white text-xs outline-none focus:border-[#d4af37]/40 font-bold"
                     >
-                      <option value="تم تسجيل الطلب">{isAr ? 'تم تسجيل الطلب واستخلاص الفاتورة' : 'Invoice saved / Registered'}</option>
-                      <option value="وصل مستودع السعودية">{isAr ? 'وصل مستودع السعودية للتعبئة' : 'Arrived Saudi packaging HUB'}</option>
-                      <option value="جاري الشحن لليمن">{isAr ? 'جاري الشحن لليمن براً / جوأً' : 'Shipped/Transit to Yemen'}</option>
-                      <option value="في التخليص الجمركي">{isAr ? 'في التخليص الجمركي والأوراق' : 'Customs clearance'}</option>
-                      <option value="وصل مركز التوزيع في اليمن">{isAr ? 'وصل مركز التوزيع والفرز النهائي' : 'Arrived final depot'}</option>
-                      <option value="مع المندوب للتوصيل">{isAr ? 'مع المندوب بانتظار التسليم' : 'Out for Yemen delivery'}</option>
-                      <option value="تم التسليم">{isAr ? 'تم التسليم وتفصيل العهد الموردة' : 'Delivered successfully'}</option>
-                      <option value="ملغي">{isAr ? 'ملغي' : 'Cancelled / Expoked'}</option>
+                      {orderStatusesList.map(st => (
+                        <option key={st.id} value={st.nameAr}>{isAr ? st.nameAr : st.nameEn}</option>
+                      ))}
                     </select>
                   </div>
 
