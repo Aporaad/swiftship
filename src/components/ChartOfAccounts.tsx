@@ -11,6 +11,7 @@ import { collection, addDoc, doc, deleteDoc, updateDoc, onSnapshot, query, where
 import { notificationService } from '../services/notificationService';
 import { useAccountBalances, computeAccountBalance, guessAccountTypeFromCode, AccountType } from '../hooks/useAccountBalances';
 import { financialAccountService } from '../services/financialAccountService';
+import { useExchangeRates } from '../hooks/useExchangeRates';
 
 interface ChartOfAccountsProps {
   isAr: boolean;
@@ -65,6 +66,7 @@ export default function ChartOfAccounts({
 
   // ── Live transaction-based balances (real-time from Supabase) ──────────────
   const liveBalances = useAccountBalances();
+  const { activeCurrencies, rates: dbRates } = useExchangeRates();
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -81,9 +83,9 @@ export default function ChartOfAccounts({
   // Currency converter — everything rolls up to YER for the tree
   const convertToYER = (amount: number, currency: string): number => {
     const amt = parseFloat(String(amount || 0));
-    if (currency === 'USD') return amt * (settings.exchangeRateUSD || 535);
-    if (currency === 'SAR') return amt * (settings.exchangeRateSAR || 140);
-    return amt;
+    if (!currency || currency === 'YER') return amt;
+    const rate = dbRates[currency] || (currency === 'USD' ? (settings.exchangeRateUSD || 535) : currency === 'SAR' ? (settings.exchangeRateSAR || 140) : 1);
+    return amt * rate;
   };
 
   // Form states
@@ -800,9 +802,9 @@ export default function ChartOfAccounts({
                 <div>
                   <label className="block text-[9px] font-black text-slate-500 mb-1 uppercase">{isAr ? 'العملة' : 'Currency'}</label>
                   <select value={newAccount.currency} onChange={e => setNewAccount(p => ({ ...p, currency: e.target.value }))} className="w-full bg-black/40 border border-slate-800 text-white rounded-xl px-3 py-2 text-xs font-black outline-none focus:border-[#d4af37]">
-                    <option value="YER">YER — ريال يمني</option>
-                    <option value="SAR">SAR — ريال سعودي</option>
-                    <option value="USD">USD — دولار</option>
+                    {(activeCurrencies.length > 0 ? activeCurrencies : [{ code: 'YER', main_nameAR: 'ريال يمني' }, { code: 'SAR', main_nameAR: 'ريال سعودي' }, { code: 'USD', main_nameAR: 'دولار أمريكي' }]).map(c => (
+                      <option key={c.code} value={c.code}>{c.code} — {(c as any).main_nameAR || c.code}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -871,9 +873,9 @@ export default function ChartOfAccounts({
                 <div>
                   <label className="block text-[9px] font-black text-slate-500 mb-1 uppercase">{isAr ? 'العملة' : 'Currency'}</label>
                   <select value={newAccount.currency} onChange={e => setNewAccount(p => ({ ...p, currency: e.target.value }))} className="w-full bg-black/40 border border-slate-800 text-white rounded-xl px-3 py-2 text-xs font-black outline-none focus:border-[#d4af37]">
-                    <option value="YER">YER</option>
-                    <option value="SAR">SAR</option>
-                    <option value="USD">USD</option>
+                    {(activeCurrencies.length > 0 ? activeCurrencies : [{ code: 'YER', main_nameAR: 'ريال يمني' }, { code: 'SAR', main_nameAR: 'ريال سعودي' }, { code: 'USD', main_nameAR: 'دولار أمريكي' }]).map(c => (
+                      <option key={c.code} value={c.code}>{c.code} — {(c as any).main_nameAR || c.code}</option>
+                    ))}
                   </select>
                 </div>
               </div>

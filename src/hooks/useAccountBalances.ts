@@ -15,8 +15,10 @@
  */
 
 import { useState, useEffect } from 'react';
-import { collection, doc, onSnapshot } from '../lib/supabase-firebase-adapter';
+import { collection, onSnapshot } from '../lib/supabase-firebase-adapter';
 import { db } from '../lib/supabase-firebase-adapter';
+import { supabase } from '../lib/supabase-firebase-adapter';
+import { DEFAULT_RATES, ExchangeRates, currencyService } from '../services/currencyService';
 
 export type AccountType = 'Asset' | 'Liability' | 'Equity' | 'Revenue' | 'Expense';
 
@@ -38,19 +40,23 @@ function convertCurrency(
   amount: number,
   from: string,
   to: string,
-  rates: { USD: number; SAR: number; YER: number }
+  rates: Record<string, number>
 ): number {
   if (!from || !to || from === to) return amount;
 
   // Convert to YER base
   let baseAmountYER = amount;
-  if (from === 'USD') baseAmountYER = amount * rates.USD;
-  else if (from === 'SAR') baseAmountYER = amount * rates.SAR;
+  if (from === 'YER') {
+    baseAmountYER = amount;
+  } else {
+    const fromRate = rates[from] || 1;
+    baseAmountYER = amount * fromRate;
+  }
 
   // Convert YER to target
-  if (to === 'USD') return baseAmountYER / rates.USD;
-  if (to === 'SAR') return baseAmountYER / rates.SAR;
-  return baseAmountYER;
+  if (to === 'YER') return baseAmountYER;
+  const toRate = rates[to] || 1;
+  return baseAmountYER / (toRate || 1);
 }
 
 /**
@@ -115,7 +121,7 @@ function _initSingleton() {
   if (_initialized) return;
   _initialized = true;
 
-  let exchangeRates = { USD: 535, SAR: 140, YER: 1 };
+  let exchangeRates: Record<string, number> = { YER: 1, SAR: 140, USD: 535 };
   let accountRegistry: Record<string, { currency: string; type: AccountType }> = {};
   let txDocs: any[] = [];
   let initialLoaded = { settings: false, accounts: false, txs: false };
@@ -172,15 +178,23 @@ function _initSingleton() {
     _notifySubscribers();
   };
 
-  // 1. Subscribe to exchange rates (single global listener)
-  onSnapshot(doc(db, 'settings', 'general'), (snap: any) => {
-    if (snap.exists()) {
-      const d = snap.data();
-      exchangeRates = { USD: d.exchangeRateUSD || 535, SAR: d.exchangeRateSAR || 140, YER: 1 };
-    }
+  // 1. Subscribe to exchange rates from cur_price (single global listener)
+  const fetchRates = async () => {
+    try {
+      const latest = await currencyService.getLatestExchangeRates();
+      exchangeRates = { ...latest };
+    } catch (_) {}
     initialLoaded.settings = true;
     checkAndCompute();
-  }, () => { initialLoaded.settings = true; checkAndCompute(); });
+  };
+  fetchRates();
+
+  (supabase as any)
+    .channel('balances_rates_sync')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'cur_price' }, () => {
+      fetchRates();
+    })
+    .subscribe();
 
   // 2. Subscribe to accounts to build type & currency registry (single global listener)
   onSnapshot(collection(db, 'accounts'), (snap: any) => {

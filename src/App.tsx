@@ -5,8 +5,8 @@
 
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth } from './lib/firebase';
+import { onAuthStateChanged, User } from './lib/supabase-firebase-adapter';
+import { auth } from './lib/supabase-firebase-adapter';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -44,7 +44,7 @@ export default function App() {
           } as unknown as User;
         }
       }
-    } catch (_) {}
+    } catch (_) { }
     return null;
   });
   const [loading, setLoading] = useState(() => {
@@ -69,7 +69,7 @@ export default function App() {
         } else {
           localStorage.removeItem('swiftship_persisted_user');
         }
-      } catch (_) {}
+      } catch (_) { }
     });
     return unsubscribe;
   }, []);
@@ -95,22 +95,22 @@ export default function App() {
         {/* Ambient background glows */}
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-cyan-700/10 rounded-full blur-[120px] pointer-events-none"></div>
         <div className="absolute bottom-1/4 left-1/3 w-[350px] h-[350px] bg-indigo-600/5 rounded-full blur-[100px] pointer-events-none"></div>
-        
+
         <div className="z-10 flex flex-col items-center p-8 max-w-sm text-center">
           {/* Animated Premium Ring Loader */}
           <div className="relative w-24 h-24 mb-6 flex items-center justify-center">
             {/* Outer pulsating glow ring */}
             <div className="absolute inset-0 rounded-full border border-cyan-500/10 animate-pulse"></div>
-            
+
             {/* Third outer slow spinning ring */}
             <div className="absolute inset-1.5 rounded-full border border-dashed border-indigo-500/20 animate-[spin_20s_linear_infinite]"></div>
-            
+
             {/* Second spinning ring */}
             <div className="absolute inset-3 rounded-full border-2 border-t-cyan-500 border-r-transparent border-b-transparent border-l-transparent animate-[spin_1.2s_cubic-bezier(0.5,0.1,0.4,0.9)_infinite]"></div>
-            
+
             {/* Counter-spinning third ring */}
             <div className="absolute inset-5 rounded-full border border-t-transparent border-r-indigo-400 border-b-indigo-400 border-l-transparent animate-[spin_1.8s_ease-in-out_infinite] opacity-80"></div>
-            
+
             {/* Core glowing dot with impulse pulse */}
             <div className="w-4 h-4 rounded-full bg-gradient-to-tr from-cyan-400 to-blue-500 animate-[pulse_1.5s_ease-in-out_infinite] shadow-[0_0_15px_rgba(34,211,238,0.6)]"></div>
           </div>
@@ -137,7 +137,8 @@ export default function App() {
         </div>
 
         {/* CSS custom keyframes for the progress bar directly injected */}
-        <style dangerouslySetInnerHTML={{ __html: `
+        <style dangerouslySetInnerHTML={{
+          __html: `
           @keyframes loading-bar {
             0% { transform: translateX(-100%); }
             100% { transform: translateX(200%); }
@@ -153,7 +154,7 @@ export default function App() {
         <Routes>
           {!user && <Route path="/tracking" element={<Tracking />} />}
           <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
-          
+
           <Route path="/" element={user ? <Layout /> : <Navigate to="/login" />}>
             <Route index element={<Dashboard />} />
             <Route path="orders" element={<Orders />} />

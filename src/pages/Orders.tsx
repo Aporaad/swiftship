@@ -22,9 +22,11 @@ import QRCode from 'qrcode';
 import { useOrderStatuses } from '../hooks/useOrderStatuses';
 import { autoEntryService } from '../services/autoEntryService';
 import OrderStatusManagementTab from '../components/OrderStatusManagementTab';
+import { useExchangeRates } from '../hooks/useExchangeRates';
 
 export default function Orders() {
   const { settings, t } = useSettings();
+  const { activeCurrencies, rates: dbRates } = useExchangeRates();
   const { role, hasPermission, profile, loading: roleLoading } = useRole();
   const { statuses: orderStatusesList, getStatusByName, getNextStatus } = useOrderStatuses();
   const canManageOrders = role === 'Admin' || hasPermission('edit_orders');
@@ -193,8 +195,8 @@ export default function Orders() {
       setFormData(prev => ({
         ...prev,
         currency: settings.currency || 'SAR',
-        exchangeRateYER: settings.exchangeRateSAR || 140,
-        exchangeRateUSD: settings.exchangeRateUSD || 535,
+        exchangeRateYER: dbRates.SAR || settings.exchangeRateSAR || 140,
+        exchangeRateUSD: dbRates.USD || settings.exchangeRateUSD || 535,
         bankCommissionRate: settings.defaultBankCommissionRate ?? 3,
         companyProfitRate: settings.defaultCompanyProfitRate ?? 12,
         packagingFee: settings.defaultPackagingFee ?? 0,
@@ -1675,7 +1677,7 @@ export default function Orders() {
                 totalBilledOriginal,
                 'YER',
                 settings.currency || 'YER',
-                { USD: selectedOrder.exchangeRateUSD || 535, SAR: selectedOrder.exchangeRateYER || 390 }
+                dbRates
               );
 
               await financialAccountService.triggerAutomaticVoucher(
@@ -1697,7 +1699,7 @@ export default function Orders() {
                 paidVal,
                 'YER',
                 settings.currency || 'YER',
-                { USD: selectedOrder.exchangeRateUSD || 535, SAR: selectedOrder.exchangeRateYER || 390 }
+                dbRates
               );
 
               await financialAccountService.triggerAutomaticVoucher(
@@ -1942,7 +1944,7 @@ export default function Orders() {
             profitValSAR,
             'SAR',
             settings.currency || 'YER',
-            { USD: selectedOrder.exchangeRateUSD || settings.exchangeRateUSD || 535, SAR: selectedOrder.exchangeRateYER || settings.exchangeRateSAR || 140 }
+            dbRates
           );
 
           await financialAccountService.triggerAutomaticVoucher('company_profit', selectedOrder, {
@@ -2536,7 +2538,7 @@ export default function Orders() {
               profitValSAR,
               'SAR',
               settings.currency || 'YER',
-              { USD: ord.exchangeRateUSD || settings.exchangeRateUSD || 535, SAR: ord.exchangeRateYER || settings.exchangeRateSAR || 140 }
+              dbRates
             );
 
             await financialAccountService.triggerAutomaticVoucher('company_profit', ord, {

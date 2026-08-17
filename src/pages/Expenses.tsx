@@ -13,12 +13,14 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import FinanceReports from '../components/FinanceReports';
 import ExpenseCategoriesManager from '../components/ExpenseCategoriesManager';
 import { useExpenseCategories, DEFAULT_EXPENSE_CATEGORIES } from '../hooks/useExpenseCategories';
+import { useExchangeRates } from '../hooks/useExchangeRates';
 
 // Keep this export for backward compatibility for now if needed, but components should transition to the hook
 export const EXPENSE_CATEGORIES = DEFAULT_EXPENSE_CATEGORIES;
 
 export default function Expenses() {
   const { settings, t } = useSettings();
+  const { activeCurrencies, rates: dbRates } = useExchangeRates();
   const { role, hasPermission, profile, loading: roleLoading } = useRole();
   const canViewExpensesPage = role === 'Admin' || hasPermission('view_finance') || hasPermission('view_expenses') || hasPermission('view_custody');
   const canViewCustody = role === 'Admin' || hasPermission('view_custody');
@@ -700,7 +702,7 @@ export default function Expenses() {
       amount,
       currency,
       settings.currency || 'YER',
-      { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+      dbRates
     );
   };
 
@@ -1321,9 +1323,9 @@ export default function Expenses() {
                     onChange={(e) => setFormData({...formData, currency: e.target.value})}
                     className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer"
                   >
-                    <option value="YER">{isAr ? 'ريال يمني YER' : 'YER'}</option>
-                    <option value="USD">{isAr ? 'دولار أمريكي USD' : 'USD'}</option>
-                    <option value="SAR">{isAr ? 'ريال سعودي SAR' : 'SAR'}</option>
+                    {(activeCurrencies.length > 0 ? activeCurrencies : [{ code: 'YER', main_nameAR: 'ريال يمني' }, { code: 'SAR', main_nameAR: 'ريال سعودي' }, { code: 'USD', main_nameAR: 'دولار أمريكي' }]).map(c => (
+                      <option key={c.code} value={c.code}>{c.code} — {(c as any).main_nameAR || c.code}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -1852,9 +1854,9 @@ export default function Expenses() {
                     onChange={(e) => setEditFormData({...editFormData, currency: e.target.value})}
                     className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer font-mono bg-[#121215]"
                   >
-                    <option value="YER">YER</option>
-                    <option value="USD">USD</option>
-                    <option value="SAR">SAR</option>
+                    {(activeCurrencies.length > 0 ? activeCurrencies : [{ code: 'YER', main_nameAR: 'ريال يمني' }, { code: 'SAR', main_nameAR: 'ريال سعودي' }, { code: 'USD', main_nameAR: 'دولار أمريكي' }]).map(c => (
+                      <option key={c.code} value={c.code}>{c.code} — {(c as any).main_nameAR || c.code}</option>
+                    ))}
                   </select>
                 </div>
               </div>

@@ -14,6 +14,8 @@ import { db } from '../lib/supabase-firebase-adapter';
 import { collection, onSnapshot, query, orderBy } from '../lib/supabase-firebase-adapter';
 import { financialAccountService } from '../services/financialAccountService';
 
+import { useExchangeRates } from '../hooks/useExchangeRates';
+
 interface FinanceReportsProps {
   orders: any[];
   expenses: any[];
@@ -25,6 +27,7 @@ interface FinanceReportsProps {
 
 export default function FinanceReports({ orders, expenses, couriers, sources, isAr, settings }: FinanceReportsProps) {
   const EXPENSE_CATEGORIES_DYNAMIC = useExpenseCategories();
+  const { rates: dbRates } = useExchangeRates();
 
   // 🏛️ Double-Entry System Live State connections
   const [accounts, setAccounts] = useState<any[]>([]);
@@ -79,7 +82,7 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
       amount,
       currency,
       settings.currency || 'YER',
-      { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+      dbRates
     );
   };
 
@@ -243,8 +246,8 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
     const usdBalance = usdIn - usdOut;
     const sarBalance = sarIn - sarOut;
 
-    const usdToYer = usdBalance * (settings.exchangeRateUSD || 535);
-    const sarToYer = sarBalance * (settings.exchangeRateSAR || 140);
+    const usdToYer = usdBalance * (dbRates.USD || settings.exchangeRateUSD || 535);
+    const sarToYer = sarBalance * (dbRates.SAR || settings.exchangeRateSAR || 140);
     const combinedTotalYER = yerBalance + usdToYer + sarToYer;
 
     return {

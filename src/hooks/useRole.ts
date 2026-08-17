@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { doc, onSnapshot, updateDoc, setDoc, deleteDoc } from '../lib/supabase-firebase-adapter';
-import { onAuthStateChanged, User } from 'supabase/auth';
-import { auth, db } from '../lib/supabase-firebase-adapter';;
+import { onAuthStateChanged, User } from '../lib/supabase-firebase-adapter';
+import { auth, db } from '../lib/supabase-firebase-adapter';
 import { clearAllLocalData } from '../lib/supabase-firebase-adapter';
 import { DEFAULT_ROLE_PERMISSIONS } from '../lib/permissions';
 

@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { doc, onSnapshot, setDoc, collection, getDocs, query, orderBy, limit, onAuthStateChanged, auth, db } from '../lib/firebase';
+import { supabase } from '../lib/supabase-firebase-adapter';
+import { currencyService } from '../services/currencyService';
 import { translations, Language, TranslationKey } from '../translations';
 
 // Custom currency definition
@@ -250,9 +252,47 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       clearTimeout(timeout);
     });
 
+    // Also sync exchange rates and active currencies from Supabase currency / cur_price tables
+    const syncDbCurrencies = async () => {
+      try {
+        const [rates, allCurrencies] = await Promise.all([
+          currencyService.getLatestExchangeRates(),
+          currencyService.getAllCurrencies(false)
+        ]);
+
+        const mappedCustomCurrencies: CustomCurrency[] = allCurrencies.map(c => ({
+          id: c.code,
+          code: c.code,
+          name: c.main_nameAR,
+          symbol: c.symbol || c.code,
+          rateToYER: c.currentPrice || (c.code === 'YER' ? 1 : 0),
+          flag: c.flag,
+          isActive: c.isActive,
+        }));
+
+        setGlobalSettings(prev => ({
+          ...prev,
+          exchangeRateUSD: rates.USD || prev.exchangeRateUSD || 535,
+          exchangeRateSAR: rates.SAR || prev.exchangeRateSAR || 140,
+          customCurrencies: mappedCustomCurrencies.length > 0 ? mappedCustomCurrencies : prev.customCurrencies,
+        }));
+      } catch (err) {
+        console.warn('Failed to sync currencies from DB:', err);
+      }
+    };
+    syncDbCurrencies();
+
+    // Realtime channel for currency & cur_price
+    const channel = (supabase as any)
+      .channel('settings_context_currencies')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'currency' }, () => syncDbCurrencies())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cur_price' }, () => syncDbCurrencies())
+      .subscribe();
+
     return () => {
       unsub();
       clearTimeout(timeout);
+      if (channel) (supabase as any).removeChannel(channel);
     };
   }, []);
 

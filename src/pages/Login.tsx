@@ -5,8 +5,8 @@ import {
   createUserWithEmailAndPassword,
   signInWithCustomToken,
   updatePassword,
-} from "firebase/auth";
-import { auth, db } from "../lib/firebase";
+} from "../lib/supabase-firebase-adapter";
+import { auth, db } from "../lib/supabase-firebase-adapter";
 import { useNavigate } from "react-router-dom";
 import {
   Lock,

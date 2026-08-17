@@ -31,6 +31,7 @@ import {
   getDoc,
   writeBatch,
 } from "../lib/supabase-firebase-adapter";
+import { currencyService } from "./currencyService";
 import { db, auth } from "../lib/supabase-firebase-adapter";
 import { activityLogService } from "./activityLogService";
 import { Transaction } from "../types";
@@ -792,23 +793,32 @@ class FinancialAccountService {
   }
 
   /**
-   * Fetches current exchange rates from settings collection
+   * Fetches current exchange rates from the `cur_price` table in Supabase via currencyService
    */
-  async getExchangeRates(): Promise<{ USD: number; SAR: number; YER: number }> {
+  async getExchangeRates(): Promise<Record<string, number>> {
     try {
-      const snap = await getDoc(doc(db, "settings", "general"));
-      if (snap.exists()) {
-        const data = snap.data();
-        return {
-          USD: data.exchangeRateUSD || 535,
-          SAR: data.exchangeRateSAR || 140,
-          YER: 1,
-        };
-      }
+      const rates = await currencyService.getLatestExchangeRates();
+      return { YER: 1, ...rates };
     } catch (e) {
-      console.warn("Could not fetch exchange rates, using defaults", e);
+      console.warn("Could not fetch exchange rates from currencyService, using defaults", e);
+      return { YER: 1, SAR: 140, USD: 535 };
     }
-    return { USD: 535, SAR: 140, YER: 1 };
+  }
+
+  /**
+   * Validates if a currency is active (isActive = true).
+   * Throws an error if the currency is disabled to prevent voucher/transaction creation.
+   */
+  async validateCurrencyActive(currencyCode: string): Promise<boolean> {
+    if (!currencyCode) return true;
+    const activeCurrencies = await currencyService.getActiveCurrencies();
+    const isAvailable = activeCurrencies.some(
+      (c) => c.code.toUpperCase() === currencyCode.toUpperCase()
+    );
+    if (!isAvailable) {
+      throw new Error(`العملة (${currencyCode}) معطلة حالياً في النظام ولا يمكن إنشاء قيد بها.`);
+    }
+    return true;
   }
 
   /**
@@ -819,26 +829,24 @@ class FinancialAccountService {
     amount: number,
     fromCurrency: string,
     targetCurrency: string,
-    exchangeRates: { USD?: number; SAR?: number; YER?: number },
+    exchangeRates: Record<string, number | undefined>,
   ): number {
-    if (fromCurrency === targetCurrency) return amount;
+    if (!fromCurrency || !targetCurrency || fromCurrency === targetCurrency) return amount;
 
     // Convert everything to YER as base
     let baseAmountYER = amount;
-    if (fromCurrency === "USD")
-      baseAmountYER = amount * (exchangeRates.USD || 535);
-    else if (fromCurrency === "SAR")
-      baseAmountYER = amount * (exchangeRates.SAR || 140);
-    else if (fromCurrency === "YER") baseAmountYER = amount;
+    if (fromCurrency === "YER") {
+      baseAmountYER = amount;
+    } else {
+      const fromRate = exchangeRates[fromCurrency] || 1;
+      baseAmountYER = amount * (typeof fromRate === "number" && fromRate > 0 ? fromRate : 1);
+    }
 
     // Convert from YER to targetCurrency
-    if (targetCurrency === "USD")
-      return baseAmountYER / (exchangeRates.USD || 535);
-    if (targetCurrency === "SAR")
-      return baseAmountYER / (exchangeRates.SAR || 140);
     if (targetCurrency === "YER") return baseAmountYER;
-
-    return baseAmountYER;
+    const targetRate = exchangeRates[targetCurrency] || 1;
+    const validTargetRate = typeof targetRate === "number" && targetRate > 0 ? targetRate : 1;
+    return baseAmountYER / validTargetRate;
   }
 
   /**
@@ -1069,10 +1077,10 @@ class FinancialAccountService {
   // Debounce map: prevents cascade recalculations within 2 seconds for same account
   private _recalcDebounce: Map<string, ReturnType<typeof setTimeout>> = new Map();
   // Cache exchange rates to avoid re-fetching for each account during bulk recalculation
-  private _cachedRates: { USD: number; SAR: number; YER: number } | null = null;
+  private _cachedRates: Record<string, number> | null = null;
   private _cachedRatesTs = 0;
 
-  private async getCachedExchangeRates(): Promise<{ USD: number; SAR: number; YER: number }> {
+  private async getCachedExchangeRates(): Promise<Record<string, number>> {
     const now = Date.now();
     if (this._cachedRates && now - this._cachedRatesTs < 60000) {
       return this._cachedRates;

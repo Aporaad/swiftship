@@ -75,9 +75,6 @@
       ],
       "@supabase/firestore": [
         "./src/lib/supabase-firebase-adapter.ts"
-      ],
-      "@google-cloud/firestore": [
-        "./src/lib/supabase-firebase-adapter.ts"
       ]
     },
     "allowImportingTsExtensions": true,

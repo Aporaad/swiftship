@@ -24,6 +24,7 @@ import * as XLSX from 'xlsx';
 import { notificationService } from '../services/notificationService';
 import { useExpenseCategories } from '../hooks/useExpenseCategories';
 import { financialAccountService } from '../services/financialAccountService';
+import { useExchangeRates } from '../hooks/useExchangeRates';
 
 // Interfaces
 interface ReportFilter {
@@ -307,6 +308,7 @@ const MultiAccountSelector: React.FC<MultiAccountSelectorProps> = ({
 
 export default function Reports() {
   const { settings } = useSettings();
+  const { rates: dbRates } = useExchangeRates();
   const EXPENSE_CATEGORIES_DYNAMIC = useExpenseCategories();
   const { role, hasPermission, loading: roleLoading } = useRole();
   const isAr = settings.language === 'ar';
@@ -453,28 +455,21 @@ export default function Reports() {
   const [selectedExpenseCategory, setSelectedExpenseCategory] = useState<string | null>(null);
 
   const convertToYER = (amount: number, currency: string) => {
-    const amt = parseFloat(String(amount || 0));
-    if (currency === 'USD') return amt * (settings.exchangeRateUSD || 535);
-    if (currency === 'SAR') return amt * (settings.exchangeRateSAR || 140);
-    return amt;
+    return financialAccountService.convertToDefaultCurrency(
+      amount,
+      currency,
+      settings.currency || 'YER',
+      dbRates
+    );
   };
 
   const convertCurrency = (amount: number, from: string, to: string) => {
-    const amt = parseFloat(String(amount || 0));
-    const normalizedFrom = (from || 'YER').toUpperCase();
-    const normalizedTo = (to || 'YER').toUpperCase();
-    if (normalizedFrom === normalizedTo) return amt;
-
-    // first convert to YER
-    let inYER = amt;
-    if (normalizedFrom === 'USD') inYER = amt * (settings.exchangeRateUSD || 535);
-    else if (normalizedFrom === 'SAR') inYER = amt * (settings.exchangeRateSAR || 140);
-
-    // then convert from YER to target
-    if (normalizedTo === 'YER') return inYER;
-    if (normalizedTo === 'USD') return inYER / (settings.exchangeRateUSD || 535);
-    if (normalizedTo === 'SAR') return inYER / (settings.exchangeRateSAR || 140);
-    return amt;
+    return financialAccountService.convertToTargetCurrency(
+      amount,
+      from,
+      to,
+      dbRates
+    );
   };
 
   // Fetch ALL account transactions for general financial metrics calculation

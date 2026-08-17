@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, doc, updateDoc, setDoc, deleteDoc, query, where, getDocs } from '../lib/supabase-firebase-adapter';
 import { db } from '../lib/supabase-firebase-adapter';
-import { handleFirestoreError, OperationType, auth } from '../lib/firebase';
+import { handleFirestoreError, OperationType, auth } from '../lib/supabase-firebase-adapter';
 import { Search, Edit2, X, Plus, UserX, UserCheck, Trash2, Users as UsersIcon, Shield, Lock, Eye, EyeOff, Crown, ShieldAlert, Coins } from 'lucide-react';
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
@@ -11,7 +11,7 @@ import ConfirmDeletePinModal from '../components/ConfirmDeletePinModal';
 import { financialAccountService } from '../services/financialAccountService';
 import { activityLogService } from '../services/activityLogService';
 import { initializeApp, deleteApp } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword } from '../lib/supabase-firebase-adapter';
 
 export default function Users() {
   const { settings, t } = useSettings();
@@ -36,7 +36,7 @@ export default function Users() {
     isOpen: false,
     title: '',
     message: '',
-    onConfirm: () => {},
+    onConfirm: () => { },
     type: 'danger'
   });
 
@@ -61,11 +61,11 @@ export default function Users() {
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
-  
+
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any>(null);
-  
+
   const [editFormData, setEditFormData] = useState({
     fullName: '',
     role: '',
@@ -117,9 +117,9 @@ export default function Users() {
   };
 
   const ROOT_EMAILS = [
-    'alsrhyarslan5@gmail.com', 
-    'arslan.alshamari@gmail.com', 
-    'engaporaad1@gmail.com', 
+    'alsrhyarslan5@gmail.com',
+    'arslan.alshamari@gmail.com',
+    'engaporaad1@gmail.com',
     'admin@swiftship.system',
     'apo.1.read@gmail.com'
   ];
@@ -128,10 +128,10 @@ export default function Users() {
     e.preventDefault();
     if (editLoading || editBlockRef.current) return;
     if (!selectedUser) return;
-    
+
     editBlockRef.current = true;
     setEditLoading(true);
-    
+
     // Check if username is taken if changed
     if (editFormData.username && editFormData.username !== selectedUser.username) {
       const q = query(collection(db, 'users'), where('username', '==', editFormData.username));
@@ -187,7 +187,7 @@ export default function Users() {
       });
     }
     const action = user.disabled ? (isAr ? 'تفعيل' : 'Activate') : (isAr ? 'تعطيل ومصادرة' : 'Disable');
-    
+
     setConfirmConfig({
       isOpen: true,
       title: isAr ? `${action} حساب مستخدم` : `Toggle status`,
@@ -204,7 +204,7 @@ export default function Users() {
             message: isAr ? `وضع الحساب للموظف ${user.fullName} تم تعديله` : `Status applied to ${user.fullName}`,
             type: user.disabled ? 'success' : 'warning'
           });
-        } catch(err) {
+        } catch (err) {
           handleFirestoreError(err, OperationType.UPDATE, 'users');
         }
       }
@@ -254,11 +254,11 @@ export default function Users() {
       // 2. Create the user in Firebase Authentication with a constant system auth password
       const SHARED_SYSTEM_AUTH_PASSWORD = 'swiftship@system_pw_2026';
       const authResult = await createUserWithEmailAndPassword(
-        secondaryAuth, 
-        addFormData.email.toLowerCase(), 
+        secondaryAuth,
+        addFormData.email.toLowerCase(),
         SHARED_SYSTEM_AUTH_PASSWORD
       );
-      
+
       const newUid = authResult.user.uid;
 
       // 3. Create the user document in Firestore using the new UID
@@ -279,10 +279,10 @@ export default function Users() {
         message: isAr ? `تم دمج الموظف ${addFormData.fullName} وتوزيع ترخيصه كـ ${addFormData.role}` : `Credentials built for ${addFormData.fullName}`,
         type: 'success'
       });
-      
+
       setIsAddModalOpen(false);
       setAddFormData({ fullName: '', username: '', email: '', password: '', systemPin: '', role: 'Employee', commissionRate: 0 });
-    } catch(err: any) {
+    } catch (err: any) {
       console.error("Error adding user:", err);
       let message = err.message;
       if (err.code === 'auth/email-already-in-use') {
@@ -305,7 +305,7 @@ export default function Users() {
   };
 
   const getRoleBadge = (role: string) => {
-    switch(role) {
+    switch (role) {
       case 'Admin':
         return <span className="bg-amber-950/20 text-[#d4af37] border border-[#d4af37]/30 px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider">{t('admin')}</span>;
       case 'Employee':
@@ -340,9 +340,9 @@ export default function Users() {
   // Filter users
   const filteredUsers = users
     .filter(u => {
-      const matchSearch = (u.fullName || '').toLowerCase().includes(search.toLowerCase()) || 
-                          (u.email || '').toLowerCase().includes(search.toLowerCase()) ||
-                          (u.username || '').toLowerCase().includes(search.toLowerCase());
+      const matchSearch = (u.fullName || '').toLowerCase().includes(search.toLowerCase()) ||
+        (u.email || '').toLowerCase().includes(search.toLowerCase()) ||
+        (u.username || '').toLowerCase().includes(search.toLowerCase());
       const matchRole = roleFilter === 'all' || u.role === roleFilter;
       const matchStatus = statusFilter === 'all' || (statusFilter === 'active' && !u.disabled) || (statusFilter === 'disabled' && u.disabled);
       return matchSearch && matchRole && matchStatus;
@@ -355,7 +355,7 @@ export default function Users() {
 
   return (
     <div className="space-y-6 pb-20 text-start font-sans selection:bg-[#d4af37]/30">
-      
+
       {/* Title block */}
       <div className="flex justify-between items-center bg-black/40 backdrop-blur-md border border-[#d4af37]/20 p-5 rounded-3xl shadow-lg">
         <div className="flex items-center gap-3">
@@ -367,7 +367,7 @@ export default function Users() {
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{isAr ? 'التحري عن الكوادر اللوجستية • توزيع الرخص والصلاحيات وتتبع الدخول' : 'Configure login configurations • Set Commission multipliers & pin numbers'}</p>
           </div>
         </div>
-        <button 
+        <button
           onClick={() => setIsAddModalOpen(true)}
           className={`bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black px-6 py-2.5 rounded-xl flex items-center gap-2 font-black text-sm transition transform active:scale-95 shadow-md shadow-yellow-950/20 ${!canAddUser ? 'hidden' : ''}`}
         >
@@ -377,23 +377,23 @@ export default function Users() {
 
       {/* Main filter container */}
       <div className="bg-[#121215] border border-slate-850 rounded-3xl overflow-hidden shadow-2xl flex flex-col">
-        
+
         {/* Belt filter options */}
         <div className="p-4 border-b border-slate-850 bg-black/30 flex flex-wrap gap-3">
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
-            <input 
-              type="text" 
-              placeholder={isAr ? 'البحث عن الموظف بالاسم أو المعرف الرقمي أو البريد...' : 'Filter profiles...'} 
+            <input
+              type="text"
+              placeholder={isAr ? 'البحث عن الموظف بالاسم أو المعرف الرقمي أو البريد...' : 'Filter profiles...'}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pr-10 pl-4 py-2 bg-black/50 border border-slate-850 rounded-xl focus:border-[#d4af37]/60 outline-none text-xs text-white placeholder:text-slate-500 font-bold"
             />
           </div>
 
-          <select 
-            value={roleFilter} 
-            onChange={e => setRoleFilter(e.target.value)} 
+          <select
+            value={roleFilter}
+            onChange={e => setRoleFilter(e.target.value)}
             className="bg-black/50 border border-slate-850 text-slate-300 rounded-xl px-4 py-2 text-xs font-bold outline-none focus:border-[#d4af37]/50"
           >
             <option value="all">{isAr ? 'جميع الرتب الوظيفية' : 'All Roles'}</option>
@@ -402,9 +402,9 @@ export default function Users() {
             ))}
           </select>
 
-          <select 
-            value={statusFilter} 
-            onChange={e => setStatusFilter(e.target.value)} 
+          <select
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
             className="bg-black/50 border border-slate-850 text-slate-300 rounded-xl px-4 py-2 text-xs font-bold outline-none focus:border-[#d4af37]/50"
           >
             <option value="all">{isAr ? 'جميع الحالات التشغيلية' : 'All States'}</option>
@@ -435,7 +435,7 @@ export default function Users() {
                     <td className="p-4">
                       <div className="flex items-center gap-3 text-start">
                         <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#121215] to-[#070708] border border-slate-800 text-[#d4af37] flex items-center justify-center font-black text-xs shrink-0 relative">
-                          {user.fullName?.substring(0,2)}
+                          {user.fullName?.substring(0, 2)}
                           {isRootTarget && <Crown className="w-3.5 h-3.5 text-yellow-500 absolute -top-1.5 -right-1.5 animate-bounce" />}
                         </div>
                         <div className="flex flex-col">
@@ -469,18 +469,18 @@ export default function Users() {
                     </td>
                     <td className="p-4 text-left flex justify-end gap-2">
                       {canDisableAccount && (
-                        <button 
-                          onClick={() => handleToggleStatus(user)} 
+                        <button
+                          onClick={() => handleToggleStatus(user)}
                           title={user.disabled ? (isAr ? 'تفعيل الحساب' : 'Unfreeze') : (isAr ? 'تجميد وحظر الوصول' : 'Freeze Access')}
                           className={`p-2 rounded-xl border transition-all ${user.disabled ? 'text-emerald-400 bg-emerald-950/10 border-emerald-950/30' : 'text-rose-450 bg-rose-950/10 border-rose-950/40'}`}
                         >
                           {user.disabled ? <UserCheck className="w-4 h-4" /> : <UserX className="w-4 h-4" />}
                         </button>
                       )}
-                      
+
                       {canEditUser && (
-                        <button 
-                          onClick={() => handleOpenEdit(user)} 
+                        <button
+                          onClick={() => handleOpenEdit(user)}
                           className="text-white hover:text-[#d4af37] bg-slate-900 border border-slate-800 p-2 rounded-xl transition-all"
                         >
                           <Edit2 className="w-4 h-4" />
@@ -488,8 +488,8 @@ export default function Users() {
                       )}
 
                       {canDeleteUser && !isRootTarget && (
-                        <button 
-                          onClick={() => handleDeleteUser(user.id, user.fullName)} 
+                        <button
+                          onClick={() => handleDeleteUser(user.id, user.fullName)}
                           className="text-rose-500 hover:bg-rose-950/20 bg-rose-950/10 border border-rose-950/45 p-2 rounded-xl transition-all"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -520,22 +520,22 @@ export default function Users() {
                 <Crown className="w-4 h-4 text-[#d4af37]" />
                 {isAr ? 'تفويض حساب موظف جديد' : 'Provision Staff Member Account'}
               </h3>
-              <button 
+              <button
                 onClick={() => setIsAddModalOpen(false)}
                 className="text-slate-500 hover:text-white bg-slate-900 border border-slate-800 p-1.5 rounded-lg"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
-            
+
             <form onSubmit={handleAddUser} className="p-6 space-y-4 text-start overflow-y-auto flex-1">
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'الاسم الكامل الثلاثي' : 'Employee Full Name'}</label>
-                <input 
-                  required 
-                  type="text" 
-                  value={addFormData.fullName} 
-                  onChange={(e) => setAddFormData({...addFormData, fullName: e.target.value})}
+                <input
+                  required
+                  type="text"
+                  value={addFormData.fullName}
+                  onChange={(e) => setAddFormData({ ...addFormData, fullName: e.target.value })}
                   className="w-full bg-black/50 border border-slate-850 rounded-xl py-3 px-4 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start"
                 />
               </div>
@@ -543,24 +543,24 @@ export default function Users() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'اسم مستخدم الولوجID' : 'Username ID Mapping'}</label>
-                  <input 
-                    required 
-                    placeholder="arslan_ops" 
-                    type="text" 
-                    value={addFormData.username} 
-                    onChange={(e) => setAddFormData({...addFormData, username: e.target.value})}
+                  <input
+                    required
+                    placeholder="arslan_ops"
+                    type="text"
+                    value={addFormData.username}
+                    onChange={(e) => setAddFormData({ ...addFormData, username: e.target.value })}
                     className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono"
                   />
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'رمز PIN السند المالي' : 'Security PIN'}</label>
-                  <input 
-                    required 
-                    placeholder="1234" 
-                    type="text" 
-                    maxLength={4} 
-                    value={addFormData.systemPin} 
-                    onChange={(e) => setAddFormData({...addFormData, systemPin: e.target.value})}
+                  <input
+                    required
+                    placeholder="1234"
+                    type="text"
+                    maxLength={4}
+                    value={addFormData.systemPin}
+                    onChange={(e) => setAddFormData({ ...addFormData, systemPin: e.target.value })}
                     className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs text-center font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono tracking-widest"
                   />
                 </div>
@@ -568,12 +568,12 @@ export default function Users() {
 
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'البريد الإلكتروني للوج' : 'Work Inbox Email Address'}</label>
-                <input 
-                  required 
-                  type="email" 
-                  placeholder="name@swiftship.system" 
-                  value={addFormData.email} 
-                  onChange={(e) => setAddFormData({...addFormData, email: e.target.value})}
+                <input
+                  required
+                  type="email"
+                  placeholder="name@swiftship.system"
+                  value={addFormData.email}
+                  onChange={(e) => setAddFormData({ ...addFormData, email: e.target.value })}
                   className="w-full bg-black/50 border border-slate-850 rounded-xl py-3 px-4 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-start"
                 />
               </div>
@@ -581,16 +581,16 @@ export default function Users() {
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'كلمة المرور المشفرة' : 'Login Secure Password'}</label>
                 <div className="relative">
-                  <input 
-                    required 
-                    type={showPassword ? 'text' : 'password'} 
-                    value={addFormData.password} 
-                    onChange={(e) => setAddFormData({...addFormData, password: e.target.value})}
+                  <input
+                    required
+                    type={showPassword ? 'text' : 'password'}
+                    value={addFormData.password}
+                    onChange={(e) => setAddFormData({ ...addFormData, password: e.target.value })}
                     className="w-full bg-black/50 border border-slate-850 rounded-xl py-3 pr-4 pl-10 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-start"
                     placeholder="••••••••"
                   />
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors"
                   >
@@ -602,9 +602,9 @@ export default function Users() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'الرتبة والدور الأساسي' : 'Assigned Role'}</label>
-                  <select 
-                    value={addFormData.role} 
-                    onChange={(e) => setAddFormData({...addFormData, role: e.target.value})}
+                  <select
+                    value={addFormData.role}
+                    onChange={(e) => setAddFormData({ ...addFormData, role: e.target.value })}
                     className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer"
                   >
                     {roles.map(r => (
@@ -614,28 +614,28 @@ export default function Users() {
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'نسبة عمولة التوزيع' : 'Commission rate %'}</label>
-                  <input 
-                    type="number" 
-                    min="0" 
-                    max="100" 
-                    step="0.1" 
-                    value={addFormData.commissionRate} 
-                    onChange={(e) => setAddFormData({...addFormData, commissionRate: parseFloat(e.target.value) || 0})}
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    value={addFormData.commissionRate}
+                    onChange={(e) => setAddFormData({ ...addFormData, commissionRate: parseFloat(e.target.value) || 0 })}
                     className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-start"
                   />
                 </div>
               </div>
 
               <div className="pt-4 flex justify-end gap-3 border-t border-slate-850">
-                <button 
-                  type="button" 
-                  onClick={() => setIsAddModalOpen(false)} 
+                <button
+                  type="button"
+                  onClick={() => setIsAddModalOpen(false)}
                   className="px-5 py-2.5 text-slate-400 font-bold bg-slate-900 border border-slate-850 hover:bg-slate-850 rounded-xl text-xs transition-colors"
                 >
                   {isAr ? 'إلغاء' : 'Cancel'}
                 </button>
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   disabled={addLoading}
                   className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] disabled:from-slate-800 disabled:to-slate-900 text-black font-black text-xs rounded-xl shadow-md transition-all h-max"
                 >
@@ -653,22 +653,22 @@ export default function Users() {
           <div className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/25 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden font-sans flex flex-col max-h-[90vh]">
             <div className="p-4 border-b border-slate-850 flex justify-between items-center bg-[#07070a]/40 shrink-0">
               <h3 className="font-black text-white text-xs uppercase tracking-widest">{isAr ? 'تعديل ملف موظف' : 'Configure Staff Parameters'}</h3>
-              <button 
+              <button
                 onClick={() => { setIsEditModalOpen(false); setSelectedUser(null); }}
                 className="text-slate-500 hover:text-white bg-slate-900 p-1.5 border border-slate-800 rounded-lg"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
-            
+
             <form onSubmit={handleUpdateUser} className="p-6 space-y-4 text-start overflow-y-auto flex-1">
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'الاسم الكامل الموثق' : 'Employee Full Name'}</label>
-                <input 
-                  required 
-                  type="text" 
-                  value={editFormData.fullName} 
-                  onChange={(e) => setEditFormData({...editFormData, fullName: e.target.value})}
+                <input
+                  required
+                  type="text"
+                  value={editFormData.fullName}
+                  onChange={(e) => setEditFormData({ ...editFormData, fullName: e.target.value })}
                   className="w-full bg-black/50 border border-slate-850 rounded-xl py-3 px-4 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start"
                 />
               </div>
@@ -676,22 +676,22 @@ export default function Users() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'المعرف الفريد @id' : 'Unique ID map'}</label>
-                  <input 
-                    required 
-                    type="text" 
-                    value={editFormData.username} 
-                    onChange={(e) => setEditFormData({...editFormData, username: e.target.value})}
+                  <input
+                    required
+                    type="text"
+                    value={editFormData.username}
+                    onChange={(e) => setEditFormData({ ...editFormData, username: e.target.value })}
                     className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start font-mono"
                   />
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'رمز الكود البريدي PIN' : 'Security PIN mapping'}</label>
-                  <input 
-                    required 
-                    type="text" 
-                    maxLength={4} 
-                    value={editFormData.systemPin} 
-                    onChange={(e) => setEditFormData({...editFormData, systemPin: e.target.value})}
+                  <input
+                    required
+                    type="text"
+                    maxLength={4}
+                    value={editFormData.systemPin}
+                    onChange={(e) => setEditFormData({ ...editFormData, systemPin: e.target.value })}
                     className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs text-center font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono tracking-widest"
                   />
                 </div>
@@ -700,10 +700,10 @@ export default function Users() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'دور الموظف ورخصته' : 'Designated Role'}</label>
-                  <select 
+                  <select
                     disabled={ROOT_EMAILS.includes(selectedUser.email) || selectedUser.isRoot}
-                    value={editFormData.role} 
-                    onChange={(e) => setEditFormData({...editFormData, role: e.target.value})}
+                    value={editFormData.role}
+                    onChange={(e) => setEditFormData({ ...editFormData, role: e.target.value })}
                     className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer disabled:opacity-50"
                   >
                     {roles.map(r => (
@@ -713,13 +713,13 @@ export default function Users() {
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'عمولة المبيعات والتوزيع (%)' : 'Split Commission %'}</label>
-                  <input 
-                    type="number" 
-                    min="0" 
-                    max="100" 
-                    step="0.1" 
-                    value={editFormData.commissionRate} 
-                    onChange={(e) => setEditFormData({...editFormData, commissionRate: parseFloat(e.target.value) || 0})}
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    value={editFormData.commissionRate}
+                    onChange={(e) => setEditFormData({ ...editFormData, commissionRate: parseFloat(e.target.value) || 0 })}
                     className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-start"
                   />
                 </div>
@@ -728,11 +728,11 @@ export default function Users() {
               {!ROOT_EMAILS.includes(selectedUser.email) && !selectedUser.isRoot && (
                 <div className="bg-black/40 border border-slate-850 p-4 rounded-xl">
                   <label className="flex items-center gap-3 cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      checked={editFormData.disabled} 
-                      onChange={(e) => setEditFormData({...editFormData, disabled: e.target.checked})}
-                      className="w-4 h-4 text-rose-500 focus:ring-rose-500 bg-black/50 border-slate-850 rounded" 
+                    <input
+                      type="checkbox"
+                      checked={editFormData.disabled}
+                      onChange={(e) => setEditFormData({ ...editFormData, disabled: e.target.checked })}
+                      className="w-4 h-4 text-rose-500 focus:ring-rose-500 bg-black/50 border-slate-850 rounded"
                     />
                     <div className="flex-1 text-start">
                       <span className="block text-xs font-black text-rose-500 uppercase tracking-tighter">{isAr ? 'تجميد حساب الموظف وسحب الرخص' : 'Freeze staff account'}</span>
@@ -743,15 +743,15 @@ export default function Users() {
               )}
 
               <div className="pt-4 flex justify-end gap-3 border-t border-slate-850">
-                <button 
-                  type="button" 
-                  onClick={() => { setIsEditModalOpen(false); setSelectedUser(null); }} 
+                <button
+                  type="button"
+                  onClick={() => { setIsEditModalOpen(false); setSelectedUser(null); }}
                   className="px-5 py-2.5 text-slate-400 font-bold bg-slate-900 border border-slate-850 hover:bg-slate-850 rounded-xl text-xs transition-colors"
                 >
                   {isAr ? 'إلغاء' : 'Cancel'}
                 </button>
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   disabled={editLoading}
                   className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] disabled:opacity-50 text-black font-black text-xs rounded-xl shadow-md transition-all h-max"
                 >
@@ -763,7 +763,7 @@ export default function Users() {
         </div>
       )}
 
-      <ConfirmModal 
+      <ConfirmModal
         isOpen={confirmConfig.isOpen}
         onClose={() => setConfirmConfig({ ...confirmConfig, isOpen: false })}
         onConfirm={confirmConfig.onConfirm}
@@ -776,7 +776,7 @@ export default function Users() {
         isOpen={deletePinConfig.isOpen}
         onClose={() => setDeletePinConfig({ ...deletePinConfig, isOpen: false })}
         title={isAr ? 'حذف حساب الموظف نهائياً' : 'Delete Employee Account Permanently'}
-        message={isAr 
+        message={isAr
           ? `هل أنت متأكد من رغبتك في حذف الموظف ${deletePinConfig.entityName}؟ هذا الإجراء سيقوم بحذف حسابه المالي وكافة قيوده ومصروفاته المرتبطة نهائياً.`
           : `Are you sure you want to permanently delete user ${deletePinConfig.entityName}? This will purge their financial account, journal transactions, and associated expenses from the database.`}
         isAr={isAr}

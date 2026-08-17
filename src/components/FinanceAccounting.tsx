@@ -16,6 +16,8 @@ import { financialAccountService } from '../services/financialAccountService';
 import { useRole } from '../hooks/useRole';
 import { formatDate, formatDateTime, now } from '../lib/dateUtils';
 
+import { useExchangeRates } from '../hooks/useExchangeRates';
+
 interface FinanceAccountingProps {
   orders: any[];
   expenses: any[];
@@ -37,27 +39,19 @@ export default function FinanceAccounting({
 }: FinanceAccountingProps) {
   const [accountingTab, setAccountingTab] = useState<string>(initialTab);
   const EXPENSE_CATEGORIES_DYNAMIC = useExpenseCategories();
+  const { activeCurrencies, rates: dbRates } = useExchangeRates();
 
   // Selected order details drawer state
   const [selectedOrderDetails, setSelectedOrderDetails] = useState<any | null>(null);
 
   // Quick Currency Formatter with Conversion Subtext
   const renderCurrencyWithEquiv = (amount: number, currency: string = 'YER') => {
-    if (currency === 'USD') {
-      const yerEquiv = amount * (settings.exchangeRateUSD || 535);
+    if (currency !== 'YER') {
+      const rate = dbRates[currency] || (currency === 'USD' ? (settings.exchangeRateUSD || 535) : currency === 'SAR' ? (settings.exchangeRateSAR || 140) : 1);
+      const yerEquiv = amount * rate;
       return (
         <span className="font-mono">
-          ${amount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} <span className="text-[10px] font-sans text-slate-500">USD</span>
-          <span className="block text-[9px] font-sans text-slate-500 font-normal mt-0.5">
-            (≈ {Math.round(yerEquiv).toLocaleString('en-US')} YER)
-          </span>
-        </span>
-      );
-    } else if (currency === 'SAR') {
-      const yerEquiv = amount * (settings.exchangeRateSAR || 140);
-      return (
-        <span className="font-mono">
-          {amount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} <span className="text-[10px] font-sans text-slate-500">SAR</span>
+          {amount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} <span className="text-[10px] font-sans text-slate-500">{currency}</span>
           <span className="block text-[9px] font-sans text-slate-500 font-normal mt-0.5">
             (≈ {Math.round(yerEquiv).toLocaleString('en-US')} YER)
           </span>
@@ -74,8 +68,9 @@ export default function FinanceAccounting({
 
   const formatAmountWithEquiv = (amount: number, currency: string) => {
     const formatted = `${amount.toLocaleString()} ${currency}`;
-    if (currency === 'SAR') {
-      const yerEquiv = amount * (settings.exchangeRateSAR || 140);
+    if (currency !== 'YER') {
+      const rate = dbRates[currency] || (currency === 'USD' ? (settings.exchangeRateUSD || 535) : currency === 'SAR' ? (settings.exchangeRateSAR || 140) : 1);
+      const yerEquiv = amount * rate;
       return `${formatted} (≈ ${Math.round(yerEquiv).toLocaleString()} YER)`;
     }
     return formatted;
@@ -233,16 +228,16 @@ export default function FinanceAccounting({
   // Currency utility converter
   const convertToYER = (amount: number, currency: string) => {
     const amt = parseFloat(String(amount || 0));
-    if (currency === 'USD') return amt * (settings.exchangeRateUSD || 535);
-    if (currency === 'SAR') return amt * (settings.exchangeRateSAR || 140);
-    return amt;
+    if (!currency || currency === 'YER') return amt;
+    const rate = dbRates[currency] || (currency === 'USD' ? (settings.exchangeRateUSD || 535) : currency === 'SAR' ? (settings.exchangeRateSAR || 140) : 1);
+    return amt * rate;
   };
 
   // Convert YER to original currency if needed for display
   const getDisplayEquivalent = (amtYER: number, currency: string) => {
-    if (currency === 'USD') return amtYER / (settings.exchangeRateUSD || 535);
-    if (currency === 'SAR') return amtYER / (settings.exchangeRateSAR || 140);
-    return amtYER;
+    if (!currency || currency === 'YER') return amtYER;
+    const rate = dbRates[currency] || (currency === 'USD' ? (settings.exchangeRateUSD || 535) : currency === 'SAR' ? (settings.exchangeRateSAR || 140) : 1);
+    return amtYER / (rate || 1);
   };
 
   // Asset totals sums based on the existing converter structure
@@ -620,7 +615,7 @@ export default function FinanceAccounting({
         rawAmt,
         editJournalData.currencyOriginal,
         settings.currency || 'YER',
-        { USD: settings.exchangeRateUSD || 535, SAR: settings.exchangeRateSAR || 140 }
+        dbRates
       );
 
       const parsedCreatedAt = editJournalData.createdAt ? new Date(editJournalData.createdAt).getTime() : Date.now();
@@ -650,11 +645,7 @@ export default function FinanceAccounting({
           : query(collection(db, 'account_transactions'), where('__name__', '==', txId));
 
         const txSnap = await getDocs(txQuery);
-        const exchangeRates = {
-          USD: settings.exchangeRateUSD || 535,
-          SAR: settings.exchangeRateSAR || 140,
-          YER: 1
-        };
+        const exchangeRates = dbRates;
 
         const newDebitAcc = editJournalData.debitAccountId ? financialAccounts.find(a => a.id === editJournalData.debitAccountId) : null;
         const newCreditAcc = editJournalData.creditAccountId ? financialAccounts.find(a => a.id === editJournalData.creditAccountId) : null;
@@ -885,7 +876,7 @@ export default function FinanceAccounting({
         amountVal,
         adjustData.currency,
         settings.currency || 'YER',
-        { USD: settings.exchangeRateUSD || 535, SAR: settings.exchangeRateSAR || 140 }
+        dbRates
       );
 
       const timestamp = Date.now();
@@ -1506,7 +1497,7 @@ Continue?`
           amountVal,
           'YER',
           settings.currency || 'YER',
-          { USD: settings.exchangeRateUSD || 535, SAR: settings.exchangeRateSAR || 140 }
+          dbRates
         );
 
         const systemAccs = await financialAccountService.ensureSystemAccounts('YER');
