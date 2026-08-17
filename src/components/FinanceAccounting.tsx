@@ -47,7 +47,7 @@ export default function FinanceAccounting({
   // Quick Currency Formatter with Conversion Subtext
   const renderCurrencyWithEquiv = (amount: number, currency: string = 'YER') => {
     if (currency !== 'YER') {
-      const rate = dbRates[currency] || (currency === 'USD' ? (settings.exchangeRateUSD || 535) : currency === 'SAR' ? (settings.exchangeRateSAR || 140) : 1);
+      const rate = dbRates[currency] || 1;
       const yerEquiv = amount * rate;
       return (
         <span className="font-mono">
@@ -69,7 +69,7 @@ export default function FinanceAccounting({
   const formatAmountWithEquiv = (amount: number, currency: string) => {
     const formatted = `${amount.toLocaleString()} ${currency}`;
     if (currency !== 'YER') {
-      const rate = dbRates[currency] || (currency === 'USD' ? (settings.exchangeRateUSD || 535) : currency === 'SAR' ? (settings.exchangeRateSAR || 140) : 1);
+      const rate = dbRates[currency] || 1;
       const yerEquiv = amount * rate;
       return `${formatted} (≈ ${Math.round(yerEquiv).toLocaleString()} YER)`;
     }
@@ -229,14 +229,14 @@ export default function FinanceAccounting({
   const convertToYER = (amount: number, currency: string) => {
     const amt = parseFloat(String(amount || 0));
     if (!currency || currency === 'YER') return amt;
-    const rate = dbRates[currency] || (currency === 'USD' ? (settings.exchangeRateUSD || 535) : currency === 'SAR' ? (settings.exchangeRateSAR || 140) : 1);
+    const rate = dbRates[currency] || 1;
     return amt * rate;
   };
 
   // Convert YER to original currency if needed for display
   const getDisplayEquivalent = (amtYER: number, currency: string) => {
     if (!currency || currency === 'YER') return amtYER;
-    const rate = dbRates[currency] || (currency === 'USD' ? (settings.exchangeRateUSD || 535) : currency === 'SAR' ? (settings.exchangeRateSAR || 140) : 1);
+    const rate = dbRates[currency] || 1;
     return amtYER / (rate || 1);
   };
 
@@ -509,8 +509,8 @@ export default function FinanceAccounting({
     const totalYerBalance = yerCashAccounts.reduce((sum, a) => sum + (parseFloat(a.balance as any) || 0), 0);
 
     // 3. Foreign Currencies Card: Show the equivalent value of the YER treasury in USD and SAR as requested
-    const usdEquivalent = totalYerBalance / (settings.exchangeRateUSD || 535);
-    const sarEquivalent = totalYerBalance / (settings.exchangeRateSAR || 140);
+    const usdEquivalent = totalYerBalance / (dbRates.USD || 1);
+    const sarEquivalent = totalYerBalance / (dbRates.SAR || 1);
 
     return {
       yer: { in: 0, out: 0, balance: totalYerBalance },
@@ -533,7 +533,7 @@ export default function FinanceAccounting({
           balance,
           a.currency || 'YER',
           settings.currency || 'YER',
-          { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+          dbRates
         );
       }, 0);
 
@@ -550,7 +550,7 @@ export default function FinanceAccounting({
           balance,
           a.currency || 'YER',
           settings.currency || 'YER',
-          { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+          dbRates
         );
       }, 0);
 
@@ -563,7 +563,7 @@ export default function FinanceAccounting({
           balance,
           a.currency || 'YER',
           settings.currency || 'YER',
-          { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+          dbRates
         );
       }, 0);
 
@@ -576,7 +576,7 @@ export default function FinanceAccounting({
           balance,
           a.currency || 'YER',
           settings.currency || 'YER',
-          { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+          dbRates
         );
       }, 0);
 
@@ -1021,7 +1021,7 @@ export default function FinanceAccounting({
       .filter(o => o.deliveryCourierId === auditedCourierId && (o.orderStatus === 'تم التسليم' || o.orderStatus === 'Delivered') && parseFloat(o.amountRemaining || 0) > 0);
 
     const totalUnremittedCashValue = currentUnremittedCargoCash.reduce((sum, o) => sum + parseFloat(o.amountRemaining || 0), 0);
-    const totalUnremittedCashValueInTargetCurrency = currency === 'SAR' ? totalUnremittedCashValue / (settings.exchangeRateSAR || 140) : totalUnremittedCashValue;
+    const totalUnremittedCashValueInTargetCurrency = currency === 'SAR' ? totalUnremittedCashValue / (dbRates.SAR || 1) : totalUnremittedCashValue;
 
     const totalOrdersDelivered = courierOrders.filter(o => o.orderStatus === 'تم التسليم' || o.orderStatus === 'Delivered').length;
     const successRate = courierOrders.length > 0
@@ -1163,7 +1163,7 @@ Continue?`
             parseFloat(exp.amount || 0),
             exp.currency || 'YER',
             settings.currency || 'SAR',
-            { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+            dbRates
           );
           await financialAccountService.recordTransaction({
             date: timestamp,
@@ -1277,7 +1277,7 @@ Continue?`
         amount: courierAuditSheet.totalUnremittedCashValue,
         currency: currency,
         amountInDefaultCurrency: isSourcing
-          ? courierAuditSheet.totalUnremittedCashValue * (settings.exchangeRateSAR || 140)
+          ? courierAuditSheet.totalUnremittedCashValue * (dbRates.SAR || 1)
           : courierAuditSheet.totalUnremittedCashValue,
         recipientId: courierAuditSheet.courier.id,
         recipientName: courierAuditSheet.courier.fullName,
@@ -2411,7 +2411,7 @@ Continue?`
                             <td className="p-2 text-left font-mono font-black text-cyan-400">
                               {courierAuditSheet.courier.courierType === 'sourcing' ? (
                                 <div className="text-right">
-                                  <span>{((parseFloat(ord.amountRemaining || 0) / (settings.exchangeRateSAR || 140))).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} SAR</span>
+                                  <span>{((parseFloat(ord.amountRemaining || 0) / (dbRates.SAR || 1))).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} SAR</span>
                                   <span className="block text-[9px] text-slate-550 font-normal">({parseFloat(ord.amountRemaining || 0).toLocaleString()} YER)</span>
                                 </div>
                               ) : (
@@ -2503,18 +2503,18 @@ Continue?`
                 <div className="space-y-4 pt-1">
                   <div>
                     <span className="text-[10px] text-slate-500 uppercase block font-black">{isAr ? 'إجمالي قيمة تعاملات الشحن المدين' : 'Gross Purchases / Cargo Debits'}</span>
-                    <span className="text-base font-mono font-black text-white">{customerLedgerDetails.grossFreightValuation.toLocaleString()} {customerLedgerDetails.customer.financialCurrency || settings.currency || 'YER'}</span>
+                    <span className="text-base font-mono font-black text-white">{customerLedgerDetails.grossFreightValuation.toLocaleString()} {customerLedgerDetails.customer.financialCurrency || 'YER'}</span>
                   </div>
 
                   <div>
                     <span className="text-[10px] text-slate-500 uppercase block font-black">{isAr ? 'المبالغ المسددة والمقيدة كداين' : 'Settle Paid Revenues'}</span>
-                    <span className="text-base font-mono font-black text-emerald-400">{customerLedgerDetails.netPaidRevenues.toLocaleString()} {customerLedgerDetails.customer.financialCurrency || settings.currency || 'YER'}</span>
+                    <span className="text-base font-mono font-black text-emerald-400">{customerLedgerDetails.netPaidRevenues.toLocaleString()} {customerLedgerDetails.customer.financialCurrency || 'YER'}</span>
                   </div>
 
                   {/* Cumulative Ledger Net balance */}
                   <div className="bg-amber-500/5 p-4 rounded-3xl border border-amber-500/10">
                     <span className="text-[10px] text-amber-500 uppercase block font-black">{isAr ? 'رصيد الحساب المتبقي بذمته (مطالبة مالية)' : 'Actual Outstanding Debit Balance'}</span>
-                    <span className="text-xl font-mono font-black text-amber-500">{customerLedgerDetails.currentOutstandingBalance.toLocaleString()} {customerLedgerDetails.customer.financialCurrency || settings.currency || 'YER'}</span>
+                    <span className="text-xl font-mono font-black text-amber-500">{customerLedgerDetails.currentOutstandingBalance.toLocaleString()} {customerLedgerDetails.customer.financialCurrency || 'YER'}</span>
                     <span className="text-[8.5px] text-slate-500 block mt-1 leading-snug">
                       {isAr ? 'حاصل المديونية التراكمي المتبقي بذمة هذا الحساب عن شحنات الشحن والرسوم المعلقة.' : 'Cumulative balanced outstanding cargo debts waiting for collections.'}
                     </span>
@@ -2563,9 +2563,9 @@ Continue?`
                           <td className="p-3 text-right font-mono text-rose-452 text-rose-400">
                             {row.debit > 0 ? (
                               <div className="flex flex-col items-end">
-                                <span>+{(row.amountOriginal || row.debit).toLocaleString()} {row.currencyOriginal || (customerLedgerDetails.customer.financialCurrency || settings.currency || 'YER')}</span>
-                                {row.currencyOriginal && row.currencyOriginal !== (customerLedgerDetails.customer.financialCurrency || settings.currency || 'YER') && (
-                                  <span className="text-[8px] text-slate-500 font-normal">≈ {row.debit.toLocaleString()} {customerLedgerDetails.customer.financialCurrency || settings.currency || 'YER'}</span>
+                                <span>+{(row.amountOriginal || row.debit).toLocaleString()} {row.currencyOriginal || (customerLedgerDetails.customer.financialCurrency || 'YER')}</span>
+                                {row.currencyOriginal && row.currencyOriginal !== (customerLedgerDetails.customer.financialCurrency || 'YER') && (
+                                  <span className="text-[8px] text-slate-500 font-normal">≈ {row.debit.toLocaleString()} {customerLedgerDetails.customer.financialCurrency || 'YER'}</span>
                                 )}
                               </div>
                             ) : '—'}
@@ -2573,15 +2573,15 @@ Continue?`
                           <td className="p-3 text-right font-mono text-emerald-400">
                             {row.credit > 0 ? (
                               <div className="flex flex-col items-end">
-                                <span>-{(row.amountOriginal || row.credit).toLocaleString()} {row.currencyOriginal || (customerLedgerDetails.customer.financialCurrency || settings.currency || 'YER')}</span>
-                                {row.currencyOriginal && row.currencyOriginal !== (customerLedgerDetails.customer.financialCurrency || settings.currency || 'YER') && (
-                                  <span className="text-[8px] text-slate-500 font-normal">≈ {row.credit.toLocaleString()} {customerLedgerDetails.customer.financialCurrency || settings.currency || 'YER'}</span>
+                                <span>-{(row.amountOriginal || row.credit).toLocaleString()} {row.currencyOriginal || (customerLedgerDetails.customer.financialCurrency || 'YER')}</span>
+                                {row.currencyOriginal && row.currencyOriginal !== (customerLedgerDetails.customer.financialCurrency || 'YER') && (
+                                  <span className="text-[8px] text-slate-500 font-normal">≈ {row.credit.toLocaleString()} {customerLedgerDetails.customer.financialCurrency || 'YER'}</span>
                                 )}
                               </div>
                             ) : '—'}
                           </td>
                           <td className="p-3 text-left font-mono font-black text-slate-200">
-                            {row.balance.toLocaleString()} {customerLedgerDetails.customer.financialCurrency || settings.currency || 'YER'}
+                            {row.balance.toLocaleString()} {customerLedgerDetails.customer.financialCurrency || 'YER'}
                           </td>
                         </tr>
                       ))}
@@ -2685,19 +2685,19 @@ Continue?`
                 <div className="text-center">
                   <span className="block text-[8px] text-slate-500 font-black">{isAr ? 'إجمالي العملاء' : 'Cust Bal'}</span>
                   <span className="font-mono text-[10px] font-bold text-white block">
-                    {financialAccounts.filter(a => a.entityType === 'customer').reduce((sum, a) => sum + financialAccountService.convertToDefaultCurrency(a.balance || 0, a.currency || 'YER', settings.currency || 'YER', { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }), 0).toLocaleString()} {settings.currency || 'YER'}
+                    {financialAccounts.filter(a => a.entityType === 'customer').reduce((sum, a) => sum + financialAccountService.convertToDefaultCurrency(a.balance || 0, a.currency || 'YER', 'YER', dbRates), 0).toLocaleString()} YER
                   </span>
                 </div>
                 <div className="text-center border-l border-r border-slate-850 px-3">
                   <span className="block text-[8px] text-slate-500 font-black">{isAr ? 'إجمالي المناديب' : 'Courier Bal'}</span>
                   <span className="font-mono text-[10px] font-bold text-amber-500 block">
-                    {financialAccounts.filter(a => a.entityType === 'courier').reduce((sum, a) => sum + financialAccountService.convertToDefaultCurrency(a.balance || 0, a.currency || 'YER', settings.currency || 'YER', { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }), 0).toLocaleString()} {settings.currency || 'YER'}
+                    {financialAccounts.filter(a => a.entityType === 'courier').reduce((sum, a) => sum + financialAccountService.convertToDefaultCurrency(a.balance || 0, a.currency || 'YER', 'YER', dbRates), 0).toLocaleString()} YER
                   </span>
                 </div>
                 <div className="text-center">
                   <span className="block text-[8px] text-slate-500 font-black">{isAr ? 'إجمالي الموظفين' : 'Staff Bal'}</span>
                   <span className="font-mono text-[10px] font-bold text-indigo-400 block">
-                    {financialAccounts.filter(a => a.entityType === 'employee').reduce((sum, a) => sum + financialAccountService.convertToDefaultCurrency(a.balance || 0, a.currency || 'YER', settings.currency || 'YER', { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }), 0).toLocaleString()} {settings.currency || 'YER'}
+                    {financialAccounts.filter(a => a.entityType === 'employee').reduce((sum, a) => sum + financialAccountService.convertToDefaultCurrency(a.balance || 0, a.currency || 'YER', 'YER', dbRates), 0).toLocaleString()} YER
                   </span>
                 </div>
               </div>
@@ -2723,8 +2723,8 @@ Continue?`
                 </thead>
                 <tbody className="text-xs divide-y divide-slate-805 bg-black/10 font-bold">
                   {filteredAccountsList.map((acc, idx) => {
-                    const balanceInUSD = getDisplayEquivalent(acc.balance || 0, 'USD');
-                    const balanceInSAR = getDisplayEquivalent(acc.balance || 0, 'SAR');
+                    const balanceInUSD = financialAccountService.convertToTargetCurrency(acc.balance || 0, acc.currency || 'YER', 'USD', dbRates);
+                    const balanceInSAR = financialAccountService.convertToTargetCurrency(acc.balance || 0, acc.currency || 'YER', 'SAR', dbRates);
 
                     return (
                       <tr key={`${acc.id}-${idx}`} className="hover:bg-slate-950/40 transition-colors">
@@ -2911,7 +2911,7 @@ Continue?`
                 description: isAr ? `صرف راتب شهر ${s.salaryMonth}` : `Salary payment for ${s.salaryMonth}`,
                 type: 'Credit',
                 amount: parseFloat(s.amount) || 0,
-                currency: s.currency || settings.currency || 'YER',
+                currency: s.currency || 'YER',
                 module: 'salary',
                 refNumber: s.voucherCode
               }))
@@ -2983,7 +2983,7 @@ Continue?`
                     <div className="flex items-baseline justify-between mt-2">
                       <span className="text-xl font-mono font-black text-[#d4af37]">
                         {totalPaid.toLocaleString()}
-                        <span className="text-xs font-sans text-slate-500 font-normal ml-1.5">{settings.currency || 'YER'}</span>
+                        <span className="text-xs font-sans text-slate-500 font-normal ml-1.5">YER</span>
                       </span>
                       <Coins className="w-6 h-6 text-[#d4af37]/20 shrink-0" />
                     </div>
@@ -3105,7 +3105,7 @@ Continue?`
                             <td className="p-4 font-mono text-xs font-black text-[#d4af37] text-start">{item.voucherCode}</td>
                             <td className="p-4 text-slate-400 max-w-xs truncate text-start">{item.notes || '—'}</td>
                             <td className="p-4 text-center font-mono font-black text-xs text-emerald-400">
-                              {(item.amount || 0).toLocaleString()} {item.currency || settings.currency}
+                              {(item.amount || 0).toLocaleString()} {item.currency || 'YER'}
                             </td>
                             <td className="p-4 text-left">
                               <button
@@ -3150,7 +3150,7 @@ Continue?`
                       </p>
                       {empStatementEmployee?.monthlySalary && (
                         <p className="text-xs font-mono text-[#d4af37] mt-0.5">
-                          {isAr ? 'الراتب الشهري:' : 'Monthly Salary:'} {empStatementEmployee.monthlySalary?.toLocaleString()} {empStatementEmployee.currency || settings.currency}
+                          {isAr ? 'الراتب الشهري:' : 'Monthly Salary:'} {empStatementEmployee.monthlySalary?.toLocaleString()} {empStatementEmployee.currency || 'YER'}
                         </p>
                       )}
                     </div>
@@ -3337,7 +3337,7 @@ Continue?`
                 </div>
                 <div className="border-t border-slate-200/80 my-2 pt-2 flex justify-between items-center text-sm font-black">
                   <span className="text-slate-800">{isAr ? 'المبلغ الصافي المصروف' : 'Net Amount Disbursed'}</span>
-                  <span className="font-mono text-lg text-emerald-600">{(selectedSalaryVoucher.amount || 0).toLocaleString()} {selectedSalaryVoucher.currency || settings.currency}</span>
+                  <span className="font-mono text-lg text-emerald-600">{(selectedSalaryVoucher.amount || 0).toLocaleString()} {selectedSalaryVoucher.currency || 'YER'}</span>
                 </div>
               </div>
               <div className="text-xs">

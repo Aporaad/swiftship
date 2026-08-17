@@ -72,11 +72,10 @@ export default function Expenses() {
         <button
           key={tab.id}
           onClick={() => handleTabChange(tab.id)}
-          className={`px-4 py-3 text-xs font-black rounded-t-xl flex items-center gap-2 whitespace-nowrap transition-colors ${
-            activeTab === tab.id 
-              ? 'bg-[#d4af37]/10 text-[#d4af37] border-b-2 border-[#d4af37]' 
+          className={`px-4 py-3 text-xs font-black rounded-t-xl flex items-center gap-2 whitespace-nowrap transition-colors ${activeTab === tab.id
+              ? 'bg-[#d4af37]/10 text-[#d4af37] border-b-2 border-[#d4af37]'
               : 'text-slate-400 hover:bg-slate-900 hover:text-white'
-          }`}
+            }`}
         >
           <tab.icon className="w-4 h-4" />
           {isAr ? tab.labelAr : tab.labelEn}
@@ -130,15 +129,15 @@ export default function Expenses() {
       const snap = await getDocs(q);
       const docsData = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setExpenses(docsData);
-      
+
       // Also fetch couriers to ensure they are in sync
       const couriersSnap = await getDocs(collection(db, 'couriers'));
       setCouriers(couriersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 
       notificationService.notify({
         title: isAr ? 'تم تحديث الإحصائيات المالية' : 'Financial Stats Synced',
-        message: isAr 
-          ? 'تم إعادة حساب إجمالي المصروفات والعهد العالقة مباشرة من الدفاتر الحية.' 
+        message: isAr
+          ? 'تم إعادة حساب إجمالي المصروفات والعهد العالقة مباشرة من الدفاتر الحية.'
           : 'Total expenses and pending custody figures re-calculated directly from Firestore.',
         type: 'success',
         category: 'finance'
@@ -258,7 +257,7 @@ export default function Expenses() {
     setAddLoading(true);
     try {
       const expenseNumber = await generateExpenseNumber();
-      
+
       let type = 'General';
       if (formData.category === 'custody') {
         type = 'Custody';
@@ -318,7 +317,7 @@ export default function Expenses() {
         rawAmount,
         formData.currency,
         settings.currency || 'SAR',
-        { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+        dbRates
       );
 
       const payload = {
@@ -405,8 +404,8 @@ export default function Expenses() {
 
       notificationService.notify({
         title: isAr ? 'تم تقييد السند بالخزينة بشكل مزدوج' : 'Double-Entry Voucher Logged',
-        message: isAr 
-          ? `تم صرف وتسجيل القيد في دفاتر الحسابات برقم: ${expenseNumber}` 
+        message: isAr
+          ? `تم صرف وتسجيل القيد في دفاتر الحسابات برقم: ${expenseNumber}`
           : `Double-entry transaction recorded successfully: ${expenseNumber}`,
         type: 'success',
         category: 'finance'
@@ -455,19 +454,13 @@ export default function Expenses() {
     setEditLoading(true);
     try {
       const rawAmount = parseFloat(editFormData.amount);
-      const exchangeRates = { 
-        USD: settings.exchangeRateUSD || 535, 
-        SAR: settings.exchangeRateSAR || 140,
-        YER: 1
-      };
-      
       const convertedAmount = financialAccountService.convertToDefaultCurrency(
         rawAmount,
         editFormData.currency,
         settings.currency || 'YER',
-        exchangeRates
+        dbRates
       );
-      
+
       const parsedCreatedAt = editFormData.createdAt ? new Date(editFormData.createdAt).getTime() : Date.now();
 
       const batch = writeBatch(db);
@@ -479,13 +472,13 @@ export default function Expenses() {
 
         txSnap.docs.forEach((txDoc) => {
           const txData = txDoc.data();
-          
+
           // CRITICAL: Calculate new amount in the account's specific currency
           const legNewAmount = financialAccountService.convertToTargetCurrency(
             rawAmount,
             editFormData.currency,
             txData.currency || 'YER',
-            exchangeRates
+            dbRates
           );
 
           const diffVal = legNewAmount - (txData.amount || 0);
@@ -602,7 +595,7 @@ export default function Expenses() {
       const currentRemitted = parseFloat(exp.remittedAmount) || 0;
       const currentRemittedDefault = parseFloat(exp.remittedAmountInDefaultCurrency) || 0;
       const totalAmount = parseFloat(exp.amount) || 0;
-      
+
       const newRemitted = currentRemitted + amountToRemit;
       const isFullySettled = newRemitted >= totalAmount;
 
@@ -610,9 +603,9 @@ export default function Expenses() {
         amountToRemit,
         exp.currency || 'YER',
         settings.currency || 'SAR',
-        { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
+        dbRates
       );
-      
+
       const newRemittedDefault = currentRemittedDefault + settledAmountInDefaultCurrency;
 
       await updateDoc(doc(db, 'expenses', exp.id), {
@@ -634,7 +627,7 @@ export default function Expenses() {
             date: Date.now(),
             description: isAr ? `تسوية/سداد عهدة (${amountToRemit} ${exp.currency || ''}): ${exp.expenseNumber}` : `Custody settlement (${amountToRemit} ${exp.currency}): ${exp.expenseNumber}`,
             module: 'custody',
-            refNumber: `${exp.expenseNumber}-SETTLE-${Math.floor(Math.random()*1000)}`,
+            refNumber: `${exp.expenseNumber}-SETTLE-${Math.floor(Math.random() * 1000)}`,
             amount: amountToRemit,
             currency: exp.currency || 'YER',
             debitAccount: { id: systemAccs['sys_cash_account'], code: '1111-0' }, // Returned to cash box
@@ -654,7 +647,7 @@ export default function Expenses() {
         type: 'success',
         category: 'finance'
       });
-      
+
       setIsSettleModalOpen(false);
       setSelectedExpense(null);
       setSettleAmount('');
@@ -727,12 +720,12 @@ export default function Expenses() {
       const amt = parseFloat(e.amount || '0');
       if (e.currency === 'USD') return sum + amt;
       if (e.currency === 'YER') {
-        const rateUSD = parseFloat(settings.exchangeRateUSD as any || '535');
+        const rateUSD = dbRates.USD || 1;
         return sum + (amt / rateUSD);
       }
       if (e.currency === 'SAR') {
-        const rateSAR = parseFloat(settings.exchangeRateSAR as any || '140');
-        const rateUSD = parseFloat(settings.exchangeRateUSD as any || '535');
+        const rateSAR = dbRates.SAR || 1;
+        const rateUSD = dbRates.USD || 1;
         return sum + ((amt * rateSAR) / rateUSD);
       }
       return sum + amt;
@@ -761,7 +754,7 @@ export default function Expenses() {
   const exportExpensesToPDF = () => {
     const reportTitle = isAr ? 'كشف المصروفات والعهد المالية' : 'Administrative Expenses Ledger';
     printContent(reportTitle, 'expenses-ledger-table', isAr);
-    
+
     activityLogService.log('export_pdf', `Expenses list report`, {
       count: filteredExpenses.length
     });
@@ -779,9 +772,9 @@ export default function Expenses() {
       isAr ? 'ملاحظات' : 'Remarks',
       isAr ? 'الحالة' : 'Status'
     ];
-    
+
     const csvLines = [headers.join(',')];
-    
+
     filteredExpenses.forEach(exp => {
       const catObj = getCategoryDetails(exp);
       const catLabel = isAr ? catObj.labelAr : catObj.labelEn;
@@ -798,7 +791,7 @@ export default function Expenses() {
       ];
       csvLines.push(row.join(','));
     });
-    
+
     const csvContent = "\uFEFF" + csvLines.join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -877,7 +870,7 @@ export default function Expenses() {
         </div>
 
         {/* Reports Component */}
-        <FinanceReports 
+        <FinanceReports
           orders={orders}
           expenses={expenses}
           couriers={couriers}
@@ -926,7 +919,7 @@ export default function Expenses() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2.5">
-          <button 
+          <button
             type="button"
             onClick={handleRefreshStats}
             disabled={isRefreshing}
@@ -936,14 +929,14 @@ export default function Expenses() {
             {isAr ? 'تحديث الحسابات والعهد' : 'Refresh Financial Stats'}
           </button>
 
-          <button 
+          <button
             onClick={exportExpensesToPDF}
             className="bg-slate-950 hover:bg-slate-900 border border-[#d4af37]/25 text-[#d4af37] px-4 py-2.5 rounded-xl flex items-center gap-2 font-black text-xs transition active:scale-95 shadow-md cursor-pointer"
           >
             <Printer className="w-4 h-4" /> {isAr ? 'طباعة تقرير PDF' : 'PDF Report'}
           </button>
-          
-          <button 
+
+          <button
             onClick={exportExpensesToCSV}
             className="bg-slate-950 hover:bg-slate-905 border border-emerald-900 text-emerald-400 px-4 py-2.5 rounded-xl flex items-center gap-2 font-black text-xs transition active:scale-95 shadow-md cursor-pointer"
           >
@@ -951,7 +944,7 @@ export default function Expenses() {
           </button>
 
           {canAddExpenses && (
-            <button 
+            <button
               onClick={() => setIsAddOpen(true)}
               className="bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black px-5 py-2.5 rounded-xl flex items-center gap-2 font-black text-xs transition transform active:scale-95 shadow-md shadow-yellow-950/20 cursor-pointer"
             >
@@ -962,12 +955,11 @@ export default function Expenses() {
       </div>
 
       {/* KPI Stats Grid */}
-      <div className={`grid grid-cols-1 ${
-        canViewGeneralExpenses && canViewCustody 
-          ? 'md:grid-cols-4' 
+      <div className={`grid grid-cols-1 ${canViewGeneralExpenses && canViewCustody
+          ? 'md:grid-cols-4'
           : (canViewGeneralExpenses || canViewCustody ? 'md:grid-cols-2' : 'hidden')
-      } gap-4`}>
-        
+        } gap-4`}>
+
         {/* KPI 1 */}
         {canViewGeneralExpenses && (
           <div className="bg-gradient-to-br from-[#121215] to-[#070708] border border-slate-850 p-4 rounded-2xl relative overflow-hidden shadow">
@@ -1026,13 +1018,13 @@ export default function Expenses() {
 
       {/* Main Filter Section */}
       <div className="bg-[#121215] border border-slate-850 rounded-3xl overflow-hidden flex flex-col shadow-2xl">
-        
+
         {/* Filter belt */}
         <div className="p-4 border-b border-slate-850 bg-black/30 flex flex-wrap gap-3">
           <div className="relative flex-1 min-w-[240px]">
             <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-550 w-4 h-4" />
-            <input 
-              type="text" 
+            <input
+              type="text"
               placeholder={isAr ? "بحث بالرقم المرجعي للسند أو غرض المصروف أو المستلم..." : "Search ledger entries..."}
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
@@ -1040,9 +1032,9 @@ export default function Expenses() {
             />
           </div>
 
-          <select 
-            value={typeFilter} 
-            onChange={(e) => setTypeFilter(e.target.value)} 
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
             className="bg-black/50 border border-slate-850 text-slate-300 rounded-xl px-4 py-2 text-xs font-bold outline-none focus:border-[#d4af37]/50 cursor-pointer"
           >
             <option value="all">{isAr ? 'جميع المعاملات المالية' : 'All Transactions'}</option>
@@ -1108,11 +1100,11 @@ export default function Expenses() {
                     </td>
                     <td className="p-4 font-bold text-slate-300 text-start">
                       <div className="flex flex-col text-start">
-                        <span 
+                        <span
                           onClick={() => {
                             if (exp.recipientEntityId && (exp.recipientEntityType === 'customer' || exp.recipientEntityType === 'courier')) {
-                              window.dispatchEvent(new CustomEvent('open-entity-ledger', { 
-                                detail: { entityId: exp.recipientEntityId, entityType: exp.recipientEntityType } 
+                              window.dispatchEvent(new CustomEvent('open-entity-ledger', {
+                                detail: { entityId: exp.recipientEntityId, entityType: exp.recipientEntityType }
                               }));
                             }
                           }}
@@ -1160,7 +1152,7 @@ export default function Expenses() {
                     <td className="p-4 text-left">
                       <div className="flex items-center justify-end gap-2 shrink-0">
                         {isSettleBtnVisible && (
-                          <button 
+                          <button
                             onClick={() => openSettleModal(exp)}
                             className="bg-emerald-600/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500 hover:text-black hover:border-transparent px-3 py-1.5 rounded-xl font-black text-[10px] transition-all cursor-pointer"
                           >
@@ -1221,9 +1213,9 @@ export default function Expenses() {
                 <CheckCircle2 className="w-4 h-4 text-[#d4af37]" />
                 {isAr ? 'تأكيد التسوية والتصفية للعهدة' : 'Settle Custody'}
               </h3>
-              <button 
-                type="button" 
-                onClick={() => { setIsSettleModalOpen(false); setSelectedExpense(null); setSettleAmount(''); }} 
+              <button
+                type="button"
+                onClick={() => { setIsSettleModalOpen(false); setSelectedExpense(null); setSettleAmount(''); }}
                 className="text-slate-500 hover:text-white p-1 bg-slate-900 border border-slate-800 rounded-lg transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
@@ -1266,16 +1258,16 @@ export default function Expenses() {
               </div>
             </div>
             <div className="p-4 border-t border-slate-850 flex justify-end gap-3 shrink-0">
-              <button 
-                type="button" 
+              <button
+                type="button"
                 disabled={settleSubmitting}
-                onClick={() => { setIsSettleModalOpen(false); setSelectedExpense(null); setSettleAmount(''); }} 
+                onClick={() => { setIsSettleModalOpen(false); setSelectedExpense(null); setSettleAmount(''); }}
                 className="px-5 py-2.5 text-slate-400 hover:bg-slate-800 rounded-xl transition-all font-bold text-[10px] disabled:opacity-50"
               >
                 {isAr ? 'إلغاء' : 'Cancel'}
               </button>
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 disabled={settleSubmitting}
                 className="px-6 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-800 hover:from-emerald-500 hover:to-emerald-700 text-white font-black rounded-xl transition-all text-xs flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -1295,7 +1287,7 @@ export default function Expenses() {
                 <Crown className="w-4 h-4 text-[#d4af37]" />
                 {isAr ? 'تسجيل وتقييد مصروف أو عهدة مالية' : 'Issue Strategic Settlement Voucher'}
               </h3>
-              <button 
+              <button
                 type="button"
                 onClick={() => setIsAddOpen(false)}
                 className="text-slate-500 hover:text-white bg-slate-900 border border-slate-800 p-1.5 rounded-lg cursor-pointer transition-colors"
@@ -1303,24 +1295,24 @@ export default function Expenses() {
                 <X className="w-4 h-4" />
               </button>
             </div>
-            
+
             <div className="p-6 space-y-4 overflow-y-auto flex-1 text-start">
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'التاريخ والوقت تلقائي' : 'Date and Time'}</label>
-                  <input 
-                    type="datetime-local" 
-                    value={selectedDateTime} 
+                  <input
+                    type="datetime-local"
+                    value={selectedDateTime}
                     onChange={(e) => setSelectedDateTime(e.target.value)}
                     className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start"
                   />
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'العملة المساندة' : 'Trade Currency'}</label>
-                  <select 
+                  <select
                     value={formData.currency}
-                    onChange={(e) => setFormData({...formData, currency: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
                     className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer"
                   >
                     {(activeCurrencies.length > 0 ? activeCurrencies : [{ code: 'YER', main_nameAR: 'ريال يمني' }, { code: 'SAR', main_nameAR: 'ريال سعودي' }, { code: 'USD', main_nameAR: 'دولار أمريكي' }]).map(c => (
@@ -1342,24 +1334,23 @@ export default function Expenses() {
                         key={cat.id}
                         type="button"
                         onClick={() => {
-                          const resolvedAcc = financialAccounts.find(a => 
-                            a.id === cat.accountId || 
-                            a.entityId === cat.accountId || 
+                          const resolvedAcc = financialAccounts.find(a =>
+                            a.id === cat.accountId ||
+                            a.entityId === cat.accountId ||
                             (a.accountCode && a.accountCode === cat.accountId) ||
                             (a.code && a.code === cat.accountId)
                           );
                           setFormData({
-                            ...formData, 
-                            category: cat.id, 
+                            ...formData,
+                            category: cat.id,
                             linkedAccountId: resolvedAcc ? resolvedAcc.id : (cat.accountId || formData.linkedAccountId),
                             linkedAccountCode: resolvedAcc ? (resolvedAcc.accountCode || resolvedAcc.code) : (cat.accountCode || formData.linkedAccountCode)
                           });
                         }}
-                        className={`p-2 rounded-xl border text-start flex items-center gap-1.5 transition active:scale-95 cursor-pointer ${
-                          isActive 
-                            ? 'bg-[#d4af37]/15 border-[#d4af37] text-white font-black' 
+                        className={`p-2 rounded-xl border text-start flex items-center gap-1.5 transition active:scale-95 cursor-pointer ${isActive
+                            ? 'bg-[#d4af37]/15 border-[#d4af37] text-white font-black'
                             : 'bg-black/40 border-slate-850 text-slate-400 hover:text-white hover:border-slate-700'
-                        }`}
+                          }`}
                       >
                         <span className="text-sm">{cat.icon}</span>
                         <span className="text-[11px] leading-tight">{isAr ? cat.labelAr : cat.labelEn}</span>
@@ -1371,12 +1362,12 @@ export default function Expenses() {
 
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'قيمة الدفعة بالأرقام' : 'Denom Amount'}</label>
-                <input 
-                  required 
-                  type="number" 
-                  min="1" 
-                  value={formData.amount} 
-                  onChange={(e) => setFormData({...formData, amount: e.target.value})}
+                <input
+                  required
+                  type="number"
+                  min="1"
+                  value={formData.amount}
+                  onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
                   placeholder="25000"
                   className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-start"
                 />
@@ -1387,17 +1378,17 @@ export default function Expenses() {
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
                   {isAr ? 'حساب الدفع المصدر (الخزينة/البنك - دائن) *' : 'Source Payment Account (Cash/Bank - Credit) *'}
                 </label>
-                
+
                 {/* Account Selection Trigger */}
-                <div 
+                <div
                   onClick={() => setIsCreditAccountDropdownOpen(!isCreditAccountDropdownOpen)}
                   className="w-full bg-black/40 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer flex justify-between items-center"
                 >
                   <span className="truncate">
                     {formData.creditAccountId ? (
                       (() => {
-                        const acc = financialAccounts.find(a => 
-                          a.id === formData.creditAccountId || 
+                        const acc = financialAccounts.find(a =>
+                          a.id === formData.creditAccountId ||
                           a.entityId === formData.creditAccountId ||
                           (a.accountCode && a.accountCode === formData.creditAccountId) ||
                           (a.code && a.code === formData.creditAccountId)
@@ -1411,40 +1402,40 @@ export default function Expenses() {
                   </span>
                   <svg className={`w-4 h-4 text-slate-500 transition-transform ${isCreditAccountDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                 </div>
-                
+
                 {formData.creditAccountCode && (
                   <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
                     {(() => {
-                        const targetAcc = financialAccounts.find(a => a.id === formData.creditAccountId);
-                        const expAmt = parseFloat(formData.amount) || 0;
-                        if (targetAcc && typeof targetAcc.balance === 'number' && expAmt > 0) {
-                           // Convert transaction amount to account currency
-                           const convertedExpAmt = financialAccountService.convertToTargetCurrency(
-                             expAmt,
-                             formData.currency,
-                             targetAcc.currency || settings.currency || 'SAR',
-                             { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
-                           );
+                      const targetAcc = financialAccounts.find(a => a.id === formData.creditAccountId);
+                      const expAmt = parseFloat(formData.amount) || 0;
+                      if (targetAcc && typeof targetAcc.balance === 'number' && expAmt > 0) {
+                        // Convert transaction amount to account currency
+                        const convertedExpAmt = financialAccountService.convertToTargetCurrency(
+                          expAmt,
+                          formData.currency,
+                          targetAcc.currency || settings.currency || 'SAR',
+                          dbRates
+                        );
 
-                           // Credit Account is being CREDITED
-                           const firstChar = (targetAcc.accountCode || targetAcc.code || '1').trim().charAt(0);
-                           const isDebitNormal = firstChar === '1' || firstChar === '5';
-                           
-                           // If it's a Debit-Normal account (Asset/Expense), Crediting reduces balance
-                           if (isDebitNormal && targetAcc.balance - convertedExpAmt < 0) {
-                              return (
-                                <div className="w-full mt-1 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[10px] p-2 rounded-lg flex items-start gap-1.5 animate-pulse font-bold">
-                                  <svg className="w-3.5 h-3.5 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                                  <span>{isAr ? 'تنبيه: رصيد حساب الدفع المختار غير كافي وسيصبح بالسالب.' : 'Alert: Selected source account balance is insufficient.'}</span>
-                                </div>
-                              );
-                           }
+                        // Credit Account is being CREDITED
+                        const firstChar = (targetAcc.accountCode || targetAcc.code || '1').trim().charAt(0);
+                        const isDebitNormal = firstChar === '1' || firstChar === '5';
+
+                        // If it's a Debit-Normal account (Asset/Expense), Crediting reduces balance
+                        if (isDebitNormal && targetAcc.balance - convertedExpAmt < 0) {
+                          return (
+                            <div className="w-full mt-1 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[10px] p-2 rounded-lg flex items-start gap-1.5 animate-pulse font-bold">
+                              <svg className="w-3.5 h-3.5 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                              <span>{isAr ? 'تنبيه: رصيد حساب الدفع المختار غير كافي وسيصبح بالسالب.' : 'Alert: Selected source account balance is insufficient.'}</span>
+                            </div>
+                          );
                         }
-                        return null;
+                      }
+                      return null;
                     })()}
                   </div>
                 )}
-                
+
                 {/* Custom Dropdown Content */}
                 {isCreditAccountDropdownOpen && (
                   <div className="absolute z-50 mt-2 w-full bg-[#121215] border border-slate-850 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-64">
@@ -1460,7 +1451,7 @@ export default function Expenses() {
                         autoFocus
                       />
                     </div>
-                    
+
                     <div className="overflow-y-auto p-1 custom-scrollbar">
                       {(() => {
                         const filteredAccounts = financialAccounts.filter(acc => {
@@ -1484,7 +1475,7 @@ export default function Expenses() {
                           if (!grouped[type]) grouped[type] = [];
                           grouped[type].push(acc);
                         });
-                        
+
                         if (Object.keys(grouped).length === 0) {
                           return <div className="p-4 text-center text-slate-500 text-xs font-bold">{isAr ? 'لا توجد نتائج' : 'No results found'}</div>;
                         }
@@ -1493,11 +1484,11 @@ export default function Expenses() {
                           <div key={type} className="mb-2">
                             <span className="text-[10px] font-black text-slate-400 px-2 py-1 uppercase">{type}</span>
                             {accs.map(a => (
-                              <div 
-                                key={a.id} 
+                              <div
+                                key={a.id}
                                 onClick={() => {
                                   setFormData({
-                                    ...formData, 
+                                    ...formData,
                                     creditAccountId: a.id,
                                     creditAccountCode: a.accountCode || a.code || ''
                                   });
@@ -1527,17 +1518,17 @@ export default function Expenses() {
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
                   {isAr ? 'الحساب المالي المستهدف (شجرة الحسابات) *' : 'Target Ledger Account *'}
                 </label>
-                
+
                 {/* Account Selection Trigger */}
-                <div 
+                <div
                   onClick={() => setIsAccountDropdownOpen(!isAccountDropdownOpen)}
                   className="w-full bg-black/40 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer flex justify-between items-center"
                 >
                   <span className="truncate">
                     {formData.linkedAccountId ? (
                       (() => {
-                        const acc = financialAccounts.find(a => 
-                          a.id === formData.linkedAccountId || 
+                        const acc = financialAccounts.find(a =>
+                          a.id === formData.linkedAccountId ||
                           a.entityId === formData.linkedAccountId ||
                           (a.accountCode && a.accountCode === formData.linkedAccountId) ||
                           (a.code && a.code === formData.linkedAccountId)
@@ -1551,7 +1542,7 @@ export default function Expenses() {
                   </span>
                   <svg className={`w-4 h-4 text-slate-500 transition-transform ${isAccountDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                 </div>
-                
+
                 {/* Custom Dropdown Content */}
                 {isAccountDropdownOpen && (
                   <div className="absolute z-50 mt-2 w-full bg-[#121215] border border-slate-850 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-64">
@@ -1567,7 +1558,7 @@ export default function Expenses() {
                         autoFocus
                       />
                     </div>
-                    
+
                     <div className="overflow-y-auto p-1 custom-scrollbar">
                       {(() => {
                         const filteredAccounts = financialAccounts.filter(acc => {
@@ -1597,127 +1588,127 @@ export default function Expenses() {
                           if (!grouped[groupKey]) grouped[groupKey] = [];
                           grouped[groupKey].push(acc);
                         });
-                        
+
                         if (Object.keys(grouped).length === 0) {
                           return <div className="p-4 text-center text-slate-500 text-xs font-bold">{isAr ? 'لا توجد نتائج' : 'No results found'}</div>;
                         }
 
                         return Object.entries(grouped).map(([type, accs]) => {
-                           let iconColor = 'text-slate-400 font-black';
-                           let iconSvg = <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" /></svg>;
-                           
-                           if (type.includes('Asset')) {
-                              iconColor = 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20';
-                              iconSvg = <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>;
-                           } else if (type.includes('Liability')) {
-                              iconColor = 'text-rose-400 bg-rose-500/10 border border-rose-500/20';
-                              iconSvg = <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
-                           } else if (type.includes('Equity')) {
-                              iconColor = 'text-purple-400 bg-purple-500/10 border border-purple-500/20';
-                              iconSvg = <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" /></svg>;
-                           } else if (type.includes('Revenue')) {
-                              iconColor = 'text-blue-400 bg-blue-500/10 border border-blue-500/20';
-                              iconSvg = <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>;
-                           } else if (type.includes('Expense')) {
-                              iconColor = 'text-orange-400 bg-orange-500/10 border border-orange-500/20';
-                              iconSvg = <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0v-8m0 8l-8-8-4 4-6-6" /></svg>;
-                           }
+                          let iconColor = 'text-slate-400 font-black';
+                          let iconSvg = <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" /></svg>;
 
-                           let label = type === 'Asset' ? (isAr ? 'أصول (Asset)' : 'Asset') :
-                                       type === 'Liability' ? (isAr ? 'خصوم (Liability)' : 'Liability') :
-                                       type === 'Equity' ? (isAr ? 'حقوق ملكية (Equity)' : 'Equity') :
-                                       type === 'Revenue' ? (isAr ? 'إيرادات (Revenue)' : 'Revenue') :
-                                       type === 'Expense' ? (isAr ? 'مصروفات (Expense)' : 'Expense') : type;
-                           
-                           return (
-                             <div key={type} className="mb-2">
-                               <div className="px-2 py-1.5 flex items-center gap-1.5">
-                                 <div className={`p-1 rounded-md ${iconColor}`}>
-                                   {iconSvg}
-                                 </div>
-                                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">{label}</span>
-                               </div>
-                               {accs.sort((a,b) => (a.code || a.accountCode || '').localeCompare(b.code || b.accountCode || '')).map(a => (
-                                 <div 
-                                   key={a.id} 
-                                   onClick={() => {
-                                      let updatedAmount = formData.amount;
-                                      if (formData.category === 'salary' && a.entityType === 'employee') {
-                                        const user = systemUsers.find(u => u.id === a.entityId);
-                                        if (user?.monthlySalary) updatedAmount = String(user.monthlySalary);
-                                      }
-                                      setFormData({
-                                        ...formData, 
-                                        linkedAccountId: a.id,
-                                        linkedAccountCode: a.accountCode || a.code || '',
-                                        linkedAccountEntityType: a.entityType || 'system',
-                                        recipientId: a.entityId || a.id,
-                                        recipientName: a.nameAr || a.entityName || '',
-                                        amount: updatedAmount
-                                      });
-                                      setIsAccountDropdownOpen(false);
-                                      setAccountSearchQuery('');
-                                   }}
-                                   className={`px-3 py-2.5 mx-1 mb-0.5 mt-0 hover:bg-white/5 cursor-pointer rounded-lg flex justify-between items-center transition-colors ${formData.linkedAccountId === a.id ? 'bg-[#d4af37]/10 border border-[#d4af37]/30' : ''}`}
-                                 >
-                                   <div className="flex flex-col gap-0.5">
-                                     <span className={`text-xs font-bold ${formData.linkedAccountId === a.id ? 'text-[#d4af37]' : 'text-slate-200'}`}>
-                                       {isAr ? a.nameAr || a.entityName : a.nameEn || a.entityName}
-                                     </span>
-                                     <span className="font-mono text-[9px] text-slate-500">{a.code || a.accountCode || 'Sys'}</span>
-                                   </div>
-                                   {a.balance !== undefined && (
-                                     <span className="font-mono text-[10px] font-black tracking-tighter text-slate-400 bg-black/40 px-1.5 py-0.5 rounded border border-slate-800">
-                                       {a.balance.toLocaleString()}
-                                     </span>
-                                   )}
-                                 </div>
-                               ))}
-                             </div>
-                           );
+                          if (type.includes('Asset')) {
+                            iconColor = 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20';
+                            iconSvg = <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>;
+                          } else if (type.includes('Liability')) {
+                            iconColor = 'text-rose-400 bg-rose-500/10 border border-rose-500/20';
+                            iconSvg = <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
+                          } else if (type.includes('Equity')) {
+                            iconColor = 'text-purple-400 bg-purple-500/10 border border-purple-500/20';
+                            iconSvg = <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" /></svg>;
+                          } else if (type.includes('Revenue')) {
+                            iconColor = 'text-blue-400 bg-blue-500/10 border border-blue-500/20';
+                            iconSvg = <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>;
+                          } else if (type.includes('Expense')) {
+                            iconColor = 'text-orange-400 bg-orange-500/10 border border-orange-500/20';
+                            iconSvg = <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0v-8m0 8l-8-8-4 4-6-6" /></svg>;
+                          }
+
+                          let label = type === 'Asset' ? (isAr ? 'أصول (Asset)' : 'Asset') :
+                            type === 'Liability' ? (isAr ? 'خصوم (Liability)' : 'Liability') :
+                              type === 'Equity' ? (isAr ? 'حقوق ملكية (Equity)' : 'Equity') :
+                                type === 'Revenue' ? (isAr ? 'إيرادات (Revenue)' : 'Revenue') :
+                                  type === 'Expense' ? (isAr ? 'مصروفات (Expense)' : 'Expense') : type;
+
+                          return (
+                            <div key={type} className="mb-2">
+                              <div className="px-2 py-1.5 flex items-center gap-1.5">
+                                <div className={`p-1 rounded-md ${iconColor}`}>
+                                  {iconSvg}
+                                </div>
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">{label}</span>
+                              </div>
+                              {accs.sort((a, b) => (a.code || a.accountCode || '').localeCompare(b.code || b.accountCode || '')).map(a => (
+                                <div
+                                  key={a.id}
+                                  onClick={() => {
+                                    let updatedAmount = formData.amount;
+                                    if (formData.category === 'salary' && a.entityType === 'employee') {
+                                      const user = systemUsers.find(u => u.id === a.entityId);
+                                      if (user?.monthlySalary) updatedAmount = String(user.monthlySalary);
+                                    }
+                                    setFormData({
+                                      ...formData,
+                                      linkedAccountId: a.id,
+                                      linkedAccountCode: a.accountCode || a.code || '',
+                                      linkedAccountEntityType: a.entityType || 'system',
+                                      recipientId: a.entityId || a.id,
+                                      recipientName: a.nameAr || a.entityName || '',
+                                      amount: updatedAmount
+                                    });
+                                    setIsAccountDropdownOpen(false);
+                                    setAccountSearchQuery('');
+                                  }}
+                                  className={`px-3 py-2.5 mx-1 mb-0.5 mt-0 hover:bg-white/5 cursor-pointer rounded-lg flex justify-between items-center transition-colors ${formData.linkedAccountId === a.id ? 'bg-[#d4af37]/10 border border-[#d4af37]/30' : ''}`}
+                                >
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className={`text-xs font-bold ${formData.linkedAccountId === a.id ? 'text-[#d4af37]' : 'text-slate-200'}`}>
+                                      {isAr ? a.nameAr || a.entityName : a.nameEn || a.entityName}
+                                    </span>
+                                    <span className="font-mono text-[9px] text-slate-500">{a.code || a.accountCode || 'Sys'}</span>
+                                  </div>
+                                  {a.balance !== undefined && (
+                                    <span className="font-mono text-[10px] font-black tracking-tighter text-slate-400 bg-black/40 px-1.5 py-0.5 rounded border border-slate-800">
+                                      {a.balance.toLocaleString()}
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          );
                         });
                       })()}
                     </div>
                   </div>
                 )}
-                
+
                 {formData.linkedAccountCode && (
                   <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
                     <span className="text-[9px] font-black text-slate-500">{isAr ? 'سيتم التقييد على حساب:' : 'Will record on account:'}</span>
                     <span className="font-mono font-black text-[#d4af37] text-[10px] bg-[#d4af37]/10 border border-[#d4af37]/20 px-2 py-0.5 rounded">{formData.linkedAccountCode}</span>
-                    
-                    {(() => {
-                        const targetAcc = financialAccounts.find(a => 
-                          a.id === formData.linkedAccountId || 
-                          a.entityId === formData.linkedAccountId ||
-                          (a.accountCode && a.accountCode === formData.linkedAccountId) ||
-                          (a.code && a.code === formData.linkedAccountId)
-                        );
-                        const expAmt = parseFloat(formData.amount) || 0;
-                        if (targetAcc && typeof targetAcc.balance === 'number' && expAmt > 0) {
-                           // Convert transaction amount to account currency for accurate comparison
-                           const convertedExpAmt = financialAccountService.convertToTargetCurrency(
-                             expAmt,
-                             formData.currency,
-                             targetAcc.currency || settings.currency || 'SAR',
-                             { USD: settings.exchangeRateUSD, SAR: settings.exchangeRateSAR }
-                           );
 
-                           // Linked Account is being DEBITED
-                           const firstChar = (targetAcc.accountCode || targetAcc.code || '1').trim().charAt(0);
-                           const isCreditNormal = firstChar === '2' || firstChar === '3' || firstChar === '4';
-                           
-                           // If it's a Credit-Normal account (Liability/Equity/Revenue), Debiting reduces balance
-                           if (isCreditNormal && targetAcc.balance - convertedExpAmt < 0) {
-                              return (
-                                <div className="w-full mt-1.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[10px] p-2 rounded-lg flex items-start gap-1.5 animate-pulse">
-                                  <svg className="w-3.5 h-3.5 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                                  <span>{isAr ? 'تنبيه: هذا القيد سيؤدي لتجاوز الرصيد الحالي للحساب وسيصبح بالسالب.' : 'Alert: This entry will exceed the current balance causing it to go negative.'}</span>
-                                </div>
-                              );
-                           }
+                    {(() => {
+                      const targetAcc = financialAccounts.find(a =>
+                        a.id === formData.linkedAccountId ||
+                        a.entityId === formData.linkedAccountId ||
+                        (a.accountCode && a.accountCode === formData.linkedAccountId) ||
+                        (a.code && a.code === formData.linkedAccountId)
+                      );
+                      const expAmt = parseFloat(formData.amount) || 0;
+                      if (targetAcc && typeof targetAcc.balance === 'number' && expAmt > 0) {
+                        // Convert transaction amount to account currency for accurate comparison
+                        const convertedExpAmt = financialAccountService.convertToTargetCurrency(
+                          expAmt,
+                          formData.currency,
+                          targetAcc.currency || settings.currency || 'SAR',
+                          dbRates
+                        );
+
+                        // Linked Account is being DEBITED
+                        const firstChar = (targetAcc.accountCode || targetAcc.code || '1').trim().charAt(0);
+                        const isCreditNormal = firstChar === '2' || firstChar === '3' || firstChar === '4';
+
+                        // If it's a Credit-Normal account (Liability/Equity/Revenue), Debiting reduces balance
+                        if (isCreditNormal && targetAcc.balance - convertedExpAmt < 0) {
+                          return (
+                            <div className="w-full mt-1.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[10px] p-2 rounded-lg flex items-start gap-1.5 animate-pulse">
+                              <svg className="w-3.5 h-3.5 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                              <span>{isAr ? 'تنبيه: هذا القيد سيؤدي لتجاوز الرصيد الحالي للحساب وسيصبح بالسالب.' : 'Alert: This entry will exceed the current balance causing it to go negative.'}</span>
+                            </div>
+                          );
                         }
-                        return null;
+                      }
+                      return null;
                     })()}
                   </div>
                 )}
@@ -1726,11 +1717,11 @@ export default function Expenses() {
               {formData.category === 'salary' && (
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'الشهر المستحق للراتب *' : 'Salary Month *'}</label>
-                  <input 
+                  <input
                     required
                     type="month"
                     value={formData.salaryMonth}
-                    onChange={(e) => setFormData({...formData, salaryMonth: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, salaryMonth: e.target.value })}
                     className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold font-mono text-center"
                   />
                 </div>
@@ -1739,12 +1730,12 @@ export default function Expenses() {
               {formData.category === 'factory' && (
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'اسم المصنع بالصين المستفيد' : 'Beneficiary China Factory Name'}</label>
-                  <input 
-                    required 
-                    type="text" 
-                    value={formData.factoryName} 
-                    onChange={(e) => setFormData({...formData, factoryName: e.target.value})}
-                    placeholder="Guangzhou Tech Group" 
+                  <input
+                    required
+                    type="text"
+                    value={formData.factoryName}
+                    onChange={(e) => setFormData({ ...formData, factoryName: e.target.value })}
+                    placeholder="Guangzhou Tech Group"
                     className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start"
                   />
                 </div>
@@ -1752,11 +1743,11 @@ export default function Expenses() {
 
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'البيان أو الشرح' : 'Statement / Explanation'}</label>
-                <input 
-                  required 
+                <input
+                  required
                   type="text"
-                  value={formData.notes} 
-                  onChange={(e) => setFormData({...formData, notes: e.target.value})}
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start"
                   placeholder={isAr ? "مثال: إعلانات سناب شات لشهر يونيو، شراء كرتون تغليف..." : "Snapchat June ads, packaging boxes..."}
                 />
@@ -1764,9 +1755,9 @@ export default function Expenses() {
 
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'ملاحظات إضافية' : 'Remarks / Notes'}</label>
-                <textarea 
-                  value={formData.remarks} 
-                  onChange={(e) => setFormData({...formData, remarks: e.target.value})}
+                <textarea
+                  value={formData.remarks}
+                  onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
                   className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none h-16 text-start"
                   placeholder={isAr ? "ملاحظات إدارية أو توجيهات الصندوق..." : "Administrative remarks..."}
                 ></textarea>
@@ -1774,15 +1765,15 @@ export default function Expenses() {
             </div>
 
             <div className="p-4 border-t border-slate-850 bg-[#07070a]/40 flex justify-end gap-3 shrink-0">
-              <button 
-                type="button" 
-                onClick={() => setIsAddOpen(false)} 
+              <button
+                type="button"
+                onClick={() => setIsAddOpen(false)}
                 className="px-5 py-2.5 text-slate-400 font-bold bg-slate-900 border border-slate-850 hover:bg-slate-850 rounded-xl text-xs transition-colors cursor-pointer"
               >
                 {isAr ? 'إلغاء' : 'Cancel'}
               </button>
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 disabled={addLoading}
                 className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black text-xs rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-40 cursor-pointer"
               >
@@ -1802,7 +1793,7 @@ export default function Expenses() {
                 <Crown className="w-4 h-4 text-[#d4af37]" />
                 {isAr ? 'تعديل السند المالي أو المصروف' : 'Modify Financial Voucher Document'}
               </h3>
-              <button 
+              <button
                 type="button"
                 onClick={() => {
                   setIsEditOpen(false);
@@ -1822,10 +1813,10 @@ export default function Expenses() {
 
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'فئة وبند المصروف' : 'Expense Category'}</label>
-                <select 
-                  required 
-                  value={editFormData.category} 
-                  onChange={(e) => setEditFormData({...editFormData, category: e.target.value})}
+                <select
+                  required
+                  value={editFormData.category}
+                  onChange={(e) => setEditFormData({ ...editFormData, category: e.target.value })}
                   className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer text-start bg-[#121215]"
                 >
                   {EXPENSE_CATEGORIES_DYNAMIC.map(cat => (
@@ -1837,21 +1828,21 @@ export default function Expenses() {
               <div className="grid grid-cols-3 gap-2.5">
                 <div className="col-span-2 text-start">
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'المبلغ' : 'Amount'}</label>
-                  <input 
-                    required 
-                    type="number" 
-                    min="1" 
-                    value={editFormData.amount} 
-                    onChange={(e) => setEditFormData({...editFormData, amount: e.target.value})}
+                  <input
+                    required
+                    type="number"
+                    min="1"
+                    value={editFormData.amount}
+                    onChange={(e) => setEditFormData({ ...editFormData, amount: e.target.value })}
                     placeholder="25000"
                     className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-start"
                   />
                 </div>
                 <div className="text-start">
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'العملة' : 'Currency'}</label>
-                  <select 
-                    value={editFormData.currency} 
-                    onChange={(e) => setEditFormData({...editFormData, currency: e.target.value})}
+                  <select
+                    value={editFormData.currency}
+                    onChange={(e) => setEditFormData({ ...editFormData, currency: e.target.value })}
                     className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer font-mono bg-[#121215]"
                   >
                     {(activeCurrencies.length > 0 ? activeCurrencies : [{ code: 'YER', main_nameAR: 'ريال يمني' }, { code: 'SAR', main_nameAR: 'ريال سعودي' }, { code: 'USD', main_nameAR: 'دولار أمريكي' }]).map(c => (
@@ -1863,20 +1854,20 @@ export default function Expenses() {
 
               <div className="text-start">
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'تاريخ ووقت تقييد السند' : 'Voucher Created At'}</label>
-                <input 
-                  type="datetime-local" 
-                  value={editFormData.createdAt} 
-                  onChange={(e) => setEditFormData({...editFormData, createdAt: e.target.value})}
+                <input
+                  type="datetime-local"
+                  value={editFormData.createdAt}
+                  onChange={(e) => setEditFormData({ ...editFormData, createdAt: e.target.value })}
                   className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold font-mono text-center"
                 />
               </div>
 
               <div className="text-start">
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'المرسل إليه / المستلم' : 'Recipient'}</label>
-                <input 
-                  type="text" 
-                  value={editFormData.recipientName} 
-                  onChange={(e) => setEditFormData({...editFormData, recipientName: e.target.value})}
+                <input
+                  type="text"
+                  value={editFormData.recipientName}
+                  onChange={(e) => setEditFormData({ ...editFormData, recipientName: e.target.value })}
                   placeholder="John Doe"
                   className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start"
                 />
@@ -1884,11 +1875,11 @@ export default function Expenses() {
 
               <div className="text-start">
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'البيان أو الشرح' : 'Statement / Explanation'}</label>
-                <input 
-                  required 
+                <input
+                  required
                   type="text"
-                  value={editFormData.notes} 
-                  onChange={(e) => setEditFormData({...editFormData, notes: e.target.value})}
+                  value={editFormData.notes}
+                  onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })}
                   className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start"
                   placeholder={isAr ? "البيان لتعديل السند..." : "Description..."}
                 />
@@ -1896,9 +1887,9 @@ export default function Expenses() {
 
               <div className="text-start">
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'ملاحظات إضافية' : 'Remarks / Notes'}</label>
-                <textarea 
-                  value={editFormData.remarks} 
-                  onChange={(e) => setEditFormData({...editFormData, remarks: e.target.value})}
+                <textarea
+                  value={editFormData.remarks}
+                  onChange={(e) => setEditFormData({ ...editFormData, remarks: e.target.value })}
                   className="w-full bg-[#121215] border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none h-16 text-start"
                   placeholder={isAr ? "ملاحظات إدارية..." : "Remarks..."}
                 ></textarea>
@@ -1906,18 +1897,18 @@ export default function Expenses() {
             </div>
 
             <div className="p-4 border-t border-slate-850 bg-[#07070a]/40 flex justify-end gap-3 shrink-0">
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => {
                   setIsEditOpen(false);
                   setSelectedExpense(null);
-                }} 
+                }}
                 className="px-5 py-2.5 text-slate-400 font-bold bg-slate-900 border border-slate-850 hover:bg-slate-850 rounded-xl text-xs transition-colors cursor-pointer"
               >
                 {isAr ? 'إلغاء' : 'Cancel'}
               </button>
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 disabled={editLoading}
                 className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black text-xs rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-40 cursor-pointer"
               >
