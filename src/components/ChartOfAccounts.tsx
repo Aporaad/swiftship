@@ -1,4 +1,4 @@
-﻿import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   FolderTree, Folder, FolderOpen, ChevronRight, ChevronDown, PlusCircle, Trash2,
   Search, Scale, X, Activity, ShieldCheck, RefreshCw, Edit2, FileText, FileSpreadsheet, Printer,
