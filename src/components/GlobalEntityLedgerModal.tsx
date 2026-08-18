@@ -78,6 +78,7 @@ export default function GlobalEntityLedgerModal() {
     if (entityType === 'customer') {
       qOrders = query(collection(db, 'orders'), where('customerId', '==', entityId));
     } else {
+      // Use direct DB column delivery_courier_id (FK) with fallback to camelCase field
       qOrders = query(collection(db, 'orders'), where('deliveryCourierId', '==', entityId));
     }
 

@@ -1832,7 +1832,15 @@ class FinancialAccountService {
         if (entityType === 'customer') {
           return o.customerId === entityId || o.customer?.id === entityId;
         } else if (entityType === 'courier') {
-          return o.courierId === entityId || o.driverId === entityId || o.courier?.id === entityId;
+          return (
+            o.courierId === entityId ||
+            o.driverId === entityId ||
+            o.courier?.id === entityId ||
+            o.deliveryCourierId === entityId ||
+            o.delivery_courier_id === entityId ||
+            o.shippingCourierId === entityId ||
+            o.shipping_courier_id === entityId
+          );
         } else if (entityType === 'user' || entityType === 'employee') {
           return o.createdByUid === entityId || o.userId === entityId || o.employeeId === entityId;
         }

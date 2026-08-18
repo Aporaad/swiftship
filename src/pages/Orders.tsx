@@ -1,61 +1,61 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useLocation } from 'react-router-dom';
-import CopyToClipboard from '../components/CopyToClipboard';
-import { collection, onSnapshot, orderBy, query, where, addDoc, setDoc, doc, updateDoc, getDoc, getDocs, deleteDoc, db, auth, handleSupabaseError, OperationType, safeToDate } from '../lib/supabase';
-import { useSettings } from '../context/SettingsContext';
-import { useRole } from '../hooks/useRole';
-import { notificationService } from '../services/notificationService';
-import toast from 'react-hot-toast';
-import { activityLogService } from '../services/activityLogService';
-import { whatsappService } from '../services/whatsappService';
-import ConfirmModal from '../components/ConfirmModal';
-import Tracking from './Tracking';
-import { financialAccountService } from '../services/financialAccountService';
+import React, { useState, useEffect, useRef, useMemo } from 'react'; // استيراد التفاعلات لاجل عرض البيانات 
+import { useLocation } from 'react-router-dom'; // استيراد الموقع لاجل عرض البيانات  
+import CopyToClipboard from '../components/CopyToClipboard'; // استيراد نسخ النص لاجل النسخ 
+import { collection, onSnapshot, orderBy, query, where, addDoc, setDoc, doc, updateDoc, getDoc, getDocs, deleteDoc, db, auth, handleSupabaseError, OperationType, safeToDate } from '../lib/supabase'; // استيراد قاعدة البيانات
+import { useSettings } from '../context/SettingsContext'; // استيراد الإعدادات
+import { useRole } from '../hooks/useRole'; // استيراد الأدوار
+import { notificationService } from '../services/notificationService'; // استيراد خدمات الإشعارات
+import toast from 'react-hot-toast'; // استيراد خدمات الإشعارات لاجل عرض الاشعارات 
+import { activityLogService } from '../services/activityLogService'; // استيراد خدمات السجلات لاجل كتابة السجلات 
+import { whatsappService } from '../services/whatsappService'; // استيراد خدمات الواتساب لاجل ارسال الرسائل 
+import ConfirmModal from '../components/ConfirmModal'; // استيراد النافذة التاكيدية لاجل الحذف  
+import Tracking from './Tracking'; // استيراد تتبع الطلبات لاجل عرض تتبع الطلبات 
+import { financialAccountService } from '../services/financialAccountService'; // استيراد خدمات الحسابات المالية لاجل عرض الحسابات المالية 
 import {
   Plus, Search, Edit2, Truck, Activity, Trash2, DollarSign,
   CreditCard, Printer, Calculator, Package, MapPin, X, AlertCircle, RefreshCw, UserPlus, Eye,
   User, Mail, Phone, Coins, Calendar, ExternalLink, Filter, Layers, CheckCircle2
-} from 'lucide-react';
-import { jsPDF } from 'jspdf';
-import { printContent } from '../lib/printUtils';
-import QRCode from 'qrcode';
-import { useOrderStatuses } from '../hooks/useOrderStatuses';
-import { autoEntryService } from '../services/autoEntryService';
-import OrderStatusManagementTab from '../components/OrderStatusManagementTab';
-import { useExchangeRates } from '../hooks/useExchangeRates';
+} from 'lucide-react'; // استيراد الايقونات لاجل عرض الايقونات 
+import { jsPDF } from 'jspdf'; // استيراد جافاسكريبت لاجل عرض البيانات 
+import { printContent } from '../lib/printUtils'; // استيراد الطباعة لاجل عرض البيانات 
+import QRCode from 'qrcode'; // استيراد رمز الاستجابة السريعة لاجل عرض رمز الاستجابة السريعة 
+import { useOrderStatuses } from '../hooks/useOrderStatuses'; // استيراد حالات الطلبات لاجل عرض حالات الطلبات 
+import { autoEntryService } from '../services/autoEntryService'; // استيراد خدمات القيد التلقائي لاجل عرض القيد التلقائي 
+import OrderStatusManagementTab from '../components/OrderStatusManagementTab'; // استيراد تبويبات حالات الطلبات لاجل عرض تبويبات حالات الطلبات 
+import { useExchangeRates } from '../hooks/useExchangeRates'; // استيراد اسعار الصرف لاجل عرض اسعار الصرف 
 
-export default function Orders() {
-  const { settings, t } = useSettings();
-  const { activeCurrencies, rates: dbRates } = useExchangeRates();
-  const { role, hasPermission, profile, loading: roleLoading } = useRole();
-  const { statuses: orderStatusesList, getStatusByName, getStatusById, getStatusByAny, getNextStatus } = useOrderStatuses();
-  const canManageOrders = role === 'Admin' || hasPermission('edit_orders');
-  const canAddOrders = role === 'Admin' || hasPermission('add_orders');
-  const canEditOrderDefaultsCreation = role === 'Admin' || hasPermission('edit_order_defaults_creation');
-  const canTrackOrders = role === 'Admin' || hasPermission('track_order');
-  const canViewOrderStatuses = role === 'Admin' || hasPermission('view_order_statuses') || hasPermission('view_auto_entries');
-  const isAr = settings.language === 'ar';
+export default function Orders() { // دالة عرض الطلبات 
+  const { settings, t } = useSettings(); // استيراد الإعدادات لاجل عرض الإعدادات 
+  const { activeCurrencies, rates: dbRates } = useExchangeRates(); // استيراد اسعار الصرف لاجل عرض اسعار الصرف 
+  const { role, hasPermission, profile, loading: roleLoading } = useRole();  // استيراد الأدوار لاجل عرض الأدوار 
+  const { statuses: orderStatusesList, getStatusByName, getStatusById, getStatusByAny, getNextStatus } = useOrderStatuses(); // استيراد حالات الطلبات لاجل عرض حالات الطلبات 
+  const canManageOrders = role === 'Admin' || hasPermission('edit_orders'); //  القدرة على ادارة الطلبات 
+  const canAddOrders = role === 'Admin' || hasPermission('add_orders'); //  القدرة على اضافة الطلبات 
+  const canEditOrderDefaultsCreation = role === 'Admin' || hasPermission('edit_order_defaults_creation'); //  القدرة على تعديل الطلبات الافتراضية 
+  const canTrackOrders = role === 'Admin' || hasPermission('track_order'); //  القدرة على تتبع الطلبات 
+  const canViewOrderStatuses = role === 'Admin' || hasPermission('view_order_statuses') || hasPermission('view_auto_entries'); //  القدرة على عرض حالات الطلبات 
+  const isAr = settings.language === 'ar'; //  اللغة العربية 
 
-  // Core Data States
-  const [orders, setOrders] = useState<any[]>([]);
-  const [customers, setCustomers] = useState<any[]>([]);
-  const [couriers, setCouriers] = useState<any[]>([]);
-  const [sources, setSources] = useState<any[]>([]);
-  const [shippingCompanies, setShippingCompanies] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // Core Data States 
+  const [orders, setOrders] = useState<any[]>([]); //  متغير مكونات الحاله الخاص ب الطلبات 
+  const [customers, setCustomers] = useState<any[]>([]); //  متغير مكونات الحاله الخاص ب العملاء 
+  const [couriers, setCouriers] = useState<any[]>([]); //  متغير مكونات الحاله الخاص ب ال مندوبين  
+  const [sources, setSources] = useState<any[]>([]); //  متغير مكونات الحاله الخاص ب المصادر 
+  const [shippingCompanies, setShippingCompanies] = useState<any[]>([]); //  متغير مكونات الحاله الخاص ب شركات الشحن 
+  const [loading, setLoading] = useState(true); //  متغير مكونات الحاله الخاص ب التحميل 
+  const [isSubmitting, setIsSubmitting] = useState(false); //  متغير مكونات الحاله الخاص ب الارسال 
 
-  // Modals & Panels States
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
-  const [isAddCustomerOpen, setIsAddCustomerOpen] = useState(false);
-  const [isAddShippingCompanyOpen, setIsAddShippingCompanyOpen] = useState(false);
-  const [isAddSourceOpen, setIsAddSourceOpen] = useState(false);
-  const [activeAddShippingIndex, setActiveAddShippingIndex] = useState<number | string | null>(null);
+  // Modals & Panels States 
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false); //  متغير مكونات الحاله الخاص ب فتح النافذة الاضافية 
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false); //  متغير مكونات الحاله الخاص ب فتح النافذة التعديل 
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false); //  متغير مكونات الحاله الخاص ب فتح نافذة الدفع 
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false); //  متغير مكونات الحاله الخاص ب فتح نافذة التفاصيل 
+  const [isAddCustomerOpen, setIsAddCustomerOpen] = useState(false); //  متغير مكونات الحاله الخاص ب فتح نافذة اضافة عميل 
+  const [isAddShippingCompanyOpen, setIsAddShippingCompanyOpen] = useState(false); //  متغير مكونات الحاله الخاص ب فتح نافذة اضافة شركة شحن 
+  const [isAddSourceOpen, setIsAddSourceOpen] = useState(false); //  متغير مكونات الحاله الخاص ب فتح نافذة اضافة مصدر 
+  const [activeAddShippingIndex, setActiveAddShippingIndex] = useState<number | string | null>(null); //  متغير مكونات الحاله الخاص ب اضافة شركة شحن 
 
-  // Form Data for newly created Inline Shipping Company
+  // Form Data for newly created Inline Shipping Company --نموذج بيانات شركة الشحن الجديدة 
   const [shippingCompanyFormData, setShippingCompanyFormData] = useState({
     name: '',
     contact_person: '',
@@ -65,7 +65,7 @@ export default function Orders() {
     notes: ''
   });
 
-  // Form Data for newly created Inline Source of Purchase
+  // Form Data for newly created Inline Source of Purchase --نموذج بيانات مصدر الشحنة الجديدة  
   const [sourceFormData, setSourceFormData] = useState({
     source_name: '',
     type: 'App',
@@ -76,32 +76,34 @@ export default function Orders() {
   });
 
   // Focus Orders States
-  const [selectedOrder, setSelectedOrder] = useState<any>(null);
-  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [orderToDelete, setOrderToDelete] = useState<any>(null);
-  const [deletePin, setDeletePin] = useState('');
-  const [deleteError, setDeleteError] = useState('');
-  const [isBatchUpdating, setIsBatchUpdating] = useState(false);
-  const [customerUnpaidAlert, setCustomerUnpaidAlert] = useState<number | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<any>(null); //   متغير مكونات حالة الطلب المحدد ويستخدم لعرض تفاصيل الطلب   
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]); //   متغير مكونات حالة الطلبات المحددة ويستخدم ل تحديث جماعي   
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false); //   متغير مكونات حالة حذف الطلب ويستخدم ل حذف جماعي   
+  const [orderToDelete, setOrderToDelete] = useState<any>(null); //   متغير مكونات حالة الطلب المراد حذفه ويستخدم ل حذف جماعي   
+  const [deletePin, setDeletePin] = useState(''); //   متغير مكونات حالة رمز الحذف ويستخدم ل حذف جماعي   
+  const [deleteError, setDeleteError] = useState(''); //   متغير مكونات حالة خطأ الحذف ويستخدم ل حذف جماعي   
+  const [isBatchUpdating, setIsBatchUpdating] = useState(false); //  تحديث جماعي
+  const [customerUnpaidAlert, setCustomerUnpaidAlert] = useState<number | null>(null); //  تنبيه العميل غير المدفوع 
 
   // Ref for QR Code
-  const qrCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const qrCanvasRef = useRef<HTMLCanvasElement | null>(null); //  رمز الاستجابة السريعة
 
   // Filters State
-  const [searchText, setSearchText] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [courierFilter, setCourierFilter] = useState('all');
-  const [sourceFilter, setSourceFilter] = useState('all');
-  const [sortBy, setSortBy] = useState('date-desc');
+  const [searchText, setSearchText] = useState(''); //  البحث في الطلبات
+  const [statusFilter, setStatusFilter] = useState('all'); //  حالة الطلب
+  const [courierFilter, setCourierFilter] = useState('all'); //  مندوب الشحن
+  const [sourceFilter, setSourceFilter] = useState('all'); //  مصدر الشحنة 
+  const [sortBy, setSortBy] = useState('date-desc'); //  ترتيب الطلبات 
 
-  const [autoVoucherRules, setAutoVoucherRules] = useState<any[]>([]);
+  const [autoVoucherRules, setAutoVoucherRules] = useState<any[]>([]); //  قواعد القيد التلقائي 
 
-  // Dedicated Products & Shipments Collections State
-  const [allProducts, setAllProducts] = useState<any[]>([]);
-  const [allShipments, setAllShipments] = useState<any[]>([]);
+  // Dedicated Products & Shipments Collections State 
+  const [allProducts, setAllProducts] = useState<any[]>([]); // جميع المنتجات  
+  const [allShipments, setAllShipments] = useState<any[]>([]); // جميع الشحنات 
 
-  const location = useLocation();
+  const location = useLocation(); //  الموقع
+
+  // تبويبات الطلبات ويستخدم ل عرض الطلبات و الشحنات و تتبع و حالات الطلبات  والفواتير التلقائية   
   const [ordersTab, setOrdersTab] = useState<'orders' | 'shipments' | 'tracking' | 'statuses'>(() => {
     const params = new URLSearchParams(location.search);
     const tab = params.get('tab');
@@ -111,6 +113,7 @@ export default function Orders() {
     return 'orders';
   });
 
+  // تحديث تبويبات الطلبات  
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const tab = params.get('tab');
@@ -128,28 +131,29 @@ export default function Orders() {
   }, [location.search, canTrackOrders, canViewOrderStatuses, ordersTab]);
 
   // Dedicated Shipments Studio Filters & Modals
-
-  const [shipmentSearchQuery, setShipmentSearchQuery] = useState('');
-  const [shipmentStatusFilter, setShipmentStatusFilter] = useState('all');
-  const [shipmentCarrierFilter, setShipmentCarrierFilter] = useState('all');
-  const [shipmentCourierFilter, setShipmentCourierFilter] = useState('all');
+  const [shipmentSearchQuery, setShipmentSearchQuery] = useState('');// البحث عن الشحنة 
+  const [shipmentStatusFilter, setShipmentStatusFilter] = useState('all'); // حالة الشحنة 
+  const [shipmentCarrierFilter, setShipmentCarrierFilter] = useState('all'); // شركة الشحن
+  const [shipmentCourierFilter, setShipmentCourierFilter] = useState('all'); // مندوب الشحن 
 
   // Shipments CRUD Modals State
-  const [isAddShipmentModalOpen, setIsAddShipmentModalOpen] = useState(false);
-  const [isEditShipmentModalOpen, setIsEditShipmentModalOpen] = useState(false);
-  const [isDeleteShipmentModalOpen, setIsDeleteShipmentModalOpen] = useState(false);
-  const [shipmentToEdit, setShipmentToEdit] = useState<any>(null);
-  const [shipmentToDelete, setShipmentToDelete] = useState<any>(null);
+  const [isAddShipmentModalOpen, setIsAddShipmentModalOpen] = useState(false); //  إضافة شحنة جديدة 
+  const [isEditShipmentModalOpen, setIsEditShipmentModalOpen] = useState(false); //  تعديل الشحنة 
+  const [isDeleteShipmentModalOpen, setIsDeleteShipmentModalOpen] = useState(false); //  حذف الشحنة 
+  const [shipmentToEdit, setShipmentToEdit] = useState<any>(null); //  تعديل الشحنة 
+  const [shipmentToDelete, setShipmentToDelete] = useState<any>(null); //  حذف الشحنة 
 
+  //بيانات الشحنة 
   const [shipmentFormData, setShipmentFormData] = useState({
     id: '',
     orderId: '', // Optional! Can be empty for standalone shipment
     trackingNumber: '',
-    shippingCompany: 'Aramex',
+    shippingCompany: 'shein_shipping',
+    shippingCompanyId: 'shein_shipping',
     courierId: '',
-    shippingType: 'بري',
+    shippingType: 'no_shipping',
     shippingSource: '',
-    shippingDestination: 'اليمن',
+    shippingDestination: 'no_shipping',
     shipmentStatus: 'في الانتظار',
     shippingCost: 0,
     weight: 0,
@@ -161,42 +165,45 @@ export default function Orders() {
     notes: ''
   });
 
-  // Multi-item sub table state for creation
+  // Multi-item sub table state for creation -- جدول المنتجات المتعددة في الطلب 
   const [items, setItems] = useState<any[]>([
     { productName: '', productUrl: '', quantity: 1, productPrice: 0, weight: 0, cbm: 0, length: 0, width: 0, height: 0, trackingNumber: '' }
   ]);
 
   // Order Upgrade states
-  const [customerSearchQuery, setCustomerSearchQuery] = useState('');
-  const [selectedCustomerProfile, setSelectedCustomerProfile] = useState<any>(null);
-  const [previewOrderNumber, setPreviewOrderNumber] = useState('');
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('');// البحث عن العميل  ويستخدم لترقية الطلب 
+  const [selectedCustomerProfile, setSelectedCustomerProfile] = useState<any>(null);//عرض تفاصيل العميل  
+  const [previewOrderNumber, setPreviewOrderNumber] = useState('');// داله ارجاع رقم الطلب الذي سوف يتم تحديثه    
 
   // Products Adjustments
-  const [bankCommissionEnabled, setBankCommissionEnabled] = useState(false);
-  const [bankCommissionRate, setBankCommissionRate] = useState(3);
-  const [bankCommissionType, setBankCommissionType] = useState<'percentage' | 'fixed'>('percentage');
-  const [couponEnabled, setCouponEnabled] = useState(false);
-  const [couponRate, setCouponRate] = useState(0);
-  const [cartShareCode, setCartShareCode] = useState('');
+  const [bankCommissionEnabled, setBankCommissionEnabled] = useState(false);//تفعيل العمولة البنكية  
+  const [bankCommissionRate, setBankCommissionRate] = useState(3);//نسبة العمولة البنكية  
+  const [bankCommissionType, setBankCommissionType] = useState<'percentage' | 'fixed'>('percentage');//نوع العمولة البنكية   
+  const [couponEnabled, setCouponEnabled] = useState(false);//متغير زر الكوبون
+  const [couponRate, setCouponRate] = useState(0);//سعر الكوبون ويستخدم لترقية الطلب  
+  const [cartShareCode, setCartShareCode] = useState('');//كود الكوبون ويستخدم لترقية الطلب  
 
   // New States for order source types
-  const [addShippingEnabled, setAddShippingEnabled] = useState(false);
-  const [profitPerKgRate, setProfitPerKgRate] = useState(19);
-  const [cbmShippingRateValue, setCbmShippingRateValue] = useState(1400);
+  const [addShippingEnabled, setAddShippingEnabled] = useState(false);//متغير تفعيل الشحن ويستخدم لتحديد هل الطلب يحتوي على شحن ام لا  
+  const [profitPerKgRate, setProfitPerKgRate] = useState(19);//قيمة الربح لكل كيلو جرام ويستخدم في حالة نوع مصدر الطلب = تطبيقات 
+  const [cbmShippingRateValue, setCbmShippingRateValue] = useState(1400);//قيمة الشحن لكل متر مكعب ويستخدم في حاله نوع مصدر الطلب = مصانع 
 
   // Shipping packaging fee state
-  const [packagingFeeEnabled, setPackagingFeeEnabled] = useState(false);
-  const [packagingFeeRate, setPackagingFeeRate] = useState(0);
+  const [packagingFeeEnabled, setPackagingFeeEnabled] = useState(false);//متغير تفعيل رسوم التغليف  على مستوى الشحن  
+  const [packagingFeeRate, setPackagingFeeRate] = useState(0);//رسوم التغليف على مستوى الشحن 
 
-  // Pre-generate preview order number when modal opens and populate settings defaults
+
+  // Pre-generate preview order number when modal opens and populate settings defaults 
+  // تم توليد رقم الطلب مسبقا عند فتح النافذة وملء الاعدادات الافتراضية 
   useEffect(() => {
     if (isAddModalOpen) {
       generateSmartOrderCode().then(code => setPreviewOrderNumber(code));
+      //متغيرات ثابته افتراضيه متعلقة بالطلب مثل العمله ونوع العمله وسعر الصرف
       setFormData(prev => ({
         ...prev,
         currency: settings.currency || 'SAR',
-        exchangeRateYER: dbRates.SAR || 1,
-        exchangeRateUSD: dbRates.USD || 1,
+        exchangeRateYER: dbRates.SAR || 1, //مهم: يجب ان يكون العمله التي سيتم اعتمادها وجلب سعر الصرف  محدده من الاعدادت وليس ثابته 
+        exchangeRateUSD: dbRates.USD || 1, //مهم: يوجد هنا خطا كبير هنا سعر الصرف ثابته يجب ان يكون العمله التي سيتم اعتمادها وجلب سعر الصرف  محدده من الاعدادت وليس ثابته 
         bankCommissionRate: settings.defaultBankCommissionRate ?? 3,
         companyProfitRate: settings.defaultCompanyProfitRate ?? 12,
         packagingFee: settings.defaultPackagingFee ?? 0,
@@ -212,12 +219,14 @@ export default function Orders() {
         amountPaid: 0,
         notes: ''
       }));
+      //متغيرات ثابته افتراضيه متعلقة بالمنتجات  مثل اسم المنتج ورابط المنتج وسعر المنتج والوزن والحجم والطول والعرض والارتفاع ورقم التتبع
       setItems([
         { productName: '', productUrl: '', quantity: 1, productPrice: 0, weight: 0, cbm: 0, length: 0, width: 0, height: 0, trackingNumber: '' }
       ]);
+      //متغيرات ثابته افتراضيه عند فتح النافذه متعلقة بالشحن مثل نوع الشحن وشركة الشحن
       setShippings([
         {
-          id: Math.random().toString(36).substr(2, 9),
+          id: 'shipp_' + Math.random().toString(36).substr(2, 9),//مهم: يتم تغييرها الى تسلسل بالترتيب حسب اخر تحديث
           shippingType: 'بري',
           shippingCompany: 'Aramex',
           shippingSource: '',
@@ -243,16 +252,17 @@ export default function Orders() {
           packagingFees: 0
         }
       ]);
-      setProfitPerKgRate(settings.defaultProfitPerKg ?? 19);
-      setCbmShippingRateValue(settings.defaultCbmShippingRate ?? 1400);
-      setAddShippingEnabled(false);
+      setProfitPerKgRate(settings.defaultProfitPerKg ?? 19);//متغير لنسبه الربح لكل كيلو جرام
+      setCbmShippingRateValue(settings.defaultCbmShippingRate ?? 1400);//متغير لسعر الشحن لكل متر مكعب
+      setAddShippingEnabled(false);//متغير لتفعيل الشحن 
     }
   }, [isAddModalOpen, settings]);
 
   // Multiple shipping details sub table state
+  //متغيرات  متعلقة بالجدول الفرعي للشحن مثل نوع الشحن وشركة الشحن
   const [shippings, setShippings] = useState<any[]>([
     {
-      id: Math.random().toString(36).substr(2, 9),
+      id: Math.random().toString(36).substr(2, 9),//مهم: يتم تغييرها الى تسلسل بالترتيب حسب تسلسل اخر شحنه
       shippingType: 'بري',
       shippingCompany: 'Aramex',
       shippingSource: '',
@@ -266,9 +276,10 @@ export default function Orders() {
     }
   ]);
 
-  const [updateShippings, setUpdateShippings] = useState<any[]>([]);
+  const [updateShippings, setUpdateShippings] = useState<any[]>([]);//متغير حاله يستخدم لتحديث الشحنات 
 
   // Order Create Form Data 
+  // بيانات نموذج إنشاء الطلب 
   const [formData, setFormData] = useState({
     customerId: '',
     customerName: '',
@@ -330,6 +341,8 @@ export default function Orders() {
     notes: ''
   });
 
+  //قسم الجلب من الداتا بيز 
+  // Fetch orders synchronized 
   useEffect(() => {
     if (roleLoading) return;
 
@@ -403,7 +416,7 @@ export default function Orders() {
         const defaults = ['Aramex', 'DHL', 'SafePost', 'Yemen Express'];
         const querySnapshot = await getDocs(collection(db, 'shipping_companies'));
         const existingNames = new Set(
-          querySnapshot.docs.map(doc => (doc.data().name || '').trim().toLowerCase())
+          querySnapshot.docs.map(doc => (doc.data().id || '').trim().toLowerCase())
         );
 
         for (const carrier of defaults) {
@@ -455,7 +468,7 @@ export default function Orders() {
     if (formData.customerId) {
       const custOrders = orders.filter(o => o.customerId === formData.customerId);
       const totalUnpaid = custOrders.reduce((sum, o) => sum + (parseFloat(o.amountRemaining || '0')), 0);
-      if (totalUnpaid > 0) {
+      if (totalUnpaid > 0 && !loading) {
         setCustomerUnpaidAlert(totalUnpaid);
       } else {
         setCustomerUnpaidAlert(null);
@@ -515,7 +528,7 @@ export default function Orders() {
     }
   };
 
-  // Smart Customer Search & Stats Upgrade
+  // Smart Customer Search & Stats Upgrade -- البحث عن عميل داخل  القائمه 
   const filteredCustomers = useMemo(() => {
     if (!customerSearchQuery.trim()) return [];
     return customers.filter(c =>
@@ -524,6 +537,7 @@ export default function Orders() {
     );
   }, [customerSearchQuery, customers]);
 
+  // Get customers stats --  احصائيات العميل 
   const customerProfileStats = useMemo(() => {
     if (!formData.customerId) return null;
     const cust = customers.find(c => c.id === formData.customerId);
@@ -548,6 +562,7 @@ export default function Orders() {
     };
   }, [formData.customerId, customers, orders]);
 
+  // Select customer from search results -- اختيار العميل من نتائج البحث 
   const selectCustomer = (c: any) => {
     setFormData(prev => ({
       ...prev,
@@ -559,6 +574,7 @@ export default function Orders() {
     setCustomerSearchQuery('');
   };
 
+  // Clear selected customer -- مسح العميل المحدد
   const clearSelectedCustomer = () => {
     setFormData(prev => ({
       ...prev,
@@ -569,6 +585,7 @@ export default function Orders() {
     }));
   };
 
+  // Generate order invoice PDF -- انشاء فاتوره للطلب 
   const generateOrderInvoicePDF = (order: any) => {
     if (!order) return;
 
@@ -660,106 +677,145 @@ export default function Orders() {
 
     printContent(isAr ? 'فاتورة طلب' : 'Order Invoice', invoiceHtml, isAr);
     activityLogService.log('export_orders_pdf', order.orderNumber || order.id, { singleOrder: true });
-  };
+  };// #مهم: يتم نفل هذا الجزء الى مجلد خاص بالتقارير
 
-  // Helper calculation values
+  // Helper calculation values حساب جميع التكاليف 
   const computeCalculations = () => {
-    // 1. Compute total products prices
+    // 1. Compute total products prices حساب سعر المنتجات
     const productsSum = items.reduce((sum, i) => sum + (parseFloat(i.quantity || 0) * parseFloat(i.productPrice || 0)), 0);
 
-    // Auto-calculate CBM for each item if dimensions are provided
+    // Auto-calculate CBM for each item if dimensions are provided حساب الحجم المكعب للمنتج الواحد 
     items.forEach(i => {
       if (formData.orderSourceType === 'Factory') {
         const length = parseFloat(i.length || 0);
         const width = parseFloat(i.width || 0);
         const height = parseFloat(i.height || 0);
         if (length > 0 && width > 0 && height > 0) {
-          i.cbm = parseFloat(((length * width * height) / 1000000).toFixed(6));
+          i.cbm = parseFloat(((length * width * height) / 1000000).toFixed(6));  // معادلة حساب حجم  CBM
         }
       }
     });
 
+    // حساب الوزن الكلي  = ضرب الكمية  مع الوزن 
     const totalWeight = items.reduce((sum, i) => sum + (parseFloat(i.quantity || 0) * parseFloat(i.weight || 0)), 0);
+
+    // حساب الحجم المكعب الكلي = ضرب الكمية  مع الحجم المكعب 
     const totalCBM = items.reduce((sum, i) => sum + (parseFloat(i.quantity || 0) * parseFloat(i.cbm || 0)), 0);
 
-    // Apply Bank Commission and Coupon to products cost
+    //Apply Bank Commission to products cost حساب العمولة البنكية
     const bankCommValue = bankCommissionEnabled
       ? (bankCommissionType === 'percentage'
         ? (productsSum * (parseFloat(bankCommissionRate as any) / 100))
         : (parseFloat(bankCommissionRate as any) || 0))
       : 0;
-    const couponValue = couponEnabled ? couponRate : 0; // couponRate is now treated as a fixed amount in SAR
-    const totalProductsCostWithAdjustments = productsSum - couponValue;
 
-    let priceSAR = totalProductsCostWithAdjustments;
-    let shippingCostSAR = 0;
-    let profitCompanySAR = 0;
-    let profitSaudiSAR = 0;
-    let totalOrderSAR = 0;
+    //  حساب كوبون    
+    const couponValue = couponEnabled ? couponRate : 0; // couponRate is now treated as a fixed amount in SAR
+
+    const totalProductsCostWithAdjustments = productsSum - couponValue; // حساب التكلفة الكلية للمنتجات مع الخصم 
+    //مهم: بدلا من الاعتماد على الريال السعودي كعمله ثابته للطلب يجب انشاء حقل في الاعدادت للتعيين عمله افتراضيه للطلب وبتم اخذ العمله منها بدلا من الريال السعودي 
+    let priceSAR = totalProductsCostWithAdjustments;// سعر المنتجات بالريال السعودي
+    let shippingCostSAR = 0;  // تكلفة الشحن بالريال السعودي
+    let profitCompanySAR = 0; // ربح الشركة بالريال السعودي 
+    let profitSaudiSAR = 0; // ربح السعودية بالريال السعودي 
+    let totalOrderSAR = 0; // الاجمالي الكلي بالريال السعودي
 
     // Sum up shipping cost from shippings table
     // packagingFeeRate is now a fixed SAR amount (not a percentage)
+    // مجموع تكلفه الشحن = مجموع تكاليف الشحن + رسوم التغليف (رسوم التغليف تضاف لكل طلب على حده ) 
     const shippingsCostSum = shippings.reduce((sum, s) => sum + parseFloat(s.shippingCost || 0) + parseFloat(s.packagingFees || 0), 0);
     const shippingPackagingFixed = packagingFeeEnabled ? (parseFloat(packagingFeeRate as any) || 0) : 0;
     const totalShippingsCost = shippingsCostSum + shippingPackagingFixed;
 
+    //----------------------------------------------
+    // حساب التكاليف في مصدر شحن شي ان
     if (formData.orderSourceType === 'SHEIN') {
-      const redPrice = parseFloat(formData.sheinRedPrice as any) || 0;
-      const generalPackagingFee = parseFloat(formData.packagingFee as any) || 0;
-      priceSAR = redPrice;
-      shippingCostSAR = 0;
+      const redPrice = parseFloat(formData.sheinRedPrice as any) || 0;// سعر المنتج في شي ان الاحمر
+      const generalPackagingFee = parseFloat(formData.packagingFee as any) || 0;// رسوم التغليف الثابته
+      priceSAR = redPrice;//سعر المنتجات بالريال السعودي 
+      shippingCostSAR = 0;// تكلفة الشحن 
       // Customer pays SHEIN Red Price + packaging fee (coupon is not deducted from what customer pays)
-      totalOrderSAR = redPrice + generalPackagingFee;
+      // سعر البيع للعميل = سعر المنتج في شي ان الاحمر + رسوم التغليف  (بدون استخدام كوبون الخصم في شي ان)
+      totalOrderSAR = redPrice + generalPackagingFee;// الاجمالي الكلي بالريال السعودي 
 
+      // ربح الشركه قبل احتساب الشحن وعموله المناديب  = سعر المنتج في شي ان الاحمر  -  (تكلفه المنتج + العمولة البنكية + رسوم التغليف ) 
       const rawProfitSAR = redPrice - (productsSum + bankCommValue + generalPackagingFee);
-      const saudiCourier = couriers.find(c => c.id === formData.shippingCourierId);
-      const saudiRate = (saudiCourier && saudiCourier.commissionRate !== undefined) ? parseFloat(saudiCourier.commissionRate) : 0;
-      profitSaudiSAR = rawProfitSAR * (saudiRate / 100);
+
+      const saudiCourier = couriers.find(c => c.id === formData.shippingCourierId); //جلب معرف مندوب الشحن السعودي
+      const saudiRate = (saudiCourier && saudiCourier.commissionRate !== undefined) ? parseFloat(saudiCourier.commissionRate) : 0; // جلب نسبه عموله مندوب الشحن السعودي      
+      profitSaudiSAR = rawProfitSAR * (saudiRate / 100);//ربح المندوب السعودي  = ربح الشركه الصافي  *  نسبه ربح المندوب 
+
       // Coupon amount is added entirely to the company profit
+      // كوبون الخصم يضاف بالكامل الى ربح الشركه
+      // ربح الشركه الكلي بعد احتساب عموله المندوب واضافه مبلغ الكوبون = ربح الشركه الصافي  -  ربح المندوب السعودي   + كوبون الخصم 
       profitCompanySAR = (rawProfitSAR - profitSaudiSAR) + couponValue;
-    } else if (formData.orderSourceType === 'Factory') {
-      const rawProfitSAR = totalWeight * (parseFloat(profitPerKgRate as any) || 0);
+    }
+    //----------------------------------------------
+    // حساب التكاليف في مصادر الشحن للمصانع
+    else if (formData.orderSourceType === 'Factory') {
+      const rawProfitSAR = totalWeight * (parseFloat(profitPerKgRate as any) || 0); //ربح الشركه للمصانع =  الوزن الكلي *  سعر الربح لكل كيلو 
 
       // Use the shipping cost from the shippings table (which is filled automatically based on formula and is editable)
-      shippingCostSAR = totalShippingsCost;
+      // جلب تكلفه الشحن من جدول الشحنات (الذي يتم ملؤه تلقائيا بناء على الصيغة وهو قابل للتعديل)
+      shippingCostSAR = totalShippingsCost; // تكلفه الشحن النهائيه بالسعودي  = مجموع تكاليف الشحن + رسوم التغليف 
 
-      const generalPackagingFee = parseFloat(formData.packagingFee as any) || 0;
+      const generalPackagingFee = parseFloat(formData.packagingFee as any) || 0; // رسوم التغليف الثابته
+      //  الاجمالي الكلي بالريال السعودي = سعر المنتجات + ربح الشركه + تكلفه الشحن + رسوم التغليف  العامه
       totalOrderSAR = productsSum + rawProfitSAR + shippingCostSAR + generalPackagingFee;
 
-      const saudiCourier = couriers.find(c => c.id === formData.shippingCourierId);
-      const saudiRate = (saudiCourier && saudiCourier.commissionRate !== undefined) ? parseFloat(saudiCourier.commissionRate) : 0;
-      profitSaudiSAR = rawProfitSAR * (saudiRate / 100);
+      const saudiCourier = couriers.find(c => c.id === formData.shippingCourierId);//جلب معرف مندوب الشحن السعودي 
+      const saudiRate = (saudiCourier && saudiCourier.commissionRate !== undefined) ? parseFloat(saudiCourier.commissionRate) : 0; // جلب نسبه عموله مندوب الشحن السعودي 
+      profitSaudiSAR = rawProfitSAR * (saudiRate / 100); // ربح المندوب السعودي = ربح الشركه الافتراضي  * نسبه ربح المندوب 
+      // ربح الشركه النهائي بالسعوديه  = ربح الشركه الافتراضي  -  ربح المندوب السعودي   + كوبون الخصم 
       profitCompanySAR = (rawProfitSAR - profitSaudiSAR) + couponValue;
-    } else {
+    }
+    //----------------------------------------------
+    // حساب التكاليف في مصدر التطبيق
+    else {
       // Shopping (App)
       let rawProfitSAR = productsSum * ((parseFloat(formData.companyProfitRate as any) || 12) / 100);
-      // Deduct bank commission from profit
+      // Deduct bank commission from profit -- جلب العموله البنكيه وخصمها من ربح الشركه 
       rawProfitSAR = rawProfitSAR - bankCommValue;
 
+      // تكلفه الشحن : اذا عدد الشحنات اكبر من 0 فان التكلفه = مجموع تكاليف الشحن 
       shippingCostSAR = (addShippingEnabled || shippings.length > 0) ? totalShippingsCost : 0;
+      //جلب رسوم التغليف العامه الخاصه بالشركه  
       const generalPackagingFee = parseFloat(formData.packagingFee as any) || 0;
       // Customer pays productsSum + raw profit BEFORE bank deduction (Wait, if customer pays original raw profit, then total is productsSum + originalRawProfit... But we just deducted it. Let's recalculate what the customer pays)
+      // سعر البيع للعميل = سعر المنتجات + ربح الشركه الافتراضي قبل خصم العموله البنكيه  + تكلفه الشحن + رسوم التغليف العامه  (هنا , اذا تم الخصم من الربح يكون سعر البيع للعميل هو سعر المنتجات + ربح الشركه  بدون العموله البنكيه  + تكلفه الشحن + رسوم التغليف العامه ) 
+
       // Actually, if Bank Commission is DEDUCTED from profit, it means the customer pays the original price.
+      // في الواقع، إذا تم خصم عمولة البنك من الربح، فهذا يعني أن العميل يدفع السعر الأصلي.
+
+      // ربح الشركه الاصلي = اجمالي تكلفه المنتجات * نسبه الربح الافتراضيه للطلبات من نوع تطبيقات 
       const originalRawProfitSAR = productsSum * ((parseFloat(formData.companyProfitRate as any) || 12) / 100);
-      totalOrderSAR = productsSum + originalRawProfitSAR + shippingCostSAR + generalPackagingFee;
+
+      // سعر البيع للعميل = سعر المنتجات + ربح الشركه الافتراضي قبل خصم العموله البنكيه  + تكلفه الشحن + رسوم التغليف العامه + كوبون الخصم 
+      totalOrderSAR = productsSum + originalRawProfitSAR + shippingCostSAR + generalPackagingFee + couponValue; // كوبون الخصم يضاف على سعر البيع للعميل
 
       const saudiCourier = couriers.find(c => c.id === formData.shippingCourierId);
       const saudiRate = (saudiCourier && saudiCourier.commissionRate !== undefined) ? parseFloat(saudiCourier.commissionRate) : 30;
       profitSaudiSAR = rawProfitSAR * (saudiRate / 100);
+
+      // ربح الشركه النهائي  = ربح الشركه الافتراضي بعد خصم العموله البنكيه  -  ربح المندوب السعودي  + كوبون الخصم 
       profitCompanySAR = (rawProfitSAR - profitSaudiSAR) + couponValue;
     }
+    //----------------------------------------------
 
     // Convert to YER for payment
     const exchange = formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER;
-    const baseTotalOrderYER = totalOrderSAR * exchange;
+    const baseTotalOrderYER = totalOrderSAR * exchange;// تحويل اجمالي تكلفه الطلب بالسعودي الى اليمني
 
     // Delivery courier fee (flat fee in YER)
+    //مهم: يتم انشاء زر في الواجهه لتحديد هل الطلب شامل التوصيل للمنزل او لا ولايتم ظهور اختيار مندوب توصيل واحتساب عمولته الا اذاتم تحدبد الزر 
     const deliveryCourierFee = parseFloat(formData.deliveryCourierFee as any) || 0;
 
     // The grand total YER includes everything.
+    //الاجمالي الكلي بالريال اليمني = اجمالي تكلفه الطلب بعد مصارفه السعودي  + رسوم التوصيل  لليمن
     const totalOrderYER = baseTotalOrderYER + deliveryCourierFee;
 
     // Remaining in YER: Total in YER (which includes delivery fee) - Amount Paid
+    // المبلغ المتبقي بالريال اليمني = الاجمالي الكلي بالريال اليمني - المبلغ المدفوع بالريال اليمني 
     const valPaid = parseFloat(formData.amountPaid as any) || 0;
     const remainingYER = totalOrderYER - valPaid;
 
@@ -780,9 +836,9 @@ export default function Orders() {
     };
   };
 
-  const calcs = computeCalculations();
+  const calcs = computeCalculations();// حساب التكاليف بناء على المتغيرات المدخله من قبل المستخدم 
 
-  // Handle order creation
+  // Handle order creation نموذج انشاء طلب 
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
@@ -1211,6 +1267,7 @@ export default function Orders() {
     }
   };
 
+  // اعاده تعبئه نموذج انشاء طلب  
   const resetCreateForm = () => {
     setFormData({
       customerId: '',
@@ -1290,7 +1347,7 @@ export default function Orders() {
       }
     }
   };
-
+  // حذف الطلب من قاعدة البيانات
   const executeDeleteOrder = async (order: any) => {
     try {
       await deleteDoc(doc(db, 'orders', order.id));
@@ -1315,7 +1372,7 @@ export default function Orders() {
       alert(isAr ? 'فشل حذف الطلب: ' + err.message : 'Failed to delete order: ' + err.message);
     }
   };
-
+  // التحقق من رمز الـ PIN  لحذف الطلب
   const handleVerifyDeletePin = () => {
     const systemPin = profile?.systemPin || '000000';
     if (deletePin.trim() === systemPin.trim()) {
@@ -1326,6 +1383,7 @@ export default function Orders() {
   };
 
   // Nested quick-add customer
+  // مهم: يتم استخدام نموذج انشاء عميل من واجهة العملاء  "../page/Customers.tsx" مع تعديلات طفيفه وعدم تكرار الاكواد هنا مره اخرى
   const handleAddCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
@@ -1399,6 +1457,7 @@ export default function Orders() {
   };
 
   // Nested quick-add purchase source
+  // مهم: يتم استخدام نموذج انشاء مصدر من واجهة المصادر "../page/Sources.tsx" مع تعديلات طفيفه وعدم تكرار الاكواد هنا مره اخرى
   const handleAddSource = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
@@ -1454,6 +1513,7 @@ export default function Orders() {
   };
 
   // Nested quick-add shipping company
+  // مهم: يتم استخدام نموذج انشاء شركة شحن من واجهة شركات الشحن "../page/ShippingCompanies.tsx" مع تعديلات طفيفه وعدم تكرار الاكواد هنا مره اخرى
   const handleAddShippingCompany = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
@@ -2084,10 +2144,11 @@ export default function Orders() {
   };
 
   // Items handling
+  // اضافه صف جديد الى المنتجات
   const addItemRow = () => {
     setItems([...items, { productName: '', productUrl: '', quantity: 1, productPrice: 0, weight: 0, cbm: 0, length: 0, width: 0, height: 0, trackingNumber: '' }]);
   };
-
+  // تعديل صف من المنتجات
   const updateItemRow = (idx: number, field: string, val: any) => {
     setItems(prev => {
       const updated = [...prev];
@@ -2095,13 +2156,14 @@ export default function Orders() {
       return updated;
     });
   };
-
+  // حذف صف من المنتجات
   const removeItemRow = (idx: number) => {
     if (items.length === 1) return;
     setItems(items.filter((_, i) => i !== idx));
   };
 
   // Shipping details handling
+  // اضافه صف جديد الى بيانات الشحنات
   const addShippingRow = () => {
     const today = new Date().toISOString().split('T')[0];
     const defaultDuration =
@@ -2128,8 +2190,7 @@ export default function Orders() {
       setAddShippingEnabled(true);
     }
   };
-
-
+  // تعديل صف بيانات الشحنات
   const updateShippingRow = (idx: number, fieldOrObj: string | Record<string, any>, val?: any) => {
     setShippings(prev => {
       const updated = [...prev];
@@ -2147,8 +2208,7 @@ export default function Orders() {
       return updated;
     });
   };
-
-  // Update shipping durations when orderSourceType changes
+  // تحديث  مدة الشحن عند تغيير نوع الشحن
   useEffect(() => {
     if (isAddModalOpen) {
       const defaultDuration =
@@ -2189,6 +2249,7 @@ export default function Orders() {
 
 
   // Auto-calculate shipping cost for Factory and sync with primary shipping row
+  //  حساب تكلفة الشحن تلقائيا من المصنع ودمجها مع صف الشحن الرئيسي
   useEffect(() => {
     if (formData.orderSourceType === 'Factory') {
       const totalCBM = items.reduce((sum, i) => sum + (parseFloat(i.quantity || 0) * parseFloat(i.cbm || 0)), 0);
@@ -2215,7 +2276,7 @@ export default function Orders() {
       });
     }
   }, [formData.orderSourceType, items, cbmShippingRateValue, formData.exchangeRateUSD, formData.exchangeRateYER]);
-
+  // حذف صف بيانات الشحن
   const removeShippingRow = (idx: number) => {
     if (shippings.length === 1) {
       setShippings([]);
@@ -2226,7 +2287,7 @@ export default function Orders() {
     }
     setShippings(shippings.filter((_, i) => i !== idx));
   };
-
+  // اضافه صف جديد الى بيانات الشحنات
   const addUpdateShippingRow = () => {
     const today = new Date().toISOString().split('T')[0];
     setUpdateShippings([...updateShippings, {
@@ -2242,7 +2303,7 @@ export default function Orders() {
       packagingFees: 0
     }]);
   };
-
+  // تعديل صف بيانات الشحن
   const updateUpdateShippingRow = (idx: number, fieldOrObj: string | Record<string, any>, val?: any) => {
     setUpdateShippings(prev => {
       const updated = [...prev];
@@ -2254,7 +2315,7 @@ export default function Orders() {
       return updated;
     });
   };
-
+  // حذف صف بيانات الشحن
   const removeUpdateShippingRow = (idx: number) => {
     setUpdateShippings(updateShippings.filter((_, i) => i !== idx));
   };
@@ -2263,6 +2324,7 @@ export default function Orders() {
 
 
   // QR code rendering effect
+  // رمز الاستجابة السريعة الخاص بالطلب
   useEffect(() => {
     if (isDetailsModalOpen && selectedOrder && qrCanvasRef.current) {
       QRCode.toCanvas(
@@ -2283,6 +2345,7 @@ export default function Orders() {
     }
   }, [isDetailsModalOpen, selectedOrder]);
 
+  //  نسخ رمز التتبع
   const copyToClipboard = (text: string) => {
     if (!text) return;
     navigator.clipboard.writeText(text);
@@ -2295,6 +2358,7 @@ export default function Orders() {
   };
 
   // Multi-select features
+  // تحديد متعدد
   const handleSelectAll = () => {
     if (selectedOrderIds.length === filteredOrdersList.length && filteredOrdersList.length > 0) {
       setSelectedOrderIds([]);
@@ -2302,18 +2366,19 @@ export default function Orders() {
       setSelectedOrderIds(filteredOrdersList.map(o => o.id));
     }
   };
-
+  // تحديد طلب واحد
   const handleToggleSelect = (id: string) => {
     setSelectedOrderIds(prev =>
       prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
     );
   };
-
+  // تحديث حالة الطلب
   const handleBatchUpdateStatus = async (newStatus: string) => {
     if (selectedOrderIds.length === 0) return;
     setIsBatchUpdating(true);
     try {
       const promises = selectedOrderIds.map(async (orderId) => {
+        // مهم: يجب استبدال البيانات الثابته للحالات بالحالات الموجوده في جدول حالات الطلب order_status 
         const defaultLocation = newStatus === 'وصل مستودع السعودية' ? 'مستودع السعودية للتعبئة' :
           newStatus === 'وصل مركز التوزيع في اليمن' ? 'مستودع صنعاء الرئيسي' : 'قيد النقل';
 
@@ -2323,7 +2388,7 @@ export default function Orders() {
         const firedTriggers = ord.firedTriggers || [];
         const newFiredTriggers = [...firedTriggers];
 
-        const ordStatus = ord.orderStatus || 'تم تسجيل الطلب';
+        const ordStatus = ord.orderStatus || 'معلق';
         const currentStatusItem = orderStatusesList.find(s => s.nameAr === ordStatus || s.nameEn === ordStatus);
         const newStatusItem = orderStatusesList.find(s => s.nameAr === newStatus || s.nameEn === newStatus) || orderStatusesList[0];
 
@@ -2652,12 +2717,14 @@ export default function Orders() {
     }
   };
   // ── Shipments Management Studio Helpers ──
+  // اضافة شحنه جديده
   const handleOpenAddShipmentModal = () => {
     setShipmentFormData({
       id: '',
       orderId: '',
       trackingNumber: '',
-      shippingCompany: 'Aramex',
+      shippingCompany: 'no',
+      shippingCompanyId: 'no',
       courierId: '',
       shippingType: 'بري',
       shippingSource: '',
@@ -2674,14 +2741,15 @@ export default function Orders() {
     });
     setIsAddShipmentModalOpen(true);
   };
-
+  // تعديل بيانات الشحنه
   const handleOpenEditShipmentModal = (shipment: any) => {
     setShipmentToEdit(shipment);
     setShipmentFormData({
       id: shipment.id,
       orderId: shipment.orderId || shipment.order_id || '',
       trackingNumber: shipment.trackingNumber || shipment.tracking_number || '',
-      shippingCompany: shipment.shippingCompany || shipment.shipping_company_id || 'Aramex',
+      shippingCompany: shipment.shippingCompany || shipment.shipping_company_id || 'no',
+      shippingCompanyId: shipment.shippingCompanyId || shipment.shipping_company_id || 'no',
       courierId: shipment.courierId || shipment.courier_id || '',
       shippingType: shipment.shippingType || 'بري',
       shippingSource: shipment.shippingSource || '',
@@ -2698,7 +2766,7 @@ export default function Orders() {
     });
     setIsEditShipmentModalOpen(true);
   };
-
+  // حفظ بيانات الشحنه
   const handleSaveShipmentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!shipmentFormData.trackingNumber) {
@@ -2757,7 +2825,7 @@ export default function Orders() {
       setIsSubmitting(false);
     }
   };
-
+  // تعديل حالة الشحنه بسرعة
   const handleQuickShipmentStatusChange = async (shipmentId: string, newStatus: string) => {
     try {
       await updateDoc(doc(db, 'shipments', shipmentId), {
@@ -2773,7 +2841,7 @@ export default function Orders() {
       console.error('Failed to quick update shipment status:', err);
     }
   };
-
+  // حذف بيانات الشحنه
   const handleDeleteShipmentSubmit = async () => {
     if (!shipmentToDelete) return;
     setIsSubmitting(true);
@@ -2810,19 +2878,20 @@ export default function Orders() {
   }, [allShipments, shipmentSearchQuery, shipmentStatusFilter, shipmentCarrierFilter, shipmentCourierFilter]);
 
   //اريد اضافه جدول مخصص لحالات الطلب في قاده البيانات وضافه واجهه مخصصه لاداره الحالات 
-  const formatStatusLabel = (status: string) => {
-    const translationAr: Record<string, string> = {
-      'تم تسجيل الطلب': 'تم تسجيل الطلب',
-      'وصل مستودع السعودية': 'وصل مستودع السعودية',
-      'جاري الشحن لليمن': 'جاري الشحن لليمن',
-      'في التخليص الجمركي': 'في التخليص الجمركي',
-      'وصل مركز التوزيع في اليمن': 'وصل مركز التوزيع في اليمن',
-      'مع المندوب للتوصيل': 'مع المندوب للتوصيل',
-      'تم التسليم': 'تم التسليم',
-      'ملغي': 'ملغي'
-    };
-    return isAr ? (translationAr[status] || status) : status;
-  };
+  // مهم:يجب استبدال الداتا الثابته للحالات بالبيانات الموجوده بجدول الحالات order_status
+  // const formatStatusLabel = (status: string) => {
+  //   const translationAr: Record<string, string> = {
+  //     'تم تسجيل الطلب': 'تم تسجيل الطلب',
+  //     'وصل مستودع السعودية': 'وصل مستودع السعودية',
+  //     'جاري الشحن لليمن': 'جاري الشحن لليمن',
+  //     'في التخليص الجمركي': 'في التخليص الجمركي',
+  //     'وصل مركز التوزيع في اليمن': 'وصل مركز التوزيع في اليمن',
+  //     'مع المندوب للتوصيل': 'مع المندوب للتوصيل',
+  //     'تم التسليم': 'تم التسليم',
+  //     'ملغي': 'ملغي'
+  //   };
+  //   return isAr ? (translationAr[status] || status) : status;
+  // };
 
   const transliterateArabic = (text: string): string => {
     if (!text) return '';
@@ -2836,6 +2905,8 @@ export default function Orders() {
     return text.split('').map(char => mapping[char] || char).join('');
   };
 
+  //طباعه كشف الشحنات والطلبيات
+  // مهم:يجب نقله الى ملف الكشوفات والتقارير
   const exportOrdersToPDF = () => {
     const reportTitle = isAr ? 'كشف حركة الشحنات والطلبيات' : 'Logistics Orders Ledger';
     printContent(reportTitle, 'orders-ledger-table', isAr);
@@ -2844,7 +2915,8 @@ export default function Orders() {
       count: filteredOrdersList.length
     });
   };
-
+  //تصدير الطلبات الى ملف اكسل
+  // مهم:يجب نقله الى ملف الكشوفات والتقارير
   const exportOrdersToCSV = () => {
     const headers = [
       isAr ? 'رقم الطلب' : 'Smart Code',
@@ -2888,7 +2960,7 @@ export default function Orders() {
       count: filteredOrdersList.length
     });
   };
-
+  //فلتره الطلبات
   const filteredOrdersList = orders
     .filter(o => {
       const num = String(o.orderNumber || '').toUpperCase();
@@ -2910,16 +2982,17 @@ export default function Orders() {
       if (sortBy === 'amount-desc') return ((parseFloat(b.amountPaid || 0) + parseFloat(b.amountRemaining || 0))) - ((parseFloat(a.amountPaid || 0) + parseFloat(a.amountRemaining || 0)));
       return 0;
     });
-
+  // اشعار تحميل الطلبات
   if (loading || roleLoading) {
     return (
       <div className="flex flex-col items-center justify-center p-20 text-slate-500 font-bold">
-        {isAr ? 'جاري تحميل الدفتر اللوجيستي والمحاسبي...' : 'Loading logistic ledger...'}
+        {isAr ? 'جاري تحميل الطلبات...' : 'Loading logistic ledger...'}
       </div>
     );
   }
 
   // Page Guard: requires view_orders
+  // اشعار عدم صلاحية عرض الطلبات
   if (role !== 'Admin' && !hasPermission('view_orders')) {
     return (
       <div className="flex flex-col items-center justify-center p-12 bg-gradient-to-br from-[#121215] to-[#070708] rounded-3xl border border-slate-800 shadow-xl text-center select-none">
@@ -2930,9 +3003,9 @@ export default function Orders() {
     );
   }
 
+  // واجهة المستخدم لعرض الطلبات
   return (
     <div className="space-y-6 pb-20 text-start transition-colors">
-
       {/* Title block */}
       <div className="flex justify-between items-center bg-black/40 backdrop-blur-md border border-[#d4af37]/20 p-5 rounded-3xl shadow-lg shadow-black/35">
         <div className="flex items-center gap-3">
@@ -2942,7 +3015,7 @@ export default function Orders() {
           <div className="text-start">
             <h1 className="text-xl font-black text-white leading-none mb-1">{t('orders')}</h1>
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-              {isAr ? 'إنشاء الفواتير • الشحنات النشطة • حسابات المتبقي ومشاركة الأرباح' : 'Invoice maker • Ledger & Profit divisions'}
+              {isAr ? 'ادارة الطلبات • ادارة الشحنات  • تتبع الطلبات • اداره مراحل الطلب والقيود التلقائيه ' : 'Invoice maker • Ledger & Profit divisions'}
             </p>
           </div>
         </div>
@@ -2973,7 +3046,7 @@ export default function Orders() {
               }}
               className="bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black px-6 py-2.5 rounded-xl flex items-center gap-2 font-black text-sm transition transform active:scale-95 shadow-md shadow-yellow-950/20 cursor-pointer"
             >
-              <Plus className="w-4 h-4" /> {isAr ? 'فاتورة جديدة' : 'New Invoice'}
+              <Plus className="w-4 h-4" /> {isAr ? 'طلب جديدة' : 'New Invoice'}
             </button>
           )}
         </div>
@@ -2984,8 +3057,8 @@ export default function Orders() {
         <button
           onClick={() => setOrdersTab('orders')}
           className={`px-5 py-2.5 rounded-2xl font-black text-xs flex items-center gap-2 transition cursor-pointer ${ordersTab === 'orders'
-              ? 'bg-[#d4af37] text-black shadow-lg shadow-[#d4af37]/20 scale-102'
-              : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-850 border border-slate-800'
+            ? 'bg-[#d4af37] text-black shadow-lg shadow-[#d4af37]/20 scale-102'
+            : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-850 border border-slate-800'
             }`}
         >
           <Package className="w-4 h-4" />
@@ -2998,8 +3071,8 @@ export default function Orders() {
         <button
           onClick={() => setOrdersTab('shipments')}
           className={`px-5 py-2.5 rounded-2xl font-black text-xs flex items-center gap-2 transition cursor-pointer ${ordersTab === 'shipments'
-              ? 'bg-[#d4af37] text-black shadow-lg shadow-[#d4af37]/20 scale-102'
-              : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-850 border border-slate-800'
+            ? 'bg-[#d4af37] text-black shadow-lg shadow-[#d4af37]/20 scale-102'
+            : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-850 border border-slate-800'
             }`}
         >
           <Truck className="w-4 h-4" />
@@ -3013,8 +3086,8 @@ export default function Orders() {
           <button
             onClick={() => setOrdersTab('tracking')}
             className={`px-5 py-2.5 rounded-2xl font-black text-xs flex items-center gap-2 transition cursor-pointer ${ordersTab === 'tracking'
-                ? 'bg-[#d4af37] text-black shadow-lg shadow-[#d4af37]/20 scale-102'
-                : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-850 border border-slate-800'
+              ? 'bg-[#d4af37] text-black shadow-lg shadow-[#d4af37]/20 scale-102'
+              : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-850 border border-slate-800'
               }`}
           >
             <MapPin className="w-4 h-4" />
@@ -3026,8 +3099,8 @@ export default function Orders() {
           <button
             onClick={() => setOrdersTab('statuses')}
             className={`px-5 py-2.5 rounded-2xl font-black text-xs flex items-center gap-2 transition cursor-pointer ${ordersTab === 'statuses'
-                ? 'bg-[#d4af37] text-black shadow-lg shadow-[#d4af37]/20 scale-102'
-                : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-850 border border-slate-800'
+              ? 'bg-[#d4af37] text-black shadow-lg shadow-[#d4af37]/20 scale-102'
+              : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-850 border border-slate-800'
               }`}
           >
             <Layers className="w-4 h-4" />
@@ -3188,8 +3261,8 @@ export default function Orders() {
                               </button>
                             </div>
                             <span className={`mt-1 inline-block px-2 py-0.5 rounded-lg text-[10px] font-bold ${statusVal === 'تم التسليم' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' :
-                                statusVal === 'ملغي' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30' :
-                                  'bg-[#d4af37]/10 text-[#d4af37] border border-[#d4af37]/30'
+                              statusVal === 'ملغي' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30' :
+                                'bg-[#d4af37]/10 text-[#d4af37] border border-[#d4af37]/30'
                               }`}>
                               {statusVal}
                             </span>
@@ -3277,2775 +3350,2777 @@ export default function Orders() {
             </div>
           </div>
         </div>
-      ) : (
-        /* Orders View & Filters */
-        <>
-          {/* Stats Quick Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {[
-              { title: isAr ? 'الطلبات النشطة اليوم' : 'Active Orders Today', val: orders.filter(o => o.orderStatus !== 'تم التسليم' && o.orderStatus !== 'ملغي').length, color: 'text-[#d4af37] bg-[#d4af37]/10' },
-              { title: isAr ? 'بانتظار التوزيع لليمن' : 'In Local Dist', val: orders.filter(o => o.orderStatus === 'وصل مركز التوزيع في اليمن').length, color: 'text-amber-400 bg-amber-950/20' },
-              { title: isAr ? 'شحنات سلمت بنجاح' : 'Delivered Ledger', val: orders.filter(o => o.orderStatus === 'تم التسليم').length, color: 'text-emerald-400 bg-emerald-950/20' },
-              { title: isAr ? 'مبالغ معلقة للتحصيل' : 'Remaining To Collect', val: orders.reduce((sum, o) => sum + financialAccountService.convertToDefaultCurrency(parseFloat(o.amountRemaining || '0'), o.currency || 'YER', settings.currency || 'YER', { USD: o.exchangeRateUSD || dbRates.USD, SAR: o.exchangeRateSAR || dbRates.SAR }), 0).toLocaleString() + ' ' + (settings.currency || 'YER'), color: 'text-rose-400 bg-rose-950/20' }
-            ].map((k, i) => (
-              <div key={i} className="bg-gradient-to-b from-[#0d0d10] to-[#070709] border border-[#d4af37]/15 p-4 rounded-2xl relative overflow-hidden shadow-md">
-                <div className="absolute right-0 top-0 w-16 h-16 bg-gradient-to-br from-[#d4af37]/5 to-transparent rounded-full blur-xl"></div>
-                <span className="text-[10px] text-slate-500 font-bold block mb-1 uppercase tracking-wider">{k.title}</span>
-                <span className={`text-xl font-mono font-black ${k.color.split(' ')[0]}`}>{k.val}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Filter and Table Panel */}
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden flex flex-col">
-
-            {/* Advanced Filters */}
-            <div className="p-4 border-b border-slate-800 flex flex-wrap gap-3 bg-slate-950/20">
-              <div className="relative flex-1 min-w-[200px]">
-                <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
-                <input
-                  type="text"
-                  placeholder={isAr ? "البحث بالاسم، الموحد أو الجوال..." : "Find by code, Name, Track ID..."}
-                  value={searchText}
-                  onChange={(e) => setSearchText(e.target.value)}
-                  className="w-full pr-9 pl-4 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white outline-none focus:ring-2 focus:ring-cyan-500 text-xs font-bold text-start"
-                />
-              </div>
-
-              <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="bg-slate-950 border border-slate-800 text-slate-300 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-cyan-500">
-                <option value="all">{isAr ? 'جميع الحالات الكلية' : 'All States'}</option>
-                {orderStatusesList.map(st => (
-                  <option key={st.id} value={String(st.id)}>{isAr ? st.nameAr : st.nameEn}</option>
-                ))}
-              </select>
-
-              <select value={courierFilter} onChange={e => setCourierFilter(e.target.value)} className="bg-slate-950 border border-slate-800 text-slate-300 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-cyan-500">
-                <option value="all">{isAr ? 'جميع الكوادر والمناديب' : 'All Couriers'}</option>
-                {couriers.map(c => (
-                  <option key={c.id} value={c.id}>{c.fullName}</option>
-                ))}
-              </select>
-
-              <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="bg-slate-950 border border-slate-800 text-slate-300 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-cyan-500">
-                <option value="date-desc">{isAr ? 'التاريخ (الأحدث)' : 'Newest'}</option>
-                <option value="date-asc">{isAr ? 'التاريخ (الأقدم)' : 'Oldest'}</option>
-                <option value="amount-desc">{isAr ? 'القيمة (الأعلى)' : 'Highest Amount'}</option>
-              </select>
+      )
+        // orders list with filters
+        : (
+          /* Orders View & Filters */
+          <>
+            {/* Stats Quick Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {[
+                { title: isAr ? 'الطلبات النشطة اليوم' : 'Active Orders Today', val: orders.filter(o => o.orderStatus !== 'تم التسليم' && o.orderStatus !== 'ملغي').length, color: 'text-[#d4af37] bg-[#d4af37]/10' },
+                { title: isAr ? 'بانتظار التوزيع لليمن' : 'In Local Dist', val: orders.filter(o => o.orderStatus === 'وصل مركز التوزيع في اليمن').length, color: 'text-amber-400 bg-amber-950/20' },
+                { title: isAr ? 'شحنات سلمت بنجاح' : 'Delivered Ledger', val: orders.filter(o => o.orderStatus === 'تم التسليم').length, color: 'text-emerald-400 bg-emerald-950/20' },
+                { title: isAr ? 'مبالغ معلقة للتحصيل' : 'Remaining To Collect', val: orders.reduce((sum, o) => sum + financialAccountService.convertToDefaultCurrency(parseFloat(o.amountRemaining || '0'), o.currency || 'YER', settings.currency || 'YER', { USD: o.exchangeRateUSD || dbRates.USD, SAR: o.exchangeRateSAR || dbRates.SAR }), 0).toLocaleString() + ' ' + (settings.currency || 'YER'), color: 'text-rose-400 bg-rose-950/20' }
+              ].map((k, i) => (
+                <div key={i} className="bg-gradient-to-b from-[#0d0d10] to-[#070709] border border-[#d4af37]/15 p-4 rounded-2xl relative overflow-hidden shadow-md">
+                  <div className="absolute right-0 top-0 w-16 h-16 bg-gradient-to-br from-[#d4af37]/5 to-transparent rounded-full blur-xl"></div>
+                  <span className="text-[10px] text-slate-500 font-bold block mb-1 uppercase tracking-wider">{k.title}</span>
+                  <span className={`text-xl font-mono font-black ${k.color.split(' ')[0]}`}>{k.val}</span>
+                </div>
+              ))}
             </div>
 
-            {/* Ledger Table */}
-            <div className="overflow-x-auto" id="orders-ledger-table">
-              <table className="w-full text-start">
-                <thead className="bg-slate-950/45 text-slate-400 text-[10px] font-black uppercase tracking-wider border-b border-slate-800">
-                  <tr>
-                    <th className="p-4 w-12 text-center">
-                      <input
-                        type="checkbox"
-                        checked={filteredOrdersList.length > 0 && selectedOrderIds.length === filteredOrdersList.length}
-                        onChange={handleSelectAll}
-                        className="w-4 h-4 rounded border-slate-800 bg-slate-950 text-[#d4af37] focus:ring-0 focus:ring-offset-0 cursor-pointer accent-[#d4af37]"
-                      />
-                    </th>
-                    <th className="p-4">{isAr ? 'رقم الطلب الموحد' : 'Smart Code'}</th>
-                    <th className="p-4">{isAr ? 'العميل والحساب' : 'Customer Account'}</th>
-                    <th className="p-4">{isAr ? 'القنوات اللوجيستية والوضع' : 'Logistics Route'}</th>
-                    <th className="p-4">{isAr ? 'القيم والمديونية والوضع المالي' : 'Financial Info'}</th>
-                    <th className="p-4 text-left">{isAr ? 'إجراءات ترحيل' : 'Actions'}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-850 text-xs text-slate-300">
-                  {filteredOrdersList.map((ord, idx) => (
-                    <tr key={`${ord.id}-${idx}`} className="hover:bg-slate-955 transition-all">
+            {/* Filter and Table Panel */}
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden flex flex-col">
 
-                      {/* Checkbox Selector */}
-                      <td className="p-4 w-12 text-center">
-                        <input
-                          type="checkbox"
-                          checked={selectedOrderIds.includes(ord.id)}
-                          onChange={() => handleToggleSelect(ord.id)}
-                          className="w-4 h-4 rounded border-slate-800 bg-slate-950 text-[#d4af37] focus:ring-0 focus:ring-offset-0 cursor-pointer accent-[#d4af37]"
-                        />
-                      </td>
+              {/* Advanced Filters */}
+              <div className="p-4 border-b border-slate-800 flex flex-wrap gap-3 bg-slate-950/20">
+                <div className="relative flex-1 min-w-[200px]">
+                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
+                  <input
+                    type="text"
+                    placeholder={isAr ? "البحث بالاسم، الموحد أو الجوال..." : "Find by code, Name, Track ID..."}
+                    value={searchText}
+                    onChange={(e) => setSearchText(e.target.value)}
+                    className="w-full pr-9 pl-4 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white outline-none focus:ring-2 focus:ring-cyan-500 text-xs font-bold text-start"
+                  />
+                </div>
 
-                      {/* Order ID */}
-                      <td className="p-4">
-                        <span className="font-mono font-black text-[#d4af37] bg-[#d4af37]/10 border border-[#d4af37]/25 px-2.5 py-0.5 rounded-lg">{ord.orderNumber || 'ALX-XXXX-XXXX'}</span>
-                        <div className="text-[10px] text-slate-500 mt-1 font-semibold">{safeToDate(ord.createdAt).toLocaleDateString(isAr ? 'ar-EG' : 'en-US')}</div>
-                      </td>
-
-                      {/* Customer */}
-                      <td className="p-4 text-start">
-                        <div className="flex flex-col">
-                          <span
-                            onClick={() => {
-                              if (ord.customerId) {
-                                window.dispatchEvent(new CustomEvent('open-entity-ledger', {
-                                  detail: { entityId: ord.customerId, entityType: 'customer' }
-                                }));
-                              }
-                            }}
-                            className="font-bold text-white text-xs hover:text-[#d4af37] cursor-pointer underline decoration-dotted decoration-[#d4af37]/40 transition-colors"
-                          >
-                            {ord.customerName}
-                          </span>
-                          <span className="text-[10px] font-mono text-slate-500 mt-0.5">{ord.customerPhone}</span>
-                        </div>
-                      </td>
-
-                      {/* Logistics Status */}
-                      <td className="p-4 text-start">
-                        <div className="flex flex-col space-y-1">
-                          <span className="px-2.5 py-0.5 rounded-xl border border-[#d4af37]/20 bg-[#d4af37]/5 text-[#d4af37] font-bold max-w-max text-[10px]">
-                            {formatStatusLabel(ord.orderStatus)}
-                          </span>
-                          <span className="text-[10px] text-slate-500 font-bold">{ord.orderSourceName || ord.orderSourceType}</span>
-                        </div>
-                      </td>
-
-                      {/* Financial status */}
-                      <td className="p-4 text-start">
-                        {(() => {
-                          const paidTotal = parseFloat(ord.amountPaid || 0);
-                          const remainVal = parseFloat(ord.amountRemaining || 0);
-                          const totalFinal = paidTotal + remainVal;
-
-                          return (
-                            <div className="flex flex-col space-y-0.5">
-                              <div className="font-mono text-slate-200 font-semibold">
-                                {isAr ? 'الإجمالي: ' : 'Total: '}{Math.ceil(totalFinal).toLocaleString()} <span className="text-[10px] text-slate-500">YER</span>
-                              </div>
-                              <div className="font-mono text-emerald-400 text-[11px]">
-                                {isAr ? 'المدفوع: ' : 'Paid: '}{Math.ceil(paidTotal).toLocaleString()} YER
-                              </div>
-                              {Math.ceil(remainVal) > 0 ? (
-                                <div className="font-mono text-rose-450 text-[11px] font-bold">
-                                  {isAr ? 'المتبقي: ' : 'Remaining: '}{Math.ceil(remainVal).toLocaleString()} YER
-                                </div>
-                              ) : Math.ceil(remainVal) < 0 ? (
-                                <div className="font-mono text-amber-500 text-[11px] font-bold">
-                                  {isAr ? 'فائض حساب: ' : 'Overpaid: '}{Math.abs(Math.ceil(remainVal)).toLocaleString()} YER
-                                </div>
-                              ) : (
-                                <span className="text-[9px] bg-emerald-950/20 border border-emerald-800 text-emerald-400 px-1.5 py-0.5 rounded font-black max-w-max uppercase tracking-tighter mt-0.5">{isAr ? 'مسدد بالكامل' : 'Paid in Full'}</span>
-                              )}
-                            </div>
-                          );
-                        })()}
-                      </td>
-
-                      {/* Actions */}
-                      <td className="p-4 text-left flex justify-end gap-2 items-center">
-
-                        {/* View Details / QR */}
-                        <button
-                          onClick={() => {
-                            setSelectedOrder(ord);
-                            setIsDetailsModalOpen(true);
-                          }}
-                          className="bg-slate-800 text-[#d4af37] hover:text-white hover:bg-slate-700 px-2.5 py-1.5 rounded-lg transition-all text-[10px] flex items-center gap-1 font-bold border border-slate-700 cursor-pointer"
-                          title={isAr ? 'عرض التفاصيل والباركود / رمز التتبع' : 'View order & QR tracking'}
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          {isAr ? 'التفاصيل' : 'Details'}
-                        </button>
-
-                        {/* Payment handler — requires add_finance */}
-                        {parseFloat(ord.amountRemaining || 0) > 0 && (role === 'Admin' || hasPermission('add_finance')) && (
-                          <button
-                            onClick={() => {
-                              setSelectedOrder(ord);
-                              setPaymentFormData({ amount: '', method: 'Cash', notes: '', pin: '' });
-                              setIsPaymentModalOpen(true);
-                            }}
-                            className="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-black px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1 text-[10px] cursor-pointer"
-                            title={isAr ? 'تحصيل دفعة مالية' : 'Post payment'}
-                          >
-                            <CreditCard className="w-3.5 h-3.5" />
-                            {isAr ? 'قبض دفعة' : 'Collect'}
-                          </button>
-                        )}
-
-                        {/* Status updates — requires edit_orders or update_order_status; delivered orders require edit_delivered_orders */}
-                        {(role === 'Admin' || hasPermission('edit_orders') || hasPermission('update_order_status')) &&
-                          (ord.orderStatus !== 'تم التسليم' || role === 'Admin' || hasPermission('edit_delivered_orders')) && (
-                            <button
-                              onClick={() => {
-                                setSelectedOrder(ord);
-                                setUpdateFormData({
-                                  orderStatus: ord.orderStatus || 'تم تسجيل الطلب',
-                                  deliveryStatus: ord.deliveryStatus || 'في الانتظار',
-                                  locationYemen: ord.locationYemen || 'مستودع صنعاء الرئيسي',
-                                  internalNotes: ord.internalNotes || '',
-                                  shippingCourierId: ord.shippingCourierId || '',
-                                  deliveryCourierId: ord.deliveryCourierId || ''
-                                });
-                                let initialShippings = ord.shippingDetails || [];
-                                if (ord.orderSourceType === 'SHEIN') {
-                                  const isDefaultOrEmpty = initialShippings.length === 1 &&
-                                    !initialShippings[0].shippingSource &&
-                                    !initialShippings[0].shippingDestination &&
-                                    (initialShippings[0].shippingCost === 0 || !initialShippings[0].shippingCost);
-                                  if (isDefaultOrEmpty || initialShippings.length === 0) {
-                                    initialShippings = [];
-                                  }
-                                }
-                                setUpdateShippings(initialShippings);
-                                setIsUpdateModalOpen(true);
-                              }}
-                              className="bg-slate-805 text-slate-305 hover:text-white px-2.5 py-1.5 rounded-lg transition-all text-[10px] flex items-center gap-1 font-bold border border-slate-750 cursor-pointer"
-                              title={isAr ? 'تعديل المسار والتوجيه اللوجيستي' : 'Update state'}
-                            >
-                              <Activity className="w-3.5 h-3.5 text-cyan-400" />
-                              {isAr ? 'اللوجستيات' : 'Update'}
-                            </button>
-                          )}
-
-                        {(role === 'Admin' || hasPermission('delete_orders')) && (
-                          <button
-                            onClick={() => handleDeleteOrderClick(ord)}
-                            className="bg-rose-950/20 text-rose-400 hover:bg-rose-900 hover:text-white px-2.5 py-1.5 rounded-lg transition-all text-[10px] flex items-center gap-1 font-bold border border-rose-900/30 cursor-pointer"
-                            title={isAr ? 'حذف هذا الطلب نهائياً' : 'Delete Order'}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            {isAr ? 'حذف' : 'Delete'}
-                          </button>
-                        )}
-
-                      </td>
-
-                    </tr>
+                <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="bg-slate-950 border border-slate-800 text-slate-300 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-cyan-500">
+                  <option value="all">{isAr ? 'جميع الحالات الكلية' : 'All States'}</option>
+                  {orderStatusesList.map(st => (
+                    <option key={st.id} value={String(st.id)}>{isAr ? st.nameAr : st.nameEn}</option>
                   ))}
-                  {filteredOrdersList.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="p-12 text-center text-slate-500 font-bold">
-                        {isAr ? 'لا يوجد طلبيات مسجلة تطابق محددات البحث.' : 'No invoices matched query.'}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                </select>
 
-          </div>
+                <select value={courierFilter} onChange={e => setCourierFilter(e.target.value)} className="bg-slate-950 border border-slate-800 text-slate-300 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-cyan-500">
+                  <option value="all">{isAr ? 'جميع الكوادر والمناديب' : 'All Couriers'}</option>
+                  {couriers.map(c => (
+                    <option key={c.id} value={c.id}>{c.fullName}</option>
+                  ))}
+                </select>
 
-          {/* Floating Action Bar for Batch Updates */}
-          {selectedOrderIds.length > 0 && (
-            <div id="batch-actions-bar" className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-905 border-2 border-[#d4af37]/50 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.8)] px-5 py-4 flex items-center gap-4 flex-wrap whitespace-nowrap">
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full col-span-1 bg-yellow-500 animate-pulse"></span>
-                <span className="text-white text-xs font-black">
-                  {isAr
-                    ? `تم تحديد ${selectedOrderIds.length} فواتير`
-                    : `${selectedOrderIds.length} invoices selected`}
-                </span>
-              </div>
-
-              <div className="h-6 w-[1px] bg-slate-800"></div>
-
-              {/* Status Selection and Action */}
-              <div className="flex items-center gap-2">
-                <span className="text-slate-400 text-[10px] font-bold">
-                  {isAr ? 'تحديث الحالة الكلية:' : 'Change status:'}
-                </span>
-                <select
-                  id="batch-status-select"
-                  defaultValue=""
-                  onChange={(e) => {
-                    if (e.target.value) {
-                      handleBatchUpdateStatus(e.target.value);
-                      e.target.value = ""; // Reset after trigger
-                    }
-                  }}
-                  disabled={isBatchUpdating}
-                  className="bg-slate-950 border border-slate-750 text-slate-200 rounded-lg px-2 py-1 text-xs font-bold outline-none focus:ring-1 focus:ring-yellow-500 disabled:opacity-50 cursor-pointer"
-                >
-                  <option value="" disabled>{isAr ? '-- اختر الحالة --' : '-- Choose status --'}</option>
-                  <option value="تم تسجيل الطلب">{isAr ? 'تم تسجيل الطلب (قيد المعالجة)' : 'Pending'}</option>
-                  <option value="وصل مستودع السعودية">{isAr ? 'وصل مستودع السعودية للتعبئة' : 'Delivered to KSA Depot'}</option>
-                  <option value="جاري الشحن لليمن">{isAr ? 'جاري الشحن والنقل لليمن' : 'In Route to Yemen'}</option>
-                  <option value="وصل مركز التوزيع في اليمن">{isAr ? 'وصل مركز التوزيع في اليمن' : 'Arrived Yemen Center'}</option>
-                  <option value="تم التسليم">{isAr ? 'تم التسليم النهائي مع العميل' : 'Delivered & Complete'}</option>
-                  <option value="ملغي">{isAr ? 'ملغي بالكامل' : 'Cancelled'}</option>
+                <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="bg-slate-950 border border-slate-800 text-slate-300 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-cyan-500">
+                  <option value="date-desc">{isAr ? 'التاريخ (الأحدث)' : 'Newest'}</option>
+                  <option value="date-asc">{isAr ? 'التاريخ (الأقدم)' : 'Oldest'}</option>
+                  <option value="amount-desc">{isAr ? 'القيمة (الأعلى)' : 'Highest Amount'}</option>
                 </select>
               </div>
 
-              <div className="h-6 w-[1px] bg-slate-800"></div>
-
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    // A quick way to ensure data is forcefully synced
-                    const btn = document.getElementById('batch-deselect-btn');
-                    if (btn) {
-                      const originalText = btn.innerText;
-                      window.dispatchEvent(new Event('reload-orders'));
-                      setTimeout(() => window.location.reload(), 300);
-                    }
-                  }}
-                  disabled={isBatchUpdating}
-                  className="text-xs text-cyan-400 hover:text-cyan-300 font-black cursor-pointer bg-slate-950 px-2.5 py-1 rounded-lg border border-cyan-950/20 active:scale-95 transition flex items-center gap-1.5"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  {isAr ? 'تحديث البيانات' : 'Refresh Data'}
-                </button>
-
-                <button
-                  id="batch-deselect-btn"
-                  onClick={() => setSelectedOrderIds([])}
-                  disabled={isBatchUpdating}
-                  className="text-xs text-rose-400 hover:text-rose-300 font-black cursor-pointer bg-slate-950 px-2.5 py-1 rounded-lg border border-rose-950/20 active:scale-95 transition"
-                >
-                  {isAr ? 'إلغاء التحديد الكلي' : 'Deselect All'}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* CREATE ORDER LARGE MODAL */}
-          {isAddModalOpen && (
-            <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in overflow-y-auto">
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-6xl my-8 overflow-hidden shadow-[0_0_50px_rgba(212,175,55,0.15)] flex flex-col max-h-[90vh]">
-
-                {/* Header */}
-                <div className="p-4 bg-slate-955 border-b border-slate-800 flex justify-between items-center">
-                  <h3 className="font-black text-white text-base">
-                    {isAr ? 'إنشاء فاتورة بوصل شحنة ومسار مالي متكامل' : 'Create Freight Invoice'}
-                  </h3>
-                  <button onClick={() => setIsAddModalOpen(false)} className="bg-slate-800 text-slate-400 hover:text-white p-1.5 rounded-lg"><X className="w-5 h-5" /></button>
-                </div>
-
-                {/* Financial Widget Bar (3 columns) */}
-                <div className="grid grid-cols-1 md:grid-cols-3 border-b border-slate-800 bg-slate-950/50 p-4 gap-4">
-                  {/* Box 1: Outstanding Debt */}
-                  <div className="p-3 bg-red-950/20 border border-red-900/30 rounded-2xl flex items-center gap-3">
-                    <div className="p-2 bg-red-500/10 text-red-500 rounded-xl"><AlertCircle className="w-5 h-5" /></div>
-                    <div className="text-start">
-                      <span className="block text-[9px] font-black text-slate-500 uppercase tracking-wider">{isAr ? 'ديون العميل السابقة' : 'Customer Outstanding Debt'}</span>
-                      <span className="text-sm font-mono font-black text-red-400">
-                        {customerProfileStats ? customerProfileStats.totalOutstandingDebt.toLocaleString() : '0'} YER
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Box 2: Amount Paid */}
-                  <div className="p-3 bg-emerald-950/20 border border-emerald-900/30 rounded-2xl flex items-center gap-3">
-                    <div className="p-2 bg-emerald-500/10 text-[#d4af37] rounded-xl"><CreditCard className="w-5 h-5" /></div>
-                    <div className="text-start">
-                      <span className="block text-[9px] font-black text-slate-500 uppercase tracking-wider">{isAr ? 'المقبوض كاش (هذا الطلب)' : 'Amount Paid (Current Order)'}</span>
-                      <span className="text-sm font-mono font-black text-emerald-400">
-                        {(parseFloat(formData.amountPaid as any) || 0).toLocaleString()} YER
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Box 3: Company Profit */}
-                  <div className="p-3 bg-blue-950/20 border border-blue-900/30 rounded-2xl flex items-center gap-3">
-                    <div className="p-2 bg-blue-500/10 text-blue-400 rounded-xl"><DollarSign className="w-5 h-5" /></div>
-                    <div className="text-start">
-                      <span className="block text-[9px] font-black text-slate-500 uppercase tracking-wider">{isAr ? 'رسوم اخرى' : 'Other Fees'}</span>
-                      <span className="text-sm font-mono font-black text-blue-400">
-                        {calcs.profitCompanySAR.toLocaleString()} SAR
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Scrollable Form Body */}
-                <form onSubmit={handleCreateOrder} className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar text-start">
-
-                  {/* Debt Alert Warning Banner */}
-                  {customerProfileStats && customerProfileStats.totalOutstandingDebt > 0 && (
-                    <div className="p-4 bg-red-950/30 border border-red-900 text-red-400 rounded-2xl flex items-center gap-3 animate-pulse">
-                      <AlertCircle className="w-6 h-6 shrink-0 text-red-500" />
-                      <span className="font-black text-xs leading-relaxed">
-                        {isAr
-                          ? `⚠️ تنبيه ديون معلقة: يوجد للعميل الحالي ديون غير محصلة ومستحقة بذمته بقيمة: [ ${customerProfileStats.totalOutstandingDebt.toLocaleString()} ريال يمني ].`
-                          : `⚠️ Outstanding Balances Warning: This client has outstanding pending balances of [ YER ${customerProfileStats.totalOutstandingDebt.toLocaleString()} ].`}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Grid 1: Customer Section + Logistics Info */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-                    {/* 1. Customer Selection & Activity Profile */}
-                    <div className="space-y-4 bg-slate-950/30 border border-slate-800 p-5 rounded-3xl relative">
-                      <div className="flex justify-between items-center">
-                        <label className="text-xs font-black text-slate-400">{isAr ? 'العميل المستلم' : 'Receiver Customer'}</label>
-                        {(role === 'Admin' || hasPermission('add_customers')) && (
-                          <button
-                            type="button"
-                            onClick={() => setIsAddCustomerOpen(true)}
-                            className="text-xs font-black text-[#d4af37] hover:underline flex items-center gap-1"
-                          >
-                            <UserPlus className="w-3.5 h-3.5" />
-                            {isAr ? 'إضافة عميل جديد ➕' : 'Quick add customer'}
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Smart Search Input */}
-                      {!formData.customerId ? (
-                        <div className="relative">
-                          <Search className="absolute right-3 top-3 text-slate-500 w-4 h-4" />
-                          <input
-                            type="text"
-                            placeholder={isAr ? "ابحث عن عميل بالاسم أو رقم الجوال..." : "Search customer by name or phone..."}
-                            value={customerSearchQuery}
-                            onChange={(e) => setCustomerSearchQuery(e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl py-2.5 pr-9 pl-4 outline-none font-bold text-xs"
-                          />
-
-                          {/* Dropdown Results */}
-                          {customerSearchQuery.trim() !== '' && (
-                            <div className="absolute left-0 right-0 mt-1 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-20 max-h-48 overflow-y-auto divide-y divide-slate-800">
-                              {filteredCustomers.length > 0 ? (
-                                filteredCustomers.map(c => (
-                                  <button
-                                    type="button"
-                                    key={c.id}
-                                    onClick={() => selectCustomer(c)}
-                                    className="w-full text-start p-3 text-xs hover:bg-slate-800 text-white font-bold flex justify-between items-center"
-                                  >
-                                    <span>{c.fullName}</span>
-                                    <span className="font-mono text-slate-500">{c.phone}</span>
-                                  </button>
-                                ))
-                              ) : (
-                                <div className="p-3 text-xs text-slate-500 font-bold flex justify-between items-center">
-                                  <span>{isAr ? '🟢 عميل جديد' : '🟢 New Customer'}</span>
-                                  {(role === 'Admin' || hasPermission('add_customers')) && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setCustomerFormData(prev => ({
-                                          ...prev,
-                                          fullName: customerSearchQuery,
-                                        }));
-                                        setIsAddCustomerOpen(true);
-                                      }}
-                                      className="bg-[#d4af37]/10 text-[#d4af37] border border-[#d4af37]/20 px-3 py-1 rounded-lg text-[10px]"
-                                    >
-                                      {isAr ? 'إضافة الآن' : 'Create Now'}
-                                    </button>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        /* Selected Customer Activity Card */
-                        <div className="bg-slate-900/60 border border-slate-850 p-4 rounded-2xl space-y-3 relative overflow-hidden group">
-                          <div className="absolute top-0 right-0 w-16 h-16 bg-[#d4af37]/5 rounded-full -mr-8 -mt-8"></div>
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <h4 className="text-xs font-black text-white">{formData.customerName}</h4>
-                              <p className="text-[10px] text-slate-500 font-mono mt-0.5">{formData.customerPhone}</p>
-                            </div>
-                            <div className="flex gap-1.5 items-center">
-                              {customerProfileStats?.tier === 'VIP' && (
-                                <span className="bg-amber-500/10 text-amber-500 border border-amber-500/25 px-2 py-0.5 rounded text-[8px] font-black uppercase">VIP Client</span>
-                              )}
-                              {customerProfileStats?.tier === 'Debt' && (
-                                <span className="bg-red-500/10 text-red-500 border border-red-500/25 px-2 py-0.5 rounded text-[8px] font-black uppercase">Has Debt</span>
-                              )}
-                              {customerProfileStats?.tier === 'Regular' && (
-                                <span className="bg-slate-800 text-slate-400 px-2 py-0.5 rounded text-[8px] font-black uppercase">Regular</span>
-                              )}
-                              <button
-                                type="button"
-                                onClick={clearSelectedCustomer}
-                                className="bg-slate-800 text-slate-400 hover:text-white p-1 rounded-lg transition"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-2 text-[10px] font-bold text-slate-500 pt-2 border-t border-slate-850/50">
-                            <div>{isAr ? 'إجمالي الطلبات:' : 'Total orders:'} <span className="text-slate-300 font-mono">{customerProfileStats?.totalOrdersCount}</span></div>
-                            <div>{isAr ? 'آخر طلب:' : 'Last order:'} <span className="text-slate-300 font-mono">{customerProfileStats?.lastOrderDate ? customerProfileStats.lastOrderDate.toLocaleDateString() : '—'}</span></div>
-                            <div className="col-span-2">{isAr ? 'العنوان الأساسي:' : 'Address:'} <span className="text-slate-300">{formData.customerAddress || '—'}</span></div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* 2. Logistics & Purchase Metadata */}
-                    <div className="space-y-4 bg-slate-950/30 border border-slate-800 p-5 rounded-3xl">
-                      <div className="grid grid-cols-2 gap-3">
-                        {/* Auto generated order code (preview) */}
-                        <div>
-                          <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider text-start">
-                            {isAr ? 'رقم الطلب الموحد' : 'Unified Order Code'}
-                          </label>
-                          <input
-                            type="text"
-                            disabled
-                            value={previewOrderNumber}
-                            className="w-full bg-slate-950/50 border border-slate-805 text-[#d4af37] rounded-xl p-3 outline-none font-black text-xs text-center font-mono"
-                          />
-                        </div>
-                        {/* Order creation date */}
-                        <div>
-                          <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider text-start">
-                            {isAr ? 'تاريخ الفاتورة' : 'Invoice Date'}
-                          </label>
-                          <input
-                            type="text"
-                            disabled
-                            value={new Date().toLocaleDateString(isAr ? 'ar-YE' : 'en-US')}
-                            className="w-full bg-slate-950/50 border border-slate-805 text-slate-300 rounded-xl p-3 outline-none font-bold text-xs text-center"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3">
-                        {/* Order Source */}
-                        <div>
-                          <div className="flex justify-between items-center mb-1.5 flex-row-reverse">
-                            {(role === 'Admin' || hasPermission('add_sources')) && (
-                              <button
-                                type="button"
-                                onClick={() => setIsAddSourceOpen(true)}
-                                className="text-[10px] font-black text-[#d4af37] hover:underline flex items-center gap-0.5"
-                              >
-                                ➕ {isAr ? 'جديد' : 'New'}
-                              </button>
-                            )}
-                            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider text-start">
-                              {isAr ? 'مصدر الشراء' : 'Order Source'}
-                            </label>
-                          </div>
-                          <select
-                            required
-                            value={formData.orderSourceId}
-                            onChange={(e) => setFormData({ ...formData, orderSourceId: e.target.value })}
-                            className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-3 outline-none font-bold text-xs"
-                          >
-                            <option value="">{isAr ? '-- اختر المصدر --' : '-- Choose Source --'}</option>
-                            {sources.map(s => (
-                              <option key={s.id} value={s.id}>{s.name || s.source_name} {s.type ? `(${s.type})` : ''}</option>
-                            ))}
-                          </select>
-                        </div>
-
-                        {/* Salla / Store reference ID */}
-                        <div>
-                          <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider text-start">
-                            {isAr ? 'رقم الفاتورة الأصلي (سلة...)' : 'Orig. Store Reference'}
-                          </label>
-                          <input
-                            type="text"
-                            value={formData.externalOrderNumber}
-                            onChange={(e) => setFormData({ ...formData, externalOrderNumber: e.target.value })}
-                            placeholder={isAr ? "رقم الفاتورة الأصلي" : "Invoice ID"}
-                            className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-3 outline-none font-bold text-xs"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3">
-                        {/* Tracking ID */}
-                        <div>
-                          <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider text-start">
-                            {isAr ? 'رقم التتبع الدولي' : 'Global Tracking Code'}
-                          </label>
-                          <input
-                            type="text"
-                            value={formData.trackingNumber}
-                            onChange={(e) => setFormData({ ...formData, trackingNumber: e.target.value })}
-                            placeholder={isAr ? "رقم التتبع الدولي (DHL...)" : "Global Tracking ID"}
-                            className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-3 outline-none font-bold text-xs"
-                          />
-                        </div>
-
-                        {/* Cart Share Code (Electronic shopping carts) */}
-                        <div>
-                          <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider text-start">
-                            {isAr ? 'كود السلة الموحد (Cart Code)' : 'Cart Share Code'}
-                          </label>
-                          <div className="flex gap-1.5">
-                            <input
-                              type="text"
-                              value={cartShareCode}
-                              onChange={(e) => setCartShareCode(e.target.value)}
-                              placeholder={isAr ? "كود السلة" : "Cart Code"}
-                              className="flex-1 bg-slate-950 border border-slate-805 text-white rounded-xl p-3 outline-none font-bold text-xs"
-                            />
-                            {cartShareCode && (
-                              <button
-                                type="button"
-                                onClick={() => window.open(`https://cart.shop/share/${cartShareCode}`, '_blank')}
-                                className="bg-[#d4af37]/10 hover:bg-[#d4af37]/20 border border-[#d4af37]/25 text-[#d4af37] px-2.5 rounded-xl text-xs flex items-center justify-center transition"
-                                title={isAr ? 'فتح رابط السلة' : 'Open cart URL'}
-                              >
-                                <Package className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                  </div>
-
-                  {/* Section 2: Products & Factory specifications */}
-                  <div className="space-y-3 bg-slate-950/20 border border-slate-850 p-5 rounded-3xl">
-                    <div className="flex justify-between items-center border-b border-slate-800 pb-3 flex-wrap gap-2">
-                      <div className="text-start">
-                        <span className="text-xs font-black text-white block">{isAr ? 'محتويات الشحنة والمنتجات التفصيلية' : 'Freight Cargo Contents'}</span>
-                        <span className="text-[10px] text-slate-500 font-bold">{isAr ? 'قم بإدخال بيانات المنتج وعناصره بالتفصيل' : 'Define detailed products lists for weight & calculation'}</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={addItemRow}
-                        className="bg-cyan-600/10 hover:bg-cyan-650/20 text-cyan-400 px-3 py-1.5 rounded-xl text-[10px] font-black transition-all"
-                      >
-                        ➕ {isAr ? 'إدراج بند منتج' : 'Add Item Row'}
-                      </button>
-                    </div>
-
-                    {/* Grid Header labels for desktop */}
-                    <div className="hidden md:grid grid-cols-12 gap-2 text-[10px] font-black text-slate-500 uppercase tracking-wider pb-1 px-2.5">
-                      <div className="col-span-3 text-start">{isAr ? 'اسم المنتج أو الرابط' : 'Item Name / Link'}</div>
-                      <div className="col-span-2 text-center">{isAr ? 'السعر (SAR)' : 'Price (SAR)'}</div>
-                      <div className="col-span-1 text-center">{isAr ? 'الكمية' : 'Qty'}</div>
-                      {formData.orderSourceType === 'Factory' ? (
-                        <>
-                          <div className="col-span-1 text-center">{isAr ? 'وزن (KG)' : 'Weight'}</div>
-                          <div className="col-span-1 text-center">CBM</div>
-                          <div className="col-span-1 text-center">{isAr ? 'طول' : 'L'}</div>
-                          <div className="col-span-1 text-center">{isAr ? 'عرض' : 'W'}</div>
-                          <div className="col-span-1 text-center">{isAr ? 'ارتفاع' : 'H'}</div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="col-span-2 text-center">{isAr ? 'رابط المنتج' : 'URL Link'}</div>
-                          <div className="col-span-3 text-center">{isAr ? 'رقم التتبع للمنتج' : 'Product Tracking'}</div>
-                        </>
-                      )}
-                      <div className="col-span-1 text-center">{isAr ? 'حذف' : 'Del'}</div>
-                    </div>
-
-                    <div className="space-y-2.5">
-                      {items.map((item, idx) => (
-                        <div key={idx} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-2.5 bg-slate-900/40 border border-slate-850/50 rounded-2xl">
-
-                          {/* Name */}
-                          <div className="col-span-3">
-                            <input
-                              required
-                              type="text"
-                              value={item.productName || ''}
-                              onChange={(e) => updateItemRow(idx, 'productName', e.target.value)}
-                              placeholder={isAr ? "اسم المنتج..." : "Product Name"}
-                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2 outline-none font-bold text-[11px] text-start"
-                            />
-                          </div>
-
-                          {/* Price */}
-                          <div className="col-span-2">
-                            <input
-                              required
-                              type="number"
-                              value={item.productPrice || 0}
-                              onChange={(e) => updateItemRow(idx, 'productPrice', parseFloat(e.target.value) || 0)}
-                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2 outline-none font-bold text-[11px] font-mono text-center"
-                            />
-                          </div>
-
-                          {/* Quantity */}
-                          <div className="col-span-1">
-                            <input
-                              required
-                              type="number"
-                              value={item.quantity || 1}
-                              onChange={(e) => updateItemRow(idx, 'quantity', parseInt(e.target.value) || 0)}
-                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2 outline-none font-bold text-[11px] font-mono text-center"
-                            />
-                          </div>
-
-                          {/* Source Type switch fields */}
-                          {formData.orderSourceType === 'Factory' ? (
-                            <>
-                              {/* Weight */}
-                              <div className="col-span-1">
-                                <input
-                                  type="number"
-                                  step="any"
-                                  value={item.weight ?? ''}
-                                  onChange={(e) => updateItemRow(idx, 'weight', e.target.value)}
-                                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2 outline-none font-bold text-[11px] font-mono text-center"
-                                />
-                              </div>
-                              {/* CBM */}
-                              <div className="col-span-1">
-                                <input
-                                  type="number"
-                                  step="any"
-                                  value={item.cbm ?? ''}
-                                  onChange={(e) => updateItemRow(idx, 'cbm', e.target.value)}
-                                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2 outline-none font-bold text-[11px] font-mono text-center"
-                                />
-                              </div>
-                              {/* Length */}
-                              <div className="col-span-1">
-                                <input
-                                  type="number"
-                                  step="any"
-                                  value={item.length ?? ''}
-                                  onChange={(e) => {
-                                    const newL = e.target.value;
-                                    const w = parseFloat(item.width || 0);
-                                    const h = parseFloat(item.height || 0);
-                                    updateItemRow(idx, 'length', newL);
-                                    updateItemRow(idx, 'cbm', parseFloat(((parseFloat(newL || '0') * w * h) / 1000000).toFixed(6)));
-                                  }}
-                                  placeholder="L"
-                                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2 outline-none font-bold text-[11px] font-mono text-center"
-                                />
-                              </div>
-                              {/* Width */}
-                              <div className="col-span-1">
-                                <input
-                                  type="number"
-                                  step="any"
-                                  value={item.width ?? ''}
-                                  onChange={(e) => {
-                                    const newW = e.target.value;
-                                    const l = parseFloat(item.length || 0);
-                                    const h = parseFloat(item.height || 0);
-                                    updateItemRow(idx, 'width', newW);
-                                    updateItemRow(idx, 'cbm', parseFloat(((l * parseFloat(newW || '0') * h) / 1000000).toFixed(6)));
-                                  }}
-                                  placeholder="W"
-                                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2 outline-none font-bold text-[11px] font-mono text-center"
-                                />
-                              </div>
-                              {/* Height */}
-                              <div className="col-span-1">
-                                <input
-                                  type="number"
-                                  step="any"
-                                  value={item.height ?? ''}
-                                  onChange={(e) => {
-                                    const newH = e.target.value;
-                                    const l = parseFloat(item.length || 0);
-                                    const w = parseFloat(item.width || 0);
-                                    updateItemRow(idx, 'height', newH);
-                                    updateItemRow(idx, 'cbm', parseFloat(((l * w * parseFloat(newH || '0')) / 1000000).toFixed(6)));
-                                  }}
-                                  placeholder="H"
-                                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2 outline-none font-bold text-[11px] font-mono text-center"
-                                />
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              {/* Product URL */}
-                              <div className="col-span-2">
-                                <input
-                                  type="text"
-                                  value={item.productUrl || ''}
-                                  onChange={(e) => updateItemRow(idx, 'productUrl', e.target.value)}
-                                  placeholder={isAr ? "رابط المنتج..." : "Product Link"}
-                                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2 outline-none font-bold text-[11px] text-start"
-                                />
-                              </div>
-                              {/* Tracking Number */}
-                              <div className="col-span-3">
-                                <input
-                                  type="text"
-                                  value={item.trackingNumber || ''}
-                                  onChange={(e) => updateItemRow(idx, 'trackingNumber', e.target.value)}
-                                  placeholder={isAr ? "كود تتبع الطرد للمنتج" : "Item Tracking Number"}
-                                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2 outline-none font-bold text-[11px] text-start font-mono"
-                                />
-                              </div>
-                            </>
-                          )}
-
-                          {/* Remove Button */}
-                          <div className="col-span-1 flex justify-center">
-                            <button
-                              type="button"
-                              onClick={() => removeItemRow(idx)}
-                              disabled={items.length === 1}
-                              className="text-rose-500 hover:text-white hover:bg-rose-600/20 p-2 rounded-xl transition disabled:opacity-30 cursor-pointer"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Adjustments row: Bank Commission & Coupon discounts */}
-                    {(formData.orderSourceType === 'App' || formData.orderSourceType === 'SHEIN') && (
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-3 border-t border-slate-850/65">
-                        {/* Bank Commission Checkbox & Rate */}
-                        {formData.orderSourceType === 'App' || formData.orderSourceType === 'SHEIN' ? (
-                          <div className="flex flex-col gap-2 bg-slate-900/40 p-3 rounded-2xl border border-slate-850">
-                            <div className="flex items-center gap-3">
-                              <input
-                                type="checkbox"
-                                id="bank-comm-check"
-                                checked={bankCommissionEnabled}
-                                onChange={(e) => setBankCommissionEnabled(e.target.checked)}
-                                className="rounded bg-slate-950 border-slate-800 text-yellow-600 focus:ring-0 w-4 h-4 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                              />
-                              <label
-                                htmlFor="bank-comm-check"
-                                className={`text-[11px] font-bold text-slate-350 cursor-pointer`}
-                              >
-                                {isAr ? 'عمولة البنك' : 'Bank Commission'}
-                              </label>
-                            </div>
-                            {bankCommissionEnabled && (
-                              <div className="flex items-center gap-2">
-                                <select
-                                  value={bankCommissionType}
-                                  onChange={(e) => setBankCommissionType(e.target.value as 'percentage' | 'fixed')}
-                                  className="bg-slate-950 border border-slate-800 text-slate-300 rounded-xl p-1 text-[10px] focus:ring-[#d4af37] focus:border-[#d4af37]"
-                                >
-                                  <option value="percentage">{isAr ? 'نسبة (%)' : 'Percentage (%)'}</option>
-                                  <option value="fixed">{isAr ? 'مبلغ ثابت' : 'Fixed Amount'}</option>
-                                </select>
-                                <input
-                                  type="number"
-                                  value={bankCommissionRate}
-                                  onChange={(e) => setBankCommissionRate(parseFloat(e.target.value) || 0)}
-                                  className="w-16 bg-slate-950 border border-slate-800 text-white rounded-xl p-1 text-center font-mono font-bold text-[10px] focus:ring-[#d4af37] focus:border-[#d4af37]"
-                                  placeholder={bankCommissionType === 'percentage' ? '%' : 'SAR'}
-                                />
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="hidden md:block"></div>
-                        )}
-
-                        {/* Coupon Discount Checkbox & Rate */}
-                        <div className="flex items-center gap-3 bg-slate-900/40 p-3 rounded-2xl border border-slate-850">
-                          <input
-                            type="checkbox"
-                            id="coupon-check"
-                            checked={couponEnabled}
-                            onChange={(e) => setCouponEnabled(e.target.checked)}
-                            className="rounded bg-slate-950 border-slate-800 text-yellow-600 focus:ring-0 w-4 h-4 cursor-pointer"
-                          />
-                          <label htmlFor="coupon-check" className="text-[11px] font-bold text-slate-350 cursor-pointer">{isAr ? 'كوبون خصم (مبلغ)' : 'Coupon Discount (Amount)'}</label>
-                          {couponEnabled && (
-                            <input
-                              type="number"
-                              value={couponRate}
-                              onChange={(e) => setCouponRate(parseFloat(e.target.value) || 0)}
-                              className="w-16 bg-slate-950 border border-slate-800 text-white rounded-xl p-1 text-center font-mono font-bold text-[10px]"
-                              placeholder="0.00"
-                            />
-                          )}
-                        </div>
-
-                        {/* Add Shipping Checkbox */}
-                        {formData.orderSourceType === 'App' ? (
-                          <div className="flex items-center gap-3 bg-slate-900/40 p-3 rounded-2xl border border-slate-850">
-                            <input
-                              type="checkbox"
-                              id="add-shipping-check"
-                              checked={addShippingEnabled}
-                              onChange={(e) => setAddShippingEnabled(e.target.checked)}
-                              className="rounded bg-slate-950 border-slate-800 text-yellow-600 focus:ring-0 w-4 h-4 cursor-pointer"
-                            />
-                            <label htmlFor="add-shipping-check" className="text-[11px] font-bold text-slate-350 cursor-pointer">{isAr ? 'إضافة شحن للطلب' : 'Add Shipping Costs'}</label>
-                          </div>
-                        ) : (
-                          <div className="hidden md:block"></div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Subtotals calculations summary */}
-                    {(formData.orderSourceType === 'App' || formData.orderSourceType === 'SHEIN') && (
-                      <div className="pt-2 flex justify-between text-[11px] font-bold text-slate-500 border-t border-slate-850/50 mt-2">
-                        <div>
-                          {isAr ? 'إجمالي المنتجات الأصلي:' : 'Original Products Subtotal:'}{' '}
-                          <span className="font-mono text-slate-300">{calcs.productsSum.toLocaleString()} SAR</span>
-                        </div>
-                        {couponEnabled && (
-                          <div>
-                            {isAr ? 'الإجمالي بعد التعديل (الخصم/العمولة):' : 'Adjusted Products Subtotal (Discount/Comm):'}{' '}
-                            <span className="font-mono text-emerald-400 font-black">{calcs.totalProductsCostWithAdjustments.toLocaleString()} SAR</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Factory specifics: Total weight and volume */}
-                    {formData.orderSourceType === 'Factory' && (
-                      <div className="p-3 bg-slate-900/40 border border-slate-850 rounded-2xl flex justify-between text-[11px] font-bold text-slate-400 mt-2">
-                        <div>
-                          {isAr ? 'إجمالي الوزن:' : 'Total Weight:'}{' '}
-                          <span className="font-mono text-amber-500 font-black">{calcs.totalWeight.toLocaleString()} {isAr ? 'كجم' : 'kg'}</span>
-                        </div>
-                        <div>
-                          {isAr ? 'إجمالي الحجم:' : 'Total Volume:'}{' '}
-                          <span className="font-mono text-blue-400 font-black">{calcs.totalCBM.toFixed(6)} CBM</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Section 3: Shipping manifestation details */}
-                  {formData.orderSourceType !== 'SHEIN' && (formData.orderSourceType !== 'App' || addShippingEnabled) && (
-                    <div className="space-y-4 bg-slate-950/20 border border-slate-850 p-5 rounded-3xl">
-                      <div className="flex justify-between items-center border-b border-slate-800 pb-3 flex-wrap gap-2">
-                        <div className="text-start">
-                          <span className="text-xs font-black text-white block">{isAr ? 'تفاصيل شحنات المسار اللوجيستي' : 'Shipping Manifest Tracks'}</span>
-                          <span className="text-[10px] text-slate-500 font-bold mt-0.5">{isAr ? 'أدخل مسارات الشحن المعتمدة لهذا الطرد للتدقيق' : 'Define transport companies and costs for delivery tracks'}</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={addShippingRow}
-                          className="bg-emerald-600/10 hover:bg-emerald-650/20 text-emerald-400 px-3 py-1.5 rounded-xl text-[10px] font-black transition-all flex items-center gap-1"
-                        >
-                          ➕ {isAr ? 'إضافة تفاصيل شحن' : 'Add Shipping Track'}
-                        </button>
-                      </div>
-
-                      <div className="space-y-3.5">
-                        {shippings && shippings.map((sh, idx) => (
-                          <div key={sh.id || idx} className="bg-slate-900/40 p-4 rounded-2xl border border-slate-850 space-y-3 relative">
-                            {/* Segment title and remove action */}
-                            <div className="flex justify-between items-center border-b border-slate-850/50 pb-2">
-                              <span className="text-[10px] font-black text-[#d4af37] bg-[#d4af37]/5 px-2 py-0.5 rounded">
-                                {isAr ? `مسار الشحن #${idx + 1}` : `Shipping Track #${idx + 1}`}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => removeShippingRow(idx)}
-                                className="text-rose-500 hover:text-rose-400 p-1 rounded hover:bg-rose-950/10 transition-all font-bold text-[10px] flex items-center gap-1"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                                {isAr ? 'إلغاء المسار' : 'Delete Segment'}
-                              </button>
-                            </div>
-
-                            {/* Manifest inputs */}
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-[11px] text-start font-bold">
-                              {/* 1. Mode */}
-                              <div>
-                                <label className="block text-slate-500 mb-1">{isAr ? 'نوع الشحن' : 'Mode'}</label>
-                                <select
-                                  value={sh.shippingType || 'بري'}
-                                  onChange={(e) => updateShippingRow(idx, 'shippingType', e.target.value)}
-                                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold"
-                                >
-                                  <option value="بري">{isAr ? 'Overland بري' : 'Land - Overland'}</option>
-                                  <option value="جوي">{isAr ? 'Air Freight جوي' : 'Air - Air Freight'}</option>
-                                  <option value="بحري">{isAr ? 'Ocean Cargo بحري' : 'Sea - Ocean Cargo'}</option>
-                                </select>
-                              </div>
-
-                              {/* 2. Carrier company */}
-                              <div>
-                                <div className="flex justify-between items-center mb-1">
-                                  <label className="block text-slate-400">{isAr ? 'شركة الشحن' : 'Carrier'}</label>
-                                  {(role === 'Admin' || hasPermission('add_sources')) && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setActiveAddShippingIndex(idx);
-                                        setIsAddShippingCompanyOpen(true);
-                                      }}
-                                      className="text-[10px] font-black text-cyan-400 hover:underline flex items-center gap-0.5"
-                                    >
-                                      ➕ {isAr ? 'جديدة' : 'New'}
-                                    </button>
-                                  )}
-                                </div>
-                                <select
-                                  value={sh.shippingCompany || ''}
-                                  onChange={(e) => updateShippingRow(idx, 'shippingCompany', e.target.value)}
-                                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold"
-                                >
-                                  <option value="">{isAr ? '-- اختر شركة شحن --' : '-- Choose carrier --'}</option>
-                                  {shippingCompanies.map(c => (
-                                    <option key={c.id} value={c.name}>{c.name}</option>
-                                  ))}
-                                </select>
-                              </div>
-
-                              {/* 3. Tracking Number */}
-                              <div>
-                                <label className="block text-slate-500 mb-1">{isAr ? 'رقم التتبع للشحنة' : 'Tracking Number'}</label>
-                                <input
-                                  type="text"
-                                  value={sh.trackingNumber || ''}
-                                  onChange={(e) => updateShippingRow(idx, 'trackingNumber', e.target.value)}
-                                  placeholder={isAr ? "رقم التتبع المخصص للشحنة" : "Cargo tracking ID"}
-                                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-mono placeholder-slate-650"
-                                />
-                              </div>
-
-                              {/* 4. Shipping Cost */}
-                              <div>
-                                <label className="block text-slate-500 mb-1">{isAr ? 'أجرة وتكاليف النقل (ريال سعودي)' : 'Shipping Cost (SAR)'}</label>
-                                <input
-                                  type="number"
-                                  required
-                                  value={sh.shippingCost || 0}
-                                  onChange={(e) => updateShippingRow(idx, 'shippingCost', parseFloat(e.target.value) || 0)}
-                                  className="w-full bg-slate-950 border border-slate-800 text-[#d4af37] rounded-xl p-2.5 outline-none font-mono"
-                                />
-                              </div>
-
-                              {/* 5. Origin */}
-                              <div>
-                                <label className="block text-slate-500 mb-1">{isAr ? 'مكان التصدير' : 'Source'}</label>
-                                <input
-                                  type="text"
-                                  required
-                                  value={sh.shippingSource || ''}
-                                  onChange={(e) => updateShippingRow(idx, 'shippingSource', e.target.value)}
-                                  placeholder={isAr ? "مثال: الصين، دبي" : "Source country"}
-                                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none placeholder-slate-600"
-                                />
-                              </div>
-
-                              {/* 6. Destination */}
-                              <div>
-                                <label className="block text-slate-500 mb-1">{isAr ? 'مكان الاستلام' : 'Destination'}</label>
-                                <input
-                                  type="text"
-                                  required
-                                  value={sh.shippingDestination || ''}
-                                  onChange={(e) => updateShippingRow(idx, 'shippingDestination', e.target.value)}
-                                  placeholder={isAr ? "مثال: مستودع صنعاء" : "Destination depot"}
-                                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none placeholder-slate-600"
-                                />
-                              </div>
-
-                              {/* 7. Dispatch / Departure Date - defaults to today, editable, with calendar picker */}
-                              <div>
-                                <label className="block text-slate-500 mb-1">{isAr ? 'تاريخ انطلاق الشحن' : 'Dispatch Date'}</label>
-                                <div className="relative">
-                                  <input
-                                    type="date"
-                                    id={`dispatch-date-${idx}`}
-                                    value={sh.shippingDate || ''}
-                                    onChange={(e) => {
-                                      const newDate = e.target.value;
-                                      let expected = sh.expectedArrival || '';
-                                      if (newDate && sh.shippingDuration) {
-                                        const days = parseInt(sh.shippingDuration);
-                                        if (!isNaN(days)) {
-                                          const dateObj = new Date(newDate);
-                                          dateObj.setDate(dateObj.getDate() + days);
-                                          expected = dateObj.toISOString().split('T')[0];
-                                        }
-                                      }
-                                      updateShippingRow(idx, { shippingDate: newDate, expectedArrival: expected });
-                                    }}
-                                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans pr-9"
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const el = document.getElementById(`dispatch-date-${idx}`);
-                                      if (el) (el as HTMLInputElement).showPicker?.();
-                                    }}
-                                    className="absolute inset-y-0 end-2.5 flex items-center text-slate-500 hover:text-[#d4af37] transition"
-                                  >
-                                    <Calendar className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              </div>
-
-                              {/* 8. Transit Duration - auto-filled from settings by source type, editable */}
-                              <div>
-                                <label className="block text-slate-500 mb-1">{isAr ? 'المدة التقديرية (أيام)' : 'Transit Duration (Days)'}</label>
-                                <div className="relative">
-                                  <input
-                                    type="number"
-                                    value={sh.shippingDuration || ''}
-                                    onChange={(e) => {
-                                      const durationVal = e.target.value;
-                                      let expected = sh.expectedArrival || '';
-                                      if (sh.shippingDate && durationVal) {
-                                        const days = parseInt(durationVal);
-                                        if (!isNaN(days)) {
-                                          const dateObj = new Date(sh.shippingDate);
-                                          dateObj.setDate(dateObj.getDate() + days);
-                                          expected = dateObj.toISOString().split('T')[0];
-                                        }
-                                      }
-                                      updateShippingRow(idx, { shippingDuration: durationVal, expectedArrival: expected });
-                                    }}
-                                    placeholder={isAr ? "مثال: 12 يوم" : "e.g. 12"}
-                                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none placeholder-slate-655 font-mono pr-9"
-                                  />
-                                  <span className="absolute inset-y-0 end-2.5 flex items-center text-slate-600 text-[10px] font-bold pointer-events-none">
-                                    {isAr ? 'يوم' : 'd'}
-                                  </span>
-                                </div>
-                              </div>
-
-                              {/* 9. Expected Arrival - auto-calculated from dispatch date + duration, editable */}
-                              <div>
-                                <label className="block text-slate-500 mb-1">{isAr ? 'موعد الوصول المتوقع' : 'Expected Arrival'}</label>
-                                <div className="relative">
-                                  <input
-                                    type="date"
-                                    id={`expected-date-${idx}`}
-                                    value={sh.expectedArrival || ''}
-                                    onChange={(e) => updateShippingRow(idx, 'expectedArrival', e.target.value)}
-                                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans pr-9"
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const el = document.getElementById(`expected-date-${idx}`);
-                                      if (el) (el as HTMLInputElement).showPicker?.();
-                                    }}
-                                    className="absolute inset-y-0 end-2.5 flex items-center text-slate-500 hover:text-emerald-400 transition"
-                                  >
-                                    <Calendar className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              </div>
-
-                              {/* 10. Packaging Fees (SAR fixed amount) */}
-                              <div className="col-span-2">
-                                <label className="block text-slate-500 mb-1">{isAr ? 'أجور التغليف والصناديق (SAR)' : 'Packaging Fees (SAR)'}</label>
-                                <input
-                                  type="number"
-                                  value={sh.packagingFees || 0}
-                                  onChange={(e) => updateShippingRow(idx, 'packagingFees', parseFloat(e.target.value) || 0)}
-                                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-mono"
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Show CBM under shipping rows for Factory */}
-                      {formData.orderSourceType === 'Factory' && (
-                        <div className="p-3 bg-slate-900/40 border border-slate-850 rounded-2xl flex justify-between text-[11px] font-bold text-slate-400 mt-2 text-start">
-                          <div>
-                            {isAr ? 'إجمالي الـ CBM للمنتجات:' : 'Total Products CBM:'}{' '}
-                            <span className="font-mono text-blue-400 font-black">{calcs.totalCBM.toFixed(6)} m³</span>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Carrier packaging fee - fixed SAR amount added to shipping cost */}
-                      <div className="flex items-center gap-3 bg-slate-900/40 p-3 rounded-2xl border border-slate-850 mt-3 text-start">
+              {/* Ledger Table */}
+              <div className="overflow-x-auto" id="orders-ledger-table">
+                <table className="w-full text-start">
+                  <thead className="bg-slate-950/45 text-slate-400 text-[10px] font-black uppercase tracking-wider border-b border-slate-800">
+                    <tr>
+                      <th className="p-4 w-12 text-center">
                         <input
                           type="checkbox"
-                          id="packaging-fee-check"
-                          checked={packagingFeeEnabled}
-                          onChange={(e) => setPackagingFeeEnabled(e.target.checked)}
-                          //disabled={!canEditOrderDefaultsCreation}
-                          className="rounded bg-slate-950 border-slate-800 text-yellow-600 focus:ring-0 w-4 h-4 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                          checked={filteredOrdersList.length > 0 && selectedOrderIds.length === filteredOrdersList.length}
+                          onChange={handleSelectAll}
+                          className="w-4 h-4 rounded border-slate-800 bg-slate-950 text-[#d4af37] focus:ring-0 focus:ring-offset-0 cursor-pointer accent-[#d4af37]"
                         />
-                        <label
-                          htmlFor="packaging-fee-check"
-                          className={`text-[11px] font-bold text-slate-350 ${!canEditOrderDefaultsCreation ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-                        >
-                          {isAr ? 'إضافة رسوم تغليف شركة الشحن (ريال ثابت)' : 'Add carrier packaging fee (fixed SAR)'}
-                        </label>
-                        {packagingFeeEnabled && (
-                          <div className="flex items-center gap-1">
-                            <input
-                              type="number"
-                              value={packagingFeeRate}
-                              onChange={(e) => canEditOrderDefaultsCreation && setPackagingFeeRate(parseFloat(e.target.value) || 0)}
-                              disabled={!canEditOrderDefaultsCreation}
-                              className="w-20 bg-slate-950 border border-slate-800 text-white rounded-xl p-1.5 text-center font-mono font-bold text-[11px] disabled:opacity-50 disabled:cursor-not-allowed"
-                              placeholder="0"
-                            />
-                            <span className="text-[10px] text-slate-500 font-bold">SAR</span>
+                      </th>
+                      <th className="p-4">{isAr ? 'رقم الطلب الموحد' : 'Smart Code'}</th>
+                      <th className="p-4">{isAr ? 'العميل والحساب' : 'Customer Account'}</th>
+                      <th className="p-4">{isAr ? 'القنوات اللوجيستية والوضع' : 'Logistics Route'}</th>
+                      <th className="p-4">{isAr ? 'القيم والمديونية والوضع المالي' : 'Financial Info'}</th>
+                      <th className="p-4 text-left">{isAr ? 'إجراءات ترحيل' : 'Actions'}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-850 text-xs text-slate-300">
+                    {filteredOrdersList.map((ord, idx) => (
+                      <tr key={`${ord.id}-${idx}`} className="hover:bg-slate-955 transition-all">
+
+                        {/* Checkbox Selector */}
+                        <td className="p-4 w-12 text-center">
+                          <input
+                            type="checkbox"
+                            checked={selectedOrderIds.includes(ord.id)}
+                            onChange={() => handleToggleSelect(ord.id)}
+                            className="w-4 h-4 rounded border-slate-800 bg-slate-950 text-[#d4af37] focus:ring-0 focus:ring-offset-0 cursor-pointer accent-[#d4af37]"
+                          />
+                        </td>
+
+                        {/* Order ID */}
+                        <td className="p-4">
+                          <span className="font-mono font-black text-[#d4af37] bg-[#d4af37]/10 border border-[#d4af37]/25 px-2.5 py-0.5 rounded-lg">{ord.orderNumber || 'ALX-XXXX-XXXX'}</span>
+                          <div className="text-[10px] text-slate-500 mt-1 font-semibold">{new Date(ord.createdAt()).toLocaleDateString(isAr ? 'ar-EG' : 'en-US')}</div>
+                        </td>
+
+                        {/* Customer */}
+                        <td className="p-4 text-start">
+                          <div className="flex flex-col">
+                            <span
+                              onClick={() => {
+                                if (ord.customerId) {
+                                  window.dispatchEvent(new CustomEvent('open-entity-ledger', {
+                                    detail: { entityId: ord.customerId, entityType: 'customer' }
+                                  }));
+                                }
+                              }}
+                              className="font-bold text-white text-xs hover:text-[#d4af37] cursor-pointer underline decoration-dotted decoration-[#d4af37]/40 transition-colors"
+                            >
+                              {ord.customerName}
+                            </span>
+                            <span className="text-[10px] font-mono text-slate-500 mt-0.5">{ord.customerPhone}</span>
                           </div>
-                        )}
+                        </td>
+
+                        {/* Logistics Status */}
+                        <td className="p-4 text-start">
+                          <div className="flex flex-col space-y-1">
+                            <span className="px-2.5 py-0.5 rounded-xl border border-[#d4af37]/20 bg-[#d4af37]/5 text-[#d4af37] font-bold max-w-max text-[10px]">
+                              {formatStatusLabel(ord.orderStatus)}
+                            </span>
+                            <span className="text-[10px] text-slate-500 font-bold">{ord.orderSourceName || ord.orderSourceType}</span>
+                          </div>
+                        </td>
+
+                        {/* Financial status */}
+                        <td className="p-4 text-start">
+                          {(() => {
+                            const paidTotal = parseFloat(ord.amountPaid || 0);
+                            const remainVal = parseFloat(ord.amountRemaining || 0);
+                            const totalFinal = paidTotal + remainVal;
+
+                            return (
+                              <div className="flex flex-col space-y-0.5">
+                                <div className="font-mono text-slate-200 font-semibold">
+                                  {isAr ? 'الإجمالي: ' : 'Total: '}{Math.ceil(totalFinal).toLocaleString()} <span className="text-[10px] text-slate-500">YER</span>
+                                </div>
+                                <div className="font-mono text-emerald-400 text-[11px]">
+                                  {isAr ? 'المدفوع: ' : 'Paid: '}{Math.ceil(paidTotal).toLocaleString()} YER
+                                </div>
+                                {Math.ceil(remainVal) > 0 ? (
+                                  <div className="font-mono text-rose-450 text-[11px] font-bold">
+                                    {isAr ? 'المتبقي: ' : 'Remaining: '}{Math.ceil(remainVal).toLocaleString()} YER
+                                  </div>
+                                ) : Math.ceil(remainVal) < 0 ? (
+                                  <div className="font-mono text-amber-500 text-[11px] font-bold">
+                                    {isAr ? 'فائض حساب: ' : 'Overpaid: '}{Math.abs(Math.ceil(remainVal)).toLocaleString()} YER
+                                  </div>
+                                ) : (
+                                  <span className="text-[9px] bg-emerald-950/20 border border-emerald-800 text-emerald-400 px-1.5 py-0.5 rounded font-black max-w-max uppercase tracking-tighter mt-0.5">{isAr ? 'مسدد بالكامل' : 'Paid in Full'}</span>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </td>
+
+                        {/* Actions */}
+                        <td className="p-4 text-left flex justify-end gap-2 items-center">
+
+                          {/* View Details / QR */}
+                          <button
+                            onClick={() => {
+                              setSelectedOrder(ord);
+                              setIsDetailsModalOpen(true);
+                            }}
+                            className="bg-slate-800 text-[#d4af37] hover:text-white hover:bg-slate-700 px-2.5 py-1.5 rounded-lg transition-all text-[10px] flex items-center gap-1 font-bold border border-slate-700 cursor-pointer"
+                            title={isAr ? 'عرض التفاصيل والباركود / رمز التتبع' : 'View order & QR tracking'}
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            {isAr ? 'التفاصيل' : 'Details'}
+                          </button>
+
+                          {/* Payment handler — requires add_finance */}
+                          {parseFloat(ord.amountRemaining || 0) > 0 && (role === 'Admin' || hasPermission('add_finance')) && (
+                            <button
+                              onClick={() => {
+                                setSelectedOrder(ord);
+                                setPaymentFormData({ amount: '', method: 'Cash', notes: '', pin: '' });
+                                setIsPaymentModalOpen(true);
+                              }}
+                              className="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-black px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1 text-[10px] cursor-pointer"
+                              title={isAr ? 'تحصيل دفعة مالية' : 'Post payment'}
+                            >
+                              <CreditCard className="w-3.5 h-3.5" />
+                              {isAr ? 'قبض دفعة' : 'Collect'}
+                            </button>
+                          )}
+
+                          {/* Status updates — requires edit_orders or update_order_status; delivered orders require edit_delivered_orders */}
+                          {(role === 'Admin' || hasPermission('edit_orders') || hasPermission('update_order_status')) &&
+                            (ord.orderStatus !== 'تم التسليم' || role === 'Admin' || hasPermission('edit_delivered_orders')) && (
+                              <button
+                                onClick={() => {
+                                  setSelectedOrder(ord);
+                                  setUpdateFormData({
+                                    orderStatus: ord.orderStatus || 'تم تسجيل الطلب',
+                                    deliveryStatus: ord.deliveryStatus || 'في الانتظار',
+                                    locationYemen: ord.locationYemen || 'مستودع صنعاء الرئيسي',
+                                    internalNotes: ord.internalNotes || '',
+                                    shippingCourierId: ord.shippingCourierId || '',
+                                    deliveryCourierId: ord.deliveryCourierId || ''
+                                  });
+                                  let initialShippings = ord.shippingDetails || [];
+                                  if (ord.orderSourceType === 'SHEIN') {
+                                    const isDefaultOrEmpty = initialShippings.length === 1 &&
+                                      !initialShippings[0].shippingSource &&
+                                      !initialShippings[0].shippingDestination &&
+                                      (initialShippings[0].shippingCost === 0 || !initialShippings[0].shippingCost);
+                                    if (isDefaultOrEmpty || initialShippings.length === 0) {
+                                      initialShippings = [];
+                                    }
+                                  }
+                                  setUpdateShippings(initialShippings);
+                                  setIsUpdateModalOpen(true);
+                                }}
+                                className="bg-slate-805 text-slate-305 hover:text-white px-2.5 py-1.5 rounded-lg transition-all text-[10px] flex items-center gap-1 font-bold border border-slate-750 cursor-pointer"
+                                title={isAr ? 'تعديل المسار والتوجيه اللوجيستي' : 'Update state'}
+                              >
+                                <Activity className="w-3.5 h-3.5 text-cyan-400" />
+                                {isAr ? 'اللوجستيات' : 'Update'}
+                              </button>
+                            )}
+
+                          {(role === 'Admin' || hasPermission('delete_orders')) && (
+                            <button
+                              onClick={() => handleDeleteOrderClick(ord)}
+                              className="bg-rose-950/20 text-rose-400 hover:bg-rose-900 hover:text-white px-2.5 py-1.5 rounded-lg transition-all text-[10px] flex items-center gap-1 font-bold border border-rose-900/30 cursor-pointer"
+                              title={isAr ? 'حذف هذا الطلب نهائياً' : 'Delete Order'}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              {isAr ? 'حذف' : 'Delete'}
+                            </button>
+                          )}
+
+                        </td>
+
+                      </tr>
+                    ))}
+                    {filteredOrdersList.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="p-12 text-center text-slate-500 font-bold">
+                          {isAr ? 'لا يوجد طلبيات مسجلة تطابق محددات البحث.' : 'No invoices matched query.'}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+            </div>
+
+            {/* Floating Action Bar for Batch Updates */}
+            {selectedOrderIds.length > 0 && (
+              <div id="batch-actions-bar" className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-905 border-2 border-[#d4af37]/50 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.8)] px-5 py-4 flex items-center gap-4 flex-wrap whitespace-nowrap">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full col-span-1 bg-yellow-500 animate-pulse"></span>
+                  <span className="text-white text-xs font-black">
+                    {isAr
+                      ? `تم تحديد ${selectedOrderIds.length} فواتير`
+                      : `${selectedOrderIds.length} invoices selected`}
+                  </span>
+                </div>
+
+                <div className="h-6 w-[1px] bg-slate-800"></div>
+
+                {/* Status Selection and Action */}
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-400 text-[10px] font-bold">
+                    {isAr ? 'تحديث الحالة الكلية:' : 'Change status:'}
+                  </span>
+                  <select
+                    id="batch-status-select"
+                    defaultValue=""
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        handleBatchUpdateStatus(e.target.value);
+                        e.target.value = ""; // Reset after trigger
+                      }
+                    }}
+                    disabled={isBatchUpdating}
+                    className="bg-slate-950 border border-slate-750 text-slate-200 rounded-lg px-2 py-1 text-xs font-bold outline-none focus:ring-1 focus:ring-yellow-500 disabled:opacity-50 cursor-pointer"
+                  >
+                    <option value="" disabled>{isAr ? '-- اختر الحالة --' : '-- Choose status --'}</option>
+                    <option value="تم تسجيل الطلب">{isAr ? 'تم تسجيل الطلب (قيد المعالجة)' : 'Pending'}</option>
+                    <option value="وصل مستودع السعودية">{isAr ? 'وصل مستودع السعودية للتعبئة' : 'Delivered to KSA Depot'}</option>
+                    <option value="جاري الشحن لليمن">{isAr ? 'جاري الشحن والنقل لليمن' : 'In Route to Yemen'}</option>
+                    <option value="وصل مركز التوزيع في اليمن">{isAr ? 'وصل مركز التوزيع في اليمن' : 'Arrived Yemen Center'}</option>
+                    <option value="تم التسليم">{isAr ? 'تم التسليم النهائي مع العميل' : 'Delivered & Complete'}</option>
+                    <option value="ملغي">{isAr ? 'ملغي بالكامل' : 'Cancelled'}</option>
+                  </select>
+                </div>
+
+                <div className="h-6 w-[1px] bg-slate-800"></div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      // A quick way to ensure data is forcefully synced
+                      const btn = document.getElementById('batch-deselect-btn');
+                      if (btn) {
+                        const originalText = btn.innerText;
+                        window.dispatchEvent(new Event('reload-orders'));
+                        setTimeout(() => window.location.reload(), 300);
+                      }
+                    }}
+                    disabled={isBatchUpdating}
+                    className="text-xs text-cyan-400 hover:text-cyan-300 font-black cursor-pointer bg-slate-950 px-2.5 py-1 rounded-lg border border-cyan-950/20 active:scale-95 transition flex items-center gap-1.5"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    {isAr ? 'تحديث البيانات' : 'Refresh Data'}
+                  </button>
+
+                  <button
+                    id="batch-deselect-btn"
+                    onClick={() => setSelectedOrderIds([])}
+                    disabled={isBatchUpdating}
+                    className="text-xs text-rose-400 hover:text-rose-300 font-black cursor-pointer bg-slate-950 px-2.5 py-1 rounded-lg border border-rose-950/20 active:scale-95 transition"
+                  >
+                    {isAr ? 'إلغاء التحديد الكلي' : 'Deselect All'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* CREATE ORDER LARGE MODAL واجهه نموذج انشاء طلب*/}
+            {isAddModalOpen && (
+              <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in overflow-y-auto">
+                <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-6xl my-8 overflow-hidden shadow-[0_0_50px_rgba(212,175,55,0.15)] flex flex-col max-h-[90vh]">
+
+                  {/* Header */}
+                  <div className="p-4 bg-slate-955 border-b border-slate-800 flex justify-between items-center">
+                    <h3 className="font-black text-white text-base">
+                      {isAr ? 'إنشاء فاتورة طلب جديد' : 'Create order Invoice'}
+                    </h3>
+                    <button onClick={() => setIsAddModalOpen(false)} className="bg-slate-800 text-slate-400 hover:text-white p-1.5 rounded-lg"><X className="w-5 h-5" /></button>
+                  </div>
+
+                  {/* Financial Widget Bar (3 columns) */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 border-b border-slate-800 bg-slate-950/50 p-4 gap-4">
+                    {/* Box 1: Outstanding Debt */}
+                    <div className="p-3 bg-red-950/20 border border-red-900/30 rounded-2xl flex items-center gap-3">
+                      <div className="p-2 bg-red-500/10 text-red-500 rounded-xl"><AlertCircle className="w-5 h-5" /></div>
+                      <div className="text-start">
+                        <span className="block text-[9px] font-black text-slate-500 uppercase tracking-wider">{isAr ? 'ديون العميل السابقة' : 'Customer Outstanding Debt'}</span>
+                        <span className="text-sm font-mono font-black text-red-400">
+                          {customerProfileStats ? customerProfileStats.totalOutstandingDebt.toLocaleString() : '0'} YER
+                        </span>
                       </div>
                     </div>
-                  )}
 
-                  {/* Section 4: Couriers & Local Logistics Drivers */}
-                  <div className="space-y-4 bg-slate-955/20 border border-slate-800 p-5 rounded-3xl">
-                    <span className="block text-xs font-black text-white text-start mb-2">{isAr ? 'المناديب واللوجستيات الميدانية' : 'Field Logistics Drivers'}</span>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-[11px] text-start font-bold">
-                      {/* Saudi Courier */}
-                      <div>
-                        <label className="block text-slate-500 mb-1">{isAr ? 'موظف التعبئة والتجميع (سعودي)' : 'Saudi Partner Aggregator'}</label>
-                        <select
-                          value={formData.shippingCourierId}
-                          onChange={(e) => setFormData({ ...formData, shippingCourierId: e.target.value })}
-                          className="w-full bg-slate-950 border border-slate-855 text-white rounded-xl p-3 outline-none text-[11px] font-bold"
-                        >
-                          <option value="">{isAr ? '-- اختر موظف التجميع --' : '-- Choose Aggregator --'}</option>
-                          {couriers.filter(c => c.courierType === 'sourcing').map(c => (
-                            <option key={c.id} value={c.id}>
-                              {c.fullName}
-                            </option>
-                          ))}
-                        </select>
-
-                        {/* Display commission rate indicator */}
-                        {formData.shippingCourierId && (
-                          <div className="text-[10px] text-[#d4af37] font-bold mt-1">
-                            {isAr ? 'عمولة الشريك المحددة:' : 'Aggregator rate:'}{' '}
-                            <span className="font-mono">
-                              {(() => {
-                                const found = couriers.find(c => c.id === formData.shippingCourierId);
-                                return found && found.commissionRate !== undefined ? found.commissionRate : '30';
-                              })()}%
-                            </span>
-                          </div>
-                        )}
+                    {/* Box 2: Amount Paid */}
+                    <div className="p-3 bg-emerald-950/20 border border-emerald-900/30 rounded-2xl flex items-center gap-3">
+                      <div className="p-2 bg-emerald-500/10 text-[#d4af37] rounded-xl"><CreditCard className="w-5 h-5" /></div>
+                      <div className="text-start">
+                        <span className="block text-[9px] font-black text-slate-500 uppercase tracking-wider">{isAr ? 'المقبوض كاش (هذا الطلب)' : 'Amount Paid (Current Order)'}</span>
+                        <span className="text-sm font-mono font-black text-emerald-400">
+                          {(parseFloat(formData.amountPaid as any) || 0).toLocaleString()} YER
+                        </span>
                       </div>
+                    </div>
 
-                      {/* Yemen Driver */}
-                      <div>
-                        <label className="block text-slate-500 mb-1">{isAr ? 'مندوب التوزيع النهائي (اليمن)' : 'Yemen Delivery Driver'}</label>
-                        <select
-                          value={formData.deliveryCourierId}
-                          onChange={(e) => setFormData({ ...formData, deliveryCourierId: e.target.value })}
-                          className="w-full bg-slate-950 border border-slate-855 text-white rounded-xl p-3 outline-none text-[11px] font-bold"
-                        >
-                          <option value="">{isAr ? '-- اختر مندوب التوصيل --' : '-- Choose Yemen Driver --'}</option>
-                          {couriers.filter(c => c.courierType === 'local' || !c.courierType).map(c => (
-                            <option key={c.id} value={c.id}>
-                              {c.fullName} {c.governorate || c.provinceId ? `(${c.governorate || c.provinceId})` : ''}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Yemen Driver Flat Fee */}
-                      <div>
-                        <label className="block text-slate-500 mb-1">{isAr ? 'رسوم التوصيل لليمن (ريال يمني)' : 'Delivery Courier Fee (YER)'}</label>
-                        <input
-                          type="number"
-                          value={formData.deliveryCourierFee}
-                          onChange={(e) => setFormData({ ...formData, deliveryCourierFee: parseFloat(e.target.value) || 0 })}
-                          disabled={!canEditOrderDefaultsCreation}
-                          className="w-full bg-slate-950 border border-slate-855 text-white rounded-xl p-3 outline-none font-mono text-xs text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                        />
+                    {/* Box 3: Company Profit */}
+                    <div className="p-3 bg-blue-950/20 border border-blue-900/30 rounded-2xl flex items-center gap-3">
+                      <div className="p-2 bg-blue-500/10 text-blue-400 rounded-xl"><DollarSign className="w-5 h-5" /></div>
+                      <div className="text-start">
+                        <span className="block text-[9px] font-black text-slate-500 uppercase tracking-wider">{isAr ? 'رسوم اخرى' : 'Other Fees'}</span>
+                        <span className="text-sm font-mono font-black text-blue-400">
+                          {calcs.profitCompanySAR.toLocaleString()} SAR
+                        </span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Section 5: Financial calculations parameters */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-slate-950/30 border border-slate-800 p-6 rounded-3xl text-[11px] font-bold text-slate-400 text-start">
+                  {/* Scrollable Form Body */}
+                  <form onSubmit={handleCreateOrder} className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar text-start">
 
-                    {/* Inputs for pricing parameters */}
-                    <div className="space-y-4 col-span-2 grid grid-cols-2 gap-3 self-start">
+                    {/* Debt Alert Warning Banner */}
+                    {customerProfileStats && customerProfileStats.totalOutstandingDebt > 0 && (
+                      <div className="p-4 bg-red-950/30 border border-red-900 text-red-400 rounded-2xl flex items-center gap-3 animate-pulse">
+                        <AlertCircle className="w-6 h-6 shrink-0 text-red-500" />
+                        <span className="font-black text-xs leading-relaxed">
+                          {isAr
+                            ? `⚠️ تنبيه ديون معلقة: يوجد للعميل الحالي ديون غير محصلة ومستحقة بذمته بقيمة: [ ${customerProfileStats.totalOutstandingDebt.toLocaleString()} ريال يمني ].`
+                            : `⚠️ Outstanding Balances Warning: This client has outstanding pending balances of [ YER ${customerProfileStats.totalOutstandingDebt.toLocaleString()} ].`}
+                        </span>
+                      </div>
+                    )}
 
-                      {formData.orderSourceType === 'SHEIN' && (
-                        <div>
-                          <label className="block text-[10px] text-slate-500 uppercase tracking-widest block leading-none mb-1.5">
-                            {isAr ? 'سعر شي إن الأحمر (SAR)' : 'SHEIN Red Price (SAR)'}
-                          </label>
-                          <input
-                            type="number"
-                            value={formData.sheinRedPrice || ''}
-                            onChange={(e) => setFormData({ ...formData, sheinRedPrice: parseFloat(e.target.value) || 0 })}
-                            className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none font-mono text-[11px]"
-                            placeholder="0.00"
-                          />
-                          {formData.sheinRedPrice > 0 && formData.sheinRedPrice < calcs.productsSum && (
-                            <p className="text-[9px] text-red-500 mt-1 font-bold">
-                              {isAr ? '⚠️ السعر الأحمر يجب ألا يقل عن تكلفة المنتجات' : '⚠️ Red price cannot be less than products cost'}
-                            </p>
+                    {/* Grid 1: Customer Section + Logistics Info */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                      {/* 1. Customer Selection & Activity Profile */}
+                      <div className="space-y-4 bg-slate-950/30 border border-slate-800 p-5 rounded-3xl relative">
+                        <div className="flex justify-between items-center">
+                          <label className="text-xs font-black text-slate-400">{isAr ? 'العميل المستلم' : 'Receiver Customer'}</label>
+                          {(role === 'Admin' || hasPermission('add_customers')) && (
+                            <button
+                              type="button"
+                              onClick={() => setIsAddCustomerOpen(true)}
+                              className="text-xs font-black text-[#d4af37] hover:underline flex items-center gap-1"
+                            >
+                              <UserPlus className="w-3.5 h-3.5" />
+                              {isAr ? 'إضافة عميل جديد ➕' : 'Quick add customer'}
+                            </button>
                           )}
                         </div>
-                      )}
 
-                      {formData.orderSourceType === 'Factory' && (
-                        <>
+                        {/* Smart Search Input */}
+                        {!formData.customerId ? (
+                          <div className="relative">
+                            <Search className="absolute right-3 top-3 text-slate-500 w-4 h-4" />
+                            <input
+                              type="text"
+                              placeholder={isAr ? "ابحث عن عميل بالاسم أو رقم الجوال..." : "Search customer by name or phone..."}
+                              value={customerSearchQuery}
+                              onChange={(e) => setCustomerSearchQuery(e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl py-2.5 pr-9 pl-4 outline-none font-bold text-xs"
+                            />
+
+                            {/* Dropdown Results */}
+                            {customerSearchQuery.trim() !== '' && (
+                              <div className="absolute left-0 right-0 mt-1 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-20 max-h-48 overflow-y-auto divide-y divide-slate-800">
+                                {filteredCustomers.length > 0 ? (
+                                  filteredCustomers.map(c => (
+                                    <button
+                                      type="button"
+                                      key={c.id}
+                                      onClick={() => selectCustomer(c)}
+                                      className="w-full text-start p-3 text-xs hover:bg-slate-800 text-white font-bold flex justify-between items-center"
+                                    >
+                                      <span>{c.fullName}</span>
+                                      <span className="font-mono text-slate-500">{c.phone}</span>
+                                    </button>
+                                  ))
+                                ) : (
+                                  <div className="p-3 text-xs text-slate-500 font-bold flex justify-between items-center">
+                                    <span>{isAr ? '🟢 عميل جديد' : '🟢 New Customer'}</span>
+                                    {(role === 'Admin' || hasPermission('add_customers')) && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setCustomerFormData(prev => ({
+                                            ...prev,
+                                            fullName: customerSearchQuery,
+                                          }));
+                                          setIsAddCustomerOpen(true);
+                                        }}
+                                        className="bg-[#d4af37]/10 text-[#d4af37] border border-[#d4af37]/20 px-3 py-1 rounded-lg text-[10px]"
+                                      >
+                                        {isAr ? 'إضافة الآن' : 'Create Now'}
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          /* Selected Customer Activity Card */
+                          <div className="bg-slate-900/60 border border-slate-850 p-4 rounded-2xl space-y-3 relative overflow-hidden group">
+                            <div className="absolute top-0 right-0 w-16 h-16 bg-[#d4af37]/5 rounded-full -mr-8 -mt-8"></div>
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <h4 className="text-xs font-black text-white">{formData.customerName}</h4>
+                                <p className="text-[10px] text-slate-500 font-mono mt-0.5">{formData.customerPhone}</p>
+                              </div>
+                              <div className="flex gap-1.5 items-center">
+                                {customerProfileStats?.tier === 'VIP' && (
+                                  <span className="bg-amber-500/10 text-amber-500 border border-amber-500/25 px-2 py-0.5 rounded text-[8px] font-black uppercase">VIP Client</span>
+                                )}
+                                {customerProfileStats?.tier === 'Debt' && (
+                                  <span className="bg-red-500/10 text-red-500 border border-red-500/25 px-2 py-0.5 rounded text-[8px] font-black uppercase">Has Debt</span>
+                                )}
+                                {customerProfileStats?.tier === 'Regular' && (
+                                  <span className="bg-slate-800 text-slate-400 px-2 py-0.5 rounded text-[8px] font-black uppercase">Regular</span>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={clearSelectedCustomer}
+                                  className="bg-slate-800 text-slate-400 hover:text-white p-1 rounded-lg transition"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 text-[10px] font-bold text-slate-500 pt-2 border-t border-slate-850/50">
+                              <div>{isAr ? 'إجمالي الطلبات:' : 'Total orders:'} <span className="text-slate-300 font-mono">{customerProfileStats?.totalOrdersCount}</span></div>
+                              <div>{isAr ? 'آخر طلب:' : 'Last order:'} <span className="text-slate-300 font-mono">{customerProfileStats?.lastOrderDate ? customerProfileStats.lastOrderDate.toLocaleDateString() : '—'}</span></div>
+                              <div className="col-span-2">{isAr ? 'العنوان الأساسي:' : 'Address:'} <span className="text-slate-300">{formData.customerAddress || '—'}</span></div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 2. Logistics & Purchase Metadata */}
+                      <div className="space-y-4 bg-slate-950/30 border border-slate-800 p-5 rounded-3xl">
+                        <div className="grid grid-cols-2 gap-3">
+                          {/* Auto generated order code (preview) */}
                           <div>
-                            <label className="block text-[10px] text-slate-500 uppercase tracking-widest block leading-none mb-1.5">
-                              {isAr ? 'نسبة الربح للكيلو (SAR/كجم)' : 'Profit Rate per KG (SAR/kg)'}
+                            <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider text-start">
+                              {isAr ? 'رقم الطلب الموحد' : 'Unified Order Code'}
                             </label>
                             <input
-                              type="number"
-                              step="any"
-                              value={profitPerKgRate}
-                              onChange={(e) => setProfitPerKgRate(parseFloat(e.target.value) || 0)}
-                              disabled={!canEditOrderDefaultsCreation}
-                              className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none font-mono text-[11px] disabled:opacity-50 disabled:cursor-not-allowed"
+                              type="text"
+                              disabled
+                              value={previewOrderNumber}
+                              className="w-full bg-slate-950/50 border border-slate-805 text-[#d4af37] rounded-xl p-3 outline-none font-black text-xs text-center font-mono"
                             />
                           </div>
+                          {/* Order creation date */}
                           <div>
-                            <label className="block text-[10px] text-slate-500 uppercase tracking-widest block leading-none mb-1.5 font-bold">
-                              {isAr ? 'سعر شحن الـ CBM (دولار USD/m³)' : 'CBM Shipping Rate (USD/m³)'}
+                            <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider text-start">
+                              {isAr ? 'تاريخ الفاتورة' : 'Invoice Date'}
+                            </label>
+                            <input
+                              type="text"
+                              disabled
+                              value={new Date().toLocaleDateString(isAr ? 'ar-YE' : 'en-US')}
+                              className="w-full bg-slate-950/50 border border-slate-805 text-slate-300 rounded-xl p-3 outline-none font-bold text-xs text-center"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          {/* Order Source */}
+                          <div>
+                            <div className="flex justify-between items-center mb-1.5 flex-row-reverse">
+                              {(role === 'Admin' || hasPermission('add_sources')) && (
+                                <button
+                                  type="button"
+                                  onClick={() => setIsAddSourceOpen(true)}
+                                  className="text-[10px] font-black text-[#d4af37] hover:underline flex items-center gap-0.5"
+                                >
+                                  ➕ {isAr ? 'جديد' : 'New'}
+                                </button>
+                              )}
+                              <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider text-start">
+                                {isAr ? 'مصدر الشراء' : 'Order Source'}
+                              </label>
+                            </div>
+                            <select
+                              required
+                              value={formData.orderSourceId}
+                              onChange={(e) => setFormData({ ...formData, orderSourceId: e.target.value })}
+                              className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-3 outline-none font-bold text-xs"
+                            >
+                              <option value="">{isAr ? '-- اختر المصدر --' : '-- Choose Source --'}</option>
+                              {sources.map(s => (
+                                <option key={s.id} value={s.id}>{s.name || s.source_name} {s.type ? `(${s.type})` : ''}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Salla / Store reference ID */}
+                          <div>
+                            <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider text-start">
+                              {isAr ? 'رقم الفاتورة الأصلي (سلة...)' : 'Orig. Store Reference'}
+                            </label>
+                            <input
+                              type="text"
+                              value={formData.externalOrderNumber}
+                              onChange={(e) => setFormData({ ...formData, externalOrderNumber: e.target.value })}
+                              placeholder={isAr ? "رقم الفاتورة الأصلي" : "Invoice ID"}
+                              className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-3 outline-none font-bold text-xs"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          {/* Tracking ID */}
+                          <div>
+                            <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider text-start">
+                              {isAr ? 'رقم التتبع الدولي' : 'Global Tracking Code'}
+                            </label>
+                            <input
+                              type="text"
+                              value={formData.trackingNumber}
+                              onChange={(e) => setFormData({ ...formData, trackingNumber: e.target.value })}
+                              placeholder={isAr ? "رقم التتبع الدولي (DHL...)" : "Global Tracking ID"}
+                              className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-3 outline-none font-bold text-xs"
+                            />
+                          </div>
+
+                          {/* Cart Share Code (Electronic shopping carts) */}
+                          <div>
+                            <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider text-start">
+                              {isAr ? 'كود السلة الموحد (Cart Code)' : 'Cart Share Code'}
                             </label>
                             <div className="flex gap-1.5">
                               <input
-                                type="number"
-                                step="any"
-                                value={cbmShippingRateValue}
-                                onChange={(e) => setCbmShippingRateValue(parseFloat(e.target.value) || 0)}
-                                disabled={!canEditOrderDefaultsCreation}
-                                className="flex-1 bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none font-mono text-[11px] disabled:opacity-50 disabled:cursor-not-allowed"
+                                type="text"
+                                value={cartShareCode}
+                                onChange={(e) => setCartShareCode(e.target.value)}
+                                placeholder={isAr ? "كود السلة" : "Cart Code"}
+                                className="flex-1 bg-slate-950 border border-slate-805 text-white rounded-xl p-3 outline-none font-bold text-xs"
                               />
-                              {settings.cbmShippingRateApiUrl && (
+                              {cartShareCode && (
                                 <button
                                   type="button"
-                                  onClick={async () => {
-                                    try {
-                                      const res = await fetch(settings.cbmShippingRateApiUrl!);
-                                      if (!res.ok) throw new Error('API request failed');
-                                      const data = await res.json();
-                                      const rate = data.cbm_rate || data.rate || data.value || data.price;
-                                      if (rate && !isNaN(parseFloat(rate))) {
-                                        setCbmShippingRateValue(parseFloat(rate));
-                                        alert(isAr ? `✅ تم جلب سعر CBM الجديد: ${rate} USD/m³` : `✅ New CBM rate fetched: ${rate} USD/m³`);
-                                      } else {
-                                        throw new Error(isAr ? 'لم يتم العثور على سعر CBM' : 'CBM rate not found');
-                                      }
-                                    } catch (err: any) {
-                                      alert((isAr ? '❌ خطأ: ' : '❌ Error: ') + err.message);
-                                    }
-                                  }}
-                                  disabled={!canEditOrderDefaultsCreation}
-                                  className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white p-2 rounded-xl text-xs flex items-center justify-center transition"
+                                  onClick={() => window.open(`https://cart.shop/share/${cartShareCode}`, '_blank')}
+                                  className="bg-[#d4af37]/10 hover:bg-[#d4af37]/20 border border-[#d4af37]/25 text-[#d4af37] px-2.5 rounded-xl text-xs flex items-center justify-center transition"
+                                  title={isAr ? 'فتح رابط السلة' : 'Open cart URL'}
                                 >
-                                  <RefreshCw className="w-4 h-4" />
+                                  <Package className="w-4 h-4" />
                                 </button>
                               )}
                             </div>
                           </div>
-                        </>
+                        </div>
+                      </div>
+
+                    </div>
+
+                    {/* Section 2: Products & Factory specifications */}
+                    <div className="space-y-3 bg-slate-950/20 border border-slate-850 p-5 rounded-3xl">
+                      <div className="flex justify-between items-center border-b border-slate-800 pb-3 flex-wrap gap-2">
+                        <div className="text-start">
+                          <span className="text-xs font-black text-white block">{isAr ? 'محتويات الشحنة والمنتجات التفصيلية' : 'Freight Cargo Contents'}</span>
+                          <span className="text-[10px] text-slate-500 font-bold">{isAr ? 'قم بإدخال بيانات المنتج وعناصره بالتفصيل' : 'Define detailed products lists for weight & calculation'}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={addItemRow}
+                          className="bg-cyan-600/10 hover:bg-cyan-650/20 text-cyan-400 px-3 py-1.5 rounded-xl text-[10px] font-black transition-all"
+                        >
+                          ➕ {isAr ? 'إدراج بند منتج' : 'Add Item Row'}
+                        </button>
+                      </div>
+
+                      {/* Grid Header labels for desktop */}
+                      <div className="hidden md:grid grid-cols-12 gap-2 text-[10px] font-black text-slate-500 uppercase tracking-wider pb-1 px-2.5">
+                        <div className="col-span-3 text-start">{isAr ? 'اسم المنتج أو الرابط' : 'Item Name / Link'}</div>
+                        <div className="col-span-2 text-center">{isAr ? 'السعر (SAR)' : 'Price (SAR)'}</div>
+                        <div className="col-span-1 text-center">{isAr ? 'الكمية' : 'Qty'}</div>
+                        {formData.orderSourceType === 'Factory' ? (
+                          <>
+                            <div className="col-span-1 text-center">{isAr ? 'وزن (KG)' : 'Weight'}</div>
+                            <div className="col-span-1 text-center">CBM</div>
+                            <div className="col-span-1 text-center">{isAr ? 'طول' : 'L'}</div>
+                            <div className="col-span-1 text-center">{isAr ? 'عرض' : 'W'}</div>
+                            <div className="col-span-1 text-center">{isAr ? 'ارتفاع' : 'H'}</div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="col-span-2 text-center">{isAr ? 'رابط المنتج' : 'URL Link'}</div>
+                            <div className="col-span-3 text-center">{isAr ? 'رقم التتبع للمنتج' : 'Product Tracking'}</div>
+                          </>
+                        )}
+                        <div className="col-span-1 text-center">{isAr ? 'حذف' : 'Del'}</div>
+                      </div>
+
+                      <div className="space-y-2.5">
+                        {items.map((item, idx) => (
+                          <div key={idx} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-2.5 bg-slate-900/40 border border-slate-850/50 rounded-2xl">
+
+                            {/* Name */}
+                            <div className="col-span-3">
+                              <input
+                                required
+                                type="text"
+                                value={item.productName || ''}
+                                onChange={(e) => updateItemRow(idx, 'productName', e.target.value)}
+                                placeholder={isAr ? "اسم المنتج..." : "Product Name"}
+                                className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2 outline-none font-bold text-[11px] text-start"
+                              />
+                            </div>
+
+                            {/* Price */}
+                            <div className="col-span-2">
+                              <input
+                                required
+                                type="number"
+                                value={item.productPrice || 0}
+                                onChange={(e) => updateItemRow(idx, 'productPrice', parseFloat(e.target.value) || 0)}
+                                className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2 outline-none font-bold text-[11px] font-mono text-center"
+                              />
+                            </div>
+
+                            {/* Quantity */}
+                            <div className="col-span-1">
+                              <input
+                                required
+                                type="number"
+                                value={item.quantity || 1}
+                                onChange={(e) => updateItemRow(idx, 'quantity', parseInt(e.target.value) || 0)}
+                                className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2 outline-none font-bold text-[11px] font-mono text-center"
+                              />
+                            </div>
+
+                            {/* Source Type switch fields */}
+                            {formData.orderSourceType === 'Factory' ? (
+                              <>
+                                {/* Weight */}
+                                <div className="col-span-1">
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    value={item.weight ?? ''}
+                                    onChange={(e) => updateItemRow(idx, 'weight', e.target.value)}
+                                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2 outline-none font-bold text-[11px] font-mono text-center"
+                                  />
+                                </div>
+                                {/* CBM */}
+                                <div className="col-span-1">
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    value={item.cbm ?? ''}
+                                    onChange={(e) => updateItemRow(idx, 'cbm', e.target.value)}
+                                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2 outline-none font-bold text-[11px] font-mono text-center"
+                                  />
+                                </div>
+                                {/* Length */}
+                                <div className="col-span-1">
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    value={item.length ?? ''}
+                                    onChange={(e) => {
+                                      const newL = e.target.value;
+                                      const w = parseFloat(item.width || 0);
+                                      const h = parseFloat(item.height || 0);
+                                      updateItemRow(idx, 'length', newL);
+                                      updateItemRow(idx, 'cbm', parseFloat(((parseFloat(newL || '0') * w * h) / 1000000).toFixed(6)));
+                                    }}
+                                    placeholder="L"
+                                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2 outline-none font-bold text-[11px] font-mono text-center"
+                                  />
+                                </div>
+                                {/* Width */}
+                                <div className="col-span-1">
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    value={item.width ?? ''}
+                                    onChange={(e) => {
+                                      const newW = e.target.value;
+                                      const l = parseFloat(item.length || 0);
+                                      const h = parseFloat(item.height || 0);
+                                      updateItemRow(idx, 'width', newW);
+                                      updateItemRow(idx, 'cbm', parseFloat(((l * parseFloat(newW || '0') * h) / 1000000).toFixed(6)));
+                                    }}
+                                    placeholder="W"
+                                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2 outline-none font-bold text-[11px] font-mono text-center"
+                                  />
+                                </div>
+                                {/* Height */}
+                                <div className="col-span-1">
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    value={item.height ?? ''}
+                                    onChange={(e) => {
+                                      const newH = e.target.value;
+                                      const l = parseFloat(item.length || 0);
+                                      const w = parseFloat(item.width || 0);
+                                      updateItemRow(idx, 'height', newH);
+                                      updateItemRow(idx, 'cbm', parseFloat(((l * w * parseFloat(newH || '0')) / 1000000).toFixed(6)));
+                                    }}
+                                    placeholder="H"
+                                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2 outline-none font-bold text-[11px] font-mono text-center"
+                                  />
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                {/* Product URL */}
+                                <div className="col-span-2">
+                                  <input
+                                    type="text"
+                                    value={item.productUrl || ''}
+                                    onChange={(e) => updateItemRow(idx, 'productUrl', e.target.value)}
+                                    placeholder={isAr ? "رابط المنتج..." : "Product Link"}
+                                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2 outline-none font-bold text-[11px] text-start"
+                                  />
+                                </div>
+                                {/* Tracking Number */}
+                                <div className="col-span-3">
+                                  <input
+                                    type="text"
+                                    value={item.trackingNumber || ''}
+                                    onChange={(e) => updateItemRow(idx, 'trackingNumber', e.target.value)}
+                                    placeholder={isAr ? "كود تتبع الطرد للمنتج" : "Item Tracking Number"}
+                                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2 outline-none font-bold text-[11px] text-start font-mono"
+                                  />
+                                </div>
+                              </>
+                            )}
+
+                            {/* Remove Button */}
+                            <div className="col-span-1 flex justify-center">
+                              <button
+                                type="button"
+                                onClick={() => removeItemRow(idx)}
+                                disabled={items.length === 1}
+                                className="text-rose-500 hover:text-white hover:bg-rose-600/20 p-2 rounded-xl transition disabled:opacity-30 cursor-pointer"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Adjustments row: Bank Commission & Coupon discounts */}
+                      {(formData.orderSourceType === 'App' || formData.orderSourceType === 'SHEIN') && (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-3 border-t border-slate-850/65">
+                          {/* Bank Commission Checkbox & Rate */}
+                          {formData.orderSourceType === 'App' || formData.orderSourceType === 'SHEIN' ? (
+                            <div className="flex flex-col gap-2 bg-slate-900/40 p-3 rounded-2xl border border-slate-850">
+                              <div className="flex items-center gap-3">
+                                <input
+                                  type="checkbox"
+                                  id="bank-comm-check"
+                                  checked={bankCommissionEnabled}
+                                  onChange={(e) => setBankCommissionEnabled(e.target.checked)}
+                                  className="rounded bg-slate-950 border-slate-800 text-yellow-600 focus:ring-0 w-4 h-4 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                />
+                                <label
+                                  htmlFor="bank-comm-check"
+                                  className={`text-[11px] font-bold text-slate-350 cursor-pointer`}
+                                >
+                                  {isAr ? 'عمولة البنك' : 'Bank Commission'}
+                                </label>
+                              </div>
+                              {bankCommissionEnabled && (
+                                <div className="flex items-center gap-2">
+                                  <select
+                                    value={bankCommissionType}
+                                    onChange={(e) => setBankCommissionType(e.target.value as 'percentage' | 'fixed')}
+                                    className="bg-slate-950 border border-slate-800 text-slate-300 rounded-xl p-1 text-[10px] focus:ring-[#d4af37] focus:border-[#d4af37]"
+                                  >
+                                    <option value="percentage">{isAr ? 'نسبة (%)' : 'Percentage (%)'}</option>
+                                    <option value="fixed">{isAr ? 'مبلغ ثابت' : 'Fixed Amount'}</option>
+                                  </select>
+                                  <input
+                                    type="number"
+                                    value={bankCommissionRate}
+                                    onChange={(e) => setBankCommissionRate(parseFloat(e.target.value) || 0)}
+                                    className="w-16 bg-slate-950 border border-slate-800 text-white rounded-xl p-1 text-center font-mono font-bold text-[10px] focus:ring-[#d4af37] focus:border-[#d4af37]"
+                                    placeholder={bankCommissionType === 'percentage' ? '%' : 'SAR'}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="hidden md:block"></div>
+                          )}
+
+                          {/* Coupon Discount Checkbox & Rate */}
+                          <div className="flex items-center gap-3 bg-slate-900/40 p-3 rounded-2xl border border-slate-850">
+                            <input
+                              type="checkbox"
+                              id="coupon-check"
+                              checked={couponEnabled}
+                              onChange={(e) => setCouponEnabled(e.target.checked)}
+                              className="rounded bg-slate-950 border-slate-800 text-yellow-600 focus:ring-0 w-4 h-4 cursor-pointer"
+                            />
+                            <label htmlFor="coupon-check" className="text-[11px] font-bold text-slate-350 cursor-pointer">{isAr ? 'كوبون خصم (مبلغ)' : 'Coupon Discount (Amount)'}</label>
+                            {couponEnabled && (
+                              <input
+                                type="number"
+                                value={couponRate}
+                                onChange={(e) => setCouponRate(parseFloat(e.target.value) || 0)}
+                                className="w-16 bg-slate-950 border border-slate-800 text-white rounded-xl p-1 text-center font-mono font-bold text-[10px]"
+                                placeholder="0.00"
+                              />
+                            )}
+                          </div>
+
+                          {/* Add Shipping Checkbox */}
+                          {formData.orderSourceType === 'App' ? (
+                            <div className="flex items-center gap-3 bg-slate-900/40 p-3 rounded-2xl border border-slate-850">
+                              <input
+                                type="checkbox"
+                                id="add-shipping-check"
+                                checked={addShippingEnabled}
+                                onChange={(e) => setAddShippingEnabled(e.target.checked)}
+                                className="rounded bg-slate-950 border-slate-800 text-yellow-600 focus:ring-0 w-4 h-4 cursor-pointer"
+                              />
+                              <label htmlFor="add-shipping-check" className="text-[11px] font-bold text-slate-350 cursor-pointer">{isAr ? 'إضافة شحن للطلب' : 'Add Shipping Costs'}</label>
+                            </div>
+                          ) : (
+                            <div className="hidden md:block"></div>
+                          )}
+                        </div>
                       )}
 
-                      <div>
-                        <label className="block text-[10px] text-slate-500 uppercase tracking-widest block leading-none mb-1.5">{isAr ? 'رسوم تغليف وشحن محلي (SAR)' : 'KSA Wrapping Fee and local shipping (SAR)'}</label>
-                        <input
-                          type="number"
-                          value={formData.packagingFee || ''}
-                          onChange={(e) => setFormData({ ...formData, packagingFee: parseFloat(e.target.value) || 0 })}
-                          disabled={!canEditOrderDefaultsCreation}
-                          className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none font-mono text-[11px] disabled:opacity-50 disabled:cursor-not-allowed"
-                          placeholder="0.00"
-                        />
-                      </div>
+                      {/* Subtotals calculations summary */}
+                      {(formData.orderSourceType === 'App' || formData.orderSourceType === 'SHEIN') && (
+                        <div className="pt-2 flex justify-between text-[11px] font-bold text-slate-500 border-t border-slate-850/50 mt-2">
+                          <div>
+                            {isAr ? 'إجمالي المنتجات الأصلي:' : 'Original Products Subtotal:'}{' '}
+                            <span className="font-mono text-slate-300">{calcs.productsSum.toLocaleString()} SAR</span>
+                          </div>
+                          {couponEnabled && (
+                            <div>
+                              {isAr ? 'الإجمالي بعد التعديل (الخصم/العمولة):' : 'Adjusted Products Subtotal (Discount/Comm):'}{' '}
+                              <span className="font-mono text-emerald-400 font-black">{calcs.totalProductsCostWithAdjustments.toLocaleString()} SAR</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
 
-                      <div>
-                        <label className="block text-[10px] text-slate-500 uppercase tracking-widest block leading-none mb-1.5">{isAr ? 'العملة والتحصيل المالي' : 'Collection Currency'}</label>
-                        <select
-                          value={formData.currency}
-                          onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
-                          className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none text-[11px]"
-                        >
-                          {activeCurrencies.map(c => (
-                            <option key={c.code} value={c.code}>
-                              {isAr ? (c.main_nameAR || c.sup_nameAR || c.code) : (c.main_nameEn || c.sup_nameEn || c.code)} ({c.code})
-                            </option>
+                      {/* Factory specifics: Total weight and volume */}
+                      {formData.orderSourceType === 'Factory' && (
+                        <div className="p-3 bg-slate-900/40 border border-slate-850 rounded-2xl flex justify-between text-[11px] font-bold text-slate-400 mt-2">
+                          <div>
+                            {isAr ? 'إجمالي الوزن:' : 'Total Weight:'}{' '}
+                            <span className="font-mono text-amber-500 font-black">{calcs.totalWeight.toLocaleString()} {isAr ? 'كجم' : 'kg'}</span>
+                          </div>
+                          <div>
+                            {isAr ? 'إجمالي الحجم:' : 'Total Volume:'}{' '}
+                            <span className="font-mono text-blue-400 font-black">{calcs.totalCBM.toFixed(6)} CBM</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Section 3: Shipping manifestation details */}
+                    {formData.orderSourceType !== 'SHEIN' && (formData.orderSourceType !== 'App' || addShippingEnabled) && (
+                      <div className="space-y-4 bg-slate-950/20 border border-slate-850 p-5 rounded-3xl">
+                        <div className="flex justify-between items-center border-b border-slate-800 pb-3 flex-wrap gap-2">
+                          <div className="text-start">
+                            <span className="text-xs font-black text-white block">{isAr ? 'تفاصيل شحنات المسار اللوجيستي' : 'Shipping Manifest Tracks'}</span>
+                            <span className="text-[10px] text-slate-500 font-bold mt-0.5">{isAr ? 'أدخل مسارات الشحن المعتمدة لهذا الطرد للتدقيق' : 'Define transport companies and costs for delivery tracks'}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={addShippingRow}
+                            className="bg-emerald-600/10 hover:bg-emerald-650/20 text-emerald-400 px-3 py-1.5 rounded-xl text-[10px] font-black transition-all flex items-center gap-1"
+                          >
+                            ➕ {isAr ? 'إضافة تفاصيل شحن' : 'Add Shipping Track'}
+                          </button>
+                        </div>
+
+                        <div className="space-y-3.5">
+                          {shippings && shippings.map((sh, idx) => (
+                            <div key={sh.id || idx} className="bg-slate-900/40 p-4 rounded-2xl border border-slate-850 space-y-3 relative">
+                              {/* Segment title and remove action */}
+                              <div className="flex justify-between items-center border-b border-slate-850/50 pb-2">
+                                <span className="text-[10px] font-black text-[#d4af37] bg-[#d4af37]/5 px-2 py-0.5 rounded">
+                                  {isAr ? `مسار الشحن #${idx + 1}` : `Shipping Track #${idx + 1}`}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => removeShippingRow(idx)}
+                                  className="text-rose-500 hover:text-rose-400 p-1 rounded hover:bg-rose-950/10 transition-all font-bold text-[10px] flex items-center gap-1"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  {isAr ? 'إلغاء المسار' : 'Delete Segment'}
+                                </button>
+                              </div>
+
+                              {/* Manifest inputs */}
+                              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-[11px] text-start font-bold">
+                                {/* 1. Mode */}
+                                <div>
+                                  <label className="block text-slate-500 mb-1">{isAr ? 'نوع الشحن' : 'Mode'}</label>
+                                  <select
+                                    value={sh.shippingType || 'بري'}
+                                    onChange={(e) => updateShippingRow(idx, 'shippingType', e.target.value)}
+                                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold"
+                                  >
+                                    <option value="بري">{isAr ? 'Overland بري' : 'Land - Overland'}</option>
+                                    <option value="جوي">{isAr ? 'Air Freight جوي' : 'Air - Air Freight'}</option>
+                                    <option value="بحري">{isAr ? 'Ocean Cargo بحري' : 'Sea - Ocean Cargo'}</option>
+                                  </select>
+                                </div>
+
+                                {/* 2. Carrier company */}
+                                <div>
+                                  <div className="flex justify-between items-center mb-1">
+                                    <label className="block text-slate-400">{isAr ? 'شركة الشحن' : 'Carrier'}</label>
+                                    {(role === 'Admin' || hasPermission('add_sources')) && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setActiveAddShippingIndex(idx);
+                                          setIsAddShippingCompanyOpen(true);
+                                        }}
+                                        className="text-[10px] font-black text-cyan-400 hover:underline flex items-center gap-0.5"
+                                      >
+                                        ➕ {isAr ? 'جديدة' : 'New'}
+                                      </button>
+                                    )}
+                                  </div>
+                                  <select
+                                    value={sh.shippingCompany || ''}
+                                    onChange={(e) => updateShippingRow(idx, 'shippingCompany', e.target.value)}
+                                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold"
+                                  >
+                                    <option value="">{isAr ? '-- اختر شركة شحن --' : '-- Choose carrier --'}</option>
+                                    {shippingCompanies.map(c => (
+                                      <option key={c.id} value={c.name}>{c.name}</option>
+                                    ))}
+                                  </select>
+                                </div>
+
+                                {/* 3. Tracking Number */}
+                                <div>
+                                  <label className="block text-slate-500 mb-1">{isAr ? 'رقم التتبع للشحنة' : 'Tracking Number'}</label>
+                                  <input
+                                    type="text"
+                                    value={sh.trackingNumber || ''}
+                                    onChange={(e) => updateShippingRow(idx, 'trackingNumber', e.target.value)}
+                                    placeholder={isAr ? "رقم التتبع المخصص للشحنة" : "Cargo tracking ID"}
+                                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-mono placeholder-slate-650"
+                                  />
+                                </div>
+
+                                {/* 4. Shipping Cost */}
+                                <div>
+                                  <label className="block text-slate-500 mb-1">{isAr ? 'أجرة وتكاليف النقل (ريال سعودي)' : 'Shipping Cost (SAR)'}</label>
+                                  <input
+                                    type="number"
+                                    required
+                                    value={sh.shippingCost || 0}
+                                    onChange={(e) => updateShippingRow(idx, 'shippingCost', parseFloat(e.target.value) || 0)}
+                                    className="w-full bg-slate-950 border border-slate-800 text-[#d4af37] rounded-xl p-2.5 outline-none font-mono"
+                                  />
+                                </div>
+
+                                {/* 5. Origin */}
+                                <div>
+                                  <label className="block text-slate-500 mb-1">{isAr ? 'مكان التصدير' : 'Source'}</label>
+                                  <input
+                                    type="text"
+                                    required
+                                    value={sh.shippingSource || ''}
+                                    onChange={(e) => updateShippingRow(idx, 'shippingSource', e.target.value)}
+                                    placeholder={isAr ? "مثال: الصين، دبي" : "Source country"}
+                                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none placeholder-slate-600"
+                                  />
+                                </div>
+
+                                {/* 6. Destination */}
+                                <div>
+                                  <label className="block text-slate-500 mb-1">{isAr ? 'مكان الاستلام' : 'Destination'}</label>
+                                  <input
+                                    type="text"
+                                    required
+                                    value={sh.shippingDestination || ''}
+                                    onChange={(e) => updateShippingRow(idx, 'shippingDestination', e.target.value)}
+                                    placeholder={isAr ? "مثال: مستودع صنعاء" : "Destination depot"}
+                                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none placeholder-slate-600"
+                                  />
+                                </div>
+
+                                {/* 7. Dispatch / Departure Date - defaults to today, editable, with calendar picker */}
+                                <div>
+                                  <label className="block text-slate-500 mb-1">{isAr ? 'تاريخ انطلاق الشحن' : 'Dispatch Date'}</label>
+                                  <div className="relative">
+                                    <input
+                                      type="date"
+                                      id={`dispatch-date-${idx}`}
+                                      value={sh.shippingDate || ''}
+                                      onChange={(e) => {
+                                        const newDate = e.target.value;
+                                        let expected = sh.expectedArrival || '';
+                                        if (newDate && sh.shippingDuration) {
+                                          const days = parseInt(sh.shippingDuration);
+                                          if (!isNaN(days)) {
+                                            const dateObj = new Date(newDate);
+                                            dateObj.setDate(dateObj.getDate() + days);
+                                            expected = dateObj.toISOString().split('T')[0];
+                                          }
+                                        }
+                                        updateShippingRow(idx, { shippingDate: newDate, expectedArrival: expected });
+                                      }}
+                                      className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans pr-9"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const el = document.getElementById(`dispatch-date-${idx}`);
+                                        if (el) (el as HTMLInputElement).showPicker?.();
+                                      }}
+                                      className="absolute inset-y-0 end-2.5 flex items-center text-slate-500 hover:text-[#d4af37] transition"
+                                    >
+                                      <Calendar className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* 8. Transit Duration - auto-filled from settings by source type, editable */}
+                                <div>
+                                  <label className="block text-slate-500 mb-1">{isAr ? 'المدة التقديرية (أيام)' : 'Transit Duration (Days)'}</label>
+                                  <div className="relative">
+                                    <input
+                                      type="number"
+                                      value={sh.shippingDuration || ''}
+                                      onChange={(e) => {
+                                        const durationVal = e.target.value;
+                                        let expected = sh.expectedArrival || '';
+                                        if (sh.shippingDate && durationVal) {
+                                          const days = parseInt(durationVal);
+                                          if (!isNaN(days)) {
+                                            const dateObj = new Date(sh.shippingDate);
+                                            dateObj.setDate(dateObj.getDate() + days);
+                                            expected = dateObj.toISOString().split('T')[0];
+                                          }
+                                        }
+                                        updateShippingRow(idx, { shippingDuration: durationVal, expectedArrival: expected });
+                                      }}
+                                      placeholder={isAr ? "مثال: 12 يوم" : "e.g. 12"}
+                                      className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none placeholder-slate-655 font-mono pr-9"
+                                    />
+                                    <span className="absolute inset-y-0 end-2.5 flex items-center text-slate-600 text-[10px] font-bold pointer-events-none">
+                                      {isAr ? 'يوم' : 'd'}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* 9. Expected Arrival - auto-calculated from dispatch date + duration, editable */}
+                                <div>
+                                  <label className="block text-slate-500 mb-1">{isAr ? 'موعد الوصول المتوقع' : 'Expected Arrival'}</label>
+                                  <div className="relative">
+                                    <input
+                                      type="date"
+                                      id={`expected-date-${idx}`}
+                                      value={sh.expectedArrival || ''}
+                                      onChange={(e) => updateShippingRow(idx, 'expectedArrival', e.target.value)}
+                                      className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans pr-9"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const el = document.getElementById(`expected-date-${idx}`);
+                                        if (el) (el as HTMLInputElement).showPicker?.();
+                                      }}
+                                      className="absolute inset-y-0 end-2.5 flex items-center text-slate-500 hover:text-emerald-400 transition"
+                                    >
+                                      <Calendar className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* 10. Packaging Fees (SAR fixed amount) */}
+                                <div className="col-span-2">
+                                  <label className="block text-slate-500 mb-1">{isAr ? 'أجور التغليف والصناديق (SAR)' : 'Packaging Fees (SAR)'}</label>
+                                  <input
+                                    type="number"
+                                    value={sh.packagingFees || 0}
+                                    onChange={(e) => updateShippingRow(idx, 'packagingFees', parseFloat(e.target.value) || 0)}
+                                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-mono"
+                                  />
+                                </div>
+                              </div>
+                            </div>
                           ))}
-                        </select>
-                      </div>
+                        </div>
 
-                      <div>
-                        <label className="block text-[10px] text-slate-500 uppercase tracking-widest block leading-none mb-1.5">{isAr ? 'سعر الصرف (ريال يمني)' : 'Exchange Rate (YER)'}</label>
-                        <input
-                          type="number"
-                          value={formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER}
-                          onChange={(e) => {
-                            const val = parseFloat(e.target.value) || 1;
-                            if (formData.currency === 'USD') {
-                              setFormData({ ...formData, exchangeRateUSD: val });
-                            } else {
-                              setFormData({ ...formData, exchangeRateYER: val });
-                            }
-                          }}
-                          disabled={!canEditOrderDefaultsCreation}
-                          className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none font-mono text-[11px] text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                        />
-                      </div>
+                        {/* Show CBM under shipping rows for Factory */}
+                        {formData.orderSourceType === 'Factory' && (
+                          <div className="p-3 bg-slate-900/40 border border-slate-850 rounded-2xl flex justify-between text-[11px] font-bold text-slate-400 mt-2 text-start">
+                            <div>
+                              {isAr ? 'إجمالي الـ CBM للمنتجات:' : 'Total Products CBM:'}{' '}
+                              <span className="font-mono text-blue-400 font-black">{calcs.totalCBM.toFixed(6)} m³</span>
+                            </div>
+                          </div>
+                        )}
 
-                      <div className="md:col-span-2 mt-2">
-                        <label className="flex items-center gap-2 cursor-pointer bg-slate-900/40 p-3 rounded-xl border border-slate-800 hover:bg-slate-900 transition">
+                        {/* Carrier packaging fee - fixed SAR amount added to shipping cost */}
+                        <div className="flex items-center gap-3 bg-slate-900/40 p-3 rounded-2xl border border-slate-850 mt-3 text-start">
                           <input
                             type="checkbox"
-                            checked={formData.deductSourcingCostFromCourier || false}
-                            onChange={(e) => setFormData({ ...formData, deductSourcingCostFromCourier: e.target.checked })}
-                            className="w-4 h-4 rounded border-slate-700 bg-slate-950 text-[#d4af37] focus:ring-0 focus:ring-offset-0 cursor-pointer accent-[#d4af37]"
+                            id="packaging-fee-check"
+                            checked={packagingFeeEnabled}
+                            onChange={(e) => setPackagingFeeEnabled(e.target.checked)}
+                            //disabled={!canEditOrderDefaultsCreation}
+                            className="rounded bg-slate-950 border-slate-800 text-yellow-600 focus:ring-0 w-4 h-4 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                           />
-                          <span className="text-[11px] font-bold text-slate-300">{isAr ? 'خصم تكاليف شراء المنتجات من حساب مندوب التجميع حالاً' : 'Deduct Orignal Products Cost from Collecting Courier Liability Now'}</span>
-                        </label>
+                          <label
+                            htmlFor="packaging-fee-check"
+                            className={`text-[11px] font-bold text-slate-350 ${!canEditOrderDefaultsCreation ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                          >
+                            {isAr ? 'إضافة رسوم تغليف شركة الشحن (ريال ثابت)' : 'Add carrier packaging fee (fixed SAR)'}
+                          </label>
+                          {packagingFeeEnabled && (
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                value={packagingFeeRate}
+                                onChange={(e) => canEditOrderDefaultsCreation && setPackagingFeeRate(parseFloat(e.target.value) || 0)}
+                                disabled={!canEditOrderDefaultsCreation}
+                                className="w-20 bg-slate-950 border border-slate-800 text-white rounded-xl p-1.5 text-center font-mono font-bold text-[11px] disabled:opacity-50 disabled:cursor-not-allowed"
+                                placeholder="0"
+                              />
+                              <span className="text-[10px] text-slate-500 font-bold">SAR</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Section 4: Couriers & Local Logistics Drivers */}
+                    <div className="space-y-4 bg-slate-955/20 border border-slate-800 p-5 rounded-3xl">
+                      <span className="block text-xs font-black text-white text-start mb-2">{isAr ? 'المناديب واللوجستيات الميدانية' : 'Field Logistics Drivers'}</span>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-[11px] text-start font-bold">
+                        {/* Saudi Courier */}
+                        <div>
+                          <label className="block text-slate-500 mb-1">{isAr ? 'موظف التعبئة والتجميع (سعودي)' : 'Saudi Partner Aggregator'}</label>
+                          <select
+                            value={formData.shippingCourierId}
+                            onChange={(e) => setFormData({ ...formData, shippingCourierId: e.target.value })}
+                            className="w-full bg-slate-950 border border-slate-855 text-white rounded-xl p-3 outline-none text-[11px] font-bold"
+                          >
+                            <option value="">{isAr ? '-- اختر موظف التجميع --' : '-- Choose Aggregator --'}</option>
+                            {couriers.filter(c => c.courierType === 'sourcing').map(c => (
+                              <option key={c.id} value={c.id}>
+                                {c.fullName}
+                              </option>
+                            ))}
+                          </select>
+
+                          {/* Display commission rate indicator */}
+                          {formData.shippingCourierId && (
+                            <div className="text-[10px] text-[#d4af37] font-bold mt-1">
+                              {isAr ? 'عمولة الشريك المحددة:' : 'Aggregator rate:'}{' '}
+                              <span className="font-mono">
+                                {(() => {
+                                  const found = couriers.find(c => c.id === formData.shippingCourierId);
+                                  return found && found.commissionRate !== undefined ? found.commissionRate : '30';
+                                })()}%
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Yemen Driver */}
+                        <div>
+                          <label className="block text-slate-500 mb-1">{isAr ? 'مندوب التوزيع النهائي (اليمن)' : 'Yemen Delivery Driver'}</label>
+                          <select
+                            value={formData.deliveryCourierId}
+                            onChange={(e) => setFormData({ ...formData, deliveryCourierId: e.target.value })}
+                            className="w-full bg-slate-950 border border-slate-855 text-white rounded-xl p-3 outline-none text-[11px] font-bold"
+                          >
+                            <option value="">{isAr ? '-- اختر مندوب التوصيل --' : '-- Choose Yemen Driver --'}</option>
+                            {couriers.filter(c => c.courierType === 'local' || !c.courierType).map(c => (
+                              <option key={c.id} value={c.id}>
+                                {c.fullName} {c.governorate || c.provinceId ? `(${c.governorate || c.provinceId})` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Yemen Driver Flat Fee */}
+                        <div>
+                          <label className="block text-slate-500 mb-1">{isAr ? 'رسوم التوصيل لليمن (ريال يمني)' : 'Delivery Courier Fee (YER)'}</label>
+                          <input
+                            type="number"
+                            value={formData.deliveryCourierFee}
+                            onChange={(e) => setFormData({ ...formData, deliveryCourierFee: parseFloat(e.target.value) || 0 })}
+                            disabled={!canEditOrderDefaultsCreation}
+                            className="w-full bg-slate-950 border border-slate-855 text-white rounded-xl p-3 outline-none font-mono text-xs text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                          />
+                        </div>
                       </div>
                     </div>
 
-                    {/* Audit summary calculations details panel */}
-                    <div className="p-5 bg-slate-950 rounded-2xl border border-slate-800 shadow-xl space-y-4 text-xs mt-2 relative overflow-hidden group">
-                      <div className="absolute top-0 right-0 w-24 h-24 bg-[#d4af37]/5 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
+                    {/* Section 5: Financial calculations parameters */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-slate-950/30 border border-slate-800 p-6 rounded-3xl text-[11px] font-bold text-slate-400 text-start">
 
-                      <div className="flex items-center gap-2 pb-3 border-b border-slate-800/80">
-                        <Calculator className="w-4 h-4 text-[#d4af37]" />
-                        <span className="text-[11px] text-slate-300 font-extrabold uppercase tracking-widest">{isAr ? 'خلاصة كشف الحساب المالي (مفصل)' : 'Detailed Financial Audit Report'}</span>
-                      </div>
+                      {/* Inputs for pricing parameters */}
+                      <div className="space-y-4 col-span-2 grid grid-cols-2 gap-3 self-start">
 
-                      <div className="space-y-3">
-                        {/* Products Cost */}
-                        <div className="flex justify-between items-center text-slate-400">
-                          <span className="font-medium">{isAr ? 'قيمة المنتجات الأصلية:' : 'Original Products Subtotal:'}</span>
-                          <div className="text-right">
-                            <span className="font-mono text-white block">{calcs.productsSum.toLocaleString()} SAR</span>
-                            <span className="font-mono text-[9px] text-slate-500 block">{(calcs.productsSum * (formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER)).toLocaleString()} YER</span>
-                          </div>
-                        </div>
-
-                        {/* Bank Commission section */}
-                        {bankCommissionEnabled && calcs.bankCommissionSAR > 0 && (
-                          <div className="flex justify-between items-center text-amber-500/80">
-                            <span className="font-medium">
-                              {isAr
-                                ? `عمولة البنك (${bankCommissionType === 'percentage' ? bankCommissionRate + '%' : bankCommissionRate + ' SAR'}):`
-                                : `Bank Fee (${bankCommissionType === 'percentage' ? bankCommissionRate + '%' : bankCommissionRate + ' SAR'}):`}
-                            </span>
-                            <div className="text-right">
-                              <span className="font-mono block">-{calcs.bankCommissionSAR.toLocaleString()} SAR</span>
-                              <span className="font-mono text-[9px] opacity-70 block">-{(calcs.bankCommissionSAR * (formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER)).toLocaleString()} YER</span>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Coupon Discount */}
-                        {couponEnabled && calcs.couponValue > 0 && (
-                          <div className="flex justify-between items-center text-rose-400/90">
-                            <span className="font-medium">{isAr ? 'كوبون الخصم النشط (مبلغ):' : 'Active Coupon Discount (Amount):'}</span>
-                            <div className="text-right">
-                              <span className="font-mono block">-{calcs.couponValue.toLocaleString()} SAR</span>
-                              <span className="font-mono text-[9px] opacity-70 block">-{(calcs.couponValue * (formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER)).toLocaleString()} YER</span>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Adjusted Products Price */}
-                        <div className="flex justify-between items-center text-slate-350 bg-slate-900/50 p-2.5 rounded-xl border border-slate-800/50">
-                          <span className="text-[10px] font-bold">{isAr ? 'إجمالي المنتجات المعدل:' : 'Adjusted Products Total:'}</span>
-                          <div className="text-right">
-                            <span className="font-mono text-emerald-100 block">{calcs.totalProductsCostWithAdjustments.toLocaleString()} SAR</span>
-                            <span className="font-mono text-[9px] text-slate-500 block">{(calcs.totalProductsCostWithAdjustments * (formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER)).toLocaleString()} YER</span>
-                          </div>
-                        </div>
-
-                        {/* Factory specifics OR ordinary shipping fee */}
-                        {(formData.orderSourceType === 'Factory' || calcs.shippingCostSAR > 0) && (
-                          <div className="pt-2 border-t border-slate-800/50 space-y-3">
-                            <span className="text-[9px] text-slate-500 font-extrabold uppercase tracking-wider block">{isAr ? 'تفاصيل أجور الشحن والنقل الدولي' : 'Logistics & Freight Cost'}</span>
-
-                            {formData.orderSourceType === 'Factory' && (
-                              <div className="flex items-center gap-4 bg-slate-900 p-2.5 rounded-xl border border-slate-800">
-                                <div className="flex-1">
-                                  <span className="block text-[9px] text-slate-500 uppercase">{isAr ? 'الوزن الفعلي (كجم)' : 'Weight (KG)'}</span>
-                                  <span className="font-mono text-amber-500/90 font-bold">{calcs.totalWeight}</span>
-                                </div>
-                                <div className="w-[1px] h-6 bg-slate-800"></div>
-                                <div className="flex-1">
-                                  <span className="block text-[9px] text-slate-500 uppercase">{isAr ? 'الحجم الفعلي (CBM)' : 'Volume (CBM)'}</span>
-                                  <span className="font-mono text-blue-400/90 font-bold">{calcs.totalCBM}</span>
-                                </div>
-                              </div>
-                            )}
-
-                            <div className="flex justify-between items-center text-slate-350">
-                              <span className="font-medium">{isAr ? 'تكلفة النقل والشحن الدولي:' : 'International Freight Fee:'}</span>
-                              <div className="text-right">
-                                <span className="font-mono text-white block">{calcs.shippingCostSAR.toLocaleString()} SAR</span>
-                                <span className="font-mono text-[9px] text-slate-500 block">{(calcs.shippingCostSAR * (formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER)).toLocaleString()} YER</span>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* KSA Packaging Fee */}
-                        {parseFloat(formData.packagingFee as any) > 0 && (
-                          <div className="flex justify-between items-center text-slate-400">
-                            <span className="font-medium">{isAr ? 'رسوم التغليف العامة:' : 'General Packaging Fee:'}</span>
-                            <div className="text-right">
-                              <span className="font-mono text-white block">{parseFloat(formData.packagingFee as any).toLocaleString()} SAR</span>
-                              <span className="font-mono text-[9px] text-slate-500 block">{(parseFloat(formData.packagingFee as any) * (formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER)).toLocaleString()} YER</span>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Pre-computation Exchanged amount */}
-                        <div className="pt-4 border-t border-slate-800/80">
-                          <div className="flex justify-between items-center text-slate-400 bg-[#d4af37]/5 p-3 rounded-xl border border-[#d4af37]/20">
-                            <div>
-                              <span className="block font-bold text-[11px] text-[#d4af37]">{isAr ? 'مجموع التكلفة الإجمالية (خارجياً):' : 'Foreign Grand Total:'}</span>
-                              <span className="block text-[9px] text-yellow-600/70 mt-0.5">{isAr ? `تُحسب بسعر صرف: ${formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER} YER` : `At exchange rate: ${formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER} YER`}</span>
-                            </div>
-                            <div className="text-right">
-                              <span className="font-mono text-white text-sm font-black block">{calcs.totalOrderSAR.toLocaleString()} SAR</span>
-                              <span className="font-mono text-[10px] text-[#d4af37] block mt-0.5 font-bold">{(calcs.totalOrderSAR * (formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER)).toLocaleString()} YER</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex justify-between items-center text-slate-300 pt-3">
-                          <span className="font-medium">{isAr ? 'المقدار المستحق للمندوب (توصيل يمني):' : 'Local Courier/Yemen Delivery Fee:'}</span>
-                          <span className="font-mono text-white bg-slate-900 border border-slate-700 px-2.5 py-1 rounded-lg">+{parseFloat(formData.deliveryCourierFee as any).toLocaleString()} YER</span>
-                        </div>
-
-                        {/* Final Grand Total */}
-                        <div className="flex justify-between items-center pt-4 mt-2 border-t-2 border-dashed border-emerald-900/40 pb-3">
-                          <span className="font-black text-emerald-400/90 text-xs">{isAr ? 'المبلغ النهائي والمستحق إجمالاً:' : 'Final Estimated Due Amount:'}</span>
-                          <span className="font-black font-mono text-emerald-400 text-lg bg-emerald-950/20 px-3 py-1 rounded-xl border border-emerald-900/40 shadow-inner">
-                            {Math.ceil(calcs.totalOrderYER).toLocaleString()} YER
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Payment & Receipts panel */}
-                      <div className="pt-4 border-t-2 border-slate-800 space-y-4">
-                        <div className="flex flex-col space-y-2">
-                          <label className="text-[10px] text-slate-400 font-bold flex justify-between items-center">
-                            <span className="text-[#d4af37]">{isAr ? 'االدفعة المقدمة / كاش (ريال يمني)' : 'Cash/Advance Payment (YER)'}</span>
-                            <div className="flex gap-1.5 text-[9px]">
-                              <button type="button" onClick={() => setFormData({ ...formData, amountPaid: 0 })} className="px-2.5 py-0.5 rounded border border-slate-700 bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer">0</button>
-                              <button type="button" onClick={() => setFormData({ ...formData, amountPaid: Math.ceil(calcs.totalOrderYER) })} className="px-2.5 py-0.5 rounded border border-emerald-800/40 bg-emerald-900/40 text-emerald-400 hover:bg-emerald-900/60 transition cursor-pointer">{isAr ? 'سداد الكل' : 'Pay All'}</button>
-                            </div>
-                          </label>
-                          <div className="relative group">
-                            <DollarSign className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-500/50 group-focus-within:text-emerald-400 transition-colors" />
+                        {formData.orderSourceType === 'SHEIN' && (
+                          <div>
+                            <label className="block text-[10px] text-slate-500 uppercase tracking-widest block leading-none mb-1.5">
+                              {isAr ? 'سعر شي إن الأحمر (SAR)' : 'SHEIN Red Price (SAR)'}
+                            </label>
                             <input
                               type="number"
-                              value={formData.amountPaid || ''}
-                              onChange={(e) => setFormData({ ...formData, amountPaid: parseFloat(e.target.value) || 0 })}
-                              className="w-full bg-slate-950/50 border border-slate-700 focus:border-emerald-500/50 text-emerald-400 font-black rounded-xl py-3 pl-10 pr-4 outline-none font-mono text-sm shadow-inner transition-colors"
-                              placeholder="0.00 YER"
+                              value={formData.sheinRedPrice || ''}
+                              onChange={(e) => setFormData({ ...formData, sheinRedPrice: parseFloat(e.target.value) || 0 })}
+                              className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none font-mono text-[11px]"
+                              placeholder="0.00"
                             />
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3 pb-2">
-                          <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl flex flex-col justify-center">
-                            <span className="text-[9px] font-black uppercase text-slate-500 block mb-1">{isAr ? 'حالة السداد الآلية' : 'Payment Status'}</span>
-                            {Math.ceil(calcs.remainingYER) <= 0 ? (
-                              <span className="text-emerald-400 font-black flex items-center gap-1.5 text-xs"><Package className="w-3.5 h-3.5" />{isAr ? 'فاتورة مدفوعة' : 'PAID'}</span>
-                            ) : parseFloat(formData.amountPaid as any) > 0 ? (
-                              <span className="text-amber-500 font-black flex items-center gap-1.5 text-xs"><AlertCircle className="w-3.5 h-3.5" />{isAr ? 'دفع جزئي' : 'PARTIAL'}</span>
-                            ) : (
-                              <span className="text-rose-500 font-black flex items-center gap-1.5 text-xs"><AlertCircle className="w-3.5 h-3.5" />{isAr ? 'مديونية غير مسددة' : 'UNPAID'}</span>
+                            {formData.sheinRedPrice > 0 && formData.sheinRedPrice < calcs.productsSum && (
+                              <p className="text-[9px] text-red-500 mt-1 font-bold">
+                                {isAr ? '⚠️ السعر الأحمر يجب ألا يقل عن تكلفة المنتجات' : '⚠️ Red price cannot be less than products cost'}
+                              </p>
                             )}
                           </div>
+                        )}
 
-                          <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl flex flex-col justify-center">
-                            <span className="text-[9px] font-black uppercase text-slate-500 block mb-1">{isAr ? 'بوابة الدفع' : 'Pay Method'}</span>
-                            <select
-                              value={formData.paymentMethod}
-                              onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
-                              className="w-full bg-transparent text-white font-bold text-xs outline-none cursor-pointer"
-                            >
-                              <option value="Cash" className="bg-slate-900">{isAr ? 'نقد كاش' : 'Cash'}</option>
-                              <option value="Bank Transfer" className="bg-slate-900">{isAr ? 'تحويل بنكي' : 'Bank Transfer'}</option>
-                            </select>
+                        {formData.orderSourceType === 'Factory' && (
+                          <>
+                            <div>
+                              <label className="block text-[10px] text-slate-500 uppercase tracking-widest block leading-none mb-1.5">
+                                {isAr ? 'نسبة الربح للكيلو (SAR/كجم)' : 'Profit Rate per KG (SAR/kg)'}
+                              </label>
+                              <input
+                                type="number"
+                                step="any"
+                                value={profitPerKgRate}
+                                onChange={(e) => setProfitPerKgRate(parseFloat(e.target.value) || 0)}
+                                disabled={!canEditOrderDefaultsCreation}
+                                className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none font-mono text-[11px] disabled:opacity-50 disabled:cursor-not-allowed"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] text-slate-500 uppercase tracking-widest block leading-none mb-1.5 font-bold">
+                                {isAr ? 'سعر شحن الـ CBM (دولار USD/m³)' : 'CBM Shipping Rate (USD/m³)'}
+                              </label>
+                              <div className="flex gap-1.5">
+                                <input
+                                  type="number"
+                                  step="any"
+                                  value={cbmShippingRateValue}
+                                  onChange={(e) => setCbmShippingRateValue(parseFloat(e.target.value) || 0)}
+                                  disabled={!canEditOrderDefaultsCreation}
+                                  className="flex-1 bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none font-mono text-[11px] disabled:opacity-50 disabled:cursor-not-allowed"
+                                />
+                                {settings.cbmShippingRateApiUrl && (
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      try {
+                                        const res = await fetch(settings.cbmShippingRateApiUrl!);
+                                        if (!res.ok) throw new Error('API request failed');
+                                        const data = await res.json();
+                                        const rate = data.cbm_rate || data.rate || data.value || data.price;
+                                        if (rate && !isNaN(parseFloat(rate))) {
+                                          setCbmShippingRateValue(parseFloat(rate));
+                                          alert(isAr ? `✅ تم جلب سعر CBM الجديد: ${rate} USD/m³` : `✅ New CBM rate fetched: ${rate} USD/m³`);
+                                        } else {
+                                          throw new Error(isAr ? 'لم يتم العثور على سعر CBM' : 'CBM rate not found');
+                                        }
+                                      } catch (err: any) {
+                                        alert((isAr ? '❌ خطأ: ' : '❌ Error: ') + err.message);
+                                      }
+                                    }}
+                                    disabled={!canEditOrderDefaultsCreation}
+                                    className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white p-2 rounded-xl text-xs flex items-center justify-center transition"
+                                  >
+                                    <RefreshCw className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </>
+                        )}
+
+                        <div>
+                          <label className="block text-[10px] text-slate-500 uppercase tracking-widest block leading-none mb-1.5">{isAr ? 'رسوم تغليف وشحن محلي (SAR)' : 'KSA Wrapping Fee and local shipping (SAR)'}</label>
+                          <input
+                            type="number"
+                            value={formData.packagingFee || ''}
+                            onChange={(e) => setFormData({ ...formData, packagingFee: parseFloat(e.target.value) || 0 })}
+                            disabled={!canEditOrderDefaultsCreation}
+                            className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none font-mono text-[11px] disabled:opacity-50 disabled:cursor-not-allowed"
+                            placeholder="0.00"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] text-slate-500 uppercase tracking-widest block leading-none mb-1.5">{isAr ? 'العملة والتحصيل المالي' : 'Collection Currency'}</label>
+                          <select
+                            value={formData.currency}
+                            onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+                            className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none text-[11px]"
+                          >
+                            {activeCurrencies.map(c => (
+                              <option key={c.code} value={c.code}>
+                                {isAr ? (c.main_nameAR || c.sup_nameAR || c.code) : (c.main_nameEn || c.sup_nameEn || c.code)} ({c.code})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] text-slate-500 uppercase tracking-widest block leading-none mb-1.5">{isAr ? 'سعر الصرف (ريال يمني)' : 'Exchange Rate (YER)'}</label>
+                          <input
+                            type="number"
+                            value={formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value) || 1;
+                              if (formData.currency === 'USD') {
+                                setFormData({ ...formData, exchangeRateUSD: val });
+                              } else {
+                                setFormData({ ...formData, exchangeRateYER: val });
+                              }
+                            }}
+                            disabled={!canEditOrderDefaultsCreation}
+                            className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none font-mono text-[11px] text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                          />
+                        </div>
+
+                        <div className="md:col-span-2 mt-2">
+                          <label className="flex items-center gap-2 cursor-pointer bg-slate-900/40 p-3 rounded-xl border border-slate-800 hover:bg-slate-900 transition">
+                            <input
+                              type="checkbox"
+                              checked={formData.deductSourcingCostFromCourier || false}
+                              onChange={(e) => setFormData({ ...formData, deductSourcingCostFromCourier: e.target.checked })}
+                              className="w-4 h-4 rounded border-slate-700 bg-slate-950 text-[#d4af37] focus:ring-0 focus:ring-offset-0 cursor-pointer accent-[#d4af37]"
+                            />
+                            <span className="text-[11px] font-bold text-slate-300">{isAr ? 'خصم تكاليف شراء المنتجات من حساب مندوب التجميع حالاً' : 'Deduct Orignal Products Cost from Collecting Courier Liability Now'}</span>
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Audit summary calculations details panel */}
+                      <div className="p-5 bg-slate-950 rounded-2xl border border-slate-800 shadow-xl space-y-4 text-xs mt-2 relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-[#d4af37]/5 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
+
+                        <div className="flex items-center gap-2 pb-3 border-b border-slate-800/80">
+                          <Calculator className="w-4 h-4 text-[#d4af37]" />
+                          <span className="text-[11px] text-slate-300 font-extrabold uppercase tracking-widest">{isAr ? 'خلاصة كشف الحساب المالي (مفصل)' : 'Detailed Financial Audit Report'}</span>
+                        </div>
+
+                        <div className="space-y-3">
+                          {/* Products Cost */}
+                          <div className="flex justify-between items-center text-slate-400">
+                            <span className="font-medium">{isAr ? 'قيمة المنتجات الأصلية:' : 'Original Products Subtotal:'}</span>
+                            <div className="text-right">
+                              <span className="font-mono text-white block">{calcs.productsSum.toLocaleString()} SAR</span>
+                              <span className="font-mono text-[9px] text-slate-500 block">{(calcs.productsSum * (formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER)).toLocaleString()} YER</span>
+                            </div>
+                          </div>
+
+                          {/* Bank Commission section */}
+                          {bankCommissionEnabled && calcs.bankCommissionSAR > 0 && (
+                            <div className="flex justify-between items-center text-amber-500/80">
+                              <span className="font-medium">
+                                {isAr
+                                  ? `عمولة البنك (${bankCommissionType === 'percentage' ? bankCommissionRate + '%' : bankCommissionRate + ' SAR'}):`
+                                  : `Bank Fee (${bankCommissionType === 'percentage' ? bankCommissionRate + '%' : bankCommissionRate + ' SAR'}):`}
+                              </span>
+                              <div className="text-right">
+                                <span className="font-mono block">-{calcs.bankCommissionSAR.toLocaleString()} SAR</span>
+                                <span className="font-mono text-[9px] opacity-70 block">-{(calcs.bankCommissionSAR * (formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER)).toLocaleString()} YER</span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Coupon Discount */}
+                          {couponEnabled && calcs.couponValue > 0 && (
+                            <div className="flex justify-between items-center text-rose-400/90">
+                              <span className="font-medium">{isAr ? 'كوبون الخصم النشط (مبلغ):' : 'Active Coupon Discount (Amount):'}</span>
+                              <div className="text-right">
+                                <span className="font-mono block">-{calcs.couponValue.toLocaleString()} SAR</span>
+                                <span className="font-mono text-[9px] opacity-70 block">-{(calcs.couponValue * (formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER)).toLocaleString()} YER</span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Adjusted Products Price */}
+                          <div className="flex justify-between items-center text-slate-350 bg-slate-900/50 p-2.5 rounded-xl border border-slate-800/50">
+                            <span className="text-[10px] font-bold">{isAr ? 'إجمالي المنتجات المعدل:' : 'Adjusted Products Total:'}</span>
+                            <div className="text-right">
+                              <span className="font-mono text-emerald-100 block">{calcs.totalProductsCostWithAdjustments.toLocaleString()} SAR</span>
+                              <span className="font-mono text-[9px] text-slate-500 block">{(calcs.totalProductsCostWithAdjustments * (formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER)).toLocaleString()} YER</span>
+                            </div>
+                          </div>
+
+                          {/* Factory specifics OR ordinary shipping fee */}
+                          {(formData.orderSourceType === 'Factory' || calcs.shippingCostSAR > 0) && (
+                            <div className="pt-2 border-t border-slate-800/50 space-y-3">
+                              <span className="text-[9px] text-slate-500 font-extrabold uppercase tracking-wider block">{isAr ? 'تفاصيل أجور الشحن والنقل الدولي' : 'Logistics & Freight Cost'}</span>
+
+                              {formData.orderSourceType === 'Factory' && (
+                                <div className="flex items-center gap-4 bg-slate-900 p-2.5 rounded-xl border border-slate-800">
+                                  <div className="flex-1">
+                                    <span className="block text-[9px] text-slate-500 uppercase">{isAr ? 'الوزن الفعلي (كجم)' : 'Weight (KG)'}</span>
+                                    <span className="font-mono text-amber-500/90 font-bold">{calcs.totalWeight}</span>
+                                  </div>
+                                  <div className="w-[1px] h-6 bg-slate-800"></div>
+                                  <div className="flex-1">
+                                    <span className="block text-[9px] text-slate-500 uppercase">{isAr ? 'الحجم الفعلي (CBM)' : 'Volume (CBM)'}</span>
+                                    <span className="font-mono text-blue-400/90 font-bold">{calcs.totalCBM}</span>
+                                  </div>
+                                </div>
+                              )}
+
+                              <div className="flex justify-between items-center text-slate-350">
+                                <span className="font-medium">{isAr ? 'تكلفة النقل والشحن الدولي:' : 'International Freight Fee:'}</span>
+                                <div className="text-right">
+                                  <span className="font-mono text-white block">{calcs.shippingCostSAR.toLocaleString()} SAR</span>
+                                  <span className="font-mono text-[9px] text-slate-500 block">{(calcs.shippingCostSAR * (formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER)).toLocaleString()} YER</span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* KSA Packaging Fee */}
+                          {parseFloat(formData.packagingFee as any) > 0 && (
+                            <div className="flex justify-between items-center text-slate-400">
+                              <span className="font-medium">{isAr ? 'رسوم التغليف العامة:' : 'General Packaging Fee:'}</span>
+                              <div className="text-right">
+                                <span className="font-mono text-white block">{parseFloat(formData.packagingFee as any).toLocaleString()} SAR</span>
+                                <span className="font-mono text-[9px] text-slate-500 block">{(parseFloat(formData.packagingFee as any) * (formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER)).toLocaleString()} YER</span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Pre-computation Exchanged amount */}
+                          <div className="pt-4 border-t border-slate-800/80">
+                            <div className="flex justify-between items-center text-slate-400 bg-[#d4af37]/5 p-3 rounded-xl border border-[#d4af37]/20">
+                              <div>
+                                <span className="block font-bold text-[11px] text-[#d4af37]">{isAr ? 'مجموع التكلفة الإجمالية (خارجياً):' : 'Foreign Grand Total:'}</span>
+                                <span className="block text-[9px] text-yellow-600/70 mt-0.5">{isAr ? `تُحسب بسعر صرف: ${formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER} YER` : `At exchange rate: ${formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER} YER`}</span>
+                              </div>
+                              <div className="text-right">
+                                <span className="font-mono text-white text-sm font-black block">{calcs.totalOrderSAR.toLocaleString()} SAR</span>
+                                <span className="font-mono text-[10px] text-[#d4af37] block mt-0.5 font-bold">{(calcs.totalOrderSAR * (formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER)).toLocaleString()} YER</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex justify-between items-center text-slate-300 pt-3">
+                            <span className="font-medium">{isAr ? 'المقدار المستحق للمندوب (توصيل يمني):' : 'Local Courier/Yemen Delivery Fee:'}</span>
+                            <span className="font-mono text-white bg-slate-900 border border-slate-700 px-2.5 py-1 rounded-lg">+{parseFloat(formData.deliveryCourierFee as any).toLocaleString()} YER</span>
+                          </div>
+
+                          {/* Final Grand Total */}
+                          <div className="flex justify-between items-center pt-4 mt-2 border-t-2 border-dashed border-emerald-900/40 pb-3">
+                            <span className="font-black text-emerald-400/90 text-xs">{isAr ? 'المبلغ النهائي والمستحق إجمالاً:' : 'Final Estimated Due Amount:'}</span>
+                            <span className="font-black font-mono text-emerald-400 text-lg bg-emerald-950/20 px-3 py-1 rounded-xl border border-emerald-900/40 shadow-inner">
+                              {Math.ceil(calcs.totalOrderYER).toLocaleString()} YER
+                            </span>
                           </div>
                         </div>
 
-                        <div className="flex justify-between items-center p-3 bg-rose-500/5 rounded-xl border border-rose-500/10">
-                          <span className="font-extrabold text-[#d4af37] text-[11px]">{isAr ? 'المديونية المتبقية للدفع:' : 'Outstanding Debt:'}</span>
-                          <span className="font-mono text-sm font-black text-rose-500">{Math.ceil(calcs.remainingYER).toLocaleString()} YER</span>
+                        {/* Payment & Receipts panel */}
+                        <div className="pt-4 border-t-2 border-slate-800 space-y-4">
+                          <div className="flex flex-col space-y-2">
+                            <label className="text-[10px] text-slate-400 font-bold flex justify-between items-center">
+                              <span className="text-[#d4af37]">{isAr ? 'االدفعة المقدمة / كاش (ريال يمني)' : 'Cash/Advance Payment (YER)'}</span>
+                              <div className="flex gap-1.5 text-[9px]">
+                                <button type="button" onClick={() => setFormData({ ...formData, amountPaid: 0 })} className="px-2.5 py-0.5 rounded border border-slate-700 bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer">0</button>
+                                <button type="button" onClick={() => setFormData({ ...formData, amountPaid: Math.ceil(calcs.totalOrderYER) })} className="px-2.5 py-0.5 rounded border border-emerald-800/40 bg-emerald-900/40 text-emerald-400 hover:bg-emerald-900/60 transition cursor-pointer">{isAr ? 'سداد الكل' : 'Pay All'}</button>
+                              </div>
+                            </label>
+                            <div className="relative group">
+                              <DollarSign className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-500/50 group-focus-within:text-emerald-400 transition-colors" />
+                              <input
+                                type="number"
+                                value={formData.amountPaid || ''}
+                                onChange={(e) => setFormData({ ...formData, amountPaid: parseFloat(e.target.value) || 0 })}
+                                className="w-full bg-slate-950/50 border border-slate-700 focus:border-emerald-500/50 text-emerald-400 font-black rounded-xl py-3 pl-10 pr-4 outline-none font-mono text-sm shadow-inner transition-colors"
+                                placeholder="0.00 YER"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3 pb-2">
+                            <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl flex flex-col justify-center">
+                              <span className="text-[9px] font-black uppercase text-slate-500 block mb-1">{isAr ? 'حالة السداد الآلية' : 'Payment Status'}</span>
+                              {Math.ceil(calcs.remainingYER) <= 0 ? (
+                                <span className="text-emerald-400 font-black flex items-center gap-1.5 text-xs"><Package className="w-3.5 h-3.5" />{isAr ? 'فاتورة مدفوعة' : 'PAID'}</span>
+                              ) : parseFloat(formData.amountPaid as any) > 0 ? (
+                                <span className="text-amber-500 font-black flex items-center gap-1.5 text-xs"><AlertCircle className="w-3.5 h-3.5" />{isAr ? 'دفع جزئي' : 'PARTIAL'}</span>
+                              ) : (
+                                <span className="text-rose-500 font-black flex items-center gap-1.5 text-xs"><AlertCircle className="w-3.5 h-3.5" />{isAr ? 'مديونية غير مسددة' : 'UNPAID'}</span>
+                              )}
+                            </div>
+
+                            <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl flex flex-col justify-center">
+                              <span className="text-[9px] font-black uppercase text-slate-500 block mb-1">{isAr ? 'بوابة الدفع' : 'Pay Method'}</span>
+                              <select
+                                value={formData.paymentMethod}
+                                onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
+                                className="w-full bg-transparent text-white font-bold text-xs outline-none cursor-pointer"
+                              >
+                                <option value="Cash" className="bg-slate-900">{isAr ? 'نقد كاش' : 'Cash'}</option>
+                                <option value="Bank Transfer" className="bg-slate-900">{isAr ? 'تحويل بنكي' : 'Bank Transfer'}</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="flex justify-between items-center p-3 bg-rose-500/5 rounded-xl border border-rose-500/10">
+                            <span className="font-extrabold text-[#d4af37] text-[11px]">{isAr ? 'المديونية المتبقية للدفع:' : 'Outstanding Debt:'}</span>
+                            <span className="font-mono text-sm font-black text-rose-500">{Math.ceil(calcs.remainingYER).toLocaleString()} YER</span>
+                          </div>
+                        </div>
+                      </div>
+
+                    </div>
+
+                    {/* Action commands */}
+                    <div className="pt-6 border-t border-slate-850 flex justify-end gap-3 shrink-0">
+                      <button type="button" disabled={isSubmitting} onClick={() => setIsAddModalOpen(false)} className="px-5 py-2.5 text-slate-400 hover:bg-slate-800 rounded-xl transition-all font-bold text-xs disabled:opacity-50">{isAr ? 'إلغاء النافذة' : 'Cancel'}</button>
+                      <button type="submit" disabled={isSubmitting} className="px-6 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl transition-all text-sm flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed">
+                        {isSubmitting ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'حفظ وترحيل الفاتورة وإرسال' : 'Deploy Freight cargo')}
+                      </button>
+                    </div>
+
+                  </form>
+
+                </div>
+              </div>
+            )}
+
+            {/* QUICK ADD CUSTOMER NESTED MODAL تبويه انشاءعميل جديد  مهم:يجب استدعائها من واجهه العميل مباشره وعدم تكرارها هنا*/}
+            {isAddCustomerOpen && (
+              <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 z-55 animate-fade-in">
+                <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl">
+                  <div className="p-4 border-b border-slate-800 bg-slate-950 flex justify-between items-center text-xs font-black text-white">
+                    <span className="flex items-center gap-1.5 uppercase tracking-wider">
+                      <UserPlus className="w-4 h-4 text-[#d4af37]" />
+                      {isAr ? 'تسجيل عميل جديد ومطابقة الحساب بالكامل' : 'Quick Register Customer'}
+                    </span>
+                    <button type="button" onClick={() => setIsAddCustomerOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-1 rounded-lg">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <form onSubmit={handleAddCustomer} className="p-5 space-y-4 text-start overflow-y-auto max-h-[85vh]">
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
+                        {isAr ? 'الاسم الثلاثي أو الرباعي للعميل' : 'Full Patron Name'} *
+                      </label>
+                      <div className="relative">
+                        <User className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#d4af37]" />
+                        <input
+                          required
+                          tabIndex={1}
+                          placeholder={isAr ? 'أدخل اسم العميل بالكامل...' : 'e.g. Abdullah bin Ali'}
+                          type="text"
+                          value={customerFormData.fullName}
+                          onChange={e => setCustomerFormData({ ...customerFormData, fullName: e.target.value })}
+                          className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none text-start transition-all"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
+                          {isAr ? 'رقم الهاتف (الواتساب)' : 'Cellphone Contact'} *
+                        </label>
+                        <div className="relative">
+                          <Phone className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                          <input
+                            required
+                            tabIndex={2}
+                            type="text"
+                            placeholder="+967..."
+                            value={customerFormData.phone}
+                            onChange={e => setCustomerFormData({ ...customerFormData, phone: e.target.value })}
+                            className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-start"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
+                          {isAr ? 'البريد الإلكتروني' : 'Electronic Mail'}
+                        </label>
+                        <div className="relative">
+                          <Mail className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                          <input
+                            tabIndex={3}
+                            type="email"
+                            placeholder="client@mail.com"
+                            value={customerFormData.email}
+                            onChange={e => setCustomerFormData({ ...customerFormData, email: e.target.value })}
+                            className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-start"
+                          />
                         </div>
                       </div>
                     </div>
 
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
+                        {isAr ? 'العنوان وتفاصيل التوزيع بليمن' : 'Yemen Handover Settlement Address'}
+                      </label>
+                      <div className="relative">
+                        <MapPin className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                        <input
+                          tabIndex={4}
+                          placeholder={isAr ? 'المدينة • المديرية • الشارع • معلم بجانب المنزل' : 'Sanaa, Haddah, behind post office'}
+                          type="text"
+                          value={customerFormData.address}
+                          onChange={e => setCustomerFormData({ ...customerFormData, address: e.target.value })}
+                          className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none text-start"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
+                        {isAr ? 'رابط الموقع الجغرافي الخرائط (GPS)' : 'Google Maps Embed/URL'}
+                      </label>
+                      <input
+                        tabIndex={5}
+                        placeholder="https://maps.google.com/?q=..."
+                        type="text"
+                        value={customerFormData.gps_location}
+                        onChange={e => setCustomerFormData({ ...customerFormData, gps_location: e.target.value })}
+                        className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-start"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
+                        {isAr ? 'ملاحظات وتصنيفات إدارية خاصة' : 'Administrative Confidential Annotations'}
+                      </label>
+                      <textarea
+                        tabIndex={7}
+                        rows={2}
+                        value={customerFormData.notes}
+                        onChange={e => setCustomerFormData({ ...customerFormData, notes: e.target.value })}
+                        className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none text-start"
+                      ></textarea>
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-4 border-t border-slate-850">
+                      <button
+                        type="button"
+                        disabled={isSubmitting}
+                        onClick={() => setIsAddCustomerOpen(false)}
+                        className="px-5 py-2 text-slate-400 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-black rounded-xl transition disabled:opacity-50"
+                      >
+                        {isAr ? 'إلغاء' : 'Cancel'}
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className="px-6 py-2 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black text-xs rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isSubmitting ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'تأكيد الحفظ' : 'Confirm Save')}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* QUICK ADD PURCHASE SOURCE NESTED MODAL نموذج انشاء مصدر شراء جديده*/}
+            {isAddSourceOpen && (
+              <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 z-55 animate-fade-in">
+                <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl">
+                  <div className="p-4 border-b border-slate-800 bg-slate-955 flex justify-between items-center text-xs font-black text-white">
+                    <span>{isAr ? 'تقييد مصدر شراء جديد' : 'Incorporate Purchase Source'}</span>
+                    <button type="button" onClick={() => setIsAddSourceOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-1 rounded-lg">
+                      <Plus className="w-4 h-4 rotate-45" />
+                    </button>
+                  </div>
+                  <form onSubmit={handleAddSource} className="p-5 space-y-4 text-start">
+                    <div>
+                      <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'تصنيف قناة التوريد' : 'Class of channel'}</label>
+                      <select
+                        value={sourceFormData.type}
+                        onChange={(e) => setSourceFormData({ ...sourceFormData, type: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold"
+                      >
+                        <option value="SHEIN">{isAr ? 'موقع SHEIN' : 'SHEIN Website'}</option>
+                        <option value="App">{isAr ? 'موقع تسوق إلكتروني / تطبيق' : 'Retail Application/Website'}</option>
+                        <option value="Factory">{isAr ? 'مصنع أو مورد بالصين' : 'Direct China Manufacturer'}</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'اسم المصدر / التطبيق' : 'Source Name'}</label>
+                      <input required type="text" value={sourceFormData.source_name || ''} onChange={e => setSourceFormData({ ...sourceFormData, source_name: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold" />
+                    </div>
+
+                    {sourceFormData.type === 'App' && (
+                      <div>
+                        <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'رابط الويب بوابة (اختياري)' : 'URL Link'}</label>
+                        <input type="url" value={sourceFormData.source_url || ''} onChange={e => setSourceFormData({ ...sourceFormData, source_url: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-mono font-bold" placeholder="https://example.com" />
+                      </div>
+                    )}
+
+                    {sourceFormData.type === 'Factory' && (
+                      <>
+                        <div>
+                          <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'بيانات المورد / WeChat' : 'WeChat Contact'}</label>
+                          <input type="text" value={sourceFormData.contact_info || ''} onChange={e => setSourceFormData({ ...sourceFormData, contact_info: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold" />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'جغرافية المصنع / التسليم' : 'Depot Location'}</label>
+                          <input type="text" value={sourceFormData.location || ''} onChange={e => setSourceFormData({ ...sourceFormData, location: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold" />
+                        </div>
+                      </>
+                    )}
+
+                    <div className="pt-2 flex justify-end gap-2 text-xs">
+                      <button type="button" disabled={isSubmitting} onClick={() => setIsAddSourceOpen(false)} className="p-2 text-slate-400 hover:bg-slate-800 rounded-lg disabled:opacity-50">{isAr ? 'إلغاء' : 'Cancel'}</button>
+                      <button type="submit" disabled={isSubmitting} className="p-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                        {isSubmitting ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'تأكيد الحفظ' : 'Confirm Save')}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* QUICK ADD SHIPPING COMPANY NESTED MODAL نموذج انشاء شركه جديده*/}
+            {isAddShippingCompanyOpen && (
+              <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 z-55 animate-fade-in">
+                <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl">
+                  <div className="p-4 border-b border-slate-800 bg-slate-955 flex justify-between items-center text-xs font-black text-white">
+                    <span>{isAr ? 'تقييد شركة شحن جديدة' : 'Add New Carrier'}</span>
+                    <button type="button" onClick={() => setIsAddShippingCompanyOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-1 rounded-lg">
+                      <Plus className="w-4 h-4 rotate-45" />
+                    </button>
+                  </div>
+                  <form onSubmit={handleAddShippingCompany} className="p-5 space-y-4 text-start">
+                    <div>
+                      <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'اسم شركة الشحن' : 'Shipping Carrier Name'}</label>
+                      <input required type="text" value={shippingCompanyFormData.name || ''} onChange={e => setShippingCompanyFormData({ ...shippingCompanyFormData, name: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold" placeholder="e.g Aramex, Safe Ship" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'مسؤول الاتصال' : 'Contact Person'}</label>
+                      <input type="text" value={shippingCompanyFormData.contact_person || ''} onChange={e => setShippingCompanyFormData({ ...shippingCompanyFormData, contact_person: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'رقم الهاتف/الجوال' : 'Phone No.'}</label>
+                      <input type="text" value={shippingCompanyFormData.phone || ''} onChange={e => setShippingCompanyFormData({ ...shippingCompanyFormData, phone: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-mono font-bold" placeholder="+967..." />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'بوابة تتبع الشحنات الويب' : 'Tracking Portal Link'}</label>
+                      <input type="url" value={shippingCompanyFormData.tracking_url || ''} onChange={e => setShippingCompanyFormData({ ...shippingCompanyFormData, tracking_url: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-mono font-bold" placeholder="https://..." />
+                    </div>
+                    <div className="pt-2 flex justify-end gap-2 text-xs">
+                      <button type="button" disabled={isSubmitting} onClick={() => setIsAddShippingCompanyOpen(false)} className="p-2 text-slate-400 hover:bg-slate-800 rounded-lg disabled:opacity-50">{isAr ? 'إلغاء' : 'Cancel'}</button>
+                      <button type="submit" disabled={isSubmitting} className="p-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                        {isSubmitting ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'تأكيد الحفظ' : 'Confirm Save')}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* UPDATE STATUS MODAL نموذج تحديث حاله ومسار الطلب */}
+            {isUpdateModalOpen && selectedOrder && (
+              <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in overflow-y-auto">
+                <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-4xl overflow-hidden text-start shadow-xl flex flex-col max-h-[90vh]">
+                  <div className="p-4 bg-slate-955 border-b border-slate-800 flex justify-between items-center text-xs font-black text-white shrink-0">
+                    <span>{isAr ? 'تحديث حاله ومسار الطلب' : 'Freight updates'}</span>
+                    <button onClick={() => setIsUpdateModalOpen(false)} className="text-slate-400 bg-slate-800 p-1 rounded-lg"><Plus className="w-4 h-4 rotate-45" /></button>
                   </div>
 
-                  {/* Action commands */}
-                  <div className="pt-6 border-t border-slate-850 flex justify-end gap-3 shrink-0">
-                    <button type="button" disabled={isSubmitting} onClick={() => setIsAddModalOpen(false)} className="px-5 py-2.5 text-slate-400 hover:bg-slate-800 rounded-xl transition-all font-bold text-xs disabled:opacity-50">{isAr ? 'إلغاء النافذة' : 'Cancel'}</button>
-                    <button type="submit" disabled={isSubmitting} className="px-6 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl transition-all text-sm flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed">
-                      {isSubmitting ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'حفظ وترحيل الفاتورة وإرسال' : 'Deploy Freight cargo')}
+                  <form onSubmit={handleUpdateStatus} className="p-6 space-y-6 text-xs font-bold text-slate-300 overflow-y-auto custom-scrollbar flex-1">
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-slate-500 block mb-1">{isAr ? 'رمز الطلب الفريد' : 'Order smart key'}</label>
+                          <span className="font-mono text-cyan-400 font-black text-sm">{selectedOrder.orderNumber}</span>
+                        </div>
+
+                        <div>
+                          <label className="block text-slate-500 block mb-1">{isAr ? 'حالة الطلب اللوجيستية الإجمالية' : 'Logistics status'}</label>
+                          <select
+                            value={updateFormData.orderStatus}
+                            onChange={e => setUpdateFormData({ ...updateFormData, orderStatus: e.target.value })}
+                            className={`w-full bg-slate-950 border text-white rounded-xl p-3 outline-none text-xs transition-colors ${(selectedOrder.firedTriggers || []).includes(`status_notified_${updateFormData.orderStatus}`)
+                              ? 'border-yellow-500/50 focus:border-yellow-500'
+                              : 'border-slate-800'
+                              }`}
+                          >
+                            <option value="تم تسجيل الطلب">{isAr ? 'تم تسجيل الطلب واستخلاص الفاتورة' : 'Invoice saved'}</option>
+                            <option value="وصل مستودع السعودية">{isAr ? 'وصل مستودع السعودية للتعبئة' : 'Arrived Saudi packaging HUB'}</option>
+                            <option value="جاري الشحن لليمن">{isAr ? 'جاري الشحن لليمن براً / جوأً' : 'Shipped/Transit to Yemen'}</option>
+                            <option value="في التخليص الجمركي">{isAr ? 'في التخليص الجمركي والأوراق' : 'Customs clearance'}</option>
+                            <option value="وصل مركز التوزيع في اليمن">{isAr ? 'وصل مركز التوزيع والفرز النهائي' : 'Arrived final depot'}</option>
+                            <option value="مع المندوب للتوصيل">{isAr ? 'مع المندوب بانتظار التسليم' : 'Out for Yemen delivery'}</option>
+                            <option value="تم التسليم">{isAr ? 'تم التسليم وتفصيل العهد الموردة' : 'Delivered successfully'}</option>
+                            <option value="ملغي">{isAr ? 'ملغي' : 'Cancelled'}</option>
+                          </select>
+                          {(selectedOrder.firedTriggers || []).includes(`status_notified_${updateFormData.orderStatus}`) && updateFormData.orderStatus !== 'ملغي' && (
+                            <div className="mt-2 p-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg flex items-center gap-2 text-yellow-500 text-[10px] animate-pulse">
+                              <AlertCircle className="w-3 h-3" />
+                              <span>
+                                {isAr
+                                  ? 'لقد وصل الطلب لهذه الحالة مسبقاً. لن يتم تكرار القيود المحاسبية أو إرسال إشعارات للعميل.'
+                                  : 'This status was already reached. Financial entries and customer notifications will not be repeated.'}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-slate-500 block mb-1">{isAr ? 'مكان التواجد لليمن' : 'Yemen Spot'}</label>
+                          <input
+                            type="text"
+                            value={updateFormData.locationYemen}
+                            onChange={e => setUpdateFormData({ ...updateFormData, locationYemen: e.target.value })}
+                            className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 outline-none text-xs"
+                          />
+                        </div>
+
+                        {canManageOrders && (
+                          <div>
+                            <label className="block text-slate-500 block mb-1">{isAr ? 'ملاحظات وتنبيهات داخلية للموزع' : 'Internal notes'}</label>
+                            <textarea
+                              rows={2}
+                              value={updateFormData.internalNotes}
+                              onChange={e => setUpdateFormData({ ...updateFormData, internalNotes: e.target.value })}
+                              className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 outline-none text-xs"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Assign Couriers/Employees */}
+                    {canManageOrders && (
+                      <div className="pt-4 border-t border-slate-805 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-slate-500 block mb-1">
+                            {isAr ? 'موظف التعبئة والتجميع' : 'Packaging & Assembly employee'}
+                          </label>
+                          <select
+                            value={updateFormData.shippingCourierId}
+                            onChange={(e) => setUpdateFormData({ ...updateFormData, shippingCourierId: e.target.value })}
+                            className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 outline-none text-xs font-bold"
+                          >
+                            <option value="">{isAr ? '-- اختر موظف التعبئة والتجميع --' : '-- Choose Aggregator --'}</option>
+                            {couriers.filter(c => c.courierType === 'sourcing').map(c => (
+                              <option key={c.id} value={c.id}>
+                                {c.fullName} {c.governorate || c.provinceId ? `(${c.governorate || c.provinceId})` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-slate-500 block mb-1">
+                            {isAr ? 'مندوب التوزيع النهائي' : 'Yemen Delivery Courier'}
+                          </label>
+                          <select
+                            value={updateFormData.deliveryCourierId}
+                            onChange={(e) => setUpdateFormData({ ...updateFormData, deliveryCourierId: e.target.value })}
+                            className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 outline-none text-xs font-bold"
+                          >
+                            <option value="">{isAr ? '-- اختر مندوب التوزيع النهائي --' : '-- Choose Final Courier --'}</option>
+                            {couriers.filter(c => c.courierType === 'local' || !c.courierType).map(c => (
+                              <option key={c.id} value={c.id}>
+                                {c.fullName} {c.governorate || c.provinceId ? `(${c.governorate || c.provinceId})` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Edit Shipping Details Subtable */}
+                    {canManageOrders && (
+                      <div className="pt-4 border-t border-slate-800 space-y-4">
+                        <div className="flex justify-between items-center">
+                          <div className="flex flex-col text-start">
+                            <span className="text-xs font-black text-white">{isAr ? 'تفاصيل شحنات المسار اللوجيستي' : 'Shipping Tracks & Manifests'}</span>
+                            <span className="text-[10px] text-slate-500 font-bold mt-0.5">{isAr ? 'يمكنك تحديث وإضافة مسارات الشحن للطلب' : 'Update or add new shipping segments'}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={addUpdateShippingRow}
+                            className="bg-emerald-600/10 hover:bg-emerald-650/20 text-emerald-400 px-3 py-1.5 rounded-lg text-[10px] font-black transition-all flex items-center gap-1"
+                          >
+                            ➕ {isAr ? 'إضافة تفاصيل شحن' : 'Add Segment'}
+                          </button>
+                        </div>
+
+                        <div className="space-y-4">
+                          {updateShippings && updateShippings.map((sh, idx) => (
+                            <div key={sh.id || idx} className="bg-slate-900/40 p-4 rounded-2xl border border-slate-850 space-y-3 relative text-start">
+                              {/* Segment title and remove action */}
+                              <div className="flex justify-between items-center border-b border-slate-850/50 pb-2">
+                                <span className="text-[10px] font-black text-[#d4af37] bg-[#d4af37]/5 px-2 py-0.5 rounded">
+                                  {isAr ? `مسار الشحن #${idx + 1}` : `Shipping Track #${idx + 1}`}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => removeUpdateShippingRow(idx)}
+                                  className="text-rose-500 hover:text-rose-400 p-1 rounded hover:bg-rose-950/10 transition-all font-bold text-[10px] flex items-center gap-1"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  {isAr ? 'إلغاء المسار' : 'Delete Segment'}
+                                </button>
+                              </div>
+
+                              {/* Manifest inputs */}
+                              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-[11px] text-start font-bold">
+                                {/* 1. Mode */}
+                                <div>
+                                  <label className="block text-slate-500 mb-1">{isAr ? 'نوع الشحن' : 'Mode'}</label>
+                                  <select
+                                    value={sh.shippingType || 'بري'}
+                                    onChange={(e) => updateUpdateShippingRow(idx, 'shippingType', e.target.value)}
+                                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold"
+                                  >
+                                    <option value="بري">{isAr ? 'Overland بري' : 'Land - Overland'}</option>
+                                    <option value="جوي">{isAr ? 'Air Freight جوي' : 'Air - Air Freight'}</option>
+                                    <option value="بحري">{isAr ? 'Ocean Cargo بحري' : 'Sea - Ocean Cargo'}</option>
+                                  </select>
+                                </div>
+
+                                {/* 2. Carrier company */}
+                                <div>
+                                  <div className="flex justify-between items-center mb-1">
+                                    <label className="block text-slate-400">{isAr ? 'شركة الشحن' : 'Carrier'}</label>
+                                    {(role === 'Admin' || hasPermission('add_sources')) && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setActiveAddShippingIndex(`edit-${idx}`);
+                                          setIsAddShippingCompanyOpen(true);
+                                        }}
+                                        className="text-[10px] font-black text-cyan-400 hover:underline flex items-center gap-0.5"
+                                      >
+                                        ➕ {isAr ? 'جديدة' : 'New'}
+                                      </button>
+                                    )}
+                                  </div>
+                                  <select
+                                    value={sh.shippingCompany || ''}
+                                    onChange={(e) => updateUpdateShippingRow(idx, 'shippingCompany', e.target.value)}
+                                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold"
+                                  >
+                                    <option value="">{isAr ? '-- اختر شركة شحن --' : '-- Choose carrier --'}</option>
+                                    {shippingCompanies.map(c => (
+                                      <option key={c.id} value={c.name}>{c.name}</option>
+                                    ))}
+                                  </select>
+                                </div>
+
+                                {/* 3. Tracking Number */}
+                                <div>
+                                  <label className="block text-slate-500 mb-1">{isAr ? 'رقم التتبع للشحنة' : 'Tracking Number'}</label>
+                                  <input
+                                    type="text"
+                                    value={sh.trackingNumber || ''}
+                                    onChange={(e) => updateUpdateShippingRow(idx, 'trackingNumber', e.target.value)}
+                                    placeholder={isAr ? "رقم التتبع المخصص للشحنة" : "Cargo tracking ID"}
+                                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-mono placeholder-slate-650"
+                                  />
+                                </div>
+
+                                {/* 4. Shipping Cost */}
+                                <div>
+                                  <label className="block text-slate-500 mb-1">{isAr ? 'أجرة وتكاليف النقل (ريال سعودي)' : 'Shipping Cost (SAR)'}</label>
+                                  <input
+                                    type="number"
+                                    required
+                                    value={sh.shippingCost || 0}
+                                    onChange={(e) => updateUpdateShippingRow(idx, 'shippingCost', parseFloat(e.target.value) || 0)}
+                                    className="w-full bg-slate-950 border border-slate-800 text-[#d4af37] rounded-xl p-2.5 outline-none font-mono"
+                                  />
+                                </div>
+
+                                {/* 5. Origin */}
+                                <div>
+                                  <label className="block text-slate-500 mb-1">{isAr ? 'مكان التصدير' : 'Source'}</label>
+                                  <input
+                                    type="text"
+                                    required
+                                    value={sh.shippingSource || ''}
+                                    onChange={(e) => updateUpdateShippingRow(idx, 'shippingSource', e.target.value)}
+                                    placeholder={isAr ? "مثال: الصين، دبي" : "Source country"}
+                                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none placeholder-slate-600"
+                                  />
+                                </div>
+
+                                {/* 6. Destination */}
+                                <div>
+                                  <label className="block text-slate-500 mb-1">{isAr ? 'مكان الاستلام' : 'Destination'}</label>
+                                  <input
+                                    type="text"
+                                    required
+                                    value={sh.shippingDestination || ''}
+                                    onChange={(e) => updateUpdateShippingRow(idx, 'shippingDestination', e.target.value)}
+                                    placeholder={isAr ? "مثال: مستودع صنعاء" : "Destination depot"}
+                                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none placeholder-slate-600"
+                                  />
+                                </div>
+
+                                {/* 7. Dispatch / Departure Date */}
+                                <div>
+                                  <label className="block text-slate-500 mb-1">{isAr ? 'تاريخ انطلاق الشحن' : 'Dispatch Date'}</label>
+                                  <div className="relative">
+                                    <input
+                                      type="date"
+                                      id={`upd-dispatch-date-${idx}`}
+                                      value={sh.shippingDate || ''}
+                                      onChange={(e) => {
+                                        const newDate = e.target.value;
+                                        let expected = sh.expectedArrival || '';
+                                        if (newDate && sh.shippingDuration) {
+                                          const days = parseInt(sh.shippingDuration);
+                                          if (!isNaN(days)) {
+                                            const dateObj = new Date(newDate);
+                                            dateObj.setDate(dateObj.getDate() + days);
+                                            expected = dateObj.toISOString().split('T')[0];
+                                          }
+                                        }
+                                        updateUpdateShippingRow(idx, { shippingDate: newDate, expectedArrival: expected });
+                                      }}
+                                      className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans pr-9"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const el = document.getElementById(`upd-dispatch-date-${idx}`);
+                                        if (el) (el as HTMLInputElement).showPicker?.();
+                                      }}
+                                      className="absolute inset-y-0 end-2.5 flex items-center text-slate-500 hover:text-[#d4af37] transition"
+                                    >
+                                      <Calendar className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* 8. Transit Duration */}
+                                <div>
+                                  <label className="block text-slate-500 mb-1">{isAr ? 'المدة التقديرية (أيام)' : 'Transit Duration (Days)'}</label>
+                                  <div className="relative">
+                                    <input
+                                      type="number"
+                                      value={sh.shippingDuration || ''}
+                                      onChange={(e) => {
+                                        const durationVal = e.target.value;
+                                        let expected = sh.expectedArrival || '';
+                                        if (sh.shippingDate && durationVal) {
+                                          const days = parseInt(durationVal);
+                                          if (!isNaN(days)) {
+                                            const dateObj = new Date(sh.shippingDate);
+                                            dateObj.setDate(dateObj.getDate() + days);
+                                            expected = dateObj.toISOString().split('T')[0];
+                                          }
+                                        }
+                                        updateUpdateShippingRow(idx, { shippingDuration: durationVal, expectedArrival: expected });
+                                      }}
+                                      placeholder={isAr ? "مثال: 12 يوم" : "e.g. 12"}
+                                      className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none placeholder-slate-655 font-mono pr-9"
+                                    />
+                                    <span className="absolute inset-y-0 end-2.5 flex items-center text-slate-600 text-[10px] font-bold pointer-events-none">
+                                      {isAr ? 'يوم' : 'd'}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* 9. Expected Arrival */}
+                                <div>
+                                  <label className="block text-slate-500 mb-1">{isAr ? 'موعد الوصول المتوقع' : 'Expected Arrival'}</label>
+                                  <div className="relative">
+                                    <input
+                                      type="date"
+                                      id={`upd-expected-date-${idx}`}
+                                      value={sh.expectedArrival || ''}
+                                      onChange={(e) => updateUpdateShippingRow(idx, 'expectedArrival', e.target.value)}
+                                      className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans pr-9"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const el = document.getElementById(`upd-expected-date-${idx}`);
+                                        if (el) (el as HTMLInputElement).showPicker?.();
+                                      }}
+                                      className="absolute inset-y-0 end-2.5 flex items-center text-slate-500 hover:text-emerald-400 transition"
+                                    >
+                                      <Calendar className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* 10. Packaging Fees (SAR fixed amount) */}
+                                <div className="col-span-2">
+                                  <label className="block text-slate-500 mb-1">{isAr ? 'أجور التغليف والصناديق (SAR)' : 'Packaging Fees (SAR)'}</label>
+                                  <input
+                                    type="number"
+                                    value={sh.packagingFees || 0}
+                                    onChange={(e) => updateUpdateShippingRow(idx, 'packagingFees', parseFloat(e.target.value) || 0)}
+                                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-mono"
+                                  />
+                                </div>
+
+                                {/* 11. Delivery Date */}
+                                <div>
+                                  <label className="block text-slate-500 mb-1">{isAr ? 'تاريخ التسليم الفعلي المكتمل' : 'Actual Completed Delivery Date'}</label>
+                                  <div className="relative">
+                                    <input
+                                      type="date"
+                                      id={`upd-delivery-date-${idx}`}
+                                      value={sh.deliveryDate || ''}
+                                      onChange={(e) => updateUpdateShippingRow(idx, 'deliveryDate', e.target.value)}
+                                      className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans pr-9"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const el = document.getElementById(`upd-delivery-date-${idx}`);
+                                        if (el) (el as HTMLInputElement).showPicker?.();
+                                      }}
+                                      className="absolute inset-y-0 end-2.5 flex items-center text-slate-500 hover:text-emerald-400 transition"
+                                    >
+                                      <Calendar className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                          {(!updateShippings || updateShippings.length === 0) && (
+                            <p className="text-center text-slate-550 text-[10px] py-4 bg-slate-950/20 rounded-xl border border-dashed border-slate-850 font-bold">
+                              {isAr ? 'لم يتم إضافة تفاصيل شحن للطلب بعد.' : 'No shipping items added yet.'}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="pt-4 border-t border-slate-800 flex justify-end gap-2 shrink-0">
+                      <button type="button" disabled={isSubmitting} onClick={() => setIsUpdateModalOpen(false)} className="px-5 py-2 hover:bg-slate-800 text-slate-400 rounded-lg disabled:opacity-50">{isAr ? 'إلغاء' : 'Cancel'}</button>
+                      <button type="submit" disabled={isSubmitting} className="px-6 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                        {isSubmitting ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'حفظ وترحيل التغييرات' : 'Update settings')}
+                      </button>
+                    </div>
+
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* COLLECT PAYMENT MODAL نموذج تحصيل دفعة مالية من العميل*/}
+            {isPaymentModalOpen && selectedOrder && (
+              <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
+                <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm overflow-hidden text-start shadow-xl">
+                  <div className="p-4 bg-slate-955 border-b border-slate-800 flex justify-between items-center text-xs font-black text-white">
+                    <span>{isAr ? 'تحصيل دفعة مالية من العميل' : 'Post payment ledger'}</span>
+                    <button onClick={() => {
+                      setIsPaymentModalOpen(false);
+                      setPaymentFormData({ amount: '', method: 'Cash', notes: '', pin: '' });
+                    }} className="text-slate-400 bg-slate-800 p-1 rounded-lg"><Plus className="w-4 h-4 rotate-45" /></button>
+                  </div>
+
+                  <form onSubmit={handleAddPayment} className="p-6 space-y-4 text-xs font-bold text-slate-300 font-sans">
+                    <div>
+                      <label className="block text-slate-500 mb-1">{isAr ? 'رقم الطلب' : 'Smart order code'}</label>
+                      <span className="font-mono text-[#d4af37] font-black text-sm">{selectedOrder.orderNumber}</span>
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-500 mb-1">{isAr ? 'إجمالي المتبقي للتحصيل' : 'Total dues left'}</label>
+                      <span className="font-mono text-rose-400 font-extrabold text-base">{parseFloat(selectedOrder.amountRemaining || 0).toLocaleString()} YER</span>
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-500 mb-1">{isAr ? 'المقدار المحصل المقبوض الآن (ريال يمني)' : 'Collection amount in YER'}</label>
+                      <input
+                        required
+                        type="number"
+                        step="any"
+                        value={paymentFormData.amount}
+                        onChange={e => setPaymentFormData({ ...paymentFormData, amount: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-800 text-emerald-400 font-mono text-sm font-black p-3 rounded-xl outline-none text-center"
+                        placeholder="0.00 YER"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-500 mb-1 text-amber-500 flex items-center gap-1">
+                        <span>{isAr ? 'رمز الـ PIN المالي الثنائي للتحقق' : 'Security PIN authorization'}</span>
+                        <span className="text-[9px] bg-amber-500/10 border border-amber-500/30 text-amber-500 px-1.5 py-0.2 rounded font-sans uppercase">MANDATORY</span>
+                      </label>
+                      <input
+                        required
+                        type="password"
+                        maxLength={6}
+                        pattern="^[0-9]{4,6}$"
+                        title={isAr ? "رمز PIN سري من 4 إلى 6 أرقام" : "A 4-6 digit security PIN code"}
+                        value={paymentFormData.pin}
+                        onChange={e => setPaymentFormData({ ...paymentFormData, pin: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-800 text-yellow-500 font-mono text-sm font-black p-3 rounded-xl outline-none text-center tracking-widest"
+                        placeholder="••••"
+                      />
+                      <p className="text-[9px] text-slate-500 mt-1">{isAr ? 'اكتب الـ PIN الخاص بك المخزن في ملف الموظف لتفويض المعاملة.' : 'Enter your professional profile PIN to authorize transaction.'}</p>
+                    </div>
+
+                    <div className="pt-4 border-t border-slate-800 flex justify-end gap-2">
+                      <button type="button" disabled={isSubmitting} onClick={() => {
+                        setIsPaymentModalOpen(false);
+                        setPaymentFormData({ amount: '', method: 'Cash', notes: '', pin: '' });
+                      }} className="px-4 py-2 hover:bg-slate-800 text-slate-400 rounded-lg disabled:opacity-50">{isAr ? 'إلغاء' : 'Cancel'}</button>
+                      <button type="submit" disabled={isSubmitting} className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                        {isSubmitting ? (isAr ? 'جاري التحصيل...' : 'Settling...') : (isAr ? 'تأكيد ترحيل القبض' : 'Settle payment')}
+                      </button>
+                    </div>
+
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* ORDER DETAILS & QR SCANNER MODAL واجهه عرض تفاصيل الطلب*/}
+            {isDetailsModalOpen && selectedOrder && (
+              <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in overflow-y-auto font-sans">
+                <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-2xl overflow-hidden text-start shadow-xl flex flex-col max-h-[90vh]">
+
+                  {/* Header */}
+                  <div className="p-4 bg-slate-955 border-b border-slate-800 flex justify-between items-center text-xs font-black text-white">
+                    <span>{isAr ? 'تفاصيل الفاتورة وتتبع الشحنة الرقمي' : 'Invoice Details & Tracking Profile'}</span>
+                    <button
+                      onClick={() => {
+                        setIsDetailsModalOpen(false);
+                        setSelectedOrder(null);
+                      }}
+                      className="text-slate-400 bg-slate-800 p-1 rounded-lg cursor-pointer hover:text-white"
+                    >
+                      <X className="w-5 h-5" />
                     </button>
                   </div>
 
-                </form>
+                  {/* Content */}
+                  <div className="p-6 overflow-y-auto space-y-6 text-slate-350 text-xs custom-scrollbar">
 
-              </div>
-            </div>
-          )}
+                    {/* QR Code and Key Track IDs Section */}
+                    <div className="bg-slate-955 border border-[#d4af37]/20 p-5 rounded-2xl flex flex-col md:flex-row items-center gap-6">
 
-          {/* QUICK ADD CUSTOMER NESTED MODAL */}
-          {isAddCustomerOpen && (
-            <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 z-55 animate-fade-in">
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl">
-                <div className="p-4 border-b border-slate-800 bg-slate-950 flex justify-between items-center text-xs font-black text-white">
-                  <span className="flex items-center gap-1.5 uppercase tracking-wider">
-                    <UserPlus className="w-4 h-4 text-[#d4af37]" />
-                    {isAr ? 'تسجيل عميل جديد ومطابقة الحساب بالكامل' : 'Quick Register Customer'}
-                  </span>
-                  <button type="button" onClick={() => setIsAddCustomerOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-1 rounded-lg">
-                    <X className="w-4 h-4" />
-                  </button>
+                      {/* QR Code Draw Area */}
+                      <div className="bg-white p-3 rounded-2xl shadow-lg border-2 border-[#d4af37] flex flex-col items-center justify-center shrink-0">
+                        <canvas ref={qrCanvasRef} className="w-[140px] h-[140px]"></canvas>
+                        <span className="text-[10px] text-slate-500 font-black tracking-tight mt-1.5 uppercase select-all">
+                          {selectedOrder.trackingNumber || selectedOrder.orderNumber || ''}
+                        </span>
+                      </div>
+
+                      {/* Key Labels & Action Copier */}
+                      <div className="flex-1 space-y-2 text-center md:text-start w-full">
+                        <span className="text-[9px] text-[#d4af37] bg-[#d4af37]/10 font-black px-2 py-0.5 rounded-full uppercase tracking-widest inline-block">
+                          {isAr ? 'رمز تتبع الشحنة الموحد' : 'Logistic Courier Tracking Key'}
+                        </span>
+
+                        <h4 className="text-white text-lg font-black tracking-tight select-all">
+                          {selectedOrder.trackingNumber || selectedOrder.orderNumber || 'ALX-XXXX-XXXX'}
+                        </h4>
+
+                        <p className="text-slate-400 text-[11px] leading-relaxed">
+                          {isAr
+                            ? 'امسح الرمز السريع (QR) أعلاه بواسطة كاميرا الكاشير أو الموزع للوصول اللوجستي وتحديث حالة الطرد بسرعة خاطفة.'
+                            : 'Scan the quick QR code with courier scanner terminal to instantly register driver dispatch status.'}
+                        </p>
+
+                        <div className="pt-1 flex flex-wrap justify-center md:justify-start gap-2">
+                          <CopyToClipboard
+                            text={selectedOrder.trackingNumber || selectedOrder.orderNumber || ''}
+                            showIconOnly={false}
+                            label={isAr ? 'نسخ رمز التتبع الموحد' : 'Copy Tracking ID'}
+                            labelCopied={isAr ? 'تم نسخ الرمز!' : 'Copied Tracking ID!'}
+                            className="px-4 py-2.5 text-[11px] rounded-xl font-black"
+                          />
+                        </div>
+                      </div>
+
+                    </div>
+
+                    {/* General Order Information Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                      <div className="space-y-3 bg-slate-950/20 p-4 border border-slate-800/60 rounded-xl">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block border-b border-slate-850 pb-1">
+                          {isAr ? 'الزبون والحساب' : 'Customer Account'}
+                        </span>
+                        <div className="space-y-1">
+                          <div className="text-slate-400 font-bold">{isAr ? 'الاسم الائتماني:' : 'Client Name:'} <span className="text-white">{selectedOrder.customerName}</span></div>
+                          <div className="text-slate-400 font-bold">{isAr ? 'رقم الهاتف:' : 'Phone Key:'} <span className="text-white font-mono select-all">{selectedOrder.customerPhone}</span></div>
+                          {selectedOrder.locationYemen && (
+                            <div className="text-slate-400 font-bold">{isAr ? 'أماكن التوصيل لليمن:' : 'Yemen Destination:'} <span className="text-white font-mono">{selectedOrder.locationYemen}</span></div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-3 bg-slate-950/20 p-4 border border-slate-800/60 rounded-xl">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block border-b border-slate-850 pb-1">
+                          {isAr ? 'البيانات اللوجيتسية' : 'Logistics Route'}
+                        </span>
+                        <div className="space-y-1">
+                          <div className="text-slate-400 font-bold">{isAr ? 'حالة الشحنة الطردية:' : 'Cargo Current State:'} <span className="text-[#d4af37] font-black">{formatStatusLabel(selectedOrder.orderStatus)}</span></div>
+                          <div className="text-slate-400 font-bold">{isAr ? 'قناة التعبئة والمصدر:' : 'Sales Cargo Source:'} <span className="text-white">{selectedOrder.orderSourceName || selectedOrder.orderSourceType}</span></div>
+                          <div className="text-slate-400 font-bold">{isAr ? 'تاريخ المعاملة:' : 'Invoice Date:'} <span className="text-white font-mono">{safeToDate(selectedOrder.createdAt).toLocaleString(isAr ? 'ar-EG' : 'en-US')}</span></div>
+                        </div>
+                      </div>
+
+                    </div>
+
+                    {/* Financial Balance Status Card */}
+                    <div className="bg-slate-955 border border-slate-800 p-4 rounded-xl space-y-3">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block border-b border-slate-850 pb-1">
+                        {isAr ? 'كشف الرصيد وتفاصيل السداد المالي' : 'Financial breakdown'}
+                      </span>
+
+                      {/* Cost Breakdown Details */}
+                      <div className="flex flex-col gap-1 text-[11px] font-bold text-slate-400 mb-3 border-b border-slate-850 pb-3">
+                        <div className="flex justify-between">
+                          <span>{isAr ? 'تكلفة المنتجات الأصلية:' : 'Original Products:'}</span>
+                          <span className="text-slate-300 font-mono">
+                            {(selectedOrder.productsSum !== undefined
+                              ? selectedOrder.productsSum
+                              : (parseFloat(selectedOrder.totalCostSAR) - parseFloat(selectedOrder.profitCompanySAR || 0) - parseFloat(selectedOrder.shippingCostSAR || 0) - parseFloat(selectedOrder.packagingFee || 0))
+                            ).toLocaleString()} SAR
+                          </span>
+                        </div>
+                        {selectedOrder.couponEnabled && (parseFloat(selectedOrder.couponRate) > 0) && (
+                          <div className="flex justify-between text-rose-450/90">
+                            <span>{isAr ? 'كوبون الخصم للمشتريات (مبلغ):' : 'Purchase Coupon Discount:'}</span>
+                            <span className="font-mono">-{parseFloat(selectedOrder.couponRate).toLocaleString()} SAR</span>
+                          </div>
+                        )}
+                        {parseFloat(selectedOrder.shippingCostSAR || '0') > 0 && (
+                          <div className="flex justify-between">
+                            <span>{isAr ? 'تكلفة الشحن والتخليص:' : 'Shipping Cost:'}</span>
+                            <span className="text-slate-300 font-mono">{parseFloat(selectedOrder.shippingCostSAR).toLocaleString()} SAR</span>
+                          </div>
+                        )}
+                        {parseFloat(selectedOrder.profitCompanySAR || '0') > 0 && (
+                          <div className="flex justify-between">
+                            <span>{isAr ? 'عمولة التطبيق (أرباح الشركة):' : 'App Commission (Profit):'}</span>
+                            <span className="text-slate-300 font-mono">{parseFloat(selectedOrder.profitCompanySAR).toLocaleString()} SAR</span>
+                          </div>
+                        )}
+                        {parseFloat(selectedOrder.packagingFee || '0') > 0 && (
+                          <div className="flex justify-between">
+                            <span>{isAr ? 'رسوم التغليف:' : 'Packaging Fee:'}</span>
+                            <span className="text-slate-300 font-mono">{parseFloat(selectedOrder.packagingFee).toLocaleString()} SAR</span>
+                          </div>
+                        )}
+                        {parseFloat(selectedOrder.deliveryCourierFee || '0') > 0 && (
+                          <div className="flex justify-between text-yellow-400/80">
+                            <span>{isAr ? 'أجرة التوصيل الداخلي:' : 'Internal Delivery Wage:'}</span>
+                            <span className="font-mono">{parseFloat(selectedOrder.deliveryCourierFee).toLocaleString()} YER</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 text-center text-[11px]">
+                        <div className="bg-slate-955 border border-slate-800 p-2.5 rounded-lg flex flex-col justify-between">
+                          <span className="text-[10px] text-slate-500 font-bold">{isAr ? 'إجمالي قيمة الفاتورة' : 'Total Invoice Due'}</span>
+                          <span className="font-mono text-white text-xs font-black mt-1">{((parseFloat(selectedOrder.amountPaid) || 0) + (parseFloat(selectedOrder.amountRemaining) || 0)).toLocaleString()} YER</span>
+                        </div>
+                        <div className="bg-emerald-950/10 border border-emerald-950/20 p-2.5 rounded-lg flex flex-col justify-between">
+                          <span className="text-[10px] text-emerald-400 font-bold">{isAr ? 'المقدار المقبوض' : 'Settled Balance'}</span>
+                          <span className="font-mono text-emerald-400 text-xs font-black mt-1">{(parseFloat(selectedOrder.amountPaid) || 0).toLocaleString()} YER</span>
+                        </div>
+                        <div className="bg-rose-950/10 border border-rose-950/20 p-2.5 rounded-lg flex flex-col justify-between">
+                          <span className="text-[10px] text-rose-455 font-bold">{isAr ? 'المديونية المتبقية' : 'Remaining Arrears'}</span>
+                          <span className="font-mono text-rose-455 text-xs font-black mt-1">{(parseFloat(selectedOrder.amountRemaining) || 0).toLocaleString()} YER</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Items Table inside current ledger */}
+                    {selectedOrder.items && selectedOrder.items.length > 0 && (
+                      <div className="space-y-2">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block pb-1 border-b border-slate-850">
+                          {isAr ? 'تفاصيل المشتريات ومشتملات الطرد' : 'Cargo manifests & items'}
+                        </span>
+                        <div className="bg-slate-950/40 border border-slate-800 rounded-xl overflow-hidden pr-2">
+                          <table className="w-full text-start text-[11px]">
+                            <thead className="bg-slate-955 text-slate-500 font-black text-[10px] border-b border-slate-850">
+                              <tr>
+                                <th className="p-2.5 text-right">{isAr ? 'المنتج' : 'Product'}</th>
+                                <th className="p-2.5 text-center">{isAr ? 'الكمية' : 'Qty'}</th>
+                                <th className="p-2.5 text-center">{isAr ? 'رابط المنتج' : 'Link'}</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-850">
+                              {selectedOrder.items.map((it: any, index: number) => (
+                                <tr key={index}>
+                                  <td className="p-2.5 text-white font-bold">{it.productName || (isAr ? `طرد رقم ${index + 1}` : `Cargo item ${index + 1}`)}</td>
+                                  <td className="p-2.5 text-center font-mono text-slate-300 font-bold">{it.quantity || 1}</td>
+                                  <td className="p-2.5 text-center">
+                                    {it.productUrl ? (
+                                      <a href={it.productUrl} target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:text-white underline font-bold">{isAr ? 'الرابط خارجي' : 'External link'}</a>
+                                    ) : <span className="text-slate-650">-</span>}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Shipping Details Tracks Timeline */}
+                    {selectedOrder.shippingDetails && selectedOrder.shippingDetails.length > 0 && (
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2 pb-2 border-b border-slate-800">
+                          <Truck className="w-5 h-5 text-[#d4af37]" />
+                          <span className="text-xs font-black text-white uppercase tracking-widest block">
+                            {isAr ? 'مسارات الشحن وتفاصيل الترانزيت اللوجستي' : 'Logistics Manifests & Shipping Steps'}
+                          </span>
+                        </div>
+
+                        <div className="relative border-r-2 border-slate-800 mr-2 md:mr-4 pr-4 md:pr-6 space-y-6 py-2 animate-fade-in text-start">
+                          {selectedOrder.shippingDetails.map((sh: any, index: number) => {
+                            const isDelivered = !!sh.deliveryDate;
+                            const hasSea = sh.shippingType === 'بحري';
+                            const hasAir = sh.shippingType === 'جوي';
+                            const hasLand = sh.shippingType === 'بري' || !sh.shippingType;
+
+                            let typeColor = 'bg-amber-500/10 text-amber-400 border border-amber-500/20';
+                            let typeIcon = '🚛';
+                            let typeLabel = isAr ? 'شحن بري - مقطورات لوجستية' : 'Overland Cargo';
+                            if (hasAir) {
+                              typeColor = 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20';
+                              typeIcon = '✈️';
+                              typeLabel = isAr ? 'شحن جوي - كيجو سريع' : 'Air Freight';
+                            } else if (hasSea) {
+                              typeColor = 'bg-indigo-500/10 text-indigo-400 border border-indigo-505/20';
+                              typeIcon = '🚢';
+                              typeLabel = isAr ? 'شحن بحري - حاويات اقتصادية' : 'Ocean Cargo';
+                            }
+
+                            return (
+                              <div key={index} className="relative group">
+                                {/* Timeline dot */}
+                                <div className={`absolute -right-[23px] md:-right-[35px] top-1.5 w-4 h-4 rounded-full border-4 border-slate-900 z-10 flex items-center justify-center transition-all ${isDelivered ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-amber-500 animate-pulse'
+                                  }`} />
+
+                                {/* Shipment Glass Card */}
+                                <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 space-y-4 hover:border-slate-700 transition duration-300 shadow-md">
+
+                                  {/* Card Header Type and Delivery status */}
+                                  <div className="flex justify-between items-center flex-wrap gap-2">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-black text-[#d4af37] bg-[#d4af37]/5 px-2.5 py-1 rounded-lg border border-[#d4af37]/20">
+                                        {isAr ? `الشحنة #${index + 1}` : `Shipment #${index + 1}`}
+                                      </span>
+                                      <span className="text-sm font-black text-slate-200">{sh.shippingCompany}</span>
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                      {/* Shipping Mode Badge */}
+                                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-black flex items-center gap-1.5 ${typeColor}`}>
+                                        <span>{typeIcon}</span>
+                                        <span>{typeLabel}</span>
+                                      </span>
+
+                                      {/* Delivered vs Transit Badge */}
+                                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-black flex items-center gap-1.5 ${isDelivered
+                                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-505/20'
+                                        : 'bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse'
+                                        }`}>
+                                        <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
+                                        <span>{isDelivered ? (isAr ? 'تم التسليم والمطابقة' : 'Delivered & Matched') : (isAr ? 'تحت الترانزيت 🕒' : 'In Transit 🕒')}</span>
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* Beautiful Route Indicator */}
+                                  <div className="grid grid-cols-7 items-center bg-slate-950/40 p-3 rounded-2xl border border-slate-850/60 text-center">
+                                    <div className="col-span-3 text-start px-2">
+                                      <span className="block text-[9px] text-slate-500 uppercase font-black tracking-wider mb-0.5">{isAr ? 'من (مصدر التصدير)' : 'Origin Point'}</span>
+                                      <span className="text-white font-extrabold text-sm flex items-center gap-1">
+                                        📍 {sh.shippingSource || (isAr ? 'بلد المصدر' : 'Source')}
+                                      </span>
+                                    </div>
+                                    <div className="col-span-1 flex flex-col items-center justify-center">
+                                      <span className="text-xs font-black text-slate-650">➔</span>
+                                    </div>
+                                    <div className="col-span-3 text-start px-2 border-r border-slate-850 pr-4">
+                                      <span className="block text-[9px] text-slate-500 uppercase font-black tracking-wider mb-0.5">{isAr ? 'إلى (وجهة الاستقبال)' : 'Destination Point'}</span>
+                                      <span className="text-[#d4af37] font-extrabold text-sm flex items-center gap-1">
+                                        🏁 {sh.shippingDestination || (isAr ? 'البلد المستقبل' : 'Destination')}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* Dates & Logistics KPIs */}
+                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-slate-950/20 p-3.5 rounded-xl text-[11px] border border-slate-850/30">
+                                    <div>
+                                      <span className="block text-[9px] text-slate-500 font-black mb-1">{isAr ? 'تاريخ انطلاق الشحن' : 'Dispatch Date'}</span>
+                                      <span className="text-slate-300 font-black font-mono">{sh.shippingDate || '—'}</span>
+                                    </div>
+                                    <div>
+                                      <span className="block text-[9px] text-slate-500 font-black mb-1">{isAr ? 'المدة المقدرة للنقل' : 'Transit Duration'}</span>
+                                      <span className="text-slate-300 font-bold bg-slate-800/40 px-2 py-0.5 rounded-md inline-block">{sh.shippingDuration || (isAr ? 'غير محدد' : 'N/A')}</span>
+                                    </div>
+                                    <div>
+                                      <span className="block text-[9px] text-slate-500 font-black mb-1">{isAr ? 'الوصول المتوقع لليمن' : 'Expected Arrival'}</span>
+                                      <span className="text-slate-300 font-extrabold">{sh.expectedArrival || '—'}</span>
+                                    </div>
+                                    <div>
+                                      <span className="block text-[9px] text-slate-500 font-black mb-1">{isAr ? 'تاريخ الاستلام الفعلي' : 'Actual Completion'}</span>
+                                      <span className={`font-mono font-black ${isDelivered ? 'text-emerald-400 bg-emerald-950/10 px-2.5 py-0.5 rounded-md inline-block' : 'text-slate-500 font-bold'}`}>
+                                        {sh.deliveryDate ? sh.deliveryDate : (isAr ? 'قيد الانتظار ⏳' : 'Pending ⏳')}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* Costs Manifest Breakdown */}
+                                  <div className="pt-3 border-t border-slate-800 flex justify-between items-center text-[11px] font-mono flex-wrap gap-2 bg-slate-950/30 -mx-5 -mb-5 p-4 rounded-b-2xl">
+                                    <div className="flex gap-4">
+                                      <div className="text-start">
+                                        <span className="text-slate-500 font-sans text-[10px] block">{isAr ? 'أجرة النقل:' : 'Freight Cost:'}</span>
+                                        <span className="text-white font-extrabold text-xs">
+                                          {(parseFloat(sh.shippingCost) || 0).toLocaleString()} <span className="text-[10px] font-normal font-sans">SAR</span>
+                                        </span>
+                                      </div>
+                                      {sh.packagingFees ? (
+                                        <div className="text-start border-r border-slate-800 pr-4">
+                                          <span className="text-slate-500 font-sans text-[10px] block">{isAr ? 'أجور التغليف والصناديق:' : 'Packaging Fees:'}</span>
+                                          <span className="text-slate-300 font-bold text-xs">
+                                            {(parseFloat(sh.packagingFees) || 0).toLocaleString()} <span className="text-[10px] font-normal font-sans">SAR</span>
+                                          </span>
+                                        </div>
+                                      ) : null}
+                                    </div>
+
+                                    <div className="text-end bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-850">
+                                      <span className="text-[9px] text-slate-500 font-sans block leading-none mb-1">{isAr ? 'إجمالي تكاليف هذه الشحنة:' : 'Segment Total Fees:'}</span>
+                                      <span className="text-emerald-400 font-black text-sm">
+                                        {((parseFloat(sh.shippingCost) || 0) + (parseFloat(sh.packagingFees) || 0)).toLocaleString()}{' '}
+                                        <span className="text-[10px] font-sans">SAR</span>
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Yemen Delivery Summary - computed total: shipping durations + Yemen delivery duration */}
+                        {(() => {
+                          const totalTransitDays = (selectedOrder.shippingDetails || []).reduce(
+                            (sum: number, s: any) => sum + (parseInt(s.shippingDuration) || 0), 0
+                          );
+                          const yemenDuration = settings.defaultYemenDeliveryDuration ?? 5;
+                          const totalExpected = totalTransitDays + yemenDuration;
+                          // Find the last dispatch date from shipping details
+                          const lastDispatch = (selectedOrder.shippingDetails || []).reduce((latest: string, s: any) => {
+                            return s.shippingDate > latest ? s.shippingDate : latest;
+                          }, '');
+                          let yemenArrivalDate = '';
+                          if (lastDispatch) {
+                            const d = new Date(lastDispatch);
+                            d.setDate(d.getDate() + totalExpected);
+                            yemenArrivalDate = d.toISOString().split('T')[0];
+                          }
+                          return (
+                            <div className="p-4 bg-slate-950/60 border border-[#d4af37]/20 rounded-2xl text-[11px] font-bold mt-2">
+                              <div className="flex items-center gap-2 mb-3 pb-2 border-b border-slate-800">
+                                <Truck className="w-4 h-4 text-[#d4af37]" />
+                                <span className="text-[10px] text-[#d4af37] font-black uppercase tracking-widest">
+                                  {isAr ? 'ملخص التسليم النهائي لليمن' : 'Yemen Final Delivery Summary'}
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div>
+                                  <span className="text-[9px] text-slate-500 block mb-1">{isAr ? 'مجموع أيام الشحن:' : 'Total Transit Days:'}</span>
+                                  <span className="font-mono text-amber-400 font-black">{totalTransitDays} {isAr ? 'يوم' : 'd'}</span>
+                                </div>
+                                <div>
+                                  <span className="text-[9px] text-slate-500 block mb-1">{isAr ? 'مدة التوصيل لليمن (إعدادات):' : 'Yemen Delivery (Settings):'}</span>
+                                  <span className="font-mono text-blue-400 font-black">{yemenDuration} {isAr ? 'يوم' : 'd'}</span>
+                                </div>
+                                <div>
+                                  <span className="text-[9px] text-slate-500 block mb-1">{isAr ? 'المدة الإجمالية المتوقعة:' : 'Total Expected Duration:'}</span>
+                                  <span className="font-mono text-emerald-400 font-black text-sm">{totalExpected} {isAr ? 'يوم' : 'days'}</span>
+                                </div>
+                                <div>
+                                  <span className="text-[9px] text-slate-500 block mb-1">{isAr ? 'تاريخ التسليم لليمن المتوقع:' : 'Est. Yemen Arrival:'}</span>
+                                  <span className="font-mono text-[#d4af37] font-black">{yemenArrivalDate || '—'}</span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                      </div>
+                    )}
+
+                  </div>
+
+                  {/* Footer buttons */}
+                  <div className="p-4 bg-slate-955 border-t border-slate-850 flex justify-end gap-2 shrink-0">
+                    <button
+                      onClick={() => generateOrderInvoicePDF(selectedOrder)}
+                      className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black rounded-xl transition font-extrabold flex items-center gap-1.5 cursor-pointer text-xs"
+                    >
+                      <Printer className="w-4 h-4" />
+                      {isAr ? '🖨️ إصدار فاتورة للعميل' : 'Print Invoice PDF'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsDetailsModalOpen(false);
+                        setSelectedOrder(null);
+                      }}
+                      className="px-5 py-2.5 bg-slate-850 text-slate-455 hover:text-white rounded-xl transition font-bold text-xs"
+                    >
+                      {isAr ? 'إغلاق نافذة التفاصيل' : 'Close Details'}
+                    </button>
+                  </div>
+
                 </div>
-                <form onSubmit={handleAddCustomer} className="p-5 space-y-4 text-start overflow-y-auto max-h-[85vh]">
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
-                      {isAr ? 'الاسم الثلاثي أو الرباعي للعميل' : 'Full Patron Name'} *
-                    </label>
-                    <div className="relative">
-                      <User className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#d4af37]" />
-                      <input
-                        required
-                        tabIndex={1}
-                        placeholder={isAr ? 'أدخل اسم العميل بالكامل...' : 'e.g. Abdullah bin Ali'}
-                        type="text"
-                        value={customerFormData.fullName}
-                        onChange={e => setCustomerFormData({ ...customerFormData, fullName: e.target.value })}
-                        className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none text-start transition-all"
-                      />
-                    </div>
+              </div>
+            )}
+
+            {/* DELETE ORDER SECURITY PIN MODAL نموذج تاكيد الحذف*/}
+            {isDeleteModalOpen && (
+              <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
+                <div className="bg-slate-900 border-2 border-rose-500/30 rounded-3xl w-full max-w-md overflow-hidden shadow-[0_0_50px_rgba(239,68,68,0.15)] flex flex-col">
+                  <div className="p-4 bg-rose-950/20 border-b border-slate-800 flex justify-between items-center">
+                    <h3 className="font-black text-rose-450 text-sm flex items-center gap-2">
+                      ⚠️ {isAr ? 'حذف طلب حساس ومحمي' : 'Sensitive Order Deletion'}
+                    </h3>
+                    <button
+                      onClick={() => {
+                        setIsDeleteModalOpen(false);
+                        setOrderToDelete(null);
+                      }}
+                      className="bg-slate-800 text-slate-400 hover:text-white p-1 rounded-lg"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
-                        {isAr ? 'رقم الهاتف (الواتساب)' : 'Cellphone Contact'} *
-                      </label>
-                      <div className="relative">
-                        <Phone className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                        <input
-                          required
-                          tabIndex={2}
-                          type="text"
-                          placeholder="+967..."
-                          value={customerFormData.phone}
-                          onChange={e => setCustomerFormData({ ...customerFormData, phone: e.target.value })}
-                          className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-start"
-                        />
+                  <div className="p-5 space-y-4 text-xs font-bold text-slate-350 text-center">
+                    <p className="text-slate-400 leading-relaxed text-center">
+                      {isAr
+                        ? 'هذا الطلب يحتوي على مدفوعات مسجلة أو تخطت حالته التثبيت الأولي. يرجى إدخال الرمز السري الشخصي للمدير (System PIN) للمتابعة.'
+                        : 'This order has payments recorded or is advanced in the logistics process. Please enter your personal System PIN to confirm deletion.'}
+                    </p>
+
+                    {deleteError && (
+                      <div className="bg-rose-950/30 text-rose-400 p-2.5 rounded-xl border border-rose-900/30 font-mono text-center">
+                        {deleteError}
                       </div>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
-                        {isAr ? 'البريد الإلكتروني' : 'Electronic Mail'}
-                      </label>
-                      <div className="relative">
-                        <Mail className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                        <input
-                          tabIndex={3}
-                          type="email"
-                          placeholder="client@mail.com"
-                          value={customerFormData.email}
-                          onChange={e => setCustomerFormData({ ...customerFormData, email: e.target.value })}
-                          className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-start"
-                        />
-                      </div>
-                    </div>
-                  </div>
+                    )}
 
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
-                      {isAr ? 'العنوان وتفاصيل التوزيع بليمن' : 'Yemen Handover Settlement Address'}
-                    </label>
-                    <div className="relative">
-                      <MapPin className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                      <input
-                        tabIndex={4}
-                        placeholder={isAr ? 'المدينة • المديرية • الشارع • معلم بجانب المنزل' : 'Sanaa, Haddah, behind post office'}
-                        type="text"
-                        value={customerFormData.address}
-                        onChange={e => setCustomerFormData({ ...customerFormData, address: e.target.value })}
-                        className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none text-start"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
-                      {isAr ? 'رابط الموقع الجغرافي الخرائط (GPS)' : 'Google Maps Embed/URL'}
-                    </label>
                     <input
-                      tabIndex={5}
-                      placeholder="https://maps.google.com/?q=..."
-                      type="text"
-                      value={customerFormData.gps_location}
-                      onChange={e => setCustomerFormData({ ...customerFormData, gps_location: e.target.value })}
-                      className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-start"
+                      type="password"
+                      value={deletePin}
+                      onChange={(e) => {
+                        setDeletePin(e.target.value);
+                        setDeleteError('');
+                      }}
+                      className="block w-full px-4 py-3 bg-black border border-slate-850 rounded-xl text-white outline-none focus:border-rose-500 text-center font-mono text-xl tracking-[0.5em]"
+                      placeholder="••••••"
+                      maxLength={10}
+                      autoFocus
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
-                      {isAr ? 'ملاحظات وتصنيفات إدارية خاصة' : 'Administrative Confidential Annotations'}
-                    </label>
-                    <textarea
-                      tabIndex={7}
-                      rows={2}
-                      value={customerFormData.notes}
-                      onChange={e => setCustomerFormData({ ...customerFormData, notes: e.target.value })}
-                      className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none text-start"
-                    ></textarea>
-                  </div>
-
-                  <div className="flex justify-end gap-3 pt-4 border-t border-slate-850">
+                  <div className="p-4 bg-slate-950/30 border-t border-slate-850 flex justify-end gap-2">
                     <button
-                      type="button"
-                      disabled={isSubmitting}
-                      onClick={() => setIsAddCustomerOpen(false)}
-                      className="px-5 py-2 text-slate-400 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-black rounded-xl transition disabled:opacity-50"
+                      onClick={() => {
+                        setIsDeleteModalOpen(false);
+                        setOrderToDelete(null);
+                      }}
+                      className="px-4 py-2 bg-slate-800 text-slate-400 rounded-xl font-bold hover:text-white transition text-xs cursor-pointer"
                     >
                       {isAr ? 'إلغاء' : 'Cancel'}
                     </button>
                     <button
-                      type="submit"
-                      disabled={isSubmitting}
-                      className="px-6 py-2 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black text-xs rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={handleVerifyDeletePin}
+                      className="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl font-black transition text-xs cursor-pointer"
                     >
-                      {isSubmitting ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'تأكيد الحفظ' : 'Confirm Save')}
+                      {isAr ? 'تأكيد الحذف النهائي' : 'Verify & Delete'}
                     </button>
                   </div>
-                </form>
-              </div>
-            </div>
-          )}
-
-          {/* QUICK ADD PURCHASE SOURCE NESTED MODAL */}
-          {isAddSourceOpen && (
-            <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 z-55 animate-fade-in">
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl">
-                <div className="p-4 border-b border-slate-800 bg-slate-955 flex justify-between items-center text-xs font-black text-white">
-                  <span>{isAr ? 'تقييد مصدر شراء جديد' : 'Incorporate Purchase Source'}</span>
-                  <button type="button" onClick={() => setIsAddSourceOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-1 rounded-lg">
-                    <Plus className="w-4 h-4 rotate-45" />
-                  </button>
-                </div>
-                <form onSubmit={handleAddSource} className="p-5 space-y-4 text-start">
-                  <div>
-                    <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'تصنيف قناة التوريد' : 'Class of channel'}</label>
-                    <select
-                      value={sourceFormData.type}
-                      onChange={(e) => setSourceFormData({ ...sourceFormData, type: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold"
-                    >
-                      <option value="SHEIN">{isAr ? 'موقع SHEIN' : 'SHEIN Website'}</option>
-                      <option value="App">{isAr ? 'موقع تسوق إلكتروني / تطبيق' : 'Retail Application/Website'}</option>
-                      <option value="Factory">{isAr ? 'مصنع أو مورد بالصين' : 'Direct China Manufacturer'}</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'اسم المصدر / التطبيق' : 'Source Name'}</label>
-                    <input required type="text" value={sourceFormData.source_name || ''} onChange={e => setSourceFormData({ ...sourceFormData, source_name: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold" />
-                  </div>
-
-                  {sourceFormData.type === 'App' && (
-                    <div>
-                      <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'رابط الويب بوابة (اختياري)' : 'URL Link'}</label>
-                      <input type="url" value={sourceFormData.source_url || ''} onChange={e => setSourceFormData({ ...sourceFormData, source_url: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-mono font-bold" placeholder="https://example.com" />
-                    </div>
-                  )}
-
-                  {sourceFormData.type === 'Factory' && (
-                    <>
-                      <div>
-                        <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'بيانات المورد / WeChat' : 'WeChat Contact'}</label>
-                        <input type="text" value={sourceFormData.contact_info || ''} onChange={e => setSourceFormData({ ...sourceFormData, contact_info: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold" />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'جغرافية المصنع / التسليم' : 'Depot Location'}</label>
-                        <input type="text" value={sourceFormData.location || ''} onChange={e => setSourceFormData({ ...sourceFormData, location: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold" />
-                      </div>
-                    </>
-                  )}
-
-                  <div className="pt-2 flex justify-end gap-2 text-xs">
-                    <button type="button" disabled={isSubmitting} onClick={() => setIsAddSourceOpen(false)} className="p-2 text-slate-400 hover:bg-slate-800 rounded-lg disabled:opacity-50">{isAr ? 'إلغاء' : 'Cancel'}</button>
-                    <button type="submit" disabled={isSubmitting} className="p-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-                      {isSubmitting ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'تأكيد الحفظ' : 'Confirm Save')}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
-
-          {/* QUICK ADD SHIPPING COMPANY NESTED MODAL */}
-          {isAddShippingCompanyOpen && (
-            <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 z-55 animate-fade-in">
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl">
-                <div className="p-4 border-b border-slate-800 bg-slate-955 flex justify-between items-center text-xs font-black text-white">
-                  <span>{isAr ? 'تقييد شركة شحن جديدة' : 'Add New Carrier'}</span>
-                  <button type="button" onClick={() => setIsAddShippingCompanyOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-1 rounded-lg">
-                    <Plus className="w-4 h-4 rotate-45" />
-                  </button>
-                </div>
-                <form onSubmit={handleAddShippingCompany} className="p-5 space-y-4 text-start">
-                  <div>
-                    <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'اسم شركة الشحن' : 'Shipping Carrier Name'}</label>
-                    <input required type="text" value={shippingCompanyFormData.name || ''} onChange={e => setShippingCompanyFormData({ ...shippingCompanyFormData, name: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold" placeholder="e.g Aramex, Safe Ship" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'مسؤول الاتصال' : 'Contact Person'}</label>
-                    <input type="text" value={shippingCompanyFormData.contact_person || ''} onChange={e => setShippingCompanyFormData({ ...shippingCompanyFormData, contact_person: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'رقم الهاتف/الجوال' : 'Phone No.'}</label>
-                    <input type="text" value={shippingCompanyFormData.phone || ''} onChange={e => setShippingCompanyFormData({ ...shippingCompanyFormData, phone: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-mono font-bold" placeholder="+967..." />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'بوابة تتبع الشحنات الويب' : 'Tracking Portal Link'}</label>
-                    <input type="url" value={shippingCompanyFormData.tracking_url || ''} onChange={e => setShippingCompanyFormData({ ...shippingCompanyFormData, tracking_url: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-mono font-bold" placeholder="https://..." />
-                  </div>
-                  <div className="pt-2 flex justify-end gap-2 text-xs">
-                    <button type="button" disabled={isSubmitting} onClick={() => setIsAddShippingCompanyOpen(false)} className="p-2 text-slate-400 hover:bg-slate-800 rounded-lg disabled:opacity-50">{isAr ? 'إلغاء' : 'Cancel'}</button>
-                    <button type="submit" disabled={isSubmitting} className="p-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-                      {isSubmitting ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'تأكيد الحفظ' : 'Confirm Save')}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
-
-          {/* UPDATE STATUS MODAL */}
-          {isUpdateModalOpen && selectedOrder && (
-            <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in overflow-y-auto">
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-4xl overflow-hidden text-start shadow-xl flex flex-col max-h-[90vh]">
-                <div className="p-4 bg-slate-955 border-b border-slate-800 flex justify-between items-center text-xs font-black text-white shrink-0">
-                  <span>{isAr ? 'تحديث المسار والوجهة والوضع اللوجيستي' : 'Freight updates'}</span>
-                  <button onClick={() => setIsUpdateModalOpen(false)} className="text-slate-400 bg-slate-800 p-1 rounded-lg"><Plus className="w-4 h-4 rotate-45" /></button>
-                </div>
-
-                <form onSubmit={handleUpdateStatus} className="p-6 space-y-6 text-xs font-bold text-slate-300 overflow-y-auto custom-scrollbar flex-1">
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-slate-500 block mb-1">{isAr ? 'رمز الطلب الفريد' : 'Order smart key'}</label>
-                        <span className="font-mono text-cyan-400 font-black text-sm">{selectedOrder.orderNumber}</span>
-                      </div>
-
-                      <div>
-                        <label className="block text-slate-500 block mb-1">{isAr ? 'حالة الطلب اللوجيستية الإجمالية' : 'Logistics status'}</label>
-                        <select
-                          value={updateFormData.orderStatus}
-                          onChange={e => setUpdateFormData({ ...updateFormData, orderStatus: e.target.value })}
-                          className={`w-full bg-slate-950 border text-white rounded-xl p-3 outline-none text-xs transition-colors ${(selectedOrder.firedTriggers || []).includes(`status_notified_${updateFormData.orderStatus}`)
-                            ? 'border-yellow-500/50 focus:border-yellow-500'
-                            : 'border-slate-800'
-                            }`}
-                        >
-                          <option value="تم تسجيل الطلب">{isAr ? 'تم تسجيل الطلب واستخلاص الفاتورة' : 'Invoice saved'}</option>
-                          <option value="وصل مستودع السعودية">{isAr ? 'وصل مستودع السعودية للتعبئة' : 'Arrived Saudi packaging HUB'}</option>
-                          <option value="جاري الشحن لليمن">{isAr ? 'جاري الشحن لليمن براً / جوأً' : 'Shipped/Transit to Yemen'}</option>
-                          <option value="في التخليص الجمركي">{isAr ? 'في التخليص الجمركي والأوراق' : 'Customs clearance'}</option>
-                          <option value="وصل مركز التوزيع في اليمن">{isAr ? 'وصل مركز التوزيع والفرز النهائي' : 'Arrived final depot'}</option>
-                          <option value="مع المندوب للتوصيل">{isAr ? 'مع المندوب بانتظار التسليم' : 'Out for Yemen delivery'}</option>
-                          <option value="تم التسليم">{isAr ? 'تم التسليم وتفصيل العهد الموردة' : 'Delivered successfully'}</option>
-                          <option value="ملغي">{isAr ? 'ملغي' : 'Cancelled'}</option>
-                        </select>
-                        {(selectedOrder.firedTriggers || []).includes(`status_notified_${updateFormData.orderStatus}`) && updateFormData.orderStatus !== 'ملغي' && (
-                          <div className="mt-2 p-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg flex items-center gap-2 text-yellow-500 text-[10px] animate-pulse">
-                            <AlertCircle className="w-3 h-3" />
-                            <span>
-                              {isAr
-                                ? 'لقد وصل الطلب لهذه الحالة مسبقاً. لن يتم تكرار القيود المحاسبية أو إرسال إشعارات للعميل.'
-                                : 'This status was already reached. Financial entries and customer notifications will not be repeated.'}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-slate-500 block mb-1">{isAr ? 'مكان التواجد لليمن' : 'Yemen Spot'}</label>
-                        <input
-                          type="text"
-                          value={updateFormData.locationYemen}
-                          onChange={e => setUpdateFormData({ ...updateFormData, locationYemen: e.target.value })}
-                          className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 outline-none text-xs"
-                        />
-                      </div>
-
-                      {canManageOrders && (
-                        <div>
-                          <label className="block text-slate-500 block mb-1">{isAr ? 'ملاحظات وتنبيهات داخلية للموزع' : 'Internal notes'}</label>
-                          <textarea
-                            rows={2}
-                            value={updateFormData.internalNotes}
-                            onChange={e => setUpdateFormData({ ...updateFormData, internalNotes: e.target.value })}
-                            className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 outline-none text-xs"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Assign Couriers/Employees */}
-                  {canManageOrders && (
-                    <div className="pt-4 border-t border-slate-805 grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-slate-500 block mb-1">
-                          {isAr ? 'موظف التعبئة والتجميع' : 'Packaging & Assembly employee'}
-                        </label>
-                        <select
-                          value={updateFormData.shippingCourierId}
-                          onChange={(e) => setUpdateFormData({ ...updateFormData, shippingCourierId: e.target.value })}
-                          className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 outline-none text-xs font-bold"
-                        >
-                          <option value="">{isAr ? '-- اختر موظف التعبئة والتجميع --' : '-- Choose Aggregator --'}</option>
-                          {couriers.filter(c => c.courierType === 'sourcing').map(c => (
-                            <option key={c.id} value={c.id}>
-                              {c.fullName} {c.governorate || c.provinceId ? `(${c.governorate || c.provinceId})` : ''}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-slate-500 block mb-1">
-                          {isAr ? 'مندوب التوزيع النهائي' : 'Yemen Delivery Courier'}
-                        </label>
-                        <select
-                          value={updateFormData.deliveryCourierId}
-                          onChange={(e) => setUpdateFormData({ ...updateFormData, deliveryCourierId: e.target.value })}
-                          className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 outline-none text-xs font-bold"
-                        >
-                          <option value="">{isAr ? '-- اختر مندوب التوزيع النهائي --' : '-- Choose Final Courier --'}</option>
-                          {couriers.filter(c => c.courierType === 'local' || !c.courierType).map(c => (
-                            <option key={c.id} value={c.id}>
-                              {c.fullName} {c.governorate || c.provinceId ? `(${c.governorate || c.provinceId})` : ''}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Edit Shipping Details Subtable */}
-                  {canManageOrders && (
-                    <div className="pt-4 border-t border-slate-800 space-y-4">
-                      <div className="flex justify-between items-center">
-                        <div className="flex flex-col text-start">
-                          <span className="text-xs font-black text-white">{isAr ? 'تفاصيل شحنات المسار اللوجيستي' : 'Shipping Tracks & Manifests'}</span>
-                          <span className="text-[10px] text-slate-500 font-bold mt-0.5">{isAr ? 'يمكنك تحديث وإضافة مسارات الشحن للطلب' : 'Update or add new shipping segments'}</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={addUpdateShippingRow}
-                          className="bg-emerald-600/10 hover:bg-emerald-650/20 text-emerald-400 px-3 py-1.5 rounded-lg text-[10px] font-black transition-all flex items-center gap-1"
-                        >
-                          ➕ {isAr ? 'إضافة تفاصيل شحن' : 'Add Segment'}
-                        </button>
-                      </div>
-
-                      <div className="space-y-4">
-                        {updateShippings && updateShippings.map((sh, idx) => (
-                          <div key={sh.id || idx} className="bg-slate-900/40 p-4 rounded-2xl border border-slate-850 space-y-3 relative text-start">
-                            {/* Segment title and remove action */}
-                            <div className="flex justify-between items-center border-b border-slate-850/50 pb-2">
-                              <span className="text-[10px] font-black text-[#d4af37] bg-[#d4af37]/5 px-2 py-0.5 rounded">
-                                {isAr ? `مسار الشحن #${idx + 1}` : `Shipping Track #${idx + 1}`}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => removeUpdateShippingRow(idx)}
-                                className="text-rose-500 hover:text-rose-400 p-1 rounded hover:bg-rose-950/10 transition-all font-bold text-[10px] flex items-center gap-1"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                                {isAr ? 'إلغاء المسار' : 'Delete Segment'}
-                              </button>
-                            </div>
-
-                            {/* Manifest inputs */}
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-[11px] text-start font-bold">
-                              {/* 1. Mode */}
-                              <div>
-                                <label className="block text-slate-500 mb-1">{isAr ? 'نوع الشحن' : 'Mode'}</label>
-                                <select
-                                  value={sh.shippingType || 'بري'}
-                                  onChange={(e) => updateUpdateShippingRow(idx, 'shippingType', e.target.value)}
-                                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold"
-                                >
-                                  <option value="بري">{isAr ? 'Overland بري' : 'Land - Overland'}</option>
-                                  <option value="جوي">{isAr ? 'Air Freight جوي' : 'Air - Air Freight'}</option>
-                                  <option value="بحري">{isAr ? 'Ocean Cargo بحري' : 'Sea - Ocean Cargo'}</option>
-                                </select>
-                              </div>
-
-                              {/* 2. Carrier company */}
-                              <div>
-                                <div className="flex justify-between items-center mb-1">
-                                  <label className="block text-slate-400">{isAr ? 'شركة الشحن' : 'Carrier'}</label>
-                                  {(role === 'Admin' || hasPermission('add_sources')) && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setActiveAddShippingIndex(`edit-${idx}`);
-                                        setIsAddShippingCompanyOpen(true);
-                                      }}
-                                      className="text-[10px] font-black text-cyan-400 hover:underline flex items-center gap-0.5"
-                                    >
-                                      ➕ {isAr ? 'جديدة' : 'New'}
-                                    </button>
-                                  )}
-                                </div>
-                                <select
-                                  value={sh.shippingCompany || ''}
-                                  onChange={(e) => updateUpdateShippingRow(idx, 'shippingCompany', e.target.value)}
-                                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold"
-                                >
-                                  <option value="">{isAr ? '-- اختر شركة شحن --' : '-- Choose carrier --'}</option>
-                                  {shippingCompanies.map(c => (
-                                    <option key={c.id} value={c.name}>{c.name}</option>
-                                  ))}
-                                </select>
-                              </div>
-
-                              {/* 3. Tracking Number */}
-                              <div>
-                                <label className="block text-slate-500 mb-1">{isAr ? 'رقم التتبع للشحنة' : 'Tracking Number'}</label>
-                                <input
-                                  type="text"
-                                  value={sh.trackingNumber || ''}
-                                  onChange={(e) => updateUpdateShippingRow(idx, 'trackingNumber', e.target.value)}
-                                  placeholder={isAr ? "رقم التتبع المخصص للشحنة" : "Cargo tracking ID"}
-                                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-mono placeholder-slate-650"
-                                />
-                              </div>
-
-                              {/* 4. Shipping Cost */}
-                              <div>
-                                <label className="block text-slate-500 mb-1">{isAr ? 'أجرة وتكاليف النقل (ريال سعودي)' : 'Shipping Cost (SAR)'}</label>
-                                <input
-                                  type="number"
-                                  required
-                                  value={sh.shippingCost || 0}
-                                  onChange={(e) => updateUpdateShippingRow(idx, 'shippingCost', parseFloat(e.target.value) || 0)}
-                                  className="w-full bg-slate-950 border border-slate-800 text-[#d4af37] rounded-xl p-2.5 outline-none font-mono"
-                                />
-                              </div>
-
-                              {/* 5. Origin */}
-                              <div>
-                                <label className="block text-slate-500 mb-1">{isAr ? 'مكان التصدير' : 'Source'}</label>
-                                <input
-                                  type="text"
-                                  required
-                                  value={sh.shippingSource || ''}
-                                  onChange={(e) => updateUpdateShippingRow(idx, 'shippingSource', e.target.value)}
-                                  placeholder={isAr ? "مثال: الصين، دبي" : "Source country"}
-                                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none placeholder-slate-600"
-                                />
-                              </div>
-
-                              {/* 6. Destination */}
-                              <div>
-                                <label className="block text-slate-500 mb-1">{isAr ? 'مكان الاستلام' : 'Destination'}</label>
-                                <input
-                                  type="text"
-                                  required
-                                  value={sh.shippingDestination || ''}
-                                  onChange={(e) => updateUpdateShippingRow(idx, 'shippingDestination', e.target.value)}
-                                  placeholder={isAr ? "مثال: مستودع صنعاء" : "Destination depot"}
-                                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none placeholder-slate-600"
-                                />
-                              </div>
-
-                              {/* 7. Dispatch / Departure Date */}
-                              <div>
-                                <label className="block text-slate-500 mb-1">{isAr ? 'تاريخ انطلاق الشحن' : 'Dispatch Date'}</label>
-                                <div className="relative">
-                                  <input
-                                    type="date"
-                                    id={`upd-dispatch-date-${idx}`}
-                                    value={sh.shippingDate || ''}
-                                    onChange={(e) => {
-                                      const newDate = e.target.value;
-                                      let expected = sh.expectedArrival || '';
-                                      if (newDate && sh.shippingDuration) {
-                                        const days = parseInt(sh.shippingDuration);
-                                        if (!isNaN(days)) {
-                                          const dateObj = new Date(newDate);
-                                          dateObj.setDate(dateObj.getDate() + days);
-                                          expected = dateObj.toISOString().split('T')[0];
-                                        }
-                                      }
-                                      updateUpdateShippingRow(idx, { shippingDate: newDate, expectedArrival: expected });
-                                    }}
-                                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans pr-9"
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const el = document.getElementById(`upd-dispatch-date-${idx}`);
-                                      if (el) (el as HTMLInputElement).showPicker?.();
-                                    }}
-                                    className="absolute inset-y-0 end-2.5 flex items-center text-slate-500 hover:text-[#d4af37] transition"
-                                  >
-                                    <Calendar className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              </div>
-
-                              {/* 8. Transit Duration */}
-                              <div>
-                                <label className="block text-slate-500 mb-1">{isAr ? 'المدة التقديرية (أيام)' : 'Transit Duration (Days)'}</label>
-                                <div className="relative">
-                                  <input
-                                    type="number"
-                                    value={sh.shippingDuration || ''}
-                                    onChange={(e) => {
-                                      const durationVal = e.target.value;
-                                      let expected = sh.expectedArrival || '';
-                                      if (sh.shippingDate && durationVal) {
-                                        const days = parseInt(durationVal);
-                                        if (!isNaN(days)) {
-                                          const dateObj = new Date(sh.shippingDate);
-                                          dateObj.setDate(dateObj.getDate() + days);
-                                          expected = dateObj.toISOString().split('T')[0];
-                                        }
-                                      }
-                                      updateUpdateShippingRow(idx, { shippingDuration: durationVal, expectedArrival: expected });
-                                    }}
-                                    placeholder={isAr ? "مثال: 12 يوم" : "e.g. 12"}
-                                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none placeholder-slate-655 font-mono pr-9"
-                                  />
-                                  <span className="absolute inset-y-0 end-2.5 flex items-center text-slate-600 text-[10px] font-bold pointer-events-none">
-                                    {isAr ? 'يوم' : 'd'}
-                                  </span>
-                                </div>
-                              </div>
-
-                              {/* 9. Expected Arrival */}
-                              <div>
-                                <label className="block text-slate-500 mb-1">{isAr ? 'موعد الوصول المتوقع' : 'Expected Arrival'}</label>
-                                <div className="relative">
-                                  <input
-                                    type="date"
-                                    id={`upd-expected-date-${idx}`}
-                                    value={sh.expectedArrival || ''}
-                                    onChange={(e) => updateUpdateShippingRow(idx, 'expectedArrival', e.target.value)}
-                                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans pr-9"
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const el = document.getElementById(`upd-expected-date-${idx}`);
-                                      if (el) (el as HTMLInputElement).showPicker?.();
-                                    }}
-                                    className="absolute inset-y-0 end-2.5 flex items-center text-slate-500 hover:text-emerald-400 transition"
-                                  >
-                                    <Calendar className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              </div>
-
-                              {/* 10. Packaging Fees (SAR fixed amount) */}
-                              <div className="col-span-2">
-                                <label className="block text-slate-500 mb-1">{isAr ? 'أجور التغليف والصناديق (SAR)' : 'Packaging Fees (SAR)'}</label>
-                                <input
-                                  type="number"
-                                  value={sh.packagingFees || 0}
-                                  onChange={(e) => updateUpdateShippingRow(idx, 'packagingFees', parseFloat(e.target.value) || 0)}
-                                  className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-mono"
-                                />
-                              </div>
-
-                              {/* 11. Delivery Date */}
-                              <div>
-                                <label className="block text-slate-500 mb-1">{isAr ? 'تاريخ التسليم الفعلي المكتمل' : 'Actual Completed Delivery Date'}</label>
-                                <div className="relative">
-                                  <input
-                                    type="date"
-                                    id={`upd-delivery-date-${idx}`}
-                                    value={sh.deliveryDate || ''}
-                                    onChange={(e) => updateUpdateShippingRow(idx, 'deliveryDate', e.target.value)}
-                                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans pr-9"
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const el = document.getElementById(`upd-delivery-date-${idx}`);
-                                      if (el) (el as HTMLInputElement).showPicker?.();
-                                    }}
-                                    className="absolute inset-y-0 end-2.5 flex items-center text-slate-500 hover:text-emerald-400 transition"
-                                  >
-                                    <Calendar className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                        {(!updateShippings || updateShippings.length === 0) && (
-                          <p className="text-center text-slate-550 text-[10px] py-4 bg-slate-950/20 rounded-xl border border-dashed border-slate-850 font-bold">
-                            {isAr ? 'لم يتم إضافة تفاصيل شحن للطلب بعد.' : 'No shipping items added yet.'}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="pt-4 border-t border-slate-800 flex justify-end gap-2 shrink-0">
-                    <button type="button" disabled={isSubmitting} onClick={() => setIsUpdateModalOpen(false)} className="px-5 py-2 hover:bg-slate-800 text-slate-400 rounded-lg disabled:opacity-50">{isAr ? 'إلغاء' : 'Cancel'}</button>
-                    <button type="submit" disabled={isSubmitting} className="px-6 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-                      {isSubmitting ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'حفظ وترحيل التغييرات' : 'Update settings')}
-                    </button>
-                  </div>
-
-                </form>
-              </div>
-            </div>
-          )}
-
-          {/* COLLECT PAYMENT MODAL */}
-          {isPaymentModalOpen && selectedOrder && (
-            <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm overflow-hidden text-start shadow-xl">
-                <div className="p-4 bg-slate-955 border-b border-slate-800 flex justify-between items-center text-xs font-black text-white">
-                  <span>{isAr ? 'تحصيل دفعة مالية وقبض من العميل' : 'Post payment ledger'}</span>
-                  <button onClick={() => {
-                    setIsPaymentModalOpen(false);
-                    setPaymentFormData({ amount: '', method: 'Cash', notes: '', pin: '' });
-                  }} className="text-slate-400 bg-slate-800 p-1 rounded-lg"><Plus className="w-4 h-4 rotate-45" /></button>
-                </div>
-
-                <form onSubmit={handleAddPayment} className="p-6 space-y-4 text-xs font-bold text-slate-300 font-sans">
-                  <div>
-                    <label className="block text-slate-500 mb-1">{isAr ? 'رقم الطلب' : 'Smart order code'}</label>
-                    <span className="font-mono text-[#d4af37] font-black text-sm">{selectedOrder.orderNumber}</span>
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-500 mb-1">{isAr ? 'إجمالي المتبقي للتحصيل' : 'Total dues left'}</label>
-                    <span className="font-mono text-rose-400 font-extrabold text-base">{parseFloat(selectedOrder.amountRemaining || 0).toLocaleString()} YER</span>
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-500 mb-1">{isAr ? 'المقدار المحصل المقبوض الآن (ريال يمني)' : 'Collection amount in YER'}</label>
-                    <input
-                      required
-                      type="number"
-                      step="any"
-                      value={paymentFormData.amount}
-                      onChange={e => setPaymentFormData({ ...paymentFormData, amount: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 text-emerald-400 font-mono text-sm font-black p-3 rounded-xl outline-none text-center"
-                      placeholder="0.00 YER"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-500 mb-1 text-amber-500 flex items-center gap-1">
-                      <span>{isAr ? 'رمز الـ PIN المالي الثنائي للتحقق' : 'Security PIN authorization'}</span>
-                      <span className="text-[9px] bg-amber-500/10 border border-amber-500/30 text-amber-500 px-1.5 py-0.2 rounded font-sans uppercase">MANDATORY</span>
-                    </label>
-                    <input
-                      required
-                      type="password"
-                      maxLength={6}
-                      pattern="^[0-9]{4,6}$"
-                      title={isAr ? "رمز PIN سري من 4 إلى 6 أرقام" : "A 4-6 digit security PIN code"}
-                      value={paymentFormData.pin}
-                      onChange={e => setPaymentFormData({ ...paymentFormData, pin: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 text-yellow-500 font-mono text-sm font-black p-3 rounded-xl outline-none text-center tracking-widest"
-                      placeholder="••••"
-                    />
-                    <p className="text-[9px] text-slate-500 mt-1">{isAr ? 'اكتب الـ PIN الخاص بك المخزن في ملف الموظف لتفويض المعاملة.' : 'Enter your professional profile PIN to authorize transaction.'}</p>
-                  </div>
-
-                  <div className="pt-4 border-t border-slate-800 flex justify-end gap-2">
-                    <button type="button" disabled={isSubmitting} onClick={() => {
-                      setIsPaymentModalOpen(false);
-                      setPaymentFormData({ amount: '', method: 'Cash', notes: '', pin: '' });
-                    }} className="px-4 py-2 hover:bg-slate-800 text-slate-400 rounded-lg disabled:opacity-50">{isAr ? 'إلغاء' : 'Cancel'}</button>
-                    <button type="submit" disabled={isSubmitting} className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-                      {isSubmitting ? (isAr ? 'جاري التحصيل...' : 'Settling...') : (isAr ? 'تأكيد ترحيل القبض' : 'Settle payment')}
-                    </button>
-                  </div>
-
-                </form>
-              </div>
-            </div>
-          )}
-
-          {/* ORDER DETAILS & QR SCANNER MODAL */}
-          {isDetailsModalOpen && selectedOrder && (
-            <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in overflow-y-auto font-sans">
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-2xl overflow-hidden text-start shadow-xl flex flex-col max-h-[90vh]">
-
-                {/* Header */}
-                <div className="p-4 bg-slate-955 border-b border-slate-800 flex justify-between items-center text-xs font-black text-white">
-                  <span>{isAr ? 'تفاصيل الفاتورة وتتبع الشحنة الرقمي' : 'Invoice Details & Tracking Profile'}</span>
-                  <button
-                    onClick={() => {
-                      setIsDetailsModalOpen(false);
-                      setSelectedOrder(null);
-                    }}
-                    className="text-slate-400 bg-slate-800 p-1 rounded-lg cursor-pointer hover:text-white"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-
-                {/* Content */}
-                <div className="p-6 overflow-y-auto space-y-6 text-slate-350 text-xs custom-scrollbar">
-
-                  {/* QR Code and Key Track IDs Section */}
-                  <div className="bg-slate-955 border border-[#d4af37]/20 p-5 rounded-2xl flex flex-col md:flex-row items-center gap-6">
-
-                    {/* QR Code Draw Area */}
-                    <div className="bg-white p-3 rounded-2xl shadow-lg border-2 border-[#d4af37] flex flex-col items-center justify-center shrink-0">
-                      <canvas ref={qrCanvasRef} className="w-[140px] h-[140px]"></canvas>
-                      <span className="text-[10px] text-slate-500 font-black tracking-tight mt-1.5 uppercase select-all">
-                        {selectedOrder.trackingNumber || selectedOrder.orderNumber || ''}
-                      </span>
-                    </div>
-
-                    {/* Key Labels & Action Copier */}
-                    <div className="flex-1 space-y-2 text-center md:text-start w-full">
-                      <span className="text-[9px] text-[#d4af37] bg-[#d4af37]/10 font-black px-2 py-0.5 rounded-full uppercase tracking-widest inline-block">
-                        {isAr ? 'رمز تتبع الشحنة الموحد' : 'Logistic Courier Tracking Key'}
-                      </span>
-
-                      <h4 className="text-white text-lg font-black tracking-tight select-all">
-                        {selectedOrder.trackingNumber || selectedOrder.orderNumber || 'ALX-XXXX-XXXX'}
-                      </h4>
-
-                      <p className="text-slate-400 text-[11px] leading-relaxed">
-                        {isAr
-                          ? 'امسح الرمز السريع (QR) أعلاه بواسطة كاميرا الكاشير أو الموزع للوصول اللوجستي وتحديث حالة الطرد بسرعة خاطفة.'
-                          : 'Scan the quick QR code with courier scanner terminal to instantly register driver dispatch status.'}
-                      </p>
-
-                      <div className="pt-1 flex flex-wrap justify-center md:justify-start gap-2">
-                        <CopyToClipboard
-                          text={selectedOrder.trackingNumber || selectedOrder.orderNumber || ''}
-                          showIconOnly={false}
-                          label={isAr ? 'نسخ رمز التتبع الموحد' : 'Copy Tracking ID'}
-                          labelCopied={isAr ? 'تم نسخ الرمز!' : 'Copied Tracking ID!'}
-                          className="px-4 py-2.5 text-[11px] rounded-xl font-black"
-                        />
-                      </div>
-                    </div>
-
-                  </div>
-
-                  {/* General Order Information Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-                    <div className="space-y-3 bg-slate-950/20 p-4 border border-slate-800/60 rounded-xl">
-                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block border-b border-slate-850 pb-1">
-                        {isAr ? 'الزبون والحساب' : 'Customer Account'}
-                      </span>
-                      <div className="space-y-1">
-                        <div className="text-slate-400 font-bold">{isAr ? 'الاسم الائتماني:' : 'Client Name:'} <span className="text-white">{selectedOrder.customerName}</span></div>
-                        <div className="text-slate-400 font-bold">{isAr ? 'رقم الهاتف:' : 'Phone Key:'} <span className="text-white font-mono select-all">{selectedOrder.customerPhone}</span></div>
-                        {selectedOrder.locationYemen && (
-                          <div className="text-slate-400 font-bold">{isAr ? 'أماكن التوصيل لليمن:' : 'Yemen Destination:'} <span className="text-white font-mono">{selectedOrder.locationYemen}</span></div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="space-y-3 bg-slate-950/20 p-4 border border-slate-800/60 rounded-xl">
-                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block border-b border-slate-850 pb-1">
-                        {isAr ? 'البيانات اللوجيتسية' : 'Logistics Route'}
-                      </span>
-                      <div className="space-y-1">
-                        <div className="text-slate-400 font-bold">{isAr ? 'حالة الشحنة الطردية:' : 'Cargo Current State:'} <span className="text-[#d4af37] font-black">{formatStatusLabel(selectedOrder.orderStatus)}</span></div>
-                        <div className="text-slate-400 font-bold">{isAr ? 'قناة التعبئة والمصدر:' : 'Sales Cargo Source:'} <span className="text-white">{selectedOrder.orderSourceName || selectedOrder.orderSourceType}</span></div>
-                        <div className="text-slate-400 font-bold">{isAr ? 'تاريخ المعاملة:' : 'Invoice Date:'} <span className="text-white font-mono">{safeToDate(selectedOrder.createdAt).toLocaleString(isAr ? 'ar-EG' : 'en-US')}</span></div>
-                      </div>
-                    </div>
-
-                  </div>
-
-                  {/* Financial Balance Status Card */}
-                  <div className="bg-slate-955 border border-slate-800 p-4 rounded-xl space-y-3">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block border-b border-slate-850 pb-1">
-                      {isAr ? 'كشف الرصيد وتفاصيل السداد المالي' : 'Financial breakdown'}
-                    </span>
-
-                    {/* Cost Breakdown Details */}
-                    <div className="flex flex-col gap-1 text-[11px] font-bold text-slate-400 mb-3 border-b border-slate-850 pb-3">
-                      <div className="flex justify-between">
-                        <span>{isAr ? 'تكلفة المنتجات الأصلية:' : 'Original Products:'}</span>
-                        <span className="text-slate-300 font-mono">
-                          {(selectedOrder.productsSum !== undefined
-                            ? selectedOrder.productsSum
-                            : (parseFloat(selectedOrder.totalCostSAR) - parseFloat(selectedOrder.profitCompanySAR || 0) - parseFloat(selectedOrder.shippingCostSAR || 0) - parseFloat(selectedOrder.packagingFee || 0))
-                          ).toLocaleString()} SAR
-                        </span>
-                      </div>
-                      {selectedOrder.couponEnabled && (parseFloat(selectedOrder.couponRate) > 0) && (
-                        <div className="flex justify-between text-rose-450/90">
-                          <span>{isAr ? 'كوبون الخصم للمشتريات (مبلغ):' : 'Purchase Coupon Discount:'}</span>
-                          <span className="font-mono">-{parseFloat(selectedOrder.couponRate).toLocaleString()} SAR</span>
-                        </div>
-                      )}
-                      {parseFloat(selectedOrder.shippingCostSAR || '0') > 0 && (
-                        <div className="flex justify-between">
-                          <span>{isAr ? 'تكلفة الشحن والتخليص:' : 'Shipping Cost:'}</span>
-                          <span className="text-slate-300 font-mono">{parseFloat(selectedOrder.shippingCostSAR).toLocaleString()} SAR</span>
-                        </div>
-                      )}
-                      {parseFloat(selectedOrder.profitCompanySAR || '0') > 0 && (
-                        <div className="flex justify-between">
-                          <span>{isAr ? 'عمولة التطبيق (أرباح الشركة):' : 'App Commission (Profit):'}</span>
-                          <span className="text-slate-300 font-mono">{parseFloat(selectedOrder.profitCompanySAR).toLocaleString()} SAR</span>
-                        </div>
-                      )}
-                      {parseFloat(selectedOrder.packagingFee || '0') > 0 && (
-                        <div className="flex justify-between">
-                          <span>{isAr ? 'رسوم التغليف:' : 'Packaging Fee:'}</span>
-                          <span className="text-slate-300 font-mono">{parseFloat(selectedOrder.packagingFee).toLocaleString()} SAR</span>
-                        </div>
-                      )}
-                      {parseFloat(selectedOrder.deliveryCourierFee || '0') > 0 && (
-                        <div className="flex justify-between text-yellow-400/80">
-                          <span>{isAr ? 'أجرة التوصيل الداخلي:' : 'Internal Delivery Wage:'}</span>
-                          <span className="font-mono">{parseFloat(selectedOrder.deliveryCourierFee).toLocaleString()} YER</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2 text-center text-[11px]">
-                      <div className="bg-slate-955 border border-slate-800 p-2.5 rounded-lg flex flex-col justify-between">
-                        <span className="text-[10px] text-slate-500 font-bold">{isAr ? 'إجمالي قيمة الفاتورة' : 'Total Invoice Due'}</span>
-                        <span className="font-mono text-white text-xs font-black mt-1">{((parseFloat(selectedOrder.amountPaid) || 0) + (parseFloat(selectedOrder.amountRemaining) || 0)).toLocaleString()} YER</span>
-                      </div>
-                      <div className="bg-emerald-950/10 border border-emerald-950/20 p-2.5 rounded-lg flex flex-col justify-between">
-                        <span className="text-[10px] text-emerald-400 font-bold">{isAr ? 'المقدار المقبوض' : 'Settled Balance'}</span>
-                        <span className="font-mono text-emerald-400 text-xs font-black mt-1">{(parseFloat(selectedOrder.amountPaid) || 0).toLocaleString()} YER</span>
-                      </div>
-                      <div className="bg-rose-950/10 border border-rose-950/20 p-2.5 rounded-lg flex flex-col justify-between">
-                        <span className="text-[10px] text-rose-455 font-bold">{isAr ? 'المديونية المتبقية' : 'Remaining Arrears'}</span>
-                        <span className="font-mono text-rose-455 text-xs font-black mt-1">{(parseFloat(selectedOrder.amountRemaining) || 0).toLocaleString()} YER</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Items Table inside current ledger */}
-                  {selectedOrder.items && selectedOrder.items.length > 0 && (
-                    <div className="space-y-2">
-                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block pb-1 border-b border-slate-850">
-                        {isAr ? 'تفاصيل المشتريات ومشتملات الطرد' : 'Cargo manifests & items'}
-                      </span>
-                      <div className="bg-slate-950/40 border border-slate-800 rounded-xl overflow-hidden pr-2">
-                        <table className="w-full text-start text-[11px]">
-                          <thead className="bg-slate-955 text-slate-500 font-black text-[10px] border-b border-slate-850">
-                            <tr>
-                              <th className="p-2.5 text-right">{isAr ? 'المنتج' : 'Product'}</th>
-                              <th className="p-2.5 text-center">{isAr ? 'الكمية' : 'Qty'}</th>
-                              <th className="p-2.5 text-center">{isAr ? 'رابط المنتج' : 'Link'}</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-850">
-                            {selectedOrder.items.map((it: any, index: number) => (
-                              <tr key={index}>
-                                <td className="p-2.5 text-white font-bold">{it.productName || (isAr ? `طرد رقم ${index + 1}` : `Cargo item ${index + 1}`)}</td>
-                                <td className="p-2.5 text-center font-mono text-slate-300 font-bold">{it.quantity || 1}</td>
-                                <td className="p-2.5 text-center">
-                                  {it.productUrl ? (
-                                    <a href={it.productUrl} target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:text-white underline font-bold">{isAr ? 'الرابط خارجي' : 'External link'}</a>
-                                  ) : <span className="text-slate-650">-</span>}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Shipping Details Tracks Timeline */}
-                  {selectedOrder.shippingDetails && selectedOrder.shippingDetails.length > 0 && (
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2 pb-2 border-b border-slate-800">
-                        <Truck className="w-5 h-5 text-[#d4af37]" />
-                        <span className="text-xs font-black text-white uppercase tracking-widest block">
-                          {isAr ? 'مسارات الشحن وتفاصيل الترانزيت اللوجستي' : 'Logistics Manifests & Shipping Steps'}
-                        </span>
-                      </div>
-
-                      <div className="relative border-r-2 border-slate-800 mr-2 md:mr-4 pr-4 md:pr-6 space-y-6 py-2 animate-fade-in text-start">
-                        {selectedOrder.shippingDetails.map((sh: any, index: number) => {
-                          const isDelivered = !!sh.deliveryDate;
-                          const hasSea = sh.shippingType === 'بحري';
-                          const hasAir = sh.shippingType === 'جوي';
-                          const hasLand = sh.shippingType === 'بري' || !sh.shippingType;
-
-                          let typeColor = 'bg-amber-500/10 text-amber-400 border border-amber-500/20';
-                          let typeIcon = '🚛';
-                          let typeLabel = isAr ? 'شحن بري - مقطورات لوجستية' : 'Overland Cargo';
-                          if (hasAir) {
-                            typeColor = 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20';
-                            typeIcon = '✈️';
-                            typeLabel = isAr ? 'شحن جوي - كيجو سريع' : 'Air Freight';
-                          } else if (hasSea) {
-                            typeColor = 'bg-indigo-500/10 text-indigo-400 border border-indigo-505/20';
-                            typeIcon = '🚢';
-                            typeLabel = isAr ? 'شحن بحري - حاويات اقتصادية' : 'Ocean Cargo';
-                          }
-
-                          return (
-                            <div key={index} className="relative group">
-                              {/* Timeline dot */}
-                              <div className={`absolute -right-[23px] md:-right-[35px] top-1.5 w-4 h-4 rounded-full border-4 border-slate-900 z-10 flex items-center justify-center transition-all ${isDelivered ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-amber-500 animate-pulse'
-                                }`} />
-
-                              {/* Shipment Glass Card */}
-                              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 space-y-4 hover:border-slate-700 transition duration-300 shadow-md">
-
-                                {/* Card Header Type and Delivery status */}
-                                <div className="flex justify-between items-center flex-wrap gap-2">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-xs font-black text-[#d4af37] bg-[#d4af37]/5 px-2.5 py-1 rounded-lg border border-[#d4af37]/20">
-                                      {isAr ? `الشحنة #${index + 1}` : `Shipment #${index + 1}`}
-                                    </span>
-                                    <span className="text-sm font-black text-slate-200">{sh.shippingCompany}</span>
-                                  </div>
-
-                                  <div className="flex items-center gap-2">
-                                    {/* Shipping Mode Badge */}
-                                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-black flex items-center gap-1.5 ${typeColor}`}>
-                                      <span>{typeIcon}</span>
-                                      <span>{typeLabel}</span>
-                                    </span>
-
-                                    {/* Delivered vs Transit Badge */}
-                                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-black flex items-center gap-1.5 ${isDelivered
-                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-505/20'
-                                      : 'bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse'
-                                      }`}>
-                                      <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
-                                      <span>{isDelivered ? (isAr ? 'تم التسليم والمطابقة' : 'Delivered & Matched') : (isAr ? 'تحت الترانزيت 🕒' : 'In Transit 🕒')}</span>
-                                    </span>
-                                  </div>
-                                </div>
-
-                                {/* Beautiful Route Indicator */}
-                                <div className="grid grid-cols-7 items-center bg-slate-950/40 p-3 rounded-2xl border border-slate-850/60 text-center">
-                                  <div className="col-span-3 text-start px-2">
-                                    <span className="block text-[9px] text-slate-500 uppercase font-black tracking-wider mb-0.5">{isAr ? 'من (مصدر التصدير)' : 'Origin Point'}</span>
-                                    <span className="text-white font-extrabold text-sm flex items-center gap-1">
-                                      📍 {sh.shippingSource || (isAr ? 'بلد المصدر' : 'Source')}
-                                    </span>
-                                  </div>
-                                  <div className="col-span-1 flex flex-col items-center justify-center">
-                                    <span className="text-xs font-black text-slate-650">➔</span>
-                                  </div>
-                                  <div className="col-span-3 text-start px-2 border-r border-slate-850 pr-4">
-                                    <span className="block text-[9px] text-slate-500 uppercase font-black tracking-wider mb-0.5">{isAr ? 'إلى (وجهة الاستقبال)' : 'Destination Point'}</span>
-                                    <span className="text-[#d4af37] font-extrabold text-sm flex items-center gap-1">
-                                      🏁 {sh.shippingDestination || (isAr ? 'البلد المستقبل' : 'Destination')}
-                                    </span>
-                                  </div>
-                                </div>
-
-                                {/* Dates & Logistics KPIs */}
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-slate-950/20 p-3.5 rounded-xl text-[11px] border border-slate-850/30">
-                                  <div>
-                                    <span className="block text-[9px] text-slate-500 font-black mb-1">{isAr ? 'تاريخ انطلاق الشحن' : 'Dispatch Date'}</span>
-                                    <span className="text-slate-300 font-black font-mono">{sh.shippingDate || '—'}</span>
-                                  </div>
-                                  <div>
-                                    <span className="block text-[9px] text-slate-500 font-black mb-1">{isAr ? 'المدة المقدرة للنقل' : 'Transit Duration'}</span>
-                                    <span className="text-slate-300 font-bold bg-slate-800/40 px-2 py-0.5 rounded-md inline-block">{sh.shippingDuration || (isAr ? 'غير محدد' : 'N/A')}</span>
-                                  </div>
-                                  <div>
-                                    <span className="block text-[9px] text-slate-500 font-black mb-1">{isAr ? 'الوصول المتوقع لليمن' : 'Expected Arrival'}</span>
-                                    <span className="text-slate-300 font-extrabold">{sh.expectedArrival || '—'}</span>
-                                  </div>
-                                  <div>
-                                    <span className="block text-[9px] text-slate-500 font-black mb-1">{isAr ? 'تاريخ الاستلام الفعلي' : 'Actual Completion'}</span>
-                                    <span className={`font-mono font-black ${isDelivered ? 'text-emerald-400 bg-emerald-950/10 px-2.5 py-0.5 rounded-md inline-block' : 'text-slate-500 font-bold'}`}>
-                                      {sh.deliveryDate ? sh.deliveryDate : (isAr ? 'قيد الانتظار ⏳' : 'Pending ⏳')}
-                                    </span>
-                                  </div>
-                                </div>
-
-                                {/* Costs Manifest Breakdown */}
-                                <div className="pt-3 border-t border-slate-800 flex justify-between items-center text-[11px] font-mono flex-wrap gap-2 bg-slate-950/30 -mx-5 -mb-5 p-4 rounded-b-2xl">
-                                  <div className="flex gap-4">
-                                    <div className="text-start">
-                                      <span className="text-slate-500 font-sans text-[10px] block">{isAr ? 'أجرة النقل:' : 'Freight Cost:'}</span>
-                                      <span className="text-white font-extrabold text-xs">
-                                        {(parseFloat(sh.shippingCost) || 0).toLocaleString()} <span className="text-[10px] font-normal font-sans">SAR</span>
-                                      </span>
-                                    </div>
-                                    {sh.packagingFees ? (
-                                      <div className="text-start border-r border-slate-800 pr-4">
-                                        <span className="text-slate-500 font-sans text-[10px] block">{isAr ? 'أجور التغليف والصناديق:' : 'Packaging Fees:'}</span>
-                                        <span className="text-slate-300 font-bold text-xs">
-                                          {(parseFloat(sh.packagingFees) || 0).toLocaleString()} <span className="text-[10px] font-normal font-sans">SAR</span>
-                                        </span>
-                                      </div>
-                                    ) : null}
-                                  </div>
-
-                                  <div className="text-end bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-850">
-                                    <span className="text-[9px] text-slate-500 font-sans block leading-none mb-1">{isAr ? 'إجمالي تكاليف هذه الشحنة:' : 'Segment Total Fees:'}</span>
-                                    <span className="text-emerald-400 font-black text-sm">
-                                      {((parseFloat(sh.shippingCost) || 0) + (parseFloat(sh.packagingFees) || 0)).toLocaleString()}{' '}
-                                      <span className="text-[10px] font-sans">SAR</span>
-                                    </span>
-                                  </div>
-                                </div>
-
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      {/* Yemen Delivery Summary - computed total: shipping durations + Yemen delivery duration */}
-                      {(() => {
-                        const totalTransitDays = (selectedOrder.shippingDetails || []).reduce(
-                          (sum: number, s: any) => sum + (parseInt(s.shippingDuration) || 0), 0
-                        );
-                        const yemenDuration = settings.defaultYemenDeliveryDuration ?? 5;
-                        const totalExpected = totalTransitDays + yemenDuration;
-                        // Find the last dispatch date from shipping details
-                        const lastDispatch = (selectedOrder.shippingDetails || []).reduce((latest: string, s: any) => {
-                          return s.shippingDate > latest ? s.shippingDate : latest;
-                        }, '');
-                        let yemenArrivalDate = '';
-                        if (lastDispatch) {
-                          const d = new Date(lastDispatch);
-                          d.setDate(d.getDate() + totalExpected);
-                          yemenArrivalDate = d.toISOString().split('T')[0];
-                        }
-                        return (
-                          <div className="p-4 bg-slate-950/60 border border-[#d4af37]/20 rounded-2xl text-[11px] font-bold mt-2">
-                            <div className="flex items-center gap-2 mb-3 pb-2 border-b border-slate-800">
-                              <Truck className="w-4 h-4 text-[#d4af37]" />
-                              <span className="text-[10px] text-[#d4af37] font-black uppercase tracking-widest">
-                                {isAr ? 'ملخص التسليم النهائي لليمن' : 'Yemen Final Delivery Summary'}
-                              </span>
-                            </div>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                              <div>
-                                <span className="text-[9px] text-slate-500 block mb-1">{isAr ? 'مجموع أيام الشحن:' : 'Total Transit Days:'}</span>
-                                <span className="font-mono text-amber-400 font-black">{totalTransitDays} {isAr ? 'يوم' : 'd'}</span>
-                              </div>
-                              <div>
-                                <span className="text-[9px] text-slate-500 block mb-1">{isAr ? 'مدة التوصيل لليمن (إعدادات):' : 'Yemen Delivery (Settings):'}</span>
-                                <span className="font-mono text-blue-400 font-black">{yemenDuration} {isAr ? 'يوم' : 'd'}</span>
-                              </div>
-                              <div>
-                                <span className="text-[9px] text-slate-500 block mb-1">{isAr ? 'المدة الإجمالية المتوقعة:' : 'Total Expected Duration:'}</span>
-                                <span className="font-mono text-emerald-400 font-black text-sm">{totalExpected} {isAr ? 'يوم' : 'days'}</span>
-                              </div>
-                              <div>
-                                <span className="text-[9px] text-slate-500 block mb-1">{isAr ? 'تاريخ التسليم لليمن المتوقع:' : 'Est. Yemen Arrival:'}</span>
-                                <span className="font-mono text-[#d4af37] font-black">{yemenArrivalDate || '—'}</span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })()}
-
-                    </div>
-                  )}
-
-                </div>
-
-                {/* Footer buttons */}
-                <div className="p-4 bg-slate-955 border-t border-slate-850 flex justify-end gap-2 shrink-0">
-                  <button
-                    onClick={() => generateOrderInvoicePDF(selectedOrder)}
-                    className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black rounded-xl transition font-extrabold flex items-center gap-1.5 cursor-pointer text-xs"
-                  >
-                    <Printer className="w-4 h-4" />
-                    {isAr ? '🖨️ إصدار فاتورة للعميل' : 'Print Invoice PDF'}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setIsDetailsModalOpen(false);
-                      setSelectedOrder(null);
-                    }}
-                    className="px-5 py-2.5 bg-slate-850 text-slate-455 hover:text-white rounded-xl transition font-bold text-xs"
-                  >
-                    {isAr ? 'إغلاق نافذة التفاصيل' : 'Close Details'}
-                  </button>
-                </div>
-
-              </div>
-            </div>
-          )}
-
-          {/* DELETE ORDER SECURITY PIN MODAL */}
-          {isDeleteModalOpen && (
-            <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
-              <div className="bg-slate-900 border-2 border-rose-500/30 rounded-3xl w-full max-w-md overflow-hidden shadow-[0_0_50px_rgba(239,68,68,0.15)] flex flex-col">
-                <div className="p-4 bg-rose-950/20 border-b border-slate-800 flex justify-between items-center">
-                  <h3 className="font-black text-rose-450 text-sm flex items-center gap-2">
-                    ⚠️ {isAr ? 'حذف طلب حساس ومحمي' : 'Sensitive Order Deletion'}
-                  </h3>
-                  <button
-                    onClick={() => {
-                      setIsDeleteModalOpen(false);
-                      setOrderToDelete(null);
-                    }}
-                    className="bg-slate-800 text-slate-400 hover:text-white p-1 rounded-lg"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-
-                <div className="p-5 space-y-4 text-xs font-bold text-slate-350 text-center">
-                  <p className="text-slate-400 leading-relaxed text-center">
-                    {isAr
-                      ? 'هذا الطلب يحتوي على مدفوعات مسجلة أو تخطت حالته التثبيت الأولي. يرجى إدخال الرمز السري الشخصي للمدير (System PIN) للمتابعة.'
-                      : 'This order has payments recorded or is advanced in the logistics process. Please enter your personal System PIN to confirm deletion.'}
-                  </p>
-
-                  {deleteError && (
-                    <div className="bg-rose-950/30 text-rose-400 p-2.5 rounded-xl border border-rose-900/30 font-mono text-center">
-                      {deleteError}
-                    </div>
-                  )}
-
-                  <input
-                    type="password"
-                    value={deletePin}
-                    onChange={(e) => {
-                      setDeletePin(e.target.value);
-                      setDeleteError('');
-                    }}
-                    className="block w-full px-4 py-3 bg-black border border-slate-850 rounded-xl text-white outline-none focus:border-rose-500 text-center font-mono text-xl tracking-[0.5em]"
-                    placeholder="••••••"
-                    maxLength={10}
-                    autoFocus
-                  />
-                </div>
-
-                <div className="p-4 bg-slate-950/30 border-t border-slate-850 flex justify-end gap-2">
-                  <button
-                    onClick={() => {
-                      setIsDeleteModalOpen(false);
-                      setOrderToDelete(null);
-                    }}
-                    className="px-4 py-2 bg-slate-800 text-slate-400 rounded-xl font-bold hover:text-white transition text-xs cursor-pointer"
-                  >
-                    {isAr ? 'إلغاء' : 'Cancel'}
-                  </button>
-                  <button
-                    onClick={handleVerifyDeletePin}
-                    className="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl font-black transition text-xs cursor-pointer"
-                  >
-                    {isAr ? 'تأكيد الحذف النهائي' : 'Verify & Delete'}
-                  </button>
                 </div>
               </div>
-            </div>
-          )}
-        </>
-      )}
+            )}
+          </>
+        )}
 
-      {/* Add / Edit Shipment Modal */}
+      {/* Add / Edit Shipment Modal نموذج انشاء/تعديل شحنه*/}
       {(isAddShipmentModalOpen || isEditShipmentModalOpen) && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 text-start">
           <form onSubmit={handleSaveShipmentSubmit} className="bg-[#121215] border border-[#d4af37]/30 w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
@@ -6224,7 +6299,7 @@ export default function Orders() {
         </div>
       )}
 
-      {/* Delete Shipment Confirm Modal */}
+      {/* Delete Shipment Confirm Modal نموذج تاكيد حذف شحنه*/}
       {isDeleteShipmentModalOpen && shipmentToDelete && (
         <ConfirmModal
           isOpen={isDeleteShipmentModalOpen}

@@ -47,7 +47,7 @@ export interface CurPriceEntry {
   updateBy: string;
   createdAt: string;
 }
-
+//مهم: هنا خطا كبير 
 export interface ExchangeRates {
   /** How many YER per 1 unit of the currency key */
   [code: string]: number;
@@ -107,6 +107,47 @@ class CurrencyService {
    * Fetches the latest exchange-rate map from the database.
    * YER is the base (always 1). For every other currency, `price` = how many YER per 1 unit.
    */
+
+  async getExchangeRatesFromBetweenTwoCurrencies(fromCurrency: string, toCurrency: string): Promise<ExchangeRates> {
+    try {
+      // Get active currencies
+      const { data: currencies } = await (supabase as any)
+        .from('currency')
+        .select('cur_id, code, isActive');
+
+      if (!currencies || currencies.length === 0) return { ...DEFAULT_RATES };
+
+      // Get latest price for each currency via max(seq)
+      const { data: prices } = await (supabase as any)
+        .from('cur_price')
+        .select('cur_no, price, seq')
+        .order('seq', { ascending: false });
+
+      const latestPrice: Record<number, number> = {};
+      (prices || []).forEach((p: { cur_no: number; price: number; seq: number }) => {
+        if (latestPrice[p.cur_no] === undefined) {
+          latestPrice[p.cur_no] = parseFloat(p.price as any) || 0;
+        }
+      });
+
+      const rates: ExchangeRates = { YER: 1, SAR: DEFAULT_RATES.SAR, USD: DEFAULT_RATES.USD };
+      currencies.forEach((c: { cur_id: number; code: string; isActive: boolean }) => {
+        if (c.code === 'YER') {
+          rates['YER'] = 1;
+        } else {
+          const price = latestPrice[c.cur_id];
+          if (price !== undefined && price > 0) {
+            rates[c.code] = price;
+          }
+        }
+      });
+
+      return rates;
+    } catch (e) {
+      console.error('[currencyService] getExchangeRatesFromBetweenTwoCurrencies error:', e);
+      return { ...DEFAULT_RATES };
+    }
+  }
   async getLatestExchangeRates(): Promise<ExchangeRates> {
     try {
       // Get active currencies
