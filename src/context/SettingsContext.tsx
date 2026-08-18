@@ -56,6 +56,7 @@ export interface Settings {
   defaultCompanyProfitRate?: number;
   defaultDeliveryFee?: number;
   defaultCourierCommissionRate?: number;
+  defaultOrderCurrency?: string;          // العملة الافتراضية المعتمدة لأسعار الطلبات (المنتجات، الشحن، التغليف، الأرباح)
 
   // Default Shipping Durations
   defaultSheinDuration?: number;
@@ -139,6 +140,7 @@ const defaultSettings: Settings = {
   defaultCompanyProfitRate: 12,
   defaultDeliveryFee: 4000,
   defaultCourierCommissionRate: 30,
+  defaultOrderCurrency: 'SAR',
   defaultSheinDuration: 12,
   defaultAppDuration: 10,
   defaultFactoryDuration: 20,

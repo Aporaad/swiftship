@@ -3,7 +3,10 @@
  * ─────────────────────────────────────────────────────────────────────────────
  * Singleton Real-time hook that subscribes to `currency` and `cur_price`
  * Supabase tables and exposes:
- *   - `rates`      — latest exchange rate map { YER:1, SAR:140, USD:535, ... }
+ *   - `rates`      — خريطة أسعار الصرف الديناميكية من DB
+ *                    { [currencyCode]: priceVsBase }
+ *                    العملة ذات isDefault=true لها قيمة = 1
+ *                    لا توجد أسعار مثبّتة في الكود
  *   - `currencies` — full enriched currency list (all, including inactive)
  *   - `activeCurrencies` — only isActive=true currencies
  *   - `loading`    — true while initial fetch is in progress
@@ -27,7 +30,9 @@ interface ExchangeRatesState {
 }
 
 let _state: ExchangeRatesState = {
-  rates: { ...DEFAULT_RATES },
+  // الحالة الأولية: خريطة فارغة — ستُملأ من DB فور الاتصال
+  // DEFAULT_RATES تُستخدم فقط كـ emergency fallback في currencyService
+  rates: {},
   currencies: [],
   activeCurrencies: [],
   loading: true,

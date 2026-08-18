@@ -35,6 +35,7 @@ export default function Orders() { // دالة عرض الطلبات
   const canTrackOrders = role === 'Admin' || hasPermission('track_order'); //  القدرة على تتبع الطلبات 
   const canViewOrderStatuses = role === 'Admin' || hasPermission('view_order_statuses') || hasPermission('view_auto_entries'); //  القدرة على عرض حالات الطلبات 
   const isAr = settings.language === 'ar'; //  اللغة العربية 
+  const orderCurrency = settings.defaultOrderCurrency || settings.currency || 'SAR'; // العملة الافتراضية المعينة لأسعار الطلبات
 
   // Core Data States 
   const [orders, setOrders] = useState<any[]>([]); //  متغير مكونات الحاله الخاص ب الطلبات 
@@ -201,9 +202,11 @@ export default function Orders() { // دالة عرض الطلبات
       //متغيرات ثابته افتراضيه متعلقة بالطلب مثل العمله ونوع العمله وسعر الصرف
       setFormData(prev => ({
         ...prev,
-        currency: settings.currency || 'SAR',
-        exchangeRateYER: dbRates.SAR || 1, //مهم: يجب ان يكون العمله التي سيتم اعتمادها وجلب سعر الصرف  محدده من الاعدادت وليس ثابته 
-        exchangeRateUSD: dbRates.USD || 1, //مهم: يوجد هنا خطا كبير هنا سعر الصرف ثابته يجب ان يكون العمله التي سيتم اعتمادها وجلب سعر الصرف  محدده من الاعدادت وليس ثابته 
+        currency: orderCurrency,
+        // جلب سعر صرف العملة الافتراضية للطلب من الإعدادات (ديناميكي من DB)
+        exchangeRateYER: dbRates[orderCurrency] || 1,
+        // سعر صرف الدولار من DB (ديناميكي)
+        exchangeRateUSD: dbRates['USD'] || 1,
         bankCommissionRate: settings.defaultBankCommissionRate ?? 3,
         companyProfitRate: settings.defaultCompanyProfitRate ?? 12,
         packagingFee: settings.defaultPackagingFee ?? 0,
@@ -408,7 +411,8 @@ export default function Orders() { // دالة عرض الطلبات
   }, [roleLoading]);
 
   // Auto-seed default shipping companies if they do not exist
-  useEffect(() => {
+  // داله انشاء شركات شحن افتراضيه تم تعليقها ولاتقم باظهاره ابدا
+  /*useEffect(() => {
     if (roleLoading) return;
 
     const seedDefaultCarriers = async () => {
@@ -421,7 +425,7 @@ export default function Orders() { // دالة عرض الطلبات
 
         for (const carrier of defaults) {
           if (!existingNames.has(carrier.toLowerCase())) {
-            await addDoc('ship_' + carrier, collection(db, 'shipping_companies'), {
+            await addDoc(carrier, collection(db, 'shipping_companies'), {
               name: carrier,
               contact_person: isAr ? 'الناقل الرسمي' : 'Default Carrier',
               phone: '',
@@ -438,7 +442,7 @@ export default function Orders() { // دالة عرض الطلبات
     };
 
     seedDefaultCarriers();
-  }, [roleLoading]);
+  }, [roleLoading]);*/
 
   // Handle URL query parameter ?new=true or ?id=ORDER_ID
   useEffect(() => {
@@ -583,6 +587,30 @@ export default function Orders() { // دالة عرض الطلبات
       customerPhone: '',
       customerAddress: ''
     }));
+  };
+
+  /**
+   * buildOrderRates — بناء خريطة أسعار الصرف الكاملة لطلب محدد.
+   * تُدمج أسعار الطلب المحفوظة (كـ override) مع آخر أسعار من DB.
+   * يُستخدم بدلاً من { USD: ..., SAR: ... } في كل عمليات التحويل.
+   *
+   * @param order - كائن الطلب (يحتوي على exchangeRateYER, exchangeRateUSD, currency)
+   * @returns خريطة أسعار كاملة { [code]: rate_vs_base }
+   */
+  const buildOrderRates = (order?: any) => {
+    // ابدأ بالأسعار الحالية من DB
+    const rates = { ...dbRates };
+    if (!order) return rates;
+
+    // أضف/اعزز بأسعار الطلب المحفوظة وقت الإنشاء
+    const orderCurrency = order.currency || settings.currency || 'SAR';
+    if (order.exchangeRateYER && order.exchangeRateYER > 0) {
+      rates[orderCurrency] = order.exchangeRateYER;
+    }
+    if (order.exchangeRateUSD && order.exchangeRateUSD > 0) {
+      rates['USD'] = order.exchangeRateUSD;
+    }
+    return rates;
   };
 
   // Generate order invoice PDF -- انشاء فاتوره للطلب 
@@ -1283,9 +1311,9 @@ export default function Orders() { // دالة عرض الطلبات
       shippingCourierId: '',
       deliveryCourierId: '',
       deliveryCourierFee: settings.defaultDeliveryFee ?? 4000,
-      currency: settings.currency || 'SAR',
-      exchangeRateYER: dbRates.SAR || 1,
-      exchangeRateUSD: dbRates.USD || 1,
+      currency: orderCurrency,
+      exchangeRateYER: dbRates[orderCurrency] || 1,
+      exchangeRateUSD: dbRates['USD'] || 1,
       bankCommissionRate: settings.defaultBankCommissionRate ?? 3,
       companyProfitRate: settings.defaultCompanyProfitRate ?? 12,
       packagingFee: settings.defaultPackagingFee ?? 0,
@@ -1625,7 +1653,7 @@ export default function Orders() { // دالة عرض الطلبات
             paidVal,
             'YER',
             settings.currency || 'YER',
-            { USD: selectedOrder.exchangeRateUSD || dbRates.USD, SAR: selectedOrder.exchangeRateYER || dbRates.SAR }
+            buildOrderRates(selectedOrder)
           );
 
           const systemAccs = await financialAccountService.ensureSystemAccounts('YER');
@@ -1812,7 +1840,7 @@ export default function Orders() { // دالة عرض الطلبات
               commissionProfit,
               finalCurrency,
               settings.currency || 'YER',
-              { USD: selectedOrder.exchangeRateUSD || dbRates.USD, SAR: selectedOrder.exchangeRateYER || dbRates.SAR }
+              buildOrderRates(selectedOrder)
             );
 
             const commissionRule = autoVoucherRules.find(r => r.id === 'courier_commission');
@@ -2435,7 +2463,7 @@ export default function Orders() { // دالة عرض الطلبات
                 commissionProfit,
                 finalCurrency,
                 settings.currency || 'YER',
-                { USD: ord.exchangeRateUSD || dbRates.USD, SAR: ord.exchangeRateYER || dbRates.SAR }
+                buildOrderRates(ord)
               );
 
               const commissionRule = autoVoucherRules.find(r => r.id === 'courier_commission');
@@ -3471,7 +3499,7 @@ export default function Orders() { // دالة عرض الطلبات
                         <td className="p-4 text-start">
                           <div className="flex flex-col space-y-1">
                             <span className="px-2.5 py-0.5 rounded-xl border border-[#d4af37]/20 bg-[#d4af37]/5 text-[#d4af37] font-bold max-w-max text-[10px]">
-                              {formatStatusLabel(ord.orderStatus)}
+                              {ord.orderStatus || ord.order_status || ''}
                             </span>
                             <span className="text-[10px] text-slate-500 font-bold">{ord.orderSourceName || ord.orderSourceType}</span>
                           </div>
@@ -4712,38 +4740,7 @@ export default function Orders() { // دالة عرض الطلبات
                           />
                         </div>
 
-                        <div>
-                          <label className="block text-[10px] text-slate-500 uppercase tracking-widest block leading-none mb-1.5">{isAr ? 'العملة والتحصيل المالي' : 'Collection Currency'}</label>
-                          <select
-                            value={formData.currency}
-                            onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
-                            className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none text-[11px]"
-                          >
-                            {activeCurrencies.map(c => (
-                              <option key={c.code} value={c.code}>
-                                {isAr ? (c.main_nameAR || c.sup_nameAR || c.code) : (c.main_nameEn || c.sup_nameEn || c.code)} ({c.code})
-                              </option>
-                            ))}
-                          </select>
-                        </div>
 
-                        <div>
-                          <label className="block text-[10px] text-slate-500 uppercase tracking-widest block leading-none mb-1.5">{isAr ? 'سعر الصرف (ريال يمني)' : 'Exchange Rate (YER)'}</label>
-                          <input
-                            type="number"
-                            value={formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER}
-                            onChange={(e) => {
-                              const val = parseFloat(e.target.value) || 1;
-                              if (formData.currency === 'USD') {
-                                setFormData({ ...formData, exchangeRateUSD: val });
-                              } else {
-                                setFormData({ ...formData, exchangeRateYER: val });
-                              }
-                            }}
-                            disabled={!canEditOrderDefaultsCreation}
-                            className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-2.5 outline-none font-mono text-[11px] text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                          />
-                        </div>
 
                         <div className="md:col-span-2 mt-2">
                           <label className="flex items-center gap-2 cursor-pointer bg-slate-900/40 p-3 rounded-xl border border-slate-800 hover:bg-slate-900 transition">
@@ -4902,8 +4899,43 @@ export default function Orders() { // دالة عرض الطلبات
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-3 pb-2">
-                            <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl flex flex-col justify-center">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pb-2">
+                            {/* عملة تحصيل الدفع من العميل */}
+                            <div className="bg-slate-900 border border-slate-800 p-2.5 rounded-xl flex flex-col justify-center">
+                              <span className="text-[9px] font-black uppercase text-[#d4af37] block mb-1">{isAr ? 'عملة الدفع من العميل' : 'Client Payment Currency'}</span>
+                              <select
+                                value={formData.currency}
+                                onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+                                className="w-full bg-slate-950 text-white font-bold text-xs p-1.5 rounded-lg border border-slate-800 outline-none cursor-pointer"
+                              >
+                                {activeCurrencies.map(c => (
+                                  <option key={c.code} value={c.code}>
+                                    {isAr ? (c.main_nameAR || c.sup_nameAR || c.code) : (c.main_nameEn || c.sup_nameEn || c.code)} ({c.code})
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            {/* سعر الصرف للعملة المحصلة */}
+                            <div className="bg-slate-900 border border-slate-800 p-2.5 rounded-xl flex flex-col justify-center">
+                              <span className="text-[9px] font-black uppercase text-slate-400 block mb-1">{isAr ? `سعر صرف (${formData.currency}) / YER` : `Exchange Rate (${formData.currency}) / YER`}</span>
+                              <input
+                                type="number"
+                                value={formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value) || 1;
+                                  if (formData.currency === 'USD') {
+                                    setFormData({ ...formData, exchangeRateUSD: val });
+                                  } else {
+                                    setFormData({ ...formData, exchangeRateYER: val });
+                                  }
+                                }}
+                                disabled={!canEditOrderDefaultsCreation}
+                                className="w-full bg-slate-950 border border-slate-800 text-white font-mono font-bold text-xs p-1.5 rounded-lg text-center outline-none disabled:opacity-50"
+                              />
+                            </div>
+
+                            <div className="bg-slate-900 border border-slate-800 p-2.5 rounded-xl flex flex-col justify-center">
                               <span className="text-[9px] font-black uppercase text-slate-500 block mb-1">{isAr ? 'حالة السداد الآلية' : 'Payment Status'}</span>
                               {Math.ceil(calcs.remainingYER) <= 0 ? (
                                 <span className="text-emerald-400 font-black flex items-center gap-1.5 text-xs"><Package className="w-3.5 h-3.5" />{isAr ? 'فاتورة مدفوعة' : 'PAID'}</span>
@@ -4913,18 +4945,18 @@ export default function Orders() { // دالة عرض الطلبات
                                 <span className="text-rose-500 font-black flex items-center gap-1.5 text-xs"><AlertCircle className="w-3.5 h-3.5" />{isAr ? 'مديونية غير مسددة' : 'UNPAID'}</span>
                               )}
                             </div>
+                          </div>
 
-                            <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl flex flex-col justify-center">
-                              <span className="text-[9px] font-black uppercase text-slate-500 block mb-1">{isAr ? 'بوابة الدفع' : 'Pay Method'}</span>
-                              <select
-                                value={formData.paymentMethod}
-                                onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
-                                className="w-full bg-transparent text-white font-bold text-xs outline-none cursor-pointer"
-                              >
-                                <option value="Cash" className="bg-slate-900">{isAr ? 'نقد كاش' : 'Cash'}</option>
-                                <option value="Bank Transfer" className="bg-slate-900">{isAr ? 'تحويل بنكي' : 'Bank Transfer'}</option>
-                              </select>
-                            </div>
+                          <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl flex justify-between items-center">
+                            <span className="text-[10px] font-black uppercase text-slate-400">{isAr ? 'طريقة / بوابة الدفع' : 'Payment Gateway / Method'}</span>
+                            <select
+                              value={formData.paymentMethod}
+                              onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
+                              className="bg-slate-950 border border-slate-800 text-white font-bold text-xs p-2 rounded-lg outline-none cursor-pointer"
+                            >
+                              <option value="Cash" className="bg-slate-900">{isAr ? 'نقد كاش' : 'Cash'}</option>
+                              <option value="Bank Transfer" className="bg-slate-900">{isAr ? 'تحويل بنكي' : 'Bank Transfer'}</option>
+                            </select>
                           </div>
 
                           <div className="flex justify-between items-center p-3 bg-rose-500/5 rounded-xl border border-rose-500/10">
@@ -5728,7 +5760,7 @@ export default function Orders() { // دالة عرض الطلبات
                           {isAr ? 'البيانات اللوجيتسية' : 'Logistics Route'}
                         </span>
                         <div className="space-y-1">
-                          <div className="text-slate-400 font-bold">{isAr ? 'حالة الشحنة الطردية:' : 'Cargo Current State:'} <span className="text-[#d4af37] font-black">{formatStatusLabel(selectedOrder.orderStatus)}</span></div>
+                          <div className="text-slate-400 font-bold">{isAr ? 'حالة الشحنة الطردية:' : 'Cargo Current State:'} <span className="text-[#d4af37] font-black">{selectedOrder.orderStatus || selectedOrder.order_status || ''}</span></div>
                           <div className="text-slate-400 font-bold">{isAr ? 'قناة التعبئة والمصدر:' : 'Sales Cargo Source:'} <span className="text-white">{selectedOrder.orderSourceName || selectedOrder.orderSourceType}</span></div>
                           <div className="text-slate-400 font-bold">{isAr ? 'تاريخ المعاملة:' : 'Invoice Date:'} <span className="text-white font-mono">{safeToDate(selectedOrder.createdAt).toLocaleString(isAr ? 'ar-EG' : 'en-US')}</span></div>
                         </div>

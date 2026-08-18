@@ -9,9 +9,13 @@
  *  cur_price(id, cur_no, price, day_date, seq, updateBy, createdAt)
  *
  * Exchange rate logic:
- *  The "current" rate for any currency is the row in cur_price with the
- *  highest `seq` value for that currency's `cur_no`.
- *  YER (the base currency, cur_id=1) always has price=1.
+ *  الأسعار في cur_price تُعبّر دائماً عن: كم وحدة من العملة الأساس (isDefault=true)
+ *  تساوي 1 وحدة من العملة المذكورة.
+ *  العملة الأساس دائماً = 1 (لا سعر لها في cur_price أو سعرها = 1).
+ *  لتحويل من عملة A إلى عملة B:
+ *    rate_A_vs_base = rates[A]  (كم وحدة أساس لكل وحدة A)
+ *    rate_B_vs_base = rates[B]  (كم وحدة أساس لكل وحدة B)
+ *    result = amount * rate_A_vs_base / rate_B_vs_base
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -47,16 +51,22 @@ export interface CurPriceEntry {
   updateBy: string;
   createdAt: string;
 }
-//مهم: هنا خطا كبير 
+
+/**
+ * خريطة أسعار الصرف: كل عملة → كم وحدة من العملة الأساس تساوي 1 وحدة منها.
+ * العملة الأساس (isDefault=true) دائماً = 1.
+ * لا يوجد أي كود عملة مثبّت هنا — يُبنى ديناميكياً من جداول currency + cur_price.
+ */
 export interface ExchangeRates {
-  /** How many YER per 1 unit of the currency key */
+  /** كل مفتاح = رمز العملة (مثل "YER", "SAR", "USD", "EUR", ...) */
   [code: string]: number;
-  YER: number;
-  SAR: number;
-  USD: number;
 }
 
-// ── Default fallback rates (used until DB loads) ───────────────────────────────
+/**
+ * أسعار احتياطية مؤقتة تُستخدم فقط في حالة فشل الاتصال بقاعدة البيانات.
+ * لا تعتمد عليها في أي منطق حسابي — استخدمها فقط كـ fallback للعرض.
+ * قيمة كل عملة = كم وحدة YER تساوي 1 وحدة منها (افتراض أن YER هي الأساس).
+ */
 export const DEFAULT_RATES: ExchangeRates = { YER: 1, SAR: 140, USD: 535 };
 
 // ── Service ───────────────────────────────────────────────────────────────────
@@ -89,7 +99,7 @@ class CurrencyService {
 
     return (currencies || []).map((c: Currency) => ({
       ...c,
-      currentPrice: latestByCode[c.cur_id]?.price ?? (c.code === 'YER' ? 1 : undefined),
+      currentPrice: latestByCode[c.cur_id]?.price ?? (c.isDefault ? 1 : undefined),
       lastSeq: latestByCode[c.cur_id]?.seq,
       lastUpdateBy: latestByCode[c.cur_id]?.updateBy,
       lastUpdateDate: latestByCode[c.cur_id]?.day_date,
@@ -104,60 +114,45 @@ class CurrencyService {
   }
 
   /**
-   * Fetches the latest exchange-rate map from the database.
-   * YER is the base (always 1). For every other currency, `price` = how many YER per 1 unit.
+   * يُعيد العملة الافتراضية للنظام (isDefault = true) من جدول currency.
+   * إذا لم توجد، يُعيد null.
    */
-
-  async getExchangeRatesFromBetweenTwoCurrencies(fromCurrency: string, toCurrency: string): Promise<ExchangeRates> {
+  async getDefaultCurrency(): Promise<Currency | null> {
     try {
-      // Get active currencies
-      const { data: currencies } = await (supabase as any)
+      const { data, error } = await (supabase as any)
         .from('currency')
-        .select('cur_id, code, isActive');
-
-      if (!currencies || currencies.length === 0) return { ...DEFAULT_RATES };
-
-      // Get latest price for each currency via max(seq)
-      const { data: prices } = await (supabase as any)
-        .from('cur_price')
-        .select('cur_no, price, seq')
-        .order('seq', { ascending: false });
-
-      const latestPrice: Record<number, number> = {};
-      (prices || []).forEach((p: { cur_no: number; price: number; seq: number }) => {
-        if (latestPrice[p.cur_no] === undefined) {
-          latestPrice[p.cur_no] = parseFloat(p.price as any) || 0;
-        }
-      });
-
-      const rates: ExchangeRates = { YER: 1, SAR: DEFAULT_RATES.SAR, USD: DEFAULT_RATES.USD };
-      currencies.forEach((c: { cur_id: number; code: string; isActive: boolean }) => {
-        if (c.code === 'YER') {
-          rates['YER'] = 1;
-        } else {
-          const price = latestPrice[c.cur_id];
-          if (price !== undefined && price > 0) {
-            rates[c.code] = price;
-          }
-        }
-      });
-
-      return rates;
+        .select('*')
+        .eq('isDefault', true)
+        .limit(1)
+        .single();
+      if (error || !data) return null;
+      return data as Currency;
     } catch (e) {
-      console.error('[currencyService] getExchangeRatesFromBetweenTwoCurrencies error:', e);
-      return { ...DEFAULT_RATES };
+      console.error('[currencyService] getDefaultCurrency error:', e);
+      return null;
     }
   }
+
+  /**
+   * Fetches the latest exchange-rate map from the database.
+   *
+   * المنطق:
+   * - العملة ذات isDefault=true دائماً = 1 (هي عملة الأساس)
+   * - كل عملة أخرى: price = كم وحدة من العملة الأساس تساوي 1 وحدة منها
+   * - لا توجد أي أسعار ثابتة — كل شيء يأتي من جدول cur_price
+   */
   async getLatestExchangeRates(): Promise<ExchangeRates> {
     try {
-      // Get active currencies
-      const { data: currencies } = await (supabase as any)
+      const { data: currencies, error: curErr } = await (supabase as any)
         .from('currency')
-        .select('cur_id, code, isActive');
+        .select('cur_id, code, isDefault, isActive');
 
-      if (!currencies || currencies.length === 0) return { ...DEFAULT_RATES };
+      if (curErr || !currencies || currencies.length === 0) {
+        console.warn('[currencyService] getLatestExchangeRates: no currencies found, using DEFAULT_RATES as emergency fallback');
+        return { ...DEFAULT_RATES };
+      }
 
-      // Get latest price for each currency via max(seq)
+      // جلب آخر سعر لكل عملة (الصف ذو أعلى seq)
       const { data: prices } = await (supabase as any)
         .from('cur_price')
         .select('cur_no, price, seq')
@@ -170,14 +165,20 @@ class CurrencyService {
         }
       });
 
-      const rates: ExchangeRates = { YER: 1, SAR: DEFAULT_RATES.SAR, USD: DEFAULT_RATES.USD };
-      currencies.forEach((c: { cur_id: number; code: string; isActive: boolean }) => {
-        if (c.code === 'YER') {
-          rates['YER'] = 1;
+      // بناء خريطة الأسعار ديناميكياً من DB
+      const rates: ExchangeRates = {};
+      currencies.forEach((c: { cur_id: number; code: string; isDefault: boolean; isActive: boolean }) => {
+        if (c.isDefault) {
+          // العملة الأساس دائماً = 1
+          rates[c.code] = 1;
         } else {
           const price = latestPrice[c.cur_id];
           if (price !== undefined && price > 0) {
             rates[c.code] = price;
+          } else {
+            // لا توجد أسعار ثابتة — كل شيء يأتي من جدول cur_price. وإذا لم يجد سعراً، يُظهر 0 مع تنبيه للمستخدم
+            rates[c.code] = 0;
+            console.warn(`⚠️ [تنبيـه أسعـار الصـرف] العملة (${c.code}) لا يوجد لها سعر صرف مسجل في جدول cur_price! تم تعيين سعرها إلى 0.`);
           }
         }
       });
@@ -188,6 +189,24 @@ class CurrencyService {
       return { ...DEFAULT_RATES };
     }
   }
+
+  /**
+   * يحسب نسبة التحويل المباشر بين عملتين باستخدام العملة الأساس كوسيط.
+   *
+   * المعادلة:
+   *   إذا كانت رات الأسعار تُعبّر عن "كم وحدة أساس = 1 وحدة من العملة X":
+   *   تحويل A → B = amount * rates[A] / rates[B]
+   *
+   * @returns الخريطة الكاملة للأسعار (نفس getLatestExchangeRates)
+   *          استخدمها مع convertToTargetCurrency في financialAccountService
+   */
+  async getExchangeRatesFromBetweenTwoCurrencies(_fromCurrency: string, _toCurrency: string): Promise<ExchangeRates> {
+    // المنطق الصحيح: نُعيد الخريطة الكاملة — التحويل يتم في convertToTargetCurrency
+    // باستخدام: result = amount * rates[from] / rates[to]
+    // لا نحتاج بناء خريطة خاصة لكل زوج — الخريطة الكاملة تكفي
+    return this.getLatestExchangeRates();
+  }
+
 
   /**
    * Adds a new exchange-rate entry for a currency (creates a new row with seq+1).

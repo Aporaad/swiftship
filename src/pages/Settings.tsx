@@ -1352,6 +1352,25 @@ export default function Settings() {
                     </div>
                   </div>
                 ))}
+
+                {/* العملة الافتراضية المعتمدة لأسعار الطلبات */}
+                <div>
+                  <FieldLabel locked={!canEditOrderDefaults}>
+                    {isAr ? 'العملة الافتراضية للطلب (من جدول العملات currency)' : 'Default Order Currency (from currency table)'}
+                  </FieldLabel>
+                  <select
+                    disabled={!canEditOrderDefaults}
+                    value={localSettings.defaultOrderCurrency || 'SAR'}
+                    onChange={e => canEditOrderDefaults && setLocalSettings({ ...localSettings, defaultOrderCurrency: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white font-bold focus:outline-none focus:border-[#d4af37] disabled:opacity-65 cursor-pointer font-mono"
+                  >
+                    {(activeCurrencies && activeCurrencies.length > 0 ? activeCurrencies : dbCurrencies).map(c => (
+                      <option key={c.cur_id || c.code} value={c.code}>
+                        {c.code} - {c.main_nameAR || c.main_nameEn || c.code} ({c.symbol || c.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <div className="mt-4 p-3 bg-[#d4af37]/5 border border-[#d4af37]/15 rounded-xl text-[10px] text-slate-400 font-bold">
                 💡 {isAr ? 'هذه القيم ستُملأ تلقائياً عند إنشاء أي طلب جديد.' : 'These defaults auto-fill when creating new orders.'}

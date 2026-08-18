@@ -31,7 +31,7 @@ import {
   getDoc,
   writeBatch,
 } from "../lib/supabase-firebase-adapter";
-import { currencyService } from "./currencyService";
+import { currencyService, DEFAULT_RATES } from "./currencyService";
 import { db, auth } from "../lib/supabase-firebase-adapter";
 import { activityLogService } from "./activityLogService";
 import { Transaction } from "../types";
@@ -793,15 +793,17 @@ class FinancialAccountService {
   }
 
   /**
-   * Fetches current exchange rates from the `cur_price` table in Supabase via currencyService
+   * Fetches current exchange rates from the `cur_price` table in Supabase via currencyService.
+   * الأسعار ديناميكية كاملاً من جداول currency + cur_price — لا أسعار ثابتة.
    */
   async getExchangeRates(): Promise<Record<string, number>> {
     try {
       const rates = await currencyService.getLatestExchangeRates();
-      return { YER: 1, ...rates };
+      return rates;
     } catch (e) {
-      console.warn("Could not fetch exchange rates from currencyService, using defaults", e);
-      return { YER: 1, SAR: 140, USD: 535 };
+      console.warn('[FinancialAccountService] Could not fetch exchange rates from currencyService, using DEFAULT_RATES as emergency fallback', e);
+      // Emergency only — لا تعتمد على هذه القيم في الإنتاج
+      return { ...DEFAULT_RATES };
     }
   }
 
@@ -823,7 +825,14 @@ class FinancialAccountService {
 
   /**
    * Universal Currency Converter
-   * Converts an amount from one currency to another using provided rates.
+   * تحويل مبلغ من عملة إلى أخرى باستخدام خريطة أسعار الصرف.
+   *
+   * المنطق:
+   *   rates[X] = كم وحدة من العملة الأساس تساوي 1 وحدة من X
+   *   العملة الأساس (isDefault=true) لها rate=1
+   *   تحويل A → B = amount * rates[A] / rates[B]
+   *
+   * لا يوجد افتراض بأن YER هي العملة الأساس — العملة الأساس هي التي rate=1
    */
   convertToTargetCurrency(
     amount: number,
@@ -833,20 +842,18 @@ class FinancialAccountService {
   ): number {
     if (!fromCurrency || !targetCurrency || fromCurrency === targetCurrency) return amount;
 
-    // Convert everything to YER as base
-    let baseAmountYER = amount;
-    if (fromCurrency === "YER") {
-      baseAmountYER = amount;
-    } else {
-      const fromRate = exchangeRates[fromCurrency] || 1;
-      baseAmountYER = amount * (typeof fromRate === "number" && fromRate > 0 ? fromRate : 1);
-    }
+    // rate[X] = كم وحدة أساس = 1 وحدة X
+    const fromRate = typeof exchangeRates[fromCurrency] === 'number' && (exchangeRates[fromCurrency] as number) > 0
+      ? (exchangeRates[fromCurrency] as number)
+      : 1;
+    const toRate = typeof exchangeRates[targetCurrency] === 'number' && (exchangeRates[targetCurrency] as number) > 0
+      ? (exchangeRates[targetCurrency] as number)
+      : 1;
 
-    // Convert from YER to targetCurrency
-    if (targetCurrency === "YER") return baseAmountYER;
-    const targetRate = exchangeRates[targetCurrency] || 1;
-    const validTargetRate = typeof targetRate === "number" && targetRate > 0 ? targetRate : 1;
-    return baseAmountYER / validTargetRate;
+    // تحويل: A → عملة أساس → B
+    // amount_in_base = amount * fromRate
+    // amount_in_B = amount_in_base / toRate
+    return (amount * fromRate) / toRate;
   }
 
   /**
