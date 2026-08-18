@@ -318,7 +318,7 @@ export default function Orders() { // دالة عرض الطلبات
 
   // Edit / Update State 
   const [updateFormData, setUpdateFormData] = useState({
-    orderStatus: 'تم تسجيل الطلب',
+    orderStatus: 'طلب معلق',
     deliveryStatus: 'في الانتظار',
     locationYemen: 'مستودع صنعاء الرئيسي',
     internalNotes: '',
@@ -980,11 +980,11 @@ export default function Orders() { // دالة عرض الطلبات
         shippingDetails: formData.orderSourceType === 'SHEIN' ? [] : (shippings || []),
 
         // Lifecycles status
-        orderStatusId: '2',
-        order_status_id: '2',
-        orderStatus: 'تم تسجيل الطلب',
+        orderStatusId: '1',
+        order_status_id: '1',
+        orderStatus: 'طلب معلق',
         deliveryStatus: 'في الانتظار',
-        locationYemen: 'مركز التوزيع الرئيسي',
+        locationYemen: 'في الانتظار',
         firedTriggers: initialFiredTriggers,
 
         createdByEmail: auth.currentUser?.email || 'admin',
@@ -1027,7 +1027,7 @@ export default function Orders() { // دالة عرض الطلبات
           shippingCompanyId: ship.shippingCompany || payload.shippingCompany || 'Aramex',
           shippingCompany: ship.shippingCompany || payload.shippingCompany || 'Aramex',
           courierId: formData.deliveryCourierId || formData.shippingCourierId || '',
-          shipmentStatus: 'تم تسجيل الطلب',
+          shipmentStatus: 'طلب معلق',
           shippingCost: parseFloat(ship.shippingCost || 0),
           weight: parseFloat(ship.weight || 0),
           shippingType: ship.shippingType || 'بري',
@@ -1721,7 +1721,7 @@ export default function Orders() { // دالة عرض الطلبات
 
     setIsSubmitting(true);
     try {
-      const currentStatus = selectedOrder.orderStatus || 'تم تسجيل الطلب';
+      const currentStatus = selectedOrder.orderStatus || 'طلب معلق';
       const newStatus = updateFormData.orderStatus;
       const firedTriggers = selectedOrder.firedTriggers || [];
       const newFiredTriggers = [...firedTriggers];
@@ -3473,7 +3473,7 @@ export default function Orders() { // دالة عرض الطلبات
                         {/* Order ID */}
                         <td className="p-4">
                           <span className="font-mono font-black text-[#d4af37] bg-[#d4af37]/10 border border-[#d4af37]/25 px-2.5 py-0.5 rounded-lg">{ord.orderNumber || 'ALX-XXXX-XXXX'}</span>
-                          <div className="text-[10px] text-slate-500 mt-1 font-semibold">{new Date(ord.createdAt()).toLocaleDateString(isAr ? 'ar-EG' : 'en-US')}</div>
+                          <div className="text-[10px] text-slate-500 mt-1 font-semibold">{safeToDate(ord.createdAt).toLocaleDateString(isAr ? 'ar-EG' : 'en-US')}</div>
                         </td>
 
                         {/* Customer */}
@@ -3575,7 +3575,7 @@ export default function Orders() { // دالة عرض الطلبات
                                 onClick={() => {
                                   setSelectedOrder(ord);
                                   setUpdateFormData({
-                                    orderStatus: ord.orderStatus || 'تم تسجيل الطلب',
+                                    orderStatus: ord.orderStatus || 'طلب معلق',
                                     deliveryStatus: ord.deliveryStatus || 'في الانتظار',
                                     locationYemen: ord.locationYemen || 'مستودع صنعاء الرئيسي',
                                     internalNotes: ord.internalNotes || '',
@@ -3663,12 +3663,11 @@ export default function Orders() { // دالة عرض الطلبات
                     className="bg-slate-950 border border-slate-750 text-slate-200 rounded-lg px-2 py-1 text-xs font-bold outline-none focus:ring-1 focus:ring-yellow-500 disabled:opacity-50 cursor-pointer"
                   >
                     <option value="" disabled>{isAr ? '-- اختر الحالة --' : '-- Choose status --'}</option>
-                    <option value="تم تسجيل الطلب">{isAr ? 'تم تسجيل الطلب (قيد المعالجة)' : 'Pending'}</option>
-                    <option value="وصل مستودع السعودية">{isAr ? 'وصل مستودع السعودية للتعبئة' : 'Delivered to KSA Depot'}</option>
-                    <option value="جاري الشحن لليمن">{isAr ? 'جاري الشحن والنقل لليمن' : 'In Route to Yemen'}</option>
-                    <option value="وصل مركز التوزيع في اليمن">{isAr ? 'وصل مركز التوزيع في اليمن' : 'Arrived Yemen Center'}</option>
-                    <option value="تم التسليم">{isAr ? 'تم التسليم النهائي مع العميل' : 'Delivered & Complete'}</option>
-                    <option value="ملغي">{isAr ? 'ملغي بالكامل' : 'Cancelled'}</option>
+                    {orderStatusesList.map(st => (
+                      <option key={st.id} value={st.nameAr}>
+                        {isAr ? st.nameAr : st.nameEn}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -5242,14 +5241,11 @@ export default function Orders() { // دالة عرض الطلبات
                               : 'border-slate-800'
                               }`}
                           >
-                            <option value="تم تسجيل الطلب">{isAr ? 'تم تسجيل الطلب واستخلاص الفاتورة' : 'Invoice saved'}</option>
-                            <option value="وصل مستودع السعودية">{isAr ? 'وصل مستودع السعودية للتعبئة' : 'Arrived Saudi packaging HUB'}</option>
-                            <option value="جاري الشحن لليمن">{isAr ? 'جاري الشحن لليمن براً / جوأً' : 'Shipped/Transit to Yemen'}</option>
-                            <option value="في التخليص الجمركي">{isAr ? 'في التخليص الجمركي والأوراق' : 'Customs clearance'}</option>
-                            <option value="وصل مركز التوزيع في اليمن">{isAr ? 'وصل مركز التوزيع والفرز النهائي' : 'Arrived final depot'}</option>
-                            <option value="مع المندوب للتوصيل">{isAr ? 'مع المندوب بانتظار التسليم' : 'Out for Yemen delivery'}</option>
-                            <option value="تم التسليم">{isAr ? 'تم التسليم وتفصيل العهد الموردة' : 'Delivered successfully'}</option>
-                            <option value="ملغي">{isAr ? 'ملغي' : 'Cancelled'}</option>
+                            {orderStatusesList.map(st => (
+                              <option key={st.id} value={st.nameAr}>
+                                {isAr ? st.nameAr : st.nameEn}
+                              </option>
+                            ))}
                           </select>
                           {(selectedOrder.firedTriggers || []).includes(`status_notified_${updateFormData.orderStatus}`) && updateFormData.orderStatus !== 'ملغي' && (
                             <div className="mt-2 p-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg flex items-center gap-2 text-yellow-500 text-[10px] animate-pulse">

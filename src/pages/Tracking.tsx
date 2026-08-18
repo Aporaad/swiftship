@@ -1,40 +1,40 @@
 import React, { useState, useEffect } from 'react';
 import CopyToClipboard from '../components/CopyToClipboard';
-import { 
-  Package, 
-  Search, 
-  Clock, 
-  CheckCircle2, 
-  Truck, 
-  PackageCheck, 
-  AlertCircle, 
-  ArrowLeft, 
-  Home, 
-  Plus, 
-  Trash2, 
-  Copy, 
-  Send, 
-  BadgeAlert, 
-  Anchor, 
-  Check, 
-  FileText, 
-  Layers, 
-  Sparkles, 
-  User, 
-  Phone, 
-  Coins, 
+import {
+  Package,
+  Search,
+  Clock,
+  CheckCircle2,
+  Truck,
+  PackageCheck,
+  AlertCircle,
+  ArrowLeft,
+  Home,
+  Plus,
+  Trash2,
+  Copy,
+  Send,
+  BadgeAlert,
+  Anchor,
+  Check,
+  FileText,
+  Layers,
+  Sparkles,
+  User,
+  Phone,
+  Coins,
   Database,
   Info
 } from 'lucide-react';
 import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, arrayUnion } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { useSettings } from '../context/SettingsContext';
+import { useOrderStatuses } from '../hooks/useOrderStatuses';
 import { Link, useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 
 import { useRole } from '../hooks/useRole';
-import { useOrderStatuses } from '../hooks/useOrderStatuses';
 
 // Fix typical leaflet icon issues
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -56,14 +56,14 @@ export default function Tracking() {
   const { settings, t } = useSettings();
   const navigate = useNavigate();
   const { role, hasPermission, loading: roleLoading } = useRole();
-  const { statuses: orderStatusesList } = useOrderStatuses();
+  const { statuses: orderStatusesList, getStatusByAny } = useOrderStatuses();
   const isAr = settings.language === 'ar';
 
   const [trackingNumber, setTrackingNumber] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
-  
+
   // High fidelity tracking results state
   const [trackingData, setTrackingData] = useState<any>(null);
   const [resolvedSource, setResolvedSource] = useState<'public' | 'orders_db' | null>(null);
@@ -83,7 +83,7 @@ export default function Tracking() {
   const [statusSelector, setStatusSelector] = useState('تم تسجيل الطلب');
   const [gpsLocation, setGpsLocation] = useState('مستودع الفرز والتبريد');
   const [customLogNotes, setCustomLogNotes] = useState('');
-  
+
   // Customer WhatsApp support configuration
   const [customSupportMsg, setCustomSupportMsg] = useState('');
 
@@ -101,30 +101,11 @@ export default function Tracking() {
     checkStaffStatus();
   }, [role, roleLoading, hasPermission, navigate]);
 
-  // Standard tracking translation lookup
-  const statusTranslations: Record<string, string> = {
-    'تم تسجيل الطلب': isAr ? 'تم تسجيل الطلب واستخلاص الفاتورة' : 'Invoice saved / Registered',
-    'وصل مستودع السعودية': isAr ? 'وصل مستودع السعودية للتعبئة' : 'Arrived Saudi packaging HUB',
-    'جاري الشحن لليمن': isAr ? 'جاري الشحن لليمن براً / جوأً' : 'Shipped/Transit to Yemen',
-    'في التخليص الجمركي': isAr ? 'في التخليص الجمركي والأوراق' : 'Customs clearance & processing',
-    'وصل مركز التوزيع في اليمن': isAr ? 'وصل مركز التوزيع والفرز النهائي' : 'Arrived final Yemen depot',
-    'مع المندوب للتوصيل': isAr ? 'مع المندوب بانتظار التسليم' : 'Out for final delivery',
-    'تم التسليم': isAr ? 'تم التسليم وتفصيل العهد الموردة' : 'Delivered successfully',
-    'ملغي': isAr ? 'ملغي ومسترجع' : 'Cancelled / Revoked',
-    
-    // Legacy mapping compatibility
-    'Pending': isAr ? 'قيد الانتظار والمراجعة' : 'Pending',
-    'Ordered': isAr ? 'تم تأكيد طلب الشحن' : 'Ordered',
-    'Processing': isAr ? 'قيد التجهيز بمستودعاتنا' : 'Processing',
-    'Shipped': isAr ? 'تم الترحيل والشحن الدولي' : 'Shipped/Dispatched',
-    'In Transit': isAr ? 'بالشحن الدولي البري' : 'In Transit',
-    'In Local Warehouse': isAr ? 'وصل مخزن التجميع المحلي' : 'In Local Warehouse',
-    'Out For Delivery': isAr ? 'خرج للتسليم مع المندوب' : 'Out For Delivery',
-    'Delivered': isAr ? 'تم التسليم بنجاح للعميل' : 'Delivered'
-  };
-
   const getTranslatedStatus = (status: string) => {
-    return statusTranslations[status] || status;
+    if (!status) return '';
+    const found = getStatusByAny(status);
+    if (found) return isAr ? found.nameAr : found.nameEn;
+    return status;
   };
 
   // Get professional icon representing current logistics status
@@ -187,74 +168,74 @@ export default function Tracking() {
     try {
       // 1. Ask backend API (which integrates third-party APIs + our local database)
       const res = await fetch('/api/tracking/live/' + encodeURIComponent(queryStr));
-      
+
       if (res.ok) {
         const contentType = res.headers.get("content-type");
         if (contentType && contentType.indexOf("application/json") !== -1) {
-            const json = await res.json();
-            if (json.success && json.tracking) {
-               const t = json.tracking;
-               let reconstructed: any = null;
+          const json = await res.json();
+          if (json.success && json.tracking) {
+            const t = json.tracking;
+            let reconstructed: any = null;
 
-           if (t.isLiveApi) {
-               // Render live external API data
-               reconstructed = {
-                  id: queryStr,
-                  trackingNumber: queryStr,
-                  orderNumber: 'N/A (External)',
-                  status: t.status || 'تم تسجيل الطلب',
-                  customerName: 'Verified Caller',
-                  customerPhone: '***',
-                  customerAddress: t.currentLocation || 'N/A',
-                  weight: 0,
-                  cbm: 0,
-                  shippingCompany: 'External Carrier',
-                  amountPaid: 0,
-                  amountRemaining: 0,
-                  totalCostYER: 0,
-                  currency: 'YER',
-                  products: [],
-                  history: t.history || [],
-                  currentCoordinates: t.currentCoordinates
-               };
-               setResolvedSource('public');
-           } else {
-               // Internal Order doc
-               const docData = t.docData;
-               reconstructed = {
-                  id: docData.id || queryStr,
-                  trackingNumber: docData.trackingNumber || docData.orderNumber,
-                  orderNumber: docData.orderNumber,
-                  status: t.status,
-                  customerName: docData.customerName,
-                  customerPhone: docData.customerPhone,
-                  customerAddress: docData.customerAddress || docData.destination || 'صنعاء، اليمن',
-                  weight: docData.totalWeight || 0,
-                  cbm: docData.totalCBM || 0,
-                  shippingCompany: docData.shippingCompany || '',
-                  amountPaid: docData.amountPaid || 0,
-                  amountRemaining: docData.amountRemaining || 0,
-                  totalCostYER: docData.totalCostYER || 0,
-                  currency: docData.currency || 'YER',
-                  products: docData.items || [],
-                  history: t.history || [],
-                  currentCoordinates: t.currentCoordinates
-               };
-               setResolvedSource('orders_db');
-           }
+            if (t.isLiveApi) {
+              // Render live external API data
+              reconstructed = {
+                id: queryStr,
+                trackingNumber: queryStr,
+                orderNumber: 'N/A (External)',
+                status: t.status || 'تم تسجيل الطلب',
+                customerName: 'Verified Caller',
+                customerPhone: '***',
+                customerAddress: t.currentLocation || 'N/A',
+                weight: 0,
+                cbm: 0,
+                shippingCompany: 'External Carrier',
+                amountPaid: 0,
+                amountRemaining: 0,
+                totalCostYER: 0,
+                currency: 'YER',
+                products: [],
+                history: t.history || [],
+                currentCoordinates: t.currentCoordinates
+              };
+              setResolvedSource('public');
+            } else {
+              // Internal Order doc
+              const docData = t.docData;
+              reconstructed = {
+                id: docData.id || queryStr,
+                trackingNumber: docData.trackingNumber || docData.orderNumber,
+                orderNumber: docData.orderNumber,
+                status: t.status,
+                customerName: docData.customerName,
+                customerPhone: docData.customerPhone,
+                customerAddress: docData.customerAddress || docData.destination || 'صنعاء، اليمن',
+                weight: docData.totalWeight || 0,
+                cbm: docData.totalCBM || 0,
+                shippingCompany: docData.shippingCompany || '',
+                amountPaid: docData.amountPaid || 0,
+                amountRemaining: docData.amountRemaining || 0,
+                totalCostYER: docData.totalCostYER || 0,
+                currency: docData.currency || 'YER',
+                products: docData.items || [],
+                history: t.history || [],
+                currentCoordinates: t.currentCoordinates
+              };
+              setResolvedSource('orders_db');
+            }
 
-           setTrackingData(reconstructed);
-           setGpsLocation(t.currentLocation || 'مستودع الفرز والتبريد');
-           setStatusSelector(t.status || 'تم تسجيل الطلب');
-           return;
-        }
+            setTrackingData(reconstructed);
+            setGpsLocation(t.currentLocation || 'مستودع الفرز والتبريد');
+            setStatusSelector(t.status || 'تم تسجيل الطلب');
+            return;
+          }
         }
       }
 
       // If nothing worked
       setError(
-        isAr 
-          ? 'تعذر العثور على شحنة مطابقة لرقم التتبع أو رقم هاتف العميل. يرجى مراجعة المدخل والمحاولة.' 
+        isAr
+          ? 'تعذر العثور على شحنة مطابقة لرقم التتبع أو رقم هاتف العميل. يرجى مراجعة المدخل والمحاولة.'
           : 'Could not resolve tracking profile. Double check tracking ID or customer phone.'
       );
     } catch (err: any) {
@@ -272,7 +253,7 @@ export default function Tracking() {
     try {
       const publicId = (trackingData.trackingNumber || trackingData.orderNumber).toUpperCase();
       const publicRef = doc(db, 'public_tracking', publicId);
-      
+
       const payload = {
         trackingNumber: publicId,
         orderNumber: trackingData.orderNumber || '',
@@ -318,7 +299,7 @@ export default function Tracking() {
       };
 
       const revisedHistory = [...(trackingData.history || []), newEvent];
-      
+
       // Update locally first for beautiful instant reactivity
       const updatedData = {
         ...trackingData,
@@ -405,56 +386,55 @@ export default function Tracking() {
     }
   };
 
-  const currentMilestones = [
-    { key: 'تم تسجيل الطلب', label: isAr ? 'تم تسجيل الطلب' : 'Registered' },
-    { key: 'وصل مستودع السعودية', label: isAr ? 'مستودع السعودية' : 'Saudi HUB' },
-    { key: 'جاري الشحن لليمن', label: isAr ? 'جاري الشحن لليمن' : 'Yemen Transit' },
-    { key: 'في التخليص الجمركي', label: isAr ? 'التخليص الجمركي' : 'Customs' },
-    { key: 'وصل مركز التوزيع في اليمن', label: isAr ? 'مركز التوزيع باليمن' : 'Yemen HUB' },
-    { key: 'تم التسليم', label: isAr ? 'تم التسليم للعميل' : 'Delivered' }
-  ];
+  const currentMilestones = (orderStatusesList && orderStatusesList.length > 0
+    ? orderStatusesList.filter(s => s.code !== 'cancelled')
+    : []
+  ).map(st => ({
+    key: st.nameAr,
+    label: isAr ? st.nameAr : st.nameEn
+  }));
 
   return (
-    <div className={auth.currentUser 
+    <div className={auth.currentUser
       ? "space-y-6 pb-20 text-start font-sans selection:bg-[#d4af37]/30 text-slate-300"
       : "min-h-screen bg-gradient-to-b from-[#0e0e11] to-[#060608] text-slate-300 font-sans selection:bg-[#d4af37]/30 text-start pb-32"
     }>
-      
+
       {!auth.currentUser && (
         /* Premium Luxury SubHeader for Guests */
         <header className="bg-black/30 sticky top-0 z-50 border-b border-[#d4af37]/15 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 border border-[#d4af37]/35 rounded-2xl flex items-center justify-center font-black bg-gradient-to-br from-[#1c1c22] to-black text-[#d4af37] shadow-[0_0_15px_rgba(212,175,55,0.15)] select-none">
-              A
+          <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 border border-[#d4af37]/35 rounded-2xl flex items-center justify-center font-black bg-gradient-to-br from-[#1c1c22] to-black text-[#d4af37] shadow-[0_0_15px_rgba(212,175,55,0.15)] select-none">
+                A
+              </div>
+              <div className="text-start">
+                <span className="text-sm font-black tracking-widest text-white uppercase block leading-none">ALX_DELIVER</span>
+                <span className="text-[10px] text-[#d4af37] font-bold block uppercase tracking-[0.2em] mt-1 pr-1">{isAr ? 'تتبع الشحنات الذكي' : 'Smart Tracking Telemetry'}</span>
+              </div>
             </div>
-            <div className="text-start">
-              <span className="text-sm font-black tracking-widest text-white uppercase block leading-none">ALX_DELIVER</span>
-              <span className="text-[10px] text-[#d4af37] font-bold block uppercase tracking-[0.2em] mt-1 pr-1">{isAr ? 'تتبع الشحنات الذكي' : 'Smart Tracking Telemetry'}</span>
+
+            <div className="flex items-center gap-3">
+              {isStaff && (
+                <span className="bg-[#d4af37]/10 text-[#d4af37] border border-[#d4af37]/25 text-[9px] font-black px-2.5 py-1 rounded-xl uppercase tracking-widest hidden sm:inline-block">
+                  {isAr ? 'صلاحيات الموظف نشطة' : 'Staff Clearance On'}
+                </span>
+              )}
+              <Link
+                to="/"
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-850 hover:text-white border border-slate-800 rounded-xl text-xs font-bold font-mono transition-all flex items-center gap-2 text-[#d4af37]"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                {isAr ? 'الرئيسية' : 'Portal Node'}
+              </Link>
             </div>
           </div>
-          
-          <div className="flex items-center gap-3">
-            {isStaff && (
-              <span className="bg-[#d4af37]/10 text-[#d4af37] border border-[#d4af37]/25 text-[9px] font-black px-2.5 py-1 rounded-xl uppercase tracking-widest hidden sm:inline-block">
-                {isAr ? 'صلاحيات الموظف نشطة' : 'Staff Clearance On'}
-              </span>
-            )}
-            <Link 
-              to="/" 
-              className="px-4 py-2 bg-slate-900 hover:bg-slate-850 hover:text-white border border-slate-800 rounded-xl text-xs font-bold font-mono transition-all flex items-center gap-2 text-[#d4af37]"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              {isAr ? 'الرئيسية' : 'Portal Node'}
-            </Link>
-          </div>
-        </div>
-      </header>
-    )}
+        </header>
+      )}
 
       {/* Main Container */}
       <main className={`max-w-4xl mx-auto px-6 ${auth.currentUser ? 'pt-4' : 'pt-12'}`}>
-        
+
         {/* Page Hero Introduction */}
         <div className="text-center mb-10">
           <div className="inline-flex p-3 bg-gradient-to-b from-[#18181f] to-transparent rounded-3xl border border-[#d4af37]/15 justify-center mb-5 shadow-2xl">
@@ -472,7 +452,7 @@ export default function Tracking() {
 
         <div className="bg-[#121215] border border-slate-850 rounded-3xl p-6 shadow-2xl mb-8 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-[#d4af37]/2 to-transparent rounded-full blur-3xl pointer-events-none"></div>
-          
+
           <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-3">
             <div className="relative flex-1">
               <Search className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
@@ -518,11 +498,11 @@ export default function Tracking() {
         {/* Dynamic Result Panel */}
         {trackingData && (
           <div className="space-y-6 animate-fade-in text-start">
-            
+
             {/* 1. Passsport Meta Card */}
             <div className="bg-gradient-to-br from-[#121215] to-[#070708] border border-slate-850 rounded-3xl overflow-hidden shadow-2xl relative">
               <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-b from-[#d4af37]/5 to-transparent rounded-full blur-3xl pointer-events-none"></div>
-              
+
               <div className="p-5 border-b border-slate-850/80 bg-black/30 flex flex-col sm:flex-row divide-y sm:divide-y-0 sm:divide-x divide-slate-850/50 justify-between items-center gap-4">
                 <div className="text-start">
                   <span className="text-[9px] font-black tracking-widest text-[#d4af37] uppercase block">{isAr ? 'رقم التتبع المكتشف' : 'LOGISTICS WAYBILL'}</span>
@@ -547,7 +527,7 @@ export default function Tracking() {
                   <span className="text-[9px] text-slate-500 font-extrabold uppercase tracking-wide block mb-0.5">{isAr ? 'الوزن القائم' : 'Gross Weight'}</span>
                   <span className="font-mono text-sm text-white font-bold">{trackingData.weight || '—'} <span className="text-[10px] text-slate-500">KG</span></span>
                 </div>
-                
+
                 <div className="p-3 bg-slate-950 border border-slate-850/50 rounded-2xl">
                   <span className="text-[9px] text-slate-500 font-extrabold uppercase tracking-wide block mb-0.5">{isAr ? 'الحجم الحجمي' : 'Volume Unit'}</span>
                   <span className="font-mono text-sm text-[#d4af37] font-bold">{trackingData.cbm || '—'} <span className="text-[10px] text-slate-500">CBM</span></span>
@@ -568,7 +548,7 @@ export default function Tracking() {
             {/* 2. Customer Financial Invoice View (Aesthetic Ledger) */}
             <div className="bg-[#121215] border border-slate-850 rounded-3xl p-6 relative overflow-hidden text-start">
               <div className="absolute right-0 top-0 w-2 h-full bg-gradient-to-b from-[#d4af37] to-amber-600"></div>
-              
+
               <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-850">
                 <div className="flex items-center gap-2">
                   <Coins className="w-4 h-4 text-[#d4af37]" />
@@ -582,7 +562,7 @@ export default function Tracking() {
                   <span className="text-[9px] text-slate-500 font-extrabold uppercase">{isAr ? 'إجمالي رسوم الشحن والتعبئة' : 'Total Charges'}</span>
                   <span className="font-mono text-base font-black text-white mt-1">{((parseFloat(trackingData.amountPaid) || 0) + (parseFloat(trackingData.amountRemaining) || 0)).toLocaleString()} <span className="text-[10px] text-slate-500">YER</span></span>
                 </div>
-                
+
                 <div className="flex flex-col">
                   <span className="text-[9px] text-slate-500 font-extrabold uppercase">{isAr ? 'المبالغ الموردة (المدفوع)' : 'Collected'}</span>
                   <span className="font-mono text-base font-black text-emerald-400 mt-1">{(trackingData.amountPaid || 0).toLocaleString()} <span className="text-[10px] text-slate-500">YER</span></span>
@@ -600,8 +580,8 @@ export default function Tracking() {
                 <div className="mt-4 p-3.5 bg-rose-950/10 border border-rose-950/40 rounded-2xl flex items-start gap-3">
                   <Info className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                   <p className="text-[10px] text-slate-400 leading-relaxed font-bold">
-                    {isAr 
-                      ? 'ملاحظة: يرجى تسوية وتوريد الرسوم المتبقية لمندوب التسليم النهائي أو تحويلها للمحاسب المختص بالمؤسسة قبل تسليم الطرد رسمياً.' 
+                    {isAr
+                      ? 'ملاحظة: يرجى تسوية وتوريد الرسوم المتبقية لمندوب التسليم النهائي أو تحويلها للمحاسب المختص بالمؤسسة قبل تسليم الطرد رسمياً.'
                       : 'Notice: Please settle the remaining fees with the final delivery representative or bank wire before shipping handover.'}
                   </p>
                 </div>
@@ -614,7 +594,7 @@ export default function Tracking() {
                 <Layers className="w-4 h-4 text-[#d4af37]" />
                 {isAr ? 'خريطة رصد المسار ومطابقة المراحل اللوجيستية' : 'Logistics Pipeline State Checkpoint'}
               </h3>
-              
+
               {/* Stepper block */}
               <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-10">
                 {currentMilestones.map((step, idx) => {
@@ -625,18 +605,17 @@ export default function Tracking() {
                   const active = idx === currentIdx;
 
                   return (
-                    <div 
-                      key={step.key} 
-                      className={`p-3 rounded-2xl border transition-all text-center flex flex-col justify-between h-24 ${
-                        active 
-                          ? 'border-[#d4af37] bg-[#d4af37]/5 shadow-[0_0_15px_rgba(212,175,55,0.08)]' 
-                          : completed 
-                          ? 'border-emerald-500/20 bg-emerald-950/5 text-slate-400' 
-                          : 'border-slate-850 bg-black/3c opacity-45'
-                      }`}
+                    <div
+                      key={step.key}
+                      className={`p-3 rounded-2xl border transition-all text-center flex flex-col justify-between h-24 ${active
+                          ? 'border-[#d4af37] bg-[#d4af37]/5 shadow-[0_0_15px_rgba(212,175,55,0.08)]'
+                          : completed
+                            ? 'border-emerald-500/20 bg-emerald-950/5 text-slate-400'
+                            : 'border-slate-850 bg-black/3c opacity-45'
+                        }`}
                     >
                       <div className="flex justify-between items-center">
-                        <span className="font-mono text-[9px] text-slate-500">0{idx+1}</span>
+                        <span className="font-mono text-[9px] text-slate-500">0{idx + 1}</span>
                         {completed ? (
                           <CheckCircle2 className={`w-3.5 h-3.5 ${active ? 'text-[#d4af37]' : 'text-emerald-400'}`} />
                         ) : (
@@ -654,14 +633,14 @@ export default function Tracking() {
               {/* Realtime Live Map Frame */}
               <div className="mb-10 w-full h-[400px] rounded-3xl overflow-hidden border border-slate-850 relative bg-black relative shadow-2xl">
                 {!trackingData.currentCoordinates && (
-                   <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 backdrop-blur text-sm text-[#d4af37] animate-pulse">
-                     {isAr ? 'جاري استقبال الإحداثيات الجغرافية...' : 'Locating GPS Coordinates...'}
-                   </div>
+                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 backdrop-blur text-sm text-[#d4af37] animate-pulse">
+                    {isAr ? 'جاري استقبال الإحداثيات الجغرافية...' : 'Locating GPS Coordinates...'}
+                  </div>
                 )}
                 {trackingData.currentCoordinates && (
-                  <MapContainer 
-                    center={trackingData.currentCoordinates as [number, number]} 
-                    zoom={5} 
+                  <MapContainer
+                    center={trackingData.currentCoordinates as [number, number]}
+                    zoom={5}
                     style={{ height: '100%', width: '100%', zIndex: 1 }}
                     scrollWheelZoom={false}
                   >
@@ -669,13 +648,13 @@ export default function Tracking() {
                       attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                       url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
                     />
-                    
+
                     {/* Render historical path polyline if there are coordinates */}
                     {(() => {
                       const points = trackingData.history
-                         ?.map((h: any) => h.coordinates)
-                         .filter(Boolean) as [number, number][];
-                         
+                        ?.map((h: any) => h.coordinates)
+                        .filter(Boolean) as [number, number][];
+
                       return points?.length > 1 ? (
                         <Polyline positions={points} color="#d4af37" weight={3} dashArray="10, 10" className="animate-pulse" />
                       ) : null;
@@ -713,18 +692,17 @@ export default function Tracking() {
                   {[...(trackingData.history || [])].reverse().map((event: any, index: number, arr: any[]) => {
                     return (
                       <div key={index} className="relative flex gap-6 pb-6 last:pb-0 text-start group">
-                        
+
                         {/* Connecting track line */}
                         {index !== arr.length - 1 && (
                           <div className="absolute right-5 top-8 bottom-0 w-[1px] bg-slate-800 group-hover:bg-[#d4af37]/20 transition-all"></div>
                         )}
 
                         <div className="shrink-0 z-10">
-                          <div className={`w-10 h-10 rounded-2xl border flex items-center justify-center bg-black/60 shadow-xl transition-all ${
-                            index === 0 
-                              ? 'border-[#d4af37] ring-1 ring-[#d4af37]/20' 
+                          <div className={`w-10 h-10 rounded-2xl border flex items-center justify-center bg-black/60 shadow-xl transition-all ${index === 0
+                              ? 'border-[#d4af37] ring-1 ring-[#d4af37]/20'
                               : 'border-slate-800'
-                          }`}>
+                            }`}>
                             {getStatusIcon(event.status)}
                           </div>
                         </div>
@@ -734,7 +712,7 @@ export default function Tracking() {
                             <span className={`text-xs font-black uppercase ${index === 0 ? 'text-[#d4af37] text-md' : 'text-slate-300'}`}>
                               {getTranslatedStatus(event.status)}
                             </span>
-                            
+
                             <span className="text-[10px] text-slate-500 font-mono font-bold">
                               {new Date(event.timestamp).toLocaleString(isAr ? 'ar-YE' : 'en-US')}
                             </span>
@@ -812,7 +790,7 @@ export default function Tracking() {
               </div>
               <a
                 href={`https://wa.me/967777777777?text=${encodeURIComponent(
-                  isAr 
+                  isAr
                     ? `أهلاً، أود الاستعلام عن تحديثات إضافية بخصوص الشحنة الخاصة بي رقم: (${trackingData.trackingNumber}) وحالة الدفع.`
                     : `Hi alx team, I would like to inquire about my package ${trackingData.trackingNumber}.`
                 )}`}
@@ -847,8 +825,8 @@ export default function Tracking() {
                     <div className="text-start">
                       <h4 className="font-extrabold text-white text-[11px] mb-0.5">{isAr ? 'تفعيل لوحة التتبع العام للعميل' : 'Activate Public Client Portal'}</h4>
                       <p className="text-[10px] text-slate-400 leading-relaxed font-bold">
-                        {isAr 
-                          ? 'تفاصيل هذه الشحنة مخزنة فقط بقاعدة إدارة المبيعات المغلقة. يرجى ترحيلها ونشرها ليتمكن العميل من تتبعها عاماً دون تسجيل دخول بالنظام.' 
+                        {isAr
+                          ? 'تفاصيل هذه الشحنة مخزنة فقط بقاعدة إدارة المبيعات المغلقة. يرجى ترحيلها ونشرها ليتمكن العميل من تتبعها عاماً دون تسجيل دخول بالنظام.'
                           : 'This payload is only in Secure DB. Publish to public domain to allow the client to track without logging in.'}
                       </p>
                     </div>
@@ -865,8 +843,8 @@ export default function Tracking() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[10px] text-slate-500 font-extrabold uppercase mb-1.5">{isAr ? 'الحدث اللوجيستي الجديد' : 'New Milestone Tag'}</label>
-                    <select 
-                      value={statusSelector} 
+                    <select
+                      value={statusSelector}
                       onChange={e => setStatusSelector(e.target.value)}
                       className="w-full bg-black/60 border border-slate-800 rounded-xl p-3 text-white text-xs outline-none focus:border-[#d4af37]/40 font-bold"
                     >
@@ -878,12 +856,12 @@ export default function Tracking() {
 
                   <div>
                     <label className="block text-[10px] text-slate-500 font-extrabold uppercase mb-1.5">{isAr ? 'إحداثيات التواجد الحالية' : 'Yemen Node Coordinates'}</label>
-                    <input 
-                      type="text" 
-                      value={gpsLocation} 
+                    <input
+                      type="text"
+                      value={gpsLocation}
                       onChange={e => setGpsLocation(e.target.value)}
-                      placeholder="الأخضر، منفذ الوديعة البري" 
-                      className="w-full bg-black/60 border border-slate-800 rounded-xl p-3 text-white text-xs outline-none focus:border-[#d4af37]/40 text-start" 
+                      placeholder="الأخضر، منفذ الوديعة البري"
+                      className="w-full bg-black/60 border border-slate-800 rounded-xl p-3 text-white text-xs outline-none focus:border-[#d4af37]/40 text-start"
                     />
                   </div>
                 </div>
@@ -907,7 +885,7 @@ export default function Tracking() {
                   >
                     {isAr ? 'تصفية تاريخ الأحداث' : 'Reset Timeline'}
                   </button>
-                  
+
                   <button
                     type="button"
                     onClick={handlePushLogEvent}
@@ -928,8 +906,8 @@ export default function Tracking() {
             <Sparkles className="w-12 h-12 text-[#d4af37] mx-auto opacity-35 animate-pulse mb-4" />
             <h4 className="text-sm font-black text-white uppercase tracking-wider mb-2">{isAr ? 'بانتظار رصد إحداثيات الشحنة' : 'Awaiting dispatch query'}</h4>
             <p className="text-[10px] text-slate-500 uppercase tracking-widest leading-relaxed">
-              {isAr 
-                ? 'الرجاء إدخال رقم تتبع الشحنة أو رقم الهاتف في الصندوق بالأعلى للوصول لبيانات التوجيه المحدثة.' 
+              {isAr
+                ? 'الرجاء إدخال رقم تتبع الشحنة أو رقم الهاتف في الصندوق بالأعلى للوصول لبيانات التوجيه المحدثة.'
                 : 'Enter waybill number or customer credentials to start cargo telemetry stream.'}
             </p>
           </div>

@@ -1,18 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, doc, updateDoc, query, orderBy, limit } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, query, orderBy, limit } from '../lib/supabase-firebase-adapter';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { db } from '../lib/firebase';
+import { db } from '../lib/supabase-firebase-adapter';
 import { useSettings } from '../context/SettingsContext';
+import { useOrderStatuses } from '../hooks/useOrderStatuses';
 import { whatsappService } from '../services/whatsappService';
-import { 
-  X, 
-  Search, 
-  User, 
-  Package, 
-  DollarSign, 
-  Truck, 
-  AlertTriangle, 
+import {
+  X,
+  Search,
+  User,
+  Package,
+  DollarSign,
+  Truck,
+  AlertTriangle,
   ExternalLink,
   ShieldCheck,
   MapPin,
@@ -80,11 +81,11 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
       const dataSet: any[] = results.map(res => res.status === 'fulfilled' ? res.value : null);
 
       const [
-        ordersSnap, 
-        usersSnap, 
-        customersSnap, 
-        couriersSnap, 
-        sourcesSnap, 
+        ordersSnap,
+        usersSnap,
+        customersSnap,
+        couriersSnap,
+        sourcesSnap,
         expensesSnap,
         accountsSnap,
         journalSnap,
@@ -288,27 +289,16 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
     ...matchedFeatures.map(f => ({ ...f, _searchType: 'system', _displayType: isAr ? 'واجهة/قسم' : 'System Feature', _color: 'gold' })),
   ];
 
+  const { getStatusByAny } = useOrderStatuses();
+
   // Helper translations and colors
   const formatStatus = (status: string) => {
-    const translation: Record<string, string> = {
-      'تم تسجيل الطلب': isAr ? 'تم تسجيل الطلب' : 'Registered',
-      'وصل مستودع السعودية': isAr ? 'وصل مستودع السعودية' : 'Saudi HUB',
-      'جاري الشحن لليمن': isAr ? 'جاري الشحن لليمن' : 'Yemen Transit',
-      'في التخليص الجمركي': isAr ? 'التخليص الجمركي' : 'Customs',
-      'وصل مركز التوزيع في اليمن': isAr ? 'وصل مركز التوزيع باليمن' : 'Yemen HUB',
-      'مع المندوب للتوصيل': isAr ? 'مع المندوب للتوصيل 🚚' : 'Out for Delivery',
-      'تم التسليم': isAr ? 'تم التسليم وتفصيل العهد' : 'Delivered & Settled',
-      'ملغي': isAr ? 'ملغي' : 'Cancelled',
-      'Pending': isAr ? 'تم تسجيل الطلب' : 'Registered',
-      'Shipped': isAr ? 'جاري الشحن لليمن' : 'Yemen Transit',
-      'In Transit': isAr ? 'جاري الشحن لليمن' : 'Yemen Transit',
-      'Processing': isAr ? 'تم تسجيل الطلب' : 'Registered',
-      'In Local Warehouse': isAr ? 'وصل مركز التوزيع باليمن' : 'Yemen HUB',
-      'Out For Delivery': isAr ? 'مع المندوب للتوصيل 🚚' : 'Out for Delivery',
-      'Delivered': isAr ? 'تم التسليم بنجاح ✅' : 'Delivered Successfully',
-      'Cancelled': isAr ? 'ملغي ❌' : 'Cancelled'
-    };
-    return translation[status] || status;
+    if (!status) return '';
+    const found = getStatusByAny(status);
+    if (found) {
+      return isAr ? found.nameAr : found.nameEn;
+    }
+    return status;
   };
 
   const getRoleLabel = (role: string) => {
@@ -325,7 +315,7 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
 
   const getWhatsAppUrl = (order: any) => {
     if (!order) return '#';
-    const text = isAr 
+    const text = isAr
       ? `مرحباً عميلنا الكريم ${order.customerName || ''}،\nنود إفادتك بأن حالة طلبك رقم: (${order.orderNumber || ''}) هي حالياً: *${order.orderStatus || order.order_status || 'قيد المعالجة'}*.\n\n🚚 شركة الشحن: ${order.shippingCompany || order.carrier || '—'}\n📌 رقم التتبع الدولي: ${order.trackingNumber || '—'}\n💵 القيمة الإجمالية: ${((parseFloat(order.amountPaid) || 0) + (parseFloat(order.amountRemaining) || 0)).toLocaleString()} ريال يمني\n💳 المدفوع: ${parseFloat(order.amountPaid || '0').toLocaleString()} YER\n⚠️ المتبقي: ${parseFloat(order.amountRemaining || '0').toLocaleString()} YER\n\nشكراً لتعاملك مع alx!`
       : `Hello customer ${order.customerName || ''},\nWe would like to inform you that your order (${order.orderNumber || ''}) status is: *${order.orderStatus || order.order_status || 'Processing'}*.\n\n🚚 Shipping Company: ${order.shippingCompany || order.carrier || '—'}\n📌 International Tracking: ${order.trackingNumber || '—'}\n💵 Total Amount: ${((parseFloat(order.amountPaid) || 0) + (parseFloat(order.amountRemaining) || 0)).toLocaleString()} YER\n💳 Paid: ${parseFloat(order.amountPaid || '0').toLocaleString()} YER\n⚠️ Remaining: ${parseFloat(order.amountRemaining || '0').toLocaleString()} YER\n\nThank you for choosing alx!`;
     return `https://api.whatsapp.com/send?phone=${order.customerPhone || ''}&text=${encodeURIComponent(text)}`;
@@ -337,7 +327,7 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
       return;
     }
     setSendingWhatsapp(true);
-    const text = isAr 
+    const text = isAr
       ? `مرحباً عميلنا الكريم ${order.customerName || ''}،\nنود إفادتك بأن حالة طلبك رقم: (${order.orderNumber || ''}) هي حالياً: *${order.orderStatus || order.order_status || 'قيد المعالجة'}*.\n\n🚚 شركة الشحن: ${order.shippingCompany || order.carrier || '—'}\n📌 رقم التتبع الدولي: ${order.trackingNumber || '—'}\n💵 القيمة الإجمالية: ${((parseFloat(order.amountPaid) || 0) + (parseFloat(order.amountRemaining) || 0)).toLocaleString()} ريال يمني\n💳 المدفوع: ${parseFloat(order.amountPaid || '0').toLocaleString()} YER\n⚠️ المتبقي: ${parseFloat(order.amountRemaining || '0').toLocaleString()} YER\n\nشكراً لتعاملك مع alx!`
       : `Hello customer ${order.customerName || ''},\nWe would like to inform you that your order (${order.orderNumber || ''}) status is: *${order.orderStatus || order.order_status || 'Processing'}*.\n\n🚚 Shipping Company: ${order.shippingCompany || order.carrier || '—'}\n📌 International Tracking: ${order.trackingNumber || '—'}\n💵 Total Amount: ${((parseFloat(order.amountPaid) || 0) + (parseFloat(order.amountRemaining) || 0)).toLocaleString()} YER\n💳 Paid: ${parseFloat(order.amountPaid || '0').toLocaleString()} YER\n⚠️ Remaining: ${parseFloat(order.amountRemaining || '0').toLocaleString()} YER\n\nThank you for choosing alx!`;
 
@@ -348,12 +338,12 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
         order.orderNumber || order.id,
         'manual_search_share'
       );
-      
+
       if (result && result.success) {
         toast.success(isAr ? 'تم إرسال إشعار WhatsApp التلقائي للعميل بنجاح! 📲✅' : 'WhatsApp notification auto-sent successfully! 📲✅');
       } else {
-        toast.error(isAr 
-          ? `فشل إرسال الإشعار التلقائي: ${result?.errorMsg || result?.status || 'تأكد من إعدادات بوابة WhatsApp'}` 
+        toast.error(isAr
+          ? `فشل إرسال الإشعار التلقائي: ${result?.errorMsg || result?.status || 'تأكد من إعدادات بوابة WhatsApp'}`
           : `Auto-dispatch failed: ${result?.errorMsg || result?.status || 'Verify WhatsApp configuration'}`
         );
       }
@@ -419,7 +409,7 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
   return (
     <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in text-start select-none">
       <div className="bg-[#0b0b0d] border border-slate-800/80 rounded-3xl w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden shadow-[0_0_50px_rgba(212,175,55,0.15)] text-slate-300">
-        
+
         {/* Header Bar */}
         <div className="p-6 border-b border-[#d4af37]/10 flex justify-between items-center bg-black/40">
           <div className="flex items-center gap-3">
@@ -431,13 +421,13 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
                 {isAr ? 'البحث العالمي الفوري الذكي ⚡' : 'Smart Universal Fast Search ⚡'}
               </h3>
               <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.15em] mt-0.5">
-                {isAr 
-                  ? 'ابحث عبر كافة أركان النظام: الطلبات • الموظفين • المندوبين • العملاء والشركاء والمصروفات' 
+                {isAr
+                  ? 'ابحث عبر كافة أركان النظام: الطلبات • الموظفين • المندوبين • العملاء والشركاء والمصروفات'
                   : 'Search everything: orders, staff profiles, couriers, global customers, sources and ledger entries'}
               </p>
             </div>
           </div>
-          
+
           <div className="flex items-center gap-2">
             <button
               onClick={fetchAllSystemData}
@@ -446,8 +436,8 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-emerald-500' : ''}`} />
             </button>
-            <button 
-              onClick={onClose} 
+            <button
+              onClick={onClose}
               className="text-slate-400 hover:text-white bg-slate-900 border border-slate-800/60 p-2.5 rounded-xl transition-all"
             >
               <X className="w-4 h-4" />
@@ -480,10 +470,10 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
 
         {/* Split Screen Dashboard Area */}
         <div className="flex-1 flex overflow-hidden min-h-0">
-          
+
           {/* Left Panel: Search results list hierarchy & tab selectors */}
           <div className="w-full md:w-[380px] shrink-0 border-r border-slate-800/70 flex flex-col bg-black/10">
-            
+
             {/* Scrollable Horizontal Tabs Row */}
             <div className="p-3 border-b border-slate-800/50 flex gap-2 overflow-x-auto custom-scrollbar shrink-0 select-none">
               {tabItems.map((tab) => (
@@ -493,16 +483,14 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
                     setActiveTab(tab.key);
                     setSelectedItem(null);
                   }}
-                  className={`px-3 py-1.5 rounded-xl text-[10px] font-black tracking-wide shrink-0 transition-all border flex items-center gap-1.5 ${
-                    activeTab === tab.key
+                  className={`px-3 py-1.5 rounded-xl text-[10px] font-black tracking-wide shrink-0 transition-all border flex items-center gap-1.5 ${activeTab === tab.key
                       ? 'bg-[#d4af37]/10 text-white border-[#d4af37] shadow-[inset_0_0_10px_rgba(212,175,55,0.05)]'
                       : 'bg-[#0a0a0c] text-slate-400 border-slate-800/70 hover:text-white hover:border-slate-700'
-                  }`}
+                    }`}
                 >
                   <span>{isAr ? tab.ar : tab.en}</span>
-                  <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-mono ${
-                    activeTab === tab.key ? 'bg-[#d4af37] text-black font-extrabold' : 'bg-slate-900 text-slate-400'
-                  }`}>
+                  <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-mono ${activeTab === tab.key ? 'bg-[#d4af37] text-black font-extrabold' : 'bg-slate-900 text-slate-400'
+                    }`}>
                     {tab.count}
                   </span>
                 </button>
@@ -527,7 +515,7 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
                     <span>{isAr ? 'العنصر المكتشف' : 'Found Object'}</span>
                     <span>{currentFilteredSet.length} {isAr ? 'تحت التصفية' : 'Filtered'}</span>
                   </div>
-                  
+
                   {currentFilteredSet.map((item) => {
                     const type = item._searchType;
                     const isSelected = selectedItem && selectedItem.id === item.id && selectedItem._searchType === type;
@@ -535,19 +523,17 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
                       <div
                         key={`${type}-${item.id}`}
                         onClick={() => setSelectedItem(item)}
-                        className={`w-full p-3.5 rounded-xl transition-all duration-300 text-start flex items-center justify-between gap-3 border cursor-pointer relative ${
-                          isSelected
+                        className={`w-full p-3.5 rounded-xl transition-all duration-300 text-start flex items-center justify-between gap-3 border cursor-pointer relative ${isSelected
                             ? 'bg-gradient-to-r from-[#d4af37]/15 to-[#0b0b0d] border-[#d4af37] shadow-[inset_3px_0_10px_rgba(212,175,55,0.04)]'
                             : 'bg-[#08080a] hover:bg-slate-900/40 border-slate-800/80 hover:border-slate-700'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center gap-3.5 flex-1 min-w-0">
-                          <div className={`p-2 rounded-lg shrink-0 ${
-                            isSelected ? 'bg-[#d4af37]/20' : 'bg-slate-950 border border-slate-800/60'
-                          }`}>
+                          <div className={`p-2 rounded-lg shrink-0 ${isSelected ? 'bg-[#d4af37]/20' : 'bg-slate-950 border border-slate-800/60'
+                            }`}>
                             {getIcon(type)}
                           </div>
-                          
+
                           <div className="flex-1 min-w-0">
                             <div className="flex justify-between items-baseline mb-1">
                               {/* Primary Badge or ID display */}
@@ -563,7 +549,7 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
                                 {type === 'source' && (item.type || 'App')}
                               </span>
                             </div>
-                            
+
                             <p className="text-xs font-black text-white truncate">
                               {type === 'order' && item.customerName}
                               {type === 'user' && item.fullName}
@@ -578,7 +564,7 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
                               {type === 'system' && (isAr ? item.nameAr : item.nameEn)}
                               {type === 'activity' && item.action}
                             </p>
-                            
+
                             <p className="text-[10px] text-slate-500 font-semibold truncate font-mono mt-0.5">
                               {type === 'order' && item.customerPhone}
                               {type === 'user' && `@${item.username || 'user'}`}
@@ -614,7 +600,7 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
                             else if (type === 'role') targetPath = '/roles';
                             else if (type === 'system') targetPath = item.path;
                             else if (type === 'activity') targetPath = '/settings';
-                            
+
                             navigate(targetPath, { state: { selectedId: item.id } });
                             onClose();
                           }}
@@ -642,11 +628,11 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
                 <Crown className="w-14 h-14 text-slate-800 rotate-12 mb-4 animate-bounce" />
                 <h4 className="font-extrabold text-white text-sm uppercase tracking-widest">{isAr ? 'شاشة تفاصيل الكيان الموحد 📊' : 'Unified Entity Panel 📊'}</h4>
                 <p className="text-xs text-slate-500 font-bold max-w-sm mt-2">
-                  {isAr 
-                    ? 'اختر أي طلب أو موظف أو عميل أو حركة مالية من نتائج البحث على اليسار لعرض البطاقة التفاعلية والتحكم والولوج السريع للمفاتيح' 
+                  {isAr
+                    ? 'اختر أي طلب أو موظف أو عميل أو حركة مالية من نتائج البحث على اليسار لعرض البطاقة التفاعلية والتحكم والولوج السريع للمفاتيح'
                     : 'Select any order, staff, customer, courier or transaction on the left index to inspect complete data metrics instantly'}
                 </p>
-                
+
                 {/* Micro metrics count details for administrative awareness */}
                 <div className="grid grid-cols-3 gap-3 max-w-sm w-full mt-8 pt-6 border-t border-slate-800/60 font-sans text-start">
                   <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-900">
@@ -665,7 +651,7 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
               </div>
             ) : (
               <div className="space-y-6 flex-1 flex flex-col justify-between h-full">
-                
+
                 <div className="space-y-6">
                   {/* Dynamic Top Stat Bar */}
                   <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 flex flex-wrap items-center justify-between gap-4">
@@ -682,7 +668,7 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
                         </span>
                       </div>
                     </div>
-                    
+
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-slate-400 font-bold">{isAr ? 'الحالة المعيارية:' : 'Metric State:'}</span>
                       <span className="px-3.5 py-1 rounded-xl text-[11px] font-black bg-slate-900 border border-slate-800 text-white shadow-sm">
@@ -701,7 +687,7 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
                   {/* 1️⃣ ORDER DETAILS PREVIEW */}
                   {selectedItem._searchType === 'order' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-start">
-                      
+
                       {/* Customer Info Card */}
                       <div className="bg-slate-950/40 border border-slate-800/80 p-4.5 rounded-2xl space-y-3">
                         <div className="flex items-center gap-2 border-b border-slate-800/60 pb-2.5">
@@ -844,7 +830,7 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
                         <User className="w-5 h-5 text-emerald-400" />
                         <h4 className="font-extrabold text-sm text-white">{isAr ? 'الملف الشخصي الشامل للعميل' : 'Customer Master Profile'}</h4>
                       </div>
-                      
+
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                         <div className="space-y-1">
                           <label className="text-slate-500 font-black block">{isAr ? 'اسم العميل بالكامل:' : 'Customer Name:'}</label>
@@ -885,7 +871,7 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
                         <Truck className="w-5 h-5 text-amber-400" />
                         <h4 className="font-extrabold text-sm text-white">{isAr ? 'المواقف والعهد المالية لمندوب التوصيل' : 'Courier Custody & Handling File'}</h4>
                       </div>
-                      
+
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                         <div className="space-y-1">
                           <label className="text-slate-500 font-black block">{isAr ? 'اسم المندوب المعتمد ومسؤول السداد:' : 'Courier Full Name:'}</label>
@@ -903,14 +889,14 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
                           <label className="text-slate-500 font-black block">{isAr ? 'مركز العمل والتوزيع الرئيسي:' : 'Regional Depot Location:'}</label>
                           <div className="bg-black/40 border border-slate-900 p-2.5 rounded-xl text-slate-200">{selectedItem.address || (isAr ? 'اليمن (رئيسي)' : 'Yemen (Core HUB)')}</div>
                         </div>
-                        
+
                         <div className="p-4 sm:col-span-2 rounded-2xl bg-amber-500/10 border border-amber-500/25 space-y-2">
                           <div className="flex items-center gap-2">
                             <AlertTriangle className="w-5 h-5 text-amber-400" />
                             <span className="font-black text-xs text-white uppercase tracking-wider">{isAr ? 'السجل والذمم المالية والعهد المعلقة' : 'Outstanding Liabilities & Balances'}</span>
                           </div>
                           <p className="text-[11px] text-slate-400 font-bold leading-normal">
-                            {isAr 
+                            {isAr
                               ? 'يرجى مراجعة صفحة المحاسبة والمصروفات لمطابقة ودراسة المبالغ المالية المسلمة بذمة المندوب كعهدة لتجنب أي فروقات بالخزينة.'
                               : 'Ensure matching this delegate record inside the main Accounting sheet to settle outstanding liquid funds securely.'}
                           </p>
@@ -926,7 +912,7 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
                         <Globe className="w-5 h-5 text-blue-400" />
                         <h4 className="font-extrabold text-sm text-white">{isAr ? 'مصدر التوريد وقنوات المشتريات المستهدفة' : 'Supplier Procurement Station'}</h4>
                       </div>
-                      
+
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                         <div className="space-y-1">
                           <label className="text-slate-500 font-black block">{isAr ? 'اسم المصدر / الموقع:' : 'Procurement Station name:'}</label>
@@ -940,7 +926,7 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
                           <label className="text-slate-500 font-black block">{isAr ? 'الرابط المباشر للمنصة (تصفح):' : 'Direct browse URL:'}</label>
                           <div className="bg-black/40 border border-slate-900 p-2.5 rounded-xl text-slate-300 font-mono truncate">
                             {selectedItem.source_url ? (
-                              <a 
+                              <a
                                 href={selectedItem.source_url.startsWith('http') ? selectedItem.source_url : `https://${selectedItem.source_url}`}
                                 target="_blank"
                                 referrerPolicy="no-referrer"
@@ -976,7 +962,7 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
                         <Wallet className="w-5 h-5 text-rose-400" />
                         <h4 className="font-extrabold text-sm text-white">{isAr ? 'حركة المصروفات والعهدة المالية بالدفاتر' : 'Spent transaction details'}</h4>
                       </div>
-                      
+
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                         <div className="space-y-1">
                           <label className="text-slate-500 font-black block">{isAr ? 'قيمة المبلغ المصروف بالعملة المستهدفة:' : 'Total Spent Funds volume:'}</label>
@@ -1024,20 +1010,19 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
                       type="button"
                       disabled={sendingWhatsapp}
                       onClick={() => handleSendWhatsApp(selectedItem)}
-                      className={`font-extrabold text-white px-4 py-2.5 rounded-xl transition-all text-xs flex items-center gap-2 shadow-md shadow-emerald-950 ${
-                        sendingWhatsapp 
-                          ? 'bg-slate-700 cursor-not-allowed opacity-70' 
+                      className={`font-extrabold text-white px-4 py-2.5 rounded-xl transition-all text-xs flex items-center gap-2 shadow-md shadow-emerald-950 ${sendingWhatsapp
+                          ? 'bg-slate-700 cursor-not-allowed opacity-70'
                           : 'bg-emerald-600 hover:bg-emerald-500'
-                      }`}
+                        }`}
                     >
                       {sendingWhatsapp ? (
                         <div className="w-4 h-4 rounded-full border-2 border-white/20 border-t-white animate-spin shrink-0"></div>
                       ) : (
-                        <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397 0 12.008 0c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 12.003-11.95 12.003-1.999-.001-3.959-.5-5.717-1.447L0 24zm6.59-4.861c1.72 1.02 3.419 1.558 5.411 1.559 5.541 0 10.054-4.515 10.057-10.057.002-2.685-1.042-5.21-2.945-7.111C17.26 1.63 14.734 1.586 12.005 1.586c-5.546 0-10.062 4.515-10.066 10.059-.001 1.93.501 3.81 1.456 5.484L2.378 21.98l4.269-1.121z"/></svg>
+                        <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397 0 12.008 0c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 12.003-11.95 12.003-1.999-.001-3.959-.5-5.717-1.447L0 24zm6.59-4.861c1.72 1.02 3.419 1.558 5.411 1.559 5.541 0 10.054-4.515 10.057-10.057.002-2.685-1.042-5.21-2.945-7.111C17.26 1.63 14.734 1.586 12.005 1.586c-5.546 0-10.062 4.515-10.066 10.059-.001 1.93.501 3.81 1.456 5.484L2.378 21.98l4.269-1.121z" /></svg>
                       )}
                       <span>
-                        {sendingWhatsapp 
-                          ? (isAr ? 'جاري إرسال الإشعار التلقائي للعميل...' : 'Sending notification via WhatsApp...') 
+                        {sendingWhatsapp
+                          ? (isAr ? 'جاري إرسال الإشعار التلقائي للعميل...' : 'Sending notification via WhatsApp...')
                           : (isAr ? 'إرسال بيانات الحالة والمبلغ المعلق للعميل' : 'Notify customer via WhatsApp')
                         }
                       </span>

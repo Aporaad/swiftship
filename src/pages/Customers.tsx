@@ -69,7 +69,7 @@ export default function Customers() {
       where('entityId', '==', selectedCustomer.id)
     );
     const unsubTx = onSnapshot(qTx, (snap) => {
-      const txs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const txs = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
       setCustomerTransactions(txs);
     }, (err) => {
       console.error("Error fetching transactions for customer:", err);
@@ -129,7 +129,7 @@ export default function Customers() {
   useEffect(() => {
     if (roleLoading) return;
     const unsub = onSnapshot(collection(db, 'customers'), (snap) => {
-      setCustomers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setCustomers(snap.docs.map((d: any) => ({ id: d.id, ...d.data() })));
       setLoading(false);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'customers');
@@ -137,7 +137,7 @@ export default function Customers() {
 
     // Subscribe to accounts collection to obtain real-time financial balances and currencies
     const unsubAccounts = onSnapshot(collection(db, 'accounts'), (snap) => {
-      setAccounts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setAccounts(snap.docs.map((d: any) => ({ id: d.id, ...d.data() })));
     }, (error) => {
       console.warn("Could not load financial accounts in Customers page", error);
     });
@@ -182,7 +182,7 @@ export default function Customers() {
     );
 
     const unsub = onSnapshot(q, (snap) => {
-      setCustomerOrders(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setCustomerOrders(snap.docs.map((d: any) => ({ id: d.id, ...d.data() })));
       setOrdersLoading(false);
     }, (err) => {
       console.error(err);
