@@ -35,6 +35,7 @@ import { currencyService, DEFAULT_RATES } from "./currencyService";
 import { db, auth } from "../lib/supabase-firebase-adapter";
 import { activityLogService } from "./activityLogService";
 import { Transaction } from "../types";
+//import { Settings } from "../contexts/SettingsContext";
 
 export type AccountEntityType = "customer" | "courier" | "employee" | "system";
 
@@ -1249,8 +1250,9 @@ class FinancialAccountService {
    *   sys_shipping_costs  → 5300-7118  (Expense — International Shipping)
    *   sys_cash_account    → 1111-0     (Asset — General Cash Box)
    */
+
   async ensureSystemAccounts(
-    currency: string = "YER",
+    currency: string = 'YER',//currencyService.getDefaultCurrency.name,
   ): Promise<Record<string, string>> {
     const sysAccounts = [
       // Revenues (4xxx)
@@ -1340,7 +1342,7 @@ class FinancialAccountService {
         id: "order_charge",
         nameAr: "قيد قيمة الطلب على العميل",
         nameEn: "Charge order value to customer",
-        isActive: true,
+        isActive: false,
         debitAccount: {
           id: "customer_linked",
           code: "1130",
@@ -1380,7 +1382,7 @@ class FinancialAccountService {
         id: "sourcing_cost_courier",
         nameAr: "تكاليف المنتجات الأصلية المضافة لعهدة المندوب",
         nameEn: "Adding sourcing cost to courier custody",
-        isActive: true,
+        isActive: false,
         debitAccount: {
           id: "sys_sourcing_cost",
           code: "5100-4483",
@@ -1402,7 +1404,7 @@ class FinancialAccountService {
         id: "sourcing_cost_system",
         nameAr: "تكلفة شراء منتجات الطلب المدفوعة نقدًا",
         nameEn: "Sourcing products cost paid from cash",
-        isActive: true,
+        isActive: false,
         debitAccount: {
           id: "sys_sourcing_cost",
           code: "5100-4483",
@@ -1422,7 +1424,7 @@ class FinancialAccountService {
         id: "packaging_fee",
         nameAr: "رسوم التغليف التلقائية",
         nameEn: "Auto packaging fee",
-        isActive: true,
+        isActive: false,
         debitAccount: {
           id: "sys_cash_account",
           code: "1111-0",
@@ -1442,7 +1444,7 @@ class FinancialAccountService {
         id: "international_shipping",
         nameAr: "تكلفة الشحن الدولي للطلب المدفوعة نقدًا",
         nameEn: "International shipping cost paid from cash",
-        isActive: true,
+        isActive: false,
         debitAccount: {
           id: "sys_shipping_costs",
           code: "5300-7118",
@@ -1463,7 +1465,7 @@ class FinancialAccountService {
         id: "order_payment",
         nameAr: "دفعة مسددة للطلب نقدًا/تحويل",
         nameEn: "Order payment received",
-        isActive: true,
+        isActive: false,
         debitAccount: {
           id: "sys_cash_account",
           code: "1111-0",
@@ -1483,7 +1485,7 @@ class FinancialAccountService {
         id: "delivery_wage",
         nameAr: "أجور التوصيل التلقائية للمندوب",
         nameEn: "Auto-wage for courier delivery",
-        isActive: true,
+        isActive: false,
         debitAccount: {
           id: "sys_delivery_cost",
           code: "5000-2788",
@@ -1503,7 +1505,7 @@ class FinancialAccountService {
         id: "custody_payment",
         nameAr: "العهدة وتصفية دفعة العميل التلقائية",
         nameEn: "Auto-custody and payment settlement",
-        isActive: true,
+        isActive: false,
         debitAccount: {
           id: "courier_linked",
           code: "2120",
@@ -1525,7 +1527,7 @@ class FinancialAccountService {
         id: "courier_commission",
         nameAr: "عمولة الشحن التلقائية للوكلاء/المناديب",
         nameEn: "Auto shipping courier commission",
-        isActive: true,
+        isActive: false,
         debitAccount: {
           id: "sys_sourcing_cost",
           code: "5100-4483",
@@ -1545,7 +1547,7 @@ class FinancialAccountService {
         id: "company_profit",
         nameAr: "صافي أرباح الشركة للطلب التلقائي",
         nameEn: "Company net profit",
-        isActive: true,
+        isActive: false,
         debitAccount: {
           id: "sys_cash_account",
           code: "1111-0",
@@ -1596,7 +1598,6 @@ class FinancialAccountService {
       return defaultRules;
     }
   }
-
   /**
    * Safe execution of dynamic automatic voucher postings based on rule configuration
    */

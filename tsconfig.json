@@ -79,5 +79,10 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "exclude": [
+    "alx_web",
+    "node_modules",
+    "dist"
+  ]
 }

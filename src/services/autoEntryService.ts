@@ -30,7 +30,7 @@ export interface AutoEntryRule {
 export const DEFAULT_AUTO_ENTRIES: AutoEntryRule[] = [
   {
     id: 'order_charge',
-    statusId: 1, // عند الاعتماد / التسجيل
+    statusId: 2, // عند الاعتماد / التسجيل
     statusNameAr: 'معلق',
     nameAr: 'قيد إجمالي قيمة الطلب على العميل',
     nameEn: 'Charge total order value to customer account',
@@ -53,7 +53,7 @@ export const DEFAULT_AUTO_ENTRIES: AutoEntryRule[] = [
   },
   {
     id: 'order_down_payment',
-    statusId: 1,
+    statusId: 2,
     statusNameAr: 'معلق',
     nameAr: 'الدفعة المقدمة للطلب المستلمة نقدًا',
     nameEn: 'Order down payment received in cash',

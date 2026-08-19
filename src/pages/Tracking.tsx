@@ -26,8 +26,8 @@ import {
   Database,
   Info
 } from 'lucide-react';
-import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, arrayUnion } from 'firebase/firestore';
-import { db, auth } from '../lib/firebase';
+import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, arrayUnion } from '../lib/supabase-firebase-adapter';
+import { db, auth } from '../lib/supabase-firebase-adapter';
 import { useSettings } from '../context/SettingsContext';
 import { useOrderStatuses } from '../hooks/useOrderStatuses';
 import { Link, useNavigate } from 'react-router-dom';
@@ -608,10 +608,10 @@ export default function Tracking() {
                     <div
                       key={step.key}
                       className={`p-3 rounded-2xl border transition-all text-center flex flex-col justify-between h-24 ${active
-                          ? 'border-[#d4af37] bg-[#d4af37]/5 shadow-[0_0_15px_rgba(212,175,55,0.08)]'
-                          : completed
-                            ? 'border-emerald-500/20 bg-emerald-950/5 text-slate-400'
-                            : 'border-slate-850 bg-black/3c opacity-45'
+                        ? 'border-[#d4af37] bg-[#d4af37]/5 shadow-[0_0_15px_rgba(212,175,55,0.08)]'
+                        : completed
+                          ? 'border-emerald-500/20 bg-emerald-950/5 text-slate-400'
+                          : 'border-slate-850 bg-black/3c opacity-45'
                         }`}
                     >
                       <div className="flex justify-between items-center">
@@ -700,8 +700,8 @@ export default function Tracking() {
 
                         <div className="shrink-0 z-10">
                           <div className={`w-10 h-10 rounded-2xl border flex items-center justify-center bg-black/60 shadow-xl transition-all ${index === 0
-                              ? 'border-[#d4af37] ring-1 ring-[#d4af37]/20'
-                              : 'border-slate-800'
+                            ? 'border-[#d4af37] ring-1 ring-[#d4af37]/20'
+                            : 'border-slate-800'
                             }`}>
                             {getStatusIcon(event.status)}
                           </div>

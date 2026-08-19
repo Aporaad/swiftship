@@ -1,7 +1,8 @@
 // Security Shield: Console Log Sanitizer
 // Prevents sensitive API keys, Supabase URLs, custom tokens, and auth secrets from appearing in Developer Console
 
-const IS_PROD = typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.PROD;
+const IS_PROD = typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.PROD;
+
 
 // Patterns that must never be printed to console
 const SENSITIVE_PATTERNS = [
