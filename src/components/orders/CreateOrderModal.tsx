@@ -303,7 +303,7 @@ export default function CreateOrderModal({
   return (
     <div className="fixed inset-0 bg-slate-955/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 z-50 animate-fade-in overflow-y-auto">
       <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-6xl my-4 overflow-hidden shadow-[0_0_50px_rgba(212,175,55,0.18)] flex flex-col max-h-[92vh]">
-        
+
         {/* ======================================================== */}
         {/* 1. FIXED TOP HEADER Across ALL Steps                     */}
         {/* ======================================================== */}
@@ -368,7 +368,7 @@ export default function CreateOrderModal({
             {/* 5. Other Fees (رسوم أخرى) */}
             <div className="bg-slate-955/70 p-2.5 rounded-xl border border-slate-800/60 text-start col-span-2 sm:col-span-1">
               <span className="block text-[9px] text-slate-500 font-black uppercase tracking-wider">
-                {isAr ? 'رسوم اخرى (أرباح)' : 'Other Fees'}
+                {isAr ? 'رسوم اخرى' : 'Other Fees'}
               </span>
               <span className="font-mono text-xs font-black text-blue-400 truncate block">
                 {(calcs?.profitCompanySAR || 0).toLocaleString()} SAR
@@ -404,30 +404,27 @@ export default function CreateOrderModal({
                   key={step.id}
                   type="button"
                   onClick={() => handleStepClick(step.id)}
-                  className={`relative z-10 flex flex-col items-center group cursor-pointer transition-all ${
-                    isActive ? 'scale-105' : 'hover:scale-102'
-                  }`}
+                  className={`relative z-10 flex flex-col items-center group cursor-pointer transition-all ${isActive ? 'scale-105' : 'hover:scale-102'
+                    }`}
                 >
                   <div
-                    className={`w-9 h-9 sm:w-10 sm:h-10 rounded-2xl flex items-center justify-center font-black text-xs transition-all duration-300 shadow-lg ${
-                      isCompleted
-                        ? 'bg-emerald-500 text-black border-2 border-emerald-400 shadow-emerald-500/20'
-                        : isActive
+                    className={`w-9 h-9 sm:w-10 sm:h-10 rounded-2xl flex items-center justify-center font-black text-xs transition-all duration-300 shadow-lg ${isCompleted
+                      ? 'bg-emerald-500 text-black border-2 border-emerald-400 shadow-emerald-500/20'
+                      : isActive
                         ? 'bg-gradient-to-br from-[#d4af37] to-yellow-600 text-black border-2 border-yellow-300 shadow-[#d4af37]/30 ring-4 ring-[#d4af37]/20'
                         : 'bg-slate-900 text-slate-500 border border-slate-800 group-hover:border-slate-700'
-                    }`}
+                      }`}
                   >
                     {isCompleted ? <CheckCircle2 className="w-5 h-5 stroke-[2.5]" /> : <Icon className="w-4 h-4" />}
                   </div>
                   <div className="mt-1.5 text-center">
                     <span
-                      className={`block text-[10px] sm:text-[11px] font-black tracking-tight transition-colors ${
-                        isActive
-                          ? 'text-[#d4af37]'
-                          : isCompleted
+                      className={`block text-[10px] sm:text-[11px] font-black tracking-tight transition-colors ${isActive
+                        ? 'text-[#d4af37]'
+                        : isCompleted
                           ? 'text-emerald-400'
                           : 'text-slate-500 group-hover:text-slate-400'
-                      }`}
+                        }`}
                     >
                       {isAr ? step.titleAr : step.titleEn}
                     </span>
@@ -458,7 +455,7 @@ export default function CreateOrderModal({
         {/* 3. STEP FORM BODY CONTENT (Scrollable)                   */}
         {/* ======================================================== */}
         <form onSubmit={handleFormSubmit} className="flex-1 overflow-y-auto p-6 custom-scrollbar text-start">
-          
+
           {/* ---------------------------------------------------- */}
           {/* STEP 1: Customer & Order Source Details              */}
           {/* ---------------------------------------------------- */}
