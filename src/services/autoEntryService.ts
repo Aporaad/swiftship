@@ -1,3 +1,4 @@
+import useExchangeRates from '../hooks/useExchangeRates';
 import { collection, getDocs, setDoc, doc, updateDoc, deleteDoc, db } from '../lib/supabase';
 import { financialAccountService } from './financialAccountService';
 
@@ -210,24 +211,51 @@ export const autoEntryService = {
     context: {
       courier?: any;
       customer?: any;
+      sourcing_cost?: any;
       isAr?: boolean;
       profileName?: string;
       rawAmountOverride?: number;
+      amountOriginal?: number;
+      currencyOriginal?: string;
     }
   ): Promise<string[]> {
     const executedRuleIds: string[] = [];
     try {
       const resolvedStatusId = statusId ?? order?.order_status_id ?? order?.orderStatusId ?? 1;
       const rules = await this.getAutoEntriesForStatus(resolvedStatusId);
+      const sourcing_cost_courier = context.sourcing_cost === 'system' ? await financialAccountService.getAccountById('sys_orders_cost') : context.courier;
       for (const rule of rules) {
         if (!rule.isActive) continue;
 
         // Trigger financial voucher
+        const amount_paid = order.amountPaid || 0;
+        const amount_remaining = order.amountRemaining || 0;
+        const delivery_wage = order.deliveryCourierFee || 0;
+        const courier_commission = order.profitSaudiSAR || 0;
+        const order_total = order.totalCostSAR || 0;
+        let currency = order.orderCurrency || 'SAR';
+
+        let amounts = rule.amountSource === 'amount_paid' ? amount_paid
+          : rule.amountSource === 'amount_remaining' ? amount_remaining
+            : rule.amountSource === 'delivery_wage' ? delivery_wage
+              : rule.amountSource === 'courier_commission' ? courier_commission
+                : rule.amountSource === 'order_total' ? order_total
+                  : rule.amountSource === 'shipping_cost' ? order.shippingCostAmount
+                    : rule.amountSource === 'company_profit' ? order.profitCompanySAR
+                      : rule.amountSource === 'sourcing_cost' ? order.sourcingCostAmount : 0;
+
+        /*if (order.currency !== order.order_currency) {
+          const rate = dbRates[order.order_currency]?.[order.currency] || 1;
+          amounts   = amounts * rate;
+        }*/
         await financialAccountService.triggerAutomaticVoucher(rule.id, order, {
           courier: context.courier,
           customer: context.customer,
+          sourcing_cost: sourcing_cost_courier,
           isAr: context.isAr ?? true,
-          rawAmount: context.rawAmountOverride,
+          rawAmount: amounts,// context.rawAmountOverride,
+          amountOriginal: amounts || 0,
+          currencyOriginal: currency || 'SAR',
           profileName: context.profileName || 'System Status Automation'
         });
 

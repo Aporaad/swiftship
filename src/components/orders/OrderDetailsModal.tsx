@@ -171,7 +171,7 @@ export default function OrderDetailsModal({
               )}
               {parseFloat(selectedOrder.profitCompanySAR || '0') > 0 && (
                 <div className="flex justify-between">
-                  <span>{isAr ? 'عمولة التطبيق (أرباح الشركة):' : 'App Commission (Profit):'}</span>
+                  <span>{isAr ? 'رسوم اخرى:' : 'other fees:'}</span>
                   <span className="text-slate-300 font-mono">{parseFloat(selectedOrder.profitCompanySAR).toLocaleString()} SAR</span>
                 </div>
               )}
@@ -279,9 +279,8 @@ export default function OrderDetailsModal({
 
                   return (
                     <div key={index} className="relative group">
-                      <div className={`absolute -right-[23px] md:-right-[35px] top-1.5 w-4 h-4 rounded-full border-4 border-slate-900 z-10 flex items-center justify-center transition-all ${
-                        isDelivered ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-amber-500 animate-pulse'
-                      }`} />
+                      <div className={`absolute -right-[23px] md:-right-[35px] top-1.5 w-4 h-4 rounded-full border-4 border-slate-900 z-10 flex items-center justify-center transition-all ${isDelivered ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-amber-500 animate-pulse'
+                        }`} />
 
                       <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 space-y-4 hover:border-slate-700 transition duration-300 shadow-md">
                         <div className="flex justify-between items-center flex-wrap gap-2">
@@ -298,11 +297,10 @@ export default function OrderDetailsModal({
                               <span>{typeLabel}</span>
                             </span>
 
-                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black flex items-center gap-1.5 ${
-                              isDelivered
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black flex items-center gap-1.5 ${isDelivered
                                 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-505/20'
                                 : 'bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse'
-                            }`}>
+                              }`}>
                               <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
                               <span>{isDelivered ? (isAr ? 'تم التسليم والمطابقة' : 'Delivered & Matched') : (isAr ? 'تحت الترانزيت 🕒' : 'In Transit 🕒')}</span>
                             </span>

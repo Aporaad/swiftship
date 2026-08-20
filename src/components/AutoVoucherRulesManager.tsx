@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  FileText, Activity, ToggleLeft, ToggleRight, Edit2, Check, X, Info, 
+import {
+  FileText, Activity, ToggleLeft, ToggleRight, Edit2, Check, X, Info,
   HelpCircle, Settings, HelpCircle as HelpIcon, ArrowRightLeft, Shield, Sparkles
 } from 'lucide-react';
-import { db } from '../lib/firebase';
-import { collection, onSnapshot, doc, updateDoc, getDocs, setDoc } from 'firebase/firestore';
+import { db } from '../lib/supabase';
+import { collection, onSnapshot, doc, updateDoc, getDocs, setDoc } from '../lib/supabase-firebase-adapter';
 import { financialAccountService } from '../services/financialAccountService';
 import { useAutoVoucherRules } from '../hooks/useAutoVoucherRules';
 
@@ -18,7 +18,7 @@ export default function AutoVoucherRulesManager({ isAr, settings }: AutoVoucherR
   const [accounts, setAccounts] = useState<any[]>([]);
   const [editingRule, setEditingRule] = useState<any | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  
+
   // Input fields for editing
   const [editDescAr, setEditDescAr] = useState('');
   const [editDescEn, setEditDescEn] = useState('');
@@ -57,7 +57,7 @@ export default function AutoVoucherRulesManager({ isAr, settings }: AutoVoucherR
     setEditingRule(rule);
     setEditDescAr(rule.descriptionTempAr || '');
     setEditDescEn(rule.descriptionTempEn || '');
-    
+
     // Map existing Debit Account config
     const deb = rule.debitAccount;
     if (deb.id === 'courier_linked' || deb.id === 'customer_linked') {
@@ -91,7 +91,7 @@ export default function AutoVoucherRulesManager({ isAr, settings }: AutoVoucherR
         finalDeb = {
           id: editDebitDynamicId,
           code: editDebitDynamicId === 'courier_linked' ? '2120' : '1130',
-          name: editDebitDynamicId === 'courier_linked' 
+          name: editDebitDynamicId === 'courier_linked'
             ? (isAr ? 'حساب المندوب المرتبط بالشحنة (ديناميكي)' : 'Courier Linked Account (Dynamic)')
             : (isAr ? 'حساب العميل المرتبط بالشحنة (ديناميكي)' : 'Customer Linked Account (Dynamic)'),
           type: 'dynamic'
@@ -112,7 +112,7 @@ export default function AutoVoucherRulesManager({ isAr, settings }: AutoVoucherR
         finalCred = {
           id: editCreditDynamicId,
           code: editCreditDynamicId === 'courier_linked' ? '2120' : '1130',
-          name: editCreditDynamicId === 'courier_linked' 
+          name: editCreditDynamicId === 'courier_linked'
             ? (isAr ? 'حساب المندوب المرتبط بالشحنة (ديناميكي)' : 'Courier Linked Account (Dynamic)')
             : (isAr ? 'حساب العميل المرتبط بالشحنة (ديناميكي)' : 'Customer Linked Account (Dynamic)'),
           type: 'dynamic'
@@ -151,7 +151,7 @@ export default function AutoVoucherRulesManager({ isAr, settings }: AutoVoucherR
 
   return (
     <div className="space-y-6 text-start">
-      
+
       {/* Information Header Banner */}
       <div className="bg-[#121215] border border-slate-850 p-5 rounded-3xl relative overflow-hidden shadow">
         <div className="flex items-start gap-4">
@@ -163,7 +163,7 @@ export default function AutoVoucherRulesManager({ isAr, settings }: AutoVoucherR
               {isAr ? 'لوحة تهيئة وإدارة القيود وأتمتة العمليات اللوجستية' : 'System Automatic Voucher Rules Studio'}
             </h3>
             <p className="text-xs text-slate-450 leading-relaxed max-w-4xl">
-              {isAr 
+              {isAr
                 ? 'تسمح لك هذه الواجهة بالتحكم الكامل في القيود التلقائية التي يُنشئها النظام عند تسليم الشحنات أو وصول الحاويات. يمكنك تفعيل أو إيقاف أي قيد، تحديد حسابات المدين والدائن (الطرف الدائن والطرف المدين لكل قيد) سواءً كانت ثابتة أو مبنية ديناميكياً على المندوب/العميل المخصص، وضبط بيان القيد ليتماشى تماماً مع معايير شجرتك المحاسبية.'
                 : 'Configure corporate-level automated journal posting rules on delivering cargo. Safely toggle triggers, map either rigid ledger accounts or dynamic courier/customer receivables, and fine-tune localized narration templates.'}
             </p>
@@ -174,11 +174,10 @@ export default function AutoVoucherRulesManager({ isAr, settings }: AutoVoucherR
       {/* Rules Grid */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         {rules.map((rule) => (
-          <div 
-            key={rule.id} 
-            className={`bg-gradient-to-br from-[#121215] to-[#08080a] border rounded-3xl p-5 shadow-xl transition-all hover:border-slate-800 flex flex-col justify-between ${
-              rule.isActive ? 'border-slate-850' : 'border-rose-950/40 opacity-75'
-            }`}
+          <div
+            key={rule.id}
+            className={`bg-gradient-to-br from-[#121215] to-[#08080a] border rounded-3xl p-5 shadow-xl transition-all hover:border-slate-800 flex flex-col justify-between ${rule.isActive ? 'border-slate-850' : 'border-rose-950/40 opacity-75'
+              }`}
           >
             <div className="space-y-4">
               <div className="flex justify-between items-start gap-2">
@@ -190,7 +189,7 @@ export default function AutoVoucherRulesManager({ isAr, settings }: AutoVoucherR
                     {isAr ? rule.nameAr : rule.nameEn}
                   </h4>
                 </div>
-                
+
                 <button
                   type="button"
                   onClick={() => handleToggleRuleActive(rule.id, rule.isActive)}
@@ -267,8 +266,8 @@ export default function AutoVoucherRulesManager({ isAr, settings }: AutoVoucherR
       {/* Edit Rule Drawer Modal */}
       {editingRule && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 text-start">
-          <form 
-            onSubmit={handleSaveRule} 
+          <form
+            onSubmit={handleSaveRule}
             className="bg-[#121215] border border-[#d4af37]/25 w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] font-sans"
           >
             <div className="p-4 border-b border-slate-850 flex justify-between items-center bg-[#07070a]/40 shrink-0">
@@ -278,9 +277,9 @@ export default function AutoVoucherRulesManager({ isAr, settings }: AutoVoucherR
                   {isAr ? 'تحديث وتعيين أطراف القيد التلقائي' : 'Configure Automation Rule Posting'}
                 </h3>
               </div>
-              <button 
-                type="button" 
-                onClick={() => setEditingRule(null)} 
+              <button
+                type="button"
+                onClick={() => setEditingRule(null)}
                 className="text-slate-500 hover:text-white p-1.5 bg-slate-900 border border-slate-800 rounded-lg transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
@@ -288,11 +287,11 @@ export default function AutoVoucherRulesManager({ isAr, settings }: AutoVoucherR
             </div>
 
             <div className="p-6 overflow-y-auto space-y-4 flex-1">
-              
+
               <div className="bg-[#d4af37]/5 border border-[#d4af37]/15 p-3 rounded-2xl text-xs text-slate-350 leading-relaxed font-sans">
                 💡 <span className="font-extrabold text-white">{isAr ? 'القالب التوليدي المعياري:' : 'Rule Code ID:'}</span> {editingRule.id}
                 <p className="mt-1">
-                  {isAr 
+                  {isAr
                     ? 'سيقوم النظام بصرف القيد التلقائي مستبدلاً المتغيرات ({orderNumber}) بالرقم الحقيقي للشحنات المنفذة.'
                     : 'System dynamically replaces ({orderNumber}) with actual shipment values during ledger posting.'}
                 </p>
@@ -335,22 +334,20 @@ export default function AutoVoucherRulesManager({ isAr, settings }: AutoVoucherR
                     <button
                       type="button"
                       onClick={() => setEditDebitType('system')}
-                      className={`py-2 text-[10.5px] font-black rounded-lg border transition ${
-                        editDebitType === 'system'
+                      className={`py-2 text-[10.5px] font-black rounded-lg border transition ${editDebitType === 'system'
                           ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400'
                           : 'bg-black/35 border-slate-800 text-slate-500 hover:text-slate-350'
-                      }`}
+                        }`}
                     >
                       {isAr ? '📦 حساب نظامي ثابت' : 'Fixed System Account'}
                     </button>
                     <button
                       type="button"
                       onClick={() => setEditDebitType('dynamic')}
-                      className={`py-2 text-[10.5px] font-black rounded-lg border transition ${
-                        editDebitType === 'dynamic'
+                      className={`py-2 text-[10.5px] font-black rounded-lg border transition ${editDebitType === 'dynamic'
                           ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400'
                           : 'bg-black/35 border-slate-800 text-slate-500 hover:text-slate-350'
-                      }`}
+                        }`}
                     >
                       {isAr ? '👤 حساب ديناميكي بالشحنة' : 'Dynamic Account'}
                     </button>
@@ -401,22 +398,20 @@ export default function AutoVoucherRulesManager({ isAr, settings }: AutoVoucherR
                     <button
                       type="button"
                       onClick={() => setEditCreditType('system')}
-                      className={`py-2 text-[10.5px] font-black rounded-lg border transition ${
-                        editCreditType === 'system'
+                      className={`py-2 text-[10.5px] font-black rounded-lg border transition ${editCreditType === 'system'
                           ? 'bg-rose-500/10 border-rose-500/40 text-rose-400'
                           : 'bg-black/35 border-slate-800 text-slate-500 hover:text-slate-350'
-                      }`}
+                        }`}
                     >
                       {isAr ? '📦 حساب نظامي ثابت' : 'Fixed System Account'}
                     </button>
                     <button
                       type="button"
                       onClick={() => setEditCreditType('dynamic')}
-                      className={`py-2 text-[10.5px] font-black rounded-lg border transition ${
-                        editCreditType === 'dynamic'
+                      className={`py-2 text-[10.5px] font-black rounded-lg border transition ${editCreditType === 'dynamic'
                           ? 'bg-rose-500/10 border-rose-500/40 text-rose-400'
                           : 'bg-black/35 border-slate-800 text-slate-500 hover:text-slate-350'
-                      }`}
+                        }`}
                     >
                       {isAr ? '👤 حساب ديناميكي بالشحنة' : 'Dynamic Account'}
                     </button>
@@ -460,15 +455,15 @@ export default function AutoVoucherRulesManager({ isAr, settings }: AutoVoucherR
             </div>
 
             <div className="p-4 border-t border-slate-850 bg-[#07070a]/40 flex justify-end gap-3 shrink-0">
-              <button 
-                type="button" 
-                onClick={() => setEditingRule(null)} 
+              <button
+                type="button"
+                onClick={() => setEditingRule(null)}
                 className="px-5 py-2.5 text-slate-400 font-bold bg-slate-900 border border-slate-850 hover:bg-slate-850 rounded-xl text-xs transition-colors cursor-pointer"
               >
                 {isAr ? 'إلغاء' : 'Cancel'}
               </button>
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 disabled={isSaving}
                 className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black text-xs rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-40 cursor-pointer"
               >

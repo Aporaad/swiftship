@@ -18,6 +18,7 @@ interface CreateOrderModalProps {
   formData: any;
   setFormData: (data: any) => void;
   previewOrderNumber: string;
+
   customerProfileStats: any;
   customerSearchQuery: string;
   setCustomerSearchQuery: (query: string) => void;
@@ -26,8 +27,10 @@ interface CreateOrderModalProps {
   clearSelectedCustomer: () => void;
   setIsAddCustomerOpen: (open: boolean) => void;
   setCustomerFormData: (data: any) => void;
+
   setIsAddSourceOpen: (open: boolean) => void;
   sources: any[];
+
   cartShareCode: string;
   setCartShareCode: (code: string) => void;
 
@@ -59,6 +62,7 @@ interface CreateOrderModalProps {
   shippingCompanies: any[];
   setIsAddShippingCompanyOpen: (open: boolean) => void;
   setActiveAddShippingIndex: (idx: any) => void;
+
   packagingFeeEnabled: boolean;
   setPackagingFeeEnabled: (v: boolean) => void;
   packagingFeeRate: number;
@@ -88,68 +92,81 @@ const STEPS = [
   { id: 5, titleAr: 'الخلاصة والحفظ', titleEn: 'Summary & Save', icon: CheckCircle2 },
 ];
 
-export default function CreateOrderModal({
-  isOpen,
-  onClose,
-  isAr,
-  role,
-  hasPermission,
-  canEditOrderDefaultsCreation,
-  isSubmitting,
-  formData,
-  setFormData,
-  previewOrderNumber,
-  customerProfileStats,
-  customerSearchQuery,
-  setCustomerSearchQuery,
-  filteredCustomers,
-  selectCustomer,
-  clearSelectedCustomer,
-  setIsAddCustomerOpen,
-  setCustomerFormData,
-  setIsAddSourceOpen,
-  sources,
-  cartShareCode,
-  setCartShareCode,
-  items,
-  addItemRow,
-  updateItemRow,
-  removeItemRow,
-  bankCommissionEnabled,
-  setBankCommissionEnabled,
-  bankCommissionType,
-  setBankCommissionType,
-  bankCommissionRate,
-  setBankCommissionRate,
-  couponEnabled,
-  setCouponEnabled,
-  couponRate,
-  setCouponRate,
-  addShippingEnabled,
-  setAddShippingEnabled,
-  shippings,
-  addShippingRow,
-  updateShippingRow,
-  removeShippingRow,
-  shippingCompanies,
-  setIsAddShippingCompanyOpen,
-  setActiveAddShippingIndex,
-  packagingFeeEnabled,
-  setPackagingFeeEnabled,
-  packagingFeeRate,
-  setPackagingFeeRate,
-  couriers,
-  profitPerKgRate,
-  setProfitPerKgRate,
-  cbmShippingRateValue,
-  setCbmShippingRateValue,
-  settings,
-  calcs,
-  activeCurrencies,
-  handleCreateOrder,
-}: CreateOrderModalProps) {
+export default function CreateOrderModal(
+  {
+    isOpen,
+    onClose,
+    isAr,
+    role,
+    hasPermission,
+    canEditOrderDefaultsCreation,
+    isSubmitting,
+    formData,
+    setFormData,
+    previewOrderNumber,
+    customerProfileStats,
+    customerSearchQuery,
+    setCustomerSearchQuery,
+    filteredCustomers,
+    selectCustomer,
+    clearSelectedCustomer,
+    setIsAddCustomerOpen,
+    setCustomerFormData,
+    setIsAddSourceOpen,
+    sources,
+    cartShareCode,
+    setCartShareCode,
+    items,
+    addItemRow,
+    updateItemRow,
+    removeItemRow,
+    bankCommissionEnabled,
+    setBankCommissionEnabled,
+    bankCommissionType,
+    setBankCommissionType,
+    bankCommissionRate,
+    setBankCommissionRate,
+    couponEnabled,
+    setCouponEnabled,
+    couponRate,
+    setCouponRate,
+    addShippingEnabled,
+    setAddShippingEnabled,
+    shippings,
+    addShippingRow,
+    updateShippingRow,
+    removeShippingRow,
+    shippingCompanies,
+    setIsAddShippingCompanyOpen,
+    setActiveAddShippingIndex,
+    packagingFeeEnabled,
+    setPackagingFeeEnabled,
+    packagingFeeRate,
+    setPackagingFeeRate,
+    couriers,
+    profitPerKgRate,
+    setProfitPerKgRate,
+    cbmShippingRateValue,
+    setCbmShippingRateValue,
+    settings,
+    calcs,
+    activeCurrencies,
+    handleCreateOrder,
+  }
+    : CreateOrderModalProps) {
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [stepErrors, setStepErrors] = useState<string | null>(null);
+  const orderCurrency = settings.defaultOrderCurrency || settings.currency || 'SAR'; // العملة الافتراضية المعينة لأسعار الطلبات
+
+  const getCurrencyRate = (code: string) => {
+    if (code === 'YER') return 1;
+    const found = activeCurrencies?.find((c) => c.code === code);
+    if (found && found.currentPrice && found.currentPrice > 0) return found.currentPrice;
+    if (found && (found as any).price && (found as any).price > 0) return (found as any).price;
+    if (code === 'SAR') return 140;
+    if (code === 'USD') return 535;
+    return 1;
+  };
 
   // Reset to step 1 when modal opens
   useEffect(() => {
@@ -243,7 +260,7 @@ export default function CreateOrderModal({
 
     // Step 4 Validation: Financials
     if (step === 4) {
-      const exchange = formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER;
+      const exchange = formData.exchangeRate ?? (getCurrencyRate(orderCurrency) / getCurrencyRate(formData.currency || 'YER'));
       if (!exchange || exchange <= 0) {
         setStepErrors(
           isAr
@@ -291,7 +308,7 @@ export default function CreateOrderModal({
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (currentStep < 5) {
+    if (currentStep <= 4) {
       handleNextStep();
     } else {
       if (validateStep(1) && validateStep(2) && validateStep(3) && validateStep(4)) {
@@ -312,7 +329,7 @@ export default function CreateOrderModal({
             <div className="flex items-center gap-2 text-start">
               <div className="w-3 h-3 rounded-full bg-[#d4af37] animate-pulse"></div>
               <h3 className="font-black text-white text-base">
-                {isAr ? 'إنشاء فاتورة طلب جديد (نموذج متعدد الخطوات)' : 'Create Order Invoice (Multi-Step Form)'}
+                {isAr ? 'إنشاء فاتورة طلب جديد' : 'Create Order Invoice'}
               </h3>
             </div>
             <button
@@ -351,7 +368,7 @@ export default function CreateOrderModal({
                 {isAr ? 'عملة الطلب' : 'Order Currency'}
               </span>
               <span className="font-mono text-xs font-black text-amber-400 truncate block">
-                {formData.currency || settings?.currency || 'SAR'}
+                {orderCurrency || 'SAR'}
               </span>
             </div>
 
@@ -1194,7 +1211,7 @@ export default function CreateOrderModal({
                   {formData.orderSourceType === 'SHEIN' && (
                     <div>
                       <label className="block text-[10px] text-slate-500 uppercase tracking-widest leading-none mb-1.5">
-                        {isAr ? 'سعر شي إن الأحمر (SAR)' : 'SHEIN Red Price (SAR)'}
+                        {isAr ? 'سعر شي إن الأحمر (' + orderCurrency + ')' : 'SHEIN Red Price (' + orderCurrency + ')'}
                       </label>
                       <input
                         type="number"
@@ -1210,7 +1227,7 @@ export default function CreateOrderModal({
                     <>
                       <div>
                         <label className="block text-[10px] text-slate-500 uppercase tracking-widest leading-none mb-1.5">
-                          {isAr ? 'نسبة الربح للكيلو (SAR/كجم)' : 'Profit Rate per KG (SAR/kg)'}
+                          {isAr ? 'نسبة الربح للكيلو (' + orderCurrency + '/كجم)' : 'Profit Rate per KG (' + orderCurrency + '/kg)'}
                         </label>
                         <input
                           type="number"
@@ -1239,7 +1256,7 @@ export default function CreateOrderModal({
 
                   <div>
                     <label className="block text-[10px] text-slate-500 uppercase tracking-widest leading-none mb-1.5">
-                      {isAr ? 'رسوم تغليف وشحن محلي (SAR)' : 'KSA Wrapping Fee & Local Freight'}
+                      {isAr ? 'رسوم تغليف وشحن محلي (' + orderCurrency + ')' : 'KSA Wrapping Fee & Local Freight (' + orderCurrency + ')'}
                     </label>
                     <input
                       type="number"
@@ -1278,22 +1295,28 @@ export default function CreateOrderModal({
                   <div className="space-y-3">
                     <div className="flex justify-between items-center text-slate-400">
                       <span className="font-medium">{isAr ? 'قيمة المنتجات الأصلية:' : 'Original Subtotal:'}</span>
-                      <span className="font-mono text-white block">{calcs.productsSum.toLocaleString()} SAR</span>
+                      <span className="font-mono text-white block">{calcs.productsSum.toLocaleString()} {orderCurrency}</span>
                     </div>
-
                     <div className="flex justify-between items-center pt-3 border-t border-slate-800">
-                      <span className="font-black text-emerald-400 text-xs">{isAr ? 'المبلغ المستحق إجمالاً:' : 'Final Total Due:'}</span>
-                      <span className="font-black font-mono text-emerald-400 text-base bg-emerald-950/30 px-3 py-1 rounded-xl border border-emerald-900/40">
-                        {Math.ceil(calcs.totalOrderYER).toLocaleString()} YER
+                      <span className="font-black text-slate-400 text-xs">{isAr ? 'اجمالي التكاليف:' : 'Net Cost:'}</span>
+                      <span className="font-black font-mono text-slate-400 text-base bg-slate-950/30 px-3 py-1 rounded-xl border border-slate-900/40">
+                        {Math.ceil(calcs.totalOrderSAR).toLocaleString()} {orderCurrency}
                       </span>
                     </div>
+                    <div className="flex justify-between items-center pt-3 border-t border-slate-600">
+                      <span className="font-black text-emerald-400 text-xs">{isAr ? `المطلوب من العميل بعملة الدفع:` : `Total Cost in ${formData.currency}:`}</span>
+                      <span className="font-black font-mono text-emerald-400 text-base bg-emerald-950/30 px-2 py-1 rounded-xl border border-emerald-900/40">
+                        {Math.ceil(calcs.totalOrderYER).toLocaleString()} {formData.currency}
+                      </span>
+                    </div>
+
                   </div>
 
                   {/* Payment controls */}
                   <div className="pt-3 border-t-2 border-slate-800 space-y-4">
                     <div className="flex flex-col space-y-2">
                       <label className="text-[10px] text-slate-400 font-bold flex justify-between items-center">
-                        <span className="text-[#d4af37]">{isAr ? 'الدفعة المقدمة / كاش (ريال يمني)' : 'Cash/Advance Payment (YER)'}</span>
+                        <span className="text-[#d4af37]">{isAr ? 'الدفعة المقدمة / كاش (' + formData.currency + ')' : 'Cash/Advance Payment (' + formData.currency + ')'}</span>
                         <div className="flex gap-1.5 text-[9px]">
                           <button type="button" onClick={() => setFormData({ ...formData, amountPaid: 0 })} className="px-2.5 py-0.5 rounded border border-slate-700 bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer">0</button>
                           <button type="button" onClick={() => setFormData({ ...formData, amountPaid: Math.ceil(calcs.totalOrderYER) })} className="px-2.5 py-0.5 rounded border border-emerald-800/40 bg-emerald-900/40 text-emerald-400 hover:bg-emerald-900/60 transition cursor-pointer">{isAr ? 'سداد الكل' : 'Pay All'}</button>
@@ -1304,7 +1327,7 @@ export default function CreateOrderModal({
                         value={formData.amountPaid || ''}
                         onChange={(e) => setFormData({ ...formData, amountPaid: parseFloat(e.target.value) || 0 })}
                         className="w-full bg-slate-955 border border-slate-700 focus:border-emerald-500/50 text-emerald-400 font-black rounded-xl py-3 px-4 outline-none font-mono text-sm"
-                        placeholder="0.00 YER"
+                        placeholder={"0.00 " + formData.currency}
                       />
                     </div>
 
@@ -1313,7 +1336,17 @@ export default function CreateOrderModal({
                         <span className="text-[9px] font-black uppercase text-[#d4af37] block mb-1">{isAr ? 'عملة الدفع من العميل' : 'Payment Currency'}</span>
                         <select
                           value={formData.currency}
-                          onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+                          onChange={(e) => {
+                            const newCurrency = e.target.value;
+                            const rateOrder = getCurrencyRate(orderCurrency);
+                            const ratePayment = getCurrencyRate(newCurrency);
+                            const rateFromTable = rateOrder / ratePayment;
+                            setFormData({
+                              ...formData,
+                              currency: newCurrency,
+                              exchangeRate: rateFromTable,
+                            });
+                          }}
                           className="w-full bg-slate-955 text-white font-bold text-xs p-2 rounded-lg border border-slate-800 outline-none cursor-pointer"
                         >
                           {activeCurrencies.map((c) => (
@@ -1324,18 +1357,23 @@ export default function CreateOrderModal({
                         </select>
                       </div>
 
-                      <div className="bg-slate-900 border border-slate-800 p-2.5 rounded-xl">
-                        <span className="text-[9px] font-black uppercase text-slate-400 block mb-1">{isAr ? `سعر صرف (${formData.currency}) / YER` : `Exchange Rate`}</span>
+                      <div className="bg-slate-900 border border-slate-600 p-2.5 rounded-xl">
+                        <span className="text-[9px] font-black uppercase text-slate-400 block mb-1">
+                          {isAr ? `سعر صرف (${orderCurrency} / ${formData.currency})` : `Exchange Rate (${orderCurrency} / ${formData.currency})`}
+                        </span>
                         <input
                           type="number"
-                          value={formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER}
+                          step="any"
+                          value={
+                            formData.exchangeRate ??
+                            (getCurrencyRate(orderCurrency) / getCurrencyRate(formData.currency || 'YER'))
+                          }
                           onChange={(e) => {
                             const val = parseFloat(e.target.value) || 1;
-                            if (formData.currency === 'USD') {
-                              setFormData({ ...formData, exchangeRateUSD: val });
-                            } else {
-                              setFormData({ ...formData, exchangeRateYER: val });
-                            }
+                            setFormData({
+                              ...formData,
+                              exchangeRate: val,
+                            });
                           }}
                           disabled={!canEditOrderDefaultsCreation}
                           className="w-full bg-slate-955 border border-slate-800 text-white font-mono font-bold text-xs p-2 rounded-lg text-center outline-none disabled:opacity-50"
@@ -1345,7 +1383,7 @@ export default function CreateOrderModal({
 
                     <div className="flex justify-between items-center p-3 bg-rose-500/5 rounded-xl border border-rose-500/10">
                       <span className="font-extrabold text-[#d4af37] text-[11px]">{isAr ? 'المديونية المتبقية للدفع:' : 'Outstanding Debt:'}</span>
-                      <span className="font-mono text-sm font-black text-rose-400">{Math.ceil(calcs.remainingYER).toLocaleString()} YER</span>
+                      <span className="font-mono text-sm font-black text-rose-400">{Math.ceil(calcs.remainingYER).toLocaleString()} {formData.currency}</span>
                     </div>
                   </div>
                 </div>
@@ -1384,7 +1422,7 @@ export default function CreateOrderModal({
                       <span className="text-white">{formData.customerName || '—'}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-500">{isAr ? 'رقم الهاتف:' : 'Phone:'}</span>
+                      <span className="text-slate-500">{isAr ? 'رقم الهاتف:' : 'Phone:'} </span>
                       <span className="text-slate-300 font-mono">{formData.customerPhone || '—'}</span>
                     </div>
                     <div className="flex justify-between">
@@ -1414,13 +1452,13 @@ export default function CreateOrderModal({
                     {items.map((item, idx) => (
                       <div key={idx} className="flex justify-between items-center p-2 bg-slate-900/60 rounded-xl border border-slate-850 text-[11px]">
                         <span className="text-white truncate max-w-[180px]">{idx + 1}. {item.productName || '—'}</span>
-                        <span className="font-mono text-emerald-400">{item.quantity} × {item.productPrice} SAR</span>
+                        <span className="font-mono text-emerald-400">{item.quantity} × {item.productPrice} {formData.orderCurrency}</span>
                       </div>
                     ))}
                   </div>
                   <div className="pt-2 border-t border-slate-800/80 flex justify-between text-xs font-black">
                     <span className="text-slate-400">{isAr ? 'إجمالي المنتجات:' : 'Products Subtotal:'}</span>
-                    <span className="font-mono text-amber-400">{calcs.productsSum.toLocaleString()} SAR</span>
+                    <span className="font-mono text-amber-400">{calcs.productsSum.toLocaleString()} {formData.orderCurrency}</span>
                   </div>
                 </div>
 
@@ -1436,20 +1474,32 @@ export default function CreateOrderModal({
                       <span className="text-slate-200">{shippings?.length || 0} {isAr ? 'مسارات' : 'tracks'}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-500">{isAr ? 'مندوب التجميع (سعودي):' : 'Saudi Aggregator:'}</span>
-                      <span className="text-slate-200">
-                        {couriers.find(c => c.id === formData.shippingCourierId)?.fullName || 'غير محدد'}
+                      <span>
+                        <span className="text-slate-500">{isAr ? 'مندوب التجميع (سعودي):' : 'Saudi Aggregator:'}</span>
+                        <span className="text-slate-200">
+                          {couriers.find(c => c.id === formData.shippingCourierId)?.fullName || 'غير محدد'}
+                        </span>
+                      </span>
+                      <span>
+                        <span className="text-slate-500">{isAr ? 'العمولة":' : 'Saudi Shipping Profit:'}</span>
+                        <span className="text-slate-200">
+                          {formData.profitSaudiSAR || 0}
+                        </span>
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-500">{isAr ? 'مندوب التوصيل (اليمن):' : 'Yemen Courier:'}</span>
-                      <span className="text-slate-200">
-                        {couriers.find(c => c.id === formData.deliveryCourierId)?.fullName || 'غير محدد'}
+                      <span>
+                        <span className="text-slate-500">{isAr ? 'مندوب التوصيل (اليمن):' : 'Yemen Courier:'}</span>
+                        <span className="text-slate-200">
+                          {couriers.find(c => c.id === formData.deliveryCourierId)?.fullName || 'غير محدد'}
+                        </span>
                       </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">{isAr ? 'أجرة التوصيل:' : 'Delivery Fee:'}</span>
-                      <span className="font-mono text-slate-300">{formData.deliveryCourierFee} YER</span>
+                      <span>
+                        <span className="text-slate-500">{isAr ? 'أجرة التوصيل:' : 'Delivery Fee:'}</span>
+                        <span className="text-slate-200">
+                          {formData.deliveryCourierFee || 0} {'YER'}
+                        </span>
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -1463,11 +1513,15 @@ export default function CreateOrderModal({
                   <div className="space-y-2 text-xs font-bold">
                     <div className="flex justify-between">
                       <span className="text-slate-500">{isAr ? 'المبلغ النهائي المستحق:' : 'Total Order Due:'}</span>
-                      <span className="font-mono text-emerald-400 font-black text-sm">{Math.ceil(calcs.totalOrderYER).toLocaleString()} YER</span>
+                      <span className="font-mono text-emerald-400 font-black text-sm">{formData.orderCurrency} {Math.ceil(calcs.totalOrderSAR).toLocaleString()} {formData.orderCurrency}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">{isAr ? 'المبلغ النهائي المستحق بعملة الدفع:' : 'Total Order Due:'}</span>
+                      <span className="font-mono text-emerald-400 font-black text-sm">{Math.ceil(calcs.totalOrderYER).toLocaleString()} {formData.currency}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-500">{isAr ? 'المبلغ المدفوع (كاش):' : 'Amount Paid:'}</span>
-                      <span className="font-mono text-blue-400 font-black">{Math.ceil(formData.amountPaid || 0).toLocaleString()} YER</span>
+                      <span className="font-mono text-blue-400 font-black">{Math.ceil(formData.amountPaid || 0).toLocaleString()} {formData.currency}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-500">{isAr ? 'عملة السداد:' : 'Payment Currency:'}</span>
@@ -1511,7 +1565,7 @@ export default function CreateOrderModal({
               )}
 
               {/* Next Step Button */}
-              {currentStep < 5 ? (
+              {currentStep <= 4 && (
                 <button
                   type="button"
                   onClick={handleNextStep}
@@ -1520,8 +1574,9 @@ export default function CreateOrderModal({
                   {isAr ? 'الخطوة التالية' : 'Next Step'}
                   {isAr ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                 </button>
-              ) : (
-                /* Final Submit Button */
+              )}
+              {/* Final Submit Button */}
+              {currentStep === 5 && (
                 <button
                   type="submit"
                   disabled={isSubmitting}
@@ -1530,7 +1585,7 @@ export default function CreateOrderModal({
                   <CheckCircle2 className="w-4 h-4" />
                   {isSubmitting
                     ? (isAr ? 'جاري الترحيل والحفظ...' : 'Saving...')
-                    : (isAr ? 'حفظ وترحيل الفاتورة وإرسال' : 'Deploy Freight Cargo')}
+                    : (isAr ? 'حفظ وترحيل الفاتورة ' : 'Deploy Freight Cargo')}
                 </button>
               )}
             </div>

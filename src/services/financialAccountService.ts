@@ -620,11 +620,21 @@ class FinancialAccountService {
     // On the single value amount double entry form, the debit and credit totals are inherently equal to this amount.
     const debitTotal = transaction.amount;
     const creditTotal = transaction.amount;
-    if (debitTotal !== creditTotal || debitTotal <= 0) {
+    if (debitTotal !== creditTotal) {
       throw new Error(
-        "Transaction submission rejected: Sum of Debits must equal Sum of Credits (totalDebit == totalCredit), and exceed zero.",
+        "Transaction submission rejected: Sum of Debits must equal Sum of Credits (totalDebit == totalCredit). debitTotal=" + debitTotal + "creditTotal=" + creditTotal,
+      );
+    } else if (debitTotal <= 0) {
+      throw new Error(
+        "Transaction submission rejected: Debit Amount must be greater than zero.",
+      );
+    } else if (creditTotal <= 0) {
+      throw new Error(
+        "Transaction submission rejected: Credit Amount must be greater than zero.",
       );
     }
+
+
 
     const debitAccount = await this.getAccountById(transaction.debitAccount.id);
     const creditAccount = await this.getAccountById(
@@ -1607,6 +1617,7 @@ class FinancialAccountService {
     entities: {
       courier?: any;
       customer?: any;
+      sourcing_cost?: any;
       isAr?: boolean;
       rawAmount?: number;
       amountOriginal?: number;
@@ -1638,7 +1649,8 @@ class FinancialAccountService {
       }
 
       // 2. Fallback to settings/automatic_voucher_rules for backwards compatibility
-      if (!rule) {
+      // العوده لفيود الاعدادت في حاله لم يجد في جدول القيود التلفائيه
+      /*if (!rule) {
         const ruleDoc = await getDoc(doc(db, "settings", "automatic_voucher_rules"));
         if (ruleDoc.exists()) {
           const d = ruleDoc.data();
@@ -1646,7 +1658,7 @@ class FinancialAccountService {
             rule = d.data.find((r) => r.id === ruleId) || null;
           }
         }
-      }
+      }*/
 
       if (!rule) {
         const rules = await this.ensureAutomaticVoucherRules();
@@ -1710,7 +1722,26 @@ class FinancialAccountService {
           entities.customer.financialAccountCode ||
           entities.customer.accountCode ||
           debConf.code;
-      } else {
+      } else if (debConf.id === "sourcing_cost") {
+        if (
+          !entities.sourcing_cost?.id &&
+          !entities.sourcing_cost?.entity_id
+        ) {
+          console.warn(
+            "[AutomaticVouchers] Dynamic sourcing cost debit account resolution failed: sourcing cost entity empty.",
+          );
+          return;
+        }
+        debitId =
+          entities.sourcing_cost.id ||
+          entities.sourcing_cost.entity_id ||
+          "";
+        debitCode =
+          entities.sourcing_cost.accountCode ||
+          entities.sourcing_cost.accountCode ||
+          debConf.code;
+      }
+      else {
         debitId = systemAccs[debConf.id] || debConf.id;
         debitCode = debConf.code;
       }
@@ -1755,7 +1786,27 @@ class FinancialAccountService {
           entities.customer.financialAccountCode ||
           entities.customer.accountCode ||
           credConf.code;
-      } else {
+      }
+      else if (credConf.id === "sourcing_cost") {
+        if (
+          !entities.sourcing_cost?.id &&
+          !entities.sourcing_cost?.entity_id
+        ) {
+          console.warn(
+            "[AutomaticVouchers] Dynamic sourcing cost credit account resolution failed: sourcing cost entity empty.",
+          );
+          return;
+        }
+        creditId =
+          entities.sourcing_cost.id ||
+          entities.sourcing_cost.entity_id ||
+          "";
+        creditCode =
+          entities.sourcing_cost.accountCode ||
+          entities.sourcing_cost.accountCode ||
+          credConf.code;
+      }
+      else {
         creditId = systemAccs[credConf.id] || credConf.id;
         creditCode = credConf.code;
       }
@@ -1773,6 +1824,8 @@ class FinancialAccountService {
 
       description = description
         .replace("{orderNumber}", order.orderNumber || "")
+        .replace("{customerName}", entities.customer?.profileName || "")
+        .replace("{courierName}", entities.courier?.profileName || "")
         .replace(
           "{commissionRate}",
           String(entities.courier?.commissionRate || 0),
@@ -1805,6 +1858,7 @@ class FinancialAccountService {
         createdByUid: auth.currentUser?.uid || "system",
         createdByName: entities.profileName || "System Auto",
       });
+      console.log('automatic voucher fired successfully', { amount: entities.amountOriginal !== undefined ? entities.amountOriginal : (entities.rawAmount ?? 0), currency: entities.currencyOriginal || "YER", debitAccount: { id: debitId, code: debitCode }, creditAccount: { id: creditId, code: creditCode }, createdByUid: auth.currentUser?.uid || "system", createdByName: entities.profileName || "System Auto" });
 
     } catch (err) {
       console.error(

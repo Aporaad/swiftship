@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { 
+import {
   Layers, Plus, Edit2, Trash2, CheckCircle2, ShieldCheck, ArrowUp, ArrowDown,
   Activity, ToggleLeft, ToggleRight, Settings, Info, AlertCircle, Save, X, Sparkles,
   ArrowRightLeft, FileText, Check, Filter, Search
 } from 'lucide-react';
-import { db } from '../lib/firebase';
+import { db } from '../lib/supabase';
 import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, getDocs } from '../lib/supabase';
 import { useOrderStatuses, OrderStatusItem, DEFAULT_ORDER_STATUSES } from '../hooks/useOrderStatuses';
 import { autoEntryService, AutoEntryRule, DEFAULT_AUTO_ENTRIES } from '../services/autoEntryService';
@@ -139,7 +139,7 @@ export default function OrderStatusManagementTab({ isAr }: OrderStatusManagement
 
     try {
       const targetId = Number(statusFormData.id);
-      
+
       // If setting as isFirst, clear isFirst from other statuses
       if (statusFormData.isFirst) {
         for (const st of statuses) {
@@ -189,7 +189,7 @@ export default function OrderStatusManagementTab({ isAr }: OrderStatusManagement
 
     const linkedRules = autoEntries.filter(e => e.statusId === st.id);
     if (linkedRules.length > 0) {
-      toast.error(isAr 
+      toast.error(isAr
         ? `تعذر الحذف: هذه المرحلة مرتبطة بـ (${linkedRules.length}) قيود تلقائية. يرجى إعادة توجيه القيود أولاً.`
         : `Cannot delete: stage is linked to ${linkedRules.length} auto entries.`
       );
@@ -311,6 +311,7 @@ export default function OrderStatusManagementTab({ isAr }: OrderStatusManagement
     return COLOR_OPTIONS.find(c => c.id === colorId) || COLOR_OPTIONS[1];
   };
 
+  //مهم جداً: يجب تثبيت هذه المصادر الى معادلات تلقائيه يتم استخراجها من الطلب عند تشغيل القيد التلفائي
   const AMOUNT_SOURCE_OPTIONS = [
     { id: 'order_total', labelAr: 'إجمالي قيمة الطلب الكاملة', labelEn: 'Total Order Amount' },
     { id: 'amount_paid', labelAr: 'المبلغ المدفوع كاش/تحويل', labelEn: 'Paid Amount' },
@@ -324,12 +325,13 @@ export default function OrderStatusManagementTab({ isAr }: OrderStatusManagement
 
   const dynamicAccountOptions = [
     { id: 'customer_linked', code: '1130', nameAr: '👤 حساب العميل المرتبط بالطلب (ديناميكي)', nameEn: 'Customer Account (Dynamic)' },
-    { id: 'courier_linked', code: '2120', nameAr: '🛵 حساب المندوب المرتبط بالشحنة (ديناميكي)', nameEn: 'Courier Account (Dynamic)' }
+    { id: 'courier_linked', code: '2120', nameAr: '🛵 حساب المندوب المرتبط بالشحنة (ديناميكي)', nameEn: 'Courier Account (Dynamic)' },
+    { id: 'sourcing_cost', code: '1120', nameAr: '🛵  (حساب قيود الطلبات او المندوب) حساب مصدر تكلفه المنتجات ', nameEn: 'sourcing_cost Account' }
   ];
 
   return (
     <div className="space-y-6 text-start font-sans">
-      
+
       {/* Top Banner & Header */}
       <div className="bg-[#121215] border border-slate-850 p-5 rounded-3xl relative overflow-hidden shadow-xl">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -347,7 +349,7 @@ export default function OrderStatusManagementTab({ isAr }: OrderStatusManagement
                 {isAr ? 'إدارة حالات الطلب والقيود التلقائية المربوطة والمراحل' : 'Order Statuses & Auto Entry Rules Studio'}
               </h2>
               <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                {isAr 
+                {isAr
                   ? 'يمكنك إضافة وتعديل مراحل الطلب بالترتيب الرقمي (id)، وتحديد مرحلة البداية والنهاية، وإنشاء قيود محاسبية تلقائية تنفذ فور وصول الطلب لأي مرحلة.'
                   : 'Manage dynamic order status sequence (by stage ID), configure first/last milestones, and build automated ledger entries executed on stage transition.'}
               </p>
@@ -384,11 +386,10 @@ export default function OrderStatusManagementTab({ isAr }: OrderStatusManagement
             <button
               type="button"
               onClick={() => setActiveSubTab('statuses')}
-              className={`px-4 py-2 rounded-xl text-xs font-extrabold transition flex items-center gap-2 ${
-                activeSubTab === 'statuses'
-                  ? 'bg-[#d4af37]/15 border border-[#d4af37]/40 text-[#d4af37]'
-                  : 'bg-black/30 border border-slate-850 text-slate-400 hover:text-white'
-              }`}
+              className={`px-4 py-2 rounded-xl text-xs font-extrabold transition flex items-center gap-2 ${activeSubTab === 'statuses'
+                ? 'bg-[#d4af37]/15 border border-[#d4af37]/40 text-[#d4af37]'
+                : 'bg-black/30 border border-slate-850 text-slate-400 hover:text-white'
+                }`}
             >
               <Layers className="w-4 h-4" />
               {isAr ? 'مراحل وحالات الطلب' : 'Order Status Stages'}
@@ -402,11 +403,10 @@ export default function OrderStatusManagementTab({ isAr }: OrderStatusManagement
             <button
               type="button"
               onClick={() => setActiveSubTab('entries')}
-              className={`px-4 py-2 rounded-xl text-xs font-extrabold transition flex items-center gap-2 ${
-                activeSubTab === 'entries'
-                  ? 'bg-[#d4af37]/15 border border-[#d4af37]/40 text-[#d4af37]'
-                  : 'bg-[#d4af37]/5 border border-slate-850 text-slate-400 hover:text-white'
-              }`}
+              className={`px-4 py-2 rounded-xl text-xs font-extrabold transition flex items-center gap-2 ${activeSubTab === 'entries'
+                ? 'bg-[#d4af37]/15 border border-[#d4af37]/40 text-[#d4af37]'
+                : 'bg-[#d4af37]/5 border border-slate-850 text-slate-400 hover:text-white'
+                }`}
             >
               <Sparkles className="w-4 h-4 text-[#d4af37]" />
               {isAr ? 'جدول القيود التلقائية للمراحل' : 'Auto Entry Rules Table'}
@@ -445,9 +445,8 @@ export default function OrderStatusManagementTab({ isAr }: OrderStatusManagement
                 return (
                   <div
                     key={st.id}
-                    className={`bg-gradient-to-br from-[#121215] to-[#08080a] border rounded-3xl p-5 shadow-lg relative flex flex-col justify-between transition-all hover:border-[#d4af37]/40 ${
-                      st.isFirst ? 'border-amber-500/50' : st.isLast ? 'border-emerald-500/50' : 'border-slate-850'
-                    }`}
+                    className={`bg-gradient-to-br from-[#121215] to-[#08080a] border rounded-3xl p-5 shadow-lg relative flex flex-col justify-between transition-all hover:border-[#d4af37]/40 ${st.isFirst ? 'border-amber-500/50' : st.isLast ? 'border-emerald-500/50' : 'border-slate-850'
+                      }`}
                   >
                     <div className="space-y-3">
                       {/* Top Bar with Stage ID and Badges */}
@@ -505,9 +504,8 @@ export default function OrderStatusManagementTab({ isAr }: OrderStatusManagement
                           <Sparkles className="w-3.5 h-3.5 text-[#d4af37]" />
                           {isAr ? 'القيود التلقائية المرتبطة:' : 'Linked Auto Entries:'}
                         </span>
-                        <span className={`font-mono font-black text-xs px-2 py-0.5 rounded-md ${
-                          linkedRules.length > 0 ? 'bg-[#d4af37]/15 text-[#d4af37] border border-[#d4af37]/30' : 'text-slate-600'
-                        }`}>
+                        <span className={`font-mono font-black text-xs px-2 py-0.5 rounded-md ${linkedRules.length > 0 ? 'bg-[#d4af37]/15 text-[#d4af37] border border-[#d4af37]/30' : 'text-slate-600'
+                          }`}>
                           {linkedRules.length} {isAr ? 'قيد' : 'rule(s)'}
                         </span>
                       </div>
@@ -556,9 +554,8 @@ export default function OrderStatusManagementTab({ isAr }: OrderStatusManagement
                 return (
                   <div
                     key={entry.id}
-                    className={`bg-gradient-to-br from-[#121215] to-[#08080a] border rounded-3xl p-5 shadow-lg relative flex flex-col justify-between transition-all ${
-                      entry.isActive ? 'border-slate-850 hover:border-[#d4af37]/40' : 'border-rose-950/40 opacity-70'
-                    }`}
+                    className={`bg-gradient-to-br from-[#121215] to-[#08080a] border rounded-3xl p-5 shadow-lg relative flex flex-col justify-between transition-all ${entry.isActive ? 'border-slate-850 hover:border-[#d4af37]/40' : 'border-rose-950/40 opacity-70'
+                      }`}
                   >
                     <div className="space-y-4">
                       {/* Header */}
@@ -695,7 +692,7 @@ export default function OrderStatusManagementTab({ isAr }: OrderStatusManagement
             </div>
 
             <div className="p-6 overflow-y-auto space-y-4 flex-1">
-              
+
               <div className="grid grid-cols-2 gap-4">
                 {/* Stage ID */}
                 <div className="space-y-1">
@@ -782,9 +779,8 @@ export default function OrderStatusManagementTab({ isAr }: OrderStatusManagement
                       key={c.id}
                       type="button"
                       onClick={() => setStatusFormData(prev => ({ ...prev, color: c.id }))}
-                      className={`p-2 rounded-xl text-xs font-bold border transition flex items-center gap-2 ${c.bg} ${c.border} ${c.text} ${
-                        statusFormData.color === c.id ? 'ring-2 ring-[#d4af37]' : ''
-                      }`}
+                      className={`p-2 rounded-xl text-xs font-bold border transition flex items-center gap-2 ${c.bg} ${c.border} ${c.text} ${statusFormData.color === c.id ? 'ring-2 ring-[#d4af37]' : ''
+                        }`}
                     >
                       <span className="w-2.5 h-2.5 rounded-full bg-current"></span>
                       {isAr ? c.labelAr : c.labelEn}
@@ -795,9 +791,8 @@ export default function OrderStatusManagementTab({ isAr }: OrderStatusManagement
 
               {/* First & Last Stage Toggles */}
               <div className="grid grid-cols-2 gap-3 pt-2">
-                <label className={`p-3 rounded-2xl border cursor-pointer flex items-center gap-3 transition ${
-                  statusFormData.isFirst ? 'bg-amber-500/10 border-amber-500/40 text-amber-300' : 'bg-black/30 border-slate-850 text-slate-400'
-                }`}>
+                <label className={`p-3 rounded-2xl border cursor-pointer flex items-center gap-3 transition ${statusFormData.isFirst ? 'bg-amber-500/10 border-amber-500/40 text-amber-300' : 'bg-black/30 border-slate-850 text-slate-400'
+                  }`}>
                   <input
                     type="checkbox"
                     checked={!!statusFormData.isFirst}
@@ -809,9 +804,8 @@ export default function OrderStatusManagementTab({ isAr }: OrderStatusManagement
                   </span>
                 </label>
 
-                <label className={`p-3 rounded-2xl border cursor-pointer flex items-center gap-3 transition ${
-                  statusFormData.isLast ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300' : 'bg-black/30 border-slate-850 text-slate-400'
-                }`}>
+                <label className={`p-3 rounded-2xl border cursor-pointer flex items-center gap-3 transition ${statusFormData.isLast ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300' : 'bg-black/30 border-slate-850 text-slate-400'
+                  }`}>
                   <input
                     type="checkbox"
                     checked={!!statusFormData.isLast}
@@ -869,7 +863,7 @@ export default function OrderStatusManagementTab({ isAr }: OrderStatusManagement
             </div>
 
             <div className="p-6 overflow-y-auto space-y-4 flex-1">
-              
+
               {/* Linked Stage Selector */}
               <div className="space-y-1">
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">
@@ -945,18 +939,16 @@ export default function OrderStatusManagementTab({ isAr }: OrderStatusManagement
                   <button
                     type="button"
                     onClick={() => setDebitType('dynamic')}
-                    className={`py-2 text-[10px] font-black rounded-lg border transition ${
-                      debitType === 'dynamic' ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400' : 'bg-black/35 border-slate-800 text-slate-500'
-                    }`}
+                    className={`py-2 text-[10px] font-black rounded-lg border transition ${debitType === 'dynamic' ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400' : 'bg-black/35 border-slate-800 text-slate-500'
+                      }`}
                   >
                     {isAr ? '👤 حساب ديناميكي' : 'Dynamic Account'}
                   </button>
                   <button
                     type="button"
                     onClick={() => setDebitType('system')}
-                    className={`py-2 text-[10px] font-black rounded-lg border transition ${
-                      debitType === 'system' ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400' : 'bg-black/35 border-slate-800 text-slate-500'
-                    }`}
+                    className={`py-2 text-[10px] font-black rounded-lg border transition ${debitType === 'system' ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400' : 'bg-black/35 border-slate-800 text-slate-500'
+                      }`}
                   >
                     {isAr ? '📦 حساب نظامي ثابت' : 'Fixed System Account'}
                   </button>
@@ -1013,18 +1005,16 @@ export default function OrderStatusManagementTab({ isAr }: OrderStatusManagement
                   <button
                     type="button"
                     onClick={() => setCreditType('dynamic')}
-                    className={`py-2 text-[10px] font-black rounded-lg border transition ${
-                      creditType === 'dynamic' ? 'bg-rose-500/10 border-rose-500/40 text-rose-400' : 'bg-black/35 border-slate-800 text-slate-500'
-                    }`}
+                    className={`py-2 text-[10px] font-black rounded-lg border transition ${creditType === 'dynamic' ? 'bg-rose-500/10 border-rose-500/40 text-rose-400' : 'bg-black/35 border-slate-800 text-slate-500'
+                      }`}
                   >
                     {isAr ? '👤 حساب ديناميكي' : 'Dynamic Account'}
                   </button>
                   <button
                     type="button"
                     onClick={() => setCreditType('system')}
-                    className={`py-2 text-[10px] font-black rounded-lg border transition ${
-                      creditType === 'system' ? 'bg-rose-500/10 border-rose-500/40 text-rose-400' : 'bg-black/35 border-slate-800 text-slate-500'
-                    }`}
+                    className={`py-2 text-[10px] font-black rounded-lg border transition ${creditType === 'system' ? 'bg-rose-500/10 border-rose-500/40 text-rose-400' : 'bg-black/35 border-slate-800 text-slate-500'
+                      }`}
                   >
                     {isAr ? '📦 حساب نظامي ثابت' : 'Fixed System Account'}
                   </button>

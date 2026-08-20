@@ -215,6 +215,7 @@ export default function Orders() { // دالة عرض الطلبات
       setFormData(prev => ({
         ...prev,
         currency: orderCurrency,
+        exchangeRate: dbRates[orderCurrency] || 1,
         // جلب سعر صرف العملة الافتراضية للطلب من الإعدادات (ديناميكي من DB)
         exchangeRateYER: dbRates[orderCurrency] || 1,
         // سعر صرف الدولار من DB (ديناميكي)
@@ -305,6 +306,7 @@ export default function Orders() { // دالة عرض الطلبات
     orderSourceType: 'App', // App or Factory
     externalOrderNumber: '', // Original Code / Salla Number
     trackingNumber: '', // Global tracking ID
+    addShippingEnabled: false,
     shippingCompany: 'Aramex', // Aramex, DHL, SafePost
 
     // Courier Links
@@ -314,6 +316,7 @@ export default function Orders() { // دالة عرض الطلبات
 
     // Rates & Commissions
     currency: 'SAR',
+    exchangeRate: 1, // Selected currency exchange rate
     exchangeRateYER: 1, // Dynamic rate from DB
     exchangeRateUSD: 1, // Dynamic rate from DB
     bankCommissionRate: 3, // default 3%
@@ -325,7 +328,8 @@ export default function Orders() { // دالة عرض الطلبات
     amountPaid: 0,
     paymentMethod: 'Cash',
     notes: '',
-    deductSourcingCostFromCourier: false
+    deductSourcingCostFromCourier: false,
+    sourcing_cost: 'system'
   });
 
   // Edit / Update State 
@@ -404,6 +408,7 @@ export default function Orders() { // دالة عرض الطلبات
     const unsubProducts = onSnapshot(collection(db, 'products'), (snap) => {
       setAllProducts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => handleSupabaseError(error, OperationType.LIST, 'products'));
+    const sourcing_cost = '';
 
     // Fetch shipments
     const unsubShipments = onSnapshot(collection(db, 'shipments'), (snap) => {
@@ -419,6 +424,7 @@ export default function Orders() { // دالة عرض الطلبات
       unsubShippingCompanies();
       unsubProducts();
       unsubShipments();
+      sourcing_cost;
     };
   }, [roleLoading]);
 
@@ -535,8 +541,19 @@ export default function Orders() { // دالة عرض الطلبات
         where('orderNumber', '<=', prefix + '-\uF8FF')
       );
       const snap = await getDocs(q);
-      const curCount = snap.docs.length;
-      const nextNum = startNum + curCount;
+      let maxNum = 0;
+      snap.docs.forEach(docSnap => {
+        const orderNum = docSnap.data()?.orderNumber;
+        if (orderNum) {
+          const parts = String(orderNum).split('-');
+          const lastPart = parts[parts.length - 1];
+          const num = parseInt(lastPart, 10);
+          if (!isNaN(num) && num > maxNum) {
+            maxNum = num;
+          }
+        }
+      });
+      const nextNum = maxNum > 0 ? Math.max(startNum, maxNum + 1) : startNum;
       return `${prefix}-${nextNum}`;
     } catch (err) {
       console.warn("Exception getting order count, using random placeholder:", err);
@@ -646,6 +663,7 @@ export default function Orders() { // دالة عرض الطلبات
       }
     });
 
+
     // حساب الوزن الكلي  = ضرب الكمية  مع الوزن 
     const totalWeight = items.reduce((sum, i) => sum + (parseFloat(i.quantity || 0) * parseFloat(i.weight || 0)), 0);
 
@@ -752,20 +770,40 @@ export default function Orders() { // دالة عرض الطلبات
     }
     //----------------------------------------------
 
-    // Convert to YER for payment
-    const exchange = formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER;
-    const baseTotalOrderYER = totalOrderSAR * exchange;// تحويل اجمالي تكلفه الطلب بالسعودي الى اليمني
+    // Helper to fetch rates vs YER base
+    const getCurrencyRate = (code: string) => {
+      if (code === 'YER') return 1;
+      const rate = dbRates[code];
+      if (rate && rate > 0) return rate;
+      if (code === 'SAR') return 140;
+      if (code === 'USD') return 535;
+      return 1;
+    };
 
-    // Delivery courier fee (flat fee in YER)
-    //مهم: يتم انشاء زر في الواجهه لتحديد هل الطلب شامل التوصيل للمنزل او لا ولايتم ظهور اختيار مندوب توصيل واحتساب عمولته الا اذاتم تحدبد الزر 
-    const deliveryCourierFee = parseFloat(formData.deliveryCourierFee as any) || 0;
+    const rateOrder = getCurrencyRate(orderCurrency);
+    const ratePayment = getCurrencyRate(formData.currency || 'YER');
+    const defaultExchange = rateOrder / ratePayment;
 
-    // The grand total YER includes everything.
-    //الاجمالي الكلي بالريال اليمني = اجمالي تكلفه الطلب بعد مصارفه السعودي  + رسوم التوصيل  لليمن
-    const totalOrderYER = baseTotalOrderYER + deliveryCourierFee;
+    const exchange = (formData.exchangeRate && formData.exchangeRate > 0)
+      ? formData.exchangeRate
+      : defaultExchange;
 
-    // Remaining in YER: Total in YER (which includes delivery fee) - Amount Paid
-    // المبلغ المتبقي بالريال اليمني = الاجمالي الكلي بالريال اليمني - المبلغ المدفوع بالريال اليمني 
+    // totalOrderSAR is the unconverted total order cost in original orderCurrency
+    // baseTotalOrderPaymentCurrency is the total order cost converted to formData.currency
+    const baseTotalOrderPaymentCurrency = totalOrderSAR * exchange;
+
+    // Delivery courier fee
+    const deliveryFeeRaw = parseFloat(formData.deliveryCourierFee as any) || 0;
+    const deliveryFeeInPaymentCurrency = (formData.currency === 'YER' || !formData.currency)
+      ? deliveryFeeRaw
+      : deliveryFeeRaw / ratePayment;
+
+    const totalOrderYER = baseTotalOrderPaymentCurrency + deliveryFeeInPaymentCurrency;
+    const sourcingCostAmount =
+      (formData.orderSourceType === 'App' || formData.orderSourceType === 'Factory')
+        ? totalProductsCostWithAdjustments + shippingCostSAR
+        : totalProductsCostWithAdjustments;
+
     const valPaid = parseFloat(formData.amountPaid as any) || 0;
     const remainingYER = totalOrderYER - valPaid;
 
@@ -782,7 +820,8 @@ export default function Orders() { // دالة عرض الطلبات
       totalOrderYER,
       remainingYER,
       profitSaudiSAR,
-      profitCompanySAR
+      profitCompanySAR,
+      sourcingCostAmount,
     };
   };
 
@@ -803,11 +842,12 @@ export default function Orders() { // دالة عرض الطلبات
     }
 
     const currentCalcs = computeCalculations();
-    const productsSumYER = currentCalcs.productsSum * (formData.currency === 'USD' ? (parseFloat(formData.exchangeRateUSD as any) || 535) : (parseFloat(formData.exchangeRateYER as any) || 140));
+    const rateOrder = dbRates[orderCurrency] || (orderCurrency === 'SAR' ? 140 : orderCurrency === 'USD' ? 535 : 1);
+    const ratePayment = dbRates[formData.currency || 'YER'] || (formData.currency === 'SAR' ? 140 : formData.currency === 'USD' ? 535 : 1);
+    const productsSumYER = currentCalcs.productsSum * (formData.exchangeRate ?? (rateOrder / ratePayment));
     const paidAmount = parseFloat(formData.amountPaid as any) || 0;
 
     // First requirement: Deleted the condition that cash paid amount cannot be less than original products cost. Any amount is allowed.
-
     if (formData.orderSourceType === 'SHEIN') {
       const redPrice = parseFloat(formData.sheinRedPrice as any) || 0;
       const productsSum = items.reduce((sum, i) => sum + (parseFloat(i.quantity || 0) * parseFloat(i.productPrice || 0)), 0);
@@ -835,7 +875,7 @@ export default function Orders() { // دالة عرض الطلبات
 
       const initialFiredTriggers = [''];
       if (parseFloat(formData.amountPaid as any) > 0) {
-        initialFiredTriggers.push('order_down_payment');
+        initialFiredTriggers.push('order_down_payment');//مهم:هذا قيد دفعه من العميل
       }
 
       const payload = {
@@ -857,7 +897,9 @@ export default function Orders() { // دالة عرض الطلبات
         deliveryCourierFee: parseFloat(formData.deliveryCourierFee as any) || 0,
 
         // Financial definitions
-        currency: formData.currency,
+        currency: orderCurrency,
+        paidCurrency: formData.currency,
+        exchangeRate: formData.exchangeRate ?? formData.exchangeRateYER,
         exchangeRateYER: formData.exchangeRateYER,
         exchangeRateUSD: formData.exchangeRateUSD,
         bankCommissionRate: formData.bankCommissionRate,
@@ -894,12 +936,16 @@ export default function Orders() { // دالة عرض الطلبات
         // Profit distribution
         profitSaudiSAR: currentCalcs.profitSaudiSAR,
         profitCompanySAR: currentCalcs.profitCompanySAR,
+        deductSourcingCostFromCourier: formData.deductSourcingCostFromCourier,
+        sourcing_cost: formData.deductSourcingCostFromCourier ? 'courier' : 'system',
+        sourcingCostAmount: currentCalcs.sourcingCostAmount,
+
 
         // Items nested list
         items,
 
-        // Shipping details nested list
-        shippingDetails: formData.orderSourceType === 'SHEIN' ? [] : (shippings || []),
+        // Shipping details nested list //مهم:يحب تحدد
+        shippingDetails: formData.orderSourceType === 'SHEIN' ? [] : formData.orderSourceType === 'App' && !formData.addShippingEnabled ? [] : (shippings || []),
 
         // Lifecycles status
         orderStatusId: parseFloat(formData.amountPaid as any) > 0 ? '2' : '1',
@@ -914,7 +960,7 @@ export default function Orders() { // دالة عرض الطلبات
         createdAt: Date.now(),
         updatedAt: Date.now()
       };
-
+      //حفظ الطلب في جدول الطلب
       await addDoc(payload.orderNumber, collection(db, 'orders'), payload);
 
       // Save products to products table
@@ -925,11 +971,15 @@ export default function Orders() { // دالة عرض الطلبات
             id: prodId,
             orderId: payload.orderNumber,
             productName: item.productName || item.name || 'منتج',
+            costomerId: formData.customerId,
             quantity: parseFloat(item.quantity || 1),
             productPrice: parseFloat(item.productPrice || item.price || 0),
             unitPrice: parseFloat(item.productPrice || item.price || 0),
             totalPrice: (parseFloat(item.quantity || 1)) * (parseFloat(item.productPrice || item.price || 0)),
             weight: parseFloat(item.weight || 0),
+            height: parseFloat(item.height || 0),
+            length: parseFloat(item.length || 0),
+            width: parseFloat(item.width || 0),
             cbm: parseFloat(item.cbm || 0),
             productUrl: item.productUrl || '',
             trackingNumber: item.trackingNumber || '',
@@ -939,7 +989,7 @@ export default function Orders() { // دالة عرض الطلبات
       }
 
       // Save shipments to shipments table
-      const shippingsToSave = formData.orderSourceType === 'SHEIN' ? [] : (shippings || []);
+      const shippingsToSave = formData.orderSourceType === 'SHEIN' ? [] : formData.orderSourceType === 'App' && !formData.addShippingEnabled ? [] : (shippings || []);
       for (const ship of shippingsToSave) {
         const shipId = ship.id || ('sh_' + Math.random().toString(36).substring(2, 11));
         await addDoc(shipId, collection(db, 'shipments'), {
@@ -974,6 +1024,7 @@ export default function Orders() { // دالة عرض الطلبات
 
       // --- Financial Account Impact ---
       const customerRecord = customers.find(c => c.id === formData.customerId);
+      const courierRecord = couriers.find(c => c.id === formData.shippingCourierId);
       const linkedAccountId = customerRecord?.financialAccountId;
       const linkedAccountCode = customerRecord?.financialAccountCode;
 
@@ -993,35 +1044,39 @@ export default function Orders() { // دالة عرض الطلبات
             { USD: formData.exchangeRateUSD, SAR: formData.exchangeRateYER }
           );
 
-          await financialAccountService.triggerAutomaticVoucher(
-            'order_charge',
-            { orderNumber },
-            {
-              customer: customerRecord,
-              isAr,
-              rawAmount: convertedOrderAmount,
-              profileName: profile?.fullName || 'Root Admin'
-            }
-          );
+          //const customerRecord = customers.find(c => c.id === payload.customerId);
+          /*await autoEntryService.executeAutoEntriesForStatus(
+            payload.orderStatusId || '1',
+            payload, {
+            customer: customerRecord,
+            courier: courierRecord,
+            sourcing_cost: payload.sourcing_cost,
+            isAr,
+            rawAmountOverride: convertedOrderAmount,
+            profileName: profile?.fullName || 'Root Admin'
+          }
+          );*/
 
           const paidVal = parseFloat(formData.amountPaid as any) || 0;
+          const paidCurrency = formData.currency;
           if (paidVal > 0) {
             const convertedPaid = financialAccountService.convertToDefaultCurrency(
               paidVal,
               'YER',
               settings.currency || 'YER',
-              { USD: formData.exchangeRateUSD, SAR: formData.exchangeRateYER }
+              { paidCurrency: formData.exchangeRateUSD, SAR: formData.exchangeRateYER }
             );
 
-            await financialAccountService.triggerAutomaticVoucher(
-              'order_down_payment',
-              { orderNumber },
-              {
-                customer: customerRecord,
-                isAr,
-                rawAmount: convertedPaid,
-                profileName: profile?.fullName || 'Root Admin'
-              }
+            //const customerRecord = customers.find(c => c.id === payload.customerId);
+            await autoEntryService.executeAutoEntriesForStatus(
+              payload.orderStatusId || '1',
+              payload, {
+              customer: customerRecord,
+              sourcing_cost: payload.sourcing_cost,
+              courier: courierRecord,
+              isAr,
+              profileName: profile?.fullName || 'Root Admin'
+            }
             );
           }
         } catch (txErr) {
@@ -1033,15 +1088,15 @@ export default function Orders() { // دالة عرض الطلبات
       const sourcingCostAmount = (formData.orderSourceType === 'App' || formData.orderSourceType === 'Factory')
         ? currentCalcs.totalProductsCostWithAdjustments + currentCalcs.shippingCostSAR
         : currentCalcs.totalProductsCostWithAdjustments;
+      //  financialAccountService.convertToDefaultCurrency(
+      //   sourcingCostAmount,
+      //   'SAR',
+      //   settings.currency || 'YER',
+      //   dbRates
+      // );
 
-      const sourcingCostConverted = financialAccountService.convertToDefaultCurrency(
-        sourcingCostAmount,
-        'SAR',
-        settings.currency || 'YER',
-        dbRates
-      );
-
-      if (formData.deductSourcingCostFromCourier && formData.shippingCourierId) {
+      // شرط خصم تكلفه المنتجات و الشحن من حساب المندوب في حاله التكاليف عليه  وخصمها من الشركه في حاله الشحن الداخلي
+      /*if (formData.deductSourcingCostFromCourier && formData.shippingCourierId) {
         const saudiCourier = couriers.find(c => c.id === formData.shippingCourierId);
         if (saudiCourier && saudiCourier.financialAccountId) {
           try {
@@ -1055,20 +1110,21 @@ export default function Orders() { // دالة عرض الطلبات
               dbRates
             );
 
-            await financialAccountService.triggerAutomaticVoucher(
-              'sourcing_cost_courier',
-              { orderNumber },
-              {
-                courier: saudiCourier,
-                isAr,
-                rawAmount: amountInCourierCurrency,
-                amountOriginal: sourcingCostAmount,
-                currencyOriginal: 'SAR',
-                profileName: profile?.fullName || 'Root Admin'
-              }
+            await autoEntryService.executeAutoEntriesForStatus(
+              payload.orderStatusId || '1',
+              payload, {
+              customer: customerRecord,
+              sourcing_cost: payload.sourcing_cost,
+              courier: courierRecord,
+              isAr,
+              rawAmountOverride: amountInCourierCurrency,
+              amountOriginal: sourcingCostAmount,
+              currencyOriginal: 'SAR',
+              profileName: profile?.fullName || 'Root Admin'
+            }
             );
 
-            // Automatically settle pending custodies
+            // Automatically settle pending custodies تنقيص العهده
             await financialAccountService.settlePendingCustodies(
               saudiCourier.id,
               amountInCourierCurrency,
@@ -1081,27 +1137,30 @@ export default function Orders() { // دالة عرض الطلبات
       } else if (systemAccs['sys_sourcing_cost']) {
         // Debit Sourcing Costs Account (Instead of Courier)
         try {
-          await financialAccountService.triggerAutomaticVoucher(
-            'sourcing_cost_system',
-            { orderNumber },
-            {
-              isAr,
-              rawAmount: sourcingCostConverted,
-              amountOriginal: sourcingCostAmount,
-              currencyOriginal: 'SAR',
-              profileName: profile?.fullName || 'Root Admin'
-            }
+          await autoEntryService.executeAutoEntriesForStatus(
+            payload.orderStatusId || '1',
+            payload, {
+            customer: customerRecord,
+            sourcing_cost: payload.sourcing_cost,
+            courier: courierRecord,
+            isAr,
+            rawAmountOverride:sourcingCostAmount,
+            amountOriginal: sourcingCostAmount,
+            currencyOriginal: 'SAR',
+            profileName: profile?.fullName || 'Root Admin'
+          }
           );
         } catch (e) {
           console.error('Failed to deduct sourcing from system account', e);
         }
-      }
+      }*/
 
       // Record Packaging Fees Credit
       const shippingsCostSum = shippings.reduce((sum, s) => sum + parseFloat(s.shippingCost || 0) + parseFloat(s.packagingFees || 0), 0);
       // packagingFeeRate is now a fixed SAR amount (not percentage)
-      const shippingPackagingFixed = packagingFeeEnabled ? (parseFloat(packagingFeeRate as any) || 0) : 0;
+      /*const shippingPackagingFixed = packagingFeeEnabled ? (parseFloat(packagingFeeRate as any) || 0) : 0;
       const packagingFeeSAR = parseFloat(formData.packagingFee as any || 0);
+
 
       if (packagingFeeSAR > 0 && systemAccs['sys_packaging_fees']) {
         try {
@@ -1111,25 +1170,28 @@ export default function Orders() { // دالة عرض الطلبات
             settings.currency || 'YER',
             dbRates
           );
-          await financialAccountService.triggerAutomaticVoucher(
-            'packaging_fee',
-            { orderNumber },
-            {
-              isAr,
-              rawAmount: pkgConverted,
-              amountOriginal: packagingFeeSAR,
-              currencyOriginal: 'SAR',
-              profileName: profile?.fullName || 'Root Admin'
-            }
+          await autoEntryService.executeAutoEntriesForStatus(
+            payload.orderStatusId || '1',
+            payload, {
+            customer: customerRecord,
+            courier: courierRecord,
+            sourcing_cost: payload.sourcing_cost,
+            isAr,
+            rawAmountOverride: pkgConverted,
+            amountOriginal: packagingFeeSAR,
+            currencyOriginal: 'SAR',
+            profileName: profile?.fullName || 'Root Admin'
+          }
           );
         } catch (e) {
           console.error('Failed to log packaging fee', e);
         }
-      }
+      }*/
 
       // Record Shipping Cost Debit (for any order type with shipping cost)
       // Only apply if deduction on courier is not set, and shipping costs are not merged with product costs
-      if (
+      // قيد تنفيذ الشحن على الشركه عند الشحن من التطبيق ويزيد مصاريف الشركه
+      /*if (
         currentCalcs.shippingCostSAR > 0 &&
         systemAccs['sys_shipping_costs'] &&
         !formData.deductSourcingCostFromCourier &&
@@ -1144,21 +1206,20 @@ export default function Orders() { // دالة عرض الطلبات
             settings.currency || 'YER',
             dbRates
           );
-          await financialAccountService.triggerAutomaticVoucher(
-            'international_shipping',
-            { orderNumber },
-            {
-              isAr,
-              rawAmount: shipCostConverted,
-              amountOriginal: currentCalcs.shippingCostSAR,
-              currencyOriginal: 'SAR',
-              profileName: profile?.fullName || 'Root Admin'
-            }
+          await autoEntryService.executeAutoEntriesForStatus(
+            payload.orderStatusId || '1',
+            payload, {
+            isAr,
+            rawAmountOverride: shipCostConverted,
+            amountOriginal: currentCalcs.shippingCostSAR,
+            currencyOriginal: 'SAR',
+            profileName: profile?.fullName || 'Root Admin'
+          }
           );
         } catch (e) {
           console.error('Failed to log shipping cost', e);
         }
-      }
+      }*/
 
       // Record Company Profit and Saudi Partner Profit will be recorded upon designated logistics statuses (handled in Update Status).
       // Removed direct ledger creation for couriers and company profit from here to prevent duplicates.
@@ -1230,10 +1291,12 @@ export default function Orders() { // دالة عرض الطلبات
       externalOrderNumber: '',
       trackingNumber: '',
       shippingCompany: 'Aramex',
+      addShippingEnabled: false,
       shippingCourierId: '',
       deliveryCourierId: '',
       deliveryCourierFee: settings.defaultDeliveryFee ?? 4000,
       currency: orderCurrency,
+      exchangeRate: dbRates[orderCurrency] || 1,
       exchangeRateYER: dbRates[orderCurrency] || 1,
       exchangeRateUSD: dbRates['USD'] || 1,
       bankCommissionRate: settings.defaultBankCommissionRate ?? 3,
@@ -1243,7 +1306,8 @@ export default function Orders() { // دالة عرض الطلبات
       amountPaid: 0,
       paymentMethod: 'Cash',
       notes: '',
-      deductSourcingCostFromCourier: false
+      deductSourcingCostFromCourier: false,
+      sourcing_cost: 'system',
     });
     setItems([{ productName: '', productUrl: '', quantity: 1, productPrice: 0, weight: 0, cbm: 0, length: 0, width: 0, height: 0, trackingNumber: '' }]);
     setCustomerSearchQuery('');
@@ -3600,324 +3664,324 @@ export default function Orders() { // دالة عرض الطلبات
           </>
         )}
 
-            {/* CREATE ORDER LARGE MODAL واجهه نموذج انشاء طلب*/}
-            <CreateOrderModal
-              isOpen={isAddModalOpen}
-              onClose={() => setIsAddModalOpen(false)}
-              isAr={isAr}
-              role={role}
-              hasPermission={hasPermission}
-              canEditOrderDefaultsCreation={canEditOrderDefaultsCreation}
-              isSubmitting={isSubmitting}
-              formData={formData}
-              setFormData={setFormData}
-              previewOrderNumber={previewOrderNumber}
-              customerProfileStats={customerProfileStats}
-              customerSearchQuery={customerSearchQuery}
-              setCustomerSearchQuery={setCustomerSearchQuery}
-              filteredCustomers={filteredCustomers}
-              selectCustomer={selectCustomer}
-              clearSelectedCustomer={clearSelectedCustomer}
-              setIsAddCustomerOpen={setIsAddCustomerOpen}
-              setCustomerFormData={setCustomerFormData}
-              setIsAddSourceOpen={setIsAddSourceOpen}
-              sources={sources}
-              cartShareCode={cartShareCode}
-              setCartShareCode={setCartShareCode}
-              items={items}
-              addItemRow={addItemRow}
-              updateItemRow={updateItemRow}
-              removeItemRow={removeItemRow}
-              bankCommissionEnabled={bankCommissionEnabled}
-              setBankCommissionEnabled={setBankCommissionEnabled}
-              bankCommissionType={bankCommissionType}
-              setBankCommissionType={setBankCommissionType}
-              bankCommissionRate={bankCommissionRate}
-              setBankCommissionRate={setBankCommissionRate}
-              couponEnabled={couponEnabled}
-              setCouponEnabled={setCouponEnabled}
-              couponRate={couponRate}
-              setCouponRate={setCouponRate}
-              addShippingEnabled={addShippingEnabled}
-              setAddShippingEnabled={setAddShippingEnabled}
-              shippings={shippings}
-              addShippingRow={addShippingRow}
-              updateShippingRow={updateShippingRow}
-              removeShippingRow={removeShippingRow}
-              shippingCompanies={shippingCompanies}
-              setIsAddShippingCompanyOpen={setIsAddShippingCompanyOpen}
-              setActiveAddShippingIndex={setActiveAddShippingIndex}
-              packagingFeeEnabled={packagingFeeEnabled}
-              setPackagingFeeEnabled={setPackagingFeeEnabled}
-              packagingFeeRate={packagingFeeRate}
-              setPackagingFeeRate={setPackagingFeeRate}
-              couriers={couriers}
-              profitPerKgRate={profitPerKgRate}
-              setProfitPerKgRate={setProfitPerKgRate}
-              cbmShippingRateValue={cbmShippingRateValue}
-              setCbmShippingRateValue={setCbmShippingRateValue}
-              settings={settings}
-              calcs={calcs}
-              activeCurrencies={activeCurrencies}
-              handleCreateOrder={handleCreateOrder}
-            />
+      {/* CREATE ORDER LARGE MODAL واجهه نموذج انشاء طلب*/}
+      <CreateOrderModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        isAr={isAr}
+        role={role}
+        hasPermission={hasPermission}
+        canEditOrderDefaultsCreation={canEditOrderDefaultsCreation}
+        isSubmitting={isSubmitting}
+        formData={formData}
+        setFormData={setFormData}
+        previewOrderNumber={previewOrderNumber}
+        customerProfileStats={customerProfileStats}
+        customerSearchQuery={customerSearchQuery}
+        setCustomerSearchQuery={setCustomerSearchQuery}
+        filteredCustomers={filteredCustomers}
+        selectCustomer={selectCustomer}
+        clearSelectedCustomer={clearSelectedCustomer}
+        setIsAddCustomerOpen={setIsAddCustomerOpen}
+        setCustomerFormData={setCustomerFormData}
+        setIsAddSourceOpen={setIsAddSourceOpen}
+        sources={sources}
+        cartShareCode={cartShareCode}
+        setCartShareCode={setCartShareCode}
+        items={items}
+        addItemRow={addItemRow}
+        updateItemRow={updateItemRow}
+        removeItemRow={removeItemRow}
+        bankCommissionEnabled={bankCommissionEnabled}
+        setBankCommissionEnabled={setBankCommissionEnabled}
+        bankCommissionType={bankCommissionType}
+        setBankCommissionType={setBankCommissionType}
+        bankCommissionRate={bankCommissionRate}
+        setBankCommissionRate={setBankCommissionRate}
+        couponEnabled={couponEnabled}
+        setCouponEnabled={setCouponEnabled}
+        couponRate={couponRate}
+        setCouponRate={setCouponRate}
+        addShippingEnabled={addShippingEnabled}
+        setAddShippingEnabled={setAddShippingEnabled}
+        shippings={shippings}
+        addShippingRow={addShippingRow}
+        updateShippingRow={updateShippingRow}
+        removeShippingRow={removeShippingRow}
+        shippingCompanies={shippingCompanies}
+        setIsAddShippingCompanyOpen={setIsAddShippingCompanyOpen}
+        setActiveAddShippingIndex={setActiveAddShippingIndex}
+        packagingFeeEnabled={packagingFeeEnabled}
+        setPackagingFeeEnabled={setPackagingFeeEnabled}
+        packagingFeeRate={packagingFeeRate}
+        setPackagingFeeRate={setPackagingFeeRate}
+        couriers={couriers}
+        profitPerKgRate={profitPerKgRate}
+        setProfitPerKgRate={setProfitPerKgRate}
+        cbmShippingRateValue={cbmShippingRateValue}
+        setCbmShippingRateValue={setCbmShippingRateValue}
+        settings={settings}
+        calcs={calcs}
+        activeCurrencies={activeCurrencies}
+        handleCreateOrder={handleCreateOrder}
+      />
 
-            {/* EDIT ORDER FULL DATA MODAL واجهة نموذج تعديل بيانات الطلب */}
-            <EditOrderModal
-              isOpen={isEditOrderModalOpen}
-              onClose={() => {
-                setIsEditOrderModalOpen(false);
-                setOrderToEdit(null);
-              }}
-              orderToEdit={orderToEdit}
-              customers={customers}
-              sources={sources}
-              couriers={couriers}
-              shippingCompanies={shippingCompanies}
-              activeCurrencies={activeCurrencies}
-              settings={settings}
-              isAr={isAr}
-            />
+      {/* EDIT ORDER FULL DATA MODAL واجهة نموذج تعديل بيانات الطلب */}
+      <EditOrderModal
+        isOpen={isEditOrderModalOpen}
+        onClose={() => {
+          setIsEditOrderModalOpen(false);
+          setOrderToEdit(null);
+        }}
+        orderToEdit={orderToEdit}
+        customers={customers}
+        sources={sources}
+        couriers={couriers}
+        shippingCompanies={shippingCompanies}
+        activeCurrencies={activeCurrencies}
+        settings={settings}
+        isAr={isAr}
+      />
 
 
-            {/* QUICK ADD CUSTOMER NESTED MODAL تبويه انشاءعميل جديد  مهم:يجب استدعائها من واجهه العميل مباشره وعدم تكرارها هنا*/}
-            {isAddCustomerOpen && (
-              <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 z-55 animate-fade-in">
-                <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl">
-                  <div className="p-4 border-b border-slate-800 bg-slate-950 flex justify-between items-center text-xs font-black text-white">
-                    <span className="flex items-center gap-1.5 uppercase tracking-wider">
-                      <UserPlus className="w-4 h-4 text-[#d4af37]" />
-                      {isAr ? 'تسجيل عميل جديد ومطابقة الحساب بالكامل' : 'Quick Register Customer'}
-                    </span>
-                    <button type="button" onClick={() => setIsAddCustomerOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-1 rounded-lg">
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <form onSubmit={handleAddCustomer} className="p-5 space-y-4 text-start overflow-y-auto max-h-[85vh]">
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
-                        {isAr ? 'الاسم الثلاثي أو الرباعي للعميل' : 'Full Patron Name'} *
-                      </label>
-                      <div className="relative">
-                        <User className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#d4af37]" />
-                        <input
-                          required
-                          tabIndex={1}
-                          placeholder={isAr ? 'أدخل اسم العميل بالكامل...' : 'e.g. Abdullah bin Ali'}
-                          type="text"
-                          value={customerFormData.fullName}
-                          onChange={e => setCustomerFormData({ ...customerFormData, fullName: e.target.value })}
-                          className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none text-start transition-all"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
-                          {isAr ? 'رقم الهاتف (الواتساب)' : 'Cellphone Contact'} *
-                        </label>
-                        <div className="relative">
-                          <Phone className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                          <input
-                            required
-                            tabIndex={2}
-                            type="text"
-                            placeholder="+967..."
-                            value={customerFormData.phone}
-                            onChange={e => setCustomerFormData({ ...customerFormData, phone: e.target.value })}
-                            className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-start"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
-                          {isAr ? 'البريد الإلكتروني' : 'Electronic Mail'}
-                        </label>
-                        <div className="relative">
-                          <Mail className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                          <input
-                            tabIndex={3}
-                            type="email"
-                            placeholder="client@mail.com"
-                            value={customerFormData.email}
-                            onChange={e => setCustomerFormData({ ...customerFormData, email: e.target.value })}
-                            className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-start"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
-                        {isAr ? 'العنوان وتفاصيل التوزيع بليمن' : 'Yemen Handover Settlement Address'}
-                      </label>
-                      <div className="relative">
-                        <MapPin className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                        <input
-                          tabIndex={4}
-                          placeholder={isAr ? 'المدينة • المديرية • الشارع • معلم بجانب المنزل' : 'Sanaa, Haddah, behind post office'}
-                          type="text"
-                          value={customerFormData.address}
-                          onChange={e => setCustomerFormData({ ...customerFormData, address: e.target.value })}
-                          className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none text-start"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
-                        {isAr ? 'رابط الموقع الجغرافي الخرائط (GPS)' : 'Google Maps Embed/URL'}
-                      </label>
-                      <input
-                        tabIndex={5}
-                        placeholder="https://maps.google.com/?q=..."
-                        type="text"
-                        value={customerFormData.gps_location}
-                        onChange={e => setCustomerFormData({ ...customerFormData, gps_location: e.target.value })}
-                        className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-start"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
-                        {isAr ? 'ملاحظات وتصنيفات إدارية خاصة' : 'Administrative Confidential Annotations'}
-                      </label>
-                      <textarea
-                        tabIndex={7}
-                        rows={2}
-                        value={customerFormData.notes}
-                        onChange={e => setCustomerFormData({ ...customerFormData, notes: e.target.value })}
-                        className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none text-start"
-                      ></textarea>
-                    </div>
-
-                    <div className="flex justify-end gap-3 pt-4 border-t border-slate-850">
-                      <button
-                        type="button"
-                        disabled={isSubmitting}
-                        onClick={() => setIsAddCustomerOpen(false)}
-                        className="px-5 py-2 text-slate-400 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-black rounded-xl transition disabled:opacity-50"
-                      >
-                        {isAr ? 'إلغاء' : 'Cancel'}
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={isSubmitting}
-                        className="px-6 py-2 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black text-xs rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {isSubmitting ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'تأكيد الحفظ' : 'Confirm Save')}
-                      </button>
-                    </div>
-                  </form>
+      {/* QUICK ADD CUSTOMER NESTED MODAL تبويه انشاءعميل جديد  مهم:يجب استدعائها من واجهه العميل مباشره [src/pages/Customers.tsx#L569-680] وعدم تكرارها هنا*/}
+      {isAddCustomerOpen && (
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 z-55 animate-fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl">
+            <div className="p-4 border-b border-slate-800 bg-slate-950 flex justify-between items-center text-xs font-black text-white">
+              <span className="flex items-center gap-1.5 uppercase tracking-wider">
+                <UserPlus className="w-4 h-4 text-[#d4af37]" />
+                {isAr ? 'تسجيل عميل جديد ومطابقة الحساب بالكامل' : 'Quick Register Customer'}
+              </span>
+              <button type="button" onClick={() => setIsAddCustomerOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-1 rounded-lg">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={handleAddCustomer} className="p-5 space-y-4 text-start overflow-y-auto max-h-[85vh]">
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
+                  {isAr ? 'الاسم الثلاثي أو الرباعي للعميل' : 'Full Patron Name'} *
+                </label>
+                <div className="relative">
+                  <User className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#d4af37]" />
+                  <input
+                    required
+                    tabIndex={1}
+                    placeholder={isAr ? 'أدخل اسم العميل بالكامل...' : 'e.g. Abdullah bin Ali'}
+                    type="text"
+                    value={customerFormData.fullName}
+                    onChange={e => setCustomerFormData({ ...customerFormData, fullName: e.target.value })}
+                    className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none text-start transition-all"
+                  />
                 </div>
               </div>
-            )}
 
-
-
-            {/* QUICK ADD SHIPPING COMPANY NESTED MODAL نموذج انشاء شركه جديده*/}
-            {isAddShippingCompanyOpen && (
-              <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 z-55 animate-fade-in">
-                <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl">
-                  <div className="p-4 border-b border-slate-800 bg-slate-955 flex justify-between items-center text-xs font-black text-white">
-                    <span>{isAr ? 'تقييد شركة شحن جديدة' : 'Add New Carrier'}</span>
-                    <button type="button" onClick={() => setIsAddShippingCompanyOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-1 rounded-lg">
-                      <Plus className="w-4 h-4 rotate-45" />
-                    </button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
+                    {isAr ? 'رقم الهاتف (الواتساب)' : 'Cellphone Contact'} *
+                  </label>
+                  <div className="relative">
+                    <Phone className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                    <input
+                      required
+                      tabIndex={2}
+                      type="text"
+                      placeholder="+967..."
+                      value={customerFormData.phone}
+                      onChange={e => setCustomerFormData({ ...customerFormData, phone: e.target.value })}
+                      className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-start"
+                    />
                   </div>
-                  <form onSubmit={handleAddShippingCompany} className="p-5 space-y-4 text-start">
-                    <div>
-                      <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'اسم شركة الشحن' : 'Shipping Carrier Name'}</label>
-                      <input required type="text" value={shippingCompanyFormData.name || ''} onChange={e => setShippingCompanyFormData({ ...shippingCompanyFormData, name: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold" placeholder="e.g Aramex, Safe Ship" />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'مسؤول الاتصال' : 'Contact Person'}</label>
-                      <input type="text" value={shippingCompanyFormData.contact_person || ''} onChange={e => setShippingCompanyFormData({ ...shippingCompanyFormData, contact_person: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold" />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'رقم الهاتف/الجوال' : 'Phone No.'}</label>
-                      <input type="text" value={shippingCompanyFormData.phone || ''} onChange={e => setShippingCompanyFormData({ ...shippingCompanyFormData, phone: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-mono font-bold" placeholder="+967..." />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'بوابة تتبع الشحنات الويب' : 'Tracking Portal Link'}</label>
-                      <input type="url" value={shippingCompanyFormData.tracking_url || ''} onChange={e => setShippingCompanyFormData({ ...shippingCompanyFormData, tracking_url: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-mono font-bold" placeholder="https://..." />
-                    </div>
-                    <div className="pt-2 flex justify-end gap-2 text-xs">
-                      <button type="button" disabled={isSubmitting} onClick={() => setIsAddShippingCompanyOpen(false)} className="p-2 text-slate-400 hover:bg-slate-800 rounded-lg disabled:opacity-50">{isAr ? 'إلغاء' : 'Cancel'}</button>
-                      <button type="submit" disabled={isSubmitting} className="p-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-                        {isSubmitting ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'تأكيد الحفظ' : 'Confirm Save')}
-                      </button>
-                    </div>
-                  </form>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
+                    {isAr ? 'البريد الإلكتروني' : 'Electronic Mail'}
+                  </label>
+                  <div className="relative">
+                    <Mail className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                    <input
+                      tabIndex={3}
+                      type="email"
+                      placeholder="client@mail.com"
+                      value={customerFormData.email}
+                      onChange={e => setCustomerFormData({ ...customerFormData, email: e.target.value })}
+                      className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-start"
+                    />
+                  </div>
                 </div>
               </div>
-            )}
 
-            {/* UPDATE STATUS MODAL نموذج تحديث حاله ومسار الطلب */}
-            <UpdateStatusModal
-              isOpen={isUpdateModalOpen}
-              selectedOrder={selectedOrder}
-              updateFormData={updateFormData}
-              setUpdateFormData={setUpdateFormData}
-              updateShippings={updateShippings}
-              setUpdateShippings={setUpdateShippings}
-              orderStatusesList={orderStatusesList}
-              couriers={couriers}
-              canManageOrders={canManageOrders}
-              isSubmitting={isSubmitting}
-              isAr={isAr}
-              onClose={() => setIsUpdateModalOpen(false)}
-              onSubmit={handleUpdateStatus}
-              setIsAddShippingCompanyOpen={setIsAddShippingCompanyOpen}
-              setActiveAddShippingIndex={setActiveAddShippingIndex}
-              shippingCompanies={shippingCompanies}
-              role={role}
-              hasPermission={hasPermission}
-            />
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
+                  {isAr ? 'العنوان وتفاصيل التوزيع بليمن' : 'Yemen Handover Settlement Address'}
+                </label>
+                <div className="relative">
+                  <MapPin className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                  <input
+                    tabIndex={4}
+                    placeholder={isAr ? 'المدينة • المديرية • الشارع • معلم بجانب المنزل' : 'Sanaa, Haddah, behind post office'}
+                    type="text"
+                    value={customerFormData.address}
+                    onChange={e => setCustomerFormData({ ...customerFormData, address: e.target.value })}
+                    className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 pr-10 pl-4 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none text-start"
+                  />
+                </div>
+              </div>
 
-            {/* COLLECT PAYMENT MODAL نموذج تحصيل دفعة مالية من العميل*/}
-            <PaymentModal
-              isOpen={isPaymentModalOpen}
-              selectedOrder={selectedOrder}
-              paymentFormData={paymentFormData}
-              setPaymentFormData={setPaymentFormData}
-              isSubmitting={isSubmitting}
-              isAr={isAr}
-              onClose={() => {
-                setIsPaymentModalOpen(false);
-                setSelectedOrder(null);
-              }}
-              onSubmit={handleCollectPayment}
-            />
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
+                  {isAr ? 'رابط الموقع الجغرافي الخرائط (GPS)' : 'Google Maps Embed/URL'}
+                </label>
+                <input
+                  tabIndex={5}
+                  placeholder="https://maps.google.com/?q=..."
+                  type="text"
+                  value={customerFormData.gps_location}
+                  onChange={e => setCustomerFormData({ ...customerFormData, gps_location: e.target.value })}
+                  className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-start"
+                />
+              </div>
 
-            {/* ORDER DETAILS MODAL كشف الفاتورة المطبوعة وتتبع كود الشحنة*/}
-            <OrderDetailsModal
-              isOpen={isDetailsModalOpen}
-              selectedOrder={selectedOrder}
-              onClose={() => {
-                setIsDetailsModalOpen(false);
-                setSelectedOrder(null);
-              }}
-              isAr={isAr}
-              settings={settings}
-            />
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">
+                  {isAr ? 'ملاحظات وتصنيفات إدارية خاصة' : 'Administrative Confidential Annotations'}
+                </label>
+                <textarea
+                  tabIndex={7}
+                  rows={2}
+                  value={customerFormData.notes}
+                  onChange={e => setCustomerFormData({ ...customerFormData, notes: e.target.value })}
+                  className="w-full bg-black/50 border border-slate-800 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none text-start"
+                ></textarea>
+              </div>
 
-            {/* DELETE ORDER SECURITY PIN MODAL نموذج تاكيد الحذف*/}
-            <DeleteOrderModal
-              isOpen={isDeleteModalOpen}
-              orderToDelete={orderToDelete}
-              deletePin={deletePin}
-              deleteError={deleteError}
-              setDeletePin={setDeletePin}
-              setDeleteError={setDeleteError}
-              onClose={() => {
-                setIsDeleteModalOpen(false);
-                setOrderToDelete(null);
-              }}
-              onVerify={handleVerifyDeletePin}
-              isAr={isAr}
-            />
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-850">
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => setIsAddCustomerOpen(false)}
+                  className="px-5 py-2 text-slate-400 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-black rounded-xl transition disabled:opacity-50"
+                >
+                  {isAr ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-6 py-2 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black text-xs rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSubmitting ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'تأكيد الحفظ' : 'Confirm Save')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+
+
+      {/* QUICK ADD SHIPPING COMPANY NESTED MODAL نموذج انشاء شركه جديده*/}
+      {isAddShippingCompanyOpen && (
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 z-55 animate-fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl">
+            <div className="p-4 border-b border-slate-800 bg-slate-955 flex justify-between items-center text-xs font-black text-white">
+              <span>{isAr ? 'تقييد شركة شحن جديدة' : 'Add New Carrier'}</span>
+              <button type="button" onClick={() => setIsAddShippingCompanyOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-1 rounded-lg">
+                <Plus className="w-4 h-4 rotate-45" />
+              </button>
+            </div>
+            <form onSubmit={handleAddShippingCompany} className="p-5 space-y-4 text-start">
+              <div>
+                <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'اسم شركة الشحن' : 'Shipping Carrier Name'}</label>
+                <input required type="text" value={shippingCompanyFormData.name || ''} onChange={e => setShippingCompanyFormData({ ...shippingCompanyFormData, name: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold" placeholder="e.g Aramex, Safe Ship" />
+              </div>
+              <div>
+                <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'مسؤول الاتصال' : 'Contact Person'}</label>
+                <input type="text" value={shippingCompanyFormData.contact_person || ''} onChange={e => setShippingCompanyFormData({ ...shippingCompanyFormData, contact_person: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-bold" />
+              </div>
+              <div>
+                <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'رقم الهاتف/الجوال' : 'Phone No.'}</label>
+                <input type="text" value={shippingCompanyFormData.phone || ''} onChange={e => setShippingCompanyFormData({ ...shippingCompanyFormData, phone: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-mono font-bold" placeholder="+967..." />
+              </div>
+              <div>
+                <label className="block text-[10px] text-slate-500 font-bold mb-1 uppercase">{isAr ? 'بوابة تتبع الشحنات الويب' : 'Tracking Portal Link'}</label>
+                <input type="url" value={shippingCompanyFormData.tracking_url || ''} onChange={e => setShippingCompanyFormData({ ...shippingCompanyFormData, tracking_url: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 outline-none text-white text-xs font-mono font-bold" placeholder="https://..." />
+              </div>
+              <div className="pt-2 flex justify-end gap-2 text-xs">
+                <button type="button" disabled={isSubmitting} onClick={() => setIsAddShippingCompanyOpen(false)} className="p-2 text-slate-400 hover:bg-slate-800 rounded-lg disabled:opacity-50">{isAr ? 'إلغاء' : 'Cancel'}</button>
+                <button type="submit" disabled={isSubmitting} className="p-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                  {isSubmitting ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'تأكيد الحفظ' : 'Confirm Save')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* UPDATE STATUS MODAL نموذج تحديث حاله ومسار الطلب */}
+      <UpdateStatusModal
+        isOpen={isUpdateModalOpen}
+        selectedOrder={selectedOrder}
+        updateFormData={updateFormData}
+        setUpdateFormData={setUpdateFormData}
+        updateShippings={updateShippings}
+        setUpdateShippings={setUpdateShippings}
+        orderStatusesList={orderStatusesList}
+        couriers={couriers}
+        canManageOrders={canManageOrders}
+        isSubmitting={isSubmitting}
+        isAr={isAr}
+        onClose={() => setIsUpdateModalOpen(false)}
+        onSubmit={handleUpdateStatus}
+        setIsAddShippingCompanyOpen={setIsAddShippingCompanyOpen}
+        setActiveAddShippingIndex={setActiveAddShippingIndex}
+        shippingCompanies={shippingCompanies}
+        role={role}
+        hasPermission={hasPermission}
+      />
+
+      {/* COLLECT PAYMENT MODAL نموذج تحصيل دفعة مالية من العميل*/}
+      <PaymentModal
+        isOpen={isPaymentModalOpen}
+        selectedOrder={selectedOrder}
+        paymentFormData={paymentFormData}
+        setPaymentFormData={setPaymentFormData}
+        isSubmitting={isSubmitting}
+        isAr={isAr}
+        onClose={() => {
+          setIsPaymentModalOpen(false);
+          setSelectedOrder(null);
+        }}
+        onSubmit={handleCollectPayment}
+      />
+
+      {/* ORDER DETAILS MODAL كشف الفاتورة المطبوعة وتتبع كود الشحنة*/}
+      <OrderDetailsModal
+        isOpen={isDetailsModalOpen}
+        selectedOrder={selectedOrder}
+        onClose={() => {
+          setIsDetailsModalOpen(false);
+          setSelectedOrder(null);
+        }}
+        isAr={isAr}
+        settings={settings}
+      />
+
+      {/* DELETE ORDER SECURITY PIN MODAL نموذج تاكيد الحذف*/}
+      <DeleteOrderModal
+        isOpen={isDeleteModalOpen}
+        orderToDelete={orderToDelete}
+        deletePin={deletePin}
+        deleteError={deleteError}
+        setDeletePin={setDeletePin}
+        setDeleteError={setDeleteError}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setOrderToDelete(null);
+        }}
+        onVerify={handleVerifyDeletePin}
+        isAr={isAr}
+      />
 
 
 
