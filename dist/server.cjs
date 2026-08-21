@@ -47560,7 +47560,7 @@ var init_supabase_firebase_adapter = __esm({
       customers: { accountId: "account_id", disabled: "is_active", level: "levels", levels: "levels" },
       couriers: { accountId: "account_id", financialCurrency: "currency", currency: "currency", disabled: "is_active", courierType: "type", type: "type", level: "levels", levels: "levels" },
       accounts: { accountCode: "account_code", code: "account_code", currency: "currency", entityId: "entity_id", type: "type", accountType: "type" },
-      orders: { orderNumber: "order_number", trackingNumber: "tracking_number", customerId: "customer_id", orderStatusId: "order_status_id", order_status_id: "order_status_id", orderStatus: "order_status", createdAt: "createdAt", orderSourceId: "order_source_id", order_source_id: "order_source_id", orderSourceType: "order_source_type", order_source_type: "order_source_type", deliveryCourierId: "delivery_courier_id", delivery_courier_id: "delivery_courier_id", shippingCourierId: "shipping_courier_id", shipping_courier_id: "shipping_courier_id" },
+      orders: { orderNumber: "order_number", trackingNumber: "tracking_number", customerId: "customer_id", orderStatusId: "order_status_id", order_status_id: "order_status_id", orderStatus: "order_status_id", createdAt: "createdAt", orderSourceId: "order_source_id", order_source_id: "order_source_id", orderSourceType: "order_source_type", order_source_type: "order_source_type", deliveryCourierId: "delivery_courier_id", delivery_courier_id: "delivery_courier_id", shippingCourierId: "shipping_courier_id", shipping_courier_id: "shipping_courier_id" },
       shipping_companies: { name: "name", shippingCompanyUrl: "shipping_company_url", trackingIDPrefix: "trackingID_prefix", financialAccountId: "account_id" },
       sources: { name: "name", supplierType: "type", type: "type", sourceUrl: "source_url", financialAccountId: "account_id" },
       account_transactions: { type: "type", accountId: "account_id", journalEntryNumber: "journalEntryNumber", journalEntryId: "journalEntryNumber", module: "module", currency: "currency", createdAt: "createdAt", amount: "amount" },
@@ -159703,7 +159703,7 @@ async function startServer2() {
     }
     if (!db2 || !auth2) {
       return res.status(503).json({
-        error: "\u062E\u062F\u0645\u0627\u062A \u0642\u0627\u0639\u062F\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u063A\u064A\u0631 \u0645\u0647\u064A\u0623\u0629 \u0623\u0648 \u063A\u064A\u0631 \u0645\u062A\u0635\u0644\u0629 \u0628\u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A \u062D\u0627\u0644\u064A\u0627\u064B. \u064A\u0631\u062C\u0649 \u0627\u0644\u062A\u0623\u0643\u062F \u0645\u0646 \u062A\u0647\u064A\u0626\u0629 Supabase \u0628\u0634\u0643\u0644 \u0635\u062D\u064A\u062D \u0639\u0628\u0631 \u0645\u062A\u063A\u064A\u0631\u0627\u062A \u0627\u0644\u0628\u064A\u0626\u0629."
+        error: "\u064A\u0648\u062C\u062F \u062E\u0637\u0627\u0621 \u0628\u0627\u0644\u0627\u062A\u0635\u0627\u0644 \u0645\u0639 \u0627\u0644\u0633\u064A\u0631\u0641\u0631 \u0627\u0648 \u0627\u0646 \u0647\u0646\u0627\u0643 \u062E\u0637\u0627\u0621 \u0628\u0627\u062A\u0635\u0627\u0644 \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A \u062D\u0627\u0644\u064A\u0627\u064B \u064A\u0631\u062C\u0649 \u0627\u0644\u062A\u0623\u0643\u062F \u0645\u0646 \u0627\u062A\u0635\u0627\u0644 \u0627\u0644\u0627\u0646\u062A\u0631\u0646\u062A \u0627\u0648 \u0627\u0644\u062A\u0648\u0627\u0635\u0644 \u0645\u0639 \u0627\u0644\u062F\u0639\u0645 \u0627\u0644\u0641\u0646\u064A "
       });
     }
     next();
@@ -160005,7 +160005,7 @@ async function startServer2() {
     try {
       const idLower = identifier3.toLowerCase();
       let email = idLower;
-      const ROOT_EMAILS = ["alsrhyarslan5@gmail.com", "arslan.alshamari@gmail.com", "engaporaad1@gmail.com", "admin@swiftship.system", "apo.1.read@gmail.com"];
+      const ROOT_EMAILS = ["alsrhyarslan5@gmail.com", "arslan.alshamari@gmail.com", "admin@swiftship.system"];
       if (idLower === "admin") {
         email = "admin@swiftship.system";
       }
