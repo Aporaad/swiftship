@@ -317,7 +317,7 @@ export default function Orders() { // دالة عرض الطلبات
     // Rates & Commissions
     currency: 'SAR',
     exchangeRate: 1, // Selected currency exchange rate
-    exchangeRateYER: 1, // Dynamic rate from DB
+    exchangeRateYER: 140, // Dynamic rate from DB
     exchangeRateUSD: 1, // Dynamic rate from DB
     bankCommissionRate: 3, // default 3%
     companyProfitRate: 12, // default 12% profit for general Apps
@@ -784,7 +784,7 @@ export default function Orders() { // دالة عرض الطلبات
     const ratePayment = getCurrencyRate(formData.currency || 'YER');
     const defaultExchange = rateOrder / ratePayment;
 
-    const exchange = (formData.exchangeRate && formData.exchangeRate > 0)
+    const exchange = (formData.exchangeRate)
       ? formData.exchangeRate
       : defaultExchange;
 
@@ -794,7 +794,7 @@ export default function Orders() { // دالة عرض الطلبات
 
     // Delivery courier fee
     const deliveryFeeRaw = parseFloat(formData.deliveryCourierFee as any) || 0;
-    const deliveryFeeInPaymentCurrency = (formData.currency === 'YER' || !formData.currency)
+    const deliveryFeeInPaymentCurrency = (formData.currency === 'YER' || !formData.currency)//مهم:يجب تغييرها من اسم ثابت الى متغير يجلب العمله الافتراضيه للنظام
       ? deliveryFeeRaw
       : deliveryFeeRaw / ratePayment;
 

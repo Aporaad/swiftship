@@ -605,7 +605,17 @@ export default function CreateOrderModal(
                       {(role === 'Admin' || hasPermission('add_sources')) && (
                         <button
                           type="button"
-                          onClick={() => setIsAddSourceOpen(true)}
+                          onClick={() => {
+                            setIsAddSourceOpen(true);
+                            const rateOrder = getCurrencyRate(orderCurrency);
+                            const ratePayment = getCurrencyRate(formData.currency);
+                            const rateFromTable = rateOrder / ratePayment;
+                            setFormData({
+                              ...formData,
+                              currency: orderCurrency,
+                              exchangeRate: rateFromTable,
+                            });
+                          }}
                           className="text-[10px] font-black text-[#d4af37] hover:underline flex items-center gap-0.5 cursor-pointer"
                         >
                           ➕ {isAr ? 'مصدر جديد' : 'New Source'}
@@ -889,14 +899,14 @@ export default function CreateOrderModal(
                       </label>
                     </div>
                     {bankCommissionEnabled && (
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 bg-[#d4af37]/5">
                         <select
                           value={bankCommissionType}
                           onChange={(e) => setBankCommissionType(e.target.value as 'percentage' | 'fixed')}
-                          className="bg-slate-955 border border-slate-800 text-slate-300 rounded-xl p-1.5 text-[10px]"
+                          className="bg-slate-955  border border-slate-800 text-slate-300 rounded-xl p-1.5 text-[10px]"
                         >
-                          <option value="percentage">{isAr ? 'نسبة (%)' : 'Percentage (%)'}</option>
-                          <option value="fixed">{isAr ? 'مبلغ ثابت' : 'Fixed Amount'}</option>
+                          <option className='bg-slate-900 text-white' value="percentage">{isAr ? 'نسبة (%)' : 'Percentage (%)'}</option>
+                          <option className='bg-slate-900 text-white' value="fixed">{isAr ? 'مبلغ ثابت' : 'Fixed Amount'}</option>
                         </select>
                         <input
                           type="number"
@@ -1002,9 +1012,9 @@ export default function CreateOrderModal(
                               onChange={(e) => updateShippingRow(idx, 'shippingType', e.target.value)}
                               className="w-full bg-slate-955 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold cursor-pointer"
                             >
-                              <option value="بري">{isAr ? 'Overland بري' : 'Land - Overland'}</option>
-                              <option value="جوي">{isAr ? 'Air Freight جوي' : 'Air - Air Freight'}</option>
-                              <option value="بحري">{isAr ? 'Ocean Cargo بحري' : 'Sea - Ocean Cargo'}</option>
+                              <option className="bg-slate-900 text-white" value="بري">{isAr ? 'Overland بري' : 'Land - Overland'}</option>
+                              <option className="bg-slate-900 text-white" value="جوي">{isAr ? 'Air Freight جوي' : 'Air - Air Freight'}</option>
+                              <option className="bg-slate-900 text-white" value="بحري">{isAr ? 'Ocean Cargo بحري' : 'Sea - Ocean Cargo'}</option>
                             </select>
                           </div>
 
@@ -1029,9 +1039,9 @@ export default function CreateOrderModal(
                               onChange={(e) => updateShippingRow(idx, 'shippingCompany', e.target.value)}
                               className="w-full bg-slate-955 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold cursor-pointer"
                             >
-                              <option value="">{isAr ? '-- اختر شركة شحن --' : '-- Choose carrier --'}</option>
+                              <option className="bg-slate-900 text-white" value="">{isAr ? '-- اختر شركة شحن --' : '-- Choose carrier --'}</option>
                               {shippingCompanies.map((c) => (
-                                <option key={c.id} value={c.name}>{c.name}</option>
+                                <option className="bg-slate-900 text-white" key={c.id} value={c.name}>{c.name}</option>
                               ))}
                             </select>
                           </div>
@@ -1161,9 +1171,9 @@ export default function CreateOrderModal(
                       onChange={(e) => setFormData({ ...formData, shippingCourierId: e.target.value })}
                       className="w-full bg-slate-955 border border-slate-855 text-white rounded-xl p-3 outline-none text-[11px] font-bold cursor-pointer"
                     >
-                      <option value="">{isAr ? '-- اختر موظف التجميع --' : '-- Choose Aggregator --'}</option>
+                      <option className="bg-slate-900 text-white" value="">{isAr ? '-- اختر موظف التجميع --' : '-- Choose Aggregator --'}</option>
                       {couriers.filter(c => c.courierType === 'sourcing').map(c => (
-                        <option key={c.id} value={c.id}>
+                        <option className="bg-slate-900 text-white" key={c.id} value={c.id}>
                           {c.fullName}
                         </option>
                       ))}
@@ -1177,9 +1187,9 @@ export default function CreateOrderModal(
                       onChange={(e) => setFormData({ ...formData, deliveryCourierId: e.target.value })}
                       className="w-full bg-slate-955 border border-slate-855 text-white rounded-xl p-3 outline-none text-[11px] font-bold cursor-pointer"
                     >
-                      <option value="">{isAr ? '-- اختر مندوب التوصيل --' : '-- Choose Yemen Driver --'}</option>
+                      <option className="bg-slate-900 text-white" value="">{isAr ? '-- اختر مندوب التوصيل --' : '-- Choose Yemen Driver --'}</option>
                       {couriers.filter(c => c.courierType === 'local' || !c.courierType).map(c => (
-                        <option key={c.id} value={c.id}>
+                        <option className="bg-slate-900 text-white" key={c.id} value={c.id}>
                           {c.fullName} {c.governorate || c.provinceId ? `(${c.governorate || c.provinceId})` : ''}
                         </option>
                       ))}
@@ -1350,7 +1360,7 @@ export default function CreateOrderModal(
                           className="w-full bg-slate-955 text-white font-bold text-xs p-2 rounded-lg border border-slate-800 outline-none cursor-pointer"
                         >
                           {activeCurrencies.map((c) => (
-                            <option key={c.code} value={c.code}>
+                            <option className="bg-slate-900 text-white" key={c.code} value={c.code}>
                               {isAr ? (c.main_nameAR || c.sup_nameAR || c.code) : (c.main_nameEn || c.sup_nameEn || c.code)} ({c.code})
                             </option>
                           ))}
@@ -1365,7 +1375,7 @@ export default function CreateOrderModal(
                           type="number"
                           step="any"
                           value={
-                            formData.exchangeRate ??
+                            //formData.exchangeRate ??
                             (getCurrencyRate(orderCurrency) / getCurrencyRate(formData.currency || 'YER'))
                           }
                           onChange={(e) => {
