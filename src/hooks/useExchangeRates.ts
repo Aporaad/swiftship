@@ -76,21 +76,41 @@ function _initSingleton() {
   // Initial load
   _refresh();
 
+  // Safely remove any existing channel instances (e.g. from HMR reloads)
+  if (_channelCurrency) {
+    try { (supabase as any).removeChannel(_channelCurrency); } catch (_) { }
+    _channelCurrency = null;
+  }
+  if (_channelCurPrice) {
+    try { (supabase as any).removeChannel(_channelCurPrice); } catch (_) { }
+    _channelCurPrice = null;
+  }
+
   // Real-time: subscribe to currency table changes
-  _channelCurrency = (supabase as any)
-    .channel('currency_realtime')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'currency' }, () => {
-      _refresh();
-    })
-    .subscribe();
+  try {
+    const currencyChannelId = `currency_realtime_${Math.random().toString(36).substring(2, 8)}`;
+    _channelCurrency = (supabase as any)
+      .channel(currencyChannelId)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'currency' }, () => {
+        _refresh();
+      })
+      .subscribe();
+  } catch (err) {
+    console.warn('[useExchangeRates] currency channel subscription warning:', err);
+  }
 
   // Real-time: subscribe to cur_price table changes
-  _channelCurPrice = (supabase as any)
-    .channel('cur_price_realtime')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'cur_price' }, () => {
-      _refresh();
-    })
-    .subscribe();
+  try {
+    const curPriceChannelId = `cur_price_realtime_${Math.random().toString(36).substring(2, 8)}`;
+    _channelCurPrice = (supabase as any)
+      .channel(curPriceChannelId)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cur_price' }, () => {
+        _refresh();
+      })
+      .subscribe();
+  } catch (err) {
+    console.warn('[useExchangeRates] cur_price channel subscription warning:', err);
+  }
 }
 
 // ── Hook ─────────────────────────────────────────────────────────────────────

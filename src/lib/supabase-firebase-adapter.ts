@@ -584,7 +584,7 @@ const DIRECT_COLUMNS_MAP: Record<string, Record<string, string>> = {
   customers: { accountId: 'account_id', disabled: 'is_active', level: 'levels', levels: 'levels' },
   couriers: { accountId: 'account_id', financialCurrency: 'currency', currency: 'currency', disabled: 'is_active', courierType: 'type', type: 'type', level: 'levels', levels: 'levels' },
   accounts: { accountCode: 'account_code', code: 'account_code', currency: 'currency', entityId: 'entity_id', type: 'type', accountType: 'type' },
-  orders: { orderNumber: 'order_number', trackingNumber: 'tracking_number', customerId: 'customer_id', orderStatusId: 'order_status_id', order_status_id: 'order_status_id', orderStatus: 'order_status_id', createdAt: 'createdAt', orderSourceId: 'order_source_id', order_source_id: 'order_source_id', orderSourceType: 'order_source_type', order_source_type: 'order_source_type', deliveryCourierId: 'delivery_courier_id', delivery_courier_id: 'delivery_courier_id', shippingCourierId: 'shipping_courier_id', shipping_courier_id: 'shipping_courier_id' },
+  orders: { orderNumber: 'order_number', trackingNumber: 'tracking_number', customerId: 'customer_id', orderStatusId: 'order_status_id', order_status_id: 'order_status_id', createdAt: 'createdAt', orderSourceId: 'order_source_id', order_source_id: 'order_source_id', orderSourceType: 'order_source_type', order_source_type: 'order_source_type', deliveryCourierId: 'delivery_courier_id', delivery_courier_id: 'delivery_courier_id', shippingCourierId: 'shipping_courier_id', shipping_courier_id: 'shipping_courier_id' },
   shipping_companies: { name: 'name', shippingCompanyUrl: 'shipping_company_url', trackingIDPrefix: 'trackingID_prefix', financialAccountId: 'account_id' },
   sources: { name: 'name', supplierType: 'type', type: 'type', sourceUrl: 'source_url', financialAccountId: 'account_id' },
   account_transactions: { type: 'type', accountId: 'account_id', journalEntryNumber: 'journalEntryNumber', journalEntryId: 'journalEntryNumber', module: 'module', currency: 'currency', createdAt: 'createdAt', amount: 'amount' },
@@ -598,7 +598,7 @@ const DIRECT_COLUMNS_MAP: Record<string, Record<string, string>> = {
   announcements: { title: 'title', isActive: 'isActive', priority: 'priority', createdBy: 'createdBy', createdAt: 'createdAt' },
   portal_tickets: { type: 'type', status: 'status', userUid: 'userUid', createdAt: 'createdAt' },
   products: { orderId: 'order_id', productName: 'product_name', name: 'product_name', quantity: 'quantity', productPrice: 'unit_price', price: 'unit_price', unitPrice: 'unit_price', totalPrice: 'total_price', packagingOptionId: 'packaging_option_id', packaging_option_id: 'packaging_option_id', createdAt: 'createdAt' },
-  shipments: { orderId: 'order_id', trackingNumber: 'tracking_number', shippingCompany: 'shipping_company_id', shippingCompanyId: 'shipping_company_id', courierId: 'courier_id', shipmentStatus: 'shipment_status', status: 'shipment_status', shippingCost: 'shipping_cost', weight: 'weight', shippingCategoryId: 'shipping_category_id', shipping_category_id: 'shipping_category_id', createdAt: 'createdAt' },
+  shipments: { orderId: 'order_id', trackingNumber: 'tracking_number', shippingCompanyId: 'shipping_company_id', shipping_company_id: 'shipping_company_id', courierId: 'courier_id', shipmentStatus: 'shipment_status', status: 'shipment_status', shippingCost: 'shipping_cost', weight: 'weight', shippingCategoryId: 'shipping_category_id', shipping_category_id: 'shipping_category_id', createdAt: 'createdAt' },
   order_status: { nameAr: 'name_ar', nameEn: 'name_en', isFirst: 'is_first', isLast: 'is_last', sortOrder: 'sort_order', color: 'color', code: 'code' },
   auto_entries: { statusId: 'status_id', nameAr: 'name_ar', nameEn: 'name_en', isActive: 'is_active', amountSource: 'amount_source' },
   autoEntry: { statusId: 'status_id', nameAr: 'name_ar', nameEn: 'name_en', isActive: 'is_active', amountSource: 'amount_source' },
@@ -611,7 +611,11 @@ export function extractDirectColumns(table: string, data: Record<string, any>): 
   const extracted: Record<string, any> = {};
   for (const [key, col] of Object.entries(mapping)) {
     if (data[key] !== undefined) {
-      const val = data[key];
+      let val = data[key];
+      // Convert empty string or whitespace foreign keys to null so Postgres FK check succeeds
+      if (typeof val === 'string' && val.trim() === '' && col.endsWith('_id')) {
+        val = null;
+      }
       if (key === 'disabled' && (table === 'customers' || table === 'couriers')) {
         extracted[col] = !val;
       } else if ((col === 'createdAt' || col === 'lastSeen') && typeof val === 'number') {
@@ -621,6 +625,27 @@ export function extractDirectColumns(table: string, data: Record<string, any>): 
       }
     }
   }
+
+  // Safety checks for foreign key ID columns
+  if (table === 'orders') {
+    const validStatusIds = ['1', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
+    if (!extracted['order_status_id'] || !validStatusIds.includes(String(extracted['order_status_id']))) {
+      extracted['order_status_id'] = '1';
+    }
+    if (typeof extracted['customer_id'] === 'string' && extracted['customer_id'].trim() === '') {
+      extracted['customer_id'] = null;
+    }
+    if (typeof extracted['order_source_id'] === 'string' && extracted['order_source_id'].trim() === '') {
+      extracted['order_source_id'] = null;
+    }
+    if (typeof extracted['delivery_courier_id'] === 'string' && extracted['delivery_courier_id'].trim() === '') {
+      extracted['delivery_courier_id'] = null;
+    }
+    if (typeof extracted['shipping_courier_id'] === 'string' && extracted['shipping_courier_id'].trim() === '') {
+      extracted['shipping_courier_id'] = null;
+    }
+  }
+
   return extracted;
 }
 

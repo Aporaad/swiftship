@@ -189,12 +189,17 @@ function _initSingleton() {
   };
   fetchRates();
 
-  (supabase as any)
-    .channel('balances_rates_sync')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'cur_price' }, () => {
-      fetchRates();
-    })
-    .subscribe();
+  try {
+    const balChanId = `balances_rates_sync_${Math.random().toString(36).substring(2, 8)}`;
+    (supabase as any)
+      .channel(balChanId)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cur_price' }, () => {
+        fetchRates();
+      })
+      .subscribe();
+  } catch (err) {
+    console.warn('[useAccountBalances] balances_rates_sync channel warning:', err);
+  }
 
   // 2. Subscribe to accounts to build type & currency registry (single global listener)
   onSnapshot(collection(db, 'accounts'), (snap: any) => {
