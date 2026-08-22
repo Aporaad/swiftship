@@ -4,6 +4,14 @@ import {
   Package, Trash2, Calendar, Calculator, ChevronRight, ChevronLeft,
   User, ShoppingCart, Truck, CheckCircle2, ShieldCheck, FileText
 } from 'lucide-react';
+import {
+  numberToWordsAr,
+  numberToWordsEn,
+  currencyNameAr,
+  currencyNameEn,
+  amountInWords,
+  paidAmountInWords
+} from '../../lib/numberToWords';
 
 interface CreateOrderModalProps {
   isOpen: boolean;
@@ -168,7 +176,7 @@ export default function CreateOrderModal(
     return 1;
   };
 
-  // Reset to step 1 when modal opens
+
   useEffect(() => {
     if (isOpen) {
       setCurrentStep(1);
@@ -608,7 +616,7 @@ export default function CreateOrderModal(
                           onClick={() => {
                             setIsAddSourceOpen(true);
                             const rateOrder = getCurrencyRate(orderCurrency);
-                            const ratePayment = getCurrencyRate(formData.currency);
+                            const ratePayment = getCurrencyRate(formData.orderCurrency);
                             const rateFromTable = rateOrder / ratePayment;
                             setFormData({
                               ...formData,
@@ -1215,197 +1223,286 @@ export default function CreateOrderModal(
           {/* STEP 4: Financials, Currency & Payment               */}
           {/* ---------------------------------------------------- */}
           {currentStep === 4 && (
-            <div className="space-y-6 animate-fade-in">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-slate-950/40 border border-slate-800 p-6 rounded-3xl text-[11px] font-bold text-slate-400 text-start">
-                <div className="space-y-4 col-span-2 grid grid-cols-2 gap-4 self-start">
-                  {formData.orderSourceType === 'SHEIN' && (
-                    <div>
-                      <label className="block text-[10px] text-slate-500 uppercase tracking-widest leading-none mb-1.5">
-                        {isAr ? 'سعر شي إن الأحمر (' + orderCurrency + ')' : 'SHEIN Red Price (' + orderCurrency + ')'}
-                      </label>
-                      <input
-                        type="number"
-                        value={formData.sheinRedPrice || ''}
-                        onChange={(e) => setFormData({ ...formData, sheinRedPrice: parseFloat(e.target.value) || 0 })}
-                        className="w-full bg-slate-955 border border-slate-805 text-white rounded-xl p-3 outline-none font-mono text-xs"
-                        placeholder="0.00"
-                      />
-                    </div>
-                  )}
-
-                  {formData.orderSourceType === 'Factory' && (
-                    <>
-                      <div>
-                        <label className="block text-[10px] text-slate-500 uppercase tracking-widest leading-none mb-1.5">
-                          {isAr ? 'نسبة الربح للكيلو (' + orderCurrency + '/كجم)' : 'Profit Rate per KG (' + orderCurrency + '/kg)'}
-                        </label>
-                        <input
-                          type="number"
-                          step="any"
-                          value={profitPerKgRate}
-                          onChange={(e) => setProfitPerKgRate(parseFloat(e.target.value) || 0)}
-                          disabled={!canEditOrderDefaultsCreation}
-                          className="w-full bg-slate-955 border border-slate-805 text-white rounded-xl p-3 outline-none font-mono text-xs disabled:opacity-50"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] text-slate-500 uppercase tracking-widest leading-none mb-1.5 font-bold">
-                          {isAr ? 'سعر شحن الـ CBM (دولار USD/m³)' : 'CBM Shipping Rate (USD/m³)'}
-                        </label>
-                        <input
-                          type="number"
-                          step="any"
-                          value={cbmShippingRateValue}
-                          onChange={(e) => setCbmShippingRateValue(parseFloat(e.target.value) || 0)}
-                          disabled={!canEditOrderDefaultsCreation}
-                          className="w-full bg-slate-955 border border-slate-805 text-white rounded-xl p-3 outline-none font-mono text-xs disabled:opacity-50"
-                        />
-                      </div>
-                    </>
-                  )}
-
+            <div className="space-y-5 animate-fade-in">
+              {/* Top inputs row: order-specific rates */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-950/40 border border-slate-800 p-5 rounded-3xl text-[11px] font-bold text-slate-400 text-start">
+                {formData.orderSourceType === 'SHEIN' && (
                   <div>
                     <label className="block text-[10px] text-slate-500 uppercase tracking-widest leading-none mb-1.5">
-                      {isAr ? 'رسوم تغليف وشحن محلي (' + orderCurrency + ')' : 'KSA Wrapping Fee & Local Freight (' + orderCurrency + ')'}
+                      {isAr ? 'سعر شي إن الأحمر (' + orderCurrency + ')' : 'SHEIN Red Price (' + orderCurrency + ')'}
                     </label>
                     <input
                       type="number"
-                      value={formData.packagingFee || ''}
-                      onChange={(e) => setFormData({ ...formData, packagingFee: parseFloat(e.target.value) || 0 })}
-                      disabled={!canEditOrderDefaultsCreation}
-                      className="w-full bg-slate-955 border border-slate-805 text-white rounded-xl p-3 outline-none font-mono text-xs disabled:opacity-50"
+                      value={formData.sheinRedPrice || ''}
+                      onChange={(e) => setFormData({ ...formData, sheinRedPrice: parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-slate-955 border border-slate-805 text-white rounded-xl p-3 outline-none font-mono text-xs"
                       placeholder="0.00"
                     />
                   </div>
-
-                  <div className="md:col-span-2 mt-2">
-                    <label className="flex items-center gap-2.5 cursor-pointer bg-slate-900/60 p-3.5 rounded-xl border border-slate-800 hover:bg-slate-900 transition">
-                      <input
-                        type="checkbox"
-                        checked={formData.deductSourcingCostFromCourier || false}
-                        onChange={(e) => setFormData({ ...formData, deductSourcingCostFromCourier: e.target.checked })}
-                        className="w-4 h-4 rounded border-slate-700 bg-slate-955 text-[#d4af37] focus:ring-0 cursor-pointer accent-[#d4af37]"
-                      />
-                      <span className="text-[11px] font-bold text-slate-300">
-                        {isAr ? 'خصم تكاليف شراء المنتجات من حساب مندوب التجميع حالاً' : 'Deduct Original Products Cost from Courier Account'}
-                      </span>
-                    </label>
-                  </div>
+                )}
+                {formData.orderSourceType === 'Factory' && (
+                  <>
+                    <div>
+                      <label className="block text-[10px] text-slate-500 uppercase tracking-widest leading-none mb-1.5">
+                        {isAr ? 'نسبة الربح للكيلو (' + orderCurrency + '/كجم)' : 'Profit Rate per KG (' + orderCurrency + '/kg)'}
+                      </label>
+                      <input type="number" step="any" value={profitPerKgRate}
+                        onChange={(e) => setProfitPerKgRate(parseFloat(e.target.value) || 0)}
+                        disabled={!canEditOrderDefaultsCreation}
+                        className="w-full bg-slate-955 border border-slate-805 text-white rounded-xl p-3 outline-none font-mono text-xs disabled:opacity-50" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-500 uppercase tracking-widest leading-none mb-1.5 font-bold">
+                        {isAr ? 'سعر شحن الـ CBM (دولار USD/m³)' : 'CBM Shipping Rate (USD/m³)'}
+                      </label>
+                      <input type="number" step="any" value={cbmShippingRateValue}
+                        onChange={(e) => setCbmShippingRateValue(parseFloat(e.target.value) || 0)}
+                        disabled={!canEditOrderDefaultsCreation}
+                        className="w-full bg-slate-955 border border-slate-805 text-white rounded-xl p-3 outline-none font-mono text-xs disabled:opacity-50" />
+                    </div>
+                  </>
+                )}
+                <div>
+                  <label className="block text-[10px] text-slate-500 uppercase tracking-widest leading-none mb-1.5">
+                    {isAr ? 'رسوم تغليف وشحن محلي (' + orderCurrency + ')' : 'KSA Wrapping Fee & Local Freight (' + orderCurrency + ')'}
+                  </label>
+                  <input type="number" value={formData.packagingFee || ''}
+                    onChange={(e) => setFormData({ ...formData, packagingFee: parseFloat(e.target.value) || 0 })}
+                    disabled={!canEditOrderDefaultsCreation}
+                    className="w-full bg-slate-955 border border-slate-805 text-white rounded-xl p-3 outline-none font-mono text-xs disabled:opacity-50"
+                    placeholder="0.00" />
                 </div>
+                <div className="md:col-span-2">
+                  <label className="flex items-center gap-2.5 cursor-pointer bg-slate-900/60 p-3.5 rounded-xl border border-slate-800 hover:bg-slate-900 transition">
+                    <input type="checkbox" checked={formData.deductSourcingCostFromCourier || false}
+                      onChange={(e) => setFormData({ ...formData, deductSourcingCostFromCourier: e.target.checked })}
+                      className="w-4 h-4 rounded border-slate-700 bg-slate-955 text-[#d4af37] focus:ring-0 cursor-pointer accent-[#d4af37]" />
+                    <span className="text-[11px] font-bold text-slate-300">
+                      {isAr ? 'خصم تكاليف شراء المنتجات من حساب مندوب التجميع حالاً' : 'Deduct Original Products Cost from Courier Account'}
+                    </span>
+                  </label>
+                </div>
+              </div>
 
-                {/* Audit Summary & Payment box */}
-                <div className="p-5 bg-slate-955 rounded-2xl border border-slate-800 shadow-xl space-y-4 text-xs mt-2 relative overflow-hidden group">
+              {/* ── Two-Column: Financial Breakdown (left) vs Payment (right) ── */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+                {/* ═══ LEFT: Full Financial Breakdown ═══ */}
+                <div className="p-5 bg-slate-955 rounded-2xl border border-slate-800 shadow-xl space-y-2.5 text-xs">
                   <div className="flex items-center gap-2 pb-3 border-b border-slate-800/80">
                     <Calculator className="w-4 h-4 text-[#d4af37]" />
                     <span className="text-[11px] text-slate-300 font-extrabold uppercase tracking-widest">
-                      {isAr ? 'خلاصة الحساب المالي' : 'Financial Audit Summary'}
+                      {isAr ? 'الكشف المالي التفصيلي' : 'Financial Breakdown'}
                     </span>
                   </div>
 
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center text-slate-400">
-                      <span className="font-medium">{isAr ? 'قيمة المنتجات الأصلية:' : 'Original Subtotal:'}</span>
-                      <span className="font-mono text-white block">{calcs.productsSum.toLocaleString()} {orderCurrency}</span>
+                  {/* Products */}
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500 font-bold">{isAr ? '🛍 قيمة المنتجات:' : '🛍 Products Value:'}</span>
+                    <span className="font-mono text-white font-bold">{(calcs.productsSum || 0).toLocaleString()} {orderCurrency}</span>
+                  </div>
+
+                  {/* Shipping cost — only if shippings exist AND cost > 0 */}
+                  {shippings && shippings.length > 0 && shippings.reduce((s: number, sh: any) => s + (parseFloat(sh.shippingCost) || 0), 0) > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-500 font-bold">{isAr ? '🚚 تكاليف الشحن:' : '🚚 Shipping Cost:'}</span>
+                      <span className="font-mono text-blue-300 font-bold">
+                        {shippings.reduce((s: number, sh: any) => s + (parseFloat(sh.shippingCost) || 0), 0).toLocaleString()} {orderCurrency}
+                      </span>
                     </div>
-                    <div className="flex justify-between items-center pt-3 border-t border-slate-800">
-                      <span className="font-black text-slate-400 text-xs">{isAr ? 'اجمالي التكاليف:' : 'Net Cost:'}</span>
-                      <span className="font-black font-mono text-slate-400 text-base bg-slate-950/30 px-3 py-1 rounded-xl border border-slate-900/40">
+                  )}
+
+                  {/* Packaging fee — carrier packaging (packagingFeeEnabled) */}
+                  {packagingFeeEnabled && packagingFeeRate > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-500 font-bold">{isAr ? '📦 رسوم تغليف شركة الشحن:' : '📦 Carrier Packaging Fee:'}</span>
+                      <span className="font-mono text-purple-300 font-bold">{packagingFeeRate.toLocaleString()} {orderCurrency}</span>
+                    </div>
+                  )}
+
+                  {/* Packaging fee — general local wrapping (formData.packagingFee) */}
+                  {(formData.packagingFee || 0) > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-500 font-bold">{isAr ? '📦 رسوم تغليف وشحن محلي:' : '📦 KSA Wrapping & Local Freight:'}</span>
+                      <span className="font-mono text-purple-200 font-bold">{(formData.packagingFee || 0).toLocaleString()} {orderCurrency}</span>
+                    </div>
+                  )}
+
+                  {/* Bank commission */}
+                  {bankCommissionEnabled && bankCommissionRate > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-500 font-bold">{isAr ? '🏦 عمولة البنك:' : '🏦 Bank Commission:'}</span>
+                      <span className="font-mono text-orange-300 font-bold">
+                        {bankCommissionType === 'percentage'
+                          ? `${bankCommissionRate}% ≈ ${Math.ceil((calcs.productsSum || 0) * bankCommissionRate / 100).toLocaleString()} ${orderCurrency}`
+                          : `${bankCommissionRate.toLocaleString()} ${orderCurrency}`
+                        }
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Coupon discount */}
+                  {couponEnabled && couponRate > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-500 font-bold">{isAr ? '🎟 خصم الكوبون:' : '🎟 Coupon Discount:'}</span>
+                      <span className="font-mono text-emerald-300 font-bold">-{couponRate.toLocaleString()} {orderCurrency}</span>
+                    </div>
+                  )}
+
+                  {/* Other fees (previously "Company Margin") */}
+                  {(calcs?.profitCompanySAR || 0) > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-500 font-bold">{isAr ? '📌 رسوم أخرى:' : '📌 Other Fees:'}</span>
+                      <span className="font-mono text-cyan-300 font-bold">{Math.ceil(calcs.profitCompanySAR || 0).toLocaleString()} {orderCurrency}</span>
+                    </div>
+                  )}
+
+                  {/* Courier commission — rate + value */}
+                  {(() => {
+                    const courier = couriers.find(c => c.id === formData.shippingCourierId);
+                    const commRate = courier?.commissionRate || 0;
+                    const commValue = commRate > 0 ? Math.ceil(calcs.profitSaudiSAR) : 0;
+                    return commRate > 0 ? (
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-500 font-bold">{isAr ? '👤 عمولة مندوب الشحن:' : '👤 Shipping Agent Commission:'}</span>
+                        <span className="font-mono text-yellow-300 font-bold">
+                          {commRate}% ≈ {commValue.toLocaleString()} {orderCurrency}
+                        </span>
+                      </div>
+                    ) : null;
+                  })()}
+
+                  {/* Delivery fee */}
+                  {(formData.deliveryCourierFee || 0) > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-500 font-bold">{isAr ? '🛵 أجرة توصيل المندوب:' : '🛵 Delivery Agent Fee:'}</span>
+                      <span className="font-mono text-amber-200 font-bold">{(formData.deliveryCourierFee || 0).toLocaleString()} YER</span>
+                    </div>
+                  )}
+
+                  {/* Divider — Net total in order currency */}
+                  <div className="border-t border-slate-700 pt-2.5 mt-1 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="font-black text-slate-300 text-xs">{isAr ? '📊 الإجمالي بعملة الطلب:' : '📊 Total in Order Currency:'}</span>
+                      <span className="font-black font-mono text-slate-200 text-sm bg-slate-800/80 px-3 py-1 rounded-xl border border-slate-700">
                         {Math.ceil(calcs.totalOrderSAR).toLocaleString()} {orderCurrency}
                       </span>
                     </div>
-                    <div className="flex justify-between items-center pt-3 border-t border-slate-600">
-                      <span className="font-black text-emerald-400 text-xs">{isAr ? `المطلوب من العميل بعملة الدفع:` : `Total Cost in ${formData.currency}:`}</span>
-                      <span className="font-black font-mono text-emerald-400 text-base bg-emerald-950/30 px-2 py-1 rounded-xl border border-emerald-900/40">
-                        {Math.ceil(calcs.totalOrderYER).toLocaleString()} {formData.currency}
-                      </span>
-                    </div>
 
-                  </div>
-
-                  {/* Payment controls */}
-                  <div className="pt-3 border-t-2 border-slate-800 space-y-4">
-                    <div className="flex flex-col space-y-2">
-                      <label className="text-[10px] text-slate-400 font-bold flex justify-between items-center">
-                        <span className="text-[#d4af37]">{isAr ? 'الدفعة المقدمة / كاش (' + formData.currency + ')' : 'Cash/Advance Payment (' + formData.currency + ')'}</span>
-                        <div className="flex gap-1.5 text-[9px]">
-                          <button type="button" onClick={() => setFormData({ ...formData, amountPaid: 0 })} className="px-2.5 py-0.5 rounded border border-slate-700 bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer">0</button>
-                          <button type="button" onClick={() => setFormData({ ...formData, amountPaid: Math.ceil(calcs.totalOrderYER) })} className="px-2.5 py-0.5 rounded border border-emerald-800/40 bg-emerald-900/40 text-emerald-400 hover:bg-emerald-900/60 transition cursor-pointer">{isAr ? 'سداد الكل' : 'Pay All'}</button>
-                        </div>
-                      </label>
-                      <input
-                        type="number"
-                        value={formData.amountPaid || ''}
-                        onChange={(e) => setFormData({ ...formData, amountPaid: parseFloat(e.target.value) || 0 })}
-                        className="w-full bg-slate-955 border border-slate-700 focus:border-emerald-500/50 text-emerald-400 font-black rounded-xl py-3 px-4 outline-none font-mono text-sm"
-                        placeholder={"0.00 " + formData.currency}
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="bg-slate-900 border border-slate-800 p-2.5 rounded-xl">
-                        <span className="text-[9px] font-black uppercase text-[#d4af37] block mb-1">{isAr ? 'عملة الدفع من العميل' : 'Payment Currency'}</span>
-                        <select
-                          value={formData.currency}
-                          onChange={(e) => {
-                            const newCurrency = e.target.value;
-                            const rateOrder = getCurrencyRate(orderCurrency);
-                            const ratePayment = getCurrencyRate(newCurrency);
-                            const rateFromTable = rateOrder / ratePayment;
-                            setFormData({
-                              ...formData,
-                              currency: newCurrency,
-                              exchangeRate: rateFromTable,
-                            });
-                          }}
-                          className="w-full bg-slate-955 text-white font-bold text-xs p-2 rounded-lg border border-slate-800 outline-none cursor-pointer"
-                        >
-                          {activeCurrencies.map((c) => (
-                            <option className="bg-slate-900 text-white" key={c.code} value={c.code}>
-                              {isAr ? (c.main_nameAR || c.sup_nameAR || c.code) : (c.main_nameEn || c.sup_nameEn || c.code)} ({c.code})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="bg-slate-900 border border-slate-600 p-2.5 rounded-xl">
-                        <span className="text-[9px] font-black uppercase text-slate-400 block mb-1">
-                          {isAr ? `سعر صرف (${orderCurrency} / ${formData.currency})` : `Exchange Rate (${orderCurrency} / ${formData.currency})`}
+                    {/* Total in payment currency — with word form */}
+                    <div className="bg-emerald-950/30 border border-emerald-800/40 rounded-xl px-4 py-3">
+                      <div className="flex justify-between items-center">
+                        <span className="font-black text-emerald-300 text-xs">{isAr ? `💰 الإجمالي بعملة الدفع (${formData.currency}):` : `💰 Total in ${formData.currency}:`}</span>
+                        <span className="font-black font-mono text-emerald-300 text-base">
+                          {Math.ceil(calcs.totalOrderYER).toLocaleString()} {formData.currency}
                         </span>
-                        <input
-                          type="number"
-                          step="any"
-                          value={
-                            //formData.exchangeRate ??
-                            (getCurrencyRate(orderCurrency) / getCurrencyRate(formData.currency || 'YER'))
-                          }
-                          onChange={(e) => {
-                            const val = parseFloat(e.target.value) || 1;
-                            setFormData({
-                              ...formData,
-                              exchangeRate: val,
-                            });
-                          }}
-                          disabled={!canEditOrderDefaultsCreation}
-                          className="w-full bg-slate-955 border border-slate-800 text-white font-mono font-bold text-xs p-2 rounded-lg text-center outline-none disabled:opacity-50"
-                        />
                       </div>
-                    </div>
-
-                    <div className="flex justify-between items-center p-3 bg-rose-500/5 rounded-xl border border-rose-500/10">
-                      <span className="font-extrabold text-[#d4af37] text-[11px]">{isAr ? 'المديونية المتبقية للدفع:' : 'Outstanding Debt:'}</span>
-                      <span className="font-mono text-sm font-black text-rose-400">{Math.ceil(calcs.remainingYER).toLocaleString()} {formData.currency}</span>
+                      {calcs.totalOrderYER > 0 && (
+                        <p className="text-[10px] text-emerald-400/80 font-bold mt-1.5 italic">
+                          {amountInWords(calcs.totalOrderYER, formData.currency, isAr ? 'ar' : 'en')}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
+
+                {/* ═══ RIGHT: Payment Section ═══ */}
+                <div className="p-5 bg-slate-955 rounded-2xl border border-[#d4af37]/20 shadow-xl space-y-4 text-xs">
+                  <div className="flex items-center gap-2 pb-3 border-b border-slate-800/80">
+                    <CreditCard className="w-4 h-4 text-[#d4af37]" />
+                    <span className="text-[11px] text-slate-300 font-extrabold uppercase tracking-widest">
+                      {isAr ? 'تفاصيل الدفع' : 'Payment Details'}
+                    </span>
+                  </div>
+
+                  {/* Currency & Exchange Rate */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-slate-900 border border-slate-800 p-2.5 rounded-xl">
+                      <span className="text-[9px] font-black uppercase text-[#d4af37] block mb-1">{isAr ? 'عملة الدفع' : 'Payment Currency'}</span>
+                      <select
+                        value={formData.currency}
+                        onChange={(e) => {
+                          const newCurrency = e.target.value;
+                          const rateOrder = getCurrencyRate(orderCurrency);
+                          const ratePayment = getCurrencyRate(newCurrency);
+                          setFormData({ ...formData, currency: newCurrency, exchangeRate: rateOrder / ratePayment });
+                        }}
+                        className="w-full bg-slate-955 text-white font-bold text-xs p-2 rounded-lg border border-slate-800 outline-none cursor-pointer"
+                      >
+                        {activeCurrencies.map((c) => (
+                          <option className="bg-slate-900 text-white" key={c.code} value={c.code}>
+                            {isAr ? (c.main_nameAR || c.sup_nameAR || c.code) : (c.main_nameEn || c.sup_nameEn || c.code)} ({c.code})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="bg-slate-900 border border-slate-600 p-2.5 rounded-xl">
+                      <span className="text-[9px] font-black uppercase text-slate-400 block mb-1">
+                        {isAr ? `سعر الصرف (${orderCurrency}/${formData.currency})` : `Rate (${orderCurrency}/${formData.currency})`}
+                      </span>
+                      <input type="number" step="any"
+                        value={getCurrencyRate(orderCurrency) / getCurrencyRate(formData.currency || 'YER')}
+                        onChange={(e) => setFormData({ ...formData, exchangeRate: parseFloat(e.target.value) || 1 })}
+                        disabled={!canEditOrderDefaultsCreation}
+                        className="w-full bg-slate-955 border border-slate-800 text-white font-mono font-bold text-xs p-2 rounded-lg text-center outline-none disabled:opacity-50" />
+                    </div>
+                  </div>
+
+                  {/* Total in order currency — info only */}
+                  <div className="flex justify-between items-center bg-slate-900/60 px-3 py-2.5 rounded-xl border border-slate-800">
+                    <span className="text-slate-400 font-black text-[11px]">{isAr ? `المبلغ المطلوب بعملة الطلب (${orderCurrency}):` : `Amount Due in ${orderCurrency}:`}</span>
+                    <span className="font-mono font-black text-amber-400 text-sm">{Math.ceil(calcs.totalOrderSAR).toLocaleString()} {orderCurrency}</span>
+                  </div>
+
+                  {/* Cash / Advance Payment */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] text-slate-400 font-bold flex justify-between items-center">
+                      <span className="text-[#d4af37]">{isAr ? 'الدفعة المقدمة / كاش (' + formData.currency + ')' : 'Cash / Advance Payment (' + formData.currency + ')'}</span>
+                      <div className="flex gap-1.5 text-[9px]">
+                        <button type="button" onClick={() => setFormData({ ...formData, amountPaid: 0 })}
+                          className="px-2.5 py-0.5 rounded border border-slate-700 bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer">0</button>
+                        <button type="button" onClick={() => setFormData({ ...formData, amountPaid: Math.ceil(calcs.totalOrderYER) })}
+                          className="px-2.5 py-0.5 rounded border border-emerald-800/40 bg-emerald-900/40 text-emerald-400 hover:bg-emerald-900/60 transition cursor-pointer">
+                          {isAr ? 'سداد الكل' : 'Pay All'}
+                        </button>
+                      </div>
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.amountPaid || ''}
+                      onChange={(e) => setFormData({ ...formData, amountPaid: parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-slate-955 border border-slate-700 focus:border-emerald-500/50 text-emerald-400 font-black rounded-xl py-3 px-4 outline-none font-mono text-sm"
+                      placeholder={'0.00 ' + formData.currency}
+                    />
+                    {/* Written word-form for paid amount */}
+                    {(formData.amountPaid || 0) > 0 && (
+                      <p className="text-[10px] text-blue-400/80 font-bold bg-blue-950/20 border border-blue-900/30 rounded-lg px-3 py-1.5 italic">
+                        {isAr
+                          ? `✍️ المبلغ المدفوع: ${numberToWordsAr(Math.ceil(formData.amountPaid))} ${currencyNameAr(formData.currency)} نقداً`
+                          : `✍️ Paid: ${numberToWordsEn(Math.ceil(formData.amountPaid))} ${currencyNameEn(formData.currency)} cash`
+                        }
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Outstanding Debt */}
+                  <div className="flex justify-between items-center p-3 bg-rose-500/5 rounded-xl border border-rose-500/10">
+                    <span className="font-extrabold text-[#d4af37] text-[11px]">{isAr ? 'المديونية المتبقية للدفع:' : 'Outstanding Debt:'}</span>
+                    <span className="font-mono text-sm font-black text-rose-400">{Math.ceil(calcs.remainingYER).toLocaleString()} {formData.currency}</span>
+                  </div>
+                </div>
+
               </div>
             </div>
           )}
 
+
           {/* ---------------------------------------------------- */}
           {/* STEP 5: Summary & Final Submission (الخلاصة والحفظ)    */}
           {/* ---------------------------------------------------- */}
+
           {currentStep === 5 && (
-            <div className="space-y-6 animate-fade-in text-start">
+            <div className="space-y-5 animate-fade-in text-start">
               <div className="p-4 bg-emerald-950/20 border border-emerald-900/30 rounded-2xl flex items-center gap-3">
                 <ShieldCheck className="w-6 h-6 text-emerald-400 shrink-0" />
                 <div>
@@ -1418,9 +1515,10 @@ export default function CreateOrderModal(
                 </div>
               </div>
 
-              {/* 4 Cards Summary Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {/* 1. Customer & Order Source Summary */}
+              {/* Summary Cards Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                {/* 1. Customer & Order Source */}
                 <div className="bg-slate-950/40 border border-slate-800 p-5 rounded-3xl space-y-3">
                   <div className="flex items-center gap-2 border-b border-slate-800 pb-2.5">
                     <User className="w-4 h-4 text-[#d4af37]" />
@@ -1432,8 +1530,12 @@ export default function CreateOrderModal(
                       <span className="text-white">{formData.customerName || '—'}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-500">{isAr ? 'رقم الهاتف:' : 'Phone:'} </span>
+                      <span className="text-slate-500">{isAr ? 'رقم الهاتف:' : 'Phone:'}</span>
                       <span className="text-slate-300 font-mono">{formData.customerPhone || '—'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">{isAr ? 'العنوان:' : 'Address:'}</span>
+                      <span className="text-slate-300 text-end max-w-[200px]">{formData.customerAddress || '—'}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-500">{isAr ? 'مصدر الطلب:' : 'Order Source:'}</span>
@@ -1458,17 +1560,34 @@ export default function CreateOrderModal(
                     <ShoppingCart className="w-4 h-4 text-[#d4af37]" />
                     <h4 className="text-xs font-black text-white">{isAr ? 'ملخص أصناف المنتجات' : 'Products & Items Summary'}</h4>
                   </div>
-                  <div className="space-y-2 text-xs font-bold max-h-36 overflow-y-auto custom-scrollbar">
+                  <div className="space-y-2 text-xs font-bold max-h-40 overflow-y-auto custom-scrollbar">
                     {items.map((item, idx) => (
-                      <div key={idx} className="flex justify-between items-center p-2 bg-slate-900/60 rounded-xl border border-slate-850 text-[11px]">
-                        <span className="text-white truncate max-w-[180px]">{idx + 1}. {item.productName || '—'}</span>
-                        <span className="font-mono text-emerald-400">{item.quantity} × {item.productPrice} {formData.orderCurrency}</span>
+                      <div key={idx} className="p-2.5 bg-slate-900/60 rounded-xl border border-slate-850 text-[11px] space-y-1">
+                        <div className="flex justify-between items-center">
+                          <span className="text-white truncate max-w-[160px] font-black">{idx + 1}. {item.productName || '—'}</span>
+                          <span className="font-mono text-emerald-400">{item.quantity} × {(item.productPrice || 0).toLocaleString()} {orderCurrency}</span>
+                        </div>
+                        {(item.weight || item.cbm) && (
+                          <div className="flex gap-3 text-[10px] text-slate-500">
+                            {item.weight && <span>⚖️ {item.weight} kg</span>}
+                            {item.cbm && <span>📐 {item.cbm} m³</span>}
+                          </div>
+                        )}
+                        {item.trackingNumber && (
+                          <div className="text-[10px] text-slate-500 font-mono">🔍 {item.trackingNumber}</div>
+                        )}
                       </div>
                     ))}
                   </div>
-                  <div className="pt-2 border-t border-slate-800/80 flex justify-between text-xs font-black">
-                    <span className="text-slate-400">{isAr ? 'إجمالي المنتجات:' : 'Products Subtotal:'}</span>
-                    <span className="font-mono text-amber-400">{calcs.productsSum.toLocaleString()} {formData.orderCurrency}</span>
+                  <div className="pt-2 border-t border-slate-800/80 space-y-1">
+                    <div className="flex justify-between text-xs font-black">
+                      <span className="text-slate-400">{isAr ? 'إجمالي المنتجات:' : 'Products Subtotal:'}</span>
+                      <span className="font-mono text-amber-400">{(calcs.productsSum || 0).toLocaleString()} {orderCurrency}</span>
+                    </div>
+                    <div className="flex justify-between text-[11px] font-bold">
+                      <span className="text-slate-500">{isAr ? 'إجمالي الوحدات:' : 'Total Units:'}</span>
+                      <span className="font-mono text-slate-300">{items.reduce((s: number, i: any) => s + (parseInt(i.quantity) || 0), 0)} {isAr ? 'قطعة' : 'pcs'}</span>
+                    </div>
                   </div>
                 </div>
 
@@ -1478,71 +1597,227 @@ export default function CreateOrderModal(
                     <Truck className="w-4 h-4 text-[#d4af37]" />
                     <h4 className="text-xs font-black text-white">{isAr ? 'ملخص الشحن والمناديب' : 'Logistics & Couriers Summary'}</h4>
                   </div>
-                  <div className="space-y-2 text-xs font-bold">
+                  <div className="space-y-2.5 text-xs font-bold">
                     <div className="flex justify-between">
                       <span className="text-slate-500">{isAr ? 'عدد مسارات الشحن:' : 'Shipping Tracks:'}</span>
                       <span className="text-slate-200">{shippings?.length || 0} {isAr ? 'مسارات' : 'tracks'}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span>
-                        <span className="text-slate-500">{isAr ? 'مندوب التجميع (سعودي):' : 'Saudi Aggregator:'}</span>
-                        <span className="text-slate-200">
-                          {couriers.find(c => c.id === formData.shippingCourierId)?.fullName || 'غير محدد'}
-                        </span>
-                      </span>
-                      <span>
-                        <span className="text-slate-500">{isAr ? 'العمولة":' : 'Saudi Shipping Profit:'}</span>
-                        <span className="text-slate-200">
-                          {formData.profitSaudiSAR || 0}
-                        </span>
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>
+                    {shippings && shippings.length > 0 && shippings.map((sh: any, idx: number) => (
+                      <div key={idx} className="bg-slate-900/50 rounded-xl p-2.5 border border-slate-850 space-y-1 text-[11px]">
+                        <div className="flex justify-between">
+                          <span className="text-[#d4af37] font-black">{isAr ? `مسار #${idx + 1}:` : `Track #${idx + 1}:`} {sh.shippingCompany || '—'}</span>
+                          <span className="text-blue-300 font-mono">{(parseFloat(sh.shippingCost) || 0).toLocaleString()} {orderCurrency}</span>
+                        </div>
+                        {sh.shippingType && <div className="text-slate-500">{isAr ? 'النوع:' : 'Mode:'} {sh.shippingType}</div>}
+                        {sh.shippingSource && sh.shippingDestination && (
+                          <div className="text-slate-500">{sh.shippingSource} → {sh.shippingDestination}</div>
+                        )}
+                        {sh.trackingNumber && <div className="font-mono text-slate-400">🔍 {sh.trackingNumber}</div>}
+                        {/* Shipping packaging fee per route */}
+                        {(parseFloat(sh.packagingFee) || 0) > 0 && (
+                          <div className="flex justify-between text-[10px]">
+                            <span className="text-slate-500">{isAr ? '📦 رسوم تغليف المسار:' : '📦 Track Packaging:'}</span>
+                            <span className="text-purple-300 font-mono">{(parseFloat(sh.packagingFee) || 0).toLocaleString()} {orderCurrency}</span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+
+                    {/* General company packaging fee */}
+                    {packagingFeeEnabled && packagingFeeRate > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">{isAr ? '📦 رسوم تغليف شركة الشحن:' : '📦 Carrier Packaging Fee:'}</span>
+                        <span className="text-purple-300 font-mono">{packagingFeeRate.toLocaleString()} {orderCurrency}</span>
+                      </div>
+                    )}
+                    {/* Local wrapping fee */}
+                    {(formData.packagingFee || 0) > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">{isAr ? '📦 رسوم تغليف وشحن محلي:' : '📦 KSA Wrapping & Local Freight:'}</span>
+                        <span className="text-purple-200 font-mono">{(formData.packagingFee || 0).toLocaleString()} {orderCurrency}</span>
+                      </div>
+                    )}
+
+                    <div className="border-t border-slate-800/60 pt-2 space-y-1.5">
+                      {/* Aggregator + commission */}
+                      {(() => {
+                        const aggCourier = couriers.find(c => c.id === formData.shippingCourierId);
+                        const aggRate = aggCourier?.commissionRate || 0;
+                        const aggValue = aggRate > 0 ? Math.ceil((calcs.productsSum || 0) * aggRate / 100) : 0;
+                        return (
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">{isAr ? 'مندوب التجميع (سعودي):' : 'Saudi Aggregator:'}</span>
+                            <span className="text-slate-200 text-end">
+                              {aggCourier?.fullName || (isAr ? 'غير محدد' : 'N/A')}
+                              {aggRate > 0 && <span className="text-yellow-300 font-mono ml-2">{aggRate}% ≈ {aggValue.toLocaleString()} {orderCurrency}</span>}
+                            </span>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Courier commission */}
+                      {(() => {
+                        const shipCourier = couriers.find(c => c.id === formData.shippingCourierId);
+                        const commRate = shipCourier?.commissionRate || 0;
+                        const commValue = commRate > 0 ? Math.ceil((calcs.productsSum || 0) * commRate / 100) : 0;
+                        return commRate > 0 ? (
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">{isAr ? '👤 عمولة مندوب الشحن:' : '👤 Shipping Agent Comm.:'}</span>
+                            <span className="text-yellow-300 font-mono">{commRate}% ≈ {commValue.toLocaleString()} {orderCurrency}</span>
+                          </div>
+                        ) : null;
+                      })()}
+
+                      <div className="flex justify-between">
                         <span className="text-slate-500">{isAr ? 'مندوب التوصيل (اليمن):' : 'Yemen Courier:'}</span>
                         <span className="text-slate-200">
-                          {couriers.find(c => c.id === formData.deliveryCourierId)?.fullName || 'غير محدد'}
+                          {couriers.find(c => c.id === formData.deliveryCourierId)?.fullName || (isAr ? 'غير محدد' : 'N/A')}
                         </span>
-                      </span>
-                      <span>
+                      </div>
+                      <div className="flex justify-between">
                         <span className="text-slate-500">{isAr ? 'أجرة التوصيل:' : 'Delivery Fee:'}</span>
-                        <span className="text-slate-200">
-                          {formData.deliveryCourierFee || 0} {'YER'}
-                        </span>
-                      </span>
+                        <span className="text-amber-200 font-mono">{(formData.deliveryCourierFee || 0).toLocaleString()} YER</span>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                {/* 4. Financial Audit Summary */}
+                {/* 4. Full Financial Audit Summary */}
                 <div className="bg-slate-950/40 border border-slate-800 p-5 rounded-3xl space-y-3">
                   <div className="flex items-center gap-2 border-b border-slate-800 pb-2.5">
                     <FileText className="w-4 h-4 text-[#d4af37]" />
-                    <h4 className="text-xs font-black text-white">{isAr ? 'ملخص الكشف المالي' : 'Financial Final Summary'}</h4>
+                    <h4 className="text-xs font-black text-white">{isAr ? 'الكشف المالي التفصيلي' : 'Full Financial Breakdown'}</h4>
                   </div>
                   <div className="space-y-2 text-xs font-bold">
                     <div className="flex justify-between">
-                      <span className="text-slate-500">{isAr ? 'المبلغ النهائي المستحق:' : 'Total Order Due:'}</span>
-                      <span className="font-mono text-emerald-400 font-black text-sm">{formData.orderCurrency} {Math.ceil(calcs.totalOrderSAR).toLocaleString()} {formData.orderCurrency}</span>
+                      <span className="text-slate-500">{isAr ? '🛍 قيمة المنتجات:' : '🛍 Products Value:'}</span>
+                      <span className="font-mono text-white">{(calcs.productsSum || 0).toLocaleString()} {orderCurrency}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">{isAr ? 'المبلغ النهائي المستحق بعملة الدفع:' : 'Total Order Due:'}</span>
-                      <span className="font-mono text-emerald-400 font-black text-sm">{Math.ceil(calcs.totalOrderYER).toLocaleString()} {formData.currency}</span>
+                    {shippings && shippings.length > 0 && shippings.reduce((s: number, sh: any) => s + (parseFloat(sh.shippingCost) || 0), 0) > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">{isAr ? '🚚 تكاليف الشحن:' : '🚚 Shipping Cost:'}</span>
+                        <span className="font-mono text-blue-300">
+                          {shippings.reduce((sum: number, sh: any) => sum + (parseFloat(sh.shippingCost) || 0), 0).toLocaleString()} {orderCurrency}
+                        </span>
+                      </div>
+                    )}
+                    {/* Carrier packaging */}
+                    {packagingFeeEnabled && packagingFeeRate > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">{isAr ? '📦 رسوم تغليف شركة الشحن:' : '📦 Carrier Packaging Fee:'}</span>
+                        <span className="font-mono text-purple-300">{packagingFeeRate.toLocaleString()} {orderCurrency}</span>
+                      </div>
+                    )}
+                    {/* Local wrapping */}
+                    {(formData.packagingFee || 0) > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">{isAr ? '📦 رسوم تغليف وشحن محلي:' : '📦 KSA Wrapping & Local Freight:'}</span>
+                        <span className="font-mono text-purple-200">{(formData.packagingFee || 0).toLocaleString()} {orderCurrency}</span>
+                      </div>
+                    )}
+                    {bankCommissionEnabled && bankCommissionRate > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">{isAr ? '🏦 عمولة البنك:' : '🏦 Bank Commission:'}</span>
+                        <span className="font-mono text-orange-300">
+                          {bankCommissionType === 'percentage'
+                            ? `${bankCommissionRate}% ≈ ${Math.ceil((calcs.productsSum || 0) * bankCommissionRate / 100).toLocaleString()} ${orderCurrency}`
+                            : `${bankCommissionRate.toLocaleString()} ${orderCurrency}`}
+                        </span>
+                      </div>
+                    )}
+                    {couponEnabled && couponRate > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">{isAr ? '🎟 خصم الكوبون:' : '🎟 Coupon Discount:'}</span>
+                        <span className="font-mono text-emerald-300">-{couponRate.toLocaleString()} {orderCurrency}</span>
+                      </div>
+                    )}
+                    {(calcs?.profitCompanySAR || 0) > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">{isAr ? '📌 رسوم أخرى:' : '📌 Other Fees:'}</span>
+                        <span className="font-mono text-cyan-300">{Math.ceil(calcs.profitCompanySAR || 0).toLocaleString()} {orderCurrency}</span>
+                      </div>
+                    )}
+                    {/* Courier commission in summary */}
+                    {(() => {
+                      const sc = couriers.find(c => c.id === formData.shippingCourierId);
+                      const cr = sc?.commissionRate || 0;
+                      const cv = cr > 0 ? Math.ceil((calcs.productsSum || 0) * cr / 100) : 0;
+                      return cr > 0 ? (
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">{isAr ? '👤 عمولة مندوب الشحن:' : '👤 Shipping Agent Comm.:'}</span>
+                          <span className="font-mono text-yellow-300">{cr}% ≈ {cv.toLocaleString()} {orderCurrency}</span>
+                        </div>
+                      ) : null;
+                    })()}
+                    {(formData.deliveryCourierFee || 0) > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">{isAr ? '🛵 أجرة توصيل المندوب:' : '🛵 Delivery Agent Fee:'}</span>
+                        <span className="font-mono text-amber-200">{(formData.deliveryCourierFee || 0).toLocaleString()} YER</span>
+                      </div>
+                    )}
+
+                    {/* Currency info */}
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-slate-500">{isAr ? `سعر الصرف (${orderCurrency}/${formData.currency}):` : `Rate (${orderCurrency}/${formData.currency}):`}</span>
+                      <span className="font-mono text-slate-300">{(getCurrencyRate(orderCurrency) / getCurrencyRate(formData.currency || 'YER')).toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">{isAr ? 'المبلغ المدفوع (كاش):' : 'Amount Paid:'}</span>
-                      <span className="font-mono text-blue-400 font-black">{Math.ceil(formData.amountPaid || 0).toLocaleString()} {formData.currency}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">{isAr ? 'عملة السداد:' : 'Payment Currency:'}</span>
-                      <span className="font-mono text-amber-400">{formData.currency}</span>
-                    </div>
-                    <div className="flex justify-between pt-1 border-t border-slate-800">
-                      <span className="text-slate-400 font-black">{isAr ? 'المديونية المتبقية:' : 'Remaining Debt:'}</span>
-                      <span className="font-mono text-rose-400 font-black">{Math.ceil(calcs.remainingYER).toLocaleString()} YER</span>
+
+                    <div className="border-t border-slate-700 pt-2 space-y-1.5">
+                      <div className="flex justify-between">
+                        <span className="text-slate-400 font-black">{isAr ? '📊 الإجمالي بعملة الطلب:' : '📊 Total in Order Currency:'}</span>
+                        <span className="font-mono text-slate-200 font-black">{Math.ceil(calcs.totalOrderSAR).toLocaleString()} {orderCurrency}</span>
+                      </div>
+
+                      {/* Total in payment currency — word form */}
+                      <div className="bg-emerald-950/30 border border-emerald-800/40 rounded-xl px-3 py-2.5">
+                        <div className="flex justify-between items-center">
+                          <span className="font-black text-emerald-300">{isAr ? `💰 الإجمالي بعملة الدفع (${formData.currency}):` : `💰 Total in ${formData.currency}:`}</span>
+                          <span className="font-mono text-emerald-300 font-black text-sm">{Math.ceil(calcs.totalOrderYER).toLocaleString()} {formData.currency}</span>
+                        </div>
+                        <p className="text-[10px] text-emerald-400/80 font-bold mt-1 italic">
+                          {amountInWords(calcs.totalOrderYER, formData.currency, isAr ? 'ar' : 'en')}
+                        </p>
+                      </div>
+
+                      {/* Paid — word form */}
+                      <div className="bg-blue-950/20 border border-blue-900/30 rounded-xl px-3 py-2.5">
+                        <div className="flex justify-between items-center">
+                          <span className="font-black text-blue-300">{isAr ? '✅ المبلغ المدفوع (كاش):' : '✅ Amount Paid (Cash):'}</span>
+                          <span className="font-mono text-blue-300 font-black">{Math.ceil(formData.amountPaid || 0).toLocaleString()} {formData.currency}</span>
+                        </div>
+                        {(formData.amountPaid || 0) > 0 && (
+                          <p className="text-[10px] text-blue-400/80 font-bold mt-1 italic">
+                            {isAr
+                              ? `✍️ استلمت مبلغ: ${numberToWordsAr(Math.ceil(formData.amountPaid))} ${currencyNameAr(formData.currency)} نقداً`
+                              : `✍️ Received: ${numberToWordsEn(Math.ceil(formData.amountPaid))} ${currencyNameEn(formData.currency)} cash`
+                            }
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Remaining debt */}
+                      <div className="flex justify-between items-center p-2.5 bg-rose-500/5 rounded-xl border border-rose-500/10">
+                        <span className="text-rose-400 font-black">{isAr ? '⚠️ المديونية المتبقية:' : '⚠️ Remaining Debt:'}</span>
+                        <span className="font-mono text-rose-400 font-black">{Math.ceil(calcs.remainingYER).toLocaleString()} {formData.currency}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
+
+              </div>
+
+              {/* Notes/Remarks field */}
+              <div className="bg-slate-950/40 border border-slate-800 p-4 rounded-2xl">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">
+                  📝 {isAr ? 'ملاحظات إضافية على الطلب' : 'Additional Order Notes'}
+                </label>
+                <textarea
+                  value={formData.notes || ''}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  placeholder={isAr ? 'أضف أي ملاحظات أو تعليمات إضافية على هذا الطلب...' : 'Add any additional notes or special instructions...'}
+                  rows={3}
+                  className="w-full bg-slate-955 border border-slate-800 text-white rounded-xl p-3 outline-none font-bold text-xs resize-none focus:border-[#d4af37]/60"
+                />
               </div>
             </div>
           )}

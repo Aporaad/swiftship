@@ -2060,7 +2060,7 @@ export default function Orders() { // دالة عرض الطلبات
 
       await updateDoc(doc(db, 'orders', selectedOrder.id), {
         orderStatusId: String(newStatusItem?.id || '1'),
-        order_status_id: String(newStatusItem?.id || '1'),
+        order_status_id: newStatusItem?.id || 1,
         orderStatus: updateFormData.orderStatus,
         deliveryStatus: updateFormData.deliveryStatus,
         locationYemen: updateFormData.locationYemen,
@@ -2754,7 +2754,7 @@ export default function Orders() { // دالة عرض الطلبات
 
         await updateDoc(doc(db, 'orders', orderId), {
           orderStatusId: String(newStatusItem?.id || '2'),
-          order_status_id: String(newStatusItem?.id || '2'),
+          order_status_id: newStatusItem?.id || 2,
           orderStatus: newStatus,
           locationYemen: defaultLocation,
           firedTriggers: newFiredTriggers,
