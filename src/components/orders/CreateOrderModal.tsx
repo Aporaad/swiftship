@@ -88,6 +88,10 @@ interface CreateOrderModalProps {
   calcs: any;
   activeCurrencies: any[];
 
+  // Order Options (order_option)
+  packagingOptions?: any[];
+  shippingCategoryOptions?: any[];
+
   // Action
   handleCreateOrder: (e: React.FormEvent) => void;
 }
@@ -159,6 +163,8 @@ export default function CreateOrderModal(
     settings,
     calcs,
     activeCurrencies,
+    packagingOptions = [],
+    shippingCategoryOptions = [],
     handleCreateOrder,
   }
     : CreateOrderModalProps) {
@@ -887,6 +893,39 @@ export default function CreateOrderModal(
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
+
+                      {/* Packaging Type Selection Sub-row */}
+                      <div className="col-span-12 flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/40 text-[10px] text-start">
+                        <div className="flex items-center gap-2">
+                          <span className="font-black text-amber-400 flex items-center gap-1">
+                            <Package className="w-3.5 h-3.5" />
+                            {isAr ? 'نوع التغليف الخاص بالمنتج (order_option):' : 'Product Packaging Type:'}
+                          </span>
+                          <select
+                            value={item.packagingOptionId || ''}
+                            onChange={(e) => {
+                              const selectedId = e.target.value;
+                              const foundOpt = packagingOptions?.find((o: any) => o.id === selectedId);
+                              updateItemRow(idx, 'packagingOptionId', selectedId);
+                              updateItemRow(idx, 'packagingOptionName', foundOpt ? (isAr ? foundOpt.nameAr : foundOpt.nameEn) : '');
+                              updateItemRow(idx, 'packagingOptionPrice', foundOpt ? (parseFloat(foundOpt.price) || 0) : 0);
+                            }}
+                            className="bg-slate-950 border border-slate-800 text-white font-bold rounded-xl px-3 py-1.5 text-[11px] outline-none cursor-pointer focus:border-[#d4af37]"
+                          >
+                            <option value="">{isAr ? '-- بدون تغليف خاص (0) --' : '-- Standard (0) --'}</option>
+                            {(packagingOptions || []).map((pkg: any) => (
+                              <option key={pkg.id} value={pkg.id}>
+                                {isAr ? pkg.nameAr : pkg.nameEn} {pkg.price > 0 ? `(+${pkg.price} ${orderCurrency})` : '(مجاني)'}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        {item.packagingOptionPrice > 0 && (
+                          <span className="text-emerald-400 font-mono font-bold bg-emerald-950/20 border border-emerald-900/40 px-2 py-0.5 rounded-lg">
+                            +{((parseFloat(item.packagingOptionPrice) || 0) * (parseFloat(item.quantity) || 1)).toLocaleString()} {orderCurrency}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1050,6 +1089,31 @@ export default function CreateOrderModal(
                               <option className="bg-slate-900 text-white" value="">{isAr ? '-- اختر شركة شحن --' : '-- Choose carrier --'}</option>
                               {shippingCompanies.map((c) => (
                                 <option className="bg-slate-900 text-white" key={c.id} value={c.name}>{c.name}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-slate-500 mb-1">{isAr ? 'فئة سرعة الشحن (order_option)' : 'Shipping Category'}</label>
+                            <select
+                              value={sh.shippingCategoryId || ''}
+                              onChange={(e) => {
+                                const selectedId = e.target.value;
+                                const foundOpt = shippingCategoryOptions?.find((o: any) => o.id === selectedId);
+                                updateShippingRow(idx, {
+                                  shippingCategoryId: selectedId,
+                                  shippingCategoryName: foundOpt ? (isAr ? foundOpt.nameAr : foundOpt.nameEn) : '',
+                                  shippingCategoryPrice: foundOpt ? (parseFloat(foundOpt.price) || 0) : 0,
+                                  shippingDuration: foundOpt?.duration !== undefined ? String(foundOpt.duration) : sh.shippingDuration
+                                });
+                              }}
+                              className="w-full bg-slate-955 border border-slate-800 text-cyan-300 font-bold rounded-xl p-2.5 outline-none cursor-pointer focus:border-[#d4af37]"
+                            >
+                              <option className="bg-slate-900 text-white" value="">{isAr ? '-- عادي (اعتيادي) --' : '-- Standard --'}</option>
+                              {(shippingCategoryOptions || []).map((cat: any) => (
+                                <option className="bg-slate-900 text-white" key={cat.id} value={cat.id}>
+                                  {isAr ? cat.nameAr : cat.nameEn} {cat.duration ? `(${cat.duration} ${isAr ? 'أيام' : 'd'})` : ''} {cat.price > 0 ? `(+${cat.price} ${orderCurrency})` : ''}
+                                </option>
                               ))}
                             </select>
                           </div>
@@ -1317,6 +1381,26 @@ export default function CreateOrderModal(
                     <div className="flex justify-between items-center">
                       <span className="text-slate-500 font-bold">{isAr ? '📦 رسوم تغليف شركة الشحن:' : '📦 Carrier Packaging Fee:'}</span>
                       <span className="font-mono text-purple-300 font-bold">{packagingFeeRate.toLocaleString()} {orderCurrency}</span>
+                    </div>
+                  )}
+
+                  {/* Packaging options fees from order_option */}
+                  {items && items.reduce((sum: number, it: any) => sum + ((parseFloat(it.packagingOptionPrice) || 0) * (parseFloat(it.quantity) || 1)), 0) > 0 && (
+                    <div className="flex justify-between items-center text-amber-300">
+                      <span className="font-bold">{isAr ? '📦 رسوم تغليف المنتجات المخصصة:' : '📦 Products Packaging Options Fee:'}</span>
+                      <span className="font-mono font-bold">
+                        +{items.reduce((sum: number, it: any) => sum + ((parseFloat(it.packagingOptionPrice) || 0) * (parseFloat(it.quantity) || 1)), 0).toLocaleString()} {orderCurrency}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Shipping category speed fees from order_option */}
+                  {shippings && shippings.reduce((sum: number, sh: any) => sum + (parseFloat(sh.shippingCategoryPrice) || 0), 0) > 0 && (
+                    <div className="flex justify-between items-center text-cyan-300">
+                      <span className="font-bold">{isAr ? '⚡️ رسوم فئات الشحن السريع:' : '⚡️ Shipping Category Speed Fees:'}</span>
+                      <span className="font-mono font-bold">
+                        +{shippings.reduce((sum: number, sh: any) => sum + (parseFloat(sh.shippingCategoryPrice) || 0), 0).toLocaleString()} {orderCurrency}
+                      </span>
                     </div>
                   )}
 
@@ -1635,6 +1719,18 @@ export default function CreateOrderModal(
                       <div className="flex justify-between">
                         <span className="text-slate-500">{isAr ? '📦 رسوم تغليف وشحن محلي:' : '📦 KSA Wrapping & Local Freight:'}</span>
                         <span className="text-purple-200 font-mono">{(formData.packagingFee || 0).toLocaleString()} {orderCurrency}</span>
+                      </div>
+                    )}
+                    {items && items.reduce((sum: number, it: any) => sum + ((parseFloat(it.packagingOptionPrice) || 0) * (parseFloat(it.quantity) || 1)), 0) > 0 && (
+                      <div className="flex justify-between text-amber-300">
+                        <span>{isAr ? '📦 تغليف المنتجات المخصص:' : '📦 Custom Packaging Option:'}</span>
+                        <span className="font-mono">+{items.reduce((sum: number, it: any) => sum + ((parseFloat(it.packagingOptionPrice) || 0) * (parseFloat(it.quantity) || 1)), 0).toLocaleString()} {orderCurrency}</span>
+                      </div>
+                    )}
+                    {shippings && shippings.reduce((sum: number, sh: any) => sum + (parseFloat(sh.shippingCategoryPrice) || 0), 0) > 0 && (
+                      <div className="flex justify-between text-cyan-300">
+                        <span>{isAr ? '⚡️ فئات الشحن المسرّعة:' : '⚡️ Shipping Speed Categories:'}</span>
+                        <span className="font-mono">+{shippings.reduce((sum: number, sh: any) => sum + (parseFloat(sh.shippingCategoryPrice) || 0), 0).toLocaleString()} {orderCurrency}</span>
                       </div>
                     )}
 

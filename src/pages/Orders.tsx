@@ -23,6 +23,8 @@ import { useOrderStatuses } from '../hooks/useOrderStatuses'; // استيراد 
 import { autoEntryService } from '../services/autoEntryService'; // استيراد خدمات القيد التلقائي لاجل عرض القيد التلقائي 
 import OrderStatusManagementTab from '../components/OrderStatusManagementTab'; // استيراد تبويبات حالات الطلبات لاجل عرض تبويبات حالات الطلبات 
 import { useExchangeRates } from '../hooks/useExchangeRates'; // استيراد اسعار الصرف لاجل عرض اسعار الصرف 
+import { useOrderOptions } from '../hooks/useOrderOptions'; // استيراد خيارات الطلب (أنواع التغليف وفئات الشحن)
+import OrderOptionsManagementTab from '../components/orders/OrderOptionsManagementTab'; // استيراد واجهة إدارة خيارات الطلب
 
 // استيراد وحدات التقارير والنماذج المنفصلة
 import { generateOrderInvoicePDF, exportOrdersToPDF, exportOrdersToCSV } from '../reports';
@@ -116,13 +118,16 @@ export default function Orders() { // دالة عرض الطلبات
 
   const location = useLocation(); //  الموقع
 
-  // تبويبات الطلبات ويستخدم ل عرض الطلبات و الشحنات و تتبع و حالات الطلبات  والفواتير التلقائية   
-  const [ordersTab, setOrdersTab] = useState<'orders' | 'shipments' | 'tracking' | 'statuses'>(() => {
+  const { options: orderOptionsList, packagingOptions, shippingCategoryOptions } = useOrderOptions();
+
+  // تبويبات الطلبات ويستخدم ل عرض الطلبات و الشحنات و تتبع و حالات الطلبات والخيارات (أنواع التغليف وفئات الشحن)
+  const [ordersTab, setOrdersTab] = useState<'orders' | 'shipments' | 'tracking' | 'statuses' | 'options'>(() => {
     const params = new URLSearchParams(location.search);
     const tab = params.get('tab');
     if (tab === 'shipments') return 'shipments';
     if (tab === 'tracking' && (role === 'Admin' || hasPermission('track_order'))) return 'tracking';
     if ((tab === 'statuses' || tab === 'order-statuses') && (role === 'Admin' || hasPermission('view_order_statuses') || hasPermission('view_auto_entries'))) return 'statuses';
+    if (tab === 'options' || tab === 'order-options' || tab === 'order_option') return 'options';
     return 'orders';
   });
 
@@ -136,6 +141,8 @@ export default function Orders() { // دالة عرض الطلبات
       setOrdersTab('shipments');
     } else if ((tab === 'statuses' || tab === 'order-statuses') && canViewOrderStatuses && ordersTab !== 'statuses') {
       setOrdersTab('statuses');
+    } else if ((tab === 'options' || tab === 'order-options' || tab === 'order_option') && ordersTab !== 'options') {
+      setOrdersTab('options');
     } else if (ordersTab === 'tracking' && !canTrackOrders) {
       setOrdersTab('orders');
     } else if (ordersTab === 'statuses' && !canViewOrderStatuses) {
@@ -983,6 +990,9 @@ export default function Orders() { // دالة عرض الطلبات
             cbm: parseFloat(item.cbm || 0),
             productUrl: item.productUrl || '',
             trackingNumber: item.trackingNumber || '',
+            packagingOptionId: item.packagingOptionId || item.packaging_option_id || '',
+            packagingOptionName: item.packagingOptionName || '',
+            packagingOptionPrice: parseFloat(item.packagingOptionPrice || 0),
             createdAt: Date.now()
           });
         }
@@ -1010,6 +1020,9 @@ export default function Orders() { // دالة عرض الطلبات
           expectedArrival: ship.expectedArrival || '',
           deliveryDate: ship.deliveryDate || '',
           packagingFees: parseFloat(ship.packagingFees || 0),
+          shippingCategoryId: ship.shippingCategoryId || ship.shipping_category_id || '',
+          shippingCategoryName: ship.shippingCategoryName || '',
+          shippingCategoryPrice: parseFloat(ship.shippingCategoryPrice || 0),
           createdAt: Date.now()
         });
       }
@@ -3146,9 +3159,26 @@ export default function Orders() { // دالة عرض الطلبات
             </span>
           </button>
         )}
+
+        <button
+          onClick={() => setOrdersTab('options')}
+          className={`px-5 py-2.5 rounded-2xl font-black text-xs flex items-center gap-2 transition cursor-pointer ${ordersTab === 'options'
+            ? 'bg-[#d4af37] text-black shadow-lg shadow-[#d4af37]/20 scale-102'
+            : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-850 border border-slate-800'
+            }`}
+        >
+          <Package className="w-4 h-4 text-amber-400" />
+          {isAr ? '✨ خيارات الطلب (التغليف وفئات الشحن)' : '✨ Order Options (order_option)'}
+          <span className="bg-black/20 px-2 py-0.5 rounded-lg text-[10px] font-mono">
+            {orderOptionsList.length}
+          </span>
+        </button>
       </div>
 
-      {ordersTab === 'statuses' ? (
+      {ordersTab === 'options' ? (
+        /* Order Options Management Tab (order_option) */
+        <OrderOptionsManagementTab isAr={isAr} canManage={canManageOrders} orderCurrency={orderCurrency} />
+      ) : ordersTab === 'statuses' ? (
         /* Order Statuses & Auto Entries Management Tab */
         <OrderStatusManagementTab isAr={isAr} />
       ) : ordersTab === 'tracking' ? (
@@ -3723,6 +3753,8 @@ export default function Orders() { // دالة عرض الطلبات
         settings={settings}
         calcs={calcs}
         activeCurrencies={activeCurrencies}
+        packagingOptions={packagingOptions}
+        shippingCategoryOptions={shippingCategoryOptions}
         handleCreateOrder={handleCreateOrder}
       />
 
@@ -3739,6 +3771,8 @@ export default function Orders() { // دالة عرض الطلبات
         couriers={couriers}
         shippingCompanies={shippingCompanies}
         activeCurrencies={activeCurrencies}
+        packagingOptions={packagingOptions}
+        shippingCategoryOptions={shippingCategoryOptions}
         settings={settings}
         isAr={isAr}
       />
@@ -3994,6 +4028,7 @@ export default function Orders() { // دالة عرض الطلبات
         orders={orders}
         shippingCompanies={shippingCompanies}
         couriers={couriers}
+        shippingCategoryOptions={shippingCategoryOptions}
         orderStatusesList={orderStatusesList}
         isSubmitting={isSubmitting}
         isAr={isAr}

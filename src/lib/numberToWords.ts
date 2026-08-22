@@ -56,6 +56,7 @@ export const numberToWordsEn = (n: number): string => {
   return n.toLocaleString('en-US');
 };
 
+//مهم:يحب تغييرها من نص ثابت الى جلب بيانات العملات الموجود في جدول العملات في قاعده البيانات
 export const currencyNameAr = (code: string): string => {
   switch (code) {
     case 'YER': return 'ريال يمني';

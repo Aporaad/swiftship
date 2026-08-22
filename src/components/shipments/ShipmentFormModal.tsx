@@ -26,6 +26,9 @@ interface ShipmentFormData {
   expectedArrival: string;
   deliveryDate: string;
   notes: string;
+  shippingCategoryId?: string;
+  shippingCategoryName?: string;
+  shippingCategoryPrice?: number;
 }
 
 interface ShipmentFormModalProps {
@@ -44,6 +47,7 @@ interface ShipmentFormModalProps {
   orders: any[];
   couriers: any[];
   shippingCompanies: any[];
+  shippingCategoryOptions?: any[];
   orderStatusesList: any[];
   isAr: boolean;
   isSubmitting: boolean;
@@ -69,6 +73,7 @@ export default function ShipmentFormModal({
   orders,
   couriers,
   shippingCompanies,
+  shippingCategoryOptions = [],
   orderStatusesList,
   isAr,
   isSubmitting,
@@ -112,6 +117,9 @@ export default function ShipmentFormModal({
         expectedArrival: shipmentFormData.expectedArrival,
         deliveryDate: shipmentFormData.deliveryDate,
         notes: shipmentFormData.notes,
+        shippingCategoryId: shipmentFormData.shippingCategoryId || '',
+        shippingCategoryName: shipmentFormData.shippingCategoryName || '',
+        shippingCategoryPrice: parseFloat(shipmentFormData.shippingCategoryPrice as any) || 0,
         createdAt: shipmentToEdit?.createdAt || Date.now(),
         updatedAt: Date.now()
       };
@@ -295,6 +303,35 @@ export default function ShipmentFormModal({
                     <option value="بحري">{isAr ? 'بحري' : 'Sea'}</option>
                   </select>
                 </div>
+              </div>
+
+              {/* فئة الشحن (عادي/مستعجل/طارئ) */}
+              <div className="space-y-1">
+                <label className="block text-[10px] font-black text-[#d4af37] uppercase flex items-center gap-1">
+                  {isAr ? 'فئة الشحن السرعة (order_option)' : 'Shipping Category'}
+                </label>
+                <select
+                  value={shipmentFormData.shippingCategoryId || ''}
+                  onChange={(e) => {
+                    const selectedId = e.target.value;
+                    const foundOpt = shippingCategoryOptions?.find((o: any) => o.id === selectedId);
+                    setShipmentFormData({
+                      ...shipmentFormData,
+                      shippingCategoryId: selectedId,
+                      shippingCategoryName: foundOpt ? (isAr ? foundOpt.nameAr : foundOpt.nameEn) : '',
+                      shippingCategoryPrice: foundOpt ? (parseFloat(foundOpt.price) || 0) : 0,
+                      shippingDuration: foundOpt?.duration !== undefined ? String(foundOpt.duration) : shipmentFormData.shippingDuration
+                    });
+                  }}
+                  className="w-full bg-black/40 border border-[#d4af37]/30 text-cyan-300 rounded-xl p-3 outline-none font-bold cursor-pointer focus:border-[#d4af37]"
+                >
+                  <option value="">{isAr ? '-- عادي (بدون تخصيص) --' : '-- Standard --'}</option>
+                  {(shippingCategoryOptions || []).map((cat: any) => (
+                    <option key={cat.id} value={cat.id}>
+                      {isAr ? cat.nameAr : cat.nameEn} {cat.duration ? `(${cat.duration} ${isAr ? 'أيام' : 'days'})` : ''} {cat.price > 0 ? `(+${cat.price} SAR)` : ''}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* الوزن وتكلفة الشحن */}

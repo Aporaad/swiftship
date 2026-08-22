@@ -199,6 +199,46 @@ const CACHE_TTL_MS = typeof window === 'undefined' ? 0 : 60000; // 0 on backend 
 const activeFetches: { [table: string]: Promise<any[]> | null } = {};
 const collectionSubscribed: { [table: string]: boolean } = {};
 
+export function extractRowPayload(table: string, row: any): any {
+  if (!row) return {};
+  const rowId = row.id;
+  const rawData = typeof row.data === 'string' ? JSON.parse(row.data) : (row.data || {});
+
+  // Extract top-level database columns excluding the 'data' JSON column itself
+  const { data: _, ...topCols } = row;
+
+  // Merge top-level columns with JSON data payload
+  const combined = { ...topCols, ...rawData };
+
+  // Map database columns to JS properties and vice versa
+  const mapping = DIRECT_COLUMNS_MAP[table];
+  if (mapping) {
+    for (const [jsKey, colName] of Object.entries(mapping)) {
+      if (combined[colName] !== undefined && combined[jsKey] === undefined) {
+        if (colName === 'is_active' && jsKey === 'disabled') {
+          combined[jsKey] = !combined[colName];
+        } else {
+          combined[jsKey] = combined[colName];
+        }
+      }
+      if (combined[jsKey] !== undefined && combined[colName] === undefined) {
+        combined[colName] = combined[jsKey];
+      }
+    }
+  }
+
+  // Automatic aliases for common field names
+  if (combined.name_ar && !combined.nameAr) combined.nameAr = combined.name_ar;
+  if (combined.nameAr && !combined.name_ar) combined.name_ar = combined.nameAr;
+  if (combined.name_en && !combined.nameEn) combined.nameEn = combined.name_en;
+  if (combined.nameEn && !combined.name_en) combined.name_en = combined.nameEn;
+  if (combined.is_active !== undefined && combined.isActive === undefined) combined.isActive = !!combined.is_active;
+  if (combined.isActive !== undefined && combined.is_active === undefined) combined.is_active = !!combined.isActive;
+
+  const normalized = normalizePayload(table, combined);
+  return { id: rowId, ...normalized };
+}
+
 async function ensureCache(table: string): Promise<any[]> {
   const now = Date.now();
   const lastFetch = lastFetchTimestamps[table] || 0;
@@ -232,11 +272,7 @@ async function ensureCache(table: string): Promise<any[]> {
           if (error) {
             console.warn(`[Supabase Adapter] Failed to load table ${table} from remote: ${error.message}. Falling back to offline/local cache.`);
           } else {
-            collectionCaches[table] = (data || []).map(row => {
-              const payload = typeof row.data === 'string' ? JSON.parse(row.data) : (row.data || {});
-              const normalized = normalizePayload(table, payload);
-              return { id: row.id, ...normalized };
-            });
+            collectionCaches[table] = (data || []).map(row => extractRowPayload(table, row));
 
             // Update local backup
             try {
@@ -274,11 +310,8 @@ async function ensureCache(table: string): Promise<any[]> {
 
           if (payload.eventType === 'DELETE') {
             collectionCaches[table] = cache.filter(item => item.id !== rowId);
-          } else {
-            const rawData = payload.new?.data;
-            const itemData = typeof rawData === 'string' ? JSON.parse(rawData) : (rawData || {});
-            const normalized = normalizePayload(table, itemData);
-            const newItem = { id: rowId, ...normalized };
+          } else if (payload.new) {
+            const newItem = extractRowPayload(table, payload.new);
             const index = cache.findIndex(item => item.id === rowId);
             if (index >= 0) {
               cache[index] = newItem;
@@ -564,11 +597,12 @@ const DIRECT_COLUMNS_MAP: Record<string, Record<string, string>> = {
   jobs_req: { email: 'email', phone: 'phone', status: 'status', category: 'category', refCode: 'refCode', createdAt: 'createdAt' },
   announcements: { title: 'title', isActive: 'isActive', priority: 'priority', createdBy: 'createdBy', createdAt: 'createdAt' },
   portal_tickets: { type: 'type', status: 'status', userUid: 'userUid', createdAt: 'createdAt' },
-  products: { orderId: 'order_id', productName: 'product_name', name: 'product_name', quantity: 'quantity', productPrice: 'unit_price', price: 'unit_price', unitPrice: 'unit_price', totalPrice: 'total_price', createdAt: 'createdAt' },
-  shipments: { orderId: 'order_id', trackingNumber: 'tracking_number', shippingCompany: 'shipping_company_id', shippingCompanyId: 'shipping_company_id', courierId: 'courier_id', shipmentStatus: 'shipment_status', status: 'shipment_status', shippingCost: 'shipping_cost', weight: 'weight', createdAt: 'createdAt' },
+  products: { orderId: 'order_id', productName: 'product_name', name: 'product_name', quantity: 'quantity', productPrice: 'unit_price', price: 'unit_price', unitPrice: 'unit_price', totalPrice: 'total_price', packagingOptionId: 'packaging_option_id', packaging_option_id: 'packaging_option_id', createdAt: 'createdAt' },
+  shipments: { orderId: 'order_id', trackingNumber: 'tracking_number', shippingCompany: 'shipping_company_id', shippingCompanyId: 'shipping_company_id', courierId: 'courier_id', shipmentStatus: 'shipment_status', status: 'shipment_status', shippingCost: 'shipping_cost', weight: 'weight', shippingCategoryId: 'shipping_category_id', shipping_category_id: 'shipping_category_id', createdAt: 'createdAt' },
   order_status: { nameAr: 'name_ar', nameEn: 'name_en', isFirst: 'is_first', isLast: 'is_last', sortOrder: 'sort_order', color: 'color', code: 'code' },
   auto_entries: { statusId: 'status_id', nameAr: 'name_ar', nameEn: 'name_en', isActive: 'is_active', amountSource: 'amount_source' },
-  autoEntry: { statusId: 'status_id', nameAr: 'name_ar', nameEn: 'name_en', isActive: 'is_active', amountSource: 'amount_source' }
+  autoEntry: { statusId: 'status_id', nameAr: 'name_ar', nameEn: 'name_en', isActive: 'is_active', amountSource: 'amount_source' },
+  order_option: { nameAr: 'name_ar', nameEn: 'name_en', type: 'type', price: 'price', duration: 'duration', details: 'details', code: 'code', isActive: 'is_active', is_active: 'is_active' }
 };
 
 export function extractDirectColumns(table: string, data: Record<string, any>): Record<string, any> {

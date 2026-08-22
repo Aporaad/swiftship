@@ -16,6 +16,8 @@ interface EditOrderModalProps {
   couriers: any[];
   shippingCompanies: any[];
   activeCurrencies: any[];
+  packagingOptions?: any[];
+  shippingCategoryOptions?: any[];
   settings: any;
   isAr: boolean;
 }
@@ -37,6 +39,8 @@ export default function EditOrderModal({
   couriers,
   shippingCompanies,
   activeCurrencies,
+  packagingOptions = [],
+  shippingCategoryOptions = [],
   settings,
   isAr,
 }: EditOrderModalProps) {
@@ -177,11 +181,19 @@ export default function EditOrderModal({
     (sum, i) => sum + (parseFloat(i.quantity || 0) * parseFloat(i.productPrice || 0)),
     0
   );
-  const shippingsCostSum = shippings.reduce(
-    (sum, s) => sum + parseFloat(s.shippingCost || 0) + parseFloat(s.packagingFees || 0),
+  const itemsPackagingSum = items.reduce(
+    (sum, i) => sum + ((parseFloat(i.packagingOptionPrice as any) || 0) * (parseFloat(i.quantity as any) || 1)),
     0
   );
-  const totalOrderSAR = productsSum + shippingsCostSum + parseFloat(formData.packagingFee || 0);
+  const shippingsCategorySum = shippings.reduce(
+    (sum, s) => sum + (parseFloat(s.shippingCategoryPrice as any) || 0),
+    0
+  );
+  const shippingsCostSum = shippings.reduce(
+    (sum, s) => sum + parseFloat(s.shippingCost || 0) + parseFloat(s.packagingFees || 0) + (parseFloat(s.shippingCategoryPrice as any) || 0),
+    0
+  );
+  const totalOrderSAR = productsSum + itemsPackagingSum + shippingsCostSum + parseFloat(formData.packagingFee || 0);
   const exchange = formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER;
   const baseTotalOrderYER = totalOrderSAR * exchange;
   const totalOrderYER = baseTotalOrderYER + (parseFloat(formData.deliveryCourierFee) || 0);
@@ -593,6 +605,39 @@ export default function EditOrderModal({
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
+
+                    {/* Packaging Type Sub-Row */}
+                    <div className="col-span-12 flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-850 text-[10px] text-start">
+                      <div className="flex items-center gap-2">
+                        <span className="font-black text-amber-400 flex items-center gap-1">
+                          <Package className="w-3.5 h-3.5" />
+                          {isAr ? 'نوع التغليف (order_option):' : 'Packaging Type:'}
+                        </span>
+                        <select
+                          value={item.packagingOptionId || ''}
+                          onChange={(e) => {
+                            const selectedId = e.target.value;
+                            const foundOpt = packagingOptions?.find((o: any) => o.id === selectedId);
+                            updateItemRow(idx, 'packagingOptionId', selectedId);
+                            updateItemRow(idx, 'packagingOptionName', foundOpt ? (isAr ? foundOpt.nameAr : foundOpt.nameEn) : '');
+                            updateItemRow(idx, 'packagingOptionPrice', foundOpt ? (parseFloat(foundOpt.price) || 0) : 0);
+                          }}
+                          className="bg-slate-950 border border-slate-800 text-white font-bold rounded-xl px-2.5 py-1 text-[11px] outline-none cursor-pointer focus:border-[#d4af37]"
+                        >
+                          <option value="">{isAr ? '-- بدون تغليف خاص (0) --' : '-- Standard (0) --'}</option>
+                          {(packagingOptions || []).map((pkg: any) => (
+                            <option key={pkg.id} value={pkg.id}>
+                              {isAr ? pkg.nameAr : pkg.nameEn} {pkg.price > 0 ? `(+${pkg.price} SAR)` : '(مجاني)'}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      {item.packagingOptionPrice > 0 && (
+                        <span className="text-emerald-400 font-mono font-bold">
+                          +{((parseFloat(item.packagingOptionPrice) || 0) * (parseFloat(item.quantity) || 1)).toLocaleString()} SAR
+                        </span>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -626,6 +671,31 @@ export default function EditOrderModal({
                         {shippingCompanies.map((sc) => (
                           <option key={sc.id} value={sc.name}>
                             {sc.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] text-slate-500 mb-0.5">{isAr ? 'فئة الشحن (order_option)' : 'Shipping Category'}</label>
+                      <select
+                        value={sh.shippingCategoryId || ''}
+                        onChange={(e) => {
+                          const selectedId = e.target.value;
+                          const foundOpt = shippingCategoryOptions?.find((o: any) => o.id === selectedId);
+                          updateShippingRow(idx, 'shippingCategoryId', selectedId);
+                          updateShippingRow(idx, 'shippingCategoryName', foundOpt ? (isAr ? foundOpt.nameAr : foundOpt.nameEn) : '');
+                          updateShippingRow(idx, 'shippingCategoryPrice', foundOpt ? (parseFloat(foundOpt.price) || 0) : 0);
+                          if (foundOpt?.duration !== undefined) {
+                            updateShippingRow(idx, 'shippingDuration', String(foundOpt.duration));
+                          }
+                        }}
+                        className="w-full bg-slate-955 border border-slate-800 text-cyan-300 font-bold rounded-lg p-2.5 text-[11px] cursor-pointer"
+                      >
+                        <option value="">{isAr ? '-- عادي --' : '-- Standard --'}</option>
+                        {(shippingCategoryOptions || []).map((cat: any) => (
+                          <option key={cat.id} value={cat.id}>
+                            {isAr ? cat.nameAr : cat.nameEn} {cat.duration ? `(${cat.duration}d)` : ''} {cat.price > 0 ? `(+${cat.price} SAR)` : ''}
                           </option>
                         ))}
                       </select>

@@ -222,6 +222,7 @@ export default function OrderDetailsModal({
                   <thead className="bg-slate-955 text-slate-500 font-black text-[10px] border-b border-slate-850">
                     <tr>
                       <th className="p-2.5 text-right">{isAr ? 'المنتج' : 'Product'}</th>
+                      <th className="p-2.5 text-center">{isAr ? 'نوع التغليف' : 'Packaging'}</th>
                       <th className="p-2.5 text-center">{isAr ? 'الكمية' : 'Qty'}</th>
                       <th className="p-2.5 text-center">{isAr ? 'رابط المنتج' : 'Link'}</th>
                     </tr>
@@ -230,6 +231,15 @@ export default function OrderDetailsModal({
                     {selectedOrder.items.map((it: any, index: number) => (
                       <tr key={index}>
                         <td className="p-2.5 text-white font-bold">{it.productName || (isAr ? `طرد رقم ${index + 1}` : `Cargo item ${index + 1}`)}</td>
+                        <td className="p-2.5 text-center">
+                          {it.packagingOptionName ? (
+                            <span className="bg-amber-950/40 text-amber-300 border border-amber-800/50 px-2 py-0.5 rounded text-[9px] font-bold">
+                              📦 {it.packagingOptionName}
+                            </span>
+                          ) : (
+                            <span className="text-slate-600">-</span>
+                          )}
+                        </td>
                         <td className="p-2.5 text-center font-mono text-slate-300 font-bold">{it.quantity || 1}</td>
                         <td className="p-2.5 text-center">
                           {it.productUrl ? (
@@ -292,6 +302,11 @@ export default function OrderDetailsModal({
                           </div>
 
                           <div className="flex items-center gap-2">
+                            {sh.shippingCategoryName && (
+                              <span className="bg-cyan-950/40 text-cyan-300 border border-cyan-800/50 px-2.5 py-1 rounded-full text-[10px] font-black">
+                                ⚡️ {sh.shippingCategoryName}
+                              </span>
+                            )}
                             <span className={`px-2.5 py-1 rounded-full text-[10px] font-black flex items-center gap-1.5 ${typeColor}`}>
                               <span>{typeIcon}</span>
                               <span>{typeLabel}</span>
