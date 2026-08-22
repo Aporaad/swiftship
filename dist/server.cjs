@@ -46497,6 +46497,7 @@ __export(supabase_firebase_adapter_exports, {
   enableEmergencyOfflineSession: () => enableEmergencyOfflineSession,
   encryptDataLocal: () => encryptDataLocal,
   extractDirectColumns: () => extractDirectColumns,
+  extractRowPayload: () => extractRowPayload,
   getAuth: () => getAuth,
   getDoc: () => getDoc,
   getDocFromServer: () => getDocFromServer,
@@ -46592,6 +46593,36 @@ function mapUser(sbUser) {
     getIdToken: async () => sbUser.jwt || "session_token"
   };
 }
+function extractRowPayload(table, row) {
+  if (!row) return {};
+  const rowId = row.id;
+  const rawData = typeof row.data === "string" ? JSON.parse(row.data) : row.data || {};
+  const { data: _, ...topCols } = row;
+  const combined = { ...topCols, ...rawData };
+  const mapping = DIRECT_COLUMNS_MAP[table];
+  if (mapping) {
+    for (const [jsKey, colName] of Object.entries(mapping)) {
+      if (combined[colName] !== void 0 && combined[jsKey] === void 0) {
+        if (colName === "is_active" && jsKey === "disabled") {
+          combined[jsKey] = !combined[colName];
+        } else {
+          combined[jsKey] = combined[colName];
+        }
+      }
+      if (combined[jsKey] !== void 0 && combined[colName] === void 0) {
+        combined[colName] = combined[jsKey];
+      }
+    }
+  }
+  if (combined.name_ar && !combined.nameAr) combined.nameAr = combined.name_ar;
+  if (combined.nameAr && !combined.name_ar) combined.name_ar = combined.nameAr;
+  if (combined.name_en && !combined.nameEn) combined.nameEn = combined.name_en;
+  if (combined.nameEn && !combined.name_en) combined.name_en = combined.nameEn;
+  if (combined.is_active !== void 0 && combined.isActive === void 0) combined.isActive = !!combined.is_active;
+  if (combined.isActive !== void 0 && combined.is_active === void 0) combined.is_active = !!combined.isActive;
+  const normalized = normalizePayload(table, combined);
+  return { id: rowId, ...normalized };
+}
 async function ensureCache(table) {
   const now = Date.now();
   const lastFetch = lastFetchTimestamps[table] || 0;
@@ -46618,11 +46649,7 @@ async function ensureCache(table) {
           if (error3) {
             console.warn(`[Supabase Adapter] Failed to load table ${table} from remote: ${error3.message}. Falling back to offline/local cache.`);
           } else {
-            collectionCaches[table] = (data || []).map((row) => {
-              const payload = typeof row.data === "string" ? JSON.parse(row.data) : row.data || {};
-              const normalized = normalizePayload(table, payload);
-              return { id: row.id, ...normalized };
-            });
+            collectionCaches[table] = (data || []).map((row) => extractRowPayload(table, row));
             try {
               safeLocalStorage.setItem(`swiftship_table_backup_${table}`, JSON.stringify(collectionCaches[table]));
             } catch (lsErr) {
@@ -46651,11 +46678,8 @@ async function ensureCache(table) {
         const rowId = payload.new?.id || payload.old?.id;
         if (payload.eventType === "DELETE") {
           collectionCaches[table] = cache.filter((item) => item.id !== rowId);
-        } else {
-          const rawData = payload.new?.data;
-          const itemData = typeof rawData === "string" ? JSON.parse(rawData) : rawData || {};
-          const normalized = normalizePayload(table, itemData);
-          const newItem = { id: rowId, ...normalized };
+        } else if (payload.new) {
+          const newItem = extractRowPayload(table, payload.new);
           const index4 = cache.findIndex((item) => item.id === rowId);
           if (index4 >= 0) {
             cache[index4] = newItem;
@@ -46835,7 +46859,10 @@ function extractDirectColumns(table, data) {
   const extracted = {};
   for (const [key, col] of Object.entries(mapping)) {
     if (data[key] !== void 0) {
-      const val = data[key];
+      let val = data[key];
+      if (typeof val === "string" && val.trim() === "" && col.endsWith("_id")) {
+        val = null;
+      }
       if (key === "disabled" && (table === "customers" || table === "couriers")) {
         extracted[col] = !val;
       } else if ((col === "createdAt" || col === "lastSeen") && typeof val === "number") {
@@ -46843,6 +46870,24 @@ function extractDirectColumns(table, data) {
       } else {
         extracted[col] = val;
       }
+    }
+  }
+  if (table === "orders") {
+    const validStatusIds = ["1", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"];
+    if (!extracted["order_status_id"] || !validStatusIds.includes(String(extracted["order_status_id"]))) {
+      extracted["order_status_id"] = "1";
+    }
+    if (typeof extracted["customer_id"] === "string" && extracted["customer_id"].trim() === "") {
+      extracted["customer_id"] = null;
+    }
+    if (typeof extracted["order_source_id"] === "string" && extracted["order_source_id"].trim() === "") {
+      extracted["order_source_id"] = null;
+    }
+    if (typeof extracted["delivery_courier_id"] === "string" && extracted["delivery_courier_id"].trim() === "") {
+      extracted["delivery_courier_id"] = null;
+    }
+    if (typeof extracted["shipping_courier_id"] === "string" && extracted["shipping_courier_id"].trim() === "") {
+      extracted["shipping_courier_id"] = null;
     }
   }
   return extracted;
@@ -47560,7 +47605,7 @@ var init_supabase_firebase_adapter = __esm({
       customers: { accountId: "account_id", disabled: "is_active", level: "levels", levels: "levels" },
       couriers: { accountId: "account_id", financialCurrency: "currency", currency: "currency", disabled: "is_active", courierType: "type", type: "type", level: "levels", levels: "levels" },
       accounts: { accountCode: "account_code", code: "account_code", currency: "currency", entityId: "entity_id", type: "type", accountType: "type" },
-      orders: { orderNumber: "order_number", trackingNumber: "tracking_number", customerId: "customer_id", orderStatusId: "order_status_id", order_status_id: "order_status_id", orderStatus: "order_status_id", createdAt: "createdAt", orderSourceId: "order_source_id", order_source_id: "order_source_id", orderSourceType: "order_source_type", order_source_type: "order_source_type", deliveryCourierId: "delivery_courier_id", delivery_courier_id: "delivery_courier_id", shippingCourierId: "shipping_courier_id", shipping_courier_id: "shipping_courier_id" },
+      orders: { orderNumber: "order_number", trackingNumber: "tracking_number", customerId: "customer_id", orderStatusId: "order_status_id", order_status_id: "order_status_id", createdAt: "createdAt", orderSourceId: "order_source_id", order_source_id: "order_source_id", orderSourceType: "order_source_type", order_source_type: "order_source_type", deliveryCourierId: "delivery_courier_id", delivery_courier_id: "delivery_courier_id", shippingCourierId: "shipping_courier_id", shipping_courier_id: "shipping_courier_id" },
       shipping_companies: { name: "name", shippingCompanyUrl: "shipping_company_url", trackingIDPrefix: "trackingID_prefix", financialAccountId: "account_id" },
       sources: { name: "name", supplierType: "type", type: "type", sourceUrl: "source_url", financialAccountId: "account_id" },
       account_transactions: { type: "type", accountId: "account_id", journalEntryNumber: "journalEntryNumber", journalEntryId: "journalEntryNumber", module: "module", currency: "currency", createdAt: "createdAt", amount: "amount" },
@@ -47573,11 +47618,12 @@ var init_supabase_firebase_adapter = __esm({
       jobs_req: { email: "email", phone: "phone", status: "status", category: "category", refCode: "refCode", createdAt: "createdAt" },
       announcements: { title: "title", isActive: "isActive", priority: "priority", createdBy: "createdBy", createdAt: "createdAt" },
       portal_tickets: { type: "type", status: "status", userUid: "userUid", createdAt: "createdAt" },
-      products: { orderId: "order_id", productName: "product_name", name: "product_name", quantity: "quantity", productPrice: "unit_price", price: "unit_price", unitPrice: "unit_price", totalPrice: "total_price", createdAt: "createdAt" },
-      shipments: { orderId: "order_id", trackingNumber: "tracking_number", shippingCompany: "shipping_company_id", shippingCompanyId: "shipping_company_id", courierId: "courier_id", shipmentStatus: "shipment_status", status: "shipment_status", shippingCost: "shipping_cost", weight: "weight", createdAt: "createdAt" },
+      products: { orderId: "order_id", productName: "product_name", name: "product_name", quantity: "quantity", productPrice: "unit_price", price: "unit_price", unitPrice: "unit_price", totalPrice: "total_price", packagingOptionId: "packaging_option_id", packaging_option_id: "packaging_option_id", createdAt: "createdAt" },
+      shipments: { orderId: "order_id", trackingNumber: "tracking_number", shippingCompanyId: "shipping_company_id", shipping_company_id: "shipping_company_id", courierId: "courier_id", shipmentStatus: "shipment_status", status: "shipment_status", shippingCost: "shipping_cost", weight: "weight", shippingCategoryId: "shipping_category_id", shipping_category_id: "shipping_category_id", createdAt: "createdAt" },
       order_status: { nameAr: "name_ar", nameEn: "name_en", isFirst: "is_first", isLast: "is_last", sortOrder: "sort_order", color: "color", code: "code" },
       auto_entries: { statusId: "status_id", nameAr: "name_ar", nameEn: "name_en", isActive: "is_active", amountSource: "amount_source" },
-      autoEntry: { statusId: "status_id", nameAr: "name_ar", nameEn: "name_en", isActive: "is_active", amountSource: "amount_source" }
+      autoEntry: { statusId: "status_id", nameAr: "name_ar", nameEn: "name_en", isActive: "is_active", amountSource: "amount_source" },
+      order_option: { nameAr: "name_ar", nameEn: "name_en", type: "type", price: "price", duration: "duration", details: "details", code: "code", isActive: "is_active", is_active: "is_active" }
     };
     IncrementValue = class {
       constructor(amount) {
