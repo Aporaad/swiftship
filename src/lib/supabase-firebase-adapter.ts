@@ -651,6 +651,13 @@ export function extractDirectColumns(table: string, data: Record<string, any>): 
   return extracted;
 }
 
+export function createWriteError(operation: 'insert' | 'upsert' | 'update' | 'delete', table: string, error: any): Error {
+  const writeError = new Error(`[Supabase Adapter] ${operation} failed on table ${table}: ${error?.message || 'Unknown database write error'}`);
+  (writeError as any).code = error?.code;
+  (writeError as any).cause = error;
+  return writeError;
+}
+
 export async function addDoc(newID: any, collectionRef: FirebaseQuery, rawData: any) {
   const table = collectionRef.path;
   const id = newID ? newID : 'noId_' + Math.random().toString(36).substring(2, 11) + Math.random().toString(36).substring(2, 11);
@@ -660,7 +667,7 @@ export async function addDoc(newID: any, collectionRef: FirebaseQuery, rawData: 
     const directCols = extractDirectColumns(table, data);
     const { error } = await supabase.from(table).insert({ id, ...directCols, data });
     if (error) {
-      console.warn(`[Supabase Adapter] addDoc error on table ${table}: ${error.message}`);
+      throw createWriteError('insert', table, error);
     }
   } else {
     // Offline mode: buffering addDoc local write
@@ -691,7 +698,7 @@ export async function addAssDoc(newID: any, arg1: any, collectionRef: FirebaseQu
     const directCols = extractDirectColumns(table, data);
     const { error } = await supabase.from(table).insert({ id, assetCode, ...directCols, data });
     if (error) {
-      console.warn(`[Supabase Adapter] addDoc error on table ${table}: ${error.message}`);
+      throw createWriteError('insert', table, error);
     }
   } else {
     // Offline mode: buffering addDoc local write
@@ -728,7 +735,7 @@ export async function setDoc(docRef: DocRef, rawData: any, options?: any) {
     const directCols = extractDirectColumns(table, data);
     const { error } = await supabase.from(table).upsert({ id, ...directCols, data });
     if (error) {
-      console.warn(`[Supabase Adapter] setDoc error on table ${table}: ${error.message}`);
+      throw createWriteError('upsert', table, error);
     }
   } else {
     // Offline mode: buffering setDoc local write
@@ -804,7 +811,7 @@ export async function updateDoc(docRef: DocRef, rawData: any) {
     const directCols = extractDirectColumns(table, data);
     const { error } = await supabase.from(table).update({ ...directCols, data }).eq('id', id);
     if (error) {
-      console.warn(`[Supabase Adapter] updateDoc error on table ${table}: ${error.message}`);
+      throw createWriteError('update', table, error);
     }
   } else {
     // Offline mode: buffering updateDoc local write
@@ -843,7 +850,7 @@ export async function deleteDoc(docRef: DocRef) {
   if (!isOfflineMode()) {
     const { error } = await supabase.from(table).delete().eq('id', id);
     if (error) {
-      console.warn(`[Supabase Adapter] deleteDoc error on table ${table}: ${error.message}`);
+      throw createWriteError('delete', table, error);
     }
   } else {
     // Offline mode: buffering deleteDoc local write

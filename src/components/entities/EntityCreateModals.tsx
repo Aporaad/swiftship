@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Globe, MapPin, Phone, Truck, User, X } from 'lucide-react';
-import { addDoc, collection, db } from '../../lib/supabase';
+import { addDoc, collection, db, doc, updateDoc } from '../../lib/supabase';
 import { financialAccountService } from '../../services/financialAccountService';
 import { activityLogService } from '../../services/activityLogService';
 import { notificationService } from '../../services/notificationService';
@@ -84,9 +84,12 @@ export function SourceCreateModal({ isOpen, onClose, isAr, settings, onCreated }
     setSubmitting(true);
     try {
       const id = `SRC-${Math.random().toString(36).substring(2, 11)}`;
-      const account = await financialAccountService.createAccountForEntity('source', id, formData.source_name, settings.currency || settings.defaultOrderCurrency || 'YER', undefined, { accountPrefix: '2140', parentCode: '2140', accountType: 'Liability', notes: `حساب ذمم مصدر طلبات: ${formData.source_name}`, updateEntity: false });
-      const source = { id, ...formData, name: formData.source_name, accountId: account.id, financialAccountId: account.id, financialAccountCode: account.accountCode, createdAt: Date.now() };
+      const source = { id, ...formData, name: formData.source_name, createdAt: Date.now() };
       await addDoc(id, collection(db, 'sources'), source);
+      const account = await financialAccountService.createAccountForEntity('source', id, formData.source_name, settings.currency || settings.defaultOrderCurrency || 'YER', undefined, { accountPrefix: '2140', parentCode: '2140', accountType: 'Liability', notes: `حساب ذمم مصدر طلبات: ${formData.source_name}`, updateEntity: false });
+      const accountLink = { accountId: account.id, financialAccountId: account.id, financialAccountCode: account.accountCode };
+      await updateDoc(doc(db, 'sources', id), accountLink);
+      Object.assign(source, accountLink);
       activityLogService.log('add_source', formData.source_name, { ...formData });
       notificationService.notify({ title: isAr ? 'إضافة مصدر شراء جديد' : 'Source Added', message: isAr ? `تمت إضافة المصدر ${formData.source_name} بنجاح` : `New order supply source ${formData.source_name} recorded`, type: 'success' });
       onCreated(source);
@@ -122,9 +125,12 @@ export function ShippingCompanyCreateModal({ isOpen, onClose, isAr, settings, on
     setSubmitting(true);
     try {
       const id = `SC-${Math.random().toString(36).substring(2, 11)}`;
-      const account = await financialAccountService.createAccountForEntity('shipping_company', id, formData.name, settings.currency || settings.defaultOrderCurrency || 'YER', undefined, { accountPrefix: '2150', parentCode: '2150', accountType: 'Liability', notes: `حساب ذمم شركة شحن: ${formData.name}`, updateEntity: false });
-      const company = { id, ...formData, accountId: account.id, financialAccountId: account.id, financialAccountCode: account.accountCode, createdAt: Date.now() };
+      const company = { id, ...formData, createdAt: Date.now() };
       await addDoc(id, collection(db, 'shipping_companies'), company);
+      const account = await financialAccountService.createAccountForEntity('shipping_company', id, formData.name, settings.currency || settings.defaultOrderCurrency || 'YER', undefined, { accountPrefix: '2150', parentCode: '2150', accountType: 'Liability', notes: `حساب ذمم شركة شحن: ${formData.name}`, updateEntity: false });
+      const accountLink = { accountId: account.id, financialAccountId: account.id, financialAccountCode: account.accountCode };
+      await updateDoc(doc(db, 'shipping_companies', id), accountLink);
+      Object.assign(company, accountLink);
       activityLogService.log('add_shipping_company', formData.name, { ...formData });
       notificationService.notify({ title: isAr ? 'إضافة شركة شحن جديدة' : 'Shipping Company Added', message: isAr ? `تمت إضافة شركة الشحن ${formData.name} بنجاح` : `New shipping carrier ${formData.name} registered`, type: 'success' });
       onCreated(company);
