@@ -48,7 +48,11 @@ export function filterOrderParties(parties: OrderParty[], queryText = '', staffO
 
 export function findOrderParty(order: any, customers: any[] = [], employees: any[] = [], couriers: any[] = []): OrderParty | null {
   const partyType = (order?.orderPartyType || order?.customerType || (order?.isStaffOrder ? 'employee' : 'customer')) as OrderPartyType;
-  const partyId = order?.customerId || order?.customer_id || order?.orderPartyId;
+  const partyId = partyType === 'employee'
+    ? (order?.employeeId || order?.employee_id || order?.orderPartyId)
+    : partyType === 'courier'
+      ? (order?.courierId || order?.courier_id || order?.orderPartyId)
+      : (order?.customerId || order?.customer_id || order?.orderPartyId);
   if (!partyId) return null;
   const collection = partyType === 'employee' ? employees : partyType === 'courier' ? couriers : customers;
   const match = collection.find((entry) => String(entry.id) === String(partyId));
@@ -57,7 +61,7 @@ export function findOrderParty(order: any, customers: any[] = [], employees: any
 
 export function toOrderPartyPayload(party: OrderParty) {
   return {
-    customerId: party.id,
+    customerId: party.type === 'customer' ? party.id : '',
     customerName: party.name,
     customerPhone: party.phone || '',
     customerAddress: party.address || '',
@@ -66,6 +70,7 @@ export function toOrderPartyPayload(party: OrderParty) {
     isStaffOrder: party.type !== 'customer',
     customerAccountId: party.financialAccountId || '',
     customerAccountCode: party.financialAccountCode || '',
+    orderPartyAccountId: party.financialAccountId || '',
     employeeId: party.type === 'employee' ? party.id : '',
     courierId: party.type === 'courier' ? party.id : '',
   };

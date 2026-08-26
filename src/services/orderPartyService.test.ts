@@ -15,25 +15,26 @@ describe('order party service', () => {
     expect(filterOrderParties(parties, 'موظف', true).map((party) => party.id)).toEqual(['emp-1']);
   });
 
-  it('retains customerId while recording the correct staff party metadata and linked account', () => {
-    const party = findOrderParty({ customerId: 'cou-1', orderPartyType: 'courier' }, customers, employees, couriers);
+  it('stores a courier party in courierId only and keeps customerId empty', () => {
+    const party = findOrderParty({ courierId: 'cou-1', orderPartyId: 'cou-1', orderPartyType: 'courier' }, customers, employees, couriers);
     expect(party).toMatchObject({ id: 'cou-1', type: 'courier', financialAccountId: 'acc_2120-0001' });
     expect(toOrderPartyPayload(party!)).toMatchObject({
-      customerId: 'cou-1', orderPartyType: 'courier', isStaffOrder: true,
-      courierId: 'cou-1', customerAccountId: 'acc_2120-0001', employeeId: '',
+      customerId: '', orderPartyType: 'courier', isStaffOrder: true,
+      courierId: 'cou-1', customerAccountId: 'acc_2120-0001', orderPartyAccountId: 'acc_2120-0001', employeeId: '',
     });
   });
 
   it('resolves an employee order to the employee ledger account without treating it as a customer', () => {
-    const party = findOrderParty({ customerId: 'emp-1', orderPartyType: 'employee', isStaffOrder: true }, customers, employees, couriers);
+    const party = findOrderParty({ employeeId: 'emp-1', orderPartyId: 'emp-1', orderPartyType: 'employee', isStaffOrder: true }, customers, employees, couriers);
     expect(party).toMatchObject({ id: 'emp-1', type: 'employee', financialAccountId: 'acc_2130-0001' });
     expect(toOrderPartyPayload(party!)).toMatchObject({
-      customerId: 'emp-1',
+      customerId: '',
       orderPartyId: 'emp-1',
       orderPartyType: 'employee',
       employeeId: 'emp-1',
       courierId: '',
       customerAccountId: 'acc_2130-0001',
+      orderPartyAccountId: 'acc_2130-0001',
     });
   });
 });

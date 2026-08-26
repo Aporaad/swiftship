@@ -8,6 +8,7 @@ describe('order party wiring', () => {
   it('defines a conditional staff/customer relationship with specific FK columns and a linked financial account', () => {
     const migration = projectFile('supabase/migrations/202608260230_add_order_party_employee_courier.sql');
     const reconciliation = projectFile('supabase/migrations/202608260245_reconcile_order_party_staff_accounts.sql');
+    const entityForeignKeysFix = projectFile('supabase/migrations/202608270005_fix_order_party_entity_foreign_keys.sql');
     expect(migration).toContain('order_party_type');
     expect(migration).toContain('employee_id');
     expect(migration).toContain('courier_id');
@@ -19,6 +20,10 @@ describe('order party wiring', () => {
     expect(reconciliation).toContain('ensure_entity_financial_account');
     expect(reconciliation).toContain('link_employee_financial_account');
     expect(reconciliation).toContain('link_courier_financial_account');
+    expect(entityForeignKeysFix).toContain("NEW.customer_id := NULL;");
+    expect(entityForeignKeysFix).toContain("NEW.employee_id := party_id;");
+    expect(entityForeignKeysFix).toContain("NEW.courier_id := party_id;");
+    expect(entityForeignKeysFix).toContain("'orderPartyAccountId', account_value");
   });
 
   it('uses the shared list picker in both order forms and keeps account resolution party-aware', () => {

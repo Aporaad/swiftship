@@ -365,6 +365,7 @@ export default function Orders() { // دالة عرض الطلبات
     courierId: '',
     customerAccountId: '',
     customerAccountCode: '',
+    orderPartyAccountId: '',
     orderSourceId: '',
     orderSourceName: '',
     orderSourceType: 'App', // App or Factory
@@ -692,7 +693,8 @@ export default function Orders() { // دالة عرض الطلبات
       employeeId: '',
       courierId: '',
       customerAccountId: c.financialAccountId || c.accountId || '',
-      customerAccountCode: c.financialAccountCode || c.accountCode || ''
+      customerAccountCode: c.financialAccountCode || c.accountCode || '',
+      orderPartyAccountId: c.financialAccountId || c.accountId || ''
     }));
     setCustomerSearchQuery('');
   };
@@ -709,7 +711,8 @@ export default function Orders() { // دالة عرض الطلبات
       employeeId: '',
       courierId: '',
       customerAccountId: '',
-      customerAccountCode: ''
+      customerAccountCode: '',
+      orderPartyAccountId: ''
     }));
   };
 
@@ -935,10 +938,10 @@ export default function Orders() { // دالة عرض الطلبات
     e.preventDefault();
     if (isSubmitting) return;
 
-    if (!formData.customerId) {
+    if (!formData.orderPartyId) {
       return notificationService.notify({
         title: isAr ? 'خطأ' : 'Error',
-        message: isAr ? 'الرجاء اختيار العميل أولاً' : 'Please select a customer first',
+        message: isAr ? 'الرجاء اختيار طرف الطلب أولاً' : 'Please select an order party first',
         type: 'error',
         category: 'order'
       });
@@ -991,6 +994,7 @@ export default function Orders() { // دالة عرض الطلبات
         courierId: formData.courierId || '',
         customerAccountId: formData.customerAccountId || '',
         customerAccountCode: formData.customerAccountCode || '',
+        orderPartyAccountId: formData.orderPartyAccountId || formData.customerAccountId || '',
         orderSourceId: formData.orderSourceId,
         orderSourceName: formData.orderSourceName,
         orderSourceType: formData.orderSourceType,
@@ -1421,6 +1425,7 @@ export default function Orders() { // دالة عرض الطلبات
       courierId: '',
       customerAccountId: '',
       customerAccountCode: '',
+      orderPartyAccountId: '',
       orderSourceId: '',
       orderSourceName: '',
       orderSourceType: 'App',
