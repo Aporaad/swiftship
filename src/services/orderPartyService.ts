@@ -39,7 +39,7 @@ export function buildOrderParties(customers: any[] = [], employees: any[] = [], 
 export function filterOrderParties(parties: OrderParty[], queryText = '', staffOnly = false): OrderParty[] {
   const query = normalized(queryText);
   return parties.filter((party) => {
-    if (staffOnly && party.type === 'customer') return false;
+    if (staffOnly ? party.type === 'customer' : party.type !== 'customer') return false;
     if (!query) return true;
     return [party.name, party.phone, party.email, party.id, party.financialAccountCode]
       .some((value) => normalized(value).includes(query));

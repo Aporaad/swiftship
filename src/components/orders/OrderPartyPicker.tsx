@@ -1,5 +1,6 @@
 import { ListFilter, Search, UserRound, UsersRound, Truck, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { filterOrderParties, getOrderPartyLabel, type OrderParty } from '../../services/orderPartyService';
 
 type Props = {
@@ -28,15 +29,20 @@ export default function OrderPartyPicker({
   onClear,
 }: Props) {
   const [isListOpen, setIsListOpen] = useState(false);
-  const [query, setQuery] = useState('');
+  const [listQuery, setListQuery] = useState('');
   const availableParties = useMemo(
-    () => filterOrderParties(parties, query, staffOnly),
-    [parties, query, staffOnly],
+    () => filterOrderParties(parties, listQuery, staffOnly),
+    [parties, listQuery, staffOnly],
   );
+
+  const setStaffMode = (value: boolean) => {
+    onStaffOnlyChange(value);
+    setListQuery('');
+  };
 
   const closeList = () => {
     setIsListOpen(false);
-    setQuery('');
+    setListQuery('');
   };
 
   const choose = (party: OrderParty) => {
@@ -46,7 +52,19 @@ export default function OrderPartyPicker({
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <label className="inline-flex cursor-pointer items-center gap-2 text-[11px] font-black text-slate-300">
+          <input
+            type="checkbox"
+            checked={staffOnly}
+            onChange={(event) => {
+              setStaffMode(event.target.checked);
+              if (event.target.checked) setIsListOpen(true);
+            }}
+            className="h-4 w-4 rounded border-slate-700 bg-slate-950 accent-[#d4af37]"
+          />
+          {isAr ? 'الطلب لموظف/مندوب' : 'Order for employee/courier'}
+        </label>
         <button
           type="button"
           onClick={() => setIsListOpen(true)}
@@ -56,18 +74,6 @@ export default function OrderPartyPicker({
           {isAr ? 'الاختيار من القائمة' : 'Choose from list'}
         </button>
       </div>
-      <label className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-[11px] font-black text-slate-200">
-                <input
-                  type="checkbox"
-                  checked={staffOnly}
-                  onChange={(event) => {
-                    onStaffOnlyChange(event.target.checked);
-                    setQuery('');
-                  }}
-                  className="h-4 w-4 rounded border-slate-700 bg-slate-950 accent-[#d4af37]"
-                />
-                {isAr ? 'الطلب لموظف/مندوب' : 'Order for employee/courier'}
-        </label>
 
       {selectedParty ? (
         <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
@@ -86,20 +92,16 @@ export default function OrderPartyPicker({
         </div>
       ) : (
         <p className="rounded-xl border border-dashed border-slate-800 bg-slate-950/50 px-3 py-2 text-[10px] font-bold text-slate-500">
-          {isAr ? 'افتح القائمة لاختيار طرف الطلب.' : 'Open the list to choose the order party.'}
+          {staffOnly ? (isAr ? 'اختر موظفًا أو مندوبًا من القائمة المنبثقة.' : 'Choose an employee or courier from the popup list.') : (isAr ? 'اختر عميلًا من القائمة المنبثقة أو استخدم بحث العميل المباشر أدناه.' : 'Choose a customer from the popup list or use the direct customer search below.')}
         </p>
       )}
 
-      {isListOpen && (
+      {isListOpen && createPortal(
         <div
-          className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[999999] isolate flex items-center justify-center bg-slate-950 p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="order-party-picker-title"
-          onKeyDown={(event) => {
-            if (event.key === 'Escape') closeList();
-          }}
-          tabIndex={-1}
         >
           <button
             type="button"
@@ -111,11 +113,11 @@ export default function OrderPartyPicker({
             <div className="border-b border-slate-800 px-5 pb-4 pt-5">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h3 id="order-party-picker-title" className="text-sm font-black text-white">
-                    {isAr ? 'اختيار طرف الطلب' : 'Choose order party'}
-                  </h3>
+                  <h3 id="order-party-picker-title" className="text-sm font-black text-white">{isAr ? 'اختيار طرف الطلب' : 'Choose order party'}</h3>
                   <p className="mt-1 text-[10px] font-medium text-slate-500">
-                    {isAr ? 'اختر العميل أو فعّل الخيار لعرض الموظفين والمناديب فقط.' : 'Choose a customer, or enable the option to show employees and couriers only.'}
+                    {staffOnly
+                      ? (isAr ? 'تظهر الموظفون والمناديب فقط.' : 'Employees and couriers only are shown.')
+                      : (isAr ? 'تظهر العملاء فقط؛ فعّل الخيار أدناه لعرض الموظفين والمناديب.' : 'Customers only are shown. Enable the option below for employees and couriers.')}
                   </p>
                 </div>
                 <button type="button" onClick={closeList} className="rounded-xl bg-slate-900 p-2 text-slate-400 transition hover:bg-slate-800 hover:text-white" aria-label={isAr ? 'إغلاق' : 'Close'}>
@@ -127,10 +129,7 @@ export default function OrderPartyPicker({
                 <input
                   type="checkbox"
                   checked={staffOnly}
-                  onChange={(event) => {
-                    onStaffOnlyChange(event.target.checked);
-                    setQuery('');
-                  }}
+                  onChange={(event) => setStaffMode(event.target.checked)}
                   className="h-4 w-4 rounded border-slate-700 bg-slate-950 accent-[#d4af37]"
                 />
                 {isAr ? 'الطلب لموظف/مندوب' : 'Order for employee/courier'}
@@ -140,8 +139,8 @@ export default function OrderPartyPicker({
                 <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                 <input
                   autoFocus
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
+                  value={listQuery}
+                  onChange={(event) => setListQuery(event.target.value)}
                   placeholder={isAr ? 'ابحث بالاسم أو الجوال أو رمز الحساب...' : 'Search by name, phone, or account code...'}
                   className="w-full rounded-xl border border-slate-800 bg-slate-900 py-3 pl-3 pr-9 text-xs font-bold text-white outline-none transition focus:border-[#d4af37]/70"
                 />
@@ -166,7 +165,7 @@ export default function OrderPartyPicker({
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
     </div>
   );
 }

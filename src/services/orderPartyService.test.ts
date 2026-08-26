@@ -9,8 +9,10 @@ describe('order party service', () => {
   it('builds one searchable list across customers, employees and couriers', () => {
     const parties = buildOrderParties(customers, employees, couriers);
     expect(parties.map((party) => party.type)).toEqual(['customer', 'employee', 'courier']);
-    expect(filterOrderParties(parties, 'موظف')).toHaveLength(1);
+    expect(filterOrderParties(parties, '').map((party) => party.type)).toEqual(['customer']);
+    expect(filterOrderParties(parties, 'موظف')).toHaveLength(0);
     expect(filterOrderParties(parties, '', true).map((party) => party.type)).toEqual(['employee', 'courier']);
+    expect(filterOrderParties(parties, 'موظف', true).map((party) => party.id)).toEqual(['emp-1']);
   });
 
   it('retains customerId while recording the correct staff party metadata and linked account', () => {

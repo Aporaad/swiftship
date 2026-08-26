@@ -562,7 +562,7 @@ export default function CreateOrderModal(
                   <div className="flex justify-between items-center">
                     <label className="text-xs font-black text-[#d4af37] flex items-center gap-1.5">
                       <User className="w-4 h-4" />
-                      {isAr ? 'اختيار وتحديد العميل المستلم' : 'Receiver Customer'} *
+                      {isAr ? (isStaffOrder ? 'اختيار طرف الطلب' : 'اختيار وتحديد العميل المستلم') : (isStaffOrder ? 'Choose order party' : 'Receiver Customer')} *
                     </label>
                     {(role === 'Admin' || hasPermission('add_customers')) && (
                       <button
