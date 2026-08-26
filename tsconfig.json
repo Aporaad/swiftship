@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "experimentalDecorators": true,
+    "useDefineForClassFields": false,
+    "module": "ESNext",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "allowJs": true,
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"],
+      "firebase/app": ["./src/lib/supabase-firebase-adapter.ts"],
+      "firebase/auth": ["./src/lib/supabase-firebase-adapter.ts"],
+      "firebase/firestore": ["./src/lib/supabase-firebase-adapter.ts"],
+      "firebase/firestore/lite": ["./src/lib/supabase-firebase-adapter.ts"],
+      "firebase-admin": ["./src/lib/supabase-firebase-adapter.ts"],
+      "firebase-admin/firestore": ["./src/lib/supabase-firebase-adapter.ts"],
+      "firebase-admin/app": ["./src/lib/supabase-firebase-adapter.ts"],
+      "firebase-admin/auth": ["./src/lib/supabase-firebase-adapter.ts"],
+      "@firebase/firestore": ["./src/lib/supabase-firebase-adapter.ts"],
+      "@google-cloud/firestore": ["./src/lib/supabase-firebase-adapter.ts"]
+    },
+    "allowImportingTsExtensions": true,
+    "noEmit": true
+  },
+  "exclude": ["alx_web", "node_modules", "dist", "drizzle.config.ts", "server/_core", "test-auth.ts", "test-auth-2.ts"]
+}

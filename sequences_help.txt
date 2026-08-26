@@ -1,0 +1,36 @@
+account_prefix = {
+  accounts : "acc_"
+  customers : "cust_"
+  users : "user_"
+  curriers : "cou_"
+  sources : "source_"
+  shipping_companies : "shipco_"
+}
+accounts = const { prefix,code, accountId } =
+        await financialAccountService.getNextAccountIdentifiers('accounts');
+      const newId = prefix + code;
+
+customers = const { accountCode, code, accountId } =
+        await financialAccountService.getNextAccountIdentifiers('customers');
+      const newId = 'customer_' + accountCode;
+
+users = const { accountCode, code, accountId } =
+        await financialAccountService.getNextAccountIdentifiers('users');
+      const newId = 'user_' + accountCode;
+curriers = const { accountCode, code, accountId } =
+        await financialAccountService.getNextAccountIdentifiers('couriers');
+      const newId = 'courier_' + accountCode;
+sources = const { accountCode, code, accountId } =
+        await financialAccountService.getNextAccountIdentifiers('sources');
+      const newId = 'source_' + accountCode;
+
+shipping_companies = const { accountCode, code, accountId } =
+        await financialAccountService.getNextAccountIdentifiers('shipping_companies');
+      const newId = 'shipping_comp_' + accountCode;
+
+orders_number = const { accountCode, code, accountId } =
+        await financialAccountService.getNextAccountIdentifiers('order_number');
+      const newId = 'user_' + accountCode;
+
+=======
+orderStartNumber: 1001,
