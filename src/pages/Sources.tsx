@@ -8,6 +8,7 @@ import { notificationService } from '../services/notificationService';
 import { activityLogService } from '../services/activityLogService';
 import ConfirmModal from '../components/ConfirmModal';
 import { financialAccountService } from '../services/financialAccountService';
+import { ShippingCompanyCreateModal, SourceCreateModal } from '../components/entities/EntityCreateModals';
 
 export default function Sources() {
   const { role, hasPermission, loading: roleLoading } = useRole();
@@ -633,8 +634,23 @@ export default function Sources() {
         </div>
       )}
 
-      {/* Origin Purchase Sources Modal */}
-      {isModalOpen && (
+      <SourceCreateModal
+        isOpen={isModalOpen && !selectedSource}
+        onClose={() => setIsModalOpen(false)}
+        isAr={isAr}
+        settings={settings}
+        onCreated={() => undefined}
+      />
+      <ShippingCompanyCreateModal
+        isOpen={isShippingModalOpen && !selectedCompany}
+        onClose={() => setIsShippingModalOpen(false)}
+        isAr={isAr}
+        settings={settings}
+        onCreated={() => undefined}
+      />
+
+      {/* Origin Purchase Sources edit modal */}
+      {isModalOpen && selectedSource && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
           <form onSubmit={handleSubmit} className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/25 rounded-3xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh] overflow-hidden font-sans">
             <div className="p-4 border-b border-slate-850 flex justify-between items-center bg-[#07070a]/40 shrink-0">
@@ -749,8 +765,8 @@ export default function Sources() {
         </div>
       )}
 
-      {/* Shipping Carrier Companies Modal */}
-      {isShippingModalOpen && (
+      {/* Shipping Carrier Companies edit modal */}
+      {isShippingModalOpen && selectedCompany && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
           <form onSubmit={handleShippingSubmit} className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/25 rounded-3xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh] overflow-hidden font-sans">
             <div className="p-4 border-b border-slate-850 flex justify-between items-center bg-[#07070a]/40 shrink-0">

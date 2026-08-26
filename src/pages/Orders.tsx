@@ -43,6 +43,7 @@ import OrderDetailsModal from '../components/orders/OrderDetailsModal';
 import UpdateStatusModal from '../components/orders/UpdateStatusModal';
 import CreateOrderModal from '../components/orders/CreateOrderModal';
 import EditOrderModal from '../components/orders/EditOrderModal';
+import { CustomerCreateModal, ShippingCompanyCreateModal, SourceCreateModal } from '../components/entities/EntityCreateModals';
 
 export default function Orders() { // دالة عرض الطلبات 
   const { settings, t } = useSettings(); // استيراد الإعدادات لاجل عرض الإعدادات 
@@ -4119,8 +4120,45 @@ export default function Orders() { // دالة عرض الطلبات
       />
 
 
-      {/* QUICK ADD CUSTOMER NESTED MODAL تبويه انشاءعميل جديد  مهم:يجب استدعائها من واجهه العميل مباشره [src/pages/Customers.tsx#L569-680] وعدم تكرارها هنا*/}
-      {isAddCustomerOpen && (
+      <CustomerCreateModal
+        isOpen={isAddCustomerOpen}
+        onClose={() => setIsAddCustomerOpen(false)}
+        isAr={isAr}
+        settings={settings}
+        initialName={customerFormData.fullName}
+        onCreated={(customer) => {
+          void selectOrderParty({ id: customer.id, type: 'customer', name: customer.fullName, phone: customer.phone, email: customer.email, financialAccountId: customer.financialAccountId, financialAccountCode: customer.financialAccountCode, raw: customer });
+          setCustomerFormData({ fullName: '', phone: '', email: '', gps_location: '', address: '', notes: '' });
+        }}
+      />
+      <SourceCreateModal
+        isOpen={isAddSourceOpen}
+        onClose={() => setIsAddSourceOpen(false)}
+        isAr={isAr}
+        settings={settings}
+        onCreated={(source) => setFormData((previous) => ({ ...previous, orderSourceId: source.id, orderSourceName: source.name, orderSourceType: source.type }))}
+      />
+      <ShippingCompanyCreateModal
+        isOpen={isAddShippingCompanyOpen}
+        onClose={() => setIsAddShippingCompanyOpen(false)}
+        isAr={isAr}
+        settings={settings}
+        onCreated={(company) => {
+          if (activeAddShippingIndex !== null) {
+            if (typeof activeAddShippingIndex === 'string' && activeAddShippingIndex.startsWith('edit-')) {
+              updateUpdateShippingRow(parseInt(activeAddShippingIndex.split('-')[1]), 'shippingCompany', company.name);
+            } else if (typeof activeAddShippingIndex === 'number') {
+              updateShippingRow(activeAddShippingIndex, 'shippingCompany', company.name);
+            }
+            setActiveAddShippingIndex(null);
+          } else {
+            setFormData((previous) => ({ ...previous, shippingCompany: company.name }));
+          }
+        }}
+      />
+
+      {/* Deprecated local quick-add markup retained temporarily but never rendered. */}
+      {false && isAddCustomerOpen && (
         <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 z-55 animate-fade-in">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl">
             <div className="p-4 border-b border-slate-800 bg-slate-950 flex justify-between items-center text-xs font-black text-white">
@@ -4256,7 +4294,7 @@ export default function Orders() { // دالة عرض الطلبات
 
 
       {/* QUICK ADD SHIPPING COMPANY NESTED MODAL نموذج انشاء شركه جديده*/}
-      {isAddShippingCompanyOpen && (
+      {false && isAddShippingCompanyOpen && (
         <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 z-55 animate-fade-in">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl">
             <div className="p-4 border-b border-slate-800 bg-slate-955 flex justify-between items-center text-xs font-black text-white">

@@ -34,6 +34,7 @@ import { financialAccountService } from '../services/financialAccountService';
 import { useAccountBalances } from '../hooks/useAccountBalances';
 import ConfirmModal from '../components/ConfirmModal';
 import ConfirmDeletePinModal from '../components/ConfirmDeletePinModal';
+import { CustomerCreateModal } from '../components/entities/EntityCreateModals';
 
 export default function Customers() {
   const { role, hasPermission, loading: roleLoading } = useRole();
@@ -566,8 +567,16 @@ export default function Customers() {
         )}
       </div>
 
-      {/* Add/Edit Modal (Gold Dark UI Frame) */}
-      {showModal && (
+      <CustomerCreateModal
+        isOpen={showModal && !selectedCustomer}
+        onClose={() => setShowModal(false)}
+        isAr={isAr}
+        settings={settings}
+        onCreated={() => undefined}
+      />
+
+      {/* Edit Modal (Gold Dark UI Frame) */}
+      {showModal && selectedCustomer && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
           <form onSubmit={handleSubmit} className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/25 rounded-3xl shadow-2xl max-w-md w-full flex flex-col max-h-[90vh] overflow-hidden font-sans">
             <div className="p-4 border-b border-slate-850 flex justify-between items-center bg-[#07070a]/40 shrink-0">
