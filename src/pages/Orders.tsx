@@ -32,6 +32,7 @@ import { calculateShipmentCategoryFees } from '../services/itemCategoryService';
 import ItemCategoriesManagementTab from '../components/orders/ItemCategoriesManagementTab';
 import OrderHistoryModal from '../components/orders/OrderHistoryModal'; // استيراد سجل تدقيق الطلبات والشحنات
 import { buildOrderParties, findOrderParty, toOrderPartyPayload, type OrderParty } from '../services/orderPartyService';
+import { calculateOrderPaymentTotals } from '../services/orderCurrencyService';
 
 // استيراد وحدات التقارير والنماذج المنفصلة
 import { generateOrderInvoicePDF, exportOrdersToPDF, exportOrdersToCSV } from '../reports';
@@ -375,9 +376,11 @@ export default function Orders() { // دالة عرض الطلبات
     shippingCourierId: '', // Saudi courier
     deliveryCourierId: '', // Yemen courier
     deliveryCourierFee: 4000, // Yemen flat delivery rate in YER
+    deliveryCourierFeeCurrency: settings.currency || 'YER',
 
     // Rates & Commissions
-    currency: 'SAR',
+    orderCurrency,
+    currency: orderCurrency,
     exchangeRate: 1, // Selected currency exchange rate
     exchangeRateYER: 140, // Dynamic rate from DB
     exchangeRateUSD: 1, // Dynamic rate from DB
@@ -883,35 +886,18 @@ export default function Orders() { // دالة عرض الطلبات
     }
     //----------------------------------------------
 
-    // Helper to fetch rates vs YER base
-    const getCurrencyRate = (code: string) => {
-      if (code === 'YER') return 1;
-      const rate = dbRates[code];
-      if (rate && rate > 0) return rate;
-      if (code === 'SAR') return 140;
-      if (code === 'USD') return 535;
-      return 1;
-    };
-
-    const rateOrder = getCurrencyRate(orderCurrency);
-    const ratePayment = getCurrencyRate(formData.currency || 'YER');
-    const defaultExchange = rateOrder / ratePayment;
-
-    const exchange = (formData.exchangeRate)
-      ? formData.exchangeRate
-      : defaultExchange;
-
-    // totalOrderSAR is the unconverted total order cost in original orderCurrency
-    // baseTotalOrderPaymentCurrency is the total order cost converted to formData.currency
-    const baseTotalOrderPaymentCurrency = totalOrderSAR * exchange;
-
-    // Delivery courier fee
     const deliveryFeeRaw = parseFloat(formData.deliveryCourierFee as any) || 0;
-    const deliveryFeeInPaymentCurrency = (formData.currency === 'YER' || !formData.currency)//مهم:يجب تغييرها من اسم ثابت الى متغير يجلب العمله الافتراضيه للنظام
-      ? deliveryFeeRaw
-      : deliveryFeeRaw / ratePayment;
-
-    const totalOrderYER = baseTotalOrderPaymentCurrency + deliveryFeeInPaymentCurrency;
+    const paymentCurrency = formData.currency || orderCurrency;
+    const deliveryFeeCurrency = formData.deliveryCourierFeeCurrency || settings.currency || 'YER';
+    const currencyTotals = calculateOrderPaymentTotals({
+      orderSubtotal: totalOrderSAR,
+      deliveryFeeOriginal: deliveryFeeRaw,
+      deliveryFeeCurrency,
+      orderCurrency,
+      paymentCurrency,
+      rates: dbRates,
+    });
+    const totalOrderYER = currencyTotals.totalPaymentCurrency;
     const sourcingCostAmount =
       (formData.orderSourceType === 'App' || formData.orderSourceType === 'Factory')
         ? totalProductsCostWithAdjustments + shippingCostSAR
@@ -929,9 +915,12 @@ export default function Orders() { // دالة عرض الطلبات
       shippingCostSAR,
       bankCommissionSAR: bankCommValue,
       couponValue,
-      totalOrderSAR,
+      totalOrderSAR: currencyTotals.totalOrderCurrency,
       totalOrderYER,
       remainingYER,
+      deliveryCourierFeeOrderCurrency: currencyTotals.deliveryFeeOrderCurrency,
+      deliveryCourierFeeCurrency: deliveryFeeCurrency,
+      paymentExchangeRate: currencyTotals.paymentExchangeRate,
       profitSaudiSAR,
       profitCompanySAR,
       sourcingCostAmount,
@@ -955,9 +944,6 @@ export default function Orders() { // دالة عرض الطلبات
     }
 
     const currentCalcs = computeCalculations();
-    const rateOrder = dbRates[orderCurrency] || (orderCurrency === 'SAR' ? 140 : orderCurrency === 'USD' ? 535 : 1);
-    const ratePayment = dbRates[formData.currency || 'YER'] || (formData.currency === 'SAR' ? 140 : formData.currency === 'USD' ? 535 : 1);
-    const productsSumYER = currentCalcs.productsSum * (formData.exchangeRate ?? (rateOrder / ratePayment));
     const paidAmount = parseFloat(formData.amountPaid as any) || 0;
 
     // First requirement: Deleted the condition that cash paid amount cannot be less than original products cost. Any amount is allowed.
@@ -1015,11 +1001,14 @@ export default function Orders() { // دالة عرض الطلبات
         shippingCourierId: formData.shippingCourierId,
         deliveryCourierId: formData.deliveryCourierId,
         deliveryCourierFee: parseFloat(formData.deliveryCourierFee as any) || 0,
+        deliveryCourierFeeCurrency: currentCalcs.deliveryCourierFeeCurrency,
+        deliveryCourierFeeOrderCurrency: currentCalcs.deliveryCourierFeeOrderCurrency,
 
         // Financial definitions
         currency: orderCurrency,
+        orderCurrency,
         paidCurrency: formData.currency,
-        exchangeRate: formData.exchangeRate ?? formData.exchangeRateYER,
+        exchangeRate: currentCalcs.paymentExchangeRate,
         exchangeRateYER: formData.exchangeRateYER,
         exchangeRateUSD: formData.exchangeRateUSD,
         bankCommissionRate: formData.bankCommissionRate,
@@ -1441,8 +1430,10 @@ export default function Orders() { // دالة عرض الطلبات
       shippingCourierId: '',
       deliveryCourierId: '',
       deliveryCourierFee: settings.defaultDeliveryFee ?? 4000,
+      deliveryCourierFeeCurrency: settings.currency || 'YER',
+      orderCurrency,
       currency: orderCurrency,
-      exchangeRate: dbRates[orderCurrency] || 1,
+      exchangeRate: 1,
       exchangeRateYER: dbRates[orderCurrency] || 1,
       exchangeRateUSD: dbRates['USD'] || 1,
       bankCommissionRate: settings.defaultBankCommissionRate ?? 3,

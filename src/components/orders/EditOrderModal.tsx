@@ -9,6 +9,7 @@ import { activityLogService } from '../../services/activityLogService';
 import { calculateShipmentCategoryFees } from '../../services/itemCategoryService';
 import { financialAccountService } from '../../services/financialAccountService';
 import { buildOrderParties, findOrderParty, toOrderPartyPayload, type OrderParty } from '../../services/orderPartyService';
+import { calculateOrderPaymentTotals } from '../../services/orderCurrencyService';
 import OrderPartyPicker from './OrderPartyPicker';
 
 interface EditOrderModalProps {
@@ -99,7 +100,10 @@ export default function EditOrderModal({
     shippingCourierId: '',
     deliveryCourierId: '',
     deliveryCourierFee: 4000,
-    currency: 'SAR',
+    deliveryCourierFeeCurrency: settings?.currency || 'YER',
+    orderCurrency: settings?.defaultOrderCurrency || settings?.currency || 'SAR',
+    currency: settings?.defaultOrderCurrency || settings?.currency || 'SAR',
+    exchangeRate: 1,
     exchangeRateYER: 1,
     exchangeRateUSD: 1,
     bankCommissionRate: 3,
@@ -119,6 +123,7 @@ export default function EditOrderModal({
     if (isOpen && orderToEdit) {
       setCurrentStep(1);
       setStepErrors(null);
+      const loadedOrderCurrency = orderToEdit.orderCurrency || orderToEdit.currency || settings?.defaultOrderCurrency || settings?.currency || 'SAR';
 
       setFormData({
         customerId: orderToEdit.customerId || '',
@@ -141,7 +146,10 @@ export default function EditOrderModal({
         shippingCourierId: orderToEdit.shippingCourierId || '',
         deliveryCourierId: orderToEdit.deliveryCourierId || '',
         deliveryCourierFee: orderToEdit.deliveryCourierFee ?? 4000,
-        currency: orderToEdit.currency || settings?.currency || 'SAR',
+        deliveryCourierFeeCurrency: orderToEdit.deliveryCourierFeeCurrency || settings?.currency || 'YER',
+        orderCurrency: loadedOrderCurrency,
+        currency: loadedOrderCurrency,
+        exchangeRate: 1,
         exchangeRateYER: orderToEdit.exchangeRateYER || 1,
         exchangeRateUSD: orderToEdit.exchangeRateUSD || 1,
         bankCommissionRate: orderToEdit.bankCommissionRate ?? 3,
@@ -287,10 +295,23 @@ export default function EditOrderModal({
     (sum, s) => sum + parseFloat(s.shippingCost || 0) + parseFloat(s.packagingFees || 0) + (parseFloat(s.shippingCategoryPrice as any) || 0),
     0
   );
-  const totalOrderSAR = productsSum + itemsPackagingSum + shippingsCostSum + parseFloat(formData.packagingFee || 0);
-  const exchange = formData.currency === 'USD' ? formData.exchangeRateUSD : formData.exchangeRateYER;
-  const baseTotalOrderYER = totalOrderSAR * exchange;
-  const totalOrderYER = baseTotalOrderYER + (parseFloat(formData.deliveryCourierFee) || 0);
+  const orderCurrency = formData.orderCurrency || settings?.defaultOrderCurrency || settings?.currency || 'SAR';
+  const paymentCurrency = formData.currency || orderCurrency;
+  const currencyRates = activeCurrencies.reduce((rates: Record<string, number>, currency: any) => {
+    const value = Number(currency.currentPrice ?? currency.price ?? currency.rate);
+    if (currency.code && Number.isFinite(value) && value > 0) rates[currency.code] = value;
+    return rates;
+  }, {});
+  const currencyTotals = calculateOrderPaymentTotals({
+    orderSubtotal: productsSum + itemsPackagingSum + shippingsCostSum + parseFloat(formData.packagingFee || 0),
+    deliveryFeeOriginal: parseFloat(formData.deliveryCourierFee) || 0,
+    deliveryFeeCurrency: formData.deliveryCourierFeeCurrency || settings?.currency || 'YER',
+    orderCurrency,
+    paymentCurrency,
+    rates: currencyRates,
+  });
+  const totalOrderSAR = currencyTotals.totalOrderCurrency;
+  const totalOrderYER = currencyTotals.totalPaymentCurrency;
   const valPaid = parseFloat(formData.amountPaid) || 0;
   const remainingYER = totalOrderYER - valPaid;
 
@@ -380,7 +401,12 @@ export default function EditOrderModal({
         shippingCourierId: formData.shippingCourierId,
         deliveryCourierId: formData.deliveryCourierId,
         deliveryCourierFee: parseFloat(formData.deliveryCourierFee) || 0,
-        currency: formData.currency,
+        deliveryCourierFeeCurrency: formData.deliveryCourierFeeCurrency || settings?.currency || 'YER',
+        deliveryCourierFeeOrderCurrency: currencyTotals.deliveryFeeOrderCurrency,
+        currency: orderCurrency,
+        orderCurrency,
+        paidCurrency: paymentCurrency,
+        exchangeRate: currencyTotals.paymentExchangeRate,
         exchangeRateYER: formData.exchangeRateYER,
         exchangeRateUSD: formData.exchangeRateUSD,
         bankCommissionRate: formData.bankCommissionRate,
@@ -453,15 +479,15 @@ export default function EditOrderModal({
             </div>
             <div className="bg-slate-955/60 p-2 rounded-xl border border-slate-800">
               <span className="block text-[9px] text-slate-500 font-black uppercase">{isAr ? 'إجمالي الفاتورة' : 'Total Due'}</span>
-              <span className="font-mono text-xs font-black text-emerald-400">{Math.ceil(totalOrderYER).toLocaleString()} YER</span>
+              <span className="font-mono text-xs font-black text-emerald-400">{Math.ceil(totalOrderYER).toLocaleString()} {paymentCurrency}</span>
             </div>
             <div className="bg-slate-955/60 p-2 rounded-xl border border-slate-800">
               <span className="block text-[9px] text-slate-500 font-black uppercase">{isAr ? 'المبلغ المدفوع' : 'Paid'}</span>
-              <span className="font-mono text-xs font-black text-blue-400">{valPaid.toLocaleString()} YER</span>
+              <span className="font-mono text-xs font-black text-blue-400">{valPaid.toLocaleString()} {paymentCurrency}</span>
             </div>
             <div className="bg-slate-955/60 p-2 rounded-xl border border-slate-800">
               <span className="block text-[9px] text-slate-500 font-black uppercase">{isAr ? 'المتبقي' : 'Remaining'}</span>
-              <span className="font-mono text-xs font-black text-rose-400">{Math.ceil(remainingYER).toLocaleString()} YER</span>
+              <span className="font-mono text-xs font-black text-rose-400">{Math.ceil(remainingYER).toLocaleString()} {paymentCurrency}</span>
             </div>
           </div>
         </div>
@@ -885,9 +911,9 @@ export default function EditOrderModal({
           {currentStep === 4 && (
             <div className="bg-slate-950/40 p-5 rounded-2xl border border-slate-800 space-y-4 animate-fade-in">
               <span className="text-blue-400 uppercase text-[10px] block font-black">{isAr ? 'القيم والمدفوعات' : 'Financials & Payments'}</span>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                 <div>
-                  <label className="block text-slate-500 mb-1">{isAr ? 'المبلغ المدفوع (ريال يمني)' : 'Amount Paid (YER)'}</label>
+                  <label className="block text-slate-500 mb-1">{isAr ? `المبلغ المدفوع (${paymentCurrency})` : `Amount Paid (${paymentCurrency})`}</label>
                   <input
                     type="number"
                     value={formData.amountPaid}
@@ -897,7 +923,7 @@ export default function EditOrderModal({
                 </div>
 
                 <div>
-                  <label className="block text-slate-500 mb-1">{isAr ? 'رسوم التغليف العامة (SAR)' : 'Packaging Fee (SAR)'}</label>
+                  <label className="block text-slate-500 mb-1">{isAr ? `رسوم التغليف العامة (${orderCurrency})` : `Packaging Fee (${orderCurrency})`}</label>
                   <input
                     type="number"
                     value={formData.packagingFee}
@@ -907,24 +933,40 @@ export default function EditOrderModal({
                 </div>
 
                 <div>
-                  <label className="block text-slate-500 mb-1">{isAr ? 'أجرة التوصيل لليمن (YER)' : 'Delivery Fee (YER)'}</label>
+                  <label className="block text-slate-500 mb-1">{isAr ? `أجرة التوصيل (${formData.deliveryCourierFeeCurrency || settings?.currency || 'YER'})` : `Delivery Fee (${formData.deliveryCourierFeeCurrency || settings?.currency || 'YER'})`}</label>
                   <input
                     type="number"
                     value={formData.deliveryCourierFee}
                     onChange={(e) => setFormData({ ...formData, deliveryCourierFee: parseFloat(e.target.value) || 0 })}
                     className="w-full bg-slate-955 border border-slate-800 text-white font-mono rounded-xl p-3 outline-none"
                   />
+                  <p className="mt-1 text-[10px] font-mono text-amber-300/80">≈ {currencyTotals.deliveryFeeOrderCurrency.toLocaleString(undefined, { maximumFractionDigits: 2 })} {orderCurrency}</p>
+                </div>
+
+                <div>
+                  <label className="block text-slate-500 mb-1">{isAr ? 'عملة الدفع' : 'Payment Currency'}</label>
+                  <select
+                    value={paymentCurrency}
+                    onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+                    className="w-full bg-slate-955 border border-slate-800 text-white font-bold rounded-xl p-3 outline-none"
+                  >
+                    {activeCurrencies.map((currency: any) => <option className="bg-slate-900 text-white" key={currency.code} value={currency.code}>{currency.code}</option>)}
+                  </select>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 pt-2">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
                 <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 flex justify-between items-center">
-                  <span className="text-slate-400">{isAr ? 'إجمالي الفاتورة المتوقع:' : 'Total Calculated:'}</span>
-                  <span className="font-mono text-white font-black text-sm">{Math.ceil(totalOrderYER).toLocaleString()} YER</span>
+                  <span className="text-slate-400">{isAr ? `إجمالي بعملة الطلب (${orderCurrency}):` : `Order Total (${orderCurrency}):`}</span>
+                  <span className="font-mono text-amber-300 font-black text-sm">{Math.ceil(totalOrderSAR).toLocaleString()} {orderCurrency}</span>
+                </div>
+                <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 flex justify-between items-center">
+                  <span className="text-slate-400">{isAr ? `إجمالي بعملة الدفع (${paymentCurrency}):` : `Payment Total (${paymentCurrency}):`}</span>
+                  <span className="font-mono text-white font-black text-sm">{Math.ceil(totalOrderYER).toLocaleString()} {paymentCurrency}</span>
                 </div>
                 <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 flex justify-between items-center">
                   <span className="text-slate-400">{isAr ? 'المتبقي ذمة:' : 'Remaining Balance:'}</span>
-                  <span className="font-mono text-rose-400 font-black text-sm">{Math.ceil(remainingYER).toLocaleString()} YER</span>
+                  <span className="font-mono text-rose-400 font-black text-sm">{Math.ceil(remainingYER).toLocaleString()} {paymentCurrency}</span>
                 </div>
               </div>
             </div>
@@ -954,8 +996,9 @@ export default function EditOrderModal({
 
                 <div className="bg-slate-950/40 p-4 rounded-2xl border border-slate-800 space-y-2">
                   <span className="text-slate-400 block border-b border-slate-800 pb-1">{isAr ? 'المالية:' : 'Financials:'}</span>
-                  <p className="text-emerald-400 font-mono">الإجمالي: {Math.ceil(totalOrderYER).toLocaleString()} YER</p>
-                  <p className="text-rose-400 font-mono">المتبقي: {Math.ceil(remainingYER).toLocaleString()} YER</p>
+                  <p className="text-amber-300 font-mono">إجمالي الطلب: {Math.ceil(totalOrderSAR).toLocaleString()} {orderCurrency}</p>
+                  <p className="text-emerald-400 font-mono">إجمالي الدفع: {Math.ceil(totalOrderYER).toLocaleString()} {paymentCurrency}</p>
+                  <p className="text-rose-400 font-mono">المتبقي: {Math.ceil(remainingYER).toLocaleString()} {paymentCurrency}</p>
                 </div>
               </div>
             </div>

@@ -39,5 +39,7 @@ describe('order party wiring', () => {
     expect(createModal).toContain('!formData.customerId && !isStaffOrder');
     expect(partyService).toContain("staffOnly ? party.type === 'customer' : party.type !== 'customer'");
     expect(financialService).toContain('entities.orderParty || entities.customer');
+    expect(createModal).toContain('orderCurrency, currency: orderCurrency, exchangeRate: 1');
+    expect(editModal).toContain('currency: loadedOrderCurrency');
   });
 });

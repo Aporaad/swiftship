@@ -237,8 +237,7 @@ export default function CreateOrderModal(
     if (isOpen) {
       setCurrentStep(1);
       setStepErrors(null);
-      const exchangeRateValue = getCurrencyRate(formData.orderCurrency) / getCurrencyRate(formData.orderCurrency || 'KSA');
-      setFormData({ ...formData, currency: formData.orderCurrency, exchangeRate: exchangeRateValue });
+      setFormData({ ...formData, orderCurrency, currency: orderCurrency, exchangeRate: 1 });
     }
   }, [isOpen]);
 
@@ -1368,7 +1367,7 @@ export default function CreateOrderModal(
                   </div>
 
                   <div>
-                    <label className="block text-slate-500 mb-1">{isAr ? 'رسوم التوصيل لليمن (ريال يمني)' : 'Delivery Courier Fee (YER)'}</label>
+                    <label className="block text-slate-500 mb-1">{isAr ? `رسوم التوصيل لليمن (${formData.deliveryCourierFeeCurrency || settings.currency || 'YER'})` : `Delivery Courier Fee (${formData.deliveryCourierFeeCurrency || settings.currency || 'YER'})`}</label>
                     <input
                       type="number"
                       value={formData.deliveryCourierFee}
@@ -1559,7 +1558,10 @@ export default function CreateOrderModal(
                   {(formData.deliveryCourierFee || 0) > 0 && (
                     <div className="flex justify-between items-center">
                       <span className="text-slate-500 font-bold">{isAr ? '🛵 أجرة توصيل المندوب:' : '🛵 Delivery Agent Fee:'}</span>
-                      <span className="font-mono text-amber-200 font-bold">{(formData.deliveryCourierFee || 0).toLocaleString()} YER</span>
+                      <span className="font-mono text-amber-200 font-bold text-end">
+                        <span className="block">{(formData.deliveryCourierFee || 0).toLocaleString()} {calcs.deliveryCourierFeeCurrency}</span>
+                        <span className="block text-[10px] text-amber-300/75">≈ {calcs.deliveryCourierFeeOrderCurrency.toLocaleString(undefined, { maximumFractionDigits: 2 })} {orderCurrency}</span>
+                      </span>
                     </div>
                   )}
 
@@ -1625,8 +1627,7 @@ export default function CreateOrderModal(
                       </span>
                       <input type="number" step="any"
                         value={getCurrencyRate(orderCurrency) / getCurrencyRate(formData.currency || 'YER')}
-                        onChange={(e) => setFormData({ ...formData, exchangeRate: parseFloat(e.target.value) || 1 })}
-                        disabled={!canEditOrderDefaultsCreation}
+                        readOnly
                         className="w-full bg-slate-955 border border-slate-800 text-white font-mono font-bold text-xs p-2 rounded-lg text-center outline-none disabled:opacity-50" />
                     </div>
                   </div>
