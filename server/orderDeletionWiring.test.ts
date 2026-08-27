@@ -8,6 +8,7 @@ const read = (relativePath: string) => fs.readFileSync(path.join(projectRoot, re
 describe('حذف الطلبات الذري', () => {
   it('ينظف التبعيات ويمنع إنشاء سجل orders_history بعد حذف الأب مع إبقاء activity_logs', () => {
     const migration = read('supabase/migrations/202608270090_add_atomic_order_deletion.sql');
+    const shipmentTriggerMigration = read('supabase/migrations/202608270091_fix_atomic_order_shipment_history_trigger.sql');
     expect(migration).toContain('CREATE OR REPLACE FUNCTION public.delete_orders_with_dependents');
     expect(migration).toContain('DELETE FROM public.account_transactions');
     expect(migration).toContain('DELETE FROM public.journal_entries');
@@ -18,6 +19,9 @@ describe('حذف الطلبات الذري', () => {
     expect(migration).toContain("IF TG_OP = 'DELETE' THEN");
     expect(migration).toContain('activityLogsDeleted');
     expect(migration).not.toContain('DELETE FROM public.activity_logs');
+    expect(shipmentTriggerMigration).toContain('CREATE OR REPLACE FUNCTION public.orders_history_from_shipments()');
+    expect(shipmentTriggerMigration).toContain("IF TG_OP = 'DELETE' THEN");
+    expect(shipmentTriggerMigration).toContain('RETURN OLD;');
   });
 
   it('يستدعي الإجراء الذري من واجهة الخدمة ولا يعتمد حذف جدول orders مباشرةً', () => {
