@@ -46,7 +46,7 @@ describe.runIf(canVerify)('Supabase read-only verification', () => {
     ]);
     const sourceRows = await sources.json();
     const carrierRows = await carriers.json();
-    expect(sourceRows[0]?.account_code).toMatch(/^2140-/);
-    expect(carrierRows[0]?.account_code).toMatch(/^2150-/);
+    expect(sourceRows[0]?.account_code).toMatch(/^2141-\d{4}$/);
+    expect(carrierRows[0]?.account_code).toMatch(/^2151-\d{4}$/);
   });
 });

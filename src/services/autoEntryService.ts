@@ -22,12 +22,14 @@ export interface AutoEntryRule {
     code: string;
     name: string;
     type: 'system' | 'dynamic';
+    defaultKey?: string;
   };
   creditAccount: {
     id: string;
     code: string;
     name: string;
     type: 'system' | 'dynamic';
+    defaultKey?: string;
   };
   amountSource?: AutoEntryAmountSource;
   amountSources?: AutoEntryAmountSource[];
@@ -57,9 +59,10 @@ export const DEFAULT_AUTO_ENTRIES: AutoEntryRule[] = [
     },
     creditAccount: {
       id: 'sys_profit_account',
-      code: '4000-0001',
+      code: '',
       name: 'حساب أرباح الشركة (نظامي)',
       type: 'system',
+      defaultKey: 'sys_profit_account',
     },
     descriptionTempAr: 'قيد قيمة الطلب رقم: {orderNumber}',
     descriptionTempEn: 'Charge for order: {orderNumber}',
@@ -74,9 +77,10 @@ export const DEFAULT_AUTO_ENTRIES: AutoEntryRule[] = [
     amountSource: 'amount_paid',
     debitAccount: {
       id: 'sys_cash_account',
-      code: '1111-0',
+      code: '',
       name: 'حساب الصندوق/الخزينة (نظامي)',
       type: 'system',
+      defaultKey: 'sys_cash_account',
     },
     creditAccount: {
       id: 'customer_linked',
@@ -97,9 +101,10 @@ export const DEFAULT_AUTO_ENTRIES: AutoEntryRule[] = [
     amountSource: 'courier_commission',
     debitAccount: {
       id: 'sys_sourcing_cost',
-      code: '5100-4483',
+      code: '',
       name: 'حساب تكلفة الشحن والعمولات (نظامي)',
       type: 'system',
+      defaultKey: 'sys_sourcing_cost',
     },
     creditAccount: {
       id: 'courier_linked',
@@ -143,9 +148,10 @@ export const DEFAULT_AUTO_ENTRIES: AutoEntryRule[] = [
     amountSource: 'delivery_wage',
     debitAccount: {
       id: 'sys_delivery_cost',
-      code: '5000-2788',
+      code: '',
       name: 'حساب مصروفات التوصيل (نظامي)',
       type: 'system',
+      defaultKey: 'sys_delivery_cost',
     },
     creditAccount: {
       id: 'courier_linked',

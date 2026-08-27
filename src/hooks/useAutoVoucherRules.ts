@@ -1,10 +1,9 @@
-import { useState, useEffect } from 'react';
-import { db } from '../lib/firebase';
-import { onSnapshot, doc, setDoc } from 'firebase/firestore';
+import { useEffect, useState } from 'react';
+import { collection, db, onSnapshot } from '../lib/supabase-firebase-adapter';
 
 export interface AutoVoucherRule {
   id: string;
-  actionCode: string;
+  actionCode?: string;
   nameAr: string;
   nameEn: string;
   descriptionTempAr: string;
@@ -12,18 +11,18 @@ export interface AutoVoucherRule {
   debitAccount: any;
   creditAccount: any;
   isActive: boolean;
-  requiredEntities: string[];
+  requiredEntities?: string[];
 }
 
 let cachedRules: AutoVoucherRule[] | null = null;
 const subscribers = new Set<() => void>();
+let unsubscribeRules: (() => void) | null = null;
 
 function notifySubscribers() {
-  subscribers.forEach(cb => cb());
+  subscribers.forEach((callback) => callback());
 }
 
-let isSubscribed = false;
-
+/** المصدر الرسمي لقواعد القيود التلقائية هو auto_entries؛ لا تقرأ هذه الواجهة وثيقة settings التاريخية. */
 export function useAutoVoucherRules() {
   const [rules, setRules] = useState<AutoVoucherRule[]>(cachedRules || []);
   const [loading, setLoading] = useState<boolean>(!cachedRules);
@@ -35,26 +34,19 @@ export function useAutoVoucherRules() {
         setLoading(false);
       }
     };
-    
     subscribers.add(handler);
-
-    if (!isSubscribed) {
-      isSubscribed = true;
-      const ref = doc(db, 'settings', 'automatic_voucher_rules');
-      
-      onSnapshot(ref, (snap) => {
-        if (snap.exists()) {
-          const docData = snap.data();
-          if (docData && docData.data && Array.isArray(docData.data)) {
-            cachedRules = docData.data;
-            notifySubscribers();
-          }
-        }
+    if (!unsubscribeRules) {
+      unsubscribeRules = onSnapshot(collection(db, 'auto_entries'), (snapshot: any) => {
+        cachedRules = snapshot.docs.map((entry: any) => ({ id: entry.id, ...entry.data() }));
+        notifySubscribers();
       });
     }
-
     return () => {
       subscribers.delete(handler);
+      if (subscribers.size === 0 && unsubscribeRules) {
+        unsubscribeRules();
+        unsubscribeRules = null;
+      }
     };
   }, []);
 

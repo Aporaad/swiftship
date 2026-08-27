@@ -96,6 +96,19 @@ function setOfflineMode(value: boolean) {
 // Hold local cache of collections for in-memory querying to ensure fast, real-time reactive updates
 const collectionCaches: { [table: string]: any[] } = {};
 const collectionListeners: { [table: string]: Set<() => void> } = {};
+const ACCOUNTING_CACHE_REFRESH_KEY = 'swiftship_accounting_cache_schema';
+const ACCOUNTING_CACHE_REFRESH_VERSION = 'accounting-hierarchy-tree-v3';
+const ACCOUNTING_CACHE_TABLES = ['account', 'acc_main', 'acc_sub', 'acc_sub_group', 'accounts', 'default_accounts', 'account_transactions'];
+
+function invalidateLegacyAccountingCache(): void {
+  if (isServer || safeLocalStorage.getItem(ACCOUNTING_CACHE_REFRESH_KEY) === ACCOUNTING_CACHE_REFRESH_VERSION) return;
+  ACCOUNTING_CACHE_TABLES.forEach((table) => {
+    safeLocalStorage.removeItem(`swiftship_table_backup_${table}`);
+    collectionCaches[table] = [];
+    lastFetchTimestamps[table] = 0;
+  });
+  safeLocalStorage.setItem(ACCOUNTING_CACHE_REFRESH_KEY, ACCOUNTING_CACHE_REFRESH_VERSION);
+}
 
 // Cache and Sync session state
 let currentSession: any = null;
@@ -240,6 +253,7 @@ export function extractRowPayload(table: string, row: any): any {
 }
 
 async function ensureCache(table: string): Promise<any[]> {
+  if (ACCOUNTING_CACHE_TABLES.includes(table)) invalidateLegacyAccountingCache();
   const now = Date.now();
   const lastFetch = lastFetchTimestamps[table] || 0;
   const isStale = (now - lastFetch > CACHE_TTL_MS) || (lastFetch === 0);
@@ -583,14 +597,20 @@ const DIRECT_COLUMNS_MAP: Record<string, Record<string, string>> = {
   user_settings: { userId: 'userid' },
   customers: { accountId: 'account_id', disabled: 'is_active', level: 'levels', levels: 'levels' },
   couriers: { accountId: 'account_id', financialCurrency: 'currency', currency: 'currency', disabled: 'is_active', courierType: 'type', type: 'type', level: 'levels', levels: 'levels' },
-  accounts: { accountCode: 'account_code', code: 'account_code', currency: 'currency', entityId: 'entity_id', type: 'type', accountType: 'type' },
+  account: { accountCode: 'account_code', code: 'account_code', accNameAr: 'acc_name_ar', nameAr: 'acc_name_ar', accNameEn: 'acc_name_en', nameEn: 'acc_name_en', balance: 'balance', curNo: 'cur_no', currencyId: 'cur_no', isActive: 'is_active', createdAt: 'created_at', updatedAt: 'updated_at' },
+  acc_main: { accountId: 'account_id', accountCode: 'account_code', code: 'account_code', accNameAr: 'acc_name_ar', nameAr: 'acc_name_ar', accNameEn: 'acc_name_en', nameEn: 'acc_name_en', balance: 'balance', curNo: 'cur_no', currencyId: 'cur_no', isActive: 'is_active', createdAt: 'created_at', updatedAt: 'updated_at' },
+  acc_sub: { accMainId: 'acc_main_id', accountCode: 'account_code', code: 'account_code', accNameAr: 'acc_name_ar', nameAr: 'acc_name_ar', accNameEn: 'acc_name_en', nameEn: 'acc_name_en', balance: 'balance', curNo: 'cur_no', currencyId: 'cur_no', isActive: 'is_active', allowsDirectAccounts: 'allows_direct_accounts', createdAt: 'created_at', updatedAt: 'updated_at' },
+  acc_sub_group: { accSubId: 'acc_sub_id', accountCode: 'account_code', code: 'account_code', accNameAr: 'acc_name_ar', nameAr: 'acc_name_ar', accNameEn: 'acc_name_en', nameEn: 'acc_name_en', balance: 'balance', curNo: 'cur_no', currencyId: 'cur_no', isActive: 'is_active', entityType: 'entity_type', allowsDirectAccounts: 'allows_direct_accounts', createdAt: 'created_at', updatedAt: 'updated_at' },
+  default_accounts: { defaultKey: 'default_key', accountId: 'account_id', accNameAr: 'acc_name_ar', nameAr: 'acc_name_ar', accNameEn: 'acc_name_en', nameEn: 'acc_name_en', curNo: 'cur_no', currencyId: 'cur_no', isActive: 'is_active', createdAt: 'created_at', updatedAt: 'updated_at' },
+  account_id_migration_map: { oldAccountId: 'old_account_id', oldAccountCode: 'old_account_code', newAccountId: 'new_account_id', migratedAt: 'migrated_at' },
+  accounts: { accountCode: 'account_code', code: 'account_code', balance: 'balance', currency: 'currency', entityId: 'entity_id', entityType: 'entity_type', type: 'type', accountType: 'type', accSubId: 'acc_sub_id', groupId: 'group_id', accountSeq: 'account_seq', accNameAr: 'acc_name_ar', nameAr: 'acc_name_ar', accNameEn: 'acc_name_en', nameEn: 'acc_name_en', limitedBalance: 'limited_balance', curNo: 'cur_no', currencyId: 'cur_no', isActive: 'is_active', createdAt: 'createdAt', updatedAt: 'updatedAt', lastRecalculatedAt: 'lastRecalculatedAt' },
   orders: { orderNumber: 'order_number', trackingNumber: 'tracking_number', customerId: 'customer_id', orderPartyId: 'order_party_id', orderPartyType: 'order_party_type', isStaffOrder: 'is_staff_order', employeeId: 'employee_id', courierId: 'courier_id', customerAccountId: 'order_party_account_id', orderPartyAccountId: 'order_party_account_id', orderStatusId: 'order_status_id', order_status_id: 'order_status_id', createdAt: 'createdAt', orderSourceId: 'order_source_id', order_source_id: 'order_source_id', orderSourceType: 'order_source_type', order_source_type: 'order_source_type', deliveryCourierId: 'delivery_courier_id', delivery_courier_id: 'delivery_courier_id', shippingCourierId: 'shipping_courier_id', shipping_courier_id: 'shipping_courier_id' },
   shipping_companies: { name: 'name', shippingCompanyUrl: 'shipping_company_url', trackingIDPrefix: 'trackingID_prefix', accountId: 'account_id', financialAccountId: 'account_id' },
   sources: { name: 'name', supplierType: 'type', type: 'type', sourceUrl: 'source_url', accountId: 'account_id', financialAccountId: 'account_id' },
-  account_transactions: { type: 'type', accountId: 'account_id', journalEntryNumber: 'journalEntryNumber', journalEntryId: 'journalEntryNumber', module: 'module', currency: 'currency', createdAt: 'createdAt', amount: 'amount', orderId: 'order_id', orderNumber: 'order_number', shipmentId: 'shipment_id', automationKey: 'automation_key', autoRuleId: 'auto_rule_id' },
-  expenses: { expenseNumber: 'expense_number', transactionsID: 'transactionsID', linkedAccountId: 'account_id', financialAccountId: 'account_id', accountId: 'account_id', category: 'category', amount: 'amount', currency: 'currency', createdAt: 'createdAt' },
-  salary_history: { transactionsID: 'transactionsID', financialAccountId: 'account_id', accountId: 'account_id', userId: 'user_id', amount: 'amount', currency: 'currency', salaryMonth: 'month', month: 'month', createdAt: 'createdAt' },
-  journal_entries: { transactionID: 'transactionID', accountId: 'account_id', createdByUid: 'created_by_uid', orderId: 'order_id', orderNumber: 'order_number', shipmentId: 'shipment_id', automationKey: 'automation_key', autoRuleId: 'auto_rule_id', statusId: 'status_id', isAutomatic: 'is_automatic' },
+  account_transactions: { type: 'type', accountId: 'account_id', journalEntryNumber: 'journalEntryNumber', journalEntryId: 'journalEntryNumber', module: 'module', currency: 'currency', curNo: 'cur_no', currencyId: 'cur_no', createdAt: 'createdAt', amount: 'amount', orderId: 'order_id', orderNumber: 'order_number', shipmentId: 'shipment_id', automationKey: 'automation_key', autoRuleId: 'auto_rule_id' },
+  expenses: { expenseNumber: 'expense_number', transactionsID: 'transactionsID', linkedAccountId: 'account_id', financialAccountId: 'account_id', accountId: 'account_id', category: 'category', amount: 'amount', currency: 'currency', curNo: 'cur_no', currencyId: 'cur_no', createdAt: 'createdAt' },
+  salary_history: { transactionsID: 'transactionsID', financialAccountId: 'account_id', accountId: 'account_id', userId: 'user_id', amount: 'amount', currency: 'currency', curNo: 'cur_no', currencyId: 'cur_no', salaryMonth: 'month', month: 'month', createdAt: 'createdAt' },
+  journal_entries: { transactionID: 'transactionID', accountId: 'account_id', createdByUid: 'created_by_uid', curNo: 'cur_no', currencyId: 'cur_no', createdAt: 'createdAt', orderId: 'order_id', orderNumber: 'order_number', shipmentId: 'shipment_id', automationKey: 'automation_key', autoRuleId: 'auto_rule_id', statusId: 'status_id', isAutomatic: 'is_automatic' },
   assets: { linkedAccountId: 'account_id', accountId: 'account_id', financialAccountId: 'account_id', financialAccountCode: 'account_code', status: 'status', currency: 'currency', isActive: 'is_active', type: 'type', createdAt: 'createdAt' },
   notifications: { userId: 'userId', category: 'category', isPublic: 'isPublic', read: 'read', type: 'type', createdAt: 'createdAt' },
   activity_logs: { userUid: 'userId', userId: 'userId', action: 'action', category: 'category', entityName: 'target', target: 'target', type: 'type', timestamp: 'createdAt', createdAt: 'createdAt' },
@@ -601,8 +621,8 @@ const DIRECT_COLUMNS_MAP: Record<string, Record<string, string>> = {
   shipments: { orderId: 'order_id', trackingNumber: 'tracking_number', shippingCompanyId: 'shipping_company_id', shipping_company_id: 'shipping_company_id', courierId: 'courier_id', shipmentStatus: 'shipment_status', status: 'shipment_status', shippingCost: 'shipping_cost', weight: 'weight', shippingCategoryId: 'shipping_category_id', shipping_category_id: 'shipping_category_id', contentCategoryId: 'content_category_id', content_category_id: 'content_category_id', contentCategoryName: 'content_category_name', cartonCount: 'carton_count', customsFee: 'customs_fee', taxFee: 'tax_fee', otherCategoryFee: 'other_category_fee', categoryFeesTotal: 'category_fees_total', categoryFeeCurrency: 'category_fee_currency', createdAt: 'createdAt' },
   orders_history: { orderId: 'order_id', orderNumber: 'order_number', shipmentId: 'shipment_id', journalEntryId: 'journal_entry_id', accountTransactionId: 'account_transaction_id', activityLogId: 'activity_log_id', eventType: 'event_type', eventCategory: 'event_category', operation: 'operation', entityType: 'entity_type', actorId: 'actor_id', actorName: 'actor_name', actorRole: 'actor_role', source: 'source', summary: 'summary', beforeData: 'before_data', afterData: 'after_data', metadata: 'metadata', occurredAt: 'occurred_at', createdAt: 'created_at' },
   order_status: { nameAr: 'name_ar', nameEn: 'name_en', isFirst: 'is_first', isLast: 'is_last', sortOrder: 'sort_order', color: 'color', code: 'code' },
-  auto_entries: { statusId: 'status_id', nameAr: 'name_ar', nameEn: 'name_en', isActive: 'is_active', amountSource: 'amount_source', amountSources: 'amount_sources', amountStrategy: 'amount_strategy', currency: 'currency', skipWhenZero: 'skip_when_zero' },
-  autoEntry: { statusId: 'status_id', nameAr: 'name_ar', nameEn: 'name_en', isActive: 'is_active', amountSource: 'amount_source', amountSources: 'amount_sources', amountStrategy: 'amount_strategy', currency: 'currency', skipWhenZero: 'skip_when_zero' },
+  auto_entries: { statusId: 'status_id', nameAr: 'name_ar', nameEn: 'name_en', isActive: 'is_active', amountSource: 'amount_source', amountSources: 'amount_sources', amountStrategy: 'amount_strategy', currency: 'currency', curNo: 'cur_no', currencyId: 'cur_no', skipWhenZero: 'skip_when_zero' },
+  autoEntry: { statusId: 'status_id', nameAr: 'name_ar', nameEn: 'name_en', isActive: 'is_active', amountSource: 'amount_source', amountSources: 'amount_sources', amountStrategy: 'amount_strategy', currency: 'currency', curNo: 'cur_no', currencyId: 'cur_no', skipWhenZero: 'skip_when_zero' },
   order_option: { nameAr: 'name_ar', nameEn: 'name_en', type: 'type', price: 'price', duration: 'duration', details: 'details', code: 'code', isActive: 'is_active', is_active: 'is_active' },
   items_category: { code: 'code', nameAr: 'name_ar', nameEn: 'name_en', description: 'description', details: 'details', hsCodeHint: 'hs_code_hint', customsPerCarton: 'customs_per_carton', taxPerCarton: 'tax_per_carton', otherFeesPerCarton: 'other_fees_per_carton', customsRate: 'customs_rate', taxRate: 'tax_rate', feeCurrency: 'fee_currency', requiresReview: 'requires_review', isActive: 'is_active', createdAt: 'createdAt', updatedAt: 'updatedAt' }
 };
@@ -615,12 +635,12 @@ export function extractDirectColumns(table: string, data: Record<string, any>): 
     if (data[key] !== undefined) {
       let val = data[key];
       // Convert empty string or whitespace foreign keys to null so Postgres FK check succeeds
-      if (typeof val === 'string' && val.trim() === '' && col.endsWith('_id')) {
+      if (typeof val === 'string' && val.trim() === '' && (col.endsWith('_id') || col === 'cur_no')) {
         val = null;
       }
       if (key === 'disabled' && (table === 'customers' || table === 'couriers')) {
         extracted[col] = !val;
-      } else if ((col === 'createdAt' || col === 'lastSeen') && typeof val === 'number') {
+      } else if ((col === 'createdAt' || col === 'updatedAt' || col === 'lastSeen' || col === 'created_at' || col === 'updated_at' || col === 'lastRecalculatedAt') && typeof val === 'number') {
         extracted[col] = new Date(val).toISOString();
       } else {
         extracted[col] = val;

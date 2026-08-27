@@ -7,11 +7,9 @@
  *   Couriers   → prefix 2120  (Liability — Courier Ledger)
  *   Employees  → prefix 2130  (Liability — Employee Ledger)
  *
- * Every transaction that touches an account is atomically written to
- * `account_transactions`. The balance field is kept updated via increment()
- * for real-time convenience, but the authoritative balance is always
- * the sum of account_transactions (Debit − Credit for Assets/Expenses,
- * Credit − Debit for Liabilities/Equity/Revenue).
+ * Every transaction that touches an account is written as a balanced ledger
+ * entry. Database safeguards maintain the authoritative posting balance and
+ * its hierarchy roll-up from account_transactions.
  *
  * Use recalculateAndSyncBalance(accountId) to reconcile the stored balance
  * against the live transaction history.
@@ -34,6 +32,7 @@ import {
 import { currencyService, DEFAULT_RATES } from "./currencyService";
 import { db, auth } from "../lib/supabase-firebase-adapter";
 import { activityLogService } from "./activityLogService";
+import { accountingHierarchyService, hierarchyCodeRules, naturalBalanceDelta } from "./accountingHierarchyService";
 import { Transaction } from "../types";
 //import { Settings } from "../contexts/SettingsContext";
 
@@ -58,6 +57,14 @@ export interface FinancialAccount {
   monthlySalary?: number; // Default monthly salary (for employees)
   type?: "Asset" | "Liability" | "Equity" | "Revenue" | "Expense";
   parentCode?: string;
+  accSubId?: string;
+  groupId?: string;
+  accountSeq?: number;
+  accNameAr?: string;
+  accNameEn?: string;
+  limitedBalance?: number;
+  curNo?: number;
+  lastRecalculatedAt?: number | string;
 }
 
 export interface AccountTransaction {
@@ -70,6 +77,7 @@ export interface AccountTransaction {
   type: "Debit" | "Credit";
   amount: number; // Amount in target account currency
   currency: string; // Account currency (YER, USD, SAR)
+  curNo?: number; // Reference to currency.cur_id
   amountOriginal: number; // Amount in original voucher currency
   currencyOriginal: string; // Original voucher currency
   description: string; // Transaction description
@@ -115,6 +123,7 @@ export interface JournalEntry {
 
   amount: number; // المبلغ الأصلي
   currency: string; // العملة الأصلية
+  curNo?: number; // Reference to currency.cur_id
   amountDebitCurrency: number; // المبلغ بعملة المدين
   amountCreditCurrency: number; // المبلغ بعملة الدائن
 
@@ -164,7 +173,8 @@ export interface AutomaticVoucherEntities {
 // Shipping companies are LIABILITIES (carrier payables) → 2150
 // Assets are ASSETS; a category-specific prefix can override the default 1200.
 // System utility accounts                         → varies, default 5000
-const ACCOUNT_PREFIXES: Record<AccountEntityType, string> = {
+/** توافق مرحلي للحسابات التي سبقت زرع الشجرة فقط؛ لا يستعمل عند جاهزية الشجرة. */
+const LEGACY_ACCOUNT_PREFIXES: Record<AccountEntityType, string> = {
   customer: "1130",
   courier: "2120",
   employee: "2130",
@@ -198,9 +208,10 @@ class FinancialAccountService {
     const sourceKey = String(order?.sourcing_cost || order?.sourcsystemAccountsingCostSource || '').trim().toLowerCase();
     const costOnCourier = Boolean(order?.deductSourcingCostFromCourier)
       || ['courier', 'delivery_courier', 'courier_linked', 'مندوب'].includes(sourceKey);
+    const defaultKey = String(accountConfig.defaultKey || accountConfig.id || '').trim();
     const fallbackOrderCost = () => ({
       id: String(systemAccounts.sys_orders_cost || systemAccounts.sys_sourcing_cost || 'sys_orders_cost'),
-      code: accountConfig.code || '2100-0001',
+      code: String(accountConfig.code || ''),
     });
 
     let candidate: { id: string; code: string } | null = null;
@@ -233,7 +244,7 @@ class FinancialAccountService {
         return fallbackOrderCost();
       default:
         return {
-          id: String(systemAccounts[accountConfig.id] || accountConfig.id),
+          id: String(systemAccounts[defaultKey] || systemAccounts[accountConfig.id] || accountConfig.id),
           code: String(accountConfig.code || ''),
         };
     }
@@ -252,7 +263,14 @@ class FinancialAccountService {
     entityType: AccountEntityType,
     prefixOverride?: string,
   ): Promise<{ prefix: string; accountNumber: string; accountCode: string; code: string; accountId: string }> {
-    const prefix = prefixOverride || ACCOUNT_PREFIXES[entityType] || "5000";
+    const hierarchyLocation = await accountingHierarchyService.getEntityPostingLocation(entityType);
+    const hierarchyReady = await accountingHierarchyService.hasHierarchyStructure();
+    if (hierarchyReady && !hierarchyLocation) {
+      throw new Error(`لا توجد مجموعة حسابات نشطة مرتبطة بنوع الكيان «${entityType}». أنشئ المجموعة أو فعّلها من شجرة الحسابات أولاً.`);
+    }
+    const prefix = hierarchyLocation
+      ? hierarchyCodeRules.postingPrefix(hierarchyLocation.accountCode)
+      : (prefixOverride || LEGACY_ACCOUNT_PREFIXES[entityType] || "5000");
 
     let allAccounts: any[] = [];
     try {
@@ -299,12 +317,15 @@ class FinancialAccountService {
       }
     }
 
-    let candidateSeq = Math.max(maxSeq + 1, allAccounts.length + 1, 1);
+    let candidateSeq = hierarchyLocation
+      ? await accountingHierarchyService.getNextAccountSequence({ ...hierarchyLocation, accountCode: prefix })
+      : Math.max(maxSeq + 1, allAccounts.length + 1, 1);
 
     while (true) {
       const seqStr = String(candidateSeq).padStart(4, "0");
-      const candidateCode = `${prefix}-${seqStr}`;
-      const candidateId = `acc_${prefix}-${seqStr}`;
+      const candidateCode = hierarchyCodeRules.formatPostingCode(prefix, candidateSeq);
+      // الحساب المالي الورقي يُعرّف بالكود المحاسبي نفسه؛ لا تستخدم بادئة acc_.
+      const candidateId = candidateCode;
 
       const isCodeTaken = existingCodes.has(candidateCode);
       const isIdTaken = existingIds.has(candidateId);
@@ -367,8 +388,21 @@ class FinancialAccountService {
       }
 
       // 2. Generate guaranteed unique account identifiers
+      const hierarchyLocation = await accountingHierarchyService.getEntityPostingLocation(entityType);
+      if (!hierarchyLocation && await accountingHierarchyService.hasHierarchyStructure()) {
+        throw new Error(`لا يمكن إنشاء حساب «${entityName}»: لا توجد مجموعة نشطة لنوع الكيان «${entityType}» في شجرة الحسابات.`);
+      }
+      const hierarchyPrefix = hierarchyLocation?.accountCode;
       const { prefix, accountNumber, accountCode, code, accountId } =
-        await this.getNextAccountIdentifiers(entityType, options?.accountPrefix);
+        await this.getNextAccountIdentifiers(entityType, options?.accountPrefix || hierarchyPrefix);
+      let currencyId: number | undefined;
+      try {
+        currencyId = await accountingHierarchyService.getCurrencyIdByCode(currency);
+      } catch (currencyError) {
+        console.warn('[FinancialAccountService] Currency reference lookup deferred:', currencyError);
+      }
+      // تستخدم عملة عقدة الشجرة فقط عندما لا يحدد الحساب المالي عملة صريحة.
+      currencyId ??= hierarchyLocation?.currencyId;
 
       const now = Date.now();
       const accountData: FinancialAccount = {
@@ -399,6 +433,13 @@ class FinancialAccountService {
             ? "Liability"
             : "Asset"),
         parentCode: options?.parentCode || prefix,
+        accSubId: hierarchyLocation?.accSubId,
+        groupId: hierarchyLocation?.groupId,
+        accountSeq: Number(accountNumber),
+        accNameAr: entityName,
+        accNameEn: entityName,
+        limitedBalance: 0,
+        curNo: currencyId,
         ...(monthlySalary !== undefined && { monthlySalary }),
       } as any;
 
@@ -469,6 +510,24 @@ class FinancialAccountService {
       const docRef = await getDoc(doc(db, "accounts", accountId));
       if (docRef.exists()) {
         return { id: docRef.id, ...docRef.data() } as FinancialAccount;
+      }
+      // جسر قراءة مؤقت للمراجع التاريخية فقط إلى حين ترحيل المعرفات النهائي.
+      const legacyCode = String(accountId || '').replace(/^acc_/, '').replace(/_/g, '-');
+      if (legacyCode && legacyCode !== accountId) {
+        const byCode = await getDocs(query(collection(db, "accounts"), where("accountCode", "==", legacyCode)));
+        if (!byCode.empty) {
+          const matched = byCode.docs[0];
+          return { id: matched.id, ...matched.data() } as FinancialAccount;
+        }
+      }
+      const mappedLegacyId = await getDocs(query(collection(db, "account_id_migration_map"), where("oldAccountId", "==", accountId)));
+      if (!mappedLegacyId.empty) {
+        const mapping = mappedLegacyId.docs[0].data();
+        const mappedAccountId = String(mapping.newAccountId || mapping.new_account_id || '').trim();
+        if (mappedAccountId) {
+          const mappedAccount = await getDoc(doc(db, "accounts", mappedAccountId));
+          if (mappedAccount.exists()) return { id: mappedAccount.id, ...mappedAccount.data() } as FinancialAccount;
+        }
       }
       // Fallback: search by entityId if not found by primary doc ID
       return this.getAccountByEntityId(accountId);
@@ -548,20 +607,21 @@ class FinancialAccountService {
         exchangeRates,
       );
 
-    const debitAccountType = this.getAccountTypeByCode(
-      debitAccount.accountCode,
-    );
-    const creditAccountType = this.getAccountTypeByCode(
-      creditAccount.accountCode,
-    );
+    if (!accountingHierarchyService.isPostingAccount(debitAccount) || !accountingHierarchyService.isPostingAccount(creditAccount)) {
+      throw new Error('Journal entries may only use active financial posting accounts.');
+    }
 
-    const isDebitNormalDebit =
-      debitAccountType === "Asset" || debitAccountType === "Expense";
-    const isCreditNormalDebit =
-      creditAccountType === "Asset" || creditAccountType === "Expense";
+    const debitAccountType = debitAccount.type || this.getAccountTypeByCode(debitAccount.accountCode);
+    const creditAccountType = creditAccount.type || this.getAccountTypeByCode(creditAccount.accountCode);
 
-    const debitDelta = isDebitNormalDebit ? debitAmount : -debitAmount;
-    const creditDelta = isCreditNormalDebit ? -creditAmount : creditAmount;
+    const debitDelta = naturalBalanceDelta(debitAccountType, 'Debit', debitAmount);
+    const creditDelta = naturalBalanceDelta(creditAccountType, 'Credit', creditAmount);
+
+    accountingHierarchyService.validateNaturalBalanceLimit(debitAccount, debitDelta);
+    accountingHierarchyService.validateNaturalBalanceLimit(creditAccount, creditDelta);
+    const debitCurrencyId = await accountingHierarchyService.getCurrencyIdByCode(debitAccount.currency);
+    const creditCurrencyId = await accountingHierarchyService.getCurrencyIdByCode(creditAccount.currency);
+    const entryCurrencyId = await accountingHierarchyService.getCurrencyIdByCode(entry.currency);
 
     // A. Write master Unified Journal Voucher entry document
     const jvRef = doc(collection(db, "journal_entries"));
@@ -570,6 +630,7 @@ class FinancialAccountService {
       createdAt: now,
       amountDebitCurrency: debitAmount,
       amountCreditCurrency: creditAmount,
+      curNo: entryCurrencyId,
     };
     batch.set(jvRef, completeEntry);
 
@@ -589,6 +650,7 @@ class FinancialAccountService {
       type: "Debit",
       amount: debitAmount,
       currency: debitAccount.currency,
+      curNo: debitCurrencyId,
       amountOriginal: entry.amount,
       currencyOriginal: entry.currency,
       description: entry.description,
@@ -601,13 +663,6 @@ class FinancialAccountService {
       journalEntryNumber: entry.entryNumber,
     };
     batch.set(debitTxRef, debitTxData);
-
-    const debitAccountRef = doc(db, "accounts", entry.debitAccountId);
-    batch.update(debitAccountRef, {
-      balance: increment(debitDelta),
-      debitTotal: increment(debitAmount),
-      updatedAt: now,
-    });
 
     // Update parent entity (Debit) financial balance
     if (
@@ -643,6 +698,7 @@ class FinancialAccountService {
       type: "Credit",
       amount: creditAmount,
       currency: creditAccount.currency,
+      curNo: creditCurrencyId,
       amountOriginal: entry.amount,
       currencyOriginal: entry.currency,
       description: entry.description,
@@ -655,13 +711,6 @@ class FinancialAccountService {
       journalEntryNumber: entry.entryNumber,
     };
     batch.set(creditTxRef, creditTxData);
-
-    const creditAccountRef = doc(db, "accounts", entry.creditAccountId);
-    batch.update(creditAccountRef, {
-      balance: increment(creditDelta),
-      creditTotal: increment(creditAmount),
-      updatedAt: now,
-    });
 
     // Update parent entity (Credit) financial balance
     if (
@@ -683,10 +732,7 @@ class FinancialAccountService {
 
     await batch.commit();
 
-    // Use debounced recalculation — balance already updated via increment() above.
-    // Debounce prevents cascade calls when multiple entries are posted rapidly.
-    this.recalculateAndSyncBalanceDebounced(entry.debitAccountId, 3000);
-    this.recalculateAndSyncBalanceDebounced(entry.creditAccountId, 3000);
+    // تعمل مشغلات قاعدة البيانات على احتساب الرصيد وتجميع الشجرة في نفس معاملة الحركة.
 
     activityLogService.log(
       "financial_transaction" as any,
@@ -889,7 +935,7 @@ class FinancialAccountService {
     */
 
     // 2. Record in salary_history collection for the dedicated salary history page
-    const newId = `acc_${params.accountCode}`;
+    const newId = `salary_${params.employeeId}_${params.salaryMonth.replace("-", "")}_${randStr}`;
     await addDoc(newId,
       collection(db, "salary_history"), {
       employeeId: params.employeeId,
@@ -1434,89 +1480,28 @@ class FinancialAccountService {
    */
 
   async ensureSystemAccounts(
-    currency: string = 'YER',//currencyService.getDefaultCurrency.name,
+    _currency: string = 'YER',
   ): Promise<Record<string, string>> {
     const sysAccounts = [
-      // Revenues (4xxx)
-      {
-        id: "sys_profit_account",
-        name: "حساب أرباح الشركة",
-        prefix: "4000",
-        accountCode: "4000-0001",
-      },
-      // Expenses (5xxx)
-      {
-        id: "sys_delivery_cost",
-        name: "حساب مصروفات التوصيل",
-        prefix: "5000",
-        accountCode: "5000-2788",
-      },
-      {
-        id: "sys_sourcing_cost",
-        name: "حساب تكاليف الاستيراد التشغيلية",
-        prefix: "5100",
-        accountCode: "5100-4483",
-      },
-      {
-        id: "sys_orders_cost",
-        name: "حساب تكاليف الطلبات والشحن",
-        prefix: "2100",
-        accountCode: "2100-0001",
-      },
-      {
-        id: "sys_local_shipping",
-        name: "حساب تكاليف الشحن المحلي",
-        prefix: "5100",
-        accountCode: "5100-7119",
-      },
-      {
-        id: "sys_packaging_fees",
-        name: "حساب رسوم التغليف والتعبئة",
-        prefix: "5100",
-        accountCode: "5100-7355",
-      },
-      {
-        id: "sys_shipping_costs",
-        name: "حساب تكاليف الشحن الدولي",
-        prefix: "5300",
-        accountCode: "5300-7118",
-      },
-      // Assets (1xxx)
-      {
-        id: "sys_cash_account",
-        name: "حساب الصندوق العام (كاش)",
-        prefix: "1110",
-        accountCode: "1111-0",
-      },
+      { id: "sys_profit_account" },
+      { id: "sys_delivery_cost" },
+      { id: "sys_sourcing_cost" },
+      { id: "sys_orders_cost" },
+      { id: "sys_local_shipping" },
+      { id: "sys_packaging_fees" },
+      { id: "sys_shipping_costs" },
+      { id: "sys_cash_account" },
     ];
 
     const sysIds: Record<string, string> = {};
 
     for (const acc of sysAccounts) {
-      const existing = await this.getAccountByEntityId(acc.id);
-      if (existing && existing.id) {
-        sysIds[acc.id] = existing.id;
-      } else {
-        // Use the predefined accountCode matching the chart of accounts exactly
-        const accountData: FinancialAccount = {
-          accountCode: acc.accountCode,
-          accountPrefix: acc.prefix,
-          accountNumber:
-            acc.accountCode.split("-").slice(1).join("-") || "0000",
-          entityType: "system",
-          entityId: acc.id,
-          entityName: acc.name,
-          currency,
-          balance: 0,
-          debitTotal: 0,
-          creditTotal: 0,
-          isActive: true,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        };
-        const ref = await addDoc(accountData.id, collection(db, "accounts"), accountData);
-        sysIds[acc.id] = ref.id;
+      const configuredDefault = await accountingHierarchyService.getDefaultAccount(acc.id);
+      if (configuredDefault) {
+        sysIds[acc.id] = configuredDefault.accountId;
+        continue;
       }
+      throw new Error(`الحساب الافتراضي «${acc.id}» غير مربوط أو معطّل في جدول default_accounts.`);
     }
     return sysIds;
   }
@@ -1752,6 +1737,16 @@ class FinancialAccountService {
         descriptionTempEn: "Company profit for order: {orderNumber}",
       },
     ];
+    const normalizedDefaultRules = defaultRules.map((rule) => {
+      const normalizeAccount = (account: any) => account?.type === 'system'
+        ? { ...account, defaultKey: account.defaultKey || account.id, code: '' }
+        : account;
+      return {
+        ...rule,
+        debitAccount: normalizeAccount(rule.debitAccount),
+        creditAccount: normalizeAccount(rule.creditAccount),
+      };
+    });
 
     try {
       const snap = await getDoc(doc(db, "settings", "automatic_voucher_rules"));
@@ -1766,7 +1761,7 @@ class FinancialAccountService {
       const existingRulesIds = new Set(currentRules.map((r) => r.id));
       let modified = false;
 
-      for (const rule of defaultRules) {
+      for (const rule of normalizedDefaultRules) {
         if (!existingRulesIds.has(rule.id)) {
           currentRules.push(rule);
           modified = true;
@@ -1783,7 +1778,7 @@ class FinancialAccountService {
         "[FinancialAccountService] Failed to seed automatic voucher rules:",
         e,
       );
-      return defaultRules;
+      return normalizedDefaultRules;
     }
   }
   /**

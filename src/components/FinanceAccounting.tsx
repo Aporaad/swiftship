@@ -8,11 +8,12 @@ import {
 import { db, auth } from '../lib/supabase-firebase-adapter';
 import { collection, addDoc, doc, updateDoc, writeBatch, deleteDoc, onSnapshot, query, orderBy, increment, getDocs, where } from '../lib/supabase-firebase-adapter';
 import { notificationService } from '../services/notificationService';
-import ChartOfAccounts from './ChartOfAccounts';
+import AccountingHierarchyManagement from './AccountingHierarchyManagement';
 import AssetsPortfolio from './AssetsPortfolio';
 import OrderStatusManagementTab from './OrderStatusManagementTab';
 import { useExpenseCategories } from '../hooks/useExpenseCategories';
 import { financialAccountService } from '../services/financialAccountService';
+import { accountingHierarchyService } from '../services/accountingHierarchyService';
 import { useRole } from '../hooks/useRole';
 import { formatDate, formatDateTime, now } from '../lib/dateUtils';
 
@@ -102,6 +103,10 @@ export default function FinanceAccounting({
     });
     return () => unsub();
   }, []);
+  const postingFinancialAccounts = useMemo(
+    () => accountingHierarchyService.filterPostingAccounts(financialAccounts),
+    [financialAccounts],
+  );
 
   // Selection states
   const [auditedCourierId, setAuditedCourierId] = useState('');
@@ -478,7 +483,7 @@ export default function FinanceAccounting({
 
   // Filter financial accounts list based on search and type filters
   const filteredAccountsList = useMemo(() => {
-    return financialAccounts.filter(acc => {
+    return accountingHierarchyService.filterPostingAccounts(financialAccounts).filter(acc => {
       // 1. Filter by entity type
       if (accountTypeFilter !== 'all' && acc.entityType !== accountTypeFilter) return false;
 
@@ -498,7 +503,7 @@ export default function FinanceAccounting({
   // Dynamic Multi-Currency Cash Box Vault Balances
   const vaultBalances = useMemo(() => {
     // 1. Identify all accounts under "Cash & Safes" category (Code 1110)
-    const cashAccounts = financialAccounts.filter(a =>
+    const cashAccounts = accountingHierarchyService.filterPostingAccounts(financialAccounts).filter(a =>
       a.accountCode === '1110' ||
       a.parentCode === '1110' ||
       a.accountCode?.startsWith('111')
@@ -647,8 +652,8 @@ export default function FinanceAccounting({
         const txSnap = await getDocs(txQuery);
         const exchangeRates = dbRates;
 
-        const newDebitAcc = editJournalData.debitAccountId ? financialAccounts.find(a => a.id === editJournalData.debitAccountId) : null;
-        const newCreditAcc = editJournalData.creditAccountId ? financialAccounts.find(a => a.id === editJournalData.creditAccountId) : null;
+        const newDebitAcc = editJournalData.debitAccountId ? postingFinancialAccounts.find(a => a.id === editJournalData.debitAccountId) : null;
+        const newCreditAcc = editJournalData.creditAccountId ? postingFinancialAccounts.find(a => a.id === editJournalData.creditAccountId) : null;
 
         if (!txSnap.empty) {
           for (const txDoc of txSnap.docs) {
@@ -882,8 +887,8 @@ export default function FinanceAccounting({
       const timestamp = Date.now();
       const randStr = Math.floor(1000 + Math.random() * 9000);
 
-      const srcAccount = financialAccounts.find(a => a.id === sourceAccountId || a.entityId === sourceAccountId);
-      const trgAccount = financialAccounts.find(a => a.id === targetAccountId || a.entityId === targetAccountId);
+      const srcAccount = postingFinancialAccounts.find(a => a.id === sourceAccountId || a.entityId === sourceAccountId);
+      const trgAccount = postingFinancialAccounts.find(a => a.id === targetAccountId || a.entityId === targetAccountId);
 
       if (!srcAccount || !trgAccount) {
         throw new Error(isAr ? 'أحد الحسابات المحددة غير موجود في الدفاتر.' : 'Selected accounts not found.');
@@ -1850,7 +1855,7 @@ Continue?`
             }`}
         >
           <Wrench className="w-3.5 h-3.5 text-[#d4af37]" />
-          {isAr ? '📦 سجل الأصول والثابتة وصيانتها' : 'Assets & Maintenance Portfolio'}
+          {isAr ? '📦الأصول والثابتة' : 'Assets & Maintenance Portfolio'}
         </button>
 
         {/* Tab 7: Salary History & Employee Statements */}
@@ -1862,7 +1867,7 @@ Continue?`
             }`}
         >
           <Users className="w-3.5 h-3.5 text-[#d4af37]" />
-          {isAr ? '💼 سجل الرواتب وكشف حساب الموظفين' : 'Salary History & Staff Statements'}
+          {isAr ? '💼الموظفين والرواتب' : 'Salary History & Staff Statements'}
         </button>
 
         {/* Tab 8: Automatic Posting Rules Manager */}
@@ -2866,15 +2871,7 @@ Continue?`
 
       {/* RENDER TAB 4: CHART OF ACCOUNTS TREE */}
       {accountingTab === 'chart_of_accounts' && (
-        <ChartOfAccounts
-          isAr={isAr}
-          settings={settings}
-          vaultBalances={vaultBalances}
-          financialTrialMetrics={financialTrialMetrics}
-          vehiclesTotal={vehiclesTotal}
-          scannersTotal={scannersTotal}
-          officeAssetsTotal={officeAssetsTotal}
-        />
+        <AccountingHierarchyManagement isAr={isAr} canEdit={canEditFinance} />
       )}
 
       {/* RENDER TAB 5: PHYSICAL ASSETS PORTFOLIO & MAINTENANCE */}
@@ -3406,7 +3403,7 @@ Continue?`
                   <span className="truncate">
                     {sourceAccountId ? (
                       (() => {
-                        const acc = financialAccounts.find(a => a.id === sourceAccountId || a.entityId === sourceAccountId);
+                        const acc = postingFinancialAccounts.find(a => a.id === sourceAccountId || a.entityId === sourceAccountId);
                         if (!acc) return isAr ? '-- اختر حساب المصدر (الدائن) --' : '-- Choose Source Account --';
                         return `[${acc.code || acc.accountCode || 'Sys'}] - ${isAr ? acc.nameAr || acc.entityName : acc.nameEn || acc.entityName} ${acc.balance !== undefined ? `(${acc.balance.toLocaleString()} ${acc.currency || 'YER'})` : ''}`;
                       })()
@@ -3435,7 +3432,7 @@ Continue?`
 
                     <div className="overflow-y-auto p-1 custom-scrollbar">
                       {(() => {
-                        const filteredAccounts = financialAccounts.filter(acc => {
+                        const filteredAccounts = postingFinancialAccounts.filter(acc => {
                           const q = sourceSearchQuery.toLowerCase().trim();
                           if (!q) return true;
                           return (
@@ -3502,7 +3499,7 @@ Continue?`
                   <span className="truncate">
                     {targetAccountId ? (
                       (() => {
-                        const acc = financialAccounts.find(a => a.id === targetAccountId || a.entityId === targetAccountId);
+                        const acc = postingFinancialAccounts.find(a => a.id === targetAccountId || a.entityId === targetAccountId);
                         if (!acc) return isAr ? '-- اختر الحساب المستهدف --' : '-- Choose Target Account --';
                         return `[${acc.code || acc.accountCode || 'Sys'}] - ${isAr ? acc.nameAr || acc.entityName : acc.nameEn || acc.entityName} ${acc.balance !== undefined ? `(${acc.balance.toLocaleString()} ${acc.currency || 'YER'})` : ''}`;
                       })()
@@ -3531,7 +3528,7 @@ Continue?`
 
                     <div className="overflow-y-auto p-1 custom-scrollbar">
                       {(() => {
-                        const filteredAccounts = financialAccounts.filter(acc => {
+                        const filteredAccounts = postingFinancialAccounts.filter(acc => {
                           const q = targetSearchQuery.toLowerCase().trim();
                           if (!q) return true;
                           return (
