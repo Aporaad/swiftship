@@ -12,6 +12,16 @@ describe('حارس الحسابات المالية الورقية', () => {
     expect(available.map((account) => account.id)).toEqual(['1132-0001']);
   });
 
+  it('يعرض الحساب المرحّل عندما يطابق كوده ومعرّفه ومساره الهرمي', () => {
+    const available = accountingHierarchyService.filterPostingAccounts([
+      { id: '1132-0011', accountCode: '1132-0011', accSubId: '113', groupId: '1132', accountSeq: 11, curNo: 1, isActive: true },
+      { id: '1130-0001', accountCode: '1130-0001', accSubId: '113', accountSeq: 1, curNo: 1, isActive: true },
+      { id: '1132-0012', accountCode: '1132-0012', isActive: true },
+    ], true);
+
+    expect(available.map((account) => account.id)).toEqual(['1132-0011', '1130-0001']);
+  });
+
   it('يفرض سقف الرصيد الطبيعي الموجب للحساب المالي', () => {
     expect(() => accountingHierarchyService.validateNaturalBalanceLimit({
       id: '1132-0001',

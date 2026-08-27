@@ -96,19 +96,6 @@ function setOfflineMode(value: boolean) {
 // Hold local cache of collections for in-memory querying to ensure fast, real-time reactive updates
 const collectionCaches: { [table: string]: any[] } = {};
 const collectionListeners: { [table: string]: Set<() => void> } = {};
-const ACCOUNTING_CACHE_REFRESH_KEY = 'swiftship_accounting_cache_schema';
-const ACCOUNTING_CACHE_REFRESH_VERSION = 'accounting-hierarchy-tree-v3';
-const ACCOUNTING_CACHE_TABLES = ['account', 'acc_main', 'acc_sub', 'acc_sub_group', 'accounts', 'default_accounts', 'account_transactions'];
-
-function invalidateLegacyAccountingCache(): void {
-  if (isServer || safeLocalStorage.getItem(ACCOUNTING_CACHE_REFRESH_KEY) === ACCOUNTING_CACHE_REFRESH_VERSION) return;
-  ACCOUNTING_CACHE_TABLES.forEach((table) => {
-    safeLocalStorage.removeItem(`swiftship_table_backup_${table}`);
-    collectionCaches[table] = [];
-    lastFetchTimestamps[table] = 0;
-  });
-  safeLocalStorage.setItem(ACCOUNTING_CACHE_REFRESH_KEY, ACCOUNTING_CACHE_REFRESH_VERSION);
-}
 
 // Cache and Sync session state
 let currentSession: any = null;
@@ -253,7 +240,6 @@ export function extractRowPayload(table: string, row: any): any {
 }
 
 async function ensureCache(table: string): Promise<any[]> {
-  if (ACCOUNTING_CACHE_TABLES.includes(table)) invalidateLegacyAccountingCache();
   const now = Date.now();
   const lastFetch = lastFetchTimestamps[table] || 0;
   const isStale = (now - lastFetch > CACHE_TTL_MS) || (lastFetch === 0);

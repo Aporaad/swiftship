@@ -43,11 +43,8 @@ describe('عقد إعادة هيكلة شجرة الحسابات', () => {
     expect(component).toContain("setActiveTab('defaults')");
     expect(component).toContain("['default_accounts', setDefaultAccounts]");
     expect(component).toContain('filterPostingAccounts(accounts, true)');
-    expect(component).toContain("supabase.from(table).select('*')");
-    expect(component).toContain("dataLoadState === 'loading'");
+    expect(component).toContain('onSnapshot(collection(db, table)');
     expect(component).toContain("dataLoadState === 'ready'");
-    expect(component).toContain("const coreTables = ['account', 'acc_main', 'acc_sub', 'acc_sub_group', 'accounts']");
-    expect(component).toContain('const coreFailures');
     expect(component).toContain('rootsForSelectedNature');
     expect(component).toContain('availableMains');
     expect(component).toContain('availableSubs');
@@ -77,7 +74,20 @@ describe('عقد إعادة هيكلة شجرة الحسابات', () => {
     expect(guardMigration).toContain('limited_balance');
     expect(adapter).toContain("balance: 'balance'");
     expect(adapter).toContain("account_id_migration_map");
-    expect(adapter).toContain('invalidateLegacyAccountingCache');
-    expect(adapter).toContain('accounting-hierarchy-tree-v3');
+    expect(adapter).toContain('const collectionCaches');
+    expect(adapter).toContain('async function ensureCache(table: string)');
+  });
+
+  it('يعيد ملء بيانات الحسابات القديمة من الشجرة دون تغيير معرّفات الحسابات أو سياسات RLS', () => {
+    const repairMigration = read('supabase/migrations/202608270080_repair_account_hierarchy_metadata.sql');
+    expect(repairMigration).toContain('BEGIN;');
+    expect(repairMigration).toContain('acc_sub_id = resolved.resolved_acc_sub_id');
+    expect(repairMigration).toContain('group_id = resolved.resolved_group_id');
+    expect(repairMigration).toContain('account_seq = resolved.resolved_sequence');
+    expect(repairMigration).toContain('cur_no = resolved.resolved_cur_no');
+    expect(repairMigration).toContain("'accountCode', target.account_code");
+    expect(repairMigration).not.toContain('SET id =');
+    expect(repairMigration).not.toContain('ROW LEVEL SECURITY');
+    expect(repairMigration).toContain('COMMIT;');
   });
 });

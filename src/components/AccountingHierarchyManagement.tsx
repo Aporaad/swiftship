@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, ChevronDown, ChevronRight, CircleDollarSign, Edit3, FileText, FolderPlus, Layers3, Loader2, Maximize2, Minimize2, Plus, Search, Settings2, Trash2, X } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
-import { addDoc, collection, db, deleteDoc, doc, extractRowPayload, getDocs, onSnapshot, orderBy, query, supabase, updateDoc, where } from '../lib/supabase-firebase-adapter';
+import { addDoc, collection, db, deleteDoc, doc, getDocs, onSnapshot, orderBy, query, updateDoc, where } from '../lib/supabase-firebase-adapter';
 import { accountingHierarchyService, hierarchyCodeRules, type HierarchyCodeKind } from '../services/accountingHierarchyService';
 
 type EditorKind = 'account' | 'main' | 'sub' | 'group' | 'ledger' | 'default';
@@ -70,8 +70,6 @@ export default function AccountingHierarchyManagement({ isAr, canEdit }: Props) 
   const [statementAccount, setStatementAccount] = useState<any | null>(null);
   const [statementTransactions, setStatementTransactions] = useState<any[]>([]);
   const [statementLoading, setStatementLoading] = useState(false);
-  const [dataLoadState, setDataLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
-
   useEffect(() => {
     const subscribe = (table: string, setItems: (items: any[]) => void) => onSnapshot(collection(db, table), (snapshot: any) => {
       setItems(snapshot.docs.map((item: any) => ({ id: item.id, ...item.data() })));
@@ -80,30 +78,11 @@ export default function AccountingHierarchyManagement({ isAr, canEdit }: Props) 
       ['account', setRoots], ['acc_main', setMains], ['acc_sub', setSubs], ['acc_sub_group', setGroups],
       ['accounts', setAccounts], ['default_accounts', setDefaultAccounts], ['currency', setCurrencies],
     ];
-    let disposed = false;
-    const loadFromDatabase = async () => {
-      setDataLoadState('loading');
-      const results = await Promise.all(sources.map(async ([table, setItems]) => {
-        const { data, error: loadError } = await supabase.from(table).select('*');
-        if (loadError) return { table, error: loadError.message };
-        if (!disposed) setItems((data || []).map((row: any) => extractRowPayload(table, row)));
-        return { table, error: null };
-      }));
-      return results.filter((result) => result.error);
-    };
-    void loadFromDatabase().then((failures) => {
-      if (disposed) return;
-      const coreTables = ['account', 'acc_main', 'acc_sub', 'acc_sub_group', 'accounts'];
-      const coreFailures = failures.filter(({ table }) => coreTables.includes(table));
-      if (failures.length) setError(failures.map(({ table, error: message }) => `${table}: ${message}`).join(' | '));
-      setDataLoadState(coreFailures.length ? 'error' : 'ready');
-    }).catch((loadError: any) => {
-      if (!disposed) { setDataLoadState('error'); setError(loadError?.message || (isAr ? 'تعذر جلب بيانات شجرة الحسابات من قاعدة البيانات.' : 'Unable to fetch the chart of accounts from the database.')); }
-    });
     const unsubs = sources.map(([table, setItems]) => subscribe(table, setItems));
-    return () => { disposed = true; unsubs.forEach((unsubscribe) => unsubscribe()); };
+    return () => { unsubs.forEach((unsubscribe) => unsubscribe()); };
   }, [isAr]);
 
+  const dataLoadState = 'ready';
   const activeCurrencies = useMemo(() => currencies.filter(isActive), [currencies]);
   const postingAccounts = useMemo(() => accountingHierarchyService.filterPostingAccounts(accounts, true), [accounts]);
   const defaultCurrencyId = activeCurrencies.find((currency) => currency.isDefault || currency.is_default)?.cur_id || activeCurrencies[0]?.cur_id || '';
