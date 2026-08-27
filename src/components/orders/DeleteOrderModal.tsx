@@ -4,6 +4,8 @@ import { X } from 'lucide-react';
 interface DeleteOrderModalProps {
   isOpen: boolean;
   orderToDelete: any;
+  orderCount?: number;
+  isDeleting?: boolean;
   deletePin: string;
   deleteError: string;
   setDeletePin: (v: string) => void;
@@ -16,6 +18,8 @@ interface DeleteOrderModalProps {
 export default function DeleteOrderModal({
   isOpen,
   orderToDelete,
+  orderCount = 1,
+  isDeleting = false,
   deletePin,
   deleteError,
   setDeletePin,
@@ -31,7 +35,7 @@ export default function DeleteOrderModal({
       <div className="bg-slate-900 border-2 border-rose-500/30 rounded-3xl w-full max-w-md overflow-hidden shadow-[0_0_50px_rgba(239,68,68,0.15)] flex flex-col">
         <div className="p-4 bg-rose-950/20 border-b border-slate-800 flex justify-between items-center">
           <h3 className="font-black text-rose-450 text-sm flex items-center gap-2">
-            ⚠️ {isAr ? 'حذف طلب حساس ومحمي' : 'Sensitive Order Deletion'}
+            ⚠️ {isAr ? (orderCount > 1 ? `حذف ${orderCount} طلبات حساس ومحمي` : 'حذف طلب حساس ومحمي') : (orderCount > 1 ? `Sensitive deletion of ${orderCount} orders` : 'Sensitive Order Deletion')}
           </h3>
           <button
             onClick={onClose}
@@ -44,8 +48,8 @@ export default function DeleteOrderModal({
         <div className="p-5 space-y-4 text-xs font-bold text-slate-350 text-center">
           <p className="text-slate-400 leading-relaxed text-center">
             {isAr
-              ? 'هذا الطلب يحتوي على مدفوعات مسجلة أو تخطت حالته التثبيت الأولي. يرجى إدخال الرمز السري الشخصي للمدير (System PIN) للمتابعة.'
-              : 'This order has payments recorded or is advanced in the logistics process. Please enter your personal System PIN to confirm deletion.'}
+              ? `سيُحذف ${orderCount > 1 ? `${orderCount} طلبات محددة` : 'الطلب المحدد'} مع المنتجات والشحنات والقيود والحركات والسجل والإشعارات والرسائل المرتبطة به بصورة دائمة. تبقى activity_logs دون حذف. أدخل رمز المدير للمتابعة.`
+              : `${orderCount > 1 ? `${orderCount} selected orders` : 'The selected order'} and its linked products, shipments, journal entries, transactions, history, notifications, and messages will be permanently deleted. activity_logs will be preserved. Enter the administrator PIN to continue.`}
           </p>
 
           {deleteError && (
@@ -71,15 +75,17 @@ export default function DeleteOrderModal({
         <div className="p-4 bg-slate-950/30 border-t border-slate-850 flex justify-end gap-2">
           <button
             onClick={onClose}
+            disabled={isDeleting}
             className="px-4 py-2 bg-slate-800 text-slate-400 rounded-xl font-bold hover:text-white transition text-xs cursor-pointer"
           >
             {isAr ? 'إلغاء' : 'Cancel'}
           </button>
           <button
             onClick={onVerify}
-            className="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl font-black transition text-xs cursor-pointer"
+            disabled={isDeleting}
+            className="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl font-black transition text-xs cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isAr ? 'تأكيد الحذف النهائي' : 'Verify & Delete'}
+            {isDeleting ? (isAr ? 'جارٍ الحذف...' : 'Deleting...') : (isAr ? 'تأكيد الحذف النهائي' : 'Verify & Delete')}
           </button>
         </div>
       </div>

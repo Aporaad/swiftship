@@ -34,6 +34,7 @@ import ProductsManagementTab from '../components/orders/ProductsManagementTab';
 import OrderHistoryModal from '../components/orders/OrderHistoryModal'; // استيراد سجل تدقيق الطلبات والشحنات
 import { buildOrderParties, findOrderParty, toOrderPartyPayload, type OrderParty } from '../services/orderPartyService';
 import { calculateOrderPaymentTotals } from '../services/orderCurrencyService';
+import { deleteOrdersWithDependents, type OrderDeletionSummary } from '../services/orderDeletionService';
 
 // استيراد وحدات التقارير والنماذج المنفصلة
 import { generateOrderInvoicePDF, exportOrdersToPDF, exportOrdersToCSV } from '../reports';
@@ -108,6 +109,7 @@ export default function Orders() { // دالة عرض الطلبات
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]); //   متغير مكونات حالة الطلبات المحددة ويستخدم ل تحديث جماعي   
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false); //   متغير مكونات حالة حذف الطلب ويستخدم ل حذف جماعي   
   const [orderToDelete, setOrderToDelete] = useState<any>(null); //   متغير مكونات حالة الطلب المراد حذفه ويستخدم ل حذف جماعي   
+  const [ordersPendingDelete, setOrdersPendingDelete] = useState<any[]>([]); // الطلبات التي أكد المدير حذفها في العملية الحالية
   const [deletePin, setDeletePin] = useState(''); //   متغير مكونات حالة رمز الحذف ويستخدم ل حذف جماعي   
   const [deleteError, setDeleteError] = useState(''); //   متغير مكونات حالة خطأ الحذف ويستخدم ل حذف جماعي   
   const [isBatchUpdating, setIsBatchUpdating] = useState(false); //  تحديث جماعي
@@ -1491,64 +1493,67 @@ export default function Orders() { // دالة عرض الطلبات
     ]);
   };
 
-  // Delete Order with Admin PIN Verification (Requirement 4: Security Settings)
-  const handleDeleteOrderClick = (order: any) => {
+  // Delete Orders with Admin PIN Verification. The SQL procedure executes all dependent deletes atomically.
+  const openOrderDeletionModal = (candidates: any[]) => {
     if (role !== 'Admin') {
-      alert(isAr ? 'عذراً، حذف الطلبات مخصص للمدراء فقط' : 'Order deletion is restricted to Administrators.');
+      toast.error(isAr ? 'حذف الطلبات مخصص للمدراء فقط.' : 'Order deletion is restricted to administrators.');
       return;
     }
-
-    // Prevent deletion if status is beyond "تم تسجيل الطلب" / "Pending" or any payments exist
-    const isSensitive = (order.orderStatus !== 'تم تسجيل الطلب' && order.orderStatus !== 'Pending' && order.orderStatus !== 'تم تسجيل الطلب (قيد المعالجة)') ||
-      parseFloat(order.amountPaid || 0) > 0;
-
-    if (isSensitive && settings.protectSensitiveOrderDelete) {
-      setOrderToDelete(order);
-      setDeletePin('');
-      setDeleteError('');
-      setIsDeleteModalOpen(true);
-    } else {
-      if (window.confirm(isAr
-        ? `هل أنت متأكد من حذف الطلب رقم ${order.orderNumber || order.id}؟ لا يمكن التراجع عن هذا الإجراء.`
-        : `Are you sure you want to delete order ${order.orderNumber || order.id}? This action cannot be undone.`
-      )) {
-        executeDeleteOrder(order);
-      }
-    }
+    const uniqueCandidates = [...new Map(candidates.filter(Boolean).map((order) => [String(order.id), order])).values()];
+    if (!uniqueCandidates.length) return;
+    setOrdersPendingDelete(uniqueCandidates);
+    setOrderToDelete(uniqueCandidates[0]);
+    setDeletePin('');
+    setDeleteError('');
+    setIsDeleteModalOpen(true);
   };
-  // حذف الطلب من قاعدة البيانات
-  const executeDeleteOrder = async (order: any) => {
-    try {
-      await deleteDoc(doc(db, 'orders', order.id));
+  const handleDeleteOrderClick = (order: any) => openOrderDeletionModal([order]);
+  const handleOpenBatchDelete = () => openOrderDeletionModal(orders.filter((order) => selectedOrderIds.includes(String(order.id))));
 
-      activityLogService.log('delete_order', order.orderNumber || order.id, {
-        customerName: order.customerName,
-        totalCostYER: order.totalCostYER
+  // حذف الطلبات من قاعدة البيانات: لا تنفذ الواجهة أي حذف مباشر لجدول orders.
+  const executeDeleteOrder = async () => {
+    const targets = ordersPendingDelete.length ? ordersPendingDelete : orderToDelete ? [orderToDelete] : [];
+    if (!targets.length) return;
+    try {
+      setIsBatchUpdating(true);
+      const result: OrderDeletionSummary = await deleteOrdersWithDependents(targets.map((order) => String(order.id)));
+
+      // تبقى activity_logs عمدًا، ويضاف لها أثر تشغيلي جديد لا يعتمد على سجل الطلب المحذوف.
+      targets.forEach((order) => {
+        activityLogService.log('delete_order', order.orderNumber || order.id, {
+          customerName: order.customerName,
+          totalCostYER: order.totalCostYER,
+          cascadeDeletion: result,
+        });
       });
 
       notificationService.notify({
-        title: isAr ? 'تم حذف الطلب' : 'Order Deleted',
+        title: isAr ? 'تم حذف الطلبات' : 'Orders deleted',
         message: isAr
-          ? `تم حذف الطلب رقم ${order.orderNumber || order.id} بنجاح`
-          : `Order ${order.orderNumber || order.id} has been deleted`,
+          ? `تم حذف ${result.orders} طلبًا مع ${result.shipments} شحنة و${result.journalEntries} قيدًا مرتبطًا.`
+          : `${result.orders} orders, ${result.shipments} shipments, and ${result.journalEntries} linked entries were deleted.`,
         type: 'warning',
         category: 'order'
       });
 
+      setSelectedOrderIds((previous) => previous.filter((id) => !targets.some((order) => String(order.id) === String(id))));
       setIsDeleteModalOpen(false);
       setOrderToDelete(null);
+      setOrdersPendingDelete([]);
+      setDeletePin('');
+      setDeleteError('');
     } catch (err: any) {
-      alert(isAr ? 'فشل حذف الطلب: ' + err.message : 'Failed to delete order: ' + err.message);
+      const message = err?.message || (isAr ? 'تعذر حذف الطلبات المحددة.' : 'Unable to delete the selected orders.');
+      setDeleteError(isAr ? `فشل حذف الطلبات: ${message}` : `Order deletion failed: ${message}`);
+    } finally {
+      setIsBatchUpdating(false);
     }
   };
-  // التحقق من رمز الـ PIN  لحذف الطلب
+  // التحقق من رمز الـ PIN لحذف الطلب أو مجموعة الطلبات.
   const handleVerifyDeletePin = () => {
     const systemPin = profile?.systemPin || '000000';
-    if (deletePin.trim() === systemPin.trim()) {
-      executeDeleteOrder(orderToDelete);
-    } else {
-      setDeleteError(isAr ? 'رمز الـ PIN غير صحيح' : 'Invalid security PIN');
-    }
+    if (deletePin.trim() === systemPin.trim()) executeDeleteOrder();
+    else setDeleteError(isAr ? 'رمز الـ PIN غير صحيح' : 'Invalid security PIN');
   };
 
   // Nested quick-add customer
@@ -2676,12 +2681,7 @@ export default function Orders() { // دالة عرض الطلبات
     setIsPaymentModalOpen(true);
   };
 
-  const handleOpenDeleteOrder = (ord: any) => {
-    setOrderToDelete(ord);
-    setDeletePin('');
-    setDeleteError('');
-    setIsDeleteModalOpen(true);
-  };
+  const handleOpenDeleteOrder = (ord: any) => openOrderDeletionModal([ord]);
 
   // تحصيل دفعة مالية من العميل
   const handleCollectPayment = async (e: React.FormEvent) => {
@@ -3857,6 +3857,17 @@ export default function Orders() { // دالة عرض الطلبات
                       {isAr ? 'تصدير المحددة (CSV)' : 'Export Selected'}
                     </button>
 
+                    {role === 'Admin' && (
+                      <button
+                        onClick={handleOpenBatchDelete}
+                        disabled={isBatchUpdating}
+                        className="px-3 py-1.5 bg-rose-950/60 hover:bg-rose-900/70 border border-rose-500/40 text-rose-200 rounded-xl flex items-center gap-1.5 text-xs transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        {isAr ? `حذف المحددة (${selectedOrderIds.length})` : `Delete selected (${selectedOrderIds.length})`}
+                      </button>
+                    )}
+
                     <button
                       onClick={() => setSelectedOrderIds([])}
                       className="px-3 py-1.5 bg-slate-800 text-slate-400 hover:text-white rounded-xl text-xs transition cursor-pointer"
@@ -4417,6 +4428,8 @@ export default function Orders() { // دالة عرض الطلبات
       <DeleteOrderModal
         isOpen={isDeleteModalOpen}
         orderToDelete={orderToDelete}
+        orderCount={ordersPendingDelete.length || 1}
+        isDeleting={isBatchUpdating}
         deletePin={deletePin}
         deleteError={deleteError}
         setDeletePin={setDeletePin}
@@ -4424,6 +4437,8 @@ export default function Orders() { // دالة عرض الطلبات
         onClose={() => {
           setIsDeleteModalOpen(false);
           setOrderToDelete(null);
+          setOrdersPendingDelete([]);
+          setDeleteError('');
         }}
         onVerify={handleVerifyDeletePin}
         isAr={isAr}

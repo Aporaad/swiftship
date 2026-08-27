@@ -1809,7 +1809,7 @@ Continue?`
             }`}
         >
           <Truck className="w-3.5 h-3.5" />
-          {isAr ? '🔑 كاشف ومطابقة حسابات المناديب' : 'Courier Custody Statement'}
+          {isAr ? '🔑حسابات المناديب' : 'Courier Custody Statement'}
         </button>
         <button
           onClick={() => setAccountingTab('customer_audit')}
@@ -1819,9 +1819,32 @@ Continue?`
             }`}
         >
           <User className="w-3.5 h-3.5" />
-          {isAr ? '👥 كشف حساب ومطابقات العملاء' : 'Customer Account Audits'}
+          {isAr ? '👥 حسابات العملاء' : 'Customer Account Audits'}
         </button>
 
+        {/* Tab 7: Salary History & Employee Statements */}
+        <button
+          onClick={() => setAccountingTab('salary_history')}
+          className={`pb-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 flex items-center gap-1.5 ${accountingTab === 'salary_history'
+            ? 'border-[#d4af37] text-white'
+            : 'border-transparent text-slate-500 hover:text-slate-350'
+            }`}
+        >
+          <Users className="w-3.5 h-3.5 text-[#d4af37]" />
+          {isAr ? '💼حسابات الموظفين' : 'Salary History & Staff Statements'}
+        </button>
+
+        {/* Tab 6: Assets Management */}
+        <button
+          onClick={() => setAccountingTab('assets_management')}
+          className={`pb-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 flex items-center gap-1.5 ${accountingTab === 'assets_management'
+            ? 'border-[#d4af37] text-white'
+            : 'border-transparent text-slate-500 hover:text-slate-350'
+            }`}
+        >
+          <Wrench className="w-3.5 h-3.5 text-[#d4af37]" />
+          {isAr ? '📦الأصول الثابتة' : 'Assets & Maintenance Portfolio'}
+        </button>
         {/* Tab 4: Chart of Accounts */}
         <button
           onClick={() => setAccountingTab('chart_of_accounts')}
@@ -1831,7 +1854,7 @@ Continue?`
             }`}
         >
           <FolderTree className="w-3.5 h-3.5 text-[#d4af37]" />
-          {isAr ? '🌳 الشجرة المحاسبية (COA)' : 'Chart of Accounts'}
+          {isAr ? '🌳 الشجرة المحاسبية' : 'Chart of Accounts'}
         </button>
 
         {/* Tab 5: Financial Accounts Dashboard */}
@@ -1844,43 +1867,7 @@ Continue?`
         >
           <Wallet className="w-3.5 h-3.5 text-[#d4af37]" />
           {isAr ? '💳 إدارة الحسابات المالية' : 'Financial Accounts'}
-        </button>
-
-        {/* Tab 6: Assets Management */}
-        <button
-          onClick={() => setAccountingTab('assets_management')}
-          className={`pb-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 flex items-center gap-1.5 ${accountingTab === 'assets_management'
-            ? 'border-[#d4af37] text-white'
-            : 'border-transparent text-slate-500 hover:text-slate-350'
-            }`}
-        >
-          <Wrench className="w-3.5 h-3.5 text-[#d4af37]" />
-          {isAr ? '📦الأصول والثابتة' : 'Assets & Maintenance Portfolio'}
-        </button>
-
-        {/* Tab 7: Salary History & Employee Statements */}
-        <button
-          onClick={() => setAccountingTab('salary_history')}
-          className={`pb-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 flex items-center gap-1.5 ${accountingTab === 'salary_history'
-            ? 'border-[#d4af37] text-white'
-            : 'border-transparent text-slate-500 hover:text-slate-350'
-            }`}
-        >
-          <Users className="w-3.5 h-3.5 text-[#d4af37]" />
-          {isAr ? '💼الموظفين والرواتب' : 'Salary History & Staff Statements'}
-        </button>
-
-        {/* Tab 8: Automatic Posting Rules Manager */}
-        <button
-          onClick={() => setAccountingTab('auto_voucher_rules')}
-          className={`pb-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 flex items-center gap-1.5 ${accountingTab === 'auto_voucher_rules'
-            ? 'border-[#d4af37] text-white'
-            : 'border-transparent text-slate-500 hover:text-slate-350'
-            }`}
-        >
-          <Activity className="w-3.5 h-3.5 text-[#d4af37]" />
-          {isAr ? '⚙️ تهيئة قيود الطلبات التلقائية' : 'Configure Auto Vouchers'}
-        </button>
+        </button>        
       </div>
 
       {/* RENDER TAB 1: GENERAL DOUBLE-ENTRY LEDGER */}
@@ -3295,11 +3282,6 @@ Continue?`
           </div>
         );
       })()}
-
-      {accountingTab === 'auto_voucher_rules' && (
-        <OrderStatusManagementTab isAr={isAr} initialSubTab="entries" hideStatusManagement />
-      )}
-
       {/* ════════════ SALARY SLIP VOUCHER MODAL ════════════ */}
       {selectedSalaryVoucher && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 no-print">
