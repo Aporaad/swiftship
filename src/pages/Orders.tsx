@@ -14,7 +14,7 @@ import { financialAccountService } from '../services/financialAccountService'; /
 import {
   Plus, Search, Edit2, Truck, Activity, Trash2, DollarSign,
   CreditCard, Printer, Calculator, Package, MapPin, X, AlertCircle, RefreshCw, UserPlus, Eye,
-  User, Mail, Phone, Coins, Calendar, ExternalLink, Filter, Layers, CheckCircle2
+  User, Mail, Phone, Coins, Calendar, ExternalLink, Filter, Layers, CheckCircle2, Boxes
 } from 'lucide-react'; // استيراد الايقونات لاجل عرض الايقونات 
 import { jsPDF } from 'jspdf'; // استيراد جافاسكريبت لاجل عرض البيانات 
 import { printContent } from '../lib/printUtils'; // استيراد الطباعة لاجل عرض البيانات 
@@ -30,6 +30,7 @@ import OrderOptionsManagementTab from '../components/orders/OrderOptionsManageme
 import { useItemCategories } from '../hooks/useItemCategories';
 import { calculateShipmentCategoryFees } from '../services/itemCategoryService';
 import ItemCategoriesManagementTab from '../components/orders/ItemCategoriesManagementTab';
+import ProductsManagementTab from '../components/orders/ProductsManagementTab';
 import OrderHistoryModal from '../components/orders/OrderHistoryModal'; // استيراد سجل تدقيق الطلبات والشحنات
 import { buildOrderParties, findOrderParty, toOrderPartyPayload, type OrderParty } from '../services/orderPartyService';
 import { calculateOrderPaymentTotals } from '../services/orderCurrencyService';
@@ -134,9 +135,10 @@ export default function Orders() { // دالة عرض الطلبات
   const { activeCategories: activeItemCategories } = useItemCategories();
 
   // تبويبات الطلبات ويستخدم ل عرض الطلبات و الشحنات و تتبع و حالات الطلبات والخيارات (أنواع التغليف وفئات الشحن)
-  const [ordersTab, setOrdersTab] = useState<'orders' | 'shipments' | 'tracking' | 'statuses' | 'options' | 'item-categories'>(() => {
+  const [ordersTab, setOrdersTab] = useState<'orders' | 'products' | 'shipments' | 'tracking' | 'statuses' | 'options' | 'item-categories'>(() => {
     const params = new URLSearchParams(location.search);
     const tab = params.get('tab');
+    if (tab === 'products') return 'products';
     if (tab === 'shipments') return 'shipments';
     if (tab === 'tracking' && (role === 'Admin' || hasPermission('track_order'))) return 'tracking';
     if ((tab === 'statuses' || tab === 'order-statuses') && (role === 'Admin' || hasPermission('view_order_statuses') || hasPermission('view_auto_entries'))) return 'statuses';
@@ -149,7 +151,9 @@ export default function Orders() { // دالة عرض الطلبات
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const tab = params.get('tab');
-    if (tab === 'tracking' && canTrackOrders && ordersTab !== 'tracking') {
+    if (tab === 'products' && ordersTab !== 'products') {
+      setOrdersTab('products');
+    } else if (tab === 'tracking' && canTrackOrders && ordersTab !== 'tracking') {
       setOrdersTab('tracking');
     } else if (tab === 'shipments' && ordersTab !== 'shipments') {
       setOrdersTab('shipments');
@@ -3427,6 +3431,18 @@ export default function Orders() { // دالة عرض الطلبات
         </button>
 
         <button
+          onClick={() => setOrdersTab('products')}
+          className={`px-5 py-2.5 rounded-2xl font-black text-xs flex items-center gap-2 transition cursor-pointer ${ordersTab === 'products'
+            ? 'bg-[#d4af37] text-black shadow-lg shadow-[#d4af37]/20 scale-102'
+            : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-850 border border-slate-800'
+            }`}
+        >
+          <Boxes className="w-4 h-4 text-emerald-400" />
+          {isAr ? '🧾 المنتجات' : '🧾 Products'}
+          <span className="bg-black/20 px-2 py-0.5 rounded-lg text-[10px] font-mono">{allProducts.length}</span>
+        </button>
+
+        <button
           onClick={() => setOrdersTab('shipments')}
           className={`px-5 py-2.5 rounded-2xl font-black text-xs flex items-center gap-2 transition cursor-pointer ${ordersTab === 'shipments'
             ? 'bg-[#d4af37] text-black shadow-lg shadow-[#d4af37]/20 scale-102'
@@ -3496,7 +3512,9 @@ export default function Orders() { // دالة عرض الطلبات
         </button>
       </div>
 
-      {ordersTab === 'item-categories' ? (
+      {ordersTab === 'products' ? (
+        <ProductsManagementTab isAr={isAr} canManage={canManageOrders} orderCurrency={orderCurrency} />
+      ) : ordersTab === 'item-categories' ? (
         <ItemCategoriesManagementTab isAr={isAr} canManage={canManageOrders} />
       ) : ordersTab === 'options' ? (
         /* Order Options Management Tab (order_option) */
