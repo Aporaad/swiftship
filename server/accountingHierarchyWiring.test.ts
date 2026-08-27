@@ -54,8 +54,16 @@ describe('عقد إعادة هيكلة شجرة الحسابات', () => {
     expect(component).toContain('const openStatement');
     expect(component).toContain('statementAccount');
     expect(component).toContain('كشف حساب مالي');
-    expect(component).toContain('توسيع الحسابات');
-    expect(component).toContain('تضييق الحسابات');
+    expect(component).toContain('const compareByAccountingCode');
+    expect(component).toContain('const codeBadge');
+    expect(component).toContain("sort(compareByAccountingCode)");
+    expect(component).toContain('اختيار أقسام الطباعة');
+    expect(component).toContain('printSections');
+    expect(component).toContain('printableRows');
+    expect(component).toContain('الرصيد الأصلي');
+    expect(component).toContain('حساب جديد');
+    expect(component).toContain('isUnifiedAccountCreate');
+    expect(component).toContain('switchUnifiedAccountKind');
     expect(accountingPage).toContain('AccountingHierarchyManagement');
     expect(accountingPage).toContain('filterPostingAccounts(financialAccounts)');
     expect(accountingPage).toContain('postingFinancialAccounts.filter');
