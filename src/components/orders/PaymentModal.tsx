@@ -1,125 +1,48 @@
 import React from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 
+type CollectionMethod = 'Cash' | 'Bank' | 'Deferred' | 'Mixed';
+type Allocation = { id: string; method: 'Cash' | 'Bank'; amount: string; receivingAccountId: string; bankReference: string };
 interface PaymentModalProps {
   isOpen: boolean;
   selectedOrder: any;
   paymentFormData: {
-    amount: string;
-    method: string;
-    notes: string;
-    pin: string;
+    amount: string; method: CollectionMethod; receivingAccountId?: string; bankReference?: string;
+    allocations?: Allocation[]; notes: string; pin: string;
   };
   setPaymentFormData: (v: any) => void;
   isSubmitting: boolean;
   isAr: boolean;
+  financialAccounts?: Array<{ id: string; name: string; currency?: string; curNo?: number; accSubId?: string }>;
   onClose: () => void;
   onSubmit: (e: React.FormEvent) => void;
 }
+const makeAllocation = (method: 'Cash' | 'Bank' = 'Cash'): Allocation => ({ id: `allocation-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, method, amount: '', receivingAccountId: '', bankReference: '' });
 
-export default function PaymentModal({
-  isOpen,
-  selectedOrder,
-  paymentFormData,
-  setPaymentFormData,
-  isSubmitting,
-  isAr,
-  onClose,
-  onSubmit,
-}: PaymentModalProps) {
+export default function PaymentModal({ isOpen, selectedOrder, paymentFormData, setPaymentFormData, isSubmitting, isAr, financialAccounts = [], onClose, onSubmit }: PaymentModalProps) {
   if (!isOpen || !selectedOrder) return null;
+  const isMixed = paymentFormData.method === 'Mixed';
+  const isDeferred = paymentFormData.method === 'Deferred';
+  const allocationRows = paymentFormData.allocations?.length ? paymentFormData.allocations : [makeAllocation()];
+  const accountsFor = (method: 'Cash' | 'Bank') => financialAccounts.filter((account) => method === 'Cash' ? account.accSubId === '111' : account.accSubId === '112');
+  const updateAllocation = (index: number, patch: Partial<Allocation>) => setPaymentFormData({ ...paymentFormData, allocations: allocationRows.map((allocation, allocationIndex) => allocationIndex === index ? { ...allocation, ...patch } : allocation) });
+  const changeMethod = (method: CollectionMethod) => setPaymentFormData({
+    ...paymentFormData, method, receivingAccountId: '', bankReference: '',
+    allocations: method === 'Mixed' ? (paymentFormData.allocations?.length && paymentFormData.allocations.length >= 2 ? paymentFormData.allocations : [makeAllocation('Cash'), makeAllocation('Bank')]) : [],
+  });
 
-  return (
-    <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm overflow-hidden text-start shadow-xl">
-        <div className="p-4 bg-slate-955 border-b border-slate-800 flex justify-between items-center text-xs font-black text-white">
-          <span>{isAr ? 'تحصيل دفعة مالية من العميل' : 'Post payment ledger'}</span>
-          <button
-            onClick={onClose}
-            className="text-slate-400 bg-slate-800 p-1 rounded-lg"
-          >
-            <Plus className="w-4 h-4 rotate-45" />
-          </button>
-        </div>
-
-        <form onSubmit={onSubmit} className="p-6 space-y-4 text-xs font-bold text-slate-300 font-sans">
-          <div>
-            <label className="block text-slate-500 mb-1">
-              {isAr ? 'رقم الطلب' : 'Smart order code'}
-            </label>
-            <span className="font-mono text-[#d4af37] font-black text-sm">
-              {selectedOrder.orderNumber}
-            </span>
-          </div>
-
-          <div>
-            <label className="block text-slate-500 mb-1">
-              {isAr ? 'إجمالي المتبقي للتحصيل' : 'Total dues left'}
-            </label>
-            <span className="font-mono text-rose-400 font-extrabold text-base">
-              {parseFloat(selectedOrder.amountRemaining || 0).toLocaleString()} YER
-            </span>
-          </div>
-
-          <div>
-            <label className="block text-slate-500 mb-1">
-              {isAr ? 'المقدار المحصل المقبوض الآن (ريال يمني)' : 'Collection amount in YER'}
-            </label>
-            <input
-              required
-              type="number"
-              step="any"
-              value={paymentFormData.amount}
-              onChange={e => setPaymentFormData({ ...paymentFormData, amount: e.target.value })}
-              className="w-full bg-slate-950 border border-slate-800 text-emerald-400 font-mono text-sm font-black p-3 rounded-xl outline-none text-center"
-              placeholder="0.00 YER"
-            />
-          </div>
-
-          <div>
-            <label className="block text-slate-500 mb-1 text-amber-500 flex items-center gap-1">
-              <span>{isAr ? 'رمز الـ PIN المالي الثنائي للتحقق' : 'Security PIN authorization'}</span>
-              <span className="text-[9px] bg-amber-500/10 border border-amber-500/30 text-amber-500 px-1.5 rounded font-sans uppercase">MANDATORY</span>
-            </label>
-            <input
-              required
-              type="password"
-              maxLength={6}
-              pattern="^[0-9]{4,6}$"
-              title={isAr ? "رمز PIN سري من 4 إلى 6 أرقام" : "A 4-6 digit security PIN code"}
-              value={paymentFormData.pin}
-              onChange={e => setPaymentFormData({ ...paymentFormData, pin: e.target.value })}
-              className="w-full bg-slate-950 border border-slate-800 text-yellow-500 font-mono text-sm font-black p-3 rounded-xl outline-none text-center tracking-widest"
-              placeholder="••••"
-            />
-            <p className="text-[9px] text-slate-500 mt-1">
-              {isAr
-                ? 'اكتب الـ PIN الخاص بك المخزن في ملف الموظف لتفويض المعاملة.'
-                : 'Enter your professional profile PIN to authorize transaction.'}
-            </p>
-          </div>
-
-          <div className="pt-4 border-t border-slate-800 flex justify-end gap-2">
-            <button
-              type="button"
-              disabled={isSubmitting}
-              onClick={onClose}
-              className="px-4 py-2 hover:bg-slate-800 text-slate-400 rounded-lg disabled:opacity-50"
-            >
-              {isAr ? 'إلغاء' : 'Cancel'}
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSubmitting
-                ? (isAr ? 'جاري التحصيل...' : 'Settling...')
-                : (isAr ? 'تأكيد ترحيل القبض' : 'Settle payment')}
-            </button>
-          </div>
-        </form>
-      </div>
+  return <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/90 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-label={isAr ? 'تحصيل دفعة مالية' : 'Collect payment'}>
+    <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-slate-800 bg-slate-900 text-start shadow-2xl">
+      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-800 bg-slate-900/95 p-4 text-xs font-black text-white backdrop-blur"><span>{isAr ? 'تحصيل دفعة مالية من العميل' : 'Post payment ledger'}</span><button onClick={onClose} className="rounded-lg bg-slate-800 p-1 text-slate-400" aria-label={isAr ? 'إغلاق' : 'Close'}><Plus className="h-4 w-4 rotate-45" /></button></div>
+      <form onSubmit={onSubmit} className="space-y-4 p-6 text-xs font-bold text-slate-300 font-sans">
+        <div className="grid gap-3 rounded-2xl border border-slate-800 bg-slate-950/60 p-4 sm:grid-cols-2"><div><span className="block text-slate-500">{isAr ? 'رقم الطلب' : 'Smart order code'}</span><span className="font-mono text-sm font-black text-[#d4af37]">{selectedOrder.orderNumber}</span></div><div><span className="block text-slate-500">{isAr ? 'إجمالي المتبقي للتحصيل' : 'Total dues left'}</span><span className="font-mono text-base font-extrabold text-rose-400">{parseFloat(selectedOrder.amountRemaining || 0).toLocaleString()} {selectedOrder.paidCurrency || selectedOrder.currency || selectedOrder.orderCurrency || 'YER'}</span></div></div>
+        <label className="block text-slate-500">{isAr ? 'المقدار المحصل الآن بعملة الدفع' : 'Collection amount in payment currency'}<input required type="number" min="0.0001" step="any" value={paymentFormData.amount} onChange={(e) => setPaymentFormData({ ...paymentFormData, amount: e.target.value })} className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-center font-mono text-sm font-black text-emerald-400 outline-none" placeholder={`0.00 ${selectedOrder.paidCurrency || selectedOrder.currency || selectedOrder.orderCurrency || 'YER'}`} /></label>
+        <label className="block text-slate-500">{isAr ? 'طريقة التحصيل' : 'Collection method'}<select value={paymentFormData.method} onChange={(e) => changeMethod(e.target.value as CollectionMethod)} className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm font-black text-white outline-none"><option value="Cash">{isAr ? 'نقدًا' : 'Cash'}</option><option value="Bank">{isAr ? 'بنك / حوالة' : 'Bank transfer'}</option><option value="Mixed">{isAr ? 'مختلط (نقد وبنك)' : 'Mixed cash and bank'}</option><option value="Deferred">{isAr ? 'آجل — ليس قبضًا فعليًا' : 'Deferred — not a collection'}</option></select></label>
+        {isDeferred ? <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-amber-100">{isAr ? 'لا يمكن أن يحدّث تحصيل الدفعة رصيد الطلب بطريقة «آجل» لأنها لا تمثل قبضًا فعليًا. استخدم سندًا آجلًا مستقلًا مع تاريخ الاستحقاق، ثم سجّل التحصيل عند استلامه.' : 'A deferred promise does not collect cash. Record it in a separate deferred voucher, then collect it when received.'}</div> : isMixed ? <fieldset className="space-y-3 rounded-2xl border border-cyan-400/25 bg-cyan-400/5 p-4"><div className="flex items-center justify-between"><div><legend className="font-black text-cyan-100">{isAr ? 'توزيع القبض المختلط' : 'Mixed collection allocation'}</legend><p className="mt-1 text-[10px] font-normal text-slate-400">{isAr ? 'يجب أن يساوي مجموع التوزيع مقدار التحصيل أعلاه.' : 'The allocation total must equal the collection amount.'}</p></div><button type="button" onClick={() => setPaymentFormData({ ...paymentFormData, allocations: [...allocationRows, makeAllocation('Cash')] })} className="inline-flex items-center gap-1 rounded-lg border border-cyan-400/30 px-2 py-1.5 text-cyan-200"><Plus className="h-3.5 w-3.5" />{isAr ? 'توزيع' : 'Split'}</button></div>{allocationRows.map((allocation, index) => <div key={allocation.id} className="grid gap-2 rounded-xl border border-slate-800 bg-slate-950/70 p-3 md:grid-cols-5"><select value={allocation.method} onChange={(e) => updateAllocation(index, { method: e.target.value as Allocation['method'], receivingAccountId: '', bankReference: '' })} className="rounded-lg border border-slate-700 bg-slate-900 p-2 text-white"><option value="Cash">{isAr ? 'نقد' : 'Cash'}</option><option value="Bank">{isAr ? 'بنك' : 'Bank'}</option></select><select value={allocation.receivingAccountId} onChange={(e) => updateAllocation(index, { receivingAccountId: e.target.value })} className="rounded-lg border border-slate-700 bg-slate-900 p-2 text-white md:col-span-2"><option value="">{isAr ? 'حساب القبض' : 'Collection account'}</option>{accountsFor(allocation.method).map((account) => <option key={account.id} value={account.id}>{account.name}{account.currency ? ` (${account.currency})` : ''}</option>)}</select><input required type="number" min="0.0001" step="any" value={allocation.amount} onChange={(e) => updateAllocation(index, { amount: e.target.value })} placeholder={isAr ? 'المبلغ' : 'Amount'} className="rounded-lg border border-slate-700 bg-slate-900 p-2 font-mono text-emerald-300" />{allocation.method === 'Bank' ? <input required value={allocation.bankReference} onChange={(e) => updateAllocation(index, { bankReference: e.target.value })} placeholder={isAr ? 'مرجع الحوالة' : 'Transfer reference'} className="rounded-lg border border-slate-700 bg-slate-900 p-2 md:col-span-4" /> : <div className="md:col-span-4" />}{allocationRows.length > 2 && <button type="button" onClick={() => setPaymentFormData({ ...paymentFormData, allocations: allocationRows.filter((_, itemIndex) => itemIndex !== index) })} className="justify-self-end rounded p-2 text-rose-300 hover:bg-rose-500/10" aria-label={isAr ? 'حذف توزيع' : 'Delete allocation'}><Trash2 className="h-4 w-4" /></button>}</div>)}</fieldset> : <div className="grid gap-3 sm:grid-cols-2"><label className="block text-slate-500">{isAr ? 'حساب القبض المستلم' : 'Receiving account'}<select required value={paymentFormData.receivingAccountId || ''} onChange={(e) => setPaymentFormData({ ...paymentFormData, receivingAccountId: e.target.value })} className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm font-black text-white outline-none"><option value="">{paymentFormData.method === 'Bank' ? (isAr ? 'اختر حسابًا بنكيًا' : 'Select bank account') : (isAr ? 'اختر صندوقًا نقديًا' : 'Select cash box')}</option>{accountsFor(paymentFormData.method as 'Cash' | 'Bank').map((account) => <option key={account.id} value={account.id}>{account.name}{account.currency ? ` (${account.currency})` : ''}</option>)}</select></label>{paymentFormData.method === 'Bank' && <label className="block text-slate-500">{isAr ? 'مرجع الحوالة / العملية البنكية' : 'Transfer / bank operation reference'}<input required value={paymentFormData.bankReference || ''} onChange={(e) => setPaymentFormData({ ...paymentFormData, bankReference: e.target.value })} className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white outline-none" /></label>}</div>}
+        <label className="block text-slate-500">{isAr ? 'ملاحظات' : 'Notes'}<textarea value={paymentFormData.notes} onChange={(e) => setPaymentFormData({ ...paymentFormData, notes: e.target.value })} className="mt-1 min-h-16 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm text-white outline-none" /></label>
+        <label className="block text-slate-500">{isAr ? 'رمز الـ PIN المالي للتحقق' : 'Security PIN authorization'}<input required type="password" maxLength={6} pattern="^[0-9]{4,6}$" value={paymentFormData.pin} onChange={(e) => setPaymentFormData({ ...paymentFormData, pin: e.target.value })} className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 p-3 text-center font-mono text-sm font-black tracking-widest text-yellow-500 outline-none" placeholder="••••" /></label>
+        <div className="flex justify-end gap-2 border-t border-slate-800 pt-4"><button type="button" disabled={isSubmitting} onClick={onClose} className="rounded-lg px-4 py-2 text-slate-400 hover:bg-slate-800 disabled:opacity-50">{isAr ? 'إلغاء' : 'Cancel'}</button><button type="submit" disabled={isSubmitting || isDeferred} className="rounded-xl bg-gradient-to-r from-[#d4af37] to-yellow-600 px-5 py-2.5 font-black text-black transition-all disabled:cursor-not-allowed disabled:opacity-50">{isSubmitting ? (isAr ? 'جارٍ التحصيل…' : 'Settling…') : (isAr ? 'تأكيد ترحيل القبض' : 'Settle payment')}</button></div>
+      </form>
     </div>
-  );
+  </div>;
 }

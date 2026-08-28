@@ -485,7 +485,7 @@ export default function Layout() {
     { id: 'orders', name: isAr ? 'الطلبات والشحنات' : 'Orders & Shipments', path: '/orders', icon: Package, permission: 'view_orders' },
     { id: 'customers', name: isAr ? 'العملاء' : 'Customers', path: '/customers', icon: Users, permission: 'view_customers' },
     { id: 'couriers', name: isAr ? 'المناديب' : 'Couriers', path: '/couriers', icon: Truck, permission: 'view_couriers' },
-    { id: 'expenses', name: isAr ? 'المصروفات والعهد' : 'Expenses & Custody', path: '/expenses', icon: Wallet, permission: 'view_finance' },
+    { id: 'finance', name: isAr ? 'القيود والسندات' : 'Entries & Vouchers', path: '/finance', icon: Wallet, permission: 'view_general_entries' },
     { id: 'accounting', name: isAr ? 'المحاسبة' : 'Accounting', path: '/accounting', icon: BookOpen, permission: 'view_finance' },
     { id: 'sources', name: isAr ? 'المصادر' : 'Sources', path: '/sources', icon: MapPin, permission: 'view_sources' },
     { id: 'browser', name: isAr ? 'متصفح المواقع' : 'Web Browser', path: '/browser', icon: Monitor, permission: 'view_browser' },
@@ -570,8 +570,8 @@ export default function Layout() {
     if (item.path === '/browser') {
       return hasPermission('view_browser') || role === 'Admin' || true;
     }
-    if (item.path === '/expenses') {
-      return hasPermission('view_finance') || hasPermission('view_expenses') || hasPermission('view_custody');
+    if (item.path === '/finance') {
+      return hasPermission('view_finance') || hasPermission('view_expenses') || hasPermission('view_custody') || hasPermission('view_general_entries');
     }
     return hasPermission(item.permission);
   });
@@ -629,13 +629,6 @@ export default function Layout() {
       return match;
     } else {
       if (location.pathname === itemPath) {
-        if (itemPath === '/expenses') {
-          // If the item path is just /expenses, don't match if we are on a tab query
-          const tab = new URLSearchParams(location.search).get('tab');
-          if (tab === 'reports') {
-            return false;
-          }
-        }
         return true;
       }
       return location.pathname.startsWith(itemPath) && itemPath !== '/';

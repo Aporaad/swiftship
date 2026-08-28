@@ -47,7 +47,8 @@ CREATE TABLE IF NOT EXISTS public.main_entry (
   amount_original numeric(18,4) NOT NULL CHECK (amount_original > 0),
   amount_text text NOT NULL DEFAULT '',
   currency_original_no integer NOT NULL REFERENCES public.currency(cur_id) ON UPDATE CASCADE ON DELETE RESTRICT,
-  currency_price_id integer REFERENCES public.cur_price(id) ON UPDATE CASCADE ON DELETE RESTRICT,
+  currency_price_id integer,
+  currency_price_seq integer,
   description text NOT NULL CHECK (btrim(description) <> ''),
   notes text NOT NULL DEFAULT '',
   attachments text[] NOT NULL DEFAULT ARRAY[]::text[],
@@ -76,6 +77,8 @@ CREATE TABLE IF NOT EXISTS public.main_entry (
   CONSTRAINT main_entry_voided_metadata CHECK (
     (posting_status <> 'voided') OR (voided_at IS NOT NULL)
   ),
+  CONSTRAINT main_entry_currency_price_fkey FOREIGN KEY (currency_price_id, currency_price_seq)
+    REFERENCES public.cur_price(id, seq) ON UPDATE CASCADE ON DELETE RESTRICT,
   CONSTRAINT main_entry_automatic_key CHECK (
     (is_automatic = false) OR (automation_key IS NOT NULL AND btrim(automation_key) <> '')
   )
@@ -91,7 +94,8 @@ CREATE TABLE IF NOT EXISTS public.account_trans (
   amount numeric(18,4) NOT NULL CHECK (amount > 0),
   amount_original numeric(18,4) NOT NULL CHECK (amount_original > 0),
   currency_original_no integer NOT NULL REFERENCES public.currency(cur_id) ON UPDATE CASCADE ON DELETE RESTRICT,
-  currency_price_id integer REFERENCES public.cur_price(id) ON UPDATE CASCADE ON DELETE RESTRICT,
+  currency_price_id integer,
+  currency_price_seq integer,
   entity_type text NOT NULL DEFAULT '',
   entity_id text NOT NULL DEFAULT '',
   payment_method text CHECK (payment_method IN ('cash', 'bank', 'mixed', 'deferred')),
@@ -106,7 +110,9 @@ CREATE TABLE IF NOT EXISTS public.account_trans (
   updated_at timestamptz NOT NULL DEFAULT now(),
   created_by_uid text REFERENCES public.users(id) ON UPDATE CASCADE ON DELETE SET NULL,
   updated_by_uid text REFERENCES public.users(id) ON UPDATE CASCADE ON DELETE SET NULL,
-  CONSTRAINT account_trans_entry_line_unique UNIQUE (entry_id, line_no)
+  CONSTRAINT account_trans_entry_line_unique UNIQUE (entry_id, line_no),
+  CONSTRAINT account_trans_currency_price_fkey FOREIGN KEY (currency_price_id, currency_price_seq)
+    REFERENCES public.cur_price(id, seq) ON UPDATE CASCADE ON DELETE RESTRICT
 );
 
 CREATE TABLE IF NOT EXISTS public.custody_advances (
@@ -118,7 +124,8 @@ CREATE TABLE IF NOT EXISTS public.custody_advances (
   recipient_account_id text NOT NULL REFERENCES public.accounts(id) ON UPDATE CASCADE ON DELETE RESTRICT,
   amount_original numeric(18,4) NOT NULL CHECK (amount_original > 0),
   currency_original_no integer NOT NULL REFERENCES public.currency(cur_id) ON UPDATE CASCADE ON DELETE RESTRICT,
-  currency_price_id integer REFERENCES public.cur_price(id) ON UPDATE CASCADE ON DELETE RESTRICT,
+  currency_price_id integer,
+  currency_price_seq integer,
   amount_settled numeric(18,4) NOT NULL DEFAULT 0 CHECK (amount_settled >= 0),
   amount_outstanding numeric(18,4) NOT NULL CHECK (amount_outstanding >= 0),
   status text NOT NULL CHECK (status IN ('open', 'partial', 'settled', 'cancelled')),
@@ -133,6 +140,8 @@ CREATE TABLE IF NOT EXISTS public.custody_advances (
   updated_at timestamptz NOT NULL DEFAULT now(),
   created_by_uid text REFERENCES public.users(id) ON UPDATE CASCADE ON DELETE SET NULL,
   updated_by_uid text REFERENCES public.users(id) ON UPDATE CASCADE ON DELETE SET NULL,
+  CONSTRAINT custody_currency_price_fkey FOREIGN KEY (currency_price_id, currency_price_seq)
+    REFERENCES public.cur_price(id, seq) ON UPDATE CASCADE ON DELETE RESTRICT,
   CONSTRAINT custody_number_nonempty CHECK (btrim(custody_number) <> ''),
   CONSTRAINT custody_amounts_valid CHECK (amount_settled + amount_outstanding = amount_original),
   CONSTRAINT custody_status_amounts_valid CHECK (

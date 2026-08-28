@@ -67,6 +67,42 @@ export type PermissionKey =
   | 'notify_system'
   | 'view_financial_accounts'
   | 'manage_financial_accounts'
+  | 'view_general_entries'
+  | 'create_general_entries'
+  | 'edit_general_entries'
+  | 'delete_general_entries'
+  | 'view_compound_entries'
+  | 'create_compound_entries'
+  | 'edit_compound_entries'
+  | 'delete_compound_entries'
+  | 'view_temporary_entries'
+  | 'create_temporary_entries'
+  | 'edit_temporary_entries'
+  | 'delete_temporary_entries'
+  | 'view_account_movements'
+  | 'export_account_movements'
+  | 'print_account_movements'
+  | 'view_receipt_vouchers'
+  | 'create_receipt_vouchers'
+  | 'edit_receipt_vouchers'
+  | 'delete_receipt_vouchers'
+  | 'view_payment_vouchers'
+  | 'create_payment_vouchers'
+  | 'edit_payment_vouchers'
+  | 'delete_payment_vouchers'
+  | 'view_custody_advances'
+  | 'create_custody_advances'
+  | 'edit_custody_advances'
+  | 'delete_custody_advances'
+  | 'view_entry_settings'
+  | 'create_entry_settings'
+  | 'edit_entry_settings'
+  | 'delete_entry_settings'
+  | 'post_financial_entries'
+  | 'post_temporary_entries'
+  | 'reverse_financial_entries'
+  | 'void_financial_entries'
+  | 'settle_custody_advances'
   | 'edit_profit_per_kg'
   | 'edit_cbm_shipping_rate'
   | 'view_website_management'
@@ -198,6 +234,42 @@ export const ALL_PERMISSIONS: PermissionDefinition[] = [
   { id: 'edit_exchange_rates', labelAr: 'تنظيم أسعار صرف وتحويل الدولار والريال السعودي بالYER', labelEn: 'Modify currency rates & exchange multipliers', category: 'accounting' },
   { id: 'view_financial_accounts', labelAr: 'عرض أرصدة الحسابات المالية وكشوفاتها', labelEn: 'View Financial Account Balances & Statements', category: 'accounting' },
   { id: 'manage_financial_accounts', labelAr: 'إدارة أرصدة الحسابات المالية وإجراء حركات تسوية يدوية', labelEn: 'Manage Financial Account Balances & Adjustments', category: 'accounting' },
+  { id: 'view_general_entries', labelAr: 'عرض القيود العامة', labelEn: 'View General Entries', category: 'accounting' },
+  { id: 'create_general_entries', labelAr: 'إنشاء القيود العامة', labelEn: 'Create General Entries', category: 'accounting' },
+  { id: 'edit_general_entries', labelAr: 'تعديل مسودات القيود العامة', labelEn: 'Edit General Entry Drafts', category: 'accounting' },
+  { id: 'delete_general_entries', labelAr: 'حذف مسودات القيود العامة', labelEn: 'Delete General Entry Drafts', category: 'accounting' },
+  { id: 'view_compound_entries', labelAr: 'عرض القيود المركبة', labelEn: 'View Compound Entries', category: 'accounting' },
+  { id: 'create_compound_entries', labelAr: 'إنشاء القيود المركبة', labelEn: 'Create Compound Entries', category: 'accounting' },
+  { id: 'edit_compound_entries', labelAr: 'تعديل مسودات القيود المركبة', labelEn: 'Edit Compound Entry Drafts', category: 'accounting' },
+  { id: 'delete_compound_entries', labelAr: 'حذف مسودات القيود المركبة', labelEn: 'Delete Compound Entry Drafts', category: 'accounting' },
+  { id: 'view_temporary_entries', labelAr: 'عرض القيود المؤقتة', labelEn: 'View Temporary Entries', category: 'accounting' },
+  { id: 'create_temporary_entries', labelAr: 'إنشاء القيود المؤقتة', labelEn: 'Create Temporary Entries', category: 'accounting' },
+  { id: 'edit_temporary_entries', labelAr: 'تعديل القيود المؤقتة', labelEn: 'Edit Temporary Entries', category: 'accounting' },
+  { id: 'delete_temporary_entries', labelAr: 'حذف القيود المؤقتة', labelEn: 'Delete Temporary Entries', category: 'accounting' },
+  { id: 'view_account_movements', labelAr: 'عرض حركة الحسابات', labelEn: 'View Account Movements', category: 'accounting' },
+  { id: 'export_account_movements', labelAr: 'تصدير حركة الحسابات', labelEn: 'Export Account Movements', category: 'accounting' },
+  { id: 'print_account_movements', labelAr: 'طباعة كشف حركة الحسابات', labelEn: 'Print Account Movements', category: 'accounting' },
+  { id: 'view_receipt_vouchers', labelAr: 'عرض سندات القبض', labelEn: 'View Receipt Vouchers', category: 'accounting' },
+  { id: 'create_receipt_vouchers', labelAr: 'إنشاء سندات القبض', labelEn: 'Create Receipt Vouchers', category: 'accounting' },
+  { id: 'edit_receipt_vouchers', labelAr: 'تعديل مسودات سندات القبض', labelEn: 'Edit Receipt Voucher Drafts', category: 'accounting' },
+  { id: 'delete_receipt_vouchers', labelAr: 'حذف مسودات سندات القبض', labelEn: 'Delete Receipt Voucher Drafts', category: 'accounting' },
+  { id: 'view_payment_vouchers', labelAr: 'عرض سندات الصرف', labelEn: 'View Payment Vouchers', category: 'accounting' },
+  { id: 'create_payment_vouchers', labelAr: 'إنشاء سندات الصرف', labelEn: 'Create Payment Vouchers', category: 'accounting' },
+  { id: 'edit_payment_vouchers', labelAr: 'تعديل مسودات سندات الصرف', labelEn: 'Edit Payment Voucher Drafts', category: 'accounting' },
+  { id: 'delete_payment_vouchers', labelAr: 'حذف مسودات سندات الصرف', labelEn: 'Delete Payment Voucher Drafts', category: 'accounting' },
+  { id: 'view_custody_advances', labelAr: 'عرض العهد والسلف', labelEn: 'View Custody Advances', category: 'accounting' },
+  { id: 'create_custody_advances', labelAr: 'إنشاء العهد والسلف', labelEn: 'Create Custody Advances', category: 'accounting' },
+  { id: 'edit_custody_advances', labelAr: 'تعديل العهد والسلف', labelEn: 'Edit Custody Advances', category: 'accounting' },
+  { id: 'delete_custody_advances', labelAr: 'حذف مسودات العهد والسلف', labelEn: 'Delete Custody Advance Drafts', category: 'accounting' },
+  { id: 'view_entry_settings', labelAr: 'عرض إعدادات الفئات والأنواع والقواعد', labelEn: 'View Entry Settings', category: 'accounting' },
+  { id: 'create_entry_settings', labelAr: 'إنشاء فئات وأنواع وقواعد قيود', labelEn: 'Create Entry Settings', category: 'accounting' },
+  { id: 'edit_entry_settings', labelAr: 'تعديل فئات وأنواع وقواعد قيود', labelEn: 'Edit Entry Settings', category: 'accounting' },
+  { id: 'delete_entry_settings', labelAr: 'حذف فئات وأنواع وقواعد قيود', labelEn: 'Delete Entry Settings', category: 'accounting' },
+  { id: 'post_financial_entries', labelAr: 'اعتماد وترحيل القيود والسندات', labelEn: 'Post Financial Entries & Vouchers', category: 'accounting' },
+  { id: 'post_temporary_entries', labelAr: 'اعتماد القيود المؤقتة', labelEn: 'Post Temporary Entries', category: 'accounting' },
+  { id: 'reverse_financial_entries', labelAr: 'إنشاء قيود عكسية', labelEn: 'Create Reversing Entries', category: 'accounting' },
+  { id: 'void_financial_entries', labelAr: 'إبطال القيود المرحّلة', labelEn: 'Void Posted Financial Entries', category: 'accounting' },
+  { id: 'settle_custody_advances', labelAr: 'تسوية العهد والسلف', labelEn: 'Settle Custody Advances', category: 'accounting' },
   { id: 'edit_profit_per_kg', labelAr: 'تعديل نسبة الربح للكيلو لطلبات المصنع', labelEn: 'Edit Profit Per KG Rate (Factory Orders)', category: 'accounting' },
   { id: 'edit_cbm_shipping_rate', labelAr: 'تعديل سعر شحن الـ CBM لطلبات المصنع والموردين', labelEn: 'Edit CBM Shipping Rate (Factory Orders)', category: 'accounting' },
 
@@ -262,6 +334,42 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     'edit_expenses',
     'view_financial_accounts',
     'manage_financial_accounts',
+    'view_general_entries',
+    'create_general_entries',
+    'edit_general_entries',
+    'delete_general_entries',
+    'view_compound_entries',
+    'create_compound_entries',
+    'edit_compound_entries',
+    'delete_compound_entries',
+    'view_temporary_entries',
+    'create_temporary_entries',
+    'edit_temporary_entries',
+    'delete_temporary_entries',
+    'view_account_movements',
+    'export_account_movements',
+    'print_account_movements',
+    'view_receipt_vouchers',
+    'create_receipt_vouchers',
+    'edit_receipt_vouchers',
+    'delete_receipt_vouchers',
+    'view_payment_vouchers',
+    'create_payment_vouchers',
+    'edit_payment_vouchers',
+    'delete_payment_vouchers',
+    'view_custody_advances',
+    'create_custody_advances',
+    'edit_custody_advances',
+    'delete_custody_advances',
+    'view_entry_settings',
+    'create_entry_settings',
+    'edit_entry_settings',
+    'delete_entry_settings',
+    'post_financial_entries',
+    'post_temporary_entries',
+    'reverse_financial_entries',
+    'void_financial_entries',
+    'settle_custody_advances',
     'view_reports',
     'view_sources',
     'add_sources',

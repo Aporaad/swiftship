@@ -1807,13 +1807,8 @@ export default function Settings() {
       {activeTab === 'logistics' && (
         <div className="space-y-5 animate-fade-slide-in">
           {canManageAdmin ? (
-            <SectionCard title={isAr ? 'الربط المباشر مع شركات الشحن (API)' : 'Logistics External API Hooks'} icon={Globe} badge={isAr ? "ميزة احترافية" : "PRO"}>
-              <div className="bg-black/30 border border-[#d4af37]/20 p-4 rounded-xl mb-6">
-                <p className="text-xs text-[#d4af37] font-bold leading-relaxed mb-2">
-                  {isAr
-                    ? 'يتيح لك هذا القسم ربط نظام التتبع بموفري الخدمات اللوجستية الخارجيين مثل AfterShip أو 17TRACK لجلب مسارات وحالات الشحنات دولياً بشكل تلقائي.'
-                    : 'Bind external third-party tracking sources like AfterShip or 17Track. Enhances the customer GPS map drastically with live resolution.'}
-                </p>
+            <SectionCard title={isAr ? 'الربط المباشر مع شركات الشحن (API)' : 'Logistics External API Hooks'} icon={Globe}>
+              <div className="bg-black/30 border border-[#d4af37]/20 p-4 rounded-xl mb-6">                
                 <p className="text-[10px] text-slate-400 font-medium">
                   {isAr
                     ? 'عند تفعيل الخيار، سيقوم خادم alx بالاتصال بالـ API الخارجي تلقائياً لجلب المسارات بمجرد إدخال رقم تتبع صالح.'

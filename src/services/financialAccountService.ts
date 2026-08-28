@@ -7,9 +7,9 @@
  *   Couriers   → prefix 2120  (Liability — Courier Ledger)
  *   Employees  → prefix 2130  (Liability — Employee Ledger)
  *
- * Every transaction that touches an account is written as a balanced ledger
- * entry. Database safeguards maintain the authoritative posting balance and
- * its hierarchy roll-up from account_transactions.
+ * Every transaction that touches an account is written through the atomic
+ * financial-entry procedure. Database safeguards maintain the authoritative
+ * posting balance and its hierarchy roll-up from account_trans.
  *
  * Use recalculateAndSyncBalance(accountId) to reconcile the stored balance
  * against the live transaction history.
@@ -29,10 +29,11 @@ import {
   getDoc,
   writeBatch,
 } from "../lib/supabase-firebase-adapter";
-import { currencyService, DEFAULT_RATES } from "./currencyService";
-import { db, auth } from "../lib/supabase-firebase-adapter";
+import { currencyService } from "./currencyService";
+import { db, auth, supabase } from "../lib/supabase-firebase-adapter";
 import { activityLogService } from "./activityLogService";
 import { accountingHierarchyService, hierarchyCodeRules, naturalBalanceDelta } from "./accountingHierarchyService";
+import { financialEntryService } from './financialEntryService';
 import { Transaction } from "../types";
 //import { Settings } from "../contexts/SettingsContext";
 
@@ -576,163 +577,44 @@ class FinancialAccountService {
     entry: Omit<JournalEntry, "id">,
     providedRates?: { USD?: number; SAR?: number; YER?: number },//مهم:يجب تغييرها من ثابته الى جلب من قاعده البيانات
   ): Promise<string> {
-    const batch = writeBatch(db);
-    const now = entry.createdAt || Date.now();
-    const exchangeRates = providedRates || (await this.getExchangeRates());
-
+    if (providedRates) {
+      console.warn('[FinancialAccountService] تم تجاهل أسعار التحويل الممررة؛ يعتمد المسار الذري على مراجع سعر صرف مثبتة من قاعدة البيانات فقط.');
+    }
     const debitAccount = await this.getAccountById(entry.debitAccountId);
     const creditAccount = await this.getAccountById(entry.creditAccountId);
-
     if (!debitAccount || !creditAccount) {
-      throw new Error(
-        "One or more financial accounts not found in ledger register.",
-      );
+      throw new Error('One or more financial accounts not found in ledger register.');
     }
-
-    // Determine target debit/credit amounts in account currency, honoring any provided values or auto-converting
-    const debitAmount =
-      entry.amountDebitCurrency ||
-      this.convertToTargetCurrency(
-        entry.amount,
-        entry.currency,
-        debitAccount.currency,
-        exchangeRates,
-      );
-    const creditAmount =
-      entry.amountCreditCurrency ||
-      this.convertToTargetCurrency(
-        entry.amount,
-        entry.currency,
-        creditAccount.currency,
-        exchangeRates,
-      );
-
     if (!accountingHierarchyService.isPostingAccount(debitAccount) || !accountingHierarchyService.isPostingAccount(creditAccount)) {
       throw new Error('Journal entries may only use active financial posting accounts.');
     }
 
-    const debitAccountType = debitAccount.type || this.getAccountTypeByCode(debitAccount.accountCode);
-    const creditAccountType = creditAccount.type || this.getAccountTypeByCode(creditAccount.accountCode);
-
-    const debitDelta = naturalBalanceDelta(debitAccountType, 'Debit', debitAmount);
-    const creditDelta = naturalBalanceDelta(creditAccountType, 'Credit', creditAmount);
-
-    accountingHierarchyService.validateNaturalBalanceLimit(debitAccount, debitDelta);
-    accountingHierarchyService.validateNaturalBalanceLimit(creditAccount, creditDelta);
-    const debitCurrencyId = await accountingHierarchyService.getCurrencyIdByCode(debitAccount.currency);
-    const creditCurrencyId = await accountingHierarchyService.getCurrencyIdByCode(creditAccount.currency);
-    const entryCurrencyId = await accountingHierarchyService.getCurrencyIdByCode(entry.currency);
-
-    // A. Write master Unified Journal Voucher entry document
-    const jvRef = doc(collection(db, "journal_entries"));
-    const completeEntry: JournalEntry = {
-      ...entry,
-      createdAt: now,
-      amountDebitCurrency: debitAmount,
-      amountCreditCurrency: creditAmount,
-      curNo: entryCurrencyId,
-    };
-    batch.set(jvRef, completeEntry);
-
-    // B. Write legacy/sub-ledger target DEBIT transaction leg for reports & accounts audits
-    const debitTxRef = doc(collection(db, "account_transactions"));
-    const debitTxData: AccountTransaction = {
-      accountId: entry.debitAccountId,
-      accountCode: debitAccount.accountCode,
-      entityType: debitAccount.entityType,
-      entityId: debitAccount.entityId,
-      entityName: debitAccount.entityName,
+    const result = await financialEntryService.createFromLegacyVoucher({
+      entryNumber: entry.entryNumber,
+      createdAt: entry.createdAt || Date.now(),
+      description: entry.description,
+      attachments: entry.attachments,
+      notes: entry.notes,
+      amount: entry.amount,
+      currency: entry.currency,
+      amountDebitCurrency: entry.amountDebitCurrency,
+      amountCreditCurrency: entry.amountCreditCurrency,
+      module: entry.module,
+      refNumber: entry.refNumber,
       orderId: entry.orderId,
-      orderNumber: entry.orderNumber,
       shipmentId: entry.shipmentId,
       automationKey: entry.automationKey,
       autoRuleId: entry.autoRuleId,
-      type: "Debit",
-      amount: debitAmount,
-      currency: debitAccount.currency,
-      curNo: debitCurrencyId,
-      amountOriginal: entry.amount,
-      currencyOriginal: entry.currency,
-      description: entry.description,
-      refNumber: entry.refNumber,
-      module: entry.module,
-      createdAt: now,
-      createdByUid: entry.createdByUid || "system",
-      createdByName: entry.createdByName || "Audit Engine",
-      journalEntryId: jvRef.id,
-      journalEntryNumber: entry.entryNumber,
-    };
-    batch.set(debitTxRef, debitTxData);
-
-    // Update parent entity (Debit) financial balance
-    if (
-      debitAccount.entityType &&
-      debitAccount.entityType !== "system" &&
-      debitAccount.entityId
-    ) {
-      try {
-        const entityCol = this.getEntityCollection(debitAccount.entityType);
-        const entityRef = doc(db, entityCol, debitAccount.entityId);
-        batch.update(entityRef, {
-          financialBalance: increment(debitDelta),
-          updatedAt: now,
-        });
-      } catch (err) {
-        console.warn("Silent parent entity update warning (debit):", err);
-      }
-    }
-
-    // C. Write legacy/sub-ledger target CREDIT transaction leg for reports & accounts audits
-    const creditTxRef = doc(collection(db, "account_transactions"));
-    const creditTxData: AccountTransaction = {
-      accountId: entry.creditAccountId,
-      accountCode: creditAccount.accountCode,
-      entityType: creditAccount.entityType,
-      entityId: creditAccount.entityId,
-      entityName: creditAccount.entityName,
-      orderId: entry.orderId,
-      orderNumber: entry.orderNumber,
-      shipmentId: entry.shipmentId,
-      automationKey: entry.automationKey,
-      autoRuleId: entry.autoRuleId,
-      type: "Credit",
-      amount: creditAmount,
-      currency: creditAccount.currency,
-      curNo: creditCurrencyId,
-      amountOriginal: entry.amount,
-      currencyOriginal: entry.currency,
-      description: entry.description,
-      refNumber: entry.refNumber,
-      module: entry.module,
-      createdAt: now,
-      createdByUid: entry.createdByUid || "system",
-      createdByName: entry.createdByName || "Audit Engine",
-      journalEntryId: jvRef.id,
-      journalEntryNumber: entry.entryNumber,
-    };
-    batch.set(creditTxRef, creditTxData);
-
-    // Update parent entity (Credit) financial balance
-    if (
-      creditAccount.entityType &&
-      creditAccount.entityType !== "system" &&
-      creditAccount.entityId
-    ) {
-      try {
-        const entityCol = this.getEntityCollection(creditAccount.entityType);
-        const entityRef = doc(db, entityCol, creditAccount.entityId);
-        batch.update(entityRef, {
-          financialBalance: increment(creditDelta),
-          updatedAt: now,
-        });
-      } catch (err) {
-        console.warn("Silent parent entity update warning (credit):", err);
-      }
-    }
-
-    await batch.commit();
-
-    // تعمل مشغلات قاعدة البيانات على احتساب الرصيد وتجميع الشجرة في نفس معاملة الحركة.
+      isAutomatic: entry.isAutomatic,
+      createdByUid: entry.createdByUid,
+      paymentMethod: (entry as any).paymentMethod,
+    }, {
+      id: debitAccount.id!, curNo: debitAccount.curNo, currency: debitAccount.currency,
+      entityType: debitAccount.entityType, entityId: debitAccount.entityId,
+    }, {
+      id: creditAccount.id!, curNo: creditAccount.curNo, currency: creditAccount.currency,
+      entityType: creditAccount.entityType, entityId: creditAccount.entityId,
+    });
 
     activityLogService.log(
       "financial_transaction" as any,
@@ -746,7 +628,7 @@ class FinancialAccountService {
       },
     );
 
-    return jvRef.id;
+    return result.id;
   }
 
   /**
@@ -1021,12 +903,23 @@ class FinancialAccountService {
    */
   async getExchangeRates(): Promise<Record<string, number>> {
     try {
-      const rates = await currencyService.getLatestExchangeRates();
+      const activeCurrencies = await currencyService.getActiveCurrencies();
+      if (!activeCurrencies.length) {
+        throw new Error('لا توجد عملات نشطة يمكن التحقق من أسعارها.');
+      }
+      const rates: Record<string, number> = {};
+      for (const currency of activeCurrencies) {
+        const code = String(currency.code || '').trim().toUpperCase();
+        const price = currency.isDefault ? 1 : Number(currency.currentPrice);
+        if (!code || !Number.isFinite(price) || price <= 0) {
+          throw new Error(`لا يوجد سعر صرف موثق للعملة ${code || '[unknown]'}.`);
+        }
+        rates[code] = price;
+      }
       return rates;
     } catch (e) {
-      console.warn('[FinancialAccountService] Could not fetch exchange rates from currencyService, using DEFAULT_RATES as emergency fallback', e);
-      // Emergency only — لا تعتمد على هذه القيم في الإنتاج
-      return { ...DEFAULT_RATES };
+      console.error('[FinancialAccountService] تعذر تحميل أسعار الصرف الموثقة؛ أُوقف إنشاء القيد بدل استخدام سعر احتياطي.', e);
+      throw e;
     }
   }
 
@@ -1296,107 +1189,26 @@ class FinancialAccountService {
   }
 
   /**
-   * recalculateAndSyncBalance
-   * ──────────────────────────────────────────────────────────────────────
-   * Re-computes the authoritative balance for an account from scratch
-   * by summing ALL account_transactions, then writes the corrected value
-   * back to the accounts document.
-   *
-   * Accounting formula applied:
-   *   Asset  / Expense   → balance = Σ Debit − Σ Credit  (normal debit balance)
-   *   Liab   / Equity    → balance = Σ Credit − Σ Debit   (normal credit balance)
-   *   Revenue            → balance = Σ Credit − Σ Debit   (normal credit balance)
-   *
-   * @param accountId  - Firestore document ID in the `accounts` collection
-   * @returns corrected balance (in account's native currency)
+   * يطلب من قاعدة البيانات إعادة احتساب رصيد الحساب من account_trans فقط.
+   * لا يسمح هذا المسار للواجهة بإعادة بناء الرصيد من account_transactions القديم.
    */
   // Debounce map: prevents cascade recalculations within 2 seconds for same account
   private _recalcDebounce: Map<string, ReturnType<typeof setTimeout>> = new Map();
-  // Cache exchange rates to avoid re-fetching for each account during bulk recalculation
-  private _cachedRates: Record<string, number> | null = null;
-  private _cachedRatesTs = 0;
-
-  private async getCachedExchangeRates(): Promise<Record<string, number>> {
-    const now = Date.now();
-    if (this._cachedRates && now - this._cachedRatesTs < 60000) {
-      return this._cachedRates;
-    }
-    this._cachedRates = await this.getExchangeRates();
-    this._cachedRatesTs = now;
-    return this._cachedRates!;
-  }
-
   async recalculateAndSyncBalance(accountId: string): Promise<number> {
     try {
-      // 1. Load the account document to know its type and code
       const accountDoc = await getDoc(doc(db, "accounts", accountId));
       if (!accountDoc.exists()) {
         console.warn(`[recalculateAndSyncBalance] Account ${accountId} not found.`);
         return 0;
       }
-      const account = accountDoc.data() as FinancialAccount & { type?: string };
-      const accountCode: string = account.accountCode || "";
-
-      // 2. Determine account type
-      const rawType: string = account.type || this.getAccountTypeByCode(accountCode);
-      const isDebitNormal = rawType === "Asset" || rawType === "Expense";
-
-      // 3. Single query by accountId only (all new transactions include accountId)
-      const qById = query(
-        collection(db, "account_transactions"),
-        where("accountId", "==", accountId),
-      );
-      const snapById = await getDocs(qById);
-
-      const exchangeRates = await this.getCachedExchangeRates();
-      const accountCurrency = account.currency || "YER";
-
-      let totalDebit = 0;
-      let totalCredit = 0;
-      snapById.docs.forEach((d) => {
-        const tx = d.data();
-        let amt = parseFloat(tx.amount) || 0;
-        const txCurrency = tx.currency || accountCurrency;
-
-        if (txCurrency !== accountCurrency) {
-          const origAmt = parseFloat(tx.amountOriginal) || amt;
-          const origCurr = tx.currencyOriginal || txCurrency;
-          amt = this.convertToTargetCurrency(origAmt, origCurr, accountCurrency, exchangeRates);
-        }
-
-        if (tx.type === "Debit") totalDebit += amt;
-        else if (tx.type === "Credit") totalCredit += amt;
+      const { error } = await (supabase as any).rpc('recalculate_accounting_hierarchy', {
+        p_account_id: accountId,
       });
-
-      // 4. Apply accounting formula
-      const correctBalance = isDebitNormal
-        ? totalDebit - totalCredit
-        : totalCredit - totalDebit;
-
-      // 5. Write corrected balance back to the accounts document
-      await updateDoc(doc(db, "accounts", accountId), {
-        balance: correctBalance,
-        debitTotal: totalDebit,
-        creditTotal: totalCredit,
-        updatedAt: Date.now(),
-        lastRecalculatedAt: Date.now(),
-      });
-
-      // 6. Write corrected balance to parent entity if exists
-      if (account.entityType && account.entityType !== "system" && account.entityId) {
-        try {
-          const entityCol = this.getEntityCollection(account.entityType);
-          const entityRef = doc(db, entityCol, account.entityId);
-          await updateDoc(entityRef, {
-            financialBalance: correctBalance,
-            updatedAt: Date.now(),
-          });
-        } catch (err) {
-          console.warn("Silent parent entity balance sync warning:", err);
-        }
+      if (error) {
+        throw new Error(error.message || String(error));
       }
-
-      return correctBalance;
+      const refreshedAccount = await this.getAccountById(accountId);
+      return Number(refreshedAccount?.balance || 0);
     } catch (error) {
       console.error("[recalculateAndSyncBalance] Error:", error);
       return 0;
@@ -1432,9 +1244,6 @@ class FinancialAccountService {
     let errors = 0;
 
     try {
-      // Pre-warm the exchange rates cache once for all accounts
-      await this.getCachedExchangeRates();
-
       const snap = await getDocs(collection(db, "accounts"));
       const docs = snap.docs;
 
@@ -1794,10 +1603,15 @@ class FinancialAccountService {
       const orderIdentifier = String(order?.id || order?.orderNumber || order?.order_number || 'unknown-order');
       const automationKey = entities.automationKey || `auto-voucher:${orderIdentifier}:rule:${ruleId}`;
 
-      const previousExecutions = await getDocs(
-        query(collection(db, 'journal_entries'), where('automationKey', '==', automationKey)),
-      );
-      if (!previousExecutions.empty) {
+      const previousExecutions = await (supabase as any)
+        .from('main_entry')
+        .select('id')
+        .eq('automation_key', automationKey)
+        .limit(1);
+      if (previousExecutions.error) {
+        throw new Error(`تعذر التحقق من تكرار القيد التلقائي: ${previousExecutions.error.message || previousExecutions.error}`);
+      }
+      if ((previousExecutions.data || []).length > 0) {
         console.info('[AutomaticVouchers] Duplicate execution prevented.', { automationKey, ruleId, orderIdentifier });
         return false;
       }

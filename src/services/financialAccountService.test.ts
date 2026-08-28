@@ -5,6 +5,9 @@ const mocks = vi.hoisted(() => ({
   setDoc: vi.fn(async () => undefined),
   updateDoc: vi.fn(async () => undefined),
   activityLog: vi.fn(),
+  createFinancialEntry: vi.fn(),
+  getDoc: vi.fn(),
+  recalculateHierarchy: vi.fn(),
 }));
 
 vi.mock('../lib/supabase-firebase-adapter', () => ({
@@ -17,10 +20,11 @@ vi.mock('../lib/supabase-firebase-adapter', () => ({
   where: vi.fn((...constraint: unknown[]) => ({ constraint })),
   orderBy: vi.fn(),
   increment: vi.fn(),
-  getDoc: vi.fn(),
+  getDoc: mocks.getDoc,
   writeBatch: vi.fn(),
   db: {},
   auth: {},
+  supabase: { from: vi.fn(), rpc: mocks.recalculateHierarchy },
 }));
 
 vi.mock('./currencyService', () => ({
@@ -29,6 +33,7 @@ vi.mock('./currencyService', () => ({
 }));
 
 vi.mock('./activityLogService', () => ({ activityLogService: { log: mocks.activityLog } }));
+vi.mock('./financialEntryService', () => ({ financialEntryService: { createFromLegacyVoucher: mocks.createFinancialEntry } }));
 
 import { financialAccountService } from './financialAccountService';
 
@@ -71,5 +76,50 @@ describe('إنشاء الحسابات التابعة', () => {
     );
 
     expect(account?.type).toBe(type);
+  });
+});
+
+describe('تسجيل القيد الذري', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('يمرر القيد إلى إجراء واحد ذري ولا يكتب الجداول القديمة مباشرة', async () => {
+    vi.spyOn(financialAccountService, 'getAccountById')
+      .mockResolvedValueOnce({ id: '1110-0003', accountCode: '1110-0003', accountNumber: '0003', accountPrefix: '1110', entityType: 'system', entityId: 'cash', entityName: 'الصندوق', currency: 'YER', curNo: 1, balance: 0, debitTotal: 0, creditTotal: 0, isActive: true, createdAt: 0, updatedAt: 0, accSubId: '111', type: 'Asset' })
+      .mockResolvedValueOnce({ id: '1132-0005', accountCode: '1132-0005', accountNumber: '0005', accountPrefix: '1132', entityType: 'customer', entityId: 'customer-1', entityName: 'عميل', currency: 'YER', curNo: 1, balance: 0, debitTotal: 0, creditTotal: 0, isActive: true, createdAt: 0, updatedAt: 0, accSubId: '113', type: 'Asset' });
+    mocks.createFinancialEntry.mockResolvedValue({ id: 'entry-v2-1' });
+
+    await expect(financialAccountService.recordJournalEntry({
+      entryNumber: 'JV-1', createdAt: Date.now(), description: 'قيد اختبار',
+      debitAccountId: '1110-0003', debitAccountName: 'الصندوق', debitAccountCode: '1110-0003',
+      creditAccountId: '1132-0005', creditAccountName: 'عميل', creditAccountCode: '1132-0005',
+      amount: 100, currency: 'YER', amountDebitCurrency: 100, amountCreditCurrency: 100,
+      module: 'adjustment', refNumber: 'JV-1', createdByUid: 'user-1', createdByName: 'Admin',
+    })).resolves.toBe('entry-v2-1');
+
+    expect(mocks.createFinancialEntry).toHaveBeenCalledTimes(1);
+    expect(mocks.setDoc).not.toHaveBeenCalled();
+    expect(mocks.activityLog).toHaveBeenCalledWith('financial_transaction', 'الصندوق / عميل', expect.any(Object));
+  });
+});
+
+describe('إعادة احتساب الأرصدة', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('يفوض إعادة الاحتساب إلى قاعدة البيانات ولا يقرأ account_transactions في المتصفح', async () => {
+    mocks.getDoc.mockResolvedValue({ exists: () => true, data: () => ({ id: '1110-0003' }) });
+    mocks.recalculateHierarchy.mockResolvedValue({ error: null });
+    vi.spyOn(financialAccountService, 'getAccountById').mockResolvedValue({
+      id: '1110-0003', accountCode: '1110-0003', accountNumber: '0003', accountPrefix: '1110',
+      entityType: 'system', entityId: 'cash', entityName: 'الصندوق', currency: 'YER', curNo: 1,
+      balance: 75, debitTotal: 0, creditTotal: 0, isActive: true, createdAt: 0, updatedAt: 0, accSubId: '111', type: 'Asset',
+    });
+
+    await expect(financialAccountService.recalculateAndSyncBalance('1110-0003')).resolves.toBe(75);
+    expect(mocks.recalculateHierarchy).toHaveBeenCalledWith('recalculate_accounting_hierarchy', { p_account_id: '1110-0003' });
+    expect(mocks.updateDoc).not.toHaveBeenCalled();
   });
 });

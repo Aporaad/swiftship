@@ -610,8 +610,24 @@ const DIRECT_COLUMNS_MAP: Record<string, Record<string, string>> = {
   auto_entries: { statusId: 'status_id', nameAr: 'name_ar', nameEn: 'name_en', isActive: 'is_active', amountSource: 'amount_source', amountSources: 'amount_sources', amountStrategy: 'amount_strategy', currency: 'currency', curNo: 'cur_no', currencyId: 'cur_no', skipWhenZero: 'skip_when_zero' },
   autoEntry: { statusId: 'status_id', nameAr: 'name_ar', nameEn: 'name_en', isActive: 'is_active', amountSource: 'amount_source', amountSources: 'amount_sources', amountStrategy: 'amount_strategy', currency: 'currency', curNo: 'cur_no', currencyId: 'cur_no', skipWhenZero: 'skip_when_zero' },
   order_option: { nameAr: 'name_ar', nameEn: 'name_en', type: 'type', price: 'price', duration: 'duration', details: 'details', code: 'code', isActive: 'is_active', is_active: 'is_active' },
-  items_category: { code: 'code', nameAr: 'name_ar', nameEn: 'name_en', description: 'description', details: 'details', hsCodeHint: 'hs_code_hint', customsPerCarton: 'customs_per_carton', taxPerCarton: 'tax_per_carton', otherFeesPerCarton: 'other_fees_per_carton', customsRate: 'customs_rate', taxRate: 'tax_rate', feeCurrency: 'fee_currency', requiresReview: 'requires_review', isActive: 'is_active', createdAt: 'createdAt', updatedAt: 'updatedAt' }
+  items_category: { code: 'code', nameAr: 'name_ar', nameEn: 'name_en', description: 'description', details: 'details', hsCodeHint: 'hs_code_hint', customsPerCarton: 'customs_per_carton', taxPerCarton: 'tax_per_carton', otherFeesPerCarton: 'other_fees_per_carton', customsRate: 'customs_rate', taxRate: 'tax_rate', feeCurrency: 'fee_currency', requiresReview: 'requires_review', isActive: 'is_active', createdAt: 'createdAt', updatedAt: 'updatedAt' },
+  entry_module: { code: 'code', nameAr: 'name_ar', nameEn: 'name_en', note: 'note', isActive: 'is_active', createdAt: 'created_at', updatedAt: 'updated_at', createdByUid: 'created_by_uid', updatedByUid: 'updated_by_uid' },
+  entry_type: { code: 'code', moduleId: 'module_id', nameAr: 'name_ar', nameEn: 'name_en', note: 'note', isActive: 'is_active', createdAt: 'created_at', updatedAt: 'updated_at', createdByUid: 'created_by_uid', updatedByUid: 'updated_by_uid' },
+  main_entry: { entryNumber: 'entry_number', moduleId: 'module_id', entryTypeId: 'entry_type_id', entryCategory: 'entry_category', postingStatus: 'posting_status', amountOriginal: 'amount_original', amountText: 'amount_text', currencyOriginalNo: 'currency_original_no', currencyPriceId: 'currency_price_id', currencyPriceSeq: 'currency_price_seq', description: 'description', notes: 'notes', attachments: 'attachments', paymentMethod: 'payment_method', orderId: 'order_id', shipmentId: 'shipment_id', custodyId: 'custody_id', automationKey: 'automation_key', autoRuleId: 'auto_rule_id', isAutomatic: 'is_automatic', reversesEntryId: 'reverses_entry_id', effectiveAt: 'effective_at', postedAt: 'posted_at', voidedAt: 'voided_at', createdAt: 'created_at', updatedAt: 'updated_at', createdByUid: 'created_by_uid', updatedByUid: 'updated_by_uid', postedByUid: 'posted_by_uid', voidedByUid: 'voided_by_uid' },
+  account_trans: { entryId: 'entry_id', lineNo: 'line_no', transType: 'trans_type', accountId: 'account_id', accountCurNo: 'account_cur_no', amount: 'amount', amountOriginal: 'amount_original', conversionRate: 'conversion_rate', currencyOriginalNo: 'currency_original_no', currencyPriceId: 'currency_price_id', currencyPriceSeq: 'currency_price_seq', entityType: 'entity_type', entityId: 'entity_id', paymentMethod: 'payment_method', orderId: 'order_id', shipmentId: 'shipment_id', custodyId: 'custody_id', autoRuleId: 'auto_rule_id', automationKey: 'automation_key', description: 'description', note: 'note', createdAt: 'created_at', updatedAt: 'updated_at', createdByUid: 'created_by_uid', updatedByUid: 'updated_by_uid' },
+  custody_advances: { custodyNumber: 'custody_number', recipientType: 'recipient_type', recipientId: 'recipient_id', recipientName: 'recipient_name', recipientAccountId: 'recipient_account_id', amountOriginal: 'amount_original', currencyOriginalNo: 'currency_original_no', currencyPriceId: 'currency_price_id', currencyPriceSeq: 'currency_price_seq', amountSettled: 'amount_settled', amountOutstanding: 'amount_outstanding', status: 'status', issuedEntryId: 'issued_entry_id', settlementEntryId: 'settlement_entry_id', note: 'note', issuedAt: 'issued_at', issuedByUid: 'issued_by_uid', settledAt: 'settled_at', settledByUid: 'settled_by_uid', createdAt: 'created_at', updatedAt: 'updated_at', createdByUid: 'created_by_uid', updatedByUid: 'updated_by_uid' },
+  financial_legacy_migration_map: { legacyTable: 'legacy_table', legacyId: 'legacy_id', targetTable: 'target_table', targetId: 'target_id', migrationStatus: 'migration_status', migratedAt: 'migrated_at', verifiedAt: 'verified_at', verifiedByUid: 'verified_by_uid' },
+  financial_migration_exceptions: { legacyTable: 'legacy_table', legacyId: 'legacy_id', exceptionCode: 'exception_code', severity: 'severity', description: 'description', resolutionStatus: 'resolution_status', resolvedByUid: 'resolved_by_uid', resolvedAt: 'resolved_at', createdAt: 'created_at', updatedAt: 'updated_at' }
 };
+
+const EXPLICIT_FINANCIAL_TABLES = new Set([
+  'entry_module', 'entry_type', 'main_entry', 'account_trans', 'custody_advances',
+  'financial_legacy_migration_map', 'financial_migration_exceptions',
+]);
+
+export function usesExplicitFinancialColumns(table: string): boolean {
+  return EXPLICIT_FINANCIAL_TABLES.has(table);
+}
 
 export function extractDirectColumns(table: string, data: Record<string, any>): Record<string, any> {
   const mapping = DIRECT_COLUMNS_MAP[table];
@@ -671,7 +687,8 @@ export async function addDoc(newID: any, collectionRef: FirebaseQuery, rawData: 
 
   if (!isOfflineMode()) {
     const directCols = extractDirectColumns(table, data);
-    const { error } = await supabase.from(table).insert({ id, ...directCols, data });
+    const writePayload = usesExplicitFinancialColumns(table) ? { id, ...directCols } : { id, ...directCols, data };
+    const { error } = await supabase.from(table).insert(writePayload);
     if (error) {
       throw createWriteError('insert', table, error);
     }
@@ -739,7 +756,8 @@ export async function setDoc(docRef: DocRef, rawData: any, options?: any) {
 
   if (!isOfflineMode()) {
     const directCols = extractDirectColumns(table, data);
-    const { error } = await supabase.from(table).upsert({ id, ...directCols, data });
+    const writePayload = usesExplicitFinancialColumns(table) ? { id, ...directCols } : { id, ...directCols, data };
+    const { error } = await supabase.from(table).upsert(writePayload);
     if (error) {
       throw createWriteError('upsert', table, error);
     }
@@ -815,7 +833,8 @@ export async function updateDoc(docRef: DocRef, rawData: any) {
 
   if (!isOfflineMode()) {
     const directCols = extractDirectColumns(table, data);
-    const { error } = await supabase.from(table).update({ ...directCols, data }).eq('id', id);
+    const writePayload = usesExplicitFinancialColumns(table) ? directCols : { ...directCols, data };
+    const { error } = await supabase.from(table).update(writePayload).eq('id', id);
     if (error) {
       throw createWriteError('update', table, error);
     }

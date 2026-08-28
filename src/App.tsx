@@ -20,7 +20,7 @@ import Roles from './pages/Roles';
 import Sources from './pages/Sources';
 import Settings from './pages/Settings';
 import Notifications from './pages/Notifications';
-import Expenses from './pages/Expenses';
+import FinanceEntries from './pages/FinanceEntries';
 import Accounting from './pages/Accounting';
 import SalaryHistory from './pages/SalaryHistory';
 import Reports from './pages/Reports';
@@ -29,7 +29,6 @@ import WebsiteManagement from './pages/WebsiteManagement';
 import BrowserViewer from './pages/BrowserViewer';
 
 import { SettingsProvider } from './context/SettingsContext';
-import { financialAccountService } from './services/financialAccountService';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(() => {
@@ -73,21 +72,6 @@ export default function App() {
     });
     return unsubscribe;
   }, []);
-
-  // ── Background periodic balance sync every 30 minutes ──
-  useEffect(() => {
-    if (!user) return;
-
-    // Setup background periodic synchronization every 30 minutes
-    // Balance is maintained via increment() on each entry; this is just a safety net
-    const interval = setInterval(() => {
-      financialAccountService.recalculateAllBalances().catch(err => {
-        console.warn("[App] Periodic background recalculation failed:", err);
-      });
-    }, 30 * 60 * 1000);
-
-    return () => clearInterval(interval);
-  }, [user]);
 
   if (loading) {
     return (
@@ -165,7 +149,8 @@ export default function App() {
             <Route path="user-management" element={<UserManagement />} />
             <Route path="employees" element={<Employees />} />
             <Route path="couriers" element={<Couriers />} />
-            <Route path="expenses" element={<Expenses />} />
+            <Route path="finance" element={<FinanceEntries />} />
+            <Route path="expenses" element={<Navigate to="/finance" replace />} />
             <Route path="accounting" element={<Accounting />} />
             <Route path="reports" element={<Reports />} />
             <Route path="roles" element={<Roles />} />
@@ -180,4 +165,3 @@ export default function App() {
     </SettingsProvider>
   );
 }
-

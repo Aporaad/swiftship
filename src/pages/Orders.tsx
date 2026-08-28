@@ -11,6 +11,7 @@ import { whatsappService } from '../services/whatsappService'; // استيراد
 import ConfirmModal from '../components/ConfirmModal'; // استيراد النافذة التاكيدية لاجل الحذف  
 import Tracking from './Tracking'; // استيراد تتبع الطلبات لاجل عرض تتبع الطلبات 
 import { financialAccountService } from '../services/financialAccountService'; // استيراد خدمات الحسابات المالية لاجل عرض الحسابات المالية 
+import { financialEntryService, type FinancialPaymentMethod } from '../services/financialEntryService';
 import {
   Plus, Search, Edit2, Truck, Activity, Trash2, DollarSign,
   CreditCard, Printer, Calculator, Package, MapPin, X, AlertCircle, RefreshCw, UserPlus, Eye,
@@ -67,6 +68,7 @@ export default function Orders() { // دالة عرض الطلبات
   const [couriers, setCouriers] = useState<any[]>([]); //  متغير مكونات الحاله الخاص ب ال مندوبين  
   const [sources, setSources] = useState<any[]>([]); //  متغير مكونات الحاله الخاص ب المصادر 
   const [shippingCompanies, setShippingCompanies] = useState<any[]>([]); //  متغير مكونات الحاله الخاص ب شركات الشحن 
+  const [financialAccounts, setFinancialAccounts] = useState<any[]>([]); // الحسابات المالية الورقية المتاحة للقبض
   const [loading, setLoading] = useState(true); //  متغير مكونات الحاله الخاص ب التحميل 
   const [isSubmitting, setIsSubmitting] = useState(false); //  متغير مكونات الحاله الخاص ب الارسال 
 
@@ -416,9 +418,16 @@ export default function Orders() { // دالة عرض الطلبات
   });
 
   // New Payment State 
-  const [paymentFormData, setPaymentFormData] = useState({
+  const [paymentFormData, setPaymentFormData] = useState<{
+    amount: string; method: 'Cash' | 'Bank' | 'Deferred' | 'Mixed'; receivingAccountId: string; bankReference: string;
+    allocations: Array<{ id: string; method: 'Cash' | 'Bank'; amount: string; receivingAccountId: string; bankReference: string }>;
+    notes: string; pin: string;
+  }>({
     amount: '',
     method: 'Cash',
+    receivingAccountId: '',
+    bankReference: '',
+    allocations: [],
     notes: '',
     pin: ''
   });
@@ -460,6 +469,18 @@ export default function Orders() { // دالة عرض الطلبات
       setCouriers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
+    const unsubFinancialAccounts = onSnapshot(collection(db, 'accounts'), (snap) => {
+      setFinancialAccounts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter((account: any) => account.isActive !== false && Boolean(account.accSubId || account.acc_sub_id))
+        .map((account: any) => ({
+          id: account.id,
+          name: account.accNameAr || account.acc_name_ar || account.accountName || account.id,
+          currency: account.currency || account.currencyCode || '',
+          curNo: Number(account.curNo ?? account.cur_no),
+          accSubId: String(account.accSubId ?? account.acc_sub_id ?? ''),
+        })));
+    });
+
     // Fetch order sources
     const unsubSources = onSnapshot(collection(db, 'sources'), (snap) => {
       setSources(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -499,6 +520,7 @@ export default function Orders() { // دالة عرض الطلبات
       unsubCustomers();
       unsubEmployees();
       unsubCouriers();
+      unsubFinancialAccounts();
       unsubSources();
       unsubAutoVoucherRules();
       unsubShippingCompanies();
@@ -1773,118 +1795,8 @@ export default function Orders() { // دالة عرض الطلبات
     }
   };
 
-  // Add payments to unpaid order
-  const handleAddPayment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isSubmitting) return;
-    if (!selectedOrder) return;
-    const paidVal = parseFloat(paymentFormData.amount) || 0;
-    if (paidVal <= 0) return;
-
-    setIsSubmitting(true);
-
-    // MANDATORY FINANCIAL SECURITY PIN VERIFICATION (Section 12 of system documentation)
-    const systemPin = profile?.systemPin || '000000';
-    if (!paymentFormData.pin || paymentFormData.pin.trim() !== systemPin.trim()) {
-      notificationService.notify({
-        title: isAr ? 'خطأ في المصادقة والـ PIN السري' : 'Verification Denied',
-        message: isAr ? 'رمز الـ PIN المالي للموظف غير صحيح! فشل ترحيل وقبض السند المالي.' : 'Employee security PIN is incorrect! Settle payment rejected.',
-        type: 'error',
-        category: 'system'
-      });
-      return;
-    }
-
-    const remaining = parseFloat(selectedOrder.amountRemaining || 0) - paidVal;
-    const newPaid = parseFloat(selectedOrder.amountPaid || 0) + paidVal;
-
-    let targetStatus = 'Partial Paid';
-    if (remaining <= 0) {
-      targetStatus = 'Paid';
-    }
-
-    try {
-      await updateDoc(doc(db, 'orders', selectedOrder.id), {
-        amountPaid: newPaid,
-        amountRemaining: Math.max(0, remaining),
-        paymentStatus: targetStatus,
-        updatedAt: Date.now()
-      });
-
-      // --- Financial Account Impact ---
-      const orderParty = findOrderParty(selectedOrder, customers, employees, couriers);
-      const customerRecord = orderParty?.raw || customers.find(c => c.id === selectedOrder.customerId);
-      const linkedAccountId = selectedOrder.customerAccountId || orderParty?.financialAccountId || customerRecord?.financialAccountId || customerRecord?.accountId;
-      const linkedAccountCode = selectedOrder.customerAccountCode || orderParty?.financialAccountCode || customerRecord?.financialAccountCode || customerRecord?.accountCode;
-
-      if (linkedAccountId) {
-        try {
-          const convertedPaid = financialAccountService.convertToDefaultCurrency(
-            paidVal,
-            'YER',
-            settings.currency || 'YER',
-            buildOrderRates(selectedOrder)
-          );
-
-          const systemAccs = await financialAccountService.ensureSystemAccounts('YER');
-
-          await financialAccountService.triggerAutomaticVoucher(
-            'order_payment',
-            { orderNumber: selectedOrder.orderNumber },
-            {
-              customer: customerRecord,
-              orderParty,
-              isAr,
-              rawAmount: convertedPaid,
-              profileName: profile?.fullName || 'Root Admin'
-            }
-          );
-        } catch (txErr) {
-          console.error('[Orders] Error registering payment transaction on financial account:', txErr);
-        }
-      }
-
-      activityLogService.log('add_payment', selectedOrder.orderNumber || selectedOrder.id, {
-        orderId: selectedOrder.id,
-        orderNumber: selectedOrder.orderNumber || selectedOrder.id,
-        amount: paidVal,
-        method: paymentFormData.method,
-        remaining: Math.max(0, remaining)
-      });
-
-      // Insert transaction history in notifications or payments
-      notificationService.notify({
-        title: isAr ? 'تم الدفع بنجاح' : 'Payment Recorded',
-        message: isAr ? `تم تحصيل مبلغ ${paidVal.toLocaleString()} ريال ومزامنته للعميل` : `Added payment of ${paidVal}`,
-        type: 'success',
-        category: 'finance',
-        orderId: selectedOrder.orderNumber || selectedOrder.id
-      });
-
-      // Dispatch real WhatsApp payment receipt notification
-      try {
-        const payloadObject = {
-          ...selectedOrder,
-          amountPaid: newPaid,
-          amountRemaining: Math.max(0, remaining)
-        };
-        await whatsappService.triggerNotification('onPaymentReceived', payloadObject, {
-          '{amountPaid}': paidVal.toLocaleString(),
-          '{totalCostSaved}': newPaid.toLocaleString()
-        });
-      } catch (whatsappErr) {
-        console.error('Failed to trigger real WhatsApp on payment post:', whatsappErr);
-      }
-
-      setIsPaymentModalOpen(false);
-      setSelectedOrder(null);
-      setPaymentFormData({ amount: '', method: 'Cash', notes: '', pin: '' });
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  // توافق مؤقت للاستدعاءات القديمة: لا توجد كتابة بديلة خارج المعاملة الذرية.
+  const handleAddPayment = (e: React.FormEvent) => handleCollectPayment(e);
 
   // Update logistics status
   const handleUpdateStatus = async (e: React.FormEvent) => {
@@ -2674,7 +2586,10 @@ export default function Orders() { // دالة عرض الطلبات
     setSelectedOrder(ord);
     setPaymentFormData({
       amount: String(ord.amountRemaining || ''),
-      method: 'كاش',
+      method: ord.paymentMethod || 'Cash',
+      receivingAccountId: '',
+      bankReference: '',
+      allocations: [],
       notes: '',
       pin: ''
     });
@@ -2694,20 +2609,76 @@ export default function Orders() { // دالة عرض الطلبات
         toast.error(isAr ? 'يرجى إدخال مبلغ صحيح' : 'Please enter valid amount');
         return;
       }
-      const newPaid = parseFloat(selectedOrder.amountPaid || 0) + amountNum;
-      const total = parseFloat(selectedOrder.totalAmount || 0);
-      const newRemaining = Math.max(0, total - newPaid);
-
-      await updateDoc(doc(db, 'orders', selectedOrder.id), {
-        amountPaid: newPaid,
-        amountRemaining: newRemaining,
-        updatedAt: Date.now()
-      });
+      const remainingBeforePayment = parseFloat(selectedOrder.amountRemaining || 0);
+      if (amountNum > remainingBeforePayment) {
+        toast.error(isAr ? 'المبلغ أكبر من المتبقي للطلب' : 'Amount exceeds order balance');
+        return;
+      }
+      const systemPin = profile?.systemPin || '000000';
+      if (!paymentFormData.pin || paymentFormData.pin.trim() !== systemPin.trim()) {
+        toast.error(isAr ? 'رمز PIN المالي غير صحيح' : 'Invalid financial PIN');
+        return;
+      }
+      const paymentCurrency = selectedOrder.paidCurrency || selectedOrder.currency || selectedOrder.orderCurrency || orderCurrency;
+      const currencyRecord = activeCurrencies.find((currency: any) => currency.code === paymentCurrency);
+      const orderParty = findOrderParty(selectedOrder, customers, employees, couriers);
+      const partyAccountId = selectedOrder.orderPartyAccountId || selectedOrder.customerAccountId || orderParty?.financialAccountId || orderParty?.raw?.financialAccountId || orderParty?.raw?.accountId;
+      const partyAccount = financialAccounts.find((account: any) => account.id === partyAccountId);
+      if (paymentFormData.method === 'Deferred') {
+        toast.error(isAr ? 'الدفع الآجل ليس قبضًا فعليًا؛ أنشئ سندًا آجلًا مستقلًا ثم سجل التحصيل عند الاستلام.' : 'Deferred payment is not a collection; record it in a separate deferred voucher.');
+        return;
+      }
+      const rawAllocations = paymentFormData.method === 'Mixed'
+        ? paymentFormData.allocations
+        : [{ id: 'single', method: paymentFormData.method as 'Cash' | 'Bank', amount: String(amountNum), receivingAccountId: paymentFormData.receivingAccountId, bankReference: paymentFormData.bankReference }];
+      if (!currencyRecord || !partyAccount || !rawAllocations.length) {
+        toast.error(isAr ? 'حدد حساب الطرف وحساب أو حسابات التحصيل وعملة الدفع قبل التحصيل' : 'Select the party, collection account(s), and payment currency first');
+        return;
+      }
+      const allocations = rawAllocations.map((allocation) => ({
+        ...allocation,
+        amount: Number(allocation.amount || 0),
+        account: financialAccounts.find((account: any) => account.id === allocation.receivingAccountId),
+        paymentMethod: allocation.method === 'Bank' ? 'bank' as FinancialPaymentMethod : 'cash' as FinancialPaymentMethod,
+      }));
+      if (allocations.some((allocation) => !allocation.account || allocation.amount <= 0)) {
+        toast.error(isAr ? 'أكمل حساب ومبلغ كل توزيع تحصيل.' : 'Complete a positive amount and account for each allocation.');
+        return;
+      }
+      if (paymentFormData.method === 'Mixed' && (allocations.length < 2 || allocations.reduce((sum, allocation) => sum + allocation.amount, 0) !== amountNum)) {
+        toast.error(isAr ? 'يجب أن يحتوي القبض المختلط على توزيعين على الأقل وأن يساوي مجموعهما مبلغ التحصيل.' : 'Mixed collection needs at least two allocations totaling the collection amount.');
+        return;
+      }
+      if (allocations.some((allocation) => allocation.paymentMethod === 'bank' && !allocation.bankReference?.trim())) {
+        toast.error(isAr ? 'أدخل مرجع كل حوالة بنكية.' : 'Enter a reference for each bank transfer.');
+        return;
+      }
+      if (partyAccount.curNo !== Number(currencyRecord.cur_id) || allocations.some((allocation) => allocation.account.curNo !== Number(currencyRecord.cur_id))) {
+        toast.error(isAr ? 'حساب الطرف وحسابات التحصيل يجب أن تطابق عملة الدفع؛ أنشئ سند صرافة مستقلًا للتحويل.' : 'The party and collection accounts must match payment currency; use a separate exchange voucher.');
+        return;
+      }
+      if (allocations.some((allocation) => allocation.paymentMethod === 'cash' && allocation.account.accSubId !== '111') || allocations.some((allocation) => allocation.paymentMethod === 'bank' && allocation.account.accSubId !== '112')) {
+        toast.error(isAr ? 'يتطلب النقد حساب صندوق ويتطلب البنك حسابًا بنكيًا وفق شجرة الحسابات.' : 'Cash requires a cash-box account and bank requires a bank account.');
+        return;
+      }
+      const paymentMethod: FinancialPaymentMethod = paymentFormData.method === 'Mixed' ? 'mixed' : allocations[0].paymentMethod;
+      await financialEntryService.recordOrderPayment(selectedOrder.id, amountNum, {
+        entryNumber: `RCPT-${selectedOrder.orderNumber || selectedOrder.id}-${Date.now().toString().slice(-6)}`,
+        moduleId: 'module_orders', entryTypeId: 'type_order_payment', entryCategory: paymentMethod === 'mixed' ? 'Compound' : 'General', postingStatus: 'posted',
+        amountOriginal: amountNum, currencyOriginalNo: Number(currencyRecord.cur_id),
+        description: `${isAr ? 'تحصيل دفعة للطلب' : 'Order payment collection'} ${selectedOrder.orderNumber || selectedOrder.id}`,
+        notes: paymentFormData.notes || '', paymentMethod, orderId: selectedOrder.id, createdByUid: profile?.id || profile?.uid,
+        lines: [
+          ...allocations.map((allocation) => ({ accountId: allocation.account.id, accountCurNo: allocation.account.curNo, transType: 'Debit' as const, amount: allocation.amount, amountOriginal: allocation.amount, paymentMethod: allocation.paymentMethod })),
+          { accountId: partyAccount.id, accountCurNo: partyAccount.curNo, transType: 'Credit', amount: amountNum, amountOriginal: amountNum, entityType: selectedOrder.orderPartyType || 'customer', entityId: selectedOrder.orderPartyId || selectedOrder.customerId },
+        ],
+        paymentDetails: allocations.map((allocation) => ({ paymentMethod: allocation.paymentMethod, accountId: allocation.account.id, amountOriginal: allocation.amount, bankReference: allocation.bankReference || '' })),
+      }, profile?.id || profile?.uid);
 
       toast.success(isAr ? 'تم تحصيل الدفعة بنجاح' : 'Payment collected successfully');
       setIsPaymentModalOpen(false);
       setSelectedOrder(null);
-      setPaymentFormData({ amount: '', method: 'Cash', notes: '', pin: '' });
+      setPaymentFormData({ amount: '', method: 'Cash', receivingAccountId: '', bankReference: '', allocations: [], notes: '', pin: '' });
     } catch (err: any) {
       console.error(err);
       toast.error(err.message || 'Error collecting payment');
@@ -4395,6 +4366,7 @@ export default function Orders() { // دالة عرض الطلبات
         setPaymentFormData={setPaymentFormData}
         isSubmitting={isSubmitting}
         isAr={isAr}
+        financialAccounts={financialAccounts}
         onClose={() => {
           setIsPaymentModalOpen(false);
           setSelectedOrder(null);
