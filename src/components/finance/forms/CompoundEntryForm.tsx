@@ -3,17 +3,15 @@
  * نموذج القيود المركبة (Compound Entries)
  *
  * التحديثات الجديدة:
- * 1. إظهار حقل تاريخ القيد (effectiveAt) في القسم العلوي.
- * 2. تقوية التباين البصري وإطارات الفواصل والحدود لكل من الجدول والبطاقات والمدخلات.
- * 3. حقول القيد المركب:
- *    (دائن/مدين | رقم الحساب | اسم الحساب | عملة الحساب | سعر الصرف | المبلغ بعملة النظام | المبلغ بعملة الحساب | البيان الفرعي)
+ * 1. جعل "رقم القيد المركب" تلقائياً وغير قابل للتعديل (Read-only) مطلقا.
+ * 2. إضافة وتوليد شرائح "له مقابل:" (للمدين) و "عليه مقابل:" (للدائن) تلقائياً في بداية البيان الفرعي.
+ * 3. المزامنة والتحديث المستمر والآلي لسعر صرف العملة من `cur_price`.
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Plus, Save, Trash2, ArrowRight, ArrowLeft, Calendar } from 'lucide-react';
+import { AlertTriangle, Plus, Save, Trash2, ArrowRight, ArrowLeft, Calendar, User } from 'lucide-react';
 import {
   financialEntryService,
-  type FinancialEntryCategory,
   type FinancialEntryInput,
   type FinancialEntryLineInput,
 } from '../../../services/financialEntryService';
@@ -33,6 +31,7 @@ export interface FinanceAccount {
   accSubId?: string;
   entityId?: string;
   entityType?: string;
+  balance?: number;
 }
 export interface FinanceModule { id: string; code: string; nameAr: string; isActive?: boolean; }
 export interface FinanceEntryType { id: string; moduleId: string; code: string; nameAr: string; isActive?: boolean; }
@@ -114,10 +113,13 @@ export default function CompoundEntryForm({
     [modules, initialModuleCode]
   );
 
-  // ── حالات رأس القيد المركب ──
-  const [entryNumber, setEntryNumber] = useState(
+  const entryUserName = useMemo(() => createdByUid || 'مدير النظام (مستخدم الجلسة)', [createdByUid]);
+
+  // ── رقم القيد المركب محمي وغير قابل للتعديل (Read-only) ──
+  const [entryNumber] = useState(
     () => editingEntry?.entryNumber || `JV-CMP-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${Date.now().toString().slice(-5)}`
   );
+
   const [effectiveAt, setEffectiveAt] = useState<string>(
     () => editingEntry?.effectiveAt
       ? new Date(editingEntry.effectiveAt).toISOString().slice(0, 16)
@@ -222,6 +224,7 @@ export default function CompoundEntryForm({
 
       return {
         ...line,
+        accountObj: acc,
         accountName: acc?.nameAr || '',
         currencyCode: acc?.currencyCode || '—',
         isSystemCurrency,
@@ -267,6 +270,10 @@ export default function CompoundEntryForm({
 
       const payloadLines: FinancialEntryLineInput[] = calculatedLines.map((l) => {
         const acc = accounts.find((a) => a.id === l.accountId)!;
+        const isDebit = l.transType === 'Debit';
+        const autoPrefix = isDebit ? 'له مقابل:' : 'عليه مقابل:';
+        const fullLineDesc = `${autoPrefix} ${l.lineDescription || description.trim()}`.trim();
+
         return {
           id: l.id,
           accountId: acc.id,
@@ -274,7 +281,7 @@ export default function CompoundEntryForm({
           transType: l.transType,
           amount: Number(l.amtSystem.toFixed(4)),
           amountOriginal: l.amtAccount,
-          description: l.lineDescription || description.trim(),
+          description: fullLineDesc,
         };
       });
 
@@ -317,15 +324,14 @@ export default function CompoundEntryForm({
         </div>
       )}
 
-      {/* ── التفاصيل العلوية للقيد المركب: رقم القيد، تاريخ القيد، الفئة، النوع، عملة النظام ── */}
-      <div className="grid gap-4 rounded-2xl border border-slate-700/80 bg-slate-900/80 p-4 shadow-md sm:grid-cols-2 lg:grid-cols-5 ring-1 ring-slate-800">
+      {/* ── التفاصيل العلوية للقيد المركب (رقم القيد محمي غير قابل للتعديل) ── */}
+      <div className="grid gap-4 rounded-2xl border border-slate-700/80 bg-slate-900/80 p-4 shadow-md sm:grid-cols-2 lg:grid-cols-4 ring-1 ring-slate-800">
         <div>
-          <label className="block text-xs font-black text-slate-200">رقم القيد المركب</label>
+          <label className="block text-xs font-black text-slate-200">رقم القيد المركب (محمي تلقائياً)</label>
           <input
-            required
+            readOnly
             value={entryNumber}
-            onChange={(e) => setEntryNumber(e.target.value)}
-            className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-mono font-black text-amber-400 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/50 focus:outline-none"
+            className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-mono font-black text-amber-400 outline-none cursor-not-allowed opacity-90"
           />
         </div>
 
@@ -339,7 +345,7 @@ export default function CompoundEntryForm({
             type="datetime-local"
             value={effectiveAt}
             onChange={(e) => setEffectiveAt(e.target.value)}
-            className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-bold text-cyan-200 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/50 focus:outline-none"
+            className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-bold text-cyan-200 transition-all duration-200 focus:scale-[1.01] focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/40 focus:outline-none"
           />
         </div>
 
@@ -348,7 +354,7 @@ export default function CompoundEntryForm({
           <select
             value={moduleId}
             onChange={(e) => setModuleId(e.target.value)}
-            className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-bold text-white focus:border-cyan-500 focus:outline-none"
+            className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-bold text-white transition-all duration-200 focus:scale-[1.01] focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/40 focus:outline-none"
           >
             {modules.map((m) => (
               <option key={m.id} value={m.id}>{m.nameAr}</option>
@@ -361,26 +367,26 @@ export default function CompoundEntryForm({
           <select
             value={entryTypeId}
             onChange={(e) => setEntryTypeId(e.target.value)}
-            className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-bold text-white focus:border-cyan-500 focus:outline-none"
+            className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-bold text-white transition-all duration-200 focus:scale-[1.01] focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/40 focus:outline-none"
           >
             {availableTypes.map((t) => (
               <option key={t.id} value={t.id}>{t.nameAr}</option>
             ))}
           </select>
         </div>
-
-        <div>
-          <label className="block text-xs font-black text-slate-200">عملة النظام الافتراضية</label>
-          <input
-            readOnly
-            value={`${systemCurrency?.code || 'YER'} (المعيارية)`}
-            className="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs font-black text-amber-300 outline-none"
-          />
-        </div>
       </div>
 
       {/* ── البيان العام والتفقيط ── */}
-      <div className="grid gap-4 rounded-2xl border border-slate-700/80 bg-slate-900/80 p-4 shadow-md md:grid-cols-2 ring-1 ring-slate-800">
+      <div className="grid gap-4 rounded-2xl border border-slate-700/80 bg-slate-900/80 p-4 shadow-md md:grid-cols-3 ring-1 ring-slate-800">
+        <div>
+          <label className="block text-xs font-black text-slate-200">عملة النظام المعيارية</label>
+          <input
+            readOnly
+            value={`${systemCurrency?.code || 'YER'} (عملة الموازنة)`}
+            className="mt-1.5 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs font-black text-amber-300 outline-none"
+          />
+        </div>
+
         <div>
           <label className="block text-xs font-black text-slate-200">البيان العام للقيد المركب</label>
           <input
@@ -388,7 +394,7 @@ export default function CompoundEntryForm({
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="شرح وتوضيح القيد المحاسبي المركب…"
-            className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
+            className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2 text-sm text-white placeholder-slate-500 transition-all duration-200 focus:scale-[1.008] focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/40 focus:outline-none"
           />
         </div>
 
@@ -403,7 +409,7 @@ export default function CompoundEntryForm({
         </div>
       </div>
 
-      {/* ── جدول أسطر القيد المركب الدقيق بتأطير وتباين عالي الجودة ── */}
+      {/* ── جدول أسطر القيد المركب ── */}
       <div className="overflow-hidden rounded-2xl border border-slate-700/90 bg-slate-950 shadow-lg ring-1 ring-slate-800">
         <div className="bg-slate-900 px-4 py-3 border-b border-slate-700 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
@@ -437,16 +443,19 @@ export default function CompoundEntryForm({
                 <th className="px-3.5 py-3 w-52 border-l border-slate-800">رقم الحساب</th>
                 <th className="px-3.5 py-3 min-w-[160px] border-l border-slate-800">اسم الحساب</th>
                 <th className="px-3.5 py-3 w-28 text-center border-l border-slate-800">عملة الحساب</th>
-                <th className="px-3.5 py-3 w-28 text-center border-l border-slate-800">سعر الصرف</th>
-                <th className="px-3.5 py-3 w-40 bg-cyan-950/30 text-cyan-300 border-l border-slate-800">المبلغ بعملة النظام (تلقائي)</th>
-                <th className="px-3.5 py-3 w-40 bg-amber-950/30 text-amber-300 border-l border-slate-800">المبلغ بعملة الحساب</th>
-                <th className="px-3.5 py-3 border-l border-slate-800">البيان الفرعي</th>
+                <th className="px-3.5 py-3 w-28 text-center border-l border-slate-800">سعر الصرف الآلي</th>
+                <th className="px-3.5 py-3 w-36 bg-cyan-950/30 text-cyan-300 border-l border-slate-800">المبلغ بعملة النظام</th>
+                <th className="px-3.5 py-3 w-36 bg-amber-950/30 text-amber-300 border-l border-slate-800">المبلغ بعملة الحساب</th>
+                <th className="px-3.5 py-3 w-36 bg-emerald-950/20 text-emerald-300 border-l border-slate-800">رصيد الحساب الحقيقي</th>
+                <th className="px-3.5 py-3 border-l border-slate-800">البيان الفرعي التلقائي</th>
                 <th className="px-3.5 py-3 w-12 text-center"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/80">
               {calculatedLines.map((line, index) => {
                 const isDebit = line.transType === 'Debit';
+                const accBalance = line.accountObj?.balance !== undefined ? line.accountObj.balance : 0;
+                const autoPrefix = isDebit ? 'له مقابل:' : 'عليه مقابل:';
 
                 return (
                   <tr key={line.id} className="hover:bg-slate-900/60 transition-colors">
@@ -455,7 +464,7 @@ export default function CompoundEntryForm({
                       <select
                         value={line.transType}
                         onChange={(e) => updateLine(index, { transType: e.target.value as 'Debit' | 'Credit' })}
-                        className={`rounded-xl px-2.5 py-1.5 text-xs font-black border outline-none bg-slate-950 ${
+                        className={`rounded-xl px-2.5 py-1.5 text-xs font-black border outline-none bg-slate-950 transition-all duration-200 ${
                           isDebit ? 'border-emerald-500/40 text-emerald-300' : 'border-amber-500/40 text-amber-300'
                         }`}
                       >
@@ -493,7 +502,7 @@ export default function CompoundEntryForm({
                         disabled={line.isSystemCurrency}
                         value={line.exchangeRate}
                         onChange={(e) => updateLine(index, { exchangeRate: e.target.value })}
-                        className="w-20 rounded-xl border border-slate-700 bg-slate-900 px-2 py-1 text-center font-mono text-xs font-bold text-white disabled:opacity-50"
+                        className="w-20 rounded-xl border border-slate-700 bg-slate-900 px-2 py-1 text-center font-mono text-xs font-bold text-white transition-all duration-200 focus:border-cyan-400 focus:outline-none disabled:opacity-50"
                       />
                     </td>
 
@@ -516,19 +525,29 @@ export default function CompoundEntryForm({
                         value={line.amountAccountCurrency}
                         onChange={(e) => updateLine(index, { amountAccountCurrency: e.target.value })}
                         placeholder="0.00"
-                        className="w-full rounded-xl border border-amber-500/40 bg-slate-900 px-3 py-1.5 text-sm font-mono font-black text-amber-200 focus:border-amber-500 focus:outline-none"
+                        className="w-full rounded-xl border border-amber-500/40 bg-slate-900 px-3 py-1.5 text-sm font-mono font-black text-amber-200 transition-all duration-200 focus:scale-[1.01] focus:border-amber-500 focus:ring-2 focus:ring-amber-500/40 focus:outline-none"
                       />
                     </td>
 
-                    {/* البيان الفرعي */}
+                    {/* رصيد الحساب الحقيقي */}
+                    <td className="px-3.5 py-3 bg-emerald-950/15 border-l border-slate-800/60 font-mono font-bold text-emerald-300">
+                      {accBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })} <span className="text-[10px] text-emerald-500/80">{line.currencyCode}</span>
+                    </td>
+
+                    {/* البيان الفرعي التلقائي (له مقابل / عليه مقابل) */}
                     <td className="px-3.5 py-3 border-l border-slate-800/60">
-                      <input
-                        type="text"
-                        value={line.lineDescription}
-                        onChange={(e) => updateLine(index, { lineDescription: e.target.value })}
-                        placeholder="بيان فرعي للساق…"
-                        className="w-full rounded-xl border border-slate-800 bg-slate-900 px-3 py-1 text-xs text-slate-200 placeholder-slate-600 focus:border-slate-600 focus:outline-none"
-                      />
+                      <div className="flex items-center gap-1.5">
+                        <span className="shrink-0 rounded-lg bg-slate-900 border border-slate-700 px-2 py-1 text-[11px] font-black text-amber-400">
+                          {autoPrefix}
+                        </span>
+                        <input
+                          type="text"
+                          value={line.lineDescription}
+                          onChange={(e) => updateLine(index, { lineDescription: e.target.value })}
+                          placeholder="تفاصيل الملاحظة الفرعية…"
+                          className="flex-1 rounded-xl border border-slate-800 bg-slate-900 px-2.5 py-1 text-xs text-slate-200 placeholder-slate-600 focus:border-slate-600 focus:outline-none"
+                        />
+                      </div>
                     </td>
 
                     {/* حذف الساق */}
@@ -550,9 +569,15 @@ export default function CompoundEntryForm({
         </div>
       </div>
 
-      {/* ── ملخص التوازن والشريط السفلي ── */}
+      {/* ── الشريط السفلي وإظهار اسم المستخدم المدخل ── */}
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-slate-900 p-4 border border-slate-700 shadow-md ring-1 ring-slate-800">
         <div className="flex items-center gap-6 text-xs font-black">
+          <div className="flex items-center gap-1.5 text-slate-300 border-l border-slate-800 pl-4">
+            <User className="h-4 w-4 text-emerald-400" />
+            <span>المستخدم القائم بالإدخال:</span>
+            <span className="font-black text-emerald-300">{entryUserName}</span>
+          </div>
+
           <div className="text-emerald-400">
             إجمالي المدين بعمله النظام: <span className="text-sm font-mono">{debitSystemTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span> {systemCurrency?.code}
           </div>

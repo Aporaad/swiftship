@@ -473,9 +473,9 @@ export default function EntryWorkspaceTab({
             className="fixed inset-0 bg-slate-950/85 backdrop-blur-md transition-opacity duration-300"
             onClick={closeModal}
           />
-
+          {/* محتوى المودال الأفقِي بحجم متناسق وهامش مريح من اليمين واليسار */}
           <div
-            className="relative z-10 w-full max-w-[98vw] lg:max-w-[95vw] xl:max-w-[1550px] 2xl:max-w-[1750px] max-h-[94vh] flex flex-col rounded-3xl border border-slate-700/80 bg-slate-950 shadow-2xl overflow-hidden transition-all duration-300"
+            className="relative z-10 w-full max-w-[92vw] lg:max-w-[88vw] xl:max-w-[1380px] 2xl:max-w-[1480px] max-h-[92vh] mx-auto flex flex-col rounded-3xl border border-slate-700/90 bg-slate-950 shadow-2xl overflow-hidden transition-all duration-300 ring-1 ring-slate-800"
             dir="rtl"
           >
             <div className="flex items-center justify-between border-b border-slate-800 bg-slate-900/90 px-4 sm:px-6 py-3.5 shrink-0">

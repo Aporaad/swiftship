@@ -173,8 +173,8 @@ export function buildFinancialEntryPayload(entry: FinancialEntryInput): Record<s
       throw new Error('الساق متعددة العملات تحتاج مرجع سعر صرف مثبتًا قبل الحفظ.');
     }
 
-    if (line.transType === 'Debit') debitTotal += line.amountOriginal;
-    else creditTotal += line.amountOriginal;
+    if (line.transType === 'Debit') debitTotal += line.amount;
+    else creditTotal += line.amount;
 
     return {
       id: line.id,
@@ -195,7 +195,10 @@ export function buildFinancialEntryPayload(entry: FinancialEntryInput): Record<s
     };
   });
 
-  if (debitTotal !== creditTotal || debitTotal !== entry.amountOriginal) {
+  const isBalancedDebitCredit = Math.abs(debitTotal - creditTotal) < 0.01;
+  const isBalancedWithHeader = Math.abs(debitTotal - entry.amountOriginal) < 0.01;
+
+  if (!isBalancedDebitCredit || !isBalancedWithHeader) {
     throw new Error('القيد غير متوازن بعملة الرأس: يجب أن يساوي مجموع المدين والدائن مبلغ رأس القيد.');
   }
 

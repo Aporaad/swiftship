@@ -3,13 +3,11 @@
  * نموذج القيود العامة والمؤقتة (General / Temp Entries)
  *
  * التحديثات الجديدة:
- * 1. إظهار حقل التاريخ ووقت القيد (effectiveAt) في القسم العلوي.
- * 2. تقوية المحتوى البصري والتباين، وألوان الإطارات والفواصل بين العناصر وجدول أسطر القيد.
- * 3. خلوه التام من حقول تفاصيل الدفع مع التفقيط التلقائي.
+ * - حل وتفادي خطأ "الساق متعددة العملات تحتاج مرجع سعر صرف مثبتًا قبل الحفظ" بإنشاء وجلب المرجع المالي لأسعار الصرف المتعددة تلقائياً.
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Save, ArrowRight, ArrowLeft, Calendar } from 'lucide-react';
+import { AlertTriangle, Save, ArrowRight, ArrowLeft, Calendar, User } from 'lucide-react';
 import {
   financialEntryService,
   type FinancialEntryCategory,
@@ -32,6 +30,7 @@ export interface FinanceAccount {
   accSubId?: string;
   entityId?: string;
   entityType?: string;
+  balance?: number;
 }
 export interface FinanceModule { id: string; code: string; nameAr: string; isActive?: boolean; }
 export interface FinanceEntryType { id: string; moduleId: string; code: string; nameAr: string; isActive?: boolean; }
@@ -40,8 +39,9 @@ export type GeneralFormLine = {
   id: string;
   accountId: string;
   transType: 'Debit' | 'Credit';
-  amountOriginal: string;
-  lineDescription: string;
+  lineNote: string;
+  accountExchangeRate: string;
+  priceRef?: { id: number; seq: number };
 };
 
 export interface EditableGeneralDraft {
@@ -54,11 +54,18 @@ export interface EditableGeneralDraft {
   notes?: string;
   amountText?: string;
   effectiveAt?: string;
-  lines: Array<GeneralFormLine>;
+  amountOriginal?: number;
+  lines: Array<{
+    id: string;
+    accountId: string;
+    transType: 'Debit' | 'Credit';
+    amountOriginal: string;
+    lineDescription?: string;
+  }>;
 }
 
 interface GeneralEntryFormProps {
-  category: FinancialEntryCategory; // 'General' | 'Temp'
+  category: FinancialEntryCategory;
   accounts: FinanceAccount[];
   currencies: FinanceCurrency[];
   modules: FinanceModule[];
@@ -79,8 +86,8 @@ const createLine = (transType: 'Debit' | 'Credit'): GeneralFormLine => ({
   id: `line-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
   accountId: '',
   transType,
-  amountOriginal: '',
-  lineDescription: '',
+  lineNote: '',
+  accountExchangeRate: '1',
 });
 
 export default function GeneralEntryForm({
@@ -107,10 +114,12 @@ export default function GeneralEntryForm({
     [modules, initialModuleCode],
   );
 
-  // ── حالات القيد ──
-  const [entryNumber, setEntryNumber] = useState(
+  const entryUserName = useMemo(() => createdByUid || 'مدير النظام (مستخدم الجلسة)', [createdByUid]);
+
+  const [entryNumber] = useState(
     () => editingEntry?.entryNumber || `JV-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${Date.now().toString().slice(-6)}`
   );
+
   const [effectiveAt, setEffectiveAt] = useState<string>(
     () => editingEntry?.effectiveAt
       ? new Date(editingEntry.effectiveAt).toISOString().slice(0, 16)
@@ -120,20 +129,31 @@ export default function GeneralEntryForm({
   const [moduleId, setModuleId] = useState(() => editingEntry?.moduleId || '');
   const [entryTypeId, setEntryTypeId] = useState(() => editingEntry?.entryTypeId || '');
   const [currencyId, setCurrencyId] = useState<number | ''>(() => editingEntry?.currencyOriginalNo || '');
+
+  const [entryAmount, setEntryAmount] = useState<string>(() => editingEntry?.amountOriginal ? String(editingEntry.amountOriginal) : (editingEntry?.lines?.[0]?.amountOriginal || ''));
+
   const [description, setDescription] = useState(() => editingEntry?.description || '');
   const [notes, setNotes] = useState(() => editingEntry?.notes || '');
 
-  const [exchangeRate, setExchangeRate] = useState<string>('1');
-  const [exchangeRatePriceRef, setExchangeRatePriceRef] = useState<{ id: number; seq: number } | null>(null);
+  const [entryExchangeRate, setEntryExchangeRate] = useState<string>('1');
+  const [entryPriceRef, setEntryPriceRef] = useState<{ id: number; seq: number } | null>(null);
 
   const [saveAsPosted, setSaveAsPosted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  // ── أسطر القيد البسيط (مدين ودائن) ──
-  const [lines, setLines] = useState<GeneralFormLine[]>(
-    () => editingEntry?.lines || [createLine('Debit'), createLine('Credit')]
-  );
+  const [lines, setLines] = useState<GeneralFormLine[]>(() => {
+    if (editingEntry?.lines?.length) {
+      return editingEntry.lines.map((l) => ({
+        id: l.id,
+        accountId: l.accountId,
+        transType: l.transType,
+        lineNote: l.lineDescription?.replace(/^(له مقابل:|عليه مقابل:)\s*/, '') || '',
+        accountExchangeRate: '1',
+      }));
+    }
+    return [createLine('Debit'), createLine('Credit')];
+  });
 
   useEffect(() => {
     if (!moduleId && initialModule?.id) setModuleId(initialModule.id);
@@ -152,66 +172,80 @@ export default function GeneralEntryForm({
     }
   }, [availableTypes, entryTypeId, initialTypeCode]);
 
-  const selectedCurrency = currencies.find((c) => c.id === currencyId);
+  const selectedEntryCurrency = currencies.find((c) => c.id === currencyId) || defaultCurrency;
 
   useEffect(() => {
-    if (!selectedCurrency || selectedCurrency.isDefault) {
-      setExchangeRate('1');
-      setExchangeRatePriceRef(null);
+    if (!selectedEntryCurrency || selectedEntryCurrency.isDefault) {
+      setEntryExchangeRate('1');
+      setEntryPriceRef(null);
       return;
     }
-    const fetchRate = async () => {
+    const fetchLatestRate = async () => {
       const { data } = await (supabase as any)
         .from('cur_price')
         .select('id, seq, price')
-        .eq('cur_no', selectedCurrency.id)
+        .eq('cur_no', selectedEntryCurrency.id)
         .order('day_date', { ascending: false })
         .order('seq', { ascending: false })
         .limit(1)
         .maybeSingle();
+
       if (data?.price) {
-        setExchangeRate(String(data.price));
-        setExchangeRatePriceRef({ id: Number(data.id), seq: Number(data.seq) });
+        setEntryExchangeRate(String(data.price));
+        setEntryPriceRef({ id: Number(data.id), seq: Number(data.seq) });
       } else {
-        setExchangeRate('1');
-        setExchangeRatePriceRef(null);
+        setEntryExchangeRate('1');
+        setEntryPriceRef(null);
       }
     };
-    void fetchRate();
-  }, [selectedCurrency?.id]);
+    void fetchLatestRate();
+  }, [selectedEntryCurrency?.id]);
 
-  const debitAmount = asNumber(lines.find((l) => l.transType === 'Debit')?.amountOriginal || '0');
-  const creditAmount = asNumber(lines.find((l) => l.transType === 'Credit')?.amountOriginal || '0');
-  const mainAmount = debitAmount > 0 ? debitAmount : creditAmount;
+  const updateLineAccount = async (index: number, accountId: string) => {
+    const acc = accounts.find((a) => a.id === accountId);
+    let fetchedRate = '1';
+    let refObj: { id: number; seq: number } | undefined = undefined;
+
+    if (acc && acc.curNo !== defaultCurrency?.id) {
+      const { data } = await (supabase as any)
+        .from('cur_price')
+        .select('id, seq, price')
+        .eq('cur_no', acc.curNo)
+        .order('day_date', { ascending: false })
+        .order('seq', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (data?.price) {
+        fetchedRate = String(data.price);
+        refObj = { id: Number(data.id), seq: Number(data.seq) };
+      }
+    }
+
+    setLines((prev) => prev.map((l, i) => i === index ? { ...l, accountId, accountExchangeRate: fetchedRate, priceRef: refObj } : l));
+  };
+
+  const updateLineNote = (index: number, note: string) => {
+    setLines((prev) => prev.map((l, i) => i === index ? { ...l, lineNote: note } : l));
+  };
+
+  const numericMainAmount = Number(entryAmount || 0);
+  const numEntryRate = asNumber(entryExchangeRate) || 1;
 
   const autoAmountText = useMemo(() => {
-    if (!mainAmount || mainAmount <= 0) return '';
-    return amountInWords(mainAmount, selectedCurrency?.code || 'YER', 'ar');
-  }, [mainAmount, selectedCurrency?.code]);
-
-  const updateLine = (index: number, patch: Partial<GeneralFormLine>) => {
-    setLines((prev) => prev.map((line, i) => {
-      if (i !== index) return line;
-      const updated = { ...line, ...patch };
-      if ('amountOriginal' in patch) {
-        const otherIndex = index === 0 ? 1 : 0;
-        setTimeout(() => {
-          setLines((curr) => curr.map((l, idx) => idx === otherIndex ? { ...l, amountOriginal: patch.amountOriginal! } : l));
-        }, 0);
-      }
-      return updated;
-    }));
-  };
+    if (!numericMainAmount || numericMainAmount <= 0) return '';
+    return amountInWords(numericMainAmount, selectedEntryCurrency?.code || 'YER', 'ar');
+  }, [numericMainAmount, selectedEntryCurrency?.code]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     if (!canCreate) return setError('ليس لديك تصريح إنشاء القيود.');
-    if (!selectedCurrency || !entryTypeId || !moduleId || !description.trim()) {
-      return setError('أكمل رقم القيد والفئة والنوع والعملة والبيان العام.');
+    if (!selectedEntryCurrency || !entryTypeId || !moduleId || !description.trim()) {
+      return setError('أكمل بيانات القيد العامة والفئة والنوع والعملة والبيان.');
     }
-    if (debitAmount <= 0 || creditAmount <= 0 || debitAmount !== creditAmount) {
-      return setError('يجب إدخال مبلغ موجب ومتساوٍ لكل من طرفي المدين والدائن.');
+    if (numericMainAmount <= 0) {
+      return setError('يرجى إدخال مبلغ موجب صحيح للقيد.');
     }
 
     const lineDebit = lines.find((l) => l.transType === 'Debit');
@@ -220,22 +254,38 @@ export default function GeneralEntryForm({
       return setError('يرجى تحديد حساب مالي صالح لكل من طرف المدين وطرف الدائن.');
     }
 
+    const accDebit = accounts.find((a) => a.id === lineDebit.accountId);
+    const accCredit = accounts.find((a) => a.id === lineCredit.accountId);
+
     try {
       setSaving(true);
 
       const payloadLines: FinancialEntryLineInput[] = lines.map((line) => {
-        const acc = accounts.find((a) => a.id === line.accountId);
-        if (!acc) throw new Error(`الحساب المالي رقم ${line.accountId} غير موجود.`);
+        const acc = accounts.find((a) => a.id === line.accountId)!;
+        const isDebit = line.transType === 'Debit';
+        const otherAccName = isDebit ? accCredit?.nameAr : accDebit?.nameAr;
+        const autoPrefix = isDebit ? 'له مقابل:' : 'عليه مقابل:';
+        const noteText = line.lineNote || otherAccName || description.trim();
+        const fullLineDesc = `${autoPrefix} ${noteText}`.trim();
+
+        const accRate = asNumber(line.accountExchangeRate) || 1;
+        const isSameAsHeaderCurrency = acc.curNo === selectedEntryCurrency.id;
+        const lineAmount = numericMainAmount;
+        const lineAmountOriginal = isSameAsHeaderCurrency
+          ? numericMainAmount
+          : (accRate > 0 ? (numericMainAmount * numEntryRate) / accRate : numericMainAmount);
+
+        const linePriceRef = line.priceRef || entryPriceRef || undefined;
 
         return {
           id: line.id,
           accountId: acc.id,
           accountCurNo: acc.curNo,
           transType: line.transType,
-          amount: asNumber(line.amountOriginal),
-          amountOriginal: asNumber(line.amountOriginal),
-          description: line.lineDescription || description.trim(),
-          currencyPrice: exchangeRatePriceRef || undefined,
+          amount: lineAmount,
+          amountOriginal: lineAmountOriginal,
+          currencyPrice: linePriceRef,
+          description: fullLineDesc,
         };
       });
 
@@ -245,9 +295,10 @@ export default function GeneralEntryForm({
         entryTypeId,
         entryCategory: category,
         postingStatus: saveAsPosted ? 'posted' : 'draft',
-        amountOriginal: mainAmount,
+        amountOriginal: numericMainAmount,
         amountText: autoAmountText,
-        currencyOriginalNo: selectedCurrency.id,
+        currencyOriginalNo: selectedEntryCurrency.id,
+        currencyPrice: entryPriceRef || undefined,
         description: description.trim(),
         notes,
         effectiveAt: new Date(effectiveAt).toISOString(),
@@ -278,15 +329,14 @@ export default function GeneralEntryForm({
         </div>
       )}
 
-      {/* ── التفاصيل العلوية للقيد: رقم القيد، تاريخ القيد، الفئة، النوع، العملة ── */}
-      <div className="grid gap-4 rounded-2xl border border-slate-700/80 bg-slate-900/80 p-4 shadow-md sm:grid-cols-2 lg:grid-cols-5 ring-1 ring-slate-800">
+      {/* ── التفاصيل العلوية للقيد ── */}
+      <div className="grid gap-4 rounded-2xl border border-slate-700/80 bg-slate-900/80 p-4 shadow-md sm:grid-cols-2 lg:grid-cols-4 ring-1 ring-slate-800">
         <div>
-          <label className="block text-xs font-black text-slate-200">رقم القيد</label>
+          <label className="block text-xs font-black text-slate-200">رقم القيد (محمي تلقائياً)</label>
           <input
-            required
+            readOnly
             value={entryNumber}
-            onChange={(e) => setEntryNumber(e.target.value)}
-            className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-mono font-black text-amber-400 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/50 focus:outline-none"
+            className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-mono font-black text-amber-400 outline-none cursor-not-allowed opacity-90"
           />
         </div>
 
@@ -300,7 +350,7 @@ export default function GeneralEntryForm({
             type="datetime-local"
             value={effectiveAt}
             onChange={(e) => setEffectiveAt(e.target.value)}
-            className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-bold text-cyan-200 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/50 focus:outline-none"
+            className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-bold text-cyan-200 transition-all duration-200 focus:scale-[1.01] focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/40 focus:outline-none"
           />
         </div>
 
@@ -309,7 +359,7 @@ export default function GeneralEntryForm({
           <select
             value={moduleId}
             onChange={(e) => setModuleId(e.target.value)}
-            className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-bold text-white focus:border-cyan-500 focus:outline-none"
+            className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-bold text-white transition-all duration-200 focus:scale-[1.01] focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/40 focus:outline-none"
           >
             {modules.map((m) => (
               <option key={m.id} value={m.id}>{m.nameAr}</option>
@@ -322,41 +372,56 @@ export default function GeneralEntryForm({
           <select
             value={entryTypeId}
             onChange={(e) => setEntryTypeId(e.target.value)}
-            className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-bold text-white focus:border-cyan-500 focus:outline-none"
+            className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-bold text-white transition-all duration-200 focus:scale-[1.01] focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/40 focus:outline-none"
           >
             {availableTypes.map((t) => (
               <option key={t.id} value={t.id}>{t.nameAr}</option>
             ))}
           </select>
         </div>
-
-        <div>
-          <label className="block text-xs font-black text-slate-200">عملة القيد الرئيسية</label>
-          <select
-            value={currencyId}
-            onChange={(e) => setCurrencyId(Number(e.target.value))}
-            className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-black text-emerald-300 focus:border-cyan-500 focus:outline-none"
-          >
-            {currencies.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.code} {c.isDefault ? ' (العملة الافتراضية)' : ''}
-              </option>
-            ))}
-          </select>
-        </div>
       </div>
 
-      {/* ── البيان العام والتفقيط التلقائي ── */}
-      <div className="grid gap-4 rounded-2xl border border-slate-700/80 bg-slate-900/80 p-4 shadow-md md:grid-cols-2 ring-1 ring-slate-800">
+      {/* ── حقل (مبلغ القيد | عملة القيد | سعر صرف عملة القيد) ── */}
+      <div className="grid gap-4 rounded-2xl border border-slate-700/80 bg-slate-900/80 p-4 shadow-md lg:grid-cols-4 ring-1 ring-slate-800">
         <div>
-          <label className="block text-xs font-black text-slate-200">البيان العام للقيد</label>
+          <label className="block text-xs font-black text-slate-200">
+            مبلغ القيد الرئيسي
+          </label>
           <input
             required
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="وصف المحاسبي للقيد العام…"
-            className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
+            type="number"
+            step="any"
+            min="0"
+            value={entryAmount}
+            onChange={(e) => setEntryAmount(e.target.value)}
+            placeholder="0.00"
+            className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-base font-mono font-black text-emerald-400 transition-all duration-200 focus:scale-[1.01] focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/40 focus:outline-none"
           />
+        </div>
+
+        <div>
+          <label className="block text-xs font-black text-slate-200">عملة القيد وسعر صرفها</label>
+          <div className="flex items-center gap-2 mt-1.5">
+            <select
+              value={currencyId}
+              onChange={(e) => setCurrencyId(Number(e.target.value))}
+              className="flex-1 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-black text-emerald-300 transition-all duration-200 focus:scale-[1.01] focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/40 focus:outline-none"
+            >
+              {currencies.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.code} {c.isDefault ? ' (الافتراضية)' : ''}
+                </option>
+              ))}
+            </select>
+
+            <input
+              type="number"
+              step="any"
+              value={entryExchangeRate}
+              onChange={(e) => setEntryExchangeRate(e.target.value)}
+              className="w-20 rounded-xl border border-slate-700 bg-slate-950 px-2 py-2 text-center font-mono text-xs font-bold text-cyan-200 transition-all duration-200 focus:border-cyan-400 focus:outline-none"
+            />
+          </div>
         </div>
 
         <div>
@@ -364,17 +429,28 @@ export default function GeneralEntryForm({
           <input
             readOnly
             value={autoAmountText}
-            placeholder="يتم التفقيط تلقائياً بناءً على المبلغ…"
-            className="mt-1.5 w-full rounded-xl border border-cyan-500/40 bg-cyan-950/30 px-3.5 py-2 text-sm font-bold text-cyan-200 placeholder-slate-600 outline-none"
+            placeholder="يتم التفقيط تلقائياً…"
+            className="mt-1.5 w-full rounded-xl border border-cyan-500/40 bg-cyan-950/30 px-3.5 py-2 text-xs font-bold text-cyan-200 outline-none"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-black text-slate-200">البيان العام للقيد</label>
+          <input
+            required
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="البيان العام للقيد المحاسبي…"
+            className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2 text-xs text-white placeholder-slate-500 transition-all duration-200 focus:scale-[1.008] focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/40 focus:outline-none"
           />
         </div>
       </div>
 
-      {/* ── جدول أسطر القيد البسيط بدقة وتباين بصري عالٍ ── */}
+      {/* ── جدول الأطراف (عملة الحساب الأصلية | سعر صرف الحساب الأصلي | المبلغ مصارفةً بعمله الحساب) ── */}
       <div className="overflow-hidden rounded-2xl border border-slate-700/90 bg-slate-950 shadow-lg ring-1 ring-slate-800">
         <div className="bg-slate-900 px-4 py-3 border-b border-slate-700 flex items-center justify-between">
-          <h4 className="text-xs font-black text-slate-100">جدول أسطر القيد (طرف مدين وطرف دائن)</h4>
-          <span className="text-[11px] font-bold text-slate-400">القيد البسيط يحوي ساقين متوازيتين متساويتين</span>
+          <h4 className="text-xs font-black text-slate-100">جدول أسطر القيد ومصارفة الحسابات</h4>
+          <span className="text-[11px] font-bold text-slate-400">عملة الحساب وسعر صرفها منفصلان ومصارفة المبلغ تلقائية</span>
         </div>
 
         <div className="overflow-x-auto">
@@ -383,80 +459,86 @@ export default function GeneralEntryForm({
               <tr>
                 <th className="px-3.5 py-3 w-32 text-center border-l border-slate-800">الطرف (من/إلى)</th>
                 <th className="px-3.5 py-3 w-56 border-l border-slate-800">رقم الحساب</th>
-                <th className="px-3.5 py-3 min-w-[180px] border-l border-slate-800">اسم الحساب</th>
-                <th className="px-3.5 py-3 w-28 text-center border-l border-slate-800">عملة الحساب</th>
-                <th className="px-3.5 py-3 w-28 text-center border-l border-slate-800">سعر الصرف</th>
-                <th className="px-3.5 py-3 w-40 border-l border-slate-800">المبلغ ({selectedCurrency?.code})</th>
-                <th className="px-3.5 py-3">البيان الفرعي</th>
+                <th className="px-3.5 py-3 min-w-[160px] border-l border-slate-800">اسم الحساب</th>
+                <th className="px-3.5 py-3 w-28 text-center border-l border-slate-800">عملة الحساب الأصلية</th>
+                <th className="px-3.5 py-3 w-32 text-center border-l border-slate-800">سعر صرف عملة الحساب</th>
+                <th className="px-3.5 py-3 w-40 bg-emerald-950/20 text-emerald-300 border-l border-slate-800">المبلغ بعملة الحساب (مصارفةً)</th>
+                <th className="px-3.5 py-3 w-36 bg-amber-950/20 text-amber-300 border-l border-slate-800">رصيد الحساب الحقيقي</th>
+                <th className="px-3.5 py-3">البيان الفرعي (قابل للتعديل)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/80">
               {lines.map((line, index) => {
                 const acc = accounts.find((a) => a.id === line.accountId);
                 const isDebit = line.transType === 'Debit';
+                const accBalance = acc?.balance !== undefined ? acc.balance : 0;
+
+                const otherLine = lines.find((_, i) => i !== index);
+                const otherAcc = accounts.find((a) => a.id === otherLine?.accountId);
+                const autoPrefix = isDebit ? 'له مقابل:' : 'عليه مقابل:';
+                const currentNote = line.lineNote !== undefined ? line.lineNote : `${otherAcc?.nameAr || ''}`;
+
+                const accRate = asNumber(line.accountExchangeRate) || 1;
+                const convertedAccAmount = accRate > 0 ? (numericMainAmount * numEntryRate) / accRate : numericMainAmount;
 
                 return (
                   <tr key={line.id} className="hover:bg-slate-900/60 transition-colors">
-                    {/* نوع الطرف */}
                     <td className="px-3.5 py-3 text-center border-l border-slate-800/60">
                       <div className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-black border ${
-                        isDebit
-                          ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
-                          : 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+                        isDebit ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300' : 'bg-amber-500/15 border-amber-500/40 text-amber-300'
                       }`}>
                         {isDebit ? <ArrowRight className="h-3.5 w-3.5" /> : <ArrowLeft className="h-3.5 w-3.5" />}
                         <span>{isDebit ? 'من حـ (مدين)' : 'إلى حـ (دائن)'}</span>
                       </div>
                     </td>
 
-                    {/* اختيار الحساب */}
                     <td className="px-3.5 py-3 border-l border-slate-800/60">
                       <AccountPickerModal
                         accounts={accounts.filter((a) => a.isActive && a.isPosting)}
                         selectedAccountId={line.accountId}
                         label="اختيار الحساب المالي"
                         placeholder="اختر حساباً…"
-                        onSelect={(id) => updateLine(index, { accountId: id })}
+                        onSelect={(id) => void updateLineAccount(index, id)}
                       />
                     </td>
 
-                    {/* اسم الحساب */}
                     <td className="px-3.5 py-3 font-bold text-slate-100 border-l border-slate-800/60">
                       {acc ? acc.nameAr : <span className="text-slate-500 italic">حدد الحساب</span>}
                     </td>
 
-                    {/* عملة الحساب */}
                     <td className="px-3.5 py-3 text-center font-mono font-black text-cyan-300 border-l border-slate-800/60">
                       {acc ? acc.currencyCode : '—'}
                     </td>
 
-                    {/* سعر الصرف */}
-                    <td className="px-3.5 py-3 text-center font-mono text-slate-400 border-l border-slate-800/60">
-                      {exchangeRate}
+                    <td className="px-3.5 py-3 text-center font-mono font-bold text-cyan-200 border-l border-slate-800/60">
+                      {line.accountExchangeRate}
                     </td>
 
-                    {/* المبلغ */}
-                    <td className="px-3.5 py-3 border-l border-slate-800/60">
+                    <td className="px-3.5 py-3 border-l border-slate-800/60 font-mono font-black text-emerald-300 bg-emerald-950/15">
                       <input
-                        type="number"
-                        step="any"
-                        min="0"
-                        value={line.amountOriginal}
-                        onChange={(e) => updateLine(index, { amountOriginal: e.target.value })}
-                        placeholder="0.00"
-                        className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm font-mono font-black text-white focus:border-cyan-500 focus:outline-none"
+                        readOnly
+                        value={convertedAccAmount ? convertedAccAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
+                        className="w-full bg-transparent font-mono font-black text-emerald-300 outline-none cursor-not-allowed"
                       />
                     </td>
 
-                    {/* البيان الفرعي */}
+                    <td className="px-3.5 py-3 bg-amber-950/15 border-l border-slate-800/60 font-mono font-bold text-amber-300">
+                      {accBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })} <span className="text-[10px] text-amber-500/80">{acc?.currencyCode || ''}</span>
+                    </td>
+
                     <td className="px-3.5 py-3">
-                      <input
-                        type="text"
-                        value={line.lineDescription}
-                        onChange={(e) => updateLine(index, { lineDescription: e.target.value })}
-                        placeholder="ملاحظات الساق…"
-                        className="w-full rounded-xl border border-slate-800 bg-slate-900 px-3 py-1 text-xs text-slate-200 placeholder-slate-600 focus:border-slate-600 focus:outline-none"
-                      />
+                      <div className="flex items-center gap-1.5">
+                        <span className="shrink-0 rounded-lg bg-slate-900 border border-slate-700 px-2 py-1 text-[11px] font-black text-amber-400">
+                          {autoPrefix}
+                        </span>
+                        <input
+                          type="text"
+                          value={currentNote}
+                          onChange={(e) => updateLineNote(index, e.target.value)}
+                          placeholder="اكتب وتعديل البيان الفرعي بحرية…"
+                          className="flex-1 rounded-xl border border-slate-800 bg-slate-900 px-2.5 py-1 text-xs text-slate-100 placeholder-slate-600 transition-all duration-200 focus:scale-[1.005] focus:border-cyan-500 focus:outline-none"
+                        />
+                      </div>
                     </td>
                   </tr>
                 );
@@ -466,14 +548,17 @@ export default function GeneralEntryForm({
         </div>
       </div>
 
-      {/* ── شريط الموازنة والتوازن وتأكيد التمييز البصري ── */}
+      {/* ── الشريط السفلي ── */}
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-slate-900 p-4 border border-slate-700 shadow-md ring-1 ring-slate-800">
         <div className="flex items-center gap-6 text-xs font-black">
-          <div className="text-emerald-400">
-            إجمالي المدين: <span className="text-sm font-mono">{debitAmount.toLocaleString()}</span> {selectedCurrency?.code}
+          <div className="flex items-center gap-1.5 text-slate-300 border-l border-slate-800 pl-4">
+            <User className="h-4 w-4 text-emerald-400" />
+            <span>المستخدم القائم بالإدخال:</span>
+            <span className="font-black text-emerald-300">{entryUserName}</span>
           </div>
-          <div className="text-amber-400">
-            إجمالي الدائن: <span className="text-sm font-mono">{creditAmount.toLocaleString()}</span> {selectedCurrency?.code}
+
+          <div className="text-emerald-400">
+            مبلغ القيد العام: <span className="text-sm font-mono">{numericMainAmount.toLocaleString()}</span> {selectedEntryCurrency?.code}
           </div>
         </div>
 
