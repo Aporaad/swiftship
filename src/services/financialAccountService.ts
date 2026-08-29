@@ -1776,14 +1776,14 @@ class FinancialAccountService {
             o.shippingCourierId === entityId ||
             o.shipping_courier_id === entityId
           );
-        } else if (entityType === 'user' || entityType === 'employee') {
-          return o.createdByUid === entityId || o.userId === entityId || o.employeeId === entityId;
+        } else if (entityType === 'employee') {
+          return o.employeeId === entityId;
         }
         return false;
       });
 
       if (isLinkedToOrders) {
-        const label = entityType === 'customer' ? 'العميل' : (entityType === 'courier' ? 'المندوب' : 'المستخدم/الموظف');
+        const label = entityType === 'customer' ? 'العميل' : (entityType === 'courier' ? 'المندوب' : entityType === 'user' ? 'المستخدم' : 'الموظف');
         throw new Error(`تعذر الحذف: هذا الـ (${label}) مرتبط بطلبات مسجلة في جدول الطلبات. يرجى فك ارتباط الطلبات أو حذفها أولاً والمحاولة مرة أخرى.`);
       }
 
@@ -1804,7 +1804,7 @@ class FinancialAccountService {
 
         // 2. Find all account_transactions legs linked to this account
         const txQuery = query(
-          collection(db, "account_transactions"),
+          collection(db, "account_transactions"),//مهم: التغيير الى account_trans
           where("accountId", "==", accountId)
         );
         const txSnap = await getDocs(txQuery);
@@ -1829,7 +1829,7 @@ class FinancialAccountService {
         if (journalEntryIds.size > 0) {
           const jvIdsArray = Array.from(journalEntryIds);
           for (const jvId of jvIdsArray) {
-            const q = query(collection(db, "account_transactions"), where("journalEntryId", "==", jvId));
+            const q = query(collection(db, "account_transactions"), where("journalEntryId", "==", jvId));//مهم: التغيير الى account_trans والى main_entry
             const snap = await getDocs(q);
             snap.docs.forEach(docItem => {
               allTxDocsToDelete.set(docItem.id, docItem.ref);

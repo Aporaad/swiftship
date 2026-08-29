@@ -57,7 +57,7 @@ export default function FinanceEntries() {
         id: item.id, nameAr: item.acc_name_ar || item.id, nameEn: item.acc_name_en,
         curNo: Number(item.cur_no), currencyCode: currencyCodeById.get(Number(item.cur_no)) || '—',
         isActive: Boolean(item.is_active), isPosting: Boolean(item.acc_sub_id), accSubId: item.acc_sub_id || undefined, entityId: item.entity_id || undefined,
-        entityType: item.entity_type || undefined, entityName: item.entity_name || undefined,
+        entityType: item.entity_type || undefined, entityName: item.acc_name_ar || item.acc_name_en || item.id,
       })));
       setModules((moduleResult.data || []).map((item: any) => ({ id: item.id, code: item.code, nameAr: item.name_ar, isActive: Boolean(item.is_active) })));
       setEntryTypes((typeResult.data || []).map((item: any) => ({ id: item.id, moduleId: item.module_id, code: item.code, nameAr: item.name_ar, isActive: Boolean(item.is_active) })));

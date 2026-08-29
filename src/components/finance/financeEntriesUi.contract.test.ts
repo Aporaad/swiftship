@@ -5,6 +5,12 @@ import { describe, expect, it } from 'vitest';
 const source = (name: string) => readFileSync(resolve(process.cwd(), 'src', 'components', 'finance', name), 'utf8');
 
 describe('عقد واجهة القيود الجديدة', () => {
+  it('لا يطلب عمود accounts.entity_name غير الموجود ويستخدم أسماء الحسابات الصريحة', () => {
+    const page = readFileSync(resolve(process.cwd(), 'src', 'pages', 'FinanceEntries.tsx'), 'utf8');
+    expect(page).toContain("acc_name_ar || item.acc_name_en || item.id");
+    expect(page).not.toContain('item.entity_name');
+  });
+
   it('يفتح تعديلًا للمسودة فقط ويمرر بيانات السطور إلى نموذج الاستبدال الذري', () => {
     const workspace = source('EntryWorkspaceTab.tsx');
     expect(workspace).toContain('const [editingEntry, setEditingEntry]');
@@ -40,6 +46,14 @@ describe('عقد واجهة القيود الجديدة', () => {
     expect(custody).toContain('recipientId: recipientEntityId');
     expect(custody).toContain('entityId: recipientEntityId');
     expect(custody).not.toContain('recipientId: recipient.id');
+  });
+
+  it('يستخدم تقرير المالية دفتر account_trans مع رؤوس main_entry المرحّلة فقط', () => {
+    const report = readFileSync(resolve(process.cwd(), 'src', 'components', 'FinanceReports.tsx'), 'utf8');
+    expect(report).toContain("collection(db, 'account_trans')");
+    expect(report).toContain("collection(db, 'main_entry')");
+    expect(report).toContain("tx.entry?.postingStatus === 'posted'");
+    expect(report).not.toContain("collection(db, 'account_transactions')");
   });
 
   it('يعرض تحصيل الطلب بعملة الدفع المحفوظة ويعتمدها عند إنشاء سند القبض', () => {

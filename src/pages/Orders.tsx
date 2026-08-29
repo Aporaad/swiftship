@@ -2672,7 +2672,7 @@ export default function Orders() { // دالة عرض الطلبات
           ...allocations.map((allocation) => ({ accountId: allocation.account.id, accountCurNo: allocation.account.curNo, transType: 'Debit' as const, amount: allocation.amount, amountOriginal: allocation.amount, paymentMethod: allocation.paymentMethod })),
           { accountId: partyAccount.id, accountCurNo: partyAccount.curNo, transType: 'Credit', amount: amountNum, amountOriginal: amountNum, entityType: selectedOrder.orderPartyType || 'customer', entityId: selectedOrder.orderPartyId || selectedOrder.customerId },
         ],
-        paymentDetails: allocations.map((allocation) => ({ paymentMethod: allocation.paymentMethod, accountId: allocation.account.id, amountOriginal: allocation.amount, bankReference: allocation.bankReference || '' })),
+        paymentDetails: allocations.map((allocation) => ({ paymentMethod: allocation.paymentMethod === 'bank' ? 'bank' as const : 'cash' as const, accountId: allocation.account.id, amountOriginal: allocation.amount, bankReference: allocation.bankReference || '' })),
       }, profile?.id || profile?.uid);
 
       toast.success(isAr ? 'تم تحصيل الدفعة بنجاح' : 'Payment collected successfully');

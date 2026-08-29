@@ -919,7 +919,7 @@ export default function UserManagement() {
   );
 
   const tabs = [
-    { id: 'users', icon: UsersIcon, label: t('الموظفون', 'Staff'), count: users.length },
+    { id: 'users', icon: UsersIcon, label: t('المستخدمون', 'users'), count: users.length },
     { id: 'roles', icon: Shield, label: t('الأدوار والصلاحيات', 'Roles'), count: roles.length },
     { id: 'sessions', icon: MonitorCheck, label: t('الجلسات النشطة', 'Active Sessions'), count: onlineSessionsCount, pulse: onlineSessionsCount > 0 },
     { id: 'activity', icon: FileClock, label: t('سجل النشاط', 'Activity Log'), count: activityLogs.length }
@@ -1978,9 +1978,9 @@ export default function UserManagement() {
       <ConfirmDeletePinModal
         isOpen={deletePinConfig.isOpen}
         onClose={() => setDeletePinConfig({ ...deletePinConfig, isOpen: false })}
-        title={isAr ? 'حذف حساب الموظف نهائياً' : 'Delete Employee Account Permanently'}
+        title={isAr ? 'حذف حساب المستخدم نهائياً' : 'Delete User Account Permanently'}
         message={isAr
-          ? `هل أنت متأكد من رغبتك في حذف الموظف ${deletePinConfig.entityName}؟ هذا الإجراء سيقوم بحذف حسابه المالي وكافة قيوده ومصروفاته المرتبطة نهائياً.`
+          ? `هل أنت متأكد من رغبتك في حذف المستخدم ${deletePinConfig.entityName}؟ هذا الإجراء سيقوم بحذف حسابه المالي وكافة قيوده ومصروفاته المرتبطة نهائياً.`
           : `Are you sure you want to permanently delete user ${deletePinConfig.entityName}? This will purge their financial account, journal transactions, and associated expenses from the database.`}
         isAr={isAr}
         onConfirm={async () => {
@@ -1988,7 +1988,7 @@ export default function UserManagement() {
           await activityLogService.log('delete_user', deletePinConfig.entityName, { userId: deletePinConfig.entityId });
           notificationService.notify({
             title: isAr ? 'تم الحذف' : 'User Deleted',
-            message: isAr ? `تم حذف الموظف ${deletePinConfig.entityName} وسجلاته المالية بنجاح` : `User ${deletePinConfig.entityName} deleted successfully`,
+            message: isAr ? `تم حذف المستخدم ${deletePinConfig.entityName} وسجلاته المالية بنجاح` : `User ${deletePinConfig.entityName} deleted successfully`,
             type: 'warning'
           });
         }}

@@ -150,6 +150,7 @@ export default function FinanceAccounting({
 
   // New states for Unified Ledger and Salary Audits
   const [accountTransactions, setAccountTransactions] = useState<any[]>([]);
+  const [financialEntries, setFinancialEntries] = useState<any[]>([]);
   const [moduleFilter, setModuleFilter] = useState<'all' | 'order' | 'expenses' | 'custody' | 'payment' | 'salary' | 'adjustment'>('all');
   const [isSalaryPayment, setIsSalaryPayment] = useState(false);
   const [adjustSalaryMonth, setAdjustSalaryMonth] = useState('');
@@ -198,13 +199,17 @@ export default function FinanceAccounting({
     const MM = String(now.getMonth() + 1).padStart(2, '0');
     setAdjustSalaryMonth(`${YYYY}-${MM}`);
 
-    // Snapshot listener for account transactions
-    const unsub = onSnapshot(collection(db, 'account_transactions'), (snap) => {
-      setAccountTransactions(snap.docs.map((doc: { id: any; data: () => any; }) => ({ id: doc.id, ...doc.data() })));
-    }, (error) => {
-      console.error("Error loading account transactions:", error);
-    });
-    return () => unsub();
+    // دفتر الأستاذ الجديد: أسطر account_trans ورؤوس main_entry المرحّلة.
+    const unsubEntries = onSnapshot(collection(db, 'main_entry'), (snap) => {
+      setFinancialEntries(snap.docs.map((doc: { id: any; data: () => any; }) => ({ id: doc.id, ...doc.data() })));
+    }, (error) => console.error('Error loading main_entry:', error));
+    const unsub = onSnapshot(collection(db, 'account_trans'), (snap) => {
+      setAccountTransactions(snap.docs.map((doc: { id: any; data: () => any; }) => {
+        const row: any = { id: doc.id, ...doc.data() };
+        return { ...row, type: row.type || row.transType, amount: row.amount ?? row.amountOriginal, amountOriginal: row.amountOriginal, entryId: row.entryId };
+      }));
+    }, (error) => console.error('Error loading account_trans:', error));
+    return () => { unsubEntries(); unsub(); };
   }, []);
 
   // Load salary history & employees for the Salary History tab
@@ -268,8 +273,15 @@ export default function FinanceAccounting({
   const ledgerEntries = useMemo(() => {
     const groupedMap = new Map<string, { debitLeg?: any; creditLeg?: any; legs: any[] }>();
 
-    // Group account_transactions legs by journalEntryId or refNumber
-    accountTransactions.forEach(tx => {
+    // Group account_trans legs by entryId and keep posted, non-temporary main_entry heads only.
+    const entryById = new Map(financialEntries.map((entry: any) => [entry.id, entry]));
+    accountTransactions
+      .map((tx: any) => {
+        const entry = entryById.get(tx.entryId);
+        return { ...tx, entry, journalEntryId: tx.entryId, refNumber: tx.refNumber || entry?.entryNumber, journalEntryNumber: entry?.entryNumber, currencyOriginal: tx.currencyOriginal || entry?.currencyOriginal };
+      })
+      .filter((tx: any) => tx.entry?.postingStatus === 'posted' && tx.entry?.entryCategory !== 'Temp')
+      .forEach(tx => {
       const groupKey = tx.journalEntryId || (tx.refNumber ? `REF-${tx.refNumber}` : tx.id);
       if (!groupedMap.has(groupKey)) {
         groupedMap.set(groupKey, { legs: [] });
@@ -342,7 +354,9 @@ export default function FinanceAccounting({
       });
     });
 
-    // B. Push unlinked expenses (general safebox outflows / inflows)
+    // لا تُضاف expenses إلى دفتر التشغيل؛ فهي مرحلة إرث جرى حذف بياناتها المعتمدة.
+    /* expenses legacy rendering intentionally omitted. */
+    /*
     expenses.forEach(exp => {
       if (exp.linkedAccountId || exp.financialAccountId) return;
 
@@ -392,6 +406,7 @@ export default function FinanceAccounting({
         });
       }
     });
+    */
 
     // Sort chronologically (oldest to newest for correct running balances, then reverse for display)
     const sorted = entries.sort((a, b) => a.date.getTime() - b.date.getTime());
@@ -412,7 +427,7 @@ export default function FinanceAccounting({
 
     // Return reversed (newest first for feed view)
     return computed.reverse();
-  }, [accountTransactions, expenses, isAr, settings, financialAccounts, couriers]);
+  }, [accountTransactions, financialEntries, isAr, settings, financialAccounts, couriers]);
 
   // Apply filters to ledger
   const filteredLedgerEntries = useMemo(() => {

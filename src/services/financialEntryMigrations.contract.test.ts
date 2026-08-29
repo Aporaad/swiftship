@@ -251,6 +251,13 @@ describe('عقود ترحيلات القيود المالية الجديدة', (
     expect(sql).toContain("public.replace_financial_entry_payment_details(v_result->>'settlementEntryId', v_payload->'paymentDetails', v_actor_id)");
   });
 
+  it('يعالج قراءة تفاصيل الدفع بصلاحية قراءة فقط دون منح الكتابة للواجهة', () => {
+    const sql = migration('202608280001_grant_entry_payment_details_read.sql');
+    expect(sql).toContain('GRANT SELECT ON TABLE public.entry_payment_details TO anon, authenticated');
+    expect(sql).toContain('REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE public.entry_payment_details FROM anon, authenticated');
+    expect(sql).not.toMatch(/\b(row level security|enable row level security|create policy)\b/i);
+  });
+
   it('يربط القيد المرحل بسجل الطلب بمرجع صريح ويكتم حدث تحديث الرصيد الداخلي للتحصيل', () => {
     const sql = migration('202608270123_link_financial_entries_to_orders_history.sql');
     expect(sql).toContain('ADD COLUMN IF NOT EXISTS main_entry_id text REFERENCES public.main_entry');

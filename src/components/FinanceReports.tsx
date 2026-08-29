@@ -32,6 +32,7 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
   // 🏛️ Double-Entry System Live State connections
   const [accounts, setAccounts] = useState<any[]>([]);
   const [allTimeTransactions, setAllTimeTransactions] = useState<any[]>([]);
+  const [allTimeEntries, setAllTimeEntries] = useState<any[]>([]);
 
   useEffect(() => {
     // 1. Subscribe to accounts tree
@@ -41,19 +42,18 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
       console.warn("FinanceReports: Accounts subscription error:", err);
     });
 
-    // 2. Subscribe to double-entry ledger entries (all-time)
-    const qAllTxs = query(
-      collection(db, 'account_transactions'),
-      orderBy('createdAt', 'desc')
-    );
+    // 2. مصدر دفتر الأستاذ الجديد: أسطر account_trans مع بيانات رأس main_entry.
+    const unsubEntries = onSnapshot(query(collection(db, 'main_entry'), orderBy('effectiveAt', 'desc')), (snap) => {
+      setAllTimeEntries(snap.docs.map((doc: { id: any; data: () => any; }) => ({ id: doc.id, ...doc.data() })));
+    }, (err) => console.warn('FinanceReports: main_entry subscription error:', err));
+    const qAllTxs = query(collection(db, 'account_trans'), orderBy('createdAt', 'desc'));
     const unsubTxs = onSnapshot(qAllTxs, (snap) => {
       setAllTimeTransactions(snap.docs.map((doc: { id: any; data: () => any; }) => ({ id: doc.id, ...doc.data() })) as any[]);
-    }, (err) => {
-      console.warn("FinanceReports: Transactions subscription error:", err);
-    });
+    }, (err) => console.warn('FinanceReports: account_trans subscription error:', err));
 
     return () => {
       unsubAccounts();
+      unsubEntries();
       unsubTxs();
     };
   }, []);
@@ -174,7 +174,24 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
 
   // Filter ledger transactions by active date limits
   const allAccountTransactions = useMemo(() => {
-    return allTimeTransactions.filter((tx: any) => {
+    const entryById = new Map(allTimeEntries.map((entry: any) => [entry.id, entry]));
+    const accountById = new Map(accounts.map((account: any) => [account.id, account]));
+    return allTimeTransactions.map((tx: any) => {
+      const entry = entryById.get(tx.entryId);
+      const account = accountById.get(tx.accountId);
+      return {
+        ...tx,
+        entry,
+        type: tx.type || tx.transType,
+        amount: tx.amount ?? tx.amountOriginal,
+        amountOriginal: tx.amountOriginal,
+        currencyOriginal: tx.currencyOriginal || account?.currency || entry?.currencyOriginal,
+        accountCode: tx.accountCode || account?.accountCode,
+        module: tx.module || entry?.moduleId,
+        refNumber: tx.refNumber || entry?.entryNumber,
+        orderId: tx.orderId || entry?.orderId,
+      };
+    }).filter((tx: any) => tx.entry?.postingStatus === 'posted' && tx.entry?.entryCategory !== 'Temp').filter((tx: any) => {
       let txDate: Date;
       if (tx.createdAt?.toDate && typeof tx.createdAt.toDate === 'function') {
         txDate = tx.createdAt.toDate();
@@ -185,7 +202,7 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
       if (endLimit && txDate > endLimit) return false;
       return true;
     });
-  }, [allTimeTransactions, startLimit, endLimit]);
+  }, [allTimeTransactions, allTimeEntries, accounts, startLimit, endLimit]);
 
   // Filter ledger transactions dynamically based on active order/expense filters
   const filteredAccountTransactions = useMemo(() => {
@@ -256,7 +273,7 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
       sar: { in: sarIn, out: sarOut, balance: sarBalance },
       combinedTotalYER
     };
-  }, [allTimeTransactions, accounts, settings]);
+  }, [allAccountTransactions, accounts, settings]);
 
   // 2. Financial Metrics calculations using live Ledger Transactions
   const metrics = useMemo(() => {
