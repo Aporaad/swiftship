@@ -3,6 +3,12 @@
 ## المهام المنجزة والحالية:
 # Project TODO
 
+- [x] [2026-08-29 08:01:00] إصلاح validate_financial_entry_balance لجمع amount (بعملة الرأس) بدل amount_original مع هامش 0.01 للقيود متعددة العملات.
+- [x] [2026-08-29 07:34:00] إصلاح خطأ is not unique في require_financial_permission بتمرير NULL صريح لدوال post/reverse.
+- [x] [2026-08-29 07:34:00] إصلاح خطأ رفض سعر الصرف في الأسطر متعددة العملات بتعديل create_financial_entry_v2.
+- [x] [2026-08-29 07:25:00] تصحيح خطأ column "created_at" does not exist بالاعتماد على ORDER BY (role = 'Admin') DESC, id ASC بجدول users.
+- [x] [2026-08-29 07:22:00] حل وتفادي خطأ "تتطلب العملية المالية جلسة مستخدم موثقة" عبر إضافة p_fallback_uid لدعم createdByUid في require_financial_permission.
+- [x] [2026-08-29 07:16:00] حل وتفادي خطأ permission denied للدالة secure_create_financial_entry بمنح GRANT EXECUTE وتفعيل SECURITY DEFINER على Supabase SQL.
 - [x] نسخ واجهة تطبيق SwiftShip الأصلية من فرع exe إلى مشروع الخدمة المُدارة دون إعادة تصميم.
 - [x] نقل خادم Express ومسارات التطبيق الأصلية مع الحفاظ على واجهات API الحالية.
 - [x] نقل الاعتماديات اللازمة وتشغيل اختبار النوع والبناء الإنتاجي بنجاح.
