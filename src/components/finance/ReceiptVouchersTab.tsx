@@ -1,27 +1,29 @@
 /**
- * ReceiptVouchersTab - تبويب سندات القبض
+ * ReceiptVouchersTab - تبويب سندات القبض (نقدي / بنكي / متعدد)
  *
- * - يعمل في وضع السند المبسط (isVoucherMode)
- * - الصندوق/البنك = مدين (يُحدَّد من تفاصيل الدفع)
- * - الطرف الآخر = دائن (يختاره المستخدم)
- * - لا يظهر خيار "آجل" في طريقة الدفع
+ * يوفر 3 أزرار لإنشاء سندات القبض بحسب النوع:
+ * 1) سند قبض نقدي جديد
+ * 2) سند قبض بنكي جديد
+ * 3) سند قبض متعدد جديد
  */
+
 import EntryWorkspaceTab from './EntryWorkspaceTab';
+
 type TabProps = Omit<
   React.ComponentProps<typeof EntryWorkspaceTab>,
   'title' | 'description' | 'category' | 'permittedTypeCodes' | 'initialModuleCode' | 'initialTypeCode' | 'buttonLabel' | 'isVoucherMode' | 'voucherType'
 >;
+
 export default function ReceiptVouchersTab(props: TabProps) {
   return (
     <EntryWorkspaceTab
       {...props}
       title="سندات القبض"
-      description="سندات قبض: الصندوق/البنك مدين تلقائياً، والطرف الآخر دائن."
+      description="إدارة واستعراض سندات القبض النقدية والبنكية والمتعددة المعالجة محسبياً بشكل آمن."
       category="General"
-      permittedTypeCodes={['RECEIPT_VOUCHER', 'ORDER_PAYMENT']}
+      permittedTypeCodes={['RECEIPT_VOUCHER', 'RECEIPT_CASH', 'RECEIPT_BANK', 'RECEIPT_MULTI', 'ORDER_PAYMENT']}
       initialModuleCode="RECEIPTS"
-      initialTypeCode="RECEIPT_VOUCHER"
-      buttonLabel="سند قبض جديد"
+      initialTypeCode="RECEIPT_CASH"
       isVoucherMode={true}
       voucherType="receipt"
     />

@@ -1,13 +1,21 @@
 # سجل تطوير قاعدة البيانات — DBdevloping_history.md
 
-## 2026-08-29 — تحديثات واجهات ونماذج القيود والسندات
+## 2026-08-29 — إضافة أنواع السندات الستة في جدول entry_type
 
-### حالة مخطط قاعدة البيانات (Database Schema Status)
-- **لا توجد أي تغييرات هيكلية جديدة على جداول أو أعمدة قاعدة البيانات في هذه الخطوة**.
-- جميع التغييرات تتركز في الطبقة البرمجية وواجهات المستخدم ومكونات React مع الاستفادة التامة من الجداول الذرية القائمة:
-  - `main_entry` (جدول رؤوس القيود والسندات).
-  - `account_trans` (جدول حركة أسطر القيود والسندات).
-  - `entry_payment_details` (تفاصيل السندات وطرق الدفع).
-  - `cur_price` (جدول أسعار صرف العملات المحدث للقيود).
-  - `currency` (جدول العملات).
-  - `accounts` (جدول شجرة ودليل الحسابات المالية).
+### التحديثات والترحيلات المنفذة في قاعدة البيانات:
+- تم تنفيذ أمر إدراج وتعديل في جدول `entry_type` عبر Supabase MCP SQL لإدراج الأنواع الستة الهيكلية لسندات القبض والصرف:
+```sql
+INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
+('type_payment_cash', 'module_payments', 'PAYMENT_CASH', 'سند صرف نقدي', 'Cash Payment Voucher', true),
+('type_payment_bank', 'module_payments', 'PAYMENT_BANK', 'سند صرف بنكي', 'Bank Payment Voucher', true),
+('type_payment_multi', 'module_payments', 'PAYMENT_MULTI', 'سند صرف متعدد', 'Multi Payment Voucher', true),
+('type_receipt_cash', 'module_receipts', 'RECEIPT_CASH', 'سند قبض نقدي', 'Cash Receipt Voucher', true),
+('type_receipt_bank', 'module_receipts', 'RECEIPT_BANK', 'سند قبض بنكي', 'Bank Receipt Voucher', true),
+('type_receipt_multi', 'module_receipts', 'RECEIPT_MULTI', 'سند قبض متعدد', 'Multi Receipt Voucher', true)
+ON CONFLICT (id) DO UPDATE SET
+  name_ar = EXCLUDED.name_ar,
+  name_en = EXCLUDED.name_en,
+  code = EXCLUDED.code,
+  is_active = true;
+```
+- الحسابات الافتراضية: الاعتماد على `sys_cash_account` وحسابات الصناديق والبنوك المسجلة في جدول `default_accounts` و `accounts`.

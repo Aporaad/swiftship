@@ -1,16 +1,13 @@
 /**
  * EntryWorkspaceTab - لوحة العمل للقيود والسندات
  *
- * الميزات المحدثة:
- * 1. فتح النموذج في نافذة منبثقة واسعة (max-w-6xl) بتصميم راقٍ وزجاجي مريح جداً للعمل.
- * 2. استخدام المكونات المستقلة حسب نوع القيد:
- *    - GeneralEntryForm للقيود العامة والمؤقتة
- *    - CompoundEntryForm للقيود المركبة
- *    - VoucherEntryForm لسندات الصرف والقبض
+ * التحديثات الجديدة:
+ * 1. دعم أزرار السندات الستة المخصصة (نقدي / بنكي / متعدد) لكل من واجهتي سندات القبض وسندات الصرف.
+ * 2. فتح المودال مع تعيين نوع السند والأنواع التلقائية وتمرير اسم المستخدم الحقيقي.
  */
 
 import { useMemo, useState } from 'react';
-import { CheckCircle2, Edit3, FilePlus2, ReceiptText, RotateCcw, Trash2, X, XCircle, BookOpen, Layers } from 'lucide-react';
+import { CheckCircle2, Edit3, FilePlus2, ReceiptText, RotateCcw, Trash2, X, XCircle, BookOpen, Layers, Wallet, Building, CreditCard } from 'lucide-react';
 import { financialEntryService, type FinancialEntryCategory } from '../../services/financialEntryService';
 
 import GeneralEntryForm from './forms/GeneralEntryForm';
@@ -98,13 +95,13 @@ const paymentMethodLabel: Record<string, string> = {
 const statusStyle: Record<string, string> = {
   posted: 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30',
   voided: 'bg-rose-500/15 text-rose-300 border border-rose-500/30',
-  draft: 'bg-amber-500/15 text-amber-300 border border-amber-500/30',
+  draft:  'bg-amber-500/15 text-amber-300 border border-amber-500/30',
 };
 
 const statusLabel: Record<string, string> = {
   posted: 'مرحّل',
   voided: 'مبطل',
-  draft: 'مسودة',
+  draft:  'مسودة',
 };
 
 export default function EntryWorkspaceTab({
@@ -136,6 +133,7 @@ export default function EntryWorkspaceTab({
 }: Props) {
   const [showModal, setShowModal] = useState(false);
   const [editingEntry, setEditingEntry] = useState<any | null>(null);
+  const [selectedVoucherSubKind, setSelectedVoucherSubKind] = useState<'cash' | 'bank' | 'multi'>('cash');
   const [busyId, setBusyId] = useState('');
   const [error, setError] = useState('');
 
@@ -167,7 +165,14 @@ export default function EntryWorkspaceTab({
     [formTypes, modules]
   );
 
+  const openNewVoucher = (subKind: 'cash' | 'bank' | 'multi') => {
+    setSelectedVoucherSubKind(subKind);
+    setEditingEntry(null);
+    setShowModal(true);
+  };
+
   const openNew = () => {
+    setSelectedVoucherSubKind('cash');
     setEditingEntry(null);
     setShowModal(true);
   };
@@ -266,24 +271,88 @@ export default function EntryWorkspaceTab({
 
   const modalTitle = editingEntry
     ? `تعديل سجل: ${editingEntry.entryNumber}`
-    : buttonLabel || 'قيد جديد';
+    : isVoucherMode
+      ? (voucherType === 'payment'
+          ? (selectedVoucherSubKind === 'cash' ? 'سند صرف نقدي جديد' : selectedVoucherSubKind === 'bank' ? 'سند صرف بنكي جديد' : 'سند صرف متعدد جديد')
+          : (selectedVoucherSubKind === 'cash' ? 'سند قبض نقدي جديد' : selectedVoucherSubKind === 'bank' ? 'سند قبض بنكي جديد' : 'سند قبض متعدد جديد'))
+      : buttonLabel || 'قيد جديد';
 
   return (
     <section className="space-y-4" dir="rtl">
-      {/* ── رأس التبويب ── */}
+      {/* ── رأس التبويب والأزرار ── */}
       <header className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
         <div>
           <h2 className="text-lg font-black text-white">{title}</h2>
           <p className="mt-1 text-xs text-slate-400">{description}</p>
         </div>
+
         {canCreate && (
-          <button
-            onClick={openNew}
-            className="inline-flex items-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-400 px-4 py-2 text-xs font-black text-slate-950 shadow-lg transition"
-          >
-            <FilePlus2 className="h-4 w-4" />
-            {buttonLabel || 'قيد جديد'}
-          </button>
+          isVoucherMode ? (
+            /* أزرار السندات الستة المخصصة حسب الواجهة (قبض / صرف) */
+            <div className="flex flex-wrap items-center gap-2">
+              {voucherType === 'payment' ? (
+                <>
+                  <button
+                    onClick={() => openNewVoucher('cash')}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 px-3.5 py-2 text-xs font-black text-slate-950 shadow-md transition"
+                  >
+                    <Wallet className="h-4 w-4" />
+                    <span>سند صرف نقدي جديد</span>
+                  </button>
+
+                  <button
+                    onClick={() => openNewVoucher('bank')}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 px-3.5 py-2 text-xs font-black text-white shadow-md transition"
+                  >
+                    <Building className="h-4 w-4" />
+                    <span>سند صرف بنكي جديد</span>
+                  </button>
+
+                  <button
+                    onClick={() => openNewVoucher('multi')}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 px-3.5 py-2 text-xs font-black text-white shadow-md transition"
+                  >
+                    <CreditCard className="h-4 w-4" />
+                    <span>سند صرف متعدد جديد</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => openNewVoucher('cash')}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 px-3.5 py-2 text-xs font-black text-slate-950 shadow-md transition"
+                  >
+                    <Wallet className="h-4 w-4" />
+                    <span>سند قبض نقدي جديد</span>
+                  </button>
+
+                  <button
+                    onClick={() => openNewVoucher('bank')}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 px-3.5 py-2 text-xs font-black text-white shadow-md transition"
+                  >
+                    <Building className="h-4 w-4" />
+                    <span>سند قبض بنكي جديد</span>
+                  </button>
+
+                  <button
+                    onClick={() => openNewVoucher('multi')}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 px-3.5 py-2 text-xs font-black text-white shadow-md transition"
+                  >
+                    <CreditCard className="h-4 w-4" />
+                    <span>سند قبض متعدد جديد</span>
+                  </button>
+                </>
+              )}
+            </div>
+          ) : (
+            <button
+              onClick={openNew}
+              className="inline-flex items-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-400 px-4 py-2 text-xs font-black text-slate-950 shadow-lg transition"
+            >
+              <FilePlus2 className="h-4 w-4" />
+              {buttonLabel || 'قيد جديد'}
+            </button>
+          )
         )}
       </header>
 
@@ -293,7 +362,7 @@ export default function EntryWorkspaceTab({
         </div>
       )}
 
-      {/* ── جدول عرض القيود ── */}
+      {/* ── جدول عرض القيود والسندات ── */}
       <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/60">
         <table className="min-w-[820px] w-full text-right text-xs">
           <thead className="bg-slate-900 text-slate-400">
@@ -301,7 +370,6 @@ export default function EntryWorkspaceTab({
               <th className="px-4 py-3">السند / القيد</th>
               <th className="px-4 py-3">البيان العام</th>
               <th className="px-4 py-3">النوع</th>
-              <th className="px-4 py-3">الطريقة</th>
               <th className="px-4 py-3">المبلغ</th>
               <th className="px-4 py-3">الحالة</th>
               <th className="px-4 py-3">الإجراءات</th>
@@ -313,7 +381,6 @@ export default function EntryWorkspaceTab({
                 <td className="px-4 py-3 font-mono font-black text-amber-400">{entry.entryNumber}</td>
                 <td className="max-w-72 px-4 py-3">{entry.description}</td>
                 <td className="px-4 py-3 text-slate-300">{typeById.get(entry.entryTypeId)?.nameAr || '—'}</td>
-                <td className="px-4 py-3">{paymentMethodLabel[entry.paymentMethod || ''] || '—'}</td>
                 <td className="px-4 py-3 font-mono font-black text-white">
                   {Number(entry.amountOriginal).toLocaleString()}{' '}
                   <span className="text-slate-500 text-[10px]">{currencyById.get(entry.currencyOriginalNo) || ''}</span>
@@ -384,8 +451,8 @@ export default function EntryWorkspaceTab({
             ))}
             {visibleEntries.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-12 text-center text-slate-500">
-                  لا توجد قيود ضمن هذا التبويب.
+                <td colSpan={6} className="px-4 py-12 text-center text-slate-500">
+                  لا توجد سجلات ضمن هذا التبويب.
                 </td>
               </tr>
             )}
@@ -394,8 +461,7 @@ export default function EntryWorkspaceTab({
       </div>
 
       {/* ════════════════════════════════════════════
-          النافذة المنبثقة الفاخرة للنموذج (Modal)
-          Max width extended (max-w-[96vw] / 1700px) with dynamic responsive design
+          النافذة المنبثقة للنموذج (Modal)
           ════════════════════════════════════════════ */}
       {showModal && (
         <div
@@ -403,18 +469,15 @@ export default function EntryWorkspaceTab({
           role="dialog"
           aria-modal="true"
         >
-          {/* خلفية زجاجية معتمة */}
           <div
             className="fixed inset-0 bg-slate-950/85 backdrop-blur-md transition-opacity duration-300"
             onClick={closeModal}
           />
 
-          {/* محتوى المودال الأفقِي الواسع والمتجاوب */}
           <div
             className="relative z-10 w-full max-w-[98vw] lg:max-w-[95vw] xl:max-w-[1550px] 2xl:max-w-[1750px] max-h-[94vh] flex flex-col rounded-3xl border border-slate-700/80 bg-slate-950 shadow-2xl overflow-hidden transition-all duration-300"
             dir="rtl"
           >
-            {/* هيدر المودال الأنيق والمتجاوب */}
             <div className="flex items-center justify-between border-b border-slate-800 bg-slate-900/90 px-4 sm:px-6 py-3.5 shrink-0">
               <div className="flex items-center gap-3">
                 <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-2.5 text-amber-400">
@@ -435,11 +498,11 @@ export default function EntryWorkspaceTab({
               </button>
             </div>
 
-            {/* جسم المودال - المكون المستقل بحجم مرن وجاهز للتجاوب */}
             <div className="overflow-y-auto p-3 sm:p-5 md:p-6 flex-1">
               {isVoucherMode ? (
                 <VoucherEntryForm
                   voucherType={voucherType || 'receipt'}
+                  voucherSubKind={selectedVoucherSubKind}
                   accounts={accounts}
                   currencies={currencies}
                   modules={formModules}

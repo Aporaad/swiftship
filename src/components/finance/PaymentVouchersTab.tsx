@@ -1,27 +1,29 @@
 /**
- * PaymentVouchersTab - تبويب سندات الصرف
+ * PaymentVouchersTab - تبويب سندات الصرف (نقدي / بنكي / متعدد)
  *
- * - يعمل في وضع السند المبسط (isVoucherMode)
- * - الصندوق/البنك = دائن (يُحدَّد من تفاصيل الدفع)
- * - الطرف الآخر = مدين (يختاره المستخدم)
- * - لا يظهر خيار "آجل" في طريقة الدفع
+ * يوفر 3 أزرار لإنشاء سندات الصرف بحسب النوع:
+ * 1) سند صرف نقدي جديد
+ * 2) سند صرف بنكي جديد
+ * 3) سند صرف متعدد جديد
  */
+
 import EntryWorkspaceTab from './EntryWorkspaceTab';
+
 type TabProps = Omit<
   React.ComponentProps<typeof EntryWorkspaceTab>,
   'title' | 'description' | 'category' | 'permittedTypeCodes' | 'initialModuleCode' | 'initialTypeCode' | 'buttonLabel' | 'isVoucherMode' | 'voucherType'
 >;
+
 export default function PaymentVouchersTab(props: TabProps) {
   return (
     <EntryWorkspaceTab
       {...props}
       title="سندات الصرف"
-      description="سندات صرف: الصندوق/البنك دائن تلقائياً، والطرف الآخر مدين."
+      description="إدارة واستعراض سندات الصرف النقدية والبنكية والمتعددة المعالجة محاسبياً."
       category="General"
-      permittedTypeCodes={['PAYMENT_VOUCHER', 'OPERATING_EXPENSE', 'SALARY_PAYMENT']}
+      permittedTypeCodes={['PAYMENT_VOUCHER', 'PAYMENT_CASH', 'PAYMENT_BANK', 'PAYMENT_MULTI', 'OPERATING_EXPENSE', 'SALARY_PAYMENT']}
       initialModuleCode="PAYMENTS"
-      initialTypeCode="PAYMENT_VOUCHER"
-      buttonLabel="سند صرف جديد"
+      initialTypeCode="PAYMENT_CASH"
       isVoucherMode={true}
       voucherType="payment"
     />
