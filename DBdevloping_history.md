@@ -228,4 +228,23 @@ ALTER FUNCTION public.secure_create_financial_entry SECURITY DEFINER;
 INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 ('type_payment_cash', 'module_payments', 'PAYMENT_CASH', 'سند صرف نقدي', 'Cash Payment Voucher', true),
 ('type_payment_bank', 'module_payments', 'PAYMENT_BANK', 'سند صرف بنكي', 'Bank Payment Voucher', true),
-('type_payment_multi', 'module_payments', 'PAYMENT_MULTI', 'سند صرف متعدد', 'Multi Payment Voucher', true),
+('type_payment_multi', 'module_payments', 'PAYMENT_MULTI', 'سند صرف متعدد', 'Multi Payment Voucher', true);
+
+---
+
+## [2026-08-30 03:45:00] — التخلي النهائي وحذف جداول account_transactions و journal_entries بعد الترحيل الشامل
+
+### التحديثات والترحيلات المنفذة في قاعدة البيانات:
+1. **ترحيل رؤوس القيود من `journal_entries` إلى `main_entry`**:
+   - تحويل 72 قيداً تاريخياً من `journal_entries` مع ربط حقول `entry_number`, `module_id`, `entry_type_id`, `posting_status` = `'posted'`, والتأكد من مطابقة `created_by_uid` للمستخدمين المعتمدين بجدول `users`.
+   - توليد رؤوس قيود مستقلة في `main_entry` للحركات اليتيمة ليصبح إجمالي رؤوس القيود في `main_entry` 100 قيداً.
+
+2. **ترحيل أسطر القيود من `account_transactions` إلى `account_trans`**:
+   - تحويل 143 حركة محاسبية إلى `account_trans` وتوليد `line_no` متسلسل لكل رأس قيد، مع ربط أسعار الصرف الحية `currency_price_id` و `currency_price_seq` لجميع القيود متعددة العملات (إجمالي 155 سطر حركة محاسبية في `account_trans`).
+
+3. **إعادة احتساب أرصدة شجرة الحسابات بالكامل**:
+   - تشغيل `SELECT recalculate_accounting_hierarchy(id) FROM accounts;` لإعادة احتساب وتحديث رصيد كل حساب في `accounts` استناداً إلى أسطر `account_trans`.
+
+4. **حذف الجداول القديمة**:
+   - تنفيذ `DROP TABLE IF EXISTS public.account_transactions CASCADE;`
+   - تنفيذ `DROP TABLE IF EXISTS public.journal_entries CASCADE;`

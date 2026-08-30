@@ -171,8 +171,8 @@ export default function Settings() {
   const [localSettings, setLocalSettings] = useState(globalSettings);
   const [exportSelections, setExportSelections] = useState<Record<string, boolean>>({
     orders: true, customers: true, couriers: true, sources: true, users: true, roles: true,
-    expenses: true, accounts: true, journal_entries: true, salary_history: true,
-    activity_logs: true, account_transactions: true, backups: false,
+    expenses: true, accounts: true, main_entry: true, salary_history: true,
+    activity_logs: true, account_trans: true, backups: false,
     settings: true, report_accounts: true, expense_categories: true, automatic_voucher_rules: true
   });
 
@@ -195,8 +195,8 @@ export default function Settings() {
     if (globalSettings.backupCollections && Array.isArray(globalSettings.backupCollections)) {
       const sel: Record<string, boolean> = {
         orders: false, customers: false, couriers: false, sources: false, users: false, roles: false,
-        expenses: false, accounts: false, journal_entries: false, salary_history: false,
-        activity_logs: false, account_transactions: false, backups: false,
+        expenses: false, accounts: false, main_entry: false, salary_history: false,
+        activity_logs: false, account_trans: false, backups: false,
         settings: false, report_accounts: false, expense_categories: false, automatic_voucher_rules: false
       };
       globalSettings.backupCollections.forEach(c => { if (c in sel) sel[c] = true; });

@@ -336,12 +336,22 @@ export default function Employees() {
 
     setStatementModal({ isOpen: true, employee: emp, transactions: [], loading: true });
     try {
+      // الاستعلام المباشر من جدول أسطر الحسابات الجديد account_trans
+      // Direct query from new ledger lines table account_trans
       const q = query(
-        collection(db, 'account_transactions'),
+        collection(db, 'account_trans'),
         where('accountId', '==', accId)
       );
       const snap = await getDocs(q);
-      const txs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const txs = snap.docs.map(d => {
+        const row = d.data();
+        return {
+          id: d.id,
+          ...row,
+          type: row.type || row.transType || row.trans_type,
+          amount: row.amount ?? row.amountOriginal
+        };
+      });
       txs.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
       setStatementModal({ isOpen: true, employee: emp, transactions: txs, loading: false });
     } catch (err) {

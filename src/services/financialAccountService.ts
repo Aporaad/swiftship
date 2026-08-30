@@ -1159,15 +1159,17 @@ class FinancialAccountService {
   }
   /**
    * Compute a ledger summary for a given account (total debit, credit, net balance)
-   * by summing all account_transactions for that account.
+   * by summing all account_trans for that account.
    * Useful for reconciliation and audit reports.
    */
   async getLedgerSummary(
     accountId: string,
   ): Promise<{ debit: number; credit: number; net: number; count: number }> {
     try {
+      // الاعتماد الكامل على جدول أسطر الحسابات الجديد account_trans
+      // Relying fully on new ledger lines table account_trans
       const q = query(
-        collection(db, "account_transactions"),
+        collection(db, "account_trans"),
         where("accountId", "==", accountId),
         orderBy("createdAt", "desc"),
       );
@@ -1176,8 +1178,9 @@ class FinancialAccountService {
         credit = 0;
       snap.docs.forEach((d) => {
         const data = d.data();
-        if (data.type === "Debit") debit += data.amount || 0;
-        else credit += data.amount || 0;
+        const type = data.transType || data.trans_type || data.type;
+        if (type === "Debit") debit += parseFloat(data.amount || 0);
+        else credit += parseFloat(data.amount || 0);
       });
       return { debit, credit, net: debit - credit, count: snap.size };
     } catch (error) {
@@ -1803,9 +1806,10 @@ class FinancialAccountService {
         const accountDoc = accountSnap.docs[0];
         accountId = accountDoc.id;
 
-        // 2. Find all account_transactions legs linked to this account
+        // 2. Find all account_trans legs linked to this account
+        // استعلام أسطر الحسابات من جدول account_trans الجديد
         const txQuery = query(
-          collection(db, "account_transactions"),//مهم: التغيير الى account_trans
+          collection(db, "account_trans"),
           where("accountId", "==", accountId)
         );
         const txSnap = await getDocs(txQuery);
@@ -1815,8 +1819,9 @@ class FinancialAccountService {
 
         txSnap.docs.forEach((d) => {
           const tx = d.data();
-          if (tx.journalEntryId) {
-            journalEntryIds.add(tx.journalEntryId);
+          const entryId = tx.entryId || tx.journalEntryId;
+          if (entryId) {
+            journalEntryIds.add(entryId);
           }
           if (tx.refNumber) {
             refNumbers.add(tx.refNumber);
@@ -1830,7 +1835,7 @@ class FinancialAccountService {
         if (journalEntryIds.size > 0) {
           const jvIdsArray = Array.from(journalEntryIds);
           for (const jvId of jvIdsArray) {
-            const q = query(collection(db, "account_transactions"), where("journalEntryId", "==", jvId));//مهم: التغيير الى account_trans والى main_entry
+            const q = query(collection(db, "account_trans"), where("entryId", "==", jvId));
             const snap = await getDocs(q);
             snap.docs.forEach(docItem => {
               allTxDocsToDelete.set(docItem.id, docItem.ref);
@@ -1839,13 +1844,15 @@ class FinancialAccountService {
                 affectedAccountIds.add(txData.accountId);
               }
             });
+            // حذف رأس القيد من main_entry
+            batch.delete(doc(db, "main_entry", jvId));
           }
         }
 
         if (refNumbers.size > 0) {
           const refsArray = Array.from(refNumbers);
           for (const refNo of refsArray) {
-            const q = query(collection(db, "account_transactions"), where("refNumber", "==", refNo));
+            const q = query(collection(db, "account_trans"), where("refNumber", "==", refNo));
             const snap = await getDocs(q);
             snap.docs.forEach(docItem => {
               allTxDocsToDelete.set(docItem.id, docItem.ref);

@@ -133,22 +133,25 @@ function _initSingleton() {
     const creditById: Record<string, number> = {};
 
     txDocs.forEach((tx: any) => {
-      const code: string = tx.accountCode || '';
-      const id: string   = tx.accountId  || '';
+      // استخراج كود الحساب والمعرف والنوع من أسطر جدول account_trans الجديد
+      // Extract account code, ID, and transaction type from account_trans table
+      const code: string = tx.accountCode || tx.account_code || '';
+      const id: string   = tx.accountId  || tx.account_id  || '';
+      const type: string = tx.transType  || tx.trans_type  || tx.type || '';
       const txCurrency   = tx.currency   || 'YER';
       const accountCurrency = accountRegistry[code]?.currency || accountRegistry[id]?.currency || 'YER';
 
       let amt: number = parseFloat(tx.amount) || 0;
       if (txCurrency !== accountCurrency) {
-        const origAmt = parseFloat(tx.amountOriginal) || amt;
-        const origCurr = tx.currencyOriginal || txCurrency;
+        const origAmt = parseFloat(tx.amountOriginal || tx.amount_original) || amt;
+        const origCurr = tx.currencyOriginal || tx.currency_original || txCurrency;
         amt = convertCurrency(origAmt, origCurr, accountCurrency, exchangeRates);
       }
 
-      if (tx.type === 'Debit') {
+      if (type === 'Debit') {
         if (code) debitByCode[code] = (debitByCode[code] || 0) + amt;
         if (id)   debitById[id]     = (debitById[id]   || 0) + amt;
-      } else if (tx.type === 'Credit') {
+      } else if (type === 'Credit') {
         if (code) creditByCode[code] = (creditByCode[code] || 0) + amt;
         if (id)   creditById[id]     = (creditById[id]   || 0) + amt;
       }
@@ -222,8 +225,9 @@ function _initSingleton() {
     checkAndCompute();
   }, () => { initialLoaded.accounts = true; checkAndCompute(); });
 
-  // 3. Subscribe to transactions (single global listener — this is the heavy one)
-  onSnapshot(collection(db, 'account_transactions'), (snap: any) => {
+  // 3. Subscribe to transactions in account_trans (single global listener)
+  // الاستماع المباشر للتغيرات في جدول أسطر الحسابات الجديد account_trans
+  onSnapshot(collection(db, 'account_trans'), (snap: any) => {
     txDocs = snap.docs.map((d: any) => d.data());
     initialLoaded.txs = true;
     checkAndCompute();
