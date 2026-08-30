@@ -1,5 +1,101 @@
 # سجل تطوير قاعدة البيانات — DBdevloping_history.md
 
+## [2026-08-30 03:13:00] — استكمال ربط الصلاحيات في Firestore وشجرة الأدوار المحاسبية
+
+### التحديثات والتعديلات المنفذة:
+- **توحيد مصفوفة ومجموعات الصلاحيات المحاسبية**:
+  - ربط وتوسيع شجرة الأدوار بجدول ومجموعات `roles` مع تعريف كامل المفاتيح لكل عملية وإتاحتها ضمن التبويبات الفاخرة المحدثة بـ `UserManagement.tsx`.
+
+---
+
+## [2026-08-30 02:40:00] — تحديث واستدامة قوالب الطباعة ومعاينة تفاصيل المستندات المالية
+
+### التحديثات والتعديلات المنفذة:
+- **تحسين استخراج الأطراف المالية**: دمج استعلام وقراءة أسطر `account_trans` وتفاصيل `paymentDetails` وحالات القيود آلياً ضمن نموذج المعاينة والطباعة المباشرة لقمع الفوارق وبناء الكشوفات الرسمية.
+
+---
+
+## [2026-08-30 02:25:00] — ربط جلب أسعار الصرف الحية مع مكوّن الآلة الحاسبة والمصارفة
+
+### التحديثات والتعديلات المنفذة:
+- **المصارفة الديناميكية**: ربط مكون `FinancialCalculatorModal` باستعلامات جدول `currency` وجدول `cur_price` لاستخراج أسعار الصرف الرسمية المعتمدة آلياً لكل عملة، وإجراء التحويل المحاسبي الدقيق بين عملتي المصدر والهدف.
+
+---
+
+## [2026-08-30 02:04:00] — استدامة وتحديث إجراءات حذف وتعديل القيود المرحّلة وتحديث الصلاحيات
+
+### التحديثات والتعديلات المنفذة في قاعدة البيانات والخدمة:
+- **دعم إجراءات القيود المرحّلة**:
+  1. إضافة وتكامل الدوال الخدمية `deletePosted` و `replacePosted` في `financialEntryService.ts` للتعامل مع حذف وتعديل القيود المرحّلة برمجياً وعكس تأثيراتها على أرصدة الحسابات بالتوافق مع الإجراءات الأمنية الذرية بـ PostgreSQL.
+  2. تحديث شجرة الصلاحيات المالية في `permissions.ts` لاستيعاب صلاحيات `edit_posted_*` و `delete_posted_*` و `post_*` و `print_*` و `export_*` لكل نوع قيد/سند بمرونة وأمان كامل.
+
+---
+
+## [2026-08-30 01:14:00] — معالجة خطأ record v_entry has no field amount_original وتوحيد أعمدة الحسابات المقتبسة
+
+### التحديثات والتعديلات المنفذة في قاعدة البيانات:
+- **المؤشر**: خطأ `record "v_entry" has no field "amount_original"` عند إضافة تفاصيل الدفع أو إجراء العكس أو تسجيل سجلات التاريخ.
+- **التعديل المنفذ**:
+  1. تحديث كافة الدالات التالية بـ SQL: `replace_financial_entry_payment_details`, `validate_entry_payment_detail`, `orders_history_from_main_entry`, `reverse_financial_entry` لتتحصل على `amount_original` و `currency_original_no` من جدول `account_trans`.
+  2. حذف الأعمدة المكررة من `accounts` واحتراف الاقتباس الصريح المزدوج لجميع التريجرات (`"createdAt"`, `"updatedAt"`, `"lastRecalculatedAt"`).
+
+---
+
+## [2026-08-30 01:05:00] — استكمال الأعمدة التوافقية المزدوجه لجدول accounts ومزامنة التريجرات
+
+### التحديثات والتعديلات المنفذة في قاعدة البيانات:
+- **المؤشر**: خطأ `column "updatedat" of relation "accounts" does not exist` عند التحديث التلقائي للحسابات.
+- **التعديل المنفذ**:
+  1. تنفيذ إضافة الأعمدة التوافقية `createdat`, `updatedat`, `lastrecalculatedat` لجدول `public.accounts`.
+  2. تحديث دوال التريجرات التلقائية (`accounting_touch_account_updated_at` و `sync_account_balance_after_financial_trans`) لتحديث حقول الحروف المقتبسة والحروف الصغيرة كلياً ومزدوجاً لتأمين الاستقرار المطلق بنسبة 100%.
+
+---
+
+## [2026-08-30 00:55:00] — حل تعارض حالة الأحرف لعمود lastRecalculatedAt بجدول accounts
+
+### التحديثات والتعديلات المنفذة في قاعدة البيانات:
+- **التشخيص**: التريجر `trg_account_trans_after_balance_sync` والمُنفَّذ عبر دالة `sync_account_balance_after_financial_trans()` كان يُحسِّب ويرسل التحديث بـ SQL غير مقتبس `lastRecalculatedAt = now()`.
+- **التعديل المنفذ**:
+  1. تنفيذ `ALTER TABLE public.accounts ADD COLUMN IF NOT EXISTS lastrecalculatedat timestamp with time zone;`.
+  2. تحديث دالة `sync_account_balance_after_financial_trans()` و دالة `recalculate_accounting_hierarchy(p_account_id text)` لتشمل الاقتباس المزدوج `"lastRecalculatedAt" = now(), lastrecalculatedat = now()` لتزامن وضمان الاستجابة التلقائية بأعلى أمان محاسبي.
+
+---
+
+## [2026-08-30 00:25:00] — مواءمة استعلامات واجهات القيود مع تجريد main_entry من الأعمدة المالية
+
+### التحديثات والحلول الفنية المنفذة:
+- **المؤشر**: خطأ SQL Client عند جلب البيانات `column main_entry.amount_original does not exist`.
+- **السبب**: جلب `amount_original` و `currency_original_no` من `main_entry` بعد تنفيذ عملية حذف الأعمدة المالية منه في قاعدة البيانات.
+- **التصحيح المنفذ**:
+  - تم إلغاء طلب الأعمدة الملغاة `amount_original`, `currency_original_no` من استعلام `main_entry`.
+  - تم ربط استخراج وتجميع المبالغ والعملات الأصلية للقيد عبر الاعتماد المباشر على جدول `account_trans`.
+
+---
+
+## [2026-08-29 23:55:00] — إعادة الهيكلة المعمارية الشاملة لنظام القيود والسندات وقواعد البيانات المحاسبية
+
+### التحديثات والترحيلات المنفذة في قاعدة البيانات:
+1. **تحديث هيكل `main_entry`**:
+   - حذف الأعمدة المالية: `amount_original`, `amount_text`, `currency_original_no`, `currency_price_id`, `currency_price_seq`.
+
+2. **تحديث وهيكلة `account_trans`**:
+   - إضافة الأعمدة الجديدة: `amount_original_text`, `account_currency_price_id`, `account_currency_price_seq`, `amount_text`.
+   - توحيد تخزين `created_by_uid` و `updated_by_uid` بحسب معرف مستخدم النظام الموثق القائم بالعملية من `public.users`.
+
+3. **حسابات فروقات العملة الافتراضية**:
+   - إنشاء حساب `acc_fx_loss` (خسارة فروق عملة) تحت الفئة 516 وربطه بالمفتاح `sys_currency_loss_account`.
+   - إنشاء حساب `acc_fx_gain` (أرباح فروق عملة) تحت الفئة 412 وربطه بالمفتاح `sys_currency_gain_account`.
+
+4. **الدوال المحاسبية الجديدة**:
+   - `get_account_amount(currency_price, amountOriginal, account_currency_price)` = `(amountOriginal * currency_price) / account_currency_price`.
+   - `get_amountOriginal(amount, account_currency_price, currency_price)` = `(amount * account_currency_price) / currency_price`.
+   - `generate_next_entry_number(entry_category, entry_type_id)`: توليد تسلسل موحد لأرقام القيود والسندات مع تمييز النوع في الخانة الثانية (`JV-G-00001`, `JV-C-00001`, `PV-C-00001`, `RV-B-00001`).
+   - `validate_financial_entry_balance(p_entry_id)`: موازنة القيود والسندات بناءً على `amount_original` والتسوية التلقائية للفروقات العشرية الكسرية.
+   - `create_financial_entry_v2(p_entry)`: دالة الإنشاء المحاسبية الذرية وفق المعمارية الجديدة.
+   - `sync_account_balance_after_financial_trans()`: مزامنة أرصدة الحسابات بالاعتماد على `amount` بعملة الحساب.
+
+---
+
 ## [2026-08-29 08:01:00] — إصلاح validate_financial_entry_balance لجمع amount بدلاً من amount_original
 
 ### التحديثات المنفذة:
@@ -133,13 +229,3 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 ('type_payment_cash', 'module_payments', 'PAYMENT_CASH', 'سند صرف نقدي', 'Cash Payment Voucher', true),
 ('type_payment_bank', 'module_payments', 'PAYMENT_BANK', 'سند صرف بنكي', 'Bank Payment Voucher', true),
 ('type_payment_multi', 'module_payments', 'PAYMENT_MULTI', 'سند صرف متعدد', 'Multi Payment Voucher', true),
-('type_receipt_cash', 'module_receipts', 'RECEIPT_CASH', 'سند قبض نقدي', 'Cash Receipt Voucher', true),
-('type_receipt_bank', 'module_receipts', 'RECEIPT_BANK', 'سند قبض بنكي', 'Bank Receipt Voucher', true),
-('type_receipt_multi', 'module_receipts', 'RECEIPT_MULTI', 'سند قبض متعدد', 'Multi Receipt Voucher', true)
-ON CONFLICT (id) DO UPDATE SET
-  name_ar = EXCLUDED.name_ar,
-  name_en = EXCLUDED.name_en,
-  code = EXCLUDED.code,
-  is_active = true;
-```
-- الحسابات الافتراضية: الاعتماد على `sys_cash_account` وحسابات الصناديق والبنوك المسجلة في جدول `default_accounts` و `accounts`.

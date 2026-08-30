@@ -2665,12 +2665,11 @@ export default function Orders() { // دالة عرض الطلبات
       await financialEntryService.recordOrderPayment(selectedOrder.id, amountNum, {
         entryNumber: `RCPT-${selectedOrder.orderNumber || selectedOrder.id}-${Date.now().toString().slice(-6)}`,
         moduleId: 'module_orders', entryTypeId: 'type_order_payment', entryCategory: paymentMethod === 'mixed' ? 'Compound' : 'General', postingStatus: 'posted',
-        amountOriginal: amountNum, currencyOriginalNo: Number(currencyRecord.cur_id),
         description: `${isAr ? 'تحصيل دفعة للطلب' : 'Order payment collection'} ${selectedOrder.orderNumber || selectedOrder.id}`,
         notes: paymentFormData.notes || '', paymentMethod, orderId: selectedOrder.id, createdByUid: profile?.id || profile?.uid,
         lines: [
-          ...allocations.map((allocation) => ({ accountId: allocation.account.id, accountCurNo: allocation.account.curNo, transType: 'Debit' as const, amount: allocation.amount, amountOriginal: allocation.amount, paymentMethod: allocation.paymentMethod })),
-          { accountId: partyAccount.id, accountCurNo: partyAccount.curNo, transType: 'Credit', amount: amountNum, amountOriginal: amountNum, entityType: selectedOrder.orderPartyType || 'customer', entityId: selectedOrder.orderPartyId || selectedOrder.customerId },
+          ...allocations.map((allocation) => ({ accountId: allocation.account.id, accountCurNo: allocation.account.curNo, currencyOriginalNo: Number(currencyRecord.cur_id), transType: 'Debit' as const, amount: allocation.amount, amountOriginal: allocation.amount, paymentMethod: allocation.paymentMethod })),
+          { accountId: partyAccount.id, accountCurNo: partyAccount.curNo, currencyOriginalNo: Number(currencyRecord.cur_id), transType: 'Credit', amount: amountNum, amountOriginal: amountNum, entityType: selectedOrder.orderPartyType || 'customer', entityId: selectedOrder.orderPartyId || selectedOrder.customerId },
         ],
         paymentDetails: allocations.map((allocation) => ({ paymentMethod: allocation.paymentMethod === 'bank' ? 'bank' as const : 'cash' as const, accountId: allocation.account.id, amountOriginal: allocation.amount, bankReference: allocation.bankReference || '' })),
       }, profile?.id || profile?.uid);

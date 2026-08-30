@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Save, ArrowRight, ArrowLeft, Calendar, User } from 'lucide-react';
+import { AlertTriangle, Save, ArrowRight, ArrowLeft, Calendar, User, Calculator } from 'lucide-react';
 import {
   financialEntryService,
   type FinancialEntryCategory,
@@ -16,6 +16,7 @@ import {
 } from '../../../services/financialEntryService';
 import { supabase } from '../../../lib/supabase-firebase-adapter';
 import AccountPickerModal from '../AccountPickerModal';
+import FinancialCalculatorModal from '../FinancialCalculatorModal';
 import { amountInWords } from '../../../lib/numberToWords';
 
 export interface FinanceCurrency { id: number; code: string; isDefault: boolean; }
@@ -269,22 +270,25 @@ export default function GeneralEntryForm({
         const fullLineDesc = `${autoPrefix} ${noteText}`.trim();
 
         const accRate = asNumber(line.accountExchangeRate) || 1;
-        const isSameAsHeaderCurrency = acc.curNo === selectedEntryCurrency.id;
-        const lineAmount = numericMainAmount;
-        const lineAmountOriginal = isSameAsHeaderCurrency
-          ? numericMainAmount
-          : (accRate > 0 ? (numericMainAmount * numEntryRate) / accRate : numericMainAmount);
-
-        const linePriceRef = line.priceRef || entryPriceRef || undefined;
+        // معادلة المصارفة: get_account_amount(entryPrice, amountOriginal, accountPrice) = (amountOriginal * entryPrice) / accountPrice
+        const lineAmountInAccountCurrency = Number(((numericMainAmount * numEntryRate) / accRate).toFixed(5));
+        
+        const accCurCode = currencies.find((c) => c.id === acc.curNo)?.code || 'YER';
+        const lineAmountText = amountInWords(lineAmountInAccountCurrency, accCurCode, 'ar');
+        const lineAmountOriginalText = autoAmountText;
 
         return {
           id: line.id,
           accountId: acc.id,
           accountCurNo: acc.curNo,
+          accountCurrencyPrice: line.priceRef || undefined,
           transType: line.transType,
-          amount: lineAmount,
-          amountOriginal: lineAmountOriginal,
-          currencyPrice: linePriceRef,
+          amount: lineAmountInAccountCurrency,
+          amountText: lineAmountText,
+          amountOriginal: numericMainAmount,
+          amountOriginalText: lineAmountOriginalText,
+          currencyOriginalNo: selectedEntryCurrency.id,
+          currencyPrice: entryPriceRef || undefined,
           description: fullLineDesc,
         };
       });
@@ -295,10 +299,6 @@ export default function GeneralEntryForm({
         entryTypeId,
         entryCategory: category,
         postingStatus: saveAsPosted ? 'posted' : 'draft',
-        amountOriginal: numericMainAmount,
-        amountText: autoAmountText,
-        currencyOriginalNo: selectedEntryCurrency.id,
-        currencyPrice: entryPriceRef || undefined,
         description: description.trim(),
         notes,
         effectiveAt: new Date(effectiveAt).toISOString(),
@@ -320,6 +320,8 @@ export default function GeneralEntryForm({
     }
   };
 
+  const [isCalcOpen, setIsCalcOpen] = useState(false);
+
   return (
     <form onSubmit={submit} className="space-y-6" dir="rtl">
       {error && (
@@ -332,7 +334,19 @@ export default function GeneralEntryForm({
       {/* ── التفاصيل العلوية للقيد ── */}
       <div className="grid gap-4 rounded-2xl border border-slate-700/80 bg-slate-900/80 p-4 shadow-md sm:grid-cols-2 lg:grid-cols-4 ring-1 ring-slate-800">
         <div>
-          <label className="block text-xs font-black text-slate-200">رقم القيد (محمي تلقائياً)</label>
+          <div className="flex items-center justify-between">
+            <label className="block text-xs font-black text-slate-200">رقم القيد (محمي تلقائياً)</label>
+            {/* زر أيقونة آلة حاسبة ومصارفة صغيرة أنيقة بدون حجز مساحة كاملة */}
+            <button
+              type="button"
+              onClick={() => setIsCalcOpen(true)}
+              className="inline-flex items-center gap-1 rounded-lg border border-[#d4af37]/40 bg-[#d4af37]/10 hover:bg-[#d4af37]/25 px-2 py-0.5 text-[11px] font-bold text-[#f4d870] transition active:scale-95"
+              title="فتح الآلة الحاسبة والمصارفة"
+            >
+              <Calculator className="h-3.5 w-3.5 text-[#f4d870]" />
+              <span>حاسبة ومصارفة</span>
+            </button>
+          </div>
           <input
             readOnly
             value={entryNumber}
@@ -591,6 +605,12 @@ export default function GeneralEntryForm({
           </button>
         </div>
       </div>
+
+      <FinancialCalculatorModal
+        isOpen={isCalcOpen}
+        onClose={() => setIsCalcOpen(false)}
+        currencies={currencies}
+      />
     </form>
   );
 }

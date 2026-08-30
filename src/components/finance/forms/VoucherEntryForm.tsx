@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Save, ArrowRight, ArrowLeft, Wallet, Building, User, Calendar } from 'lucide-react';
+import { AlertTriangle, Save, ArrowRight, ArrowLeft, Wallet, Building, User, Calendar, Calculator } from 'lucide-react';
 import {
   financialEntryService,
   type FinancialEntryInput,
@@ -16,6 +16,7 @@ import {
 } from '../../../services/financialEntryService';
 import { supabase } from '../../../lib/supabase-firebase-adapter';
 import AccountPickerModal from '../AccountPickerModal';
+import FinancialCalculatorModal from '../FinancialCalculatorModal';
 import { amountInWords } from '../../../lib/numberToWords';
 
 export interface FinanceCurrency { id: number; code: string; isDefault: boolean; }
@@ -392,19 +393,24 @@ export default function VoucherEntryForm({
         const customNote = customLineNotes[leg.id] !== undefined ? customLineNotes[leg.id] : `${otherName} ${description.trim()}`;
         const fullLineDesc = `${leg.autoPrefix} ${customNote}`.trim();
 
-        const linePriceRef = leg.priceRef || voucherPriceRef || undefined;
-        const isSameAsHeaderCurrency = leg.accountObj?.curNo === selectedVoucherCurrency.id;
+        const lineAmountInAccountCurrency = Number(leg.accountConvertedAmount.toFixed(5));
+        const lineAmountOriginal = leg.rawVoucherAmount;
 
-        const lineAmount = leg.rawVoucherAmount;
-        const lineAmountOriginal = isSameAsHeaderCurrency ? leg.rawVoucherAmount : leg.accountConvertedAmount;
+        const accCurCode = currencies.find((c) => c.id === leg.accountObj?.curNo)?.code || 'YER';
+        const lineAmountText = amountInWords(lineAmountInAccountCurrency, accCurCode, 'ar');
+        const lineAmountOriginalText = autoAmountText;
 
         return {
           accountId: leg.accountId,
           accountCurNo: leg.accountObj?.curNo || selectedVoucherCurrency.id,
+          accountCurrencyPrice: leg.priceRef || undefined,
           transType: leg.transType,
-          amount: lineAmount,
+          amount: lineAmountInAccountCurrency,
+          amountText: lineAmountText,
           amountOriginal: lineAmountOriginal,
-          currencyPrice: linePriceRef,
+          amountOriginalText: lineAmountOriginalText,
+          currencyOriginalNo: selectedVoucherCurrency.id,
+          currencyPrice: voucherPriceRef || undefined,
           description: fullLineDesc,
         };
       });
@@ -432,10 +438,6 @@ export default function VoucherEntryForm({
         entryTypeId,
         entryCategory: 'General',
         postingStatus: saveAsPosted ? 'posted' : 'draft',
-        amountOriginal: totalVoucherAmount,
-        amountText: autoAmountText,
-        currencyOriginalNo: selectedVoucherCurrency.id,
-        currencyPrice: voucherPriceRef || undefined,
         description: description.trim(),
         notes,
         effectiveAt: effectiveAtIso,
@@ -459,6 +461,8 @@ export default function VoucherEntryForm({
     }
   };
 
+  const [isCalcOpen, setIsCalcOpen] = useState(false);
+
   return (
     <form onSubmit={submit} className="space-y-6" dir="rtl">
       {error && (
@@ -472,7 +476,18 @@ export default function VoucherEntryForm({
       <div className="rounded-2xl border border-slate-700/80 bg-slate-900/80 p-4 shadow-md ring-1 ring-slate-800 space-y-4">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div>
-            <label className="block text-xs font-black text-slate-300">رقم السند (محمي تلقائياً)</label>
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-black text-slate-300">رقم السند (محمي تلقائياً)</label>
+              <button
+                type="button"
+                onClick={() => setIsCalcOpen(true)}
+                className="inline-flex items-center gap-1 rounded-lg border border-[#d4af37]/40 bg-[#d4af37]/10 hover:bg-[#d4af37]/25 px-2 py-0.5 text-[11px] font-bold text-[#f4d870] transition active:scale-95"
+                title="فتح الآلة الحاسبة والمصارفة"
+              >
+                <Calculator className="h-3.5 w-3.5 text-[#f4d870]" />
+                <span>حاسبة ومصارفة</span>
+              </button>
+            </div>
             <input
               readOnly
               value={entryNumber}
@@ -772,6 +787,12 @@ export default function VoucherEntryForm({
           </button>
         </div>
       </div>
+
+      <FinancialCalculatorModal
+        isOpen={isCalcOpen}
+        onClose={() => setIsCalcOpen(false)}
+        currencies={currencies}
+      />
     </form>
   );
 }

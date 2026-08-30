@@ -68,11 +68,11 @@ export default function CustodyAdvancesTab({ items, accounts, currencies, canVie
         custodyNumber: number, recipientType, recipientId: recipientEntityId, recipientName: resolvedRecipientName, recipientAccountId: recipient.id,
         amountOriginal: parsedAmount, currencyOriginalNo: currencyNo, note, createdByUid,
       }, {
-        entryNumber: `ISS-${number}`, moduleId: 'module_custody', entryTypeId: 'type_custody_issue', entryCategory: 'General', postingStatus: 'posted', amountOriginal: parsedAmount, currencyOriginalNo: currencyNo,
+        entryNumber: `ISS-${number}`, moduleId: 'module_custody', entryTypeId: 'type_custody_issue', entryCategory: 'General', postingStatus: 'posted',
         description: `إصدار عهدة ${number} إلى ${resolvedRecipientName}`, notes: note, paymentMethod, createdByUid,
         lines: [
-          { accountId: recipient.id, accountCurNo: recipient.curNo, transType: 'Debit', amount: parsedAmount, amountOriginal: parsedAmount, entityType: recipientType, entityId: recipientEntityId },
-          { accountId: funding.id, accountCurNo: funding.curNo, transType: 'Credit', amount: parsedAmount, amountOriginal: parsedAmount, paymentMethod },
+          { accountId: recipient.id, accountCurNo: recipient.curNo, currencyOriginalNo: currencyNo, transType: 'Debit', amount: parsedAmount, amountOriginal: parsedAmount, entityType: recipientType, entityId: recipientEntityId },
+          { accountId: funding.id, accountCurNo: funding.curNo, currencyOriginalNo: currencyNo, transType: 'Credit', amount: parsedAmount, amountOriginal: parsedAmount, paymentMethod },
         ],
         paymentDetails: [{ paymentMethod: paymentMethod as Exclude<FinancialPaymentMethod, 'mixed'>, accountId: funding.id, amountOriginal: parsedAmount, dueAt }],
       });
@@ -92,11 +92,11 @@ export default function CustodyAdvancesTab({ items, accounts, currencies, canVie
     try {
       setBusy(true);
       await financialEntryService.settleCustodyAdvance(selected.id, {
-        entryNumber: `SET-${selected.custodyNumber}-${Date.now().toString().slice(-5)}`, moduleId: 'module_custody', entryTypeId: 'type_custody_settlement', entryCategory: 'General', postingStatus: 'posted', amountOriginal: parsedAmount, currencyOriginalNo: selected.currencyOriginalNo,
+        entryNumber: `SET-${selected.custodyNumber}-${Date.now().toString().slice(-5)}`, moduleId: 'module_custody', entryTypeId: 'type_custody_settlement', entryCategory: 'General', postingStatus: 'posted',
         description: `تسوية عهدة ${selected.custodyNumber}`, notes: note, paymentMethod, createdByUid,
         lines: [
-          { accountId: receiving.id, accountCurNo: receiving.curNo, transType: 'Debit', amount: parsedAmount, amountOriginal: parsedAmount, paymentMethod },
-          { accountId: recipient.id, accountCurNo: recipient.curNo, transType: 'Credit', amount: parsedAmount, amountOriginal: parsedAmount, entityType: selected.recipientType, entityId: selected.recipientId },
+          { accountId: receiving.id, accountCurNo: receiving.curNo, currencyOriginalNo: selected.currencyOriginalNo, transType: 'Debit', amount: parsedAmount, amountOriginal: parsedAmount, paymentMethod },
+          { accountId: recipient.id, accountCurNo: recipient.curNo, currencyOriginalNo: selected.currencyOriginalNo, transType: 'Credit', amount: parsedAmount, amountOriginal: parsedAmount, entityType: selected.recipientType, entityId: selected.recipientId },
         ],
         paymentDetails: [{ paymentMethod: paymentMethod as Exclude<FinancialPaymentMethod, 'mixed'>, accountId: receiving.id, amountOriginal: parsedAmount, dueAt }],
       }, createdByUid);

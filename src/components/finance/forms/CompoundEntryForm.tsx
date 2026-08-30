@@ -9,7 +9,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Plus, Save, Trash2, ArrowRight, ArrowLeft, Calendar, User } from 'lucide-react';
+import { AlertTriangle, Plus, Save, Trash2, ArrowRight, ArrowLeft, Calendar, User, Calculator } from 'lucide-react';
 import {
   financialEntryService,
   type FinancialEntryInput,
@@ -17,6 +17,7 @@ import {
 } from '../../../services/financialEntryService';
 import { supabase } from '../../../lib/supabase-firebase-adapter';
 import AccountPickerModal from '../AccountPickerModal';
+import FinancialCalculatorModal from '../FinancialCalculatorModal';
 import { amountInWords } from '../../../lib/numberToWords';
 
 export interface FinanceCurrency { id: number; code: string; isDefault: boolean; }
@@ -268,19 +269,35 @@ export default function CompoundEntryForm({
     try {
       setSaving(true);
 
+      const systemCurId = systemCurrency?.id || 1;
+      const systemCurCode = systemCurrency?.code || 'YER';
+
       const payloadLines: FinancialEntryLineInput[] = calculatedLines.map((l) => {
         const acc = accounts.find((a) => a.id === l.accountId)!;
         const isDebit = l.transType === 'Debit';
         const autoPrefix = isDebit ? 'له مقابل:' : 'عليه مقابل:';
         const fullLineDesc = `${autoPrefix} ${l.lineDescription || description.trim()}`.trim();
 
+        // معادلة المصارفة القيد المركب:
+        // amountOriginal = get_amountOriginal(l.amtAccount, l.rate, 1) = (l.amtAccount * l.rate) / 1
+        const lineAmountOriginal = Number((l.amtAccount * l.rate).toFixed(5));
+        const lineAmountInAccountCur = Number(l.amtAccount.toFixed(5));
+
+        const accCurCode = currencies.find((c) => c.id === acc.curNo)?.code || 'YER';
+        const lineAmountText = amountInWords(lineAmountInAccountCur, accCurCode, 'ar');
+        const lineAmountOriginalText = amountInWords(lineAmountOriginal, systemCurCode, 'ar');
+
         return {
           id: l.id,
           accountId: acc.id,
           accountCurNo: acc.curNo,
           transType: l.transType,
-          amount: Number(l.amtSystem.toFixed(4)),
-          amountOriginal: l.amtAccount,
+          amount: lineAmountInAccountCur,
+          amountText: lineAmountText,
+          amountOriginal: lineAmountOriginal,
+          amountOriginalText: lineAmountOriginalText,
+          currencyOriginalNo: systemCurId,
+          currencyPrice: { id: 1, seq: 1 },
           description: fullLineDesc,
         };
       });
@@ -291,9 +308,6 @@ export default function CompoundEntryForm({
         entryTypeId,
         entryCategory: 'Compound',
         postingStatus: saveAsPosted ? 'posted' : 'draft',
-        amountOriginal: debitSystemTotal,
-        amountText: autoAmountText,
-        currencyOriginalNo: selectedCurrency.id,
         description: description.trim(),
         notes,
         effectiveAt: new Date(effectiveAt).toISOString(),
@@ -315,6 +329,8 @@ export default function CompoundEntryForm({
     }
   };
 
+  const [isCalcOpen, setIsCalcOpen] = useState(false);
+
   return (
     <form onSubmit={submit} className="space-y-6" dir="rtl">
       {error && (
@@ -324,10 +340,21 @@ export default function CompoundEntryForm({
         </div>
       )}
 
-      {/* ── التفاصيل العلوية للقيد المركب (رقم القيد محمي غير قابل للتعديل) ── */}
+      {/* ── التفاصيل العلوية للقيد المركب ── */}
       <div className="grid gap-4 rounded-2xl border border-slate-700/80 bg-slate-900/80 p-4 shadow-md sm:grid-cols-2 lg:grid-cols-4 ring-1 ring-slate-800">
         <div>
-          <label className="block text-xs font-black text-slate-200">رقم القيد المركب (محمي تلقائياً)</label>
+          <div className="flex items-center justify-between">
+            <label className="block text-xs font-black text-slate-200">رقم القيد المركب (محمي تلقائياً)</label>
+            <button
+              type="button"
+              onClick={() => setIsCalcOpen(true)}
+              className="inline-flex items-center gap-1 rounded-lg border border-[#d4af37]/40 bg-[#d4af37]/10 hover:bg-[#d4af37]/25 px-2 py-0.5 text-[11px] font-bold text-[#f4d870] transition active:scale-95"
+              title="فتح الآلة الحاسبة والمصارفة"
+            >
+              <Calculator className="h-3.5 w-3.5 text-[#f4d870]" />
+              <span>حاسبة ومصارفة</span>
+            </button>
+          </div>
           <input
             readOnly
             value={entryNumber}
@@ -618,6 +645,12 @@ export default function CompoundEntryForm({
           </button>
         </div>
       </div>
+
+      <FinancialCalculatorModal
+        isOpen={isCalcOpen}
+        onClose={() => setIsCalcOpen(false)}
+        currencies={currencies}
+      />
     </form>
   );
 }

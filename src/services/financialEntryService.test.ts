@@ -13,12 +13,10 @@ const baseEntry = {
   moduleId: 'module_accounting',
   entryTypeId: 'type_daily_journal',
   entryCategory: 'General' as const,
-  amountOriginal: 100,
-  currencyOriginalNo: 1,
   description: 'قيد اختبار',
   lines: [
-    { accountId: '1110-0003', accountCurNo: 1, transType: 'Debit' as const, amount: 100, amountOriginal: 100 },
-    { accountId: '1132-0005', accountCurNo: 1, transType: 'Credit' as const, amount: 100, amountOriginal: 100 },
+    { accountId: '1110-0003', accountCurNo: 1, currencyOriginalNo: 1, transType: 'Debit' as const, amount: 100, amountOriginal: 100 },
+    { accountId: '1132-0005', accountCurNo: 1, currencyOriginalNo: 1, transType: 'Credit' as const, amount: 100, amountOriginal: 100 },
   ],
 };
 
@@ -27,12 +25,10 @@ describe('financialEntryService', () => {
     const payload = buildFinancialEntryPayload(baseEntry);
     expect(payload).toMatchObject({
       entryNumber: 'JV-20260827-001',
-      amountOriginal: '100',
-      currencyOriginalNo: '1',
       postingStatus: 'draft',
     });
     expect((payload.lines as Array<Record<string, unknown>>)[0]).toMatchObject({
-      transType: 'Debit', amount: '100', amountOriginal: '100', accountCurNo: '1',
+      transType: 'Debit', amount: '100', amountOriginal: '100', accountCurNo: '1', currencyOriginalNo: '1',
     });
     expect(payload).not.toHaveProperty('data');
   });
@@ -99,7 +95,7 @@ describe('financialEntryService', () => {
 
   it('يرسل دفعة الطلب وسند القبض معًا إلى إجراء ذري واحد', async () => {
     rpc.mockResolvedValueOnce({ data: { orderId: 'order-1', entryId: 'entry-1', amountPaid: 100, amountRemaining: 0, paymentStatus: 'Paid' }, error: null });
-    await expect(financialEntryService.recordOrderPayment('order-1', 100, { ...baseEntry, orderId: 'order-1', amountOriginal: 100 })).resolves.toMatchObject({ entryId: 'entry-1', paymentStatus: 'Paid' });
+    await expect(financialEntryService.recordOrderPayment('order-1', 100, { ...baseEntry, orderId: 'order-1' })).resolves.toMatchObject({ entryId: 'entry-1', paymentStatus: 'Paid' });
     expect(rpc).toHaveBeenCalledWith('secure_record_order_payment', expect.objectContaining({ p_order_id: 'order-1', p_payment_amount: 100, p_entry: expect.any(Object) }));
   });
 

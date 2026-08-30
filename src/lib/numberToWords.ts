@@ -76,11 +76,49 @@ export const currencyNameEn = (code: string): string => {
 };
 
 export const amountInWords = (amount: number, currencyCode: string, lang: 'ar' | 'en'): string => {
-  const whole = Math.ceil(amount);
+  if (!amount || isNaN(amount)) return '';
+  const fixedStr = amount.toFixed(5).replace(/\.?0+$/, '');
+  const parts = fixedStr.split('.');
+  const whole = Math.floor(Math.abs(Number(parts[0])));
+  const decimalStr = parts[1] || '';
+
+  const getSubCurrencyNameAr = (code: string): string => {
+    switch (code) {
+      case 'USD': return 'سنت';
+      case 'SAR': return 'هللة';
+      case 'YER': return 'فلس';
+      default: return 'جزء';
+    }
+  };
+
+  const getSubCurrencyNameEn = (code: string): string => {
+    switch (code) {
+      case 'USD': return 'Cents';
+      case 'SAR': return 'Halalas';
+      case 'YER': return 'Fils';
+      default: return 'Cents';
+    }
+  };
+
   if (lang === 'ar') {
-    return `✍️ فقط: ${numberToWordsAr(whole)} ${currencyNameAr(currencyCode)} لا غير`;
+    let result = `✍️ فقط: ${numberToWordsAr(whole)} ${currencyNameAr(currencyCode)}`;
+    if (decimalStr) {
+      const decNum = Number(decimalStr);
+      if (decNum > 0) {
+        result += ` و ${numberToWordsAr(decNum)} ${getSubCurrencyNameAr(currencyCode)}`;
+      }
+    }
+    return `${result} لا غير`;
+  } else {
+    let result = `✍️ Say: ${numberToWordsEn(whole)} ${currencyNameEn(currencyCode)}`;
+    if (decimalStr) {
+      const decNum = Number(decimalStr);
+      if (decNum > 0) {
+        result += ` and ${numberToWordsEn(decNum)} ${getSubCurrencyNameEn(currencyCode)}`;
+      }
+    }
+    return `${result} only`;
   }
-  return `✍️ Say: ${numberToWordsEn(whole)} ${currencyNameEn(currencyCode)} only`;
 };
 
 export const paidAmountInWords = (amount: number, currencyCode: string, lang: 'ar' | 'en'): string => {

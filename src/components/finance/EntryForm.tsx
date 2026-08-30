@@ -325,7 +325,8 @@ export default function EntryForm({
   const debitTotal  = lines.filter((l) => l.transType === 'Debit').reduce((s, l) => s + asNumber(l.amountOriginal), 0);
   const creditTotal = lines.filter((l) => l.transType === 'Credit').reduce((s, l) => s + asNumber(l.amountOriginal), 0);
   const balanceDiff = debitTotal - creditTotal;
-  const balanced    = debitTotal > 0 && balanceDiff === 0;
+  const isBalanced = debitTotal > 0 && balanceDiff === 0;
+  const balanced = isBalanced;
 
   // ─────────────────────────── دوال التحديث ───────────────────────────
 
@@ -358,10 +359,14 @@ export default function EntryForm({
     );
   };
 
-  // ─────────────────────────── حل العملات المتقاطعة ───────────────────────────
-
   const resolveCrossCurrencyLine = async (
     line: FormLine,
+    account: FinanceAccount,
+    originalAmount: number,
+  ): Promise<FinancialEntryLineInput> => resolveLinePayload(line, account, originalAmount);
+
+  const resolveLinePayload = async (
+    line: { id: string; accountId: string; transType: 'Debit' | 'Credit'; amount?: number },
     account: FinanceAccount,
     originalAmount: number,
   ): Promise<FinancialEntryLineInput> => {
@@ -371,6 +376,7 @@ export default function EntryForm({
         id: line.id,
         accountId: account.id,
         accountCurNo: account.curNo,
+        currencyOriginalNo: selectedCurrency.id,
         transType: line.transType,
         amount: originalAmount,
         amountOriginal: originalAmount,
@@ -412,6 +418,7 @@ export default function EntryForm({
       id: line.id,
       accountId: account.id,
       accountCurNo: account.curNo,
+      currencyOriginalNo: selectedCurrency.id,
       transType: line.transType,
       amount: Number(accountAmount.toFixed(4)),
       amountOriginal: originalAmount,
@@ -560,9 +567,6 @@ export default function EntryForm({
         entryTypeId,
         entryCategory: category,
         postingStatus: saveAsPosted ? 'posted' : 'draft',
-        amountOriginal: totalAmount,
-        amountText: amountText.trim() || undefined,
-        currencyOriginalNo: selectedCurrency.id,
         description: description.trim(),
         notes,
         paymentMethod,

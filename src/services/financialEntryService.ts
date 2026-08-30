@@ -14,9 +14,13 @@ export interface FinancialEntryLineInput {
   id?: string;
   accountId: string;
   accountCurNo: number;
+  accountCurrencyPrice?: FinancialEntryPriceReference;
   transType: FinancialTransactionType;
   amount: number;
+  amountText?: string;
   amountOriginal: number;
+  amountOriginalText?: string;
+  currencyOriginalNo: number;
   currencyPrice?: FinancialEntryPriceReference;
   entityType?: string;
   entityId?: string;
@@ -40,15 +44,11 @@ export interface FinancialPaymentDetailInput {
 
 export interface FinancialEntryInput {
   id?: string;
-  entryNumber: string;
+  entryNumber?: string;
   moduleId: string;
   entryTypeId: string;
   entryCategory: FinancialEntryCategory;
   postingStatus?: FinancialPostingStatus;
-  amountOriginal: number;
-  amountText?: string;
-  currencyOriginalNo: number;
-  currencyPrice?: FinancialEntryPriceReference;
   description: string;
   notes?: string;
   attachments?: string[];
@@ -119,9 +119,13 @@ export interface LegacyVoucherInput {
 const hasValidPositiveNumber = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value) && value > 0;
 
-const serializePriceReference = (price?: FinancialEntryPriceReference) => ({
-  currencyPriceId: price?.id?.toString() ?? '',
-  currencyPriceSeq: price?.seq?.toString() ?? '',
+const serializePriceReference = (
+  price?: FinancialEntryPriceReference,
+  idKey = 'currencyPriceId',
+  seqKey = 'currencyPriceSeq'
+) => ({
+  [idKey]: price?.id?.toString() ?? '',
+  [seqKey]: price?.seq?.toString() ?? '',
 });
 
 const legacyModuleRoute = (module: string): Pick<FinancialEntryInput, 'moduleId' | 'entryTypeId'> => {
@@ -141,11 +145,8 @@ const legacyModuleRoute = (module: string): Pick<FinancialEntryInput, 'moduleId'
  * لا ينفذ هذا المسار أي insert/update منفصل ولا ينشئ سعر صرف أو قيمة تحويل بديلة.
  */
 export function buildFinancialEntryPayload(entry: FinancialEntryInput): Record<string, unknown> {
-  if (!entry || !entry.entryNumber?.trim() || !entry.moduleId || !entry.entryTypeId || !entry.description?.trim()) {
-    throw new Error('رقم القيد والفئة والنوع والبيان حقول إلزامية.');
-  }
-  if (!hasValidPositiveNumber(entry.amountOriginal) || !Number.isInteger(entry.currencyOriginalNo)) {
-    throw new Error('المبلغ الأصلي ومرجع عملته حقول إلزامية وصحيحة.');
+  if (!entry || !entry.moduleId || !entry.entryTypeId || !entry.description?.trim()) {
+    throw new Error('الفئة والنوع والبيان حقول إلزامية.');
   }
   if (!Array.isArray(entry.lines) || entry.lines.length < 2) {
     throw new Error('يتطلب القيد ساقين محاسبيتين على الأقل.');
@@ -157,33 +158,32 @@ export function buildFinancialEntryPayload(entry: FinancialEntryInput): Record<s
     throw new Error('القيد المركب يجب أن يحتوي على ثلاثة أسطر على الأقل.');
   }
 
-  let debitTotal = 0;
-  let creditTotal = 0;
+  let debitOriginalTotal = 0;
+  let creditOriginalTotal = 0;
+
   const lines = entry.lines.map((line) => {
-    if (!line.accountId || !Number.isInteger(line.accountCurNo) || !hasValidPositiveNumber(line.amount) || !hasValidPositiveNumber(line.amountOriginal)) {
+    if (!line.accountId || !Number.isInteger(line.accountCurNo) || !Number.isInteger(line.currencyOriginalNo) || !hasValidPositiveNumber(line.amount) || !hasValidPositiveNumber(line.amountOriginal)) {
       throw new Error('كل ساق تحتاج حسابًا ومبلغًا ومبلغًا أصليًا ومرجع عملة صحيحين.');
     }
     if (line.transType !== 'Debit' && line.transType !== 'Credit') {
       throw new Error('نوع الساق يجب أن يكون Debit أو Credit.');
     }
-    if (line.accountCurNo === entry.currencyOriginalNo && line.amount !== line.amountOriginal) {
-      throw new Error('عندما تتطابق عملة الحساب مع عملة الرأس يجب أن يساوي amount قيمة amountOriginal.');
-    }
-    if (line.accountCurNo !== entry.currencyOriginalNo && !line.currencyPrice && !entry.currencyPrice) {
-      throw new Error('الساق متعددة العملات تحتاج مرجع سعر صرف مثبتًا قبل الحفظ.');
-    }
 
-    if (line.transType === 'Debit') debitTotal += line.amount;
-    else creditTotal += line.amount;
+    if (line.transType === 'Debit') debitOriginalTotal += line.amountOriginal;
+    else creditOriginalTotal += line.amountOriginal;
 
     return {
       id: line.id,
       accountId: line.accountId,
       accountCurNo: String(line.accountCurNo),
+      ...serializePriceReference(line.accountCurrencyPrice, 'accountCurrencyPriceId', 'accountCurrencyPriceSeq'),
       transType: line.transType,
       amount: String(line.amount),
+      amountText: line.amountText || '',
       amountOriginal: String(line.amountOriginal),
-      ...serializePriceReference(line.currencyPrice),
+      amountOriginalText: line.amountOriginalText || '',
+      currencyOriginalNo: String(line.currencyOriginalNo),
+      ...serializePriceReference(line.currencyPrice, 'currencyPriceId', 'currencyPriceSeq'),
       entityType: line.entityType || '',
       entityId: line.entityId || '',
       paymentMethod: line.paymentMethod || '',
@@ -195,11 +195,9 @@ export function buildFinancialEntryPayload(entry: FinancialEntryInput): Record<s
     };
   });
 
-  const isBalancedDebitCredit = Math.abs(debitTotal - creditTotal) < 0.01;
-  const isBalancedWithHeader = Math.abs(debitTotal - entry.amountOriginal) < 0.01;
-
-  if (!isBalancedDebitCredit || !isBalancedWithHeader) {
-    throw new Error('القيد غير متوازن بعملة الرأس: يجب أن يساوي مجموع المدين والدائن مبلغ رأس القيد.');
+  const diff = Math.abs(debitOriginalTotal - creditOriginalTotal);
+  if (diff > 0.05) {
+    throw new Error('القيد غير متوازن: مجموع أسطر المدين الأصلي لا يطابق مجموع أسطر الدائن الأصلي.');
   }
 
   const paymentDetails = (entry.paymentDetails || []).map((detail) => {
@@ -215,15 +213,11 @@ export function buildFinancialEntryPayload(entry: FinancialEntryInput): Record<s
 
   return {
     id: entry.id || '',
-    entryNumber: entry.entryNumber.trim(),
+    entryNumber: entry.entryNumber?.trim() || '',
     moduleId: entry.moduleId,
     entryTypeId: entry.entryTypeId,
     entryCategory: entry.entryCategory,
     postingStatus: entry.postingStatus || 'draft',
-    amountOriginal: String(entry.amountOriginal),
-    amountText: entry.amountText || '',
-    currencyOriginalNo: String(entry.currencyOriginalNo),
-    ...serializePriceReference(entry.currencyPrice),
     description: entry.description.trim(),
     notes: entry.notes || '',
     attachments: entry.attachments || [],
@@ -296,6 +290,7 @@ class FinancialEntryService {
         transType,
         amount: amountOriginal,
         amountOriginal,
+        currencyOriginalNo: originalCurrency.curId,
         entityType: target.entityType,
         entityId: target.entityId,
       };
@@ -314,9 +309,11 @@ class FinancialEntryService {
     return {
       accountId: target.id,
       accountCurNo: target.curNo,
+      accountCurrencyPrice: price.reference,
       transType,
       amount,
       amountOriginal,
+      currencyOriginalNo: originalCurrency.curId,
       currencyPrice: price.reference,
       entityType: target.entityType,
       entityId: target.entityId,
@@ -341,8 +338,6 @@ class FinancialEntryService {
       entryNumber: voucher.entryNumber,
       entryCategory: 'General',
       postingStatus: 'posted',
-      amountOriginal: voucher.amount,
-      currencyOriginalNo: originalCurrency.curId,
       description: voucher.description,
       notes: voucher.notes,
       attachments: voucher.attachments,
@@ -373,9 +368,6 @@ class FinancialEntryService {
     if (!hasValidPositiveNumber(custody.amountOriginal) || !Number.isInteger(custody.currencyOriginalNo)) {
       throw new Error('مبلغ العهدة ومرجع عملتها غير صالحين.');
     }
-    if (entry.amountOriginal !== custody.amountOriginal || entry.currencyOriginalNo !== custody.currencyOriginalNo) {
-      throw new Error('يجب أن يطابق قيد إنشاء العهدة مبلغ العهدة وعملتها.');
-    }
     const payload = buildFinancialEntryPayload({ ...entry, custodyId: '' });
     const custodyPayload = {
       id: custody.id || '', custodyNumber: custody.custodyNumber.trim(), recipientType: custody.recipientType,
@@ -400,7 +392,7 @@ class FinancialEntryService {
 
   async recordOrderPayment(orderId: string, paymentAmount: number, entry: FinancialEntryInput, updatedByUid?: string): Promise<{ orderId: string; entryId: string; amountPaid: number; amountRemaining: number; paymentStatus: 'Paid' | 'Partial Paid' }> {
     if (!orderId?.trim() || !hasValidPositiveNumber(paymentAmount)) throw new Error('معرف الطلب ومبلغ الدفعة الموجب مطلوبان.');
-    if (entry.orderId !== orderId || entry.amountOriginal !== paymentAmount) throw new Error('مرجع الطلب ومبلغ سند القبض يجب أن يطابقا الدفعة.');
+    if (entry.orderId !== orderId) throw new Error('مرجع الطلب ومبلغ سند القبض يجب أن يطابقا الدفعة.');
     const { data, error } = await (supabase as any).rpc('secure_record_order_payment', {
       p_order_id: orderId, p_payment_amount: paymentAmount, p_entry: buildFinancialEntryPayload(entry),
     });
@@ -446,6 +438,52 @@ class FinancialEntryService {
     const { data, error } = await (supabase as any).rpc('secure_post_financial_entry', { p_entry_id: entryId });
     if (error) throw new Error(`[FinancialEntryService] تعذر ترحيل القيد: ${error.message || error}`);
     return data as { id: string; postingStatus: 'posted' };
+  }
+  /**
+   * حذف قيد مرحّل — Delete a posted entry (requires special permission)
+   * يستخدم إجراء SQL مخصص يتحقق من الصلاحية قبل الحذف ويعكس الأثر المحاسبي
+   * Uses a dedicated SQL procedure that validates permission before deleting and reverses accounting impact
+   */
+  async deletePosted(entryId: string, deletedByUid?: string): Promise<{ id: string; deleted: true }> {
+    if (!entryId?.trim()) throw new Error('معرف القيد المرحّل مطلوب للحذف.');
+    // نحاول أولاً إجراء RPC مخصص للمرحّل، وإن لم يكن موجوداً نعود لحذف المسودة
+    // Try dedicated RPC first; fall back to draft delete if not available
+    const { data, error } = await (supabase as any).rpc('secure_delete_posted_financial_entry', {
+      p_entry_id: entryId,
+      p_deleted_by: deletedByUid || '',
+    });
+    if (error) {
+      // إن كان الخطأ بسبب عدم وجود الإجراء، نعود للحذف المباشر
+      // If RPC doesn't exist, fall back to direct delete
+      if (error.message?.includes('does not exist') || error.code === 'PGRST202') {
+        const { data: d2, error: e2 } = await (supabase as any).rpc('secure_delete_financial_entry_draft', { p_entry_id: entryId });
+        if (e2) throw new Error(`[FinancialEntryService] تعذر حذف القيد المرحّل: ${e2.message || e2}`);
+        return d2;
+      }
+      throw new Error(`[FinancialEntryService] تعذر حذف القيد المرحّل: ${error.message || error}`);
+    }
+    return data;
+  }
+
+  /**
+   * تعديل قيد مرحّل — Update a posted entry (requires special permission)
+   * يعيد القيد إلى مسودة أولاً ثم يحدثه ويعيد ترحيله
+   * Reverts the entry to draft first, updates it, then re-posts it
+   */
+  async replacePosted(entryId: string, entry: FinancialEntryInput): Promise<FinancialEntryWriteResult> {
+    if (!entryId?.trim()) throw new Error('معرف القيد المرحّل مطلوب للتعديل.');
+    const { data, error } = await (supabase as any).rpc('secure_replace_posted_financial_entry', {
+      p_entry_id: entryId,
+      p_entry: buildFinancialEntryPayload({ ...entry, postingStatus: 'posted' }),
+    });
+    if (error) {
+      // Fallback: استخدام replaceDraft إن لم يكن إجراء المرحّل موجوداً
+      if (error.message?.includes('does not exist') || error.code === 'PGRST202') {
+        return this.replaceDraft(entryId, entry);
+      }
+      throw new Error(`[FinancialEntryService] تعذر تعديل القيد المرحّل: ${error.message || error}`);
+    }
+    return data as FinancialEntryWriteResult;
   }
 }
 

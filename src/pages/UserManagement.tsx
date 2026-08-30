@@ -88,19 +88,100 @@ const PERMISSION_GROUPS = (isAr: boolean) => [
     ]
   },
   {
-    group: isAr ? '💰 المالية' : '💰 Finance',
+    group: isAr ? '💰 المالية العامة والحسابات' : '💰 General Finance & Accounts',
     perms: [
       { id: 'view_finance', label: isAr ? 'عرض البيانات المالية العامة' : 'View General Financial Data' },
       { id: 'add_finance', label: isAr ? 'إضافة المدفوعات والعمليات المالية' : 'Add Payments & Finance' },
       { id: 'edit_finance', label: isAr ? 'تعديل المدفوعات والعمليات المالية' : 'Edit Payments & Finance' },
       { id: 'view_expenses', label: isAr ? 'رؤية المصروفات والتكاليف' : 'View Expenses & Costs' },
-      { id: 'view_custody', label: isAr ? 'عرض العهد المالية' : 'View Financial Custody' },
       { id: 'add_expenses', label: isAr ? 'إضافة المصروفات' : 'Add Expenses' },
       { id: 'edit_expenses', label: isAr ? 'تعديل المصروفات وتسوية العهد' : 'Edit Expenses & Reconcile' },
       { id: 'delete_expenses', label: isAr ? 'حذف المصروفات' : 'Delete Expenses' },
       { id: 'edit_exchange_rates', label: isAr ? 'تعديل أسعار الصرف' : 'Edit Exchange Rates' },
       { id: 'view_financial_accounts', label: isAr ? 'عرض أرصدة وكشوفات الحسابات المالية' : 'View Financial Account Balances & Statements' },
       { id: 'manage_financial_accounts', label: isAr ? 'إدارة وتعديل أرصدة الحسابات المالية' : 'Manage Financial Account Balances & Adjustments' },
+      { id: 'view_account_movements', label: isAr ? 'استعراض حركة الحسابات' : 'View Account Movements' },
+      { id: 'print_account_movements', label: isAr ? 'طباعة حركة الحسابات' : 'Print Account Movements' },
+      { id: 'export_account_movements', label: isAr ? 'تصدير حركة الحسابات (CSV/XLS)' : 'Export Account Movements' },
+      { id: 'view_custody_advances', label: isAr ? 'عرض سجل العهد والسلف' : 'View Custody Advances' },
+      { id: 'create_custody_advances', label: isAr ? 'إنشاء عهدة/سلفة جديدة' : 'Create Custody Advance' },
+      { id: 'settle_custody_advances', label: isAr ? 'تسوية العهد والسلف' : 'Settle Custody Advances' },
+    ]
+  },
+  {
+    group: isAr ? '📖 القيود العامة والمركبة والمؤقتة' : '📖 General, Compound & Temp Entries',
+    perms: [
+      // القيود العامة
+      { id: 'view_general_entries', label: isAr ? 'استعراض القيود العامة' : 'View General Entries' },
+      { id: 'create_general_entries', label: isAr ? 'إنشاء قيد عام جديد' : 'Create General Entry' },
+      { id: 'edit_general_entries', label: isAr ? 'تعديل مسودات القيود العامة' : 'Edit General Entry Drafts' },
+      { id: 'delete_general_entries', label: isAr ? 'حذف مسودات القيود العامة' : 'Delete General Entry Drafts' },
+      { id: 'post_general_entries', label: isAr ? 'ترحيل واعتماد القيود العامة' : 'Post General Entries' },
+      { id: 'print_general_entries', label: isAr ? 'طباعة القيود العامة' : 'Print General Entries' },
+      { id: 'export_general_entries', label: isAr ? 'تصدير القيود العامة (CSV/XLS)' : 'Export General Entries' },
+      { id: 'edit_posted_general_entries', label: isAr ? 'تعديل القيود العامة المرحّلة (صلاحية خاصة)' : 'Edit Posted General Entries' },
+      { id: 'delete_posted_general_entries', label: isAr ? 'حذف القيود العامة المرحّلة (صلاحية خاصة)' : 'Delete Posted General Entries' },
+
+      // القيود المركبة
+      { id: 'view_compound_entries', label: isAr ? 'استعراض القيود المركبة' : 'View Compound Entries' },
+      { id: 'create_compound_entries', label: isAr ? 'إنشاء قيد مركب جديد' : 'Create Compound Entry' },
+      { id: 'edit_compound_entries', label: isAr ? 'تعديل مسودات القيود المركبة' : 'Edit Compound Entry Drafts' },
+      { id: 'delete_compound_entries', label: isAr ? 'حذف مسودات القيود المركبة' : 'Delete Compound Entry Drafts' },
+      { id: 'post_compound_entries', label: isAr ? 'ترحيل واعتماد القيود المركبة' : 'Post Compound Entries' },
+      { id: 'print_compound_entries', label: isAr ? 'طباعة القيود المركبة' : 'Print Compound Entries' },
+      { id: 'export_compound_entries', label: isAr ? 'تصدير القيود المركبة (CSV/XLS)' : 'Export Compound Entries' },
+      { id: 'edit_posted_compound_entries', label: isAr ? 'تعديل القيود المركبة المرحّلة (صلاحية خاصة)' : 'Edit Posted Compound Entries' },
+      { id: 'delete_posted_compound_entries', label: isAr ? 'حذف القيود المركبة المرحّلة (صلاحية خاصة)' : 'Delete Posted Compound Entries' },
+
+      // القيود المؤقتة
+      { id: 'view_temporary_entries', label: isAr ? 'استعراض القيود المؤقتة' : 'View Temporary Entries' },
+      { id: 'create_temporary_entries', label: isAr ? 'إنشاء قيد مؤقت جديد' : 'Create Temporary Entry' },
+      { id: 'edit_temporary_entries', label: isAr ? 'تعديل القيود المؤقتة' : 'Edit Temporary Entries' },
+      { id: 'delete_temporary_entries', label: isAr ? 'حذف القيود المؤقتة' : 'Delete Temporary Entries' },
+      { id: 'post_temporary_entries', label: isAr ? 'ترحيل واعتماد القيود المؤقتة' : 'Post Temporary Entries' },
+      { id: 'print_temporary_entries', label: isAr ? 'طباعة القيود المؤقتة' : 'Print Temporary Entries' },
+      { id: 'export_temporary_entries', label: isAr ? 'تصدير القيود المؤقتة (CSV/XLS)' : 'Export Temporary Entries' },
+      { id: 'edit_posted_temporary_entries', label: isAr ? 'تعديل القيود المؤقتة المرحّلة (صلاحية خاصة)' : 'Edit Posted Temporary Entries' },
+      { id: 'delete_posted_temporary_entries', label: isAr ? 'حذف القيود المؤقتة المرحّلة (صلاحية خاصة)' : 'Delete Posted Temporary Entries' },
+
+      // عمليات حساسة
+      { id: 'reverse_financial_entries', label: isAr ? 'إنشاء قيود عكسية' : 'Create Reversing Entries' },
+      { id: 'void_financial_entries', label: isAr ? 'إبطال القيود المرحّلة' : 'Void Posted Financial Entries' },
+    ]
+  },
+  {
+    group: isAr ? '🧾 سندات القبض والصرف' : '🧾 Receipt & Payment Vouchers',
+    perms: [
+      // سندات القبض
+      { id: 'view_receipt_vouchers', label: isAr ? 'استعراض سندات القبض' : 'View Receipt Vouchers' },
+      { id: 'create_receipt_vouchers', label: isAr ? 'إنشاء سند قبض جديد (نقدي/بنكي/متعدد)' : 'Create Receipt Voucher' },
+      { id: 'edit_receipt_vouchers', label: isAr ? 'تعديل مسودات سندات القبض' : 'Edit Receipt Voucher Drafts' },
+      { id: 'delete_receipt_vouchers', label: isAr ? 'حذف مسودات سندات القبض' : 'Delete Receipt Voucher Drafts' },
+      { id: 'post_receipt_vouchers', label: isAr ? 'ترحيل واعتماد سندات القبض' : 'Post Receipt Vouchers' },
+      { id: 'print_receipt_vouchers', label: isAr ? 'طباعة سندات القبض' : 'Print Receipt Vouchers' },
+      { id: 'export_receipt_vouchers', label: isAr ? 'تصدير سندات القبض (CSV/XLS)' : 'Export Receipt Vouchers' },
+      { id: 'edit_posted_receipt_vouchers', label: isAr ? 'تعديل سندات القبض المرحّلة (صلاحية خاصة)' : 'Edit Posted Receipt Vouchers' },
+      { id: 'delete_posted_receipt_vouchers', label: isAr ? 'حذف سندات القبض المرحّلة (صلاحية خاصة)' : 'Delete Posted Receipt Vouchers' },
+
+      // سندات الصرف
+      { id: 'view_payment_vouchers', label: isAr ? 'استعراض سندات الصرف' : 'View Payment Vouchers' },
+      { id: 'create_payment_vouchers', label: isAr ? 'إنشاء سند صرف جديد (نقدي/بنكي/متعدد)' : 'Create Payment Voucher' },
+      { id: 'edit_payment_vouchers', label: isAr ? 'تعديل مسودات سندات الصرف' : 'Edit Payment Voucher Drafts' },
+      { id: 'delete_payment_vouchers', label: isAr ? 'حذف مسودات سندات الصرف' : 'Delete Payment Voucher Drafts' },
+      { id: 'post_payment_vouchers', label: isAr ? 'ترحيل واعتماد سندات الصرف' : 'Post Payment Vouchers' },
+      { id: 'print_payment_vouchers', label: isAr ? 'طباعة سندات الصرف' : 'Print Payment Vouchers' },
+      { id: 'export_payment_vouchers', label: isAr ? 'تصدير سندات الصرف (CSV/XLS)' : 'Export Payment Vouchers' },
+      { id: 'edit_posted_payment_vouchers', label: isAr ? 'تعديل سندات الصرف المرحّلة (صلاحية خاصة)' : 'Edit Posted Payment Vouchers' },
+      { id: 'delete_posted_payment_vouchers', label: isAr ? 'حذف سندات الصرف المرحّلة (صلاحية خاصة)' : 'Delete Posted Payment Vouchers' },
+    ]
+  },
+  {
+    group: isAr ? '⚙️ إعدادات وأنواع القيود' : '⚙️ Entry Settings & Types',
+    perms: [
+      { id: 'view_entry_settings', label: isAr ? 'استعراض فئات وأنواع وقواعد القيود' : 'View Entry Settings & Types' },
+      { id: 'create_entry_settings', label: isAr ? 'إنشاء فئة أو نوع قيد جديد' : 'Create Entry Settings & Types' },
+      { id: 'edit_entry_settings', label: isAr ? 'تعديل فئات وأنواع وقواعد القيود' : 'Edit Entry Settings & Types' },
+      { id: 'delete_entry_settings', label: isAr ? 'حذف فئة أو نوع قيد' : 'Delete Entry Settings & Types' },
     ]
   },
   {
@@ -284,6 +365,7 @@ export default function UserManagement() {
   const t = (ar: string, en: string) => isAr ? ar : en;
 
   const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'sessions' | 'activity'>('users');
+  const [roleActiveTab, setRoleActiveTab] = useState<string>('all');
 
   // ── Data ─────────────────────────────────────────────────
   const [users, setUsers] = useState<any[]>([]);
@@ -761,17 +843,63 @@ export default function UserManagement() {
     });
   };
 
-  const toggleGroup = (group: string, checked: boolean) => {
-    const permsInGroup = PERMISSION_GROUPS(isAr).find(g => g.group === group)?.perms.map(p => p.id) || [];
-    setRoleFormData(prev => {
+  const toggleGroup = (groupName: string, checked: boolean) => {
+    const permsInGroup = PERMISSION_GROUPS(isAr).find((g) => g.group === groupName)?.perms.map((p) => p.id) || [];
+    setRoleFormData((prev) => {
       const activePerms = Array.isArray(prev.permissions) ? prev.permissions : [];
       return {
         ...prev,
         permissions: checked
-          ? [...new Set([...activePerms, ...permsInGroup])]
-          : activePerms.filter(p => !permsInGroup.includes(p))
+          ? Array.from(new Set([...activePerms, ...permsInGroup]))
+          : activePerms.filter((p) => !permsInGroup.includes(p)),
       };
     });
+  };
+
+  const ROLE_TAB_MAPPING: Record<string, string[]> = {
+    all: [],
+    general_orders: ['🏠 عام', '🏠 General', '📦 الطلبات والتتبع', '📦 Orders & Tracking', '⚙️ مراحل وحالات الطلب', '⚙️ Order Status Stages'],
+    entries: ['📖 القيود العامة والمركبة والمؤقتة', '📖 General, Compound & Temp Entries'],
+    vouchers: ['🧾 سندات القبض والصرف', '🧾 Receipt & Payment Vouchers'],
+    finance_accounts: ['💰 المالية العامة والحسابات', '💰 General Finance & Accounts', '📊 التقارير', '📊 Reports'],
+    people: ['👥 العملاء', '👥 Customers', '🚚 المناديب', '🚚 Couriers', '🧑‍💼 سجل الموظفين', '🧑‍💼 Employees Ledger', '👤 مستخدمو النظام', '👤 System Users (Dashboard Accounts)', '🛡️ الأدوار والصلاحيات', '🛡️ Roles & Permissions'],
+    settings: ['⚡ القيود التلقائية', '⚡ Auto Entry Rules', '⚙️ إعدادات وأنواع القيود', '⚙️ Entry Settings & Types', '🗺️ مصادر الشراء والتوريد', '🗺️ Purchase & Supply Sources', '🚛 شركات الشحن والنقل', '🚛 Shipping Companies & Carriers', '🔔 الإشعارات', '🔔 Notifications', '⚙️ الإعدادات', '⚙️ Settings']
+  };
+
+  const getFilteredPerms = () => {
+    let groups = PERMISSION_GROUPS(isAr);
+    if (roleActiveTab !== 'all') {
+      const allowedTitles = ROLE_TAB_MAPPING[roleActiveTab] || [];
+      groups = groups.filter((g) => allowedTitles.includes(g.group));
+    }
+    if (!permSearch.trim()) return groups;
+    const queryLower = permSearch.toLowerCase().trim();
+    return groups
+      .map((g) => ({
+        ...g,
+        perms: g.perms.filter(
+          (p) => p.label.toLowerCase().includes(queryLower) || p.id.toLowerCase().includes(queryLower)
+        ),
+      }))
+      .filter((g) => g.perms.length > 0);
+  };
+
+  const selectAllInActiveTab = () => {
+    const currentTabGroups = getFilteredPerms();
+    const permsToSelect = currentTabGroups.flatMap((g) => g.perms.map((p) => p.id));
+    setRoleFormData((prev) => ({
+      ...prev,
+      permissions: Array.from(new Set([...(prev.permissions || []), ...permsToSelect])),
+    }));
+  };
+
+  const deselectAllInActiveTab = () => {
+    const currentTabGroups = getFilteredPerms();
+    const permsToDeselect = new Set(currentTabGroups.flatMap((g) => g.perms.map((p) => p.id)));
+    setRoleFormData((prev) => ({
+      ...prev,
+      permissions: (prev.permissions || []).filter((p) => !permsToDeselect.has(p)),
+    }));
   };
 
   const handleSaveRole = async (e: React.FormEvent) => {
@@ -893,13 +1021,7 @@ export default function UserManagement() {
 
   const currentUserData = users.find(u => u.id === auth.currentUser?.uid);
 
-  const getFilteredPerms = () => {
-    const q = permSearch.toLowerCase();
-    return PERMISSION_GROUPS(isAr).map(g => ({
-      ...g,
-      perms: g.perms.filter(p => !q || p.label.toLowerCase().includes(q) || p.id.includes(q))
-    })).filter(g => g.perms.length > 0);
-  };
+
 
   // ══════════════════════════════════════════════════════════
   // ACCESS GUARD
@@ -1863,53 +1985,96 @@ export default function UserManagement() {
       )}
 
       {/* ══════════════════════════════════════════════════ */}
-      {/* ROLE MODAL                                         */}
+      {/* ROLE MODAL — ENHANCED WITH TABS                     */}
       {/* ══════════════════════════════════════════════════ */}
       {isRoleModalOpen && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/20 rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="p-5 border-b border-slate-800/50 flex justify-between items-center bg-black/40 shrink-0">
-              <h3 className="font-black text-[#d4af37] text-xs uppercase tracking-widest flex items-center gap-2">
-                <Shield className="w-4 h-4" />
-                {selectedRole ? t('تعديل صلاحيات الدور', 'Edit Role Permissions') : t('إنشاء دور جديد', 'Create New Role')}
-              </h3>
-              <button onClick={() => setIsRoleModalOpen(false)} className="text-slate-500 hover:text-white bg-slate-900 border border-slate-800 p-1.5 rounded-lg"><X className="w-4 h-4" /></button>
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/30 rounded-3xl shadow-2xl w-full max-w-4xl max-h-[92vh] overflow-hidden flex flex-col">
+
+            {/* Header */}
+            <div className="p-5 border-b border-slate-800/80 flex justify-between items-center bg-black/60 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="rounded-2xl border border-[#d4af37]/30 bg-[#d4af37]/10 p-2.5 text-[#f4d870]">
+                  <Shield className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-white text-base">
+                    {selectedRole ? t('تعديل صلاحيات الدور', 'Edit Role Permissions') : t('إنشاء دور مخصص جديد', 'Create Custom Role')}
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    {t('توزيع وتخصيص مستويات الوصول لجميع واجهات وعمليات النظام بالتبويبات', 'Configure granular access levels for all system modules using tabbed sections')}
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setIsRoleModalOpen(false)} className="text-slate-400 hover:text-white bg-slate-900 border border-slate-800 p-2 rounded-xl transition">
+                <X className="w-5 h-5" />
+              </button>
             </div>
+
             <form onSubmit={handleSaveRole} className="flex flex-col flex-1 overflow-hidden" dir={isAr ? 'rtl' : 'ltr'}>
               <div className="p-5 space-y-4 overflow-y-auto flex-1">
-                <div className="grid grid-cols-2 gap-4">
+
+                {/* Role Title and ID inputs */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-2xl border border-slate-800 bg-black/40 p-4">
                   <div>
-                    <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('اسم الدور', 'Role Name')} *</label>
-                    <input required type="text" placeholder={t('مثل: مشرف المستودع', 'e.g. Warehouse Supervisor')} value={roleFormData.title} onChange={e => setRoleFormData({ ...roleFormData, title: e.target.value })} className="w-full border border-slate-800 rounded-xl p-3 bg-black/50 text-white focus:border-[#d4af37]/60 outline-none text-xs font-bold" />
+                    <label className="block text-xs font-black text-slate-300 mb-1.5">{t('اسم الدور (بالعربي)', 'Role Title')} *</label>
+                    <input required type="text" placeholder={t('مثل: مدير المالية والمحاسبة', 'e.g. Finance & Accounting Manager')} value={roleFormData.title} onChange={e => setRoleFormData({ ...roleFormData, title: e.target.value })} className="w-full border border-slate-800 rounded-xl p-3 bg-slate-950 text-white focus:border-[#d4af37]/60 outline-none text-xs font-bold" />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('المعرّف (بالإنجليزي)', 'ID (English)')} *</label>
-                    <input required disabled={!!selectedRole} type="text" placeholder="Warehouse_Supervisor" value={roleFormData.id} onChange={e => setRoleFormData({ ...roleFormData, id: e.target.value })} className="w-full border border-slate-800 rounded-xl p-3 bg-black/50 text-white focus:border-[#d4af37]/60 outline-none text-xs font-bold font-mono disabled:opacity-40 disabled:cursor-not-allowed" dir="ltr" />
+                    <label className="block text-xs font-black text-slate-300 mb-1.5">{t('المعرّف (بالإنجليزي)', 'Role ID (English)')} *</label>
+                    <input required disabled={!!selectedRole} type="text" placeholder="Finance_Manager" value={roleFormData.id} onChange={e => setRoleFormData({ ...roleFormData, id: e.target.value })} className="w-full border border-slate-800 rounded-xl p-3 bg-slate-950 text-white focus:border-[#d4af37]/60 outline-none text-xs font-bold font-mono disabled:opacity-40 disabled:cursor-not-allowed" dir="ltr" />
                   </div>
                 </div>
 
+                {/* ── شريط تبويبات الأقسام — Category Tabs Bar ── */}
+                <div className="flex gap-2 overflow-x-auto border-b border-slate-800 pb-2.5 pt-1 text-xs">
+                  {[
+                    { id: 'all', label: t('🌐 جميع الأقسام', '🌐 All Modules') },
+                    { id: 'entries', label: t('📖 القيود المحاسبية', '📖 Journal Entries') },
+                    { id: 'vouchers', label: t('🧾 سندات القبض والصرف', '🧾 Vouchers') },
+                    { id: 'finance_accounts', label: t('💰 المالية والحسابات', '💰 Finance & Accounts') },
+                    { id: 'general_orders', label: t('📦 عام والطلبات', '📦 General & Orders') },
+                    { id: 'people', label: t('👥 الأشخاص والمستخدمون', '👥 Users & People') },
+                    { id: 'settings', label: t('⚙️ الإعدادات والتلقائية', '⚙️ Settings & Rules') },
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setRoleActiveTab(tab.id)}
+                      className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl px-3.5 py-2 font-black transition ${roleActiveTab === tab.id
+                          ? 'bg-[#d4af37] text-slate-950 shadow-md'
+                          : 'bg-slate-900/80 text-slate-400 hover:bg-slate-800 hover:text-white border border-slate-800'
+                        }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+
                 {/* Toolbar */}
-                <div className="flex items-center flex-wrap gap-2">
-                  <button type="button" onClick={() => setRoleFormData(prev => ({ ...prev, permissions: ALL_PERMISSIONS(isAr).map(p => p.id) }))}
-                    className="px-3 py-1.5 bg-[#d4af37]/10 text-[#d4af37] border border-[#d4af37]/20 rounded-lg text-[9px] font-black hover:bg-[#d4af37]/20 transition-colors">
-                    {t('تحديد الكل', 'Select All')}
+                <div className="flex items-center flex-wrap gap-2.5 rounded-xl border border-slate-800 bg-slate-950/60 p-2.5">
+                  <button type="button" onClick={selectAllInActiveTab}
+                    className="px-3 py-1.5 bg-[#d4af37]/15 text-[#f4d870] border border-[#d4af37]/30 rounded-lg text-xs font-black hover:bg-[#d4af37]/25 transition-all">
+                    {t('تحديد كل هذا القسم', 'Select Section')}
                   </button>
-                  <button type="button" onClick={() => setRoleFormData(prev => ({ ...prev, permissions: [] }))}
-                    className="px-3 py-1.5 bg-slate-900 text-slate-400 border border-slate-800 rounded-lg text-[9px] font-black hover:bg-slate-800 transition-colors">
-                    {t('إلغاء الكل', 'Deselect All')}
+                  <button type="button" onClick={deselectAllInActiveTab}
+                    className="px-3 py-1.5 bg-slate-900 text-slate-400 border border-slate-800 rounded-lg text-xs font-black hover:bg-slate-800 transition-all">
+                    {t('إلغاء كل هذا القسم', 'Deselect Section')}
                   </button>
-                  <div className="flex-1 relative min-w-[140px]">
-                    <Search className={`absolute ${isAr ? 'right-2.5' : 'left-2.5'} top-1/2 -translate-y-1/2 text-slate-500 w-3.5 h-3.5`} />
-                    <input type="text" placeholder={t('بحث في الصلاحيات...', 'Search permissions...')} value={permSearch} onChange={e => setPermSearch(e.target.value)}
-                      className={`w-full ${isAr ? 'pr-8 pl-3' : 'pl-8 pr-3'} py-1.5 bg-black/50 border border-slate-800 rounded-lg text-[10px] text-white font-bold outline-none focus:border-[#d4af37]/40`} />
+
+                  <div className="flex-1 relative min-w-[160px]">
+                    <Search className={`absolute ${isAr ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 text-slate-500 w-3.5 h-3.5`} />
+                    <input type="text" placeholder={t('بحث سريع في الصلاحيات...', 'Filter permissions...')} value={permSearch} onChange={e => setPermSearch(e.target.value)}
+                      className={`w-full ${isAr ? 'pr-9 pl-3' : 'pl-9 pr-3'} py-1.5 bg-black/60 border border-slate-800 rounded-lg text-xs text-white font-bold outline-none focus:border-[#d4af37]/60`} />
                   </div>
-                  <span className="text-[9px] text-slate-500 font-bold whitespace-nowrap">
+
+                  <span className="text-xs font-mono font-black text-[#f4d870] bg-slate-900 px-3 py-1 rounded-lg border border-slate-800">
                     {roleFormData.permissions.length}/{ALL_PERMISSIONS(isAr).length} {t('محدد', 'selected')}
                   </span>
                 </div>
 
-                {/* Permission Groups */}
-                <div className="space-y-2">
+                {/* Permission Groups List */}
+                <div className="space-y-3 max-h-[48vh] overflow-y-auto pr-1">
                   {getFilteredPerms().map(group => {
                     const groupPermsIds = group.perms.map(p => p.id);
                     const activePermissions = Array.isArray(roleFormData.permissions) ? roleFormData.permissions : [];
@@ -1917,33 +2082,36 @@ export default function UserManagement() {
                     const someChecked = groupPermsIds.some(id => activePermissions.includes(id));
                     const isExpanded = expandedGroups[group.group] !== false; // default expanded
                     return (
-                      <div key={group.group} className="bg-black/30 border border-slate-800/50 rounded-xl overflow-hidden">
-                        <div className="px-4 py-2.5 bg-slate-900/40 border-b border-slate-800/40 flex items-center justify-between cursor-pointer"
+                      <div key={group.group} className="bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+                        <div className="px-4 py-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between cursor-pointer hover:bg-slate-850 transition"
                           onClick={() => setExpandedGroups(prev => ({ ...prev, [group.group]: !isExpanded }))}>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-3">
                             <div onClick={e => { e.stopPropagation(); toggleGroup(group.group, !allChecked); }}
-                              className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-all ${allChecked ? 'bg-[#d4af37] border-[#d4af37] text-black' : someChecked ? 'bg-[#d4af37]/30 border-[#d4af37]/50' : 'border-slate-700'}`}>
-                              {allChecked && <CheckCircle2 className="w-3 h-3" />}
-                              {someChecked && !allChecked && <div className="w-2 h-0.5 bg-[#d4af37]"></div>}
+                              className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-all ${allChecked ? 'bg-[#d4af37] border-[#d4af37] text-slate-950' : someChecked ? 'bg-[#d4af37]/30 border-[#d4af37]/60' : 'border-slate-700'}`}>
+                              {allChecked && <CheckCircle2 className="w-3.5 h-3.5" />}
+                              {someChecked && !allChecked && <div className="w-2.5 h-1 bg-[#d4af37] rounded-sm"></div>}
                             </div>
-                            <span className="text-[10px] font-black text-slate-300">{group.group}</span>
-                            <span className="text-[9px] text-slate-600 font-bold">({group.perms.filter(p => activePermissions.includes(p.id)).length}/{group.perms.length})</span>
+                            <span className="text-xs font-black text-white">{group.group}</span>
+                            <span className="text-[10px] font-mono font-bold text-slate-400 bg-slate-950 px-2 py-0.5 rounded-md border border-slate-800">
+                              {group.perms.filter(p => activePermissions.includes(p.id)).length} / {group.perms.length}
+                            </span>
                           </div>
-                          <ChevronDown className={`w-3.5 h-3.5 text-slate-600 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                          <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
                         </div>
+
                         {isExpanded && (
-                          <div className="grid grid-cols-1 sm:grid-cols-2">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-px bg-slate-800/40">
                             {group.perms.map(perm => {
                               const isChecked = activePermissions.includes(perm.id);
                               return (
                                 <label key={perm.id} onClick={() => togglePermission(perm.id)}
-                                  className={`flex items-center gap-3 p-3 cursor-pointer transition-all select-none border-b border-slate-800/20 last:border-0 ${isChecked ? 'bg-[#d4af37]/5' : 'bg-black/10 hover:bg-slate-900/30'}`}>
-                                  <div className={`w-4.5 h-4.5 w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-all ${isChecked ? 'bg-[#d4af37] border-[#d4af37] text-black' : 'border-slate-700 hover:border-slate-600'}`}>
+                                  className={`flex items-center gap-3 p-3 cursor-pointer transition-all select-none ${isChecked ? 'bg-[#d4af37]/10' : 'bg-slate-950/70 hover:bg-slate-900'}`}>
+                                  <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-all ${isChecked ? 'bg-[#d4af37] border-[#d4af37] text-slate-950 font-black' : 'border-slate-700 hover:border-slate-500'}`}>
                                     {isChecked && <CheckCircle2 className="w-3.5 h-3.5" />}
                                   </div>
                                   <div className="flex-1 min-w-0">
-                                    <div className="text-[11px] font-bold text-white leading-none">{perm.label}</div>
-                                    <div className="text-[8px] text-slate-600 font-mono mt-0.5">{perm.id}</div>
+                                    <div className="text-xs font-bold text-white leading-snug">{perm.label}</div>
+                                    <div className="text-[9px] text-slate-500 font-mono mt-0.5 truncate">{perm.id}</div>
                                   </div>
                                 </label>
                               );
@@ -1953,13 +2121,26 @@ export default function UserManagement() {
                       </div>
                     );
                   })}
+
+                  {getFilteredPerms().length === 0 && (
+                    <div className="p-8 text-center text-xs font-bold text-slate-500 bg-slate-950/60 rounded-2xl border border-slate-800">
+                      {t('لا توجد صلاحيات تطابق معايير البحث أو التبويب المحدد.', 'No permissions match your search or selected tab.')}
+                    </div>
+                  )}
                 </div>
               </div>
-              <div className="p-5 border-t border-slate-800/50 bg-black/40 flex justify-end gap-3 shrink-0">
-                <button type="button" onClick={() => setIsRoleModalOpen(false)} className="px-5 py-2.5 text-slate-400 font-bold bg-slate-900 border border-slate-800 hover:bg-slate-800 rounded-xl text-xs">{t('إلغاء', 'Cancel')}</button>
-                <button type="submit" disabled={savingRole} className="px-6 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl shadow-lg transition-all active:scale-[0.98] text-xs disabled:opacity-50">
-                  {savingRole ? t('جاري الحفظ...', 'Saving...') : t('حفظ الدور والصلاحيات', 'Save Role & Permissions')}
-                </button>
+
+              {/* Footer */}
+              <div className="p-5 border-t border-slate-800 bg-black/60 flex items-center justify-between shrink-0">
+                <span className="text-xs font-mono text-slate-400">
+                  {t('إجمالي الصلاحيات المختارة:', 'Selected:')} <span className="font-bold text-[#f4d870]">{roleFormData.permissions.length}</span>
+                </span>
+                <div className="flex items-center gap-3">
+                  <button type="button" onClick={() => setIsRoleModalOpen(false)} className="px-5 py-2.5 text-slate-400 font-bold bg-slate-900 border border-slate-800 hover:bg-slate-800 rounded-xl text-xs">{t('إلغاء', 'Cancel')}</button>
+                  <button type="submit" disabled={savingRole} className="px-6 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl shadow-lg transition-all active:scale-[0.98] text-xs disabled:opacity-50">
+                    {savingRole ? t('جاري الحفظ...', 'Saving...') : t('حفظ الدور والصلاحيات', 'Save Role & Permissions')}
+                  </button>
+                </div>
               </div>
             </form>
           </div>

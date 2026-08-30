@@ -440,6 +440,7 @@ class FinancialAccountService {
         accNameAr: entityName,
         accNameEn: entityName,
         limitedBalance: 0,
+        lastRecalculatedAt: now.toString(),
         curNo: currencyId,
         ...(monthlySalary !== undefined && { monthlySalary }),
       } as any;

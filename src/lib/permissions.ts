@@ -119,7 +119,33 @@ export type PermissionKey =
   | 'view_shipping_companies'
   | 'add_shipping_companies'
   | 'edit_shipping_companies'
-  | 'delete_shipping_companies';
+  | 'delete_shipping_companies'
+  // ── صلاحيات مفصّلة لكل واجهة قيد / سند — طباعة، تصدير، ترحيل ──
+  // Granular per-interface: print, export, post
+  | 'print_general_entries'
+  | 'export_general_entries'
+  | 'post_general_entries'
+  | 'edit_posted_general_entries'
+  | 'delete_posted_general_entries'
+  | 'print_compound_entries'
+  | 'export_compound_entries'
+  | 'post_compound_entries'
+  | 'edit_posted_compound_entries'
+  | 'delete_posted_compound_entries'
+  | 'print_temporary_entries'
+  | 'export_temporary_entries'
+  | 'edit_posted_temporary_entries'
+  | 'delete_posted_temporary_entries'
+  | 'print_receipt_vouchers'
+  | 'export_receipt_vouchers'
+  | 'post_receipt_vouchers'
+  | 'edit_posted_receipt_vouchers'
+  | 'delete_posted_receipt_vouchers'
+  | 'print_payment_vouchers'
+  | 'export_payment_vouchers'
+  | 'post_payment_vouchers'
+  | 'edit_posted_payment_vouchers'
+  | 'delete_posted_payment_vouchers';
 
 export interface PermissionDefinition {
   id: PermissionKey;
@@ -265,13 +291,42 @@ export const ALL_PERMISSIONS: PermissionDefinition[] = [
   { id: 'create_entry_settings', labelAr: 'إنشاء فئات وأنواع وقواعد قيود', labelEn: 'Create Entry Settings', category: 'accounting' },
   { id: 'edit_entry_settings', labelAr: 'تعديل فئات وأنواع وقواعد قيود', labelEn: 'Edit Entry Settings', category: 'accounting' },
   { id: 'delete_entry_settings', labelAr: 'حذف فئات وأنواع وقواعد قيود', labelEn: 'Delete Entry Settings', category: 'accounting' },
-  { id: 'post_financial_entries', labelAr: 'اعتماد وترحيل القيود والسندات', labelEn: 'Post Financial Entries & Vouchers', category: 'accounting' },
-  { id: 'post_temporary_entries', labelAr: 'اعتماد القيود المؤقتة', labelEn: 'Post Temporary Entries', category: 'accounting' },
+  { id: 'post_financial_entries', labelAr: 'اعتماد وترحيل القيود والسندات (عام)', labelEn: 'Post Financial Entries & Vouchers (General)', category: 'accounting' },
+  { id: 'post_temporary_entries', labelAr: 'اعتماد القيود المؤقتة (عام)', labelEn: 'Post Temporary Entries (General)', category: 'accounting' },
   { id: 'reverse_financial_entries', labelAr: 'إنشاء قيود عكسية', labelEn: 'Create Reversing Entries', category: 'accounting' },
   { id: 'void_financial_entries', labelAr: 'إبطال القيود المرحّلة', labelEn: 'Void Posted Financial Entries', category: 'accounting' },
   { id: 'settle_custody_advances', labelAr: 'تسوية العهد والسلف', labelEn: 'Settle Custody Advances', category: 'accounting' },
   { id: 'edit_profit_per_kg', labelAr: 'تعديل نسبة الربح للكيلو لطلبات المصنع', labelEn: 'Edit Profit Per KG Rate (Factory Orders)', category: 'accounting' },
   { id: 'edit_cbm_shipping_rate', labelAr: 'تعديل سعر شحن الـ CBM لطلبات المصنع والموردين', labelEn: 'Edit CBM Shipping Rate (Factory Orders)', category: 'accounting' },
+  // ── صلاحيات القيود العامة المفصّلة ── General Entries granular permissions
+  { id: 'print_general_entries', labelAr: 'طباعة وتصدير القيود العامة', labelEn: 'Print General Entries', category: 'accounting' },
+  { id: 'export_general_entries', labelAr: 'تصدير القيود العامة (CSV/XLS)', labelEn: 'Export General Entries (CSV/XLS)', category: 'accounting' },
+  { id: 'post_general_entries', labelAr: 'ترحيل القيود العامة', labelEn: 'Post General Entries', category: 'accounting' },
+  { id: 'edit_posted_general_entries', labelAr: 'تعديل القيود العامة المرحّلة', labelEn: 'Edit Posted General Entries', category: 'accounting' },
+  { id: 'delete_posted_general_entries', labelAr: 'حذف القيود العامة المرحّلة', labelEn: 'Delete Posted General Entries', category: 'accounting' },
+  // ── صلاحيات القيود المركبة المفصّلة ── Compound Entries granular permissions
+  { id: 'print_compound_entries', labelAr: 'طباعة وتصدير القيود المركبة', labelEn: 'Print Compound Entries', category: 'accounting' },
+  { id: 'export_compound_entries', labelAr: 'تصدير القيود المركبة (CSV/XLS)', labelEn: 'Export Compound Entries (CSV/XLS)', category: 'accounting' },
+  { id: 'post_compound_entries', labelAr: 'ترحيل القيود المركبة', labelEn: 'Post Compound Entries', category: 'accounting' },
+  { id: 'edit_posted_compound_entries', labelAr: 'تعديل القيود المركبة المرحّلة', labelEn: 'Edit Posted Compound Entries', category: 'accounting' },
+  { id: 'delete_posted_compound_entries', labelAr: 'حذف القيود المركبة المرحّلة', labelEn: 'Delete Posted Compound Entries', category: 'accounting' },
+  // ── صلاحيات القيود المؤقتة المفصّلة ── Temporary Entries granular permissions
+  { id: 'print_temporary_entries', labelAr: 'طباعة وتصدير القيود المؤقتة', labelEn: 'Print Temporary Entries', category: 'accounting' },
+  { id: 'export_temporary_entries', labelAr: 'تصدير القيود المؤقتة (CSV/XLS)', labelEn: 'Export Temporary Entries (CSV/XLS)', category: 'accounting' },
+  { id: 'edit_posted_temporary_entries', labelAr: 'تعديل القيود المؤقتة المرحّلة', labelEn: 'Edit Posted Temporary Entries', category: 'accounting' },
+  { id: 'delete_posted_temporary_entries', labelAr: 'حذف القيود المؤقتة المرحّلة', labelEn: 'Delete Posted Temporary Entries', category: 'accounting' },
+  // ── صلاحيات سندات القبض المفصّلة ── Receipt Vouchers granular permissions
+  { id: 'print_receipt_vouchers', labelAr: 'طباعة وتصدير سندات القبض', labelEn: 'Print Receipt Vouchers', category: 'accounting' },
+  { id: 'export_receipt_vouchers', labelAr: 'تصدير سندات القبض (CSV/XLS)', labelEn: 'Export Receipt Vouchers (CSV/XLS)', category: 'accounting' },
+  { id: 'post_receipt_vouchers', labelAr: 'ترحيل سندات القبض', labelEn: 'Post Receipt Vouchers', category: 'accounting' },
+  { id: 'edit_posted_receipt_vouchers', labelAr: 'تعديل سندات القبض المرحّلة', labelEn: 'Edit Posted Receipt Vouchers', category: 'accounting' },
+  { id: 'delete_posted_receipt_vouchers', labelAr: 'حذف سندات القبض المرحّلة', labelEn: 'Delete Posted Receipt Vouchers', category: 'accounting' },
+  // ── صلاحيات سندات الصرف المفصّلة ── Payment Vouchers granular permissions
+  { id: 'print_payment_vouchers', labelAr: 'طباعة وتصدير سندات الصرف', labelEn: 'Print Payment Vouchers', category: 'accounting' },
+  { id: 'export_payment_vouchers', labelAr: 'تصدير سندات الصرف (CSV/XLS)', labelEn: 'Export Payment Vouchers (CSV/XLS)', category: 'accounting' },
+  { id: 'post_payment_vouchers', labelAr: 'ترحيل سندات الصرف', labelEn: 'Post Payment Vouchers', category: 'accounting' },
+  { id: 'edit_posted_payment_vouchers', labelAr: 'تعديل سندات الصرف المرحّلة', labelEn: 'Edit Posted Payment Vouchers', category: 'accounting' },
+  { id: 'delete_posted_payment_vouchers', labelAr: 'حذف سندات الصرف المرحّلة', labelEn: 'Delete Posted Payment Vouchers', category: 'accounting' },
 
   // Reports
   { id: 'view_reports', labelAr: 'تأطير ورؤية تقارير جرد أرباح وحسابات الأنشطة', labelEn: 'Access Profit Analytics & Financial Reports', category: 'reports' },
