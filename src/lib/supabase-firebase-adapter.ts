@@ -276,6 +276,15 @@ export function extractRowPayload(table: string, row: any): any {
     if (combined.createdAt && !combined.created_at) combined.created_at = combined.createdAt;
   }
 
+  if (table === 'accounts') {
+    if (!combined.entityName) combined.entityName = combined.entity_name || combined.accNameAr || combined.acc_name_ar || combined.acc_name_en || '';
+    if (!combined.accountNumber) combined.accountNumber = combined.account_number || (combined.accountSeq ? String(combined.accountSeq).padStart(4, '0') : (combined.accountCode ? String(combined.accountCode).split('-')[1] : ''));
+    if (!combined.accountPrefix) combined.accountPrefix = combined.account_prefix || (combined.accountCode ? String(combined.accountCode).split('-')[0] : '');
+    if (!combined.parentCode) combined.parentCode = combined.groupId || combined.accSubId || combined.accountPrefix || '';
+    if (combined.debitTotal === undefined) combined.debitTotal = 0;
+    if (combined.creditTotal === undefined) combined.creditTotal = 0;
+  }
+
   const normalized = normalizePayload(table, combined);
   return { id: rowId, ...normalized };
 }
@@ -633,7 +642,7 @@ const DIRECT_COLUMNS_MAP: Record<string, Record<string, string>> = {
   acc_sub_group: { accSubId: 'acc_sub_id', accountCode: 'account_code', code: 'account_code', accNameAr: 'acc_name_ar', nameAr: 'acc_name_ar', accNameEn: 'acc_name_en', nameEn: 'acc_name_en', balance: 'balance', curNo: 'cur_no', currencyId: 'cur_no', isActive: 'is_active', entityType: 'entity_type', allowsDirectAccounts: 'allows_direct_accounts', createdAt: 'created_at', updatedAt: 'updated_at' },
   default_accounts: { defaultKey: 'default_key', accountId: 'account_id', accNameAr: 'acc_name_ar', nameAr: 'acc_name_ar', accNameEn: 'acc_name_en', nameEn: 'acc_name_en', curNo: 'cur_no', currencyId: 'cur_no', isActive: 'is_active', createdAt: 'created_at', updatedAt: 'updated_at' },
   account_id_migration_map: { oldAccountId: 'old_account_id', oldAccountCode: 'old_account_code', newAccountId: 'new_account_id', migratedAt: 'migrated_at' },
-  accounts: { accountCode: 'account_code', code: 'account_code', balance: 'balance', currency: 'currency', entityId: 'entity_id', entityType: 'entity_type', type: 'type', accountType: 'type', accSubId: 'acc_sub_id', groupId: 'group_id', accountSeq: 'account_seq', accNameAr: 'acc_name_ar', nameAr: 'acc_name_ar', accNameEn: 'acc_name_en', nameEn: 'acc_name_en', limitedBalance: 'limited_balance', curNo: 'cur_no', currencyId: 'cur_no', isActive: 'is_active', createdAt: 'createdAt', updatedAt: 'updatedAt', lastRecalculatedAt: 'lastRecalculatedAt' },
+  accounts: { accountCode: 'account_code', code: 'account_code', balance: 'balance', currency: 'currency', entityId: 'entity_id', entityType: 'entity_type', type: 'type', accountType: 'type', accSubId: 'acc_sub_id', groupId: 'group_id', accountSeq: 'account_seq', accNameAr: 'acc_name_ar', nameAr: 'acc_name_ar', accNameEn: 'acc_name_en', nameEn: 'acc_name_en', limitedBalance: 'limited_balance', curNo: 'cur_no', currencyId: 'cur_no', isActive: 'is_active', createdAt: 'createdAt', updatedAt: 'updatedAt', lastRecalculatedAt: 'lastRecalculatedAt', accountNumber: 'account_number', accountPrefix: 'account_prefix', entityName: 'entity_name', notes: 'notes' },
   orders: { orderNumber: 'order_number', trackingNumber: 'tracking_number', customerId: 'customer_id', orderPartyId: 'order_party_id', orderPartyType: 'order_party_type', isStaffOrder: 'is_staff_order', employeeId: 'employee_id', courierId: 'courier_id', customerAccountId: 'order_party_account_id', orderPartyAccountId: 'order_party_account_id', orderStatusId: 'order_status_id', order_status_id: 'order_status_id', createdAt: 'createdAt', orderSourceId: 'order_source_id', order_source_id: 'order_source_id', orderSourceType: 'order_source_type', order_source_type: 'order_source_type', deliveryCourierId: 'delivery_courier_id', delivery_courier_id: 'delivery_courier_id', shippingCourierId: 'shipping_courier_id', shipping_courier_id: 'shipping_courier_id' },
   shipping_companies: { name: 'name', shippingCompanyUrl: 'shipping_company_url', trackingIDPrefix: 'trackingID_prefix', accountId: 'account_id', financialAccountId: 'account_id' },
   sources: { name: 'name', supplierType: 'type', type: 'type', sourceUrl: 'source_url', accountId: 'account_id', financialAccountId: 'account_id' },
@@ -664,7 +673,7 @@ const DIRECT_COLUMNS_MAP: Record<string, Record<string, string>> = {
 };
 
 const EXPLICIT_FINANCIAL_TABLES = new Set([
-  'entry_module', 'entry_type', 'main_entry', 'account_trans', 'custody_advances',
+  'accounts', 'entry_module', 'entry_type', 'main_entry', 'account_trans', 'custody_advances',
   'financial_legacy_migration_map', 'financial_migration_exceptions',
 ]);
 

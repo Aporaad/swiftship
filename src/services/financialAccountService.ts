@@ -373,7 +373,6 @@ class FinancialAccountService {
           entityName,
           currency: currency || existing.currency,
           type: options?.accountType || existing.type,
-          parentCode: options?.parentCode || existing.parentCode,
           updatedAt: now,
         };
         await updateDoc(doc(db, "accounts", existing.id), existingUpdate);
@@ -417,8 +416,6 @@ class FinancialAccountService {
         entityName,
         currency,
         balance: 0,
-        debitTotal: 0,
-        creditTotal: 0,
         isActive: true,
         createdAt: now,
         updatedAt: now,
@@ -433,7 +430,6 @@ class FinancialAccountService {
           ] as AccountEntityType[]).includes(entityType)
             ? "Liability"
             : "Asset"),
-        parentCode: options?.parentCode || prefix,
         accSubId: hierarchyLocation?.accSubId,
         groupId: hierarchyLocation?.groupId,
         accountSeq: Number(accountNumber),
@@ -442,7 +438,6 @@ class FinancialAccountService {
         limitedBalance: 0,
         lastRecalculatedAt: now.toString(),
         curNo: currencyId,
-        ...(monthlySalary !== undefined && { monthlySalary }),
       } as any;
 
       // Save document with explicit unique ID
@@ -880,12 +875,6 @@ class FinancialAccountService {
     monthlySalary: number,
   ): Promise<void> {
     try {
-      const account = await this.getAccountByEntityId(employeeId);
-      if (!account || !account.id) return;
-      await updateDoc(doc(db, "accounts", account.id), {
-        monthlySalary,
-        updatedAt: Date.now(),
-      });
       await updateDoc(doc(db, "employees", employeeId), {
         monthlySalary,
         updatedAt: Date.now(),

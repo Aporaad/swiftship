@@ -12,3 +12,9 @@
 - [x] حل تعارض التاريخ المقطوع (non-fast-forward) ورفع التغييرات المحلية لفرع `main` على GitHub بنجاح.
 - [x] ضبط وتأكيد تتبع الفرع المحلي `main` للفرع البعيد `swiftship/main`.
 
+## [2026-08-31 23:25:00] — إلغاء الاعتماد على حقل data بجدول الحسابات accounts والاعتماد على الحقول الأساسية
+- [x] ترحيل البيانات من حقل `data` إلى الأعمدة الأصلية الأساسية (`account_number`, `account_prefix`, `entity_name`, `notes`, `acc_name_ar`, `acc_name_en`).
+- [x] تفريغ وإلغاء الاعتماد على حقل `data` من جدول `accounts` والتأكد من اعتماد المحول الخدمي على الأعمدة المباشرة فقط.
+- [x] استبعاد وحذف الحقول الإضافية غير المطلوبة (`parent_code`, `debit_total`, `credit_total`, `monthly_salary`) والاعتماد على `acc_sub_id` و `group_id`.
+- [x] تحديث محول الكود `supabase-firebase-adapter.ts` والخدمة المحاسبية `financialAccountService.ts` لتطبيق معايير الكود النظيف والأمان والتعليقات باللغتين.
+

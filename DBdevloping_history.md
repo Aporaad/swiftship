@@ -324,5 +324,16 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 - لم يتم إجراء تعديلات جديدة على مخطط ودوال قاعدة البيانات في هذه المهمة المحددة.
 - تم التأكد من رفع ومزامنة جميع ملفات وسكربتات المهاجرة ومخططات قاعدة البيانات السابقة (`drizzle/migrations` و SQL files) إلى فرع `main` بـ GitHub بنجاح واستقرار تام.
 
+---
+
+## [2026-08-31 23:25:00] — ترحيل وإلغاء الاعتماد على حقل data في جدول accounts
+
+### التحديثات والترحيلات المنفذة في قاعدة البيانات:
+1. **ترحيل بيانات `data` إلى الأعمدة الأصلية بجدول `accounts`**:
+   - تنفيذ عملية ترحيل دقيقة لـ 87 سجلاً في جدول `public.accounts` لنقل قيم `accountNumber`, `accountPrefix`, `entityName`, `notes`, `accNameAr`, `accNameEn` إلى الأعمدة الأصلية المباشرة `account_number`, `account_prefix`, `entity_name`, `notes`, `acc_name_ar`, `acc_name_en`.
+   - تعيين وتصفير حقل `data` بـ `NULL` لكافة السجلات لضمان الاعتماد المباشر والكامل على الأعمدة النظيفة.
+2. **استبعاد الحقول غير المطلوبة والتكامل الهرمي**:
+   - إلغاء وإزالة التعامل مع الأعمدة غير المطلوبة (`parent_code`, `debit_total`, `credit_total`, `monthly_salary`) والاعتماد بدلاً منها على المعرفات الهيكلية `acc_sub_id` و `group_id` لربط شجرة الحسابات.
+
 
 
