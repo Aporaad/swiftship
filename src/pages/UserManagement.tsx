@@ -376,7 +376,7 @@ export default function UserManagement() {
   const [activityLogs, setActivityLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // ── Live transaction-based balances (real-time from account_transactions) ────
+  // ── Live transaction-based balances (real-time from account_trans) ────
   const liveBalances = useAccountBalances();
 
   // ── Users filters ────────────────────────────────────────

@@ -215,7 +215,7 @@ export default function ChartOfAccounts({
 
       const parentCode = ca.accountPrefix || ca.parentCode || null;
 
-      // ── Live balance from account_transactions ───────────────────────────
+      // ── Live balance from account_trans ────────────────────────────────
       // Priority: liveBalances.byCode → liveBalances.byId → stored balance
       const liveByCode = liveBalances.byCode[code];
       const liveById = ca.id ? liveBalances.byId[ca.id] : undefined;
@@ -456,12 +456,12 @@ export default function ChartOfAccounts({
     setReportLoading(true);
     setReportTransactions([]);
     try {
-      const qCode = query(collection(db, 'account_transactions'), where('accountCode', '==', node.code), orderBy('createdAt', 'desc'));
+      const qCode = query(collection(db, 'account_trans'), where('account_code', '==', node.code), orderBy('created_at', 'desc'));
       const snapCode = await getDocs(qCode);
       let txs = snapCode.docs.map(d => ({ id: d.id, ...d.data() }));
 
       if (node.id) {
-        const qId = query(collection(db, 'account_transactions'), where('accountId', '==', node.id), orderBy('createdAt', 'desc'));
+        const qId = query(collection(db, 'account_trans'), where('account_id', '==', node.id), orderBy('created_at', 'desc'));
         const snapId = await getDocs(qId);
         snapId.docs.forEach(d => {
           if (!txs.some((t: any) => t.id === d.id)) txs.push({ id: d.id, ...d.data() });
@@ -617,7 +617,7 @@ export default function ChartOfAccounts({
             <p className="text-[10px] text-slate-550 font-medium">
               {isAr
                 ? `الأرصدة تُحتسب تلقائياً من حركة القيود (مدين − دائن) وتتجمع للأعلى بـ${settings.currency || 'YER'}.`
-                : `Balances computed live from account_transactions (Debit−Credit) and rolled up to ${settings.currency || 'YER'}.`}
+                : `Balances computed live from account_trans (Debit−Credit) and rolled up to ${settings.currency || 'YER'}.`}
             </p>
           </div>
           <div className="flex gap-2">
@@ -966,13 +966,13 @@ export default function ChartOfAccounts({
                   <div className="bg-emerald-950/20 border border-emerald-900/20 rounded-xl p-2 text-center">
                     <span className="block text-[8px] text-emerald-400 font-black uppercase">{isAr ? 'إجمالي المدين' : 'Total Debit'}</span>
                     <span className="text-xs font-mono font-black text-emerald-400">
-                      {reportTransactions.filter(t => t.type === 'Debit').reduce((s, t) => s + (t.amount || 0), 0).toLocaleString()} {settings.currency || 'YER'}
+                      {reportTransactions.filter(t => (t.transType || t.trans_type || t.type) === 'Debit').reduce((s, t) => s + (t.amount || 0), 0).toLocaleString()} {settings.currency || 'YER'}
                     </span>
                   </div>
                   <div className="bg-rose-950/20 border border-rose-900/20 rounded-xl p-2 text-center">
                     <span className="block text-[8px] text-rose-400 font-black uppercase">{isAr ? 'إجمالي الدائن' : 'Total Credit'}</span>
                     <span className="text-xs font-mono font-black text-rose-400">
-                      {reportTransactions.filter(t => t.type === 'Credit').reduce((s, t) => s + (t.amount || 0), 0).toLocaleString()} {settings.currency || 'YER'}
+                      {reportTransactions.filter(t => (t.transType || t.trans_type || t.type) === 'Credit').reduce((s, t) => s + (t.amount || 0), 0).toLocaleString()} {settings.currency || 'YER'}
                     </span>
                   </div>
                   <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-2 text-center">
@@ -1007,15 +1007,15 @@ export default function ChartOfAccounts({
                         <td className="p-2 text-[10px] font-mono text-slate-500">
                           {tx.createdAt ? new Date(tx.createdAt).toLocaleDateString('ar-YE') : '—'}
                         </td>
-                        <td className="p-2 text-[9px] font-mono text-[#d4af37]">{tx.refNumber || '—'}</td>
+                        <td className="p-2 text-[9px] font-mono text-[#d4af37]">{tx.entryNumber || tx.entry_number || tx.refNumber || tx.journalEntryNumber || '—'}</td>
                         <td className="p-2 text-[10px] text-slate-300 max-w-[200px] break-words">{tx.description || '—'}</td>
                         <td className="p-2">
-                          <span className="text-[8px] bg-slate-900 text-slate-500 border border-slate-800 px-1.5 py-0.5 rounded uppercase font-black">{tx.module || '—'}</span>
+                          <span className="text-[8px] bg-slate-900 text-slate-500 border border-slate-800 px-1.5 py-0.5 rounded uppercase font-black">{tx.module || tx.moduleId || '—'}</span>
                         </td>
                         <td className="p-2 text-right text-[10px] font-mono text-emerald-400 font-black">
-                          {tx.type === 'Debit' ? (
+                          {(tx.transType || tx.trans_type || tx.type) === 'Debit' ? (
                             <div className="flex flex-col items-end">
-                              <span>{(tx.amountOriginal || tx.amount || 0).toLocaleString()} {tx.currencyOriginal || (settings.currency || 'YER')}</span>
+                              <span>{(tx.amountOriginal || tx.amount_original || tx.amount || 0).toLocaleString()} {tx.currencyOriginal || tx.currency || (settings.currency || 'YER')}</span>
                               {tx.currencyOriginal && tx.currencyOriginal !== (settings.currency || 'YER') && (
                                 <span className="text-[8px] text-slate-500 font-normal">≈ {(tx.amount || 0).toLocaleString()} {settings.currency || 'YER'}</span>
                               )}
@@ -1023,9 +1023,9 @@ export default function ChartOfAccounts({
                           ) : '—'}
                         </td>
                         <td className="p-2 text-right text-[10px] font-mono text-rose-400 font-black">
-                          {tx.type === 'Credit' ? (
+                          {(tx.transType || tx.trans_type || tx.type) === 'Credit' ? (
                             <div className="flex flex-col items-end">
-                              <span>{(tx.amountOriginal || tx.amount || 0).toLocaleString()} {tx.currencyOriginal || (settings.currency || 'YER')}</span>
+                              <span>{(tx.amountOriginal || tx.amount_original || tx.amount || 0).toLocaleString()} {tx.currencyOriginal || tx.currency || (settings.currency || 'YER')}</span>
                               {tx.currencyOriginal && tx.currencyOriginal !== (settings.currency || 'YER') && (
                                 <span className="text-[8px] text-slate-500 font-normal">≈ {(tx.amount || 0).toLocaleString()} {settings.currency || 'YER'}</span>
                               )}

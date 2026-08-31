@@ -72,7 +72,7 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
         getDocs(collection(db, 'sources')),
         getDocs(collection(db, 'expenses')),
         getDocs(collection(db, 'accounts')),
-        getDocs(collection(db, 'journal_entries')),
+        getDocs(collection(db, 'main_entry')),
         getDocs(collection(db, 'salary_history')),
         getDocs(collection(db, 'roles')),
         getDocs(query(collection(db, 'activity_logs'), orderBy('createdAt', 'desc'), limit(100)))

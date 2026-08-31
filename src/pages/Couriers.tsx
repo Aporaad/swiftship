@@ -53,7 +53,7 @@ export default function Couriers() {
   const [sortBy, setSortBy] = useState('newest');
   const isAr = settings.language === 'ar';
 
-  // ── Live transaction-based balances (real-time from account_transactions) ────
+  // ── Live transaction-based balances (real-time from account_trans) ────
   const liveBalances = useAccountBalances();
 
   // Confirmation Modal State
@@ -98,8 +98,8 @@ export default function Couriers() {
     }
 
     const qTx = query(
-      collection(db, 'account_transactions'),
-      where('entityId', '==', selectedCourier.id)
+      collection(db, 'account_trans'),
+      where('entity_id', '==', selectedCourier.id)
     );
     const unsubTx = onSnapshot(qTx, (snap) => {
       setCourierTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -950,7 +950,7 @@ export default function Couriers() {
                           const account = accounts.find(a => a.id === courier.accountId || a.id === courier.financialAccountId || a.entityId === courier.id);
                           if (!account) return null;
 
-                          // ── Live balance from account_transactions ──────────────────────────
+                          // ── Live balance from account_trans ────────────────────────────────────
                           const liveByCode = account.accountCode ? liveBalances.byCode[account.accountCode] : undefined;
                           const liveById = account.id ? liveBalances.byId[account.id] : undefined;
                           const displayBalance = liveByCode ?? liveById ?? account.balance ?? 0;
@@ -1350,7 +1350,7 @@ export default function Couriers() {
                 const ledgerData = getCourierUnifiedLedger();
                 const debits = ledgerData.filter(i => i.type === 'Debit').reduce((sum, i) => sum + i.amountFCurrency, 0);
                 const credits = ledgerData.filter(i => i.type === 'Credit').reduce((sum, i) => sum + i.amountFCurrency, 0);
-                // ── Live balance from account_transactions (preferred over stored account.balance) ──
+                // ── Live balance from account_trans (preferred over stored account.balance) ──
                 const liveByCode = account?.accountCode ? liveBalances.byCode[account.accountCode] : undefined;
                 const liveById = account?.id ? liveBalances.byId[account.id] : undefined;
                 const netBalance = liveByCode ?? liveById ?? account?.balance ?? 0;

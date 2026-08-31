@@ -43,7 +43,7 @@ export default function Customers() {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // ── Live transaction-based balances (real-time from account_transactions) ────
+  // ── Live transaction-based balances (real-time from account_trans) ────
   const liveBalances = useAccountBalances();
   const [showModal, setShowModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -66,8 +66,8 @@ export default function Customers() {
     }
 
     const qTx = query(
-      collection(db, 'account_transactions'),
-      where('entityId', '==', selectedCustomer.id)
+      collection(db, 'account_trans'),
+      where('entity_id', '==', selectedCustomer.id)
     );
     const unsubTx = onSnapshot(qTx, (snap) => {
       const txs = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
@@ -279,8 +279,8 @@ export default function Customers() {
       );
 
       // ── Live balance: priority chain ────────────────────────────────────────────
-      // 1. Live from account_transactions by accountCode (most accurate)
-      // 2. Live from account_transactions by account document ID
+      // 1. Live from account_trans by accountCode (most accurate)
+      // 2. Live from account_trans by account document ID
       // 3. Stored balance field (fallback if no transactions yet)
       const liveByCode = acc?.accountCode ? liveBalances.byCode[acc.accountCode] : undefined;
       const liveById = acc?.id ? liveBalances.byId[acc.id] : undefined;

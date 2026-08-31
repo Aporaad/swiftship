@@ -467,7 +467,7 @@ export default function Expenses() {
 
       // 1. Check if we have linked account transactions (by expenseNumber vs refNumber)
       if (selectedExpense.expenseNumber) {
-        const txQuery = query(collection(db, 'account_transactions'), where('refNumber', '==', selectedExpense.expenseNumber));
+        const txQuery = query(collection(db, 'account_trans'), where('ref_number', '==', selectedExpense.expenseNumber));
         const txSnap = await getDocs(txQuery);
 
         txSnap.docs.forEach((txDoc) => {

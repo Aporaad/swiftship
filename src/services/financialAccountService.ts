@@ -570,8 +570,8 @@ class FinancialAccountService {
 
   /**
    * Complete unified double-entry journal voucher posting system.
-   * Creates a master entry in the `journal_entries` collection,
-   * leg entries in `account_transactions`, updates both balances,
+   * Creates a master entry in the `main_entry` collection,
+   * leg entries in `account_trans`, updates both balances,
    * and updates corresponding parent entities, entirely atomically.
    */
   async recordJournalEntry(
@@ -793,7 +793,7 @@ class FinancialAccountService {
     const randStr = Math.floor(1000 + Math.random() * 9000);
     const voucherCode = `SAL-${params.salaryMonth.replace("-", "")}-${randStr}`;
 
-    // 1. (REMOVED) We no longer record Salary in account_transactions
+    // 1. (REMOVED) We no longer record Salary in account_trans
     // as per the new requirement: it should only deduct from company profits
     // (handled via Expenses) and not affect the employee's account balance.
     /*
@@ -1194,7 +1194,7 @@ class FinancialAccountService {
 
   /**
    * يطلب من قاعدة البيانات إعادة احتساب رصيد الحساب من account_trans فقط.
-   * لا يسمح هذا المسار للواجهة بإعادة بناء الرصيد من account_transactions القديم.
+   * لا يسمح هذا المسار للواجهة بإعادة بناء الرصيد من جداول ملغاة.
    */
   // Debounce map: prevents cascade recalculations within 2 seconds for same account
   private _recalcDebounce: Map<string, ReturnType<typeof setTimeout>> = new Map();
@@ -1749,11 +1749,11 @@ class FinancialAccountService {
    * Completely purges a financial entity (customer, courier, or user) and all its financial footprint.
    * Steps:
    * 1. Finds the associated account in `accounts` table.
-   * 2. If account exists, finds all `account_transactions` legs linked to this account.
+   * 2. If account exists, finds all `account_trans` legs linked to this account.
    * 3. For each transaction leg:
    *    - Collects the opposite account ID (if it's a double-entry with another account).
-   *    - Deletes both legs of the double entry (or the entire transaction group by journalEntryId or refNumber).
-   *    - Deletes the associated master `journal_entries` document.
+   *    - Deletes both legs of the double entry.
+   *    - Deletes the associated master `main_entry` document.
    *    - Deletes any `expenses` documents linked to this transaction refNumber or accountId.
    * 4. Deletes the `accounts` document.
    * 5. Deletes the core entity document (from `customers`, `couriers`, or `users`).

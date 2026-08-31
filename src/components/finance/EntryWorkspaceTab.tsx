@@ -44,8 +44,8 @@ export interface FinanceAccount {
   entityType?: string; entityName?: string;
 }
 export interface FinanceCurrency { id: number; code: string; isDefault: boolean; }
-export interface FinanceModule   { id: string; code: string; nameAr: string; isActive?: boolean; }
-export interface FinanceEntryType{ id: string; moduleId: string; code: string; nameAr: string; isActive?: boolean; }
+export interface FinanceModule { id: string; code: string; nameAr: string; isActive?: boolean; }
+export interface FinanceEntryType { id: string; moduleId: string; code: string; nameAr: string; isActive?: boolean; }
 
 export interface FinanceEntryRow {
   id: string; entryNumber: string; moduleId: string; entryTypeId: string;
@@ -96,7 +96,7 @@ const paymentMethodLabel: Record<string, string> = {
 const statusStyle: Record<string, string> = {
   posted: 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30',
   voided: 'bg-rose-500/15 text-rose-300 border border-rose-500/30',
-  draft:  'bg-amber-500/15 text-amber-300 border border-amber-500/30',
+  draft: 'bg-amber-500/15 text-amber-300 border border-amber-500/30',
 };
 const statusLabel: Record<string, string> = {
   posted: 'مرحّل', voided: 'مبطل', draft: 'مسودة',
@@ -108,25 +108,25 @@ const statusFilterOptions = [
   { value: 'voided', label: 'مبطل' },
 ];
 const sortOptions = [
-  { value: 'date_desc',   label: 'الأحدث أولاً' },
-  { value: 'date_asc',    label: 'الأقدم أولاً' },
+  { value: 'date_desc', label: 'الأحدث أولاً' },
+  { value: 'date_asc', label: 'الأقدم أولاً' },
   { value: 'number_desc', label: 'رقم القيد تنازلياً' },
-  { value: 'number_asc',  label: 'رقم القيد تصاعدياً' },
+  { value: 'number_asc', label: 'رقم القيد تصاعدياً' },
   { value: 'amount_desc', label: 'الأعلى مبلغاً' },
-  { value: 'amount_asc',  label: 'الأقل مبلغاً' },
-  { value: 'status',      label: 'حسب الحالة' },
+  { value: 'amount_asc', label: 'الأقل مبلغاً' },
+  { value: 'status', label: 'حسب الحالة' },
 ];
 
 // ── أداة تصدير CSV ── CSV Export Helper
 const toCsvCell = (v: unknown) => `"${String(v ?? '').replaceAll('"', '""')}"`;
-const rowToCsv  = (cols: unknown[]) => cols.map(toCsvCell).join(',');
+const rowToCsv = (cols: unknown[]) => cols.map(toCsvCell).join(',');
 
 // ── أداة تصدير XLS ── XLS Export Helper (HTML table trick)
 function exportXls(filename: string, headers: string[], rows: string[][]) {
   const tableHtml = `<table><tr>${headers.map((h) => `<th>${h}</th>`).join('')}</tr>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}</table>`;
   const blob = new Blob(['\ufeff', tableHtml], { type: 'application/vnd.ms-excel;charset=utf-8' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a'); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url);
 }
 
 // ── المكوّن الرئيسي ── Main Component
@@ -143,36 +143,101 @@ export default function EntryWorkspaceTab({
 }: Props) {
 
   // ── حالة واجهة المستخدم ── UI State
-  const [showModal, setShowModal]     = useState(false);
+  const [showModal, setShowModal] = useState(false);
   const [editingEntry, setEditingEntry] = useState<any | null>(null);
   const [selectedVoucherSubKind, setSelectedVoucherSubKind] = useState<'cash' | 'bank' | 'multi'>('cash');
-  const [busyId, setBusyId]           = useState('');
-  const [error, setError]             = useState('');
+  const [selectedEntryIds, setSelectedEntryIds] = useState<string[]>([]);
+  const [busyId, setBusyId] = useState('');
+  const [isBatchProcessing, setIsBatchProcessing] = useState(false);
+  const [error, setError] = useState('');
 
   // حالة نوافذ التفاصيل والحذف — Details & Delete modal state
-  const [detailsEntry, setDetailsEntry]   = useState<FinanceEntryRow | null>(null);
-  const [deleteTarget, setDeleteTarget]   = useState<FinanceEntryRow | null>(null);
+  const [detailsEntry, setDetailsEntry] = useState<FinanceEntryRow | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<FinanceEntryRow | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // ── إجراءات التحديد المتعدد ── Multi-select handlers
+  const handleSelectAll = () => {
+    if (selectedEntryIds.length === visibleEntries.length && visibleEntries.length > 0) {
+      setSelectedEntryIds([]);
+    } else {
+      setSelectedEntryIds(visibleEntries.map((e) => e.id));
+    }
+  };
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedEntryIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  // ── حذف جماعي ── Bulk Delete
+  const handleBatchDelete = async () => {
+    if (selectedEntryIds.length === 0) return;
+    if (!window.confirm(`هل أنت تأكد من رغبتك في حذف ${selectedEntryIds.length} قيد/سند بشكل نهائي مع كافة أطرافها وحركاتها التابعة؟`)) return;
+
+    try {
+      setIsBatchProcessing(true);
+      setError('');
+      for (const id of selectedEntryIds) {
+        const target = baseEntries.find((e) => e.id === id);
+        if (target?.postingStatus === 'posted') {
+          await financialEntryService.deletePosted(id, createdByUid);
+        } else {
+          await financialEntryService.deleteDraft(id);
+        }
+      }
+      setSelectedEntryIds([]);
+      onChanged();
+    } catch (cause: any) {
+      setError(cause?.message || 'تعذر إجراء الحذف الجماعي للقيود.');
+    } finally {
+      setIsBatchProcessing(false);
+    }
+  };
+
+  // ── ترحيل جماعي ── Bulk Post
+  const handleBatchPost = async () => {
+    if (selectedEntryIds.length === 0 || !canPost) return;
+    if (!window.confirm(`هل أنت تأكد من ترحيل ${selectedEntryIds.length} قيد/سند؟`)) return;
+
+    try {
+      setIsBatchProcessing(true);
+      setError('');
+      for (const id of selectedEntryIds) {
+        const target = baseEntries.find((e) => e.id === id);
+        if (target?.postingStatus === 'draft') {
+          await financialEntryService.post(id, createdByUid);
+        }
+      }
+      setSelectedEntryIds([]);
+      onChanged();
+    } catch (cause: any) {
+      setError(cause?.message || 'تعذر إجراء الترحيل الجماعي للقيود.');
+    } finally {
+      setIsBatchProcessing(false);
+    }
+  };
 
   // حالة الفلاتر والبحث — Filters & Search state
   const [showFilters, setShowFilters] = useState(false);
-  const [search,       setSearch]     = useState('');
+  const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterPayMethod, setFilterPayMethod] = useState('');
-  const [filterCurrency, setFilterCurrency]   = useState('');
-  const [filterModuleId, setFilterModuleId]   = useState('');
-  const [filterTypeId, setFilterTypeId]       = useState('');
-  const [filterDateFrom, setFilterDateFrom]   = useState('');
-  const [filterDateTo, setFilterDateTo]       = useState('');
-  const [filterAmtMin, setFilterAmtMin]       = useState('');
-  const [filterAmtMax, setFilterAmtMax]       = useState('');
-  const [sortBy, setSortBy]                   = useState('date_desc');
+  const [filterCurrency, setFilterCurrency] = useState('');
+  const [filterModuleId, setFilterModuleId] = useState('');
+  const [filterTypeId, setFilterTypeId] = useState('');
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
+  const [filterAmtMin, setFilterAmtMin] = useState('');
+  const [filterAmtMax, setFilterAmtMax] = useState('');
+  const [sortBy, setSortBy] = useState('date_desc');
 
   // ── خرائط بحث سريعة ── Lookup Maps
   const currencyById = useMemo(() => new Map(currencies.map((c) => [c.id, c.code])), [currencies]);
-  const typeById     = useMemo(() => new Map(entryTypes.map((t) => [t.id, t])),       [entryTypes]);
-  const moduleById   = useMemo(() => new Map(modules.map((m) => [m.id, m])),          [modules]);
-  const accountById  = useMemo(() => new Map(accounts.map((a) => [a.id, a])),        [accounts]);
+  const typeById = useMemo(() => new Map(entryTypes.map((t) => [t.id, t])), [entryTypes]);
+  const moduleById = useMemo(() => new Map(modules.map((m) => [m.id, m])), [modules]);
+  const accountById = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
 
   // ── قوائم منسدلة للفلاتر ── Filter dropdown lists
   const formTypes = useMemo(
@@ -210,8 +275,8 @@ export default function EntryWorkspaceTab({
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       list = list.filter((e) => {
-        const typeName  = typeById.get(e.entryTypeId)?.nameAr?.toLowerCase() || '';
-        const modName   = moduleById.get(e.moduleId)?.nameAr?.toLowerCase() || '';
+        const typeName = typeById.get(e.entryTypeId)?.nameAr?.toLowerCase() || '';
+        const modName = moduleById.get(e.moduleId)?.nameAr?.toLowerCase() || '';
         return e.entryNumber.toLowerCase().includes(q) ||
           (e.description || '').toLowerCase().includes(q) ||
           typeName.includes(q) || modName.includes(q);
@@ -229,7 +294,7 @@ export default function EntryWorkspaceTab({
     if (filterTypeId) list = list.filter((e) => e.entryTypeId === filterTypeId);
     // فلتر الفترة — Date range filter
     if (filterDateFrom) list = list.filter((e) => (e.effectiveAt || e.createdAt || '') >= filterDateFrom);
-    if (filterDateTo)   list = list.filter((e) => (e.effectiveAt || e.createdAt || '') <= filterDateTo + 'T23:59:59');
+    if (filterDateTo) list = list.filter((e) => (e.effectiveAt || e.createdAt || '') <= filterDateTo + 'T23:59:59');
     // فلتر نطاق المبلغ — Amount range filter
     if (filterAmtMin) list = list.filter((e) => Number(e.amountOriginal) >= Number(filterAmtMin));
     if (filterAmtMax) list = list.filter((e) => Number(e.amountOriginal) <= Number(filterAmtMax));
@@ -237,14 +302,14 @@ export default function EntryWorkspaceTab({
     // الفرز — Sorting
     list = [...list].sort((a, b) => {
       switch (sortBy) {
-        case 'date_asc':    return (a.effectiveAt || a.createdAt || '').localeCompare(b.effectiveAt || b.createdAt || '');
-        case 'date_desc':   return (b.effectiveAt || b.createdAt || '').localeCompare(a.effectiveAt || a.createdAt || '');
-        case 'number_asc':  return a.entryNumber.localeCompare(b.entryNumber);
+        case 'date_asc': return (a.effectiveAt || a.createdAt || '').localeCompare(b.effectiveAt || b.createdAt || '');
+        case 'date_desc': return (b.effectiveAt || b.createdAt || '').localeCompare(a.effectiveAt || a.createdAt || '');
+        case 'number_asc': return a.entryNumber.localeCompare(b.entryNumber);
         case 'number_desc': return b.entryNumber.localeCompare(a.entryNumber);
-        case 'amount_asc':  return Number(a.amountOriginal) - Number(b.amountOriginal);
+        case 'amount_asc': return Number(a.amountOriginal) - Number(b.amountOriginal);
         case 'amount_desc': return Number(b.amountOriginal) - Number(a.amountOriginal);
-        case 'status':      return (statusLabel[a.postingStatus] || '').localeCompare(statusLabel[b.postingStatus] || '');
-        default:            return (b.effectiveAt || b.createdAt || '').localeCompare(a.effectiveAt || a.createdAt || '');
+        case 'status': return (statusLabel[a.postingStatus] || '').localeCompare(statusLabel[b.postingStatus] || '');
+        default: return (b.effectiveAt || b.createdAt || '').localeCompare(a.effectiveAt || a.createdAt || '');
       }
     });
     return list;
@@ -252,9 +317,9 @@ export default function EntryWorkspaceTab({
 
   // ── الإحصائيات ── Statistics
   const stats = useMemo(() => {
-    const postedList  = baseEntries.filter((e) => e.postingStatus === 'posted');
-    const draftList   = baseEntries.filter((e) => e.postingStatus === 'draft');
-    const voidedList  = baseEntries.filter((e) => e.postingStatus === 'voided');
+    const postedList = baseEntries.filter((e) => e.postingStatus === 'posted');
+    const draftList = baseEntries.filter((e) => e.postingStatus === 'draft');
+    const voidedList = baseEntries.filter((e) => e.postingStatus === 'voided');
     const totalAmount = postedList.reduce((s, e) => s + Number(e.amountOriginal), 0);
     return { total: baseEntries.length, posted: postedList.length, draft: draftList.length, voided: voidedList.length, totalAmount };
   }, [baseEntries]);
@@ -274,10 +339,10 @@ export default function EntryWorkspaceTab({
   const exportHeaders = ['رقم القيد', 'النوع', 'الفئة', 'الحالة', 'المبلغ', 'العملة', 'طريقة الدفع', 'البيان', 'التاريخ'];
 
   const exportCsv = () => {
-    const rows  = buildExportRows();
-    const blob  = new Blob([[rowToCsv(exportHeaders), ...rows.map(rowToCsv)].join('\n')], { type: 'text/csv;charset=utf-8' });
-    const url   = URL.createObjectURL(blob);
-    const a     = document.createElement('a'); a.href = url; a.download = `${title}-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(url);
+    const rows = buildExportRows();
+    const blob = new Blob([[rowToCsv(exportHeaders), ...rows.map(rowToCsv)].join('\n')], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `${title}-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(url);
   };
   const exportXlsFile = () => exportXls(`${title}-${new Date().toISOString().slice(0, 10)}.xls`, exportHeaders, buildExportRows());
   const printPdf = () => {
@@ -351,7 +416,7 @@ export default function EntryWorkspaceTab({
   // ── إبطال أو عكس ── Void / Reverse
   const runSensitiveAction = async (entry: FinanceEntryRow, action: 'void' | 'reverse') => {
     const prompts = {
-      void:    `سيُبطل القيد ${entry.entryNumber} ولن يمكن إعادة تفعيله. هل تريد المتابعة؟`,
+      void: `سيُبطل القيد ${entry.entryNumber} ولن يمكن إعادة تفعيله. هل تريد المتابعة؟`,
       reverse: `سيُنشأ قيد عكسي مرحّل للقيد ${entry.entryNumber}. هل تريد المتابعة؟`,
     };
     if (!window.confirm(prompts[action])) return;
@@ -622,6 +687,46 @@ export default function EntryWorkspaceTab({
       )}
 
       {/* ────────────────────────────────────────────
+          شريط الإجراءات الجماعية — Batch Actions Bar
+          ──────────────────────────────────────────── */}
+      {selectedEntryIds.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-amber-200">
+          <div className="flex items-center gap-2 font-bold text-xs">
+            <span className="rounded-full bg-amber-500 px-2.5 py-0.5 text-slate-950 font-black">
+              {selectedEntryIds.length}
+            </span>
+            <span>قيود/سندات محددة</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {canPost && (
+              <button
+                disabled={isBatchProcessing}
+                onClick={handleBatchPost}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 px-3 py-1.5 text-xs font-black text-slate-950 transition"
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" /> ترحيل المحدد
+              </button>
+            )}
+            {(canDelete || canDeletePosted) && (
+              <button
+                disabled={isBatchProcessing}
+                onClick={handleBatchDelete}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 px-3 py-1.5 text-xs font-black text-white transition"
+              >
+                <Trash2 className="h-3.5 w-3.5" /> حذف المحدد
+              </button>
+            )}
+            <button
+              onClick={() => setSelectedEntryIds([])}
+              className="inline-flex items-center gap-1 rounded-xl border border-slate-700 px-2.5 py-1.5 text-xs font-bold text-slate-300 hover:bg-slate-800 transition"
+            >
+              <X className="h-3.5 w-3.5" /> إلغاء التحديد
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ────────────────────────────────────────────
           نتيجة الفلترة — Filter Result Count
           ──────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-1">
@@ -638,6 +743,14 @@ export default function EntryWorkspaceTab({
         <table className="min-w-[900px] w-full text-right text-xs">
           <thead className="bg-slate-900 text-slate-400">
             <tr>
+              <th className="px-3 py-3 text-center w-10">
+                <input
+                  type="checkbox"
+                  checked={visibleEntries.length > 0 && selectedEntryIds.length === visibleEntries.length}
+                  onChange={handleSelectAll}
+                  className="rounded border-slate-700 bg-slate-900 text-[#d4af37] focus:ring-0"
+                />
+              </th>
               <th className="px-4 py-3">رقم القيد</th>
               <th className="px-4 py-3">البيان</th>
               <th className="px-4 py-3">النوع</th>
@@ -650,7 +763,15 @@ export default function EntryWorkspaceTab({
           </thead>
           <tbody className="divide-y divide-slate-800">
             {visibleEntries.map((entry) => (
-              <tr key={entry.id} className="hover:bg-slate-900/40 transition text-slate-200">
+              <tr key={entry.id} className={`hover:bg-slate-900/40 transition text-slate-200 ${selectedEntryIds.includes(entry.id) ? 'bg-amber-500/5' : ''}`}>
+                <td className="px-3 py-3 text-center">
+                  <input
+                    type="checkbox"
+                    checked={selectedEntryIds.includes(entry.id)}
+                    onChange={() => handleToggleSelect(entry.id)}
+                    className="rounded border-slate-700 bg-slate-900 text-[#d4af37] focus:ring-0"
+                  />
+                </td>
                 {/* رقم القيد — Entry Number */}
                 <td className="px-4 py-3 font-mono font-black text-[#f4d870] whitespace-nowrap">
                   {entry.entryNumber}
@@ -664,7 +785,7 @@ export default function EntryWorkspaceTab({
                 {/* المبلغ — Amount */}
                 <td className="px-4 py-3 font-mono font-black text-white whitespace-nowrap">
                   {Number(entry.amountOriginal).toLocaleString()}
-                  <span className="mr-1 text-slate-500 text-[10px]">{currencyById.get(entry.currencyOriginalNo)}</span>
+                  <span className="mr-1 text-slate-500 text-[10px]">{" " + currencyById.get(entry.currencyOriginalNo)}</span>
                 </td>
                 {/* طريقة الدفع — Payment Method */}
                 <td className="px-4 py-3 text-slate-400">{paymentMethodLabel[entry.paymentMethod || ''] || '—'}</td>

@@ -95,8 +95,8 @@ export default function GlobalEntityLedgerModal() {
       }, (err) => console.error("Error fetching expenses:", err));
     }
 
-    // 4. Fetch Ledger Account Transactions
-    const qTx = query(collection(db, 'account_transactions'), where('entityId', '==', entityId));
+    // 4. Fetch Ledger Account Transactions from account_trans
+    const qTx = query(collection(db, 'account_trans'), where('entity_id', '==', entityId));
     const unsubTx = onSnapshot(qTx, (snap) => {
       setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       setLoading(false);
@@ -169,19 +169,22 @@ export default function GlobalEntityLedgerModal() {
         // Prevent duplication: our order generator always adds the 'order charge' debit line
         if (tx.module === 'order') return;
 
+        const currentType = tx.transType || tx.trans_type || tx.type || 'Debit';
+        const refNo = tx.entryNumber || tx.entry_number || tx.refNumber || tx.accountCode || '';
+
         ledger.push({
           id: tx.id || `tx-${Math.random()}`,
           date: tx.createdAt || Date.now(),
-          type: tx.type, // 'Debit' | 'Credit'
+          type: currentType, // 'Debit' | 'Credit'
           amount: tx.amount || 0,
-          amountOriginal: tx.amountOriginal || tx.amount || 0,
-          currencyOriginal: tx.currencyOriginal || 'YER',
+          amountOriginal: tx.amountOriginal || tx.amount_original || tx.amount || 0,
+          currencyOriginal: tx.currencyOriginal || tx.currency || 'YER',
           module: 'transaction',
-          title: tx.description ? tx.description : (isAr ? (tx.type === 'Credit' ? 'إيداع نقدي للحساب' : 'سحب / تسوية من الحساب') : (tx.type === 'Credit' ? 'Account Deposit' : 'Account Withdrawal')),
+          title: tx.description ? tx.description : (isAr ? (currentType === 'Credit' ? 'إيداع نقدي للحساب' : 'سحب / تسوية من الحساب') : (currentType === 'Credit' ? 'Account Deposit' : 'Account Withdrawal')),
           description: isAr 
-            ? `حركة حساب مركزية رقم القيد: ${tx.refNumber || tx.accountCode || 'Ledger-Tx'}`
-            : `System journal entry ref: ${tx.refNumber || tx.accountCode || 'Ledger-Tx'}`,
-          ref: tx.refNumber || tx.accountCode || ''
+            ? `حركة حساب مركزية رقم القيد: ${refNo || 'Ledger-Tx'}`
+            : `System journal entry ref: ${refNo || 'Ledger-Tx'}`,
+          ref: refNo
         });
       });
 
@@ -189,14 +192,15 @@ export default function GlobalEntityLedgerModal() {
       // ----------------- COURIER LEDGER GENERATOR -----------------
       transactions.forEach(tx => {
         const amtBase = parseFloat(tx.amount || 0);
-        const amtOriginal = parseFloat(tx.amountOriginal || tx.amount || 0);
+        const amtOriginal = parseFloat(tx.amountOriginal || tx.amount_original || tx.amount || 0);
+        const refNo = tx.entryNumber || tx.entry_number || tx.refNumber || tx.accountCode || 'GL-TX';
 
         // We normalize types to ensure perfect bookkeeping and auto-heal any legacy data quirks.
-        let type = tx.type || 'Debit';
+        let type = tx.transType || tx.trans_type || tx.type || 'Debit';
         let title = '';
-        let category = tx.module || 'transaction';
+        let category = tx.module || tx.moduleId || 'transaction';
 
-        if (tx.module === 'custody') {
+        if (category === 'custody') {
           const isSettlement = (tx.description || '').includes('تسوية') || 
                                (tx.description || '').includes('سداد') || 
                                (tx.description || '').toLowerCase().includes('settle');
@@ -207,16 +211,16 @@ export default function GlobalEntityLedgerModal() {
             type = 'Debit';
             title = isAr ? 'تسليم عهدة مالية للمندوب' : 'Custody Handed Over';
           }
-        } else if (tx.module === 'order') {
-          if (tx.type === 'Debit') {
+        } else if (category === 'order') {
+          if (type === 'Debit') {
             title = isAr ? 'تحصيل قيمة شحنة (كاش بعهدة المندوب)' : 'Collected COD Cargo Cash';
           } else {
             title = isAr ? 'أجور توصيل وعمولة المندوب للطلب' : 'Earned Courier Delivery Commission';
           }
-        } else if (tx.module === 'expense') {
+        } else if (category === 'expense') {
           type = 'Credit';
           title = isAr ? 'مصروف تشغيلي / أجور مسددة' : 'Operating Expense / Disbursed';
-        } else if (tx.module === 'wage' || tx.module === 'salary_payment') {
+        } else if (category === 'wage' || category === 'salary_payment') {
           type = 'Credit';
           title = isAr ? 'صرف راتب أو مستحقات الموظف' : 'Salary / Wages Paid';
         } else {
@@ -229,11 +233,11 @@ export default function GlobalEntityLedgerModal() {
           type,
           amount: amtBase,
           amountOriginal: amtOriginal,
-          currencyOriginal: tx.currencyOriginal || 'YER',
+          currencyOriginal: tx.currencyOriginal || tx.currency || 'YER',
           module: category,
           title,
-          description: tx.description || (isAr ? `قيد مالي رقم: ${tx.refNumber || tx.accountCode || ''}` : `Entry reference: ${tx.refNumber || tx.accountCode || ''}`),
-          ref: tx.refNumber || tx.accountCode || 'GL-TX'
+          description: tx.description || (isAr ? `قيد مالي رقم: ${refNo}` : `Entry reference: ${refNo}`),
+          ref: refNo
         });
       });
     }

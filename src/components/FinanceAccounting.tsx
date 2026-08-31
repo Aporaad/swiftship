@@ -269,7 +269,7 @@ export default function FinanceAccounting({
       .reduce((sum, a) => sum + convertToYER(a.cost || 0, a.currency || 'YER'), 0);
   }, [assets, settings]);
 
-  // 1. Double-Entry General Chronology Ledger (Unified & Grouped from account_transactions and unlinked expenses)
+  // 1. Double-Entry General Chronology Ledger (Unified & Grouped from account_trans and unlinked expenses)
   const ledgerEntries = useMemo(() => {
     const groupedMap = new Map<string, { debitLeg?: any; creditLeg?: any; legs: any[] }>();
 
@@ -661,8 +661,8 @@ export default function FinanceAccounting({
         const refNum = selectedEditEntry.refNumber;
 
         const txQuery = refNum
-          ? query(collection(db, 'account_transactions'), where('refNumber', '==', refNum))
-          : query(collection(db, 'account_transactions'), where('__name__', '==', txId));
+          ? query(collection(db, 'account_trans'), where('ref_number', '==', refNum))
+          : query(collection(db, 'account_trans'), where('__name__', '==', txId));
 
         const txSnap = await getDocs(txQuery);
         const exchangeRates = dbRates;
@@ -727,9 +727,9 @@ export default function FinanceAccounting({
           }
         }
 
-        // Update master journal entry doc if exists
+        // Update master entry doc in main_entry if exists
         if (selectedEditEntry.journalEntryId) {
-          const jvRef = doc(db, 'journal_entries', selectedEditEntry.journalEntryId);
+          const jvRef = doc(db, 'main_entry', selectedEditEntry.journalEntryId);
           batch.update(jvRef, {
             amount: rawAmt,
             currency: editJournalData.currencyOriginal,
@@ -804,15 +804,15 @@ export default function FinanceAccounting({
       if (entryToDelete.allLegs && entryToDelete.allLegs.length > 0) {
         entryToDelete.allLegs.forEach((leg: any) => {
           if (leg.id) {
-            batch.delete(doc(db, 'account_transactions', leg.id));
+            batch.delete(doc(db, 'account_trans', leg.id));
           }
           if (leg.accountId) affectedAccountIds.add(leg.accountId);
         });
       } else if (entryToDelete.id && !entryToDelete.id.startsWith('EXP-UNLINKED-')) {
         const refNum = entryToDelete.refNumber;
         const qTx = refNum
-          ? query(collection(db, 'account_transactions'), where('refNumber', '==', refNum))
-          : query(collection(db, 'account_transactions'), where('__name__', '==', entryToDelete.id));
+          ? query(collection(db, 'account_trans'), where('ref_number', '==', refNum))
+          : query(collection(db, 'account_trans'), where('__name__', '==', entryToDelete.id));
         const snap = await getDocs(qTx);
         snap.docs.forEach(d => {
           batch.delete(d.ref);
@@ -821,9 +821,9 @@ export default function FinanceAccounting({
         });
       }
 
-      // Delete master journal entry document if present
+      // Delete master entry document from main_entry if present
       if (entryToDelete.journalEntryId) {
-        batch.delete(doc(db, 'journal_entries', entryToDelete.journalEntryId));
+        batch.delete(doc(db, 'main_entry', entryToDelete.journalEntryId));
       }
 
       // Delete unlinked expense document if present
@@ -1364,7 +1364,7 @@ Continue?`
     }
   };
 
-  // 3. Bilateral Customer Statement of Account Ledger (Standard matching sub-ledger using account_transactions)
+  // 3. Bilateral Customer Statement of Account Ledger (Standard matching sub-ledger using account_trans)
   const customerLedgerDetails = useMemo(() => {
     if (!auditedCustomerId) return null;
     const cust = customers.find(c => c.id === auditedCustomerId);

@@ -475,8 +475,8 @@ export default function Reports() {
   // Fetch ALL account transactions for general financial metrics calculation
   useEffect(() => {
     const qAllTxs = query(
-      collection(db, 'account_transactions'),
-      orderBy('createdAt', 'desc')
+      collection(db, 'account_trans'),
+      orderBy('created_at', 'desc')
     );
 
     const unsub = onSnapshot(qAllTxs, (snap) => {
@@ -669,8 +669,8 @@ export default function Reports() {
       (isPackagingReport ? packagingAccountId : null);
 
     const qTx = query(
-      collection(db, 'account_transactions'),
-      orderBy('createdAt', 'desc')
+      collection(db, 'account_trans'),
+      orderBy('created_at', 'desc')
     );
 
     const unsub = onSnapshot(qTx, (snap) => {

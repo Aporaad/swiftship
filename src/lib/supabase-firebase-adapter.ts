@@ -235,6 +235,47 @@ export function extractRowPayload(table: string, row: any): any {
   if (combined.is_active !== undefined && combined.isActive === undefined) combined.isActive = !!combined.is_active;
   if (combined.isActive !== undefined && combined.is_active === undefined) combined.is_active = !!combined.isActive;
 
+  // Compatibility aliases for account_trans and main_entry
+  if (table === 'account_trans') {
+    if (combined.account_id && !combined.accountId) combined.accountId = combined.account_id;
+    if (combined.accountId && !combined.account_id) combined.account_id = combined.accountId;
+    if (combined.entry_id && !combined.entryId) combined.entryId = combined.entry_id;
+    if (combined.entryId && !combined.entry_id) combined.entry_id = combined.entryId;
+    if (combined.trans_type && !combined.transType) combined.transType = combined.trans_type;
+    if (combined.transType && !combined.trans_type) combined.trans_type = combined.transType;
+    if (combined.transType && !combined.type) combined.type = combined.transType;
+    if (combined.type && !combined.transType) combined.transType = combined.type;
+    if (combined.amount_original !== undefined && combined.amountOriginal === undefined) combined.amountOriginal = Number(combined.amount_original);
+    if (combined.amountOriginal !== undefined && combined.amount_original === undefined) combined.amount_original = Number(combined.amountOriginal);
+    if (combined.account_cur_no !== undefined && combined.accountCurNo === undefined) combined.accountCurNo = Number(combined.account_cur_no);
+    if (combined.accountCurNo !== undefined && combined.account_cur_no === undefined) combined.account_cur_no = Number(combined.accountCurNo);
+    if (combined.currency_original_no !== undefined && combined.currencyOriginalNo === undefined) combined.currencyOriginalNo = Number(combined.currency_original_no);
+    if (combined.currencyOriginalNo !== undefined && combined.currency_original_no === undefined) combined.currency_original_no = Number(combined.currencyOriginalNo);
+    if (combined.order_id && !combined.orderId) combined.orderId = combined.order_id;
+    if (combined.orderId && !combined.order_id) combined.order_id = combined.orderId;
+    if (combined.shipment_id && !combined.shipmentId) combined.shipmentId = combined.shipment_id;
+    if (combined.shipmentId && !combined.shipment_id) combined.shipment_id = combined.shipmentId;
+    if (combined.payment_method && !combined.paymentMethod) combined.paymentMethod = combined.payment_method;
+    if (combined.paymentMethod && !combined.payment_method) combined.payment_method = combined.paymentMethod;
+    if (combined.created_at && !combined.createdAt) combined.createdAt = combined.created_at;
+    if (combined.createdAt && !combined.created_at) combined.created_at = combined.createdAt;
+  }
+
+  if (table === 'main_entry' || table === 'journal_entries') {
+    if (combined.entry_number && !combined.entryNumber) combined.entryNumber = combined.entry_number;
+    if (combined.entryNumber && !combined.entry_number) combined.entry_number = combined.entryNumber;
+    if (combined.entry_number && !combined.journalEntryNumber) combined.journalEntryNumber = combined.entry_number;
+    if (combined.posting_status && !combined.postingStatus) combined.postingStatus = combined.posting_status;
+    if (combined.postingStatus && !combined.posting_status) combined.posting_status = combined.postingStatus;
+    if (combined.postingStatus && !combined.status) combined.status = combined.postingStatus;
+    if (combined.module_id && !combined.moduleId) combined.moduleId = combined.module_id;
+    if (combined.module_id && !combined.module) combined.module = combined.module_id;
+    if (combined.entry_type_id && !combined.entryTypeId) combined.entryTypeId = combined.entry_type_id;
+    if (combined.effective_at && !combined.effectiveAt) combined.effectiveAt = combined.effective_at;
+    if (combined.created_at && !combined.createdAt) combined.createdAt = combined.created_at;
+    if (combined.createdAt && !combined.created_at) combined.created_at = combined.createdAt;
+  }
+
   const normalized = normalizePayload(table, combined);
   return { id: rowId, ...normalized };
 }
@@ -481,7 +522,10 @@ export function getFirestore(...args: any[]): any {
 }
 
 export function collection(dbInstance: any, path: string) {
-  return new FirebaseQuery(path);
+  let targetPath = path;
+  if (path === 'account_transactions') targetPath = 'account_trans';
+  if (path === 'journal_entries') targetPath = 'main_entry';
+  return new FirebaseQuery(targetPath);
 }
 
 export function doc(...args: any[]) {
@@ -593,7 +637,6 @@ const DIRECT_COLUMNS_MAP: Record<string, Record<string, string>> = {
   orders: { orderNumber: 'order_number', trackingNumber: 'tracking_number', customerId: 'customer_id', orderPartyId: 'order_party_id', orderPartyType: 'order_party_type', isStaffOrder: 'is_staff_order', employeeId: 'employee_id', courierId: 'courier_id', customerAccountId: 'order_party_account_id', orderPartyAccountId: 'order_party_account_id', orderStatusId: 'order_status_id', order_status_id: 'order_status_id', createdAt: 'createdAt', orderSourceId: 'order_source_id', order_source_id: 'order_source_id', orderSourceType: 'order_source_type', order_source_type: 'order_source_type', deliveryCourierId: 'delivery_courier_id', delivery_courier_id: 'delivery_courier_id', shippingCourierId: 'shipping_courier_id', shipping_courier_id: 'shipping_courier_id' },
   shipping_companies: { name: 'name', shippingCompanyUrl: 'shipping_company_url', trackingIDPrefix: 'trackingID_prefix', accountId: 'account_id', financialAccountId: 'account_id' },
   sources: { name: 'name', supplierType: 'type', type: 'type', sourceUrl: 'source_url', accountId: 'account_id', financialAccountId: 'account_id' },
-  account_transactions: { type: 'type', accountId: 'account_id', journalEntryNumber: 'journalEntryNumber', journalEntryId: 'journalEntryNumber', module: 'module', currency: 'currency', curNo: 'cur_no', currencyId: 'cur_no', createdAt: 'createdAt', amount: 'amount', orderId: 'order_id', orderNumber: 'order_number', shipmentId: 'shipment_id', automationKey: 'automation_key', autoRuleId: 'auto_rule_id' },
   expenses: { expenseNumber: 'expense_number', transactionsID: 'transactionsID', linkedAccountId: 'account_id', financialAccountId: 'account_id', accountId: 'account_id', category: 'category', amount: 'amount', currency: 'currency', curNo: 'cur_no', currencyId: 'cur_no', createdAt: 'createdAt' },
   salary_history: { transactionsID: 'transactionsID', financialAccountId: 'account_id', accountId: 'account_id', userId: 'user_id', amount: 'amount', currency: 'currency', curNo: 'cur_no', currencyId: 'cur_no', salaryMonth: 'month', month: 'month', createdAt: 'createdAt' },
   journal_entries: { transactionID: 'transactionID', accountId: 'account_id', createdByUid: 'created_by_uid', curNo: 'cur_no', currencyId: 'cur_no', createdAt: 'createdAt', orderId: 'order_id', orderNumber: 'order_number', shipmentId: 'shipment_id', automationKey: 'automation_key', autoRuleId: 'auto_rule_id', statusId: 'status_id', isAutomatic: 'is_automatic' },

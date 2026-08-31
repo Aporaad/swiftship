@@ -82,7 +82,7 @@ export default function Layout() {
   const downloadBackup = () => {
     try {
       const backup: any = {};
-      const tables = ['users', 'orders', 'expenses', 'settings', 'accounts', 'account_transactions', 'activity_logs', 'roles', 'sources', 'notifications'];
+      const tables = ['users', 'orders', 'expenses', 'settings', 'accounts', 'account_trans', 'activity_logs', 'roles', 'sources', 'notifications'];
       tables.forEach(table => {
         const saved = localStorage.getItem(`swiftship_table_backup_${table}`);
         if (saved) {

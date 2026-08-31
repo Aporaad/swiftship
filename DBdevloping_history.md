@@ -1,6 +1,12 @@
 # سجل تطوير قاعدة البيانات — DBdevloping_history.md
 
-## [2026-08-30 03:13:00] — استكمال ربط الصلاحيات في Firestore وشجرة الأدوار المحاسبية
+## [2026-08-30 06:13:00] — استكمال ضبط حقول ومحولات الجداول الإرثية والتحصيل الذري
+- **تحسين وسائط التعبير لبيانات الجداول الإرثية**:
+  - تعديل التعامل مع كائن العمود `data` في دالة استخراج الصفوف بالحامي `extractRowPayload` تجنبًا لاستثناءات الاستعلام على الكيانات التي لا تستخدم هذا العمود.
+- **دعم مطابقة حسابات القبض التلقائية للطلبات**:
+  - ضبط استعلامات وتحديثات تحصيل دفعة الطلب الذرية لتقبل حسابات الصندوق والبنك التي تطابق عملة الدفع المسجلة صراحة للطلب (`YER` / `SAR` / `USD`).
+
+---
 
 ### التحديثات والتعديلات المنفذة:
 - **توحيد مصفوفة ومجموعات الصلاحيات المحاسبية**:
@@ -248,3 +254,52 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 4. **حذف الجداول القديمة**:
    - تنفيذ `DROP TABLE IF EXISTS public.account_transactions CASCADE;`
    - تنفيذ `DROP TABLE IF EXISTS public.journal_entries CASCADE;`
+
+---
+
+## [2026-08-30 04:36:00] — إعادة بناء دوال حذف وتعديل القيود وحذف الطلبات وتحصيل الدفعات بـ Postgres
+
+### التحديثات والترحيلات المنفذة في قاعدة البيانات:
+1. **تحديث دالة `delete_orders_with_dependents(p_order_ids text[])`**:
+   - إزالة المراجع المحذوفة لجدولي `journal_entries` و `account_transactions`.
+   - استهداف وتطهير القيود والحركات والأسطر المنسوبة للطلبات عبر `main_entry` و `account_trans` و `entry_payment_details`.
+   - استدعاء `recalculate_accounting_hierarchy` لإعادة ضبط أرصدة الحسابات المتأثرة بالحذف تلقائياً.
+
+2. **تحديث دالتي حذف القيود (`delete_financial_entry_draft` & `secure_delete_posted_financial_entry`)**:
+   - إزالة القيد المانع `entry_record.posting_status <> 'draft'`.
+   - تجميع معرّفات الحسابات المتأثرة من `account_trans` قبل الحذف.
+   - حذف أسطر القيد من `entry_payment_details` و `account_trans` و رأس القيد من `main_entry` وإعادة احتساب الأرصدة التابعة فوراً.
+
+3. **تحديث دالتي تعديل القيود (`replace_financial_entry_draft` & `secure_replace_posted_financial_entry`)**:
+   - إزالة المانع لتعديل القيود المرحّلة والسماح بتحديث واستبدال أسطر القيد في `account_trans` وفي `main_entry` وإعادة تجميع أرصدته.
+
+4. **تحديث دالة تحصيل دفعة الطلب (`record_order_payment_v2`)**:
+   - إلغاء قيد المطابقة الجبرية لعملة حساب الطرف مع عملة الدفع والسماح بالتحصيل متعدد العملات عبر أسعار الصرف المثبتة بـ `cur_price`.
+   - تنقية حقول الـ JSON العدية لمنع رفع استثناء `invalid input syntax for type numeric: ""`.
+
+---
+
+## [2026-08-30 05:14:00] — تحديث دالة enforce_account_transaction_posting_rules وتطهير قاعدة البيانات
+
+### التحديثات والترحيلات المنفذة في قاعدة البيانات:
+1. **تحديث دالة `enforce_account_transaction_posting_rules`**:
+   - تحويل استعلام فحص سقف الرصيد الطبيعي ليعتمد حصراً على `public.account_trans` واستخدام عمود `trans_type` بدلاً من أسماء الأعمدة المحذوفة.
+2. **التحقق والمسح الفعلي لقاعدة البيانات**:
+   - تشغيل استعلام SQL مسحي على كافة إجراءات ودوال schema لـ Supabase والتأكد المباشر من أن نسبة وجود الجداول القديمة بجميع إجراءات Postgres هي **0%**.
+
+---
+
+## [2026-08-31 04:22:00] — إصلاح إجراءات القيود والتحصيل وسجل الحذف بالحزم المحمّلة لـ Postgres
+
+### التحديثات والترحيلات المنفذة في قاعدة البيانات:
+1. **تحديث دالة `replace_financial_entry_draft(p_entry_id text, p_entry jsonb)`**:
+   - إضافة `SET search_path = public, auth` لضمان وصول الإجراء الذري بدقة إلى التوقيع المحمّل بمصفوفة النصوص `public.recalculate_accounting_hierarchy(text[])`.
+2. **تحديث دالة التريجر `derive_account_trans_conversion_rate()`**:
+   - المعالجة الآلية للتطابق التام `NEW.amount := NEW.amount_original` و `NEW.conversion_rate := 1.0` في حال كون `account_cur_no = currency_original_no`.
+   - الاستخراج والربط التلقائي لمرجع سعر الصرف الحقيقي `currency_price_id` و `currency_price_seq` من جدول `cur_price` فور إدخال حركة متعددة العملات بدون مرجع صريح.
+3. **تحديث دالتي `delete_orders_with_dependents` و `orders_history_from_orders`**:
+   - ضبط الإعداد الجلسي `swiftship.suppress_order_delete_history` لمنع التريجر من محاولة الإدراج بسجل التاريخ لطلب أزيل بالفعل من جدول `orders` ومنع رفع استثناء `orders_history_order_id_fkey`.
+4. **تحديث دالة `record_order_payment_v2` ودالة `replace_financial_entry_payment_details`**:
+   - إلغاء اشتراط المطابقة الصلبة لعملة الحساب مع عملة الدفع والسماح الكامل بحركات التحصيل والصناديق والبنوك متعددة العملات.
+   - تطبيق مقارنة مرنة بهامش تسامح التقريب العشري عند التحقق من المتبقي ومجموع تفاصيل الدفع.
+

@@ -421,7 +421,7 @@ export default function Orders() { // دالة عرض الطلبات
   const [paymentFormData, setPaymentFormData] = useState<{
     amount: string; method: 'Cash' | 'Bank' | 'Deferred' | 'Mixed'; receivingAccountId: string; bankReference: string;
     allocations: Array<{ id: string; method: 'Cash' | 'Bank'; amount: string; receivingAccountId: string; bankReference: string }>;
-    notes: string; pin: string;
+    notes: string; pin: string; paymentCurrency?: string; voucherDate?: string; voucherNumber?: string;
   }>({
     amount: '',
     method: 'Cash',
@@ -429,7 +429,10 @@ export default function Orders() { // دالة عرض الطلبات
     bankReference: '',
     allocations: [],
     notes: '',
-    pin: ''
+    pin: '',
+    paymentCurrency: 'YER',
+    voucherDate: '',
+    voucherNumber: ''
   });
 
   // Nested Add Customer Form
@@ -2584,6 +2587,7 @@ export default function Orders() { // دالة عرض الطلبات
 
   const handleOpenCollectPayment = (ord: any) => {
     setSelectedOrder(ord);
+    const ordCur = (ord.paidCurrency || ord.currency || ord.orderCurrency || 'YER').toUpperCase();
     setPaymentFormData({
       amount: String(ord.amountRemaining || ''),
       method: ord.paymentMethod || 'Cash',
@@ -2591,7 +2595,8 @@ export default function Orders() { // دالة عرض الطلبات
       bankReference: '',
       allocations: [],
       notes: '',
-      pin: ''
+      pin: '',
+      paymentCurrency: ordCur
     });
     setIsPaymentModalOpen(true);
   };
@@ -2609,18 +2614,40 @@ export default function Orders() { // دالة عرض الطلبات
         toast.error(isAr ? 'يرجى إدخال مبلغ صحيح' : 'Please enter valid amount');
         return;
       }
+      const paymentCurrency = (paymentFormData.paymentCurrency || selectedOrder.paidCurrency || selectedOrder.currency || selectedOrder.orderCurrency || orderCurrency || 'YER').toUpperCase();
+      const defaultOrderCurrency = String(selectedOrder.paidCurrency || selectedOrder.currency || selectedOrder.orderCurrency || 'YER').toUpperCase();
+
+      // تحويل مبلغ الدفعة من عملة الدفع إلى عملة الطلب الأساسية لمقارنتها وتحديث أرصدة الطلب في قاعدة البيانات
+      const orderPaymentAmountInOrderCurrency = paymentCurrency === defaultOrderCurrency
+        ? amountNum
+        : financialAccountService.convertToTargetCurrency(
+          amountNum,
+          paymentCurrency,
+          defaultOrderCurrency,
+          dbRates
+        );
+
+      // التحقق من أن مبلغ الدفعة بعملة الدفع لا يتجاوز المتبقي للطلب بعملة الدفع
       const remainingBeforePayment = parseFloat(selectedOrder.amountRemaining || 0);
-      if (amountNum > remainingBeforePayment) {
-        toast.error(isAr ? 'المبلغ أكبر من المتبقي للطلب' : 'Amount exceeds order balance');
+      const orderRemainingInPaymentCurrency = paymentCurrency === defaultOrderCurrency
+        ? remainingBeforePayment
+        : financialAccountService.convertToTargetCurrency(
+          remainingBeforePayment,
+          defaultOrderCurrency,
+          paymentCurrency,
+          dbRates
+        );
+
+      if (amountNum > orderRemainingInPaymentCurrency + 0.05) {
+        toast.error(
+          isAr
+            ? `المبلغ يتجاوز المتبقي للطلب (${orderRemainingInPaymentCurrency.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${paymentCurrency})`
+            : `Amount exceeds remaining order balance (${orderRemainingInPaymentCurrency.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${paymentCurrency})`
+        );
         return;
       }
-      const systemPin = profile?.systemPin || '000000';
-      if (!paymentFormData.pin || paymentFormData.pin.trim() !== systemPin.trim()) {
-        toast.error(isAr ? 'رمز PIN المالي غير صحيح' : 'Invalid financial PIN');
-        return;
-      }
-      const paymentCurrency = selectedOrder.paidCurrency || selectedOrder.currency || selectedOrder.orderCurrency || orderCurrency;
-      const currencyRecord = activeCurrencies.find((currency: any) => currency.code === paymentCurrency);
+
+      const currencyRecord = activeCurrencies.find((c: any) => String(c.code).toUpperCase() === paymentCurrency) || { cur_id: 1, code: paymentCurrency };
       const orderParty = findOrderParty(selectedOrder, customers, employees, couriers);
       const partyAccountId = selectedOrder.orderPartyAccountId || selectedOrder.customerAccountId || orderParty?.financialAccountId || orderParty?.raw?.financialAccountId || orderParty?.raw?.accountId;
       const partyAccount = financialAccounts.find((account: any) => account.id === partyAccountId);
@@ -2645,7 +2672,7 @@ export default function Orders() { // دالة عرض الطلبات
         toast.error(isAr ? 'أكمل حساب ومبلغ كل توزيع تحصيل.' : 'Complete a positive amount and account for each allocation.');
         return;
       }
-      if (paymentFormData.method === 'Mixed' && (allocations.length < 2 || allocations.reduce((sum, allocation) => sum + allocation.amount, 0) !== amountNum)) {
+      if (paymentFormData.method === 'Mixed' && (allocations.length < 2 || Math.abs(allocations.reduce((sum, allocation) => sum + allocation.amount, 0) - amountNum) > 0.01)) {
         toast.error(isAr ? 'يجب أن يحتوي القبض المختلط على توزيعين على الأقل وأن يساوي مجموعهما مبلغ التحصيل.' : 'Mixed collection needs at least two allocations totaling the collection amount.');
         return;
       }
@@ -2653,31 +2680,76 @@ export default function Orders() { // دالة عرض الطلبات
         toast.error(isAr ? 'أدخل مرجع كل حوالة بنكية.' : 'Enter a reference for each bank transfer.');
         return;
       }
-      if (partyAccount.curNo !== Number(currencyRecord.cur_id) || allocations.some((allocation) => allocation.account.curNo !== Number(currencyRecord.cur_id))) {
-        toast.error(isAr ? 'حساب الطرف وحسابات التحصيل يجب أن تطابق عملة الدفع؛ أنشئ سند صرافة مستقلًا للتحويل.' : 'The party and collection accounts must match payment currency; use a separate exchange voucher.');
-        return;
-      }
       if (allocations.some((allocation) => allocation.paymentMethod === 'cash' && allocation.account.accSubId !== '111') || allocations.some((allocation) => allocation.paymentMethod === 'bank' && allocation.account.accSubId !== '112')) {
         toast.error(isAr ? 'يتطلب النقد حساب صندوق ويتطلب البنك حسابًا بنكيًا وفق شجرة الحسابات.' : 'Cash requires a cash-box account and bank requires a bank account.');
         return;
       }
       const paymentMethod: FinancialPaymentMethod = paymentFormData.method === 'Mixed' ? 'mixed' : allocations[0].paymentMethod;
-      await financialEntryService.recordOrderPayment(selectedOrder.id, amountNum, {
+
+      const lines = [
+        ...allocations.map((allocation) => {
+          const isSameCur = Number(allocation.account.curNo) === Number(currencyRecord.cur_id);
+          const lineAmount = isSameCur
+            ? Number(allocation.amount || 0)
+            : financialAccountService.convertToTargetCurrency(
+              Number(allocation.amount || 0),
+              paymentCurrency,
+              allocation.account.currency || 'YER',
+              dbRates
+            );
+          return {
+            accountId: allocation.account.id,
+            accountCurNo: Number(allocation.account.curNo),
+            currencyOriginalNo: Number(currencyRecord.cur_id),
+            transType: 'Debit' as const,
+            amount: lineAmount,
+            amountOriginal: Number(allocation.amount || 0),
+            paymentMethod: allocation.paymentMethod
+          };
+        }),
+        {
+          accountId: partyAccount.id,
+          accountCurNo: Number(partyAccount.curNo),
+          currencyOriginalNo: Number(currencyRecord.cur_id),
+          transType: 'Credit' as const,
+          amount: Number(partyAccount.curNo) === Number(currencyRecord.cur_id)
+            ? Number(amountNum)
+            : financialAccountService.convertToTargetCurrency(
+              Number(amountNum),
+              paymentCurrency,
+              partyAccount.currency || 'YER',
+              dbRates
+            ),
+          amountOriginal: Number(amountNum),
+          entityType: selectedOrder.orderPartyType || 'customer',
+          entityId: selectedOrder.orderPartyId || selectedOrder.customerId
+        },
+      ];
+
+      await financialEntryService.recordOrderPayment(selectedOrder.id, orderPaymentAmountInOrderCurrency, {
         entryNumber: `RCPT-${selectedOrder.orderNumber || selectedOrder.id}-${Date.now().toString().slice(-6)}`,
-        moduleId: 'module_orders', entryTypeId: 'type_order_payment', entryCategory: paymentMethod === 'mixed' ? 'Compound' : 'General', postingStatus: 'posted',
+        moduleId: 'module_orders',
+        entryTypeId: 'type_order_payment',
+        entryCategory: paymentMethod === 'mixed' ? 'Compound' : 'General',
+        postingStatus: 'posted',
         description: `${isAr ? 'تحصيل دفعة للطلب' : 'Order payment collection'} ${selectedOrder.orderNumber || selectedOrder.id}`,
-        notes: paymentFormData.notes || '', paymentMethod, orderId: selectedOrder.id, createdByUid: profile?.id || profile?.uid,
-        lines: [
-          ...allocations.map((allocation) => ({ accountId: allocation.account.id, accountCurNo: allocation.account.curNo, currencyOriginalNo: Number(currencyRecord.cur_id), transType: 'Debit' as const, amount: allocation.amount, amountOriginal: allocation.amount, paymentMethod: allocation.paymentMethod })),
-          { accountId: partyAccount.id, accountCurNo: partyAccount.curNo, currencyOriginalNo: Number(currencyRecord.cur_id), transType: 'Credit', amount: amountNum, amountOriginal: amountNum, entityType: selectedOrder.orderPartyType || 'customer', entityId: selectedOrder.orderPartyId || selectedOrder.customerId },
-        ],
-        paymentDetails: allocations.map((allocation) => ({ paymentMethod: allocation.paymentMethod === 'bank' ? 'bank' as const : 'cash' as const, accountId: allocation.account.id, amountOriginal: allocation.amount, bankReference: allocation.bankReference || '' })),
+        notes: paymentFormData.notes || '',
+        paymentMethod,
+        orderId: selectedOrder.id,
+        createdByUid: profile?.id || profile?.uid,
+        lines,
+        paymentDetails: allocations.map((allocation) => ({
+          paymentMethod: allocation.paymentMethod === 'bank' ? 'bank' as const : 'cash' as const,
+          accountId: allocation.account.id,
+          amountOriginal: Number(allocation.amount || 0),
+          bankReference: allocation.bankReference || ''
+        })),
       }, profile?.id || profile?.uid);
 
       toast.success(isAr ? 'تم تحصيل الدفعة بنجاح' : 'Payment collected successfully');
       setIsPaymentModalOpen(false);
       setSelectedOrder(null);
-      setPaymentFormData({ amount: '', method: 'Cash', receivingAccountId: '', bankReference: '', allocations: [], notes: '', pin: '' });
+      setPaymentFormData({ amount: '', method: 'Cash', receivingAccountId: '', bankReference: '', allocations: [], notes: '', pin: '', paymentCurrency: 'YER' });
     } catch (err: any) {
       console.error(err);
       toast.error(err.message || 'Error collecting payment');
@@ -4366,6 +4438,8 @@ export default function Orders() { // دالة عرض الطلبات
         isSubmitting={isSubmitting}
         isAr={isAr}
         financialAccounts={financialAccounts}
+        activeCurrencies={activeCurrencies}
+        dbRates={dbRates}
         onClose={() => {
           setIsPaymentModalOpen(false);
           setSelectedOrder(null);

@@ -236,10 +236,20 @@ export default function FinancialCalculatorModal({
   // ─────────────────────────────────────────────────────────
   // منطق المصارفة
   // ─────────────────────────────────────────────────────────
+  const handleSwapCurrencies = () => {
+    const temp = fromCurrencyCode;
+    setFromCurrencyCode(toCurrencyCode);
+    setToCurrencyCode(temp);
+  };
+
+  if (!isOpen) return null;
+
   const getAvailableCurrencyCodes = (): string[] => {
-    const fromRates = Object.keys(exchangeRates);
+    const fromRates = Object.keys(exchangeRates || {});
     if (fromRates.length > 0) return fromRates;
-    if (currencies.length > 0) return currencies.map((c) => c.code);
+    if (Array.isArray(currencies) && currencies.length > 0) {
+      return currencies.map((c) => c?.code).filter(Boolean) as string[];
+    }
     return ['YER', 'SAR', 'USD'];
   };
 
@@ -262,14 +272,6 @@ export default function FinancialCalculatorModal({
 
   const directRate = rateToBase > 0 ? rateFromBase / rateToBase : 0;
   const formattedDirectRate = Number(directRate.toFixed(6));
-
-  const handleSwapCurrencies = () => {
-    const temp = fromCurrencyCode;
-    setFromCurrencyCode(toCurrencyCode);
-    setToCurrencyCode(temp);
-  };
-
-  if (!isOpen) return null;
 
   return (
     <div

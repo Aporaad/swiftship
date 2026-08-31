@@ -123,10 +123,13 @@ const serializePriceReference = (
   price?: FinancialEntryPriceReference,
   idKey = 'currencyPriceId',
   seqKey = 'currencyPriceSeq'
-) => ({
-  [idKey]: price?.id?.toString() ?? '',
-  [seqKey]: price?.seq?.toString() ?? '',
-});
+) => {
+  if (!price || !price.id || !price.seq) return {};
+  return {
+    [idKey]: String(price.id),
+    [seqKey]: String(price.seq),
+  };
+};
 
 const legacyModuleRoute = (module: string): Pick<FinancialEntryInput, 'moduleId' | 'entryTypeId'> => {
   switch (String(module || '').trim().toLowerCase()) {
@@ -200,13 +203,26 @@ export function buildFinancialEntryPayload(entry: FinancialEntryInput): Record<s
     throw new Error('القيد غير متوازن: مجموع أسطر المدين الأصلي لا يطابق مجموع أسطر الدائن الأصلي.');
   }
 
-  const paymentDetails = (entry.paymentDetails || []).map((detail) => {
-    if (!detail.accountId || !hasValidPositiveNumber(detail.amountOriginal)) {
+  let paymentDetailsInput = entry.paymentDetails;
+  if ((!paymentDetailsInput || paymentDetailsInput.length === 0) && (entry.paymentMethod === 'cash' || entry.paymentMethod === 'bank')) {
+    const targetLine = lines.find((l) => l.paymentMethod === entry.paymentMethod || l.transType === 'Debit');
+    if (targetLine && targetLine.accountId && hasValidPositiveNumber(Number(targetLine.amountOriginal))) {
+      paymentDetailsInput = [{
+        paymentMethod: entry.paymentMethod as 'cash' | 'bank',
+        accountId: targetLine.accountId,
+        amountOriginal: Number(targetLine.amountOriginal),
+      }];
+    }
+  }
+
+  const paymentDetails = (paymentDetailsInput || []).map((detail) => {
+    const numAmt = Number(detail.amountOriginal);
+    if (!detail.accountId || !hasValidPositiveNumber(numAmt)) {
       throw new Error('كل تفصيل دفع يحتاج طريقة غير مختلطة وحسابًا ماليًا ومبلغًا موجبًا.');
     }
     return {
       id: detail.id || '', paymentMethod: detail.paymentMethod, accountId: detail.accountId,
-      amountOriginal: String(detail.amountOriginal), bankReference: detail.bankReference?.trim() || '',
+      amountOriginal: String(numAmt), bankReference: detail.bankReference?.trim() || '',
       dueAt: detail.dueAt || '', note: detail.note || '',
     };
   });
