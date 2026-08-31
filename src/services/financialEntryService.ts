@@ -501,6 +501,31 @@ class FinancialEntryService {
     }
     return data as FinancialEntryWriteResult;
   }
+
+  /**
+   * إلغاء ترحيل طلب مرحّل — Unpost a posted order entry (requires permission unpost_posted_orders)
+   * يعيد القيد المرتبط بطلب من مرحّل إلى مسودة ويعكس تأثير الأرصدة تلقائياً
+   * Reverts a posted order entry from 'posted' to 'draft' and recalculates account balances
+   */
+  async unpostOrder(entryId: string, unpostedByUid?: string): Promise<{ id: string; postingStatus: 'draft'; unposted: true }> {
+    if (!entryId?.trim()) throw new Error('معرف القيد مطلوب لإلغاء الترحيل.');
+    const { data, error } = await (supabase as any).rpc('secure_unpost_order_financial_entry', {
+      p_entry_id: entryId,
+    });
+    if (error) {
+      if (error.message?.includes('does not exist') || error.code === 'PGRST202') {
+        const { data: d2, error: e2 } = await (supabase as any).rpc('unpost_financial_entry', {
+          p_entry_id: entryId,
+          p_unposted_by: unpostedByUid || '',
+        });
+        if (e2) throw new Error(`[FinancialEntryService] تعذر إلغاء ترحيل الطلب: ${e2.message || e2}`);
+        return d2;
+      }
+      throw new Error(`[FinancialEntryService] تعذر إلغاء ترحيل الطلب: ${error.message || error}`);
+    }
+    return data;
+  }
 }
 
 export const financialEntryService = new FinancialEntryService();
+

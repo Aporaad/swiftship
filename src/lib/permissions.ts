@@ -145,7 +145,9 @@ export type PermissionKey =
   | 'export_payment_vouchers'
   | 'post_payment_vouchers'
   | 'edit_posted_payment_vouchers'
-  | 'delete_posted_payment_vouchers';
+  | 'delete_posted_payment_vouchers'
+  | 'unpost_posted_orders';
+
 
 export interface PermissionDefinition {
   id: PermissionKey;
@@ -189,6 +191,8 @@ export const ALL_PERMISSIONS: PermissionDefinition[] = [
   { id: 'edit_delivered_orders', labelAr: 'تعديل تفاصيل الطلب بعد وصوله للمستلم', labelEn: 'Edit Orders after Handover', category: 'orders' },
   { id: 'print_orders', labelAr: 'تصدير وتوليد فواتير للطباعة', labelEn: 'Generate & Print PDF Invoices', category: 'orders' },
   { id: 'export_orders', labelAr: 'تصدير بيانات الطلب بصيغة إلكترونية', labelEn: 'Export Excel/CSV Order datasets', category: 'orders' },
+  { id: 'unpost_posted_orders', labelAr: 'الغاء ترحيل الطلبات المرحله', labelEn: 'Unpost Posted Orders', category: 'orders' },
+
 
   // Order Statuses
   { id: 'view_order_statuses', labelAr: 'عرض واستعراض جدول مراحل الطلب', labelEn: 'View Order Status Stages', category: 'order_statuses' },

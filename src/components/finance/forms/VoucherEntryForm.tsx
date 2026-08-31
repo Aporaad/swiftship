@@ -46,6 +46,12 @@ export interface EditableVoucherDraft {
   notes?: string;
   amountText?: string;
   effectiveAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  createdByUid?: string;
+  updatedByUid?: string;
+  amountOriginal?: number;
+  counterpartAccountId?: string;
   paymentDetails?: Array<{
     id: string;
     paymentMethod: 'cash' | 'bank';
@@ -73,6 +79,7 @@ interface VoucherEntryFormProps {
   canCreate: boolean;
   canPost: boolean;
   createdByUid?: string;
+  usersMap?: Map<string, string>;
   initialModuleCode?: string;
   initialTypeCode?: string;
   editingEntry?: EditableVoucherDraft;
@@ -92,6 +99,7 @@ export default function VoucherEntryForm({
   canCreate,
   canPost,
   createdByUid,
+  usersMap,
   initialModuleCode,
   initialTypeCode,
   editingEntry,
@@ -106,6 +114,21 @@ export default function VoucherEntryForm({
     () => modules.find((m) => m.code === initialModuleCode) || modules[0],
     [modules, initialModuleCode]
   );
+
+  const createdByName = useMemo(() => {
+    if (editingEntry?.createdByUid) {
+      return usersMap?.get(editingEntry.createdByUid) || editingEntry.createdByUid;
+    }
+    return createdByUid ? (usersMap?.get(createdByUid) || createdByUid) : 'مدير النظام (مستخدم الجلسة)';
+  }, [createdByUid, editingEntry?.createdByUid, usersMap]);
+
+  const updatedByName = useMemo(() => {
+    if (editingEntry?.updatedByUid) {
+      return usersMap?.get(editingEntry.updatedByUid) || editingEntry.updatedByUid;
+    }
+    return createdByUid ? (usersMap?.get(createdByUid) || createdByUid) : '—';
+  }, [createdByUid, editingEntry?.updatedByUid, usersMap]);
+
 
   const isReceipt = voucherType === 'receipt';
 
@@ -788,11 +811,39 @@ export default function VoucherEntryForm({
         </div>
       </div>
 
+      {/* ── التفاصيل الزمنية أسفل المستند / السند ── */}
+      <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-3.5 shadow-inner">
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[10px] font-bold text-slate-500">تم الإنشاء في</span>
+            <span className="font-mono font-bold text-slate-200">
+              {editingEntry?.createdAt ? new Date(editingEntry.createdAt).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' }) : new Date().toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })}
+            </span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[10px] font-bold text-slate-500">تم الإنشاء بواسطة</span>
+            <span className="font-black text-[#f4d870]">{createdByName}</span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[10px] font-bold text-slate-500">تم التحديث في</span>
+            <span className="font-mono font-bold text-slate-200">
+              {editingEntry?.updatedAt ? new Date(editingEntry.updatedAt).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' }) : '—'}
+            </span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[10px] font-bold text-slate-500">تم التحديث بواسطة</span>
+            <span className="font-black text-cyan-300">{updatedByName}</span>
+          </div>
+        </div>
+      </div>
+
       <FinancialCalculatorModal
         isOpen={isCalcOpen}
         onClose={() => setIsCalcOpen(false)}
         currencies={currencies}
       />
+
     </form>
   );
 }

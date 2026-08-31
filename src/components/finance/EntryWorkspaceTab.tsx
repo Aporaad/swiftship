@@ -52,6 +52,7 @@ export interface FinanceEntryRow {
   entryCategory: string; postingStatus: 'draft' | 'posted' | 'voided';
   amountOriginal: number; currencyOriginalNo: number; description: string;
   paymentMethod?: string; effectiveAt?: string; createdAt?: string;
+  updatedAt?: string; createdByUid?: string; updatedByUid?: string; orderId?: string;
 }
 
 export interface FinancePaymentDetailRow {
@@ -85,9 +86,12 @@ interface Props {
   canPrint?: boolean; canExport?: boolean;
   canEditPosted?: boolean;   // تعديل المرحّل — Edit posted entries
   canDeletePosted?: boolean; // حذف المرحّل — Delete posted entries
+  canUnpostOrder?: boolean;  // إلغاء ترحيل الطلب — Unpost posted order permission
   createdByUid?: string;
+  usersMap?: Map<string, string>;
   onChanged: () => void;
 }
+
 
 // ── ثوابت التسميات ── Label Constants
 const paymentMethodLabel: Record<string, string> = {
@@ -139,8 +143,10 @@ export default function EntryWorkspaceTab({
   canView, canCreate, canEdit, canPost, canDelete, canVoid, canReverse,
   canPrint = false, canExport = false,
   canEditPosted = false, canDeletePosted = false,
+  canUnpostOrder = false, usersMap,
   createdByUid, onChanged,
 }: Props) {
+
 
   // ── حالة واجهة المستخدم ── UI State
   const [showModal, setShowModal] = useState(false);
@@ -397,6 +403,23 @@ export default function EntryWorkspaceTab({
     catch (cause: any) { setError(cause?.message || 'تعذر اعتماد القيد.'); }
     finally { setBusyId(''); }
   };
+
+  // ── إلغاء ترحيل طلب مرحّل ── Unpost Posted Order Entry
+  const unpostOrderEntry = async (entry: FinanceEntryRow) => {
+    if (!canUnpostOrder) return;
+    if (!window.confirm(`هل أنت تأكد من إلغاء ترحيل الطلب ${entry.entryNumber} وتحويله إلى مسودة؟`)) return;
+    try {
+      setBusyId(entry.id);
+      setError('');
+      await financialEntryService.unpostOrder(entry.id, createdByUid);
+      onChanged();
+    } catch (cause: any) {
+      setError(cause?.message || 'تعذر إلغاء ترحيل الطلب.');
+    } finally {
+      setBusyId('');
+    }
+  };
+
 
   // ── حذف القيد (مسودة أو مرحّل) ── Delete Entry
   const confirmDelete = async () => {
@@ -897,6 +920,20 @@ export default function EntryWorkspaceTab({
                       </button>
                     )}
 
+                    {/* زر إلغاء ترحيل الطلب — Unpost Posted Order Button */}
+                    {entry.postingStatus === 'posted' && (Boolean(entry.orderId) || entry.moduleId === 'module_orders') && canUnpostOrder && (
+                      <button
+                        disabled={busyId === entry.id}
+                        onClick={() => void unpostOrderEntry(entry)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-xs font-bold text-amber-300 hover:bg-amber-500/20 transition"
+                        title="إلغاء ترحيل الطلب المرحّل (صلاحية خاصة)"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        إلغاء ترحيل
+                      </button>
+                    )}
+
+
                     {/* مبطل — Voided Indicator */}
                     {entry.postingStatus === 'voided' && (
                       <span title="مبطل"><ReceiptText className="h-4 w-4 text-slate-600" /></span>
@@ -943,7 +980,7 @@ export default function EntryWorkspaceTab({
                   voucherType={voucherType || 'receipt'} voucherSubKind={selectedVoucherSubKind}
                   accounts={accounts} currencies={currencies} modules={formModules} entryTypes={formTypes}
                   canCreate={editingEntry ? canEdit : canCreate} canPost={canPost}
-                  createdByUid={createdByUid} initialModuleCode={initialModuleCode}
+                  createdByUid={createdByUid} usersMap={usersMap} initialModuleCode={initialModuleCode}
                   initialTypeCode={initialTypeCode} editingEntry={editingEntry || undefined}
                   onCancel={closeModal} onSaved={() => { closeModal(); onChanged(); }}
                 />
@@ -951,7 +988,7 @@ export default function EntryWorkspaceTab({
                 <CompoundEntryForm
                   accounts={accounts} currencies={currencies} modules={formModules} entryTypes={formTypes}
                   canCreate={editingEntry ? canEdit : canCreate} canPost={canPost}
-                  createdByUid={createdByUid} initialModuleCode={initialModuleCode}
+                  createdByUid={createdByUid} usersMap={usersMap} initialModuleCode={initialModuleCode}
                   initialTypeCode={initialTypeCode} editingEntry={editingEntry || undefined}
                   onCancel={closeModal} onSaved={() => { closeModal(); onChanged(); }}
                 />
@@ -960,11 +997,12 @@ export default function EntryWorkspaceTab({
                   category={category} accounts={accounts} currencies={currencies}
                   modules={formModules} entryTypes={formTypes}
                   canCreate={editingEntry ? canEdit : canCreate} canPost={canPost}
-                  createdByUid={createdByUid} initialModuleCode={initialModuleCode}
+                  createdByUid={createdByUid} usersMap={usersMap} initialModuleCode={initialModuleCode}
                   initialTypeCode={initialTypeCode} editingEntry={editingEntry || undefined}
                   onCancel={closeModal} onSaved={() => { closeModal(); onChanged(); }}
                 />
               )}
+
             </div>
           </div>
         </div>
@@ -981,9 +1019,13 @@ export default function EntryWorkspaceTab({
           currencies={currencies}
           modules={modules}
           entryTypes={entryTypes}
+          usersMap={usersMap}
+          canUnpostOrder={canUnpostOrder}
+          onUnpostOrder={unpostOrderEntry}
           onClose={() => setDetailsEntry(null)}
         />
       )}
+
 
       {/* ════════════════════════════════════════════
           نافذة تأكيد الحذف — Delete Confirm Modal

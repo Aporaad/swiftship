@@ -55,6 +55,10 @@ export interface EditableGeneralDraft {
   notes?: string;
   amountText?: string;
   effectiveAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  createdByUid?: string;
+  updatedByUid?: string;
   amountOriginal?: number;
   lines: Array<{
     id: string;
@@ -74,12 +78,14 @@ interface GeneralEntryFormProps {
   canCreate: boolean;
   canPost: boolean;
   createdByUid?: string;
+  usersMap?: Map<string, string>;
   initialModuleCode?: string;
   initialTypeCode?: string;
   editingEntry?: EditableGeneralDraft;
   onSaved: () => void;
   onCancel: () => void;
 }
+
 
 const asNumber = (val: string) => Number(val || 0);
 
@@ -100,6 +106,7 @@ export default function GeneralEntryForm({
   canCreate,
   canPost,
   createdByUid,
+  usersMap,
   initialModuleCode,
   initialTypeCode,
   editingEntry,
@@ -115,7 +122,22 @@ export default function GeneralEntryForm({
     [modules, initialModuleCode],
   );
 
-  const entryUserName = useMemo(() => createdByUid || 'مدير النظام (مستخدم الجلسة)', [createdByUid]);
+  const createdByName = useMemo(() => {
+    if (editingEntry?.createdByUid) {
+      return usersMap?.get(editingEntry.createdByUid) || editingEntry.createdByUid;
+    }
+    return createdByUid ? (usersMap?.get(createdByUid) || createdByUid) : 'مدير النظام (مستخدم الجلسة)';
+  }, [createdByUid, editingEntry?.createdByUid, usersMap]);
+
+  const updatedByName = useMemo(() => {
+    if (editingEntry?.updatedByUid) {
+      return usersMap?.get(editingEntry.updatedByUid) || editingEntry.updatedByUid;
+    }
+    return createdByUid ? (usersMap?.get(createdByUid) || createdByUid) : '—';
+  }, [createdByUid, editingEntry?.updatedByUid, usersMap]);
+
+  const entryUserName = createdByName;
+
 
   const [entryNumber] = useState(
     () => editingEntry?.entryNumber || `JV-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${Date.now().toString().slice(-6)}`
@@ -606,11 +628,39 @@ export default function GeneralEntryForm({
         </div>
       </div>
 
+      {/* ── التفاصيل الزمنية أسفل الطلب / القيد ── */}
+      <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-3.5 shadow-inner">
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[10px] font-bold text-slate-500">تم الإنشاء في</span>
+            <span className="font-mono font-bold text-slate-200">
+              {editingEntry?.createdAt ? new Date(editingEntry.createdAt).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' }) : new Date().toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })}
+            </span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[10px] font-bold text-slate-500">تم الإنشاء بواسطة</span>
+            <span className="font-black text-[#f4d870]">{createdByName}</span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[10px] font-bold text-slate-500">تم التحديث في</span>
+            <span className="font-mono font-bold text-slate-200">
+              {editingEntry?.updatedAt ? new Date(editingEntry.updatedAt).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' }) : '—'}
+            </span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[10px] font-bold text-slate-500">تم التحديث بواسطة</span>
+            <span className="font-black text-cyan-300">{updatedByName}</span>
+          </div>
+        </div>
+      </div>
+
       <FinancialCalculatorModal
         isOpen={isCalcOpen}
         onClose={() => setIsCalcOpen(false)}
         currencies={currencies}
       />
+
     </form>
   );
 }

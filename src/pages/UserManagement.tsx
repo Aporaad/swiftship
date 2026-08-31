@@ -49,7 +49,9 @@ const PERMISSION_GROUPS = (isAr: boolean) => [
       { id: 'print_orders', label: isAr ? 'طباعة وتصدير الفواتير' : 'Print & Export Invoices' },
       { id: 'export_orders', label: isAr ? 'تصدير بيانات الطلبات' : 'Export Orders Data' },
       { id: 'edit_order_defaults_creation', label: isAr ? 'تعديل الأسعار الافتراضية عند إنشاء طلب' : 'Edit Default Prices When Creating Order' },
+      { id: 'unpost_posted_orders', label: isAr ? 'الغاء ترحيل الطلبات المرحله' : 'Unpost Posted Orders' },
     ]
+
   },
   {
     group: isAr ? '⚙️ مراحل وحالات الطلب' : '⚙️ Order Status Stages',

@@ -27,7 +27,9 @@ import {
   CreditCard,
   Printer,
   UserCheck,
+  RotateCcw,
 } from 'lucide-react';
+
 import type { FinanceAccount, FinanceCurrency, FinanceEntryType, FinanceModule } from './EntryForm';
 import type { FinanceEntryRow } from './EntryWorkspaceTab';
 
@@ -61,8 +63,12 @@ interface Props {
   currencies: FinanceCurrency[];
   modules: FinanceModule[];
   entryTypes: FinanceEntryType[];
+  usersMap?: Map<string, string>;
+  canUnpostOrder?: boolean;
+  onUnpostOrder?: (entry: FinanceEntryRow) => void;
   onClose: () => void;
 }
+
 
 const statusStyle: Record<string, string> = {
   posted: 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30',
@@ -171,8 +177,12 @@ export default function EntryDetailsModal({
   currencies,
   modules,
   entryTypes,
+  usersMap,
+  canUnpostOrder = false,
+  onUnpostOrder,
   onClose,
 }: Props) {
+
   const [ledgerAccount, setLedgerAccount] = useState<FinanceAccount | null>(null);
 
   const accountById  = useMemo(() => new Map(accounts.map((a) => [a.id, a])),        [accounts]);
@@ -520,12 +530,46 @@ export default function EntryDetailsModal({
             </div>
           </div>
 
-          {/* ── ذيل النافذة — Footer ── */}
-          <div className="flex items-center justify-between border-t border-slate-800 bg-slate-900/70 px-6 py-4">
-            <span className="text-xs text-slate-500 font-mono">
-              {entry.createdAt ? `تاريخ الإنشاء: ${new Date(entry.createdAt).toLocaleString('ar-EG')}` : ''}
-            </span>
-            <div className="flex items-center gap-2">
+          {/* ── ذيل النافذة — Footer & Audit Details ── */}
+          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-800 bg-slate-900/90 px-6 py-4">
+            {/* التفاصيل الزمنية أسفل الطلب / القيد */}
+            <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs">
+              <div className="flex items-center gap-1.5 text-slate-400 font-bold">
+                <span className="text-slate-500">تم الإنشاء في:</span>
+                <span className="font-mono text-slate-200">
+                  {entry.createdAt ? new Date(entry.createdAt).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' }) : '—'}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 text-slate-400 font-bold">
+                <span className="text-slate-500">تم الإنشاء بواسطة:</span>
+                <span className="text-[#f4d870] font-black">
+                  {(entry.createdByUid ? usersMap?.get(entry.createdByUid) : null) || entry.createdByUid || '—'}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 text-slate-400 font-bold">
+                <span className="text-slate-500">تم التحديث في:</span>
+                <span className="font-mono text-slate-200">
+                  {entry.updatedAt ? new Date(entry.updatedAt).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' }) : '—'}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 text-slate-400 font-bold">
+                <span className="text-slate-500">تم التحديث بواسطة:</span>
+                <span className="text-cyan-300 font-black">
+                  {(entry.updatedByUid ? usersMap?.get(entry.updatedByUid) : null) || entry.updatedByUid || '—'}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {entry.postingStatus === 'posted' && (Boolean(entry.orderId) || entry.moduleId === 'module_orders') && canUnpostOrder && onUnpostOrder && (
+                <button
+                  onClick={() => { onUnpostOrder(entry); onClose(); }}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-amber-500/50 bg-amber-500/15 hover:bg-amber-500/25 px-3.5 py-2 text-xs font-black text-amber-300 transition active:scale-95"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  <span>إلغاء ترحيل الطلب</span>
+                </button>
+              )}
               <button
                 onClick={handlePrintEntry}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-xs font-black text-white shadow-md transition active:scale-95"
@@ -541,6 +585,7 @@ export default function EntryDetailsModal({
               </button>
             </div>
           </div>
+
         </div>
       </div>
 

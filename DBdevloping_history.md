@@ -303,3 +303,17 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
    - إلغاء اشتراط المطابقة الصلبة لعملة الحساب مع عملة الدفع والسماح الكامل بحركات التحصيل والصناديق والبنوك متعددة العملات.
    - تطبيق مقارنة مرنة بهامش تسامح التقريب العشري عند التحقق من المتبقي ومجموع تفاصيل الدفع.
 
+---
+
+## [2026-08-31 06:30:00] — إنشاء دالة إلغاء ترحيل الطلب المرحّل وتقييدها بصلاحية unpost_posted_orders
+
+### التحديثات والترحيلات المنفذة في قاعدة البيانات:
+1. **إنشاء دالة `public.unpost_financial_entry(p_entry_id text, p_unposted_by text)`**:
+   - تتيح إعادة تحويل حالة رأس القيد `main_entry` من `posted` إلى `draft`.
+   - تصفير حقول الترحيل `posted_at` و `posted_by_uid` وتحديث `updated_at` و `updated_by_uid`.
+   - تجميع الحسابات المتأثرة بالقيد واستدعاء `recalculate_accounting_hierarchy` لإعادة احتساب أرصدة شجرة الحسابات فورياً.
+2. **إنشاء إجراء RPC الآمن `public.secure_unpost_order_financial_entry(p_entry_id text)`**:
+   - التحقق من وجود وجاهزية مفتاح الصلاحية `unpost_posted_orders` عبر استدعاء `require_financial_permission`.
+   - منح صلاحية التنفيذ للأنواع الموثقة والمصرح لها في PostgreSQL.
+
+

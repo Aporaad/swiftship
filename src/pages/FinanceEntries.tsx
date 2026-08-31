@@ -32,23 +32,32 @@ export default function FinanceEntries() {
   const [transactions, setTransactions] = useState<FinanceAccountTransactionRow[]>([]);
   const [paymentDetails, setPaymentDetails] = useState<FinancePaymentDetailRow[]>([]);
   const [custodies, setCustodies] = useState<CustodyAdvanceRow[]>([]);
+  const [usersMap, setUsersMap] = useState<Map<string, string>>(new Map());
 
   const refresh = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
-      const [currencyResult, accountResult, moduleResult, typeResult, entryResult, transResult, paymentDetailResult, custodyResult] = await Promise.all([
+      const [currencyResult, accountResult, moduleResult, typeResult, entryResult, transResult, paymentDetailResult, custodyResult, usersResult] = await Promise.all([
         (supabase as any).from('currency').select('cur_id, code, isDefault').eq('isActive', true).order('cur_id'),
         (supabase as any).from('accounts').select('id, acc_name_ar, acc_name_en, cur_no, is_active, acc_sub_id, entity_id, entity_type').order('id'),
         (supabase as any).from('entry_module').select('id, code, name_ar, is_active').order('name_ar'),
         (supabase as any).from('entry_type').select('id, module_id, code, name_ar, is_active').order('name_ar'),
-        (supabase as any).from('main_entry').select('id, entry_number, module_id, entry_type_id, entry_category, posting_status, description, payment_method, effective_at, created_at').order('effective_at', { ascending: false }).limit(500),
+        (supabase as any).from('main_entry').select('id, entry_number, module_id, entry_type_id, entry_category, posting_status, description, payment_method, effective_at, created_at, updated_at, created_by_uid, updated_by_uid, order_id').order('effective_at', { ascending: false }).limit(500),
         (supabase as any).from('account_trans').select('id, entry_id, line_no, trans_type, account_id, account_cur_no, amount, amount_original, currency_original_no, payment_method, description, order_id, shipment_id, created_at').order('created_at', { ascending: false }).limit(1500),
         (supabase as any).from('entry_payment_details').select('id, entry_id, payment_method, account_id, amount_original, bank_reference, due_at, note').order('entry_id').order('allocation_no').limit(1500),
         (supabase as any).from('custody_advances').select('id, custody_number, recipient_id, recipient_name, recipient_type, recipient_account_id, amount_original, amount_outstanding, currency_original_no, status, issued_at').order('issued_at', { ascending: false }).limit(500),
+        (supabase as any).from('users').select('id, username, data').limit(500),
       ]);
       const failure = [currencyResult, accountResult, moduleResult, typeResult, entryResult, transResult, paymentDetailResult, custodyResult].find((result: any) => result.error)?.error;
       if (failure) throw new Error(failure.message || String(failure));
+
+      const uMap = new Map<string, string>();
+      for (const u of usersResult.data || []) {
+        const uName = u.username || u.data?.fullName || u.data?.fullNameAr || u.id;
+        uMap.set(u.id, uName);
+      }
+      setUsersMap(uMap);
 
       const loadedCurrencies = (currencyResult.data || []).map((item: any) => ({ id: Number(item.cur_id), code: item.code, isDefault: Boolean(item.isDefault) }));
       const currencyCodeById = new Map(loadedCurrencies.map((item) => [item.id, item.code]));
@@ -87,7 +96,8 @@ export default function FinanceEntries() {
           id: item.id, entryNumber: item.entry_number, moduleId: item.module_id, entryTypeId: item.entry_type_id,
           entryCategory: item.entry_category, postingStatus: item.posting_status, amountOriginal: transInfo.amountOriginal,
           currencyOriginalNo: transInfo.currencyOriginalNo, description: item.description, paymentMethod: item.payment_method,
-          effectiveAt: item.effective_at, createdAt: item.created_at,
+          effectiveAt: item.effective_at, createdAt: item.created_at, updatedAt: item.updated_at,
+          createdByUid: item.created_by_uid, updatedByUid: item.updated_by_uid, orderId: item.order_id,
         };
       }));
       setPaymentDetails((paymentDetailResult.data || []).map((item: any) => ({
@@ -120,7 +130,7 @@ export default function FinanceEntries() {
   ], [hasPermission, isAdmin]);
 
   const createdByUid = (profile as any)?.id || (profile as any)?.uid || undefined;
-  const common = { entries, accounts, currencies, modules, entryTypes, transactions, paymentDetails, createdByUid, onChanged: refresh };
+  const common = { entries, accounts, currencies, modules, entryTypes, transactions, paymentDetails, createdByUid, usersMap, onChanged: refresh };
 
   /**
    * بناء صلاحيات التبويب حسب المعرّف والصلاحية القديمة
@@ -139,7 +149,9 @@ export default function FinanceEntries() {
     canExport:       can(isAdmin, hasPermission, `export_${subject}`,           'view_finance'),
     canEditPosted:   can(isAdmin, hasPermission, `edit_posted_${subject}`,      'edit_finance'),
     canDeletePosted: can(isAdmin, hasPermission, `delete_posted_${subject}`,    subject.includes('payment') ? 'delete_expenses' : 'edit_finance'),
+    canUnpostOrder:  can(isAdmin, hasPermission, 'unpost_posted_orders',        'edit_orders'),
   });
+
 
   if (roleLoading || loading) return <div className="flex min-h-72 items-center justify-center text-sm font-bold text-slate-400">جارٍ تحميل القيود والسندات…</div>;
   if (!tabs.some((tab) => tab.access)) return <div className="flex flex-col items-center justify-center rounded-3xl border border-slate-800 bg-slate-950/70 p-12 text-center"><ShieldAlert className="h-12 w-12 text-rose-400" /><h1 className="mt-4 text-xl font-black text-white">لا توجد صلاحية مالية</h1><p className="mt-2 text-sm text-slate-400">اطلب من المسؤول تفعيل صلاحية استعراض الواجهة المالية المناسبة.</p></div>;
