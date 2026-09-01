@@ -1008,12 +1008,23 @@ export default function Reports() {
     const start = startOfDay(new Date(filters.startDate));
     const end = endOfDay(new Date(filters.endDate));
 
-    const isDebitNormal = (code: string) => {
-      const cleanCode = (code || '').trim().toUpperCase();
+    const getTime = (val: any) => {
+      if (!val) return 0;
+      if (typeof val === 'number') return val;
+      if (typeof val.toDate === 'function') return val.toDate().getTime();
+      const d = new Date(val);
+      return isNaN(d.getTime()) ? 0 : d.getTime();
+    };
+
+    const isDebitNormal = (acc: any) => {
+      const type = (acc.type || acc.accountType || '').trim();
+      if (type === 'Asset' || type === 'Expense') return true;
+      if (type === 'Liability' || type === 'Equity' || type === 'Revenue') return false;
+      const cleanCode = (acc.accountCode || '').trim().toUpperCase();
       if (cleanCode.startsWith('1') || cleanCode.startsWith('5') || cleanCode.startsWith('AST') || cleanCode.startsWith('EXP')) return true;
       return false;
     };
-    const debitNormal = isDebitNormal(selectedAccount.accountCode);
+    const debitNormal = isDebitNormal(selectedAccount);
 
     // Get all transactions of all time for this account
     const myAllTimeTxs = allTimeTransactions.filter((tx: any) => {
@@ -1025,23 +1036,30 @@ export default function Reports() {
     });
 
     // Sort chronologically (oldest first) to compute running balance
-    const sortedAllTime = [...myAllTimeTxs].sort((a, b) => a.createdAt - b.createdAt);
+    const sortedAllTime = [...myAllTimeTxs].sort((a, b) => {
+      const tA = getTime(a.createdAt || a.created_at);
+      const tB = getTime(b.createdAt || b.created_at);
+      return tA - tB;
+    });
 
     let openingBalance = 0;
     let periodDebits = 0;
     let periodCredits = 0;
 
     sortedAllTime.forEach(tx => {
-      const txDate = new Date(tx.createdAt);
+      const t = getTime(tx.createdAt || tx.created_at);
+      const txDate = new Date(t);
       const amt = parseFloat(tx.amount) || 0;
+      const isDebit = (tx.trans_type || tx.transType || tx.type) === 'Debit';
+
       if (txDate < start) {
-        if (tx.type === 'Debit') {
+        if (isDebit) {
           openingBalance += debitNormal ? amt : -amt;
         } else {
           openingBalance += debitNormal ? -amt : amt;
         }
       } else if (isWithinInterval(txDate, { start, end })) {
-        if (tx.type === 'Debit') {
+        if (isDebit) {
           periodDebits += amt;
         } else {
           periodCredits += amt;
@@ -1054,18 +1072,21 @@ export default function Reports() {
     let currentRunning = openingBalance;
     const rowsWithRunningBalance = sortedAllTime
       .filter(tx => {
-        const txDate = new Date(tx.createdAt);
+        const t = getTime(tx.createdAt || tx.created_at);
+        const txDate = new Date(t);
         return isWithinInterval(txDate, { start, end });
       })
       .map(tx => {
         const amt = parseFloat(tx.amount) || 0;
-        if (tx.type === 'Debit') {
+        const isDebit = (tx.trans_type || tx.transType || tx.type) === 'Debit';
+        if (isDebit) {
           currentRunning += debitNormal ? amt : -amt;
         } else {
           currentRunning += debitNormal ? -amt : amt;
         }
         return {
           ...tx,
+          type: tx.trans_type || tx.transType || tx.type || 'Debit',
           runningBalance: currentRunning
         };
       });

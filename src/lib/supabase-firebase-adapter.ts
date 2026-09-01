@@ -276,6 +276,15 @@ export function extractRowPayload(table: string, row: any): any {
     if (combined.createdAt && !combined.created_at) combined.created_at = combined.createdAt;
   }
 
+  if (table === 'account_trans') {
+    const typeVal = combined.trans_type || combined.transType || combined.type;
+    if (typeVal) {
+      combined.trans_type = typeVal;
+      combined.transType = typeVal;
+      combined.type = typeVal;
+    }
+  }
+
   if (table === 'accounts') {
     if (!combined.entityName) combined.entityName = combined.entity_name || combined.accNameAr || combined.acc_name_ar || combined.acc_name_en || '';
     if (!combined.accountNumber) combined.accountNumber = combined.account_number || (combined.accountSeq ? String(combined.accountSeq).padStart(4, '0') : (combined.accountCode ? String(combined.accountCode).split('-')[1] : ''));

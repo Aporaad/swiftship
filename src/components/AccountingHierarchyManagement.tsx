@@ -64,6 +64,7 @@ export default function AccountingHierarchyManagement({ isAr, canEdit }: Props) 
   const [accounts, setAccounts] = useState<any[]>([]);
   const [defaultAccounts, setDefaultAccounts] = useState<any[]>([]);
   const [currencies, setCurrencies] = useState<any[]>([]);
+  const [entryModules, setEntryModules] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [defaultSearch, setDefaultSearch] = useState('');
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -91,6 +92,7 @@ export default function AccountingHierarchyManagement({ isAr, canEdit }: Props) 
     const sources: Array<[string, (items: any[]) => void]> = [
       ['account', setRoots], ['acc_main', setMains], ['acc_sub', setSubs], ['acc_sub_group', setGroups],
       ['accounts', setAccounts], ['default_accounts', setDefaultAccounts], ['currency', setCurrencies],
+      ['entry_module', setEntryModules],
     ];
     const unsubs = sources.map(([table, setItems]) => subscribe(table, setItems));
     return () => { unsubs.forEach((unsubscribe) => unsubscribe()); };
@@ -103,6 +105,36 @@ export default function AccountingHierarchyManagement({ isAr, canEdit }: Props) 
   const defaultCurrencyCode = useMemo(() => String(exchangeCurrencies.find((currency) => currency.isDefault)?.code || activeCurrencies.find((currency) => currency.isDefault || currency.is_default)?.code || '').toUpperCase(), [activeCurrencies, exchangeCurrencies]);
   const currencyCode = (record: any) => getRecordCurrencyCode(record, exchangeCurrencies.length ? exchangeCurrencies : activeCurrencies, defaultCurrencyCode) || '—';
   const formatMoney = (value: unknown) => Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+  const getModuleName = (transaction: any, isAr: boolean) => {
+    const rawKey = String(
+      transaction?.module ||
+      transaction?.module_id ||
+      transaction?.moduleId ||
+      transaction?.entryCategory ||
+      ''
+    ).trim();
+
+    if (!rawKey || rawKey === '—') return '—';
+
+    // البحث في سجلات جدول entry_module التي تم جلبها ديناميكياً من قاعدة البيانات
+    const matched = entryModules.find(
+      (m) =>
+        String(m.id).toLowerCase() === rawKey.toLowerCase() ||
+        String(m.code).toLowerCase() === rawKey.toLowerCase() ||
+        String(m.name_ar || m.nameAr || '').toLowerCase() === rawKey.toLowerCase() ||
+        String(m.name_en || m.nameEn || '').toLowerCase() === rawKey.toLowerCase()
+    );
+
+    if (matched) {
+      const name = isAr
+        ? (matched.name_ar || matched.nameAr || matched.name_en || matched.nameEn || matched.code)
+        : (matched.name_en || matched.nameEn || matched.name_ar || matched.nameAr || matched.code);
+      if (name) return name;
+    }
+
+    if (rawKey === 'Debit' || rawKey === 'Credit') return isAr ? 'قيد عام' : 'General Entry';
+    return rawKey;
+  };
   const treeBalances = useMemo(() => calculateAccountingTreeBalances({
     roots, mains, subs, groups, accounts: postingAccounts, currencies: exchangeCurrencies,
     liveBalances: { byId: liveBalances.byId, byCode: liveBalances.byCode },
@@ -273,7 +305,30 @@ export default function AccountingHierarchyManagement({ isAr, canEdit }: Props) 
     setStatementLoading(true);
     try {
       const snapshot = await getDocs(query(collection(db, 'account_trans'), where('accountId', '==', account.id), orderBy('createdAt', 'desc')));
-      setStatementTransactions(snapshot.docs.map((entry: any) => ({ id: entry.id, ...entry.data() })));
+      const rawTrans = snapshot.docs.map((entry: any) => ({ id: entry.id, ...entry.data() }));
+
+      const entryIds = Array.from(new Set(rawTrans.map((t: any) => t.entryId || t.entry_id).filter(Boolean)));
+      const mainEntriesMap = new Map<string, any>();
+      if (entryIds.length > 0) {
+        try {
+          const mainEntriesSnap = await getDocs(collection(db, 'main_entry'));
+          mainEntriesSnap.docs.forEach((d: any) => {
+            if (entryIds.includes(d.id)) {
+              mainEntriesMap.set(d.id, d.data());
+            }
+          });
+        } catch (_) { /* ignore fallback fetch error */ }
+      }
+
+      setStatementTransactions(
+        rawTrans.map((t: any) => {
+          const mainEntry = mainEntriesMap.get(t.entryId || t.entry_id);
+          return {
+            ...t,
+            module: t.module || t.module_id || t.moduleId || mainEntry?.moduleId || mainEntry?.module_id || mainEntry?.entryCategory || t.entryCategory || t.trans_type,
+          };
+        })
+      );
     } catch (statementError: any) {
       setError(statementError?.message || (isAr ? 'تعذر تحميل كشف الحساب.' : 'Unable to load the account statement.'));
     } finally {
@@ -537,8 +592,8 @@ export default function AccountingHierarchyManagement({ isAr, canEdit }: Props) 
               </div><button onClick={() => setStatementAccount(null)} className="rounded-xl p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white" title={isAr ? 'إغلاق' : 'Close'}><X /></button>
             </div>
             <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-4"><div className="rounded-xl border border-[#d4af37]/20 bg-[#d4af37]/5 p-3"><div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{isAr ? 'الرصيد الحالي' : 'Current balance'}</div>
-              <div className="mt-1 font-mono text-base font-black text-[#f0d576]">{formatMoney(balanceFor('ledger', String(statementAccount.id)))} {currencyCode(statementAccount)}</div></div><div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3"><div className="text-[10px] font-bold uppercase tracking-wide text-emerald-300/70">{isAr ? 'إجمالي المدين' : 'Total debit'}</div><div className="mt-1 font-mono text-base font-black text-emerald-300">{formatMoney(statementDebitTotal)} {currencyCode(statementAccount)}</div></div><div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-3">
-                <div className="text-[10px] font-bold uppercase tracking-wide text-rose-300/70">{isAr ? 'إجمالي الدائن' : 'Total credit'}</div><div className="mt-1 font-mono text-base font-black text-rose-300">{formatMoney(statementCreditTotal)} {currencyCode(statementAccount)}</div></div><div className="rounded-xl border border-slate-700 bg-slate-900/60 p-3"><div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{isAr ? 'عدد الحركات' : 'Transactions'}</div><div className="mt-1 font-mono text-base font-black text-white">{statementTransactions.length}</div></div></div></div><div className="min-h-0 flex-1 overflow-auto p-4">{statementLoading ? <div className="flex h-full items-center justify-center gap-2 text-sm text-slate-400"><Loader2 size={20} className="animate-spin" />{isAr ? 'جارٍ تحميل كشف الحساب...' : 'Loading statement...'}</div> : <table className="w-full min-w-[760px] text-sm"><thead className="sticky top-0 bg-slate-950 text-xs text-slate-400"><tr><th className="p-3 text-start">{isAr ? 'التاريخ' : 'Date'}</th><th className="p-3 text-start">{isAr ? 'المرجع' : 'Reference'}</th><th className="p-3 text-start">{isAr ? 'البيان' : 'Description'}</th><th className="p-3 text-start">{isAr ? 'الوحدة' : 'Module'}</th><th className="p-3 text-end text-emerald-300">{isAr ? 'مدين' : 'Debit'}</th><th className="p-3 text-end text-rose-300">{isAr ? 'دائن' : 'Credit'}</th></tr></thead><tbody>{statementTransactions.map((transaction) => <tr key={transaction.id} className="border-t border-slate-800/80 transition-colors hover:bg-slate-800/50"><td className="p-3 font-mono text-xs text-slate-400">{transaction.createdAt ? new Date(transaction.createdAt).toLocaleDateString(isAr ? 'ar-YE' : undefined) : '—'}</td><td className="p-3 font-mono text-xs text-[#f0d576]">{transaction.entry_id || transaction.entry_number || transaction.refNumber || transaction.journalEntryNumber || '—'}</td><td className="max-w-[260px] p-3 text-xs text-slate-200">{transaction.description || '—'}</td><td className="p-3"><span className="rounded-md border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-[10px] font-bold uppercase text-slate-400">{transaction.trans_type || transaction.moduleId || '—'}</span></td><td className="p-3 text-end font-mono text-xs font-bold text-emerald-300">{(transaction.transType || transaction.trans_type || transaction.type) === 'Debit' ? `${formatMoney(transaction.amount)} ${transaction.currency || currencyCode(statementAccount)}` : '—'}</td><td className="p-3 text-end font-mono text-xs font-bold text-rose-300">{(transaction.transType || transaction.trans_type || transaction.type) === 'Credit' ? `${formatMoney(transaction.amount)} ${transaction.currency || currencyCode(statementAccount)}` : '—'}</td></tr>)}{statementTransactions.length === 0 && <tr><td colSpan={6} className="p-12 text-center text-sm text-slate-500">{isAr ? 'لا توجد حركات مسجلة على هذا الحساب.' : 'No transactions are recorded for this account.'}</td></tr>}</tbody></table>}</div><div className="flex justify-end border-t border-slate-800 bg-slate-950/80 p-4"><button onClick={() => setStatementAccount(null)} className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-slate-100 transition-colors hover:bg-slate-700">{isAr ? 'إغلاق' : 'Close'}</button></div></div></div>}
+              <div className="mt-1 font-mono text-base font-black text-[#f0d576]">{formatMoney(balanceFor('ledger', String(statementAccount.id))?.nativeBalance ?? statementAccount.balance ?? 0)} {currencyCode(statementAccount)}</div></div><div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3"><div className="text-[10px] font-bold uppercase tracking-wide text-emerald-300/70">{isAr ? 'إجمالي المدين' : 'Total debit'}</div><div className="mt-1 font-mono text-base font-black text-emerald-300">{formatMoney(statementDebitTotal)} {currencyCode(statementAccount)}</div></div><div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-3">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-rose-300/70">{isAr ? 'إجمالي الدائن' : 'Total credit'}</div><div className="mt-1 font-mono text-base font-black text-rose-300">{formatMoney(statementCreditTotal)} {currencyCode(statementAccount)}</div></div><div className="rounded-xl border border-slate-700 bg-slate-900/60 p-3"><div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{isAr ? 'عدد الحركات' : 'Transactions'}</div><div className="mt-1 font-mono text-base font-black text-white">{statementTransactions.length}</div></div></div></div><div className="min-h-0 flex-1 overflow-auto p-4">{statementLoading ? <div className="flex h-full items-center justify-center gap-2 text-sm text-slate-400"><Loader2 size={20} className="animate-spin" />{isAr ? 'جارٍ تحميل كشف الحساب...' : 'Loading statement...'}</div> : <table className="w-full min-w-[760px] text-sm"><thead className="sticky top-0 bg-slate-950 text-xs text-slate-400"><tr><th className="p-3 text-start">{isAr ? 'التاريخ' : 'Date'}</th><th className="p-3 text-start">{isAr ? 'المرجع' : 'Reference'}</th><th className="p-3 text-start">{isAr ? 'البيان' : 'Description'}</th><th className="p-3 text-start">{isAr ? 'الوحدة' : 'Module'}</th><th className="p-3 text-end text-emerald-300">{isAr ? 'مدين' : 'Debit'}</th><th className="p-3 text-end text-rose-300">{isAr ? 'دائن' : 'Credit'}</th></tr></thead><tbody>{statementTransactions.map((transaction) => <tr key={transaction.id} className="border-t border-slate-800/80 transition-colors hover:bg-slate-800/50"><td className="p-3 font-mono text-xs text-slate-400">{transaction.createdAt ? new Date(transaction.createdAt).toLocaleDateString(isAr ? 'ar-YE' : undefined) : '—'}</td><td className="p-3 font-mono text-xs text-[#f0d576]">{transaction.entry_id || transaction.entry_number || transaction.refNumber || transaction.journalEntryNumber || '—'}</td><td className="max-w-[260px] p-3 text-xs text-slate-200">{transaction.description || '—'}</td><td className="p-3"><span className="rounded-md border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-[10px] font-bold uppercase text-slate-400">{getModuleName(transaction, isAr)}</span></td><td className="p-3 text-end font-mono text-xs font-bold text-emerald-300">{(transaction.transType || transaction.trans_type || transaction.type) === 'Debit' ? `${formatMoney(transaction.amount)} ${transaction.currency || currencyCode(statementAccount)}` : '—'}</td><td className="p-3 text-end font-mono text-xs font-bold text-rose-300">{(transaction.transType || transaction.trans_type || transaction.type) === 'Credit' ? `${formatMoney(transaction.amount)} ${transaction.currency || currencyCode(statementAccount)}` : '—'}</td></tr>)}{statementTransactions.length === 0 && <tr><td colSpan={6} className="p-12 text-center text-sm text-slate-500">{isAr ? 'لا توجد حركات مسجلة على هذا الحساب.' : 'No transactions are recorded for this account.'}</td></tr>}</tbody></table>}</div><div className="flex justify-end border-t border-slate-800 bg-slate-950/80 p-4"><button onClick={() => setStatementAccount(null)} className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-slate-100 transition-colors hover:bg-slate-700">{isAr ? 'إغلاق' : 'Close'}</button></div></div></div>}
     <ConfirmModal isOpen={Boolean(deleting)} onClose={() => setDeleting(null)} onConfirm={remove} title={isAr ? 'حذف حساب أو عقدة' : 'Delete account or node'} message={isAr ? 'لا يمكن الحذف عند وجود حسابات أو سجلات مرتبطة. هل تريد المتابعة؟' : 'Deletion is blocked when dependent records exist. Continue?'} confirmText={isAr ? 'حذف' : 'Delete'} type="danger" />
   </section>;
 }
