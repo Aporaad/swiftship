@@ -364,3 +364,45 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
    - توحيد استخراج ومطابقة عمود `trans_type` بجدول `account_trans` في المحول والواجهات وتوفير الخواص المترادفة (`trans_type`, `transType`, `type`) لمنع أي تضارب بين البيانات المجلوبة واستعلامات التقارير.
 2. **مطابقة حسابات الأرصدة التراكمية بـ `account_trans` و `accounts`**:
    - ضمان تطابق حساب الرصيد الختامي `closingBalance` مع الرصيد التراكمي الشامل `selectedAccount.balance` المسجل بقاعدة البيانات عند تحديد الفترات الكاملة.
+
+---
+
+## [2026-09-01 01:45:00] — تحديث دالة ومُشغّلات المزامنة الفورية للأرصدة بـ PostgreSQL
+
+### التحديثات والترحيلات المنفذة في قاعدة البيانات:
+1. **ترحيل ملف التغييرات المحدث `202609010002_fix_account_balance_sync_and_triggers.sql`**:
+   - إعادة تعريف دالة `public.recalculate_accounting_hierarchy(text)` لتربط حركات `account_trans` المعتمدة بـ `LEFT JOIN public.main_entry` دون إسقاط أي حركة معتمدة.
+2. **ضبط المشغلات الآلية لإعادة الاحتساب الفورية عند الحذف/التعديل**:
+   - تحديث `trg_account_trans_after_balance_sync` على `public.account_trans` ليعمل على (`INSERT`, `UPDATE`, `DELETE`).
+   - تحديث `trg_main_entry_after_posting_balance_sync` على `public.main_entry` ليعمل عند تغيير `posting_status` أو عند `DELETE` لضمان إعادة تحديث الأرصدة المنسوبة فوراً عند إلغاء أو حذف أي قيد أو سند.
+3. **توفير وتشغيل دالة الشمول `recalculate_all_account_balances()`**:
+   - تنفيذ إعادة حساب ومزامنة فورية لكل الحسابات في `public.accounts` وإعادة بناء شجرة الأرصدة التراكمية بـ `acc_sub_group`, `acc_sub`, `acc_main`, `account`.
+
+---
+
+## [2026-09-01 23:10:00] — مواءمة مخرجات محول النظام لطلبات إدراج وتعديل جداول الهيكل المحاسبي
+
+### التحديثات والترحيلات المنفذة في قاعدة البيانات ومحول النظام:
+1. **تحديث نطاق الجداول العلاقاتية الصريحة `EXPLICIT_FINANCIAL_TABLES`**:
+   - حظر إرسال الحقل الوهمي `data` نهائياً أثناء عمليات الإدراج والتحديث على جداول PostgreSQL الهيكلية (`account`, `acc_main`, `acc_sub`, `acc_sub_group`, `default_accounts`).
+2. **مطابقة أعمدة جداول الهيكل المحاسبي الصريحة**:
+   - ربط ومطابقة الأعمدة المباشرة `account_code`, `acc_name_ar`, `acc_name_en`, `account_type`, `cur_no`, `is_active`, `allows_direct_accounts`, `entity_type` مباشرة بحسب تعريف مخطط Supabase REST API ومنع أخطاء 400 Bad Request.
+
+---
+
+## [2026-09-02 01:35:00] — تثبيت استبعاد القيود المؤقتة (Temp) من احتساب أرصدة الحسابات
+
+### التحديثات والترحيلات المنفذة في قاعدة البيانات:
+1. **تعديل دالة `recalculate_accounting_hierarchy` في PostgreSQL**:
+   - تثبيت شرط `COALESCE(entry.entry_category, '') <> 'Temp'` في استعلام حساب رصيد `accounts.balance` لمنع أسطر القيود المؤقتة غير المعتمدة من التأثير على أرصدة الحسابات.
+   - إعادة تشغيل دالة الشمول `recalculate_all_account_balances()` بـ Supabase لمزامنة أرصدة الـ 89 حساباً وتطبيق المهاجرة بنجاح عبر `@mcp:supabase`.
+
+---
+
+## [2026-09-02 01:42:00] — إعادة تشغيل ومزامنة قاعدة البيانات لتعميم تصفية القيود المؤقتة (Temp)
+
+### التحديثات والترحيلات المنفذة في قاعدة البيانات:
+1. **تأكيد مهاجرة PostgreSQL المحدثة `202609010002_fix_account_balance_sync_and_triggers.sql`**:
+   - تثبيت تصفية شرط `COALESCE(entry.entry_category, '') <> 'Temp'` في استعلام حساب رصيد `accounts.balance` وتأكيد المشغلات الآلية عند أي عملية إضافة/تعديل/حذف.
+2. **إعادة تشغيل دالة الشمول بـ Supabase (`@mcp:supabase`)**:
+   - تم استدعاء وتنفيد `recalculate_all_account_balances()` لتحديث شجرة أرصدة قاعدة البيانات بأكملها لجميع الحسابات والكيانات المربوطة.

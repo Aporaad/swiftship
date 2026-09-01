@@ -645,11 +645,11 @@ const DIRECT_COLUMNS_MAP: Record<string, Record<string, string>> = {
   user_settings: { userId: 'userid' },
   customers: { accountId: 'account_id', disabled: 'is_active', level: 'levels', levels: 'levels' },
   couriers: { accountId: 'account_id', financialCurrency: 'currency', currency: 'currency', disabled: 'is_active', courierType: 'type', type: 'type', level: 'levels', levels: 'levels' },
-  account: { accountCode: 'account_code', code: 'account_code', accNameAr: 'acc_name_ar', nameAr: 'acc_name_ar', accNameEn: 'acc_name_en', nameEn: 'acc_name_en', balance: 'balance', curNo: 'cur_no', currencyId: 'cur_no', isActive: 'is_active', createdAt: 'created_at', updatedAt: 'updated_at' },
-  acc_main: { accountId: 'account_id', accountCode: 'account_code', code: 'account_code', accNameAr: 'acc_name_ar', nameAr: 'acc_name_ar', accNameEn: 'acc_name_en', nameEn: 'acc_name_en', balance: 'balance', curNo: 'cur_no', currencyId: 'cur_no', isActive: 'is_active', createdAt: 'created_at', updatedAt: 'updated_at' },
-  acc_sub: { accMainId: 'acc_main_id', accountCode: 'account_code', code: 'account_code', accNameAr: 'acc_name_ar', nameAr: 'acc_name_ar', accNameEn: 'acc_name_en', nameEn: 'acc_name_en', balance: 'balance', curNo: 'cur_no', currencyId: 'cur_no', isActive: 'is_active', allowsDirectAccounts: 'allows_direct_accounts', createdAt: 'created_at', updatedAt: 'updated_at' },
-  acc_sub_group: { accSubId: 'acc_sub_id', accountCode: 'account_code', code: 'account_code', accNameAr: 'acc_name_ar', nameAr: 'acc_name_ar', accNameEn: 'acc_name_en', nameEn: 'acc_name_en', balance: 'balance', curNo: 'cur_no', currencyId: 'cur_no', isActive: 'is_active', entityType: 'entity_type', allowsDirectAccounts: 'allows_direct_accounts', createdAt: 'created_at', updatedAt: 'updated_at' },
-  default_accounts: { defaultKey: 'default_key', accountId: 'account_id', accNameAr: 'acc_name_ar', nameAr: 'acc_name_ar', accNameEn: 'acc_name_en', nameEn: 'acc_name_en', curNo: 'cur_no', currencyId: 'cur_no', isActive: 'is_active', createdAt: 'created_at', updatedAt: 'updated_at' },
+  account: { accountCode: 'account_code', code: 'account_code', account_code: 'account_code', accNameAr: 'acc_name_ar', nameAr: 'acc_name_ar', acc_name_ar: 'acc_name_ar', accNameEn: 'acc_name_en', nameEn: 'acc_name_en', acc_name_en: 'acc_name_en', balance: 'balance', curNo: 'cur_no', currencyId: 'cur_no', cur_no: 'cur_no', isActive: 'is_active', is_active: 'is_active', accountType: 'account_type', account_type: 'account_type', createdAt: 'created_at', updatedAt: 'updated_at' },
+  acc_main: { accountId: 'account_id', account_id: 'account_id', accountCode: 'account_code', code: 'account_code', account_code: 'account_code', accNameAr: 'acc_name_ar', nameAr: 'acc_name_ar', acc_name_ar: 'acc_name_ar', accNameEn: 'acc_name_en', nameEn: 'acc_name_en', acc_name_en: 'acc_name_en', balance: 'balance', curNo: 'cur_no', currencyId: 'cur_no', cur_no: 'cur_no', isActive: 'is_active', is_active: 'is_active', createdAt: 'created_at', updatedAt: 'updated_at' },
+  acc_sub: { accMainId: 'acc_main_id', acc_main_id: 'acc_main_id', accountCode: 'account_code', code: 'account_code', account_code: 'account_code', accNameAr: 'acc_name_ar', nameAr: 'acc_name_ar', acc_name_ar: 'acc_name_ar', accNameEn: 'acc_name_en', nameEn: 'acc_name_en', acc_name_en: 'acc_name_en', balance: 'balance', curNo: 'cur_no', currencyId: 'cur_no', cur_no: 'cur_no', isActive: 'is_active', is_active: 'is_active', allowsDirectAccounts: 'allows_direct_accounts', allows_direct_accounts: 'allows_direct_accounts', createdAt: 'created_at', updatedAt: 'updated_at' },
+  acc_sub_group: { accSubId: 'acc_sub_id', acc_sub_id: 'acc_sub_id', accountCode: 'account_code', code: 'account_code', account_code: 'account_code', accNameAr: 'acc_name_ar', nameAr: 'acc_name_ar', acc_name_ar: 'acc_name_ar', accNameEn: 'acc_name_en', nameEn: 'acc_name_en', acc_name_en: 'acc_name_en', balance: 'balance', curNo: 'cur_no', currencyId: 'cur_no', cur_no: 'cur_no', isActive: 'is_active', is_active: 'is_active', entityType: 'entity_type', entity_type: 'entity_type', allowsDirectAccounts: 'allows_direct_accounts', allows_direct_accounts: 'allows_direct_accounts', createdAt: 'created_at', updatedAt: 'updated_at' },
+  default_accounts: { defaultKey: 'default_key', default_key: 'default_key', accountId: 'account_id', account_id: 'account_id', accNameAr: 'acc_name_ar', nameAr: 'acc_name_ar', acc_name_ar: 'acc_name_ar', accNameEn: 'acc_name_en', nameEn: 'acc_name_en', acc_name_en: 'acc_name_en', curNo: 'cur_no', currencyId: 'cur_no', cur_no: 'cur_no', isActive: 'is_active', is_active: 'is_active', createdAt: 'created_at', updatedAt: 'updated_at' },
   account_id_migration_map: { oldAccountId: 'old_account_id', oldAccountCode: 'old_account_code', newAccountId: 'new_account_id', migratedAt: 'migrated_at' },
   accounts: { accountCode: 'account_code', code: 'account_code', balance: 'balance', currency: 'currency', entityId: 'entity_id', entityType: 'entity_type', type: 'type', accountType: 'type', accSubId: 'acc_sub_id', groupId: 'group_id', accountSeq: 'account_seq', accNameAr: 'acc_name_ar', nameAr: 'acc_name_ar', accNameEn: 'acc_name_en', nameEn: 'acc_name_en', limitedBalance: 'limited_balance', curNo: 'cur_no', currencyId: 'cur_no', isActive: 'is_active', createdAt: 'createdAt', updatedAt: 'updatedAt', lastRecalculatedAt: 'lastRecalculatedAt', accountNumber: 'account_number', accountPrefix: 'account_prefix', entityName: 'entity_name', notes: 'notes' },
   orders: { orderNumber: 'order_number', trackingNumber: 'tracking_number', customerId: 'customer_id', orderPartyId: 'order_party_id', orderPartyType: 'order_party_type', isStaffOrder: 'is_staff_order', employeeId: 'employee_id', courierId: 'courier_id', customerAccountId: 'order_party_account_id', orderPartyAccountId: 'order_party_account_id', orderStatusId: 'order_status_id', order_status_id: 'order_status_id', createdAt: 'createdAt', orderSourceId: 'order_source_id', order_source_id: 'order_source_id', orderSourceType: 'order_source_type', order_source_type: 'order_source_type', deliveryCourierId: 'delivery_courier_id', delivery_courier_id: 'delivery_courier_id', shippingCourierId: 'shipping_courier_id', shipping_courier_id: 'shipping_courier_id' },
@@ -681,7 +681,10 @@ const DIRECT_COLUMNS_MAP: Record<string, Record<string, string>> = {
   financial_migration_exceptions: { legacyTable: 'legacy_table', legacyId: 'legacy_id', exceptionCode: 'exception_code', severity: 'severity', description: 'description', resolutionStatus: 'resolution_status', resolvedByUid: 'resolved_by_uid', resolvedAt: 'resolved_at', createdAt: 'created_at', updatedAt: 'updated_at' }
 };
 
+// قائمة الجداول المالية العلاقاتية ذات الأعمدة المباشرة فقط (بدون حقل data jsonb)
+// Relational financial tables using explicit columns only (no data jsonb column)
 const EXPLICIT_FINANCIAL_TABLES = new Set([
+  'account', 'acc_main', 'acc_sub', 'acc_sub_group', 'default_accounts', 'account_id_migration_map',
   'accounts', 'entry_module', 'entry_type', 'main_entry', 'account_trans', 'custody_advances',
   'financial_legacy_migration_map', 'financial_migration_exceptions',
 ]);
@@ -690,13 +693,24 @@ export function usesExplicitFinancialColumns(table: string): boolean {
   return EXPLICIT_FINANCIAL_TABLES.has(table);
 }
 
+/**
+ * استخراج الأعمدة المباشرة المجهزة لقاعدة البيانات بنظافة وأمان
+ * Safely extract direct relational columns for Supabase REST queries
+ */
 export function extractDirectColumns(table: string, data: Record<string, any>): Record<string, any> {
   const mapping = DIRECT_COLUMNS_MAP[table];
   if (!mapping || !data || typeof data !== 'object') return {};
   const extracted: Record<string, any> = {};
   for (const [key, col] of Object.entries(mapping)) {
+    let val: any = undefined;
     if (data[key] !== undefined) {
-      let val = data[key];
+      val = data[key];
+    } else if (data[col] !== undefined) {
+      val = data[col];
+    }
+
+    if (val !== undefined) {
+      // تحويل المفاتيح الأجنبية الفارغة أو المسافات إلى null لتفادي خطأ القيود بقاعدة البيانات
       // Convert empty string or whitespace foreign keys to null so Postgres FK check succeeds
       if (typeof val === 'string' && val.trim() === '' && (col.endsWith('_id') || col === 'cur_no')) {
         val = null;

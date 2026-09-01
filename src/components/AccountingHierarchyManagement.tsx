@@ -321,13 +321,19 @@ export default function AccountingHierarchyManagement({ isAr, canEdit }: Props) 
       }
 
       setStatementTransactions(
-        rawTrans.map((t: any) => {
-          const mainEntry = mainEntriesMap.get(t.entryId || t.entry_id);
-          return {
-            ...t,
-            module: t.module || t.module_id || t.moduleId || mainEntry?.moduleId || mainEntry?.module_id || mainEntry?.entryCategory || t.entryCategory || t.trans_type,
-          };
-        })
+        rawTrans
+          .filter((t: any) => {
+            const mainEntry = mainEntriesMap.get(t.entryId || t.entry_id);
+            const category = t.entryCategory || t.entry_category || mainEntry?.entryCategory || mainEntry?.entry_category || mainEntry?.entryCategory;
+            return category !== 'Temp';
+          })
+          .map((t: any) => {
+            const mainEntry = mainEntriesMap.get(t.entryId || t.entry_id);
+            return {
+              ...t,
+              module: t.module || t.module_id || t.moduleId || mainEntry?.moduleId || mainEntry?.module_id || mainEntry?.entryCategory || t.entryCategory || t.trans_type,
+            };
+          })
       );
     } catch (statementError: any) {
       setError(statementError?.message || (isAr ? 'تعذر تحميل كشف الحساب.' : 'Unable to load the account statement.'));

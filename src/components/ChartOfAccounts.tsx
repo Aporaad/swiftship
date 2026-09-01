@@ -468,6 +468,11 @@ export default function ChartOfAccounts({
         });
         txs.sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
       }
+      // Filter out temporary entries (القيود المؤقتة)
+      txs = txs.filter((t: any) => {
+        const category = t.entryCategory || t.entry_category || t.category || t.entry_type;
+        return category !== 'Temp';
+      });
       setReportTransactions(txs);
     } catch (err) {
       console.error(err);

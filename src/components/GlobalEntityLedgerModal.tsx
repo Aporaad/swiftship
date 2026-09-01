@@ -166,6 +166,9 @@ export default function GlobalEntityLedgerModal() {
 
       // System manual/accounting transactions for customers
       transactions.forEach(tx => {
+        // Exclude temporary entries (القيود المؤقتة)
+        if (tx.entryCategory === 'Temp' || tx.entry_category === 'Temp' || tx.category === 'Temp' || tx.module === 'Temp') return;
+
         // Prevent duplication: our order generator always adds the 'order charge' debit line
         if (tx.module === 'order') return;
 
@@ -191,6 +194,8 @@ export default function GlobalEntityLedgerModal() {
     } else {
       // ----------------- COURIER LEDGER GENERATOR -----------------
       transactions.forEach(tx => {
+        // Exclude temporary entries (القيود المؤقتة)
+        if (tx.entryCategory === 'Temp' || tx.entry_category === 'Temp' || tx.category === 'Temp' || tx.module === 'Temp') return;
         const amtBase = parseFloat(tx.amount || 0);
         const amtOriginal = parseFloat(tx.amountOriginal || tx.amount_original || tx.amount || 0);
         const refNo = tx.entryNumber || tx.entry_number || tx.refNumber || tx.accountCode || 'GL-TX';

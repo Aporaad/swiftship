@@ -133,6 +133,10 @@ function _initSingleton() {
     const creditById: Record<string, number> = {};
 
     txDocs.forEach((tx: any) => {
+      // Exclude temporary entries (القيود المؤقتة) from account balances
+      const category = tx.entryCategory || tx.entry_category || tx.category || tx.entry_type;
+      if (category === 'Temp') return;
+
       // استخراج كود الحساب والمعرف والنوع من أسطر جدول account_trans الجديد
       // Extract account code, ID, and transaction type from account_trans table
       const code: string = tx.accountCode || tx.account_code || '';

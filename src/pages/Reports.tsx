@@ -1026,8 +1026,10 @@ export default function Reports() {
     };
     const debitNormal = isDebitNormal(selectedAccount);
 
-    // Get all transactions of all time for this account
+    // Get all transactions of all time for this account (excluding temporary entries)
     const myAllTimeTxs = allTimeTransactions.filter((tx: any) => {
+      if (tx.entryCategory === 'Temp' || tx.entry_category === 'Temp' || tx.category === 'Temp') return false;
+
       const matchesIdOrCode = tx.accountId === selectedAccount.id || tx.accountCode === selectedAccount.accountCode;
       const matchesEntity = selectedAccount.entityId && (tx.entityId === selectedAccount.entityId || tx.accountId === selectedAccount.entityId);
       const isTargetPackaging = selectedAccount.entityId === 'sys_packaging_fees' || selectedAccount.accountCode === '5100-7355';
