@@ -15,7 +15,7 @@ describe('عقد واجهة القيود الجديدة', () => {
     const workspace = source('EntryWorkspaceTab.tsx');
     expect(workspace).toContain('const [editingEntry, setEditingEntry]');
     expect(workspace).toContain('const openEdit = (entry: FinanceEntryRow)');
-    expect(workspace).toContain("transactions.filter((line) => line.entryId === entry.id)");
+    expect(workspace).toContain(".filter((l) => l.entryId === entry.id)");
     expect(workspace).toContain('editingEntry={editingEntry || undefined}');
     expect(workspace).toContain("entry.postingStatus === 'draft' && canEdit");
     expect(workspace).toContain('onClick={() => openEdit(entry)}');
@@ -59,7 +59,7 @@ describe('عقد واجهة القيود الجديدة', () => {
   it('يعرض تحصيل الطلب بعملة الدفع المحفوظة ويعتمدها عند إنشاء سند القبض', () => {
     const modal = source('../orders/PaymentModal.tsx');
     const orders = source('../../pages/Orders.tsx');
-    expect(modal).toContain('selectedOrder.paidCurrency || selectedOrder.currency');
+    expect(modal).toContain('selectedOrder?.paidCurrency || selectedOrder?.currency');
     expect(orders).toContain('selectedOrder.paidCurrency || selectedOrder.currency || selectedOrder.orderCurrency');
   });
 
@@ -69,7 +69,7 @@ describe('عقد واجهة القيود الجديدة', () => {
     expect(form).toContain('مرجع الحوالة / العملية');
     expect(form).toContain('تاريخ الاستحقاق');
     expect(form).toContain("paymentMethod === 'mixed' && category !== 'Compound'");
-    expect(form).toContain("account.accSubId === '111'");
-    expect(form).toContain("account.accSubId === '112'");
+    expect(form).toContain("acc.accSubId === '111'");
+    expect(form).toContain("acc.accSubId === '112'");
   });
 });

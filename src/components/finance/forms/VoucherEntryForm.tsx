@@ -303,10 +303,10 @@ export default function VoucherEntryForm({
 
   const unifiedLegsTable = useMemo(() => {
     const firstLegLabel = !isReceipt ? 'من حـ / (صرف)' : 'إلى حـ / (قبض)';
-    const firstLegTransType: 'Debit' | 'Credit' = !isReceipt ? 'Debit' : 'Credit';
+    const firstLegTransType: 'Debit' | 'Credit' = !isReceipt ? 'Credit' : 'Debit';
 
     const secondLegLabel = !isReceipt ? 'إلى حـ / (المستهدف)' : 'من حـ / (المستهدف)';
-    const secondLegTransType: 'Debit' | 'Credit' = !isReceipt ? 'Credit' : 'Debit';
+    const secondLegTransType: 'Credit' | 'Debit' = !isReceipt ? 'Debit' : 'Credit';
 
     const numVoucherRate = asNumber(voucherExchangeRate) || 1;
 
@@ -660,9 +660,8 @@ export default function VoucherEntryForm({
                 return (
                   <tr key={leg.id} className="hover:bg-slate-900/60 transition-colors">
                     <td className="px-3.5 py-3 text-center border-l border-slate-800/60">
-                      <div className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-1 text-xs font-black border ${
-                        isDebit ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300' : 'bg-amber-500/15 border-amber-500/40 text-amber-300'
-                      }`}>
+                      <div className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-1 text-xs font-black border ${isDebit ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300' : 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+                        }`}>
                         {isDebit ? <ArrowRight className="h-3.5 w-3.5" /> : <ArrowLeft className="h-3.5 w-3.5" />}
                         <span>{leg.label}</span>
                       </div>

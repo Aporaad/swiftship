@@ -406,3 +406,53 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
    - تثبيت تصفية شرط `COALESCE(entry.entry_category, '') <> 'Temp'` في استعلام حساب رصيد `accounts.balance` وتأكيد المشغلات الآلية عند أي عملية إضافة/تعديل/حذف.
 2. **إعادة تشغيل دالة الشمول بـ Supabase (`@mcp:supabase`)**:
    - تم استدعاء وتنفيد `recalculate_all_account_balances()` لتحديث شجرة أرصدة قاعدة البيانات بأكملها لجميع الحسابات والكيانات المربوطة.
+
+---
+
+## [2026-09-02 03:12:00] — تحديث دالة PostgreSQL وسكربت المهاجرة لإلزام شرط الترحيل الصريح (posting_status = 'posted')
+
+### التحديثات والترحيلات المنفذة في قاعدة البيانات:
+1. **تحديث دالة `public.recalculate_accounting_hierarchy(p_account_id text)`**:
+   - تم تعديل الاستعلام المحاسبي لربط `public.main_entry` والتحقق الصريح من أن القيد موجود وحالة الترحيل تساوي `posted`:
+     ```sql
+     WHERE tx.account_id = p_account_id
+       AND (
+         tx.entry_id IS NULL
+         OR (
+           entry.id IS NOT NULL
+           AND entry.posting_status = 'posted'
+           AND COALESCE(entry.entry_category, '') <> 'Temp'
+         )
+       );
+     ```
+   - استبعاد جميع الحركات التي يتبع قيدها حالة غير مرحّلة (`draft`) أو فئة مؤقتة (`Temp`) من الرصيد الصافي للحسابات الرئيسية والفرعية وشجرة الحسابات.
+2. **إنشاء ملف المهاجرة التوثيقي (`202609020001_enforce_posted_status_filter_on_balances.sql`)**:
+   - حفظ التعديل ضمن مجلد `supabase/migrations/202609020001_enforce_posted_status_filter_on_balances.sql`.
+3. **التطبيق الفوري وإعادة احتساب الأرصدة الشامل عبر `@mcp:supabase`**:
+   - تم تنفيذ وتأكيد السكربت على قاعدة بيانات Supabase.
+   - تشغيل `SELECT public.recalculate_all_account_balances();` وإعادة احتساب أرصدة الـ 89 حساباً وتأكيد التطابق بنسبة 100%.
+
+---
+
+## [2026-09-02 03:28:00] — حذف شرط استبعاد فئة Temp وتضمين القيود المؤقتة في احتساب الأرصدة بـ PostgreSQL
+
+### التحديثات والترحيلات المنفذة في قاعدة البيانات:
+1. **تعديل دالة `public.recalculate_accounting_hierarchy(p_account_id text)`**:
+   - تم حذف `AND COALESCE(entry.entry_category, '') <> 'Temp'` من استعلام تجميع الرصيد لجدول `accounts`.
+   - أصبح الاستعلام يعتمد حصرياً على فحص حالة الترحيل المرحّلة (`entry.posting_status = 'posted'`) واستبعاد المسودات غير المرحّلة فقط:
+     ```sql
+     WHERE tx.account_id = p_account_id
+       AND (
+         tx.entry_id IS NULL
+         OR (
+           entry.id IS NOT NULL
+           AND entry.posting_status = 'posted'
+         )
+       );
+     ```
+2. **تحديث ملف المهاجرة `202609020001_enforce_posted_status_filter_on_balances.sql`**:
+   - تحديث المهاجرة لتأكّد تضمين القيود المؤقتة وإلزام شرط `posting_status = 'posted'`.
+3. **التطبيق والمزامنة الشاملة عبر `@mcp:supabase`**:
+   - تطبيق الإجراء المحدث على قاعدة بيانات Supabase.
+   - تنفيذ `SELECT public.recalculate_all_account_balances();` لمزامنة وتحديث الـ 89 حساباً بنجاح وتطابق تام 100%.
+

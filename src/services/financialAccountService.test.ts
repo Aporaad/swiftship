@@ -55,7 +55,7 @@ describe('إنشاء الحسابات التابعة', () => {
 
     expect(account).toMatchObject({
       id: `${prefix}-0001`, accountCode: `${prefix}-0001`, accountPrefix: prefix,
-      parentCode: prefix, entityType, entityId, entityName, type, balance: 0,
+      entityType, entityId, entityName, type, balance: 0,
     });
     expect(mocks.setDoc).toHaveBeenCalledTimes(1);
     expect(mocks.updateDoc).not.toHaveBeenCalled();

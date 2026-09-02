@@ -476,3 +476,40 @@
 3. **مزامنة وتطابق قاعدة البيانات بـ Supabase (`@mcp:supabase`)**:
    - إعادة تشغيل دالة الشمول `recalculate_all_account_balances()` لتنفيذ المزامنة الكاملة ومطابقة 100% بين محرك الواجهة وقاعدة البيانات.
 
+## [2026-09-02 03:12:00] — استبعاد القيود غير المرحّلة (posting_status !== 'posted') من جميع أكواد النظام والأرصدة والتقارير
+
+### التغييرات والإجراءات المنفذة:
+1. **تحديث محرك الأرصدة التراكمية الموحد (`useAccountBalances.ts`)**:
+   - تم إضافة اشتراك حي لجدول `main_entry` لبناء خريطة حالات الترحيل والفئات.
+   - تطبيق فلتر صريح يمنع احتساب أي حركة مالية في `account_trans` إذا كان القيد المرتبط `main_entry` غير مرحّل (`posting_status !== 'posted'`) أو قيداً مؤقتاً (`Temp`).
+2. **تحديث شاشات كشوفات الحسابات والتقرير المحاسبي**:
+   - **`AccountingHierarchyManagement.tsx`**: تحديث `openStatement` لربط حركات `account_trans` بجدول `main_entry` واستبعاد الحركات غير المرحّلة والمسودات.
+   - **`ChartOfAccounts.tsx`**: تحديث `openReport` للتحقق من حالة الترحيل بـ `main_entry` وعرض الحركات المرحّلة الصريحة فقط.
+   - **`GlobalEntityLedgerModal.tsx`**: إضافة اشتراك `main_entry` وتصفية كافة الحركات المفتوحة للعملاء والمناديب وفق شرط الترحيل.
+3. **تحديث شاشات العملاء والموظفين والتقارير المالية**:
+   - **`Customers.tsx`**: تصفية حركات كشف حساب العميل وفق حالة الترحيل `posted`.
+   - **`Employees.tsx`**: تحديث `handleOpenStatement` لجلب `main_entry` وعرض الحركات المرحّلة فقط.
+   - **`Reports.tsx`**: ربط استعلام `allTimeTransactions` و `accountTransactions` بالاشتراك الحي لـ `main_entry` وتصفية كافة المسودات والحركات غير المرحّلة.
+   - **`FinanceReports.tsx`**: تحديث احتساب أرصدة الخزينة `treasuryBalances` ليعتمد حصرياً على الحركات المرحّلة.
+4. **تحديث قاعدة البيانات وتطبيق المهاجرة (`@mcp:supabase`)**:
+   - تحديث دالة PostgreSQL `recalculate_accounting_hierarchy` باشتراط `entry.posting_status = 'posted'` واستبعاد الحركات غير المرحّلة.
+   - إنشاء ملف المهاجرة `202609020001_enforce_posted_status_filter_on_balances.sql`.
+   - تشغيل `SELECT public.recalculate_all_account_balances();` عبر `@mcp:supabase` وإعادة حساب أرصدة الـ 89 حساباً وتأكيد التطابق التام 100%.
+
+## [2026-09-02 03:28:00] — حصر الاستبعاد على القيود غير المرحّلة (draft) فقط وتضمين القيود المؤقتة (Temp)
+
+### التغييرات والإجراءات المنفذة:
+1. **تحديث منطق فلترة الأرصدة الحية (`useAccountBalances.ts`)**:
+   - بناءً على توجيه المستخدم، تم إلغاء وحذف شرط استبعاد القيود المؤقتة (`entryCategory === 'Temp'`).
+   - الإبقاء حصرياً على فحص حالة الترحيل: استبعاد أي حركة مالية في `account_trans` إذا كان القيد المرتبط بـ `main_entry` في حالة غير مرحّلة `draft` أو `posting_status !== 'posted'`.
+2. **تعديل مكونات وشاشات النظام لتضمين القيود المؤقتة**:
+   - **`AccountingHierarchyManagement.tsx`**: حذف فحص `Temp` من `openStatement` وتضمين قيودها فور مرحلتها.
+   - **`ChartOfAccounts.tsx`**: حذف فحص `Temp` من `openReport` والاعتماد التام على `posting_status === 'posted'`.
+   - **`FinanceAccounting.tsx`**: إزالة التصفية لـ `entryCategory !== 'Temp'` من التجميع لـ `accountTransactions`.
+   - **`GlobalEntityLedgerModal.tsx`**, **`Customers.tsx`**, **`Employees.tsx`**, **`Reports.tsx`**: حصر التصفية على حالة الترحيل المرحّلة فقط وحذف استبعاد `Temp`.
+3. **تحديث دالة PostgreSQL وسكربت المهاجرة**:
+   - حذف `AND COALESCE(entry.entry_category, '') <> 'Temp'` من دالة `recalculate_accounting_hierarchy` في PostgreSQL.
+   - تحديث السكربت [202609020001_enforce_posted_status_filter_on_balances.sql](file:///F:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/supabase/migrations/202609020001_enforce_posted_status_filter_on_balances.sql).
+   - إعادة تنفيذ `SELECT public.recalculate_all_account_balances();` عبر `@mcp:supabase` وإجادة تجميع الأرصدة الـ 89 حساباً بنسبة 100%.
+
+

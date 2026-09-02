@@ -468,11 +468,50 @@ export default function ChartOfAccounts({
         });
         txs.sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
       }
-      // Filter out temporary entries (القيود المؤقتة)
+
+      // جمع معرّفات القيود المرتبطة من main_entry
+      // Collect linked entry IDs to fetch from main_entry
+      const entryIds = Array.from(new Set(
+        txs.map((t: any) => t.entryId || t.entry_id).filter(Boolean)
+      ));
+      const mainEntryMap = new Map<string, any>();
+      if (entryIds.length > 0) {
+        try {
+          // جلب رؤوس القيود من main_entry للتحقق من حالة الترحيل
+          // Fetch main_entry headers to check posting_status
+          const allEntriesSnap = await getDocs(collection(db, 'main_entry'));
+          allEntriesSnap.docs.forEach((d: any) => {
+            if (entryIds.includes(d.id)) {
+              mainEntryMap.set(d.id, d.data());
+            }
+          });
+        } catch (_) { /* ignore */ }
+      }
+
+      // تصفية الحركات: فقط الحركات المرتبطة بقيود مرحّلة (posting_status === 'posted')
+      // Filter transactions: only those linked to posted entries
       txs = txs.filter((t: any) => {
-        const category = t.entryCategory || t.entry_category || t.category || t.entry_type;
-        return category !== 'Temp';
+        const entryId = t.entryId || t.entry_id;
+
+        // إذا لم يوجد entryId: إدراج كحركة تاريخية
+        // No entryId: include as legacy transaction
+        if (!entryId) return true;
+
+        const mainEntry = mainEntryMap.get(entryId);
+
+        // إذا لم يُوجد القيد في main_entry: استبعاد
+        // Entry not found in main_entry: exclude
+        if (!mainEntry) return false;
+
+        // استبعاد القيود غير المرحّلة (posting_status !== 'posted')
+        // Exclude non-posted entries
+        const postingStatus = mainEntry?.postingStatus || mainEntry?.posting_status || '';
+        if (postingStatus !== 'posted') return false;
+
+        return true;
       });
+
+
       setReportTransactions(txs);
     } catch (err) {
       console.error(err);
@@ -480,6 +519,7 @@ export default function ChartOfAccounts({
       setReportLoading(false);
     }
   };
+
 
   const confirmDeleteAccount = async () => {
     if (!showDeleteConfirm) return;

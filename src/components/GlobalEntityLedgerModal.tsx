@@ -31,6 +31,9 @@ export default function GlobalEntityLedgerModal() {
   const [orders, setOrders] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
+  // خريطة رؤوس القيود: entryId → بيانات القيد
+  // Journal entry headers map: entryId → entry data
+  const [mainEntriesMap, setMainEntriesMap] = useState<Map<string, any>>(new Map());
   
   const [loading, setLoading] = useState(false);
   const [finSearch, setFinSearch] = useState('');
@@ -105,11 +108,24 @@ export default function GlobalEntityLedgerModal() {
       setLoading(false);
     });
 
+    // 5. الاستماع لجدول main_entry لبناء خريطة حالة الترحيل
+    //    Subscribe to main_entry to build posting-status map for this entity
+    const unsubMainEntries = onSnapshot(collection(db, 'main_entry'), (snap) => {
+      const map = new Map<string, any>();
+      snap.docs.forEach(d => {
+        map.set(d.id, d.data());
+      });
+      setMainEntriesMap(map);
+    }, (err) => {
+      console.warn("Error fetching main_entry for ledger modal:", err);
+    });
+
     return () => {
       unsubEntity();
       unsubOrders();
       unsubExpenses();
       unsubTx();
+      unsubMainEntries();
     };
   }, [isOpen, entityId, entityType]);
 
@@ -166,8 +182,17 @@ export default function GlobalEntityLedgerModal() {
 
       // System manual/accounting transactions for customers
       transactions.forEach(tx => {
-        // Exclude temporary entries (القيود المؤقتة)
-        if (tx.entryCategory === 'Temp' || tx.entry_category === 'Temp' || tx.category === 'Temp' || tx.module === 'Temp') return;
+        const entryId = tx.entryId || tx.entry_id;
+        if (entryId) {
+          const mainEntry = mainEntriesMap.get(entryId);
+          // استبعاد الحركات التي قيدها غير موجود في main_entry
+          // Exclude if entry not found
+          if (!mainEntry) return;
+          // استبعاد القيود غير المرحّلة (posting_status !== 'posted')
+          // Exclude non-posted entries
+          const ps = mainEntry.postingStatus || mainEntry.posting_status || '';
+          if (ps !== 'posted') return;
+        }
 
         // Prevent duplication: our order generator always adds the 'order charge' debit line
         if (tx.module === 'order') return;
@@ -194,8 +219,17 @@ export default function GlobalEntityLedgerModal() {
     } else {
       // ----------------- COURIER LEDGER GENERATOR -----------------
       transactions.forEach(tx => {
-        // Exclude temporary entries (القيود المؤقتة)
-        if (tx.entryCategory === 'Temp' || tx.entry_category === 'Temp' || tx.category === 'Temp' || tx.module === 'Temp') return;
+        const entryId = tx.entryId || tx.entry_id;
+        if (entryId) {
+          const mainEntry = mainEntriesMap.get(entryId);
+          // استبعاد الحركات التي قيدها غير موجود في main_entry
+          // Exclude if entry not found
+          if (!mainEntry) return;
+          // استبعاد القيود غير المرحّلة
+          // Exclude non-posted entries
+          const ps = mainEntry.postingStatus || mainEntry.posting_status || '';
+          if (ps !== 'posted') return;
+        }
         const amtBase = parseFloat(tx.amount || 0);
         const amtOriginal = parseFloat(tx.amountOriginal || tx.amount_original || tx.amount || 0);
         const refNo = tx.entryNumber || tx.entry_number || tx.refNumber || tx.accountCode || 'GL-TX';

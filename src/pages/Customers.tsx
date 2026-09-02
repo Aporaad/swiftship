@@ -56,6 +56,9 @@ export default function Customers() {
 
   const [detailTab, setDetailTab] = useState<'logistics' | 'financial'>('logistics');
   const [customerTransactions, setCustomerTransactions] = useState<any[]>([]);
+  // خريطة رؤوس القيود: entryId → بيانات القيد (posting_status, entry_category)
+  // Journal entry headers map: entryId → entry data
+  const [customerMainEntriesMap, setCustomerMainEntriesMap] = useState<Map<string, any>>(new Map());
   const [finSearch, setFinSearch] = useState('');
   const [finModuleFilter, setFinModuleFilter] = useState<'all' | 'order' | 'expense' | 'payment' | 'custody'>('all');
 
@@ -67,7 +70,7 @@ export default function Customers() {
 
     const qTx = query(
       collection(db, 'account_trans'),
-      where('entity_id', '==', selectedCustomer.id)
+      where('account_id', '==', selectedCustomer.account_id)
     );
     const unsubTx = onSnapshot(qTx, (snap) => {
       const txs = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
@@ -76,7 +79,17 @@ export default function Customers() {
       console.error("Error fetching transactions for customer:", err);
     });
 
-    return () => unsubTx();
+    // الاستماع لجدول main_entry لبناء خريطة حالة الترحيل للعميل
+    // Subscribe to main_entry to build posting-status map for customer
+    const unsubMainEntries = onSnapshot(collection(db, 'main_entry'), (snap) => {
+      const map = new Map<string, any>();
+      snap.docs.forEach((d: any) => { map.set(d.id, d.data()); });
+      setCustomerMainEntriesMap(map);
+    }, (err) => {
+      console.warn('[Customers] main_entry subscription warning:', err);
+    });
+
+    return () => { unsubTx(); unsubMainEntries(); };
   }, [selectedCustomer, showDetailsModal]);
 
   // Confirmation Modal State
@@ -367,6 +380,17 @@ export default function Customers() {
 
     // 2. Add ledger system transactions (deposits, manual entries from back-office)
     customerTransactions.forEach(tx => {
+      // فحص حالة الترحيل من main_entry قبل إدراج الحركة
+      // Check posting_status from main_entry before including this transaction
+      const entryId = tx.entryId || tx.entry_id;
+      if (entryId) {
+        const mainEntry = customerMainEntriesMap.get(entryId);
+        if (!mainEntry) return; // استبعاد إذا لم يُوجد القيد
+        const ps = mainEntry.postingStatus || mainEntry.posting_status || '';
+        if (ps !== 'posted') return; // استبعاد القيود غير المرحّلة
+      }
+
+
       // Prevent duplication: our order generator always adds the 'order charge' debit line
       if (tx.module === 'order') return;
 

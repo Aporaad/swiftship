@@ -323,9 +323,19 @@ export default function AccountingHierarchyManagement({ isAr, canEdit }: Props) 
       setStatementTransactions(
         rawTrans
           .filter((t: any) => {
-            const mainEntry = mainEntriesMap.get(t.entryId || t.entry_id);
-            const category = t.entryCategory || t.entry_category || mainEntry?.entryCategory || mainEntry?.entry_category || mainEntry?.entryCategory;
-            return category !== 'Temp';
+            const entryId = t.entryId || t.entry_id;
+            const mainEntry = mainEntriesMap.get(entryId);
+
+            // استبعاد الحركات التي ليس لها قيد مرتبط وتم إيجاد entry_id فارغ
+            // Exclude transactions with entry_id that has no matching main_entry
+            if (entryId && !mainEntry) return false;
+
+            // استبعاد القيود غير المرحّلة (draft وما يشابهها)
+            // Exclude non-posted entries (draft or any status other than posted)
+            const postingStatus = mainEntry?.postingStatus || mainEntry?.posting_status || '';
+            if (entryId && postingStatus !== 'posted') return false;
+
+            return true;
           })
           .map((t: any) => {
             const mainEntry = mainEntriesMap.get(t.entryId || t.entry_id);
@@ -335,6 +345,8 @@ export default function AccountingHierarchyManagement({ isAr, canEdit }: Props) 
             };
           })
       );
+
+
     } catch (statementError: any) {
       setError(statementError?.message || (isAr ? 'تعذر تحميل كشف الحساب.' : 'Unable to load the account statement.'));
     } finally {

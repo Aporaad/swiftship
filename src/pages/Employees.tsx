@@ -343,7 +343,7 @@ export default function Employees() {
         where('accountId', '==', accId)
       );
       const snap = await getDocs(q);
-      const txs = snap.docs.map(d => {
+      const rawTxs = snap.docs.map(d => {
         const row = d.data();
         return {
           id: d.id,
@@ -352,12 +352,43 @@ export default function Employees() {
           amount: row.amount ?? row.amountOriginal
         };
       });
+
+      // جلب رؤوس القيود المرتبطة من main_entry للتحقق من حالة الترحيل
+      // Fetch linked main_entry headers to check posting status
+      const entryIds = Array.from(new Set(rawTxs.map(t => t.entryId || t.entry_id).filter(Boolean)));
+      const mainEntryMap = new Map<string, any>();
+      if (entryIds.length > 0) {
+        try {
+          const mainSnap = await getDocs(collection(db, 'main_entry'));
+          mainSnap.docs.forEach(d => {
+            if (entryIds.includes(d.id)) {
+              mainEntryMap.set(d.id, d.data());
+            }
+          });
+        } catch (_) { /* fallback */ }
+      }
+
+      // تصفية الحركات: إبقاء القيود المرحّلة فقط
+      // Filter transactions: keep posted entries only
+      const txs = rawTxs.filter(t => {
+        const entryId = t.entryId || t.entry_id;
+        if (entryId) {
+          const mainEntry = mainEntryMap.get(entryId);
+          if (!mainEntry) return false;
+          const ps = mainEntry.postingStatus || mainEntry.posting_status || '';
+          if (ps !== 'posted') return false;
+        }
+        return true;
+      });
+
+
       txs.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
       setStatementModal({ isOpen: true, employee: emp, transactions: txs, loading: false });
     } catch (err) {
       console.error('Error loading statement of account:', err);
       setStatementModal({ isOpen: true, employee: emp, transactions: [], loading: false });
     }
+
   };
 
   // Check permission

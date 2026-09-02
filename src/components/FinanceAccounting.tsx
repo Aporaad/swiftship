@@ -280,7 +280,8 @@ export default function FinanceAccounting({
         const entry = entryById.get(tx.entryId);
         return { ...tx, entry, journalEntryId: tx.entryId, refNumber: tx.refNumber || entry?.entryNumber, journalEntryNumber: entry?.entryNumber, currencyOriginal: tx.currencyOriginal || entry?.currencyOriginal };
       })
-      .filter((tx: any) => tx.entry?.postingStatus === 'posted' && tx.entry?.entryCategory !== 'Temp')
+      .filter((tx: any) => tx.entry?.postingStatus === 'posted')
+
       .forEach(tx => {
       const groupKey = tx.journalEntryId || (tx.refNumber ? `REF-${tx.refNumber}` : tx.id);
       if (!groupedMap.has(groupKey)) {

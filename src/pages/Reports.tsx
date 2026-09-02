@@ -472,6 +472,20 @@ export default function Reports() {
     );
   };
 
+  const [mainEntriesMap, setMainEntriesMap] = useState<Map<string, any>>(new Map());
+
+  // Subscribe to main_entry to track posting_status real-time
+  useEffect(() => {
+    const unsubMain = onSnapshot(collection(db, 'main_entry'), (snap) => {
+      const map = new Map<string, any>();
+      snap.docs.forEach((doc: any) => {
+        map.set(doc.id, doc.data());
+      });
+      setMainEntriesMap(map);
+    });
+    return () => unsubMain();
+  }, []);
+
   // Fetch ALL account transactions for general financial metrics calculation
   useEffect(() => {
     const qAllTxs = query(
@@ -480,7 +494,19 @@ export default function Reports() {
     );
 
     const unsub = onSnapshot(qAllTxs, (snap) => {
-      const allTxs = snap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) as any[];
+      const allRawTxs = snap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) as any[];
+      // Filter out non-posted entries (posting_status !== 'posted')
+      const allTxs = allRawTxs.filter((tx: any) => {
+        const entryId = tx.entryId || tx.entry_id;
+        if (entryId) {
+          const mainEntry = mainEntriesMap.get(entryId);
+          if (!mainEntry) return false;
+          const ps = mainEntry.postingStatus || mainEntry.posting_status || '';
+          if (ps !== 'posted') return false;
+        }
+        return true;
+      });
+
       setAllTimeTransactions(allTxs);
       // Filter by active start/end date range
       const filtered = allTxs.filter((tx: any) => {
@@ -493,7 +519,8 @@ export default function Reports() {
     });
 
     return () => unsub();
-  }, [filters.startDate, filters.endDate]);
+  }, [filters.startDate, filters.endDate, mainEntriesMap]);
+
 
   // Custom presets handlers
   const handleSaveFilterTemplate = async () => {
@@ -676,7 +703,18 @@ export default function Reports() {
     const unsub = onSnapshot(qTx, (snap) => {
       const allTxs = snap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) as any[];
       const filtered = allTxs.filter((tx: any) => {
+        // استبعاد أي حركة غير مرحّلة (posting_status !== 'posted')
+        // Exclude non-posted entries
+        const entryId = tx.entryId || tx.entry_id;
+        if (entryId) {
+          const mainEntry = mainEntriesMap.get(entryId);
+          if (!mainEntry) return false;
+          const ps = mainEntry.postingStatus || mainEntry.posting_status || '';
+          if (ps !== 'posted') return false;
+        }
+
         const txDate = new Date(tx.createdAt);
+
         const start = startOfDay(new Date(filters.startDate));
         const end = endOfDay(new Date(filters.endDate));
         const dateInRange = isWithinInterval(txDate, { start, end });
@@ -3738,19 +3776,19 @@ export default function Reports() {
                                         {format(new Date(tx.createdAt), 'yyyy-MM-dd HH:mm')}
                                       </td>
                                       <td className="py-3 px-3 font-mono font-black text-slate-350">
-                                        {tx.refNumber || '-'}
+                                        {tx.entry_id || '-'}
                                       </td>
                                       <td className="py-3 px-3 font-bold text-white truncate max-w-xs" title={tx.description}>
                                         {tx.description}
                                       </td>
-                                      <td className="py-3 px-3 text-right font-mono font-black text-rose-400">
+                                      <td className="py-3 px-3 text-right font-mono font-black text-emerald-400">
                                         {tx.type === 'Debit' ? `+${amt.toLocaleString()}` : '-'}
                                       </td>
-                                      <td className="py-3 px-3 text-right font-mono font-black text-emerald-400">
+                                      <td className="py-3 px-3 text-right font-mono font-black text-rose-400 ">
                                         {tx.type === 'Credit' ? `-${amt.toLocaleString()}` : '-'}
                                       </td>
                                       <td className={`py-3 px-3 text-right font-mono font-black ${tx.runningBalance >= 0 ? 'text-[#d4af37]' : 'text-rose-400'}`}>
-                                        {tx.runningBalance.toLocaleString()} {tx.currencyOriginal || tx.currency || 'SAR'}
+                                        {tx.runningBalance.toLocaleString()} {ledgerMetrics.selectedAccount.currency}
                                       </td>
                                     </tr>
                                   );

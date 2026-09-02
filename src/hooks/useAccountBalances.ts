@@ -10,7 +10,16 @@
  *   إيراد  (Revenue)  = Σ دائن − Σ مدين (طبيعي دائن)
  *   ملكية  (Equity)   = Σ دائن − Σ مدين (طبيعي دائن)
  *
- * يتحدث تلقائياً كلما تغير أي قيد في account_trans أو الإعدادات أو أسعار الصرف.
+ * شرط جوهري:
+ *   يتم استبعاد أي حركة مالية من account_trans فقط إذا كانت حالة ترحيل قيدها غير مرحّل
+ *   (posting_status !== 'posted' / draft).
+ *   أما القيود المؤقتة (Temp) فيتم تضمينها واحتسابها طبيعياً طالما قيدها مرحّل.
+ *
+ * Critical Rule:
+ *   Any account_trans row is EXCLUDED only if its linked main_entry has
+ *   posting_status !== 'posted' (e.g. 'draft'). Temp entries are INCLUDED.
+ *
+ * يتحدث تلقائياً كلما تغير أي قيد في account_trans أو main_entry أو الإعدادات أو أسعار الصرف.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -102,6 +111,39 @@ export function guessAccountTypeFromCode(code: string): AccountType {
   }
 }
 
+/**
+ * يتحقق ما إذا كانت الحركة المالية معتمدة للإدراج في الأرصدة.
+ * Checks if a transaction should be included in balance calculations.
+ *
+ * القاعدة / Rule:
+ *   - يجب أن يكون القيد المرتبط (main_entry) مرحّلاً (posting_status = 'posted')
+ *   - يستبعد فقط القيود التي حالة ترحيلها draft أو غير مرحّلة.
+ *   - القيود المؤقتة (Temp) يُتم تضمينها واحتسابها فور مرحلتها.
+ *
+ * @param tx          - سطر الحركة من account_trans
+ * @param entryMap    - خريطة رؤوس القيود من main_entry (id → data)
+ */
+export function isTransactionPostable(tx: any, entryMap: Map<string, any>): boolean {
+  const entryId = tx.entryId || tx.entry_id;
+
+  // إذا لم يوجد entry_id: تُدرج الحركة (حركات تاريخية غير مرتبطة)
+  // If no entry_id: include the transaction (legacy unlinked transactions)
+  if (!entryId) return true;
+
+  const entry = entryMap.get(entryId);
+
+  // إذا لم يُوجد القيد في main_entry: نستبعد الحركة لتفادي أرصدة خاطئة
+  // If entry not found in main_entry: exclude to avoid corrupted balances
+  if (!entry) return false;
+
+  // التحقق من حالة الترحيل: يجب أن تكون 'posted' (استبعاد 'draft')
+  // Check posting status: must be 'posted' (exclude 'draft')
+  const postingStatus = entry.postingStatus || entry.posting_status || '';
+  if (postingStatus !== 'posted') return false;
+
+  return true;
+}
+
 // ── Singleton state shared across all hook consumers ──────────────────────────
 // Subscriptions are created once and shared; no duplicate listeners per component.
 let _singleton: AccountBalancesMap = {
@@ -124,7 +166,10 @@ function _initSingleton() {
   let exchangeRates: Record<string, number> = { YER: 1, SAR: 140, USD: 535 };
   let accountRegistry: Record<string, { currency: string; type: AccountType }> = {};
   let txDocs: any[] = [];
-  let initialLoaded = { settings: false, accounts: false, txs: false };
+  // خريطة رؤوس القيود: entryId → بيانات القيد (posting_status)
+  // Map of journal entry headers: entryId → entry data (posting_status)
+  let entryMap = new Map<string, any>();
+  let initialLoaded = { settings: false, accounts: false, txs: false, entries: false };
 
   const checkAndCompute = () => {
     const debitByCode: Record<string, number> = {};
@@ -133,9 +178,11 @@ function _initSingleton() {
     const creditById: Record<string, number> = {};
 
     txDocs.forEach((tx: any) => {
-      // Exclude temporary entries (القيود المؤقتة) from account balances
-      const category = tx.entryCategory || tx.entry_category || tx.category || tx.entry_type;
-      if (category === 'Temp') return;
+      // ──────────────────────────────────────────────────────────────────────
+      // شرط أساسي: استبعاد الحركات التي لم يُرحَّل قيدها (posting_status !== 'posted')
+      // Critical filter: exclude transactions from non-posted entries only
+      // ──────────────────────────────────────────────────────────────────────
+      if (!isTransactionPostable(tx, entryMap)) return;
 
       // استخراج كود الحساب والمعرف والنوع من أسطر جدول account_trans الجديد
       // Extract account code, ID, and transaction type from account_trans table
@@ -179,7 +226,7 @@ function _initSingleton() {
     _singleton = {
       byCode,
       byId,
-      loading: !(initialLoaded.settings && initialLoaded.accounts && initialLoaded.txs),
+      loading: !(initialLoaded.settings && initialLoaded.accounts && initialLoaded.txs && initialLoaded.entries),
       updatedAt: Date.now(),
     };
     _notifySubscribers();
@@ -229,10 +276,30 @@ function _initSingleton() {
     checkAndCompute();
   }, () => { initialLoaded.accounts = true; checkAndCompute(); });
 
-  // 3. Subscribe to transactions in account_trans (single global listener)
+  // 3. الاستماع لجدول main_entry لبناء خريطة رؤوس القيود (مرحّل/مسودة)
+  //    Subscribe to main_entry to build the posting-status map
+  onSnapshot(collection(db, 'main_entry'), (snap: any) => {
+    const newMap = new Map<string, any>();
+    snap.docs.forEach((d: any) => {
+      const data = d.data();
+      newMap.set(d.id, data);
+      if (data.id && data.id !== d.id) {
+        newMap.set(data.id, data);
+      }
+    });
+    entryMap = newMap;
+    initialLoaded.entries = true;
+    checkAndCompute();
+  }, (err: any) => {
+    console.warn('[useAccountBalances] main_entry subscription warning:', err);
+    initialLoaded.entries = true;
+    checkAndCompute();
+  });
+
+  // 4. Subscribe to transactions in account_trans (single global listener)
   // الاستماع المباشر للتغيرات في جدول أسطر الحسابات الجديد account_trans
   onSnapshot(collection(db, 'account_trans'), (snap: any) => {
-    txDocs = snap.docs.map((d: any) => d.data());
+    txDocs = snap.docs.map((d: any) => ({ _docId: d.id, ...d.data() }));
     initialLoaded.txs = true;
     checkAndCompute();
   }, (error: any) => {
@@ -267,4 +334,3 @@ export function useAccountBalances(
 }
 
 export default useAccountBalances;
-

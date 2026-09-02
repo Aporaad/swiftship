@@ -232,7 +232,8 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
     });
   }, [allAccountTransactions, filteredOrders, filteredExpenses, selectedSource, selectedCourier, paymentStatus]);
 
-  // 🏛️ Treasury Currency Balances (All-time cumulative Cash Box balance)
+  // 🏛️ Treasury Currency Balances (All-time cumulative Cash Box balance — posted entries only)
+  // احتساب أرصدة الخزينة من القيود المرحّلة فقط (غير المؤقتة وغير المسودة)
   const treasuryBalances = useMemo(() => {
     let yerIn = 0, yerOut = 0;
     let usdIn = 0, usdOut = 0;
@@ -240,7 +241,9 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
 
     const cashAccount = accounts.find(a => a.entityId === 'sys_cash_account');
     if (cashAccount) {
-      allTimeTransactions.forEach(tx => {
+      // استخدام allAccountTransactions الذي يطبق فلتر (posted & non-Temp) بالفعل
+      // Use allAccountTransactions which already applies (posted & non-Temp) filter
+      allAccountTransactions.forEach(tx => {
         if (tx.accountId === cashAccount.id) {
           const amt = parseFloat(tx.amountOriginal || tx.amount || 0);
           const cur = tx.currencyOriginal || 'YER';
@@ -274,6 +277,8 @@ export default function FinanceReports({ orders, expenses, couriers, sources, is
       combinedTotalYER
     };
   }, [allAccountTransactions, accounts, settings]);
+
+
 
   // 2. Financial Metrics calculations using live Ledger Transactions
   const metrics = useMemo(() => {

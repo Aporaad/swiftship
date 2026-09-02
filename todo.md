@@ -241,5 +241,11 @@
 - [x] تحديث خطاف الأرصدة الحية `useAccountBalances.ts` لاستبعاد أسطر القيود المؤقتة (`entryCategory === 'Temp'`) لتنعكس التصفية فوراً على شجرة الحسابات، الأصول، الخصوم، العهد، وكافة بطاقات العرض.
 - [x] تحديث شاشة كشوفات شجرة الحسابات `AccountingHierarchyManagement.tsx` و `ChartOfAccounts.tsx` لاستبعاد أسطر القيود المؤقتة عند استعراض كشف الحساب.
 - [x] تحديث نافذة كشف الحساب الموحد `GlobalEntityLedgerModal.tsx` لاستبعاد أسطر القيود المؤقتة للعملاء والمناديب وتأكيد التطابق التام مع قاعدة البيانات.
-- [x] إعادة تشغيل وتأكيد المهاجرة والدالة الشاملة `recalculate_all_account_balances()` على مشروعات Supabase عبر `@mcp:supabase`.
+## [2026-09-02 03:28:00] — إلغاء استبعاد القيود المؤقتة (Temp) والاعتماد الحصري على تصفية حالة الترحيل (posting_status === 'posted')
+- [x] تعديل `useAccountBalances.ts` واستبعاد شرط `entryCategory === 'Temp'` وتطبيقه حصرياً على `posting_status === 'posted'` (استبعاد المسودات فقط).
+- [x] تعديل `AccountingHierarchyManagement.tsx` و `ChartOfAccounts.tsx` و `FinanceAccounting.tsx` لتضمين القيود المؤقتة واستبعاد غير المرحّلة فقط.
+- [x] تعديل `GlobalEntityLedgerModal.tsx` و `Customers.tsx` و `Employees.tsx` و `Reports.tsx` لتأكيد تضمين القيود المؤقتة إذا كانت مرحّلة واستبعاد `draft`.
+- [x] تحديث دالة `recalculate_accounting_hierarchy` في PostgreSQL وتحديث المهاجرة `202609020001_enforce_posted_status_filter_on_balances.sql`.
+- [x] إعادة تشغيل `recalculate_all_account_balances()` بـ Supabase لمزامنة وتحديث أرصدة الـ 89 حساباً بنسبة 100%.
+
 

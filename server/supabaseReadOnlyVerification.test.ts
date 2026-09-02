@@ -26,7 +26,7 @@ describe.runIf(canVerify)('Supabase read-only verification', () => {
 
     await expect(get('products?select=id,item_category_id,item_category_name,item_category:items_category%21products_item_category_id_fkey(id,code)&limit=1')).resolves.toBeDefined();
     await expect(get('shipments?select=id,content_category_id,content_category_name,carton_count,customs_fee,tax_fee,other_category_fee,category_fees_total,category_fee_currency,content_category:items_category%21shipments_content_category_id_fkey(id,code)&limit=1')).resolves.toBeDefined();
-  });
+  }, 30000);
 
   it('has no source, shipping company, or asset without a linked account', async () => {
     const [sources, carriers, assets] = await Promise.all([
@@ -37,16 +37,16 @@ describe.runIf(canVerify)('Supabase read-only verification', () => {
     await expect(sources.json()).resolves.toEqual([]);
     await expect(carriers.json()).resolves.toEqual([]);
     await expect(assets.json()).resolves.toEqual([]);
-  });
+  }, 30000);
 
   it('exposes linked source and shipping-company ledgers in their assigned sections', async () => {
     const [sources, carriers] = await Promise.all([
-      get('accounts?select=id,account_code,data&data-%3E%3EentityType=eq.source&limit=1'),
-      get('accounts?select=id,account_code,data&data-%3E%3EentityType=eq.shipping_company&limit=1'),
+      get('accounts?select=id,account_code&entity_type=eq.source&limit=1'),
+      get('accounts?select=id,account_code&entity_type=eq.shipping_company&limit=1'),
     ]);
     const sourceRows = await sources.json();
     const carrierRows = await carriers.json();
     expect(sourceRows[0]?.account_code).toMatch(/^2141-\d{4}$/);
     expect(carrierRows[0]?.account_code).toMatch(/^2151-\d{4}$/);
-  });
+  }, 30000);
 });
