@@ -179,7 +179,13 @@ export default function Employees() {
       const newId = 'emp_' + Math.random().toString(36).substring(2, 11);
       const now = Date.now();
 
-      // 1. Create employee document in `employees` collection
+      // ══════════════════════════════════════════════════════════════════════════════
+      // ISOLATION RULE: Employee creation writes strictly to `employees` table.
+      // Automatically provisions employee financial account (2130-xxxx) for payroll,
+      // but NEVER creates a system user login account in `users` table.
+      // قاعدة العزل: إدراج الموظف يكون حكراً بجدول `employees` لسجل الكادر البشري.
+      // ينشئ تلقائياً حساباً مالياً للرواتب (2130-xxxx)، ولا ينشئ مستخدم دخول لنظام لوحة التحكم.
+      // ══════════════════════════════════════════════════════════════════════════════
       const empData = {
         fullName: addFormData.fullName.trim(),
         phone: addFormData.phone.trim(),
@@ -197,7 +203,8 @@ export default function Employees() {
 
       await setDoc(doc(db, 'employees', newId), empData);
 
-      // 2. Automatically provision financial account (2130-xxxx) for employee
+      // 2. Automatically provision financial account (2130-xxxx) for employee payroll ledger
+      // إنشاء الحساب المالي للموظف بجدول الحسابات المحاسبية للرواتب
       try {
         await financialAccountService.createAccountForEntity(
           'employee',

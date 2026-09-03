@@ -419,11 +419,11 @@ export default function UserManagement() {
 
   // ── Forms ────────────────────────────────────────────────
   const [editFormData, setEditFormData] = useState({
-    fullName: '', role: '', disabled: false, commissionRate: 0, username: '', systemPin: '', monthlySalary: 0,
+    fullName: '', role: '', disabled: false, username: '', systemPin: '',
     linkedType: 'none', linkedEntity: ''
   });
   const [addFormData, setAddFormData] = useState({
-    fullName: '', username: '', email: '', password: '', systemPin: '', role: 'Employee', commissionRate: 0, monthlySalary: 0,
+    fullName: '', username: '', email: '', password: '', systemPin: '', role: 'Employee',
     linkedType: 'none', linkedEntity: ''
   });
 
@@ -573,8 +573,7 @@ export default function UserManagement() {
     setEditFormData({
       fullName: user.fullName || '', username: user.username || '',
       role: user.role || 'Employee', disabled: user.disabled || false,
-      commissionRate: user.commissionRate || 0, systemPin: user.systemPin || '',
-      monthlySalary: user.monthlySalary || 0,
+      systemPin: user.systemPin || '',
       linkedType: user.linkedType || (user.linkedEntity ? 'employee' : 'none'),
       linkedEntity: user.linkedEntity || ''
     });
@@ -602,8 +601,7 @@ export default function UserManagement() {
         fullName: editFormData.fullName, username: editFormData.username,
         role: isRoot ? 'Admin' : editFormData.role,
         disabled: isRoot ? false : editFormData.disabled,
-        commissionRate: editFormData.commissionRate, systemPin: editFormData.systemPin,
-        monthlySalary: editFormData.monthlySalary,
+        systemPin: editFormData.systemPin,
         linkedType: editFormData.linkedType !== 'none' ? editFormData.linkedType : null,
         linkedEntity: editFormData.linkedType !== 'none' ? editFormData.linkedEntity : null,
         updatedAt: Date.now()
@@ -740,10 +738,17 @@ export default function UserManagement() {
       const secondaryAuth = getAuth(secondaryApp);
       const SHARED_SYSTEM_AUTH_PASSWORD = 'swiftship@system_pw_2026';
       const { user: newUser } = await createUserWithEmailAndPassword(secondaryAuth, addFormData.email.toLowerCase(), SHARED_SYSTEM_AUTH_PASSWORD);
+      
+      // ══════════════════════════════════════════════════════════════════════════════
+      // ISOLATION RULE: System User creation writes strictly to `users` table.
+      // NEVER create a financial account or employee record upon System User creation.
+      // قاعدة العزل: إدراج مستخدم النظام يكون حكراً بجدول `users` لحسابات الدخول والصلاحيات.
+      // يُمنع إنشاء حساب مالي أو سجل موظف تلقائي عند إنشاء مستخدم نظام.
+      // ══════════════════════════════════════════════════════════════════════════════
       await setDoc(doc(db, 'users', newUser.uid), {
         fullName: addFormData.fullName, email: addFormData.email.toLowerCase(),
         username: addFormData.username, systemPin: addFormData.systemPin,
-        role: addFormData.role, commissionRate: addFormData.commissionRate,
+        role: addFormData.role,
         password: addFormData.password,
         disabled: false,
         linkedType: addFormData.linkedType !== 'none' ? addFormData.linkedType : null,
@@ -754,7 +759,7 @@ export default function UserManagement() {
       await activityLogService.log('add_user', addFormData.fullName, { email: addFormData.email, role: addFormData.role });
       notificationService.notify({ title: t('تم إنشاء الحساب', 'Account Created'), message: t(`تم إنشاء حساب ${addFormData.fullName}`, `${addFormData.fullName} account created`), type: 'success', category: 'system' });
       setIsAddModalOpen(false);
-      setAddFormData({ fullName: '', username: '', email: '', password: '', systemPin: '', role: 'Employee', commissionRate: 0, monthlySalary: 0, linkedType: 'none', linkedEntity: '' });
+      setAddFormData({ fullName: '', username: '', email: '', password: '', systemPin: '', role: 'Employee', linkedType: 'none', linkedEntity: '' });
     } catch (err: any) {
       let msg = err.message;
       if (err.code === 'auth/email-already-in-use') msg = t('البريد مسجل في نظام المصادقة', 'Email already in auth system');
@@ -1152,12 +1157,9 @@ export default function UserManagement() {
             <table className="w-full" dir={isAr ? 'rtl' : 'ltr'}>
               <thead className="bg-[#0a0a0d] text-slate-500 text-[10px] font-black uppercase tracking-wider border-b border-slate-800/50">
                 <tr>
-                  <th className="p-4 text-start">{t('الموظف', 'Staff Member')}</th>
-                  <th className="p-4 text-start">{t('البريد', 'Email')}</th>
-                  <th className="p-4 text-start">{t('الدور', 'Role')}</th>
-                  <th className="p-4 text-center">{t('الراتب', 'Salary')}</th>
-                  <th className="p-4 text-center">{t('عمولة%', 'Commission%')}</th>
-                  <th className="p-4 text-center">{t('الرصيد المالي', 'Balance')}</th>
+                  <th className="p-4 text-start">{t('المستخدم والمعرف', 'User Account')}</th>
+                  <th className="p-4 text-start">{t('البريد الإلكتروني', 'Email')}</th>
+                  <th className="p-4 text-start">{t('الدور والصلاحية', 'Role')}</th>
                   <th className="p-4 text-center">PIN</th>
                   <th className="p-4 text-center">{t('الحالة', 'Status')}</th>
                   <th className="p-4 text-center">{t('آخر ظهور', 'Last Seen')}</th>
@@ -1182,14 +1184,6 @@ export default function UserManagement() {
                             <div className="font-extrabold text-white">{user.fullName}</div>
                             <div className="text-[9px] font-mono text-slate-500 mt-0.5 flex items-center gap-1.5">
                               <span>@{user.username || 'not_set'}</span>
-                              {user.financialAccountCode && (
-                                <>
-                                  <span className="text-slate-700">•</span>
-                                  <span className="text-[#d4af37] font-black font-mono">
-                                    {user.financialAccountCode}
-                                  </span>
-                                </>
-                              )}
                             </div>
                             {user.linkedEntity && (
                               <div className="text-[9px] font-bold text-cyan-400 bg-cyan-950/40 border border-cyan-900/40 px-2 py-0.5 rounded-lg flex items-center gap-1 w-max mt-1">
@@ -1206,11 +1200,6 @@ export default function UserManagement() {
                       </td>
                       <td className="p-4 font-mono text-slate-400 text-[10px]" dir="ltr">{user.email}</td>
                       <td className="p-4"><span className={`px-2.5 py-1 rounded-lg border text-[9px] font-black uppercase tracking-wider ${getRoleBadgeStyle(user.role)}`}>{user.role}</span></td>
-                      <td className="p-4 text-center font-mono text-[#d4af37] font-black">{(user.monthlySalary || 0).toLocaleString()} {settings.currency || 'YER'}</td>
-                      <td className="p-4 text-center font-mono text-slate-300 font-black">{user.commissionRate || 0}%</td>
-                      <td className={`p-4 text-center font-mono font-black ${(user.financialBalance || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        {(user.financialBalance || 0).toLocaleString()} {settings.currency || 'YER'}
-                      </td>
                       <td className="p-4 text-center font-mono text-slate-400 font-semibold text-[11px] tracking-widest">{user.systemPin || '—'}</td>
                       <td className="p-4 text-center">
                         {user.disabled ? (
@@ -1727,31 +1716,16 @@ export default function UserManagement() {
                 </div>
               </div>
               {/*role*/}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الدور', 'Role')}</label>
-                  <select
-                    tabIndex={6}
-                    value={addFormData.role}
-                    onChange={e => setAddFormData({ ...addFormData, role: e.target.value })}
-                    className="w-full bg-black/50 border border-slate-800 text-white rounded-xl py-3 px-4 focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none text-xs font-bold transition-all font-sans"
-                  >
-                    {roles.filter(r => r.id !== 'courier' && r.id !== 'Courier').map(r => <option key={r.id} value={r.id}>{r.title || r.id}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('نسبة العمولة%', 'Commission%')}</label>
-                  <input
-                    tabIndex={7}
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.1"
-                    value={addFormData.commissionRate}
-                    onChange={e => setAddFormData({ ...addFormData, commissionRate: parseFloat(e.target.value) || 0 })}
-                    className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono transition-all"
-                  />
-                </div>
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الدور والصلاحية', 'Assigned Role')}</label>
+                <select
+                  tabIndex={6}
+                  value={addFormData.role}
+                  onChange={e => setAddFormData({ ...addFormData, role: e.target.value })}
+                  className="w-full bg-black/50 border border-slate-800 text-white rounded-xl py-3 px-4 focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none text-xs font-bold transition-all font-sans"
+                >
+                  {roles.filter(r => r.id !== 'courier' && r.id !== 'Courier').map(r => <option key={r.id} value={r.id}>{r.title || r.id}</option>)}
+                </select>
               </div>
 
               {/* Entity Linking Block */}
@@ -1848,32 +1822,17 @@ export default function UserManagement() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الدور', 'Role')}</label>
-                  <select
-                    tabIndex={4}
-                    disabled={ROOT_EMAILS.includes(selectedUser.email) || selectedUser.isRoot}
-                    value={editFormData.role}
-                    onChange={e => setEditFormData({ ...editFormData, role: e.target.value })}
-                    className="w-full bg-black/50 border border-slate-800 text-white rounded-xl py-3 px-4 focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed font-sans transition-all"
-                  >
-                    {roles.filter(r => r.id !== 'courier' && r.id !== 'Courier').map(r => <option key={r.id} value={r.id}>{r.title || r.id}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('عمولة%', 'Commission%')}</label>
-                  <input
-                    tabIndex={5}
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.1"
-                    value={editFormData.commissionRate}
-                    onChange={e => setEditFormData({ ...editFormData, commissionRate: parseFloat(e.target.value) || 0 })}
-                    className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono transition-all"
-                  />
-                </div>
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الدور والصلاحية', 'Assigned Role')}</label>
+                <select
+                  tabIndex={4}
+                  disabled={ROOT_EMAILS.includes(selectedUser.email) || selectedUser.isRoot}
+                  value={editFormData.role}
+                  onChange={e => setEditFormData({ ...editFormData, role: e.target.value })}
+                  className="w-full bg-black/50 border border-slate-800 text-white rounded-xl py-3 px-4 focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed font-sans transition-all"
+                >
+                  {roles.filter(r => r.id !== 'courier' && r.id !== 'Courier').map(r => <option key={r.id} value={r.id}>{r.title || r.id}</option>)}
+                </select>
               </div>
 
               {/* Entity Linking Block */}

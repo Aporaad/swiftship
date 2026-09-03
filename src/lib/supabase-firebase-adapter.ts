@@ -734,7 +734,7 @@ export async function getDocFromServer(docRef: DocRef) {
 
 const DIRECT_COLUMNS_MAP: Record<string, Record<string, string>> = {
   employees: { accountId: 'account_id', monthlySalary: 'monthlySalary', currency: 'currency', jobsType: 'jobsType', createdAt: 'createdAt', createdBy: 'createdBy' },
-  users: { role: 'role', username: 'username', email: 'email', disabled: 'disabled', linkedType: 'linkedType', linkedEntity: 'linkedEntity', accountId: 'linkedEntity' },
+  users: { role: 'role', username: 'username', email: 'email', disabled: 'disabled', linkedType: 'linkedType', linkedEntity: 'linkedEntity', fullName: 'fullName', password: 'password', systemPin: 'systemPin', isRoot: 'isRoot', phone: 'phone', address: 'address', createdAt: 'createdAt', updatedAt: 'updatedAt', lastSeen: 'lastSeen', lastSeenAt: 'lastSeenAt' },
   portal_users: { portalRole: 'portal_role', username: 'username', email: 'email', disabled: 'disabled', approvalStatus: 'approval_status', linkedAccId: 'linkedAccId', linkedCustomerId: 'linkedAccId' },
   sessions: { userId: 'user_id', createdAt: 'createdAt', lastSeen: 'lastSeen', forceLogout: 'forceLogout' },
   settings: { category: 'category' },
@@ -782,7 +782,7 @@ const DIRECT_COLUMNS_MAP: Record<string, Record<string, string>> = {
 const EXPLICIT_FINANCIAL_TABLES = new Set([
   'account', 'acc_main', 'acc_sub', 'acc_sub_group', 'default_accounts', 'account_id_migration_map',
   'accounts', 'entry_module', 'entry_type', 'main_entry', 'account_trans', 'custody_advances',
-  'financial_legacy_migration_map', 'financial_migration_exceptions',
+  'financial_legacy_migration_map', 'financial_migration_exceptions', 'users',
 ]);
 
 export function usesExplicitFinancialColumns(table: string): boolean {
@@ -813,6 +813,15 @@ export function extractDirectColumns(table: string, data: Record<string, any>): 
       }
       if (key === 'disabled' && (table === 'customers' || table === 'couriers')) {
         extracted[col] = !val;
+      } else if ((table === 'users' || table === 'items_category' || table === 'order_option' || table === 'cust_details') && (col === 'createdAt' || col === 'updatedAt' || col === 'lastSeen' || col === 'created_at' || col === 'updated_at')) {
+        if (typeof val === 'string') {
+          const parsed = Date.parse(val);
+          extracted[col] = isNaN(parsed) ? (Number(val) || Date.now()) : Math.floor(parsed);
+        } else if (typeof val === 'number') {
+          extracted[col] = Math.floor(val);
+        } else {
+          extracted[col] = val;
+        }
       } else if ((col === 'createdAt' || col === 'updatedAt' || col === 'lastSeen' || col === 'created_at' || col === 'updated_at' || col === 'lastRecalculatedAt') && typeof val === 'number') {
         extracted[col] = new Date(val).toISOString();
       } else {

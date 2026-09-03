@@ -71,7 +71,6 @@ export default function Users() {
     fullName: '',
     role: '',
     disabled: false,
-    commissionRate: 0,
     username: '',
     systemPin: ''
   });
@@ -82,8 +81,7 @@ export default function Users() {
     email: '',
     password: '',
     systemPin: '',
-    role: 'Employee',
-    commissionRate: 0
+    role: 'Employee'
   });
 
   const [addLoading, setAddLoading] = useState(false);
@@ -130,7 +128,6 @@ export default function Users() {
       username: user.username || '',
       role: user.role || 'Employee',
       disabled: user.disabled || false,
-      commissionRate: user.commissionRate || 0,
       systemPin: user.systemPin || ''
     });
     setIsEditModalOpen(true);
@@ -178,19 +175,23 @@ export default function Users() {
         username: editFormData.username,
         role: finalRole,
         disabled: finalDisabled,
-        commissionRate: editFormData.commissionRate,
         systemPin: editFormData.systemPin,
         updatedAt: Date.now()
       });
       notificationService.notify({
-        title: isAr ? 'تم تحديث بيانات المستخدم' : 'Staff parameters saved',
-        message: isAr ? `تم تحديث ملف الموظف ${editFormData.fullName} بنجاح` : `User settings synchronized for ${editFormData.fullName}`,
-        type: 'info'
+        title: isAr ? 'تم حفظ التعديلات' : 'Staff Dossier Synchronized',
+        message: isAr ? `تم تحديث ملف ${editFormData.fullName} بنجاح` : `Updated ${editFormData.fullName}'s profile`,
+        type: 'success'
       });
+
       setIsEditModalOpen(false);
       setSelectedUser(null);
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, 'users');
+    } catch (err: any) {
+      notificationService.notify({
+        title: isAr ? 'فشل التحديث' : 'Operation Aborted',
+        message: err.message,
+        type: 'error'
+      });
     } finally {
       setEditLoading(false);
       editBlockRef.current = false;
@@ -281,44 +282,27 @@ export default function Users() {
 
       const newUid = authResult.user.uid;
 
-      // 3. Create the user document in Firestore using the new UID
+      // 3. Create the user document in `users` collection ONLY
+      // إنشاء حساب المستخدم في جدول `users` فقط دون إنشاء سجل موظف أو حساب مالي
       await setDoc(doc(db, 'users', newUid), {
         fullName: addFormData.fullName,
         email: addFormData.email.toLowerCase(),
         username: addFormData.username,
         systemPin: addFormData.systemPin,
         role: addFormData.role,
-        commissionRate: addFormData.commissionRate,
         password: addFormData.password,
         disabled: false,
         createdAt: Date.now()
       });
 
-      await setDoc(doc(db, 'employees', newUid), {
-        fullName: addFormData.fullName,
-        email: addFormData.email.toLowerCase(),
-        username: addFormData.username,
-        userId: newUid,
-        role: addFormData.role,
-        disabled: false,
-        createdAt: Date.now(),
-      });
-
-      await financialAccountService.createAccountForEntity(
-        'employee',
-        newUid,
-        addFormData.fullName,
-        settings.currency || 'YER',
-      );
-
       notificationService.notify({
-        title: isAr ? 'تم تقييد مستشار جديد' : 'Credentials Provisioned',
-        message: isAr ? `تم دمج الموظف ${addFormData.fullName} وتوزيع ترخيصه كـ ${addFormData.role}` : `Credentials built for ${addFormData.fullName}`,
+        title: isAr ? 'تم تقييد مستخدم جديد' : 'Credentials Provisioned',
+        message: isAr ? `تم إدراج المستخدم ${addFormData.fullName} كـ ${addFormData.role} بنجاح` : `User ${addFormData.fullName} provisioned as ${addFormData.role}`,
         type: 'success'
       });
 
       setIsAddModalOpen(false);
-      setAddFormData({ fullName: '', username: '', email: '', password: '', systemPin: '', role: 'Employee', commissionRate: 0 });
+      setAddFormData({ fullName: '', username: '', email: '', password: '', systemPin: '', role: 'Employee' });
     } catch (err: any) {
       console.error("Error adding user:", err);
       let message = err.message;
@@ -455,10 +439,9 @@ export default function Users() {
           <table className="w-full text-right">
             <thead className="bg-[#0a0a0d] text-slate-500 text-[10px] font-black uppercase tracking-wider border-b border-slate-850">
               <tr>
-                <th className="p-4">{isAr ? 'الموظف والمعرف' : 'Staff Member Name'}</th>
+                <th className="p-4">{isAr ? 'المستخدم والمعرف' : 'User Account Name'}</th>
                 <th className="p-4">{isAr ? 'البريد المؤسسي' : 'Secure Inbox'}</th>
                 <th className="p-4">{isAr ? 'الرتبة والدور' : 'Assigned Role'}</th>
-                <th className="p-4 text-center">{isAr ? 'عمولة التوزيع (%)' : 'Split Commission'}</th>
                 <th className="p-4 text-center">{isAr ? 'الرمز التعريفي PIN' : 'Security PIN Code'}</th>
                 <th className="p-4 text-center">{isAr ? 'الحالة التشغيلية' : 'Activity Status'}</th>
                 <th className="p-4 text-left">{isAr ? 'الإجراءات الأمنية' : 'Enforcements'}</th>
@@ -486,9 +469,6 @@ export default function Users() {
                     </td>
                     <td className="p-4">
                       {getRoleBadge(user.role)}
-                    </td>
-                    <td className="p-4 text-center font-mono text-slate-300 font-black">
-                      {user.commissionRate || 0}%
                     </td>
                     <td className="p-4 text-center font-mono text-slate-400 font-semibold">
                       {user.systemPin || '—'}
@@ -636,31 +616,17 @@ export default function Users() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'الرتبة والدور الأساسي' : 'Assigned Role'}</label>
-                  <select
-                    value={addFormData.role}
-                    onChange={(e) => setAddFormData({ ...addFormData, role: e.target.value })}
-                    className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer"
-                  >
-                    {roles.map(r => (
-                      <option key={r.id} value={r.id}>{r.title || r.id}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'نسبة عمولة التوزيع' : 'Commission rate %'}</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.1"
-                    value={addFormData.commissionRate}
-                    onChange={(e) => setAddFormData({ ...addFormData, commissionRate: parseFloat(e.target.value) || 0 })}
-                    className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-start"
-                  />
-                </div>
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'الرتبة والدور الأساسي' : 'Assigned Role'}</label>
+                <select
+                  value={addFormData.role}
+                  onChange={(e) => setAddFormData({ ...addFormData, role: e.target.value })}
+                  className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer"
+                >
+                  {roles.map(r => (
+                    <option key={r.id} value={r.id}>{r.title || r.id}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="pt-4 flex justify-end gap-3 border-t border-slate-850">
@@ -746,34 +712,6 @@ export default function Users() {
                     value={editFormData.systemPin}
                     onChange={(e) => setEditFormData({ ...editFormData, systemPin: e.target.value })}
                     className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs text-center font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono tracking-widest"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'دور الموظف ورخصته' : 'Designated Role'}</label>
-                  <select
-                    disabled={ROOT_EMAILS.includes(selectedUser.email) || selectedUser.isRoot}
-                    value={editFormData.role}
-                    onChange={(e) => setEditFormData({ ...editFormData, role: e.target.value })}
-                    className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer disabled:opacity-50"
-                  >
-                    {roles.map(r => (
-                      <option key={r.id} value={r.id}>{r.title || r.id}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'عمولة المبيعات والتوزيع (%)' : 'Split Commission %'}</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.1"
-                    value={editFormData.commissionRate}
-                    onChange={(e) => setEditFormData({ ...editFormData, commissionRate: parseFloat(e.target.value) || 0 })}
-                    className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono text-start"
                   />
                 </div>
               </div>
