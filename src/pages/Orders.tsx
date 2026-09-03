@@ -4207,6 +4207,7 @@ export default function Orders() { // دالة عرض الطلبات
         settings={settings}
         calcs={calcs}
         activeCurrencies={activeCurrencies}
+        financialAccounts={financialAccounts}
         packagingOptions={packagingOptions}
         shippingCategoryOptions={shippingCategoryOptions}
         itemCategories={activeItemCategories}
