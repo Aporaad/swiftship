@@ -235,6 +235,15 @@ class FinancialAccountService {
       case 'shipping_company_linked':
         candidate = linkedAccount(entities.shippingCompany);
         break;
+      case 'payment_account_selected':
+      case 'payment_account_linked':
+      case 'receiving_account_selected':
+        candidate = linkedAccount((entities as any).paymentAccount || (entities as any).receivingAccount || (entities as any).cashAccount || (entities as any).bankAccount)
+          || ((entities as any).receivingAccountId ? { id: String((entities as any).receivingAccountId), code: '' } : null)
+          || (order?.cashAccountId ? { id: String(order.cashAccountId), code: '' } : null)
+          || (order?.bankAccountId ? { id: String(order.bankAccountId), code: '' } : null)
+          || (order?.receivingAccountId ? { id: String(order.receivingAccountId), code: '' } : null);
+        break;
       case 'product_cost_source':
       case 'sourcing_cost':
         candidate = costOnCourier

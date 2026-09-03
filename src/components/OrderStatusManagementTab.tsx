@@ -348,6 +348,7 @@ export default function OrderStatusManagementTab({
 
   const dynamicAccountOptions = [
     { id: 'customer_linked', code: '1130', nameAr: '👤 حساب العميل المرتبط بالطلب (ديناميكي)', nameEn: 'Customer Account (Dynamic)' },
+    { id: 'payment_account_selected', code: '1110', nameAr: '💳 حساب الدفع/التحصيل المختار للطلب (ديناميكي)', nameEn: 'Selected Payment Receiving Account (Dynamic)' },
     { id: 'delivery_courier_linked', code: '2120', nameAr: '🛵 حساب مندوب التوصيل المرتبط بالطلب', nameEn: 'Delivery courier account (Dynamic)' },
     { id: 'shipping_courier_linked', code: '2120', nameAr: '🚚 حساب مندوب/وكيل الشحن المرتبط بالطلب', nameEn: 'Shipping courier account (Dynamic)' },
     { id: 'courier_linked', code: '2120', nameAr: '🛵 حساب المندوب المرتبط بالطلب (توافق سابق)', nameEn: 'Courier account (Legacy dynamic)' },

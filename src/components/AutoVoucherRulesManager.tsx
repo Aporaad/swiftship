@@ -11,6 +11,7 @@ interface AutoVoucherRulesManagerProps {
 
 const dynamicOptions = [
   { id: 'customer_linked', labelAr: 'حساب طرف الطلب المرتبط (عميل/موظف/مندوب)', labelEn: 'Linked order-party account' },
+  { id: 'payment_account_selected', labelAr: 'حساب الدفع/التحصيل المختار للطلب (ديناميكي)', labelEn: 'Selected payment receiving account (dynamic)' },
   { id: 'courier_linked', labelAr: 'حساب المندوب المرتبط', labelEn: 'Linked courier account' },
   { id: 'delivery_courier_linked', labelAr: 'حساب مندوب التوصيل', labelEn: 'Delivery courier account' },
   { id: 'shipping_courier_linked', labelAr: 'حساب مندوب الشحن', labelEn: 'Shipping courier account' },

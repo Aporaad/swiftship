@@ -109,6 +109,19 @@ describe('إعادة احتساب الأرصدة', () => {
     vi.clearAllMocks();
   });
 
+  it('يسوي الحساب الديناميكي القابض المختار للدفع بشكل صحيح', () => {
+    const resolveAccount = (financialAccountService as any).resolveAutomaticVoucherAccount.bind(financialAccountService);
+
+    const resolved = resolveAccount(
+      { id: 'payment_account_selected', code: '1110', type: 'dynamic' },
+      { sys_cash_account: '1110-0003' },
+      { cashAccountId: '1110-0005' },
+      {}
+    );
+
+    expect(resolved).toEqual({ id: '1110-0005', code: '' });
+  });
+
   it('يفوض إعادة الاحتساب إلى قاعدة البيانات ولا يقرأ account_transactions في المتصفح', async () => {
     mocks.getDoc.mockResolvedValue({ exists: () => true, data: () => ({ id: '1110-0003' }) });
     mocks.recalculateHierarchy.mockResolvedValue({ error: null });
