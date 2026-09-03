@@ -512,4 +512,44 @@
    - تحديث السكربت [202609020001_enforce_posted_status_filter_on_balances.sql](file:///F:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/supabase/migrations/202609020001_enforce_posted_status_filter_on_balances.sql).
    - إعادة تنفيذ `SELECT public.recalculate_all_account_balances();` عبر `@mcp:supabase` وإجادة تجميع الأرصدة الـ 89 حساباً بنسبة 100%.
 
+## [2026-09-02 23:48:00] — إعادة هيكلة جداول الطلبات والمنتجات والشحنات وحذف البيانات والأعمدة المكررة من حقل data
+
+### التغييرات والإجراءات المنفذة:
+1. **تحديث محول الخدمات وقاعدة البيانات (`supabase-firebase-adapter.ts`)**:
+   - بناء دالة `sanitizeDataPayload(table, data)` لاستبعاد وحذف الحقول والأعمدة المكررة من حقل `data` لجدول الطلبات `orders` والمرتبطة بـ `products` و `shipments`.
+   - بناء دالة `enrichOrderPayload(item)` لإثراء ورسم الطلبات ديناميكياً ببيانات الأصناف والشحنات المجلوبة صراحة من جدولي `products` و `shipments` عبر المفتاح `order_id`.
+   - تحديث دوال الإدخال والتعديل والاستعلام والاشتراكات الحية (`addDoc`, `setDoc`, `updateDoc`, `getDocs`, `getDoc`, `onSnapshot`, `ensureCache`) لمنع تكرار البيانات ولضمان المزامنة التلقائية.
+2. **تحديث الواجهات والنوافذ الموحدة**:
+   - **`EditOrderModal.tsx`**: ضبط حفظ وإدراج الأصناف بجدول `products` والشحنات بجدول `shipments` بالأعمدة المباشرة صراحة دون إدراجها داخل `orders.data`.
+   - **`Orders.tsx`**, **`ProductsManagementTab.tsx`**, **`ShipmentFormModal.tsx`**: الاعتماد الكامل على الأعمدة المباشرة والتفاعل مع الجداول المرتبطة بروابط العلاقات الصريحة.
+3. **الاختبار والتحقق التقني**:
+   - التأكد من اجتياز فحص TypeScript `npx tsc --noEmit` بنجاح وخلو الكود تماماً من الأخطاء (0 أخطاء).
+
+## [2026-09-02 23:58:00] — استكمال المعالجة المباشرة لتنقية data وحذف الحقول المكررة للعملاء والمستخدمين
+
+### الإنجازات والتحسينات الرئيسية المنفذة:
+1. **تنقية حمولة data وإلغاء التكرار في orders و products و shipments**:
+   - تم تحديث دالة `sanitizeDataPayload` لمنع تخزين أي من حقول العميل (`customerName`, `customerPhone`, `customerAddress`, `customerAccountId`, `customerAccountCode`) أو حقول المستخدم والمصدر (`createdByName`, `createdByEmail`, `updatedAt`, `updatedBy`, `orderSourceName`) داخل عمود JSON `data` نهائياً.
+   - الاعتماد الحصري والمباشر على الأعمدة الأساسية `created_by_name`, `updated_at`, `updated_by` في جدول `orders`.
+
+2. **التحديث المباشر للنماذج والشاشات**:
+   - تحديث `CreateOrderModal.tsx`, `EditOrderModal.tsx`, `Orders.tsx` لحذف المفاتيح المكررة ومنع إرسال `createdByEmail` نهائياً.
+   - تحديث `OrderDetailsModal.tsx`, `OrderInvoicePrint.ts`, `Orders.tsx` لاستعراض بيانات العميل والمصدر ديناميكياً بربط المفتاح الأساسي `customer_id` و `order_source_id` بجدولي `customers` و `sources`.
+   - التأكد من خلو المشروع كلياً من أخطاء البناء أو النوع (`npx tsc --noEmit` بنجاح 100%).
+
+---
+
+## [2026-09-03 01:20:00] — تنظيف قاعدة بيانات Supabase وتفريغ data كلياً وحذف customerAccountId نهائياً
+
+### الإنجازات والتحسينات الرئيسية المنفذة:
+1. **التنفيذ المباشر لقاعدة البيانات عبر `@mcp:supabase:execute_sql`**:
+   - تشغيل استعلامات SQL لتنقية وتجريد أعمدة `data` لجداول `orders` و `products` و `shipments` في خادم Supabase PostgreSQL من كل المفاتيح المكررة القديمة: (`customerId`, `orderPartyType`, `orderPartyId`, `orderPartyAccountId`, `customerAccountId`, `employeeId`, `courierId`, `isStaffOrder`, `customerName`, `customerPhone`, `customerAddress`, `orderSourceName`, `createdByName`, `createdByEmail`, `updatedAt`, `updatedBy`).
+2. **إلغاء customerAccountId نهائياً**:
+   - إزالة جميع الإشارات والتحديثات لحقل `customerAccountId` من `Orders.tsx`, `EditOrderModal.tsx`, `orderPartyService.ts`, `orderPartyService.test.ts`, و `supabase-firebase-adapter.ts`.
+   - الاعتماد الحصري والمطلق على الحقل المباشر `order_party_account_id` (`orderPartyAccountId`).
+3. **الفحص والتحقق الأمني والتقني**:
+   - اجتياز اختبار التجميع TypeScript `npx tsc --noEmit` بنجاح وتأكيد خلو الكود من الأخطاء تماماً.
+
+
+
 

@@ -20,7 +20,7 @@ describe('order party service', () => {
     expect(party).toMatchObject({ id: 'cou-1', type: 'courier', financialAccountId: 'acc_2120-0001' });
     expect(toOrderPartyPayload(party!)).toMatchObject({
       customerId: '', orderPartyType: 'courier', isStaffOrder: true,
-      courierId: 'cou-1', customerAccountId: 'acc_2120-0001', orderPartyAccountId: 'acc_2120-0001', employeeId: '',
+      courierId: 'cou-1', orderPartyAccountId: 'acc_2120-0001', employeeId: '',
     });
   });
 
@@ -33,7 +33,6 @@ describe('order party service', () => {
       orderPartyType: 'employee',
       employeeId: 'emp-1',
       courierId: '',
-      customerAccountId: 'acc_2130-0001',
       orderPartyAccountId: 'acc_2130-0001',
     });
   });

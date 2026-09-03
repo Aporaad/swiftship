@@ -249,7 +249,9 @@ export default function CreateOrderModal(
 
     // Step 1 Validation: Customer & Source
     if (step === 1) {
-      if (!formData.customerId && !formData.customerName) {
+    // التحقق من وجود طرف الطلب (عميل أو موظف أو مندوب)
+    // Validate order party: customer, employee, or courier must be selected
+    if (!formData.customerId && !formData.orderPartyId && !formData.customerName) {
         setStepErrors(
           isAr
             ? '⚠️ يرجى اختيار وتحديد العميل أولاً للمتابعة إلى الخطوة التالية'

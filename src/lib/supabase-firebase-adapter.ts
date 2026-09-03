@@ -199,6 +199,89 @@ const CACHE_TTL_MS = typeof window === 'undefined' ? 0 : 60000; // 0 on backend 
 const activeFetches: { [table: string]: Promise<any[]> | null } = {};
 const collectionSubscribed: { [table: string]: boolean } = {};
 
+/**
+ * تنظيف حقل data وتجريده من الحقول المكررة التي توجد كأعمدة أساسية
+ * Sanitize data JSONB column payload by removing fields that exist as explicit relational columns
+ */
+export function sanitizeDataPayload(table: string, data: Record<string, any>): Record<string, any> {
+  if (!data || typeof data !== 'object') return data;
+  const clean = { ...data };
+
+  // Remove primary columns and direct column mapped keys from JSON data
+  if (table === 'orders') {
+    const keysToRemove = [
+      'id', 'order_number', 'orderNumber', 'tracking_number', 'trackingNumber',
+      'customer_id', 'customerId', 'order_status', 'orderStatus',
+      'order_status_id', 'orderStatusId', 'order_source_id', 'orderSourceId',
+      'order_source_type', 'orderSourceType', 'delivery_courier_id', 'deliveryCourierId',
+      'shipping_courier_id', 'shippingCourierId', 'courier_id', 'courierId',
+      'employee_id', 'employeeId', 'order_party_id', 'orderPartyId',
+      'order_party_type', 'orderPartyType', 'is_staff_order', 'isStaffOrder',
+      'order_party_account_id', 'orderPartyAccountId', 'customerAccountId', 'customerAccountCode',
+      'customerName', 'customerPhone', 'customerAddress', 'orderSourceName',
+      'createdByName', 'created_by_name', 'createdByEmail',
+      'updatedAt', 'updated_at', 'updatedBy', 'updated_by',
+      'createdAt', 'created_at',
+      'items', 'products', 'shippingDetails', 'shippings'
+    ];
+    keysToRemove.forEach(k => delete clean[k]);
+  } else if (table === 'products') {
+    const keysToRemove = [
+      'id', 'order_id', 'orderId', 'product_name', 'productName', 'name',
+      'quantity', 'unit_price', 'unitPrice', 'productPrice', 'price',
+      'total_price', 'totalPrice', 'packaging_option_id', 'packagingOptionId',
+      'item_category_id', 'itemCategoryId', 'item_category_name', 'itemCategoryName',
+      'createdAt', 'created_at'
+    ];
+    keysToRemove.forEach(k => delete clean[k]);
+  } else if (table === 'shipments') {
+    const keysToRemove = [
+      'id', 'order_id', 'orderId', 'tracking_number', 'trackingNumber',
+      'shipping_company_id', 'shippingCompanyId', 'courier_id', 'courierId',
+      'shipment_status', 'shipmentStatus', 'status', 'shipping_cost', 'shippingCost',
+      'weight', 'shipping_category_id', 'shippingCategoryId',
+      'content_category_id', 'contentCategoryId', 'content_category_name', 'contentCategoryName',
+      'carton_count', 'cartonCount', 'customs_fee', 'customsFee',
+      'tax_fee', 'taxFee', 'other_category_fee', 'otherCategoryFee',
+      'category_fees_total', 'categoryFeesTotal', 'category_fee_currency', 'categoryFeeCurrency',
+      'createdAt', 'created_at'
+    ];
+    keysToRemove.forEach(k => delete clean[k]);
+  }
+
+  return clean;
+}
+
+/**
+ * إثراء بيانات الطلب ديناميكياً بالأصناف والشحنات المجلوبة من الجداول المخصصة
+ * Dynamically enrich order object with items and shipping details from products & shipments tables
+ */
+export function enrichOrderPayload(item: any): any {
+  if (!item || typeof item !== 'object') return item;
+  const orderId = item.id;
+  const orderNum = item.order_number || item.orderNumber;
+
+  const productsCache = collectionCaches['products'] || [];
+  const matchedProducts = productsCache.filter((p: any) =>
+    (p.order_id && (p.order_id === orderId || p.order_id === orderNum)) ||
+    (p.orderId && (p.orderId === orderId || p.orderId === orderNum))
+  );
+
+  const shipmentsCache = collectionCaches['shipments'] || [];
+  const matchedShipments = shipmentsCache.filter((s: any) =>
+    (s.order_id && (s.order_id === orderId || s.order_id === orderNum)) ||
+    (s.orderId && (s.orderId === orderId || s.orderId === orderNum))
+  );
+
+  return {
+    ...item,
+    items: matchedProducts,
+    products: matchedProducts,
+    shippingDetails: matchedShipments,
+    shippings: matchedShipments
+  };
+}
+
 export function extractRowPayload(table: string, row: any): any {
   if (!row) return {};
   const rowId = row.id;
@@ -207,8 +290,12 @@ export function extractRowPayload(table: string, row: any): any {
   // Extract top-level database columns excluding the 'data' JSON column itself
   const { data: _, ...topCols } = row;
 
+  // تنظيف الحقول المكررة من data لمنع تداخل الاستعلامات
+  // Sanitize raw data payload to eliminate duplicate fields
+  const sanitizedData = sanitizeDataPayload(table, rawData);
+
   // Merge top-level columns with JSON data payload
-  const combined = { ...topCols, ...rawData };
+  const combined = { ...topCols, ...sanitizedData };
 
   // Map database columns to JS properties and vice versa
   const mapping = DIRECT_COLUMNS_MAP[table];
@@ -317,6 +404,11 @@ async function ensureCache(table: string): Promise<any[]> {
     if (!collectionCaches[table]) {
       collectionCaches[table] = [];
     }
+  }
+
+  // Pre-load products and shipments when fetching orders to ensure relational fields items and shippingDetails are populated
+  if (table === 'orders' && !isOfflineMode()) {
+    Promise.all([ensureCache('products'), ensureCache('shipments')]).catch(() => {});
   }
 
   // 2. Fetch from network ONLY if cache is stale or has never fetched
@@ -597,15 +689,18 @@ export async function getDocs(queryObj: FirebaseQuery) {
   const allItems = await ensureCache(table);
   const filtered = applyQuery(allItems, queryObj);
 
-  const docs = filtered.map(item => ({
-    id: item.id,
-    ref: new DocRef(table, item.id),
-    exists: () => true,
-    data: () => {
-      const { id, ...rest } = item;
-      return rest;
-    }
-  }));
+  const docs = filtered.map(rawItem => {
+    const item = table === 'orders' ? enrichOrderPayload(rawItem) : rawItem;
+    return {
+      id: item.id,
+      ref: new DocRef(table, item.id),
+      exists: () => true,
+      data: () => {
+        const { id, ...rest } = item;
+        return rest;
+      }
+    };
+  });
 
   return {
     docs,
@@ -619,7 +714,8 @@ export async function getDoc(docRef: DocRef) {
   const table = docRef.path;
   const id = docRef.id;
   const allItems = await ensureCache(table);
-  const item = allItems.find(i => i.id === id);
+  const rawItem = allItems.find(i => i.id === id);
+  const item = (table === 'orders' && rawItem) ? enrichOrderPayload(rawItem) : rawItem;
 
   return {
     id,
@@ -652,7 +748,7 @@ const DIRECT_COLUMNS_MAP: Record<string, Record<string, string>> = {
   default_accounts: { defaultKey: 'default_key', default_key: 'default_key', accountId: 'account_id', account_id: 'account_id', accNameAr: 'acc_name_ar', nameAr: 'acc_name_ar', acc_name_ar: 'acc_name_ar', accNameEn: 'acc_name_en', nameEn: 'acc_name_en', acc_name_en: 'acc_name_en', curNo: 'cur_no', currencyId: 'cur_no', cur_no: 'cur_no', isActive: 'is_active', is_active: 'is_active', createdAt: 'created_at', updatedAt: 'updated_at' },
   account_id_migration_map: { oldAccountId: 'old_account_id', oldAccountCode: 'old_account_code', newAccountId: 'new_account_id', migratedAt: 'migrated_at' },
   accounts: { accountCode: 'account_code', code: 'account_code', balance: 'balance', currency: 'currency', entityId: 'entity_id', entityType: 'entity_type', type: 'type', accountType: 'type', accSubId: 'acc_sub_id', groupId: 'group_id', accountSeq: 'account_seq', accNameAr: 'acc_name_ar', nameAr: 'acc_name_ar', accNameEn: 'acc_name_en', nameEn: 'acc_name_en', limitedBalance: 'limited_balance', curNo: 'cur_no', currencyId: 'cur_no', isActive: 'is_active', createdAt: 'createdAt', updatedAt: 'updatedAt', lastRecalculatedAt: 'lastRecalculatedAt', accountNumber: 'account_number', accountPrefix: 'account_prefix', entityName: 'entity_name', notes: 'notes' },
-  orders: { orderNumber: 'order_number', trackingNumber: 'tracking_number', customerId: 'customer_id', orderPartyId: 'order_party_id', orderPartyType: 'order_party_type', isStaffOrder: 'is_staff_order', employeeId: 'employee_id', courierId: 'courier_id', customerAccountId: 'order_party_account_id', orderPartyAccountId: 'order_party_account_id', orderStatusId: 'order_status_id', order_status_id: 'order_status_id', createdAt: 'createdAt', orderSourceId: 'order_source_id', order_source_id: 'order_source_id', orderSourceType: 'order_source_type', order_source_type: 'order_source_type', deliveryCourierId: 'delivery_courier_id', delivery_courier_id: 'delivery_courier_id', shippingCourierId: 'shipping_courier_id', shipping_courier_id: 'shipping_courier_id' },
+  orders: { orderNumber: 'order_number', trackingNumber: 'tracking_number', customerId: 'customer_id', orderPartyId: 'order_party_id', orderPartyType: 'order_party_type', isStaffOrder: 'is_staff_order', employeeId: 'employee_id', courierId: 'courier_id', orderPartyAccountId: 'order_party_account_id', orderStatusId: 'order_status_id', order_status_id: 'order_status_id', createdAt: 'createdAt', orderSourceId: 'order_source_id', order_source_id: 'order_source_id', orderSourceType: 'order_source_type', order_source_type: 'order_source_type', deliveryCourierId: 'delivery_courier_id', delivery_courier_id: 'delivery_courier_id', shippingCourierId: 'shipping_courier_id', shipping_courier_id: 'shipping_courier_id', createdByName: 'created_by_name', created_by_name: 'created_by_name', updatedAt: 'updated_at', updated_at: 'updated_at', updatedBy: 'updated_by', updated_by: 'updated_by' },
   shipping_companies: { name: 'name', shippingCompanyUrl: 'shipping_company_url', trackingIDPrefix: 'trackingID_prefix', accountId: 'account_id', financialAccountId: 'account_id' },
   sources: { name: 'name', supplierType: 'type', type: 'type', sourceUrl: 'source_url', accountId: 'account_id', financialAccountId: 'account_id' },
   expenses: { expenseNumber: 'expense_number', transactionsID: 'transactionsID', linkedAccountId: 'account_id', financialAccountId: 'account_id', accountId: 'account_id', category: 'category', amount: 'amount', currency: 'currency', curNo: 'cur_no', currencyId: 'cur_no', createdAt: 'createdAt' },
@@ -758,10 +854,11 @@ export function createWriteError(operation: 'insert' | 'upsert' | 'update' | 'de
 export async function addDoc(newID: any, collectionRef: FirebaseQuery, rawData: any) {
   const table = collectionRef.path;
   const id = newID ? newID : 'noId_' + Math.random().toString(36).substring(2, 11) + Math.random().toString(36).substring(2, 11);
-  const data = cleanData(rawData);
+  const rawClean = cleanData(rawData);
+  const data = sanitizeDataPayload(table, rawClean);
 
   if (!isOfflineMode()) {
-    const directCols = extractDirectColumns(table, data);
+    const directCols = extractDirectColumns(table, rawClean);
     const writePayload = usesExplicitFinancialColumns(table) ? { id, ...directCols } : { id, ...directCols, data };
     const { error } = await supabase.from(table).insert(writePayload);
     if (error) {
@@ -771,9 +868,15 @@ export async function addDoc(newID: any, collectionRef: FirebaseQuery, rawData: 
     // Offline mode: buffering addDoc local write
   }
 
-  const newItem = { id, ...data };
+  const newItem = extractRowPayload(table, { id, ...extractDirectColumns(table, rawClean), data });
   if (!collectionCaches[table]) collectionCaches[table] = [];
   collectionCaches[table].push(newItem);
+
+  // إعلام استماع الطلبات عند إضافة منتج أو شحنة جديدة
+  // Notify orders listeners when a product or shipment is added
+  if ((table === 'products' || table === 'shipments') && collectionListeners['orders']) {
+    collectionListeners['orders'].forEach(cb => cb());
+  }
 
   // Safe write update in localStorage backup
   try {
@@ -786,14 +889,16 @@ export async function addDoc(newID: any, collectionRef: FirebaseQuery, rawData: 
 
   return { id };
 }
+
 export async function addAssDoc(newID: any, arg1: any, collectionRef: FirebaseQuery, rawData: any) {
   const table = collectionRef.path;
   const id = newID ? newID : 'noId_' + Math.random().toString(36).substring(2, 11) + Math.random().toString(36).substring(2, 11);
   const assetCode = arg1 ? arg1 : 'noAssetCode_' + Math.random().toString(36).substring(2, 11) + Math.random().toString(36).substring(2, 11);
-  const data = cleanData(rawData);
+  const rawClean = cleanData(rawData);
+  const data = sanitizeDataPayload(table, rawClean);
 
   if (!isOfflineMode()) {
-    const directCols = extractDirectColumns(table, data);
+    const directCols = extractDirectColumns(table, rawClean);
     const { error } = await supabase.from(table).insert({ id, assetCode, ...directCols, data });
     if (error) {
       throw createWriteError('insert', table, error);
@@ -802,7 +907,7 @@ export async function addAssDoc(newID: any, arg1: any, collectionRef: FirebaseQu
     // Offline mode: buffering addDoc local write
   }
 
-  const newItem = { id, assetCode, ...data };
+  const newItem = extractRowPayload(table, { id, assetCode, ...extractDirectColumns(table, rawClean), data });
   if (!collectionCaches[table]) collectionCaches[table] = [];
   collectionCaches[table].push(newItem);
 
@@ -817,20 +922,22 @@ export async function addAssDoc(newID: any, arg1: any, collectionRef: FirebaseQu
 
   return { id };
 }
+
 export async function setDoc(docRef: DocRef, rawData: any, options?: any) {
   const table = docRef.path;
   const id = docRef.id;
-  let data = cleanData(rawData);
+  let rawClean = cleanData(rawData);
 
   if (options && options.merge) {
     const all = await ensureCache(table);
     const existing = all.find(item => item.id === id) || {};
     const { id: _, ...existingData } = existing;
-    data = { ...existingData, ...data };
+    rawClean = { ...existingData, ...rawClean };
   }
+  const data = sanitizeDataPayload(table, rawClean);
 
   if (!isOfflineMode()) {
-    const directCols = extractDirectColumns(table, data);
+    const directCols = extractDirectColumns(table, rawClean);
     const writePayload = usesExplicitFinancialColumns(table) ? { id, ...directCols } : { id, ...directCols, data };
     const { error } = await supabase.from(table).upsert(writePayload);
     if (error) {
@@ -840,13 +947,19 @@ export async function setDoc(docRef: DocRef, rawData: any, options?: any) {
     // Offline mode: buffering setDoc local write
   }
 
-  const newItem = { id, ...data };
+  const newItem = extractRowPayload(table, { id, ...extractDirectColumns(table, rawClean), data });
   if (!collectionCaches[table]) collectionCaches[table] = [];
   const idx = collectionCaches[table].findIndex(item => item.id === id);
   if (idx >= 0) {
     collectionCaches[table][idx] = newItem;
   } else {
     collectionCaches[table].push(newItem);
+  }
+
+  // إعلام استماع الطلبات عند تعديل منتج أو شحنة
+  // Notify orders listeners when a product or shipment is updated
+  if ((table === 'products' || table === 'shipments') && collectionListeners['orders']) {
+    collectionListeners['orders'].forEach(cb => cb());
   }
 
   // Safe write update in localStorage backup
@@ -904,10 +1017,13 @@ export async function updateDoc(docRef: DocRef, rawData: any) {
     }
   }
 
-  const data = { ...existingData, ...resolvedPayload };
+  // استخدم resolvedPayload فقط لحمولة data لمنع إعادة الحقول المكررة من الـ cache القديم
+  // Use only resolvedPayload for data to prevent stale duplicate fields from cache re-entering data column
+  const rawClean = { ...existingData, ...resolvedPayload };
+  const data = sanitizeDataPayload(table, resolvedPayload);
 
   if (!isOfflineMode()) {
-    const directCols = extractDirectColumns(table, data);
+    const directCols = extractDirectColumns(table, rawClean);
     const writePayload = usesExplicitFinancialColumns(table) ? directCols : { ...directCols, data };
     const { error } = await supabase.from(table).update(writePayload).eq('id', id);
     if (error) {
@@ -918,19 +1034,25 @@ export async function updateDoc(docRef: DocRef, rawData: any) {
   }
 
   // Double check if this is the Admin's user document update - synchronized live across sessions
-  if (table === 'users' && data.email?.toLowerCase() === 'admin@swiftship.system' && data.password) {
+  if (table === 'users' && rawClean.email?.toLowerCase() === 'admin@swiftship.system' && rawClean.password) {
     try {
-      const hash = simpleHashPassword(data.password);
+      const hash = simpleHashPassword(rawClean.password);
       safeLocalStorage.setItem('swiftship_emergency_admin_hash', hash);
-      safeLocalStorage.setItem('swiftship_emergency_admin_profile', encryptDataLocal(JSON.stringify(data), data.password));
-      safeLocalStorage.setItem('swiftship_emergency_admin_pwd', data.password);
+      safeLocalStorage.setItem('swiftship_emergency_admin_profile', encryptDataLocal(JSON.stringify(rawClean), rawClean.password));
+      safeLocalStorage.setItem('swiftship_emergency_admin_pwd', rawClean.password);
     } catch (_) { }
   }
 
-  const newItem = { id, ...data };
+  const newItem = extractRowPayload(table, { id, ...extractDirectColumns(table, rawClean), data });
   const idx = collectionCaches[table].findIndex(item => item.id === id);
   if (idx >= 0) {
     collectionCaches[table][idx] = newItem;
+  }
+
+  // إعلام استماع الطلبات عند تحديث منتج أو شحنة
+  // Notify orders listeners when a product or shipment is updated
+  if ((table === 'products' || table === 'shipments') && collectionListeners['orders']) {
+    collectionListeners['orders'].forEach(cb => cb());
   }
 
   // Safe write update in localStorage backup
@@ -1013,7 +1135,8 @@ export function onSnapshot(
     const docListener = async () => {
       try {
         const allItems = await ensureCache(table);
-        const item = allItems.find(i => i.id === docId);
+        const rawItem = allItems.find(i => i.id === docId);
+        const item = (table === 'orders' && rawItem) ? enrichOrderPayload(rawItem) : rawItem;
         callback({
           id: docId,
           exists: () => !!item,
@@ -1047,15 +1170,18 @@ export function onSnapshot(
       const allItems = await ensureCache(table);
       const filtered = queryObj instanceof FirebaseQuery ? applyQuery(allItems, queryObj) : allItems;
 
-      const docs = filtered.map(item => ({
-        id: item.id,
-        ref: new DocRef(table, item.id),
-        exists: () => true,
-        data: () => {
-          const { id, ...rest } = item;
-          return rest;
-        }
-      }));
+      const docs = filtered.map(rawItem => {
+        const item = table === 'orders' ? enrichOrderPayload(rawItem) : rawItem;
+        return {
+          id: item.id,
+          ref: new DocRef(table, item.id),
+          exists: () => true,
+          data: () => {
+            const { id, ...rest } = item;
+            return rest;
+          }
+        };
+      });
 
       callback({
         docs,

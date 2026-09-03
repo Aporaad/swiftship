@@ -1,6 +1,9 @@
 # Dependencies
 **/node_modules
 .pnpm-store/
+.zcode/
+.claude/
+.mimosa/
 
 # Build outputs
 dist/

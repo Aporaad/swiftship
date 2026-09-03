@@ -456,3 +456,43 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
    - تطبيق الإجراء المحدث على قاعدة بيانات Supabase.
    - تنفيذ `SELECT public.recalculate_all_account_balances();` لمزامنة وتحديث الـ 89 حساباً بنجاح وتطابق تام 100%.
 
+## [2026-09-02 23:48:00] — تنظيف قاعدة البيانات Supabase PostgreSQL وإلغاء تكرار الأعمدة من حقل data لجداول الطلبات والمنتجات والشحنات
+
+### التحديثات والترحيلات المنفذة في قاعدة البيانات:
+1. **تنظيف جدول الطلبات `orders`**:
+   - إزالة وتنظيف الحقول المكررة من `orders.data` (`order_number`, `tracking_number`, `customer_id`, `order_status`, `order_status_id`, `order_source_id`, `delivery_courier_id`, `shipping_courier_id`, `courier_id`, `employee_id`, `order_party_id`, `is_staff_order`, `order_party_account_id`, `createdAt`).
+   - إزالة مصفوفات الأصناف والشحنات `items` و `shippingDetails` من داخل `orders.data` والاعتماد المطلق على الربط العلاقي بجدولي `products` و `shipments`.
+2. **تنظيف جدولي المنتجات `products` والشحنات `shipments`**:
+   - تنظيف `products.data` وحذف الأعمدة المكررة (`order_id`, `product_name`, `quantity`, `unit_price`, `total_price`, `packaging_option_id`, `item_category_id`, `item_category_name`, `createdAt`).
+   - تنظيف `shipments.data` وحذف الأعمدة المكررة (`order_id`, `tracking_number`, `shipping_company_id`, `courier_id`, `shipment_status`, `shipping_cost`, `weight`, `shipping_category_id`, `content_category_id`, `carton_count`, `customs_fee`, `tax_fee`, `category_fees_total`, `createdAt`).
+3. **مزامنة البيانات واختبار السجلات عبر Supabase MCP SQL (`execute_sql`)**:
+   - تنفيذ السكربت بنجاح وتصفية الاعتماد على الحقول المتكررة وتأكيد الحفظ في الأعمدة المباشرة 100%.
+
+## [2026-09-02 23:58:00] — تحديث تعيين الأعمدة المباشرة لجدول orders وتجريد حقل data
+
+### التحديثات والتعديلات المنفذة في قاعدة البيانات والمحول المحاسبي:
+1. **تحديث `DIRECT_COLUMNS_MAP` في `supabase-firebase-adapter.ts`**:
+   - إضافة التعيين المباشر للأعمدة الأساسية بجدول `orders`:
+     - `createdByName` / `created_by_name` -> `created_by_name`
+     - `updatedAt` / `updated_at` -> `updated_at`
+     - `updatedBy` / `updated_by` -> `updated_by`
+
+2. **حذف الحقول المكررة من حمولات JSON**:
+   - تجريد كائن `orders.data` من حقول العميل والبيانات الشخصية (`customerName`, `customerPhone`, `customerAddress`, `customerAccountId`, `customerAccountCode`).
+   - تجريد كائن `orders.data` من `orderSourceName` و `createdByEmail` والحقول المكررة `customerId`, `orderPartyId`, `orderPartyType`, `orderPartyAccountId`, `employeeId`, `courierId`, `isStaffOrder`.
+   - ضمان التنسيق والتحديث الآمن للبيانات وفق معايير الأمان والكود النظيف.
+
+---
+
+## [2026-09-03 01:20:00] — تطهير حقول data لجداول orders و products و shipments في Supabase PostgreSQL
+
+### التحديثات والتعديلات المنفذة في قاعدة البيانات:
+1. **تحديث صفوف جدول `orders` بـ SQL**:
+   - تنفيذ `UPDATE orders SET data = data - 'customerId' - 'orderPartyType' - 'orderPartyId' - 'orderPartyAccountId' - 'customerAccountId' - 'customerAccountCode' - 'employeeId' - 'courierId' - 'isStaffOrder' - 'customerName' - 'customerPhone' - 'customerAddress' - 'orderSourceName' - 'createdByName' - 'createdByEmail' - 'updatedAt' - 'updatedBy' - 'items' - 'products' - 'shippingDetails' - 'shippings' WHERE data IS NOT NULL;`
+2. **تحديث صفوف جدولي `products` و `shipments` بـ SQL**:
+   - إزالة جميع المفاتيح المكررة من `products.data` و `shipments.data`.
+3. **استبعاد customerAccountId نهائياً**:
+   - إزالة تعيين `customerAccountId` من `DIRECT_COLUMNS_MAP` والاعتماد المباشر على العمود الأساسي `order_party_account_id`.
+
+
+

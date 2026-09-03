@@ -275,8 +275,7 @@ export default function Orders() { // دالة عرض الطلبات
         isStaffOrder: false,
         employeeId: '',
         courierId: '',
-        customerAccountId: '',
-        customerAccountCode: '',
+        orderPartyAccountId: '',
         orderSourceId: '',
         orderSourceName: '',
         externalOrderNumber: '',
@@ -371,8 +370,6 @@ export default function Orders() { // دالة عرض الطلبات
     isStaffOrder: false,
     employeeId: '',
     courierId: '',
-    customerAccountId: '',
-    customerAccountCode: '',
     orderPartyAccountId: '',
     orderSourceId: '',
     orderSourceName: '',
@@ -723,8 +720,6 @@ export default function Orders() { // دالة عرض الطلبات
       isStaffOrder: false,
       employeeId: '',
       courierId: '',
-      customerAccountId: c.financialAccountId || c.accountId || '',
-      customerAccountCode: c.financialAccountCode || c.accountCode || '',
       orderPartyAccountId: c.financialAccountId || c.accountId || ''
     }));
     setCustomerSearchQuery('');
@@ -741,8 +736,6 @@ export default function Orders() { // دالة عرض الطلبات
       orderPartyId: '',
       employeeId: '',
       courierId: '',
-      customerAccountId: '',
-      customerAccountCode: '',
       orderPartyAccountId: ''
     }));
   };
@@ -1013,34 +1006,29 @@ export default function Orders() { // دالة عرض الطلبات
       }
 
       const payload = {
+        // أعمدة مباشرة - ترتبط بـ DIRECT_COLUMNS_MAP لتُكتب في الأعمدة الأساسية وتُحذف من data
+        // Direct columns - mapped via DIRECT_COLUMNS_MAP to base columns, excluded from data
         orderNumber,
-        customerId: formData.customerId,
-        customerName: formData.customerName,
-        customerPhone: formData.customerPhone,
-        customerAddress: formData.customerAddress,
-        orderPartyId: formData.orderPartyId || formData.customerId,
+        trackingNumber: formData.trackingNumber || orderNumber,
+        customerId: formData.customerId || '',
+        orderPartyId: formData.orderPartyId || formData.customerId || '',
         orderPartyType: formData.orderPartyType || 'customer',
         isStaffOrder: Boolean(formData.isStaffOrder),
-        employeeId: formData.employeeId || '',
-        courierId: formData.courierId || '',
-        customerAccountId: formData.customerAccountId || '',
-        customerAccountCode: formData.customerAccountCode || '',
-        orderPartyAccountId: formData.orderPartyAccountId || formData.customerAccountId || '',
-        orderSourceId: formData.orderSourceId,
-        orderSourceName: formData.orderSourceName,
-        orderSourceType: formData.orderSourceType,
-        externalOrderNumber: formData.externalOrderNumber,
-        trackingNumber: formData.trackingNumber || orderNumber,
-        shippingCompany: formData.shippingCompany,
+        employeeId: formData.employeeId || null,
+        courierId: formData.courierId || null,
+        orderPartyAccountId: formData.orderPartyAccountId || null,
+        orderStatusId: parseFloat(formData.amountPaid as any) > 0 ? '2' : '1',
+        order_status_id: parseFloat(formData.amountPaid as any) > 0 ? '2' : '1',
+        orderSourceId: formData.orderSourceId || null,
+        orderSourceType: formData.orderSourceType || null,
+        deliveryCourierId: formData.deliveryCourierId || null,
+        shippingCourierId: formData.shippingCourierId || null,
+        createdByName: profile?.fullName || 'Root Admin',
+        updatedAt: new Date().toISOString(),
+        updatedBy: profile?.fullName || 'Root Admin',
 
-        // Couriers
-        shippingCourierId: formData.shippingCourierId,
-        deliveryCourierId: formData.deliveryCourierId,
-        deliveryCourierFee: parseFloat(formData.deliveryCourierFee as any) || 0,
-        deliveryCourierFeeCurrency: currentCalcs.deliveryCourierFeeCurrency,
-        deliveryCourierFeeOrderCurrency: currentCalcs.deliveryCourierFeeOrderCurrency,
-
-        // Financial definitions
+        // بيانات مالية وحسابية - تُخزَّن في data لأنها ليست أعمدة مباشرة
+        // Financial & calculation data - stored in data column (no direct column)
         currency: orderCurrency,
         orderCurrency,
         paidCurrency: formData.currency,
@@ -1052,8 +1040,6 @@ export default function Orders() { // دالة عرض الطلبات
         companyProfitRate: formData.companyProfitRate,
         packagingFee: parseFloat(formData.packagingFee as any) || 0,
         sheinRedPrice: parseFloat(formData.sheinRedPrice as any) || 0,
-
-        // New fields
         cartShareCode,
         bankCommissionEnabled,
         couponEnabled,
@@ -1062,8 +1048,6 @@ export default function Orders() { // دالة عرض الطلبات
         productsSum: currentCalcs.productsSum,
         packagingFeeEnabled,
         packagingFeeRate,
-
-        // Calculated values
         totalWeight: currentCalcs.totalWeight,
         totalCBM: currentCalcs.totalCBM,
         totalCostSAR: currentCalcs.totalOrderSAR,
@@ -1071,42 +1055,29 @@ export default function Orders() { // دالة عرض الطلبات
         amountPaid: parseFloat(formData.amountPaid as any) || 0,
         amountRemaining: currentCalcs.remainingYER,
         paymentStatus: payStatus,
-
-        // Add details from source types
         profitPerKgRate: parseFloat(profitPerKgRate as any) || 19,
         cbmShippingRateValue: parseFloat(cbmShippingRateValue as any) || 1400,
-        addShippingEnabled: addShippingEnabled,
+        addShippingEnabled,
         shippingCostSAR: currentCalcs.shippingCostSAR,
-
-        // Profit distribution
         profitSaudiSAR: currentCalcs.profitSaudiSAR,
         profitCompanySAR: currentCalcs.profitCompanySAR,
         deductSourcingCostFromCourier: formData.deductSourcingCostFromCourier,
         sourcing_cost: formData.deductSourcingCostFromCourier ? 'courier' : 'system',
         sourcingCostAmount: currentCalcs.sourcingCostAmount,
-
-
-        // Items nested list
-        items,
-
-        // Shipping details nested list //مهم:يحب تحدد
-        shippingDetails: formData.orderSourceType === 'SHEIN' ? [] : formData.orderSourceType === 'App' && !formData.addShippingEnabled ? [] : (shippings || []),
-
-        // Lifecycles status
-        orderStatusId: parseFloat(formData.amountPaid as any) > 0 ? '2' : '1',
-        order_status_id: parseFloat(formData.amountPaid as any) > 0 ? '2' : '1',
         orderStatus: parseFloat(formData.amountPaid as any) > 0 ? 'تم استلام دفعة جزئية' : 'طلب معلق',
         deliveryStatus: 'في الانتظار',
         locationYemen: 'في الانتظار',
         firedTriggers: initialFiredTriggers,
-
-        createdByEmail: auth.currentUser?.email || 'admin',
-        createdByName: profile?.fullName || 'Root Admin',
+        shippingCompany: formData.shippingCompany,
+        externalOrderNumber: formData.externalOrderNumber,
+        deliveryCourierFee: parseFloat(formData.deliveryCourierFee as any) || 0,
+        deliveryCourierFeeCurrency: currentCalcs.deliveryCourierFeeCurrency,
+        deliveryCourierFeeOrderCurrency: currentCalcs.deliveryCourierFeeOrderCurrency,
         createdAt: Date.now(),
-        updatedAt: Date.now()
       };
       //حفظ الطلب في جدول الطلب
       await addDoc(payload.orderNumber, collection(db, 'orders'), payload);
+
 
       // Save products to products table
       if (items && items.length > 0) {
@@ -1114,13 +1085,23 @@ export default function Orders() { // دالة عرض الطلبات
           const prodId = 'prod_' + Math.random().toString(36).substring(2, 11);
           await addDoc(prodId, collection(db, 'products'), {
             id: prodId,
+            // أعمدة مباشرة في جدول المنتجات
+            order_id: payload.orderNumber,
             orderId: payload.orderNumber,
+            product_name: item.productName || item.name || 'منتج',
             productName: item.productName || item.name || 'منتج',
-            costomerId: formData.customerId,
             quantity: parseFloat(item.quantity || 1),
-            productPrice: parseFloat(item.productPrice || item.price || 0),
-            unitPrice: parseFloat(item.productPrice || item.price || 0),
-            totalPrice: (parseFloat(item.quantity || 1)) * (parseFloat(item.productPrice || item.price || 0)),
+            unit_price: parseFloat(item.productPrice || item.price || item.unitPrice || 0),
+            unitPrice: parseFloat(item.productPrice || item.price || item.unitPrice || 0),
+            total_price: (parseFloat(item.quantity || 1)) * (parseFloat(item.productPrice || item.price || item.unitPrice || 0)),
+            totalPrice: (parseFloat(item.quantity || 1)) * (parseFloat(item.productPrice || item.price || item.unitPrice || 0)),
+            packaging_option_id: item.packagingOptionId || item.packaging_option_id || null,
+            packagingOptionId: item.packagingOptionId || item.packaging_option_id || null,
+            item_category_id: item.itemCategoryId || item.item_category_id || null,
+            itemCategoryId: item.itemCategoryId || item.item_category_id || null,
+            item_category_name: item.itemCategoryName || item.item_category_name || '',
+            itemCategoryName: item.itemCategoryName || item.item_category_name || '',
+            // حقول إضافية تُخزَّن في data
             weight: parseFloat(item.weight || 0),
             height: parseFloat(item.height || 0),
             length: parseFloat(item.length || 0),
@@ -1128,48 +1109,52 @@ export default function Orders() { // دالة عرض الطلبات
             cbm: parseFloat(item.cbm || 0),
             productUrl: item.productUrl || '',
             trackingNumber: item.trackingNumber || '',
-            packagingOptionId: item.packagingOptionId || item.packaging_option_id || '',
             packagingOptionName: item.packagingOptionName || '',
             packagingOptionPrice: parseFloat(item.packagingOptionPrice || 0),
-            itemCategoryId: item.itemCategoryId || item.item_category_id || '',
-            itemCategoryName: item.itemCategoryName || '',
             createdAt: Date.now()
           });
         }
       }
 
-      // Save shipments to shipments table
-      const shippingsToSave = formData.orderSourceType === 'SHEIN' ? [] : formData.orderSourceType === 'App' && !formData.addShippingEnabled ? [] : (shippings || []);
+
+      // حفظ شحنات الطلب في جدول الشحنات
+      // Save order shipments to dedicated shipments table - always save if shippings exist
+      const shippingsToSave = (shippings || []).filter((s: any) => s && (s.shippingCompany || s.trackingNumber || s.shippingCost));
       for (const ship of shippingsToSave) {
         const shipId = ship.id || ('sh_' + Math.random().toString(36).substring(2, 11));
         await addDoc(shipId, collection(db, 'shipments'), {
           id: shipId,
+          // ربط الشحنة بالطلب عبر رقم الطلب (المفتاح الأجنبي)
+          order_id: payload.orderNumber,
           orderId: payload.orderNumber,
+          tracking_number: ship.trackingNumber || payload.trackingNumber || payload.orderNumber,
           trackingNumber: ship.trackingNumber || payload.trackingNumber || payload.orderNumber,
+          shipping_company_id: ship.shippingCompany || payload.shippingCompany || 'Aramex',
           shippingCompanyId: ship.shippingCompany || payload.shippingCompany || 'Aramex',
-          shippingCompany: ship.shippingCompany || payload.shippingCompany || 'Aramex',
-          courierId: formData.deliveryCourierId || formData.shippingCourierId || '',
-          shipmentStatus: 'طلب معلق',
+          courier_id: formData.deliveryCourierId || formData.shippingCourierId || null,
+          courierId: formData.deliveryCourierId || formData.shippingCourierId || null,
+          shipment_status: ship.shipmentStatus || 'طلب معلق',
+          shipmentStatus: ship.shipmentStatus || 'طلب معلق',
+          shipping_cost: parseFloat(ship.shippingCost || 0),
           shippingCost: parseFloat(ship.shippingCost || 0),
           weight: parseFloat(ship.weight || 0),
-          shippingType: ship.shippingType || 'بري',
-          shippingSource: ship.shippingSource || '',
-          shippingDestination: ship.shippingDestination || '',
-          shippingDate: ship.shippingDate || new Date().toISOString().split('T')[0],
-          shippingDuration: ship.shippingDuration || '15',
-          expectedArrival: ship.expectedArrival || '',
-          deliveryDate: ship.deliveryDate || '',
-          packagingFees: parseFloat(ship.packagingFees || 0),
-          shippingCategoryId: ship.shippingCategoryId || ship.shipping_category_id || '',
-          shippingCategoryName: ship.shippingCategoryName || '',
-          shippingCategoryPrice: parseFloat(ship.shippingCategoryPrice || 0),
-          contentCategoryId: ship.contentCategoryId || ship.content_category_id || '',
-          contentCategoryName: ship.contentCategoryName || '',
+          shipping_category_id: ship.shippingCategoryId || ship.shipping_category_id || null,
+          shippingCategoryId: ship.shippingCategoryId || ship.shipping_category_id || null,
+          content_category_id: ship.contentCategoryId || ship.content_category_id || null,
+          contentCategoryId: ship.contentCategoryId || ship.content_category_id || null,
+          content_category_name: ship.contentCategoryName || ship.content_category_name || '',
+          contentCategoryName: ship.contentCategoryName || ship.content_category_name || '',
+          carton_count: parseFloat(ship.cartonCount || 0),
           cartonCount: parseFloat(ship.cartonCount || 0),
+          customs_fee: parseFloat(ship.customsFee || 0),
           customsFee: parseFloat(ship.customsFee || 0),
+          tax_fee: parseFloat(ship.taxFee || 0),
           taxFee: parseFloat(ship.taxFee || 0),
+          other_category_fee: parseFloat(ship.otherCategoryFee || 0),
           otherCategoryFee: parseFloat(ship.otherCategoryFee || 0),
+          category_fees_total: parseFloat(ship.categoryFeesTotal || 0),
           categoryFeesTotal: parseFloat(ship.categoryFeesTotal || 0),
+          category_fee_currency: ship.categoryFeeCurrency || '',
           categoryFeeCurrency: ship.categoryFeeCurrency || '',
           createdAt: Date.now()
         });
@@ -1186,8 +1171,8 @@ export default function Orders() { // دالة عرض الطلبات
       // --- Financial Account Impact ---
       const customerRecord = selectedOrderParty?.raw || customers.find(c => c.id === formData.customerId);
       const courierRecord = couriers.find(c => c.id === formData.shippingCourierId);
-      const linkedAccountId = formData.customerAccountId || customerRecord?.financialAccountId || customerRecord?.accountId;
-      const linkedAccountCode = formData.customerAccountCode || customerRecord?.financialAccountCode || customerRecord?.accountCode;
+      const linkedAccountId = formData.orderPartyAccountId || customerRecord?.financialAccountId || customerRecord?.accountId;
+      const linkedAccountCode = customerRecord?.financialAccountCode || customerRecord?.accountCode;
 
       if (linkedAccountId) {
         try {
@@ -1387,11 +1372,14 @@ export default function Orders() { // دالة عرض الطلبات
       // Removed direct ledger creation for couriers and company profit from here to prevent duplicates.
       // Removed Yemen delivery driver wage creation here to prevent duplicates (handled on "تم التسليم").
 
+      const selectedCustomer = customers.find(c => c.id === payload.customerId || c.id === payload.orderPartyId);
+      const customerDisplayName = selectedCustomer ? (selectedCustomer.name || selectedCustomer.nameAr || selectedCustomer.nameEn || 'عميل') : (formData.customerName || 'عميل');
+
       // Log the order creation to activity log
       activityLogService.log('add_order', payload.orderNumber || 'New Order', {
         orderId: payload.orderNumber,
         orderNumber: payload.orderNumber,
-        customer: payload.customerName,
+        customer: customerDisplayName,
         total: payload.totalCostYER,
         status: payload.orderStatus
       });
@@ -1407,7 +1395,7 @@ export default function Orders() { // دالة عرض الطلبات
 
       // Automatically dispatch real WhatsApp message based on active templates and config
       try {
-        await whatsappService.triggerNotification('onOrderCreated', payload);
+        await whatsappService.triggerNotification('onOrderCreated', { ...payload, customerName: customerDisplayName });
       } catch (whatsappErr) {
         console.error('Failed to trigger real WhatsApp on order creation:', whatsappErr);
       }
@@ -1416,8 +1404,8 @@ export default function Orders() { // دالة عرض الطلبات
       const remainingVal = parseFloat(String(payload.amountRemaining || '0'));
       const totalCostYERVal = parseFloat(String(payload.amountPaid || '0')) + parseFloat(String(payload.amountRemaining || '0'));
       const smsMessage = isAr
-        ? `عزيزنا العميل ${payload.customerName}، تم تأكيد طلبك رقم: (${orderNumber}) بنجاح. حالة الشحنة: (${payload.orderStatus}). تتبع مع: ${payload.shippingCompany}، تتبع رقم: ${payload.trackingNumber || 'قيد الرفع'}. القيمة الإجمالية: ${totalCostYERVal.toLocaleString()} YER، المتبقي: ${remainingVal.toLocaleString()} YER.`
-        : `Dear ${payload.customerName}, your order ${orderNumber} has been confirmed. Status: ${payload.orderStatus}. Track with ${payload.shippingCompany}: ${payload.trackingNumber || 'Pending'}. Total: ${totalCostYERVal.toLocaleString()} YER, Remaining: ${remainingVal.toLocaleString()} YER.`;
+        ? `عزيزنا العميل ${customerDisplayName}، تم تأكيد طلبك رقم: (${orderNumber}) بنجاح. حالة الشحنة: (${payload.orderStatus}). تتبع مع: ${payload.shippingCompany}، تتبع رقم: ${payload.trackingNumber || 'قيد الرفع'}. القيمة الإجمالية: ${totalCostYERVal.toLocaleString()} YER، المتبقي: ${remainingVal.toLocaleString()} YER.`
+        : `Dear ${customerDisplayName}, your order ${orderNumber} has been confirmed. Status: ${payload.orderStatus}. Track with ${payload.shippingCompany}: ${payload.trackingNumber || 'Pending'}. Total: ${totalCostYERVal.toLocaleString()} YER, Remaining: ${remainingVal.toLocaleString()} YER.`;
 
       await notificationService.notify({
         title: isAr ? '📲 إرسال تلقائي (WhatsApp + SMS)' : '📲 Automatic WhatsApp / SMS Dispatcher',
@@ -1454,8 +1442,6 @@ export default function Orders() { // دالة عرض الطلبات
       isStaffOrder: false,
       employeeId: '',
       courierId: '',
-      customerAccountId: '',
-      customerAccountCode: '',
       orderPartyAccountId: '',
       orderSourceId: '',
       orderSourceName: '',
@@ -1871,7 +1857,8 @@ export default function Orders() { // دالة عرض الطلبات
       const isAlreadyNotified = firedTriggers.includes(statusTriggerId);
       const selectedOrderParty = findOrderParty(selectedOrder, customers, employees, couriers);
       const selectedOrderPartyRaw = selectedOrderParty?.raw || null;
-      const selectedOrderAccountId = selectedOrder.customerAccountId
+      const selectedOrderAccountId = selectedOrder.orderPartyAccountId
+        || selectedOrder.order_party_account_id
         || selectedOrderParty?.financialAccountId
         || selectedOrderPartyRaw?.financialAccountId
         || selectedOrderPartyRaw?.accountId
@@ -2649,7 +2636,7 @@ export default function Orders() { // دالة عرض الطلبات
 
       const currencyRecord = activeCurrencies.find((c: any) => String(c.code).toUpperCase() === paymentCurrency) || { cur_id: 1, code: paymentCurrency };
       const orderParty = findOrderParty(selectedOrder, customers, employees, couriers);
-      const partyAccountId = selectedOrder.orderPartyAccountId || selectedOrder.customerAccountId || orderParty?.financialAccountId || orderParty?.raw?.financialAccountId || orderParty?.raw?.accountId;
+      const partyAccountId = selectedOrder.orderPartyAccountId || selectedOrder.order_party_account_id || orderParty?.financialAccountId || orderParty?.raw?.financialAccountId || orderParty?.raw?.accountId;
       const partyAccount = financialAccounts.find((account: any) => account.id === partyAccountId);
       if (paymentFormData.method === 'Deferred') {
         toast.error(isAr ? 'الدفع الآجل ليس قبضًا فعليًا؛ أنشئ سندًا آجلًا مستقلًا ثم سجل التحصيل عند الاستلام.' : 'Deferred payment is not a collection; record it in a separate deferred voucher.');
@@ -2786,7 +2773,8 @@ export default function Orders() { // دالة عرض الطلبات
         const shippingCourierId = ord.shippingCourierId;
         const orderParty = findOrderParty(ord, customers, employees, couriers);
         const orderPartyRaw = orderParty?.raw || null;
-        const orderPartyAccountId = ord.customerAccountId
+        const orderPartyAccountId = ord.orderPartyAccountId
+          || ord.order_party_account_id
           || orderParty?.financialAccountId
           || orderPartyRaw?.financialAccountId
           || orderPartyRaw?.accountId
@@ -3365,16 +3353,67 @@ export default function Orders() { // دالة عرض الطلبات
 
 
 
-  const filteredOrdersList = orders
+  // إثراء قائمة الطلبات ببيانات العميل والمصدر من المصفوفات المحملة مسبقاً
+  // Enrich each order with customer name/phone and source name from loaded arrays
+  const enrichedOrders = orders.map(o => {
+    const partyId = o.orderPartyId || o.order_party_id || o.customerId || o.customer_id;
+    const partyType = o.orderPartyType || o.order_party_type || 'customer';
+    let partyName = '';
+    let partyPhone = '';
+    let partyAddress = '';
+    if (partyType === 'employee') {
+      const emp = employees.find((e: any) => e.id === partyId);
+      partyName = emp?.fullName || emp?.name || '';
+      partyPhone = emp?.phone || '';
+      partyAddress = emp?.address || '';
+    } else if (partyType === 'courier') {
+      const cou = couriers.find((c: any) => c.id === partyId);
+      partyName = cou?.fullName || cou?.name || '';
+      partyPhone = cou?.phone || '';
+    } else {
+      const custId = o.customerId || o.customer_id || partyId;
+      const cust = customers.find((c: any) => c.id === custId);
+      partyName = cust?.fullName || cust?.name || '';
+      partyPhone = cust?.phone || cust?.mobile || '';
+      partyAddress = cust?.address || '';
+    }
+    const srcId = o.orderSourceId || o.order_source_id;
+    const src = sources.find((s: any) => s.id === srcId);
+    const srcName = src?.name || o.orderSourceType || o.order_source_type || '';
+    return {
+      ...o,
+      // عرض بيانات الطرف والعميل ديناميكياً من الجداول المرتبطة
+      customerName: partyName || o.customerName || '',
+      customerPhone: partyPhone || o.customerPhone || '',
+      customerAddress: partyAddress || o.customerAddress || '',
+      // عرض اسم المصدر ديناميكياً من جدول المصادر
+      orderSourceName: srcName,
+      // أعمدة مباشرة للاستعلام
+      customerId: o.customerId || o.customer_id || '',
+      orderPartyId: o.orderPartyId || o.order_party_id || '',
+      orderPartyType: o.orderPartyType || o.order_party_type || 'customer',
+      isStaffOrder: o.isStaffOrder ?? o.is_staff_order ?? false,
+      employeeId: o.employeeId || o.employee_id || '',
+      courierId: o.courierId || o.courier_id || '',
+      orderPartyAccountId: o.orderPartyAccountId || o.order_party_account_id || '',
+      orderSourceId: o.orderSourceId || o.order_source_id || '',
+      orderSourceType: o.orderSourceType || o.order_source_type || '',
+      deliveryCourierId: o.deliveryCourierId || o.delivery_courier_id || '',
+      shippingCourierId: o.shippingCourierId || o.shipping_courier_id || '',
+    };
+  });
+
+  const filteredOrdersList = enrichedOrders
     .filter(o => {
-      const num = String(o.orderNumber || '').toUpperCase();
+      const num = String(o.orderNumber || o.order_number || '').toUpperCase();
       const customer = String(o.customerName || '').toLowerCase();
       const phone = String(o.customerPhone || '');
-      const track = String(o.trackingNumber || '').toUpperCase();
+      const track = String(o.trackingNumber || o.tracking_number || '').toUpperCase();
       const q = searchText.toLowerCase();
 
       const matchSearch = num.includes(q.toUpperCase()) || customer.includes(q) || phone.includes(searchText) || track.includes(q.toUpperCase());
       const matchStatus = statusFilter === 'all' || String(o.order_status_id || o.orderStatusId) === String(statusFilter) || o.orderStatus === statusFilter;
+
       const matchCourier = courierFilter === 'all' || o.deliveryCourierId === courierFilter || o.shippingCourierId === courierFilter;
       const matchSource = sourceFilter === 'all' || o.orderSourceId === sourceFilter;
 

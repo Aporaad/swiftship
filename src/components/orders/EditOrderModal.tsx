@@ -3,7 +3,7 @@ import {
   X, Edit2, Trash2, Calendar, Package, DollarSign, CreditCard, AlertCircle,
   User, ShoppingCart, Truck, CheckCircle2, ChevronRight, ChevronLeft, Calculator, FileText, ShieldCheck
 } from 'lucide-react';
-import { doc, updateDoc, db } from '../../lib/supabase';
+import { doc, updateDoc, addDoc, collection, db } from '../../lib/supabase';
 import { notificationService } from '../../services/notificationService';
 import { activityLogService } from '../../services/activityLogService';
 import { calculateShipmentCategoryFees } from '../../services/itemCategoryService';
@@ -89,8 +89,6 @@ export default function EditOrderModal({
     isStaffOrder: false,
     employeeId: '',
     courierId: '',
-    customerAccountId: '',
-    customerAccountCode: '',
     orderPartyAccountId: '',
     orderSourceId: '',
     orderSourceName: '',
@@ -136,9 +134,7 @@ export default function EditOrderModal({
         isStaffOrder: Boolean(orderToEdit.isStaffOrder || (orderToEdit.orderPartyType && orderToEdit.orderPartyType !== 'customer')),
         employeeId: orderToEdit.employeeId || '',
         courierId: orderToEdit.courierId || '',
-        customerAccountId: orderToEdit.customerAccountId || '',
-        customerAccountCode: orderToEdit.customerAccountCode || '',
-        orderPartyAccountId: orderToEdit.orderPartyAccountId || orderToEdit.customerAccountId || '',
+        orderPartyAccountId: orderToEdit.orderPartyAccountId || orderToEdit.order_party_account_id || '',
         orderSourceId: orderToEdit.orderSourceId || '',
         orderSourceName: orderToEdit.orderSourceName || '',
         orderSourceType: orderToEdit.orderSourceType || 'App',
@@ -185,14 +181,14 @@ export default function EditOrderModal({
     setFormData((prev: any) => ({
       ...prev,
       customerId: '', customerName: '', customerPhone: '', customerAddress: '',
-      orderPartyId: '', employeeId: '', courierId: '', customerAccountId: '', customerAccountCode: '',
+      orderPartyId: '', employeeId: '', courierId: '', orderPartyAccountId: '',
       isStaffOrder: value, orderPartyType: value ? 'employee' : 'customer',
     }));
   };
   const clearOrderParty = () => {
     setFormData((prev: any) => ({
       ...prev, customerId: '', customerName: '', customerPhone: '', customerAddress: '',
-      orderPartyId: '', employeeId: '', courierId: '', customerAccountId: '', customerAccountCode: '',
+      orderPartyId: '', employeeId: '', courierId: '', orderPartyAccountId: '',
     }));
   };
   const selectOrderParty = async (party: OrderParty) => {
@@ -383,26 +379,25 @@ export default function EditOrderModal({
       const payStatus = remainingYER <= 0 ? 'Paid' : valPaid > 0 ? 'Partial Paid' : 'Unpaid';
 
       const payload = {
-        customerId: formData.customerId,
-        customerName: formData.customerName,
-        customerPhone: formData.customerPhone,
-        customerAddress: formData.customerAddress,
-        orderPartyId: formData.orderPartyId || formData.customerId,
+        // أعمدة مباشرة - تُكتب في الأعمدة الأساسية وتُحذف من data
+        customerId: formData.customerId || '',
+        orderPartyId: formData.orderPartyId || formData.customerId || '',
         orderPartyType: formData.orderPartyType || 'customer',
         isStaffOrder: Boolean(formData.isStaffOrder),
-        employeeId: formData.employeeId || '',
-        courierId: formData.courierId || '',
-        customerAccountId: formData.customerAccountId || '',
-        customerAccountCode: formData.customerAccountCode || '',
-        orderPartyAccountId: formData.orderPartyAccountId || formData.customerAccountId || '',
-        orderSourceId: formData.orderSourceId,
-        orderSourceName: formData.orderSourceName,
-        orderSourceType: formData.orderSourceType,
-        externalOrderNumber: formData.externalOrderNumber,
+        employeeId: formData.employeeId || null,
+        courierId: formData.courierId || null,
+        orderPartyAccountId: formData.orderPartyAccountId || null,
+        orderSourceId: formData.orderSourceId || null,
+        orderSourceType: formData.orderSourceType || null,
         trackingNumber: formData.trackingNumber || orderToEdit.orderNumber,
+        deliveryCourierId: formData.deliveryCourierId || null,
+        shippingCourierId: formData.shippingCourierId || null,
+        createdByName: orderToEdit.createdByName || orderToEdit.created_by_name || 'Admin',
+        updatedAt: new Date().toISOString(),
+        updatedBy: 'Admin',
+        // بيانات مالية وحسابية - تُخزَّن في data
+        externalOrderNumber: formData.externalOrderNumber,
         shippingCompany: formData.shippingCompany,
-        shippingCourierId: formData.shippingCourierId,
-        deliveryCourierId: formData.deliveryCourierId,
         deliveryCourierFee: parseFloat(formData.deliveryCourierFee) || 0,
         deliveryCourierFeeCurrency: formData.deliveryCourierFeeCurrency || settings?.currency || 'YER',
         deliveryCourierFeeOrderCurrency: currencyTotals.deliveryFeeOrderCurrency,
@@ -422,12 +417,80 @@ export default function EditOrderModal({
         amountPaid: valPaid,
         amountRemaining: Math.max(0, remainingYER),
         paymentStatus: payStatus,
-        items,
-        shippingDetails: shippings,
-        updatedAt: Date.now(),
       };
 
+
+      // تحديث بيانات الطلب الأساسية في جدول الطلبات
+      // Update primary order record in orders table
       await updateDoc(doc(db, 'orders', orderToEdit.id), payload);
+
+      const targetOrderId = orderToEdit.id || orderToEdit.orderNumber;
+
+      // حفظ وإدراج منتجات الطلب في جدول المنتجات المخصص
+      // Save order products into dedicated products table
+      if (items && items.length > 0) {
+        for (const item of items) {
+          const prodId = item.id || ('prod_' + Math.random().toString(36).substring(2, 11));
+          const prodPayload = {
+            order_id: targetOrderId,
+            orderId: targetOrderId,
+            product_name: item.productName || item.product_name || item.name || 'منتج',
+            productName: item.productName || item.product_name || item.name || 'منتج',
+            quantity: parseFloat(item.quantity || 1),
+            unit_price: parseFloat(item.productPrice || item.price || item.unitPrice || 0),
+            unitPrice: parseFloat(item.productPrice || item.price || item.unitPrice || 0),
+            total_price: (parseFloat(item.quantity || 1)) * (parseFloat(item.productPrice || item.price || item.unitPrice || 0)),
+            totalPrice: (parseFloat(item.quantity || 1)) * (parseFloat(item.productPrice || item.price || item.unitPrice || 0)),
+            packaging_option_id: item.packagingOptionId || item.packaging_option_id || null,
+            item_category_id: item.itemCategoryId || item.item_category_id || null,
+            item_category_name: item.itemCategoryName || item.item_category_name || '',
+            createdAt: item.createdAt || Date.now()
+          };
+          if (item.id) {
+            await updateDoc(doc(db, 'products', item.id), prodPayload);
+          } else {
+            await addDoc(prodId, collection(db, 'products'), { id: prodId, ...prodPayload });
+          }
+        }
+      }
+
+      // حفظ وإدراج شحنات الطلب في جدول الشحنات المخصص
+      // Save order shipments into dedicated shipments table
+      if (shippings && shippings.length > 0) {
+        for (const ship of shippings) {
+          const shipId = ship.id || ('sh_' + Math.random().toString(36).substring(2, 11));
+          const shipPayload = {
+            order_id: targetOrderId,
+            orderId: targetOrderId,
+            tracking_number: ship.trackingNumber || ship.tracking_number || formData.trackingNumber || orderToEdit.orderNumber,
+            trackingNumber: ship.trackingNumber || ship.tracking_number || formData.trackingNumber || orderToEdit.orderNumber,
+            shipping_company_id: ship.shippingCompany || formData.shippingCompany || 'Aramex',
+            shippingCompanyId: ship.shippingCompany || formData.shippingCompany || 'Aramex',
+            courier_id: formData.deliveryCourierId || formData.shippingCourierId || null,
+            courierId: formData.deliveryCourierId || formData.shippingCourierId || null,
+            shipment_status: ship.shipmentStatus || ship.shipment_status || 'طلب معلق',
+            shipmentStatus: ship.shipmentStatus || ship.shipment_status || 'طلب معلق',
+            shipping_cost: parseFloat(ship.shippingCost || 0),
+            shippingCost: parseFloat(ship.shippingCost || 0),
+            weight: parseFloat(ship.weight || 0),
+            shipping_category_id: ship.shippingCategoryId || ship.shipping_category_id || null,
+            content_category_id: ship.contentCategoryId || ship.content_category_id || null,
+            content_category_name: ship.contentCategoryName || ship.content_category_name || '',
+            carton_count: parseFloat(ship.cartonCount || 0),
+            customs_fee: parseFloat(ship.customsFee || 0),
+            tax_fee: parseFloat(ship.taxFee || 0),
+            other_category_fee: parseFloat(ship.otherCategoryFee || 0),
+            category_fees_total: parseFloat(ship.categoryFeesTotal || 0),
+            category_fee_currency: ship.categoryFeeCurrency || '',
+            createdAt: ship.createdAt || Date.now()
+          };
+          if (ship.id) {
+            await updateDoc(doc(db, 'shipments', ship.id), shipPayload);
+          } else {
+            await addDoc(shipId, collection(db, 'shipments'), { id: shipId, ...shipPayload });
+          }
+        }
+      }
 
       activityLogService.log('edit_order', orderToEdit.orderNumber || orderToEdit.id, {
         updatedFields: Object.keys(payload),

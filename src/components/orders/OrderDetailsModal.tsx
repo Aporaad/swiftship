@@ -106,10 +106,10 @@ export default function OrderDetailsModal({
               </span>
               <div className="space-y-1">
                 <div className="text-slate-400 font-bold">
-                  {isAr ? 'الاسم الائتماني:' : 'Client Name:'} <span className="text-white">{selectedOrder.customerName}</span>
+                  {isAr ? 'الاسم الائتماني:' : 'Client Name:'} <span className="text-white">{selectedOrder.customerName || selectedOrder.customer?.name || selectedOrder.customer?.fullName || '—'}</span>
                 </div>
                 <div className="text-slate-400 font-bold">
-                  {isAr ? 'رقم الهاتف:' : 'Phone Key:'} <span className="text-white font-mono select-all">{selectedOrder.customerPhone}</span>
+                  {isAr ? 'رقم الهاتف:' : 'Phone Key:'} <span className="text-white font-mono select-all">{selectedOrder.customerPhone || selectedOrder.customer?.phone || '—'}</span>
                 </div>
                 {selectedOrder.locationYemen && (
                   <div className="text-slate-400 font-bold">
@@ -130,7 +130,7 @@ export default function OrderDetailsModal({
                 </div>
                 <div className="text-slate-400 font-bold">
                   {isAr ? 'قناة التعبئة والمصدر:' : 'Sales Cargo Source:'}{' '}
-                  <span className="text-white">{selectedOrder.orderSourceName || selectedOrder.orderSourceType}</span>
+                  <span className="text-white">{selectedOrder.orderSourceName || selectedOrder.source?.name || selectedOrder.orderSourceType || 'App'}</span>
                 </div>
                 <div className="text-slate-400 font-bold">
                   {isAr ? 'تاريخ المعاملة:' : 'Invoice Date:'}{' '}

@@ -248,4 +248,23 @@
 - [x] تحديث دالة `recalculate_accounting_hierarchy` في PostgreSQL وتحديث المهاجرة `202609020001_enforce_posted_status_filter_on_balances.sql`.
 - [x] إعادة تشغيل `recalculate_all_account_balances()` بـ Supabase لمزامنة وتحديث أرصدة الـ 89 حساباً بنسبة 100%.
 
+## [2026-09-02 23:48:00] — إعادة هيكلة جداول الطلبات والمنتجات والشحنات وحذف الأعمدة المكررة من حقل data
+- [x] تنظيف قاعدة البيانات وتفريغ حقل `data` في جداول `orders` و `products` و `shipments` من الأعمدة المكررة وإلغاء مصفوفات الأصناف والشحنات المضمنة.
+- [x] تحديث محول الخدمة `supabase-firebase-adapter.ts` وتفعيل `sanitizeDataPayload` و `enrichOrderPayload` لمنع كتابة الأعمدة المكررة وتزويد الأصناف والشحنات المجلوبة صراحة من جداولها.
+- [x] تحديث شاشات ونوافذ الطلبات والمنتجات والشحنات (`Orders.tsx`, `CreateOrderModal.tsx`, `EditOrderModal.tsx`, `ProductsManagementTab.tsx`, `ShipmentFormModal.tsx`) للاعتماد التام على الأعمدة الأساسية والجداول المرتبطة.
+- [x] الفحص الشامل وتأكيد خلو المشروع من أخطاء النوع والتركيب بنسبة 100%.
+
+## [2026-09-02 23:58:00] — استكمال تنقية data وحذف الأعمدة المكررة وتثبيت created_by_name و updated_at و updated_by
+- [x] إضافة الأعمدة الأساسية `created_by_name`, `updated_at`, `updated_by` إلى تعيين `DIRECT_COLUMNS_MAP` بجدول `orders` في `supabase-firebase-adapter.ts`.
+- [x] تنظيف وتجريد حمولة `data` بـ `sanitizeDataPayload` من كافة حقول العميل (`customerName`, `customerPhone`, `customerAddress`, `customerAccountId`, `customerAccountCode`) وتفاصيل المستخدم والمصدر نهائياً.
+- [x] تحديث نماذج وشاشات الطلبات (`Orders.tsx`, `CreateOrderModal.tsx`, `EditOrderModal.tsx`, `OrderDetailsModal.tsx`, `OrderInvoicePrint.ts`) لاستعراض بيانات العميل والمصدر ديناميكياً من جداول `customers` و `sources` بالربط مع المفاتيح الأساسية (`customer_id`, `order_source_id`).
+- [x] إدراج الأعمدة `created_by_name` و `updated_at` و `updated_by` مباشرة عند إنشاء وتحديث الطلب مع الحفاظ على الأمان والكود النظيف.
+
+## [2026-09-03 01:20:00] — تنظيف قاعدة البيانات وتفريغ المفاتيح المكررة وإلغاء customerAccountId نهائياً
+- [x] تنفيذ استعلامات SQL لتنقية حقل `data` في جداول `orders` و `products` و `shipments` في Supabase وحذف كافة المفاتيح المكررة (`customerId`, `orderPartyType`, `orderPartyId`, `orderPartyAccountId`, `customerAccountId`, `employeeId`, `courierId`, `isStaffOrder`, `customerName`, `customerPhone`, `customerAddress`, `orderSourceName`, `createdByName`, `createdByEmail`, `updatedAt`, `updatedBy`).
+- [x] إلغاء حقل `customerAccountId` نهائياً من جميع الأكواد والشاشات والخدمات والاعتماد الحصري والمباشر على `order_party_account_id` / `orderPartyAccountId`.
+- [x] التأكد من خلو مشروع TypeScript من أي أخطاء تركيب أو نوع بنسبة 100% (`npx tsc --noEmit`).
+
+
+
 

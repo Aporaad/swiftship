@@ -39,7 +39,9 @@ export function buildOrderParties(customers: any[] = [], employees: any[] = [], 
 export function filterOrderParties(parties: OrderParty[], queryText = '', staffOnly = false): OrderParty[] {
   const query = normalized(queryText);
   return parties.filter((party) => {
-    if (staffOnly ? party.type === 'customer' : party.type !== 'customer') return false;
+    // staffOnly=true: عرض الموظفين والمناديب فقط | staffOnly=false: عرض الكل
+    // staffOnly=true: show employees & couriers only | staffOnly=false: show all
+    if (staffOnly && party.type === 'customer') return false;
     if (!query) return true;
     return [party.name, party.phone, party.email, party.id, party.financialAccountCode]
       .some((value) => normalized(value).includes(query));
@@ -61,15 +63,17 @@ export function findOrderParty(order: any, customers: any[] = [], employees: any
 
 export function toOrderPartyPayload(party: OrderParty) {
   return {
+    // عميل: يُعيَّن customer_id | موظف/مندوب: customer_id فارغ
+    // customer: set customer_id | employee/courier: customer_id empty
     customerId: party.type === 'customer' ? party.id : '',
-    customerName: party.name,
+    // اسم الطرف للعرض في الواجهة (لا يُخزَّن في DB)
+    // party display name for UI (not stored in DB)
+    customerName: party.name || '',
     customerPhone: party.phone || '',
     customerAddress: party.address || '',
     orderPartyId: party.id,
     orderPartyType: party.type,
     isStaffOrder: party.type !== 'customer',
-    customerAccountId: party.financialAccountId || '',
-    customerAccountCode: party.financialAccountCode || '',
     orderPartyAccountId: party.financialAccountId || '',
     employeeId: party.type === 'employee' ? party.id : '',
     courierId: party.type === 'courier' ? party.id : '',

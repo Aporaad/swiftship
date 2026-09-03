@@ -32,14 +32,14 @@ export function generateOrderInvoicePDF(
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 40px;">
         <div style="background: #f8f8fa; padding: 20px; border-radius: 12px; border-right: 4px solid #d4af37;">
           <h3 style="margin-top: 0; border-bottom: 1px solid #ddd; padding-bottom: 10px; font-size: 16px;">${isAr ? 'بيانات العميل المستلم' : 'Bill To (Recipient)'}</h3>
-          <p style="margin: 8px 0;"><strong>${isAr ? 'الاسم' : 'Name'}:</strong> ${order.customerName || '—'}</p>
-          <p style="margin: 8px 0;"><strong>${isAr ? 'الهاتف' : 'Phone'}:</strong> ${order.customerPhone || '—'}</p>
-          <p style="margin: 8px 0;"><strong>${isAr ? 'العنوان' : 'Address'}:</strong> ${order.customerAddress || '—'}</p>
+          <p style="margin: 8px 0;"><strong>${isAr ? 'الاسم' : 'Name'}:</strong> ${order.customerName || order.customer?.name || order.customer?.fullName || '—'}</p>
+          <p style="margin: 8px 0;"><strong>${isAr ? 'الهاتف' : 'Phone'}:</strong> ${order.customerPhone || order.customer?.phone || '—'}</p>
+          <p style="margin: 8px 0;"><strong>${isAr ? 'العنوان' : 'Address'}:</strong> ${order.customerAddress || order.customer?.address || '—'}</p>
         </div>
         <div style="background: #f8f8fa; padding: 20px; border-radius: 12px; border-right: 4px solid #334155;">
           <h3 style="margin-top: 0; border-bottom: 1px solid #ddd; padding-bottom: 10px; font-size: 16px;">${isAr ? 'تفاصيل الشحن واللوجستيات' : 'Shipping & Logistics'}</h3>
           <p style="margin: 8px 0;"><strong>${isAr ? 'الحالة' : 'Status'}:</strong> ${order.orderStatus || '—'}</p>
-          <p style="margin: 8px 0;"><strong>${isAr ? 'المصدر' : 'Source'}:</strong> ${order.orderSourceName || '—'}</p>
+          <p style="margin: 8px 0;"><strong>${isAr ? 'المصدر' : 'Source'}:</strong> ${order.orderSourceName || order.source?.name || order.orderSourceType || '—'}</p>
           <p style="margin: 8px 0;"><strong>${isAr ? 'رقم التتبع' : 'Tracking'}:</strong> <span style="font-family: monospace;">${order.trackingNumber || '—'}</span></p>
         </div>
       </div>
