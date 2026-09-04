@@ -236,6 +236,8 @@ export default function OrderStatusManagementTab({
       nameAr: '',
       nameEn: '',
       isActive: true,
+      // ترحيل فوري افتراضي للقيود الجديدة — default auto post for new rules
+      autoPost: true,
       amountSource: 'order_total',
       amountSources: ['order_total'],
       amountStrategy: 'sum',
@@ -259,6 +261,8 @@ export default function OrderStatusManagementTab({
       amountStrategy: entry.amountStrategy || 'sum',
       currency: entry.currency || undefined,
       skipWhenZero: entry.skipWhenZero ?? true,
+      // تهيئة autoPost من القاعدة (افتراضي: true) — init autoPost from rule (default: true)
+      autoPost: entry.autoPost !== false,
     });
     setDebitType(entry.debitAccount?.type || 'dynamic');
     setCreditType(entry.creditAccount?.type || 'system');
@@ -282,6 +286,8 @@ export default function OrderStatusManagementTab({
         nameAr: entryFormData.nameAr,
         nameEn: entryFormData.nameEn || entryFormData.nameAr,
         isActive: entryFormData.isActive ?? true,
+        // حفظ خيار ترحيل القيد — persist autoPost preference
+        autoPost: entryFormData.autoPost !== false,
         amountSource: (entryFormData.amountSources || [entryFormData.amountSource || 'order_total'])[0],
         amountSources: entryFormData.amountSources?.length
           ? entryFormData.amountSources
@@ -347,6 +353,7 @@ export default function OrderStatusManagementTab({
   const AMOUNT_SOURCE_OPTIONS = AUTO_ENTRY_AMOUNT_SOURCE_OPTIONS;
 
   const dynamicAccountOptions = [
+    { id: 'payment_account_linked', code: '1110/1120', nameAr: '💳 حساب الدفع المختار بالطلب (صندوق/بنك/متعدد - ديناميكي)', nameEn: 'Selected Payment Account (Cash/Bank/Mixed - Dynamic)' },
     { id: 'customer_linked', code: '1130', nameAr: '👤 حساب العميل المرتبط بالطلب (ديناميكي)', nameEn: 'Customer Account (Dynamic)' },
     { id: 'delivery_courier_linked', code: '2120', nameAr: '🛵 حساب مندوب التوصيل المرتبط بالطلب', nameEn: 'Delivery courier account (Dynamic)' },
     { id: 'shipping_courier_linked', code: '2120', nameAr: '🚚 حساب مندوب/وكيل الشحن المرتبط بالطلب', nameEn: 'Shipping courier account (Dynamic)' },
@@ -965,15 +972,32 @@ export default function OrderStatusManagementTab({
                     value={entryFormData.currency}
                     onChange={(currency) => setEntryFormData(previous => ({ ...previous, currency }))}
                   />
-                  <label className="flex items-center gap-2 mt-5 text-xs text-slate-300 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={entryFormData.skipWhenZero ?? true}
-                      onChange={(e) => setEntryFormData(previous => ({ ...previous, skipWhenZero: e.target.checked }))}
-                      className="rounded border-slate-700 accent-[#d4af37]"
-                    />
-                    {isAr ? 'تجاوز القيد إذا كان مجموع المصادر صفراً' : 'Skip voucher when total is zero'}
-                  </label>
+                  {/* زر تبديل ترحيل القيد — Auto Post Toggle */}
+                  <div className="flex flex-col gap-2 mt-3">
+                    <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={entryFormData.skipWhenZero ?? true}
+                        onChange={(e) => setEntryFormData(previous => ({ ...previous, skipWhenZero: e.target.checked }))}
+                        className="rounded border-slate-700 accent-[#d4af37]"
+                      />
+                      {isAr ? 'تجاوز القيد إذا كان مجموع المصادر صفراً' : 'Skip voucher when total is zero'}
+                    </label>
+                    {/* ترحيل القيد — Auto-post toggle */}
+                    <div className="flex items-center justify-between bg-black/20 border border-slate-850 rounded-xl px-3 py-2">
+                      <div>
+                        <p className="text-[10px] font-black text-white">{isAr ? 'ترحيل القيد' : 'Auto-Post Entry'}</p>
+                        <p className="text-[9px] text-slate-500">{isAr ? (entryFormData.autoPost !== false ? '⚡ مرحَّل فوراً' : '📋 مسودة فقط') : (entryFormData.autoPost !== false ? '⚡ Posted Immediately' : '📋 Draft Only')}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setEntryFormData(previous => ({ ...previous, autoPost: !(previous.autoPost !== false) }))}
+                        className={`relative w-10 h-5 rounded-full transition-all duration-200 border ${entryFormData.autoPost !== false ? 'bg-cyan-500/20 border-cyan-500/50' : 'bg-slate-800 border-slate-700'}`}
+                      >
+                        <span className={`absolute top-0.5 w-4 h-4 rounded-full transition-all duration-200 shadow ${entryFormData.autoPost !== false ? 'right-0.5 bg-cyan-400' : 'left-0.5 bg-slate-500'}`} />
+                      </button>
+                    </div>
+                  </div>
                 </div>
                 {(entryFormData.amountSources || []).includes('custom') && (
                   <label className="block space-y-1">

@@ -1,6 +1,7 @@
 import useExchangeRates from '../hooks/useExchangeRates';
 import { collection, getDocs, setDoc, doc, updateDoc, deleteDoc, db, supabase } from '../lib/supabase';
 import { financialAccountService } from './financialAccountService';
+import { financialEntryService } from './financialEntryService';
 import {
   AUTO_ENTRY_AMOUNT_SOURCE_OPTIONS,
   AutoEntryAmountSource,
@@ -40,6 +41,12 @@ export interface AutoEntryRule {
   descriptionTempAr: string;
   descriptionTempEn: string;
   createdAt?: number;
+  /**
+   * ترحيل القيد فوراً أم حفظه كمسودة غير مرحّلة
+   * Auto post the entry immediately (posted) or save it as a draft (draft)
+   * Default: true (posted immediately)
+   */
+  autoPost?: boolean;
 }
 
 export const DEFAULT_AUTO_ENTRIES: AutoEntryRule[] = [
@@ -71,16 +78,16 @@ export const DEFAULT_AUTO_ENTRIES: AutoEntryRule[] = [
     id: 'order_down_payment',
     statusId: 2,
     statusNameAr: 'معلق',
-    nameAr: 'الدفعة المقدمة للطلب المستلمة نقدًا',
-    nameEn: 'Order down payment received in cash',
+    nameAr: 'الدفعة المقدمة للطلب المستلمة (صندوق / بنك / متعدد)',
+    nameEn: 'Order down payment received (cash/bank/mixed)',
     isActive: true,
+    autoPost: true,   // ترحيل فوري افتراضي
     amountSource: 'amount_paid',
     debitAccount: {
-      id: 'sys_cash_account',
-      code: '',
-      name: 'حساب الصندوق/الخزينة (نظامي)',
-      type: 'system',
-      defaultKey: 'sys_cash_account',
+      id: 'payment_account_linked',
+      code: '1110/1120',
+      name: 'حساب الدفع القابض المختار بالطلب (ديناميكي)',
+      type: 'dynamic',
     },
     creditAccount: {
       id: 'customer_linked',
@@ -249,6 +256,16 @@ export const autoEntryService = {
       rawAmountOverride?: number;
       amountOriginal?: number;
       currencyOriginal?: string;
+      paidCurrency?: string;
+      /** توزيعات الدفعة المقدمة (نقد/بنك) — تُنفَّذ قيداً لكل توزيع على الحساب الذي اختاره المستخدم */
+      downPaymentAllocations?: Array<{
+        method?: 'cash' | 'bank';
+        accountId: string;
+        accountCode?: string;
+        accountName?: string;
+        amount: number;
+        bankReference?: string;
+      }>;
     }
   ): Promise<string[]> {
     const executedRuleIds: string[] = [];
@@ -279,6 +296,181 @@ export const autoEntryService = {
           continue;
         }
 
+        // ============================================================
+        // قيد الدفعة المقدمة — Order Down Payment Entry Logic
+        // ============================================================
+        // إذا كان نوع الدفع متعدد (نقد + بنك): ننشئ قيداً مركباً واحداً بثلاثة أطراف
+        // If payment is mixed (cash + bank): create a single 3-party compound entry
+        // أما إذا كان الدفع بطريقة واحدة: ننشئ قيداً بسيطاً (سطر واحد للمدين)
+        // Otherwise (single payment method): create a regular debit entry per allocation
+
+        // بناء قائمة توزيعات الدفع (نقد + بنك) — build payment allocations (cash + bank)
+        const effectiveAllocations = (context.downPaymentAllocations && context.downPaymentAllocations.length > 0)
+          ? context.downPaymentAllocations
+          : (order?.paymentMethod === 'Mixed' || ((order?.cashAmount || 0) > 0 && (order?.bankAmount || 0) > 0))
+            ? [
+                ...(order?.cashAccountId && (order?.cashAmount || 0) > 0
+                  ? [{ method: 'cash' as const, accountId: order.cashAccountId, amount: Number(order.cashAmount) || 0 }]
+                  : []),
+                ...(order?.bankAccountId && (order?.bankAmount || 0) > 0
+                  ? [{ method: 'bank' as const, accountId: order.bankAccountId, amount: Number(order.bankAmount) || 0, bankReference: order.bankReference || '' }]
+                  : [])
+              ]
+            : undefined;
+
+        if (rule.id === 'order_down_payment' && effectiveAllocations && effectiveAllocations.length > 0) {
+
+          const paidCurrency = String(context.paidCurrency || order?.paidCurrency || order?.currency || 'YER').toUpperCase();
+          const activeAllocations = effectiveAllocations.filter(
+            (alloc) => alloc && alloc.accountId && (Number(alloc.amount) || 0) > 0
+          );
+          if (activeAllocations.length === 0) continue;
+
+          // القيد المركب: يتطلب طرفين مدينين (صندوق + بنك) وطرف دائن (العميل)
+          // Compound entry: requires 2 debit lines (cash + bank) and 1 credit line (customer)
+          if (activeAllocations.length >= 2) {
+            // حساب العميل الدائن — resolve credit account (customer)
+            const orderPartyAccount = context.orderParty || context.customer;
+            const customerAccountId = orderPartyAccount?.financialAccountId
+              || orderPartyAccount?.accountId
+              || orderPartyAccount?.linkedAccountId
+              || orderPartyAccount?.account_id;
+
+            if (!customerAccountId) {
+              console.warn('[autoEntryService] لا يمكن إنشاء القيد المركب: حساب العميل غير مرتبط.', { orderId: order?.id, automationKey });
+              continue;
+            }
+
+            const totalAmount = activeAllocations.reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
+            if (!(totalAmount > 0)) continue;
+
+            // التحقق من عدم تنفيذ القيد مسبقاً (منع التكرار) — duplicate check
+            const previousExec = await (supabase as any)
+              .from('main_entry')
+              .select('id')
+              .eq('automation_key', automationKey)
+              .limit(1);
+            if ((previousExec.data || []).length > 0) {
+              console.info('[autoEntryService] Compound entry duplicate prevented.', { automationKey });
+              executedRuleIds.push(rule.id);
+              continue;
+            }
+
+            // جلب تفاصيل حساب العميل الدائن — fetch customer credit account details
+            const customerAccount = await financialAccountService.getAccountById(customerAccountId);
+            const customerCurNo = customerAccount?.curNo || 0;
+            const customerCurrencyCode = customerAccount?.currency || currency;
+
+            // بناء أسطر القيد المركب — build compound entry lines asynchronously with resolved account details
+            const debitLines = await Promise.all(
+              activeAllocations.map(async (alloc) => {
+                const allocAmount = Number(alloc.amount) || 0;
+                const convertedAllocAmount = currency === paidCurrency
+                  ? allocAmount
+                  : financialAccountService.convertToTargetCurrency(allocAmount, paidCurrency, currency, exchangeRates);
+
+                const allocAcc = await financialAccountService.getAccountById(alloc.accountId);
+                return {
+                  account: {
+                    id: alloc.accountId,
+                    curNo: allocAcc?.curNo || 0,
+                    currency: allocAcc?.currency || currency,
+                    entityType: allocAcc?.entityType,
+                    entityId: allocAcc?.entityId,
+                  },
+                  transType: 'Debit' as const,
+                  amountOriginal: convertedAllocAmount,
+                  paymentMethod: ((alloc as any).method === 'bank' ? 'bank' : 'cash') as 'cash' | 'bank',
+                  bankReference: (alloc as any).bankReference || '',
+                };
+              })
+            );
+
+            const compoundLines = [
+              ...debitLines,
+              {
+                account: {
+                  id: customerAccountId,
+                  curNo: customerCurNo,
+                  currency: customerCurrencyCode,
+                  entityType: customerAccount?.entityType,
+                  entityId: customerAccount?.entityId,
+                },
+                transType: 'Credit' as const,
+                amountOriginal: totalAmount,
+              },
+            ];
+
+            // تحديد حالة ترحيل القيد بناءً على autoPost — determine posting status from autoPost
+            const postingStatus = rule.autoPost === false ? 'draft' : 'posted';
+
+            try {
+              await financialEntryService.createCompoundFromLegacyVoucher({
+                entryNumber: automationKey,
+                createdAt: Date.now(),
+                description: (context.isAr ?? true)
+                  ? (rule.descriptionTempAr || rule.nameAr).replace('{orderNumber}', order?.orderNumber || '')
+                  : (rule.descriptionTempEn || rule.nameEn).replace('{orderNumber}', order?.orderNumber || ''),
+                currency,
+                module: 'payment',
+                refNumber: order?.orderNumber || '',
+                orderId: order?.id,
+                automationKey,
+                autoRuleId: rule.id,
+                isAutomatic: true,
+                createdByUid: context.profileName || 'system',
+                postingStatus,
+                lines: compoundLines,
+              });
+              console.info('[autoEntryService] قيد مركب للدفع المتعدد أُنشئ بنجاح — Compound entry created for mixed payment.', { automationKey, totalAmount, currency, postingStatus });
+              executedRuleIds.push(rule.id);
+            } catch (compoundErr) {
+              console.error('[autoEntryService] فشل إنشاء القيد المركب — Failed to create compound entry:', compoundErr);
+            }
+            continue;
+          }
+
+          // دفعة واحدة: قيد بسيط لكل توزيع — Single allocation: simple debit per allocation
+          for (let allocIndex = 0; allocIndex < activeAllocations.length; allocIndex++) {
+            const allocation = activeAllocations[allocIndex];
+            const allocAmount = Number(allocation.amount) || 0;
+            const convertedAllocAmount = currency === paidCurrency
+              ? allocAmount
+              : financialAccountService.convertToTargetCurrency(allocAmount, paidCurrency, currency, exchangeRates);
+            if (!(convertedAllocAmount > 0)) continue;
+            const executedAllocation = await financialAccountService.triggerAutomaticVoucher(rule.id, order, {
+              courier: context.courier,
+              deliveryCourier: context.deliveryCourier,
+              shippingCourier: context.shippingCourier,
+              customer: context.customer,
+              orderParty: context.orderParty || context.customer,
+              purchaseSource: context.purchaseSource,
+              shippingCompany: context.shippingCompany,
+              sourcing_cost: context.sourcing_cost,
+              isAr: context.isAr ?? true,
+              rawAmount: convertedAllocAmount,
+              amountOriginal: convertedAllocAmount,
+              currencyOriginal: currency,
+              profileName: context.profileName || 'System Status Automation',
+              statusId: resolvedStatusId,
+              automationKey: `${automationKey}:alloc:${allocIndex + 1}`,
+              autoRuleId: rule.id,
+              amountSources,
+              debitAccountOverride: {
+                id: allocation.accountId,
+                code: (allocation as any).accountCode || '',
+                name: (allocation as any).accountName || '',
+              },
+              // مرجع الحوالة البنكية يظهر كرقم مرجعي للسند
+              expenseNumber: allocation.bankReference || order?.orderNumber || '',
+              // تمرير autoPost من قاعدة القيد — pass autoPost from rule to respect posting preference
+              autoPost: rule.autoPost,
+            });
+            if (executedAllocation) executedRuleIds.push(rule.id);
+          }
+          continue;
+        }
+
         const executed = await financialAccountService.triggerAutomaticVoucher(rule.id, order, {
           courier: context.courier,
           deliveryCourier: context.deliveryCourier,
@@ -298,6 +490,7 @@ export const autoEntryService = {
           autoRuleId: rule.id,
           amountSources,
           amountBreakdown: calculated.breakdown,
+          autoPost: rule.autoPost,
         });
 
         if (executed) executedRuleIds.push(rule.id);

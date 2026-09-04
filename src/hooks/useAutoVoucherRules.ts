@@ -11,6 +11,7 @@ export interface AutoVoucherRule {
   debitAccount: any;
   creditAccount: any;
   isActive: boolean;
+  autoPost?: boolean;
   requiredEntities?: string[];
 }
 

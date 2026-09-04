@@ -1647,7 +1647,22 @@ export default function CreateOrderModal(
                             key={type.id}
                             type="button"
                             onClick={() => {
-                              setFormData({ ...formData, paymentMethod: type.id });
+                              const newMethod = type.id;
+                              const updates: any = { paymentMethod: newMethod };
+                              if (newMethod === 'Cash' && !formData.cashAccountId && cashAccountsList[0]) {
+                                updates.cashAccountId = cashAccountsList[0].id;
+                              }
+                              if (newMethod === 'Bank' && !formData.bankAccountId && bankAccountsList[0]) {
+                                updates.bankAccountId = bankAccountsList[0].id;
+                              }
+                              if (newMethod === 'Mixed') {
+                                if (!formData.cashAccountId && cashAccountsList[0]) updates.cashAccountId = cashAccountsList[0].id;
+                                if (!formData.bankAccountId && bankAccountsList[0]) updates.bankAccountId = bankAccountsList[0].id;
+                              }
+                              if (newMethod === 'Deferred') {
+                                updates.amountPaid = 0;
+                              }
+                              setFormData({ ...formData, ...updates });
                             }}
                             className={`flex flex-col items-center justify-center p-2.5 rounded-xl border font-bold text-[10px] transition-all cursor-pointer ${isSelected
                               ? 'bg-[#d4af37]/15 border-[#d4af37] text-[#d4af37] shadow-md ring-1 ring-[#d4af37]/30'

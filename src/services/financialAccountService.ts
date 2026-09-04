@@ -139,6 +139,8 @@ export interface JournalEntry {
   isAutomatic?: boolean;
   amountSources?: string[];
   amountBreakdown?: Array<{ source: string; amount: number; currency: string; convertedAmount: number }>;
+  /** حالة الترحيل: 'posted' فوري، 'draft' مسودة — Posting status: posted=immediate, draft=unposted */
+  postingStatus?: 'posted' | 'draft';
 
   createdByUid: string; // المعرف للمستخدم المدخل للعملية
   createdByName: string; // الاسم للمستخدم المدخل للعملية
@@ -164,6 +166,14 @@ export interface AutomaticVoucherEntities {
   autoRuleId?: string;
   amountSources?: string[];
   amountBreakdown?: any[];
+  /** تجاوز اختياري للحساب المدين (مثل حساب الصندوق/البنك الذي اختاره المستخدم في نموذج إنشاء الطلب) */
+  debitAccountOverride?: { id: string; code?: string; name?: string };
+  /**
+   * ترحيل القيد فوراً أم حفظه كمسودة غير مرحّلة
+   * Auto post the entry immediately (posted) or save as draft (draft).
+   * Defaults to true if not provided.
+   */
+  autoPost?: boolean;
 }
 
 // Account prefix ranges per entity type
@@ -234,6 +244,18 @@ class FinancialAccountService {
         break;
       case 'shipping_company_linked':
         candidate = linkedAccount(entities.shippingCompany);
+        break;
+      case 'payment_account_linked':
+      case 'payment_account_dynamic':
+      case 'selected_payment_account':
+        candidate = linkedAccount((entities as any).paymentAccount)
+          || (entities.debitAccountOverride?.id ? { id: String(entities.debitAccountOverride.id), code: String(entities.debitAccountOverride.code || '') } : null)
+          || (order?.cashAccountId ? { id: String(order.cashAccountId), code: String(order.cashAccountCode || '') } : null)
+          || (order?.bankAccountId ? { id: String(order.bankAccountId), code: String(order.bankAccountCode || '') } : null)
+          || (order?.receivingAccountId ? { id: String(order.receivingAccountId), code: '' } : null)
+          || (order?.paymentDetails?.[0]?.accountId ? { id: String(order.paymentDetails[0].accountId), code: '' } : null)
+          || (order?.cash_account_id ? { id: String(order.cash_account_id), code: '' } : null)
+          || (order?.bank_account_id ? { id: String(order.bank_account_id), code: '' } : null);
         break;
       case 'product_cost_source':
       case 'sourcing_cost':
@@ -604,6 +626,8 @@ class FinancialAccountService {
       isAutomatic: entry.isAutomatic,
       createdByUid: entry.createdByUid,
       paymentMethod: (entry as any).paymentMethod,
+      // تمرير postingStatus من القيد — forward postingStatus from journal entry for autoPost support
+      postingStatus: entry.postingStatus || 'posted',
     }, {
       id: debitAccount.id!, curNo: debitAccount.curNo, currency: debitAccount.currency,
       entityType: debitAccount.entityType, entityId: debitAccount.entityId,
@@ -761,6 +785,8 @@ class FinancialAccountService {
       isAutomatic: transaction.isAutomatic,
       amountSources: transaction.amountSources,
       amountBreakdown: transaction.amountBreakdown,
+      // تمرير postingStatus إذا مُرِّر من القيد التلقائي — forward postingStatus if provided (for autoPost support)
+      postingStatus: (transaction as any).postingStatus || 'posted',
       createdByUid: transaction.createdByUid || "system",
       createdByName: transaction.createdByName || "Audit Engine",
     };
@@ -1662,7 +1688,9 @@ class FinancialAccountService {
       // Use a consistent default currency if not specified, but prefer settings if available
       const systemAccs = await this.ensureSystemAccounts("YER");
 
-      const debitAccount = this.resolveAutomaticVoucherAccount(rule.debitAccount, systemAccs, order, entities);
+      const debitAccount = entities.debitAccountOverride?.id
+        ? { id: String(entities.debitAccountOverride.id), code: String(entities.debitAccountOverride.code || '') }
+        : this.resolveAutomaticVoucherAccount(rule.debitAccount, systemAccs, order, entities);
       const creditAccount = this.resolveAutomaticVoucherAccount(rule.creditAccount, systemAccs, order, entities);
       const debitId = debitAccount.id;
       const debitCode = debitAccount.code;
@@ -1702,6 +1730,10 @@ class FinancialAccountService {
         moduleAssign = "payment";
       }
 
+      // تحديد حالة الترحيل بناءً على خيار autoPost — determine posting status from autoPost (default: posted)
+      // true or undefined = ترحيل فوري | false = مسودة
+      const postingStatus = entities.autoPost === false ? 'draft' : 'posted';
+
       await this.recordTransaction({
         date: Date.now(),
         description,
@@ -1721,8 +1753,10 @@ class FinancialAccountService {
         isAutomatic: true,
         amountSources: entities.amountSources,
         amountBreakdown: entities.amountBreakdown,
-      });
-      console.log('automatic voucher fired successfully', { automationKey, amount, currency: entities.currencyOriginal || "YER", debitAccount: { id: debitId, code: debitCode }, creditAccount: { id: creditId, code: creditCode }, createdByUid: auth.currentUser?.uid || "system", createdByName: entities.profileName || "System Auto", amountSources: entities.amountSources, amountBreakdown: entities.amountBreakdown });
+        // حالة الترحيل ستُستخدم في createFromLegacyVoucher — postingStatus is used inside recordJournalEntry via createFromLegacyVoucher
+        postingStatus,
+      } as any);
+      console.log('automatic voucher fired successfully', { automationKey, amount, currency: entities.currencyOriginal || "YER", debitAccount: { id: debitId, code: debitCode }, creditAccount: { id: creditId, code: creditCode }, createdByUid: auth.currentUser?.uid || "system", createdByName: entities.profileName || "System Auto", amountSources: entities.amountSources, amountBreakdown: entities.amountBreakdown, postingStatus });
       return true;
 
     } catch (err) {

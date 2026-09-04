@@ -1026,10 +1026,10 @@ export async function updateDoc(docRef: DocRef, rawData: any) {
     }
   }
 
-  // استخدم resolvedPayload فقط لحمولة data لمنع إعادة الحقول المكررة من الـ cache القديم
-  // Use only resolvedPayload for data to prevent stale duplicate fields from cache re-entering data column
+  // دمج البيانات السابقة مع التحديث لتجنب مسح أي حقول من كائن data في PostgreSQL عند التحديث الجزئي
+  // Merge existing document fields with update payload to prevent wiping JSONB data column on partial update
   const rawClean = { ...existingData, ...resolvedPayload };
-  const data = sanitizeDataPayload(table, resolvedPayload);
+  const data = sanitizeDataPayload(table, rawClean);
 
   if (!isOfflineMode()) {
     const directCols = extractDirectColumns(table, rawClean);

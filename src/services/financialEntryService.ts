@@ -114,6 +114,21 @@ export interface LegacyVoucherInput {
   isAutomatic?: boolean;
   createdByUid?: string;
   paymentMethod?: FinancialPaymentMethod;
+  /** حالة الترحيل: 'posted' للترحيل الفوري، 'draft' للمسودة — Posting status: posted = immediate, draft = unposted */
+  postingStatus?: FinancialPostingStatus;
+}
+
+/** مدخل بيانات إنشاء قيد مركب (متعدد الأطراف) من واجهة الترحيل التلقائي */
+/** Input for creating a compound entry (multi-line) from the legacy automation interface */
+export interface CompoundLegacyVoucherInput extends Omit<LegacyVoucherInput, 'amount'> {
+  /** أسطر القيد المركب — Compound entry lines (Debit + Credit sides) */
+  lines: Array<{
+    account: LegacyVoucherAccountTarget;
+    transType: FinancialTransactionType;
+    amountOriginal: number;
+    paymentMethod?: Exclude<FinancialPaymentMethod, 'mixed'>;
+    bankReference?: string;
+  }>;
 }
 
 const hasValidPositiveNumber = (value: unknown): value is number =>
@@ -292,17 +307,21 @@ class FinancialEntryService {
     effectiveAt: string,
     suppliedAmount?: number,
   ): Promise<FinancialEntryLineInput> {
-    if (!target.id || !Number.isInteger(target.curNo)) {
-      throw new Error('الحساب المالي المختار لا يملك مرجع عملة صالحًا.');
+    if (!target.id) {
+      throw new Error('الحساب المالي المختار لا يملك معرفاً صالحاً.');
     }
     const accountCurrency = await this.resolveCurrency(target.currency);
-    if (accountCurrency.curId !== target.curNo) {
+    const targetCurNo = (target.curNo && Number.isInteger(target.curNo) && target.curNo > 0)
+      ? target.curNo
+      : accountCurrency.curId;
+
+    if (accountCurrency.curId !== targetCurNo) {
       throw new Error('رمز عملة الحساب لا يطابق مرجع عملته؛ لن يُنشأ القيد.');
     }
     if (accountCurrency.curId === originalCurrency.curId) {
       return {
         accountId: target.id,
-        accountCurNo: target.curNo,
+        accountCurNo: targetCurNo,
         transType,
         amount: amountOriginal,
         amountOriginal,
@@ -324,7 +343,7 @@ class FinancialEntryService {
 
     return {
       accountId: target.id,
-      accountCurNo: target.curNo,
+      accountCurNo: targetCurNo,
       accountCurrencyPrice: price.reference,
       transType,
       amount,
@@ -349,11 +368,13 @@ class FinancialEntryService {
       this.buildLegacyVoucherLine(creditAccount, 'Credit', voucher.amount, originalCurrency, effectiveAt, voucher.amountCreditCurrency),
     ]);
     const route = legacyModuleRoute(voucher.module);
+    // احترام postingStatus الممرر — respect passed postingStatus (posted by default for backward compat)
+    const postingStatus: FinancialPostingStatus = voucher.postingStatus || 'posted';
     return this.create({
       ...route,
       entryNumber: voucher.entryNumber,
       entryCategory: 'General',
-      postingStatus: 'posted',
+      postingStatus,
       description: voucher.description,
       notes: voucher.notes,
       attachments: voucher.attachments,
@@ -366,6 +387,76 @@ class FinancialEntryService {
       effectiveAt,
       createdByUid: voucher.createdByUid,
       lines: [debitLine, creditLine],
+    });
+  }
+
+  /**
+   * إنشاء قيد مركب واحد من متعدد الأطراف (مثل الدفع المتعدد: صندوق + بنك + عميل)
+   * Creates a single compound (multi-line) entry for multi-party transactions (e.g. mixed payment: cash + bank + customer)
+   *
+   * @param voucher - بيانات القيد الأساسية مع الأسطر المحددة — Base voucher data with explicit lines
+   * @returns FinancialEntryWriteResult — نتيجة إنشاء القيد
+   */
+  async createCompoundFromLegacyVoucher(
+    voucher: CompoundLegacyVoucherInput,
+  ): Promise<FinancialEntryWriteResult> {
+    if (!Array.isArray(voucher.lines) || voucher.lines.length < 3) {
+      throw new Error('القيد المركب يتطلب ثلاثة أسطر على الأقل (طرف مدين + طرف مدين + طرف دائن على الأقل).');
+    }
+
+    const effectiveAt = new Date(voucher.createdAt || Date.now()).toISOString();
+    const originalCurrency = await this.resolveCurrency(voucher.currency);
+    const route = legacyModuleRoute(voucher.module);
+    const postingStatus: FinancialPostingStatus = voucher.postingStatus || 'posted';
+
+    // بناء أسطر القيد المركب — Build compound entry lines
+    const builtLines: FinancialEntryLineInput[] = await Promise.all(
+      voucher.lines.map(async (lineInput) => {
+        const line = await this.buildLegacyVoucherLine(
+          lineInput.account,
+          lineInput.transType,
+          lineInput.amountOriginal,
+          originalCurrency,
+          effectiveAt,
+        );
+        // إضافة طريقة الدفع لكل سطر إن وُجدت — attach per-line payment method if provided
+        return {
+          ...line,
+          paymentMethod: lineInput.paymentMethod,
+        };
+      })
+    );
+
+    // بناء تفاصيل الدفع للأسطر ذات طريقة دفع محددة — build paymentDetails from lines that carry a payment method
+    const paymentDetails: FinancialPaymentDetailInput[] = voucher.lines
+      .filter((l) => l.paymentMethod === 'cash' || l.paymentMethod === 'bank')
+      .map((l) => ({
+        paymentMethod: l.paymentMethod as Exclude<FinancialPaymentMethod, 'mixed'>,
+        accountId: l.account.id,
+        amountOriginal: l.amountOriginal,
+        bankReference: l.bankReference || '',
+      }));
+
+    return this.create({
+      ...route,
+      entryNumber: voucher.entryNumber,
+      // القيد المركب دائمًا من النوع Compound — compound entries are always of category Compound
+      entryCategory: 'Compound',
+      postingStatus,
+      description: voucher.description,
+      notes: voucher.notes,
+      attachments: voucher.attachments,
+      // طريقة الدفع المركبة — mixed payment method at header level
+      paymentMethod: 'mixed',
+      paymentDetails: paymentDetails.length > 0 ? paymentDetails : undefined,
+      orderId: voucher.orderId,
+      shipmentId: voucher.shipmentId,
+      automationKey: voucher.automationKey,
+      autoRuleId: voucher.autoRuleId,
+      isAutomatic: voucher.isAutomatic,
+      effectiveAt,
+      createdByUid: voucher.createdByUid,
+      lines: builtLines,
     });
   }
 
