@@ -18,6 +18,7 @@ export const AUTO_ENTRY_AMOUNT_SOURCE_OPTIONS = [
   { id: 'company_profit_by_rate', labelAr: 'ربح الشركة المحسوب بالمعدل', labelEn: 'Company profit calculated by rate' },
   { id: 'shein_red_price', labelAr: 'قيمة سعر شي إن الأحمر', labelEn: 'SHEIN red price' },
   { id: 'profit_saudi', labelAr: 'ربح السوق السعودي', labelEn: 'Saudi-market profit' },
+  { id: 'product_insurance_fee', labelAr: 'رسوم تأمين المنتجات', labelEn: 'Products insurance fee' },
   { id: 'custom', labelAr: 'مبلغ ثابت مخصص', labelEn: 'Custom fixed amount' },
 ] as const;
 
@@ -115,6 +116,10 @@ export function calculateAutoEntryAmount(
     },
     shein_red_price: { amount: asAmount(order.sheinRedPrice), currency: defaultCurrency },
     profit_saudi: { amount: asAmount(order.profitSaudiSAR), currency: 'SAR' },
+    product_insurance_fee: {
+      amount: asAmount(order.productInsuranceFee) || asAmount(order.product_insurance_fee),
+      currency: defaultCurrency,
+    },
     custom: { amount: asAmount(rule.customAmount), currency: targetCurrency },
   };
 

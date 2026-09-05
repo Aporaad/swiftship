@@ -814,6 +814,9 @@ export default function Orders() { // دالة عرض الطلبات
     // حساب الحجم المكعب الكلي = ضرب الكمية  مع الحجم المكعب 
     const totalCBM = items.reduce((sum, i) => sum + (parseFloat(i.quantity || 0) * parseFloat(i.cbm || 0)), 0);
 
+    // حساب إجمالي رسوم تأمين المنتجات
+    const itemsInsuranceSum = items.reduce((sum: number, i: any) => sum + (i.isInsured ? (parseFloat(i.insuranceFee) || 0) : 0), 0);
+
     //Apply Bank Commission to products cost حساب العمولة البنكية
     const bankCommValue = bankCommissionEnabled
       ? (bankCommissionType === 'percentage'
@@ -846,9 +849,8 @@ export default function Orders() { // دالة عرض الطلبات
       const generalPackagingFee = parseFloat(formData.packagingFee as any) || 0;// رسوم التغليف الثابته
       priceSAR = redPrice;//سعر المنتجات بالريال السعودي 
       shippingCostSAR = 0;// تكلفة الشحن 
-      // Customer pays SHEIN Red Price + packaging fee (coupon is not deducted from what customer pays)
-      // سعر البيع للعميل = سعر المنتج في شي ان الاحمر + رسوم التغليف  (بدون استخدام كوبون الخصم في شي ان)
-      totalOrderSAR = redPrice + generalPackagingFee;// الاجمالي الكلي بالريال السعودي 
+      // Customer pays SHEIN Red Price + packaging fee + insurance fee
+      totalOrderSAR = redPrice + generalPackagingFee + itemsInsuranceSum;// الاجمالي الكلي بالريال السعودي 
 
       // ربح الشركه قبل احتساب الشحن وعموله المناديب  = سعر المنتج في شي ان الاحمر  -  (تكلفه المنتج + العمولة البنكية + رسوم التغليف ) 
       const rawProfitSAR = redPrice - (productsSum + bankCommValue + generalPackagingFee);
@@ -872,8 +874,8 @@ export default function Orders() { // دالة عرض الطلبات
       shippingCostSAR = totalShippingsCost; // تكلفه الشحن النهائيه بالسعودي  = مجموع تكاليف الشحن + رسوم التغليف 
 
       const generalPackagingFee = parseFloat(formData.packagingFee as any) || 0; // رسوم التغليف الثابته
-      //  الاجمالي الكلي بالريال السعودي = سعر المنتجات + ربح الشركه + تكلفه الشحن + رسوم التغليف  العامه
-      totalOrderSAR = productsSum + rawProfitSAR + shippingCostSAR + generalPackagingFee;
+      //  الاجمالي الكلي بالريال السعودي = سعر المنتجات + ربح الشركه + تكلفه الشحن + رسوم التغليف العامه + رسوم التامين
+      totalOrderSAR = productsSum + rawProfitSAR + shippingCostSAR + generalPackagingFee + itemsInsuranceSum;
 
       const saudiCourier = couriers.find(c => c.id === formData.shippingCourierId);//جلب معرف مندوب الشحن السعودي 
       const saudiRate = (saudiCourier && saudiCourier.commissionRate !== undefined) ? parseFloat(saudiCourier.commissionRate) : 0; // جلب نسبه عموله مندوب الشحن السعودي 
@@ -893,17 +895,12 @@ export default function Orders() { // دالة عرض الطلبات
       shippingCostSAR = (addShippingEnabled || shippings.length > 0) ? totalShippingsCost : 0;
       //جلب رسوم التغليف العامه الخاصه بالشركه  
       const generalPackagingFee = parseFloat(formData.packagingFee as any) || 0;
-      // Customer pays productsSum + raw profit BEFORE bank deduction (Wait, if customer pays original raw profit, then total is productsSum + originalRawProfit... But we just deducted it. Let's recalculate what the customer pays)
-      // سعر البيع للعميل = سعر المنتجات + ربح الشركه الافتراضي قبل خصم العموله البنكيه  + تكلفه الشحن + رسوم التغليف العامه  (هنا , اذا تم الخصم من الربح يكون سعر البيع للعميل هو سعر المنتجات + ربح الشركه  بدون العموله البنكيه  + تكلفه الشحن + رسوم التغليف العامه ) 
-
-      // Actually, if Bank Commission is DEDUCTED from profit, it means the customer pays the original price.
-      // في الواقع، إذا تم خصم عمولة البنك من الربح، فهذا يعني أن العميل يدفع السعر الأصلي.
 
       // ربح الشركه الاصلي = اجمالي تكلفه المنتجات * نسبه الربح الافتراضيه للطلبات من نوع تطبيقات 
       const originalRawProfitSAR = productsSum * ((parseFloat(formData.companyProfitRate as any) || 12) / 100);
 
-      // سعر البيع للعميل = سعر المنتجات + ربح الشركه الافتراضي قبل خصم العموله البنكيه  + تكلفه الشحن + رسوم التغليف العامه + كوبون الخصم 
-      totalOrderSAR = productsSum + originalRawProfitSAR + shippingCostSAR + generalPackagingFee + couponValue; // كوبون الخصم يضاف على سعر البيع للعميل
+      // سعر البيع للعميل = سعر المنتجات + ربح الشركه الافتراضي قبل خصم العموله البنكيه  + تكلفه الشحن + رسوم التغليف العامه + كوبون الخصم + رسوم تأمين المنتجات 
+      totalOrderSAR = productsSum + originalRawProfitSAR + shippingCostSAR + generalPackagingFee + couponValue + itemsInsuranceSum;
 
       const saudiCourier = couriers.find(c => c.id === formData.shippingCourierId);
       const saudiRate = (saudiCourier && saudiCourier.commissionRate !== undefined) ? parseFloat(saudiCourier.commissionRate) : 30;
@@ -936,6 +933,7 @@ export default function Orders() { // دالة عرض الطلبات
 
     return {
       productsSum,
+      itemsInsuranceSum,
       totalProductsCostWithAdjustments,
       totalWeight,
       totalCBM,
@@ -1079,6 +1077,8 @@ export default function Orders() { // دالة عرض الطلبات
         deliveryCourierFee: parseFloat(formData.deliveryCourierFee as any) || 0,
         deliveryCourierFeeCurrency: currentCalcs.deliveryCourierFeeCurrency,
         deliveryCourierFeeOrderCurrency: currentCalcs.deliveryCourierFeeOrderCurrency,
+        productInsuranceFee: currentCalcs.itemsInsuranceSum,
+        product_insurance_fee: currentCalcs.itemsInsuranceSum,
         createdAt: Date.now(),
       };
       //حفظ الطلب في جدول الطلب
@@ -1107,6 +1107,10 @@ export default function Orders() { // دالة عرض الطلبات
             itemCategoryId: item.itemCategoryId || item.item_category_id || null,
             item_category_name: item.itemCategoryName || item.item_category_name || '',
             itemCategoryName: item.itemCategoryName || item.item_category_name || '',
+            is_insured: Boolean(item.isInsured),
+            isInsured: Boolean(item.isInsured),
+            insurance_fee: item.isInsured ? (parseFloat(item.insuranceFee) || 0) : 0,
+            insuranceFee: item.isInsured ? (parseFloat(item.insuranceFee) || 0) : 0,
             // حقول إضافية تُخزَّن في data
             weight: parseFloat(item.weight || 0),
             height: parseFloat(item.height || 0),

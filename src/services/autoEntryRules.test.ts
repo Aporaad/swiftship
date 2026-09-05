@@ -70,6 +70,7 @@ describe('autoEntryRules', () => {
       profitPerKgRate: 25,
       companyProfitRate: 20,
       sheinRedPrice: 12,
+      productInsuranceFee: 35,
     };
     const expected: Record<string, number> = {
       order_total: 1_000,
@@ -91,6 +92,7 @@ describe('autoEntryRules', () => {
       company_profit_by_rate: 200,
       shein_red_price: 12,
       profit_saudi: 30,
+      product_insurance_fee: 35,
       custom: 7,
     };
 

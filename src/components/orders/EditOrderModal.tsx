@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   X, Edit2, Trash2, Calendar, Package, DollarSign, CreditCard, AlertCircle,
-  User, ShoppingCart, Truck, CheckCircle2, ChevronRight, ChevronLeft, Calculator, FileText, ShieldCheck, Wallet, Building, ArrowRightLeft, Coins, Hash
+  User, ShoppingCart, Truck, CheckCircle2, ChevronRight, ChevronLeft, Calculator, FileText, ShieldCheck, Wallet, Building, ArrowRightLeft, Coins, Hash, Boxes
 } from 'lucide-react';
 import { doc, updateDoc, addDoc, collection, db } from '../../lib/supabase';
 import { notificationService } from '../../services/notificationService';
@@ -14,6 +14,7 @@ import { amountInWords } from '../../lib/numberToWords';
 import { validateOrderPaymentInput } from '../../services/orderPaymentDataService';
 import FinancialCalculatorModal from '../finance/FinancialCalculatorModal';
 import OrderPartyPicker from './OrderPartyPicker';
+import ProductPickerModal, { SystemProductRecord } from './ProductPickerModal';
 
 interface EditOrderModalProps {
   isOpen: boolean;
@@ -83,6 +84,7 @@ export default function EditOrderModal({
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [stepErrors, setStepErrors] = useState<string | null>(null);
   const [isCalcOpen, setIsCalcOpen] = useState(false);
+  const [isProductPickerOpen, setIsProductPickerOpen] = useState(false);
 
   // Filter available cash box and bank accounts from financialAccounts
   const cashAccountsList = (financialAccounts || []).filter(
@@ -190,8 +192,12 @@ export default function EditOrderModal({
 
       setItems(
         orderToEdit.items && orderToEdit.items.length > 0
-          ? JSON.parse(JSON.stringify(orderToEdit.items))
-          : [{ productName: '', productUrl: '', quantity: 1, productPrice: 0, weight: 0, cbm: 0 }]
+          ? JSON.parse(JSON.stringify(orderToEdit.items)).map((i: any) => ({
+              ...i,
+              isInsured: Boolean(i.isInsured || i.is_insured),
+              insuranceFee: i.insuranceFee || i.insurance_fee || 0,
+            }))
+          : [{ productName: '', productUrl: '', quantity: 1, productPrice: 0, weight: 0, cbm: 0, isInsured: false, insuranceFee: 0 }]
       );
 
       setShippings(
@@ -231,13 +237,68 @@ export default function EditOrderModal({
 
   // Item handlers
   const addItemRow = () => {
-    setItems([...items, { productName: '', productUrl: '', quantity: 1, productPrice: 0, weight: 0, cbm: 0 }]);
+    const defaultInsuranceFee = settings?.defaultProductInsuranceFee || 0;
+    setItems([
+      ...items,
+      {
+        productName: '',
+        productUrl: '',
+        quantity: 1,
+        productPrice: 0,
+        weight: 0,
+        cbm: 0,
+        isInsured: false,
+        insuranceFee: defaultInsuranceFee,
+      },
+    ]);
+  };
+
+  const handleSelectProductFromPicker = (selectedProd: SystemProductRecord) => {
+    const defaultInsuranceFee = settings?.defaultProductInsuranceFee || 0;
+    const defaultInsuranceType = settings?.defaultProductInsuranceType || 'fixed';
+    let rowInsuranceFee = 0;
+    if (defaultInsuranceType === 'percentage') {
+      rowInsuranceFee = (selectedProd.price * 1) * (defaultInsuranceFee / 100);
+    } else {
+      rowInsuranceFee = defaultInsuranceFee * 1;
+    }
+
+    setItems((prev) => [
+      ...prev,
+      {
+        productName: selectedProd.name,
+        productUrl: selectedProd.image_url || '',
+        quantity: 1,
+        productPrice: selectedProd.price || 0,
+        weight: 0,
+        cbm: 0,
+        isInsured: false,
+        insuranceFee: rowInsuranceFee,
+      },
+    ]);
   };
 
   const updateItemRow = (idx: number, field: string, val: any) => {
     setItems((prev) => {
       const updated = [...prev];
-      updated[idx] = { ...updated[idx], [field]: val };
+      const nextItem = { ...updated[idx], [field]: val };
+
+      const price = parseFloat(nextItem.productPrice || 0);
+      const qty = parseFloat(nextItem.quantity || 1);
+      const defaultInsuranceFee = settings?.defaultProductInsuranceFee || 0;
+      const defaultInsuranceType = settings?.defaultProductInsuranceType || 'fixed';
+
+      if (nextItem.isInsured) {
+        if (defaultInsuranceType === 'percentage') {
+          nextItem.insuranceFee = (price * qty) * (defaultInsuranceFee / 100);
+        } else {
+          nextItem.insuranceFee = defaultInsuranceFee * qty;
+        }
+      } else {
+        nextItem.insuranceFee = 0;
+      }
+
+      updated[idx] = nextItem;
       return updated;
     });
   };
@@ -314,6 +375,10 @@ export default function EditOrderModal({
     (sum, i) => sum + ((parseFloat(i.packagingOptionPrice as any) || 0) * (parseFloat(i.quantity as any) || 1)),
     0
   );
+  const itemsInsuranceSum = items.reduce(
+    (sum, i) => sum + (i.isInsured ? (parseFloat(i.insuranceFee as any) || 0) : 0),
+    0
+  );
   const shippingsCategorySum = shippings.reduce(
     (sum, s) => sum + (parseFloat(s.shippingCategoryPrice as any) || 0),
     0
@@ -330,7 +395,7 @@ export default function EditOrderModal({
     return rates;
   }, {});
   const currencyTotals = calculateOrderPaymentTotals({
-    orderSubtotal: productsSum + itemsPackagingSum + shippingsCostSum + parseFloat(formData.packagingFee || 0),
+    orderSubtotal: productsSum + itemsPackagingSum + itemsInsuranceSum + shippingsCostSum + parseFloat(formData.packagingFee || 0),
     deliveryFeeOriginal: parseFloat(formData.deliveryCourierFee) || 0,
     deliveryFeeCurrency: formData.deliveryCourierFeeCurrency || settings?.currency || 'YER',
     orderCurrency,
@@ -447,6 +512,8 @@ export default function EditOrderModal({
         bankCommissionRate: formData.bankCommissionRate,
         companyProfitRate: formData.companyProfitRate,
         packagingFee: parseFloat(formData.packagingFee) || 0,
+        productInsuranceFee: itemsInsuranceSum,
+        product_insurance_fee: itemsInsuranceSum,
         sheinRedPrice: parseFloat(formData.sheinRedPrice) || 0,
         productsSum,
         totalCostSAR: totalOrderSAR,
@@ -487,6 +554,10 @@ export default function EditOrderModal({
             packaging_option_id: item.packagingOptionId || item.packaging_option_id || null,
             item_category_id: item.itemCategoryId || item.item_category_id || null,
             item_category_name: item.itemCategoryName || item.item_category_name || '',
+            is_insured: Boolean(item.isInsured),
+            isInsured: Boolean(item.isInsured),
+            insurance_fee: item.isInsured ? (parseFloat(item.insuranceFee) || 0) : 0,
+            insuranceFee: item.isInsured ? (parseFloat(item.insuranceFee) || 0) : 0,
             createdAt: item.createdAt || Date.now()
           };
           if (item.id) {
@@ -765,13 +836,23 @@ export default function EditOrderModal({
             <div className="bg-slate-950/40 p-5 rounded-2xl border border-slate-800 space-y-4 animate-fade-in">
               <div className="flex justify-between items-center border-b border-slate-800 pb-2">
                 <span className="text-blue-400 uppercase text-[10px] font-black">{isAr ? 'الأصناف والمنتجات' : 'Products & Items'}</span>
-                <button
-                  type="button"
-                  onClick={addItemRow}
-                  className="bg-cyan-600/10 hover:bg-cyan-600/20 text-cyan-400 border border-cyan-500/20 px-3 py-1.5 rounded-xl text-[10px] font-black cursor-pointer"
-                >
-                  ➕ {isAr ? 'إضافة منتج' : 'Add Item'}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsProductPickerOpen(true)}
+                    className="bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 px-3 py-1.5 rounded-xl text-[10px] font-black flex items-center gap-1.5 cursor-pointer transition-all"
+                  >
+                    <Boxes className="w-3.5 h-3.5 text-indigo-400" />
+                    {isAr ? 'اختيار منتج من القائمة' : 'Select Product from Catalog'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={addItemRow}
+                    className="bg-cyan-600/10 hover:bg-cyan-600/20 text-cyan-400 border border-cyan-500/20 px-3 py-1.5 rounded-xl text-[10px] font-black cursor-pointer"
+                  >
+                    ➕ {isAr ? 'إضافة منتج' : 'Add Item'}
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-2.5">
@@ -828,7 +909,7 @@ export default function EditOrderModal({
                       </button>
                     </div>
 
-                    {/* Packaging Type Sub-Row */}
+                    {/* Packaging Type Sub-Row & Insurance */}
                     <div className="col-span-12 flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-850 text-[10px] text-start">
                       <div className="flex items-center gap-2">
                         <span className="font-black text-cyan-400">{isAr ? 'فئة الصنف:' : 'Item category:'}</span>
@@ -869,6 +950,23 @@ export default function EditOrderModal({
                             </option>
                           ))}
                         </select>
+                      </div>
+                      <div className="flex items-center gap-2 border-r border-slate-800 pr-3">
+                        <label className="flex items-center gap-1.5 cursor-pointer text-slate-300 font-bold">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(item.isInsured)}
+                            onChange={(e) => updateItemRow(idx, 'isInsured', e.target.checked)}
+                            className="w-3.5 h-3.5 rounded border-slate-700 bg-slate-950 text-indigo-500 focus:ring-indigo-400 cursor-pointer"
+                          />
+                          <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>{isAr ? 'تأمين المنتج' : 'Insure Product'}</span>
+                        </label>
+                        {item.isInsured && (
+                          <span className="text-indigo-300 font-mono font-bold text-[10px] bg-indigo-950/60 border border-indigo-800/40 px-2 py-0.5 rounded-lg">
+                            +{(parseFloat(item.insuranceFee) || 0).toLocaleString()} {orderCurrency}
+                          </span>
+                        )}
                       </div>
                       {item.packagingOptionPrice > 0 && (
                         <span className="text-emerald-400 font-mono font-bold">
@@ -1489,6 +1587,14 @@ export default function EditOrderModal({
         isOpen={isCalcOpen}
         onClose={() => setIsCalcOpen(false)}
         currencies={activeCurrencies}
+      />
+
+      {/* Product Catalog Picker Modal */}
+      <ProductPickerModal
+        isOpen={isProductPickerOpen}
+        onClose={() => setIsProductPickerOpen(false)}
+        onSelectProduct={handleSelectProductFromPicker}
+        isAr={isAr}
       />
     </div>
   );

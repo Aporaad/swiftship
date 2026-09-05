@@ -57,6 +57,8 @@ export interface Settings {
   defaultDeliveryFee?: number;
   defaultCourierCommissionRate?: number;
   defaultOrderCurrency?: string;          // العملة الافتراضية المعتمدة لأسعار الطلبات (المنتجات، الشحن، التغليف، الأرباح)
+  defaultProductInsuranceFee?: number;   // رسوم تأمين المنتجات الافتراضية
+  defaultProductInsuranceType?: 'fixed' | 'percentage'; // نوع رسوم تأمين المنتجات الافتراضية (سعر ثابت / نسبة مئوية)
 
   // Default Shipping Durations
   defaultSheinDuration?: number;
@@ -141,6 +143,8 @@ const defaultSettings: Settings = {
   defaultDeliveryFee: 4000,
   defaultCourierCommissionRate: 30,
   defaultOrderCurrency: 'SAR',
+  defaultProductInsuranceFee: 0,
+  defaultProductInsuranceType: 'fixed',
   defaultSheinDuration: 12,
   defaultAppDuration: 10,
   defaultFactoryDuration: 20,

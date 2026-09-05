@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   X, Search, UserPlus, CreditCard, DollarSign, AlertCircle,
   Package, Trash2, Calendar, Calculator, ChevronRight, ChevronLeft,
-  User, ShoppingCart, Truck, CheckCircle2, ShieldCheck, FileText, Wallet, Building, ArrowRightLeft
+  User, ShoppingCart, Truck, CheckCircle2, ShieldCheck, FileText, Wallet, Building, ArrowRightLeft, Boxes
 } from 'lucide-react';
 import {
   numberToWordsAr,
@@ -15,6 +15,7 @@ import {
 import { calculateShipmentCategoryFees } from '../../services/itemCategoryService';
 import OrderPartyPicker from './OrderPartyPicker';
 import FinancialCalculatorModal from '../finance/FinancialCalculatorModal';
+import ProductPickerModal, { SystemProductRecord } from './ProductPickerModal';
 
 interface CreateOrderModalProps {
   isOpen: boolean;
@@ -209,7 +210,54 @@ export default function CreateOrderModal(
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [stepErrors, setStepErrors] = useState<string | null>(null);
   const [isCalcOpen, setIsCalcOpen] = useState(false);
+  const [isProductPickerOpen, setIsProductPickerOpen] = useState(false);
   const orderCurrency = settings.defaultOrderCurrency || settings.currency || 'SAR'; // العملة الافتراضية المعينة لأسعار الطلبات
+
+  // اختيار وتعيين منتج سابق بكامل تفاصيله من قائمة الكتالوج
+  // Handle selecting a product from catalog picker modal
+  const handleSelectProductFromPicker = (selectedProduct: SystemProductRecord) => {
+    const qty = 1;
+    const price = Number(selectedProduct.productPrice ?? selectedProduct.unitPrice ?? 0);
+    const isInsured = selectedProduct.isInsured ?? false;
+    const feeRate = settings.defaultProductInsuranceFee || 0;
+    const isPercent = settings.defaultProductInsuranceType === 'percentage';
+    const computedFee = isInsured
+      ? (isPercent ? (price * qty * (feeRate / 100)) : (feeRate * qty))
+      : 0;
+
+    const newItem = {
+      productName: selectedProduct.productName || selectedProduct.name || '',
+      sku: selectedProduct.sku || '',
+      description: selectedProduct.description || selectedProduct.notes || '',
+      quantity: qty,
+      productPrice: price,
+      weight: Number(selectedProduct.weight || 0),
+      cbm: Number(selectedProduct.cbm || 0),
+      length: Number(selectedProduct.length || 0),
+      width: Number(selectedProduct.width || 0),
+      height: Number(selectedProduct.height || 0),
+      productUrl: selectedProduct.productUrl || '',
+      trackingNumber: selectedProduct.trackingNumber || '',
+      packagingOptionId: selectedProduct.packagingOptionId || '',
+      packagingOptionName: selectedProduct.packagingOptionName || '',
+      packagingOptionPrice: Number(selectedProduct.packagingOptionPrice || 0),
+      itemCategoryId: selectedProduct.itemCategoryId || '',
+      itemCategoryName: selectedProduct.itemCategoryName || '',
+      isInsured: isInsured,
+      insuranceFee: computedFee,
+    };
+
+    let targetIndex = 0;
+    if (items.length === 1 && !items[0].productName) {
+      targetIndex = 0;
+    } else {
+      targetIndex = items.length;
+      addItemRow();
+    }
+    Object.keys(newItem).forEach((key) => {
+      updateItemRow(targetIndex, key, (newItem as any)[key]);
+    });
+  };
 
   // Filter available cash box and bank accounts from financialAccounts
   const cashAccountsList = (financialAccounts || []).filter(
@@ -794,13 +842,23 @@ export default function CreateOrderModal(
                       {isAr ? 'أدخل أصناف المنتج وأسعارها والكميات بالتفصيل' : 'Define detailed products lists for pricing & weight'}
                     </span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={addItemRow}
-                    className="bg-cyan-600/10 hover:bg-cyan-650/20 text-cyan-400 border border-cyan-500/20 px-3.5 py-2 rounded-xl text-[10px] font-black transition-all cursor-pointer flex items-center gap-1"
-                  >
-                    ➕ {isAr ? 'إدراج بند منتج جديد' : 'Add Product Item'}
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsProductPickerOpen(true)}
+                      className="bg-[#d4af37]/10 hover:bg-[#d4af37]/20 text-[#d4af37] border border-[#d4af37]/30 px-3.5 py-2 rounded-xl text-[10px] font-black transition-all cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Boxes className="w-3.5 h-3.5" />
+                      {isAr ? 'اختيار منتج من القائمة' : 'Select Product from Catalog'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={addItemRow}
+                      className="bg-cyan-600/10 hover:bg-cyan-650/20 text-cyan-400 border border-cyan-500/20 px-3.5 py-2 rounded-xl text-[10px] font-black transition-all cursor-pointer flex items-center gap-1"
+                    >
+                      ➕ {isAr ? 'إدراج بند منتج جديد' : 'Add Product Item'}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="hidden md:grid grid-cols-12 gap-2 text-[10px] font-black text-slate-500 uppercase tracking-wider pb-1 px-2.5">
@@ -843,7 +901,17 @@ export default function CreateOrderModal(
                           required
                           type="number"
                           value={item.productPrice || 0}
-                          onChange={(e) => updateItemRow(idx, 'productPrice', parseFloat(e.target.value) || 0)}
+                          onChange={(e) => {
+                            const newPrice = parseFloat(e.target.value) || 0;
+                            updateItemRow(idx, 'productPrice', newPrice);
+                            if (item.isInsured) {
+                              const qty = Number(item.quantity || 1);
+                              const feeRate = settings.defaultProductInsuranceFee || 0;
+                              const isPercent = settings.defaultProductInsuranceType === 'percentage';
+                              const computedFee = isPercent ? (newPrice * qty * (feeRate / 100)) : (feeRate * qty);
+                              updateItemRow(idx, 'insuranceFee', computedFee);
+                            }
+                          }}
                           className="w-full bg-slate-955 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold text-[11px] font-mono text-center focus:border-[#d4af37]"
                         />
                       </div>
@@ -853,7 +921,17 @@ export default function CreateOrderModal(
                           required
                           type="number"
                           value={item.quantity || 1}
-                          onChange={(e) => updateItemRow(idx, 'quantity', parseInt(e.target.value) || 0)}
+                          onChange={(e) => {
+                            const newQty = parseInt(e.target.value) || 0;
+                            updateItemRow(idx, 'quantity', newQty);
+                            if (item.isInsured) {
+                              const price = Number(item.productPrice || 0);
+                              const feeRate = settings.defaultProductInsuranceFee || 0;
+                              const isPercent = settings.defaultProductInsuranceType === 'percentage';
+                              const computedFee = isPercent ? (price * newQty * (feeRate / 100)) : (feeRate * newQty);
+                              updateItemRow(idx, 'insuranceFee', computedFee);
+                            }
+                          }}
                           className="w-full bg-slate-955 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold text-[11px] font-mono text-center focus:border-[#d4af37]"
                         />
                       </div>
@@ -961,7 +1039,7 @@ export default function CreateOrderModal(
                         </button>
                       </div>
 
-                      {/* Packaging Type Selection Sub-row */}
+                      {/* Sub-row: Category, Packaging & Insurance */}
                       <div className="col-span-12 flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/40 text-[10px] text-start">
                         <div className="flex items-center gap-2">
                           <span className="font-black text-cyan-400">{isAr ? 'فئة الصنف:' : 'Item category:'}</span>
@@ -1008,6 +1086,40 @@ export default function CreateOrderModal(
                             +{((parseFloat(item.packagingOptionPrice) || 0) * (parseFloat(item.quantity) || 1)).toLocaleString()} {orderCurrency}
                           </span>
                         )}
+
+                        {/* خيار تأمين المنتج وحساب الرسوم تلقائياً */}
+                        {/* Product Insurance Checkbox & Auto Fee Display */}
+                        <div className="flex items-center gap-2 bg-slate-950/70 p-1.5 px-3 rounded-xl border border-slate-800">
+                          <input
+                            type="checkbox"
+                            id={`create-insured-check-${idx}`}
+                            checked={Boolean(item.isInsured)}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              const qty = Number(item.quantity || 1);
+                              const price = Number(item.productPrice || 0);
+                              const feeRate = settings.defaultProductInsuranceFee || 0;
+                              const isPercent = settings.defaultProductInsuranceType === 'percentage';
+                              const computedFee = checked
+                                ? (isPercent ? (price * qty * (feeRate / 100)) : (feeRate * qty))
+                                : 0;
+                              
+                              updateItemRow(idx, 'isInsured', checked);
+                              updateItemRow(idx, 'insuranceFee', computedFee);
+                            }}
+                            className="rounded bg-slate-900 border-slate-700 text-amber-500 focus:ring-0 w-4 h-4 cursor-pointer accent-[#d4af37]"
+                          />
+                          <label htmlFor={`create-insured-check-${idx}`} className="text-[10px] font-bold text-slate-300 cursor-pointer flex items-center gap-1">
+                            <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                            {isAr ? 'تأمين المنتج' : 'Insure Product'}
+                          </label>
+                          {item.isInsured && (
+                            <span className="text-[10px] font-mono font-black text-amber-400 bg-amber-950/30 border border-amber-900/40 px-2 py-0.5 rounded-lg ms-1">
+                              🛡️ {(item.insuranceFee || 0).toLocaleString()} {orderCurrency}
+                              {settings.defaultProductInsuranceType === 'percentage' && ` (${settings.defaultProductInsuranceFee}%)`}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -1502,6 +1614,19 @@ export default function CreateOrderModal(
                       <span className="font-bold">{isAr ? '📦 رسوم تغليف المنتجات المخصصة:' : '📦 Products Packaging Options Fee:'}</span>
                       <span className="font-mono font-bold">
                         +{items.reduce((sum: number, it: any) => sum + ((parseFloat(it.packagingOptionPrice) || 0) * (parseFloat(it.quantity) || 1)), 0).toLocaleString()} {orderCurrency}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Product Insurance Fee */}
+                  {items && items.reduce((sum: number, it: any) => sum + (it.isInsured ? (parseFloat(it.insuranceFee) || 0) : 0), 0) > 0 && (
+                    <div className="flex justify-between items-center text-amber-400">
+                      <span className="font-bold flex items-center gap-1">
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        {isAr ? '🛡️ رسوم تأمين المنتجات:' : '🛡️ Products Insurance Fee:'}
+                      </span>
+                      <span className="font-mono font-bold">
+                        +{items.reduce((sum: number, it: any) => sum + (it.isInsured ? (parseFloat(it.insuranceFee) || 0) : 0), 0).toLocaleString()} {orderCurrency}
                       </span>
                     </div>
                   )}
@@ -2024,6 +2149,15 @@ export default function CreateOrderModal(
                         <span className="font-mono">+{items.reduce((sum: number, it: any) => sum + ((parseFloat(it.packagingOptionPrice) || 0) * (parseFloat(it.quantity) || 1)), 0).toLocaleString()} {orderCurrency}</span>
                       </div>
                     )}
+                    {items && items.reduce((sum: number, it: any) => sum + (it.isInsured ? (parseFloat(it.insuranceFee) || 0) : 0), 0) > 0 && (
+                      <div className="flex justify-between text-amber-400">
+                        <span className="flex items-center gap-1">
+                          <ShieldCheck className="w-3.5 h-3.5" />
+                          {isAr ? '🛡️ رسوم تأمين المنتجات:' : '🛡️ Products Insurance Fee:'}
+                        </span>
+                        <span className="font-mono">+{items.reduce((sum: number, it: any) => sum + (it.isInsured ? (parseFloat(it.insuranceFee) || 0) : 0), 0).toLocaleString()} {orderCurrency}</span>
+                      </div>
+                    )}
                     {shippings && shippings.reduce((sum: number, sh: any) => sum + (parseFloat(sh.shippingCategoryPrice) || 0), 0) > 0 && (
                       <div className="flex justify-between text-cyan-300">
                         <span>{isAr ? '⚡️ فئات الشحن المسرّعة:' : '⚡️ Shipping Speed Categories:'}</span>
@@ -2269,6 +2403,14 @@ export default function CreateOrderModal(
           </div>
         </form>
       </div>
+
+      {/* نافذة اختيار منتج من القائمة المسجلة */}
+      <ProductPickerModal
+        isOpen={isProductPickerOpen}
+        onClose={() => setIsProductPickerOpen(false)}
+        onSelectProduct={handleSelectProductFromPicker}
+        isAr={isAr}
+      />
     </div>
   );
 }

@@ -1371,6 +1371,43 @@ export default function Settings() {
                     ))}
                   </select>
                 </div>
+
+                {/* رسوم تامين المنتجات */}
+                <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-3 bg-black/30 p-3 rounded-2xl border border-slate-800">
+                  <div>
+                    <FieldLabel locked={!canEditOrderDefaults}>
+                      {isAr ? 'رسوم تامين المنتجات' : 'Product Insurance Fee'}
+                    </FieldLabel>
+                    <div className="relative">
+                      <FieldInput
+                        type="number"
+                        step="any"
+                        value={localSettings.defaultProductInsuranceFee ?? 0}
+                        onChange={e => canEditOrderDefaults && setLocalSettings({ ...localSettings, defaultProductInsuranceFee: parseFloat(e.target.value) || 0 })}
+                        disabled={!canEditOrderDefaults}
+                        className="font-mono pr-12"
+                        dir="ltr"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-[#d4af37] bg-[#d4af37]/10 px-1.5 py-0.5 rounded">
+                        {localSettings.defaultProductInsuranceType === 'percentage' ? '%' : (localSettings.defaultOrderCurrency || 'SAR')}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <FieldLabel locked={!canEditOrderDefaults}>
+                      {isAr ? 'طريقة احتساب رسوم التأمين' : 'Insurance Calculation Mode'}
+                    </FieldLabel>
+                    <select
+                      disabled={!canEditOrderDefaults}
+                      value={localSettings.defaultProductInsuranceType || 'fixed'}
+                      onChange={e => canEditOrderDefaults && setLocalSettings({ ...localSettings, defaultProductInsuranceType: e.target.value as 'fixed' | 'percentage' })}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white font-bold focus:outline-none focus:border-[#d4af37] disabled:opacity-65 cursor-pointer"
+                    >
+                      <option value="fixed">{isAr ? 'سعر ثابت (بعملة الطلب الافتراضية)' : 'Fixed Price (Base Currency)'}</option>
+                      <option value="percentage">{isAr ? 'نسبة مئوية من سعر المنتج (%)' : 'Percentage of Product Price (%)'}</option>
+                    </select>
+                  </div>
+                </div>
               </div>
               <div className="mt-4 p-3 bg-[#d4af37]/5 border border-[#d4af37]/15 rounded-xl text-[10px] text-slate-400 font-bold">
                 💡 {isAr ? 'هذه القيم ستُملأ تلقائياً عند إنشاء أي طلب جديد.' : 'These defaults auto-fill when creating new orders.'}
