@@ -1132,6 +1132,79 @@ export async function deleteDoc(docRef: DocRef) {
   }
 }
 
+/**
+ * إعادة استعلام المجموعات من خادم Supabase وإعادة بناء الذاكرة المؤقتة وإشعار المستمعين
+ * Force refetch a collection table from Supabase, update cache, and trigger active listeners
+ */
+export async function refetchCollection(table: string): Promise<any[]> {
+  delete lastFetchTimestamps[table];
+  delete collectionCaches[table];
+  delete activeFetches[table];
+  const items = await ensureCache(table);
+  if (collectionListeners[table]) {
+    collectionListeners[table].forEach(cb => cb());
+  }
+  return items;
+}
+
+/**
+ * تحديث الذاكرة المؤقتة فورياً بعد حذف طلبات عبر إجراء RPC وإشعار كافة الواجهات بالاختفاء الفوري
+ * Instantly update local in-memory cache after order deletion RPC and trigger reactive UI listeners
+ */
+export function notifyOrderDeletionInCache(orderIds: string[]) {
+  if (!orderIds || !orderIds.length) return;
+  const idsSet = new Set(orderIds.map(id => String(id || '').trim()).filter(Boolean));
+
+  // 1. إزالة الطلبات المحذوفة من كاش الطلبات وتحديث التخزين المحلي
+  // Remove deleted orders from orders cache and update localStorage backup
+  if (collectionCaches['orders']) {
+    collectionCaches['orders'] = collectionCaches['orders'].filter(order =>
+      !idsSet.has(String(order.id || '').trim()) &&
+      !idsSet.has(String(order.order_number || order.orderNumber || '').trim())
+    );
+    try {
+      safeLocalStorage.setItem('swiftship_table_backup_orders', JSON.stringify(collectionCaches['orders']));
+    } catch (_) { }
+  }
+
+  // 2. إزالة الشحنات المرتبطة من كاش الشحنات
+  // Remove linked shipments from shipments cache
+  if (collectionCaches['shipments']) {
+    collectionCaches['shipments'] = collectionCaches['shipments'].filter(s =>
+      !idsSet.has(String(s.order_id || s.orderId || '').trim())
+    );
+    try {
+      safeLocalStorage.setItem('swiftship_table_backup_shipments', JSON.stringify(collectionCaches['shipments']));
+    } catch (_) { }
+  }
+
+  // 3. إزالة بنود الطلب من كاش order_items
+  // Remove linked order items from order_items cache
+  if (collectionCaches['order_items']) {
+    collectionCaches['order_items'] = collectionCaches['order_items'].filter(item =>
+      !idsSet.has(String(item.order_id || item.orderId || '').trim())
+    );
+    try {
+      safeLocalStorage.setItem('swiftship_table_backup_order_items', JSON.stringify(collectionCaches['order_items']));
+    } catch (_) { }
+  }
+
+  // 4. إعادة ضبط التوقيتات للجداول المتأثرة لإلزام المزامنة الشبكية التالية
+  // Invalidate fetch timestamps for affected relational tables
+  ['orders', 'shipments', 'order_items', 'products', 'main_entry', 'account_trans', 'expenses', 'notifications', 'whatsapp_logs', 'orders_history'].forEach(table => {
+    delete lastFetchTimestamps[table];
+    delete activeFetches[table];
+  });
+
+  // 5. إشعار جميع المستمعين المتصلين بجداول الطلبات والشحنات والبنود للتحديث الفوري بالواجهة
+  // Trigger all active snapshot listeners for orders, shipments, order_items, and products
+  ['orders', 'shipments', 'order_items', 'products'].forEach(table => {
+    if (collectionListeners[table]) {
+      collectionListeners[table].forEach(cb => cb());
+    }
+  });
+}
+
 // Mock Batch write functionality
 class MockWriteBatch {
   operations: Array<() => Promise<void>> = [];

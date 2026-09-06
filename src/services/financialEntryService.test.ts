@@ -61,28 +61,66 @@ describe('financialEntryService', () => {
     expect(rpc).toHaveBeenCalledWith('secure_create_financial_entry', expect.objectContaining({ p_entry: expect.any(Object) }));
   });
 
-  it('يرفض التحويل المباشر بين عملتين غير افتراضيتين بدل اختراع أساس سعر غير محفوظ', async () => {
-    const from = vi.fn(() => ({
+  it('يحول تلقائياً بين عملتين غير افتراضيتين بناءً على أسعار صرف العملتين مقابل العملة الافتراضية', async () => {
+    const originalFrom = (await import('../lib/supabase-firebase-adapter')).supabase.from;
+    const from = vi.fn((table: string) => ({
       select: () => ({
-        eq: (_field: string, code: string) => ({
-          limit: () => ({
-            maybeSingle: async () => ({
-              data: code === 'SAR' ? { cur_id: 2, isDefault: false } : { cur_id: 3, isDefault: false },
-              error: null,
+        eq: (_field: string, val: unknown) => {
+          if (table === 'currency') {
+            return {
+              limit: () => ({
+                maybeSingle: async () => ({
+                  data: (val === 'SAR' || val === 2) ? { cur_id: 2, isDefault: false } : { cur_id: 3, isDefault: false },
+                  error: null,
+                }),
+              }),
+            };
+          }
+          const chain: any = {
+            lte: () => chain,
+            order: () => chain,
+            limit: () => ({
+              maybeSingle: async () => ({
+                data: val === 2 ? { price: 140, id: 1, seq: 10 } : { price: 530, id: 2, seq: 20 },
+                error: null,
+              }),
             }),
-          }),
-        }),
+          };
+          return chain;
+        },
       }),
     }));
-    (await import('../lib/supabase-firebase-adapter')).supabase.from = from;
+    (await import('../lib/supabase-firebase-adapter')).supabase.from = from as any;
+    rpc.mockResolvedValueOnce({ data: { id: 'entry-fx-1' }, error: null });
 
-    await expect(financialEntryService.createFromLegacyVoucher({
-      entryNumber: 'FX-001', createdAt: Date.now(), description: 'قيد صرف', amount: 10, currency: 'SAR', module: 'exchange', refNumber: 'FX-001',
-    }, {
-      id: '1110-0003', curNo: 3, currency: 'USD',
-    }, {
-      id: '1132-0005', curNo: 3, currency: 'USD',
-    })).rejects.toThrow('التحويل المباشر بين عملتين غير افتراضيتين');
+    try {
+      const result = await financialEntryService.createFromLegacyVoucher({
+        entryNumber: 'FX-001', createdAt: Date.now(), description: 'قيد صرف', amount: 100, currency: 'SAR', module: 'exchange', refNumber: 'FX-001',
+      }, {
+        id: '1110-0003', curNo: 3, currency: 'USD',
+      }, {
+        id: '1132-0005', curNo: 2, currency: 'SAR',
+      });
+
+      expect(result).toMatchObject({ id: 'entry-fx-1' });
+      expect(rpc).toHaveBeenLastCalledWith('secure_create_financial_entry', expect.objectContaining({
+        p_entry: expect.objectContaining({
+          lines: expect.arrayContaining([
+            expect.objectContaining({
+              accountId: '1110-0003',
+              accountCurNo: '3',
+              currencyOriginalNo: '2',
+              currencyPriceId: '1',
+              currencyPriceSeq: '10',
+              accountCurrencyPriceId: '2',
+              accountCurrencyPriceSeq: '20',
+            }),
+          ]),
+        }),
+      }));
+    } finally {
+      (await import('../lib/supabase-firebase-adapter')).supabase.from = originalFrom;
+    }
   });
 
   it('ينشئ العهدة وقيد إصدارها عبر إجراء ذري واحد', async () => {

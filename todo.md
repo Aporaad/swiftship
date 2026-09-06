@@ -380,6 +380,13 @@
 - [x] حل استثناء `orders_history_order_id_fkey` بدالة التريجر `orders_history_from_orders` عبر إرسال `NULL` لـ `order_id` عند عمليات الحذف `TG_OP = 'DELETE'`.
 - [x] إنشاء وتنفيذ المهاجرة `202609060001_fix_order_deletion_rpc_and_triggers.sql` في قاعدة بيانات Supabase بنجاح.
 
+## [2026-09-06 22:06:00] — التحديث اللحظي للذاكرة المؤقتة (Cache) وإخفاء الطلبات المحذوفة فوراً بالواجهة بدون تحديث الصفحة
+- [x] إضافة الدالتين `notifyOrderDeletionInCache(orderIds)` و `refetchCollection(table)` بـ `supabase-firebase-adapter.ts` لتطهير الذاكرة المؤقتة المحلية وإعادة التخزين بالـ localStorage.
+- [x] تحديث خدمة `deleteOrdersWithDependents` بـ `orderDeletionService.ts` لاستدعاء التحديث اللحظي وإشعار كافة مستمعات الشاشة (`onSnapshot`) فور اكتمال الـ RPC.
+- [x] التأكد من اختفاء الطلبات المحذوفة لحظياً من الواجهة فور تأكيد الحذف ودون الحاجة لإعادة تحميل الصفحة.
+- [x] اجتياز فحص التركيب والتجميع `npx tsc --noEmit` بنسبة 100% وخلو المشروع تماماً من أي أخطاء.
+
+
 
 
 

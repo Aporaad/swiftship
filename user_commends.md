@@ -69,3 +69,27 @@ Show less
 """
 @mcp:supabase:
 ```
+
+## [2026-09-06 22:06:00] — AI Model: Antigravity / Gemini 3.6 Flash
+```text
+لماذا بعد حذف الطلبات تضل الطلبات ظاهره الى ان يتم تحتديث الصفحه 
+المفروض تحتذف على طول وتختفي
+```
+
+## [2026-09-06 22:25:00] — AI Model: Antigravity / Gemini 3.6 Flash
+```text
+لماذا يتعذر تنفيذ القيد التلقائي لدفعه الطلب عند اختيار حساب دفع بعمله مختلفه عن النظام وعن عمله الطلب 
+ويظهر في الكونسول خطا  """
+[AutomaticVouchers] Failed to fire automatic voucher rule: order_down_payment Error: التحويل المباشر بين عملتين غير افتراضيتين يحتاج قيد صرافة صريحًا بمراجع سعر لكل عملة.
+    at FinancialEntryService.buildLegacyVoucherLine (financialEntryService.ts:334:13)
+    at async Promise.all (index 0)
+    at async FinancialEntryService.createFromLegacyVoucher (financialEntryService.ts:366:37)
+    at async FinancialAccountService.recordJournalEntry (financialAccountService.ts:610:20)
+    at async FinancialAccountService.recordTransaction (financialAccountService.ts:794:5)
+    at async FinancialAccountService.triggerAutomaticVoucher (financialAccountService.ts:1737:7)
+    at async Object.executeAutoEntriesForStatus (autoEntryService.ts:474:26)
+    at async handleCreateOrder (Orders.tsx:1348:13)
+"""
+@mcp:supabase:
+@[user_global] 
+```

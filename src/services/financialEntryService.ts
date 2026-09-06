@@ -330,14 +330,37 @@ class FinancialEntryService {
         entityId: target.entityId,
       };
     }
+
+    // إذا كانت كلتا العملتين غير افتراضيتين (مثل USD -> SAR والعملة الافتراضية للنظام YER)
+    // يتم تحويل المبلغ بالاعتماد على أسعار الصرف الرسمية المسجلة لكلتا العملتين في cur_price
     if (!originalCurrency.isDefault && !accountCurrency.isDefault) {
-      throw new Error('التحويل المباشر بين عملتين غير افتراضيتين يحتاج قيد صرافة صريحًا بمراجع سعر لكل عملة.');
+      const [priceOriginal, priceAccount] = await Promise.all([
+        this.resolvePrice(originalCurrency.curId, effectiveAt),
+        this.resolvePrice(accountCurrency.curId, effectiveAt),
+      ]);
+
+      const amountInDefaultCurrency = amountOriginal * priceOriginal.price;
+      const derivedAmount = priceAccount.price > 0 ? amountInDefaultCurrency / priceAccount.price : amountOriginal;
+      const amount = hasValidPositiveNumber(suppliedAmount) ? suppliedAmount : derivedAmount;
+
+      return {
+        accountId: target.id,
+        accountCurNo: targetCurNo,
+        accountCurrencyPrice: priceAccount.reference,
+        transType,
+        amount,
+        amountOriginal,
+        currencyOriginalNo: originalCurrency.curId,
+        currencyPrice: priceOriginal.reference,
+        entityType: target.entityType,
+        entityId: target.entityId,
+      };
     }
 
     const pricedCurrency = originalCurrency.isDefault ? accountCurrency : originalCurrency;
     const price = await this.resolvePrice(pricedCurrency.curId, effectiveAt);
     const derivedAmount = originalCurrency.isDefault
-      ? amountOriginal / price.price
+      ? (price.price > 0 ? amountOriginal / price.price : amountOriginal)
       : amountOriginal * price.price;
     const amount = hasValidPositiveNumber(suppliedAmount) ? suppliedAmount : derivedAmount;
 

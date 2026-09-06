@@ -383,9 +383,48 @@ export default function EntryForm({
       };
     }
     const accountCurrency = currencies.find((c) => c.id === account.curNo);
-    if (!accountCurrency || (!selectedCurrency.isDefault && !accountCurrency.isDefault)) {
-      throw new Error('التحويل بين عملتين غير افتراضيتين يتطلب سند صرافة مستقلًا بمراجع سعر صريحة.');
+    if (!accountCurrency) {
+      throw new Error('عملة الحساب المالي غير معرّفة في النظام.');
     }
+
+    const fetchPrice = async (curNo: number, curCode: string) => {
+      const { data, error: priceError } = await (supabase as any)
+        .from('cur_price')
+        .select('id, seq, price, day_date')
+        .eq('cur_no', curNo)
+        .order('day_date', { ascending: false })
+        .order('seq', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (priceError || !data || Number(data.price) <= 0) {
+        throw new Error(`لا يوجد سعر صرف موثق لعملة ${curCode}؛ لن يُحفظ القيد.`);
+      }
+      return {
+        price: Number(data.price),
+        reference: { id: Number(data.id), seq: Number(data.seq) },
+      };
+    };
+
+    if (!selectedCurrency.isDefault && !accountCurrency.isDefault) {
+      const [priceOriginal, priceAccount] = await Promise.all([
+        fetchPrice(selectedCurrency.id, selectedCurrency.code),
+        fetchPrice(accountCurrency.id, accountCurrency.code),
+      ]);
+      const amountInDefaultCurrency = originalAmount * priceOriginal.price;
+      const accountAmount = priceAccount.price > 0 ? amountInDefaultCurrency / priceAccount.price : originalAmount;
+      return {
+        id: line.id,
+        accountId: account.id,
+        accountCurNo: account.curNo,
+        currencyOriginalNo: selectedCurrency.id,
+        transType: line.transType,
+        amount: Number(accountAmount.toFixed(4)),
+        amountOriginal: originalAmount,
+        currencyPrice: priceOriginal.reference,
+        accountCurrencyPrice: priceAccount.reference,
+      };
+    }
+
     // استخدام السعر المُعدَّل يدوياً إن وُجد، وإلا جلبه من قاعدة البيانات
     const pricedCurrency = selectedCurrency.isDefault ? accountCurrency : selectedCurrency;
     let priceValue: number;
@@ -395,19 +434,9 @@ export default function EntryForm({
       priceValue = Number(exchangeRate);
       priceRef = exchangeRatePriceRef;
     } else {
-      const { data, error: priceError } = await (supabase as any)
-        .from('cur_price')
-        .select('id, seq, price, day_date')
-        .eq('cur_no', pricedCurrency.id)
-        .order('day_date', { ascending: false })
-        .order('seq', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (priceError || !data || Number(data.price) <= 0) {
-        throw new Error(`لا يوجد سعر صرف موثق لعملة ${pricedCurrency.code}؛ لن يُحفظ القيد.`);
-      }
-      priceValue = Number(data.price);
-      priceRef   = { id: Number(data.id), seq: Number(data.seq) };
+      const fetched = await fetchPrice(pricedCurrency.id, pricedCurrency.code);
+      priceValue = fetched.price;
+      priceRef = fetched.reference;
     }
 
     const accountAmount = selectedCurrency.isDefault

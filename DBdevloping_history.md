@@ -701,4 +701,9 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 2. **استقرار حقول الإدراج لجدول `order_items`**:
    - تأكيد الربط الحجمي والمفتاحي الصريح بين `order_items.product_id` و `products.product_id` ومعالجة كافة معاملات الإرجاع والإلغاء لحسابات التأمين وفق الهيكلية المعتمَدة.
 
+## [2026-09-06 22:06:00] — مزامنة الذاكرة المؤقتة (Cache) والتفاعل اللحظي بالواجهة عقب تنفيذ RPC حذف الطلبات
 
+### التحديثات والتوافقية في PostgreSQL والمحول المحاسبي:
+1. **الربط التفاعلي بين إجراء الـ RPC والذاكرة المؤقتة بالواجهة**:
+   - تم توثيق وربط نتيجة الـ RPC الذري `delete_orders_with_dependents` بدالة المزامنة والتطهير اللحظي `notifyOrderDeletionInCache(orderIds)` في المحول المحلي `supabase-firebase-adapter.ts`.
+   - يتم بموجبها تنقية كاش جداول `orders` و `shipments` و `order_items` وحذف السجلات الملغاة من `collectionCaches` وتحديث التخزين المحلي `localStorage` وإطلاق الأحداث التفاعلية لشاشة `Orders.tsx` فورياً.

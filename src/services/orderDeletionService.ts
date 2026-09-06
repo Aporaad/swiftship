@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase, notifyOrderDeletionInCache, refetchCollection } from '../lib/supabase';
 
 export interface OrderDeletionSummary {
   orderIds: string[];
@@ -30,5 +30,15 @@ export async function deleteOrdersWithDependents(orderIds: string[]): Promise<Or
   if (Number(data.activityLogsDeleted || 0) !== 0) {
     throw new Error('The deletion procedure reported an unexpected activity log deletion.');
   }
+
+  // تحديث الكاش المحلي فوراً وتفعيل كافة مستمعات الشاشة لإخفاء الطلبات المحذوفة لحظياً بدون تحديث الصفحة
+  // Immediately update in-memory cache and notify all UI listeners so deleted orders vanish instantly without page reload
+  notifyOrderDeletionInCache(normalizedIds);
+
+  // إعادة مزامنة جدول الطلبات خلف الكواليس لتأكيد التطابق التام مع قاعدة البيانات
+  // Asynchronously refetch orders collection to guarantee 100% data consistency
+  refetchCollection('orders').catch(console.warn);
+
   return data as OrderDeletionSummary;
 }
+

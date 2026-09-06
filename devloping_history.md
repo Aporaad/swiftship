@@ -793,5 +793,20 @@
    - إتاحة مرادفات الوصول (`product_id` / `id`, `product_name_ar` / `productName`, `unit_price` / `productPrice`) للتأكد من استقرار عملية التمرير واختيار الأصناف في `CreateOrderModal.tsx` و `EditOrderModal.tsx`.
    - مطابقة `ProductPickerModal.tsx` و `productService.ts` و `ProductsManagementTab.tsx` بنسبة 100%.
 
+---
 
+## [2026-09-06 22:06:00] — التحديث اللحظي للذاكرة المؤقتة (Cache) وإخفاء الطلبات المحذوفة فوراً بالواجهة بدون تحديث الصفحة
 
+### الإنجازات والتحسينات الرئيسية المنفذة:
+1. **تشخيص السبب المباشر لبقاء الطلبات المحذوفة بالواجهة حتى تحديث الصفحة**:
+   - واجهة النظام تستمع لحركات جداول الطلبات والشحنات عبر `onSnapshot` الموفرة بـ `supabase-firebase-adapter.ts`.
+   - عند تنفيذ إجراء الحذف الذري `deleteOrdersWithDependents` كانت الواجهة تستدعي الـ RPC المباشر `supabase.rpc('delete_orders_with_dependents')`.
+   - خادم Supabase PostgreSQL كان يحذف البيانات فعلياً، لكن كاش الذاكرة المؤقتة المحلية `collectionCaches['orders']` والتخزين الاحتياطي `localStorage` لم يتم تحديثهما أو تنظيفهما عقب الـ RPC، ولم يتم إشعار دالة الاستماع `onSnapshot` فظلت تعرض قائمة الطلبات السابقة المخزنة بالذاكرة إلى حين إعادة تحويل/تحميل الصفحة.
+
+2. **بناء دالة التحديث اللحظي للذاكرة `notifyOrderDeletionInCache` المحلية بـ `supabase-firebase-adapter.ts`**:
+   - تم إنشاء وتصدير `notifyOrderDeletionInCache(orderIds)` لتصفية الطلبات والشحنات وبنود الطلبات المحذوفة فوراً من كائن الذاكرة المؤقتة `collectionCaches` وتحديث التخزين الاحتياطي بـ `localStorage`.
+   - إشعار كافة مستمعي الشاشات `collectionListeners['orders']` و `shipments` لتشغيل التفاعلية اللحظية بدون أي تأخير.
+   - إنشاء دالة `refetchCollection('orders')` لإعادة المزامنة الخلفية مع Supabase DB لضمان التطابق التام 100%.
+
+3. **تحديث خدمة `orderDeletionService.ts`**:
+   - استدعاء `notifyOrderDeletionInCache(normalizedIds)` و `refetchCollection('orders')` فور النجاح من الـ RPC لتختفي الطلبات المحذوفة لحظياً من شاشات المستخدم.
