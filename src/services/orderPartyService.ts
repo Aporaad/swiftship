@@ -40,8 +40,9 @@ export function filterOrderParties(parties: OrderParty[], queryText = '', staffO
   const query = normalized(queryText);
   return parties.filter((party) => {
     // staffOnly=true: عرض الموظفين والمناديب فقط | staffOnly=false: عرض العملاء فقط
-    // staffOnly=true: show employees & couriers only | staffOnly=false: show all
+    // staffOnly=true: show employees & couriers only | staffOnly=false: show customers only
     if (staffOnly && party.type === 'customer') return false;
+    if (!staffOnly && party.type !== 'customer') return false;
     if (!query) return true;
     return [party.name, party.phone, party.email, party.id, party.financialAccountCode]
       .some((value) => normalized(value).includes(query));

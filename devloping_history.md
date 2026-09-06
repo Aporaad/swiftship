@@ -810,3 +810,33 @@
 
 3. **تحديث خدمة `orderDeletionService.ts`**:
    - استدعاء `notifyOrderDeletionInCache(normalizedIds)` و `refetchCollection('orders')` فور النجاح من الـ RPC لتختفي الطلبات المحذوفة لحظياً من شاشات المستخدم.
+
+---
+
+## [2026-09-06 22:25:00] — دعم التحويل التلقائي للقيد المالي بين عملتين غير افتراضيتين (Cross-Currency Vouchers)
+
+### التحديثات والحلول الفنية المنفذة:
+1. **تشخيص المشكلة والسبب الجذري**:
+   - عند اختيار حساب دفع بعملة غير افتراضية (مثل USD أو SAR حين تكون عملة النظام Default YER وعملة الطلب YER أو SAR)، كانت الخدمة المحاسبية `financialEntryService.ts` ترمي خطأ `التحويل المباشر بين عملتين غير افتراضيتين يحتاج قيد صرافة صريحًا بمراجع سعر لكل عملة.`، مما يمنع إطلاق القيد التلقائي لدفعة الطلب.
+2. **تحديث خدمة `financialEntryService.ts`**:
+   - تم تحديث دالة `buildLegacyVoucherLine` لتقوم بجلب أسعار الصرف الرسمية للعملتين غير الافتراضيتين من جدول `cur_price` عبر `Promise.all([this.resolvePrice(cur1), this.resolvePrice(cur2)])`.
+   - تحويل المبلغ تلقائياً من العملة الأصلية إلى العملة الافتراضية ثم إلى عملة الحساب المستهدف وإثبات مرجعي الصرف (`currencyPrice` و `accountCurrencyPrice`) بدون أي خطأ.
+3. **تحديث مكون الواجهة `EntryForm.tsx`**:
+   - تحديث دالة `resolveLinePayload` بجلب أسعار الصرف لكلا الساقين ديناميكياً عند اختيار عملتين غير افتراضيتين للقيد المالي.
+4. **تحديث الاختبارات وتأكيد النجاح**:
+   - تحديث `financialEntryService.test.ts` واجتياز اختبارات الوحدة بنسبة 100%.
+
+---
+
+## [2026-09-06 23:26:00] — حل خطأ القيد التلقائي المكرر `main_entry_entry_number_key` وتنظيف الاعتماد على الجداول القديمة
+
+### التحديثات والحلول الفنية المنفذة:
+1. **تشخيص المشكلة والسبب الجذري**:
+   - عند تفعيل القيود التلقائية لطلب يحتوي على أكثر من قيد تلقائي (مثل `order_charge` و `order_down_payment`)، كان `financialAccountService.ts` يقوم بضبط `entryNumber = transaction.refNumber` (وهو رقم الطلب مثل `ALX-2609-1002`).
+   - حاول القيد التلقائي الثاني استخدام نفس `entry_number = 'ALX-2609-1002'`، مما أدى لانتهاك قيد الفرادة في PostgreSQL ورخص استثناء `duplicate key value violates unique constraint "main_entry_entry_number_key"`.
+2. **تحديث `financialAccountService.ts`**:
+   - تم تعديل دالة `recordTransaction` لتضمن توليد `entryNumber` فريد دائماً (باستخدام `automationKey` إن وجد، أو توليد تسلسل فريد `JV-YYYYMMDD-XXXXXX`) مع الحفاظ على رقم الطلب والمرجع في حقل `refNumber`.
+3. **تنظيف الاعتمادات التاريخية والجداول القديمة**:
+   - تأكيد الاعتماد المباشر الكامل على الجداول المحاسبية الحديثة `main_entry` و `account_trans` وتأكيد خلو الخدمات المحاسبية المباشرة من الاستعلام المباشر عن `journal_entries` و `account_transactions`.
+4. **التحقق والاختبار الشامل**:
+   - اجتياز فحص `npx tsc --noEmit` واختبارات الخدمات `npx vitest run src/services/` (15 ملف اختبار و 77 اختبار بنسبة نجاح 100%).

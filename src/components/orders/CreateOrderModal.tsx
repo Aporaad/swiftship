@@ -237,11 +237,17 @@ export default function CreateOrderModal(
   const [isProductPickerOpen, setIsProductPickerOpen] = useState(false);
   const orderCurrency = settings.defaultOrderCurrency || settings.currency || 'SAR'; // العملة الافتراضية المعينة لأسعار الطلبات
 
-  // اختيار وتعيين منتج سابق بكامل تفاصيله من قائمة الكتالوج
-  // Handle selecting a product from catalog picker modal
+  // اختيار وتعيين منتج سابق بكامل تفاصيله من قائمة الكتالوج الرئيسية (بدون إعادة إنشائه)
+  // Handle selecting an existing product from master catalog picker modal
+  // IMPORTANT: يجب الاحتفاظ بـ product_id لإخبار Orders.tsx بأن المنتج موجود مسبقاً
+  // IMPORTANT: Must carry product_id so Orders.tsx skips re-creating it in products table
   const handleSelectProductFromPicker = (selectedProduct: SystemProductRecord) => {
     const qty = 1;
-    const price = Number(selectedProduct.productPrice ?? selectedProduct.unitPrice ?? 0);
+    // استخدام unit_price كأولوية أولى ثم المرادفات للتوافق العكسي
+    // Prefer unit_price from master catalog, then aliases for backwards compatibility
+    const price = Number(
+      selectedProduct.unit_price ?? selectedProduct.productPrice ?? selectedProduct.unitPrice ?? 0
+    );
     const isInsured = selectedProduct.isInsured ?? false;
     const feeRate = settings.defaultProductInsuranceFee || 0;
     const isPercent = settings.defaultProductInsuranceType === 'percentage';
@@ -250,7 +256,12 @@ export default function CreateOrderModal(
       : 0;
 
     const newItem = {
-      productName: selectedProduct.productName || selectedProduct.name || '',
+      // ────── الحقل الحاسم: معرف المنتج الرئيسي لمنع إعادة إنشائه في products ──────
+      // Critical field: master product_id to prevent re-creation in products table
+      product_id: selectedProduct.product_id || selectedProduct.id || '',
+      productId: selectedProduct.product_id || selectedProduct.id || '',
+      productName: selectedProduct.product_name_ar || selectedProduct.productName || selectedProduct.name || '',
+      productNameEn: selectedProduct.product_name_en || '',
       sku: selectedProduct.sku || '',
       description: selectedProduct.description || selectedProduct.notes || '',
       quantity: qty,
@@ -260,12 +271,12 @@ export default function CreateOrderModal(
       length: Number(selectedProduct.length || 0),
       width: Number(selectedProduct.width || 0),
       height: Number(selectedProduct.height || 0),
-      productUrl: selectedProduct.productUrl || '',
+      productUrl: selectedProduct.product_url || selectedProduct.productUrl || '',
       trackingNumber: selectedProduct.trackingNumber || '',
       packagingOptionId: selectedProduct.packagingOptionId || '',
       packagingOptionName: selectedProduct.packagingOptionName || '',
       packagingOptionPrice: Number(selectedProduct.packagingOptionPrice || 0),
-      itemCategoryId: selectedProduct.itemCategoryId || '',
+      itemCategoryId: selectedProduct.item_category_id || selectedProduct.itemCategoryId || '',
       itemCategoryName: selectedProduct.itemCategoryName || '',
       isInsured: isInsured,
       insuranceFee: computedFee,
@@ -292,6 +303,7 @@ export default function CreateOrderModal(
   );
 
   const getCurrencyRate = (code: string) => {
+    //مهم : هذا خطاء كبير هل يتم مصارفه العملات على قيم ثابته ولايتم اخذها من جدول اسعار الصرف
     if (code === 'YER') return 1;
     const found = activeCurrencies?.find((c) => c.code === code);
     if (found && found.currentPrice && found.currentPrice > 0) return found.currentPrice;

@@ -1179,70 +1179,93 @@ export default function Orders() { // دالة عرض الطلبات
 
 
       // ─── حفظ المنتجات الرئيسية في products ثم بنود الطلب في order_items ───
-      // Save master products in 'products' table (if brand new),
+      // Save master products in 'products' table (only if brand new item with no product_id),
       // then save each order line item in 'order_items' referencing the master product.
       if (items && items.length > 0) {
+        // إيجاد cur_id لعملة الطلب الافتراضية من جدول currency لاستخدامه في product_price_currency
+        // Look up cur_id for the default order currency to use as product_price_currency FK
+        const orderCurrencyRecord = activeCurrencies?.find(
+          (c: any) => String(c.code || '').toUpperCase() === String(orderCurrency || '').toUpperCase()
+        );
+        const orderCurrencyId = orderCurrencyRecord?.cur_id || orderCurrencyRecord?.code || null;
+
         for (const item of items) {
-          const qty      = parseFloat(item.quantity   || 1);
+          const qty = parseFloat(item.quantity || 1);
           const unitPrice = parseFloat(item.productPrice || item.price || item.unitPrice || 0);
-          const weight   = parseFloat(item.weight || 0);
-          const cbm      = parseFloat(item.cbm    || 0);
+          const weight = parseFloat(item.weight || 0);
+          const cbm = parseFloat(item.cbm || 0);
           const isInsured = Boolean(item.isInsured);
           const insuranceFee = isInsured ? (parseFloat(item.insuranceFee) || 0) : 0;
 
-          // ── إذا كان المنتج جديداً (لا يحمل product_id) → أنشئه في products أولاً ──
-          // If the item has no master product ID, create a new master product record
-          let masterProductId = item.product_id || item.productId || null;
+          // ── التحقق من معرف المنتج: إذا كان المنتج موجود مسبقاً (product_id مملوء) فلا تنشئه مجدداً ──
+          // Check if item has an existing master product_id - if yes, skip creating new master product
+          let masterProductId = (
+            item.product_id ||
+            item.productId ||
+            null
+          );
+          // تنظيف المعرف الفارغ أو غير الصالح
+          // Sanitize empty or invalid product_id
+          if (masterProductId && typeof masterProductId === 'string') {
+            masterProductId = masterProductId.trim() || null;
+          }
 
           if (!masterProductId) {
+            // ── منتج جديد: أنشئه في products مع تعبئة جميع الحقول والعملة الافتراضية ──
+            // Brand new product: create in products table with all fields and order currency FK
             masterProductId = 'prod_' + Math.random().toString(36).substring(2, 11);
             await addDoc(masterProductId, collection(db, 'products'), {
-              product_id:           masterProductId,
-              product_name_ar:      item.productName || item.name || 'منتج',
-              product_name_en:      item.productNameEn || item.productName || item.name || 'Product',
-              product_url:          item.productUrl || '',
-              unit_price:           unitPrice,
-              item_category_id:     item.itemCategoryId || item.item_category_id || null,
-              is_allowed:           true,
-              cbm:                  cbm,
-              width:                parseFloat(item.width  || 0),
-              height:               parseFloat(item.height || 0),
-              length:               parseFloat(item.length || 0),
-              weight:               weight,
-              created_at:           new Date().toISOString(),
-              created_by:           profile?.fullName || 'system',
-              updated_at:           new Date().toISOString(),
-              updated_by:           profile?.fullName || 'system',
+              product_id: masterProductId,
+              product_name_ar: item.productName || item.name || 'منتج',
+              product_name_en: item.productNameEn || item.productName || item.name || 'Product',
+              product_url: item.productUrl || '',
+              // تعبئة مرجع عملة السعر بـ cur_id من جدول العملات
+              // Populate currency FK with cur_id from currency table matching order default currency
+              product_price_currency: orderCurrencyId,
+              unit_price: unitPrice,
+              item_category_id: item.itemCategoryId || item.item_category_id || null,
+              is_allowed: true,
+              cbm: cbm,
+              width: parseFloat(item.width || 0),
+              height: parseFloat(item.height || 0),
+              length: parseFloat(item.length || 0),
+              weight: weight,
+              created_at: new Date().toISOString(),
+              created_by: profile?.fullName || 'system',
+              updated_at: new Date().toISOString(),
+              updated_by: profile?.fullName || 'system',
             });
           }
+          // إذا كان masterProductId موجوداً مسبقاً → لا يتم إنشاء أي سجل جديد في products
+          // If masterProductId already exists → skip inserting into products, use existing reference
 
           // ── حفظ بند الطلب في order_items مرتبطاً بالطلب والمنتج الرئيسي ──
           // Save order line item in 'order_items' linked to order & master product
           const itemId = 'item_' + Math.random().toString(36).substring(2, 11);
           await addDoc(itemId, collection(db, 'order_items'), {
-            items_id:              itemId,
-            order_id:              payload.orderNumber,
-            product_id:            masterProductId,
-            product_price:         unitPrice,
-            product_url:           item.productUrl || '',
-            tracking_number:       item.trackingNumber || '',
-            produc_source_id:      formData.orderSourceId || null,
-            produc_source_url:     item.productUrl || '',
-            product_cooler:        item.productName || item.name || 'منتج',
-            nota:                  item.notes || item.description || '',
-            quantity:              qty,
-            total_price:           qty * unitPrice,
-            total__weight:         weight * qty,
-            total_cbm:             cbm * qty,
-            packaging_option_id:   item.packagingOptionId || null,
+            items_id: itemId,
+            order_id: payload.orderNumber,
+            product_id: masterProductId,
+            product_price: unitPrice,
+            product_url: item.productUrl || '',
+            tracking_number: item.trackingNumber || '',
+            produc_source_id: formData.orderSourceId || null,
+            produc_source_url: item.productUrl || '',
+            product_cooler: item.productName || item.name || 'منتج',
+            nota: item.notes || item.description || '',
+            quantity: qty,
+            total_price: qty * unitPrice,
+            total__weight: weight * qty,
+            total_cbm: cbm * qty,
+            packaging_option_id: item.packagingOptionId || null,
             packaging_option_price: parseFloat(item.packagingOptionPrice || 0),
-            is_insured:            isInsured,
-            insurance_fee:         insuranceFee,
-            items_status:          'قيد الطلب',
-            created_at:            new Date().toISOString(),
-            created_by:            profile?.fullName || 'system',
-            updated_at:            new Date().toISOString(),
-            updated_by:            profile?.fullName || 'system',
+            is_insured: isInsured,
+            insurance_fee: insuranceFee,
+            items_status: 'قيد الطلب',
+            created_at: new Date().toISOString(),
+            created_by: profile?.fullName || 'system',
+            updated_at: new Date().toISOString(),
+            updated_by: profile?.fullName || 'system',
           });
         }
       }

@@ -707,3 +707,14 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 1. **الربط التفاعلي بين إجراء الـ RPC والذاكرة المؤقتة بالواجهة**:
    - تم توثيق وربط نتيجة الـ RPC الذري `delete_orders_with_dependents` بدالة المزامنة والتطهير اللحظي `notifyOrderDeletionInCache(orderIds)` في المحول المحلي `supabase-firebase-adapter.ts`.
    - يتم بموجبها تنقية كاش جداول `orders` و `shipments` و `order_items` وحذف السجلات الملغاة من `collectionCaches` وتحديث التخزين المحلي `localStorage` وإطلاق الأحداث التفاعلية لشاشة `Orders.tsx` فورياً.
+
+---
+
+## [2026-09-06 23:26:00] — حماية قيد الفرادة `main_entry_entry_number_key` بالطبقة المحاسبية وتأكيد الاعتماد على `main_entry` و `account_trans`
+
+### التحديثات والتوافقية في PostgreSQL والمحول المحاسبي:
+1. **احترام قيد الفرادة `main_entry_entry_number_key` بالجدول الرئيسي `main_entry`**:
+   - قيد الفرادة المفروض في PostgreSQL على عمود `entry_number` بالجدول الرئيسي `main_entry` يقتضي أن يكون رقم كل قيد محاسبي فريداً وغير مكرر إطلاقاً.
+   - تم حل المشكلة بضبط توليد `entry_number` فريد لكل قيد تلقائي (باستخدام `automationKey` المحتوي على مفتاح القاعدة والطلب والرمز أو تسلسل `JV-YYYYMMDD-XXXXXX`) بينما يُحفظ رقم الطلب المرجعي في عمود `ref_number`.
+2. **الاعتماد الكامل على الجداول الحديثة `main_entry` و `account_trans`**:
+   - خلو قاعدة البيانات والخدمات المحاسبية تماماً من أي استعلام مباشر عن الجداول الملغاة `journal_entries` و `account_transactions`.

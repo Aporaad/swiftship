@@ -93,3 +93,36 @@ Show less
 @mcp:supabase:
 @[user_global] 
 ```
+
+## [2026-09-06 22:44:00] — AI Model: Claude Sonnet 4.6 (Thinking)
+```text
+ياحيوان لماذا يتم انشاء المنتج  مره اخرى في جدول المنتجات عند اختيار منتج سابق من القائمه عند انشاء الطلب 
+وااحنا قلنا 
+عند انشاء طلب واختيار منتج موجود سابقا في المنتجات الرئيسه يتم جلب تفاصيل المنتج من جدول  المنتجات الرئيسه products  وعدم انشائه في جدول المنتجات products  مره اخرى   واضافه حركه للمنتج بجدول عناصر الطلب   order_items وربطه  بالمنتج من جدول المنتجات الرئيسيه products 
+
+وايضا لماذا يتم حفظ قيمه عمله سعر المنتج  product_price_currency بفارغ والمفروض ان يتم تعبئتها بمرجع عمله الطلب الافتراضيه في جدول العملات 
+
+@[productService.ts] @[ProductPickerModal.tsx] @[orders/] @[CreateOrderModal.tsx] @[ProductsManagementTab.tsx] @[supabase-firebase-adapter.ts] @[permissions.ts] @[Orders.tsx] @mcp:supabase: @[user_global] 
+```
+
+## [2026-09-06 23:26:00] — AI Model: Antigravity / Gemini 3.6 Flash
+```text
+ظهرت الان مشكله وهي  تعذر تنفيذ قيد من القيود التلقائيه وظهر خطاء  في الكونسول """
+sanitizeConsole.ts:96 [AutomaticVouchers] Failed to fire automatic voucher rule: auto_1787108018493 Error: [FinancialEntryService] تعذر إنشاء القيد: duplicate key value violates unique constraint "main_entry_entry_number_key"
+    at FinancialEntryService.create (financialEntryService.ts:489:22)
+    at async FinancialAccountService.recordJournalEntry (financialAccountService.ts:610:20)
+    at async FinancialAccountService.recordTransaction (financialAccountService.ts:794:5)
+    at async FinancialAccountService.triggerAutomaticVoucher (financialAccountService.ts:1737:7)
+    at async Object.executeAutoEntriesForStatus (autoEntryService.ts:474:26)
+    at async handleCreateOrder (Orders.tsx:1371:13)
+"""
+
+ولماذا لايزال financialAccountService.ts و FinanceAccounting.tsx يتم الاعتماد على حقول وجدول ومسميات قديمه مثل journalEntry وغيرها ولم يتم تعديلها وتحديثها للمسميات الجدبده والتعامل  مع الجداول والحقول الجديده مباشره لانه لم يعد هناك حقل data في جداول الحسابات والقيود  ويتم حذف اي اكواد ومسميات وملفات غير مستخدمه 
+
+جداول القيود والسندات والعمليات الماليه الجديده هي 
+Main_Entry
+Account_Trans
+فقط 
+
+اما JournalEntry و AccountTransaction تم حذفهم نهايا ولذالك قم بحذف اي مسميات او حقول او عمليات او اي صله بهم نهائيا 
+```

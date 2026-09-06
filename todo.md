@@ -386,6 +386,16 @@
 - [x] التأكد من اختفاء الطلبات المحذوفة لحظياً من الواجهة فور تأكيد الحذف ودون الحاجة لإعادة تحميل الصفحة.
 - [x] اجتياز فحص التركيب والتجميع `npx tsc --noEmit` بنسبة 100% وخلو المشروع تماماً من أي أخطاء.
 
+## [2026-09-06 22:25:00] — دعم التحويل التلقائي للقيد المالي بين عملتين غير افتراضيتين (Cross-Currency Vouchers)
+- [x] تحديث `buildLegacyVoucherLine` بـ `financialEntryService.ts` لدعم التحويل بين عملتين غير افتراضيتين (مثل USD و SAR حين تكون عملة النظام YER) بحساب سعر الصرف لكلتا العملتين عبر `Promise.all([resolvePrice(cur1), resolvePrice(cur2)])` وإثبات المراجع دون رمي استثناء.
+- [x] تحديث `resolveLinePayload` بـ `EntryForm.tsx` لجلب مراجع سعر الصرف ديناميكياً لكلا الساقين عند التحويل بين عملتين غير افتراضيتين.
+- [x] تحديث اختبارات الوحدة بـ `financialEntryService.test.ts` واجتياز كافة الاختبارات بنجاح 100%.
+
+## [2026-09-06 23:26:00] — حل خطأ القيد التلقائي المكرر `main_entry_entry_number_key` وتنظيف الاعتماد على الجداول القديمة
+- [x] حل استثناء قيد المبتكر المكرر `duplicate key value violates unique constraint "main_entry_entry_number_key"` بـ `financialAccountService.ts` عبر توليد `entryNumber` فريد دائماً وحفظ مرجع الطلب بـ `refNumber`.
+- [x] الاعتماد التام على الجداول المحاسبية الحديثة `main_entry` و `account_trans` وتأكيد خلو الخدمات المباشرة من الاستعلام المباشر عن `journal_entries` و `account_transactions`.
+- [x] اجتياز فحص التركيب والتجميع `npx tsc --noEmit` وااختبارات الخدمات `npx vitest run src/services/` (15 ملف اختبار و 77 اختبار بنسبة نجاح 100%).
+
 
 
 

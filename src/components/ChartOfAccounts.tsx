@@ -98,7 +98,7 @@ export default function ChartOfAccounts({
     balance: '',
     currency: 'YER'
   });
-//مهم: يتم تغييرها الى اي حساب تحته ابناء تظهر خاصيه التوسيع له
+  //مهم: يتم تغييرها الى اي حساب تحته ابناء تظهر خاصيه التوسيع له
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({
     '1000': true,
     '1100': true,
@@ -150,8 +150,8 @@ export default function ChartOfAccounts({
       { code: '1000', nameAr: 'الأصول الدفترية الكلية', nameEn: 'Total Assets Base', type: 'Asset', parentCode: null, isSystem: true },
 
       { code: '1100', nameAr: 'الأصول المتداولة والسيولة', nameEn: 'Current Assets & Liquidity', type: 'Asset', parentCode: '1000', isSystem: true },
-      { code: '1110', nameAr: 'نقدية الصناديق والخزائن الحية', nameEn: 'Safe-Box Cash Accounts (Live)', type: 'Asset', parentCode: '1100', isSystem: true, balance: cashBalance, currency: 'YER' },      
-      
+      { code: '1110', nameAr: 'نقدية الصناديق والخزائن الحية', nameEn: 'Safe-Box Cash Accounts (Live)', type: 'Asset', parentCode: '1100', isSystem: true, balance: cashBalance, currency: 'YER' },
+
       { code: '1120', nameAr: 'ذمم وشحنات العملاء المعلقة المدينة', nameEn: 'Accounts Receivable (Pending Cargo)', type: 'Asset', parentCode: '1100', isSystem: true, balance: 0, currency: 'YER' },
       { code: '1130', nameAr: 'حسابات العملاء الماليين الكلية', nameEn: 'Customers Financial Accounts Ledger', type: 'Asset', parentCode: '1120', isSystem: true },
 

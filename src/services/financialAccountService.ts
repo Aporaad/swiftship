@@ -754,8 +754,9 @@ class FinancialAccountService {
 
     const journalEntry: Omit<JournalEntry, "id"> = {
       entryNumber:
-        transaction.refNumber ||
-        `JV-${transaction.date}-${Math.floor(1000 + Math.random() * 9000)}`,
+        (transaction as any).entryNumber ||
+        transaction.automationKey ||
+        `JV-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${Math.floor(100000 + Math.random() * 900000)}`,
       createdAt: transaction.date || Date.now(),
       description: transaction.description || "",
       attachments: transaction.attachments || [],
