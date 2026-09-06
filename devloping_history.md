@@ -724,7 +724,74 @@
 5. **فحص الأنواع والتجميع (`TypeScript Verification`)**:
    - اجتياز فحص `npx tsc --noEmit --skipLibCheck` بنجاح بنسبة 100% وبدون أي خطأ.
 
+---
 
+## [2026-09-06 07:15:00] — إعادة هيكلة الكتالوج الرئيسي للمنتجات وحركة البنود في بنود الطلبات (products & order_items)
+
+### التحديثات والتحسينات المنجزة:
+1. **جدول المنتجات الرئيسي (`products`)**:
+   - تحويل جدول المنتجات ليصبح كتالوجاً رئيسياً ثابتاً غير مرتبط بأي طلب أو شحنة نهائياً، مع تخزين كافة المواصفات في أعمدة SQL صريحة (`product_id`, `product_name_ar`, `product_name_en`, `product_url`, `unit_price`, `item_category_id`, `is_allowed`, `cbm`, `width`, `height`, `length`, `weight`).
+
+2. **جدول بنود الطلبات (`order_items`)**:
+   - إنشاء واعتناد جدول بنود الطلبات لربط الطلب بالمنتج الرئيسي وتخزين تفاصيل الحركة الخاصة بالطلب (`items_id`, `order_id`, `product_id`, `product_price`, `quantity`, `total_price`, `total__weight`, `total_cbm`, `is_insured`, `insurance_fee`, `items_status`).
+
+3. **خدمات المنتجات ومحول النظام**:
+   - إنشاء `productService.ts` لدعم كافة عمليات CRUD، واحتساب عدد طلبات المنتج، وعرض حركات المنتج، وإجراء عملية الإرجاع للمنتجات المؤمنة (`is_insured=true`) بحالة `مرتجع`.
+   - تحديث `supabase-firebase-adapter.ts` وتعيين `DIRECT_COLUMNS_MAP` وإدراج `products` و `order_items` ضمن `EXPLICIT_FINANCIAL_TABLES`.
+
+4. **تحديث الصلاحيات وواجهة المنتجات والمودالات**:
+   - تحديث `permissions.ts` و `Roles.tsx` بالصلاحيات السباعية للمنتجات وحركتها.
+   - تحديث `ProductsManagementTab.tsx` بتبويبتين مستقلتين: **المنتجات الرئيسية** (Master Products) و **حركة المنتجات** (Product Movements).
+   - تحديث `CreateOrderModal.tsx`, `EditOrderModal.tsx`, و `ProductPickerModal.tsx` لدعم اختيار واستدعاء المنتجات الرئيسية وحفظ أسطر الطلب بجدول `order_items`.
+
+5. **فحص الأنواع والتجميع (`TypeScript Verification`)**:
+   - اجتياز فحص `npx tsc --noEmit` بنسبة 100% وخلو المشروع تماماً من أي أخطاء.
+
+---
+
+## [2026-09-06 20:15:00] — تصحيح تعيين المفاتيح الرئيسية وقواعد الكتابة للجداول `products` و `order_items` في المحول
+
+### التغييرات والإجراءات المنفذة:
+1. **تشخيص المشكلة والسبب الجذري**:
+   - عند إنشاء طلب جديد أو إضافة منتج رئيسي، كان المحول `supabase-firebase-adapter.ts` يقوم بإرسال حقل `id` ضمن حمولة الكتابة الموجهة لـ Supabase REST API (`POST /rest/v1/products`).
+   - تبين أن المفتاح الرئيسي لجدول `products` في PostgreSQL هو `product_id` ولجدول `order_items` هو `items_id` ولا يوجد عمود باسم `id` في المخطط.
+   - تسبب ذلك في خطأ Supabase REST API: `400 Bad Request` و `Could not find the 'id' column of 'products' in the schema cache`.
+
+2. **تحديث `TABLE_PRIMARY_KEY_MAP` ودالة `getTablePrimaryKey` في `supabase-firebase-adapter.ts`**:
+   - تم إنشاء خريطة موحدة للمفاتيح الرئيسية للجداول التي لا تستخدم العمود الافتراضي `id`:
+     - `products` -> `product_id`
+     - `order_items` -> `items_id`
+     - `currency` -> `cur_id`
+   - تحديث دوال `addDoc`, `addAssDoc`, `setDoc`, `updateDoc`, `deleteDoc`, `extractRowPayload`, `ensureCache`, `getDoc` لاستخدام اسم العمود الصحيح للمفتاح الرئيسي لكل جدول أثناء عمليات الاستعلام والإدراج والتحديث والحذف والمزامنة الحية.
+
+3. **الالتزام بمعايير النظافة والأمان واجتياز التحقق**:
+   - تم الحفاظ على مرادفات `id` و `product_id` و `items_id` في كائنات الذاكرة الحية لمنع حدوث أي كسر في مكونات React أو الخدمات التابعة.
+   - التأكد من اجتياز فحص النمط وأنواع TypeScript عبر `npx tsc --noEmit` بنجاح وتوثيق التغييرات بالكامل.
+
+---
+
+## [2026-09-06 21:21:00] — تقييد اختيار المنتجات بالأصناف المسموحة واستكمال ملف الأوامر
+
+### التحديثات والتعديلات المنفذة:
+1. **تحديث `ProductPickerModal.tsx`**:
+   - إضافة تصفية صارمة في مودال اختيار منتج من الكتالوج بحقل `is_allowed !== false` لضمان ظهور المنتجات المسموح بها فقط وفق كراسة الشروط.
+2. **إنشاء ملف `user_commends.md`**:
+   - توثيق نص التوجيه الصادر بالكامل مع التاريخ والوقت واسم نموذج الذكاء الاصطناعي المنفذ (`Antigravity / Gemini 3.6 Flash`).
+3. **التحقق الشامل والتأكد من استقرار النظام**:
+   - فحص TypeScript بـ `npx tsc --noEmit` للتأكد من انعدام أخطاء البناء والأنواع تماماً.
+
+---
+
+## [2026-09-06 21:37:00] — مطابقة واجهة ProductPickerModal مع جدول المنتجات الرئيسية products وخدمة productService.ts
+
+### التحديثات والتعديلات المنفذة:
+1. **شرح وتوضيح حقول `SystemProductRecord` القديمة**:
+   - توضيح أن حقول `orderId`, `trackingNumber`, `quantity`, `isInsured`, `packagingOptionName`, `notes` كانت تخص التنسيق القديم المختلط قبل الفصل بين الكتالوج وحركات الطلبات.
+   - تم ربط الواجهة بـ `Product` من `productService.ts` لتقتصر المودال على استدعاء وعرض المنتجات الكتالوجية المسموحة من جدول `products`.
+
+2. **تحديث `ProductPickerModal.tsx` وربط المرادفات**:
+   - إتاحة مرادفات الوصول (`product_id` / `id`, `product_name_ar` / `productName`, `unit_price` / `productPrice`) للتأكد من استقرار عملية التمرير واختيار الأصناف في `CreateOrderModal.tsx` و `EditOrderModal.tsx`.
+   - مطابقة `ProductPickerModal.tsx` و `productService.ts` و `ProductsManagementTab.tsx` بنسبة 100%.
 
 
 

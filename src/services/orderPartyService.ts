@@ -39,7 +39,7 @@ export function buildOrderParties(customers: any[] = [], employees: any[] = [], 
 export function filterOrderParties(parties: OrderParty[], queryText = '', staffOnly = false): OrderParty[] {
   const query = normalized(queryText);
   return parties.filter((party) => {
-    // staffOnly=true: عرض الموظفين والمناديب فقط | staffOnly=false: عرض الكل
+    // staffOnly=true: عرض الموظفين والمناديب فقط | staffOnly=false: عرض العملاء فقط
     // staffOnly=true: show employees & couriers only | staffOnly=false: show all
     if (staffOnly && party.type === 'customer') return false;
     if (!query) return true;
@@ -49,7 +49,7 @@ export function filterOrderParties(parties: OrderParty[], queryText = '', staffO
 }
 
 export function findOrderParty(order: any, customers: any[] = [], employees: any[] = [], couriers: any[] = []): OrderParty | null {
-  const partyType = (order?.orderPartyType || order?.customerType || (order?.isStaffOrder ? 'employee' : 'customer')) as OrderPartyType;
+  const partyType = (order?.customerType || order?.orderPartyType || (order?.isStaffOrder ? 'employee' : 'customer')) as OrderPartyType;
   const partyId = partyType === 'employee'
     ? (order?.employeeId || order?.employee_id || order?.orderPartyId)
     : partyType === 'courier'

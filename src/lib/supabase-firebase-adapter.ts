@@ -261,10 +261,10 @@ export function enrichOrderPayload(item: any): any {
   const orderId = item.id;
   const orderNum = item.order_number || item.orderNumber;
 
-  const productsCache = collectionCaches['products'] || [];
-  const matchedProducts = productsCache.filter((p: any) =>
-    (p.order_id && (p.order_id === orderId || p.order_id === orderNum)) ||
-    (p.orderId && (p.orderId === orderId || p.orderId === orderNum))
+  const orderItemsCache = collectionCaches['order_items'] || collectionCaches['products'] || [];
+  const matchedOrderItems = orderItemsCache.filter((oi: any) =>
+    (oi.order_id && (oi.order_id === orderId || oi.order_id === orderNum)) ||
+    (oi.orderId && (oi.orderId === orderId || oi.orderId === orderNum))
   );
 
   const shipmentsCache = collectionCaches['shipments'] || [];
@@ -275,8 +275,9 @@ export function enrichOrderPayload(item: any): any {
 
   return {
     ...item,
-    items: matchedProducts,
-    products: matchedProducts,
+    items: matchedOrderItems,
+    products: matchedOrderItems,
+    orderItems: matchedOrderItems,
     shippingDetails: matchedShipments,
     shippings: matchedShipments
   };
@@ -284,7 +285,8 @@ export function enrichOrderPayload(item: any): any {
 
 export function extractRowPayload(table: string, row: any): any {
   if (!row) return {};
-  const rowId = row.id;
+  const pkCol = getTablePrimaryKey(table);
+  const rowId = row[pkCol] || row.id || row.product_id || row.items_id || row.cur_id;
   const rawData = typeof row.data === 'string' ? JSON.parse(row.data) : (row.data || {});
 
   // Extract top-level database columns excluding the 'data' JSON column itself
@@ -321,6 +323,15 @@ export function extractRowPayload(table: string, row: any): any {
   if (combined.nameEn && !combined.name_en) combined.name_en = combined.nameEn;
   if (combined.is_active !== undefined && combined.isActive === undefined) combined.isActive = !!combined.is_active;
   if (combined.isActive !== undefined && combined.is_active === undefined) combined.is_active = !!combined.isActive;
+
+  // Primary key explicit field aliases
+  if (table === 'products') {
+    if (rowId && !combined.product_id) combined.product_id = rowId;
+    if (rowId && !combined.productId) combined.productId = rowId;
+  } else if (table === 'order_items') {
+    if (rowId && !combined.items_id) combined.items_id = rowId;
+    if (rowId && !combined.itemsId) combined.itemsId = rowId;
+  }
 
   // Compatibility aliases for account_trans and main_entry
   if (table === 'account_trans') {
@@ -382,7 +393,7 @@ export function extractRowPayload(table: string, row: any): any {
   }
 
   const normalized = normalizePayload(table, combined);
-  return { id: rowId, ...normalized };
+  return { id: rowId, [pkCol]: rowId, ...normalized };
 }
 
 async function ensureCache(table: string): Promise<any[]> {
@@ -406,9 +417,9 @@ async function ensureCache(table: string): Promise<any[]> {
     }
   }
 
-  // Pre-load products and shipments when fetching orders to ensure relational fields items and shippingDetails are populated
+  // Pre-load products, order_items and shipments when fetching orders to ensure relational fields items and shippingDetails are populated
   if (table === 'orders' && !isOfflineMode()) {
-    Promise.all([ensureCache('products'), ensureCache('shipments')]).catch(() => { });
+    Promise.all([ensureCache('products'), ensureCache('order_items'), ensureCache('shipments')]).catch(() => { });
   }
 
   // 2. Fetch from network ONLY if cache is stale or has never fetched
@@ -760,7 +771,8 @@ const DIRECT_COLUMNS_MAP: Record<string, Record<string, string>> = {
   jobs_req: { email: 'email', phone: 'phone', status: 'status', category: 'category', refCode: 'refCode', createdAt: 'createdAt' },
   announcements: { title: 'title', isActive: 'isActive', priority: 'priority', createdBy: 'createdBy', createdAt: 'createdAt' },
   portal_tickets: { type: 'type', status: 'status', userUid: 'userUid', createdAt: 'createdAt' },
-  products: { orderId: 'order_id', productName: 'product_name', name: 'product_name', quantity: 'quantity', productPrice: 'unit_price', price: 'unit_price', unitPrice: 'unit_price', totalPrice: 'total_price', packagingOptionId: 'packaging_option_id', packaging_option_id: 'packaging_option_id', itemCategoryId: 'item_category_id', item_category_id: 'item_category_id', itemCategoryName: 'item_category_name', createdAt: 'createdAt' },
+  products: { productId: 'product_id', product_id: 'product_id', productNameAr: 'product_name_ar', product_name_ar: 'product_name_ar', productNameEn: 'product_name_en', product_name_en: 'product_name_en', productUrl: 'product_url', product_url: 'product_url', productPriceCurrency: 'product_price_currency', product_price_currency: 'product_price_currency', unitPrice: 'unit_price', unit_price: 'unit_price', itemCategoryId: 'item_category_id', item_category_id: 'item_category_id', isAllowed: 'is_allowed', is_allowed: 'is_allowed', cbm: 'cbm', width: 'width', height: 'height', length: 'length', weight: 'weight', createdAt: 'created_at', created_at: 'created_at', createdBy: 'created_by', created_by: 'created_by', updatedAt: 'updated_at', updated_at: 'updated_at', updatedBy: 'updated_by', updated_by: 'updated_by' },
+  order_items: { itemsId: 'items_id', items_id: 'items_id', orderId: 'order_id', order_id: 'order_id', productId: 'product_id', product_id: 'product_id', productPrice: 'product_price', product_price: 'product_price', productUrl: 'product_url', product_url: 'product_url', trackingNumber: 'tracking_number', tracking_number: 'tracking_number', producSourceId: 'produc_source_id', produc_source_id: 'produc_source_id', producSourceUrl: 'produc_source_url', produc_source_url: 'produc_source_url', productCooler: 'product_cooler', product_cooler: 'product_cooler', nota: 'nota', quantity: 'quantity', totalPrice: 'total_price', total_price: 'total_price', totalWeight: 'total__weight', total_weight: 'total__weight', total__weight: 'total__weight', totalCbm: 'total_cbm', total_cbm: 'total_cbm', packagingOptionId: 'packaging_option_id', packaging_option_id: 'packaging_option_id', packagingOptionPrice: 'packaging_option_price', packaging_option_price: 'packaging_option_price', isInsured: 'is_insured', is_insured: 'is_insured', insuranceFee: 'insurance_fee', insurance_fee: 'insurance_fee', itemsStatus: 'items_status', items_status: 'items_status', createdAt: 'created_at', created_at: 'created_at', createdBy: 'created_by', created_by: 'created_by', updatedAt: 'updated_at', updated_at: 'updated_at', updatedBy: 'updated_by', updated_by: 'updated_by' },
   shipments: { orderId: 'order_id', trackingNumber: 'tracking_number', shippingCompanyId: 'shipping_company_id', shipping_company_id: 'shipping_company_id', courierId: 'courier_id', shipmentStatus: 'shipment_status', status: 'shipment_status', shippingCost: 'shipping_cost', weight: 'weight', shippingCategoryId: 'shipping_category_id', shipping_category_id: 'shipping_category_id', contentCategoryId: 'content_category_id', content_category_id: 'content_category_id', contentCategoryName: 'content_category_name', cartonCount: 'carton_count', customsFee: 'customs_fee', taxFee: 'tax_fee', otherCategoryFee: 'other_category_fee', categoryFeesTotal: 'category_fees_total', categoryFeeCurrency: 'category_fee_currency', createdAt: 'createdAt' },
   orders_history: { orderId: 'order_id', orderNumber: 'order_number', shipmentId: 'shipment_id', journalEntryId: 'journal_entry_id', accountTransactionId: 'account_transaction_id', activityLogId: 'activity_log_id', eventType: 'event_type', eventCategory: 'event_category', operation: 'operation', entityType: 'entity_type', actorId: 'actor_id', actorName: 'actor_name', actorRole: 'actor_role', source: 'source', summary: 'summary', beforeData: 'before_data', afterData: 'after_data', metadata: 'metadata', occurredAt: 'occurred_at', createdAt: 'created_at' },
   order_status: { nameAr: 'name_ar', nameEn: 'name_en', isFirst: 'is_first', isLast: 'is_last', sortOrder: 'sort_order', color: 'color', code: 'code' },
@@ -777,12 +789,24 @@ const DIRECT_COLUMNS_MAP: Record<string, Record<string, string>> = {
   financial_migration_exceptions: { legacyTable: 'legacy_table', legacyId: 'legacy_id', exceptionCode: 'exception_code', severity: 'severity', description: 'description', resolutionStatus: 'resolution_status', resolvedByUid: 'resolved_by_uid', resolvedAt: 'resolved_at', createdAt: 'created_at', updatedAt: 'updated_at' }
 };
 
+// خريطة أسماء أعمدة المفاتيح الرئيسية للداول التي لا تستخدم العمود الافتراضي 'id'
+// Primary key column map for tables that do not use the default 'id' column name
+const TABLE_PRIMARY_KEY_MAP: Record<string, string> = {
+  products: 'product_id',
+  order_items: 'items_id',
+  currency: 'cur_id',
+};
+
+export function getTablePrimaryKey(table: string): string {
+  return TABLE_PRIMARY_KEY_MAP[table] || 'id';
+}
+
 // قائمة الجداول المالية العلاقاتية ذات الأعمدة المباشرة فقط (بدون حقل data jsonb)
 // Relational financial tables using explicit columns only (no data jsonb column)
 const EXPLICIT_FINANCIAL_TABLES = new Set([
   'account', 'acc_main', 'acc_sub', 'acc_sub_group', 'default_accounts', 'account_id_migration_map',
   'accounts', 'entry_module', 'entry_type', 'main_entry', 'account_trans', 'custody_advances',
-  'financial_legacy_migration_map', 'financial_migration_exceptions', 'users',
+  'financial_legacy_migration_map', 'financial_migration_exceptions', 'users', 'products', 'order_items',
 ]);
 
 export function usesExplicitFinancialColumns(table: string): boolean {
@@ -864,13 +888,14 @@ export function createWriteError(operation: 'insert' | 'upsert' | 'update' | 'de
 
 export async function addDoc(newID: any, collectionRef: FirebaseQuery, rawData: any) {
   const table = collectionRef.path;
+  const pkCol = getTablePrimaryKey(table);
   const id = newID ? newID : 'noId_' + Math.random().toString(36).substring(2, 11) + Math.random().toString(36).substring(2, 11);
   const rawClean = cleanData(rawData);
   const data = sanitizeDataPayload(table, rawClean);
 
   if (!isOfflineMode()) {
     const directCols = extractDirectColumns(table, rawClean);
-    const writePayload = usesExplicitFinancialColumns(table) ? { id, ...directCols } : { id, ...directCols, data };
+    const writePayload = usesExplicitFinancialColumns(table) ? { [pkCol]: id, ...directCols } : { [pkCol]: id, ...directCols, data };
     const { error } = await supabase.from(table).insert(writePayload);
     if (error) {
       throw createWriteError('insert', table, error);
@@ -879,13 +904,13 @@ export async function addDoc(newID: any, collectionRef: FirebaseQuery, rawData: 
     // Offline mode: buffering addDoc local write
   }
 
-  const newItem = extractRowPayload(table, { id, ...extractDirectColumns(table, rawClean), data });
+  const newItem = extractRowPayload(table, { [pkCol]: id, id, ...extractDirectColumns(table, rawClean), data });
   if (!collectionCaches[table]) collectionCaches[table] = [];
   collectionCaches[table].push(newItem);
 
   // إعلام استماع الطلبات عند إضافة منتج أو شحنة جديدة
   // Notify orders listeners when a product or shipment is added
-  if ((table === 'products' || table === 'shipments') && collectionListeners['orders']) {
+  if ((table === 'products' || table === 'order_items' || table === 'shipments') && collectionListeners['orders']) {
     collectionListeners['orders'].forEach(cb => cb());
   }
 
@@ -903,6 +928,7 @@ export async function addDoc(newID: any, collectionRef: FirebaseQuery, rawData: 
 
 export async function addAssDoc(newID: any, arg1: any, collectionRef: FirebaseQuery, rawData: any) {
   const table = collectionRef.path;
+  const pkCol = getTablePrimaryKey(table);
   const id = newID ? newID : 'noId_' + Math.random().toString(36).substring(2, 11) + Math.random().toString(36).substring(2, 11);
   const assetCode = arg1 ? arg1 : 'noAssetCode_' + Math.random().toString(36).substring(2, 11) + Math.random().toString(36).substring(2, 11);
   const rawClean = cleanData(rawData);
@@ -910,7 +936,7 @@ export async function addAssDoc(newID: any, arg1: any, collectionRef: FirebaseQu
 
   if (!isOfflineMode()) {
     const directCols = extractDirectColumns(table, rawClean);
-    const { error } = await supabase.from(table).insert({ id, assetCode, ...directCols, data });
+    const { error } = await supabase.from(table).insert({ [pkCol]: id, assetCode, ...directCols, data });
     if (error) {
       throw createWriteError('insert', table, error);
     }
@@ -918,7 +944,7 @@ export async function addAssDoc(newID: any, arg1: any, collectionRef: FirebaseQu
     // Offline mode: buffering addDoc local write
   }
 
-  const newItem = extractRowPayload(table, { id, assetCode, ...extractDirectColumns(table, rawClean), data });
+  const newItem = extractRowPayload(table, { [pkCol]: id, id, assetCode, ...extractDirectColumns(table, rawClean), data });
   if (!collectionCaches[table]) collectionCaches[table] = [];
   collectionCaches[table].push(newItem);
 
@@ -936,20 +962,21 @@ export async function addAssDoc(newID: any, arg1: any, collectionRef: FirebaseQu
 
 export async function setDoc(docRef: DocRef, rawData: any, options?: any) {
   const table = docRef.path;
+  const pkCol = getTablePrimaryKey(table);
   const id = docRef.id;
   let rawClean = cleanData(rawData);
 
   if (options && options.merge) {
     const all = await ensureCache(table);
-    const existing = all.find(item => item.id === id) || {};
-    const { id: _, ...existingData } = existing;
+    const existing = all.find(item => item.id === id || item[pkCol] === id) || {};
+    const { id: _, [pkCol]: __, ...existingData } = existing;
     rawClean = { ...existingData, ...rawClean };
   }
   const data = sanitizeDataPayload(table, rawClean);
 
   if (!isOfflineMode()) {
     const directCols = extractDirectColumns(table, rawClean);
-    const writePayload = usesExplicitFinancialColumns(table) ? { id, ...directCols } : { id, ...directCols, data };
+    const writePayload = usesExplicitFinancialColumns(table) ? { [pkCol]: id, ...directCols } : { [pkCol]: id, ...directCols, data };
     const { error } = await supabase.from(table).upsert(writePayload);
     if (error) {
       throw createWriteError('upsert', table, error);
@@ -958,9 +985,9 @@ export async function setDoc(docRef: DocRef, rawData: any, options?: any) {
     // Offline mode: buffering setDoc local write
   }
 
-  const newItem = extractRowPayload(table, { id, ...extractDirectColumns(table, rawClean), data });
+  const newItem = extractRowPayload(table, { [pkCol]: id, id, ...extractDirectColumns(table, rawClean), data });
   if (!collectionCaches[table]) collectionCaches[table] = [];
-  const idx = collectionCaches[table].findIndex(item => item.id === id);
+  const idx = collectionCaches[table].findIndex(item => item.id === id || item[pkCol] === id);
   if (idx >= 0) {
     collectionCaches[table][idx] = newItem;
   } else {
@@ -969,7 +996,7 @@ export async function setDoc(docRef: DocRef, rawData: any, options?: any) {
 
   // إعلام استماع الطلبات عند تعديل منتج أو شحنة
   // Notify orders listeners when a product or shipment is updated
-  if ((table === 'products' || table === 'shipments') && collectionListeners['orders']) {
+  if ((table === 'products' || table === 'order_items' || table === 'shipments') && collectionListeners['orders']) {
     collectionListeners['orders'].forEach(cb => cb());
   }
 
@@ -1008,11 +1035,12 @@ export function arrayUnion(...elements: any[]) {
 
 export async function updateDoc(docRef: DocRef, rawData: any) {
   const table = docRef.path;
+  const pkCol = getTablePrimaryKey(table);
   const id = docRef.id;
 
   const all = await ensureCache(table);
-  const existing = all.find(item => item.id === id) || {};
-  const { id: _, ...existingData } = existing;
+  const existing = all.find(item => item.id === id || item[pkCol] === id) || {};
+  const { id: _, [pkCol]: __, ...existingData } = existing;
 
   const resolvedPayload: any = {};
   for (const k of Object.keys(rawData)) {
@@ -1036,7 +1064,7 @@ export async function updateDoc(docRef: DocRef, rawData: any) {
   if (!isOfflineMode()) {
     const directCols = extractDirectColumns(table, rawClean);
     const writePayload = usesExplicitFinancialColumns(table) ? directCols : { ...directCols, data };
-    const { error } = await supabase.from(table).update(writePayload).eq('id', id);
+    const { error } = await supabase.from(table).update(writePayload).eq(pkCol, id);
     if (error) {
       throw createWriteError('update', table, error);
     }
@@ -1054,15 +1082,15 @@ export async function updateDoc(docRef: DocRef, rawData: any) {
     } catch (_) { }
   }
 
-  const newItem = extractRowPayload(table, { id, ...extractDirectColumns(table, rawClean), data });
-  const idx = collectionCaches[table].findIndex(item => item.id === id);
+  const newItem = extractRowPayload(table, { [pkCol]: id, id, ...extractDirectColumns(table, rawClean), data });
+  const idx = collectionCaches[table].findIndex(item => item.id === id || item[pkCol] === id);
   if (idx >= 0) {
     collectionCaches[table][idx] = newItem;
   }
 
   // إعلام استماع الطلبات عند تحديث منتج أو شحنة
   // Notify orders listeners when a product or shipment is updated
-  if ((table === 'products' || table === 'shipments') && collectionListeners['orders']) {
+  if ((table === 'products' || table === 'order_items' || table === 'shipments') && collectionListeners['orders']) {
     collectionListeners['orders'].forEach(cb => cb());
   }
 
@@ -1078,10 +1106,11 @@ export async function updateDoc(docRef: DocRef, rawData: any) {
 
 export async function deleteDoc(docRef: DocRef) {
   const table = docRef.path;
+  const pkCol = getTablePrimaryKey(table);
   const id = docRef.id;
 
   if (!isOfflineMode()) {
-    const { error } = await supabase.from(table).delete().eq('id', id);
+    const { error } = await supabase.from(table).delete().eq(pkCol, id);
     if (error) {
       throw createWriteError('delete', table, error);
     }
@@ -1090,7 +1119,7 @@ export async function deleteDoc(docRef: DocRef) {
   }
 
   if (collectionCaches[table]) {
-    collectionCaches[table] = collectionCaches[table].filter(item => item.id !== id);
+    collectionCaches[table] = collectionCaches[table].filter(item => item.id !== id && item[pkCol] !== id);
   }
 
   // Safe write update in localStorage backup

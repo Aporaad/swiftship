@@ -537,36 +537,73 @@ export default function EditOrderModal({
       const targetOrderId = orderToEdit.id || orderToEdit.orderNumber;
 
       // حفظ وإدراج منتجات الطلب في جدول المنتجات المخصص
-      // Save order products into dedicated products table
+      // ─── حفظ المنتجات الرئيسية في products وبنود الطلب في order_items ───
+      // Save master products in 'products' table (if new) and line items in 'order_items' table
       if (items && items.length > 0) {
         for (const item of items) {
-          const prodId = item.id || ('prod_' + Math.random().toString(36).substring(2, 11));
-          const prodPayload = {
+          const qty = parseFloat(item.quantity || 1);
+          const unitPrice = parseFloat(item.productPrice || item.price || item.unitPrice || 0);
+          const weight = parseFloat(item.weight || 0);
+          const cbm = parseFloat(item.cbm || 0);
+          const isInsured = Boolean(item.isInsured || item.is_insured);
+          const insuranceFee = isInsured ? (parseFloat(item.insuranceFee || item.insurance_fee) || 0) : 0;
+
+          // 1) التأكد من وجود المنتج الرئيسي أو إنشائه
+          let masterProductId = item.product_id || item.productId || null;
+          if (!masterProductId) {
+            masterProductId = 'prod_' + Math.random().toString(36).substring(2, 11);
+            await addDoc(masterProductId, collection(db, 'products'), {
+              product_id: masterProductId,
+              product_name_ar: item.productName || item.product_name || item.name || 'منتج',
+              product_name_en: item.productNameEn || item.productName || 'Product',
+              product_url: item.productUrl || item.product_url || '',
+              unit_price: unitPrice,
+              item_category_id: item.itemCategoryId || item.item_category_id || null,
+              is_allowed: true,
+              cbm: cbm,
+              width: parseFloat(item.width || 0),
+              height: parseFloat(item.height || 0),
+              length: parseFloat(item.length || 0),
+              weight: weight,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            });
+          }
+
+          // 2) حفظ بند الطلب في جدول order_items
+          const itemId = item.items_id || item.id || ('item_' + Math.random().toString(36).substring(2, 11));
+          const itemPayload = {
+            items_id: itemId,
             order_id: targetOrderId,
-            orderId: targetOrderId,
-            product_name: item.productName || item.product_name || item.name || 'منتج',
-            productName: item.productName || item.product_name || item.name || 'منتج',
-            quantity: parseFloat(item.quantity || 1),
-            unit_price: parseFloat(item.productPrice || item.price || item.unitPrice || 0),
-            unitPrice: parseFloat(item.productPrice || item.price || item.unitPrice || 0),
-            total_price: (parseFloat(item.quantity || 1)) * (parseFloat(item.productPrice || item.price || item.unitPrice || 0)),
-            totalPrice: (parseFloat(item.quantity || 1)) * (parseFloat(item.productPrice || item.price || item.unitPrice || 0)),
+            product_id: masterProductId,
+            product_price: unitPrice,
+            product_url: item.productUrl || item.product_url || '',
+            tracking_number: item.trackingNumber || item.tracking_number || '',
+            produc_source_id: formData.orderSourceId || null,
+            produc_source_url: item.productUrl || item.product_url || '',
+            product_cooler: item.productName || item.product_name || item.name || 'منتج',
+            nota: item.notes || item.description || '',
+            quantity: qty,
+            total_price: qty * unitPrice,
+            total__weight: weight * qty,
+            total_cbm: cbm * qty,
             packaging_option_id: item.packagingOptionId || item.packaging_option_id || null,
-            item_category_id: item.itemCategoryId || item.item_category_id || null,
-            item_category_name: item.itemCategoryName || item.item_category_name || '',
-            is_insured: Boolean(item.isInsured),
-            isInsured: Boolean(item.isInsured),
-            insurance_fee: item.isInsured ? (parseFloat(item.insuranceFee) || 0) : 0,
-            insuranceFee: item.isInsured ? (parseFloat(item.insuranceFee) || 0) : 0,
-            createdAt: item.createdAt || Date.now()
+            packaging_option_price: parseFloat(item.packagingOptionPrice || 0),
+            is_insured: isInsured,
+            insurance_fee: insuranceFee,
+            items_status: item.items_status || item.itemsStatus || 'قيد الطلب',
+            created_at: item.created_at || new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           };
-          if (item.id) {
-            await updateDoc(doc(db, 'products', item.id), prodPayload);
+
+          if (item.items_id || item.id) {
+            await updateDoc(doc(db, 'order_items', itemId), itemPayload);
           } else {
-            await addDoc(prodId, collection(db, 'products'), { id: prodId, ...prodPayload });
+            await addDoc(itemId, collection(db, 'order_items'), itemPayload);
           }
         }
       }
+
 
       // حفظ وإدراج شحنات الطلب في جدول الشحنات المخصص
       // Save order shipments into dedicated shipments table

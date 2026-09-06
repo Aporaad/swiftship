@@ -146,6 +146,13 @@ export type PermissionKey =
   | 'post_payment_vouchers'
   | 'edit_posted_payment_vouchers'
   | 'delete_posted_payment_vouchers'
+  | 'view_products'
+  | 'add_products'
+  | 'edit_products'
+  | 'delete_products'
+  | 'view_order_items'
+  | 'edit_order_items'
+  | 'return_order_items'
   | 'unpost_posted_orders';
 
 
@@ -161,6 +168,7 @@ export const PERMISSION_CATEGORIES = {
   orders: { ar: 'الطلبات والتتبع', en: 'Orders & Tracking' },
   order_statuses: { ar: 'مراحل وحالات الطلب', en: 'Order Status Stages' },
   auto_entries: { ar: 'القيود المحاسبية التلقائية', en: 'Auto Entry Rules' },
+  products: { ar: 'المنتجات الرئيسية وحركتها', en: 'Master Products & Movements' },
   customers: { ar: 'العملاء', en: 'Customers' },
   couriers: { ar: 'المناديب', en: 'Couriers' },
   sources: { ar: 'مصادر الشراء والتوريد', en: 'Purchase & Supply Sources' },
@@ -205,6 +213,15 @@ export const ALL_PERMISSIONS: PermissionDefinition[] = [
   { id: 'add_auto_entries', labelAr: 'إنشاء وإضافة قيد تلقائي لمراحل الطلب', labelEn: 'Add Auto Entry Rule', category: 'auto_entries' },
   { id: 'edit_auto_entries', labelAr: 'تعديل وتحديث القيود التلقائية لمراحل الطلب', labelEn: 'Edit Auto Entry Rules', category: 'auto_entries' },
   { id: 'delete_auto_entries', labelAr: 'حذف قيد تلقائي من النظام', labelEn: 'Delete Auto Entry Rule', category: 'auto_entries' },
+
+  // Products & Order Items
+  { id: 'view_products', labelAr: 'عرض قائمة المنتجات الرئيسية', labelEn: 'View Master Products Catalog', category: 'products' },
+  { id: 'add_products', labelAr: 'إضافة منتج رئيسي جديد للكتالوج', labelEn: 'Add New Master Product', category: 'products' },
+  { id: 'edit_products', labelAr: 'تعديل بيانات المنتج الرئيسي', labelEn: 'Edit Master Product Details', category: 'products' },
+  { id: 'delete_products', labelAr: 'حذف منتج رئيسي من الكتالوج', labelEn: 'Delete Master Product', category: 'products' },
+  { id: 'view_order_items', labelAr: 'عرض حركة المنتجات والبنود المطلوبة', labelEn: 'View Product Movements (Order Items)', category: 'products' },
+  { id: 'edit_order_items', labelAr: 'تعديل بيانات بند منتج في طلب', labelEn: 'Edit Order Item Details', category: 'products' },
+  { id: 'return_order_items', labelAr: 'إرجاع منتج مؤمن واسترداد قيمته', labelEn: 'Return Insured Product & Issue Refund', category: 'products' },
 
   // Customers
   { id: 'view_customers', labelAr: 'رؤية قائمة العملاء والملفات الشخصية', labelEn: 'View Customer directory', category: 'customers' },
@@ -374,6 +391,11 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     'view_sources',
     'add_sources',
     'edit_sources',
+    'view_products',
+    'add_products',
+    'edit_products',
+    'view_order_items',
+    'edit_order_items',
     'view_notifications',
     'notify_orders',
     'notify_system',

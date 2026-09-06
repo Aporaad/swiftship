@@ -252,7 +252,8 @@
 - [x] تنظيف قاعدة البيانات وتفريغ حقل `data` في جداول `orders` و `products` و `shipments` من الأعمدة المكررة وإلغاء مصفوفات الأصناف والشحنات المضمنة.
 - [x] تحديث محول الخدمة `supabase-firebase-adapter.ts` وتفعيل `sanitizeDataPayload` و `enrichOrderPayload` لمنع كتابة الأعمدة المكررة وتزويد الأصناف والشحنات المجلوبة صراحة من جداولها.
 - [x] تحديث شاشات ونوافذ الطلبات والمنتجات والشحنات (`Orders.tsx`, `CreateOrderModal.tsx`, `EditOrderModal.tsx`, `ProductsManagementTab.tsx`, `ShipmentFormModal.tsx`) للاعتماد التام على الأعمدة الأساسية والجداول المرتبطة.
-- [x] الفحص الشامل وتأكيد خلو المشروع من أخطاء النوع والتركيب بنسبة 100%.
+- [x] إجراء التحقق الكامل بنسبة 100% لخلو الكود من الأخطاء واجتياز بناء TypeScript وVite.
+- [x] [2026-09-06 20:15:00] حل وتفادي مشكلة خطأ 400 Bad Request وتعذر العثور على عمود `id` في جدول المنتجات `products` وبنود الطلبات `order_items` بتحديث خريطة المفاتيح الرئيسية `TABLE_PRIMARY_KEY_MAP` في `supabase-firebase-adapter.ts`.
 
 ## [2026-09-02 23:58:00] — استكمال تنقية data وحذف الأعمدة المكررة وتثبيت created_by_name و updated_at و updated_by
 - [x] إضافة الأعمدة الأساسية `created_by_name`, `updated_at`, `updated_by` إلى تعيين `DIRECT_COLUMNS_MAP` بجدول `orders` في `supabase-firebase-adapter.ts`.
@@ -351,3 +352,34 @@
 - [x] إصلاح دالة التريجر `orders_history_from_orders()` بـ PostgreSQL وإزالة المرجع المحذوف `OLD.order_status` لمنع استثناء `record "old" has no field "order_status"`.
 - [x] تحديث بيانات الطلبات القائمة بـ SQL لربط `order_status_id = '2'` للطلبات المسددة جزئياً أو كلياً (`ALX-2609-1005`, `ALX-2609-1006`).
 - [x] اجتياز فحص التركيب والتجميع `npx tsc --noEmit --skipLibCheck` بنسبة 100% بدون أي خطأ.
+
+## [2026-09-06 07:15:00] — إعادة هيكلة نظام الكتالوج الرئيسي للمنتجات وحركة الأصناف في بنود الطلبات (products & order_items)
+- [x] إنشاء واستخدام جدول الكتالوج الرئيسي للمنتجات `products` بدون أي ربط بالطلبات أو الشحنات مع تعيين الحقول الصريحة (`product_id`, `product_name_ar`, `product_name_en`, `product_url`, `unit_price`, `item_category_id`, `is_allowed`, `cbm`, `width`, `height`, `length`, `weight`).
+- [x] إنشاء واستخدام جدول بنود الطلبات `order_items` لربط الطلب بالمنتج الرئيسي وتخزين تفاصيل البند (`items_id`, `order_id`, `product_id`, `product_price`, `quantity`, `total_price`, `total__weight`, `total_cbm`, `is_insured`, `insurance_fee`, `items_status`).
+- [x] تحديث `supabase-firebase-adapter.ts` لإدراج `products` و `order_items` في قائمة الجداول المباشرة `EXPLICIT_FINANCIAL_TABLES` وإثراء الاستعلامات المباشرة.
+- [x] بناء الخدمة البرمجية `productService.ts` لكافة عمليات CRUD وإرجاع الأصناف المؤمنة وإلغاء الاعتماد التام على المساعدات القديمة.
+- [x] تحديث الصلاحيات في `permissions.ts` و `Roles.tsx` لدعم `view_products`, `add_products`, `edit_products`, `delete_products`, `view_order_items`, `edit_order_items`, `return_order_items`.
+- [x] تحديث واجهة إدارة المنتجات `ProductsManagementTab.tsx` بتبويبتين مستقلتين: Tab 1 (المنتجات الرئيسية) و Tab 2 (حركة المنتجات عبر بنود الطلبات).
+- [x] تحديث نماذج إنشاء وتعديل الطلبات (`CreateOrderModal.tsx`, `EditOrderModal.tsx`) ومودال اختيار المنتجات `ProductPickerModal.tsx` لربط الكتالوج الرئيسي وحفظ أسطر البنود في `order_items`.
+- [x] اجتياز فحص فحص التركيب والتجميع `npx tsc --noEmit` بنسبة 100% بدون أي خطأ.
+
+## [2026-09-06 21:21:00] — استكمال فحص وإصلاح المحول وتخصيص الفلترة بالأصناف المسموحة فقط
+- [x] تصفية واجهة اختيار منتج من القائمة المسجلة `ProductPickerModal.tsx` لإظهار الاصناف المسموحة فقط (`is_allowed !== false`).
+- [x] تأكيد حل تعذر إنشاء الطلبات وإصلاح خطأ `Could not find the 'id' column of 'products' in the schema cache` عبر تعيين المفتاح الرئيسي `product_id` و `items_id` بـ `supabase-firebase-adapter.ts`.
+- [x] إنشاء واستكمال توثيق ملف `user_commends.md` بنص الأمر الدقيق والتوقيت واسم نموذج الذكاء الاصطناعي المنفذ.
+- [x] اجتياز فحص التركيب والتجميع `npx tsc --noEmit` بنسبة 100% بدون أي خطأ.
+
+## [2026-09-06 21:37:00] — مطابقة واجهة ProductPickerModal مع جدول المنتجات الرئيسية products وخدمة productService.ts
+- [x] إعادة هيكلة واجهة `SystemProductRecord` في `ProductPickerModal.tsx` وربطها بـ `Product` من `productService.ts`.
+- [x] إزالة اعتماد `ProductPickerModal.tsx` على حقول الطلبات القديمة المتروكة وتوضيح أسباب وجودها سابقاً.
+- [x] توفير مرادفات وصول مرنة (`product_id` / `id`, `unit_price` / `productPrice`, `product_name_ar` / `productName`) لعدم كسر واجهات إنشاء وتعديل الطلبات (`CreateOrderModal.tsx`, `EditOrderModal.tsx`).
+- [x] تأكيد وتنسيق التوافق بين `ProductPickerModal.tsx` و `productService.ts` و `ProductsManagementTab.tsx`.
+
+## [2026-09-06 21:55:00] — إصلاح إجراء حذف الطلبات الذري `delete_orders_with_dependents` وتريجر التاريخ `orders_history_from_orders`
+- [x] إصلاح استعلام حذف بنود الطلبات في دالة `delete_orders_with_dependents` للتوجيه إلى جدول `order_items` بدلاً من `products` (الذي أصبح كتلجاً عاماً ولا يملك عمود `order_id`).
+- [x] حل استثناء `orders_history_order_id_fkey` بدالة التريجر `orders_history_from_orders` عبر إرسال `NULL` لـ `order_id` عند عمليات الحذف `TG_OP = 'DELETE'`.
+- [x] إنشاء وتنفيذ المهاجرة `202609060001_fix_order_deletion_rpc_and_triggers.sql` في قاعدة بيانات Supabase بنجاح.
+
+
+
+

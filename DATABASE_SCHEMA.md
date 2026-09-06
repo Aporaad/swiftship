@@ -39,6 +39,26 @@ Data jsonb  --جميع الحقول داخله
 "jobs_req"
 
 =============
+products {
+"product_id","product_name_ar","product_name_en","product_url",
+"product_price_currency" ->currency.id ,"unit_price",
+"item_category_id"->items_category.id,"is_allowed"
+"cbm","width","height","length","weight",
+"created_at","created_by","updated_at","updated_by"
+}
+----
+order_items {
+"items_id",
+"order_id-> order.id",
+"product_id -> products.product_id","product_price",
+"product_url","tracking_number","produc_source_id->sources.id","produc_source_url"
+"product_cooler","nota"
+"quantity","total_price","total__weight","total_cbm",
+"packaging_option_id ->order_option.id","packaging_option_price",
+"is_insured","insurance_fee","items_status:[قيد الطلب/محجوز بالميناء/تم مصادرته/وصل المخزن/تم التسليم/مرتجع]"
+"created_at","created_by","updated_at","updated_by"
+}
+
 users :(id,role,username,email,disabled,linkedEntity,data{})
 portal_users :(id,portal_role,username,email,disabled,approval_status,linkedAccId,data{})
 sessions:(id,user_id,createdAt,lastSeen,forceLogout,data{})

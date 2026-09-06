@@ -1178,43 +1178,71 @@ export default function Orders() { // دالة عرض الطلبات
       await addDoc(payload.orderNumber, collection(db, 'orders'), payload);
 
 
-      // Save products to products table
+      // ─── حفظ المنتجات الرئيسية في products ثم بنود الطلب في order_items ───
+      // Save master products in 'products' table (if brand new),
+      // then save each order line item in 'order_items' referencing the master product.
       if (items && items.length > 0) {
         for (const item of items) {
-          const prodId = 'prod_' + Math.random().toString(36).substring(2, 11);
-          await addDoc(prodId, collection(db, 'products'), {
-            id: prodId,
-            // أعمدة مباشرة في جدول المنتجات
-            order_id: payload.orderNumber,
-            orderId: payload.orderNumber,
-            product_name: item.productName || item.name || 'منتج',
-            productName: item.productName || item.name || 'منتج',
-            quantity: parseFloat(item.quantity || 1),
-            unit_price: parseFloat(item.productPrice || item.price || item.unitPrice || 0),
-            unitPrice: parseFloat(item.productPrice || item.price || item.unitPrice || 0),
-            total_price: (parseFloat(item.quantity || 1)) * (parseFloat(item.productPrice || item.price || item.unitPrice || 0)),
-            totalPrice: (parseFloat(item.quantity || 1)) * (parseFloat(item.productPrice || item.price || item.unitPrice || 0)),
-            packaging_option_id: item.packagingOptionId || item.packaging_option_id || null,
-            packagingOptionId: item.packagingOptionId || item.packaging_option_id || null,
-            item_category_id: item.itemCategoryId || item.item_category_id || null,
-            itemCategoryId: item.itemCategoryId || item.item_category_id || null,
-            item_category_name: item.itemCategoryName || item.item_category_name || '',
-            itemCategoryName: item.itemCategoryName || item.item_category_name || '',
-            is_insured: Boolean(item.isInsured),
-            isInsured: Boolean(item.isInsured),
-            insurance_fee: item.isInsured ? (parseFloat(item.insuranceFee) || 0) : 0,
-            insuranceFee: item.isInsured ? (parseFloat(item.insuranceFee) || 0) : 0,
-            // حقول إضافية تُخزَّن في data
-            weight: parseFloat(item.weight || 0),
-            height: parseFloat(item.height || 0),
-            length: parseFloat(item.length || 0),
-            width: parseFloat(item.width || 0),
-            cbm: parseFloat(item.cbm || 0),
-            productUrl: item.productUrl || '',
-            trackingNumber: item.trackingNumber || '',
-            packagingOptionName: item.packagingOptionName || '',
-            packagingOptionPrice: parseFloat(item.packagingOptionPrice || 0),
-            createdAt: Date.now()
+          const qty      = parseFloat(item.quantity   || 1);
+          const unitPrice = parseFloat(item.productPrice || item.price || item.unitPrice || 0);
+          const weight   = parseFloat(item.weight || 0);
+          const cbm      = parseFloat(item.cbm    || 0);
+          const isInsured = Boolean(item.isInsured);
+          const insuranceFee = isInsured ? (parseFloat(item.insuranceFee) || 0) : 0;
+
+          // ── إذا كان المنتج جديداً (لا يحمل product_id) → أنشئه في products أولاً ──
+          // If the item has no master product ID, create a new master product record
+          let masterProductId = item.product_id || item.productId || null;
+
+          if (!masterProductId) {
+            masterProductId = 'prod_' + Math.random().toString(36).substring(2, 11);
+            await addDoc(masterProductId, collection(db, 'products'), {
+              product_id:           masterProductId,
+              product_name_ar:      item.productName || item.name || 'منتج',
+              product_name_en:      item.productNameEn || item.productName || item.name || 'Product',
+              product_url:          item.productUrl || '',
+              unit_price:           unitPrice,
+              item_category_id:     item.itemCategoryId || item.item_category_id || null,
+              is_allowed:           true,
+              cbm:                  cbm,
+              width:                parseFloat(item.width  || 0),
+              height:               parseFloat(item.height || 0),
+              length:               parseFloat(item.length || 0),
+              weight:               weight,
+              created_at:           new Date().toISOString(),
+              created_by:           profile?.fullName || 'system',
+              updated_at:           new Date().toISOString(),
+              updated_by:           profile?.fullName || 'system',
+            });
+          }
+
+          // ── حفظ بند الطلب في order_items مرتبطاً بالطلب والمنتج الرئيسي ──
+          // Save order line item in 'order_items' linked to order & master product
+          const itemId = 'item_' + Math.random().toString(36).substring(2, 11);
+          await addDoc(itemId, collection(db, 'order_items'), {
+            items_id:              itemId,
+            order_id:              payload.orderNumber,
+            product_id:            masterProductId,
+            product_price:         unitPrice,
+            product_url:           item.productUrl || '',
+            tracking_number:       item.trackingNumber || '',
+            produc_source_id:      formData.orderSourceId || null,
+            produc_source_url:     item.productUrl || '',
+            product_cooler:        item.productName || item.name || 'منتج',
+            nota:                  item.notes || item.description || '',
+            quantity:              qty,
+            total_price:           qty * unitPrice,
+            total__weight:         weight * qty,
+            total_cbm:             cbm * qty,
+            packaging_option_id:   item.packagingOptionId || null,
+            packaging_option_price: parseFloat(item.packagingOptionPrice || 0),
+            is_insured:            isInsured,
+            insurance_fee:         insuranceFee,
+            items_status:          'قيد الطلب',
+            created_at:            new Date().toISOString(),
+            created_by:            profile?.fullName || 'system',
+            updated_at:            new Date().toISOString(),
+            updated_by:            profile?.fullName || 'system',
           });
         }
       }

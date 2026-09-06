@@ -494,7 +494,7 @@ export default function CreateOrderModal(
           </div>
 
           {/* Fixed Metrics Bar (5 Persistent Fields across steps) */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 bg-slate-900/90 border border-slate-800/80 p-3 rounded-2xl text-xs font-bold">
+          <div className="grid grid-cols-2 sm:grid-cols-6 gap-2.5 bg-slate-900/90 border border-slate-800/80 p-3 rounded-2xl text-xs font-bold">
             {/* 1. Order Number */}
             <div className="bg-slate-955/70 p-2.5 rounded-xl border border-slate-800/60 text-start">
               <span className="block text-[9px] text-slate-500 font-black uppercase tracking-wider">
@@ -544,6 +544,23 @@ export default function CreateOrderModal(
                 {(calcs?.profitCompanySAR || 0).toLocaleString()} SAR
               </span>
             </div>
+            {/* Calculator Button */}
+            <div className="bg-slate-955/70 p-2.5 rounded-xl border border-slate-800/60 text-start col-span-2 sm:col-span-1">
+              <button
+                type="button"
+                onClick={() => setIsCalcOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-[#d4af37]/10 bg-[#d4af37]/5 hover:bg-[#d4af37]/25 px-2.5 py-1.5 text-xs font-bold text-[#f4d870] transition active:scale-95 cursor-pointer"
+                title={isAr ? 'فتح الآلة الحاسبة والمصارفة' : 'Calculator & Currency Exchange'}
+              >
+                <Calculator className="h-6 w-6 text-[#f4d870]" />
+              </button>
+              {/* Financial Calculator Modal */}
+              <FinancialCalculatorModal
+                isOpen={isCalcOpen}
+                onClose={() => setIsCalcOpen(false)}
+                currencies={activeCurrencies}
+              />
+            </div>
           </div>
         </div>
 
@@ -573,7 +590,7 @@ export default function CreateOrderModal(
                 <button
                   key={step.id}
                   type="button"
-                  onClick={() => handleStepClick(step.id)}
+                  onClick={() => { /* handleStepClick(step.id)*/ }}
                   className={`relative z-10 flex flex-col items-center group cursor-pointer transition-all ${isActive ? 'scale-105' : 'hover:scale-102'
                     }`}
                 >
@@ -1417,7 +1434,7 @@ export default function CreateOrderModal(
                             />
                           </div>
 
-                          <div className="md:col-span-4 border-t border-cyan-500/15 pt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2.5">
+                          {/* <div className="md:col-span-4 border-t border-cyan-500/15 pt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2.5">
                             <div className="lg:col-span-2">
                               <label className="block text-cyan-300 mb-1 font-black">{isAr ? 'فئة محتوى الشحنة' : 'Shipment content category'}</label>
                               <select
@@ -1438,13 +1455,13 @@ export default function CreateOrderModal(
                                 onChange={(e) => updateShipmentContentCategory(idx, sh.contentCategoryId || '', Math.max(0, parseInt(e.target.value, 10) || 0))}
                                 className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-mono text-center"
                               />
-                            </div>
+                            </div> 
                             <ShipmentFeeCell label={isAr ? 'جمارك' : 'Customs'} value={sh.customsFee} currency={sh.categoryFeeCurrency} />
                             <ShipmentFeeCell label={isAr ? 'ضريبة' : 'Tax'} value={sh.taxFee} currency={sh.categoryFeeCurrency} />
                             <ShipmentFeeCell label={isAr ? 'رسوم أخرى' : 'Other fees'} value={sh.otherCategoryFee} currency={sh.categoryFeeCurrency} />
                             <ShipmentFeeCell label={isAr ? 'إجمالي رسوم الفئة' : 'Category fees total'} value={sh.categoryFeesTotal} currency={sh.categoryFeeCurrency} emphasized />
                             <p className="lg:col-span-7 text-[9px] text-slate-500">{isAr ? 'تسجل هذه الرسوم مع الشحنة فقط، ولا تُضاف إلى إجمالي الطلب أو الدفعة المطلوبة.' : 'These fees are stored with the shipment only and are not added to the order total or payment due.'}</p>
-                          </div>
+                          </div> */}
                         </div>
                       </div>
                     ))}
@@ -1953,16 +1970,7 @@ export default function CreateOrderModal(
                         </span>
                       </div>
 
-                      {/* Calculator Button */}
-                      <button
-                        type="button"
-                        onClick={() => setIsCalcOpen(true)}
-                        className="inline-flex items-center gap-1.5 rounded-xl border border-[#d4af37]/40 bg-[#d4af37]/10 hover:bg-[#d4af37]/25 px-2.5 py-1 text-xs font-bold text-[#f4d870] transition active:scale-95 cursor-pointer"
-                        title={isAr ? 'فتح الآلة الحاسبة والمصارفة' : 'Calculator & Currency Exchange'}
-                      >
-                        <Calculator className="h-4 w-4 text-[#f4d870]" />
-                        <span>{isAr ? 'حاسبة ومصارفة' : 'Calc & Rates'}</span>
-                      </button>
+
                     </div>
 
                     {/* Payment Type Selection (نقد / بنك / آجل / متعدد) */}
@@ -2204,12 +2212,7 @@ export default function CreateOrderModal(
                   </div>
                 )}
 
-                {/* Financial Calculator Modal */}
-                <FinancialCalculatorModal
-                  isOpen={isCalcOpen}
-                  onClose={() => setIsCalcOpen(false)}
-                  currencies={activeCurrencies}
-                />
+
 
               </div>
             </div>
@@ -2652,6 +2655,6 @@ export default function CreateOrderModal(
         onSelectProduct={handleSelectProductFromPicker}
         isAr={isAr}
       />
-    </div>
+    </div >
   );
 }

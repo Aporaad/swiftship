@@ -629,7 +629,76 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
    ```
    - تم التحديث والمزامنة الفورية للطلبات المسددة (`ALX-2609-1001`, `ALX-2609-1002`, `ALX-2609-1005`, `ALX-2609-1006`).
 
+---
 
+## [2026-09-06 07:15:00] — إعادة هيكلة جداول المنتجات وبنود الطلبات والعلاقات العلاقاتية (products & order_items)
 
+### التحديثات والتعديلات المنفذة بقاعدة البيانات PostgreSQL via Supabase SQL:
+1. **إنشاء جدول المنتجات الرئيسي (`public.products`)**:
+   - هيكلة جدول `products` ككتالوج رئيسي للمنتجات بدون `order_id` وبأعمدة SQL مباشرة:
+     - `product_id PRIMARY KEY text`
+     - `product_name_ar text`
+     - `product_name_en text`
+     - `product_url text`
+     - `product_price_currency text REFERENCES currency(cur_id)`
+     - `unit_price numeric(15,2)`
+     - `item_category_id text REFERENCES items_category(id)`
+     - `is_allowed boolean DEFAULT true`
+     - `cbm numeric(12,4)`
+     - `width numeric(10,2)`
+     - `height numeric(10,2)`
+     - `length numeric(10,2)`
+     - `weight numeric(12,3)`
+     - `created_at, created_by, updated_at, updated_by`
+
+2. **إنشاء جدول بنود الطلبات (`public.order_items`)**:
+   - هيكلة جدول `order_items` لربط الطلب بالمنتج الرئيسي بأعمدة SQL صريحة ومفاتيح أجنبية:
+     - `items_id PRIMARY KEY text`
+     - `order_id text REFERENCES orders(order_number) ON DELETE CASCADE`
+     - `product_id text REFERENCES products(product_id)`
+     - `product_price numeric(15,2)`
+     - `product_url text`
+     - `tracking_number text`
+     - `produc_source_id text REFERENCES sources(id)`
+     - `produc_source_url text`
+     - `product_cooler text`
+     - `nota text`
+     - `quantity numeric(10,2)`
+     - `total_price numeric(15,2)`
+     - `total__weight numeric(12,3)`
+     - `total_cbm numeric(12,4)`
+     - `packaging_option_id text REFERENCES order_option(id)`
+     - `packaging_option_price numeric(15,2)`
+     - `is_insured boolean DEFAULT false`
+     - `insurance_fee numeric(15,2)`
+     - `items_status text` ('قيد الطلب', 'محجوز بالميناء', 'تم مصادرته', 'وصل المخزن', 'تم التسليم', 'مرتجع')
+     - `created_at, created_by, updated_at, updated_by`
+
+3. **سياسات RLS والأمان**:
+   - تفعيل RLS على `products` و `order_items` مع منح كامل الصلاحيات للمستخدمين المصرح لهم `anon` و `authenticated` و `service_role`.
+
+---
+
+## [2026-09-06 20:15:00] — مطابقة المفاتيح الرئيسية الصريحة لجداول `products` و `order_items` و `currency` في محول قاعدة البيانات
+
+### التحديثات والتعديلات المنفذة:
+1. **مطابقة أسماء الأعمدة المفتاحية في PostgreSQL**:
+   - تأكيد وتعريف أعمدة المفاتيح الرئيسية الصريحة للجداول بـ PostgreSQL:
+     - `products` -> المفتاح الرئيسي `product_id` (بدلاً من `id`).
+     - `order_items` -> المفتاح الرئيسي `items_id` (بدلاً من `id`).
+     - `currency` -> المفتاح الرئيسي `cur_id` (بدلاً من `id`).
+2. **تعديل عمليات الإدراج والتحديث والحذف والمزامنة الحية**:
+   - تحديث `supabase-firebase-adapter.ts` باستبدال إرسال العمود الوهمي `id` باسم العمود المفتاحي الحقيقي لكل جدول في استعلامات REST وحمولات الـ Insert / Update / Delete.
+   - إنهاء تعذر الحفظ وخطأ `Could not find the 'id' column of 'products' in the schema cache` عند إنشاء الطلبات والمنتجات.
+
+---
+
+## [2026-09-06 21:21:00] — تأكيد استقرار الربط الهيكلي بين المنتجات الكتالوجية وبنود الطلبات
+
+### التحديثات والتحققات المنفذة في قاعدة البيانات:
+1. **تأكيد شروط الاستعلام بالجدول الرئيسي `products`**:
+   - تفعيل مرشح الأصناف المسموحة `is_allowed = true` عند استدعاء قائمة المنتجات الكتالوجية في مودالات إنشاء واختيار الطلبات.
+2. **استقرار حقول الإدراج لجدول `order_items`**:
+   - تأكيد الربط الحجمي والمفتاحي الصريح بين `order_items.product_id` و `products.product_id` ومعالجة كافة معاملات الإرجاع والإلغاء لحسابات التأمين وفق الهيكلية المعتمَدة.
 
 
