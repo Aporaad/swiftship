@@ -840,3 +840,33 @@
    - تأكيد الاعتماد المباشر الكامل على الجداول المحاسبية الحديثة `main_entry` و `account_trans` وتأكيد خلو الخدمات المحاسبية المباشرة من الاستعلام المباشر عن `journal_entries` و `account_transactions`.
 4. **التحقق والاختبار الشامل**:
    - اجتياز فحص `npx tsc --noEmit` واختبارات الخدمات `npx vitest run src/services/` (15 ملف اختبار و 77 اختبار بنسبة نجاح 100%).
+
+---
+
+## [2026-09-06 23:51:00] — حل عدم ظهور العمليات المالية وعمليات البنود في كشف حركة الطلب (`orders_history`)
+
+### التشخيص والأسباب الجذرية:
+1. **عدم إطلاق Trigger سندات القيود عند الإنشاء المباشر**:
+   - الزناد `trg_orders_history_main_entry_financial` في قاعدة البيانات كان معرفاً كـ `AFTER UPDATE OF posting_status ON public.main_entry`.
+   - القيود التلقائية التي تُنشأ بحالة مرحّلة مباشرة `posted` تستخدم `INSERT INTO main_entry` بدلاً من `UPDATE`؛ مما أدى إلى عدم تفعيل الزناد مطلقاً للعمليات المالية المباشرة.
+2. **مطابقة الطلب حسب رقم الطلب (`order_number`)**:
+   - دالة الزناد `orders_history_from_main_entry()` كانت تبحث عن الطلب باستعلام حقيقي مقيد بـ `WHERE o.id = v_order_id`. وعندما يكون `NEW.order_id` محتوياً على رقم الطلب (مثل `ALX-2609-1002`)، كان البحث يرجع `NULL` ويتوقف تسجيل الحركة.
+3. **تعدد معايير الاستعلام في `orderHistoryService.ts`**:
+   - دالة الاستعلام في الواجهة الأمامية `listForContext` كانت تجلب الحركات فقط بحقل `context.orderId`. وعندما تُسجّل الحركات باستخدام `orderNumber` كانت تُستثنى من قائمة العرض في المودال.
+4. **نقص خريطة الأعمدة في المحول `supabase-firebase-adapter.ts`**:
+   - الخريطة المباشرة `DIRECT_COLUMNS_MAP.orders_history` كانت تفتقد ربط `mainEntryId` (`main_entry_id`) و `accountTransCount` (`account_trans_count`).
+5. **غياب الزناد التلقائي لحركات بنود الطلب (`order_items`)**:
+   - عدم وجود زناد على جدول `order_items` لتتبع إضافات أو تعديلات أو حذف الأصناف التابعة للطلب.
+
+### الحلول والتحديثات المنفذة:
+1. **ترحيل المخطط لقاعدة البيانات (`202609060002_fix_orders_history_financial_and_item_triggers.sql`)**:
+   - إعادة إنشاء `orders_history_from_main_entry()` لدعم كل من `INSERT` و `UPDATE` وتغيير مطابقة الطلب إلى `WHERE id = v_order_id OR order_number = v_order_id`.
+   - تحديث الزناد `trg_orders_history_main_entry_financial` ليعمل `AFTER INSERT OR UPDATE ON public.main_entry`.
+   - إضافة دالة `orders_history_from_order_items()` والزناد `trg_orders_history_order_items` على جدول `public.order_items` لتسجيل كافة أنشطة بنود الطلب تلقائياً في `orders_history`.
+2. **تحديث خدمة الاستعلام `orderHistoryService.ts`**:
+   - توسيع `listForContext` للاستعلام المزدوج بناءً على `orderId` و `orderNumber` و `shipmentId` مع معالجة آمنة لنتائج الاستعلام المسترجعة.
+3. **تحديث خريطة الأعمدة في `supabase-firebase-adapter.ts`**:
+   - إدراج `mainEntryId` و `accountTransCount` لتأكيد مزامنة وقراءة البيانات بشكل صحيح من Supabase.
+4. **التحقق الشامل**:
+   - اجتياز اختبارات الوحدة بـ `npx vitest run src/services/` (15 ملف اختبار و 77 اختبار بنسبة نجاح 100%).
+   - التأكد من سلامة الأنواع عبر `npx tsc --noEmit` بدون أي خطأ.

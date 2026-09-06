@@ -394,7 +394,12 @@
 ## [2026-09-06 23:26:00] — حل خطأ القيد التلقائي المكرر `main_entry_entry_number_key` وتنظيف الاعتماد على الجداول القديمة
 - [x] حل استثناء قيد المبتكر المكرر `duplicate key value violates unique constraint "main_entry_entry_number_key"` بـ `financialAccountService.ts` عبر توليد `entryNumber` فريد دائماً وحفظ مرجع الطلب بـ `refNumber`.
 - [x] الاعتماد التام على الجداول المحاسبية الحديثة `main_entry` و `account_trans` وتأكيد خلو الخدمات المباشرة من الاستعلام المباشر عن `journal_entries` و `account_transactions`.
-- [x] اجتياز فحص التركيب والتجميع `npx tsc --noEmit` وااختبارات الخدمات `npx vitest run src/services/` (15 ملف اختبار و 77 اختبار بنسبة نجاح 100%).
+## [2026-09-06 23:51:00] — استكمال وتسجيل كافة العمليات المالية وحركات بنود الطلبات في سجل حركة الطلب `orders_history`
+- [x] إعداد المهاجرة `202609060002_fix_orders_history_financial_and_item_triggers.sql` لتحديث التريجر `trg_orders_history_main_entry_financial` ليشمل `AFTER INSERT OR UPDATE ON main_entry` بدلاً من الاقتصار على `UPDATE`.
+- [x] إنشاء دالة والتريجر `trg_orders_history_order_items` على جدول `order_items` لتسجيل حركات إضافة وتعديل وحذف منتجات الطلبات فورياً في `orders_history`.
+- [x] تحديث خدمة `orderHistoryService.ts` لتبحث بالـ `orderId` والـ `orderNumber` والـ `shipmentId` مع استبعاد المكررات.
+- [x] تحديث المحول `supabase-firebase-adapter.ts` لإدراج `mainEntryId` و `accountTransCount` ضمن خريطة أعمدة `orders_history`.
+- [x] اجتياز فحص التركيب والتجميع `npx tsc --noEmit` واختبارات الخدمات `npx vitest run src/services/` بنسبة 100%.
 
 
 

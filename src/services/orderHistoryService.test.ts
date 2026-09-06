@@ -24,14 +24,16 @@ describe('orderHistoryService', () => {
   });
 
   it('loads order events newest first', async () => {
-    mocks.getDocs.mockResolvedValueOnce(snapshot([
-      { id: 'older', eventType: 'order.created', occurredAt: '2026-08-20T09:00:00.000Z' },
-      { id: 'newer', eventType: 'order.status_changed', occurredAt: '2026-08-21T09:00:00.000Z' },
-    ]));
+    mocks.getDocs
+      .mockResolvedValueOnce(snapshot([
+        { id: 'older', eventType: 'order.created', occurredAt: '2026-08-20T09:00:00.000Z' },
+        { id: 'newer', eventType: 'order.status_changed', occurredAt: '2026-08-21T09:00:00.000Z' },
+      ]))
+      .mockResolvedValueOnce(snapshot([]));
 
     const events = await orderHistoryService.listForContext({ entityType: 'order', orderId: 'ord_1', orderNumber: 'ALX-1', label: 'ALX-1' });
 
-    expect(mocks.getDocs).toHaveBeenCalledTimes(1);
+    expect(mocks.getDocs).toHaveBeenCalledTimes(2);
     expect(events.map((event) => event.id)).toEqual(['newer', 'older']);
   });
 

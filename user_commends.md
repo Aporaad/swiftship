@@ -126,3 +126,8 @@ Account_Trans
 
 اما JournalEntry و AccountTransaction تم حذفهم نهايا ولذالك قم بحذف اي مسميات او حقول او عمليات او اي صله بهم نهائيا 
 ```
+
+## [2026-09-06 23:51:00] — AI Model: Antigravity / Gemini 3.6 Flash
+```text
+لماذا لاتظهر العمليات الماليه وعمليات الطلب الاخرى في كشف حركه الطلب من جدول order_history
+```

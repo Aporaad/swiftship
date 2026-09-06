@@ -66,13 +66,17 @@ class OrderHistoryService {
       reads.push(getDocs(query(history, where('orderId', '==', context.orderId), orderBy('occurredAt', 'desc'), limit(250))));
     }
 
+    if (context.orderNumber && context.orderNumber !== context.orderId) {
+      reads.push(getDocs(query(history, where('orderNumber', '==', context.orderNumber), orderBy('occurredAt', 'desc'), limit(250))));
+    }
+
     if (context.shipmentId) {
       reads.push(getDocs(query(history, where('shipmentId', '==', context.shipmentId), orderBy('occurredAt', 'desc'), limit(250))));
     }
 
     if (reads.length === 0) return [];
     const snapshots = await Promise.all(reads);
-    return deduplicate(snapshots.flatMap((snapshot) => snapshot.docs.map(readEvent)));
+    return deduplicate(snapshots.flatMap((snapshot) => (snapshot?.docs ? snapshot.docs.map(readEvent) : [])));
   }
 }
 
