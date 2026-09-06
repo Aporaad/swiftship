@@ -570,8 +570,65 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
    - حفظ حقول التأمين لكل سطر منتج: `is_insured` / `isInsured` (boolean) و `insurance_fee` / `insuranceFee` (numeric) في جدول المنتجات.
 2. **جدول الطلبات `orders`**:
    - حفظ إجمالي رسوم تأمين منتجات الطلب في الحقلين `product_insurance_fee` / `productInsuranceFee` (numeric) بجداول ووثائق الطلبات.
-3. **ربط المصدر المالي في القيود التلقائية**:
-   - إتاحة حقل `product_insurance_fee` كمصدر مبلغ معتمد للقيود التلقائية لإنشاء القيود وتحديث الأرصدة فورياً عبر Supabase PostgreSQL Triggers.
+
+---
+
+## [2026-09-06 02:10:00] — توثيق حفظ خيارات إنشاء الطلب الأربعة بجدول وثائق الطلبات orders
+
+### التحديثات والتوافقية في PostgreSQL ومجسم الطلبات:
+1. **حقل وخيار "توصيل للمنزل" (`homeDeliveryEnabled`)**:
+   - حفظ المفتاح المنطقي `homeDeliveryEnabled` بـ `orders.data`.
+   - حفظ `delivery_courier_id` و `deliveryCourierId` بجدول `orders` فقط عند التفعيل (`true`) وتعيينه بـ `null` عند الإلغاء.
+   - حفظ `deliveryCourierFee` بـ `orders.data` فقط عند التفعيل (`true`) وتصفيثه بـ `0` عند الإلغاء.
+
+2. **حقل وخيار "عبر مندوب شحن" (`viaShippingAgent`)**:
+   - حفظ المفتاح المنطقي `viaShippingAgent` بـ `orders.data`.
+   - حفظ `shipping_courier_id` و `shippingCourierId` بجدول `orders` فقط عند التفعيل (`true`) وتعيينه بـ `null` عند الإلغاء.
+   - حفظ نسبة عمولة المندوب `shippingCourierFeeRate` وقيمة العمولة المحسوبة `profitSaudiSAR` بـ `orders.data` فقط عند التفعيل (`true`).
+   - حفظ خيار `deductSourcingCostFromCourier` و `sourcing_cost` ('courier' / 'system') فقط عند التفعيل (`true`).
+
+3. **حقل وخيار "الدفع لاحقاً" (`payLater`)**:
+   - حفظ المفتاح المنطقي `payLater` بـ `orders.data`.
+   - تعيين `order_status_id` بـ ID الحالة الأولى (تسلسل 1 "طلب معلق") وحفظ حالة الدفع `paymentStatus = 'Unpaid'` و `amountPaid = 0` و `paymentMethod = 'Deferred'`.
+
+4. **حقل وخيار "الحفظ والاعتماد مباشرة" (`directApprove`)**:
+   - حفظ المفتاح المنطقي `directApprove` بـ `orders.data`.
+   - تعيين `order_status_id` بـ ID الحالة الثالثة (تسلسل 3 "معتمد") وحفظ نص الحالة `orderStatus = 'معتمد'`.
+
+---
+
+## [2026-09-06 04:31:00] — إصلاح دالة التريجر orders_history_from_orders وتحديث حالة 2 للطلبات المسددة
+
+### التحديثات والترحيلات المنفذة في قاعدة البيانات:
+1. **إصلاح دالة PostgreSQL التريجر `public.orders_history_from_orders()`**:
+   - تم إزالة المرجع الملغى `OLD.order_status` من شرط المقارنة داخل دالة التريجر، والذي كان يستدعي عمود غير موجود ويرفع استثناء `ERROR: 42703: record "old" has no field "order_status"`.
+   - تعديل شرط التغيير ليعتمد حصراً وصراحة على `OLD.order_status_id IS DISTINCT FROM NEW.order_status_id`.
+   ```sql
+   CREATE OR REPLACE FUNCTION public.orders_history_from_orders()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO 'public', 'auth'
+   AS $function$
+   ...
+   ELSIF OLD.order_status_id IS DISTINCT FROM NEW.order_status_id THEN
+     event_name := 'order.status_changed';
+     event_summary := 'تم تحديث حالة الطلب';
+   ...
+   $function$;
+   ```
+
+2. **تحديث بيانات الطلبات المسددة عبر Supabase SQL (`@mcp:supabase:execute_sql`)**:
+   - تنفيذ استعلام SQL لتصحيح حالة الطلبات التي دفعت عربوناً وسجلت خطأ بحالة 1:
+   ```sql
+   UPDATE orders
+   SET order_status_id = '2',
+       data = jsonb_set(data, '{orderStatusId}', '"2"')
+   WHERE order_status_id = '1'
+     AND (data->>'amountPaid')::numeric > 0
+     AND (data->>'payLater')::boolean IS NOT TRUE;
+   ```
+   - تم التحديث والمزامنة الفورية للطلبات المسددة (`ALX-2609-1001`, `ALX-2609-1002`, `ALX-2609-1005`, `ALX-2609-1006`).
+
 
 
 

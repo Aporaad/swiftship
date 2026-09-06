@@ -408,7 +408,7 @@ async function ensureCache(table: string): Promise<any[]> {
 
   // Pre-load products and shipments when fetching orders to ensure relational fields items and shippingDetails are populated
   if (table === 'orders' && !isOfflineMode()) {
-    Promise.all([ensureCache('products'), ensureCache('shipments')]).catch(() => {});
+    Promise.all([ensureCache('products'), ensureCache('shipments')]).catch(() => { });
   }
 
   // 2. Fetch from network ONLY if cache is stale or has never fetched
@@ -832,9 +832,11 @@ export function extractDirectColumns(table: string, data: Record<string, any>): 
 
   // Safety checks for foreign key ID columns
   if (table === 'orders') {
-    const validStatusIds = ['1', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
-    if (!extracted['order_status_id'] || !validStatusIds.includes(String(extracted['order_status_id']))) {
+    const rawStatus = extracted['order_status_id'];
+    if (rawStatus === undefined || rawStatus === null || String(rawStatus).trim() === '' || String(rawStatus).trim() === '0') {
       extracted['order_status_id'] = '1';
+    } else {
+      extracted['order_status_id'] = String(rawStatus);
     }
     if (typeof extracted['customer_id'] === 'string' && extracted['customer_id'].trim() === '') {
       extracted['customer_id'] = null;

@@ -16,14 +16,15 @@ export interface OrderStatusItem {
 
 export const DEFAULT_ORDER_STATUSES: OrderStatusItem[] = [
   { id: 1, nameAr: 'معلق', nameEn: 'Pending', isFirst: true, isLast: false, color: 'amber', code: 'pending', description: 'طلب جديد بانتظار الاعتماد' },
-  { id: 2, nameAr: 'تم تسجيل الطلب', nameEn: 'Order Registered', isFirst: false, isLast: false, color: 'blue', code: 'registered', description: 'تم تسجيل واكتشاف الطلب في النظام' },
-  { id: 3, nameAr: 'وصل مستودع السعودية', nameEn: 'Arrived KSA Warehouse', isFirst: false, isLast: false, color: 'indigo', code: 'ksa_warehouse', description: 'استلام المنتجات بمكتب/مستودع المملكة' },
-  { id: 4, nameAr: 'جاري الشحن لليمن', nameEn: 'Shipping to Yemen', isFirst: false, isLast: false, color: 'purple', code: 'shipping_yemen', description: 'انطلاق شاحنات الشحن إلى الجمهورية اليمنية' },
-  { id: 5, nameAr: 'في التخليص الجمركي', nameEn: 'Customs Clearance', isFirst: false, isLast: false, color: 'orange', code: 'customs', description: 'إجراءات التخليص والمعاينة الجمركية' },
-  { id: 6, nameAr: 'وصل مركز التوزيع في اليمن', nameEn: 'Arrived Yemen Hub', isFirst: false, isLast: false, color: 'cyan', code: 'yemen_hub', description: 'وصول الشحنة لمستودع التوزيع الرئيسي' },
-  { id: 7, nameAr: 'مع المندوب للتوصيل', nameEn: 'Out for Delivery', isFirst: false, isLast: false, color: 'sky', code: 'out_for_delivery', description: 'تسليم الشحنة لمندوب التوصيل النهائي' },
-  { id: 8, nameAr: 'تم التسليم', nameEn: 'Delivered', isFirst: false, isLast: true, color: 'emerald', code: 'delivered', description: 'تسليم الطلب بنجاح للعميل' },
-  { id: 9, nameAr: 'ملغي', nameEn: 'Cancelled', isFirst: false, isLast: false, color: 'rose', code: 'cancelled', description: 'طلب ملغي' }
+  { id: 2, nameAr: "تم الدفع ولم يتسجل", nameEn: "payment and not Registered", isFirst: false, isLast: false, sortOrder: 2, color: "cyan", code: "payment_not_Registered", description: "العميل دفع قسط ولم يعتمد طلبه" },
+  { id: 3, nameAr: 'تم تسجيل الطلب', nameEn: 'Order Registered', isFirst: false, isLast: false, color: 'blue', code: 'registered', description: 'تم تسجيل واكتشاف الطلب في النظام' },
+  { id: 4, nameAr: 'وصل مستودع السعودية', nameEn: 'Arrived KSA Warehouse', isFirst: false, isLast: false, color: 'indigo', code: 'ksa_warehouse', description: 'استلام المنتجات بمكتب/مستودع المملكة' },
+  { id: 5, nameAr: 'جاري الشحن لليمن', nameEn: 'Shipping to Yemen', isFirst: false, isLast: false, color: 'purple', code: 'shipping_yemen', description: 'انطلاق شاحنات الشحن إلى الجمهورية اليمنية' },
+  { id: 6, nameAr: 'في التخليص الجمركي', nameEn: 'Customs Clearance', isFirst: false, isLast: false, color: 'orange', code: 'customs', description: 'إجراءات التخليص والمعاينة الجمركية' },
+  { id: 7, nameAr: 'وصل مركز التوزيع في اليمن', nameEn: 'Arrived Yemen Hub', isFirst: false, isLast: false, color: 'cyan', code: 'yemen_hub', description: 'وصول الشحنة لمستودع التوزيع الرئيسي' },
+  { id: 8, nameAr: 'مع المندوب للتوصيل', nameEn: 'Out for Delivery', isFirst: false, isLast: false, color: 'sky', code: 'out_for_delivery', description: 'تسليم الشحنة لمندوب التوصيل النهائي' },
+  { id: 9, nameAr: 'تم التسليم', nameEn: 'Delivered', isFirst: false, isLast: true, color: 'emerald', code: 'delivered', description: 'تسليم الطلب بنجاح للعميل' },
+  { id: 10, nameAr: 'ملغي', nameEn: 'Cancelled', isFirst: false, isLast: false, color: 'rose', code: 'cancelled', description: 'طلب ملغي' }
 ];
 
 export function useOrderStatuses() {

@@ -103,6 +103,20 @@ interface CreateOrderModalProps {
   shippingCategoryOptions?: any[];
   itemCategories?: any[];
 
+  // ====== خيارات جديدة: توصيل للمنزل، عبر مندوب شحن، الدفع لاحقاً، الحفظ والاعتماد ======
+  // New feature checkboxes: home delivery, via shipping agent, pay later, direct approve
+  homeDeliveryEnabled: boolean;
+  setHomeDeliveryEnabled: (v: boolean) => void;
+  viaShippingAgent: boolean;
+  setViaShippingAgent: (v: boolean) => void;
+  payLater: boolean;
+  setPayLater: (v: boolean) => void;
+  directApprove: boolean;
+  setDirectApprove: (v: boolean) => void;
+  // ترتيب حالات الطلب المحملة من DB للاستخدام في تحديد ID الحالة
+  // Order statuses loaded from DB for dynamic status ID assignment
+  orderStatuses?: any[];
+
   // Action
   handleCreateOrder: (e: React.FormEvent) => void;
 }
@@ -204,6 +218,16 @@ export default function CreateOrderModal(
     packagingOptions = [],
     shippingCategoryOptions = [],
     itemCategories = [],
+    // ====== الخصائص الجديدة ======
+    homeDeliveryEnabled,
+    setHomeDeliveryEnabled,
+    viaShippingAgent,
+    setViaShippingAgent,
+    payLater,
+    setPayLater,
+    directApprove,
+    setDirectApprove,
+    orderStatuses = [],
     handleCreateOrder,
   }
     : CreateOrderModalProps) {
@@ -309,9 +333,9 @@ export default function CreateOrderModal(
 
     // Step 1 Validation: Customer & Source
     if (step === 1) {
-    // التحقق من وجود طرف الطلب (عميل أو موظف أو مندوب)
-    // Validate order party: customer, employee, or courier must be selected
-    if (!formData.customerId && !formData.orderPartyId && !formData.customerName) {
+      // التحقق من وجود طرف الطلب (عميل أو موظف أو مندوب)
+      // Validate order party: customer, employee, or courier must be selected
+      if (!formData.customerId && !formData.orderPartyId && !formData.customerName) {
         setStepErrors(
           isAr
             ? '⚠️ يرجى اختيار وتحديد العميل أولاً للمتابعة إلى الخطوة التالية'
@@ -386,7 +410,9 @@ export default function CreateOrderModal(
     }
 
     // Step 4 Validation: Financials
-    if (step === 4) {
+    // التحقق من تفاصيل الدفع — يُتخطى إذا كان خيار "الدفع لاحقاً" مفعلاً
+    // Skip payment validation when payLater is enabled
+    if (step === 4 && !payLater) {
       const exchange = formData.exchangeRate ?? (getCurrencyRate(orderCurrency) / getCurrencyRate(formData.currency || 'YER'));
       if (!exchange || exchange <= 0) {
         setStepErrors(
@@ -1103,7 +1129,7 @@ export default function CreateOrderModal(
                               const computedFee = checked
                                 ? (isPercent ? (price * qty * (feeRate / 100)) : (feeRate * qty))
                                 : 0;
-                              
+
                               updateItemRow(idx, 'isInsured', checked);
                               updateItemRow(idx, 'insuranceFee', computedFee);
                             }}
@@ -1452,57 +1478,183 @@ export default function CreateOrderModal(
                 </div>
               )}
 
-              {/* Field Logistics & Couriers Section */}
+              {/* Field Logistics & Couriers Section - قسم المناديب واللوجستيات الميدانية */}
               <div className="space-y-4 bg-slate-955/20 border border-slate-800 p-5 rounded-3xl">
                 <span className="block text-xs font-black text-white text-start mb-1 flex items-center gap-1.5">
                   <UserPlus className="w-4 h-4 text-[#d4af37]" />
                   {isAr ? 'المناديب واللوجستيات الميدانية' : 'Field Logistics & Delivery Drivers'}
                 </span>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-[11px] text-start font-bold">
-                  <div>
-                    <label className="block text-slate-500 mb-1">{isAr ? 'موظف التعبئة والتجميع (سعودي)' : 'Saudi Partner Aggregator'}</label>
-                    <select
-                      value={formData.shippingCourierId}
-                      onChange={(e) => setFormData({ ...formData, shippingCourierId: e.target.value })}
-                      className="w-full bg-slate-955 border border-slate-855 text-white rounded-xl p-3 outline-none text-[11px] font-bold cursor-pointer"
-                    >
-                      <option className="bg-slate-900 text-white" value="">{isAr ? '-- اختر موظف التجميع --' : '-- Choose Aggregator --'}</option>
-                      {couriers.filter(c => c.courierType === 'sourcing').map(c => (
-                        <option className="bg-slate-900 text-white" key={c.id} value={c.id}>
-                          {c.fullName}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-500 mb-1">{isAr ? 'مندوب التوزيع النهائي (اليمن)' : 'Yemen Delivery Driver'}</label>
-                    <select
-                      value={formData.deliveryCourierId}
-                      onChange={(e) => setFormData({ ...formData, deliveryCourierId: e.target.value })}
-                      className="w-full bg-slate-955 border border-slate-855 text-white rounded-xl p-3 outline-none text-[11px] font-bold cursor-pointer"
-                    >
-                      <option className="bg-slate-900 text-white" value="">{isAr ? '-- اختر مندوب التوصيل --' : '-- Choose Yemen Driver --'}</option>
-                      {couriers.filter(c => c.courierType === 'local' || !c.courierType).map(c => (
-                        <option className="bg-slate-900 text-white" key={c.id} value={c.id}>
-                          {c.fullName} {c.governorate || c.provinceId ? `(${c.governorate || c.provinceId})` : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-500 mb-1">{isAr ? `رسوم التوصيل لليمن (${formData.deliveryCourierFeeCurrency || settings.currency || 'YER'})` : `Delivery Courier Fee (${formData.deliveryCourierFeeCurrency || settings.currency || 'YER'})`}</label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {/* ====== Checkbox 1: توصيل للمنزل | Home Delivery Toggle ====== */}
+                  {/* عند التفعيل: يظهر حقلا مندوب التوصيل اليمني + رسوم التوصيل */}
+                  {/* When enabled: Yemen delivery courier & fee fields become visible */}
+                  <div className={`flex items-center gap-3 border p-3 rounded-2xl transition-all ${homeDeliveryEnabled ? 'bg-emerald-950/20 border-emerald-700/50' : 'bg-slate-900/50 border-slate-800'}`}>
                     <input
-                      type="number"
-                      value={formData.deliveryCourierFee}
-                      onChange={(e) => setFormData({ ...formData, deliveryCourierFee: parseFloat(e.target.value) || 0 })}
-                      disabled={!canEditOrderDefaultsCreation}
-                      className="w-full bg-slate-955 border border-slate-855 text-white rounded-xl p-3 outline-none font-mono text-xs text-center disabled:opacity-50"
+                      type="checkbox"
+                      id="home-delivery-check"
+                      checked={homeDeliveryEnabled}
+                      onChange={(e) => {
+                        const isChecked = e.target.checked;
+                        setHomeDeliveryEnabled(isChecked);
+                        // عند إلغاء التوصيل للمنزل: مسح بيانات المندوب والرسوم تلقائياً
+                        // When unchecked: clear delivery courier & fee automatically
+                        if (!isChecked) {
+                          setFormData({
+                            ...formData,
+                            deliveryCourierId: '',
+                            deliveryCourierFee: 0,
+                          });
+                        }
+                      }}
+                      className="rounded bg-slate-955 border-slate-700 w-4 h-4 cursor-pointer accent-emerald-500"
                     />
+                    <label htmlFor="home-delivery-check" className="text-[11px] font-bold text-slate-200 cursor-pointer flex items-center gap-2">
+                      🏠 {isAr ? 'توصيل للمنزل' : 'Home Delivery'}
+                    </label>
+                    {homeDeliveryEnabled && (
+                      <span className="ms-auto text-[10px] font-black text-emerald-400 bg-emerald-950/30 border border-emerald-900/40 px-2 py-0.5 rounded-lg">
+                        ✅ {isAr ? 'مفعل' : 'Active'}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* ====== Checkbox 2: عبر مندوب شحن | Via Shipping Agent Toggle ====== */}
+                  {/* عند اختياره: يتم إظهار حقل اختيار مندوب الشحن "موظف التعبئة والتجميع (سعودي)" وحقل "نسبة/رسوم مندوب الشحن" */}
+                  {/* عند تركه فارغاً: يتم إخفاء الحقول وتصفير العمولة وإخفاء خصم التكاليف في قسم الدفع */}
+                  <div className={`flex items-center gap-3 border p-3 rounded-2xl transition-all ${viaShippingAgent ? 'bg-amber-950/20 border-amber-700/50' : 'bg-slate-900/50 border-slate-800'}`}>
+                    <input
+                      type="checkbox"
+                      id="via-shipping-agent-check"
+                      checked={viaShippingAgent}
+                      onChange={(e) => {
+                        const isChecked = e.target.checked;
+                        setViaShippingAgent(isChecked);
+                        // عند إلغاء مندوب الشحن: مسح بيانات المندوب ونسبة العمولة وخصم التكاليف تلقائياً
+                        // When unchecked: clear shipping courier, commission rate & deduct sourcing cost automatically
+                        if (!isChecked) {
+                          setFormData({
+                            ...formData,
+                            shippingCourierId: '',
+                            shippingCourierFeeRate: 0,
+                            deductSourcingCostFromCourier: false,
+                          });
+                        }
+                      }}
+                      className="rounded bg-slate-955 border-slate-700 w-4 h-4 cursor-pointer accent-[#d4af37]"
+                    />
+                    <label htmlFor="via-shipping-agent-check" className="text-[11px] font-bold text-slate-200 cursor-pointer flex items-center gap-2">
+                      📦 {isAr ? 'عبر مندوب شحن' : 'Via Shipping Agent'}
+                    </label>
+                    {viaShippingAgent && (
+                      <span className="ms-auto text-[10px] font-black text-amber-400 bg-amber-950/30 border border-amber-900/40 px-2 py-0.5 rounded-lg">
+                        ✅ {isAr ? 'مفعل' : 'Active'}
+                      </span>
+                    )}
                   </div>
                 </div>
+
+                {/* الحقول الشرطية بناءً على الأزرار المحددة أعلاه */}
+                {/* Conditional Fields Grid based on active checkboxes */}
+                {(viaShippingAgent || homeDeliveryEnabled) && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[11px] text-start font-bold pt-2 border-t border-slate-850">
+                    {/* 1. موظف التعبئة والتجميع (سعودي) — يظهر فقط عند تفعيل "عبر مندوب شحن" */}
+                    {/* Saudi Aggregator Field — shown only when viaShippingAgent is true */}
+                    {viaShippingAgent && (
+                      <div>
+                        <label className="block text-amber-400 mb-1 font-black">
+                          📦 {isAr ? 'موظف التعبئة والتجميع (سعودي)' : 'Saudi Partner Aggregator'}
+                        </label>
+                        <select
+                          value={formData.shippingCourierId}
+                          onChange={(e) => {
+                            const selectedId = e.target.value;
+                            const selectedC = couriers.find(c => c.id === selectedId);
+                            const rate = (selectedC && selectedC.commissionRate !== undefined) ? parseFloat(selectedC.commissionRate) : (settings.defaultCourierCommissionRate ?? 30);
+                            setFormData({
+                              ...formData,
+                              shippingCourierId: selectedId,
+                              shippingCourierFeeRate: rate
+                            });
+                          }}
+                          className="w-full bg-slate-955 border border-amber-700/50 text-white rounded-xl p-3 outline-none text-[11px] font-bold cursor-pointer focus:border-amber-400"
+                        >
+                          <option className="bg-slate-900 text-white" value="">{isAr ? '-- اختر موظف التجميع --' : '-- Choose Aggregator --'}</option>
+                          {couriers.filter(c => c.courierType === 'sourcing' || !c.courierType).map(c => (
+                            <option className="bg-slate-900 text-white" key={c.id} value={c.id}>
+                              {c.fullName}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    {/* 2. نسبة/رسوم مندوب الشحن — تظهر فقط عند تفعيل "عبر مندوب شحن" */}
+                    {/* Shipping Agent Fee Rate Field — shown only when viaShippingAgent is true */}
+                    {viaShippingAgent && (
+                      <div>
+                        <label className="block text-amber-400 mb-1 font-black">
+                          💰 {isAr ? 'نسبة مندوب الشحن (%)' : 'Shipping Agent Fee Rate (%)'}
+                        </label>{/* 
+                          <span className="w-full bg-slate-955 border border-amber-700/50 text-amber-300 rounded-xl p-3 outline-none font-mono text-xs text-center disabled:opacity-50 focus:border-amber-400">
+                            {formData.shippingCourierFeeRate}% ≈ {(Math.ceil(calcs.profitSaudiSAR) || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} {orderCurrency}
+                          </span>*/}
+                        <input
+                          type="number"
+                          value={formData.shippingCourierFeeRate !== undefined ? formData.shippingCourierFeeRate : settings.defaultCourierCommissionRate}
+                          onChange={(e) => setFormData({ ...formData, shippingCourierFeeRate: parseFloat(e.target.value) || 0 })}
+                          disabled={!canEditOrderDefaultsCreation}
+                          readOnly={true}
+                          className="w-full bg-slate-955 border border-amber-700/50 text-amber-300 rounded-xl p-3 outline-none font-mono text-xs text-center disabled:opacity-50 focus:border-amber-400"
+                          placeholder="30"
+                        />
+                        <span className="font-mono text-amber-200 font-bold">
+                          {isAr ? 'تعادل ' : 'equal:'} {(Math.ceil(calcs.profitSaudiSAR) || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} {orderCurrency}
+                        </span>
+
+                      </div>
+                    )}
+                    {/* 3. مندوب التوصيل اليمني — يظهر فقط عند تفعيل "توصيل للمنزل" */}
+                    {/* Yemen Delivery Driver — shown only when homeDeliveryEnabled is true */}
+                    {homeDeliveryEnabled && (
+                      <div>
+                        <label className="block text-emerald-400 mb-1 font-black">
+                          🛵 {isAr ? 'مندوب التوزيع النهائي (اليمن)' : 'Yemen Delivery Driver'}
+                        </label>
+                        <select
+                          value={formData.deliveryCourierId}
+                          onChange={(e) => setFormData({ ...formData, deliveryCourierId: e.target.value })}
+                          className="w-full bg-slate-955 border border-emerald-700/50 text-white rounded-xl p-3 outline-none text-[11px] font-bold cursor-pointer focus:border-emerald-400"
+                        >
+                          <option className="bg-slate-900 text-white" value="">{isAr ? '-- اختر مندوب التوصيل --' : '-- Choose Yemen Driver --'}</option>
+                          {couriers.filter(c => c.courierType === 'local' || !c.courierType).map(c => (
+                            <option className="bg-slate-900 text-white" key={c.id} value={c.id}>
+                              {c.fullName} {c.governorate || c.provinceId ? `(${c.governorate || c.provinceId})` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    {/* 4. رسوم التوصيل لليمن — تظهر فقط عند تفعيل "توصيل للمنزل" */}
+                    {/* Yemen Delivery Fee — shown only when homeDeliveryEnabled is true */}
+                    {homeDeliveryEnabled && (
+                      <div>
+                        <label className="text-emerald-400 mb-1 font-black">
+                          💸 {isAr ? `رسوم التوصيل لليمن (${formData.deliveryCourierFeeCurrency || settings.currency || 'YER'})` : `Delivery Courier Fee (${formData.deliveryCourierFeeCurrency || settings.currency || 'YER'})`}
+                        </label>
+                        <input
+                          type="number"
+                          value={formData.deliveryCourierFee}
+                          onChange={(e) => setFormData({ ...formData, deliveryCourierFee: parseFloat(e.target.value) || 0 })}
+                          disabled={!canEditOrderDefaultsCreation}
+                          className="w-full bg-slate-955 border border-emerald-700/50 text-emerald-300 rounded-xl p-3 outline-none font-mono text-xs text-center disabled:opacity-50 focus:border-emerald-400"
+                        />
+                        <span className="font-mono text-amber-200 font-bold">
+                          {isAr ? 'تعادل ' : 'equal:'}{calcs.deliveryCourierFeeOrderCurrency.toLocaleString(undefined, { maximumFractionDigits: 2 })}  {orderCurrency}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1512,6 +1664,38 @@ export default function CreateOrderModal(
           {/* ---------------------------------------------------- */}
           {currentStep === 4 && (
             <div className="space-y-5 animate-fade-in">
+
+              {/* ====== Checkbox: الدفع لاحقاً | Pay Later Toggle ====== */}
+              {/* عند التفعيل: تُخفى حقول الدفع ويُحفظ الطلب دون دفع بحالة الطلب الأولى */}
+              {/* When enabled: payment fields are hidden, order saved with status #1 as Unpaid */}
+              <div className={`flex items-center gap-3 p-3.5 rounded-2xl border transition-all ${payLater ? 'bg-amber-950/20 border-amber-700/50' : 'bg-slate-900/50 border-slate-800'}`}>
+                <input
+                  type="checkbox"
+                  id="pay-later-check"
+                  checked={payLater}
+                  onChange={(e) => {
+                    const isChecked = e.target.checked;
+                    setPayLater(isChecked);
+                    // عند تفعيل الدفع لاحقاً: يتم تصفير المبلغ المدفوع تلقائياً
+                    // When pay later is enabled: reset amountPaid to 0 automatically
+                    if (isChecked) {
+                      setFormData({ ...formData, amountPaid: 0, paymentMethod: 'Deferred' });
+                    }
+                  }}
+                  className="rounded bg-slate-955 border-slate-700 w-4 h-4 cursor-pointer accent-amber-500"
+                />
+                <label htmlFor="pay-later-check" className="flex-1 text-[11px] font-bold text-slate-200 cursor-pointer">
+                  ⏳ {isAr
+                    ? 'الدفع لاحقاً — تخطي قسم الدفع وحفظ الطلب كمعلق بدون دفع'
+                    : 'Pay Later — Skip payment, save order as pending without payment'} {formData.order_status_id || '0'}
+                </label>
+                {payLater && (
+                  <span className="text-[10px] font-black text-amber-400 bg-amber-950/30 border border-amber-900/40 px-2.5 py-0.5 rounded-lg whitespace-nowrap">
+                    ⏳ {isAr ? 'لم يتم الدفع' : 'Payment Deferred'}
+                  </span>
+                )}
+              </div>
+
               {/* Top inputs row: order-specific rates */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-950/40 border border-slate-800 p-5 rounded-3xl text-[11px] font-bold text-slate-400 text-start">
                 {formData.orderSourceType === 'SHEIN' && (
@@ -1560,16 +1744,20 @@ export default function CreateOrderModal(
                     className="w-full bg-slate-955 border border-slate-805 text-white rounded-xl p-3 outline-none font-mono text-xs disabled:opacity-50"
                     placeholder="0.00" />
                 </div>
-                <div className="md:col-span-2">
-                  <label className="flex items-center gap-2.5 cursor-pointer bg-slate-900/60 p-3.5 rounded-xl border border-slate-800 hover:bg-slate-900 transition">
-                    <input type="checkbox" checked={formData.deductSourcingCostFromCourier || false}
-                      onChange={(e) => setFormData({ ...formData, deductSourcingCostFromCourier: e.target.checked })}
-                      className="w-4 h-4 rounded border-slate-700 bg-slate-955 text-[#d4af37] focus:ring-0 cursor-pointer accent-[#d4af37]" />
-                    <span className="text-[11px] font-bold text-slate-300">
-                      {isAr ? 'خصم تكاليف شراء المنتجات من حساب مندوب التجميع حالاً' : 'Deduct Original Products Cost from Courier Account'}
-                    </span>
-                  </label>
-                </div>
+                {/* خصم تكاليف شراء المنتجات من حساب مندوب التجميع — يظهر فقط عند تفعيل "عبر مندوب شحن" */}
+                {/* Deduct products cost from courier account field — shown only when viaShippingAgent is true */}
+                {viaShippingAgent && (
+                  <div className="md:col-span-2">
+                    <label className="flex items-center gap-2.5 cursor-pointer bg-slate-900/60 p-3.5 rounded-xl border border-slate-800 hover:bg-slate-900 transition">
+                      <input type="checkbox" checked={formData.deductSourcingCostFromCourier || false}
+                        onChange={(e) => setFormData({ ...formData, deductSourcingCostFromCourier: e.target.checked })}
+                        className="w-4 h-4 rounded border-slate-700 bg-slate-955 text-[#d4af37] focus:ring-0 cursor-pointer accent-[#d4af37]" />
+                      <span className="text-[11px] font-bold text-slate-300">
+                        {isAr ? 'خصم تكاليف شراء المنتجات من حساب مندوب التجميع حالاً' : 'Deduct Original Products Cost from Courier Account'}
+                      </span>
+                    </label>
+                  </div>
+                )}
               </div>
 
               {/* ── Two-Column: Financial Breakdown (left) vs Payment (right) ── */}
@@ -1697,9 +1885,8 @@ export default function CreateOrderModal(
                   {(formData.deliveryCourierFee || 0) > 0 && (
                     <div className="flex justify-between items-center">
                       <span className="text-slate-500 font-bold">{isAr ? '🛵 أجرة توصيل المندوب:' : '🛵 Delivery Agent Fee:'}</span>
-                      <span className="font-mono text-amber-200 font-bold text-end">
-                        <span className="block">{(formData.deliveryCourierFee || 0).toLocaleString()} {calcs.deliveryCourierFeeCurrency}</span>
-                        <span className="block text-[10px] text-amber-300/75">≈ {calcs.deliveryCourierFeeOrderCurrency.toLocaleString(undefined, { maximumFractionDigits: 2 })} {orderCurrency}</span>
+                      <span className="font-mono text-amber-200 font-bold">
+                        {(formData.deliveryCourierFee || 0).toLocaleString()} {calcs.deliveryCourierFeeCurrency}  {isAr ? 'تعادل ' : 'equal:'}{calcs.deliveryCourierFeeOrderCurrency.toLocaleString(undefined, { maximumFractionDigits: 2 })}  {orderCurrency}
                       </span>
                     </div>
                   )}
@@ -1731,265 +1918,291 @@ export default function CreateOrderModal(
                 </div>
 
                 {/* ═══ RIGHT: Payment Section (مطابق لسند القبض) ═══ */}
-                <div className="p-5 bg-slate-955 rounded-2xl border border-[#d4af37]/20 shadow-xl space-y-4 text-xs">
-                  {/* Header with Calculator & Exchange Button */}
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
-                    <div className="flex items-center gap-2">
-                      <CreditCard className="w-4 h-4 text-[#d4af37]" />
-                      <span className="text-[11px] text-slate-300 font-extrabold uppercase tracking-widest">
-                        {isAr ? 'تفاصيل وسائل وحسابات التحصيل' : 'Payment Methods & Receipt Accounts'}
+                {/* إذا كان الدفع لاحقاً مفعلاً: يُعرض فقط ملخص "لم يتم الدفع" بدلاً من حقول الدفع */}
+                {/* If payLater is active: show only Deferred summary instead of payment fields */}
+                {payLater ? (
+                  <div className="p-5 bg-amber-950/20 rounded-2xl border border-amber-700/40 shadow-xl text-xs flex flex-col items-center justify-center gap-4 min-h-[200px]">
+                    <div className="text-4xl">⏳</div>
+                    <div className="text-center">
+                      <h4 className="text-sm font-black text-amber-300 mb-1">
+                        {isAr ? 'الدفع لاحقاً — مؤجل' : 'Payment Deferred'}{formData.order_status_id}
+                      </h4>
+                      <p className="text-[11px] text-amber-400/80 font-bold leading-relaxed">
+                        {isAr
+                          ? 'سيتم حفظ الطلب بحالة المرحلة الأولى وحالة الدفع "لم يتم الدفع". يمكن إتمام الدفع لاحقاً من نافذة سداد الطلب.'
+                          : 'Order will be saved at status stage 1 with payment status "Unpaid". Payment can be completed later from the order payment window.'}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 bg-amber-950/30 border border-amber-900/40 rounded-xl px-4 py-2">
+                      <span className="text-[11px] font-black text-amber-300">
+                        {isAr ? 'الإجمالي المطلوب:' : 'Total Due:'}
+                      </span>
+                      <span className="font-mono font-black text-amber-200 text-sm">
+                        {Math.ceil(calcs.totalOrderYER).toLocaleString()} {formData.currency}
                       </span>
                     </div>
-
-                    {/* Calculator Button */}
-                    <button
-                      type="button"
-                      onClick={() => setIsCalcOpen(true)}
-                      className="inline-flex items-center gap-1.5 rounded-xl border border-[#d4af37]/40 bg-[#d4af37]/10 hover:bg-[#d4af37]/25 px-2.5 py-1 text-xs font-bold text-[#f4d870] transition active:scale-95 cursor-pointer"
-                      title={isAr ? 'فتح الآلة الحاسبة والمصارفة' : 'Calculator & Currency Exchange'}
-                    >
-                      <Calculator className="h-4 w-4 text-[#f4d870]" />
-                      <span>{isAr ? 'حاسبة ومصارفة' : 'Calc & Rates'}</span>
-                    </button>
                   </div>
-
-                  {/* Payment Type Selection (نقد / بنك / آجل / متعدد) */}
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase text-slate-400 block">
-                      {isAr ? 'نوع وسيلة الدفع' : 'Payment Type'}
-                    </label>
-                    <div className="grid grid-cols-4 gap-2">
-                      {[
-                        { id: 'Cash', labelAr: 'نقد (صندوق)', labelEn: 'Cash Box', icon: Wallet },
-                        { id: 'Bank', labelAr: 'بنك (تحويل)', labelEn: 'Bank Transfer', icon: Building },
-                        { id: 'Deferred', labelAr: 'آجل (دين)', labelEn: 'On Credit', icon: FileText },
-                        { id: 'Mixed', labelAr: 'متعدد (مختلط)', labelEn: 'Multi / Split', icon: ArrowRightLeft },
-                      ].map((type) => {
-                        const Icon = type.icon;
-                        const isSelected = (formData.paymentMethod || 'Cash') === type.id;
-                        return (
-                          <button
-                            key={type.id}
-                            type="button"
-                            onClick={() => {
-                              const newMethod = type.id;
-                              const updates: any = { paymentMethod: newMethod };
-                              if (newMethod === 'Cash' && !formData.cashAccountId && cashAccountsList[0]) {
-                                updates.cashAccountId = cashAccountsList[0].id;
-                              }
-                              if (newMethod === 'Bank' && !formData.bankAccountId && bankAccountsList[0]) {
-                                updates.bankAccountId = bankAccountsList[0].id;
-                              }
-                              if (newMethod === 'Mixed') {
-                                if (!formData.cashAccountId && cashAccountsList[0]) updates.cashAccountId = cashAccountsList[0].id;
-                                if (!formData.bankAccountId && bankAccountsList[0]) updates.bankAccountId = bankAccountsList[0].id;
-                              }
-                              if (newMethod === 'Deferred') {
-                                updates.amountPaid = 0;
-                              }
-                              setFormData({ ...formData, ...updates });
-                            }}
-                            className={`flex flex-col items-center justify-center p-2.5 rounded-xl border font-bold text-[10px] transition-all cursor-pointer ${isSelected
-                              ? 'bg-[#d4af37]/15 border-[#d4af37] text-[#d4af37] shadow-md ring-1 ring-[#d4af37]/30'
-                              : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-850 hover:text-slate-200'
-                              }`}
-                          >
-                            <Icon className="w-4 h-4 mb-1" />
-                            <span>{isAr ? type.labelAr : type.labelEn}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Currency & Exchange Rate */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-slate-900 border border-slate-800 p-2.5 rounded-xl">
-                      <span className="text-[9px] font-black uppercase text-[#d4af37] block mb-1">{isAr ? 'عملة الدفع' : 'Payment Currency'}</span>
-                      <select
-                        value={formData.currency}
-                        onChange={(e) => {
-                          const newCurrency = e.target.value;
-                          const rateOrder = getCurrencyRate(orderCurrency);
-                          const ratePayment = getCurrencyRate(newCurrency);
-                          setFormData({ ...formData, currency: newCurrency, exchangeRate: rateOrder / ratePayment });
-                        }}
-                        className="w-full bg-slate-955 text-white font-bold text-xs p-2 rounded-lg border border-slate-800 outline-none cursor-pointer"
-                      >
-                        {activeCurrencies.map((c) => (
-                          <option className="bg-slate-900 text-white" key={c.code} value={c.code}>
-                            {isAr ? (c.main_nameAR || c.sup_nameAR || c.code) : (c.main_nameEn || c.sup_nameEn || c.code)} ({c.code})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="bg-slate-900 border border-slate-600 p-2.5 rounded-xl">
-                      <span className="text-[9px] font-black uppercase text-slate-400 block mb-1">
-                        {isAr ? `سعر الصرف (${orderCurrency}/${formData.currency})` : `Rate (${orderCurrency}/${formData.currency})`}
-                      </span>
-                      <input type="number" step="any"
-                        value={getCurrencyRate(orderCurrency) / getCurrencyRate(formData.currency || 'YER')}
-                        readOnly
-                        className="w-full bg-slate-955 border border-slate-800 text-white font-mono font-bold text-xs p-2 rounded-lg text-center outline-none disabled:opacity-50" />
-                    </div>
-                  </div>
-
-                  {/* Receiving Accounts Dropdowns based on Payment Method */}
-                  {((formData.paymentMethod || 'Cash') === 'Cash' || (formData.paymentMethod || 'Cash') === 'Mixed') && (
-                    <div className="bg-slate-900/80 border border-slate-800 p-3 rounded-xl space-y-2">
-                      <label className="text-[10px] font-black text-amber-400 flex items-center gap-1">
-                        <Wallet className="w-3.5 h-3.5" />
-                        <span>{isAr ? 'حساب الصندوق القابض (الصناديق)' : 'Cash Box Receiving Account'}</span>
-                      </label>
-                      <select
-                        value={formData.cashAccountId || ''}
-                        onChange={(e) => setFormData({ ...formData, cashAccountId: e.target.value })}
-                        className="w-full bg-slate-955 text-white font-bold text-xs p-2.5 rounded-lg border border-slate-800 outline-none cursor-pointer focus:border-[#d4af37]"
-                      >
-                        <option value="">{isAr ? '-- اختر حساب الصندوق --' : '-- Select Cash Account --'}</option>
-                        {cashAccountsList.map((acc: any) => (
-                          <option key={acc.id} value={acc.id} className="bg-slate-900 text-white">
-                            {acc.name || acc.accNameAr || acc.id} ({acc.id})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-
-                  {((formData.paymentMethod || 'Cash') === 'Bank' || (formData.paymentMethod || 'Cash') === 'Mixed') && (
-                    <div className="bg-slate-900/80 border border-slate-800 p-3 rounded-xl space-y-2.5">
-                      <label className="text-[10px] font-black text-cyan-400 flex items-center gap-1">
-                        <Building className="w-3.5 h-3.5" />
-                        <span>{isAr ? 'حساب البنك القابض (البنوك)' : 'Bank Receiving Account'}</span>
-                      </label>
-                      <select
-                        value={formData.bankAccountId || ''}
-                        onChange={(e) => setFormData({ ...formData, bankAccountId: e.target.value })}
-                        className="w-full bg-slate-955 text-white font-bold text-xs p-2.5 rounded-lg border border-slate-800 outline-none cursor-pointer focus:border-cyan-400"
-                      >
-                        <option value="">{isAr ? '-- اختر حساب البنك --' : '-- Select Bank Account --'}</option>
-                        {bankAccountsList.map((acc: any) => (
-                          <option key={acc.id} value={acc.id} className="bg-slate-900 text-white">
-                            {acc.name || acc.accNameAr || acc.id} ({acc.id})
-                          </option>
-                        ))}
-                      </select>
-
-                      {/* Bank Reference Input */}
-                      <div>
-                        <label className="text-[9px] font-bold text-slate-400 block mb-1">
-                          {isAr ? 'رقم المرجع / الحوالة البنكية' : 'Bank Transfer Reference #'}
-                        </label>
-                        <input
-                          type="text"
-                          value={formData.bankReference || ''}
-                          onChange={(e) => setFormData({ ...formData, bankReference: e.target.value })}
-                          placeholder={isAr ? "رقم الإشعار أو الحوالة..." : "Transfer Ref / Voucher #"}
-                          className="w-full bg-slate-955 border border-slate-800 text-white font-mono font-bold text-xs p-2 rounded-lg outline-none focus:border-cyan-400"
-                        />
+                ) : (
+                  <div className="p-5 bg-slate-955 rounded-2xl border border-[#d4af37]/20 shadow-xl space-y-4 text-xs">
+                    {/* Header with Calculator & Exchange Button */}
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
+                      <div className="flex items-center gap-2">
+                        <CreditCard className="w-4 h-4 text-[#d4af37]" />
+                        <span className="text-[11px] text-slate-300 font-extrabold uppercase tracking-widest">
+                          {isAr ? 'تفاصيل وسائل وحسابات التحصيل' : 'Payment Methods & Receipt Accounts'}
+                        </span>
                       </div>
+
+                      {/* Calculator Button */}
+                      <button
+                        type="button"
+                        onClick={() => setIsCalcOpen(true)}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-[#d4af37]/40 bg-[#d4af37]/10 hover:bg-[#d4af37]/25 px-2.5 py-1 text-xs font-bold text-[#f4d870] transition active:scale-95 cursor-pointer"
+                        title={isAr ? 'فتح الآلة الحاسبة والمصارفة' : 'Calculator & Currency Exchange'}
+                      >
+                        <Calculator className="h-4 w-4 text-[#f4d870]" />
+                        <span>{isAr ? 'حاسبة ومصارفة' : 'Calc & Rates'}</span>
+                      </button>
                     </div>
-                  )}
 
-                  {(formData.paymentMethod || 'Cash') === 'Deferred' && (
-                    <div className="p-3 bg-amber-950/20 border border-amber-800/40 rounded-xl text-[10px] text-amber-300 font-bold leading-relaxed">
-                      {isAr
-                        ? '📌 الدفع الآجل: سيتم ترحيل كامل قيمة الفاتورة كمديونية على حساب العميل دون تحصيل مبالغ نقدية حالاً.'
-                        : '📌 On Credit: Full invoice value will be registered as outstanding debt on customer balance.'}
-                    </div>
-                  )}
-
-                  {/* Multi / Mixed Payment Split Amounts */}
-                  {(formData.paymentMethod || 'Cash') === 'Mixed' && (
-                    <div className="grid grid-cols-2 gap-2 bg-slate-900/90 border border-slate-800 p-3 rounded-xl">
-                      <div>
-                        <label className="text-[9px] font-bold text-amber-400 block mb-1">
-                          {isAr ? 'مبلغ الصندوق' : 'Cash Split Amount'}
-                        </label>
-                        <input
-                          type="number"
-                          value={formData.cashAmount || ''}
-                          onChange={(e) => {
-                            const val = parseFloat(e.target.value) || 0;
-                            const bVal = parseFloat(formData.bankAmount || '0') || 0;
-                            setFormData({
-                              ...formData,
-                              cashAmount: val,
-                              amountPaid: val + bVal
-                            });
-                          }}
-                          placeholder="0.00"
-                          className="w-full bg-slate-955 border border-slate-800 text-amber-300 font-mono font-bold text-xs p-2 rounded-lg outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[9px] font-bold text-cyan-400 block mb-1">
-                          {isAr ? 'مبلغ البنك' : 'Bank Split Amount'}
-                        </label>
-                        <input
-                          type="number"
-                          value={formData.bankAmount || ''}
-                          onChange={(e) => {
-                            const val = parseFloat(e.target.value) || 0;
-                            const cVal = parseFloat(formData.cashAmount || '0') || 0;
-                            setFormData({
-                              ...formData,
-                              bankAmount: val,
-                              amountPaid: cVal + val
-                            });
-                          }}
-                          placeholder="0.00"
-                          className="w-full bg-slate-955 border border-slate-800 text-cyan-300 font-mono font-bold text-xs p-2 rounded-lg outline-none"
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Total in order currency — info only */}
-                  <div className="flex justify-between items-center bg-slate-900/60 px-3 py-2.5 rounded-xl border border-slate-800">
-                    <span className="text-slate-400 font-black text-[11px]">{isAr ? `المبلغ المطلوب بعملة الطلب (${orderCurrency}):` : `Amount Due in ${orderCurrency}:`}</span>
-                    <span className="font-mono font-black text-amber-400 text-sm">{Math.ceil(calcs.totalOrderSAR).toLocaleString()} {orderCurrency}</span>
-                  </div>
-
-                  {/* Cash / Advance Payment */}
-                  {(formData.paymentMethod || 'Cash') !== 'Deferred' && (formData.paymentMethod || 'Cash') !== 'Mixed' && (
+                    {/* Payment Type Selection (نقد / بنك / آجل / متعدد) */}
                     <div className="space-y-2">
-                      <label className="text-[10px] text-slate-400 font-bold flex justify-between items-center">
-                        <span className="text-[#d4af37]">{isAr ? 'الدفعة المقدمة / المحصلة (' + formData.currency + ')' : 'Cash / Advance Payment (' + formData.currency + ')'}</span>
-                        <div className="flex gap-1.5 text-[9px]">
-                          <button type="button" onClick={() => setFormData({ ...formData, amountPaid: 0 })}
-                            className="px-2.5 py-0.5 rounded border border-slate-700 bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer">0</button>
-                          <button type="button" onClick={() => setFormData({ ...formData, amountPaid: Math.ceil(calcs.totalOrderYER) })}
-                            className="px-2.5 py-0.5 rounded border border-emerald-800/40 bg-emerald-900/40 text-emerald-400 hover:bg-emerald-900/60 transition cursor-pointer">
-                            {isAr ? 'سداد الكل' : 'Pay All'}
-                          </button>
-                        </div>
+                      <label className="text-[10px] font-black uppercase text-slate-400 block">
+                        {isAr ? 'نوع وسيلة الدفع' : 'Payment Type'}
                       </label>
-                      <input
-                        type="number"
-                        value={formData.amountPaid || ''}
-                        onChange={(e) => setFormData({ ...formData, amountPaid: parseFloat(e.target.value) || 0 })}
-                        className="w-full bg-slate-955 border border-slate-700 focus:border-emerald-500/50 text-emerald-400 font-black rounded-xl py-3 px-4 outline-none font-mono text-sm"
-                        placeholder={'0.00 ' + formData.currency}
-                      />
-                      {/* Written word-form for paid amount */}
-                      {(formData.amountPaid || 0) > 0 && (
-                        <p className="text-[10px] text-blue-400/80 font-bold bg-blue-950/20 border border-blue-900/30 rounded-lg px-3 py-1.5 italic">
-                          {isAr
-                            ? `✍️ المبلغ المدفوع: ${numberToWordsAr(Math.ceil(formData.amountPaid))} ${currencyNameAr(formData.currency)}`
-                            : `✍️ Paid: ${numberToWordsEn(Math.ceil(formData.amountPaid))} ${currencyNameEn(formData.currency)}`
-                          }
-                        </p>
-                      )}
+                      <div className="grid grid-cols-4 gap-2">
+                        {[
+                          { id: 'Cash', labelAr: 'نقد (صندوق)', labelEn: 'Cash Box', icon: Wallet },
+                          { id: 'Bank', labelAr: 'بنك (تحويل)', labelEn: 'Bank Transfer', icon: Building },
+                          { id: 'Deferred', labelAr: 'آجل (دين)', labelEn: 'On Credit', icon: FileText },
+                          { id: 'Mixed', labelAr: 'متعدد (مختلط)', labelEn: 'Multi / Split', icon: ArrowRightLeft },
+                        ].map((type) => {
+                          const Icon = type.icon;
+                          const isSelected = (formData.paymentMethod || 'Cash') === type.id;
+                          return (
+                            <button
+                              key={type.id}
+                              type="button"
+                              onClick={() => {
+                                const newMethod = type.id;
+                                const updates: any = { paymentMethod: newMethod };
+                                if (newMethod === 'Cash' && !formData.cashAccountId && cashAccountsList[0]) {
+                                  updates.cashAccountId = cashAccountsList[0].id;
+                                }
+                                if (newMethod === 'Bank' && !formData.bankAccountId && bankAccountsList[0]) {
+                                  updates.bankAccountId = bankAccountsList[0].id;
+                                }
+                                if (newMethod === 'Mixed') {
+                                  if (!formData.cashAccountId && cashAccountsList[0]) updates.cashAccountId = cashAccountsList[0].id;
+                                  if (!formData.bankAccountId && bankAccountsList[0]) updates.bankAccountId = bankAccountsList[0].id;
+                                }
+                                if (newMethod === 'Deferred') {
+                                  updates.amountPaid = 0;
+                                }
+                                setFormData({ ...formData, ...updates });
+                              }}
+                              className={`flex flex-col items-center justify-center p-2.5 rounded-xl border font-bold text-[10px] transition-all cursor-pointer ${isSelected
+                                ? 'bg-[#d4af37]/15 border-[#d4af37] text-[#d4af37] shadow-md ring-1 ring-[#d4af37]/30'
+                                : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-850 hover:text-slate-200'
+                                }`}
+                            >
+                              <Icon className="w-4 h-4 mb-1" />
+                              <span>{isAr ? type.labelAr : type.labelEn}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                  )}
 
-                  {/* Outstanding Debt */}
-                  <div className="flex justify-between items-center p-3 bg-rose-500/5 rounded-xl border border-rose-500/10">
-                    <span className="font-extrabold text-[#d4af37] text-[11px]">{isAr ? 'المديونية المتبقية للدفع:' : 'Outstanding Debt:'}</span>
-                    <span className="font-mono text-sm font-black text-rose-400">{Math.ceil(calcs.remainingYER).toLocaleString()} {formData.currency}</span>
+                    {/* Currency & Exchange Rate */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-slate-900 border border-slate-800 p-2.5 rounded-xl">
+                        <span className="text-[9px] font-black uppercase text-[#d4af37] block mb-1">{isAr ? 'عملة الدفع' : 'Payment Currency'}</span>
+                        <select
+                          value={formData.currency}
+                          onChange={(e) => {
+                            const newCurrency = e.target.value;
+                            const rateOrder = getCurrencyRate(orderCurrency);
+                            const ratePayment = getCurrencyRate(newCurrency);
+                            setFormData({ ...formData, currency: newCurrency, exchangeRate: rateOrder / ratePayment });
+                          }}
+                          className="w-full bg-slate-955 text-white font-bold text-xs p-2 rounded-lg border border-slate-800 outline-none cursor-pointer"
+                        >
+                          {activeCurrencies.map((c) => (
+                            <option className="bg-slate-900 text-white" key={c.code} value={c.code}>
+                              {isAr ? (c.main_nameAR || c.sup_nameAR || c.code) : (c.main_nameEn || c.sup_nameEn || c.code)} ({c.code})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="bg-slate-900 border border-slate-600 p-2.5 rounded-xl">
+                        <span className="text-[9px] font-black uppercase text-slate-400 block mb-1">
+                          {isAr ? `سعر الصرف (${orderCurrency}/${formData.currency})` : `Rate (${orderCurrency}/${formData.currency})`}
+                        </span>
+                        <input type="number" step="any"
+                          value={getCurrencyRate(orderCurrency) / getCurrencyRate(formData.currency || 'YER')}
+                          readOnly
+                          className="w-full bg-slate-955 border border-slate-800 text-white font-mono font-bold text-xs p-2 rounded-lg text-center outline-none disabled:opacity-50" />
+                      </div>
+                    </div>
+
+                    {/* Receiving Accounts Dropdowns based on Payment Method */}
+                    {((formData.paymentMethod || 'Cash') === 'Cash' || (formData.paymentMethod || 'Cash') === 'Mixed') && (
+                      <div className="bg-slate-900/80 border border-slate-800 p-3 rounded-xl space-y-2">
+                        <label className="text-[10px] font-black text-amber-400 flex items-center gap-1">
+                          <Wallet className="w-3.5 h-3.5" />
+                          <span>{isAr ? 'حساب الصندوق القابض (الصناديق)' : 'Cash Box Receiving Account'}</span>
+                        </label>
+                        <select
+                          value={formData.cashAccountId || ''}
+                          onChange={(e) => setFormData({ ...formData, cashAccountId: e.target.value })}
+                          className="w-full bg-slate-955 text-white font-bold text-xs p-2.5 rounded-lg border border-slate-800 outline-none cursor-pointer focus:border-[#d4af37]"
+                        >
+                          <option value="">{isAr ? '-- اختر حساب الصندوق --' : '-- Select Cash Account --'}</option>
+                          {cashAccountsList.map((acc: any) => (
+                            <option key={acc.id} value={acc.id} className="bg-slate-900 text-white">
+                              {acc.name || acc.accNameAr || acc.id} ({acc.id})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {((formData.paymentMethod || 'Cash') === 'Bank' || (formData.paymentMethod || 'Cash') === 'Mixed') && (
+                      <div className="bg-slate-900/80 border border-slate-800 p-3 rounded-xl space-y-2.5">
+                        <label className="text-[10px] font-black text-cyan-400 flex items-center gap-1">
+                          <Building className="w-3.5 h-3.5" />
+                          <span>{isAr ? 'حساب البنك القابض (البنوك)' : 'Bank Receiving Account'}</span>
+                        </label>
+                        <select
+                          value={formData.bankAccountId || ''}
+                          onChange={(e) => setFormData({ ...formData, bankAccountId: e.target.value })}
+                          className="w-full bg-slate-955 text-white font-bold text-xs p-2.5 rounded-lg border border-slate-800 outline-none cursor-pointer focus:border-cyan-400"
+                        >
+                          <option value="">{isAr ? '-- اختر حساب البنك --' : '-- Select Bank Account --'}</option>
+                          {bankAccountsList.map((acc: any) => (
+                            <option key={acc.id} value={acc.id} className="bg-slate-900 text-white">
+                              {acc.name || acc.accNameAr || acc.id} ({acc.id})
+                            </option>
+                          ))}
+                        </select>
+
+                        {/* Bank Reference Input */}
+                        <div>
+                          <label className="text-[9px] font-bold text-slate-400 block mb-1">
+                            {isAr ? 'رقم المرجع / الحوالة البنكية' : 'Bank Transfer Reference #'}
+                          </label>
+                          <input
+                            type="text"
+                            value={formData.bankReference || ''}
+                            onChange={(e) => setFormData({ ...formData, bankReference: e.target.value })}
+                            placeholder={isAr ? "رقم الإشعار أو الحوالة..." : "Transfer Ref / Voucher #"}
+                            className="w-full bg-slate-955 border border-slate-800 text-white font-mono font-bold text-xs p-2 rounded-lg outline-none focus:border-cyan-400"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {(formData.paymentMethod || 'Cash') === 'Deferred' && (
+                      <div className="p-3 bg-amber-950/20 border border-amber-800/40 rounded-xl text-[10px] text-amber-300 font-bold leading-relaxed">
+                        {isAr
+                          ? '📌 الدفع الآجل: سيتم ترحيل كامل قيمة الفاتورة كمديونية على حساب العميل دون تحصيل مبالغ نقدية حالاً.'
+                          : '📌 On Credit: Full invoice value will be registered as outstanding debt on customer balance.'}
+                      </div>
+                    )}
+
+                    {/* Multi / Mixed Payment Split Amounts */}
+                    {(formData.paymentMethod || 'Cash') === 'Mixed' && (
+                      <div className="grid grid-cols-2 gap-2 bg-slate-900/90 border border-slate-800 p-3 rounded-xl">
+                        <div>
+                          <label className="text-[9px] font-bold text-amber-400 block mb-1">
+                            {isAr ? 'مبلغ الصندوق' : 'Cash Split Amount'}
+                          </label>
+                          <input
+                            type="number"
+                            value={formData.cashAmount || ''}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value) || 0;
+                              const bVal = parseFloat(formData.bankAmount || '0') || 0;
+                              setFormData({
+                                ...formData,
+                                cashAmount: val,
+                                amountPaid: val + bVal
+                              });
+                            }}
+                            placeholder="0.00"
+                            className="w-full bg-slate-955 border border-slate-800 text-amber-300 font-mono font-bold text-xs p-2 rounded-lg outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[9px] font-bold text-cyan-400 block mb-1">
+                            {isAr ? 'مبلغ البنك' : 'Bank Split Amount'}
+                          </label>
+                          <input
+                            type="number"
+                            value={formData.bankAmount || ''}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value) || 0;
+                              const cVal = parseFloat(formData.cashAmount || '0') || 0;
+                              setFormData({
+                                ...formData,
+                                bankAmount: val,
+                                amountPaid: cVal + val
+                              });
+                            }}
+                            placeholder="0.00"
+                            className="w-full bg-slate-955 border border-slate-800 text-cyan-300 font-mono font-bold text-xs p-2 rounded-lg outline-none"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Total in order currency — info only */}
+                    <div className="flex justify-between items-center bg-slate-900/60 px-3 py-2.5 rounded-xl border border-slate-800">
+                      <span className="text-slate-400 font-black text-[11px]">{isAr ? `المبلغ المطلوب بعملة الطلب (${orderCurrency}):` : `Amount Due in ${orderCurrency}:`}</span>
+                      <span className="font-mono font-black text-amber-400 text-sm">{Math.ceil(calcs.totalOrderSAR).toLocaleString()} {orderCurrency}</span>
+                    </div>
+
+                    {/* Cash / Advance Payment */}
+                    {(formData.paymentMethod || 'Cash') !== 'Deferred' && (formData.paymentMethod || 'Cash') !== 'Mixed' && (
+                      <div className="space-y-2">
+                        <label className="text-[10px] text-slate-400 font-bold flex justify-between items-center">
+                          <span className="text-[#d4af37]">{isAr ? 'الدفعة المقدمة / المحصلة (' + formData.currency + ')' : 'Cash / Advance Payment (' + formData.currency + ')'}</span>
+                          <div className="flex gap-1.5 text-[9px]">
+                            <button type="button" onClick={() => setFormData({ ...formData, amountPaid: 0 })}
+                              className="px-2.5 py-0.5 rounded border border-slate-700 bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer">0</button>
+                            <button type="button" onClick={() => setFormData({ ...formData, amountPaid: Math.ceil(calcs.totalOrderYER) })}
+                              className="px-2.5 py-0.5 rounded border border-emerald-800/40 bg-emerald-900/40 text-emerald-400 hover:bg-emerald-900/60 transition cursor-pointer">
+                              {isAr ? 'سداد الكل' : 'Pay All'}
+                            </button>
+                          </div>
+                        </label>
+                        <input
+                          type="number"
+                          value={formData.amountPaid || ''}
+                          onChange={(e) => setFormData({ ...formData, amountPaid: parseFloat(e.target.value) || 0 })}
+                          className="w-full bg-slate-955 border border-slate-700 focus:border-emerald-500/50 text-emerald-400 font-black rounded-xl py-3 px-4 outline-none font-mono text-sm"
+                          placeholder={'0.00 ' + formData.currency}
+                        />
+                        {/* Written word-form for paid amount */}
+                        {(formData.amountPaid || 0) > 0 && (
+                          <p className="text-[10px] text-blue-400/80 font-bold bg-blue-950/20 border border-blue-900/30 rounded-lg px-3 py-1.5 italic">
+                            {isAr
+                              ? `✍️ المبلغ المدفوع: ${numberToWordsAr(Math.ceil(formData.amountPaid))} ${currencyNameAr(formData.currency)}`
+                              : `✍️ Paid: ${numberToWordsEn(Math.ceil(formData.amountPaid))} ${currencyNameEn(formData.currency)}`
+                            }
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Outstanding Debt */}
+                    <div className="flex justify-between items-center p-3 bg-rose-500/5 rounded-xl border border-rose-500/10">
+                      <span className="font-extrabold text-[#d4af37] text-[11px]">{isAr ? 'المديونية المتبقية للدفع:' : 'Outstanding Debt:'}</span>
+                      <span className="font-mono text-sm font-black text-rose-400">{Math.ceil(calcs.remainingYER).toLocaleString()} {formData.currency}</span>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Financial Calculator Modal */}
                 <FinancialCalculatorModal
@@ -2019,6 +2232,29 @@ export default function CreateOrderModal(
                     {isAr ? 'يرجى مراجعة ملخص بيانات الطلب أدناه وتأكيد حفظ وترحيل الفاتورة' : 'Review the order summary below before final submission'}
                   </p>
                 </div>
+              </div>
+
+              {/* ====== Checkbox: الحفظ والاعتماد مباشرة | Direct Approve Toggle ====== */}
+              {/* عند التفعيل: يُحفظ الطلب مباشرة بحالة المرحلة الثالثة (المعتمد) */}
+              {/* When enabled: order is saved directly at status stage 3 (Approved) */}
+              <div className={`flex items-center gap-3 p-3.5 rounded-2xl border transition-all ${directApprove ? 'bg-violet-950/25 border-violet-600/50' : 'bg-slate-900/50 border-slate-800'}`}>
+                <input
+                  type="checkbox"
+                  id="direct-approve-check"
+                  checked={directApprove}
+                  onChange={(e) => setDirectApprove(e.target.checked)}
+                  className="rounded bg-slate-955 border-slate-700 w-4 h-4 cursor-pointer accent-violet-500"
+                />
+                <label htmlFor="direct-approve-check" className="flex-1 text-[11px] font-bold text-slate-200 cursor-pointer">
+                  🚀 {isAr
+                    ? 'الحفظ والاعتماد مباشرة — تجاوز مرحلة المراجعة وترحيل الطلب كمعتمد فوراً (المرحلة 3)'
+                    : 'Save & Approve Immediately — Skip review stage and post order as Approved (Stage 3)'}
+                </label>
+                {directApprove && (
+                  <span className="text-[10px] font-black text-violet-400 bg-violet-950/30 border border-violet-800/40 px-2.5 py-0.5 rounded-lg whitespace-nowrap">
+                    ✅ {isAr ? 'سيتم الاعتماد فوراً' : 'Auto-Approved'}
+                  </span>
+                )}
               </div>
 
               {/* Summary Cards Grid */}
@@ -2166,44 +2402,49 @@ export default function CreateOrderModal(
                     )}
 
                     <div className="border-t border-slate-800/60 pt-2 space-y-1.5">
-                      {/* Aggregator + commission */}
-                      {(() => {
-                        const aggCourier = couriers.find(c => c.id === formData.shippingCourierId);
-                        const aggRate = aggCourier?.commissionRate || 0;
-                        const commValue = aggRate > 0 ? Math.ceil(calcs.profitSaudiSAR * aggRate / 100) : 0;
-                        return (
+                      {/* مندوب التجميع السعودي والعمولة — يظهر فقط عند تفعيل "عبر مندوب شحن" */}
+                      {viaShippingAgent ? (
+                        <>
                           <div className="flex justify-between">
                             <span className="text-slate-500">{isAr ? 'مندوب التجميع (سعودي):' : 'Saudi Aggregator:'}</span>
-                            <span className="text-slate-200 text-end">
-                              {aggCourier?.fullName || (isAr ? 'غير محدد' : 'N/A')}
+                            <span className="text-amber-300 font-bold">
+                              {couriers.find(c => c.id === formData.shippingCourierId)?.fullName || (isAr ? 'غير محدد' : 'N/A')}
                             </span>
                           </div>
-                        );
-                      })()}
-
-                      {/* Courier commission */}
-                      {(() => {
-                        const shipCourier = couriers.find(c => c.id === formData.shippingCourierId);
-                        const commRate = shipCourier?.commissionRate || 0;
-                        const commValue = commRate > 0 ? Math.ceil(calcs.profitSaudiSAR) : 0;
-                        return commRate > 0 ? (
                           <div className="flex justify-between">
                             <span className="text-slate-500">{isAr ? '👤 عمولة مندوب الشحن:' : '👤 Shipping Agent Comm.:'}</span>
-                            <span className="text-yellow-300 font-mono">{commRate}% ≈ {commValue.toLocaleString()} {orderCurrency}</span>
+                            <span className="text-yellow-300 font-mono">
+                              {formData.shippingCourierFeeRate !== undefined ? formData.shippingCourierFeeRate : 30}% ≈ {Math.ceil(calcs.profitSaudiSAR || 0).toLocaleString()} {orderCurrency}
+                            </span>
                           </div>
-                        ) : null;
-                      })()}
+                        </>
+                      ) : (
+                        <div className="flex justify-between text-slate-500 italic text-[10px]">
+                          <span>{isAr ? 'مندوب الشحن:' : 'Shipping Agent:'}</span>
+                          <span>{isAr ? 'غير مفعل (بدون مندوب شحن)' : 'Disabled (No Shipping Agent)'}</span>
+                        </div>
+                      )}
 
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">{isAr ? 'مندوب التوصيل (اليمن):' : 'Yemen Courier:'}</span>
-                        <span className="text-slate-200">
-                          {couriers.find(c => c.id === formData.deliveryCourierId)?.fullName || (isAr ? 'غير محدد' : 'N/A')}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">{isAr ? 'أجرة التوصيل:' : 'Delivery Fee:'}</span>
-                        <span className="text-amber-200 font-mono">{(formData.deliveryCourierFee || 0).toLocaleString()} YER</span>
-                      </div>
+                      {/* مندوب التوصيل النهائي اليمني والرسوم — يظهر فقط عند تفعيل "توصيل للمنزل" */}
+                      {homeDeliveryEnabled ? (
+                        <>
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">{isAr ? 'مندوب التوصيل (اليمن):' : 'Yemen Courier:'}</span>
+                            <span className="text-emerald-300 font-bold">
+                              {couriers.find(c => c.id === formData.deliveryCourierId)?.fullName || (isAr ? 'غير محدد' : 'N/A')}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">{isAr ? 'أجرة التوصيل:' : 'Delivery Fee:'}</span>
+                            <span className="text-emerald-300 font-mono">{(formData.deliveryCourierFee || 0).toLocaleString()} YER</span>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex justify-between text-slate-500 italic text-[10px]">
+                          <span>{isAr ? 'توصيل للمنزل:' : 'Home Delivery:'}</span>
+                          <span>{isAr ? 'غير مفعل (بدون توصيل)' : 'Disabled (No Home Delivery)'}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

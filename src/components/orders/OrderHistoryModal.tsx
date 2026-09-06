@@ -19,10 +19,8 @@ type OrderHistoryModalProps = {
 type ChangeValue = { before?: unknown; after?: unknown };
 
 const fieldLabels: Record<string, { ar: string; en: string }> = {
-  order_status: { ar: 'حالة الطلب', en: 'Order status' },
+  order_status: { ar: 'حالة الطلب', en: 'Order status' }, /*مهم: هنا يجب جلب اسم المرحله من جدول المراحل بناء على رقم المرحله*/
   order_status_id: { ar: 'معرّف حالة الطلب', en: 'Order status ID' },
-  orderStatus: { ar: 'حالة الطلب', en: 'Order status' },
-  orderStatusId: { ar: 'معرّف حالة الطلب', en: 'Order status ID' },
   shipment_status: { ar: 'حالة الشحنة', en: 'Shipment status' },
   shipmentStatus: { ar: 'حالة الشحنة', en: 'Shipment status' },
   tracking_number: { ar: 'رقم التتبع', en: 'Tracking number' },
@@ -252,24 +250,24 @@ export default function OrderHistoryModal({ isOpen, context, onClose, isAr }: Or
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-slate-400"><span>{isAr ? `عرض ${filteredEvents.length} من ${events.length} حدث` : `Showing ${filteredEvents.length} of ${events.length} events`}</span>{appliedFilters > 0 && <span className="rounded-md border border-[#d4af37]/25 bg-[#d4af37]/10 px-2 py-1 text-[#e7c75d]">{appliedFilters} {isAr ? 'فلاتر مطبقة' : 'filters applied'}</span>}</div>
                   {filteredEvents.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-950/50 p-12 text-center"><Search className="mx-auto h-6 w-6 text-slate-600" /><p className="mt-3 text-sm font-bold text-slate-400">{isAr ? 'لا توجد أحداث تطابق معايير البحث والتصفية.' : 'No events match the current search and filters.'}</p><button type="button" onClick={() => setFilters(defaultOrderHistoryFilters)} className="mt-4 text-xs font-black text-[#e7c75d] hover:text-[#f0d77e]">{isAr ? 'مسح الفلاتر وعرض كل الأحداث' : 'Clear filters and show all events'}</button></div>
                     : <div className="overflow-x-auto rounded-2xl border border-slate-800 shadow-inner"><table className="min-w-[940px] w-full border-collapse text-right" aria-label={isAr ? 'سجل الأحداث والتغييرات' : 'Events and changes history'} dir={isAr ? 'rtl' : 'ltr'}>
-                  <thead className="sticky top-0 z-10 bg-slate-900 text-xs font-black text-slate-400"><tr><th className="px-5 py-4">{isAr ? 'الحدث' : 'Event'}</th><th className="px-4 py-4">{isAr ? 'النوع' : 'Type'}</th><th className="px-4 py-4">{isAr ? 'القائم بالحدث' : 'Actor'}</th><th className="px-4 py-4">{isAr ? 'التوقيت' : 'Time'}</th><th className="px-4 py-4 text-center">{isAr ? 'التفاصيل' : 'Details'}</th></tr></thead>
-                  <tbody className="divide-y divide-slate-800 bg-[#101014]">{filteredEvents.map((event) => {
-                    const Icon = eventIcon(event);
-                    const occurred = asDate(event.occurredAt ?? event.createdAt);
-                    const expanded = expandedId === event.id;
-                    const changes = changeEntries(event);
-                    return <Fragment key={event.id}>
-                      <tr key={event.id} className={`cursor-pointer transition hover:bg-slate-900/80 ${expanded ? 'bg-slate-900/70' : ''}`} onClick={() => setExpandedId(expanded ? null : event.id)}>
-                        <td className="px-5 py-4"><div className="flex items-center gap-3"><span className="rounded-xl border border-slate-700 bg-slate-900 p-2.5 text-[#d4af37]"><Icon className="h-4 w-4" /></span><div><p className="text-sm font-black text-white">{summaryLabel(event, isAr)}</p><p className="mt-1 font-mono text-[11px] text-slate-500">{event.eventType}</p></div></div></td>
-                        <td className="px-4 py-4"><span className="rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs font-bold text-slate-300">{entityLabel(event, isAr)}</span></td>
-                        <td className="px-4 py-4"><div className="inline-flex items-center gap-2 text-xs font-bold text-slate-300"><UserRound className="h-4 w-4 text-slate-500" />{event.actorName || (isAr ? 'النظام' : 'System')}</div>{event.actorRole && <p className="mt-1 text-[11px] text-slate-500">{event.actorRole}</p>}</td>
-                        <td className="px-4 py-4 text-xs font-semibold text-slate-300"><div className="inline-flex items-center gap-2"><Clock3 className="h-4 w-4 text-slate-500" />{occurred ? occurred.toLocaleString(isAr ? 'ar-EG' : 'en-US') : '—'}</div></td>
-                        <td className="px-4 py-4 text-center"><button onClick={(click) => { click.stopPropagation(); setExpandedId(expanded ? null : event.id); }} className="inline-flex items-center gap-2 rounded-lg border border-[#d4af37]/30 bg-[#d4af37]/10 px-3 py-2 text-xs font-black text-[#e7c75d] hover:bg-[#d4af37]/20"><span>{changes.length || (isAr ? 'عرض' : 'View')}</span><ChevronDown className={`h-4 w-4 transition ${expanded ? 'rotate-180' : ''}`} /></button></td>
-                      </tr>
-                      {expanded && <tr><td colSpan={5} className="p-0"><EventDetails event={event} isAr={isAr} /></td></tr>}
-                    </Fragment>;
-                  })}</tbody>
-                </table></div>}
+                      <thead className="sticky top-0 z-10 bg-slate-900 text-xs font-black text-slate-400"><tr><th className="px-5 py-4">{isAr ? 'الحدث' : 'Event'}</th><th className="px-4 py-4">{isAr ? 'النوع' : 'Type'}</th><th className="px-4 py-4">{isAr ? 'القائم بالحدث' : 'Actor'}</th><th className="px-4 py-4">{isAr ? 'التوقيت' : 'Time'}</th><th className="px-4 py-4 text-center">{isAr ? 'التفاصيل' : 'Details'}</th></tr></thead>
+                      <tbody className="divide-y divide-slate-800 bg-[#101014]">{filteredEvents.map((event) => {
+                        const Icon = eventIcon(event);
+                        const occurred = asDate(event.occurredAt ?? event.createdAt);
+                        const expanded = expandedId === event.id;
+                        const changes = changeEntries(event);
+                        return <Fragment key={event.id}>
+                          <tr key={event.id} className={`cursor-pointer transition hover:bg-slate-900/80 ${expanded ? 'bg-slate-900/70' : ''}`} onClick={() => setExpandedId(expanded ? null : event.id)}>
+                            <td className="px-5 py-4"><div className="flex items-center gap-3"><span className="rounded-xl border border-slate-700 bg-slate-900 p-2.5 text-[#d4af37]"><Icon className="h-4 w-4" /></span><div><p className="text-sm font-black text-white">{summaryLabel(event, isAr)}</p><p className="mt-1 font-mono text-[11px] text-slate-500">{event.eventType}</p></div></div></td>
+                            <td className="px-4 py-4"><span className="rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs font-bold text-slate-300">{entityLabel(event, isAr)}</span></td>
+                            <td className="px-4 py-4"><div className="inline-flex items-center gap-2 text-xs font-bold text-slate-300"><UserRound className="h-4 w-4 text-slate-500" />{event.actorName || (isAr ? 'النظام' : 'System')}</div>{event.actorRole && <p className="mt-1 text-[11px] text-slate-500">{event.actorRole}</p>}</td>
+                            <td className="px-4 py-4 text-xs font-semibold text-slate-300"><div className="inline-flex items-center gap-2"><Clock3 className="h-4 w-4 text-slate-500" />{occurred ? occurred.toLocaleString(isAr ? 'ar-EG' : 'en-US') : '—'}</div></td>
+                            <td className="px-4 py-4 text-center"><button onClick={(click) => { click.stopPropagation(); setExpandedId(expanded ? null : event.id); }} className="inline-flex items-center gap-2 rounded-lg border border-[#d4af37]/30 bg-[#d4af37]/10 px-3 py-2 text-xs font-black text-[#e7c75d] hover:bg-[#d4af37]/20"><span>{changes.length || (isAr ? 'عرض' : 'View')}</span><ChevronDown className={`h-4 w-4 transition ${expanded ? 'rotate-180' : ''}`} /></button></td>
+                          </tr>
+                          {expanded && <tr><td colSpan={5} className="p-0"><EventDetails event={event} isAr={isAr} /></td></tr>}
+                        </Fragment>;
+                      })}</tbody>
+                    </table></div>}
                 </>}
         </div>
       </section>

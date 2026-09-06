@@ -245,7 +245,26 @@ export default function Orders() { // دالة عرض الطلبات
 
   // Shipping packaging fee state
   const [packagingFeeEnabled, setPackagingFeeEnabled] = useState(false);//متغير تفعيل رسوم التغليف  على مستوى الشحن  
-  const [packagingFeeRate, setPackagingFeeRate] = useState(0);//رسوم التغليف على مستوى الشحن 
+  const [packagingFeeRate, setPackagingFeeRate] = useState(0);//رسوم التغليف على مستوى الشحن
+
+  // ====== حالات الخيارات الجديدة الثلاثة لإنشاء الطلب ======
+  // New feature states for order creation: home delivery, pay later, direct approve
+
+  /** هل التوصيل للمنزل مفعل؟ (يُظهر حقول المندوب اليمني ورسوم التوصيل)
+   *  Is home delivery enabled? (shows Yemen courier & delivery fee fields) */
+  const [homeDeliveryEnabled, setHomeDeliveryEnabled] = useState(false);
+
+  /** هل الشحن عبر مندوب مفعل؟ (يُظهر حقول موظف التعبئة والتجميع والعمولة)
+   *  Is via shipping agent enabled? (shows Saudi aggregator & commission fee fields) */
+  const [viaShippingAgent, setViaShippingAgent] = useState(false);
+
+  /** هل الدفع لاحقاً مفعل؟ (يُخفي حقول الدفع ويحفظ الطلب بحالة 1 كـ "لم يتم الدفع")
+   *  Is pay later enabled? (hides payment fields, saves order at status 1 as Unpaid) */
+  const [payLater, setPayLater] = useState(false);
+
+  /** هل الحفظ والاعتماد المباشر مفعل؟ (يحفظ الطلب بحالة الطلب الثالثة مباشرة)
+   *  Is direct approve enabled? (saves order directly at status stage 3 = Approved) */
+  const [directApprove, setDirectApprove] = useState(false);
 
 
   // Pre-generate preview order number when modal opens and populate settings defaults 
@@ -381,6 +400,7 @@ export default function Orders() { // دالة عرض الطلبات
 
     // Courier Links
     shippingCourierId: '', // Saudi courier
+    shippingCourierFeeRate: 30, // Saudi courier fee/commission rate (%)
     deliveryCourierId: '', // Yemen courier
     deliveryCourierFee: 4000, // Yemen flat delivery rate in YER
     deliveryCourierFeeCurrency: settings.currency || 'YER',
@@ -902,16 +922,26 @@ export default function Orders() { // دالة عرض الطلبات
       // سعر البيع للعميل = سعر المنتجات + ربح الشركه الافتراضي قبل خصم العموله البنكيه  + تكلفه الشحن + رسوم التغليف العامه + كوبون الخصم + رسوم تأمين المنتجات 
       totalOrderSAR = productsSum + originalRawProfitSAR + shippingCostSAR + generalPackagingFee + couponValue + itemsInsuranceSum;
 
-      const saudiCourier = couriers.find(c => c.id === formData.shippingCourierId);
-      const saudiRate = (saudiCourier && saudiCourier.commissionRate !== undefined) ? parseFloat(saudiCourier.commissionRate) : 30;
-      profitSaudiSAR = rawProfitSAR * (saudiRate / 100);
+      // احتساب ربح المندوب السعودي فقط إذا كان خيار "عبر مندوب شحن" مفعّلاً ومحدداً
+      // Calculate Saudi courier profit only if viaShippingAgent toggle is enabled
+      if (viaShippingAgent && formData.shippingCourierId) {
+        const saudiCourier = couriers.find(c => c.id === formData.shippingCourierId);
+        const saudiRate = (formData.shippingCourierFeeRate !== undefined && formData.shippingCourierFeeRate !== null)
+          ? (parseFloat(formData.shippingCourierFeeRate as any) || 0)
+          : ((saudiCourier && saudiCourier.commissionRate !== undefined) ? parseFloat(saudiCourier.commissionRate) : 30);
+        profitSaudiSAR = rawProfitSAR * (saudiRate / 100);
+      } else {
+        profitSaudiSAR = 0;
+      }
 
       // ربح الشركه النهائي  = ربح الشركه الافتراضي بعد خصم العموله البنكيه  -  ربح المندوب السعودي  + كوبون الخصم 
       profitCompanySAR = (rawProfitSAR - profitSaudiSAR) + couponValue;
     }
     //----------------------------------------------
 
-    const deliveryFeeRaw = parseFloat(formData.deliveryCourierFee as any) || 0;
+    // احتساب رسوم التوصيل لليمن فقط إذا كان خيار "توصيل للمنزل" مفعّلاً
+    // Calculate Yemen delivery fee only if homeDeliveryEnabled is true
+    const deliveryFeeRaw = homeDeliveryEnabled ? (parseFloat(formData.deliveryCourierFee as any) || 0) : 0;
     const paymentCurrency = formData.currency || orderCurrency;
     const deliveryFeeCurrency = formData.deliveryCourierFeeCurrency || settings.currency || 'YER';
     const currencyTotals = calculateOrderPaymentTotals({
@@ -992,16 +1022,66 @@ export default function Orders() { // دالة عرض الطلبات
       const orderNumber = await generateSmartOrderCode();
       const currentCalcs = computeCalculations();
 
-      const payStatus = currentCalcs.remainingYER <= 0
-        ? 'Paid'
-        : parseFloat(formData.amountPaid as any) > 0
-          ? 'Partial Paid'
-          : 'Unpaid';
+      // ====== تحديد حالة الدفع بناءً على خيار "الدفع لاحقاً" أو المبلغ المدفوع ======
+      // Determine payment status based on payLater toggle or paid amount
+      let payStatus: string;
+      if (payLater) {
+        // الدفع لاحقاً: حالة الدفع دائماً "لم يتم الدفع"
+        // Pay later: always set payment status to Unpaid
+        payStatus = 'Unpaid';
+      } else if (currentCalcs.remainingYER <= 0) {
+        payStatus = 'Paid'; // دفع كامل
+      } else if (parseFloat(formData.amountPaid as any) > 0) {
+        payStatus = 'Partial Paid'; // دفع جزئي
+      } else {
+        payStatus = 'Unpaid'; // لم يتم الدفع
+      }
+
+      // ====== تحديد ID حالة الطلب بناءً على الخيارات الثلاثة ======
+      // Determine order status ID based on payLater, directApprove and paid amount
+      // المنطق: directApprove => حالة 3 | payLater => حالة 1 | دفع موجود => حالة 2 | بدون دفع => حالة 1
+      // Logic: directApprove => stage 3 | payLater => stage 1 | paid > 0 => stage 2 | else => stage 1
+      const computedOrderStatusId = (() => {
+        // ترتيب الأولوية: الاعتماد المباشر > الدفع لاحقاً > مدفوع/غير مدفوع
+        // Priority: direct approve > pay later > paid/unpaid
+        if (directApprove) {
+          // البحث عن الحالة ذات الترتيب 3 من جدول حالات الطلب
+          // Find status with sortOrder/id = 3 from order statuses table
+          const stage3 = orderStatusesList.find((s: any) => s.id === 3 || s.sortOrder === 3);
+          return stage3 ? String(stage3.id) : '3';
+        }
+        if (payLater) {
+          // حالة البداية (الأولى) من جدول حالات الطلب
+          // First stage from order statuses table
+          const stage1 = orderStatusesList.find((s: any) => s.id === 1 || s.isFirst === true || s.sortOrder === 1);
+          return stage1 ? String(stage1.id) : '1';
+        }
+        // المنطق الافتراضي: إذا تم الدفع => الحالة الثانية، وإلا => الأولى
+        // Default: paid amount present => stage 2 else stage 1
+        if (parseFloat(formData.amountPaid as any) > 0) {
+          const stage2 = orderStatusesList.find((s: any) => s.id === 2 || s.sortOrder === 2);
+          return stage2 ? String(stage2.id) : '2';
+        }
+        const stage1 = orderStatusesList.find((s: any) => s.id === 1 || s.isFirst === true || s.sortOrder === 1);
+        return stage1 ? String(stage1.id) : '1';
+      })();
 
       const initialFiredTriggers = [''];
-      if (parseFloat(formData.amountPaid as any) > 0) {
+      if (parseFloat(formData.amountPaid as any) > 0 && !payLater) {
         initialFiredTriggers.push('order_down_payment');//مهم:هذا قيد دفعه من العميل
       }
+
+      // ====== نص حالة الطلب (نصي) بناءً على الخيارات ======
+      // Order status text based on options
+      const orderStatusText = (() => {
+        if (directApprove) return isAr ? 'معتمد' : 'Approved';
+        if (payLater) return isAr ? 'طلب معلق' : 'Pending Order';
+        if (parseFloat(formData.amountPaid as any) > 0) {
+          const stage2 = orderStatusesList.find((s: any) => s.id === 2 || s.sortOrder === 2);
+          return stage2 ? (isAr ? stage2.nameAr : stage2.nameEn) : (isAr ? 'تم الدفع ولم يتسجل' : 'Paid Not Registered');
+        }
+        return isAr ? 'طلب معلق' : 'Pending Order';
+      })();
 
       const payload = {
         // أعمدة مباشرة - ترتبط بـ DIRECT_COLUMNS_MAP لتُكتب في الأعمدة الأساسية وتُحذف من data
@@ -1015,12 +1095,16 @@ export default function Orders() { // دالة عرض الطلبات
         employeeId: formData.employeeId || null,
         courierId: formData.courierId || null,
         orderPartyAccountId: formData.orderPartyAccountId || null,
-        orderStatusId: parseFloat(formData.amountPaid as any) > 0 ? '2' : '1',
-        order_status_id: parseFloat(formData.amountPaid as any) > 0 ? '2' : '1',
+        // تحديد ID حالة الطلب ديناميكياً بناءً على payLater و directApprove
+        // Dynamic order status ID based on payLater & directApprove options
+        orderStatusId: computedOrderStatusId,
+        order_status_id: computedOrderStatusId,
         orderSourceId: formData.orderSourceId || null,
         orderSourceType: formData.orderSourceType || null,
-        deliveryCourierId: formData.deliveryCourierId || null,
-        shippingCourierId: formData.shippingCourierId || null,
+        deliveryCourierId: homeDeliveryEnabled ? (formData.deliveryCourierId || null) : null,
+        delivery_courier_id: homeDeliveryEnabled ? (formData.deliveryCourierId || null) : null,
+        shippingCourierId: viaShippingAgent ? (formData.shippingCourierId || null) : null,
+        shipping_courier_id: viaShippingAgent ? (formData.shippingCourierId || null) : null,
         createdByName: profile?.fullName || 'Root Admin',
         updatedAt: new Date().toISOString(),
         updatedBy: profile?.fullName || 'Root Admin',
@@ -1053,7 +1137,13 @@ export default function Orders() { // دالة عرض الطلبات
         amountPaid: parseFloat(formData.amountPaid as any) || 0,
         amountRemaining: currentCalcs.remainingYER,
         paymentStatus: payStatus,
-        paymentMethod: (formData as any).paymentMethod || 'Cash',
+        // حفظ خيارات الحفظ الإضافية في سجل الطلب
+        // Save extra order creation options in the order record
+        homeDeliveryEnabled: homeDeliveryEnabled,
+        viaShippingAgent: viaShippingAgent,
+        payLater: payLater,
+        directApprove: directApprove,
+        paymentMethod: payLater ? 'Deferred' : ((formData as any).paymentMethod || 'Cash'),
         cashAccountId: (formData as any).cashAccountId || null,
         bankAccountId: (formData as any).bankAccountId || null,
         bankReference: (formData as any).bankReference || '',
@@ -1063,18 +1153,21 @@ export default function Orders() { // دالة عرض الطلبات
         cbmShippingRateValue: parseFloat(cbmShippingRateValue as any) || 1400,
         addShippingEnabled,
         shippingCostSAR: currentCalcs.shippingCostSAR,
-        profitSaudiSAR: currentCalcs.profitSaudiSAR,
+        shippingCourierFeeRate: viaShippingAgent ? (parseFloat(formData.shippingCourierFeeRate as any) || 0) : 0,
+        profitSaudiSAR: viaShippingAgent ? currentCalcs.profitSaudiSAR : 0,
         profitCompanySAR: currentCalcs.profitCompanySAR,
-        deductSourcingCostFromCourier: formData.deductSourcingCostFromCourier,
-        sourcing_cost: formData.deductSourcingCostFromCourier ? 'courier' : 'system',
+        deductSourcingCostFromCourier: viaShippingAgent ? Boolean(formData.deductSourcingCostFromCourier) : false,
+        sourcing_cost: (viaShippingAgent && formData.deductSourcingCostFromCourier) ? 'courier' : 'system',
         sourcingCostAmount: currentCalcs.sourcingCostAmount,
-        orderStatus: parseFloat(formData.amountPaid as any) > 0 ? 'تم استلام دفعة جزئية' : 'طلب معلق',
+        // نص حالة الطلب يأخذ بعين الاعتبار الاعتماد المباشر والدفع لاحقاً
+        // Order status text respects directApprove and payLater
+        orderStatus: orderStatusText,
         deliveryStatus: 'في الانتظار',
         locationYemen: 'في الانتظار',
         firedTriggers: initialFiredTriggers,
         shippingCompany: formData.shippingCompany,
         externalOrderNumber: formData.externalOrderNumber,
-        deliveryCourierFee: parseFloat(formData.deliveryCourierFee as any) || 0,
+        deliveryCourierFee: homeDeliveryEnabled ? (parseFloat(formData.deliveryCourierFee as any) || 0) : 0,
         deliveryCourierFeeCurrency: currentCalcs.deliveryCourierFeeCurrency,
         deliveryCourierFeeOrderCurrency: currentCalcs.deliveryCourierFeeOrderCurrency,
         productInsuranceFee: currentCalcs.itemsInsuranceSum,
@@ -1461,6 +1554,7 @@ export default function Orders() { // دالة عرض الطلبات
       shippingCompany: 'Aramex',
       addShippingEnabled: false,
       shippingCourierId: '',
+      shippingCourierFeeRate: settings.defaultCourierCommissionRate ?? 30,
       deliveryCourierId: '',
       deliveryCourierFee: settings.defaultDeliveryFee ?? 4000,
       deliveryCourierFeeCurrency: settings.currency || 'YER',
@@ -1512,6 +1606,11 @@ export default function Orders() { // دالة عرض الطلبات
         categoryFeeCurrency: 'SAR'
       }
     ]);
+    // إعادة تعيين الخيارات الجديدة الثلاثة عند إغلاق النموذج
+    // Reset three new feature checkboxes when form is reset
+    setHomeDeliveryEnabled(false);
+    setPayLater(false);
+    setDirectApprove(false);
   };
 
   // Delete Orders with Admin PIN Verification. The SQL procedure executes all dependent deletes atomically.
@@ -1811,7 +1910,7 @@ export default function Orders() { // دالة عرض الطلبات
       const newFiredTriggers = [...firedTriggers];
 
       const currentStatusItem = getStatusByAny(
-        selectedOrder.orderStatusId || selectedOrder.order_status_id || currentStatus,
+        selectedOrder.order_status_id || selectedOrder.orderStatusId || currentStatus,
       ) || orderStatusesList[0];
       const newStatusItem = getStatusByAny(newStatus) || orderStatusesList[0];
 
@@ -2236,7 +2335,7 @@ export default function Orders() { // دالة عرض الطلبات
             shippingCompanyId: ship.shippingCompany || selectedOrder.shippingCompany || 'Aramex',
             shippingCompany: ship.shippingCompany || selectedOrder.shippingCompany || 'Aramex',
             courierId: updateFormData.deliveryCourierId || updateFormData.shippingCourierId || selectedOrder.deliveryCourierId || '',
-            shipmentStatus: updateFormData.orderStatus || ship.shipmentStatus || 'تم تسجيل الطلب',
+            shipmentStatus: updateFormData.orderStatus || ship.shipmentStatus || 'معلق  ',
             shippingCost: parseFloat(ship.shippingCost || 0),
             weight: parseFloat(ship.weight || 0),
             shippingCategoryId: ship.shippingCategoryId || '',
@@ -2771,7 +2870,7 @@ export default function Orders() { // دالة عرض الطلبات
         const firedTriggers = ord.firedTriggers || [];
         const newFiredTriggers = [...firedTriggers];
 
-        const ordStatus = ord.orderStatus || 'معلق';
+        const ordStatus = ord.orderStatus || 'معلق'; /*مهم: هنا يجب جلب اسم المرحله من جدول المراحل بناء على رقم المرحله*/
         const currentStatusItem = orderStatusesList.find(s => s.nameAr === ordStatus || s.nameEn === ordStatus);
         const newStatusItem = orderStatusesList.find(s => s.nameAr === newStatus || s.nameEn === newStatus) || orderStatusesList[0];
 
@@ -4031,9 +4130,15 @@ export default function Orders() { // دالة عرض الطلبات
                         {/* Logistics Status */}
                         <td className="p-4 text-start">
                           <div className="flex flex-col space-y-1">
-                            <span className="px-2.5 py-0.5 rounded-xl border border-[#d4af37]/20 bg-[#d4af37]/5 text-[#d4af37] font-bold max-w-max text-[10px]">
-                              {ord.orderStatus || ord.order_status || ''}
-                            </span>
+                            {(() => {
+                              const currentStatusItem = orderStatusesList.find(s => s.sortOrder == ord.order_status_id || s.sortOrder == ord.order_status_id || s.id == ord.order_status_id);
+                              return (
+                                <span className="px-2.5 py-0.5 rounded-xl border border-[#d4af37]/20 bg-[#d4af37]/5 text-[#d4af37] font-bold max-w-max text-[10px]">
+                                  {ord.order_status_id + ' : ' + (isAr ? currentStatusItem?.nameAr : currentStatusItem?.nameEn) /*مهم: هنا يجب جلب اسم المرحله من جدول المراحل بناء على رقم المرحله*/}
+                                </span>
+                              );
+                            })()}
+
                             <span className="text-[10px] text-slate-500 font-bold">{ord.orderSourceName || ord.orderSourceType}</span>
                           </div>
                         </td>
@@ -4221,6 +4326,15 @@ export default function Orders() { // دالة عرض الطلبات
         packagingOptions={packagingOptions}
         shippingCategoryOptions={shippingCategoryOptions}
         itemCategories={activeItemCategories}
+        homeDeliveryEnabled={homeDeliveryEnabled}
+        setHomeDeliveryEnabled={setHomeDeliveryEnabled}
+        viaShippingAgent={viaShippingAgent}
+        setViaShippingAgent={setViaShippingAgent}
+        payLater={payLater}
+        setPayLater={setPayLater}
+        directApprove={directApprove}
+        setDirectApprove={setDirectApprove}
+        orderStatuses={orderStatusesList}
         handleCreateOrder={handleCreateOrder}
       />
 
@@ -4507,6 +4621,7 @@ export default function Orders() { // دالة عرض الطلبات
         }}
         isAr={isAr}
         settings={settings}
+        orderStatusesList={orderStatusesList}
       />
 
       <OrderHistoryModal

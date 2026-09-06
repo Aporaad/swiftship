@@ -11,6 +11,7 @@ interface OrderDetailsModalProps {
   onClose: () => void;
   isAr: boolean;
   settings: any;
+  orderStatusesList: any;
 }
 
 export default function OrderDetailsModal({
@@ -19,6 +20,7 @@ export default function OrderDetailsModal({
   onClose,
   isAr,
   settings,
+  orderStatusesList,
 }: OrderDetailsModalProps) {
   const qrCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -126,7 +128,14 @@ export default function OrderDetailsModal({
               <div className="space-y-1">
                 <div className="text-slate-400 font-bold">
                   {isAr ? 'حالة الشحنة الطردية:' : 'Cargo Current State:'}{' '}
-                  <span className="text-[#d4af37] font-black">{selectedOrder.orderStatus || selectedOrder.order_status || ''}</span>
+                  {(() => {
+                    const currentStatusItem = orderStatusesList.find(s => s.sortOrder == selectedOrder.order_status_id || s.sortOrder == selectedOrder.order_status_id || s.id == selectedOrder.order_status_id);
+                    return (
+                      <span className="px-2.5 py-0.5 rounded-xl border border-[#d4af37]/20 bg-[#d4af37]/5 text-[#d4af37] font-bold max-w-max text-[10px]">
+                        {selectedOrder.order_status_id + ' : ' + (isAr ? currentStatusItem?.nameAr : currentStatusItem?.nameEn) /*مهم: هنا يجب جلب اسم المرحله من جدول المراحل بناء على رقم المرحله*/}
+                      </span>
+                    );
+                  })()}
                 </div>
                 <div className="text-slate-400 font-bold">
                   {isAr ? 'قناة التعبئة والمصدر:' : 'Sales Cargo Source:'}{' '}
@@ -313,8 +322,8 @@ export default function OrderDetailsModal({
                             </span>
 
                             <span className={`px-2.5 py-1 rounded-full text-[10px] font-black flex items-center gap-1.5 ${isDelivered
-                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-505/20'
-                                : 'bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse'
+                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-505/20'
+                              : 'bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse'
                               }`}>
                               <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
                               <span>{isDelivered ? (isAr ? 'تم التسليم والمطابقة' : 'Delivered & Matched') : (isAr ? 'تحت الترانزيت 🕒' : 'In Transit 🕒')}</span>
