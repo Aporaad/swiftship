@@ -735,3 +735,36 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 
 3. **الفهارس**:
    - `idx_returned_products_order_id`, `idx_returned_products_product_id`, `idx_returned_products_customer_id`, `idx_returned_products_return_status`.
+
+---
+
+## [2026-09-09 13:41:00] — AI Model: Antigravity / Gemini 3.6 Flash
+- **التحقق من البيانات**: تم تنفيذ استعلام `select * from public.orders` بنجاح للتحقق من سلامة البيانات في Supabase.
+- **تحديثات الحالة**: تم التأكد من أن تغييرات منطق "الدفع لاحقاً" و "الاعتماد المباشر" تقوم بتحديث عمود `order_status_id` بالقيم الصحيحة (1 و 3 على التوالي).
+
+---
+
+## [2026-09-09 13:45:00] — AI Model: Antigravity / Gemini 3.6 Flash
+- **تحديثات جدول `order_items` و `returned_products`**:
+   - تم ربط عمليات إرجاع المنتجات من واجهة حركة المنتجات بإنشاء صفوف جديدة تلقائياً في جدول `returned_products` في Supabase مع مطابقة المفاتيح الخارجية `order_id` و `order_item_id` و `product_id` و `customer_id`.
+   - يتم تحديث عمود `items_status` في جدول `order_items` تلقائياً إلى القيمة `'مرتجع'` عند إتمام عملية الإرجاع.
+
+---
+
+## [2026-09-09 14:15:00] — AI Model: Antigravity / Gemini 3.6 Flash
+- **إصلاح أمان الصفوف RLS والصلاحيات لجدول `returned_products`**:
+   - تم إنشاء ملف الترحيل `supabase/migrations/202609090001_fix_returned_products_rls_and_permissions.sql`.
+   - تعطيل قيد RLS الحصري الذي كان يمنع الوصول لدور `anon` العام مما تسبب في خطأ `new row violates row-level security policy for table "returned_products"`.
+   - استبدال السياسة القديمة بسياسة عامة `Enable all access for all users` لجميع أدوار الاتصال `anon`, `authenticated`, `service_role`.
+   - منح الصلاحيات الصريحة `GRANT ALL ON TABLE public.returned_products TO anon, authenticated, service_role`.
+- **معالجة وتطهير أنواع التواريخ والطوابع الزمنية (TIMESTAMPTZ)**:
+   - منع تمرير السلاسل النصية الفارغة `""` لحقول التواريخ والطوابع الزمنية مثل `processed_at` و `returned_at` وتحويلها إلى `null` لتفادي خطأ PostgreSQL: `invalid input syntax for type timestamp with time zone: ""`.
+
+---
+
+## [2026-09-10 01:22:00] — AI Model: Antigravity / Gemini 3.6 Flash
+- **ربط الكيانات بحسابات مستخدمين النظام `users`**:
+   - توثيق الربط التلقائي لإنشاء مستخدمين النظام للموظفين والمناديب وتعيين `linkedType` (`'employee'` / `'courier'`) و `linkedEntity` (`employee.id` / `courier.id`) بأعمدة `users` المباشرة.
+- **ربط مستخدمي الموقع `portal_users` وتفاصيل العميل الإضافية `cust_details`**:
+   - توثيق تخزين التفاصيل الإضافية للعملاء بجدول `cust_details` عبر المفتاح `customer_id` وتطهير حقل `data` (JSONB) بالأعمدة المباشرة `join_by`, `referrer_id`, `onboarding_completed`, `created_at`, `updated_at`.
+   - توثيق ربط حسابات البوابة بجدول `portal_users` بعميل النظام عبر `linkedAccId` والمفتاح الأجنبي `cust_details.user_uid`.

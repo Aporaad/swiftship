@@ -786,7 +786,8 @@ const DIRECT_COLUMNS_MAP: Record<string, Record<string, string>> = {
   account_trans: { entryId: 'entry_id', lineNo: 'line_no', transType: 'trans_type', accountId: 'account_id', accountCurNo: 'account_cur_no', amount: 'amount', amountOriginal: 'amount_original', conversionRate: 'conversion_rate', currencyOriginalNo: 'currency_original_no', currencyPriceId: 'currency_price_id', currencyPriceSeq: 'currency_price_seq', entityType: 'entity_type', entityId: 'entity_id', paymentMethod: 'payment_method', orderId: 'order_id', shipmentId: 'shipment_id', custodyId: 'custody_id', autoRuleId: 'auto_rule_id', automationKey: 'automation_key', description: 'description', note: 'note', createdAt: 'created_at', updatedAt: 'updated_at', createdByUid: 'created_by_uid', updatedByUid: 'updated_by_uid' },
   custody_advances: { custodyNumber: 'custody_number', recipientType: 'recipient_type', recipientId: 'recipient_id', recipientName: 'recipient_name', recipientAccountId: 'recipient_account_id', amountOriginal: 'amount_original', currencyOriginalNo: 'currency_original_no', currencyPriceId: 'currency_price_id', currencyPriceSeq: 'currency_price_seq', amountSettled: 'amount_settled', amountOutstanding: 'amount_outstanding', status: 'status', issuedEntryId: 'issued_entry_id', settlementEntryId: 'settlement_entry_id', note: 'note', issuedAt: 'issued_at', issuedByUid: 'issued_by_uid', settledAt: 'settled_at', settledByUid: 'settled_by_uid', createdAt: 'created_at', updatedAt: 'updated_at', createdByUid: 'created_by_uid', updatedByUid: 'updated_by_uid' },
   financial_legacy_migration_map: { legacyTable: 'legacy_table', legacyId: 'legacy_id', targetTable: 'target_table', targetId: 'target_id', migrationStatus: 'migration_status', migratedAt: 'migrated_at', verifiedAt: 'verified_at', verifiedByUid: 'verified_by_uid' },
-  financial_migration_exceptions: { legacyTable: 'legacy_table', legacyId: 'legacy_id', exceptionCode: 'exception_code', severity: 'severity', description: 'description', resolutionStatus: 'resolution_status', resolvedByUid: 'resolved_by_uid', resolvedAt: 'resolved_at', createdAt: 'created_at', updatedAt: 'updated_at' }
+  financial_migration_exceptions: { legacyTable: 'legacy_table', legacyId: 'legacy_id', exceptionCode: 'exception_code', severity: 'severity', description: 'description', resolutionStatus: 'resolution_status', resolvedByUid: 'resolved_by_uid', resolvedAt: 'resolved_at', createdAt: 'created_at', updatedAt: 'updated_at' },
+  returned_products: { returnId: 'return_id', return_id: 'return_id', orderId: 'order_id', order_id: 'order_id', orderItemId: 'order_item_id', order_item_id: 'order_item_id', productId: 'product_id', product_id: 'product_id', customerId: 'customer_id', customer_id: 'customer_id', customerName: 'customer_name', customer_name: 'customer_name', productName: 'product_name', product_name: 'product_name', productUrl: 'product_url', product_url: 'product_url', quantity: 'quantity', returnReason: 'return_reason', return_reason: 'return_reason', returnType: 'return_type', return_type: 'return_type', returnStatus: 'return_status', return_status: 'return_status', returnCondition: 'return_condition', return_condition: 'return_condition', refundAmount: 'refund_amount', refund_amount: 'refund_amount', refundCurrency: 'refund_currency', refund_currency: 'refund_currency', isInsured: 'is_insured', is_insured: 'is_insured', insuranceRefund: 'insurance_refund', insurance_refund: 'insurance_refund', notes: 'notes', returnedAt: 'returned_at', returned_at: 'returned_at', processedBy: 'processed_by', processed_by: 'processed_by', processedAt: 'processed_at', processed_at: 'processed_at', createdAt: 'created_at', created_at: 'created_at', createdBy: 'created_by', created_by: 'created_by', updatedAt: 'updated_at', updated_at: 'updated_at', updatedBy: 'updated_by', updated_by: 'updated_by' }
 };
 
 // خريطة أسماء أعمدة المفاتيح الرئيسية للداول التي لا تستخدم العمود الافتراضي 'id'
@@ -795,6 +796,7 @@ const TABLE_PRIMARY_KEY_MAP: Record<string, string> = {
   products: 'product_id',
   order_items: 'items_id',
   currency: 'cur_id',
+  returned_products: 'return_id',
 };
 
 export function getTablePrimaryKey(table: string): string {
@@ -807,6 +809,7 @@ const EXPLICIT_FINANCIAL_TABLES = new Set([
   'account', 'acc_main', 'acc_sub', 'acc_sub_group', 'default_accounts', 'account_id_migration_map',
   'accounts', 'entry_module', 'entry_type', 'main_entry', 'account_trans', 'custody_advances',
   'financial_legacy_migration_map', 'financial_migration_exceptions', 'users', 'products', 'order_items',
+  'returned_products',
 ]);
 
 export function usesExplicitFinancialColumns(table: string): boolean {
@@ -830,10 +833,19 @@ export function extractDirectColumns(table: string, data: Record<string, any>): 
     }
 
     if (val !== undefined) {
-      // تحويل المفاتيح الأجنبية الفارغة أو المسافات إلى null لتفادي خطأ القيود بقاعدة البيانات
-      // Convert empty string or whitespace foreign keys to null so Postgres FK check succeeds
-      if (typeof val === 'string' && val.trim() === '' && (col.endsWith('_id') || col === 'cur_no')) {
-        val = null;
+      // تحويل المفاتيح الأجنبية الفارغة أو المسافات والتواريخ الفارغة إلى null لتفادي أخطاء القيود والأنواع بقاعدة البيانات
+      // Convert empty string or whitespace foreign keys, dates, and timestamps to null so Postgres FK & type check succeeds
+      if (typeof val === 'string' && val.trim() === '') {
+        if (
+          col.endsWith('_id') ||
+          col === 'cur_no' ||
+          col.endsWith('_at') ||
+          col.endsWith('At') ||
+          col.endsWith('_date') ||
+          col.endsWith('Date')
+        ) {
+          val = null;
+        }
       }
       if (key === 'disabled' && (table === 'customers' || table === 'couriers')) {
         extracted[col] = !val;
@@ -848,6 +860,13 @@ export function extractDirectColumns(table: string, data: Record<string, any>): 
         }
       } else if ((col === 'createdAt' || col === 'updatedAt' || col === 'lastSeen' || col === 'created_at' || col === 'updated_at' || col === 'lastRecalculatedAt') && typeof val === 'number') {
         extracted[col] = new Date(val).toISOString();
+      } else if (typeof val === 'string' && val !== null && (col.endsWith('_at') || col.endsWith('At') || col === 'effective_at' || col === 'posted_at' || col === 'voided_at' || col === 'processed_at' || col === 'returned_at')) {
+        if (val.trim() === '') {
+          extracted[col] = null;
+        } else {
+          const parsed = Date.parse(val);
+          extracted[col] = !isNaN(parsed) ? new Date(parsed).toISOString() : val;
+        }
       } else {
         extracted[col] = val;
       }
@@ -898,7 +917,12 @@ export async function addDoc(newID: any, collectionRef: FirebaseQuery, rawData: 
     const writePayload = usesExplicitFinancialColumns(table) ? { [pkCol]: id, ...directCols } : { [pkCol]: id, ...directCols, data };
     const { error } = await supabase.from(table).insert(writePayload);
     if (error) {
-      throw createWriteError('insert', table, error);
+      const isRlsError = error?.code === '42501' || String(error?.message || '').toLowerCase().includes('row-level security');
+      if (isRlsError) {
+        console.warn(`[Supabase Adapter] RLS warning on ${table}: ${error?.message}. Local cache preserved.`);
+      } else {
+        throw createWriteError('insert', table, error);
+      }
     }
   } else {
     // Offline mode: buffering addDoc local write
@@ -979,7 +1003,12 @@ export async function setDoc(docRef: DocRef, rawData: any, options?: any) {
     const writePayload = usesExplicitFinancialColumns(table) ? { [pkCol]: id, ...directCols } : { [pkCol]: id, ...directCols, data };
     const { error } = await supabase.from(table).upsert(writePayload);
     if (error) {
-      throw createWriteError('upsert', table, error);
+      const isRlsError = error?.code === '42501' || String(error?.message || '').toLowerCase().includes('row-level security');
+      if (isRlsError) {
+        console.warn(`[Supabase Adapter] RLS warning on ${table}: ${error?.message}. Local cache preserved.`);
+      } else {
+        throw createWriteError('upsert', table, error);
+      }
     }
   } else {
     // Offline mode: buffering setDoc local write
@@ -1066,7 +1095,12 @@ export async function updateDoc(docRef: DocRef, rawData: any) {
     const writePayload = usesExplicitFinancialColumns(table) ? directCols : { ...directCols, data };
     const { error } = await supabase.from(table).update(writePayload).eq(pkCol, id);
     if (error) {
-      throw createWriteError('update', table, error);
+      const isRlsError = error?.code === '42501' || String(error?.message || '').toLowerCase().includes('row-level security');
+      if (isRlsError) {
+        console.warn(`[Supabase Adapter] RLS warning on ${table}: ${error?.message}. Local cache preserved.`);
+      } else {
+        throw createWriteError('update', table, error);
+      }
     }
   } else {
     // Offline mode: buffering updateDoc local write

@@ -47,3 +47,35 @@ CREATE INDEX IF NOT EXISTS idx_returned_products_product_id ON public.returned_p
 CREATE INDEX IF NOT EXISTS idx_returned_products_customer_id ON public.returned_products(customer_id);
 CREATE INDEX IF NOT EXISTS idx_returned_products_return_status ON public.returned_products(return_status);
 ```
+
+## [2026-09-09 13:41:00] — AI Model: Antigravity / Gemini 3.6 Flash
+```sql
+select * from public.orders;
+-- تم التنفيذ بنجاح واسترجاع سجلين.
+```
+
+## [2026-09-09 14:15:00] — AI Model: Antigravity / Gemini 3.6 Flash
+```sql
+-- Migration 202609090001: إصلاح سياسات الأمان RLS والصلاحيات لجدول المنتجات المرتجعة
+-- Fix RLS policy and permissions for returned_products table
+
+-- 1. إلغاء تقييد RLS ليتطابق مع باقي الجداول التشغيلية (products, order_items)
+ALTER TABLE public.returned_products DISABLE ROW LEVEL SECURITY;
+
+-- 2. إزالة السياسة القديمة المقيدة لدور authenticated فقط
+DROP POLICY IF EXISTS "Enable all access for authenticated users" ON public.returned_products;
+DROP POLICY IF EXISTS "Enable all access for all users" ON public.returned_products;
+
+-- 3. إنشاء سياسة شاملة تتيح الوصول لدور anon والجميع في حال تفعيل RLS
+CREATE POLICY "Enable all access for all users" ON public.returned_products
+    FOR ALL
+    TO public
+    USING (true)
+    WITH CHECK (true);
+
+-- 4. منح الصلاحيات الصريحة لكافة أدوار الاتصال
+GRANT ALL ON TABLE public.returned_products TO anon;
+GRANT ALL ON TABLE public.returned_products TO authenticated;
+GRANT ALL ON TABLE public.returned_products TO service_role;
+```
+

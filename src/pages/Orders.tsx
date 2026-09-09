@@ -3754,7 +3754,11 @@ export default function Orders() { // دالة عرض الطلبات
       </div>
 
       {ordersTab === 'products' ? (
-        <ProductsManagementTab isAr={isAr} canManage={canManageOrders} orderCurrency={orderCurrency} />
+        <ProductsManagementTab
+          isAr={isAr}
+          canManage={canManageOrders}
+          orderCurrency={orderCurrency}
+        />
       ) : ordersTab === 'item-categories' ? (
         <ItemCategoriesManagementTab isAr={isAr} canManage={canManageOrders} />
       ) : ordersTab === 'options' ? (

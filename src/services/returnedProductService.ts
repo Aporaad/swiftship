@@ -7,7 +7,7 @@
  * Returned Products: Track products returned by customers with reason, status, and financial refund details
  */
 
-import { supabase } from '../lib/supabase-firebase-adapter';
+import { supabase, db, collection, addDoc } from '../lib/supabase-firebase-adapter';
 
 // ────────────────────────── Types ──────────────────────────
 
@@ -154,10 +154,15 @@ export async function createReturnedProduct(
 ): Promise<ReturnedProduct> {
   // توليد معرف فريد للمرتجع - Generate unique return ID
   const return_id = 'ret_' + Math.random().toString(36).substring(2, 11);
+  const now = new Date().toISOString();
 
   const payload: ReturnedProduct = {
     return_id,
     ...returnData,
+    order_id: (returnData.order_id || '').trim() || undefined,
+    order_item_id: (returnData.order_item_id || '').trim() || undefined,
+    product_id: (returnData.product_id || '').trim() || undefined,
+    customer_id: (returnData.customer_id || '').trim() || undefined,
     quantity: Math.max(1, Number(returnData.quantity) || 1),
     refund_amount: Math.max(0, Number(returnData.refund_amount) || 0),
     insurance_refund: returnData.is_insured
@@ -167,21 +172,21 @@ export async function createReturnedProduct(
     return_type: returnData.return_type || 'استرداد',
     return_condition: returnData.return_condition || 'مستخدم',
     is_insured: Boolean(returnData.is_insured),
-    returned_at: returnData.returned_at || new Date().toISOString(),
-    created_at: new Date().toISOString(),
-    created_by: createdBy || null,
-    updated_at: new Date().toISOString(),
-    updated_by: createdBy || null,
+    returned_at: returnData.returned_at
+      ? (returnData.returned_at.includes('T') ? returnData.returned_at : new Date(returnData.returned_at).toISOString())
+      : now,
+    processed_at: returnData.processed_at
+      ? (returnData.processed_at.includes('T') ? returnData.processed_at : new Date(returnData.processed_at).toISOString())
+      : undefined,
+    processed_by: (returnData.processed_by || '').trim() || undefined,
+    created_at: now,
+    created_by: createdBy || 'system',
+    updated_at: now,
+    updated_by: createdBy || 'system',
   };
 
-  const { data, error } = await supabase
-    .from('returned_products')
-    .insert(payload)
-    .select()
-    .single();
-
-  if (error) throw new Error(error.message);
-  return data;
+  await addDoc(return_id, collection(db, 'returned_products'), payload);
+  return payload;
 }
 
 /**
@@ -268,8 +273,8 @@ export function calculateReturnStats(returns: ReturnedProduct[]): ReturnedProduc
 }
 
 /**
- * إنشاء مرتجع تلقائياً من بند طلب مؤمن عند النقر على زر الإرجاع
- * Automatically create returned product record from insured order item
+ * إنشاء مرتجع تلقائياً من بند طلب عند النقر على زر الإرجاع في حركة المنتجات
+ * Automatically create returned product record from order item when clicking return
  */
 export async function createReturnedProductFromOrderItem(
   orderItem: any,
@@ -280,40 +285,40 @@ export async function createReturnedProductFromOrderItem(
 ): Promise<ReturnedProduct> {
   const return_id = 'ret_' + Math.random().toString(36).substring(2, 11);
   const now = new Date().toISOString();
+  const is_insured = Boolean(orderItem.is_insured);
+  const insurance_refund = is_insured ? Number(orderItem.insurance_fee || 0) : 0;
 
   const payload: ReturnedProduct = {
     return_id,
-    order_id: orderItem.order_id || '',
-    order_item_id: orderItem.items_id || '',
-    product_id: orderItem.product_id || '',
-    customer_id: order?.customer_id || order?.customerId || '',
-    customer_name: order?.customerName || order?.customer_name || order?.customer_id || 'عميل',
-    product_name: orderItem.product_cooler || masterProduct?.product_name_ar || masterProduct?.productName || '—',
-    product_url: orderItem.product_url || '',
+    order_id: (orderItem.order_id || order?.orderNumber || order?.order_number || order?.id || '').trim() || undefined,
+    order_item_id: (orderItem.items_id || orderItem.id || '').trim() || undefined,
+    product_id: (orderItem.product_id || '').trim() || undefined,
+    customer_id: (order?.customer_id || order?.customerId || '').trim() || undefined,
+    customer_name: (order?.customerName || order?.customer_name || order?.customer_id || 'عميل').trim(),
+    product_name: (orderItem.product_cooler || masterProduct?.product_name_ar || masterProduct?.productName || 'منتج').trim(),
+    product_url: (orderItem.product_url || '').trim(),
     quantity: Math.max(1, Number(orderItem.quantity) || 1),
-    return_reason: 'إرجاع منتج مؤمن من حركة المنتجات',
+    return_reason: is_insured ? 'إرجاع منتج مؤمن من حركة المنتجات' : 'إرجاع منتج من حركة المنتجات',
     return_type: 'استرداد',
     return_status: 'معلق',
     return_condition: 'مستخدم',
     refund_amount: Number(orderItem.total_price || (orderItem.product_price ? orderItem.product_price * (orderItem.quantity || 1) : 0)),
-    refund_currency: orderCurrency,
-    is_insured: true,
-    insurance_refund: Number(orderItem.insurance_fee || 0),
-    notes: 'تم الإرجاع تلقائياً عبر زر إرجاع المنتجات المؤمنة',
-    returned_at: now.split('T')[0],
+    refund_currency: order?.currency || orderCurrency,
+    is_insured: is_insured,
+    insurance_refund: insurance_refund,
+    notes: is_insured
+      ? 'تم الإرجاع تلقائياً عبر زر إرجاع المنتجات بحركة المنتجات (منتج مؤمن)'
+      : 'تم الإرجاع تلقائياً عبر زر إرجاع المنتجات بحركة المنتجات',
+    returned_at: now,
+    processed_by: undefined,
+    processed_at: undefined,
     created_at: now,
     created_by: createdBy || 'system',
     updated_at: now,
     updated_by: createdBy || 'system',
   };
 
-  const { data, error } = await supabase
-    .from('returned_products')
-    .insert(payload)
-    .select()
-    .single();
-
-  if (error) throw new Error(error.message);
-  return data;
+  await addDoc(return_id, collection(db, 'returned_products'), payload);
+  return payload;
 }
 

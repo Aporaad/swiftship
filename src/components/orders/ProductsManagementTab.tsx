@@ -12,10 +12,11 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ConfirmModal from '../ConfirmModal';
-import { addDoc, collection, db, deleteDoc, doc, onSnapshot, updateDoc } from '../../lib/supabase';
+import { addDoc, collection, db, deleteDoc, doc, onSnapshot, updateDoc, auth } from '../../lib/supabase';
 import { useItemCategories } from '../../hooks/useItemCategories';
 import { useExchangeRates } from '../../hooks/useExchangeRates';
 import { useRole } from '../../hooks/useRole';
+import { createReturnedProductFromOrderItem } from '../../services/returnedProductService';
 import ReturnedProductsTab from './ReturnedProductsTab';
 
 // ────────────────────── Types ──────────────────────
@@ -109,10 +110,14 @@ export default function ProductsManagementTab({
   isAr,
   canManage,
   orderCurrency = 'SAR',
+  orders: propOrders,
+  customers: propCustomers,
 }: {
   isAr: boolean;
   canManage: boolean;
   orderCurrency?: string;
+  orders?: any[];
+  customers?: any[];
 }) {
   const { role, hasPermission } = useRole();
   const { categories } = useItemCategories();
@@ -121,6 +126,36 @@ export default function ProductsManagementTab({
   // ── تبويب نشط: المنتجات الرئيسية أم حركة المنتجات أم المنتجات المرتجعة ──
   // Active sub-tab: Master Products, Product Movements, or Returned Products
   const [activeSubTab, setActiveSubTab] = useState<'master' | 'movements' | 'returns'>('master');
+
+  // ──────────── قائمة الطلبات والعملاء - Orders & Customers ────────────
+  const [localOrders, setLocalOrders] = useState<any[]>([]);
+  const [localCustomers, setLocalCustomers] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!propOrders || propOrders.length === 0) {
+      const unsub = onSnapshot(collection(db, 'orders'), (snap: any) => {
+        setLocalOrders(snap.docs.map((d: any) => ({ id: d.id, ...d.data() })));
+      });
+      return () => unsub?.();
+    }
+  }, [propOrders]);
+
+  useEffect(() => {
+    if (!propCustomers || propCustomers.length === 0) {
+      const unsub = onSnapshot(collection(db, 'customers'), (snap: any) => {
+        setLocalCustomers(snap.docs.map((d: any) => ({ id: d.id, ...d.data() })));
+      });
+      return () => unsub?.();
+    }
+  }, [propCustomers]);
+
+  const ordersList = useMemo(() => {
+    return propOrders && propOrders.length > 0 ? propOrders : localOrders;
+  }, [propOrders, localOrders]);
+
+  const customersList = useMemo(() => {
+    return propCustomers && propCustomers.length > 0 ? propCustomers : localCustomers;
+  }, [propCustomers, localCustomers]);
 
   // ──────────── Master Products State ────────────
   const [products, setProducts] = useState<MasterProduct[]>([]);
@@ -284,21 +319,44 @@ export default function ProductsManagementTab({
     }
   };
 
-  // ──────────── إرجاع بند مؤمن ────────────
-  // Return an insured order item – sets status to 'مرتجع'
+  // ──────────── إرجاع بند الطلب تلقائياً إلى جدول وواجهة المرتجعات ────────────
+  // Automatically return an order item and create returned_products record
   const returnItem = async (item: OrderItem) => {
-    if (!item.is_insured) {
-      toast.error(isAr ? 'لا يمكن إرجاع منتج غير مؤمن' : 'Only insured items can be returned');
-      return;
-    }
     try {
+      // 1. البحث عن الطلب المرتبط بالبند
+      const matchedOrder = ordersList.find((o: any) =>
+        o.id === item.order_id ||
+        o.orderNumber === item.order_id ||
+        o.order_number === item.order_id
+      );
+
+      // 2. البحث عن المنتج الرئيسي في الكتالوج
+      const matchedProduct = products.find(p => p.product_id === item.product_id);
+
+      // 3. إضافة المنتج المرتجع تلقائياً إلى جدول returned_products
+      const userIdentifier = auth.currentUser?.email || auth.currentUser?.uid || 'system';
+      await createReturnedProductFromOrderItem(
+        item,
+        matchedOrder,
+        matchedProduct,
+        matchedOrder?.currency || orderCurrency,
+        userIdentifier
+      );
+
+      // 4. تحديث حالة بند الطلب في جدول order_items إلى 'مرتجع'
       await updateDoc(doc(db, 'order_items', item.items_id), {
         items_status: 'مرتجع',
         updated_at: new Date().toISOString(),
       });
-      toast.success(isAr ? 'تم إرجاع المنتج وتغيير حالته إلى مرتجع' : 'Item returned successfully');
+
+      toast.success(
+        isAr
+          ? 'تم إرجاع المنتج وإضافته تلقائياً إلى جدول وواجهة المرتجعات بنجاح'
+          : 'Product returned and automatically added to returns records'
+      );
       setReturningItem(null);
     } catch (err: any) {
+      console.error('Failed to return item:', err);
       toast.error(err?.message || (isAr ? 'تعذر إرجاع المنتج' : 'Return failed'));
     }
   };
@@ -433,8 +491,8 @@ export default function ProductsManagementTab({
                 className={inp + ' max-w-[160px]'}
               >
                 <option value="all">{isAr ? 'كل الفئات' : 'All categories'}</option>
-                {categories.map(c => (
-                  <option key={c.id} value={c.id}>{isAr ? c.nameAr : c.nameEn}</option>
+                {categories.map((c, idx) => (
+                  <option key={c.id || `cat-${idx}`} value={c.id}>{isAr ? c.nameAr : c.nameEn}</option>
                 ))}
               </select>
               {/* فلتر مسموح/محظور */}
@@ -497,11 +555,11 @@ export default function ProductsManagementTab({
                     <tr><td colSpan={7} className="p-10 text-center text-slate-500">
                       {isAr ? 'لا توجد منتجات مطابقة' : 'No matching products'}
                     </td></tr>
-                  ) : filteredProducts.map(p => {
+                  ) : filteredProducts.map((p, idx) => {
                     const catName = categories.find(c => c.id === p.item_category_id);
                     const orderCount = orderItemCounts[p.product_id] || 0;
                     return (
-                      <tr key={p.product_id} className="hover:bg-slate-900/40 transition-colors">
+                      <tr key={p.product_id || `prod-${idx}`} className="hover:bg-slate-900/40 transition-colors">
                         <td className="p-3">
                           <div className="font-black text-white">
                             {p.product_name_ar || p.productName || p.name || '—'}
@@ -604,7 +662,7 @@ export default function ProductsManagementTab({
                 className={inp + ' max-w-[180px]'}
               >
                 <option value="all">{isAr ? 'جميع الحالات' : 'All statuses'}</option>
-                {ITEM_STATUS_LIST.map(s => <option key={s} value={s}>{s}</option>)}
+                {ITEM_STATUS_LIST.map((s, idx) => <option key={`status-movements-${idx}`} value={s}>{s}</option>)}
               </select>
               {itemSearch && (
                 <button
@@ -644,14 +702,14 @@ export default function ProductsManagementTab({
                     <tr><td colSpan={7} className="p-10 text-center text-slate-500">
                       {isAr ? 'لا توجد حركات مطابقة' : 'No matching movements'}
                     </td></tr>
-                  ) : filteredItems.map(item => {
+                  ) : filteredItems.map((item, idx) => {
                     // إيجاد اسم المنتج الرئيسي
                     const masterProd = products.find(p => p.product_id === item.product_id);
                     const displayName = item.product_cooler
                       || masterProd?.product_name_ar || masterProd?.productName || '—';
 
                     return (
-                      <tr key={item.items_id} className="hover:bg-slate-900/40 transition-colors">
+                      <tr key={item.items_id || `item-${idx}`} className="hover:bg-slate-900/40 transition-colors">
                         <td className="p-3">
                           <div className="font-mono font-black text-[#d4af37]">
                             {item.order_id || '—'}
@@ -703,7 +761,7 @@ export default function ProductsManagementTab({
                                 onChange={e => setItemStatusEdit(e.target.value)}
                                 className="bg-slate-900 border border-slate-700 text-white rounded-lg text-[10px] p-1 outline-none"
                               >
-                                {ITEM_STATUS_LIST.map(s => <option key={s} value={s}>{s}</option>)}
+                                {ITEM_STATUS_LIST.map((s, idx) => <option key={`status-edit-${idx}`} value={s}>{s}</option>)}
                               </select>
                               <button
                                 onClick={() => updateItemStatus(item, itemStatusEdit)}
@@ -732,12 +790,16 @@ export default function ProductsManagementTab({
                                 <Edit2 className="w-3.5 h-3.5" />
                               </button>
                             )}
-                            {/* إرجاع المنتج المؤمن */}
-                            {(canManage || canReturnItem) && item.is_insured && item.items_status !== 'مرتجع' && (
+                            {/* إرجاع المنتج تلقائياً إلى سجل وواجهة المرتجعات */}
+                            {(canManage || canReturnItem) && item.items_status !== 'مرتجع' && (
                               <button
                                 onClick={() => setReturningItem(item)}
                                 className="p-1.5 text-amber-400 hover:bg-amber-500/10 rounded-lg transition"
-                                title={isAr ? 'إرجاع المنتج (مؤمن)' : 'Return insured item'}
+                                title={
+                                  item.is_insured
+                                    ? (isAr ? 'إرجاع المنتج إلى سجل المرتجعات (مؤمن)' : 'Return insured item to returns')
+                                    : (isAr ? 'إرجاع المنتج إلى سجل المرتجعات' : 'Return item to returns')
+                                }
                               >
                                 <RotateCcw className="w-3.5 h-3.5" />
                               </button>
@@ -773,6 +835,9 @@ export default function ProductsManagementTab({
           canManage={canManage}
           orderCurrency={orderCurrency}
           masterProducts={products}
+          orders={ordersList}
+          customers={customersList}
+          orderItems={orderItems}
         />
       )}
 
@@ -823,8 +888,8 @@ export default function ProductsManagementTab({
                     className={inp}
                   >
                     <option value="">{isAr ? 'بدون فئة' : 'No category'}</option>
-                    {categories.map(c => (
-                      <option key={c.id} value={c.id}>{isAr ? c.nameAr : c.nameEn}</option>
+                    {categories.map((c, idx) => (
+                      <option key={c.id || `cat-modal-${idx}`} value={c.id}>{isAr ? c.nameAr : c.nameEn}</option>
                     ))}
                   </select>
                 </FieldLabel>
@@ -922,15 +987,17 @@ export default function ProductsManagementTab({
         type="danger"
       />
 
-      {/* ════════════ نافذة تأكيد إرجاع بند مؤمن ════════════ */}
+      {/* ════════════ نافذة تأكيد إرجاع بند الطلب ════════════ */}
       <ConfirmModal
         isOpen={Boolean(returningItem)}
         onClose={() => setReturningItem(null)}
         onConfirm={() => returningItem && returnItem(returningItem)}
-        title={isAr ? 'إرجاع المنتج المؤمن' : 'Return Insured Item'}
-        message={isAr
-          ? `سيتم تغيير حالة البند إلى "مرتجع". التأمين: ${money(returningItem?.insurance_fee)}`
-          : `Item status will change to "Returned". Insurance: ${money(returningItem?.insurance_fee)}`}
+        title={isAr ? 'إرجاع المنتج إلى سجل المرتجعات' : 'Return Product'}
+        message={
+          isAr
+            ? `هل أنت متأكد من رغبتك في إرجاع المنتج "${returningItem?.product_cooler || returningItem?.items_id}"؟ سيتم إضافة المنتج تلقائياً إلى جدول وواجهة المرتجعات وتغيير حالته إلى "مرتجع".${returningItem?.is_insured ? ` (المنتج مؤمن - رسوم التأمين: ${money(returningItem?.insurance_fee)})` : ''}`
+            : `Are you sure you want to return "${returningItem?.product_cooler || returningItem?.items_id}"? It will be automatically added to the Returned Products table and its status will change to "Returned".${returningItem?.is_insured ? ` (Insured - Fee: ${money(returningItem?.insurance_fee)})` : ''}`
+        }
         confirmText={isAr ? 'تأكيد الإرجاع' : 'Confirm Return'}
         type="warning"
       />
