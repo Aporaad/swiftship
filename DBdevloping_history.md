@@ -718,3 +718,20 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
    - تم حل المشكلة بضبط توليد `entry_number` فريد لكل قيد تلقائي (باستخدام `automationKey` المحتوي على مفتاح القاعدة والطلب والرمز أو تسلسل `JV-YYYYMMDD-XXXXXX`) بينما يُحفظ رقم الطلب المرجعي في عمود `ref_number`.
 2. **الاعتماد الكامل على الجداول الحديثة `main_entry` و `account_trans`**:
    - خلو قاعدة البيانات والخدمات المحاسبية تماماً من أي استعلام مباشر عن الجداول الملغاة `journal_entries` و `account_transactions`.
+
+---
+
+## [2026-09-09 22:15:00] — إنشاء جدول المنتجات المرتجعة `returned_products` في Supabase
+
+### التحديثات والتعديلات المنفذة في قاعدة البيانات:
+1. **إنشاء جدول `returned_products`**:
+   - العمود المفتاحي `return_id TEXT PRIMARY KEY`.
+   - ربط العلاقات: `order_id`, `order_item_id`, `product_id`, `customer_id`.
+   - أعمدة بيانات الإرجاع والمالية: `customer_name`, `product_name`, `product_url`, `quantity`, `return_reason`, `return_type`, `return_status`, `return_condition`, `refund_amount`, `refund_currency`, `is_insured`, `insurance_refund`, `notes`.
+   - الأعمدة الزمنية والتتبع: `returned_at`, `processed_by`, `processed_at`, `created_at`, `created_by`, `updated_at`, `updated_by`.
+
+2. **حماية الصفوف RLS والتأمين**:
+   - تفعيل RLS وسياسة `Enable all access for authenticated users`.
+
+3. **الفهارس**:
+   - `idx_returned_products_order_id`, `idx_returned_products_product_id`, `idx_returned_products_customer_id`, `idx_returned_products_return_status`.

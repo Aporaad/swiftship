@@ -401,6 +401,13 @@
 - [x] تحديث المحول `supabase-firebase-adapter.ts` لإدراج `mainEntryId` و `accountTransCount` ضمن خريطة أعمدة `orders_history`.
 - [x] اجتياز فحص التركيب والتجميع `npx tsc --noEmit` واختبارات الخدمات `npx vitest run src/services/` بنسبة 100%.
 
+## [2026-09-09 22:15:00] — إنشاء جدول المنتجات المرتجعة وتبويبة إدارة المرتجعات
+- [x] إنشاء جدول `returned_products` في قاعدة البيانات Supabase مع حقول تفاصيل الإرجاع وحماية RLS والفهارس.
+- [x] إنشاء خدمة `returnedProductService.ts` لفصل Business Logic للمنتجات المرتجعة عن واجهة المستخدم (Clean Code, Snake Case).
+- [x] إنشاء مكوّن `ReturnedProductsTab.tsx` لدعم كامل عمليات CRUD والفلترة المتقدمة والبحث والإحصائيات وتحديث حالة الإرجاع.
+- [x] تضمين التبويبة الفرعية الثالثة "المنتجات المرتجعة" داخل واجهة إدارة المنتجات `ProductsManagementTab.tsx`.
+- [x] اجتياز فحص التركيب والتجميع `npx tsc --noEmit` بنسبة 100% بدون أي أخطاء.
+
 
 
 

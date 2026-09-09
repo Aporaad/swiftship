@@ -16,6 +16,7 @@ import { addDoc, collection, db, deleteDoc, doc, onSnapshot, updateDoc } from '.
 import { useItemCategories } from '../../hooks/useItemCategories';
 import { useExchangeRates } from '../../hooks/useExchangeRates';
 import { useRole } from '../../hooks/useRole';
+import ReturnedProductsTab from './ReturnedProductsTab';
 
 // ────────────────────── Types ──────────────────────
 
@@ -117,9 +118,9 @@ export default function ProductsManagementTab({
   const { categories } = useItemCategories();
   const { activeCurrencies } = useExchangeRates();
 
-  // ── تبويب نشط: المنتجات الرئيسية أم حركة المنتجات ──
-  // Active sub-tab: Master Products or Product Movements
-  const [activeSubTab, setActiveSubTab] = useState<'master' | 'movements'>('master');
+  // ── تبويب نشط: المنتجات الرئيسية أم حركة المنتجات أم المنتجات المرتجعة ──
+  // Active sub-tab: Master Products, Product Movements, or Returned Products
+  const [activeSubTab, setActiveSubTab] = useState<'master' | 'movements' | 'returns'>('master');
 
   // ──────────── Master Products State ────────────
   const [products, setProducts] = useState<MasterProduct[]>([]);
@@ -392,6 +393,16 @@ export default function ProductsManagementTab({
               <span className="bg-black/20 px-1.5 py-0.5 rounded font-mono text-[10px]">
                 {orderItems.length}
               </span>
+            </button>
+            <button
+              id="subtab-returned-products"
+              onClick={() => setActiveSubTab('returns')}
+              className={`px-4 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition cursor-pointer ${activeSubTab === 'returns'
+                ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/20'
+                : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'}`}
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              {isAr ? 'المنتجات المرتجعة' : 'Returned Products'}
             </button>
           </div>
         </div>
@@ -751,6 +762,18 @@ export default function ProductsManagementTab({
             </div>
           </div>
         </section>
+      )}
+
+      {/* ════════════════════════════════════════════ */}
+      {/* TAB 3: المنتجات المرتجعة (returned_products) */}
+      {/* ════════════════════════════════════════════ */}
+      {activeSubTab === 'returns' && (
+        <ReturnedProductsTab
+          isAr={isAr}
+          canManage={canManage}
+          orderCurrency={orderCurrency}
+          masterProducts={products}
+        />
       )}
 
       {/* ════════════ نافذة إنشاء / تعديل منتج رئيسي ════════════ */}
