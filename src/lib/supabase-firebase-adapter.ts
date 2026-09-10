@@ -858,14 +858,32 @@ export function extractDirectColumns(table: string, data: Record<string, any>): 
         } else {
           extracted[col] = val;
         }
-      } else if ((col === 'createdAt' || col === 'updatedAt' || col === 'lastSeen' || col === 'created_at' || col === 'updated_at' || col === 'lastRecalculatedAt') && typeof val === 'number') {
-        extracted[col] = new Date(val).toISOString();
-      } else if (typeof val === 'string' && val !== null && (col.endsWith('_at') || col.endsWith('At') || col === 'effective_at' || col === 'posted_at' || col === 'voided_at' || col === 'processed_at' || col === 'returned_at')) {
-        if (val.trim() === '') {
+      } else if (
+        col.endsWith('_at') ||
+        col.endsWith('At') ||
+        col.endsWith('_date') ||
+        col.endsWith('Date') ||
+        col === 'lastRecalculatedAt' ||
+        col === 'effective_at' ||
+        col === 'posted_at' ||
+        col === 'voided_at' ||
+        col === 'processed_at' ||
+        col === 'returned_at'
+      ) {
+        if (val === null || val === undefined || (typeof val === 'string' && val.trim() === '')) {
           extracted[col] = null;
+        } else if (typeof val === 'number') {
+          extracted[col] = new Date(val).toISOString();
+        } else if (typeof val === 'string') {
+          const trimmed = val.trim();
+          if (/^\d+$/.test(trimmed)) {
+            extracted[col] = new Date(Number(trimmed)).toISOString();
+          } else {
+            const parsed = Date.parse(trimmed);
+            extracted[col] = !isNaN(parsed) ? new Date(parsed).toISOString() : null;
+          }
         } else {
-          const parsed = Date.parse(val);
-          extracted[col] = !isNaN(parsed) ? new Date(parsed).toISOString() : val;
+          extracted[col] = val;
         }
       } else {
         extracted[col] = val;
@@ -908,7 +926,13 @@ export function createWriteError(operation: 'insert' | 'upsert' | 'update' | 'de
 export async function addDoc(newID: any, collectionRef: FirebaseQuery, rawData: any) {
   const table = collectionRef.path;
   const pkCol = getTablePrimaryKey(table);
-  const id = newID ? newID : 'noId_' + Math.random().toString(36).substring(2, 11) + Math.random().toString(36).substring(2, 11);
+  let id = newID ? String(newID) : 'noId_' + Math.random().toString(36).substring(2, 11) + Math.random().toString(36).substring(2, 11);
+
+  // Uniqueness check against cached items to prevent duplicate primary key violations
+  const cache = collectionCaches[table] || [];
+  if (cache.some((item: any) => String(item.id) === id || String(item[pkCol]) === id)) {
+    id = `${id}_${Math.random().toString(36).substring(2, 6)}`;
+  }
   const rawClean = cleanData(rawData);
   const data = sanitizeDataPayload(table, rawClean);
 

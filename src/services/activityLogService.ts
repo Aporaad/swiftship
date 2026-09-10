@@ -23,6 +23,9 @@ export type ActivityAction =
   | 'add_customer'
   | 'edit_customer'
   | 'delete_customer'
+  | 'add_portal_user'
+  | 'edit_portal_user'
+  | 'delete_portal_user'
   | 'terminate_session'
   | 'add_source'
   | 'edit_source'
@@ -48,6 +51,9 @@ export type ActivityAction =
   | 'delete_shipping_company'
   | 'force_logout'
   | 'temp_ban'
+  | 'add_employee'
+  | 'edit_employee'
+  | 'delete_employee'
   // Financial Account Actions
   | 'create_financial_account'
   | 'financial_transaction'
@@ -59,6 +65,7 @@ export type ActivityAction =
   | 'account_order_charge'
   | 'account_payment_received'
   | 'manage_financial_accounts';
+
 
 export interface ActivityLog {
   userId: string;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Globe, Activity, Users, Package, Briefcase, MessageSquare, Megaphone, Shield,
+  Globe, Activity, Users, User, Package, Briefcase, MessageSquare, Megaphone, Shield,
   Link as LinkIcon, CheckCircle2, Clock, AlertCircle, RefreshCw, Plus, Trash2,
   Check, X, Eye, Edit2, Send, Server, Key, Lock, Settings as SettingsIcon,
   ChevronRight, ArrowUpRight, Award, UserCheck, ShieldAlert, Cpu, Phone, Mail, MapPin
@@ -9,6 +9,9 @@ import { supabase, doc, setDoc, db } from '../lib/supabase-firebase-adapter';
 import { useSettings } from '../context/SettingsContext';
 import { financialAccountService } from '../services/financialAccountService';
 import toast from 'react-hot-toast';
+
+import LocationMapPickerModal from '../components/common/LocationMapPickerModal';
+import { portalUserService } from '../services/portalUserService';
 
 function extractRows(data: any[]): any[] {
   return (data || []).map(row => {
@@ -32,7 +35,7 @@ export default function WebsiteManagement() {
   const isAr = settings.language === 'ar';
 
   const [activeTab, setActiveTab] = useState<
-    'analytics' | 'pending' | 'orders' | 'tickets' | 'announcements' | 'jobs' | 'security' | 'api'
+    'analytics' | 'portal_users' | 'pending' | 'orders' | 'tickets' | 'announcements' | 'jobs' | 'security' | 'api'
   >('analytics');
 
   const [loading, setLoading] = useState(true);
@@ -44,6 +47,40 @@ export default function WebsiteManagement() {
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [jobApplications, setJobApplications] = useState<any[]>([]);
   const [couriers, setCouriers] = useState<any[]>([]);
+
+  // Portal Users Management UI State
+  const [pUserSearch, setPUserSearch] = useState('');
+  const [pUserRoleFilter, setPUserRoleFilter] = useState<string>('all');
+  const [pUserStatusFilter, setPUserStatusFilter] = useState<string>('all');
+  const [pUserDisabledFilter, setPUserDisabledFilter] = useState<string>('all');
+
+  // Modals state for Portal Users
+  const [showCreatePUserModal, setShowCreatePUserModal] = useState(false);
+  const [editingPUser, setEditingPUser] = useState<any | null>(null);
+  const [viewingPUser, setViewingPUser] = useState<any | null>(null);
+  const [isPUserMapOpen, setIsPUserMapOpen] = useState(false);
+
+  // Portal User Form State (For Creation & Editing)
+  const [pUserFormData, setPUserFormData] = useState({
+    username: '',
+    email: '',
+    password: '',
+    portal_role: 'client',
+    approval_status: 'approved',
+    disabled: false,
+    fullName: '',
+    phone: '',
+    address: '',
+    city: '',
+    country: 'اليمن',
+    company_name: '',
+    id_number: '',
+    max_debt: 0,
+    gps_location: '',
+    lat: 15.3694,
+    lng: 44.1910,
+    notes: ''
+  });
 
   // Form & Action states
   const [actionId, setActionId] = useState<string | null>(null);
@@ -74,8 +111,8 @@ export default function WebsiteManagement() {
   const loadAllData = useCallback(async () => {
     setLoading(true);
     try {
-      const [uRes, oRes, tRes, aRes, jRes, cRes] = await Promise.all([
-        supabase.from('portal_users').select('*'),
+      const [enrichedUsers, oRes, tRes, aRes, jRes, cRes] = await Promise.all([
+        portalUserService.getPortalUsers(),
         supabase.from('orders').select('*'),
         supabase.from('portal_tickets').select('*'),
         supabase.from('announcements').select('*'),
@@ -83,20 +120,18 @@ export default function WebsiteManagement() {
         supabase.from('couriers').select('*'),
       ]);
 
-      const users = extractRows(uRes.data || []);
       const orders = extractRows(oRes.data || []);
       const tick = extractRows(tRes.data || []);
       const ann = extractRows(aRes.data || []);
       const jobs = extractRows(jRes.data || []);
       const cour = extractRows(cRes.data || []);
 
-      users.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
       orders.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
       tick.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
       ann.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
       jobs.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
-      setPortalUsers(users);
+      setPortalUsers(enrichedUsers);
       setPortalOrders(orders.filter(o => o.customerUid || o.portalUid || o.orderSourceType === 'App'));
       setTickets(tick);
       setAnnouncements(ann);
@@ -313,6 +348,153 @@ export default function WebsiteManagement() {
     }
   };
 
+  // ── Portal Users Management Actions ─────────────────────────────────────
+  const handleOpenCreatePUser = () => {
+    setPUserFormData({
+      username: '',
+      email: '',
+      password: '',
+      portal_role: 'client',
+      approval_status: 'approved',
+      disabled: false,
+      fullName: '',
+      phone: '',
+      address: '',
+      city: '',
+      country: 'اليمن',
+      company_name: '',
+      id_number: '',
+      max_debt: 0,
+      gps_location: '',
+      lat: 15.3694,
+      lng: 44.1910,
+      notes: ''
+    });
+    setShowCreatePUserModal(true);
+  };
+
+  const handleOpenEditPUser = (user: any) => {
+    setEditingPUser(user);
+    const dt = user.customerDetails || {};
+    setPUserFormData({
+      username: user.username || '',
+      email: user.email || '',
+      password: '',
+      portal_role: user.portal_role || 'client',
+      approval_status: user.approval_status || 'approved',
+      disabled: Boolean(user.disabled),
+      fullName: user.fullName || user.username || '',
+      phone: user.phone || '',
+      address: dt.address || user.address || '',
+      city: dt.city || '',
+      country: dt.country || 'اليمن',
+      company_name: dt.company_name || '',
+      id_number: dt.id_number || '',
+      max_debt: Number(dt.max_debt) || 0,
+      gps_location: dt.gps_location || user.gps_location || '',
+      lat: 15.3694,
+      lng: 44.1910,
+      notes: dt.notes || user.notes || ''
+    });
+  };
+
+  const handleTogglePUserDisabled = async (user: any) => {
+    try {
+      await portalUserService.togglePortalUserDisabled(user.id, Boolean(user.disabled));
+      await loadAllData();
+    } catch (err: any) {
+      toast.error(err?.message || (isAr ? 'تعذر تغيير حالة الحساب' : 'Failed to toggle status'));
+    }
+  };
+
+  const handleDeletePUser = async (user: any) => {
+    if (!window.confirm(isAr ? `هل أنت متأكد من حذف مستخدم الموقع ${user.username}؟` : `Delete portal user ${user.username}?`)) return;
+    try {
+      await portalUserService.deletePortalUser(user.id);
+      toast.success(isAr ? 'تم حذف مستخدم الموقع بنجاح' : 'Portal user deleted');
+      await loadAllData();
+    } catch (err: any) {
+      toast.error(err?.message || (isAr ? 'تعذر الحذف' : 'Failed to delete'));
+    }
+  };
+
+  const handleCreatePUserSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pUserFormData.username.trim() || !pUserFormData.password.trim()) {
+      return toast.error(isAr ? 'يرجى إدخال اسم المستخدم وكلمة المرور' : 'Username and password required');
+    }
+    setActionId('create_puser');
+    try {
+      await portalUserService.createPortalUser(
+        {
+          username: pUserFormData.username.trim(),
+          email: pUserFormData.email.trim(),
+          password: pUserFormData.password,
+          portal_role: pUserFormData.portal_role,
+          approval_status: pUserFormData.approval_status as any,
+          disabled: pUserFormData.disabled,
+          fullName: pUserFormData.fullName || pUserFormData.username,
+          phone: pUserFormData.phone
+        },
+        {
+          address: pUserFormData.address,
+          gps_location: pUserFormData.gps_location,
+          city: pUserFormData.city,
+          country: pUserFormData.country,
+          company_name: pUserFormData.company_name,
+          id_number: pUserFormData.id_number,
+          max_debt: Number(pUserFormData.max_debt) || 0,
+          notes: pUserFormData.notes
+        }
+      );
+      toast.success(isAr ? 'تم إضافة مستخدم الموقع بنجاح' : 'Portal user created');
+      setShowCreatePUserModal(false);
+      await loadAllData();
+    } catch (err: any) {
+      toast.error(err?.message || (isAr ? 'تعذر الإنشاء' : 'Creation failed'));
+    } finally {
+      setActionId(null);
+    }
+  };
+
+  const handleEditPUserSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPUser) return;
+    setActionId(editingPUser.id);
+    try {
+      await portalUserService.updatePortalUser(
+        editingPUser.id,
+        {
+          username: pUserFormData.username.trim(),
+          email: pUserFormData.email.trim(),
+          password: pUserFormData.password || undefined,
+          portal_role: pUserFormData.portal_role,
+          approval_status: pUserFormData.approval_status as any,
+          disabled: pUserFormData.disabled,
+          fullName: pUserFormData.fullName,
+          phone: pUserFormData.phone
+        },
+        {
+          address: pUserFormData.address,
+          gps_location: pUserFormData.gps_location,
+          city: pUserFormData.city,
+          country: pUserFormData.country,
+          company_name: pUserFormData.company_name,
+          id_number: pUserFormData.id_number,
+          max_debt: Number(pUserFormData.max_debt) || 0,
+          notes: pUserFormData.notes
+        }
+      );
+      toast.success(isAr ? 'تم تحديث بيانات مستخدم الموقع بنجاح' : 'Portal user updated');
+      setEditingPUser(null);
+      await loadAllData();
+    } catch (err: any) {
+      toast.error(err?.message || (isAr ? 'تعذر التحديث' : 'Update failed'));
+    } finally {
+      setActionId(null);
+    }
+  };
+
   // ── Derived Statistics for Analytics ──────────────────────────────────────
   const pendingUsers = portalUsers.filter(u => u.approvalStatus === 'pending_approval' || u.approval_status === 'pending_approval');
   const approvedUsers = portalUsers.filter(u => u.approvalStatus === 'approved' || u.approval_status === 'approved');
@@ -412,6 +594,7 @@ export default function WebsiteManagement() {
       <div className="flex items-center gap-2 border-b border-[#d4af37]/15 pb-2 overflow-x-auto custom-scrollbar">
         {[
           { id: 'analytics', label: isAr ? '📊 شاشة المراقبة والإحصائيات' : 'Monitoring & Analytics', badge: null },
+          { id: 'portal_users', label: isAr ? '👥 مستخدمين الموقع (portal_users)' : 'Portal Users', badge: portalUsers.length },
           { id: 'pending', label: isAr ? '⏳ اعتماد الحسابات المعلقة' : 'Pending Approvals', badge: pendingUsers.length },
           { id: 'orders', label: isAr ? '📦 طلبات البوابة' : 'Portal Orders', badge: portalOrders.length },
           { id: 'tickets', label: isAr ? '🎧 الشكاوى والاقتراحات' : 'Support Tickets', badge: tickets.filter(t => t.status === 'open').length },
@@ -438,6 +621,219 @@ export default function WebsiteManagement() {
           </button>
         ))}
       </div>
+
+      {/* ── TAB 0: Website Portal Users (portal_users) Management ──────────── */}
+      {activeTab === 'portal_users' && (
+        <div className="space-y-6 animate-fade-in">
+          {/* Header & Filter Controls Bar */}
+          <div className="bg-[#0a0a0c] border border-white/[0.04] p-5 rounded-3xl space-y-4">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div>
+                <h3 className="text-base font-black text-white flex items-center gap-2">
+                  <Users className="w-5 h-5 text-[#d4af37]" />
+                  {isAr ? 'إدارة وحوكمة مستخدمي الموقع الإلكتروني (portal_users)' : 'Website Portal Users Management'}
+                </h3>
+                <p className="text-xs text-slate-400 font-bold mt-1">
+                  {isAr
+                    ? 'عرض وتعديل وتفعيل كافة الحسابات المسجلة بالموقع، وربطها بالعملاء والتفاصيل الإضافية (cust_details)'
+                    : 'Manage, edit, disable, or authorize portal user accounts and their linked customer profiles'
+                  }
+                </p>
+              </div>
+
+              <button
+                onClick={handleOpenCreatePUser}
+                className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-amber-600 hover:from-amber-400 hover:to-[#d4af37] text-black font-black text-xs rounded-xl shadow-lg shadow-amber-950/30 transition-all flex items-center gap-2 cursor-pointer active:scale-95 shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                {isAr ? 'إضافة مستخدم موقع جديد' : 'Add New Portal User'}
+              </button>
+            </div>
+
+            {/* Filter inputs grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-3 border-t border-white/[0.05]">
+              <input
+                type="text"
+                placeholder={isAr ? 'بحث بالاسم، البريد، أو الهاتف...' : 'Search name, email, phone...'}
+                value={pUserSearch}
+                onChange={e => setPUserSearch(e.target.value)}
+                className="bg-black/50 border border-slate-850 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-500 font-bold outline-none focus:border-[#d4af37]/60"
+              />
+
+              <select
+                value={pUserRoleFilter}
+                onChange={e => setPUserRoleFilter(e.target.value)}
+                className="bg-black/50 border border-slate-850 rounded-xl px-3 py-2 text-xs text-slate-300 font-bold outline-none focus:border-[#d4af37]/60"
+              >
+                <option value="all">{isAr ? 'جميع الأدوار' : 'All Roles'}</option>
+                <option value="client">{isAr ? '👤 عميل موقع (client)' : 'Client'}</option>
+                <option value="customer">{isAr ? '👤 عميل (customer)' : 'Customer'}</option>
+                <option value="courier">{isAr ? '🚚 مندوب (courier)' : 'Courier'}</option>
+                <option value="supplier">{isAr ? '🏭 مورد (supplier)' : 'Supplier'}</option>
+                <option value="admin">{isAr ? '👑 مدير (admin)' : 'Admin'}</option>
+              </select>
+
+              <select
+                value={pUserStatusFilter}
+                onChange={e => setPUserStatusFilter(e.target.value)}
+                className="bg-black/50 border border-slate-850 rounded-xl px-3 py-2 text-xs text-slate-300 font-bold outline-none focus:border-[#d4af37]/60"
+              >
+                <option value="all">{isAr ? 'جميع حالات الاعتماد' : 'All Approval Statuses'}</option>
+                <option value="approved">{isAr ? '✓ معتمد (approved)' : 'Approved'}</option>
+                <option value="pending_approval">{isAr ? '⏳ في الانتظار (pending)' : 'Pending'}</option>
+                <option value="rejected">{isAr ? '✕ مرفوض (rejected)' : 'Rejected'}</option>
+              </select>
+
+              <select
+                value={pUserDisabledFilter}
+                onChange={e => setPUserDisabledFilter(e.target.value)}
+                className="bg-black/50 border border-slate-850 rounded-xl px-3 py-2 text-xs text-slate-300 font-bold outline-none focus:border-[#d4af37]/60"
+              >
+                <option value="all">{isAr ? 'حالة التفعيل والتعطيل' : 'All Account States'}</option>
+                <option value="active">{isAr ? '🟢 حساب نشط' : 'Active'}</option>
+                <option value="disabled">{isAr ? '🔴 حساب معطل' : 'Disabled'}</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Portal Users Table */}
+          <div className="bg-[#0a0a0c] border border-white/[0.04] rounded-3xl overflow-hidden shadow-2xl">
+            <div className="overflow-x-auto">
+              <table className="w-full text-right text-xs">
+                <thead className="bg-black/60 text-[10px] text-slate-500 font-black uppercase tracking-wider border-b border-slate-850">
+                  <tr>
+                    <th className="p-4">{isAr ? 'المستخدم والحساب' : 'User Identity'}</th>
+                    <th className="p-4">{isAr ? 'البريد والهاتف' : 'Contact'}</th>
+                    <th className="p-4">{isAr ? 'الدور والاعتماد' : 'Role & Approval'}</th>
+                    <th className="p-4">{isAr ? 'حالة الحساب' : 'Status'}</th>
+                    <th className="p-4">{isAr ? 'التفاصيل الإضافية (cust_details)' : 'Extra Details'}</th>
+                    <th className="p-4 text-left">{isAr ? 'الإجراءات' : 'Actions'}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-850/60 bg-black/20">
+                  {portalUsers
+                    .filter(u => {
+                      const q = pUserSearch.toLowerCase();
+                      const matchesSearch = !q ||
+                        (u.username || '').toLowerCase().includes(q) ||
+                        (u.email || '').toLowerCase().includes(q) ||
+                        (u.fullName || '').toLowerCase().includes(q) ||
+                        (u.phone || '').includes(q);
+                      const role = u.portal_role || u.portalRole || 'client';
+                      const matchesRole = pUserRoleFilter === 'all' || role === pUserRoleFilter;
+                      const appStatus = u.approval_status || u.approvalStatus || 'approved';
+                      const matchesStatus = pUserStatusFilter === 'all' || appStatus === pUserStatusFilter;
+                      const isDisabled = Boolean(u.disabled);
+                      const matchesDisabled = pUserDisabledFilter === 'all' || (pUserDisabledFilter === 'disabled' ? isDisabled : !isDisabled);
+                      return matchesSearch && matchesRole && matchesStatus && matchesDisabled;
+                    })
+                    .map((user) => {
+                      const role = user.portal_role || user.portalRole || 'client';
+                      const appStatus = user.approval_status || user.approvalStatus || 'approved';
+                      const details = user.customerDetails || {};
+                      const isDisabled = Boolean(user.disabled);
+
+                      return (
+                        <tr key={user.id} className="hover:bg-white/[0.02] transition-colors">
+                          <td className="p-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 rounded-xl bg-[#d4af37]/10 border border-[#d4af37]/30 flex items-center justify-center font-black text-[#d4af37] shrink-0">
+                                {(user.username || user.fullName || 'U').substring(0, 1).toUpperCase()}
+                              </div>
+                              <div>
+                                <span className="font-bold text-white block">{user.username || 'بدون اسم'}</span>
+                                <span className="text-[10px] text-slate-500 font-bold block">{user.fullName || '—'}</span>
+                              </div>
+                            </div>
+                          </td>
+
+                          <td className="p-4 font-mono font-bold text-slate-300">
+                            <div className="text-xs">{user.email || '—'}</div>
+                            <div className="text-[10px] text-slate-500">{user.phone || '—'}</div>
+                          </td>
+
+                          <td className="p-4">
+                            <div className="flex flex-col gap-1 w-max">
+                              <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-black bg-[#d4af37]/10 text-[#d4af37] border border-[#d4af37]/30">
+                                {role === 'client' || role === 'customer' ? '👤 عميل موقع' :
+                                 role === 'courier' ? '🚚 مندوب توصيل' :
+                                 role === 'supplier' ? '🏭 مورد مصانع' : '👑 مدير'}
+                              </span>
+                              <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black ${
+                                appStatus === 'approved' ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-800/40' :
+                                appStatus === 'pending_approval' ? 'bg-amber-950/40 text-amber-400 border border-amber-800/40' :
+                                'bg-rose-950/40 text-rose-400 border border-rose-800/40'
+                              }`}>
+                                {appStatus === 'approved' ? '✓ معتمد' : appStatus === 'pending_approval' ? '⏳ قيد المراجعة' : '✕ مرفوض'}
+                              </span>
+                            </div>
+                          </td>
+
+                          <td className="p-4">
+                            <button
+                              onClick={() => handleTogglePUserDisabled(user)}
+                              className={`px-3 py-1 rounded-xl text-xs font-black border transition-all cursor-pointer ${
+                                isDisabled
+                                  ? 'bg-rose-950/40 text-rose-400 border-rose-800/40 hover:bg-rose-900/60'
+                                  : 'bg-emerald-950/40 text-emerald-400 border-emerald-800/40 hover:bg-emerald-900/60'
+                              }`}
+                            >
+                              {isDisabled ? '🔴 معطل' : '🟢 نشط'}
+                            </button>
+                          </td>
+
+                          <td className="p-4 max-w-xs truncate text-slate-400">
+                            <div className="font-bold text-slate-300 text-xs">{details.address || user.address || '—'}</div>
+                            {details.company_name && (
+                              <div className="text-[10px] text-[#d4af37] font-bold mt-0.5">🏢 {details.company_name}</div>
+                            )}
+                            {details.gps_location && (
+                              <div className="text-[9px] font-mono text-cyan-400 mt-0.5 truncate">📍 {details.gps_location}</div>
+                            )}
+                          </td>
+
+                          <td className="p-4 text-left">
+                            <div className="flex justify-end gap-1.5">
+                              <button
+                                onClick={() => setViewingPUser(user)}
+                                title="عرض تفاصيل الحساب والنشاط"
+                                className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 transition"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleOpenEditPUser(user)}
+                                title="تعديل الحساب والتفاصيل"
+                                className="p-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-[#d4af37] border border-amber-500/30 transition"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeletePUser(user)}
+                                title="حذف مستخدم الموقع نهائياً"
+                                className="p-2 rounded-xl bg-rose-950/20 hover:bg-rose-950/40 text-rose-400 border border-rose-900/30 transition"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+
+                  {portalUsers.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="p-12 text-center text-slate-500 font-bold italic">
+                        {isAr ? '[ لا يوجد مستخدمين مسجلين بالموقع الإلكتروني حالياً ]' : '[ NO PORTAL USERS REGISTERED ]'}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── TAB 1: Monitoring & Analytics ─────────────────────────────────── */}
       {activeTab === 'analytics' && (
@@ -1028,6 +1424,368 @@ export default function WebsiteManagement() {
         </div>
       )}
 
+      {/* ── CREATE & EDIT PORTAL USER MODAL ──────────────────────────────── */}
+      {(showCreatePUserModal || editingPUser) && (
+        <div className="fixed inset-0 z-[100000] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#0e0e12] border border-[#d4af37]/30 rounded-3xl shadow-2xl max-w-xl w-full flex flex-col max-h-[90vh] overflow-hidden">
+            <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-black/50 shrink-0">
+              <h3 className="text-sm font-black text-white flex items-center gap-2">
+                <Users className="w-4 h-4 text-[#d4af37]" />
+                {editingPUser
+                  ? (isAr ? 'تعديل بيانات مستخدم الموقع (portal_users)' : 'Edit Portal User')
+                  : (isAr ? 'إضافة مستخدم موقع جديد (portal_users)' : 'Create New Portal User')
+                }
+              </h3>
+              <button
+                type="button"
+                onClick={() => { setShowCreatePUserModal(false); setEditingPUser(null); }}
+                className="text-slate-400 hover:text-white p-1 rounded-lg bg-slate-900 border border-slate-800"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={editingPUser ? handleEditPUserSubmit : handleCreatePUserSubmit}
+              className="p-5 space-y-4 overflow-y-auto flex-1 text-start"
+            >
+              {/* Login Credentials Section */}
+              <div className="p-4 rounded-2xl bg-black/40 border border-slate-850 space-y-3">
+                <h4 className="text-xs font-black text-[#d4af37] flex items-center gap-1.5">
+                  <Key className="w-3.5 h-3.5" />
+                  {isAr ? 'بيانات الاعتماد وتسجيل الدخول للموقع' : 'Portal Login Credentials'}
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 mb-1">{isAr ? 'اسم المستخدم *' : 'Username *'}</label>
+                    <input
+                      required
+                      type="text"
+                      placeholder="username"
+                      value={pUserFormData.username}
+                      onChange={e => setPUserFormData({ ...pUserFormData, username: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white outline-none focus:border-[#d4af37]/60"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 mb-1">{isAr ? 'البريد الإلكتروني' : 'Email'}</label>
+                    <input
+                      type="email"
+                      placeholder="user@web.com"
+                      value={pUserFormData.email}
+                      onChange={e => setPUserFormData({ ...pUserFormData, email: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white outline-none focus:border-[#d4af37]/60"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 mb-1">
+                      {editingPUser ? (isAr ? 'كلمة المرور (اتركها فارغة للتعديل بدون تغيير)' : 'New Password (Optional)') : (isAr ? 'كلمة المرور *' : 'Password *')}
+                    </label>
+                    <input
+                      required={!editingPUser}
+                      type="password"
+                      placeholder="••••••••"
+                      value={pUserFormData.password}
+                      onChange={e => setPUserFormData({ ...pUserFormData, password: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white outline-none focus:border-[#d4af37]/60"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 mb-1">{isAr ? 'دور المستخدم بالموقع' : 'Portal Role'}</label>
+                    <select
+                      value={pUserFormData.portal_role}
+                      onChange={e => setPUserFormData({ ...pUserFormData, portal_role: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-300 font-bold outline-none focus:border-[#d4af37]/60"
+                    >
+                      <option value="client">{isAr ? '👤 عميل موقع (client)' : 'Client'}</option>
+                      <option value="courier">{isAr ? '🚚 مندوب توصيل (courier)' : 'Courier'}</option>
+                      <option value="supplier">{isAr ? '🏭 مورد (supplier)' : 'Supplier'}</option>
+                      <option value="admin">{isAr ? '👑 مدير (admin)' : 'Admin'}</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 mb-1">{isAr ? 'حالة الاعتماد' : 'Approval Status'}</label>
+                    <select
+                      value={pUserFormData.approval_status}
+                      onChange={e => setPUserFormData({ ...pUserFormData, approval_status: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-300 font-bold outline-none focus:border-[#d4af37]/60"
+                    >
+                      <option value="approved">{isAr ? '✓ معتمد (approved)' : 'Approved'}</option>
+                      <option value="pending_approval">{isAr ? '⏳ قيد المراجعة (pending)' : 'Pending'}</option>
+                      <option value="rejected">{isAr ? '✕ مرفوض (rejected)' : 'Rejected'}</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 mb-1">{isAr ? 'حالة الحساب' : 'Account Status'}</label>
+                    <select
+                      value={pUserFormData.disabled ? 'disabled' : 'active'}
+                      onChange={e => setPUserFormData({ ...pUserFormData, disabled: e.target.value === 'disabled' })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-300 font-bold outline-none focus:border-[#d4af37]/60"
+                    >
+                      <option value="active">{isAr ? '🟢 نشط ومفعل' : 'Active'}</option>
+                      <option value="disabled">{isAr ? '🔴 معطل' : 'Disabled'}</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Personal & Extra Customer Details Section (cust_details) */}
+              <div className="p-4 rounded-2xl bg-black/40 border border-slate-850 space-y-3">
+                <h4 className="text-xs font-black text-[#d4af37] flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5" />
+                  {isAr ? 'تفاصيل العميل الإضافية (cust_details)' : 'Customer Profile & Extra Details'}
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 mb-1">{isAr ? 'الاسم الكامل' : 'Full Name'}</label>
+                    <input
+                      type="text"
+                      placeholder="الاسم الثلاثي..."
+                      value={pUserFormData.fullName}
+                      onChange={e => setPUserFormData({ ...pUserFormData, fullName: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white outline-none focus:border-[#d4af37]/60"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 mb-1">{isAr ? 'رقم الهاتف' : 'Phone'}</label>
+                    <input
+                      type="text"
+                      placeholder="+967..."
+                      value={pUserFormData.phone}
+                      onChange={e => setPUserFormData({ ...pUserFormData, phone: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white font-mono outline-none focus:border-[#d4af37]/60"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 mb-1">{isAr ? 'الدولة' : 'Country'}</label>
+                    <input
+                      type="text"
+                      value={pUserFormData.country}
+                      onChange={e => setPUserFormData({ ...pUserFormData, country: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white outline-none focus:border-[#d4af37]/60"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 mb-1">{isAr ? 'المدينة / المحافظة' : 'City'}</label>
+                    <input
+                      type="text"
+                      placeholder="صنعاء / عدن..."
+                      value={pUserFormData.city}
+                      onChange={e => setPUserFormData({ ...pUserFormData, city: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white outline-none focus:border-[#d4af37]/60"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 mb-1">{isAr ? 'العنوان التفصيلي' : 'Detailed Address'}</label>
+                  <input
+                    type="text"
+                    placeholder="المنطقة، الشارع، المعلم الشهير..."
+                    value={pUserFormData.address}
+                    onChange={e => setPUserFormData({ ...pUserFormData, address: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white outline-none focus:border-[#d4af37]/60"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 mb-1">{isAr ? 'اسم الشركة / المؤسسة' : 'Company Name'}</label>
+                    <input
+                      type="text"
+                      value={pUserFormData.company_name}
+                      onChange={e => setPUserFormData({ ...pUserFormData, company_name: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white outline-none focus:border-[#d4af37]/60"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 mb-1">{isAr ? 'سقف الدين الأقصى (ريال)' : 'Max Debt Limit'}</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={pUserFormData.max_debt}
+                      onChange={e => setPUserFormData({ ...pUserFormData, max_debt: parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white font-mono outline-none focus:border-[#d4af37]/60"
+                    />
+                  </div>
+                </div>
+
+                {/* Leaflet GPS Map Picker button inside Website Management */}
+                <div className="p-3 rounded-xl bg-black/60 border border-slate-800 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs font-black text-[#d4af37] flex items-center gap-1.5">
+                      <Globe className="w-3.5 h-3.5" />
+                      {isAr ? 'تثبيت موقع GPS على الخريطة التفاعلية' : 'GPS Map Location'}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setIsPUserMapOpen(true)}
+                      className="px-3 py-1 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-[#d4af37] text-xs font-black rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                    >
+                      <MapPin className="w-3.5 h-3.5" />
+                      {isAr ? 'فتح الخريطة التفاعلية 🗺️' : 'Open Map 🗺️'}
+                    </button>
+                  </div>
+
+                  <input
+                    type="text"
+                    readOnly
+                    value={pUserFormData.gps_location}
+                    placeholder="https://maps.google.com/?q=..."
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2 text-[11px] font-mono font-bold text-slate-300 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => { setShowCreatePUserModal(false); setEditingPUser(null); }}
+                  className="px-4 py-2 bg-slate-900 border border-slate-800 text-slate-400 hover:text-white rounded-xl text-xs font-bold"
+                >
+                  {isAr ? 'إلغاء' : 'Cancel'}
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={actionId === 'create_puser' || actionId === editingPUser?.id}
+                  className="px-6 py-2.5 bg-gradient-to-r from-[#d4af37] to-amber-600 hover:from-amber-400 hover:to-[#d4af37] text-black font-black text-xs rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer"
+                >
+                  {editingPUser
+                    ? (isAr ? 'تحديث الحساب' : 'Update User')
+                    : (isAr ? 'حفظ الحساب في الموقع' : 'Save Portal User')
+                  }
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── VIEW PORTAL USER DETAILS MODAL ────────────────────────────────── */}
+      {viewingPUser && (
+        <div className="fixed inset-0 z-[100000] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#0e0e12] border border-[#d4af37]/30 rounded-3xl shadow-2xl max-w-lg w-full flex flex-col max-h-[90vh] overflow-hidden">
+            <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-black/50 shrink-0">
+              <h3 className="text-sm font-black text-white flex items-center gap-2">
+                <Eye className="w-4 h-4 text-[#d4af37]" />
+                {isAr ? 'بطاقة تفاصيل مستخدم الموقع' : 'Portal User Details Card'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setViewingPUser(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg bg-slate-900 border border-slate-800"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 overflow-y-auto text-start flex-1">
+              <div className="flex items-center gap-4 p-4 rounded-2xl bg-black/40 border border-slate-850">
+                <div className="w-12 h-12 rounded-2xl bg-[#d4af37]/15 border border-[#d4af37]/40 flex items-center justify-center font-black text-lg text-[#d4af37]">
+                  {(viewingPUser.username || viewingPUser.fullName || 'U').substring(0, 1).toUpperCase()}
+                </div>
+                <div>
+                  <h4 className="text-base font-black text-white">{viewingPUser.username}</h4>
+                  <span className="text-xs text-slate-400 font-bold block">{viewingPUser.fullName || '—'}</span>
+                  <span className="text-[10px] font-mono text-amber-400 block mt-0.5">ID: {viewingPUser.id}</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="p-3 bg-black/40 rounded-xl border border-slate-850">
+                  <span className="text-[10px] text-slate-500 font-bold block">{isAr ? 'البريد الإلكتروني' : 'Email'}</span>
+                  <span className="font-mono font-bold text-slate-200">{viewingPUser.email || '—'}</span>
+                </div>
+                <div className="p-3 bg-black/40 rounded-xl border border-slate-850">
+                  <span className="text-[10px] text-slate-500 font-bold block">{isAr ? 'رقم الهاتف' : 'Phone'}</span>
+                  <span className="font-mono font-bold text-slate-200">{viewingPUser.phone || '—'}</span>
+                </div>
+              </div>
+
+              {/* cust_details additional fields */}
+              {viewingPUser.customerDetails && (
+                <div className="p-4 bg-black/40 rounded-2xl border border-slate-850 space-y-2">
+                  <h5 className="text-xs font-black text-[#d4af37]">{isAr ? 'التفاصيل الإضافية (cust_details)' : 'Extra Customer Details'}</h5>
+                  <div className="grid grid-cols-2 gap-2 text-[11px] font-bold text-slate-300">
+                    <div><span className="text-slate-500 block text-[10px]">المدينة:</span>{viewingPUser.customerDetails.city || '—'}</div>
+                    <div><span className="text-slate-500 block text-[10px]">الدولة:</span>{viewingPUser.customerDetails.country || 'اليمن'}</div>
+                    <div><span className="text-slate-500 block text-[10px]">الشركة:</span>{viewingPUser.customerDetails.company_name || '—'}</div>
+                    <div><span className="text-slate-500 block text-[10px]">سقف الدين:</span>{viewingPUser.customerDetails.max_debt ? `${viewingPUser.customerDetails.max_debt.toLocaleString()} YER` : '—'}</div>
+                  </div>
+                  {viewingPUser.customerDetails.address && (
+                    <div className="pt-1 text-xs">
+                      <span className="text-slate-500 block text-[10px]">العنوان السكني:</span>
+                      <span className="text-slate-200 font-bold">{viewingPUser.customerDetails.address}</span>
+                    </div>
+                  )}
+                  {viewingPUser.customerDetails.gps_location && (
+                    <div className="pt-1 text-xs">
+                      <span className="text-slate-500 block text-[10px]">رابط GPS:</span>
+                      <a href={viewingPUser.customerDetails.gps_location} target="_blank" rel="noreferrer" className="text-cyan-400 hover:underline font-mono text-[10px]">
+                        {viewingPUser.customerDetails.gps_location}
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setViewingPUser(null)}
+                  className="px-5 py-2 bg-slate-900 border border-slate-800 text-white font-bold text-xs rounded-xl"
+                >
+                  {isAr ? 'إغلاق' : 'Close'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Location Map Picker Modal for Website Management */}
+      <LocationMapPickerModal
+        isOpen={isPUserMapOpen}
+        onClose={() => setIsPUserMapOpen(false)}
+        initialData={{
+          country: pUserFormData.country,
+          city: pUserFormData.city,
+          street: pUserFormData.address,
+          addressDetails: pUserFormData.address,
+          lat: pUserFormData.lat,
+          lng: pUserFormData.lng,
+          gps_location: pUserFormData.gps_location
+        }}
+        onSelectLocation={(data) => {
+          setPUserFormData(prev => ({
+            ...prev,
+            country: data.country || prev.country,
+            city: data.city || prev.city,
+            address: [data.governorate, data.city, data.street, data.addressDetails].filter(Boolean).join(' - ') || prev.address,
+            lat: data.lat || prev.lat,
+            lng: data.lng || prev.lng,
+            gps_location: data.gps_location || prev.gps_location
+          }));
+        }}
+        isAr={isAr}
+      />
     </div>
   );
 }
+

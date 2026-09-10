@@ -951,12 +951,19 @@
 
 ---
 
-## [2026-09-10 01:22:00] — خطة تنفيذ وتطوير إنشاء المستخدمين وإعادة هيكلة النماذج وإدارة مستخدمي الموقع
+## [2026-09-10 01:35:00] — توثيق وتأكيد تنفيذ مستخدمي النظام والموقع وتأمين خريطة GPS التفاعلية
 ### التغييرات والإجراءات المنفذة:
-1. **تجهيز خطة التنفيذ والتحليل الهيكلي**:
-   - إعداد وثيقة [implementation_plan.md](file:///C:/Users/raad/.gemini/antigravity-ide/brain/113b20d0-ff13-448d-a0fd-6a232a7855a6/implementation_plan.md) لتفصيل خطوات الربط والتطوير.
-2. **تحديث سجلات وتوثيقات المشروع**:
-   - تحديث ملف توجيهات المستخدم [user_commends.md](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/user_commends.md).
-   - تحديث قائمة المهام [todo.md](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/todo.md).
-   - تحديث سجل تطوير قاعدة البيانات [DBdevloping_history.md](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/DBdevloping_history.md).
-   - تحديث سجل التطوير العام [devloping_history.md](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/devloping_history.md).
+1. **تطوير خدمة إدارة مستخدمين الموقع (`portalUserService.ts`)**:
+   - بناء خدمة مستقلة لفصل منطق العمل عن الواجهة، تتيح جلب مستخدمي الموقع وإثرائهم بتفاصيل العملاء من جدول `cust_details` وسجل العملاء من جدول `customers`.
+   - توفير عمليات الإنشاء (`createPortalUser`) والتعديل (`updatePortalUser`) وتغيير الحالة (`togglePortalUserDisabled`) والحذف النهائي (`deletePortalUser`).
+2. **تطوير نماذج الموظفين والمناديب (`Employees.tsx` & `Couriers.tsx`)**:
+   - إدراج خيار "إنشاء مستخدم في النظام للموظف / المندوب" مع حقول اسم المستخدم، البريد الإلكتروني، كلمة المرور، الرمز PIN، والدور الوظيفي.
+   - ربط المستخدم تلقائياً بجدول `users` مع تعبئة المفاتيح المرتبطة `linkedType` (`employee` / `courier`) و `linkedEntity`.
+3. **تطوير نموذج العملاء وإضافة خريطة Leaflet GPS التفاعلية (`Customers.tsx` & `EntityCreateModals.tsx`)**:
+   - تقسيم نموذج العميل إلى 3 مراحل (البيانات الأساسية، التفاصيل الإضافية لـ `cust_details` مع خريطة GPS، وإنشاء مستخدم الموقع `portal_users`).
+   - إنشاء مكوّن الخريطة التفاعلية `LocationMapPickerModal.tsx` باستخدام المكتبة الجغرافية Leaflet لتثبيت الموقع والحصول على الإحداثيات ورابط جوجل ماب بدقة.
+4. **تطوير تبويب مستخدمين الموقع المخصص (`WebsiteManagement.tsx`)**:
+   - إضافة تبويب مخصص "مستخدمين الموقع (portal_users)" يعرض جدولاً كاملاً لمستخدمي البوابة، مع خيارات البحث والفلترة حسب الدور وحالة الاعتماد وحالة التفعيل.
+   - إتاحة أزرار العرض والتعديل والتعطيل/التفعيل والحذف مع نماذج التعديل والإضافة المضمنة التي تدعم خريطة Leaflet GPS التفاعلية.
+5. **التحقق واختبار البناء البرمجي**:
+   - إجراء فحص TypeScript كامل عبر `npx tsc --noEmit` والتأكد من نجاح التجميع بنسبة 100% وبدون أي أخطاء.

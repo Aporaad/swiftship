@@ -762,9 +762,8 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 
 ---
 
-## [2026-09-10 01:22:00] — AI Model: Antigravity / Gemini 3.6 Flash
-- **ربط الكيانات بحسابات مستخدمين النظام `users`**:
-   - توثيق الربط التلقائي لإنشاء مستخدمين النظام للموظفين والمناديب وتعيين `linkedType` (`'employee'` / `'courier'`) و `linkedEntity` (`employee.id` / `courier.id`) بأعمدة `users` المباشرة.
-- **ربط مستخدمي الموقع `portal_users` وتفاصيل العميل الإضافية `cust_details`**:
-   - توثيق تخزين التفاصيل الإضافية للعملاء بجدول `cust_details` عبر المفتاح `customer_id` وتطهير حقل `data` (JSONB) بالأعمدة المباشرة `join_by`, `referrer_id`, `onboarding_completed`, `created_at`, `updated_at`.
-   - توثيق ربط حسابات البوابة بجدول `portal_users` بعميل النظام عبر `linkedAccId` والمفتاح الأجنبي `cust_details.user_uid`.
+## [2026-09-10 01:35:00] — AI Model: Antigravity / Gemini 3.6 Flash
+- **توثيق هيكل الجداول والعلاقات لـ `portal_users` و `cust_details` و `users`**:
+  - جدول `users`: إضافة خيار الإنشاء المباشر للموظفين والمناديب وتخزين `username`, `email`, `password`, `systemPin`, `role`, `disabled`, `linkedType`, `linkedEntity`.
+  - جدول `portal_users`: تخزين حسابات الموقع الإلكتروني بـ `username`, `email`, `portal_role`, `approval_status`, `disabled`, `linkedAccId`, وحقل `data` (JSONB) لكلمة المرور والاسم الكامل ورقم الهاتف.
+  - جدول `cust_details`: تخزين البيانات الإضافية الدائمة للعملاء بـ `user_uid`, `customer_id`, `join_by`, `referrer_id`, `onboarding_completed`, وحقل `data` (JSONB) للعنوان، موقع الخريطة GPS، المدينة، الدولة، اسم الشركة، رقم الهوية/السجل التجاري، سقف الدين الأقصى، والملاحظات.

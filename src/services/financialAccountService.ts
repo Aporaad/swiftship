@@ -296,11 +296,18 @@ class FinancialAccountService {
       : (prefixOverride || LEGACY_ACCOUNT_PREFIXES[entityType] || "5000");
 
     let allAccounts: any[] = [];
+    let entityDocs: any[] = [];
     try {
       const snap = await getDocs(collection(db, "accounts"));
       allAccounts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      const entityCollectionName = this.getEntityCollection(entityType);
+      if (entityCollectionName) {
+        const entitySnap = await getDocs(collection(db, entityCollectionName));
+        entityDocs = entitySnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      }
     } catch (e) {
-      console.warn("[FinancialAccountService] Error fetching existing accounts for uniqueness check:", e);
+      console.warn("[FinancialAccountService] Error fetching existing accounts/entities for uniqueness check:", e);
     }
 
     const existingIds = new Set<string>();
@@ -340,6 +347,10 @@ class FinancialAccountService {
       }
     }
 
+    for (const ent of entityDocs) {
+      if (ent.id) existingIds.add(String(ent.id));
+    }
+
     let candidateSeq = hierarchyLocation
       ? await accountingHierarchyService.getNextAccountSequence({ ...hierarchyLocation, accountCode: prefix })
       : Math.max(maxSeq + 1, allAccounts.length + 1, 1);
@@ -349,9 +360,12 @@ class FinancialAccountService {
       const candidateCode = hierarchyCodeRules.formatPostingCode(prefix, candidateSeq);
       // الحساب المالي الورقي يُعرّف بالكود المحاسبي نفسه؛ لا تستخدم بادئة acc_.
       const candidateId = candidateCode;
+      const candidateCustId = `cust_${candidateCode}`;
+      const candidateEmpId = `emp_${candidateCode}`;
+      const candidateCourId = `cour_${candidateCode}`;
 
       const isCodeTaken = existingCodes.has(candidateCode);
-      const isIdTaken = existingIds.has(candidateId);
+      const isIdTaken = existingIds.has(candidateId) || existingIds.has(candidateCustId) || existingIds.has(candidateEmpId) || existingIds.has(candidateCourId);
       const isNumTaken = existingNumbersForPrefix.has(seqStr);
 
       if (!isCodeTaken && !isIdTaken && !isNumTaken) {
@@ -458,7 +472,7 @@ class FinancialAccountService {
         accNameAr: entityName,
         accNameEn: entityName,
         limitedBalance: 0,
-        lastRecalculatedAt: now.toString(),
+        lastRecalculatedAt: new Date(now).toISOString(),
         curNo: currencyId,
       } as any;
 

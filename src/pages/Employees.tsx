@@ -113,6 +113,16 @@ export default function Employees() {
     notes: ''
   });
 
+  // System User Provisioning State
+  const [createSystemUser, setCreateSystemUser] = useState(false);
+  const [systemUserFormData, setSystemUserFormData] = useState({
+    username: '',
+    email: '',
+    password: '',
+    systemPin: '',
+    role: 'Staff'
+  });
+
   const [editFormData, setEditFormData] = useState({
     fullName: '',
     phone: '',
@@ -174,18 +184,21 @@ export default function Employees() {
       });
     }
 
+    if (createSystemUser) {
+      if (!systemUserFormData.username.trim() || !systemUserFormData.password.trim()) {
+        return notificationService.notify({
+          title: isAr ? 'بيانات ناقصة' : 'Missing Data',
+          message: isAr ? 'يرجى إدخال اسم المستخدم وكلمة المرور للنظام' : 'Username and password required for system user',
+          type: 'error'
+        });
+      }
+    }
+
     setAddLoading(true);
     try {
       const newId = 'emp_' + Math.random().toString(36).substring(2, 11);
       const now = Date.now();
 
-      // ══════════════════════════════════════════════════════════════════════════════
-      // ISOLATION RULE: Employee creation writes strictly to `employees` table.
-      // Automatically provisions employee financial account (2130-xxxx) for payroll,
-      // but NEVER creates a system user login account in `users` table.
-      // قاعدة العزل: إدراج الموظف يكون حكراً بجدول `employees` لسجل الكادر البشري.
-      // ينشئ تلقائياً حساباً مالياً للرواتب (2130-xxxx)، ولا ينشئ مستخدم دخول لنظام لوحة التحكم.
-      // ══════════════════════════════════════════════════════════════════════════════
       const empData = {
         fullName: addFormData.fullName.trim(),
         phone: addFormData.phone.trim(),
@@ -203,8 +216,7 @@ export default function Employees() {
 
       await setDoc(doc(db, 'employees', newId), empData);
 
-      // 2. Automatically provision financial account (2130-xxxx) for employee payroll ledger
-      // إنشاء الحساب المالي للموظف بجدول الحسابات المحاسبية للرواتب
+      // Automatically provision financial account (2130-xxxx) for employee payroll ledger
       try {
         await financialAccountService.createAccountForEntity(
           'employee',
@@ -217,17 +229,42 @@ export default function Employees() {
         console.warn('[Employees] Financial account creation error:', accErr);
       }
 
+      // Provision System User in `users` table if requested
+      if (createSystemUser) {
+        try {
+          const userId = 'usr_' + Math.random().toString(36).substring(2, 11);
+          const userPayload = {
+            id: userId,
+            username: systemUserFormData.username.trim(),
+            email: systemUserFormData.email.trim() || addFormData.email.trim() || `${systemUserFormData.username.trim()}@system.local`,
+            password: systemUserFormData.password,
+            systemPin: systemUserFormData.systemPin.trim(),
+            fullName: addFormData.fullName.trim(),
+            phone: addFormData.phone.trim(),
+            role: systemUserFormData.role || 'Staff',
+            disabled: false,
+            linkedType: 'employee',
+            linkedEntity: newId,
+            createdAt: now
+          };
+          await setDoc(doc(db, 'users', userId), userPayload);
+        } catch (uErr: any) {
+          console.error('[Employees] Error provisioning system user:', uErr);
+        }
+      }
+
       await activityLogService.log('add_user', addFormData.fullName, { employeeId: newId });
 
       notificationService.notify({
         title: isAr ? 'تم إضافة الموظف' : 'Employee Enrolled',
         message: isAr
-          ? `تم إضافة الموظف ${addFormData.fullName} وإنشاء حسابه المالي بنجاح`
-          : `Employee ${addFormData.fullName} created with financial ledger account`,
+          ? `تم إضافة الموظف ${addFormData.fullName} ${createSystemUser ? 'وانشاء حساب مستخدم النظام وربطه به تلقائياً' : 'وانشاء حسابه المالي بنجاح'}`
+          : `Employee ${addFormData.fullName} created successfully`,
         type: 'success'
       });
 
       setIsAddModalOpen(false);
+      setCreateSystemUser(false);
       setAddFormData({
         fullName: '',
         phone: '',
@@ -238,6 +275,13 @@ export default function Employees() {
         currency: 'YER',
         commissionRate: 0,
         notes: ''
+      });
+      setSystemUserFormData({
+        username: '',
+        email: '',
+        password: '',
+        systemPin: '',
+        role: 'Staff'
       });
     } catch (err: any) {
       notificationService.notify({
@@ -738,6 +782,90 @@ export default function Employees() {
                   onChange={(e) => setAddFormData({ ...addFormData, notes: e.target.value })}
                   className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start"
                 />
+              </div>
+
+              {/* ── System User Provisioning Section ──────────────────────────────── */}
+              <div className="pt-3 border-t border-slate-850 space-y-3">
+                <label className="flex items-center gap-3 p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 cursor-pointer hover:bg-amber-500/20 transition-all">
+                  <input
+                    type="checkbox"
+                    checked={createSystemUser}
+                    onChange={(e) => setCreateSystemUser(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-700 text-[#d4af37] focus:ring-0 cursor-pointer"
+                  />
+                  <span className="text-xs font-black text-[#d4af37]">
+                    {isAr ? 'إنشاء مستخدم في النظام (users) للموظف وربطه به تلقائياً' : 'Create System Login User (users) for Employee'}
+                  </span>
+                </label>
+
+                {createSystemUser && (
+                  <div className="p-4 rounded-2xl bg-black/40 border border-slate-800 space-y-3 text-start animate-fade-in">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-400 mb-1">{isAr ? 'اسم المستخدم للنظام *' : 'System Username *'}</label>
+                        <input
+                          required={createSystemUser}
+                          type="text"
+                          placeholder="emp_user"
+                          value={systemUserFormData.username}
+                          onChange={(e) => setSystemUserFormData({ ...systemUserFormData, username: e.target.value })}
+                          className="w-full bg-black border border-slate-800 rounded-xl p-2.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-400 mb-1">{isAr ? 'البريد الإلكتروني للنظام' : 'System Email'}</label>
+                        <input
+                          type="email"
+                          placeholder="user@system.local"
+                          value={systemUserFormData.email}
+                          onChange={(e) => setSystemUserFormData({ ...systemUserFormData, email: e.target.value })}
+                          className="w-full bg-black border border-slate-800 rounded-xl p-2.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-400 mb-1">{isAr ? 'كلمة المرور *' : 'Password *'}</label>
+                        <input
+                          required={createSystemUser}
+                          type="password"
+                          placeholder="••••••••"
+                          value={systemUserFormData.password}
+                          onChange={(e) => setSystemUserFormData({ ...systemUserFormData, password: e.target.value })}
+                          className="w-full bg-black border border-slate-800 rounded-xl p-2.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-400 mb-1">{isAr ? 'رمز PIN للنظام' : 'System PIN'}</label>
+                        <input
+                          type="text"
+                          maxLength={6}
+                          placeholder="1234"
+                          value={systemUserFormData.systemPin}
+                          onChange={(e) => setSystemUserFormData({ ...systemUserFormData, systemPin: e.target.value })}
+                          className="w-full bg-black border border-slate-800 rounded-xl p-2.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono tracking-widest text-center"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-400 mb-1">{isAr ? 'الدور والصلاحية' : 'System Role'}</label>
+                        <select
+                          value={systemUserFormData.role}
+                          onChange={(e) => setSystemUserFormData({ ...systemUserFormData, role: e.target.value })}
+                          className="w-full bg-black border border-slate-800 text-white rounded-xl p-2.5 text-xs font-bold outline-none focus:border-[#d4af37]/60 cursor-pointer"
+                        >
+                          <option value="Staff">{isAr ? 'موظف (Staff)' : 'Staff'}</option>
+                          <option value="Accountant">{isAr ? 'محاسب (Accountant)' : 'Accountant'}</option>
+                          <option value="Manager">{isAr ? 'مدير (Manager)' : 'Manager'}</option>
+                          <option value="Admin">{isAr ? 'مدير نظام (Admin)' : 'Admin'}</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="pt-4 flex justify-end gap-3 border-t border-slate-850">

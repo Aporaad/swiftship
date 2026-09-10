@@ -141,6 +141,16 @@ export default function Couriers() {
   const [addLoading, setAddLoading] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
 
+  // System User Provisioning State
+  const [createSystemUser, setCreateSystemUser] = useState(false);
+  const [systemUserFormData, setSystemUserFormData] = useState({
+    username: '',
+    email: '',
+    password: '',
+    systemPin: '',
+    role: 'Courier'
+  });
+
   // Smart Custody Calculator Helper
   const getCourierCustodyStats = (courierId: string) => {
     const cour = couriers.find(c => c.id === courierId);
@@ -509,6 +519,18 @@ export default function Couriers() {
   const handleAddCourier = async (e: React.FormEvent) => {
     e.preventDefault();
     if (addLoading) return;
+
+    if (createSystemUser) {
+      if (!systemUserFormData.username.trim() || !systemUserFormData.password.trim()) {
+        return notificationService.notify({
+          title: isAr ? 'بيانات ناقصة' : 'Missing Data',
+          message: isAr ? 'يرجى إدخال اسم المستخدم وكلمة المرور للنظام' : 'Username and password required for system user',
+          type: 'error',
+          category: 'system'
+        });
+      }
+    }
+
     setAddLoading(true);
     try {
       // 1. Generate unique custom courier ID
@@ -549,18 +571,44 @@ export default function Couriers() {
         console.warn('[Couriers] Could not create financial account:', accErr);
       }
 
+      // Provision System User in `users` table if requested
+      if (createSystemUser) {
+        try {
+          const userId = 'usr_' + Math.random().toString(36).substring(2, 11);
+          const userPayload = {
+            id: userId,
+            username: systemUserFormData.username.trim(),
+            email: systemUserFormData.email.trim() || emailValue,
+            password: systemUserFormData.password,
+            systemPin: systemUserFormData.systemPin.trim(),
+            fullName: addFormData.fullName.trim(),
+            phone: addFormData.phone.trim(),
+            role: systemUserFormData.role || 'Courier',
+            disabled: false,
+            linkedType: 'courier',
+            linkedEntity: newId,
+            createdAt: Date.now()
+          };
+          await setDoc(doc(db, 'users', userId), userPayload);
+        } catch (uErr: any) {
+          console.error('[Couriers] Error provisioning system user:', uErr);
+        }
+      }
+
       activityLogService.log('add_courier', addFormData.fullName, { ...addFormData, courierCustomId: customId });
       notificationService.notify({
-        title: isAr ? 'تم تسجيل مندوب خارجي' : 'External Courier Registered',
+        title: isAr ? 'تم تسجيل مندوب' : 'Courier Registered',
         message: isAr
-          ? `تم تسجيل المندوب برمز: ${customId} وإنشاء حسابه المالي تلقائياً`
-          : `External courier registered: ${customId} with auto-generated financial account`,
+          ? `تم تسجيل المندوب برمز: ${customId} ${createSystemUser ? 'وانشاء حساب مستخدم النظام وربطه به تلقائياً' : 'وانشاء حسابه المالي تلقائياً'}`
+          : `Courier ${addFormData.fullName} registered successfully`,
         type: 'success',
         category: 'system'
       });
 
       // Reset form setup
+      setCreateSystemUser(false);
       setAddFormData({ fullName: '', phone: '', email: '', address: '', gpsLocation: '', commissionRate: 0, notes: '', courierType: 'local' });
+      setSystemUserFormData({ username: '', email: '', password: '', systemPin: '', role: 'Courier' });
       setIsAddModalOpen(false);
 
     } catch (err: any) {
@@ -1632,6 +1680,89 @@ export default function Couriers() {
               <div>
                 <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'تقرير وملاحظات التسجيل' : 'Induction confidential remarks'}</label>
                 <textarea value={addFormData.notes} onChange={(e) => setAddFormData({ ...addFormData, notes: e.target.value })} className="w-full bg-black/50 border border-slate-850 rounded-xl p-3 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none h-20 text-start"></textarea>
+              </div>
+
+              {/* ── System User Provisioning Section ──────────────────────────────── */}
+              <div className="pt-3 border-t border-slate-850 space-y-3">
+                <label className="flex items-center gap-3 p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 cursor-pointer hover:bg-amber-500/20 transition-all">
+                  <input
+                    type="checkbox"
+                    checked={createSystemUser}
+                    onChange={(e) => setCreateSystemUser(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-700 text-[#d4af37] focus:ring-0 cursor-pointer"
+                  />
+                  <span className="text-xs font-black text-[#d4af37]">
+                    {isAr ? 'إنشاء مستخدم في النظام (users) للمندوب وربطه به تلقائياً' : 'Create System Login User (users) for Courier'}
+                  </span>
+                </label>
+
+                {createSystemUser && (
+                  <div className="p-4 rounded-2xl bg-black/40 border border-slate-800 space-y-3 text-start animate-fade-in">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-400 mb-1">{isAr ? 'اسم المستخدم للنظام *' : 'System Username *'}</label>
+                        <input
+                          required={createSystemUser}
+                          type="text"
+                          placeholder="courier_user"
+                          value={systemUserFormData.username}
+                          onChange={(e) => setSystemUserFormData({ ...systemUserFormData, username: e.target.value })}
+                          className="w-full bg-black border border-slate-800 rounded-xl p-2.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-400 mb-1">{isAr ? 'البريد الإلكتروني للنظام' : 'System Email'}</label>
+                        <input
+                          type="email"
+                          placeholder="courier@system.local"
+                          value={systemUserFormData.email}
+                          onChange={(e) => setSystemUserFormData({ ...systemUserFormData, email: e.target.value })}
+                          className="w-full bg-black border border-slate-800 rounded-xl p-2.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-400 mb-1">{isAr ? 'كلمة المرور *' : 'Password *'}</label>
+                        <input
+                          required={createSystemUser}
+                          type="password"
+                          placeholder="••••••••"
+                          value={systemUserFormData.password}
+                          onChange={(e) => setSystemUserFormData({ ...systemUserFormData, password: e.target.value })}
+                          className="w-full bg-black border border-slate-800 rounded-xl p-2.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-400 mb-1">{isAr ? 'رمز PIN للنظام' : 'System PIN'}</label>
+                        <input
+                          type="text"
+                          maxLength={6}
+                          placeholder="1234"
+                          value={systemUserFormData.systemPin}
+                          onChange={(e) => setSystemUserFormData({ ...systemUserFormData, systemPin: e.target.value })}
+                          className="w-full bg-black border border-slate-800 rounded-xl p-2.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono tracking-widest text-center"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-400 mb-1">{isAr ? 'الدور والصلاحية' : 'System Role'}</label>
+                        <select
+                          value={systemUserFormData.role}
+                          onChange={(e) => setSystemUserFormData({ ...systemUserFormData, role: e.target.value })}
+                          className="w-full bg-black border border-slate-800 text-white rounded-xl p-2.5 text-xs font-bold outline-none focus:border-[#d4af37]/60 cursor-pointer"
+                        >
+                          <option value="Courier">{isAr ? 'مندوب توصيل (Courier)' : 'Courier'}</option>
+                          <option value="Staff">{isAr ? 'موظف (Staff)' : 'Staff'}</option>
+                          <option value="Admin">{isAr ? 'مدير نظام (Admin)' : 'Admin'}</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
