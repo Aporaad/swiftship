@@ -21,4 +21,4 @@
 12. **Status Skipping**: Skipping from `Ordered` straight to `Delivered` without intermediate stages (if enforced).
 
 ## Test Runner Plan
-- We will use `firebase.rules.test.ts` to simulate these attacks.
+- We will use `supabase.rules.test.ts` to simulate these attacks.

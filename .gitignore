@@ -4,6 +4,7 @@
 .zcode/
 .claude/
 .mimosa/
+.firebase-cleanup-backup/
 
 # Build outputs
 dist/

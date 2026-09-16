@@ -21,7 +21,7 @@
 | المتطلب | الحالة | الموقع |
 |---------|--------|--------|
 | شعار واسم النظام | ✅ | Settings.tsx Tab 2 + SettingsContext (systemName, systemLogo) |
-| حفظ الشعار Base64 في Firestore | ✅ | Settings.tsx:308-317 (handleLogoUpload) |
+| حفظ الشعار Base64 في PostgreSQL | ✅ | Settings.tsx:308-317 (handleLogoUpload) |
 | عرض الشعار في Sidebar | ✅ | Layout.tsx:344-347 |
 | عرض الشعار في صفحة الدخول | ✅ | Login.tsx:227-239 |
 | اسم النظام في Login | ✅ | Login.tsx:245 |
@@ -55,7 +55,7 @@
 |---------|--------|--------|
 | النسخ التلقائي اليومي (24h) | ✅ | Layout.tsx:161-212 (autoBackup on admin login) |
 | نسخ 6 مجموعات رئيسية | ✅ | Layout.tsx:169 (orders,customers,couriers,sources,users,roles) |
-| حفظ في Firestore (backups) | ✅ | Layout.tsx:185 |
+| حفظ في PostgreSQL (backups) | ✅ | Layout.tsx:185 |
 | تسجيل في activity_log | ✅ | Layout.tsx:191 |
 | إشعار بعد النسخ | ✅ | Layout.tsx:192-199 |
 | تصدير JSON | ✅ | Settings.tsx:457 |

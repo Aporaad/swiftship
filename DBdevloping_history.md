@@ -767,3 +767,25 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
   - جدول `users`: إضافة خيار الإنشاء المباشر للموظفين والمناديب وتخزين `username`, `email`, `password`, `systemPin`, `role`, `disabled`, `linkedType`, `linkedEntity`.
   - جدول `portal_users`: تخزين حسابات الموقع الإلكتروني بـ `username`, `email`, `portal_role`, `approval_status`, `disabled`, `linkedAccId`, وحقل `data` (JSONB) لكلمة المرور والاسم الكامل ورقم الهاتف.
   - جدول `cust_details`: تخزين البيانات الإضافية الدائمة للعملاء بـ `user_uid`, `customer_id`, `join_by`, `referrer_id`, `onboarding_completed`, وحقل `data` (JSONB) للعنوان، موقع الخريطة GPS، المدينة، الدولة، اسم الشركة، رقم الهوية/السجل التجاري، سقف الدين الأقصى، والملاحظات.
+
+---
+
+## [2026-09-15 02:04:05] — AI Model: Gemini 3.6 Flash
+- **توثيق قاعدة البيانات الكامل والشامل بملف `DATABASE_SCHEMA.md`**:
+  - تم استقراء وتوثيق كافة الجداول البالغ عددها 51 جدولاً في `public` schema.
+  - توثيق أسماء الأعمدة وأنواع بياناتها والعلاقات والمفاتيح الأجنبية (`FK`).
+  - تفكيك وحصر المفاتيح البرمجية لكافة حقول الـ `JSONB` المفهرسة بالنظام وإبراز هيكلها الداخلي.
+
+---
+
+  - إنشاء وتنفيذ التترحيل `202609160002_sanitize_data_jsonb_duplicates.sql`: تطهير كائن البيانات المرنة `data` (JSONB) عبر جميع الجداول وتفريغه تلقائياً من أي مفاتيح طابق أعمدة مباشرة لمنع تكرار البيانات.
+
+---
+
+## [2026-09-16 02:15:00] — AI Model: Gemini 3.6 Flash
+- **توحيد أسماء أعمدة العروض الـ VIEWS بـ PostgreSQL إلى snake_case والتأكد الشامل من الانضباط**:
+  - إنشاء وتنفيذ التترحيل `202609160005_fix_view_column_names_to_snake_case.sql`: إعادة إنشاء `expenes_view` و `portal_users_view` بأسماء أعمدة `snake_case` صريحة (مثل `amount_in_default_currency`, `created_at`, `created_by_email`, `created_by_name`, `created_by_uid`, `expense_number`, `financial_account_code`, `financial_account_id`, `linked_account_code`, `linked_account_id`, `recipient_entity_id`, `recipient_entity_type`, `recipient_id`, `recipient_name`, `remitted_amount`, `remitted_amount_in_default_currency`, `salary_month`, `settled_at`, `settled_by_email`, `settled_by_name`, `updated_at`, `approval_status`, `commercial_register_url`, `full_name`, `gps_location`, `identity_doc_url`, `linked_acc_id`, `linked_customer_id`, `portal_role`, `profile_image_url`).
+  - تشغيل فحص استعلام SQL القياسي على `information_schema.columns` لجميع جداول وعروض `public` وتأكيد أن عدد الأعمدة التي تحوي حروفاً كبيرة أو camelCase هو **0** بنسبة 100%.
+  - التأكد من خلو 100% من كائنات `data` (JSONB) في جميع الجداول المأهولة من أي مفاتيح مكررة تطابق الأعمدة المباشرة.
+
+
