@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, doc } from '../lib/supabase-firebase-adapter';
-import { db } from '../lib/supabase-firebase-adapter';
+import { collection, query, where, onSnapshot, doc } from '../lib/supabase-adapter';
+import { db } from '../lib/supabase-adapter';
 import { useSettings } from '../context/SettingsContext';
 import { 
   X, 

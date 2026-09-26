@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase-firebase-adapter';
+import { supabase } from '../lib/supabase-adapter';
 
 export type FinancialEntrySettingKind = 'module' | 'type';
 export type FinancialEntrySettingAction = 'create' | 'update' | 'delete';

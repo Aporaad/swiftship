@@ -10,8 +10,8 @@ import {
 } from 'lucide-react';
 import { printContent } from '../lib/printUtils';
 import { useExpenseCategories } from '../hooks/useExpenseCategories';
-import { db } from '../lib/supabase-firebase-adapter';
-import { collection, onSnapshot, query, orderBy } from '../lib/supabase-firebase-adapter';
+import { db } from '../lib/supabase-adapter';
+import { collection, onSnapshot, query, orderBy } from '../lib/supabase-adapter';
 import { financialAccountService } from '../services/financialAccountService';
 
 import { useExchangeRates } from '../hooks/useExchangeRates';

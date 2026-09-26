@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, orderBy, addDoc, doc, updateDoc, getDocs, where, increment, writeBatch } from 'firebase/firestore';
-import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
+import { collection, onSnapshot, query, orderBy, addDoc, doc, updateDoc, getDocs, where, increment, writeBatch } from '../lib/supabase-adapter';
+import { db, auth, handlePostgreSQLError, OperationType } from '../lib/supabase-adapter';
 import { useSettings } from '../context/SettingsContext';
 import { useRole } from '../hooks/useRole';
 import { notificationService } from '../services/notificationService';
@@ -138,7 +138,7 @@ export default function Expenses() {
         title: isAr ? 'تم تحديث الإحصائيات المالية' : 'Financial Stats Synced',
         message: isAr
           ? 'تم إعادة حساب إجمالي المصروفات والعهد العالقة مباشرة من الدفاتر الحية.'
-          : 'Total expenses and pending custody figures re-calculated directly from Firestore.',
+          : 'Total expenses and pending custody figures re-calculated directly from PostgreSQL.',
         type: 'success',
         category: 'finance'
       });
@@ -163,7 +163,7 @@ export default function Expenses() {
       setExpenses(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       setExpensesLoading(false);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'expenses');
+      handlePostgreSQLError(error, OperationType.LIST, 'expenses');
     });
 
     // Fetch couriers for custody recipient selection

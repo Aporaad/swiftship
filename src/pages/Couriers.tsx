@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, doc, updateDoc, addDoc, setDoc, deleteDoc, query, where, orderBy, or } from '../lib/supabase-firebase-adapter';
-import { db, auth } from '../lib/supabase-firebase-adapter';
-import { handleFirestoreError, OperationType } from '../lib/firebase';
+import { collection, onSnapshot, doc, updateDoc, addDoc, setDoc, deleteDoc, query, where, orderBy, or } from '../lib/supabase-adapter';
+import { db, auth } from '../lib/supabase-adapter';
+import { handlePostgreSQLError, OperationType } from '../lib/supabase-adapter';
 import {
   Search,
   Edit2,
@@ -339,7 +339,7 @@ export default function Couriers() {
       setCouriers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       setLoading(false);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'couriers');
+      handlePostgreSQLError(error, OperationType.LIST, 'couriers');
     });
 
     // 2. Subscribe to Orders (Smart Custody / Performance sync)
@@ -356,7 +356,7 @@ export default function Couriers() {
       console.error("Error loading expenses:", error);
     });
 
-    // 4. Subscribe to Accounts
+    // 4. Subscribe to Accounts    
     const unsubAccounts = onSnapshot(collection(db, 'accounts'), (snap) => {
       setAccounts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     }, (error) => {
@@ -475,7 +475,7 @@ export default function Couriers() {
       });
       setIsEditModalOpen(false);
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, 'couriers');
+      handlePostgreSQLError(err, OperationType.UPDATE, 'couriers');
     } finally {
       setEditLoading(false);
     }
@@ -502,7 +502,7 @@ export default function Couriers() {
             category: 'system'
           });
         } catch (err) {
-          handleFirestoreError(err, OperationType.UPDATE, 'couriers');
+          handlePostgreSQLError(err, OperationType.UPDATE, 'couriers');
         }
       }
     });
@@ -565,7 +565,7 @@ export default function Couriers() {
           'courier',
           newCourierRef.id,
           addFormData.fullName,
-          type === 'sourcing' ? 'SAR' : 'YER'
+          type === 'sourcing' ? settings.defaultOrderCurrency : settings.currency
         );
       } catch (accErr) {
         console.warn('[Couriers] Could not create financial account:', accErr);

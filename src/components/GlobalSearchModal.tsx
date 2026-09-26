@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, doc, updateDoc, query, orderBy, limit } from '../lib/supabase-firebase-adapter';
+import { collection, getDocs, doc, updateDoc, query, orderBy, limit } from '../lib/supabase-adapter';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { db } from '../lib/supabase-firebase-adapter';
+import { db } from '../lib/supabase-adapter';
 import { useSettings } from '../context/SettingsContext';
 import { useOrderStatuses } from '../hooks/useOrderStatuses';
 import { whatsappService } from '../services/whatsappService';

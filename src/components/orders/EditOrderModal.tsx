@@ -193,10 +193,10 @@ export default function EditOrderModal({
       setItems(
         orderToEdit.items && orderToEdit.items.length > 0
           ? JSON.parse(JSON.stringify(orderToEdit.items)).map((i: any) => ({
-              ...i,
-              isInsured: Boolean(i.isInsured || i.is_insured),
-              insuranceFee: i.insuranceFee || i.insurance_fee || 0,
-            }))
+            ...i,
+            isInsured: Boolean(i.isInsured || i.is_insured),
+            insuranceFee: i.insuranceFee || i.insurance_fee || 0,
+          }))
           : [{ productName: '', productUrl: '', quantity: 1, productPrice: 0, weight: 0, cbm: 0, isInsured: false, insuranceFee: 0 }]
       );
 
@@ -673,7 +673,7 @@ export default function EditOrderModal({
   return (
     <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 z-50 animate-fade-in overflow-y-auto">
       <div className="bg-slate-900 border border-blue-500/30 rounded-3xl w-full max-w-5xl my-4 overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
-        
+
         {/* Persistent Fixed Header */}
         <div className="p-4 bg-slate-955 border-b border-slate-800 space-y-3 shrink-0 text-start">
           <div className="flex justify-between items-center">
@@ -732,25 +732,22 @@ export default function EditOrderModal({
                   key={step.id}
                   type="button"
                   onClick={() => handleStepClick(step.id)}
-                  className={`relative z-10 flex flex-col items-center group cursor-pointer transition-all ${
-                    isActive ? 'scale-105' : 'hover:scale-102'
-                  }`}
+                  className={`relative z-10 flex flex-col items-center group cursor-pointer transition-all ${isActive ? 'scale-105' : 'hover:scale-102'
+                    }`}
                 >
                   <div
-                    className={`w-9 h-9 rounded-2xl flex items-center justify-center font-black text-xs transition-all duration-300 shadow-lg ${
-                      isCompleted
-                        ? 'bg-blue-500 text-white border-2 border-blue-400'
-                        : isActive
+                    className={`w-9 h-9 rounded-2xl flex items-center justify-center font-black text-xs transition-all duration-300 shadow-lg ${isCompleted
+                      ? 'bg-blue-500 text-white border-2 border-blue-400'
+                      : isActive
                         ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white border-2 border-indigo-300 shadow-blue-500/30 ring-4 ring-blue-500/20'
                         : 'bg-slate-900 text-slate-500 border border-slate-800'
-                    }`}
+                      }`}
                   >
                     {isCompleted ? <CheckCircle2 className="w-4 h-4 stroke-[2.5]" /> : <Icon className="w-4 h-4" />}
                   </div>
                   <span
-                    className={`block text-[10px] font-black mt-1 ${
-                      isActive ? 'text-blue-400' : isCompleted ? 'text-slate-300' : 'text-slate-500'
-                    }`}
+                    className={`block text-[10px] font-black mt-1 ${isActive ? 'text-blue-400' : isCompleted ? 'text-slate-300' : 'text-slate-500'
+                      }`}
                   >
                     {isAr ? step.titleAr : step.titleEn}
                   </span>
@@ -775,7 +772,7 @@ export default function EditOrderModal({
 
         {/* Scrollable Form Body */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar text-start text-xs font-bold">
-          
+
           {/* STEP 1: Customer & Source */}
           {currentStep === 1 && (
             <div className="space-y-4 animate-fade-in">
@@ -1300,7 +1297,7 @@ export default function EditOrderModal({
                       {[
                         { id: 'Cash', labelAr: 'نقد (صندوق)', labelEn: 'Cash Box', icon: Wallet },
                         { id: 'Bank', labelAr: 'بنك (تحويل)', labelEn: 'Bank Transfer', icon: Building },
-                        { id: 'Deferred', labelAr: 'آجل (دين)', labelEn: 'On Credit', icon: FileText },
+                        { id: 'Deferred', labelAr: 'آجل (من حساب اخر)', labelEn: 'On Credit', icon: FileText },//مهم : يتم تطوير حاله من حساب اخر بحيث يمكن اختيار حساب مالي اخر غير حساب العميل ليتم تقييد الفاتوره من هذا الحساب 
                         { id: 'Mixed', labelAr: 'متعدد (مختلط)', labelEn: 'Multi / Split', icon: ArrowRightLeft },
                       ].map((type) => {
                         const Icon = type.icon;
@@ -1327,11 +1324,10 @@ export default function EditOrderModal({
                               }
                               setFormData({ ...formData, ...updates });
                             }}
-                            className={`flex flex-col items-center justify-center p-2 rounded-xl border font-bold text-[10px] transition-all cursor-pointer ${
-                              isSelected
-                                ? 'bg-[#d4af37]/15 border-[#d4af37] text-[#d4af37] shadow-md ring-1 ring-[#d4af37]/30'
-                                : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-850 hover:text-slate-200'
-                            }`}
+                            className={`flex flex-col items-center justify-center p-2 rounded-xl border font-bold text-[10px] transition-all cursor-pointer ${isSelected
+                              ? 'bg-[#d4af37]/15 border-[#d4af37] text-[#d4af37] shadow-md ring-1 ring-[#d4af37]/30'
+                              : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-850 hover:text-slate-200'
+                              }`}
                           >
                             <Icon className="w-4 h-4 mb-1" />
                             <span>{isAr ? type.labelAr : type.labelEn}</span>

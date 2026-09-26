@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { X, ShieldAlert, KeyRound } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { collection, getDocs, query } from '../lib/supabase-firebase-adapter';
-import { db } from '../lib/supabase-firebase-adapter';
+import { collection, getDocs, query } from '../lib/supabase-adapter';
+import { db } from '../lib/supabase-adapter';
 
 interface ConfirmDeletePinModalProps {
   isOpen: boolean;

@@ -16,7 +16,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase-firebase-adapter';
+import { supabase } from '../lib/supabase-adapter';
 import { currencyService, Currency, ExchangeRates, DEFAULT_RATES } from '../services/currencyService';
 
 // ── Singleton State ───────────────────────────────────────────────────────────

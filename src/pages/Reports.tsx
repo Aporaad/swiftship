@@ -2,8 +2,8 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   collection, onSnapshot, query, orderBy, getDocs, doc, setDoc, getDoc, where, addDoc, deleteDoc
-} from '../lib/firebase';
-import { db } from '../lib/firebase';
+} from '../lib/supabase-adapter';
+import { db } from '../lib/supabase-adapter';
 import { useSettings } from '../context/SettingsContext';
 import { useRole } from '../hooks/useRole';
 import {
@@ -819,7 +819,7 @@ export default function Reports() {
     return () => unsub();
   }, [filters.accountId, filters.entityId, filters.startDate, filters.endDate, accounts, activeReport, selectedCustomerId, selectedCourierId, selectedUserId, selectedOrderId, selectedExpenseCategory, orders, customers, users, EXPENSE_CATEGORIES_DYNAMIC, selectedPackagingAccountIds, selectedOrdersCostAccountIds, selectedShippingCompaniesAccountIds]);
 
-  // Save changes to print settings template in Firestore 
+  // Save changes to print settings template in PostgreSQL 
   const handleSavePrintSettings = async () => {
     setSavingTemplate(true);
     try {

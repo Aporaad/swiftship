@@ -473,4 +473,39 @@
 - [x] [2026-09-16 06:35:00] جلب مدة خمول المستخدم `userSessionTimeout` ديناميكياً من `SettingsContext` في `src/hooks/useRole.ts` وإلغاء القيمة الثابتة.
 - [x] [2026-09-16 06:35:00] أتمتة حذف الجلسات من قاعدة البيانات والكاش والتخزين المحلي (`localStorage` & `sessionStorage`) والنظام فور تسجيل الخروج أو انتهاء المهلة أو عند إغلاق النافذة/التبويب (`pagehide`/`beforeunload`).
 - [x] [2026-09-16 06:35:00] تشخيص وإصلاح عدم ظهور قائمة الجلسات النشطة في `UserManagement.tsx` بفك وتوحيد تحويل الطوابع الزمنية `last_seen` / `lastSeen` وتصحيح مطابقة الأعمدة في `supabase-adapter.ts`.
-- [x] [2026-09-16 06:35:00] إجراء فحص التجميع المعياري `npx tsc --noEmit` بنجاح كامل وحصد 0 أخطاء.
+- [x] [2026-09-16 08:20:00] تحويل استمرارية مصادقة المستخدم `swiftship_persisted_user` كلياً من `localStorage` إلى `sessionStorage` في `App.tsx` و `supabase-adapter.ts` لتنتهي وتباد الجلسة من التخزين المحلي والذاكرة تلقائياً عند إغلاق تبويب/نافذة المتصفح، مع الحفاظ الكامل على بقاء الجلسة آمنة عند تحديث الصفحة (F5).
+
+## [2026-09-25 21:55:07] — تحويل مسميات المفاتيح الرئيسية ورسم الخرائط وتصحيح العروض والدوال بنجاح
+- [x] [2026-09-25 21:55:07] تحويل مسميات المفاتيح الرئيسية في قاعدة البيانات إلى نمط `table_id` وتعديل العلاقات والدوال وإصلاح `cur_price` و `portal_users_view` واجتياز التجميع والبناء الإنتاجي بنسبة 100%.
+
+## [2026-09-25 23:45:00] — إصلاح مشكلة تسجيل الدخول وتحديث استعلامات المفاتيح الرئيسية بالنظام بالكامل
+- [x] [2026-09-25 23:45:00] إصلاح خطأ تسجيل الدخول و `useRole.ts:161` بتحديد `uid: row.user_id || row.id || row.uid` بدقة في `mapPublicUser` بمحول النظام `supabase-adapter.ts`.
+- [x] [2026-09-25 23:45:00] إصلاح كافة استعلامات المفاتيح الرئيسية في خدمات النظام (`portalUserService.ts`, `autoEntryService.ts`) والواجهات النوافذ المرافقة (`WebsiteManagement.tsx`, `PendingPortalApprovalsModal.tsx`, `JobApplicationsModal.tsx`) لاستخدام `portal_user_id`, `auto_entry_id`, `main_entry_id`, `announcement_id`, `jobs_req_id`, `cust_detail_id`.
+- [x] [2026-09-25 23:45:00] اجتياز فحص تجميع TypeScript المعياري `npx tsc --noEmit` بنسبة 100% (0 أخطاء).
+- [x] [2026-09-25 23:45:00] اجتياز فحص البناء الإنتاجي `npm run build` بنسبة 100% وبدقة كاملة خلال 35 ثانية.
+
+## [2026-09-26 00:15:00] — حل أخطاء REST 400 وتأكيد استكمال خدمات النظام والأنواع والمكونات
+- [x] [2026-09-26 00:15:00] إصلاح كافة أخطاء 400 Bad Request الناتجة عن استعلامات Supabase المباشرة بـ `FinanceEntries.tsx` عبر توحيد مسميات الأعمدة المستعلمة (`cur_id`, `is_default`, `is_active`, `account_id`, `main_entry_id`, `account_trans_id`, `entry_payment_detail_id`, `custody_advance_id`, `user_id`, `full_name`).
+- [x] [2026-09-26 00:15:00] استكمال تحديث خدمات النظام بالكامل بـ `orderService.ts`, `financialAccountService.ts`, `financialEntryService.ts`, `customerService.ts`, `employeeService.ts`, `courierService.ts`, `productService.ts`, `shipmentService.ts`, `portalUserService.ts` (المراحل 3.2، 4.1، 4.2).
+- [x] [2026-09-26 00:15:00] تحديث `naming_refactor_tasks.md` وتوثيق كافة خطوات الإنجاز والاعتماد النهائي.
+- [x] [2026-09-26 00:15:00] اجتياز فحص التجميع المعياري `npx tsc --noEmit` بتحقيق 0 أخطاء بنسبة 100%.
+- [x] [2026-09-26 00:15:00] اجتياز فحص البناء الإنتاجي `npm run build` وبناء حزمة الإنتاج بنجاح كامل خلال 35.12 ثانية.
+
+## [2026-09-26 03:53:00] — حل أخطاء cur_price و main_entry بتحديث المفاتيح الرئيسية بالاستعلامات
+- [x] [2026-09-26 03:53:00] معالجة خطأ HTTP 400 Bad Request بالاستعلام المباشر لجدول `cur_price` بتحديث `select('cur_price_id, seq, price')` بدلاً من `id` في `financialEntryService.ts` و `GeneralEntryForm.tsx` و `VoucherEntryForm.tsx` و `EntryForm.tsx`.
+- [x] [2026-09-26 03:53:00] تحديث استعلامات `main_entry` لاستخدام `select('main_entry_id')` بـ `orderPaymentDataService.ts` و `financialAccountService.ts`.
+- [x] [2026-09-26 03:53:00] اجتياز فحص التجميع المعياري `npx tsc --noEmit` بنسبة 100% (0 أخطاء).
+- [x] [2026-09-26 03:53:00] اجتياز فحص البناء الإنتاجي `npm run build` بنسبة 100% وبناء الحزم بنجاح خلال 30.12 ثانية.
+
+
+## [2026-09-26 05:20:00] — حل أخطاء إدراج الطلبات وإعادة تحديث دوال وسجلات orders_history ومصفوفة القيود
+- [x] [2026-09-26 05:20:00] معالجة خطأ `Error: [Supabase Adapter] insert failed on table orders: column "id" of relation "orders_history" does not exist` بتحديث دالة PostgreSQL `orders_history_write` لاستخدام العمود `orders_history_id` بدلاً من `id`.
+- [x] [2026-09-26 05:20:00] تحديث دوال التريجرات وإجراءات حذف الطلبات بـ PostgreSQL: `delete_orders_with_dependents`, `ensure_entity_financial_account`, `manage_financial_entry_setting`, `recalculate_accounting_hierarchy`.
+- [x] [2026-09-26 05:20:00] تحديث الدوال الحساسة الـ 9 بالنظام المحاسبي: `post_financial_entry`, `enforce_account_transaction_posting_rules`, `recalculate_all_account_balances`, `secure_delete_financial_entry_draft`, `secure_delete_posted_financial_entry`, `sync_account_balances_after_entry_status_change`, `validate_financial_entry_account_limits`, `validate_main_entry_posting_transition`, `derive_account_trans_conversion_rate`.
+
+## [2026-09-26 05:32:00] — إصلاح خطأ secure_create_financial_entry ومعالجة مراجع isDefault و is_default بالدوال المحاسبية
+- [x] [2026-09-26 05:32:00] معالجة خطأ HTTP 400 Bad Request على `rpc/secure_create_financial_entry` بتحديث دالة PostgreSQL `financial_entry_permission_for_payload` لاستخدام `entry_type_id` بدلاً من `id`.
+- [x] [2026-09-26 05:32:00] تصحيح وتنسيق 14 دالة مخزنة في PostgreSQL لاستبدال مراجع المفاتيح وحقول التوافقية الملغاة (`id`, `isDefault`, `isActive`) بالمسميات القياسية الجديدة (`entry_type_id`, `main_entry_id`, `account_id`, `user_id`, `role_id`, `custody_advance_id`, `is_default`, `is_active`).
+- [x] [2026-09-26 05:32:00] تصحيح دالة العملة `accounting_system_currency_id` لاستعلام `is_default = true AND is_active = true` بدلاً من `isDefault` و `isActive`.
+- [x] [2026-09-26 05:32:00] إجراء اختبار معاملي ناجح للـ RPC `secure_create_financial_entry` بتثبيت استجابة JSON سليمة وإنشاء القيد وتحديث شجرة الحسابات بنجاح 100%.
+- [x] [2026-09-26 05:32:00] الفحص التراكمي النهائي لقاعدة البيانات وتأكيد خلو PostgreSQL تماماً (0 دوال) من أي مراجع قديمة لعمود `id` أو مسميات camelcase.

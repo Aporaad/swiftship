@@ -3,8 +3,8 @@ import {
   Truck, Search, Wrench, X, PlusCircle, Trash2, Calendar, DollarSign,
   Activity, CheckCircle, AlertTriangle, ShieldCheck, RefreshCw, User, ClipboardList, Package, Printer
 } from 'lucide-react';
-import { addAssDoc, db } from '../lib/supabase-firebase-adapter';
-import { collection, addDoc, doc, deleteDoc, updateDoc, onSnapshot } from '../lib/supabase-firebase-adapter';
+import { addAssDoc, db } from '../lib/supabase-adapter';
+import { collection, addDoc, doc, deleteDoc, updateDoc, onSnapshot } from '../lib/supabase-adapter';
 import { notificationService } from '../services/notificationService';
 import { financialAccountService } from '../services/financialAccountService';
 import { jsPDF } from 'jspdf';
@@ -257,7 +257,7 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
     } catch (err: any) {
       console.error(err);
       notificationService.notify({
-        title: 'Firestore Error',
+        title: 'PostgreSQL Error',
         message: err.message,
         type: 'error'
       });

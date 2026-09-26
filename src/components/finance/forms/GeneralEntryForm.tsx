@@ -14,7 +14,7 @@ import {
   type FinancialEntryInput,
   type FinancialEntryLineInput,
 } from '../../../services/financialEntryService';
-import { supabase } from '../../../lib/supabase-firebase-adapter';
+import { supabase } from '../../../lib/supabase-adapter';
 import AccountPickerModal from '../AccountPickerModal';
 import FinancialCalculatorModal from '../FinancialCalculatorModal';
 import { amountInWords } from '../../../lib/numberToWords';
@@ -206,7 +206,7 @@ export default function GeneralEntryForm({
     const fetchLatestRate = async () => {
       const { data } = await (supabase as any)
         .from('cur_price')
-        .select('id, seq, price')
+        .select('cur_price_id, seq, price')
         .eq('cur_no', selectedEntryCurrency.id)
         .order('day_date', { ascending: false })
         .order('seq', { ascending: false })
@@ -215,7 +215,7 @@ export default function GeneralEntryForm({
 
       if (data?.price) {
         setEntryExchangeRate(String(data.price));
-        setEntryPriceRef({ id: Number(data.id), seq: Number(data.seq) });
+        setEntryPriceRef({ id: Number(data.cur_price_id || data.id), seq: Number(data.seq) });
       } else {
         setEntryExchangeRate('1');
         setEntryPriceRef(null);
@@ -232,7 +232,7 @@ export default function GeneralEntryForm({
     if (acc && acc.curNo !== defaultCurrency?.id) {
       const { data } = await (supabase as any)
         .from('cur_price')
-        .select('id, seq, price')
+        .select('cur_price_id, seq, price')
         .eq('cur_no', acc.curNo)
         .order('day_date', { ascending: false })
         .order('seq', { ascending: false })
@@ -241,7 +241,7 @@ export default function GeneralEntryForm({
 
       if (data?.price) {
         fetchedRate = String(data.price);
-        refObj = { id: Number(data.id), seq: Number(data.seq) };
+        refObj = { id: Number(data.cur_price_id || data.id), seq: Number(data.seq) };
       }
     }
 
@@ -294,7 +294,7 @@ export default function GeneralEntryForm({
         const accRate = asNumber(line.accountExchangeRate) || 1;
         // معادلة المصارفة: get_account_amount(entryPrice, amountOriginal, accountPrice) = (amountOriginal * entryPrice) / accountPrice
         const lineAmountInAccountCurrency = Number(((numericMainAmount * numEntryRate) / accRate).toFixed(5));
-        
+
         const accCurCode = currencies.find((c) => c.id === acc.curNo)?.code || 'YER';
         const lineAmountText = amountInWords(lineAmountInAccountCurrency, accCurCode, 'ar');
         const lineAmountOriginalText = autoAmountText;
@@ -520,9 +520,8 @@ export default function GeneralEntryForm({
                 return (
                   <tr key={line.id} className="hover:bg-slate-900/60 transition-colors">
                     <td className="px-3.5 py-3 text-center border-l border-slate-800/60">
-                      <div className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-black border ${
-                        isDebit ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300' : 'bg-amber-500/15 border-amber-500/40 text-amber-300'
-                      }`}>
+                      <div className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-black border ${isDebit ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300' : 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+                        }`}>
                         {isDebit ? <ArrowRight className="h-3.5 w-3.5" /> : <ArrowLeft className="h-3.5 w-3.5" />}
                         <span>{isDebit ? 'من حـ (مدين)' : 'إلى حـ (دائن)'}</span>
                       </div>

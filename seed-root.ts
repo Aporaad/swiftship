@@ -1,22 +1,22 @@
-import { initializeApp, cert } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
+import { initializeApp, cert } from './src/lib/supabase-adapter';
+import { getAuth } from './src/lib/supabase-adapter';
+import { getPostgreSQL } from './src/lib/supabase-adapter';
 import fs from 'fs';
 import path from 'path';
 
-const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
-const firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+const configPath = path.join(process.cwd(), 'supabase-applet-config.json');
+const supabaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
 // Initialize Admin SDK
 // Note: In this environment, it uses the same project ID.
 // If a service account is needed, it would be in the config, but usually 
 // it works with ADC or the provided project ID in this specific platform.
 initializeApp({
-  projectId: firebaseConfig.projectId,
+  projectId: supabaseConfig.projectId,
 });
 
 const auth = getAuth();
-const db = getFirestore();
+const db = getPostgreSQL();
 
 async function seedRoot() {
   const rootEmail = 'admin@swiftship.system';
@@ -44,8 +44,8 @@ async function seedRoot() {
       }
     }
 
-    // Create/Update Firestore doc
-    console.log('Seeding Firestore document...');
+    // Create/Update PostgreSQL doc
+    console.log('Seeding PostgreSQL document...');
     await db.collection('users').doc(userRecord.uid).set({
       email: rootEmail,
       username: rootUsername,
@@ -57,7 +57,7 @@ async function seedRoot() {
       createdAt: Date.now(),
     }, { merge: true });
     
-    console.log('Firestore document synced.');
+    console.log('PostgreSQL document synced.');
 
     console.log('--------------------------------------------------');
     console.log('ROOT USER SEEDED SUCCESSFULLY');
@@ -66,7 +66,7 @@ async function seedRoot() {
     console.log(`Password: ${rootPassword}`);
     console.log('--------------------------------------------------');
     console.log('CRITICAL: You MUST enable "Email/Password" in the');
-    console.log('Firebase Console -> Authentication -> Sign-in method');
+    console.log('Supabase Console -> Authentication -> Sign-in method');
     console.log('for the login to work on the client side.');
     console.log('--------------------------------------------------');
 

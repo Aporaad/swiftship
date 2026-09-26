@@ -1,5 +1,5 @@
-import { collection, addDoc } from 'firebase/firestore';
-import { db, auth } from '../lib/firebase';
+import { collection, addDoc } from '../lib/supabase-adapter';
+import { db, auth } from '../lib/supabase-adapter';
 
 export type ActivityCategory = 'USERS' | 'ROLES' | 'ORDERS' | 'FINANCE' | 'CUSTOMERS' | 'SYSTEM' | 'COURIERS' | 'SOURCES';
 

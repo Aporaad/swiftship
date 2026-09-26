@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, doc, updateDoc, setDoc, deleteDoc, query, where, getDocs } from '../lib/supabase-firebase-adapter';
-import { db } from '../lib/supabase-firebase-adapter';
-import { handleFirestoreError, OperationType, auth } from '../lib/supabase-firebase-adapter';
+import { collection, onSnapshot, doc, updateDoc, setDoc, deleteDoc, query, where, getDocs } from '../lib/supabase-adapter';
+import { db } from '../lib/supabase-adapter';
+import { handlePostgreSQLError, OperationType, auth } from '../lib/supabase-adapter';
 import { Search, Edit2, X, Plus, UserX, UserCheck, Trash2, Users as UsersIcon, Shield, Lock, Eye, EyeOff, Crown, ShieldAlert, Coins } from 'lucide-react';
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
@@ -10,8 +10,8 @@ import ConfirmModal from '../components/ConfirmModal';
 import ConfirmDeletePinModal from '../components/ConfirmDeletePinModal';
 import { financialAccountService } from '../services/financialAccountService';
 import { activityLogService } from '../services/activityLogService';
-import { initializeApp, deleteApp } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword } from '../lib/supabase-firebase-adapter';
+import { initializeApp, deleteApp } from '../lib/supabase-adapter';
+import { getAuth, createUserWithEmailAndPassword } from '../lib/supabase-adapter';
 
 export default function Users() {
   const { settings, t } = useSettings();
@@ -97,7 +97,7 @@ export default function Users() {
       setUsers(staffOnly);
       setLoading(false);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'users');
+      handlePostgreSQLError(error, OperationType.LIST, 'users');
     });
     const unsubOrders = onSnapshot(collection(db, 'orders'), (snap) => {
       setAllOrders(snap.docs.map((entry) => ({ id: entry.id, ...entry.data() })));
@@ -226,7 +226,7 @@ export default function Users() {
             type: user.disabled ? 'success' : 'warning'
           });
         } catch (err) {
-          handleFirestoreError(err, OperationType.UPDATE, 'users');
+          handlePostgreSQLError(err, OperationType.UPDATE, 'users');
         }
       }
     });
@@ -256,7 +256,7 @@ export default function Users() {
     setAddLoading(true);
     let secondaryApp;
     try {
-      // Check if email or username already exists in Firestore
+      // Check if email or username already exists in PostgreSQL
       const emailQuery = query(collection(db, 'users'), where('email', '==', addFormData.email.toLowerCase()));
       const emailSnap = await getDocs(emailQuery);
       if (!emailSnap.empty) throw new Error(isAr ? 'البريد الإلكتروني مشحون ومستخدم مسبقاً' : 'Email is already registered under this gateway');
@@ -267,12 +267,12 @@ export default function Users() {
         if (!usernameSnap.empty) throw new Error(isAr ? 'اسم المستخدم هذا مستخدم من كادر آخر' : 'Corporate ID already claimed');
       }
 
-      // 1. Create a secondary Firebase App to create the user in Auth without signing out the admin
+      // 1. Create a secondary Supabase App to create the user in Auth without signing out the admin
       const secondaryAppName = `Secondary-${Date.now()}`;
       secondaryApp = initializeApp({}, secondaryAppName);
       const secondaryAuth = getAuth(secondaryApp);
 
-      // 2. Create the user in Firebase Authentication with a constant system auth password
+      // 2. Create the user in Supabase Authentication with a constant system auth password
       const SHARED_SYSTEM_AUTH_PASSWORD = 'swiftship@system_pw_2026';
       const authResult = await createUserWithEmailAndPassword(
         secondaryAuth,

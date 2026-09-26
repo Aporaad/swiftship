@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { collection, db, onSnapshot } from '../lib/supabase-firebase-adapter';
+import { collection, db, onSnapshot } from '../lib/supabase-adapter';
 
 export interface AutoVoucherRule {
   id: string;

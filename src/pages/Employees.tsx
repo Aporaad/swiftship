@@ -13,7 +13,7 @@ import {
   handleSupabaseError,
   OperationType,
   auth
-} from '../lib/supabase-firebase-adapter';
+} from '../lib/supabase-adapter';
 import {
   Search,
   Edit2,

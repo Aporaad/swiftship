@@ -7,7 +7,7 @@
  * Returned Products: Track products returned by customers with reason, status, and financial refund details
  */
 
-import { supabase, db, collection, addDoc } from '../lib/supabase-firebase-adapter';
+import { supabase, db, collection, addDoc } from '../lib/supabase-adapter';
 
 // ────────────────────────── Types ──────────────────────────
 

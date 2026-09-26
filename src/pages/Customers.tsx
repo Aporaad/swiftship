@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { collection, addDoc, doc, updateDoc, onSnapshot, deleteDoc, query, where, orderBy, getDocs } from '../lib/supabase-firebase-adapter';
-import { db } from '../lib/supabase-firebase-adapter';
-import { handleFirestoreError, OperationType } from '../lib/firebase';
+import { collection, addDoc, doc, updateDoc, onSnapshot, deleteDoc, query, where, orderBy, getDocs } from '../lib/supabase-adapter';
+import { db } from '../lib/supabase-adapter';
+import { handlePostgreSQLError, OperationType } from '../lib/supabase-adapter';
 import {
   Plus,
   Search,
@@ -146,7 +146,7 @@ export default function Customers() {
       setCustomers(snap.docs.map((d: any) => ({ id: d.id, ...d.data() })));
       setLoading(false);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'customers');
+      handlePostgreSQLError(error, OperationType.LIST, 'customers');
     });
 
     // Subscribe to accounts collection to obtain real-time financial balances and currencies
@@ -269,7 +269,7 @@ export default function Customers() {
       }
       setShowModal(false);
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'customers');
+      handlePostgreSQLError(error, OperationType.CREATE, 'customers');
     } finally {
       setSubmitting(false);
     }

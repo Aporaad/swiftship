@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, doc, updateDoc, deleteDoc, addDoc } from '../lib/supabase-firebase-adapter';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { collection, onSnapshot, doc, updateDoc, deleteDoc, addDoc } from '../lib/supabase-adapter';
+import { db, handlePostgreSQLError, OperationType } from '../lib/supabase-adapter';
 import { Search, Edit2, X, Plus, Trash2, MapPin, ShieldAlert, RefreshCw, Crown, Globe, Truck, Phone, Landmark } from 'lucide-react';
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
@@ -97,7 +97,7 @@ export default function Sources() {
       setSources(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       setLoading(false);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'sources');
+      handlePostgreSQLError(error, OperationType.LIST, 'sources');
     });
     return unsub;
   }, [roleLoading]);
@@ -279,7 +279,7 @@ export default function Sources() {
       setIsModalOpen(false);
       setSelectedSource(null);
     } catch (err) {
-      handleFirestoreError(err, selectedSource ? OperationType.UPDATE : OperationType.CREATE, 'sources');
+      handlePostgreSQLError(err, selectedSource ? OperationType.UPDATE : OperationType.CREATE, 'sources');
     } finally {
       setSourceSubmitting(false);
     }

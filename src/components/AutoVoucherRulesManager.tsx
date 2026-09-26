@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Edit2, FileText, Settings, ToggleLeft, ToggleRight, X } from 'lucide-react';
-import { collection, db, doc, onSnapshot, updateDoc } from '../lib/supabase-firebase-adapter';
+import { collection, db, doc, onSnapshot, updateDoc } from '../lib/supabase-adapter';
 import { autoEntryService } from '../services/autoEntryService';
 import { useAutoVoucherRules } from '../hooks/useAutoVoucherRules';
 

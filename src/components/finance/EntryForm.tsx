@@ -23,7 +23,7 @@ import {
   type FinancialPaymentDetailInput,
   type FinancialPaymentMethod,
 } from '../../services/financialEntryService';
-import { supabase } from '../../lib/supabase-firebase-adapter';
+import { supabase } from '../../lib/supabase-adapter';
 import AccountPickerModal from './AccountPickerModal';
 
 // ─────────────────────────── أنواع مشتركة ───────────────────────────
@@ -83,10 +83,10 @@ export interface EditableEntryDraft {
  * Methods available for general entries
  */
 const ALL_METHODS: Array<{ id: FinancialPaymentMethod; label: string }> = [
-  { id: 'cash',     label: 'نقدًا' },
-  { id: 'bank',     label: 'بنك / حوالة' },
+  { id: 'cash', label: 'نقدًا' },
+  { id: 'bank', label: 'بنك / حوالة' },
   { id: 'deferred', label: 'آجل' },
-  { id: 'mixed',    label: 'مختلط' },
+  { id: 'mixed', label: 'مختلط' },
 ];
 
 /**
@@ -210,13 +210,13 @@ export default function EntryForm({
   const [entryNumber, setEntryNumber] = useState(
     () => editingEntry?.entryNumber || `JV-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${Date.now().toString().slice(-6)}`,
   );
-  const [moduleId, setModuleId]       = useState(() => editingEntry?.moduleId || '');
+  const [moduleId, setModuleId] = useState(() => editingEntry?.moduleId || '');
   const [entryTypeId, setEntryTypeId] = useState(() => editingEntry?.entryTypeId || '');
-  const [currencyId, setCurrencyId]   = useState<number | ''>(() => editingEntry?.currencyOriginalNo || '');
+  const [currencyId, setCurrencyId] = useState<number | ''>(() => editingEntry?.currencyOriginalNo || '');
   const [description, setDescription] = useState(() => editingEntry?.description || '');
-  const [notes, setNotes]             = useState(() => editingEntry?.notes || '');
+  const [notes, setNotes] = useState(() => editingEntry?.notes || '');
   /** المبلغ كتابةً بالحروف مع ذكر العملة */
-  const [amountText, setAmountText]   = useState(() => editingEntry?.amountText || '');
+  const [amountText, setAmountText] = useState(() => editingEntry?.amountText || '');
   /** سعر صرف العملة المختارة مقابل العملة الافتراضية */
   const [exchangeRate, setExchangeRate] = useState('');
   /** مرجع سعر الصرف المجلوب من قاعدة البيانات */
@@ -236,10 +236,10 @@ export default function EntryForm({
     () => editingEntry?.paymentDetails?.length
       ? editingEntry.paymentDetails
       : [createPaymentDetail(
-          editingEntry?.paymentMethod === 'bank'
-            ? 'bank'
-            : 'cash',
-        )],
+        editingEntry?.paymentMethod === 'bank'
+          ? 'bank'
+          : 'cash',
+      )],
   );
 
   const [saveAsPosted, setSaveAsPosted] = useState(false);
@@ -257,7 +257,7 @@ export default function EntryForm({
   // في وضع القبض: الصندوق/البنك = مدين، الطرف الآخر = دائن
   // في وضع الصرف: الصندوق/البنك = دائن، الطرف الآخر = مدين
   const otherPartyTransType: 'Debit' | 'Credit' = voucherType === 'payment' ? 'Debit' : 'Credit';
-  const cashBankTransType: 'Debit' | 'Credit'   = voucherType === 'payment' ? 'Credit' : 'Debit';
+  const cashBankTransType: 'Debit' | 'Credit' = voucherType === 'payment' ? 'Credit' : 'Debit';
 
   const [otherPartyAccountId, setOtherPartyAccountId] = useState(() => {
     if (!isVoucherMode || !editingEntry?.lines) return '';
@@ -268,7 +268,7 @@ export default function EntryForm({
   });
 
   const [saving, setSaving] = useState(false);
-  const [error, setError]   = useState('');
+  const [error, setError] = useState('');
 
   // ─────────────────────────── التهيئة التلقائية ───────────────────────────
 
@@ -303,7 +303,7 @@ export default function EntryForm({
     const fetchRate = async () => {
       const { data } = await (supabase as any)
         .from('cur_price')
-        .select('id, seq, price')
+        .select('cur_price_id, seq, price')
         .eq('cur_no', selectedCurrency.id)
         .order('day_date', { ascending: false })
         .order('seq', { ascending: false })
@@ -311,7 +311,7 @@ export default function EntryForm({
         .maybeSingle();
       if (data?.price) {
         setExchangeRate(String(data.price));
-        setExchangeRatePriceRef({ id: Number(data.id), seq: Number(data.seq) });
+        setExchangeRatePriceRef({ id: Number(data.cur_price_id || data.id), seq: Number(data.seq) });
       } else {
         setExchangeRate('');
         setExchangeRatePriceRef(null);
@@ -322,7 +322,7 @@ export default function EntryForm({
 
   // ─────────────────────────── إجماليات ───────────────────────────
 
-  const debitTotal  = lines.filter((l) => l.transType === 'Debit').reduce((s, l) => s + asNumber(l.amountOriginal), 0);
+  const debitTotal = lines.filter((l) => l.transType === 'Debit').reduce((s, l) => s + asNumber(l.amountOriginal), 0);
   const creditTotal = lines.filter((l) => l.transType === 'Credit').reduce((s, l) => s + asNumber(l.amountOriginal), 0);
   const balanceDiff = debitTotal - creditTotal;
   const isBalanced = debitTotal > 0 && balanceDiff === 0;
@@ -390,7 +390,7 @@ export default function EntryForm({
     const fetchPrice = async (curNo: number, curCode: string) => {
       const { data, error: priceError } = await (supabase as any)
         .from('cur_price')
-        .select('id, seq, price, day_date')
+        .select('cur_price_id, seq, price, day_date')
         .eq('cur_no', curNo)
         .order('day_date', { ascending: false })
         .order('seq', { ascending: false })
@@ -401,7 +401,7 @@ export default function EntryForm({
       }
       return {
         price: Number(data.price),
-        reference: { id: Number(data.id), seq: Number(data.seq) },
+        reference: { id: Number(data.cur_price_id || data.id), seq: Number(data.seq) },
       };
     };
 
@@ -493,7 +493,7 @@ export default function EntryForm({
     // نتحقق إن كان السعر مختلفاً عن آخر سعر مجلوب
     const { data: existing } = await (supabase as any)
       .from('cur_price')
-      .select('id, seq, price')
+      .select('cur_price_id, seq, price')
       .eq('cur_no', selectedCurrency.id)
       .order('day_date', { ascending: false })
       .order('seq', { ascending: false })
@@ -501,9 +501,10 @@ export default function EntryForm({
       .maybeSingle();
     if (existing && Number(existing.price) === Number(exchangeRate)) return; // لا تغيير
     // إدراج سعر جديد
+    // مهم: غلط كبير ان يتم التعامل مع قاعده البيانات مباشره من الواجهه
     await (supabase as any).from('cur_price').insert({
-      cur_no:   selectedCurrency.id,
-      price:    Number(exchangeRate),
+      cur_no: selectedCurrency.id,
+      price: Number(exchangeRate),
       day_date: new Date().toISOString().slice(0, 10),
     });
   };
@@ -537,7 +538,7 @@ export default function EntryForm({
         if (amount <= 0) return setError('أدخل مبلغاً موجباً صحيحاً.');
       } else {
         // التحقق من توازن القيد العادي
-        const debit  = effectiveLines.filter((l) => l.transType === 'Debit').reduce((s, l) => s + asNumber(l.amountOriginal), 0);
+        const debit = effectiveLines.filter((l) => l.transType === 'Debit').reduce((s, l) => s + asNumber(l.amountOriginal), 0);
         const credit = effectiveLines.filter((l) => l.transType === 'Credit').reduce((s, l) => s + asNumber(l.amountOriginal), 0);
         if (debit === 0 || debit !== credit) {
           return setError('لا يمكن الحفظ: مجموع المدين والدائن غير متساوٍ بعملة رأس القيد.');
@@ -867,9 +868,9 @@ export default function EntryForm({
             <div className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-300">
               {voucherCashBankAccountId
                 ? (() => {
-                    const acc = accounts.find((a) => a.id === voucherCashBankAccountId);
-                    return acc ? `${acc.id} — ${acc.nameAr}` : voucherCashBankAccountId;
-                  })()
+                  const acc = accounts.find((a) => a.id === voucherCashBankAccountId);
+                  return acc ? `${acc.id} — ${acc.nameAr}` : voucherCashBankAccountId;
+                })()
                 : <span className="text-slate-500 italic">اختر الحساب المالي في تفاصيل الدفع أعلاه</span>}
             </div>
           </div>

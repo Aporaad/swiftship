@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Briefcase, X, Check, ShieldAlert, RefreshCw, User, Phone, Mail, MapPin, Award, Clock, FileText, Trash2, UserCheck, AlertCircle } from 'lucide-react';
-import { supabase, doc, setDoc, db } from '../lib/supabase-firebase-adapter';
+import { supabase, doc, setDoc, db } from '../lib/supabase-adapter';
 import { financialAccountService } from '../services/financialAccountService';
 
 function extractRows(data: any[]): any[] {
@@ -59,7 +59,7 @@ export default function JobApplicationsModal({ isOpen, onClose }: { isOpen: bool
         updatedAt: Date.now()
       };
       const { id: _, ...cleanPayload } = updatedPayload;
-      await supabase.from('jobs_req').update({ data: cleanPayload }).eq('id', appId);
+      await supabase.from('jobs_req').update({ data: cleanPayload }).eq('jobs_req_id', appId);
 
       // If approved and applicant applied for courier role, auto-register as courier in system
       if (newStatus === 'approved' && (existing.jobPosition === 'local_courier' || existing.jobPosition === 'sourcing_courier')) {
@@ -100,7 +100,7 @@ export default function JobApplicationsModal({ isOpen, onClose }: { isOpen: bool
     if (!window.confirm('هل أنت متأكد من حذف هذا الطلب نهائياً؟')) return;
     setActioningId(appId);
     try {
-      await supabase.from('jobs_req').delete().eq('id', appId);
+      await supabase.from('jobs_req').delete().eq('jobs_req_id', appId);
       await loadApplications();
     } catch (err) {
       console.error('[JobApplicationsModal] Error deleting application:', err);

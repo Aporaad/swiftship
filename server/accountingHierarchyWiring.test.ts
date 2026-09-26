@@ -72,7 +72,7 @@ describe('عقد إعادة هيكلة شجرة الحسابات', () => {
   it('يحافظ على خريطة تدقيق للمعرفات ويضع ضمانات الترحيل والعملة داخل قاعدة البيانات', () => {
     const rekeyMigration = read('supabase/migrations/202608270070_rekey_accounts_to_account_codes.sql');
     const guardMigration = read('supabase/migrations/202608270075_enforce_accounting_posting_guards.sql');
-    const adapter = read('src/lib/supabase-firebase-adapter.ts');
+    const adapter = read('src/lib/supabase-adapter.ts');
     expect(rekeyMigration).toContain('CREATE TABLE IF NOT EXISTS public.account_id_migration_map');
     expect(rekeyMigration).toContain("id !~ '^\\d{4}-\\d{4}$' OR id <> account_code");
     expect(rekeyMigration).toContain('ON UPDATE CASCADE');

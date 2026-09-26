@@ -222,7 +222,7 @@ export const autoEntryService = {
       ...(normalizedCurrency ? { currency: normalizedCurrency } : {}),
     };
     if (!normalizedCurrency) {
-      const { error } = await (supabase as any).from('auto_entries').update({ currency: null }).eq('id', id);
+      const { error } = await (supabase as any).from('auto_entries').update({ currency: null }).eq('auto_entry_id', id);
       if (error) console.warn('[autoEntryService] Unable to clear the stored voucher currency:', error.message);
     }
     // كتابة مستبدِلة متعمدة: حذف currency من الوثيقة عند الاعتماد على عملة الطلب الافتراضية.
@@ -347,7 +347,7 @@ export const autoEntryService = {
             // التحقق من عدم تنفيذ القيد مسبقاً (منع التكرار) — duplicate check
             const previousExec = await (supabase as any)
               .from('main_entry')
-              .select('id')
+              .select('main_entry_id')
               .eq('automation_key', automationKey)
               .limit(1);
             if ((previousExec.data || []).length > 0) {

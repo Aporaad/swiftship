@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   recalculateHierarchy: vi.fn(),
 }));
 
-vi.mock('../lib/supabase-firebase-adapter', () => ({
+vi.mock('../lib/supabase-adapter', () => ({
   collection: vi.fn((_: unknown, name: string) => ({ name })),
   getDocs: mocks.getDocs,
   setDoc: mocks.setDoc,

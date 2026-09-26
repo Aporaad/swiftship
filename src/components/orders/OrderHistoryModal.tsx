@@ -20,6 +20,7 @@ type ChangeValue = { before?: unknown; after?: unknown };
 
 const fieldLabels: Record<string, { ar: string; en: string }> = {
   order_status: { ar: 'حالة الطلب', en: 'Order status' }, /*مهم: هنا يجب جلب اسم المرحله من جدول المراحل بناء على رقم المرحله*/
+  orderStatus: { ar: 'حالة الطلب', en: 'Order status' },
   order_status_id: { ar: 'معرّف حالة الطلب', en: 'Order status ID' },
   shipment_status: { ar: 'حالة الشحنة', en: 'Shipment status' },
   shipmentStatus: { ar: 'حالة الشحنة', en: 'Shipment status' },

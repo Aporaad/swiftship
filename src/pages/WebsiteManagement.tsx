@@ -5,7 +5,7 @@ import {
   Check, X, Eye, Edit2, Send, Server, Key, Lock, Settings as SettingsIcon,
   ChevronRight, ArrowUpRight, Award, UserCheck, ShieldAlert, Cpu, Phone, Mail, MapPin
 } from 'lucide-react';
-import { supabase, doc, setDoc, db } from '../lib/supabase-firebase-adapter';
+import { supabase, doc, setDoc, db } from '../lib/supabase-adapter';
 import { useSettings } from '../context/SettingsContext';
 import { financialAccountService } from '../services/financialAccountService';
 import toast from 'react-hot-toast';
@@ -161,7 +161,7 @@ export default function WebsiteManagement() {
       };
       delete cleanPayload.id;
 
-      await supabase.from('portal_users').update({ data: cleanPayload }).eq('id', userObj.id);
+      await supabase.from('portal_users').update({ data: cleanPayload }).eq('portal_user_id', userObj.id);
 
       if (status === 'approved') {
         const entityId = userObj.linkedAccId || userObj.linkedCustomerId || userObj.id;
@@ -207,7 +207,7 @@ export default function WebsiteManagement() {
       };
       delete cleanPayload.id;
 
-      await supabase.from('portal_tickets').update({ data: cleanPayload }).eq('id', ticketId);
+      await supabase.from('portal_tickets').update({ data: cleanPayload }).eq('portal_ticket_id', ticketId);
       toast.success(isAr ? 'تم إرسال الرد على التذكرة' : 'Reply sent');
       setReplyingTicketId(null);
       setTicketReplyText('');
@@ -228,7 +228,7 @@ export default function WebsiteManagement() {
     try {
       const id = `ann_${Date.now()}`;
       const payload = {
-        id,
+        announcement_id: id,
         title: annForm.title.trim(),
         content: annForm.content.trim(),
         targetAudience: annForm.targetAudience,
@@ -240,7 +240,7 @@ export default function WebsiteManagement() {
         created_at: Date.now(),
       };
 
-      await supabase.from('announcements').insert({ id, data: payload });
+      await supabase.from('announcements').insert({ announcement_id: id, data: payload });
       toast.success(isAr ? 'تم نشر الإعلان بنجاح!' : 'Announcement published!');
       setShowAnnForm(false);
       setAnnForm({ title: '', content: '', targetAudience: 'all', priority: 'normal' });
@@ -264,7 +264,7 @@ export default function WebsiteManagement() {
       };
       delete cleanPayload.id;
 
-      await supabase.from('announcements').update({ data: cleanPayload }).eq('id', ann.id);
+      await supabase.from('announcements').update({ data: cleanPayload }).eq('announcement_id', ann.id);
       await loadAllData();
     } catch (err: any) {
       toast.error(err.message || 'Error updating status');
@@ -277,7 +277,7 @@ export default function WebsiteManagement() {
     if (!window.confirm(isAr ? 'هل أنت متأكد من حذف هذا الإعلان؟' : 'Delete announcement?')) return;
     setActionId(id);
     try {
-      await supabase.from('announcements').delete().eq('id', id);
+      await supabase.from('announcements').delete().eq('announcement_id', id);
       toast.success(isAr ? 'تم الحذف' : 'Deleted');
       await loadAllData();
     } catch (err: any) {
@@ -299,7 +299,7 @@ export default function WebsiteManagement() {
       };
       delete cleanPayload.id;
 
-      await supabase.from('jobs_req').update({ data: cleanPayload }).eq('id', appId);
+      await supabase.from('jobs_req').update({ data: cleanPayload }).eq('jobs_req_id', appId);
 
       if (status === 'approved' && (existing.jobPosition === 'local_courier' || existing.jobPosition === 'sourcing_courier')) {
         try {
@@ -338,7 +338,7 @@ export default function WebsiteManagement() {
     if (!window.confirm(isAr ? 'حذف طلب التوظيف نهائياً؟' : 'Delete job application?')) return;
     setActionId(appId);
     try {
-      await supabase.from('jobs_req').delete().eq('id', appId);
+      await supabase.from('jobs_req').delete().eq('jobs_req_id', appId);
       toast.success(isAr ? 'تم الحذف' : 'Deleted');
       await loadAllData();
     } catch (err: any) {

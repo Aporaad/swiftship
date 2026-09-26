@@ -1,5 +1,5 @@
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, db } from '../lib/firebase';
+import { collection, addDoc, serverTimestamp } from '../lib/supabase-adapter';
+import { auth, db } from '../lib/supabase-adapter';
 
 export type ActivityAction =
   | 'login'
@@ -87,8 +87,8 @@ class ActivityLogService {
       const user = auth.currentUser;
       if (!user) return;
 
-      // Get user profile from Firestore to get name/role
-      const { doc, getDoc } = await import('firebase/firestore');
+      // Get user profile from PostgreSQL to get name/role
+      const { doc, getDoc } = await import('../lib/supabase-adapter');
       const userDoc = await getDoc(doc(db, 'users', user.uid));
       const userData = userDoc.exists() ? userDoc.data() : {};
 

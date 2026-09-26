@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, doc, updateDoc, addDoc, setDoc, deleteDoc, getDocs } from '../lib/firebase';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { collection, onSnapshot, doc, updateDoc, addDoc, setDoc, deleteDoc, getDocs } from '../lib/supabase-adapter';
+import { db, handlePostgreSQLError, OperationType } from '../lib/supabase-adapter';
 import { Search, Edit2, X, Plus, Trash2, Shield, CheckCircle2, RefreshCw } from 'lucide-react';
 import { useRole } from '../hooks/useRole';
 import { useSettings } from '../context/SettingsContext';
@@ -43,7 +43,7 @@ export default function Roles() {
       setLoading(false);
     }, (error: any) => {
       setLoading(false);
-      handleFirestoreError(error, OperationType.LIST, 'roles');
+      handlePostgreSQLError(error, OperationType.LIST, 'roles');
     });
     return unsub;
   }, [roleLoading]);
@@ -139,7 +139,7 @@ export default function Roles() {
       });
       setIsModalOpen(false);
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, 'roles');
+      handlePostgreSQLError(err, OperationType.UPDATE, 'roles');
     } finally {
       setSaving(false);
       saveBlockRef.current = false;
@@ -154,7 +154,7 @@ export default function Roles() {
     try {
       await deleteDoc(doc(db, 'roles', id));
     } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, 'roles');
+      handlePostgreSQLError(err, OperationType.DELETE, 'roles');
     }
   };
 

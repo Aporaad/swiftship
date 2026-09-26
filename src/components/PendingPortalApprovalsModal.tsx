@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Check, ShieldAlert, UserCheck, RefreshCw } from 'lucide-react';
-import { supabase, doc, updateDoc, setDoc, db } from '../lib/supabase-firebase-adapter';
+import { supabase, doc, updateDoc, setDoc, db } from '../lib/supabase-adapter';
 import { financialAccountService } from '../services/financialAccountService';
 
 function extractRows(data: any[]): any[] {
@@ -47,7 +47,7 @@ export default function PendingPortalApprovalsModal({ isOpen, onClose }: { isOpe
         updatedAt: Date.now()
       };
       const { id: _, ...cleanPayload } = updatedUserPayload;
-      await supabase.from('portal_users').update({ data: cleanPayload }).eq('id', user.id);
+      await supabase.from('portal_users').update({ data: cleanPayload }).eq('portal_user_id', user.id);
 
       // 2. If Courier, activate courier record in main system couriers collection & ensure financial account
       if (userRole === 'courier') {
@@ -105,7 +105,7 @@ export default function PendingPortalApprovalsModal({ isOpen, onClose }: { isOpe
         updatedAt: Date.now()
       };
       const { id: _, ...cleanPayload } = updatedUserPayload;
-      await supabase.from('portal_users').update({ data: cleanPayload }).eq('id', userId);
+      await supabase.from('portal_users').update({ data: cleanPayload }).eq('portal_user_id', userId);
       await loadPending();
     } catch (err) {
       console.error("Error rejecting portal user:", err);

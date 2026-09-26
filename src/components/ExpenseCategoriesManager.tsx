@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Settings, Plus, Edit2, Trash2, X, AlertTriangle } from 'lucide-react';
-import { db } from '../lib/firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, getDocs } from 'firebase/firestore';
+import { db } from '../lib/supabase-adapter';
+import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, getDocs } from '../lib/supabase-adapter';
 import { useExpenseCategories, ExpenseCategory } from '../hooks/useExpenseCategories';
 import { notificationService } from '../services/notificationService';
 

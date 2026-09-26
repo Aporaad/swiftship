@@ -1,5 +1,5 @@
-import { collection, addDoc } from 'firebase/firestore';
-import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
+import { collection, addDoc } from '../lib/supabase-adapter';
+import { db, auth, handlePostgreSQLError, OperationType } from '../lib/supabase-adapter';
 import toast from 'react-hot-toast';
 
 export type NotificationType = 'info' | 'success' | 'warning' | 'error';
@@ -69,7 +69,7 @@ export const notificationService = {
         }
       }
 
-      // 3. Save to Firestore for persistence only if the operator is authenticated
+      // 3. Save to PostgreSQL for persistence only if the operator is authenticated
       if (auth.currentUser) {
         const notifId = 'NOTIF-' + Math.random().toString(36).substring(2, 11);
         await addDoc(notifId, collection(db, 'notifications'), {
@@ -89,7 +89,7 @@ export const notificationService = {
       }
     } catch (error) {
       console.error('Failed to create notification:', error);
-      handleFirestoreError(error, OperationType.CREATE, 'notifications');
+      handlePostgreSQLError(error, OperationType.CREATE, 'notifications');
     }
   }
 };

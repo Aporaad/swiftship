@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BookOpen, CreditCard, FileClock, Landmark, ListTree, ReceiptText, Settings2, ShieldAlert, Wallet } from 'lucide-react';
 import { useRole } from '../hooks/useRole';
-import { supabase } from '../lib/supabase-firebase-adapter';
+import { supabase } from '../lib/supabase-adapter';
 import GeneralEntriesTab from '../components/finance/GeneralEntriesTab';
 import CompoundEntriesTab from '../components/finance/CompoundEntriesTab';
 import TemporaryEntriesTab from '../components/finance/TemporaryEntriesTab';
@@ -39,40 +39,40 @@ export default function FinanceEntries() {
       setLoading(true);
       setError('');
       const [currencyResult, accountResult, moduleResult, typeResult, entryResult, transResult, paymentDetailResult, custodyResult, usersResult] = await Promise.all([
-        (supabase as any).from('currency').select('cur_id, code, isDefault').eq('isActive', true).order('cur_id'),
-        (supabase as any).from('accounts').select('id, acc_name_ar, acc_name_en, cur_no, is_active, acc_sub_id, entity_id, entity_type').order('id'),
-        (supabase as any).from('entry_module').select('id, code, name_ar, is_active').order('name_ar'),
-        (supabase as any).from('entry_type').select('id, module_id, code, name_ar, is_active').order('name_ar'),
-        (supabase as any).from('main_entry').select('id, entry_number, module_id, entry_type_id, entry_category, posting_status, description, payment_method, effective_at, created_at, updated_at, created_by_uid, updated_by_uid, order_id').order('effective_at', { ascending: false }).limit(500),
-        (supabase as any).from('account_trans').select('id, entry_id, line_no, trans_type, account_id, account_cur_no, amount, amount_original, currency_original_no, payment_method, description, order_id, shipment_id, created_at').order('created_at', { ascending: false }).limit(1500),
-        (supabase as any).from('entry_payment_details').select('id, entry_id, payment_method, account_id, amount_original, bank_reference, due_at, note').order('entry_id').order('allocation_no').limit(1500),
-        (supabase as any).from('custody_advances').select('id, custody_number, recipient_id, recipient_name, recipient_type, recipient_account_id, amount_original, amount_outstanding, currency_original_no, status, issued_at').order('issued_at', { ascending: false }).limit(500),
-        (supabase as any).from('users').select('id, username, data').limit(500),
+        (supabase as any).from('currency').select('cur_id, code, is_default, is_active').eq('is_active', true).order('cur_id'),
+        (supabase as any).from('accounts').select('account_id, acc_name_ar, acc_name_en, cur_no, is_active, acc_sub_id, entity_id, entity_type').order('account_id'),
+        (supabase as any).from('entry_module').select('entry_module_id, code, name_ar, is_active').order('name_ar'),
+        (supabase as any).from('entry_type').select('entry_type_id, module_id, code, name_ar, is_active').order('name_ar'),
+        (supabase as any).from('main_entry').select('main_entry_id, entry_number, module_id, entry_type_id, entry_category, posting_status, description, payment_method, effective_at, created_at, updated_at, created_by_uid, updated_by_uid, order_id').order('effective_at', { ascending: false }).limit(500),
+        (supabase as any).from('account_trans').select('account_trans_id, main_entry_id, line_no, trans_type, account_id, account_cur_no, amount, amount_original, currency_original_no, payment_method, description, order_id, shipment_id, created_at').order('created_at', { ascending: false }).limit(1500),
+        (supabase as any).from('entry_payment_details').select('entry_payment_detail_id, main_entry_id, payment_method, account_id, amount_original, bank_reference, due_at, note').order('main_entry_id').order('allocation_no').limit(1500),
+        (supabase as any).from('custody_advances').select('custody_advance_id, custody_number, recipient_id, recipient_name, recipient_type, recipient_account_id, amount_original, amount_outstanding, currency_original_no, status, issued_at').order('issued_at', { ascending: false }).limit(500),
+        (supabase as any).from('users').select('user_id, username, full_name').limit(500),
       ]);
       const failure = [currencyResult, accountResult, moduleResult, typeResult, entryResult, transResult, paymentDetailResult, custodyResult].find((result: any) => result.error)?.error;
       if (failure) throw new Error(failure.message || String(failure));
 
       const uMap = new Map<string, string>();
       for (const u of usersResult.data || []) {
-        const uName = u.username || u.data?.fullName || u.data?.fullNameAr || u.id;
-        uMap.set(u.id, uName);
+        const uName = u.username || u.full_name || u.user_id;
+        uMap.set(u.user_id, uName);
       }
       setUsersMap(uMap);
 
-      const loadedCurrencies = (currencyResult.data || []).map((item: any) => ({ id: Number(item.cur_id), code: item.code, isDefault: Boolean(item.isDefault) }));
+      const loadedCurrencies = (currencyResult.data || []).map((item: any) => ({ id: Number(item.cur_id), code: item.code, isDefault: Boolean(item.is_default) }));
       const currencyCodeById = new Map(loadedCurrencies.map((item) => [item.id, item.code]));
       setCurrencies(loadedCurrencies);
       setAccounts((accountResult.data || []).map((item: any) => ({
-        id: item.id, nameAr: item.acc_name_ar || item.id, nameEn: item.acc_name_en,
+        id: item.account_id, nameAr: item.acc_name_ar || item.account_id, nameEn: item.acc_name_en,
         curNo: Number(item.cur_no), currencyCode: currencyCodeById.get(Number(item.cur_no)) || '—',
         isActive: Boolean(item.is_active), isPosting: Boolean(item.acc_sub_id), accSubId: item.acc_sub_id || undefined, entityId: item.entity_id || undefined,
-        entityType: item.entity_type || undefined, entityName: item.acc_name_ar || item.acc_name_en || item.id,
+        entityType: item.entity_type || undefined, entityName: item.acc_name_ar || item.acc_name_en || item.account_id,
       })));
-      setModules((moduleResult.data || []).map((item: any) => ({ id: item.id, code: item.code, nameAr: item.name_ar, isActive: Boolean(item.is_active) })));
-      setEntryTypes((typeResult.data || []).map((item: any) => ({ id: item.id, moduleId: item.module_id, code: item.code, nameAr: item.name_ar, isActive: Boolean(item.is_active) })));
+      setModules((moduleResult.data || []).map((item: any) => ({ id: item.entry_module_id, code: item.code, nameAr: item.name_ar, isActive: Boolean(item.is_active) })));
+      setEntryTypes((typeResult.data || []).map((item: any) => ({ id: item.entry_type_id, moduleId: item.module_id, code: item.code, nameAr: item.name_ar, isActive: Boolean(item.is_active) })));
 
       const loadedTransactions = (transResult.data || []).map((item: any) => ({
-        id: item.id, entryId: item.entry_id, lineNo: Number(item.line_no), transType: item.trans_type,
+        id: item.account_trans_id, entryId: item.main_entry_id || item.entry_id, lineNo: Number(item.line_no), transType: item.trans_type,
         accountId: item.account_id, accountCurNo: Number(item.account_cur_no), amount: Number(item.amount),
         amountOriginal: Number(item.amount_original), currencyOriginalNo: Number(item.currency_original_no),
         paymentMethod: item.payment_method, description: item.description, orderId: item.order_id, shipmentId: item.shipment_id, createdAt: item.created_at,
@@ -91,9 +91,9 @@ export default function FinanceEntries() {
       }
 
       setEntries((entryResult.data || []).map((item: any) => {
-        const transInfo = transByEntryId.get(item.id) || { amountOriginal: 0, currencyOriginalNo: 1 };
+        const transInfo = transByEntryId.get(item.main_entry_id) || { amountOriginal: 0, currencyOriginalNo: 1 };
         return {
-          id: item.id, entryNumber: item.entry_number, moduleId: item.module_id, entryTypeId: item.entry_type_id,
+          id: item.main_entry_id, entryNumber: item.entry_number, moduleId: item.module_id, entryTypeId: item.entry_type_id,
           entryCategory: item.entry_category, postingStatus: item.posting_status, amountOriginal: transInfo.amountOriginal,
           currencyOriginalNo: transInfo.currencyOriginalNo, description: item.description, paymentMethod: item.payment_method,
           effectiveAt: item.effective_at, createdAt: item.created_at, updatedAt: item.updated_at,
@@ -101,11 +101,11 @@ export default function FinanceEntries() {
         };
       }));
       setPaymentDetails((paymentDetailResult.data || []).map((item: any) => ({
-        id: item.id, entryId: item.entry_id, paymentMethod: item.payment_method, accountId: item.account_id,
+        id: item.entry_payment_detail_id, entryId: item.main_entry_id || item.entry_id, paymentMethod: item.payment_method, accountId: item.account_id,
         amountOriginal: Number(item.amount_original), bankReference: item.bank_reference, dueAt: item.due_at, note: item.note,
       })));
       setCustodies((custodyResult.data || []).map((item: any) => ({
-        id: item.id, custodyNumber: item.custody_number, recipientId: item.recipient_id, recipientName: item.recipient_name, recipientType: item.recipient_type,
+        id: item.custody_advance_id, custodyNumber: item.custody_number, recipientId: item.recipient_id, recipientName: item.recipient_name, recipientType: item.recipient_type,
         recipientAccountId: item.recipient_account_id, amountOriginal: Number(item.amount_original), amountOutstanding: Number(item.amount_outstanding),
         currencyOriginalNo: Number(item.currency_original_no), status: item.status, issuedAt: item.issued_at,
       })));

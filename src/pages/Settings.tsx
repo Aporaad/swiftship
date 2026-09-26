@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { collection, doc, getDocs, setDoc, writeBatch, query, orderBy, deleteDoc, db, handleSupabaseError, OperationType } from '../lib/supabase-firebase-adapter';
+import { collection, doc, getDocs, setDoc, writeBatch, query, orderBy, deleteDoc, db, handleSupabaseError, OperationType } from '../lib/supabase-adapter';
 import {
   Save, Globe, Palette, Database, DollarSign, Building, X, Upload, CheckCircle,
   ShieldAlert, RefreshCw, Archive, Settings2, Shield, FileText, Image, Type,
@@ -14,7 +14,7 @@ import { activityLogService } from '../services/activityLogService';
 import { notificationService } from '../services/notificationService';
 import { currencyService, Currency, CurPriceEntry } from '../services/currencyService';
 import { useExchangeRates } from '../hooks/useExchangeRates';
-import { auth } from '../lib/supabase-firebase-adapter';
+import { auth } from '../lib/supabase-adapter';
 
 type SettingsTab = 'interface' | 'general' | 'currency' | 'admin' | 'logistics';
 

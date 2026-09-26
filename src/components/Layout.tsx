@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
-import { signOut } from '../lib/firebase';
-import { collection, query, where, onSnapshot, getDocs, writeBatch, doc, setDoc } from '../lib/firebase';
-import { auth, db } from '../lib/firebase';
-import { clearAllLocalData } from '../lib/supabase-firebase-adapter';
+import { signOut } from '../lib/supabase-adapter';
+import { collection, query, where, onSnapshot, getDocs, writeBatch, doc, setDoc } from '../lib/supabase-adapter';
+import { auth, db } from '../lib/supabase-adapter';
+import { clearAllLocalData } from '../lib/supabase-adapter';
 import { formatDate, formatDateTime, formatTime, now } from '../lib/dateUtils';
 import {
   LayoutDashboard,
@@ -65,7 +65,7 @@ import PendingPortalApprovalsModal from './PendingPortalApprovalsModal';
 import JobApplicationsModal from './JobApplicationsModal';
 import { activityLogService } from '../services/activityLogService';
 import { notificationService } from '../services/notificationService';
-import { supabase } from '../lib/supabase-firebase-adapter';
+import { supabase } from '../lib/supabase-adapter';
 
 export default function Layout() {
   const navigate = useNavigate();
@@ -377,7 +377,7 @@ export default function Layout() {
     try {
       const activeSessId = sessionId || sessionStorage.getItem('swiftship_session_id');
       if (activeSessId && activeSessId !== 'sess-loading' && activeSessId !== 'sess-loggedout') {
-        const { deleteDoc, doc } = await import('../lib/firebase');
+        const { deleteDoc, doc } = await import('../lib/supabase-adapter');
         await deleteDoc(doc(db, 'sessions', activeSessId));
       }
 
@@ -400,7 +400,7 @@ export default function Layout() {
     navigate('/login');
   };
 
-  // Auto-backup check: if admin & autoBackupEnabled & 24h passed, run backup to Firestore
+  // Auto-backup check: if admin & autoBackupEnabled & 24h passed, run backup to PostgreSQL
   useEffect(() => {
     if (roleLoading || role !== 'Admin' || !settings.autoBackupEnabled || !auth.currentUser) return;
     const lastBackupAt = settings.lastAutoBackupAt || 0;
@@ -425,7 +425,7 @@ export default function Layout() {
             console.warn(`[AutoBackup] Ignored error reading collection ${col}:`, colErr.message || colErr);
           }
         }
-        // Save backup as a Firestore document under /backups collection
+        // Save backup as a PostgreSQL document under /backups collection
         const backupId = `auto_${formatDate()}`;
         try {
           await setDoc(doc(db, 'backups', backupId), {
@@ -449,7 +449,7 @@ export default function Layout() {
             title: settings.language === 'ar' ? 'النسخ الاحتياطي التلقائي' : 'Automatic System Backup',
             message: settings.language === 'ar'
               ? 'قام النظام تلقائياً بأخذ نسخة احتياطية لجميع البيانات وحفظها في قاعدة البيانات'
-              : 'The system has automatically backed up all collections to Firestore',
+              : 'The system has automatically backed up all collections to PostgreSQL',
             type: 'success',
             category: 'system'
           });

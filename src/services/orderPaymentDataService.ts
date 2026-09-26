@@ -163,7 +163,7 @@ export async function hasDownPaymentEntry(orderId: string): Promise<boolean> {
   try {
     const { data, error } = await (supabase as any)
       .from('main_entry')
-      .select('id')
+      .select('main_entry_id')
       .eq('order_id', orderId)
       .eq('auto_rule_id', 'order_down_payment')
       .limit(1);

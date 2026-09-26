@@ -28,9 +28,9 @@ import {
   increment,
   getDoc,
   writeBatch,
-} from "../lib/supabase-firebase-adapter";
+} from "../lib/supabase-adapter";
 import { currencyService } from "./currencyService";
-import { db, auth, supabase } from "../lib/supabase-firebase-adapter";
+import { db, auth, supabase } from "../lib/supabase-adapter";
 import { activityLogService } from "./activityLogService";
 import { accountingHierarchyService, hierarchyCodeRules, naturalBalanceDelta } from "./accountingHierarchyService";
 import { financialEntryService } from './financialEntryService';
@@ -45,7 +45,7 @@ export interface FinancialAccount {
   accountPrefix: string; // e.g. '1130'
   accountNumber: string; // e.g. '0001'
   entityType: AccountEntityType;
-  entityId: string; // Firestore document ID of customer/courier/employee
+  entityId: string; // PostgreSQL document ID of customer/courier/employee
   entityName: string; // Display name
   currency: string; // Default currency from settings
   balance: number; // Current balance in default currency
@@ -1165,7 +1165,7 @@ class FinancialAccountService {
   }
 
   /**
-   * Get the Firestore collection name for an entity type
+   * Get the PostgreSQL collection name for an entity type
    */
   public getEntityCollection(entityType: AccountEntityType): string {
     switch (entityType) {
@@ -1639,7 +1639,7 @@ class FinancialAccountService {
 
       const previousExecutions = await (supabase as any)
         .from('main_entry')
-        .select('id')
+        .select('main_entry_id')
         .eq('automation_key', automationKey)
         .limit(1);
       if (previousExecutions.error) {

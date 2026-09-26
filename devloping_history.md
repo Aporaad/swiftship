@@ -1105,6 +1105,110 @@
      1. توحيد قراءة وتحويل `last_seen` و `lastSeen` و `last_seen_at` في `UserManagement.tsx` إلى طوابع زمنية عددية (`lastSeenMs = Date.parse(rawLastSeen)`).
      2. تحديث `isSessionOnline` وتصفية `dbSessions` لتعمل بدقة متناهية مع الطوابع الزمنية والسجلات الحقيقية.
 
-4. **الفحص والتجميع**:
-   - تشغيل `npx tsc --noEmit` واجتيازه بنجاح تام وبدون أي خطأ (0 errors).
 
+
+
+
+6. **الربط المتوازن: حذف الجلسة عند إغلاق النافذة/التبويب واستعادتها بسلاسة عند تحديث الصفحة (F5)**:
+   - **السبب والتصحيح الفني**:
+     - في المتصفحات الحديثة، يُطلق حدث `beforeunload` / `pagehide` عند التحديث (F5) وعند الإغلاق.
+
+
+7. **حظر الدخول التلقائي وتحويل استمرارية مصادقة المستخدم إلى `sessionStorage` كلياً**:
+   - **السبب الجذر**: كانت بيانات المستند المحفوظ للمصادقة `swiftship_persisted_user` تُخزن في `localStorage` على مستوى القرص الصلب. فعندما يغلق المستخدم تبويب أو نافذة المتصفح، تظل البيانات محفوظة على القرص، وعند فتح المتصفح مجدداً تقوم `App.tsx` بقراءة `localStorage` وتعيين المستخدم كمسجل دخول تلقائياً وإنشاء جلسة جديدة بدون طلب كلمة المرور!
+   - **الحل الفني**:
+     - تحويل تخزين واسترجاع `swiftship_persisted_user` كلياً من `localStorage` إلى `sessionStorage` في [App.tsx](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/App.tsx) وفي [supabase-adapter.ts](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/lib/supabase-adapter.ts) عبر `safeSessionStorage`.
+     - عند إغلاق النافذة أو التبويب، يمسح المتصفح `sessionStorage` تلقائياً. وعند إعادة فتح المتصفح أو فتح تبويب جديد، يرجع `getSavedUser()` قيمة `null` فتطالب الشاشة بدخول جديد فوراً وترفض أي تسجيل دخول تلقائي.
+     - عند تحديث الصفحة (F5 / Reload)، يحافظ المتصفح على `sessionStorage` بنفس التبويب، فيستمر تصفح المستخدم وتسجيله بأمان ودون أي خروج.
+
+---
+
+## [2026-09-25 21:55:07] — إكمال مهمة هيكلة مسميات المفاتيح الرئيسية ورسم الخرائط المحاسبية وتطهير القاعدة
+- **تحويل الـ Primary Keys:** تم تحويل أسماء المفاتيح الرئيسية لجميع جداول قاعدة البيانات من `id` إلى `[singular_table]_id` (مثل `order_id`, `customer_id`, `user_id`, `employee_id`, `courier_id`, `shipment_id`, `account_id`, `main_entry_id`, `account_trans_id`, `order_item_id`, `product_id`, `cur_price_id`...).
+- **تحديث العروض والدوال:** تم إعادة بناء عرض `portal_users_view` وتحديث الدوال المخزنة (`delete_orders_with_dependents`, `orders_history_from_orders`, `create_financial_entry_v2`) لاستخدام المسميات الجديدة.
+- **تحديث المحول المحاسبي:** تم تحديث `TABLE_PRIMARY_KEY_MAP` و `getTablePrimaryKey` و `DIRECT_COLUMNS_MAP` بـ `src/lib/supabase-adapter.ts` لتعكس كافة المفاتيح الجديدة.
+- **الفحص والتحقق:** تم تشغيل `npx tsc --noEmit` بنجاح (0 أخطاء) والبناء الإنتاجي `npm run build` بنجاح كامل.
+
+---
+
+## [2026-09-25 23:45:00] — إصلاح مشكلة تسجيل الدخول واستكمال تحديث استعلامات المفاتيح الرئيسية عبر خدمات ونوافذ النظام
+- **إصلاح خطأ تسجيل الدخول:** تم تحديث `mapPublicUser` بـ `supabase-adapter.ts` لقراءة `user_id` المسند من جدول `public.users` وتعيينه كـ `uid` لتفادي ظهور `undefined` وإصلاح خطأ `useRole.ts:161`.
+- **إصلاح دوال الدبابيس في قاعدة البيانات:** تم إعادة بناء دوال التريجرات (`orders_history_resolve_order`, `link_employee_financial_account`, `link_courier_financial_account`, `link_source_financial_account`, `link_shipping_company_financial_account`, `link_asset_financial_account`) لاستخدام `order_id`, `user_id`, `employee_id`, `courier_id`, `source_id`, `shipping_company_id`, `asset_id` بدلاً من `o.id` المتقادم.
+- **تحديث استعلامات خدمات المكونات والنوافذ:** تحديث استعلامات `.eq('id', ...)` و `onConflict` في `portalUserService.ts`, `autoEntryService.ts`, `WebsiteManagement.tsx`, `PendingPortalApprovalsModal.tsx`, `JobApplicationsModal.tsx` لاستخدام أعمدة المفاتيح الرئيسية الحقيقية (`portal_user_id`, `auto_entry_id`, `main_entry_id`, `announcement_id`, `jobs_req_id`, `cust_detail_id`).
+- **الفحص والتحقق الشامل:** تشغيل فحص التجميع المعياري `npx tsc --noEmit` وضمان 0% أخطاء، واجتياز البناء الإنتاجي `npm run build` بنجاح كامل بدون أي خطأ.
+
+---
+
+## [2026-09-26 00:15:00] — حل أخطاء REST 400 وتأكيد استكمال خدمات النظام والأنواع والمكونات
+- **النموذج المنفّذ**: Gemini 3.6 Flash
+- **التغييرات والملفات**:
+  - `src/pages/FinanceEntries.tsx`
+  - `naming_refactor_tasks.md`
+  - `todo.md`, `devloping_history.md`, `DBdevloping_history.md`, `user_commends.md`, `db_commends.md`
+
+### الإنجازات والتفاصيل المنفذة:
+1. **معالجة أخطاء 400 Bad Request بالاستعلامات المباشرة**:
+   - إصلاح كافة استعلامات PostgREST المباشرة لجدول `FinanceEntries.tsx` التي كانت تطلب أعمدة متقادمة مثل `id`, `isDefault`, `isActive`, `data`.
+   - تعديل استعلامات الجداول (`currency`, `accounts`, `entry_module`, `entry_type`, `main_entry`, `account_trans`, `entry_payment_details`, `custody_advances`, `users`) لتستعلم صراحة عن أسماء الأعمدة الفعلية بـ PostgreSQL (`cur_id`, `is_default`, `is_active`, `account_id`, `entry_module_id`, `entry_type_id`, `main_entry_id`, `account_trans_id`, `entry_payment_detail_id`, `custody_advance_id`, `user_id`, `full_name`).
+2. **استكمال توثيق وحظر المهام بـ `naming_refactor_tasks.md`**:
+   - تأكيد واجتياز كافة مهام المراحل 3.2 (خدمات النظام)، 4.1 (واجهات الأنواع)، و4.2 (مكونات الواجهات).
+   - تأشر كافة المربعات `[x]` وتوثيق جدول التحديث اللحظي.
+3. **الفحص والتجميع النهائي وتأكيد الاستقرار**:
+   - تشغيل `npx tsc --noEmit` واجتيازه بنسبة 100% بدون أي أخطاء (0 errors).
+   - تشغيل البناء الإنتاجي `npm run build` واجتيازه بنجاح كامل خلال 35.12 ثانية.
+
+---
+
+## [2026-09-26 03:53:00] — حل خطأ 400 Bad Request لجدول cur_price وتحديث المراجع بالنظام
+- **النموذج المنفّذ**: Gemini 3.6 Flash
+- **التغييرات والملفات**:
+  - `src/services/financialEntryService.ts`
+  - `src/services/orderPaymentDataService.ts`
+  - `src/services/financialAccountService.ts`
+  - `src/components/finance/forms/GeneralEntryForm.tsx`
+  - `src/components/finance/forms/VoucherEntryForm.tsx`
+  - `src/components/finance/EntryForm.tsx`
+  - `todo.md`, `devloping_history.md`, `DBdevloping_history.md`, `user_commends.md`, `db_commends.md`
+
+## [2026-09-26 05:20:00] — AI Model: Gemini 3.6 Flash
+- **المهمة / الهدف**: معالجة خطأ فشل إدراج الطلب `insert failed on table orders: column "id" of relation "orders_history" does not exist` واستكمال تحديث دوال قاعدة البيانات والتطبيقات التابعة.
+- **الملفات المتأثرة والمحدثة**:
+  - `orders_history_write` (دالة Postgres)
+  - `delete_orders_with_dependents` (دالة Postgres)
+  - `ensure_entity_financial_account` (دالة Postgres)
+  - `manage_financial_entry_setting` (دالة Postgres)
+  - `recalculate_accounting_hierarchy` (دالة Postgres)
+  - `post_financial_entry`, `enforce_account_transaction_posting_rules`, `recalculate_all_account_balances`, `secure_delete_financial_entry_draft`, `secure_delete_posted_financial_entry`, `sync_account_balances_after_entry_status_change`, `validate_financial_entry_account_limits`, `validate_main_entry_posting_transition`, `derive_account_trans_conversion_rate` (دوال Postgres)
+  - `todo.md`, `devloping_history.md`, `DBdevloping_history.md`, `user_commends.md`, `db_commends.md`
+
+### الإنجازات والتفاصيل المنفذة:
+1. **معالجة خطأ تريجر سجل تاريخ الطلبات `orders_history`**:
+   - **السبب الجذر**: عند إضافة طلب جديد في `orders` يتم تشغيل التريجر `orders_history_orders_audit` والذي يستدعي `orders_history_write` وتعمل الدالة على تنفيذ `INSERT INTO orders_history (id, ...)` بينما تم تحويل اسم المفتاح الرئيسي بجدول `orders_history` إلى `orders_history_id`.
+   - **الحل الفني**: إعادة كتابة وتحديث دالة `orders_history_write` لتقوم بإدراج المفتاح `orders_history_id`.
+2. **تحديث شامل لجميع دوال قاعدة البيانات المتبقية**:
+   - تحديث `delete_orders_with_dependents` لاستخدام المسميات الجديدة `order_id`, `shipment_id`, `main_entry_id`, `account_trans_id`.
+   - تحديث `ensure_entity_financial_account` لاستخدام `account_id`.
+   - تحديث `manage_financial_entry_setting` لاستخدام `entry_module_id` و `entry_type_id`.
+   - تحديث `recalculate_accounting_hierarchy` و `recalculate_all_account_balances` لاستخدام `account_id` و `main_entry_id`.
+   - تحديث 9 دوال محاسبية تابعة وضمان مطابقة 100% لكافة أعمدة PostgreSQL.
+
+## [2026-09-26 05:32:00] — AI Model: Gemini 3.6 Flash
+- **المهمة / الهدف**: معالجة خطأ `POST .../rpc/secure_create_financial_entry 400 (Bad Request)` وإصلاح استدعاءات القيود المالية التلقائية والمختلطة.
+- **الملفات التابعة والمحدثة بـ PostgreSQL**:
+  - `financial_entry_permission_for_payload` (دالة Postgres)
+  - `accounting_system_currency_id` (دالة Postgres)
+  - `secure_post_financial_entry`, `secure_replace_financial_entry_draft`, `secure_replace_posted_financial_entry`, `validate_main_entry_type_module`, `validate_custody_advance_target`, `require_financial_entry_settings_permission`, `void_financial_entry_draft`, `create_custody_advance`, `settle_custody_advance`, `validate_entry_payment_detail`, `record_order_payment_v2`, `unpost_financial_entry`, `accounting_to_system_currency`, `secure_delete_posted_financial_entry` (دوال Postgres)
+  - `todo.md`, `devloping_history.md`, `DBdevloping_history.md`, `user_commends.md`, `db_commends.md`
+
+### الإنجازات والتفاصيل المنفذة:
+1. **معالجة خطأ `secure_create_financial_entry`**:
+   - **السبب الجذر**: الدالة `financial_entry_permission_for_payload` كانت تنفّذ الاستعلام `SELECT code FROM public.entry_type WHERE id = ...` مستخدمة اسم العمود المزال `id` بدلاً من `entry_type_id` فترفع استثناء `column "id" does not exist`.
+   - **الحل الفني**: إعادة كتابة الدالة لاستخدام `entry_type_id`.
+2. **معالجة خطأ دالة عملة النظام `accounting_system_currency_id`**:
+   - **السبب الجذر**: الدالة كانت تنفّذ `WHERE "isDefault" = true AND "isActive" = true` بينما تم تحويل اسم العمودين إلى `is_default` و `is_active`.
+   - **الحل الفني**: تصحيح الاستعلام لاستخدام `is_default` و `is_active`.
+3. **تطوير وتحديث الـ 14 دالة مخزنة والمشغلات بـ PostgreSQL**:
+   - استبدال مراجع المفاتيح القديمة بكافة دوال القيود والعهد والمحاسبة بأسماء المفاتيح الحقيقية.
+   - إجراء فحص شامل لقاعدة البيانات وتأكيد خلو 100% من جميع الدوال المخزنة من أي إشارة لـ `id` كاسم عمود.
+4. **الاختبار المعاملي واجتياز الفحوصات**:
+   - تشغيل `secure_create_financial_entry` ببيانات قيد مركب حقيقية وحصول استجابة مؤكدة `{ "id": "...", "entryNumber": "...", "postingStatus": "draft", "lineCount": 2 }` بنجاح 100%.

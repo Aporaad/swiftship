@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, orderBy } from '../lib/supabase-firebase-adapter';
-import { db } from '../lib/supabase-firebase-adapter';
+import { collection, onSnapshot, query, orderBy } from '../lib/supabase-adapter';
+import { db } from '../lib/supabase-adapter';
 import { useSettings } from '../context/SettingsContext';
 import { useRole } from '../hooks/useRole';
 import { ShieldAlert, BookOpen } from 'lucide-react';

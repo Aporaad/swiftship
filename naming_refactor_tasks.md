@@ -60,17 +60,17 @@
 - [x] **المهمة 2.1.5:** تطهير كائن `data` في الجداول القائمة التي تحتوي على `data` (عبر التترحيل `202609160002_sanitize_data_jsonb_duplicates.sql`) لحذف أي مفاتيح مكررة تطابق الأعمدة المباشرة للجداول.
 
 #### 2.2 تحويل المفاتيح الرئيسية (Primary Keys Rename: `id` -> `[table]_id`)
-- [ ] **المهمة 2.2.1:** تحويل الـ PK لجدول `orders` من `id` إلى `order_id`.
-- [ ] **المهمة 2.2.2:** تحويل الـ PK لجدول `customers` من `id` إلى `customer_id`.
-- [ ] **المهمة 2.2.3:** تحويل الـ PK لجدول `users` من `id` إلى `user_id`.
-- [ ] **المهمة 2.2.4:** تحويل الـ PK لجدول `employees` من `id` إلى `employee_id`.
-- [ ] **المهمة 2.2.5:** تحويل الـ PK لجدول `couriers` من `id` إلى `courier_id`.
-- [ ] **المهمة 2.2.6:** تحويل الـ PK لجدول `shipments` من `id` إلى `shipment_id`.
-- [ ] **المهمة 2.2.7:** تحويل الـ PK لجدول `accounts` من `id` إلى `account_id`.
-- [ ] **المهمة 2.2.8:** تحويل الـ PK لجدول `main_entry` من `id` إلى `main_entry_id`.
-- [ ] **المهمة 2.2.9:** تحويل الـ PK لجدول `account_trans` من `id` إلى `account_trans_id`.
-- [ ] **المهمة 2.2.10:** تحويل الـ PK لجدول `order_items` من `items_id` إلى `order_item_id`.
-- [ ] **المهمة 2.2.11:** تحويل الـ PK لبقية الجداول الـ 39 التابعة (مثل `items_category`, `sources`, `shipping_companies`, `assets`, `portal_users`, `cust_details`, `returned_products`, `auto_entries`, `entry_module`, `entry_type`, `custody_advances`, `orders_history`, `activity_logs`, إلخ).
+- [x] **المهمة 2.2.1:** تحويل الـ PK لجدول `orders` من `id` إلى `order_id`.
+- [x] **المهمة 2.2.2:** تحويل الـ PK لجدول `customers` من `id` إلى `customer_id`.
+- [x] **المهمة 2.2.3:** تحويل الـ PK لجدول `users` من `id` إلى `user_id`.
+- [x] **المهمة 2.2.4:** تحويل الـ PK لجدول `employees` من `id` إلى `employee_id`.
+- [x] **المهمة 2.2.5:** تحويل الـ PK لجدول `couriers` من `id` إلى `courier_id`.
+- [x] **المهمة 2.2.6:** تحويل الـ PK لجدول `shipments` من `id` إلى `shipment_id`.
+- [x] **المهمة 2.2.7:** تحويل الـ PK لجدول `accounts` من `id` إلى `account_id`.
+- [x] **المهمة 2.2.8:** تحويل الـ PK لجدول `main_entry` من `id` إلى `main_entry_id`.
+- [x] **المهمة 2.2.9:** تحويل الـ PK لجدول `account_trans` من `id` إلى `account_trans_id`.
+- [x] **المهمة 2.2.10:** تحويل الـ PK لجدول `order_items` من `items_id` إلى `order_item_id`.
+- [x] **المهمة 2.2.11:** تحويل الـ PK لبقية الجداول الـ 39 التابعة (مثل `items_category`, `sources`, `shipping_companies`, `assets`, `portal_users`, `cust_details`, `returned_products`, `auto_entries`, `entry_module`, `entry_type`, `custody_advances`, `orders_history`, `activity_logs`, `cur_price` إلخ).
 
 #### 2.3 تحويل حقول الـ camelCase المخالفة بجدول قاعدة البيانات إلى snake_case
 - [x] **المهمة 2.3.1:** تحويل حقول `createdAt`, `updatedAt`, `createdBy`, `updatedBy` المخالفة في الجداول المتبقية إلى `created_at`, `updated_at`, `created_by`, `updated_by`.
@@ -78,42 +78,42 @@
 
 #### 2.4 إعادة تحديث وتعديل القيود والمشغلات والدوال (Triggers, Functions & RLS Policies)
 - [x] **المهمة 2.4.1:** تحديث دالة `link_source_financial_account`, `link_shipping_company_financial_account`, `link_asset_financial_account` ودالة `accounting_touch_account_updated_at`.
-- [ ] **المهمة 2.4.2:** تحديث دالة `create_financial_entry_v2` ودوال الحماية `secure_%` لاستخدام `main_entry_id` و `account_trans_id`.
-- [ ] **المهمة 2.4.3:** تحديث دالة `delete_orders_with_dependents` لتسجيل `order_id` بدلاً من `id`.
-- [ ] **المهمة 2.4.4:** تحديث دالة وسجل التدقيق `orders_history_from_orders` ومُشغلات التتبع.
-- [ ] **المهمة 2.4.5:** تحديث كافة سياسات Row Level Security (RLS) للعمل على المسميات الجديدة.
+- [x] **المهمة 2.4.2:** تحديث دالة `create_financial_entry_v2` ودوال الحماية `secure_%` لاستخدام `main_entry_id` و `account_trans_id`.
+- [x] **المهمة 2.4.3:** تحديث دالة `delete_orders_with_dependents` لتسجيل `order_id` بدلاً من `id`.
+- [x] **المهمة 2.4.4:** تحديث دالة وسجل التدقيق `orders_history_from_orders` ومُشغلات التتبع.
+- [x] **المهمة 2.4.5:** تحديث كافة سياسات Row Level Security (RLS) والعروض للعمل على المسميات الجديدة (`portal_users_view`).
 
 ---
 
 ### المرحلة 3: تحديث محول النظام والخدمات وتطهير الحمولة (Adapter & Services Layer Refactoring)
 
 #### 3.1 تحديث المحول المحاسبي وتطوير التطهير الصارم (`supabase-firebase-adapter.ts`)
-- [ ] **المهمة 3.1.1:** تحديث خريطة المفاتيح الرئيسية `TABLE_PRIMARY_KEY_MAP` لتعكس اسم الـ PK الجديد لكل جدول.
+- [x] **المهمة 3.1.1:** تحديث خريطة المفاتيح الرئيسية `TABLE_PRIMARY_KEY_MAP` و `getTablePrimaryKey` لتعكس اسم الـ PK الجديد لكل جدول.
 - [x] **المهمة 3.1.2:** تحديث خريطة الأعمدة المباشرة `DIRECT_COLUMNS_MAP` لترجمة كل خاصية `camelCase` إلى عمود `snake_case` واحد صريح في قاعدة البيانات، وإلغاء الكتابة المزدوجة للأعمدة الإرثية.
 - [x] **المهمة 3.1.3:** تطوير وتفعيل التطهير الصارم بـ `sanitizeDataPayload` لمنع إرسال أي مفتاح ينتمي للأعمدة المباشرة للجدول داخل كائن `data`.
 - [x] **المهمة 3.1.4:** ضمان أن كافة المفاتيح الداخلية لكائن `data` في طبقة الكود تعتمد نمط `camelCase` حصراً.
 - [x] **المهمة 3.1.5:** تحديث دالة الاستخراج والتظهير `extractRowPayload`.
 
 #### 3.2 تحديث خدمات النظام (Services Layer)
-- [ ] **المهمة 3.2.1:** تحديث [orderService.ts](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/services/orderService.ts) لاستخدام `orderID`, `createdAt`, `trackingNumber`.
-- [ ] **المهمة 3.2.2:** تحديث [financialAccountService.ts](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/services/financialAccountService.ts) لاستخدام `accountID`, `parentAccountID`, `createdAt`.
-- [ ] **المهمة 3.2.3:** تحديث [financialEntryService.ts](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/services/financialEntryService.ts) لاستخدام `mainEntryID`, `accountTransID`.
-- [ ] **المهمة 3.2.4:** تحديث [customerService.ts](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/services/customerService.ts) لاستخدام `customerID`, `createdAt`.
-- [ ] **المهمة 3.2.5:** تحديث [employeeService.ts](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/services/employeeService.ts), [courierService.ts](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/services/courierService.ts), [productService.ts](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/services/productService.ts), [shipmentService.ts](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/services/shipmentService.ts), [portalUserService.ts](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/services/portalUserService.ts).
+- [x] **المهمة 3.2.1:** تحديث [orderService.ts](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/services/orderService.ts) لاستخدام `orderID`, `createdAt`, `trackingNumber`.
+- [x] **المهمة 3.2.2:** تحديث [financialAccountService.ts](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/services/financialAccountService.ts) لاستخدام `accountID`, `parentAccountID`, `createdAt`.
+- [x] **المهمة 3.2.3:** تحديث [financialEntryService.ts](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/services/financialEntryService.ts) لاستخدام `mainEntryID`, `accountTransID`.
+- [x] **المهمة 3.2.4:** تحديث [customerService.ts](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/services/customerService.ts) لاستخدام `customerID`, `createdAt`.
+- [x] **المهمة 3.2.5:** تحديث [employeeService.ts](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/services/employeeService.ts), [courierService.ts](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/services/courierService.ts), [productService.ts](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/services/productService.ts), [shipmentService.ts](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/services/shipmentService.ts), [portalUserService.ts](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/services/portalUserService.ts).
 
 ---
 
 ### المرحلة 4: تحديث الأنواع وواجهات المستخدم (TypeScript Types & UI Components Refactoring)
 
 #### 4.1 تحديث واجهات الأنواع (TypeScript Interfaces & Types)
-- [ ] **المهمة 4.1.1:** تحديث `src/types/index.ts` لتغيير جميع خصائص الكائنات إلى `camelCase` القياسي (`orderID`, `customerID`, `createdAt`, `createdBy`, إلخ).
-- [ ] **المهمة 4.1.2:** تحديث أنواع الواجهات المحاسبية بـ `src/types/finance.ts`.
+- [x] **المهمة 4.1.1:** تحديث `src/types/index.ts` لتغيير جميع خصائص الكائنات إلى `camelCase` القياسي (`orderID`, `customerID`, `createdAt`, `createdBy`, إلخ).
+- [x] **المهمة 4.1.2:** تحديث أنواع الواجهات المحاسبية بـ `src/types/finance.ts`.
 
 #### 4.2 تحديث المكونات والصفحات (React Pages & Components)
-- [ ] **المهمة 4.2.1:** تحديث [Orders.tsx](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/pages/Orders.tsx), [CreateOrderModal.tsx](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/components/orders/CreateOrderModal.tsx), [EditOrderModal.tsx](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/components/orders/EditOrderModal.tsx).
-- [ ] **المهمة 4.2.2:** تحديث [Customers.tsx](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/pages/Customers.tsx), [Employees.tsx](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/pages/Employees.tsx), [Couriers.tsx](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/pages/Couriers.tsx).
-- [ ] **المهمة 4.2.3:** تحديث [FinanceEntries.tsx](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/pages/FinanceEntries.tsx), [GeneralEntryForm.tsx](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/components/finance/GeneralEntryForm.tsx), [CompoundEntryForm.tsx](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/components/finance/CompoundEntryForm.tsx), [VoucherEntryForm.tsx](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/components/finance/VoucherEntryForm.tsx).
-- [ ] **المهمة 4.2.4:** تحديث [AccountingHierarchyManagement.tsx](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/components/finance/AccountingHierarchyManagement.tsx), [ProductsManagementTab.tsx](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/components/products/ProductsManagementTab.tsx), [ReturnedProductsTab.tsx](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/components/products/ReturnedProductsTab.tsx).
+- [x] **المهمة 4.2.1:** تحديث [Orders.tsx](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/pages/Orders.tsx), [CreateOrderModal.tsx](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/components/orders/CreateOrderModal.tsx), [EditOrderModal.tsx](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/components/orders/EditOrderModal.tsx).
+- [x] **المهمة 4.2.2:** تحديث [Customers.tsx](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/pages/Customers.tsx), [Employees.tsx](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/pages/Employees.tsx), [Couriers.tsx](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/pages/Couriers.tsx).
+- [x] **المهمة 4.2.3:** تحديث [FinanceEntries.tsx](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/pages/FinanceEntries.tsx), [GeneralEntryForm.tsx](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/components/finance/GeneralEntryForm.tsx), [CompoundEntryForm.tsx](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/components/finance/CompoundEntryForm.tsx), [VoucherEntryForm.tsx](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/components/finance/VoucherEntryForm.tsx).
+- [x] **المهمة 4.2.4:** تحديث [AccountingHierarchyManagement.tsx](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/components/finance/AccountingHierarchyManagement.tsx), [ProductsManagementTab.tsx](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/components/products/ProductsManagementTab.tsx), [ReturnedProductsTab.tsx](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/src/components/products/ReturnedProductsTab.tsx).
 
 ---
 
@@ -141,6 +141,9 @@
 | `BUILD-01` | فحص البناء الإنتاجي Vite | 2026-09-16 01:04 | `[x] مكتمل` | تشغيل npm run build وبناء حزم الإنتاج بنجاح كامل خلال 42.27 ثانية |
 | `DB-04` | تحويل أعمدة العروض (VIEWS) إلى snake_case | 2026-09-16 02:15 | `[x] مكتمل` | تنفيذ 202609160005_fix_view_column_names_to_snake_case.sql وحصل 0 أعمدة camelCase بـ DB |
 | `AUDIT-01` | الفحص التراكمي الشامل واجتياز التجميع والبناء والتسليم | 2026-09-16 02:15 | `[x] مكتمل` | تأكيد تطهير DB بنسبة 100%، 0 أخطاء TypeScript وبناء إنتاجي تام |
+| `DB-05` | إعادة تسمية كافة المفاتيح الرئيسية Primary Keys وتأمين الخرائط | 2026-09-25 21:55 | `[x] مكتمل` | تحويل `id` في كل الجداول إلى `[table]_id` وتحديث كافة FKs والدوال وعرض `portal_users_view` والمحول `supabase-adapter.ts` واجتياز التجميع والبناء بنجاح 100% |
+| `FIX-01` | إصلاح خطأ تسجيل الدخول وتحديث كافة استعلامات المفاتيح بقواعد البيانات والنظام | 2026-09-25 23:45 | `[x] مكتمل` | معالجة `mapPublicUser` وتحديث دوال Postgres المخزنة (`orders_history_resolve_order`, `link_*`) وتحديث الاستعلامات المباشرة في الخدمات والمكونات واجتياز `npx tsc --noEmit` و `npm run build` بنجاح 100% |
+
 
 
 

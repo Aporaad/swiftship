@@ -1,5 +1,4 @@
-import { initializeApp } from "firebase/app";
-import { getFirestore, collection, getDocs, updateDoc, doc } from "firebase/firestore/lite";
+import { collection, db, getDocs, updateDoc, doc } from '../../../src/lib/supabase-adapter';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -11,7 +10,7 @@ const currentFilePath = (typeof import.meta !== 'undefined' && import.meta.url)
 const currentDirPath = (currentFilePath) 
   ? path.dirname(currentFilePath) 
   : (typeof __dirname !== 'undefined' ? __dirname : process.cwd());
-const configPath = path.resolve(currentDirPath, '../firebase-applet-config.json');
+const configPath = path.resolve(currentDirPath, '../applet-config.json');
 
 let config;
 try {
@@ -20,9 +19,6 @@ try {
   console.log("No config found, skipping setup");
   process.exit(0);
 }
-
-const app = initializeApp(config);
-const db = getFirestore(app);
 
 async function run() {
   console.log("Starting Migration...");

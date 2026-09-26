@@ -4,7 +4,7 @@
  * Service for managing master products catalog and order line items
  */
 
-import { supabase } from '../lib/supabase-firebase-adapter';
+import { supabase } from '../lib/supabase-adapter';
 
 // ────────────────────────────── Types ──────────────────────────────
 

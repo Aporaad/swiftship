@@ -6,7 +6,7 @@ const projectFile = (relativePath: string) => readFileSync(resolve(process.cwd()
 
 describe('database write failure guard', () => {
   it('raises database write failures for all core adapter operations before local cache mutation', () => {
-    const adapter = projectFile('src/lib/supabase-firebase-adapter.ts');
+    const adapter = projectFile('src/lib/supabase-adapter.ts');
     expect(adapter).toContain("export function createWriteError(operation: 'insert' | 'upsert' | 'update' | 'delete'");
     expect(adapter).toContain("throw createWriteError('insert', table, error);");
     expect(adapter).toContain("throw createWriteError('upsert', table, error);");
@@ -18,8 +18,8 @@ describe('database write failure guard', () => {
     const orders = projectFile('src/pages/Orders.tsx');
     const primaryWrite = orders.indexOf("await addDoc(payload.orderNumber, collection(db, 'orders'), payload);");
     expect(primaryWrite).toBeGreaterThan(-1);
-    expect(orders.indexOf('// Save products to products table')).toBeGreaterThan(primaryWrite);
-    expect(orders.indexOf('// Save shipments to shipments table')).toBeGreaterThan(primaryWrite);
+    expect(orders.indexOf('حفظ المنتجات الرئيسية في products')).toBeGreaterThan(primaryWrite);
+    expect(orders.indexOf('حفظ شحنات الطلب في جدول الشحنات')).toBeGreaterThan(primaryWrite);
     expect(orders.indexOf("activityLogService.log('add_order'")).toBeGreaterThan(primaryWrite);
     expect(orders.indexOf('await notificationService.notify({')).toBeGreaterThan(primaryWrite);
   });

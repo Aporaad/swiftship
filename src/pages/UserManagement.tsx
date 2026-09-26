@@ -516,9 +516,38 @@ export default function UserManagement() {
   useEffect(() => {
     if (roleLoading) return;
     const unsub = onSnapshot(collection(db, 'sessions'), snap => {
-      const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
-      setDbSessions(all.filter((s: any) => s.lastSeen && s.lastSeen > twentyFourHoursAgo));
+      const all = snap.docs.map(d => {
+        const rawData = d.data();
+        const payload = typeof rawData.data === 'string' ? JSON.parse(rawData.data) : (rawData.data || {});
+
+        const rawLastSeen = rawData.last_seen || rawData.lastSeen || payload.last_seen_at || payload.last_seen;
+        let lastSeenMs = 0;
+        if (typeof rawLastSeen === 'number') lastSeenMs = rawLastSeen;
+        else if (typeof rawLastSeen === 'string') {
+          const parsed = Date.parse(rawLastSeen);
+          if (!isNaN(parsed)) lastSeenMs = parsed;
+        }
+
+        const fullName = payload.full_name || payload.fullName || rawData.fullName || rawData.full_name || (rawData.email ? rawData.email.split('@')[0] : 'User');
+        const email = payload.email || rawData.email || '';
+        const role = payload.role || rawData.role || 'Employee';
+        const deviceInfo = payload.device_info || payload.deviceInfo || rawData.deviceInfo || rawData.device_info || 'Unknown';
+
+        return {
+          id: d.id,
+          ...rawData,
+          ...payload,
+          fullName,
+          email,
+          role,
+          deviceInfo,
+          lastSeen: lastSeenMs,
+          last_seen: lastSeenMs,
+        };
+      });
+
+      setDbSessions(all.filter((s: any) => s.lastSeen > 0 ? s.lastSeen > twentyFourHoursAgo : true));
     }, err => console.error("Error fetching sessions:", err));
     return unsub;
   }, [roleLoading]);
@@ -680,7 +709,7 @@ export default function UserManagement() {
       }
       if (passwordTargetUser.email?.toLowerCase() === 'admin@swiftship.system' || passwordTargetUser.email?.toLowerCase() === 'admin') {
         try {
-          const { simpleHashPassword, encryptDataLocal } = await import('../lib/supabase-firebase-adapter');
+          const { simpleHashPassword, encryptDataLocal } = await import('../lib/supabase-adapter');
           const hashVal = simpleHashPassword(newPasswordValue);
           const adminProfile = {
             uid: passwordTargetUser.id,
@@ -738,7 +767,7 @@ export default function UserManagement() {
       const secondaryAuth = getAuth(secondaryApp);
       const SHARED_SYSTEM_AUTH_PASSWORD = 'swiftship@system_pw_2026';
       const { user: newUser } = await createUserWithEmailAndPassword(secondaryAuth, addFormData.email.toLowerCase(), SHARED_SYSTEM_AUTH_PASSWORD);
-      
+
       // ══════════════════════════════════════════════════════════════════════════════
       // ISOLATION RULE: System User creation writes strictly to `users` table.
       // NEVER create a financial account or employee record upon System User creation.
@@ -1015,9 +1044,16 @@ export default function UserManagement() {
     .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
   const isSessionOnline = (sess: any) => {
-    if (!sess.lastSeen) return false;
+    const rawLastSeen = sess.lastSeen || sess.last_seen;
+    let lastSeenMs = 0;
+    if (typeof rawLastSeen === 'number') lastSeenMs = rawLastSeen;
+    else if (typeof rawLastSeen === 'string') {
+      const parsed = Date.parse(rawLastSeen);
+      if (!isNaN(parsed)) lastSeenMs = parsed;
+    }
+    if (!lastSeenMs) return false;
     // Heartbeat updates are every 45s; mark offline if no heartbeat for 3 minutes
-    return (Date.now() - sess.lastSeen) < 3 * 60 * 1000;
+    return (Date.now() - lastSeenMs) < 3 * 60 * 1000;
   };
   const onlineSessionsCount = dbSessions.filter(isSessionOnline).length;
   const activeSessions = dbSessions;
@@ -1402,7 +1438,7 @@ export default function UserManagement() {
                         </td>
                         <td className="p-4"><span className={`px-2 py-0.5 rounded-md border text-[9px] font-black uppercase ${getRoleBadgeStyle(sess.role)}`}>{sess.role}</span></td>
                         <td className="p-4 text-center text-[10px] font-bold text-slate-400">{sess.deviceInfo || t('غير معروف', 'Unknown')}</td>
-                        <td className="p-4 text-center text-[10px] font-bold text-slate-400">{getTimeSince(sess.lastSeen)}</td>
+                        <td className="p-4 text-center text-[10px] font-bold text-slate-400">{getTimeSince(sess.lastSeen || sess.last_seen)}</td>
                         <td className="p-4 text-center">
                           {isSelf || (isRoot && !ROOT_EMAILS.includes(currentUserDoc?.email)) ? (
                             <span className="text-[#d4af37] text-[9px] font-black bg-[#d4af37]/10 border border-[#d4af37]/25 px-2 py-1 rounded-lg">
@@ -1932,7 +1968,7 @@ export default function UserManagement() {
                   className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 px-4 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono transition-all"
                   dir="ltr"
                 />
-                <span className="block text-[8px] text-slate-500 mt-1">{t('سيتغير تسجيل الدخول للمستخدم فوراً بهذا المفتاح دون الحاجة لبريده الإلكتروني.', 'This will instantly change the user\'s password in Firebase Authentication directly.')}</span>
+                <span className="block text-[8px] text-slate-500 mt-1">{t('سيتغير تسجيل الدخول للمستخدم فوراً بهذا المفتاح دون الحاجة لبريده الإلكتروني.', 'This will instantly change the user\'s password in Supabase Authentication directly.')}</span>
               </div>
               <div className="pt-3 flex justify-end gap-3 border-t border-slate-800/50 shrink-0">
                 <button type="button" onClick={() => { setIsPasswordModalOpen(false); setPasswordTargetUser(null); }} className="px-5 py-2.5 text-slate-400 font-bold bg-slate-900 border border-slate-800 hover:bg-slate-850 rounded-xl text-xs transition active:scale-95">{t('إلغاء', 'Cancel')}</button>
@@ -2003,8 +2039,8 @@ export default function UserManagement() {
                       type="button"
                       onClick={() => setRoleActiveTab(tab.id)}
                       className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl px-3.5 py-2 font-black transition ${roleActiveTab === tab.id
-                          ? 'bg-[#d4af37] text-slate-950 shadow-md'
-                          : 'bg-slate-900/80 text-slate-400 hover:bg-slate-800 hover:text-white border border-slate-800'
+                        ? 'bg-[#d4af37] text-slate-950 shadow-md'
+                        : 'bg-slate-900/80 text-slate-400 hover:bg-slate-800 hover:text-white border border-slate-800'
                         }`}
                     >
                       {tab.label}

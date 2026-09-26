@@ -6,8 +6,8 @@ import {
 } from 'lucide-react';
 import { format, startOfDay, endOfDay, subDays, isWithinInterval } from 'date-fns';
 import ConfirmModal from './ConfirmModal';
-import { db } from '../lib/supabase-firebase-adapter';
-import { collection, addDoc, doc, deleteDoc, updateDoc, onSnapshot, query, where, getDocs, orderBy } from '../lib/supabase-firebase-adapter';
+import { db } from '../lib/supabase-adapter';
+import { collection, addDoc, doc, deleteDoc, updateDoc, onSnapshot, query, where, getDocs, orderBy } from '../lib/supabase-adapter';
 import { notificationService } from '../services/notificationService';
 import { useAccountBalances, computeAccountBalance, guessAccountTypeFromCode, AccountType } from '../hooks/useAccountBalances';
 import { financialAccountService } from '../services/financialAccountService';
@@ -412,7 +412,7 @@ export default function ChartOfAccounts({
       setIsAddOpen(false);
       setNewAccount({ code: '', nameAr: '', nameEn: '', type: 'Asset', parentCode: '', balance: '', currency: 'YER' });
     } catch (err: any) {
-      notificationService.notify({ title: 'Firestore Error', message: err.message, type: 'error' });
+      notificationService.notify({ title: 'PostgreSQL Error', message: err.message, type: 'error' });
     } finally {
       setAccountLoading(false);
     }

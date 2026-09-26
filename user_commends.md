@@ -282,5 +282,157 @@ Comments on implementation_plan.md:
 ولاتنسى ان يتم حذف الجلسه من النظام ومن قاعده البيانات ومن بيانات الكاش  عند عمل تسجيل الخروج signOut  او عند انتهاء مهله نشاط المستخدم  وايضا عند اغلاق النظام او اغلاق صفحه النظام او اغلاق جلسه المستخدم بالمتصفح او اغلاق واجهه تطبيق النظام اريد ان يتم حذف جلسه المستخدم فورا 
 
 
-ثانيا ماهوا سبب عدم ظهور قائمه الجلسات النشطه في واجهه الجلسات 
+
+
+## [2026-09-16 06:56:00] — AI Model: Gemini 3.6 Flash
+```text
+اولا من الاخطاء يظهر ان النظام يتعامل مع جدول الجلسات sessions  على انه يتضمن حقل data ويخزن الحقول داخله والحقيقه ان جدول الجلسات sessions كل حقوله اساسيه ولايوجد داخله حقل data
+قم بتغيير طريقه التعامل مع جدول sessions على اساس ان جميع حقوله اساسيه 
+قم بحل مشكله خطاء 
+[Session Heartbeat] Error: Error: [Supabase Adapter] upsert failed on table sessions: Could not find the 'data' column of 'sessions' in the schema cache
+
+
+## [2026-09-16 07:12:00] — AI Model: Gemini 3.6 Flash
+```text
+ياحيوان انا قلت لك اريد 
+" عند اغلاق النظام او اغلاق صفحه النظام او اغلاق جلسه المستخدم بالمتصفح او اغلاق واجهه تطبيق النظام اريد ان يتم حذف جلسه المستخدم فورا "
+
+ولم اقل حذف الجلسه عند تحديث الصفحه ياحيوان
+
+سريع قم بمنع حذف الجلسه عند تحديث الصفحه او النقر على زر التحذيث 
+
+
+
+## [2026-09-16 07:48:00] — AI Model: Gemini 3.6 Flash
+```text
+ ياحيوان انا قلت لك اريد فقط عند تحديث الصفحه لايتم حذف الجلسه 
+اما عند اغلاق النظام او اغلاق صفحه النظام او اغلاق جلسه المستخدم بالمتصفح او اغلاق واجهه تطبيق النظام اريد ان يتم حذف جلسه المستخدم فورا 
+
+
+
+
+
+
+## [2026-09-25 23:45:00] — AI Model: Gemini 3.6 Flash
+```text
+تاكد انك قمت بتعديل كل اسماء الحقول بقاعده البيانات وايضا تاكد من القبود والعلاقات بين الجدول على الاسماء الجديده 
+والشي الاهم تاكد انك عدلت كل اكواد ومسميات بالنظام من الاسماء القديمه الى الجديده وكل شي مرتبط بها
+وقم بحل الاخطاء ومشكله عدم الدخول للنظام
 ```
+
+## [2026-09-26 00:15:00] — AI Model: Gemini 3.6 Flash
+```text
+مازال هناك اخطاء كثيره واكواد وملفات بالنظام لم يتم تحديثها وتغييرها الى التسميات الجديده @[naming_refactor_tasks.md:L97-L118] 
+
+#### 3.2 تحديث خدمات النظام (Services Layer)
+- [ ] **المهمة 3.2.1:** تحديث orderService.ts لاستخدام orderID, createdAt, trackingNumber.
+- [ ] **المهمة 3.2.2:** تحديث financialAccountService.ts لاستخدام accountID, parentAccountID, createdAt.
+- [ ] **المهمة 3.2.3:** تحديث financialEntryService.ts لاستخدام mainEntryID, accountTransID.
+- [ ] **المهمة 3.2.4:** تحديث customerService.ts لاستخدام customerID, createdAt.
+- [ ] **المهمة 3.2.5:** تحديث employeeService.ts, courierService.ts, productService.ts, shipmentService.ts, portalUserService.ts.
+
+---
+
+### المرحلة 4: تحديث الأنواع وواجهات المستخدم (TypeScript Types & UI Components Refactoring)
+
+#### 4.1 تحديث واجهات الأنواع (TypeScript Interfaces & Types)
+- [ ] **المهمة 4.1.1:** تحديث src/types/index.ts لتغيير جميع خصائص الكائنات إلى camelCase القياسي.
+- [ ] **المهمة 4.1.2:** تحديث أنواع الواجهات المحاسبية بـ src/types/finance.ts.
+
+#### 4.2 تحديث المكونات والصفحات (React Pages & Components)
+- [ ] **المهمة 4.2.1:** تحديث Orders.tsx, CreateOrderModal.tsx, EditOrderModal.tsx.
+- [ ] **المهمة 4.2.2:** تحديث Customers.tsx, Employees.tsx, Couriers.tsx.
+- [ ] **المهمة 4.2.3:** تحديث FinanceEntries.tsx, GeneralEntryForm.tsx, CompoundEntryForm.tsx, VoucherEntryForm.tsx.
+- [ ] **المهمة 4.2.4:** تحديث AccountingHierarchyManagement.tsx, ProductsManagementTab.tsx, ReturnedProductsTab.tsx.
+
+وقم بحل مشكله اللاخطاء (أخطاء 400 Bad Request على Supabase REST API)
+```
+
+## [2026-09-26 03:53:00] — AI Model: Gemini 3.6 Flash
+```text
+اصلح الاخطاء التالية:
+GET https://ejrojwbbflzchasvgexr.supabase.co/rest/v1/cur_price?select=id%2Cseq%2Cprice&cur_no=eq.3&order=day_date.desc%2Cseq.desc&limit=1 400 (Bad Request)
+GET https://ejrojwbbflzchasvgexr.supabase.co/rest/v1/cur_price?select=id%2Cseq%2Cprice&cur_no=eq.2&order=day_date.desc%2Cseq.desc&limit=1 400 (Bad Request)
+
+اصلح الاخطاء وقم بفحص جميع اكواد ومكونات النظام والتاكد من تغيير كل شي الى المسميات الجديده
+```
+ 
+ 
+ 
+ 
+
+## [2026-09-26 05:20:00] — AI Model: Gemini 3.6 Flash
+```text
+اكمل المهمه السابقه 
+
+وايضا قم بحل الاخطاء التاليه
+"""
+@supabase_supabase-j…js?v=a2d9be23:20666 
+ POST https://ejrojwbbflzchasvgexr.supabase.co/rest/v1/orders 400 (Bad Request)
+(anonymous)	@	@supabase_supabase-j…js?v=a2d9be23:20666
+(anonymous)	@	@supabase_supabase-j…js?v=a2d9be23:20691
+await in (anonymous) (async)		
+executeWithRetry	@	@supabase_supabase-js.js?v=a2d9be23:608
+then	@	@supabase_supabase-js.js?v=a2d9be23:637
+Show less
+@supabase_supabase-j…js?v=a2d9be23:20666 Fetch failed loading: POST "https://ejrojwbbflzchasvgexr.supabase.co/rest/v1/orders".
+sanitizeConsole.ts:96 Error: [Supabase Adapter] insert failed on table orders: column "id" of relation "orders_history" does not exist
+    at createWriteError (supabase-adapter.ts:1105:22)
+    at addDoc (supabase-adapter.ts:1133:15)
+    at async handleCreateOrder (Orders.tsx:1178:7)
+overrideMethod	@	hook.js:586
+console.error	@	sanitizeConsole.ts:96
+handleCreateOrder	@	Orders.tsx:1575
+await in handleCreateOrder (async)		
+handleFormSubmit	@	CreateOrderModal.tsx:480
+executeDispatch	@	react-dom_client.js?v=a2d9be23:13622
+runWithFiberInDEV	@	react-dom_client.js?v=a2d9be23:997
+processDispatchQueue	@	react-dom_client.js?v=a2d9be23:13658
+(anonymous)	@	react-dom_client.js?v=a2d9be23:14071
+batchedUpdates$1	@	react-dom_client.js?v=a2d9be23:2626
+dispatchEventForPluginEventSystem	@	react-dom_client.js?v=a2d9be23:13763
+dispatchEvent	@	react-dom_client.js?v=a2d9be23:16784
+dispatchDiscreteEvent	@	react-dom_client.js?v=a2d9be23:16765
+
+## [2026-09-26 05:32:00] — AI Model: Gemini 3.6 Flash
+```text
+ياحيوان باقي اخطاء حلهن 
+
+POST https://ejrojwbbflzchasvgexr.supabase.co/rest/v1/rpc/secure_create_financial_entry 400 (Bad Request)
+(anonymous) @ @supabase_supabase-js.js?v=a2d9be23:20666
+(anonymous) @ @supabase_supabase-js.js?v=a2d9be23:20691
+await in (anonymous) (async)
+executeWithRetry @ @supabase_supabase-js.js?v=a2d9be23:608
+then @ @supabase_supabase-js.js?v=a2d9be23:637
+Show 4 more frames
+Show less
+sanitizeConsole.ts:96 [autoEntryService] فشل إنشاء القيد المركب — Failed to create compound entry: Error: [FinancialEntryService] تعذر إنشاء القيد: column "id" does not exist
+    at FinancialEntryService.create (financialEntryService.ts:491:22)
+    at async Object.executeAutoEntriesForStatus (autoEntryService.ts:408:15)
+    at async handleCreateOrder (Orders.tsx:1371:13)
+overrideMethod @ hook.js:586
+console.error @ sanitizeConsole.ts:96
+executeAutoEntriesForStatus @ autoEntryService.ts:428
+await in executeAutoEntriesForStatus (async)
+handleCreateOrder @ Orders.tsx:1371
+await in handleCreateOrder (async)
+handleFormSubmit @ CreateOrderModal.tsx:480
+executeDispatch @ react-dom_client.js?v=a2d9be23:13622
+runWithFiberInDEV @ react-dom_client.js?v=a2d9be23:997
+processDispatchQueue @ react-dom_client.js?v=a2d9be23:13658
+(anonymous) @ react-dom_client.js?v=a2d9be23:14071
+batchedUpdates$1 @ react-dom_client.js?v=a2d9be23:2626
+dispatchEventForPluginEventSystem @ react-dom_client.js?v=a2d9be23:13763
+dispatchEvent @ react-dom_client.js?v=a2d9be23:16784
+dispatchDiscreteEvent @ react-dom_client.js?v=a2d9be23:16765
+Show 9 more frames
+Show less
+@supabase_supabase-js.js?v=a2d9be23:20666 Fetch failed loading: POST "https://ejrojwbbflzchasvgexr.supabase.co/rest/v1/rpc/secure_create_financial_entry".
+```
+
+
+
+
+
+
+

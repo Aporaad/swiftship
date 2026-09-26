@@ -15,7 +15,7 @@ import {
   type FinancialEntryInput,
   type FinancialEntryLineInput,
 } from '../../../services/financialEntryService';
-import { supabase } from '../../../lib/supabase-firebase-adapter';
+import { supabase } from '../../../lib/supabase-adapter';
 import AccountPickerModal from '../AccountPickerModal';
 import FinancialCalculatorModal from '../FinancialCalculatorModal';
 import { amountInWords } from '../../../lib/numberToWords';

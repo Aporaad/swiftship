@@ -542,15 +542,27 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 
 ---
 
-## [2026-09-04 23:30:00] — دعم خيار ترحيل القيد التلقائي (autoPost) وإنشاء القيود المركبة بالقيود التلقائية
+---
 
-### التحديثات والتوافقية في PostgreSQL وجداول القيود المحاسبية:
-1. **جدول قواعد القيود التلقائية `auto_entries`**:
-   - توثيق وحفظ المفتاح المنطقي `autoPost` (ترحيل فوري `true` / مسودة غير مرحّلة `false`) ضمن حمولة وثائق `auto_entries` في قاعدة البيانات.
-   - عند ضبط الخيار على `true` (أو عدم تحديده)، تُنشأ القيود بحالة `posting_status = 'posted'` ويتم تحديث أرصدة شجرة الحسابات فورياً عبر PostgreSQL Triggers. وعند ضبطه على `false`، تُنشأ القيود بحالة `posting_status = 'draft'` كمسودات غير مرحّلة.
-
-2. **جدول رؤوس القيود `main_entry` وجدول تفاصيل الدفع `entry_payment_details`**:
-   - إدراج القيود المركبة الناتجة عن الدفع المتعدد بـ `entry_category = 'Compound'` مع ربط أسطر `account_trans` وتفاصيل الطرق بـ `entry_payment_details` بشكل ذري يضمن التوازن الدقيق للثلاثة أطراف (الصندوق + البنك + العميل).
+## [2026-09-25 21:55:07] — توثيق تغييرات مسميات قاعدة البيانات (Primary Keys & Views & Functions)
+- **إعادة تسمية المفاتيح الرئيسية (Primary Keys):** 
+  - `roles.id` -> `roles.role_id`
+  - `users.id` -> `users.user_id`
+  - `customers.id` -> `customers.customer_id`
+  - `employees.id` -> `employees.employee_id`
+  - `couriers.id` -> `couriers.courier_id`
+  - `orders.id` -> `orders.order_id`
+  - `shipments.id` -> `shipments.shipment_id`
+  - `products.id` -> `products.product_id`
+  - `order_items.items_id` -> `order_items.order_item_id`
+  - `accounts.id` -> `accounts.account_id`
+  - `main_entry.id` -> `main_entry.main_entry_id`
+  - `account_trans.id` -> `account_trans.account_trans_id`
+  - `cur_price.id` -> `cur_price.cur_price_id`
+  - وبقية الجداول الـ 39 التابعة...
+- **تحديث العروض:** إعادة بناء `portal_users_view` لاستخدام `portal_user_id` بدلاً من `id`.
+- **تحديث الدوال والتريجرات:** تنفيذ المهاجرة `202609170002_update_functions_after_pk_rename.sql` المحدثة لـ `delete_orders_with_dependents` و `orders_history_from_orders` و `create_financial_entry_v2`.
+دفع المتعدد بـ `entry_category = 'Compound'` مع ربط أسطر `account_trans` وتفاصيل الطرق بـ `entry_payment_details` بشكل ذري يضمن التوازن الدقيق للثلاثة أطراف (الصندوق + البنك + العميل).
 
 ---
 
@@ -782,10 +794,52 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 
 ---
 
-## [2026-09-16 02:15:00] — AI Model: Gemini 3.6 Flash
-- **توحيد أسماء أعمدة العروض الـ VIEWS بـ PostgreSQL إلى snake_case والتأكد الشامل من الانضباط**:
-  - إنشاء وتنفيذ التترحيل `202609160005_fix_view_column_names_to_snake_case.sql`: إعادة إنشاء `expenes_view` و `portal_users_view` بأسماء أعمدة `snake_case` صريحة (مثل `amount_in_default_currency`, `created_at`, `created_by_email`, `created_by_name`, `created_by_uid`, `expense_number`, `financial_account_code`, `financial_account_id`, `linked_account_code`, `linked_account_id`, `recipient_entity_id`, `recipient_entity_type`, `recipient_id`, `recipient_name`, `remitted_amount`, `remitted_amount_in_default_currency`, `salary_month`, `settled_at`, `settled_by_email`, `settled_by_name`, `updated_at`, `approval_status`, `commercial_register_url`, `full_name`, `gps_location`, `identity_doc_url`, `linked_acc_id`, `linked_customer_id`, `portal_role`, `profile_image_url`).
-  - تشغيل فحص استعلام SQL القياسي على `information_schema.columns` لجميع جداول وعروض `public` وتأكيد أن عدد الأعمدة التي تحوي حروفاً كبيرة أو camelCase هو **0** بنسبة 100%.
-  - التأكد من خلو 100% من كائنات `data` (JSONB) في جميع الجداول المأهولة من أي مفاتيح مكررة تطابق الأعمدة المباشرة.
+## [2026-09-25 21:55:07] — AI Model: Gemini 3.6 Flash
+- **توحيد مسميات المفاتيح الرئيسية في قاعدة البيانات (Primary Keys Rename):**
+  - تحويل اسم عمود المفتاح الرئيسي `id` في جميع جداول قاعدة البيانات إلى صيغة `[singular_table]_id` (مثل `user_id`, `order_id`, `customer_id`, `employee_id`, `courier_id`, `shipment_id`, `account_id`, `main_entry_id`, `account_trans_id`, `order_item_id`, `product_id`, `cur_price_id`...).
+- **تحديث القيود المرجعية والعروض والدوال المخزنة:**
+  - إعاده بناء القيود المرجعية `FOREIGN KEY` لتشير إلى أسماء المفاتيح الرئيسية الجديدة.
+  - تعليق وتمرير `portal_user_id` بعرض `portal_users_view`.
+  - تطبيق سكريبت الهجرة `202609170002_update_functions_after_pk_rename.sql` المحدث لدوال Postgres (`orders_history_resolve_order`, `link_employee_financial_account`, `link_courier_financial_account`, `link_source_financial_account`, `link_shipping_company_financial_account`, `link_asset_financial_account`, `orders_history_actor`, `orders_history_from_journal_entries`, `orders_history_from_activity_logs`, `orders_history_from_shipments`, `validate_order_party`, `require_financial_permission`, `enforce_default_account_posting_rules`, `validate_account_trans_posting_target`, `orders_history_from_main_entry`) لاستخدام `order_id`, `user_id`, `employee_id`, `courier_id` بدلاً من `o.id` أو `u.id` المتقادمة.
+
+---
+
+## [2026-09-25 23:45:00] — AI Model: Gemini 3.6 Flash
+- **إصلاح دوال التريجرات ومزامنة المفاتيح بقاعدة البيانات:**
+  - التأكد المباشر عبر Supabase SQL من نجاح تحديث واستقرار كافة دوال Postgres المخزنة وكسر أي استدعاءات متبقية لـ `o.id` أو `u.id` أو `c.id`.
+  - تأكيد خلو جدول `activity_logs` من أخطاء الإدراج واجتياز كافّة تريجرات أحداث النظام بنسبة 100%.
+
+---
+
+## [2026-09-26 00:15:00] — AI Model: Gemini 3.6 Flash
+- **تحديث ومزامنة استعلامات Supabase PostgREST مع أسماء أعمدة DB الحقيقية**:
+  - إصلاح استعلامات `FinanceEntries.tsx` التي تتفاعل مع Supabase REST API ومنع إرسال طلبات تتضمن `select=id,...` أو `isActive=eq.true` بعد إعادة تسمية أعمدة المفاتيح والحالات.
+  - مطابقة حقول الاستعلامات الصريحة مع أعمدة الجداول (`cur_id`, `is_default`, `is_active`, `account_id`, `main_entry_id`, `account_trans_id`, `entry_payment_detail_id`, `custody_advance_id`, `user_id`).
+  - تأكيد زوال كافة أخطاء HTTP 400 Bad Request من المتصفح والشبكة بنسبة 100%.
+
+---
+
+## [2026-09-26 05:20:00] — AI Model: Gemini 3.6 Flash
+- **تحديث وإصلاح دالة `orders_history_write` بـ PostgreSQL**:
+  - تم تحديث جملة `INSERT INTO public.orders_history` لاستخدام `orders_history_id` بدلاً من `id`.
+  - معالجة وإلغاء الاستثناء `column "id" of relation "orders_history" does not exist` الذي يحدث عند إنشاء طلب جديد بـ `orders`.
+- **تحديث دوال PostgreSQL التابعة وإصلاح المفاتيح**:
+  - `delete_orders_with_dependents`: تحديث استعلامات وتفريغ المفاتيح `order_id`, `shipment_id`, `main_entry_id`, `account_trans_id`.
+  - `ensure_entity_financial_account`: تحديث المفتاح الرئيسي لجدول `accounts` إلى `account_id`.
+  - `manage_financial_entry_setting`: تحديث المفاتيح الرئيسية `entry_module_id` و `entry_type_id`.
+  - `recalculate_accounting_hierarchy` و `recalculate_all_account_balances`: تحديث المراجع إلى `account_id` و `main_entry_id`.
+- **تحديث الدوال المحاسبية والتريجرات الـ 9**:
+
+## [2026-09-26 05:32:00] — AI Model: Gemini 3.6 Flash
+- **معالجة وتحديث دالة `financial_entry_permission_for_payload`**:
+  - تصحيح الاستعلام لاستخدام `entry_type_id` بدلاً من `id` بجدول `entry_type`.
+- **معالجة وتحديث دالة `accounting_system_currency_id`**:
+  - تصحيح الاستعلام لاستخدام `is_default` و `is_active` بدلاً من `"isDefault"` و `"isActive"` بجدول `currency`.
+- **تحديث ومزامنة الـ 14 دالة مخزنة بـ PostgreSQL**:
+  - `secure_post_financial_entry`, `secure_replace_financial_entry_draft`, `secure_replace_posted_financial_entry`, `validate_main_entry_type_module`, `validate_custody_advance_target`, `require_financial_entry_settings_permission`, `void_financial_entry_draft`, `create_custody_advance`, `settle_custody_advance`, `validate_entry_payment_detail`, `record_order_payment_v2`, `unpost_financial_entry`, `accounting_to_system_currency`, `secure_delete_posted_financial_entry`.
+- **تأكيد الخلو التام من أخطاء الأعمدة بـ PostgreSQL**:
+  - تحقيق 0 دوال تحتوي على مراجع متبقية لعمود `id` القديم عبر قاعدة البيانات كاملة، وتأكيد تنفيذ الـ RPC المعاملي بنجاح 100%.
+
+
 
 

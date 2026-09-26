@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { db } from '../lib/firebase';
-import { onSnapshot, doc, setDoc } from 'firebase/firestore';
+import { db } from '../lib/supabase-adapter';
+import { onSnapshot, doc, setDoc } from '../lib/supabase-adapter';
 
 export interface ExpenseCategory {
   id: string;

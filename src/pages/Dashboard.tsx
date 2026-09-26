@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { collection, onSnapshot, query, limit, orderBy, addDoc, where, doc, getDoc, setDoc } from 'firebase/firestore';
-import { db, auth, safeToDate } from '../lib/firebase';
+import { collection, onSnapshot, query, limit, orderBy, addDoc, where, doc, getDoc, setDoc } from '../lib/supabase-adapter';
+import { db, auth, safeToDate } from '../lib/supabase-adapter';
 import { financialAccountService } from '../services/financialAccountService';
 import { 
   Package, 
@@ -315,7 +315,7 @@ export default function Dashboard() {
     ];
   }, [orders, isAr]);
 
-  // Active Couriers linked directly with real-time Firestore database coordinates
+  // Active Couriers linked directly with real-time PostgreSQL database coordinates
   const mapCouriers = React.useMemo(() => {
     // Return empty if no database couriers to strictly prevent mock representations
     if (couriers.length === 0) {
@@ -377,7 +377,7 @@ export default function Dashboard() {
     });
   }, [couriers, orders, isAr]);
 
-  // Activity stream resolved dynamically from audit logs collection in Firestore
+  // Activity stream resolved dynamically from audit logs collection in PostgreSQL
   const recentActivities = React.useMemo(() => {
     if (realLogs.length > 0) {
       return realLogs.map(log => {

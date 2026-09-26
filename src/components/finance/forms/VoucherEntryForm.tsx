@@ -14,7 +14,7 @@ import {
   type FinancialEntryLineInput,
   type FinancialPaymentDetailInput,
 } from '../../../services/financialEntryService';
-import { supabase } from '../../../lib/supabase-firebase-adapter';
+import { supabase } from '../../../lib/supabase-adapter';
 import AccountPickerModal from '../AccountPickerModal';
 import FinancialCalculatorModal from '../FinancialCalculatorModal';
 import { amountInWords } from '../../../lib/numberToWords';
@@ -234,7 +234,7 @@ export default function VoucherEntryForm({
     const fetchVoucherRate = async () => {
       const { data } = await (supabase as any)
         .from('cur_price')
-        .select('id, seq, price')
+        .select('cur_price_id, seq, price')
         .eq('cur_no', selectedVoucherCurrency.id)
         .order('day_date', { ascending: false })
         .order('seq', { ascending: false })
@@ -243,7 +243,7 @@ export default function VoucherEntryForm({
 
       if (data?.price) {
         setVoucherExchangeRate(String(data.price));
-        setVoucherPriceRef({ id: Number(data.id), seq: Number(data.seq) });
+        setVoucherPriceRef({ id: Number(data.cur_price_id || data.id), seq: Number(data.seq) });
       } else {
         setVoucherExchangeRate('1');
         setVoucherPriceRef(null);
@@ -266,7 +266,7 @@ export default function VoucherEntryForm({
         void (async () => {
           const { data } = await (supabase as any)
             .from('cur_price')
-            .select('id, seq, price')
+            .select('cur_price_id, seq, price')
             .eq('cur_no', acc.curNo)
             .order('day_date', { ascending: false })
             .order('seq', { ascending: false })
@@ -274,7 +274,7 @@ export default function VoucherEntryForm({
             .maybeSingle();
 
           const fetchedPrice = data?.price ? String(data.price) : '1';
-          const priceObj = data ? { price: fetchedPrice, id: Number(data.id), seq: Number(data.seq) } : { price: '1' };
+          const priceObj = data ? { price: fetchedPrice, id: Number(data.cur_price_id || data.id), seq: Number(data.seq) } : { price: '1' };
           setAccountRatesMap((prev) => ({ ...prev, [acc.curNo]: priceObj }));
         })();
       }

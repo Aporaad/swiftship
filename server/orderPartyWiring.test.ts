@@ -42,7 +42,7 @@ describe('order party wiring', () => {
     expect(picker).toContain('document.body');
     expect(picker).toContain('z-[999999]');
     expect(createModal).toContain('!formData.customerId && !isStaffOrder');
-    expect(partyService).toContain("staffOnly ? party.type === 'customer' : party.type !== 'customer'");
+    expect(partyService).toContain("if (staffOnly && party.type === 'customer') return false;");
     expect(financialService).toContain('entities.orderParty || entities.customer');
     expect(createModal).toContain('orderCurrency, currency: orderCurrency, exchangeRate: 1');
     expect(editModal).toContain('currency: loadedOrderCurrency');

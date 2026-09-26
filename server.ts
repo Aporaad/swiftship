@@ -15,7 +15,7 @@ const currentDirPath = (currentFilePath)
 
 import admin, {
   initializeApp,
-  getFirestore,
+  getPostgreSQL,
   doc,
   getDoc,
   collection,
@@ -31,7 +31,7 @@ import admin, {
   signInWithEmailAndPassword,
   setDoc,
   createUserWithEmailAndPassword
-} from './src/lib/supabase-firebase-adapter';
+} from './src/lib/supabase-adapter';
 import { createServer as createViteServer } from 'vite';
 import { isAuthorizedHeartbeatRequest } from './server/heartbeatAuth';
 
@@ -39,12 +39,12 @@ async function startServer() {
   const app = express();
   app.use(express.json());
 
-  // Initialize Firebase Adapter Services (Backed by Supabase)
-  let firebaseApp: any = null;
+  // Initialize Supabase Adapter Services (Backed by Supabase)
+  let supabaseApp: any = null;
   let db: any = null;
   let auth: any = null;
 
-  // Initialize Firebase Admin SDK Mock
+  // Initialize Supabase Admin SDK Mock
   try {
     admin.initializeApp();
     console.log('Backend Adapter Admin SDK initialized successfully');
@@ -53,9 +53,9 @@ async function startServer() {
   }
 
   try {
-    firebaseApp = initializeApp({});
-    db = getFirestore(firebaseApp);
-    auth = initializeAuth(firebaseApp, {
+    supabaseApp = initializeApp({});
+    db = getPostgreSQL(supabaseApp);
+    auth = initializeAuth(supabaseApp, {
       persistence: inMemoryPersistence
     });
     console.log('[Server] Initialize Backend Adapter Services supporting Supabase on server successfully');
@@ -75,13 +75,13 @@ async function startServer() {
       console.warn('Backend failed standard authentication with system master password:', authErr.message);
       if (authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/user-not-found') {
         try {
-          const { createUserWithEmailAndPassword } = await import('./src/lib/supabase-firebase-adapter');
+          const { createUserWithEmailAndPassword } = await import('./src/lib/supabase-adapter');
           await createUserWithEmailAndPassword(auth, systemEmail, systemPassword);
           console.log('Backend server successfully registered admin@swiftship.system on-the-fly');
 
-          // Auto-seed admin user document in Firestore to enable immediate resolve-identifier and verify-login lookup list
+          // Auto-seed admin user document in PostgreSQL to enable immediate resolve-identifier and verify-login lookup list
           try {
-            const { doc: fDoc, setDoc } = await import('./src/lib/supabase-firebase-adapter');
+            const { doc: fDoc, setDoc } = await import('./src/lib/supabase-adapter');
             await setDoc(fDoc(db, 'users', auth.currentUser!.uid), {
               email: systemEmail,
               username: 'admin',
@@ -111,10 +111,10 @@ async function startServer() {
     }
   }
 
-  // --- EMULATED CLOUD FUNCTIONS (FIREBASE FUNCTIONS TRIGGERS) ---
+  // --- EMULATED CLOUD FUNCTIONS (SUPABASE FUNCTIONS TRIGGERS) ---
   if (db) {
     try {
-      console.log('[System Triggers] Setting up emulated real-time Firebase Cloud Functions on server backend...');
+      console.log('[System Triggers] Setting up emulated real-time Supabase Cloud Functions on server backend...');
 
       const getExchangeRatesBackend = async () => {
         try {
@@ -319,7 +319,7 @@ async function startServer() {
       });
 
     } catch (triggerErr: any) {
-      console.error('[System Triggers] Could not start real-time Firebase Triggers:', triggerErr.message);
+      console.error('[System Triggers] Could not start real-time Supabase Triggers:', triggerErr.message);
     }
   }
 
@@ -631,7 +631,7 @@ async function startServer() {
     res.json({ status: 'ok', project: 'supabase-backend' });
   });
 
-  // Direct administrative password update using Firestore to bypass disabled Identity Toolkit API
+  // Direct administrative password update using PostgreSQL to bypass disabled Identity Toolkit API
   app.post('/api/auth/admin-change-password', async (req, res) => {
     const { uid, newPassword } = req.body;
     if (!uid || !newPassword) {
@@ -644,15 +644,15 @@ async function startServer() {
     try {
       const userRef = doc(db, 'users', uid);
       await updateDoc(userRef, { password: newPassword });
-      console.log(`Successfully changed password in Firestore for user ${uid}`);
+      console.log(`Successfully changed password in PostgreSQL for user ${uid}`);
       return res.json({ success: true });
     } catch (err: any) {
-      console.error('Failed to change user password in Firestore:', err);
+      console.error('Failed to change user password in PostgreSQL:', err);
       return res.status(500).json({ error: err.message || 'Failed to change password' });
     }
   });
 
-  // Dual-logic login validation (supports custom/override Firestore passwords and Firebase Auth verification)
+  // Dual-logic login validation (supports custom/override PostgreSQL passwords and Supabase Auth verification)
   app.post('/api/auth/verify-login', async (req, res) => {
     const { identifier, password } = req.body;
     if (!identifier || !password) {
@@ -689,7 +689,7 @@ async function startServer() {
       const isRoot = ROOT_EMAILS.includes(email.toLowerCase());
 
       if (!userDoc && isRoot) {
-        // Automatically check/create Auth user and Firestore doc for root emails
+        // Automatically check/create Auth user and PostgreSQL doc for root emails
         let uid = '';
         let createdSuccessfully = false;
 
@@ -712,8 +712,8 @@ async function startServer() {
               }
             }
 
-            // Create/merge the user document in Firestore using Admin SDK
-            await admin.firestore().collection('users').doc(uid).set({
+            // Create/merge the user document in PostgreSQL using Admin SDK
+            await admin.supabase().collection('users').doc(uid).set({
               email: email.toLowerCase(),
               username: email.toLowerCase().split('@')[0],
               fullName: email.toLowerCase().split('@')[0].toUpperCase() + ' (Root)',
@@ -733,8 +733,8 @@ async function startServer() {
         // Fallback to Client Web SDK if Admin SDK was unavailable or failed
         if (!createdSuccessfully) {
           try {
-            const { signInWithEmailAndPassword, createUserWithEmailAndPassword } = await import('./src/lib/supabase-firebase-adapter');
-            const { setDoc, doc: fDoc } = await import('./src/lib/supabase-firebase-adapter');
+            const { signInWithEmailAndPassword, createUserWithEmailAndPassword } = await import('./src/lib/supabase-adapter');
+            const { setDoc, doc: fDoc } = await import('./src/lib/supabase-adapter');
 
             // Try to sign in as this user to see if they exist in auth
             try {
@@ -760,7 +760,7 @@ async function startServer() {
               }
             }
 
-            // Write/merge the Firestore document via Web SDK if uid got resolved
+            // Write/merge the PostgreSQL document via Web SDK if uid got resolved
             if (uid) {
               await setDoc(fDoc(db, 'users', uid), {
                 email: email.toLowerCase(),
@@ -805,7 +805,7 @@ async function startServer() {
       // If document has custom password, verify it directly
       if (userDoc.password) {
         if (userDoc.password === password) {
-          // Generate secure customToken using firebase-admin to seamlessly sign in on-the-fly and self-heal any password/provider issues
+          // Generate secure customToken using supabase-admin to seamlessly sign in on-the-fly and self-heal any password/provider issues
           let customToken = '';
           try {
             customToken = await admin.auth().createCustomToken(userDocId);
@@ -823,7 +823,7 @@ async function startServer() {
         }
       }
 
-      // Legacy user/root verification with NO password field stored in Firestore
+      // Legacy user/root verification with NO password field stored in PostgreSQL
       let customToken = '';
       try {
         customToken = await admin.auth().createCustomToken(userDocId);
@@ -852,13 +852,13 @@ async function startServer() {
     }
 
     try {
-      // 1. Fetch settings from Firestore via Client SDK
+      // 1. Fetch settings from PostgreSQL via Client SDK
       const settingsRef = doc(db, 'settings', 'whatsapp');
       const configSnap = await getDoc(settingsRef);
       const whatsappConfig = configSnap.exists() ? configSnap.data() : null;
 
       if (!whatsappConfig || !whatsappConfig.enabled) {
-        // Log to Firestore even if disabled, showing Skipped
+        // Log to PostgreSQL even if disabled, showing Skipped
         await addDoc(null, collection(db, 'whatsapp_logs'), {
           phone,
           message,
@@ -969,7 +969,7 @@ async function startServer() {
         errorMsg = 'No active WhatsApp provider configured.';
       }
 
-      // Add dispatch log to Firestore
+      // Add dispatch log to PostgreSQL
       await addDoc(null, collection(db, 'whatsapp_logs'), {
         phone,
         message,
@@ -995,7 +995,7 @@ async function startServer() {
           createdAt: Date.now()
         });
       } catch (logErr) {
-        console.error('Failed to write error log to Firestore:', logErr);
+        console.error('Failed to write error log to PostgreSQL:', logErr);
       }
       return res.status(500).json({ error: e.message });
     }

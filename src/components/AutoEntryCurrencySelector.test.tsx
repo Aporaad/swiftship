@@ -10,8 +10,26 @@ describe('AutoEntryCurrencySelector', () => {
         value={undefined}
         onChange={() => undefined}
         currencies={[
-          { cur_id: 1, code: 'YER', main_nameAR: 'ريال يمني', sup_nameAR: '', main_nameEn: 'Yemeni Rial', sup_nameEn: '', symbol: '﷼', flag: '🇾🇪', isDefault: true, isActive: true, createdAt: '' },
-          { cur_id: 2, code: 'EUR', main_nameAR: 'يورو', sup_nameAR: '', main_nameEn: 'Euro', sup_nameEn: '', symbol: '€', flag: '🇪🇺', isDefault: false, isActive: true, createdAt: '' },
+          {
+            cur_id: 1, code: 'YER',
+            // snake_case (DB columns)
+            main_name_ar: 'ريال يمني', sub_name_ar: '', main_name_en: 'Yemeni Rial', sub_name_en: '',
+            is_default: true, is_active: true, created_at: '',
+            // camelCase aliases (backward compat)
+            main_nameAR: 'ريال يمني', sup_nameAR: '', main_nameEn: 'Yemeni Rial', sup_nameEn: '',
+            isDefault: true, isActive: true, createdAt: '',
+            symbol: '﷼', flag: '🇾🇪',
+          },
+          {
+            cur_id: 2, code: 'EUR',
+            // snake_case (DB columns)
+            main_name_ar: 'يورو', sub_name_ar: '', main_name_en: 'Euro', sub_name_en: '',
+            is_default: false, is_active: true, created_at: '',
+            // camelCase aliases (backward compat)
+            main_nameAR: 'يورو', sup_nameAR: '', main_nameEn: 'Euro', sup_nameEn: '',
+            isDefault: false, isActive: true, createdAt: '',
+            symbol: '€', flag: '🇪🇺',
+          },
         ]}
       />,
     );

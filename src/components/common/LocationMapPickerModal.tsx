@@ -12,6 +12,7 @@ interface LocationData {
   addressDetails?: string;
   lat?: number;
   lng?: number;
+  gpsLocation?: string;
   gps_location?: string;
 }
 
@@ -190,9 +191,10 @@ export default function LocationMapPickerModal({
   };
 
   const handleConfirm = () => {
-    const finalGps = formData.gps_location || (formData.lat && formData.lng ? `https://maps.google.com/?q=${formData.lat},${formData.lng}` : '');
+    const finalGps = formData.gpsLocation || formData.gps_location || (formData.lat && formData.lng ? `https://maps.google.com/?q=${formData.lat},${formData.lng}` : '');
     onSelectLocation({
       ...formData,
+      gpsLocation: finalGps,
       gps_location: finalGps
     });
     onClose();

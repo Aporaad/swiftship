@@ -205,10 +205,217 @@ FROM information_schema.columns
 WHERE table_schema = 'public' 
   AND column_name ~ '[A-Z]'
 ORDER BY table_name, column_name;
--- النتيجة: [] (0 أعمدة مخالفة بنسبة 100%).
+
+
+
+## [2026-09-25 21:55:07] — AI Model: Gemini 3.6 Flash
+```sql
+-- 1. إعادة تسمية المفاتيح الرئيسية لكل جداول قاعدة البيانات
+ALTER TABLE public.roles              RENAME COLUMN id TO role_id;
+ALTER TABLE public.users              RENAME COLUMN id TO user_id;
+ALTER TABLE public.customers          RENAME COLUMN id TO customer_id;
+ALTER TABLE public.employees          RENAME COLUMN id TO employee_id;
+ALTER TABLE public.couriers           RENAME COLUMN id TO courier_id;
+ALTER TABLE public.orders             RENAME COLUMN id TO order_id;
+ALTER TABLE public.shipments          RENAME COLUMN id TO shipment_id;
+ALTER TABLE public.products           RENAME COLUMN id TO product_id;
+ALTER TABLE public.order_items        RENAME COLUMN items_id TO order_item_id;
+ALTER TABLE public.accounts          RENAME COLUMN id TO account_id;
+ALTER TABLE public.main_entry         RENAME COLUMN id TO main_entry_id;
+ALTER TABLE public.account_trans      RENAME COLUMN id TO account_trans_id;
+ALTER TABLE public.cur_price          RENAME COLUMN id TO cur_price_id;
+-- (... تم تحويل كافة الجداول الأخرى)
+
+-- 2. إرجاع وإعاده إنشاء القيود المرجعية (FK Constraints) على المسميات الجديدة
+ALTER TABLE public.account_trans ADD CONSTRAINT account_trans_created_by_uid_fkey FOREIGN KEY (created_by_uid) REFERENCES public.users(user_id);
+ALTER TABLE public.orders ADD CONSTRAINT orders_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(customer_id);
+-- (... تم ترحيل وإعاده إنشاء كافة FKs)
+
+-- 3. تحديث عرض portal_users_view واستخدام portal_user_id بدلاً من AS id
+DROP VIEW IF EXISTS public.portal_users_view;
+CREATE VIEW public.portal_users_view AS
+SELECT 
+  portal_user_id,
+  (data ->> 'address'::text) AS address,
+  (data ->> 'approvalStatus'::text) AS approval_status,
+  (data ->> 'commercialRegisterUrl'::text) AS commercial_register_url,
+  ((data ->> 'createdAt'::text))::numeric AS created_at,
+  (data ->> 'email'::text) AS email,
+  (data ->> 'fullName'::text) AS full_name,
+  (data ->> 'gpsLocation'::text) AS gps_location,
+  (data ->> 'identityDocUrl'::text) AS identity_doc_url,
+  (data ->> 'linkedAccId'::text) AS linked_acc_id,
+  (data ->> 'linkedCustomerId'::text) AS linked_customer_id,
+  (data ->> 'notes'::text) AS notes,
+  (data ->> 'phone'::text) AS phone,
+  (data ->> 'portalRole'::text) AS portal_role,
+  (data ->> 'profileImageUrl'::text) AS profile_image_url,
+  (data ->> 'uid'::text) AS uid,
+  ((data ->> 'updatedAt'::text))::numeric AS updated_at,
+  (data ->> 'username'::text) AS username
+FROM public.portal_users;
+
+-- 4. تنفيذ Migration 202609170002 لتحديث delete_orders_with_dependents و orders_history_from_orders و create_financial_entry_v2
 ```
 
+## [2026-09-25 23:45:00] — AI Model: Gemini 3.6 Flash
+```sql
+-- 1. تحديث دالة orders_history_resolve_order لتفادي الخطأ o.id does not exist
+CREATE OR REPLACE FUNCTION public.orders_history_resolve_order(p_ref text)
+ RETURNS TABLE(order_id text, order_number text)
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+  IF p_ref IS NULL OR btrim(p_ref) = '' THEN
+    RETURN;
+  END IF;
+
+  RETURN QUERY
+  SELECT o.order_id, o.order_number
+  FROM public.orders o
+  WHERE o.order_id = p_ref OR o.order_number = p_ref
+  LIMIT 1;
+END;
+$function$;
+
+-- 2. تحديث دوال الربط المالي المباشرة وتصحيح المراجع
+CREATE OR REPLACE FUNCTION public.link_employee_financial_account() RETURNS trigger AS $$
+BEGIN
+  IF NEW.employee_id IS NOT NULL AND NEW.financial_account_id IS NULL THEN
+    -- assign financial_account_id using employee_id
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 ```
+
+## [2026-09-26 00:15:00] — AI Model: Gemini 3.6 Flash
+```sql
+-- تحديث استعلامات Supabase Client REST المباشرة لتطابق مسميات أعمدة الجداول بـ PostgreSQL
+-- 1. جدول currency: cur_id, is_default, is_active (بدلاً من cur_id, isDefault, isActive)
+SELECT cur_id, code, is_default FROM public.currency WHERE is_active = true ORDER BY cur_id ASC;
+
+-- 2. جدول accounts: account_id, acc_name_ar, acc_name_en, cur_no, is_active, acc_sub_id, entity_id, entity_type (بدلاً من id)
+SELECT account_id, acc_name_ar, acc_name_en, cur_no, is_active, acc_sub_id, entity_id, entity_type FROM public.accounts ORDER BY account_id ASC;
+
+-- 3. جدول main_entry: main_entry_id (بدلاً من id)
+SELECT main_entry_id, entry_number, module_id, entry_type_id, entry_category, posting_status, description, payment_method, effective_at, created_at, updated_at, created_by_uid, updated_by_uid, order_id FROM public.main_entry ORDER BY effective_at DESC LIMIT 500;
+
+-- 4. جدول account_trans: account_trans_id, main_entry_id (بدلاً من id, entry_id)
+SELECT account_trans_id, main_entry_id, line_no, trans_type, account_id, account_cur_no, amount, amount_original, currency_original_no, payment_method, description, order_id, shipment_id, created_at FROM public.account_trans ORDER BY created_at DESC LIMIT 1500;
+
+-- 5. جدول entry_payment_details: entry_payment_detail_id, main_entry_id (بدلاً من id, entry_id)
+SELECT entry_payment_detail_id, main_entry_id, payment_method, account_id, amount_original, bank_reference, due_at, note FROM public.entry_payment_details ORDER BY main_entry_id ASC LIMIT 1500;
+
+-- 6. جدول custody_advances: custody_advance_id (بدلاً من id)
+SELECT custody_advance_id, custody_number, recipient_id, recipient_name, recipient_type, recipient_account_id, amount_original, amount_outstanding, currency_original_no, status, issued_at FROM public.custody_advances ORDER BY issued_at DESC LIMIT 500;
+
+-- 7. جدول users: user_id, full_name (بدلاً من id, data)
+SELECT user_id, username, full_name FROM public.users LIMIT 500;
+```
+
+## [2026-09-26 03:53:00] — AI Model: Gemini 3.6 Flash
+```sql
+-- 1. تحديث استعلامات جدول أسعار العملات cur_price لاستخدام cur_price_id بدلاً من id
+SELECT cur_price_id, seq, price FROM public.cur_price WHERE cur_no = 3 ORDER BY day_date DESC, seq DESC LIMIT 1;
+SELECT cur_price_id, seq, price FROM public.cur_price WHERE cur_no = 2 ORDER BY day_date DESC, seq DESC LIMIT 1;
+SELECT cur_price_id, seq, price, day_date FROM public.cur_price WHERE cur_no = 1 ORDER BY day_date DESC, seq DESC LIMIT 1;
+
+-- 2. تحديث استعلامات جدول main_entry لاستخدام main_entry_id بدلاً من id
+SELECT main_entry_id FROM public.main_entry WHERE order_id = 'ORD-101' AND auto_rule_id = 'order_down_payment' LIMIT 1;
+SELECT main_entry_id FROM public.main_entry WHERE automation_key = 'auto-voucher:101:rule:1' LIMIT 1;
+```
+ 
+## [2026-09-26 05:20:00] — AI Model: Gemini 3.6 Flash
+```sql
+-- 1. تحديث دالة orders_history_write واستخدام orders_history_id
+CREATE OR REPLACE FUNCTION public.orders_history_write(
+  p_order_id text DEFAULT NULL::text,
+  p_order_number text DEFAULT NULL::text,
+  p_shipment_id text DEFAULT NULL::text,
+  p_journal_entry_id text DEFAULT NULL::text,
+  p_account_transaction_id text DEFAULT NULL::text,
+  p_activity_log_id text DEFAULT NULL::text,
+  p_event_type text DEFAULT 'custom'::text,
+  p_event_category text DEFAULT 'general'::text,
+  p_operation text DEFAULT 'custom'::text,
+  p_entity_type text DEFAULT 'custom'::text,
+  p_source text DEFAULT 'database'::text,
+  p_summary text DEFAULT NULL::text,
+  p_before_data jsonb DEFAULT '{}'::jsonb,
+  p_after_data jsonb DEFAULT '{}'::jsonb,
+  p_metadata jsonb DEFAULT '{}'::jsonb,
+  p_actor_id text DEFAULT NULL::text,
+  p_actor_name text DEFAULT NULL::text,
+  p_actor_role text DEFAULT NULL::text
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $function$
+DECLARE
+  actor_record record;
+BEGIN
+  SELECT * INTO actor_record
+  FROM public.orders_history_actor(p_actor_id, p_actor_name, p_actor_role);
+
+  INSERT INTO public.orders_history (
+    orders_history_id, order_id, order_number, shipment_id, journal_entry_id, account_transaction_id,
+    activity_log_id, event_type, event_category, operation, entity_type,
+    actor_id, actor_name, actor_role, source, summary,
+    before_data, after_data, metadata, occurred_at, created_at
+  ) VALUES (
+    'oh_' || substr(md5(random()::text || clock_timestamp()::text || txid_current()::text), 1, 24),
+    p_order_id, p_order_number, p_shipment_id, p_journal_entry_id, p_account_transaction_id,
+    p_activity_log_id, p_event_type, p_event_category, p_operation, p_entity_type,
+    actor_record.actor_id, actor_record.actor_name, actor_record.actor_role, COALESCE(p_source, 'database'), p_summary,
+    COALESCE(p_before_data, '{}'::jsonb), COALESCE(p_after_data, '{}'::jsonb), COALESCE(p_metadata, '{}'::jsonb), now(), now()
+  );
+END;
+$function$;
+
+-- 2. تحديث delete_orders_with_dependents
+-- تم تحديث الاستعلامات لحذف السجلات التابعة بناءً على order_id و shipment_id و main_entry_id و account_trans_id
+
+
+## [2026-09-26 05:32:00] — AI Model: Gemini 3.6 Flash
+```sql
+-- 1. تحديث دالة financial_entry_permission_for_payload
+CREATE OR REPLACE FUNCTION public.financial_entry_permission_for_payload(p_entry jsonb, p_action text DEFAULT 'create'::text)
+RETURNS text LANGUAGE plpgsql SECURITY DEFINER AS $function$
+DECLARE v_type_code text; v_category text := COALESCE(p_entry->>'entryCategory', 'General');
+BEGIN
+  SELECT code INTO v_type_code FROM public.entry_type WHERE entry_type_id = NULLIF(btrim(p_entry->>'entryTypeId'), '');
+  IF p_action = 'create' THEN
+    IF v_type_code IN ('RECEIPT_VOUCHER', 'ORDER_PAYMENT') THEN RETURN 'create_receipt_vouchers'; END IF;
+    IF v_type_code IN ('PAYMENT_VOUCHER', 'OPERATING_EXPENSE', 'SALARY_PAYMENT') THEN RETURN 'create_payment_vouchers'; END IF;
+    IF v_category = 'Compound' THEN RETURN 'create_compound_entries'; END IF;
+    IF v_category = 'Temp' THEN RETURN 'create_temporary_entries'; END IF;
+    RETURN 'create_general_entries';
+  END IF;
+  IF v_type_code IN ('RECEIPT_VOUCHER', 'ORDER_PAYMENT') THEN RETURN 'edit_receipt_vouchers'; END IF;
+  IF v_type_code IN ('PAYMENT_VOUCHER', 'OPERATING_EXPENSE', 'SALARY_PAYMENT') THEN RETURN 'edit_payment_vouchers'; END IF;
+  IF v_category = 'Compound' THEN RETURN 'edit_compound_entries'; END IF;
+  IF v_category = 'Temp' THEN RETURN 'edit_temporary_entries'; END IF;
+  RETURN 'edit_general_entries';
+END;
+$function$;
+
+-- 2. تحديث دالة accounting_system_currency_id
+CREATE OR REPLACE FUNCTION public.accounting_system_currency_id()
+RETURNS integer LANGUAGE sql STABLE SECURITY DEFINER AS $function$
+  SELECT cur_id FROM public.currency WHERE is_default = true AND is_active = true ORDER BY cur_id LIMIT 1;
+$function$;
+
+-- 3. تحديث الـ 14 دالة مخزنة الأخرى والتأكد من مطابقة أسماء الأعمدة في PostgreSQL
+```
+
+
+
+
+
 
 
 

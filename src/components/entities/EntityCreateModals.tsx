@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Globe, MapPin, Phone, Truck, User, X, ShieldCheck, Calendar, Key, Lock, CheckCircle2, Building2, Briefcase } from 'lucide-react';
-import { addDoc, collection, db, doc, setDoc, updateDoc } from '../../lib/supabase-firebase-adapter';
+import { addDoc, collection, db, doc, setDoc, updateDoc } from '../../lib/supabase-adapter';
 import { financialAccountService } from '../../services/financialAccountService';
 import { activityLogService } from '../../services/activityLogService';
 import { notificationService } from '../../services/notificationService';

@@ -1,4 +1,4 @@
-import { collection, db, doc, getDoc, getDocs } from '../lib/supabase-firebase-adapter';
+import { collection, db, doc, getDoc, getDocs } from '../lib/supabase-adapter';
 
 export type LedgerEntityType =
   | 'customer'

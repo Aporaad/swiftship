@@ -4,7 +4,11 @@
     "experimentalDecorators": true,
     "useDefineForClassFields": false,
     "module": "ESNext",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "skipLibCheck": true,
     "moduleResolution": "bundler",
     "isolatedModules": true,
@@ -13,20 +17,42 @@
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"],
-      "firebase/app": ["./src/lib/supabase-firebase-adapter.ts"],
-      "firebase/auth": ["./src/lib/supabase-firebase-adapter.ts"],
-      "firebase/firestore": ["./src/lib/supabase-firebase-adapter.ts"],
-      "firebase/firestore/lite": ["./src/lib/supabase-firebase-adapter.ts"],
-      "firebase-admin": ["./src/lib/supabase-firebase-adapter.ts"],
-      "firebase-admin/firestore": ["./src/lib/supabase-firebase-adapter.ts"],
-      "firebase-admin/app": ["./src/lib/supabase-firebase-adapter.ts"],
-      "firebase-admin/auth": ["./src/lib/supabase-firebase-adapter.ts"],
-      "@firebase/firestore": ["./src/lib/supabase-firebase-adapter.ts"],
-      "@google-cloud/firestore": ["./src/lib/supabase-firebase-adapter.ts"]
+      "@/*": [
+        "./*"
+      ],
+      "../lib/supabase-adapter": [
+        "./src/lib/supabase-adapter.ts"
+      ],
+      "supabase-admin": [
+        "./src/lib/supabase-adapter.ts"
+      ],
+      "supabase-admin/supabase": [
+        "./src/lib/supabase-adapter.ts"
+      ],
+      "supabase-admin/app": [
+        "./src/lib/supabase-adapter.ts"
+      ],
+      "supabase-admin/auth": [
+        "./src/lib/supabase-adapter.ts"
+      ],
+      "@supabase/supabase": [
+        "./src/lib/supabase-adapter.ts"
+      ],
+      "@google-cloud/supabase": [
+        "./src/lib/supabase-adapter.ts"
+      ]
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
-  "exclude": ["alx_web", "node_modules", "dist", "drizzle.config.ts", "server/_core", "test-auth.ts", "test-auth-2.ts"]
+  "exclude": [
+    "alx_web",
+    "alx_api",
+    "node_modules",
+    "dist",
+    "drizzle.config.ts",
+    "server/_core",
+    "test-auth.ts",
+    "test-auth-2.ts"
+  ]
 }

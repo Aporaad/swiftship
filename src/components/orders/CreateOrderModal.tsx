@@ -1994,7 +1994,7 @@ export default function CreateOrderModal(
                         {[
                           { id: 'Cash', labelAr: 'نقد (صندوق)', labelEn: 'Cash Box', icon: Wallet },
                           { id: 'Bank', labelAr: 'بنك (تحويل)', labelEn: 'Bank Transfer', icon: Building },
-                          { id: 'Deferred', labelAr: 'آجل (دين)', labelEn: 'On Credit', icon: FileText },
+                          { id: 'Deferred', labelAr: 'آجل (من حساب اخر)', labelEn: 'On Credit', icon: FileText },//مهم : يتم تطوير حاله من حساب اخر بحيث يمكن اختيار حساب مالي اخر غير حساب العميل ليتم تقييد الفاتوره من هذا الحساب 
                           { id: 'Mixed', labelAr: 'متعدد (مختلط)', labelEn: 'Multi / Split', icon: ArrowRightLeft },
                         ].map((type) => {
                           const Icon = type.icon;

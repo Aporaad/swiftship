@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase-firebase-adapter';
+import { supabase } from '../lib/supabase-adapter';
 
 export type FinancialPaymentMethod = 'cash' | 'bank' | 'mixed' | 'deferred';
 export type FinancialEntryCategory = 'General' | 'Compound' | 'Temp' | 'Reversing';
@@ -270,20 +270,22 @@ class FinancialEntryService {
   private async resolveCurrency(code: string): Promise<{ curId: number; isDefault: boolean }> {
     const normalizedCode = String(code || '').trim().toUpperCase();
     if (!normalizedCode) throw new Error('رمز العملة مطلوب لإنشاء القيد.');
+    // استعلام العملة باستخدام اسم العمود الصحيح is_default (snake_case)
+    // Query currency using correct column name is_default (snake_case)
     const { data, error } = await (supabase as any)
       .from('currency')
-      .select('cur_id, isDefault')
+      .select('cur_id, is_default')
       .eq('code', normalizedCode)
       .limit(1)
       .maybeSingle();
     if (error || !data?.cur_id) throw new Error(`لا يوجد مرجع عملة نشط ومثبت للرمز ${normalizedCode}.`);
-    return { curId: Number(data.cur_id), isDefault: Boolean(data.isDefault) };
+    return { curId: Number(data.cur_id), isDefault: Boolean(data.is_default) };
   }
 
   private async resolvePrice(currencyId: number, effectiveAt: string): Promise<{ price: number; reference: FinancialEntryPriceReference }> {
     const { data, error } = await (supabase as any)
       .from('cur_price')
-      .select('id, seq, price')
+      .select('cur_price_id, seq, price')
       .eq('cur_no', currencyId)
       .lte('day_date', effectiveAt)
       .order('day_date', { ascending: false })
@@ -295,7 +297,7 @@ class FinancialEntryService {
     }
     return {
       price: Number(data.price),
-      reference: { id: Number(data.id), seq: Number(data.seq) },
+      reference: { id: Number(data.cur_price_id || data.id), seq: Number(data.seq) },
     };
   }
 

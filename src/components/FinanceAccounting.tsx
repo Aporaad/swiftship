@@ -5,8 +5,8 @@ import {
   DollarSign, Activity, FileSpreadsheet, PlusCircle, Scale, Receipt, Sparkles, TrendingUp, RefreshCw, X,
   FolderTree, Wrench, Users, Coins, UserCheck, Eye, ChevronDown, ChevronUp, Edit2, Lock, Trash2, ArrowRightLeft
 } from 'lucide-react';
-import { db, auth } from '../lib/supabase-firebase-adapter';
-import { collection, addDoc, doc, updateDoc, writeBatch, deleteDoc, onSnapshot, query, orderBy, increment, getDocs, where } from '../lib/supabase-firebase-adapter';
+import { db, auth } from '../lib/supabase-adapter';
+import { collection, addDoc, doc, updateDoc, writeBatch, deleteDoc, onSnapshot, query, orderBy, increment, getDocs, where } from '../lib/supabase-adapter';
 import { notificationService } from '../services/notificationService';
 import AccountingHierarchyManagement from './AccountingHierarchyManagement';
 import AssetsPortfolio from './AssetsPortfolio';
@@ -1359,7 +1359,7 @@ Continue?`
       console.error(err);
       notificationService.notify({
         title: 'Writeback fault',
-        message: err.message || 'Could not discharge custody row in Firestore.',
+        message: err.message || 'Could not discharge custody row in PostgreSQL.',
         type: 'error'
       });
     }

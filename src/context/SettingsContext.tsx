@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { doc, onSnapshot, setDoc, collection, getDocs, query, orderBy, limit, onAuthStateChanged, auth, db } from '../lib/firebase';
-import { supabase } from '../lib/supabase-firebase-adapter';
+import { doc, onSnapshot, setDoc, collection, getDocs, query, orderBy, limit, onAuthStateChanged, auth, db } from '../lib/supabase-adapter';
+import { supabase } from '../lib/supabase-adapter';
 import { currencyService } from '../services/currencyService';
 import { translations, Language, TranslationKey } from '../translations';
 
@@ -81,7 +81,7 @@ export interface Settings {
   // Backup System
   autoBackupEnabled?: boolean;
   backupSchedule?: 'daily' | 'weekly' | 'monthly' | 'manual';
-  backupRetentionDays?: number;    // how many days to keep Firestore auto backups
+  backupRetentionDays?: number;    // how many days to keep PostgreSQL auto backups
   backupCollections?: string[];    // which collections to backup
   backupEncrypted?: boolean;       // whether to encrypt the backup
   lastBackup?: string;
@@ -237,7 +237,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   }, [settings.language, settings.theme, settings.fontSize, settings.systemName, settings.companyName]);
 
   useEffect(() => {
-    // Timeout to prevent infinite loading if Firestore is offline
+    // Timeout to prevent infinite loading if PostgreSQL is offline
     const timeout = setTimeout(() => {
       if (loading) {
         console.warn('Settings fetch timed out - using defaults');

@@ -4,8 +4,8 @@ import {
   Send, Database, Key, Phone, ShieldCheck, Layers, Play, Check, 
   FileText, Info, ExternalLink, Lock, Settings, HelpCircle, Activity, Sparkles, RefreshCw
 } from 'lucide-react';
-import { collection, onSnapshot, query, orderBy, limit, writeBatch, doc } from 'firebase/firestore';
-import { db, auth, safeToDate } from '../lib/firebase';
+import { collection, onSnapshot, query, orderBy, limit, writeBatch, doc } from '../lib/supabase-adapter';
+import { db, auth, safeToDate } from '../lib/supabase-adapter';
 import { formatDistanceToNow } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { useRole } from '../hooks/useRole';

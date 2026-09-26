@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { supabase } from '../src/lib/supabase-firebase-adapter';
+import { supabase } from '../src/lib/supabase-adapter';
 
 describe('Supabase adapter runtime configuration', () => {
   it('initializes the original application adapter with the injected project URL', () => {

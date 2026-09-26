@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
-import { doc, onSnapshot, updateDoc, setDoc, deleteDoc } from '../lib/supabase-firebase-adapter';
-import { onAuthStateChanged, User } from '../lib/supabase-firebase-adapter';
-import { auth, db } from '../lib/supabase-firebase-adapter';
-import { clearAllLocalData } from '../lib/supabase-firebase-adapter';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { doc, onSnapshot, updateDoc, setDoc, deleteDoc } from '../lib/supabase-adapter';
+import { onAuthStateChanged, User } from '../lib/supabase-adapter';
+import { auth, db } from '../lib/supabase-adapter';
+import { clearAllLocalData, signOut as adapterSignOut } from '../lib/supabase-adapter';
 import { DEFAULT_ROLE_PERMISSIONS } from '../lib/permissions';
+import { useSettings } from '../context/SettingsContext';
 
 const getDeviceAndBrowser = () => {
   if (typeof window === 'undefined') return 'Unknown';
@@ -38,6 +39,89 @@ export function useRole(enableHeartbeat: boolean = false) {
   const [user, setUser] = useState<User | null>(auth.currentUser);
   const [sessionId, setSessionId] = useState<string>('sess-loading');
 
+  // جلب إعدادات مهلة خمول المستخدم بالدقائق من Context تلقائياً بدلاً من القيمة الثابتة
+  // Fetch user inactivity timeout in minutes from SettingsContext dynamically
+  let timeoutMinutes = 10;
+  try {
+    const { settings } = useSettings();
+    if (settings && typeof settings.userSessionTimeout === 'number' && settings.userSessionTimeout > 0) {
+      timeoutMinutes = settings.userSessionTimeout;
+    }
+  } catch (_) {
+    // Fallback in case useRole is consumed outside SettingsProvider
+  }
+  const inactivityTimeoutMs = timeoutMinutes * 60 * 1000;
+
+  // مرجع لمُعرّف session لاستخدامه في cleanup بعيداً عن React state
+  // Ref to hold session ID for use in cleanup callbacks outside React state
+  const sessionIdRef = useRef<string>('sess-loading');
+  const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /**
+   * حذف سجل الجلسة من قاعدة البيانات وتنظيف البيانات المحلية والذاكرة المخبئية
+   * Delete session record from DB and clean local data and cache
+   */
+  const performSignOut = useCallback(async (sessId?: string) => {
+    const targetSessionId = sessId || sessionIdRef.current;
+    if (targetSessionId && targetSessionId !== 'sess-loading' && targetSessionId !== 'sess-loggedout') {
+      try {
+        // حذف الجلسة من قاعدة البيانات
+        // Delete session from database
+        await deleteDoc(doc(db, 'sessions', targetSessionId));
+      } catch (e) {
+        console.warn('[useRole] Failed to delete session from DB:', e);
+      }
+    }
+
+    // تنظيف بيانات الجلسة والمستخدم من التخزين المحلي والـ Session Storage
+    // Clean session identifiers from storage
+    if (typeof window !== 'undefined') {
+      try {
+        for (let i = sessionStorage.length - 1; i >= 0; i--) {
+          const key = sessionStorage.key(i);
+          if (key && (key.startsWith('swiftship_session_') || key.startsWith('swiftship_persisted_'))) {
+            sessionStorage.removeItem(key);
+          }
+        }
+        localStorage.removeItem('swiftship_persisted_user');
+        localStorage.removeItem('swiftship_session_id');
+      } catch (_) { }
+    }
+
+    // مسح جميع بيانات التخزين المؤقت في الكاش local storage
+    // Clear all local cache data
+    clearAllLocalData();
+
+    await adapterSignOut().catch(console.error);
+  }, []);
+
+  /**
+   * إعادة ضبط مؤقت الخمول بناءً على مهلة خمول الجلسة الديناميكية من الإعدادات
+   * Reset the inactivity timer on user activity based on userSessionTimeout
+   */
+  const resetInactivityTimer = useCallback(() => {
+    if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
+    if (!inactivityTimeoutMs || inactivityTimeoutMs <= 0) return;
+    inactivityTimerRef.current = setTimeout(() => {
+      console.warn('[useRole] Inactivity timeout reached - signing out');
+      performSignOut();
+    }, inactivityTimeoutMs);
+  }, [performSignOut, inactivityTimeoutMs]);
+
+  // استمع لأحداث نشاط المستخدم لإعادة ضبط مؤقت الخمول
+  // Listen to user activity events to reset the inactivity timer
+  useEffect(() => {
+    if (!enableHeartbeat || !user) return;
+    const events = ['mousemove', 'keydown', 'click', 'touchstart', 'scroll'];
+    const handler = () => resetInactivityTimer();
+    events.forEach(e => window.addEventListener(e, handler, { passive: true }));
+    resetInactivityTimer(); // ابدأ المؤقت فوراً / start timer immediately
+    return () => {
+      events.forEach(e => window.removeEventListener(e, handler));
+      if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
+    };
+  }, [enableHeartbeat, user, resetInactivityTimer]);
+
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (u) => {
       setUser(u);
@@ -47,6 +131,7 @@ export function useRole(enableHeartbeat: boolean = false) {
         setProfile(null);
         setLoading(false);
         setSessionId('sess-loggedout');
+        sessionIdRef.current = 'sess-loggedout';
         if (typeof window !== 'undefined') {
           // Clear all stored custom/standard session attributes to avoid stale logins crossing paths
           for (let i = sessionStorage.length - 1; i >= 0; i--) {
@@ -66,6 +151,7 @@ export function useRole(enableHeartbeat: boolean = false) {
   useEffect(() => {
     if (!user) {
       setSessionId('sess-loggedout');
+      sessionIdRef.current = 'sess-loggedout';
       return;
     }
 
@@ -76,9 +162,10 @@ export function useRole(enableHeartbeat: boolean = false) {
       sessionStorage.setItem(storageKey, id);
     }
     setSessionId(id);
+    sessionIdRef.current = id;
   }, [user]);
 
-  // Session heartbeats: update /sessions/{sessionId} dynamically so the Admin knows which device/tab is active
+  // Session heartbeats: update /sessions/{sessionId} with correct ISO timestamps
   useEffect(() => {
     if (!enableHeartbeat || !user || loading || sessionId === 'sess-loading' || sessionId === 'sess-loggedout') return;
 
@@ -86,26 +173,34 @@ export function useRole(enableHeartbeat: boolean = false) {
       try {
         const sessionRef = doc(db, 'sessions', sessionId);
         const createdTimeKey = `swiftship_session_created_${user.uid}`;
-        const createdTime = sessionStorage.getItem(createdTimeKey) || String(Date.now());
+        const createdTimeStr = sessionStorage.getItem(createdTimeKey) || new Date().toISOString();
         if (!sessionStorage.getItem(createdTimeKey)) {
-          sessionStorage.setItem(createdTimeKey, createdTime);
+          sessionStorage.setItem(createdTimeKey, createdTimeStr);
         }
 
         const emailVal = profile?.email || user.email || '';
         const fullNameVal = profile?.fullName || user.displayName || (emailVal ? emailVal.split('@')[0] : 'User');
         const roleVal = profile?.role || role || 'Employee';
+        const nowISO = new Date().toISOString();
 
+        // بناء بيانات الجلسة لحقل data والأعمدة المباشرة بصيغة ISO صحيحة
+        // Build session data with ISO timestamps for DB columns
         await setDoc(sessionRef, {
           id: sessionId,
           userId: user.uid,
+          user_id: user.uid,
+          createdAt: createdTimeStr,
+          created_at: createdTimeStr,
+          lastSeen: nowISO,
+          last_seen: nowISO,
+          forceLogout: false,
+          force_logout: false,
           email: emailVal,
           fullName: fullNameVal,
+          full_name: fullNameVal,
           role: roleVal,
           deviceInfo: getDeviceAndBrowser(),
-          lastSeen: Date.now(),
-          lastSeenAt: new Date().toISOString(),
-          createdAt: Number(createdTime),
-          forceLogout: false
+          device_info: getDeviceAndBrowser(),
         }, { merge: true });
       } catch (err) {
         console.warn("[Session Heartbeat] Error:", err);
@@ -113,11 +208,47 @@ export function useRole(enableHeartbeat: boolean = false) {
     };
 
     updateSessionHeartbeat();
-    const interval = setInterval(updateSessionHeartbeat, 45_000);
+    const interval = setInterval(updateSessionHeartbeat, 30_000);
     return () => clearInterval(interval);
   }, [enableHeartbeat, user, profile, role, loading, sessionId]);
 
-  // Listen for individual session termination
+  // ── DELETE SESSION FROM DB ON WINDOW / TAB / APP CLOSE ──
+  // عند إغلاق التبويب أو نافذة التطبيق أو المتصفح، يتم حذف سجل الجلسة من قاعدة البيانات فوراً
+  // ملاحظة: لا نمس sessionStorage أو localStorage هنا حتى يتمكن تحديث الصفحة (F5) من إعادة إحياء الجلسة تلقائياً
+  useEffect(() => {
+    if (!enableHeartbeat || !user || sessionId === 'sess-loading' || sessionId === 'sess-loggedout') return;
+
+    const handleBeforeUnload = () => {
+      const targetSessId = sessionIdRef.current;
+      if (targetSessId && targetSessId !== 'sess-loading' && targetSessId !== 'sess-loggedout') {
+        const env = (import.meta as any).env || {};
+        const supabaseUrl = env.VITE_SUPABASE_URL || 'https://ejrojwbbflzchasvgexr.supabase.co';
+        const supabaseKey = env.VITE_SUPABASE_ANON_KEY || '';
+
+        // إرسال طلب حذف الجلسة من DB عبر fetch مع keepalive
+        try {
+          fetch(`${supabaseUrl}/rest/v1/sessions?id=eq.${targetSessId}`, {
+            method: 'DELETE',
+            headers: {
+              'apikey': supabaseKey,
+              'Authorization': `Bearer ${supabaseKey}`,
+              'Content-Type': 'application/json'
+            },
+            keepalive: true
+          }).catch(() => {});
+        } catch (_) {}
+      }
+    };
+
+    window.addEventListener('pagehide', handleBeforeUnload);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('pagehide', handleBeforeUnload);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [enableHeartbeat, user, sessionId]);
+
+  // Listen for individual session termination (forceLogout from admin)
   useEffect(() => {
     if (!enableHeartbeat || !user || sessionId === 'sess-loading' || sessionId === 'sess-loggedout') return;
 
@@ -125,28 +256,29 @@ export function useRole(enableHeartbeat: boolean = false) {
     const unsubSession = onSnapshot(sessionRef, (sessionDoc) => {
       if (sessionDoc.exists()) {
         const sessionData = sessionDoc.data();
-        if (sessionData.forceLogout === true) {
+        if (sessionData.force_logout === true || sessionData.forceLogout === true) {
           const keyId = `swiftship_session_id_${user.uid}`;
           const keyCreated = `swiftship_session_created_${user.uid}`;
           sessionStorage.removeItem(keyId);
           sessionStorage.removeItem(keyCreated);
-          deleteDoc(sessionRef).catch(console.error);
-          clearAllLocalData();
-          auth.signOut().catch(console.error);
+          // حذف سجل الجلسة من قاعدة البيانات ثم تسجيل الخروج
+          // Delete session from DB then sign out
+          performSignOut(sessionId);
         }
       }
     });
 
     return () => unsubSession();
-  }, [enableHeartbeat, user, sessionId]);
+  }, [enableHeartbeat, user, sessionId, performSignOut]);
 
-  // Heartbeat: update lastSeen every 60s so the general user lists show online/offline status
+  // Heartbeat: update last_seen every 60s so the general user lists show online/offline status
   useEffect(() => {
     if (!enableHeartbeat || !user || loading) return;
     const updateLastSeen = () => {
+      const nowISO = new Date().toISOString();
       updateDoc(doc(db, 'users', user.uid), {
-        lastSeen: Date.now(),
-        lastSeenAt: new Date().toISOString(),
+        last_seen: Date.now(), // عدد مليثاني - للمقارنات التحليلية
+        last_seen_at: nowISO,  // نص للعرض
       }).catch(() => {/* silently ignore */ });
     };
     updateLastSeen(); // immediate on mount
@@ -176,19 +308,19 @@ export function useRole(enableHeartbeat: boolean = false) {
         const userData = userDoc.data();
 
         // ── FORCE LOGOUT: admin requested remote session termination ──
-        if (userData.forceLogout === true) {
+        if (userData.forceLogout === true || userData.force_logout === true) {
           // Clear the flag first, then sign out
-          updateDoc(doc(db, 'users', user.uid), { forceLogout: false, forceLogoutAt: null })
+          updateDoc(doc(db, 'users', user.uid), { forceLogout: false, force_logout: false, forceLogoutAt: null })
             .catch(console.error);
-          clearAllLocalData();
-          auth.signOut().catch(console.error);
+          // حذف سجل الجلسة من DB وتسجيل الخروج
+          // Delete session from DB and sign out
+          performSignOut();
           return;
         }
 
         // ── DISABLED: account was disabled while user was logged in ──
         if (userData.disabled === true) {
-          clearAllLocalData();
-          auth.signOut().catch(console.error);
+          performSignOut();
           return;
         }
 
@@ -198,8 +330,7 @@ export function useRole(enableHeartbeat: boolean = false) {
           setPermissions([]);
           setProfile(null);
           setLoading(false);
-          clearAllLocalData();
-          auth.signOut().catch(console.error);
+          performSignOut();
           return;
         }
 
@@ -254,7 +385,7 @@ export function useRole(enableHeartbeat: boolean = false) {
           setPermissions(['*']);
 
           // Auto-create the user document if it's missing (one-time check)
-          import('firebase/firestore').then(({ setDoc, doc }) => {
+          import('../lib/supabase-adapter').then(({ setDoc, doc }) => {
             setDoc(doc(db, 'users', user.uid), {
               email: user.email,
               username: user.email?.split('@')[0] || 'admin',
@@ -267,7 +398,7 @@ export function useRole(enableHeartbeat: boolean = false) {
           });
         } else {
           // If not super admin, check if there's a legacy invitation for this email
-          import('firebase/firestore').then(({ query, collection, where, getDocs, doc, setDoc }) => {
+          import('../lib/supabase-adapter').then(({ query, collection, where, getDocs, doc, setDoc }) => {
             const q = query(collection(db, 'users'), where('email', '==', user.email));
             getDocs(q).then((snap) => {
               if (!snap.empty) {
@@ -292,7 +423,7 @@ export function useRole(enableHeartbeat: boolean = false) {
       }
     }, (err) => {
       console.warn("Error fetching role (possibly missing doc):", err);
-      // Fallback for SuperAdmin even if Firestore read fails (e.g. permission denied)
+      // Fallback for SuperAdmin even if PostgreSQL read fails (e.g. permission denied)
       const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'engaporaad1@gmail.com', 'admin@swiftship.system', 'apo.1.read@gmail.com'];
       const lowerEmail = (user.email || '').toLowerCase();
       if (ROOT_EMAILS.includes(lowerEmail)) {
@@ -316,5 +447,5 @@ export function useRole(enableHeartbeat: boolean = false) {
     return permissions.includes(permission);
   };
 
-  return { role, permissions, hasPermission, loading, profile, sessionId };
+  return { role, permissions, hasPermission, loading, profile, sessionId, signOut: performSignOut };
 }

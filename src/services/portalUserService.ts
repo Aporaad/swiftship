@@ -17,7 +17,7 @@ import {
   getDocs,
   getDoc,
   db
-} from '../lib/supabase-firebase-adapter';
+} from '../lib/supabase-adapter';
 import { notificationService } from './notificationService';
 import { activityLogService } from './activityLogService';
 
@@ -40,6 +40,7 @@ export interface CustomerDetailsPayload {
   user_uid?: string;
   customer_id?: string;
   address?: string;
+  gpsLocation?: string;
   gps_location?: string;
   city?: string;
   country?: string;
@@ -68,7 +69,7 @@ export class PortalUserService {
       const portalList = (pRes.data || []).map(row => {
         const payload = typeof row.data === 'string' ? JSON.parse(row.data) : (row.data || {});
         return {
-          id: row.id,
+          id: row.portal_user_id || row.id,
           username: row.username || payload.username || '',
           email: row.email || payload.email || '',
           portal_role: row.portal_role || payload.portalRole || 'client',
@@ -84,13 +85,14 @@ export class PortalUserService {
       (dRes.data || []).forEach(row => {
         const payload = typeof row.data === 'string' ? JSON.parse(row.data) : (row.data || {});
         const uid = row.user_uid || row.customer_id;
-        if (uid) detailsMap.set(uid, { id: row.id, user_uid: row.user_uid, customer_id: row.customer_id, ...payload });
+        if (uid) detailsMap.set(uid, { id: row.cust_detail_id || row.id, user_uid: row.user_uid, customer_id: row.customer_id, ...payload });
       });
 
       const customersMap = new Map<string, any>();
       (cRes.data || []).forEach(row => {
         const payload = typeof row.data === 'string' ? JSON.parse(row.data) : (row.data || {});
-        customersMap.set(row.id, { id: row.id, ...payload });
+        const custId = row.customer_id || row.id;
+        customersMap.set(custId, { id: custId, ...payload });
       });
 
       return portalList.map(u => {
@@ -128,7 +130,8 @@ export class PortalUserService {
         updated_at: now,
         data: {
           address: details.address || '',
-          gps_location: details.gps_location || '',
+          gpsLocation: details.gpsLocation || details.gps_location || '',
+          gps_location: details.gpsLocation || details.gps_location || '',
           city: details.city || '',
           country: details.country || 'اليمن',
           company_name: details.company_name || '',
@@ -138,7 +141,7 @@ export class PortalUserService {
         }
       };
 
-      await supabase.from('cust_details').upsert(payload, { onConflict: 'id' });
+      await supabase.from('cust_details').upsert(payload, { onConflict: 'cust_detail_id' });
       return payload;
     } catch (error: any) {
       console.error('[PortalUserService] saveCustomerDetails error:', error);
@@ -157,7 +160,7 @@ export class PortalUserService {
       const nowIso = new Date().toISOString();
 
       const userRecord = {
-        id: puserId,
+        portal_user_id: puserId,
         username: userPayload.username.trim(),
         email: userPayload.email.trim(),
         portal_role: userPayload.portal_role || 'client',
@@ -210,7 +213,7 @@ export class PortalUserService {
       const now = Date.now();
 
       // Fetch existing row first
-      const { data: existingData } = await supabase.from('portal_users').select('*').eq('id', puserId).single();
+      const { data: existingData } = await supabase.from('portal_users').select('*').eq('portal_user_id', puserId).single();
       const prevData = existingData?.data ? (typeof existingData.data === 'string' ? JSON.parse(existingData.data) : existingData.data) : {};
 
       const updatedPayload = {
@@ -230,7 +233,7 @@ export class PortalUserService {
       if (userPayload.approval_status) updateRow.approval_status = userPayload.approval_status;
       if (userPayload.disabled !== undefined) updateRow.disabled = userPayload.disabled;
 
-      await supabase.from('portal_users').update(updateRow).eq('id', puserId);
+      await supabase.from('portal_users').update(updateRow).eq('portal_user_id', puserId);
 
       if (detailsPayload && (userPayload.customerId || prevData.customerId || existingData?.linkedAccId)) {
         const custId = userPayload.customerId || prevData.customerId || existingData?.linkedAccId;
@@ -262,7 +265,7 @@ export class PortalUserService {
   async togglePortalUserDisabled(puserId: string, currentDisabled: boolean): Promise<boolean> {
     try {
       const newStatus = !currentDisabled;
-      await supabase.from('portal_users').update({ disabled: newStatus }).eq('id', puserId);
+      await supabase.from('portal_users').update({ disabled: newStatus }).eq('portal_user_id', puserId);
 
       notificationService.notify({
         title: 'تغيير حالة مستخدم الموقع',
@@ -283,7 +286,7 @@ export class PortalUserService {
    */
   async deletePortalUser(puserId: string): Promise<void> {
     try {
-      await supabase.from('portal_users').delete().eq('id', puserId);
+      await supabase.from('portal_users').delete().eq('portal_user_id', puserId);
       await supabase.from('cust_details').delete().eq('user_uid', puserId);
 
       notificationService.notify({

@@ -1,5 +1,5 @@
-import { doc, getDoc, setDoc, collection, addDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { doc, getDoc, setDoc, collection, addDoc } from '../lib/supabase-adapter';
+import { db } from '../lib/supabase-adapter';
 
 export interface WhatsAppConfig {
   enabled: boolean;

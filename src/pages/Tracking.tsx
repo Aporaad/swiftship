@@ -26,8 +26,8 @@ import {
   Database,
   Info
 } from 'lucide-react';
-import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, arrayUnion } from '../lib/supabase-firebase-adapter';
-import { db, auth } from '../lib/supabase-firebase-adapter';
+import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, arrayUnion } from '../lib/supabase-adapter';
+import { db, auth } from '../lib/supabase-adapter';
 import { useSettings } from '../context/SettingsContext';
 import { useOrderStatuses } from '../hooks/useOrderStatuses';
 import { Link, useNavigate } from 'react-router-dom';

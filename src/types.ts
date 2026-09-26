@@ -1,11 +1,12 @@
-//مهم: يجب تحديد خصائص وحقول كل الكيانات التي بالنظام هنا 
+// مهم: يجب تحديد خصائص وحقول كل الكيانات التي بالنظام هنا 
+// System Interface Definitions — Standard camelCase naming convention
 export interface Customer {
   id: string;
   fullName: string;
   phone: string;
   email?: string;
   address?: string;
-  gps_location?: string;
+  gpsLocation?: string;
   notes?: string;
   financialBalance?: number;
   financialCurrency?: string;

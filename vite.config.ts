@@ -4,7 +4,7 @@ import path from 'path';
 import { defineConfig } from 'vite';
 
 const projectRoot = process.cwd();
-const adapterPath = path.resolve(projectRoot, 'src/lib/supabase-firebase-adapter.ts');
+const adapterPath = path.resolve(projectRoot, 'src/lib/supabase-adapter.ts');
 
 export default defineConfig(() => ({
   root: projectRoot,
@@ -40,16 +40,10 @@ export default defineConfig(() => ({
   resolve: {
     alias: {
       '@': projectRoot,
-      'firebase/app': adapterPath,
-      'firebase/auth': adapterPath,
-      'firebase/firestore': adapterPath,
-      'firebase/firestore/lite': adapterPath,
-      'firebase-admin/app': adapterPath,
-      'firebase-admin/auth': adapterPath,
-      'firebase-admin/firestore': adapterPath,
-      'firebase-admin': adapterPath,
-      '@firebase/firestore': adapterPath,
-      '@google-cloud/firestore': adapterPath,
+      '../lib/supabase-adapter': adapterPath,
+      './src/lib/supabase-adapter': adapterPath,
+      '@supabase/supabase': adapterPath,
+      '@google-cloud/supabase': adapterPath,
     },
   },
 }));

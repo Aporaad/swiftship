@@ -1,12 +1,6 @@
 import React, { useState } from "react";
-import {
-  signInWithEmailAndPassword,
-  signOut,
-  createUserWithEmailAndPassword,
-  signInWithCustomToken,
-  updatePassword,
-} from "../lib/supabase-firebase-adapter";
-import { auth, db } from "../lib/supabase-firebase-adapter";
+import { signInWithPassword, signOut } from "../lib/supabase-adapter";
+import { auth, db } from "../lib/supabase-adapter";
 import { useNavigate } from "react-router-dom";
 import {
   Lock,
@@ -20,11 +14,10 @@ import {
   MessageCircle,
   Phone,
 } from "lucide-react";
-import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
+import { collection, doc, getDocs, getDoc, query, setDoc, where } from "../lib/supabase-adapter";
 import { useSettings } from "../context/SettingsContext";
 import { activityLogService } from "../services/activityLogService";
 
-const SHARED_SYSTEM_AUTH_PASSWORD = "swiftship@system_pw_2026";
 
 export default function Login() {
   const [identifier, setIdentifier] = useState("");
@@ -41,396 +34,74 @@ export default function Login() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!identifier || !password) return;
+    if (!identifier.trim() || !password) return;
 
     try {
       setLoading(true);
       setError("");
 
-      // 1. Authenticate and prepare session via backend verify-login
-      let verifyData: any = null;
-      let email = identifier;
-      const isTargetAdmin =
-        identifier.toLowerCase() === "admin" ||
-        identifier.toLowerCase() === "admin@swiftship.system";
-
-      let res;
-      let isOfflineAuth = false;
-      try {
-        res = await fetch("/api/auth/verify-login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ identifier, password }),
-        });
-      } catch (err: any) {
-        console.error("[Login] Backend verification fetch error:", err);
-        if (isTargetAdmin) {
-          isOfflineAuth = true;
-        } else {
-          // Let's attempt client-side login as a fallback instead of blocking completely!
-          // We'll set a flag so we know backend is unreachable.
-          verifyData = { useClientAuth: true, isLegacyNoPasswordDoc: true };
-          console.warn(
-            "[Login] Backend unreachable, falling back to direct Firebase Auth...",
-          );
-        }
+      let email = identifier.trim().toLowerCase();
+      if (!email.includes("@") && email !== "admin") {
+        const usernameSnap = await getDocs(query(collection(db, "users"), where("username", "==", email),));
+        const usernameProfile = usernameSnap.docs[0]?.data() as any;
+        if (!usernameProfile?.email) throw new Error(isAr ? "اسم المستخدم غير موجود" : "Username was not found");
+        email = usernameProfile.email;
       }
 
-      if (!isOfflineAuth && res) {
-        const contentType = res.headers.get("content-type") || "";
-        if (!contentType.includes("application/json")) {
-          if (isTargetAdmin) {
-            isOfflineAuth = true;
-          } else {
-            throw new Error(
-              isAr
-                ? "خطأ في الاستجابة: أرجع الخادم صفحة ويب (HTML) بدلاً من بيانات (JSON). للتصحيح: تأكد من تشغيل خادم Express، وتأكد من عدم رفع الموقع كصفحة ساكنة فقط، أو افحص سجلات الخوادم."
-                : "Server Error: The backend returned an HTML document instead of JSON. Ensure your Express server is running, and that you did not deploy as static-only.",
-            );
-          }
-        } else {
-          const resData = await res.json();
-          if (res.ok) {
-            verifyData = resData;
-            email = verifyData.email;
-          } else {
-            if (isTargetAdmin) {
-              isOfflineAuth = true;
-            } else {
-              throw new Error(resData.error || "Login verification failed");
-            }
-          }
-        }
-      }
+      const result = await signInWithPassword(email, password);
+      if (!result.user) throw new Error(isAr ? "تعذر إنشاء جلسة Supabase" : "Supabase did not return an authenticated user");
 
-      if (isOfflineAuth) {
-        // Run Client-Side Local Storage verification check directly using adapter helpers
-        const {
-          simpleHashPassword,
-          decryptDataLocal,
-          encryptDataLocal,
-          enableEmergencyOfflineSession,
-        } = await import("../lib/supabase-firebase-adapter");
-        let localHash = localStorage.getItem("swiftship_emergency_admin_hash");
-        let localProfileCipher = localStorage.getItem(
-          "swiftship_emergency_admin_profile",
-        );
-
-        // Auto-seed default offline system admin credentials if none exist yet, allowing the system admin to log in using standard system passwords
-        if (!localHash || !localProfileCipher) {
-          const acceptablePasswords = [
-            SHARED_SYSTEM_AUTH_PASSWORD,
-            "password123",
-            "admin",
-            "000000",
-          ];
-          if (acceptablePasswords.includes(password)) {
-            const adminProfile = {
-              uid: "mock-emergency-admin-uid",
-              email: "admin@swiftship.system",
-              fullName: "Emergency Master Admin",
-              role: "Admin",
-              isRoot: true,
-              disabled: false,
-              createdAt: Date.now(),
-            };
-            try {
-              localStorage.setItem(
-                "swiftship_emergency_admin_hash",
-                simpleHashPassword(password),
-              );
-              localStorage.setItem(
-                "swiftship_emergency_admin_profile",
-                encryptDataLocal(JSON.stringify(adminProfile), password),
-              );
-              localStorage.setItem("swiftship_emergency_admin_pwd", password);
-              localHash = localStorage.getItem(
-                "swiftship_emergency_admin_hash",
-              );
-              localProfileCipher = localStorage.getItem(
-                "swiftship_emergency_admin_profile",
-              );
-            } catch (seedErr) {
-              console.warn(
-                "[Login] Local storage writing blocked or failed:",
-                seedErr,
-              );
-            }
-          }
-        }
-
-        if (
-          localHash &&
-          localProfileCipher &&
-          simpleHashPassword(password) === localHash
-        ) {
-          const decryptedProfileText = decryptDataLocal(
-            localProfileCipher,
-            password,
-          );
-          if (decryptedProfileText) {
-            try {
-              const parsedProfile = JSON.parse(decryptedProfileText);
-              enableEmergencyOfflineSession(parsedProfile, password);
-              navigate("/");
-              setLoading(false);
-              return;
-            } catch (_) { }
-          }
-        }
-        throw new Error(
-          isAr
-            ? "تعذر الاتصال بقاعدة البيانات/الخادم، والبيانات المحلية المدخلة لمدير النظام غير متطابقة."
-            : "Failed to reach database/server, and local emergency credentials mismatch.",
-        );
-      }
-
-      // 2. Perform Firebase Auth login using Custom Token, Standard System Password, or Client Fallback
-      let result;
-      if (verifyData && verifyData.isLegacyNoPasswordDoc) {
-        try {
-          result = await signInWithEmailAndPassword(auth, email, password);
-
-          // Auto-align Firebase Auth password to SHARED_SYSTEM_AUTH_PASSWORD to keep central system auth password standard
-          try {
-            await updatePassword(result.user, SHARED_SYSTEM_AUTH_PASSWORD);
-          } catch (spAlignErr) {
-            console.warn(
-              "Could not auto-align legacy auth password:",
-              spAlignErr,
-            );
-          }
-        } catch (authErr: any) {
-          if (
-            authErr.code === "auth/invalid-credential" ||
-            authErr.code === "auth/user-not-found"
-          ) {
-            const ROOT_EMAILS = [
-              "alsrhyarslan5@gmail.com",
-              "arslan.alshamari@gmail.com",
-              "engaporaad1@gmail.com",
-              "admin@swiftship.system",
-              "apo.1.read@gmail.com",
-            ];
-            if (ROOT_EMAILS.includes(email.toLowerCase())) {
-              try {
-                // Register root user with SHARED_SYSTEM_AUTH_PASSWORD
-                result = await createUserWithEmailAndPassword(
-                  auth,
-                  email,
-                  SHARED_SYSTEM_AUTH_PASSWORD,
-                );
-              } catch (regErr: any) {
-                if (regErr.code === "auth/email-already-in-use") {
-                  throw new Error(
-                    isAr
-                      ? "بيانات الدخول غير صحيحة."
-                      : "Invalid login credentials.",
-                  );
-                }
-                if (regErr.code === "auth/operation-not-allowed") {
-                  throw new Error(
-                    isAr
-                      ? 'يرجى تفعيل "Email/Password" في إعدادات Firebase Console Authentication.'
-                      : 'Please enable "Email/Password" sign-in method in Firebase Console Authentication.',
-                  );
-                }
-                throw regErr;
-              }
-            } else {
-              throw authErr;
-            }
-          } else {
-            throw authErr;
-          }
-        }
-      } else if (verifyData && verifyData.customToken) {
-        try {
-          result = await signInWithCustomToken(auth, verifyData.customToken);
-        } catch (tokenErr: any) {
-          console.error(
-            "Custom token sign-in failed, trying standard system password:",
-            tokenErr,
-          );
-          try {
-            result = await signInWithEmailAndPassword(
-              auth,
-              email,
-              SHARED_SYSTEM_AUTH_PASSWORD,
-            );
-          } catch (spErr) {
-            result = await signInWithEmailAndPassword(auth, email, password);
-            // Self-heal: Align Firebase Auth password to SHARED_SYSTEM_AUTH_PASSWORD
-            try {
-              if (result && result.user) {
-                await updatePassword(result.user, SHARED_SYSTEM_AUTH_PASSWORD);
-              }
-            } catch (alignErr) {
-              console.warn(
-                "Could not auto-align legacy auth credentials during login:",
-                alignErr,
-              );
-            }
-          }
-        }
-      } else {
-        // No custom token: Try standard system password first
-        try {
-          result = await signInWithEmailAndPassword(
-            auth,
-            email,
-            SHARED_SYSTEM_AUTH_PASSWORD,
-          );
-        } catch (spErr: any) {
-          try {
-            result = await signInWithEmailAndPassword(auth, email, password);
-            // Self-heal: Align Firebase Auth password to SHARED_SYSTEM_AUTH_PASSWORD
-            try {
-              if (result && result.user) {
-                await updatePassword(result.user, SHARED_SYSTEM_AUTH_PASSWORD);
-              }
-            } catch (alignErr) {
-              console.warn(
-                "Could not auto-align legacy auth credentials during login:",
-                alignErr,
-              );
-            }
-          } catch (authErr: any) {
-            if (
-              authErr.code === "auth/invalid-credential" ||
-              authErr.code === "auth/user-not-found"
-            ) {
-              try {
-                // Register the successfully verified client on-the-fly in Firebase Auth block
-                result = await createUserWithEmailAndPassword(
-                  auth,
-                  email,
-                  SHARED_SYSTEM_AUTH_PASSWORD,
-                );
-              } catch (regErr: any) {
-                if (regErr.code === "auth/email-already-in-use") {
-                  throw new Error(
-                    isAr
-                      ? "بيانات الدخول غير صحيحة."
-                      : "Invalid login credentials.",
-                  );
-                }
-                if (regErr.code === "auth/operation-not-allowed") {
-                  throw new Error(
-                    isAr
-                      ? 'يرجى تفعيل "Email/Password" في إعدادات Firebase Console Authentication.'
-                      : 'Please enable "Email/Password" sign-in method in Firebase Console Authentication.',
-                  );
-                }
-                throw regErr;
-              }
-            } else {
-              throw authErr;
-            }
-          }
-        }
-      }
-
-      // 3. User is now authenticated, we can safely query/update their doc
       const userDocRef = doc(db, "users", result.user.uid);
       const userSnap = await getDoc(userDocRef);
-      let userData = userSnap.exists() ? userSnap.data() : null;
-
-      // 4. Auto-seed Firestore document if it's a root user but doc doesn't exist
-      const ROOT_EMAILS = [
+      let userData: any = userSnap.exists() ? userSnap.data() : null;
+      const rootEmails = [
         "alsrhyarslan5@gmail.com",
         "arslan.alshamari@gmail.com",
         "engaporaad1@gmail.com",
         "admin@swiftship.system",
         "apo.1.read@gmail.com",
       ];
-      if (!userData && ROOT_EMAILS.includes(email.toLowerCase())) {
-        const newUserDoc = {
-          email: email.toLowerCase(),
-          username: email.split("@")[0],
+
+      if (!userData && rootEmails.includes((result.user.email || email).toLowerCase())) {
+        userData = {
+          email: result.user.email || email,
+          username: (result.user.email || email).split("@")[0],
           fullName: "System Root Administrator",
           role: "Admin",
           isRoot: true,
           disabled: false,
-          systemPin: "000000",
-          password: password, // Seed modern password
           createdAt: Date.now(),
         };
-        await setDoc(userDocRef, newUserDoc);
-        userData = newUserDoc;
-      } else if (userData && !userData.password) {
-        // Auto-migrate legacy user's password payload to Firestore on first successful login
-        try {
-          await updateDoc(userDocRef, { password: password });
-        } catch (migrateErr) {
-          console.warn(
-            "Failed to migrate password field, continuing anyway:",
-            migrateErr,
-          );
-        }
+        await setDoc(userDocRef, userData);
       }
 
-      if (userData && userData.disabled) {
-        await signOut(auth);
-        throw new Error(
-          isAr
-            ? "هذا الحساب معطل حالياً."
-            : "This account is currently disabled.",
-        );
+      if (userData?.disabled) {
+        await signOut();
+        throw new Error(isAr ? "هذا الحساب معطل حالياً." : "This account is currently disabled.");
       }
 
-      if (
-        userData &&
-        (userData.role === "Courier" ||
-          userData.roleId === "courier" ||
-          userData.role === "courier")
-      ) {
-        await signOut(auth);
-        throw new Error(
-          isAr
-            ? "عذراً، هذا الحساب مخصص للمناديب الخارجيين فقط ولا يمكنه تسجيل الدخول بأي صلاحية."
-            : "Access Denied: Courier accounts are external and not permitted to log in.",
-        );
+      if (userData && ["Courier", "courier"].includes(userData.role) || userData?.roleId === "courier") {
+        await signOut();
+        throw new Error(isAr ? "حساب المندوب الخارجي لا يملك صلاحية دخول النظام." : "Courier accounts cannot access the staff system.");
       }
 
-      // 5. Check for System PIN
       if (userData?.systemPin) {
         setPinRequired(true);
         setTempUser(userData);
-        setLoading(false);
         return;
       }
 
-      // Log login event
-      try {
-        await activityLogService.log(
-          "login",
-          userData?.fullName || result.user.email || "Unknown",
-          {
-            email: result.user.email,
-            loginAt: new Date().toISOString(),
-          },
-        );
-      } catch (_) { }
-
+      await activityLogService.log("login", userData?.fullName || result.user.email || "Unknown", {
+        email: result.user.email,
+        loginAt: new Date().toISOString(),
+      });
       navigate("/");
     } catch (err: any) {
-      console.error(err);
-      let message = err.message;
-      if (
-        err.code === "auth/wrong-password" ||
-        err.code === "auth/invalid-credential" ||
-        err.code === "auth/user-not-found"
-      ) {
-        message = isAr
-          ? "بيانات الدخول غير صحيحة"
-          : "Invalid login credentials";
-      } else if (err.message.includes("permission")) {
-        message = isAr
-          ? "عذراً، حدث خطأ في الصلاحيات. يرجى المحاولة مرة أخرى."
-          : "Permission error. Please try again.";
-      }
-      setError(message);
+      console.error("[Login] Supabase authentication failed:", err);
+      const code = String(err?.code || "");
+      setError(code.includes("invalid") || code.includes("credentials")
+        ? (isAr ? "بيانات الدخول غير صحيحة" : "Invalid login credentials")
+        : (err?.message || (isAr ? "تعذر تسجيل الدخول" : "Unable to sign in")));
     } finally {
       setLoading(false);
     }
