@@ -1,5 +1,6 @@
 import { collection, addDoc } from '../lib/supabase-adapter';
-import { db, auth } from '../lib/supabase-adapter';
+import { db } from '../lib/supabase-adapter';
+import { currentSupabaseAuthGateway } from '../data/current-supabase/gateways/auth.gateway';
 
 export type ActivityCategory = 'USERS' | 'ROLES' | 'ORDERS' | 'FINANCE' | 'CUSTOMERS' | 'SYSTEM' | 'COURIERS' | 'SOURCES';
 
@@ -16,13 +17,14 @@ export interface ActivityLog {
 export const activityService = {
   async log({ action, category, details }: { action: string; category: ActivityCategory; details: string }) {
     try {
-      const user = auth.currentUser;
-      if (!user) return;
+      const session = await currentSupabaseAuthGateway.getCurrentSession();
+      if (session.status !== 'authenticated') return;
+      const user = session.user;
 
       // Dynamic path log
       const logId = 'ACT-' + Math.random().toString(36).substring(2, 11);
       await addDoc(logId, collection(db, 'activity_logs'), {
-        userId: user.uid,
+        userId: user.id,
         userEmail: user.email || 'unknown',
         action,
         category,

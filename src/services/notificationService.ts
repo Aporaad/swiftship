@@ -1,5 +1,6 @@
 import { collection, addDoc } from '../lib/supabase-adapter';
-import { db, auth, handlePostgreSQLError, OperationType } from '../lib/supabase-adapter';
+import { db, handlePostgreSQLError, OperationType } from '../lib/supabase-adapter';
+import { currentSupabaseAuthGateway } from '../data/current-supabase/gateways/auth.gateway';
 import toast from 'react-hot-toast';
 
 export type NotificationType = 'info' | 'success' | 'warning' | 'error';
@@ -69,8 +70,10 @@ export const notificationService = {
         }
       }
 
-      // 3. Save to PostgreSQL for persistence only if the operator is authenticated
-      if (auth.currentUser) {
+      // 3. Save to PostgreSQL only when AuthGateway reports an authenticated operator.
+      const session = await currentSupabaseAuthGateway.getCurrentSession();
+      if (session.status === 'authenticated') {
+        const currentUser = session.user;
         const notifId = 'NOTIF-' + Math.random().toString(36).substring(2, 11);
         await addDoc(notifId, collection(db, 'notifications'), {
           title,
@@ -83,8 +86,8 @@ export const notificationService = {
           read: false,
           category: inferredCategory,
           createdAt: Date.now(),
-          creatorId: auth.currentUser?.uid || 'system',
-          creatorName: auth.currentUser?.displayName || 'System'
+          creatorId: currentUser.id || 'system',
+          creatorName: currentUser.displayName || 'System'
         });
       }
     } catch (error) {

@@ -1413,3 +1413,16 @@
 - أضيف `src/data/dtos/legacy-field-contracts.test.ts` باختبارات مابينغ لـcustomer details وportal account (من دون كشف كلمة المرور)، order/shipment JSONB، تفاصيل الفئات، job applications، ticket replies، notification/activity payloads، ومرفقات قيود المالية.
 - تعذر اعتماد التنفيذ runtime: Vitest التنفيذي غير قابل للتنفيذ على mount، وبيئة node_modules الخاصة بويندوز غير متوافقة مع esbuild في sandbox. كما تعذر `npm run check` الكامل لأن ملفات root مفقودة من mount ولأن TypeScript 6 يرفض `baseUrl` دون `ignoreDeprecations`؛ لم تُغيّر إعدادات المشروع لتجاوز ذلك.
 - لا تغييرات SQL أو قاعدة بيانات. المرحلة الرابعة غير مغلقة إلى حين تشغيل الاختبارات والفحص الكامل في البيئة المحلية.
+
+## [2026-09-28 14:05:35 +03:00] — إغلاق المرحلة الرابعة بعد التحقق المحلي — AI Model: Manus
+- اجتاز `npm run check -- --pretty false` على Windows؛ واختبار الحقول القديم 9/9، واختبارات المشروع 40 ملفاً ناجحاً وملفاً واحداً متجاوزاً.
+- تحقق Supabase للقراءة فقط من مخطط `public` أكد أعمدة العميل والبوابة، وعدم وجود جدول أو مفاتيح JSONB لملفات العميل؛ `attachments` القديمة تخص القيود المالية. لم تتغير القاعدة أو Gateways المرحلة الثالثة.
+- حدّثت `phase4-dtos.md` و`DATABASE_SCHEMA.md` بالنتائج وأُغلقت Phase 4.
+
+## [2026-09-28 15:42:30 +03:00] — تنفيذ فصل AuthSession تمهيداً للـAPI — AI Model: Manus
+- أضيفت `CurrentUserDto` و`SessionState` وMapper واختبارات للعقد، ووُسع `AuthGateway` للجلسة والتحقق وإكمال الدخول والـrefresh والخروج.
+- أضيف `AuthSessionProvider` حول `App`؛ يعتمد على `AuthGateway`، وأُبقي `CurrentSupabaseAuthGateway` كحد توافق. نُقلت نقاط استهلاك المصادقة في التطبيق والخدمات إلى Provider/Gateway مع إسقاط `legacyAuth` مؤقتاً لشكل `uid` القديم.
+- أوقف Adapter استعادة المستخدم المحفوظ ونظّف المفتاح القديم؛ لا تُفعّل الجلسة إلا بعد التحقق من حالة الحساب والدور وPIN عند الحاجة. لا تُخزن كلمة المرور أو PIN في DTO أو Storage.
+- قرار المستخدم: بعد refresh يلزم تسجيل الدخول إلى أن يوفر Gateway مستقبلي جلسة قابلة للتحقق والتجديد؛ بعدها تستمر الجلسة حتى الانتهاء أو الإبطال. لم يُبنَ Auth API جديد.
+- التحقق: TypeScript ناجح؛ اختبارات `src` (26 ملفاً) واختبارا الحقول وAuth mapper ناجحة. مجموعة Vitest الكاملة نجحت فيها 145 حالة وتجاوزت 3، وتعثر اختبار تكاملي خارجي واحد بمهلة اتصال Supabase. `npm run build` نجح مع تحذيرات غير حاجبة عن `import.meta` في CJS وحجم chunks.
+- لا تغييرات على قاعدة البيانات أو RLS.

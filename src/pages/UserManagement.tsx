@@ -3,7 +3,7 @@ import {
   collection, onSnapshot, doc, updateDoc, setDoc, deleteDoc,
   query, orderBy, limit, getDocs, where,
   sendPasswordResetEmail,
-  db, handleSupabaseError, OperationType, auth,
+  db, handleSupabaseError, OperationType,
   initializeApp, deleteApp,
   getAuth, createUserWithEmailAndPassword
 } from '../lib/supabase';
@@ -16,6 +16,7 @@ import {
   Coins, Truck
 } from 'lucide-react';
 import { useRole } from '../hooks/useRole';
+import { useAuthSession } from '../features/auth/AuthSessionProvider';
 import { useSettings } from '../context/SettingsContext';
 import { notificationService } from '../services/notificationService';
 import { activityLogService } from '../services/activityLogService';
@@ -361,6 +362,7 @@ const SESSION_ACTIONS = (isAr: boolean): { id: SessionAction; label: string; des
 // MAIN COMPONENT
 // ══════════════════════════════════════════════════════════════
 export default function UserManagement() {
+  const { user: currentUser } = useAuthSession();
   const { settings } = useSettings();
   const { role, hasPermission, profile: currentUserDoc, loading: roleLoading, sessionId } = useRole();
   const isAr = settings.language === 'ar';
@@ -1062,7 +1064,7 @@ export default function UserManagement() {
     .filter(l => (logFilter === 'all' || l.action === logFilter) && (logUserFilter === 'all' || l.userId === logUserFilter))
     .slice(0, logLimit);
 
-  const currentUserData = users.find(u => u.id === auth.currentUser?.uid);
+  const currentUserData = users.find(u => u.id === currentUser?.id);
 
 
 

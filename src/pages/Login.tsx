@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { signInWithPassword, signOut } from "../lib/supabase-adapter";
-import { auth, db } from "../lib/supabase-adapter";
+import { db } from "../lib/supabase-adapter";
+import { useAuthSession } from "../features/auth/AuthSessionProvider";
 import { useNavigate } from "react-router-dom";
 import {
   Lock,
@@ -27,10 +27,12 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [pinRequired, setPinRequired] = useState(false);
   const [tempUser, setTempUser] = useState<any>(null);
+  const [pendingUserId, setPendingUserId] = useState<string | null>(null);
   const [pin, setPin] = useState("");
   const navigate = useNavigate();
   const { settings, t } = useSettings();
   const isAr = settings.language === "ar";
+  const { authenticate, completeSignIn, cancelPendingSignIn } = useAuthSession();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,10 +50,10 @@ export default function Login() {
         email = usernameProfile.email;
       }
 
-      const result = await signInWithPassword(email, password);
-      if (!result.user) throw new Error(isAr ? "تعذر إنشاء جلسة Supabase" : "Supabase did not return an authenticated user");
+      const result = await authenticate(email, password);
+      if (!result.id) throw new Error(isAr ? "تعذر التحقق من بيانات الدخول" : "Credentials could not be verified");
 
-      const userDocRef = doc(db, "users", result.user.uid);
+      const userDocRef = doc(db, "users", result.id);
       const userSnap = await getDoc(userDocRef);
       let userData: any = userSnap.exists() ? userSnap.data() : null;
       const rootEmails = [
@@ -62,10 +64,10 @@ export default function Login() {
         "apo.1.read@gmail.com",
       ];
 
-      if (!userData && rootEmails.includes((result.user.email || email).toLowerCase())) {
+      if (!userData && rootEmails.includes((result.email || email).toLowerCase())) {
         userData = {
-          email: result.user.email || email,
-          username: (result.user.email || email).split("@")[0],
+          email: result.email || email,
+          username: (result.email || email).split("@")[0],
           fullName: "System Root Administrator",
           role: "Admin",
           isRoot: true,
@@ -76,27 +78,30 @@ export default function Login() {
       }
 
       if (userData?.disabled) {
-        await signOut();
+        cancelPendingSignIn();
         throw new Error(isAr ? "هذا الحساب معطل حالياً." : "This account is currently disabled.");
       }
 
       if (userData && ["Courier", "courier"].includes(userData.role) || userData?.roleId === "courier") {
-        await signOut();
+        cancelPendingSignIn();
         throw new Error(isAr ? "حساب المندوب الخارجي لا يملك صلاحية دخول النظام." : "Courier accounts cannot access the staff system.");
       }
 
       if (userData?.systemPin) {
         setPinRequired(true);
-        setTempUser(userData);
+        setTempUser({ ...userData, email: userData.email || result.email });
+        setPendingUserId(result.id);
         return;
       }
 
-      await activityLogService.log("login", userData?.fullName || result.user.email || "Unknown", {
-        email: result.user.email,
+      completeSignIn(result.id);
+      await activityLogService.log("login", userData?.fullName || result.email || "Unknown", {
+        email: result.email,
         loginAt: new Date().toISOString(),
       });
       navigate("/");
     } catch (err: any) {
+      cancelPendingSignIn();
       console.error("[Login] Supabase authentication failed:", err);
       const code = String(err?.code || "");
       setError(code.includes("invalid") || code.includes("credentials")
@@ -107,11 +112,29 @@ export default function Login() {
     }
   };
 
-  const verifyPin = () => {
-    if (pin === tempUser?.systemPin) {
-      navigate("/");
-    } else {
+  const verifyPin = async () => {
+    if (pin !== tempUser?.systemPin) {
       setError(isAr ? "رمز الدخول غير صحيح" : "Invalid Access PIN");
+      return;
+    }
+    if (!pendingUserId) {
+      cancelPendingSignIn();
+      setError(isAr ? "تعذر استكمال جلسة الدخول" : "Unable to complete sign-in");
+      return;
+    }
+    try {
+      completeSignIn(pendingUserId);
+      await activityLogService.log("login", tempUser?.fullName || tempUser?.email || "Unknown", {
+        email: tempUser?.email,
+        loginAt: new Date().toISOString(),
+      });
+      setPinRequired(false);
+      setPin("");
+      setTempUser(null);
+      setPendingUserId(null);
+      navigate("/");
+    } catch (err: any) {
+      setError(err?.message || (isAr ? "تعذر استكمال تسجيل الدخول" : "Unable to complete sign-in"));
     }
   };
 
@@ -164,7 +187,9 @@ export default function Login() {
               onClick={() => {
                 setPinRequired(false);
                 setPin("");
-                signOut(auth);
+                setTempUser(null);
+                setPendingUserId(null);
+                cancelPendingSignIn();
               }}
               className="text-[10px] font-black text-slate-500 hover:text-slate-350 uppercase tracking-widest cursor-pointer"
             >

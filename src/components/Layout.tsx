@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
-import { signOut } from '../lib/supabase-adapter';
 import { collection, query, where, onSnapshot, getDocs, writeBatch, doc, setDoc } from '../lib/supabase-adapter';
-import { auth, db } from '../lib/supabase-adapter';
+import { db } from '../lib/supabase-adapter';
 import { clearAllLocalData } from '../lib/supabase-adapter';
 import { formatDate, formatDateTime, formatTime, now } from '../lib/dateUtils';
 import {
@@ -56,6 +55,7 @@ import {
   X
 } from 'lucide-react';
 import { useRole } from '../hooks/useRole';
+import { useAuthSession } from '../features/auth/AuthSessionProvider';
 import { useSettings } from '../context/SettingsContext';
 import { Toaster } from 'react-hot-toast';
 import GlobalSearchModal from './GlobalSearchModal';
@@ -68,6 +68,7 @@ import { notificationService } from '../services/notificationService';
 import { supabase } from '../lib/supabase-adapter';
 
 export default function Layout() {
+  const { legacyAuth: auth, signOut } = useAuthSession();
   const navigate = useNavigate();
   const location = useLocation();
   const { role, profile, hasPermission, loading: roleLoading, sessionId } = useRole(true);
@@ -396,7 +397,7 @@ export default function Layout() {
     // Wipe all cached data from localStorage before signing out
     clearAllLocalData();
 
-    await signOut(auth);
+    await signOut();
     navigate('/login');
   };
 

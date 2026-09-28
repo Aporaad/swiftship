@@ -41,3 +41,20 @@ export interface AuthUpdateInput {
 export type AuthViewModel = Partial<AuthApiDto> & { id: string };
 
 export type AuthAudit = AuditDto;
+
+export interface CurrentUserDto {
+  id: string;
+  email: string | null;
+  displayName: string | null;
+  emailVerified: boolean;
+  username: string | null;
+  role: string | null;
+  isRoot: boolean;
+}
+
+export type SessionState =
+  | { status: 'loading' }
+  | { status: 'authenticated'; user: CurrentUserDto }
+  | { status: 'unauthenticated' }
+  | { status: 'expired' }
+  | { status: 'locked' };

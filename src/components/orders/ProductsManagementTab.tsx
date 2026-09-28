@@ -12,7 +12,8 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ConfirmModal from '../ConfirmModal';
-import { addDoc, collection, db, deleteDoc, doc, onSnapshot, updateDoc, auth } from '../../lib/supabase';
+import { addDoc, collection, db, deleteDoc, doc, onSnapshot, updateDoc } from '../../lib/supabase';
+import { useAuthSession } from '../../features/auth/AuthSessionProvider';
 import { useItemCategories } from '../../hooks/useItemCategories';
 import { useExchangeRates } from '../../hooks/useExchangeRates';
 import { useRole } from '../../hooks/useRole';
@@ -119,6 +120,7 @@ export default function ProductsManagementTab({
   orders?: any[];
   customers?: any[];
 }) {
+  const { legacyAuth: auth } = useAuthSession();
   const { role, hasPermission } = useRole();
   const { categories } = useItemCategories();
   const { activeCurrencies } = useExchangeRates();

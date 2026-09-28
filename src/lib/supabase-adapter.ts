@@ -132,10 +132,9 @@ export interface User {
   role?: string | null;
   isRoot?: boolean;
   disabled?: boolean;
-  systemPin?: string | null;
 }
 
-/** مفتاح تخزين الجلسة في localStorage */
+/** Legacy key removed during startup/logout; persisted user objects are never restored. */
 const SESSION_STORAGE_KEY = 'swiftship_persisted_user';
 
 const authListeners = new Set<(user: User | null) => void>();
@@ -157,41 +156,12 @@ function mapPublicUser(row: any): User | null {
     role: row.role ?? null,
     isRoot: !!row.is_root || !!row.isRoot,
     disabled: !!row.disabled,
-    systemPin: row.system_pin || row.systemPin || null,
   };
 }
 
-/**
- * استرجاع المستخدم المحفوظ من sessionStorage (مستمر أثناء التحديث F5 وممحو عند إغلاق التبويب)
- * Retrieve the persisted user from sessionStorage (persists across reload, cleared on tab close)
- */
-function getSavedUser(): User | null {
-  try {
-    const saved = safeSessionStorage.getItem(SESSION_STORAGE_KEY);
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed && parsed.uid) return parsed as User;
-    }
-  } catch (e) {
-    console.warn('[Supabase Adapter] Failed to parse persisted user:', e);
-  }
-  // تنظيف مفتاح localStorage القديم لمنع أي استمرار تلقائي للجلسة عند فتح المتصفح من جديد
+function clearPersistedUser(): void {
+  safeSessionStorage.removeItem(SESSION_STORAGE_KEY);
   safeLocalStorage.removeItem(SESSION_STORAGE_KEY);
-  return null;
-}
-
-/**
- * حفظ بيانات المستخدم في sessionStorage بدلاً من localStorage
- * Persist user session data to sessionStorage
- */
-function persistUser(user: User | null): void {
-  if (user) {
-    safeSessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(user));
-    safeLocalStorage.removeItem(SESSION_STORAGE_KEY);
-  } else {
-    safeSessionStorage.removeItem(SESSION_STORAGE_KEY);
-    safeLocalStorage.removeItem(SESSION_STORAGE_KEY);
-  }
 }
 
 /**
@@ -200,15 +170,15 @@ function persistUser(user: User | null): void {
  */
 function setLoggedInUser(user: User | null): void {
   loggedInUser = user;
-  persistUser(user);
+  clearPersistedUser();
   if (authReady) {
     authListeners.forEach((listener) => listener(user));
   }
 }
 
-// تهيئة الجلسة عند تحميل الموديول من localStorage
-// Initialize session from localStorage on module load
-loggedInUser = getSavedUser();
+// Start unauthenticated after every page load. A cached User object is not proof of a session.
+loggedInUser = null;
+clearPersistedUser();
 
 // تعيين authReady بشكل غير متزامن حتى تكتمل تهيئة الكاش
 // Set authReady asynchronously after a minimal delay
@@ -729,16 +699,14 @@ export async function signInWithPassword(emailOrUsername: string, pass: string):
     throw err;
   }
 
-  // التحقق من كلمة المرور (مطابقة نصية مباشرة)
-  // Verify password (direct string match against stored password)
+  // Verify credentials using the current legacy source; do not activate a session yet.
   if (row.password !== pass) {
     const err = new Error('بيانات الدخول غير صحيحة') as any;
     err.code = 'auth/invalid-credential';
     throw err;
   }
 
-  // بناء كائن المستخدم وحفظ الجلسة
-  // Build user object and persist session
+  // Return a safe user projection; Login completes sign-in after account/PIN checks.
   const user = mapPublicUser(row);
   if (!user) {
     const err = new Error('فشل في تحليل بيانات المستخدم') as any;
@@ -746,8 +714,13 @@ export async function signInWithPassword(emailOrUsername: string, pass: string):
     throw err;
   }
 
-  setLoggedInUser(user);
   return { user };
+}
+
+export function completeSignIn(user: User): void {
+  if (!user?.uid) throw new Error('A valid user ID is required to complete sign-in.');
+  if (user.disabled) throw new Error('Disabled users cannot establish a session.');
+  setLoggedInUser(user);
 }
 
 /**

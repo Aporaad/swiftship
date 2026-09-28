@@ -11,8 +11,7 @@ import {
   getDocs,
   db,
   handleSupabaseError,
-  OperationType,
-  auth
+  OperationType
 } from '../lib/supabase-adapter';
 import {
   Search,
@@ -34,6 +33,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { useRole } from '../hooks/useRole';
+import { useAuthSession } from '../features/auth/AuthSessionProvider';
 import { useSettings } from '../context/SettingsContext';
 import { notificationService } from '../services/notificationService';
 import ConfirmModal from '../components/ConfirmModal';
@@ -44,6 +44,7 @@ import { useAccountBalances } from '../hooks/useAccountBalances';
 import { useExchangeRates } from '../hooks/useExchangeRates';
 
 export default function Employees() {
+  const { legacyAuth: auth } = useAuthSession();
   const { settings, t } = useSettings();
   const { activeCurrencies } = useExchangeRates();
   const { role, hasPermission, loading: roleLoading } = useRole();

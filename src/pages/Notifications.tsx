@@ -5,10 +5,11 @@ import {
   FileText, Info, ExternalLink, Lock, Settings, HelpCircle, Activity, Sparkles, RefreshCw
 } from 'lucide-react';
 import { collection, onSnapshot, query, orderBy, limit, writeBatch, doc } from '../lib/supabase-adapter';
-import { db, auth, safeToDate } from '../lib/supabase-adapter';
+import { db, safeToDate } from '../lib/supabase-adapter';
 import { formatDistanceToNow } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { useRole } from '../hooks/useRole';
+import { useAuthSession } from '../features/auth/AuthSessionProvider';
 import { ShieldAlert } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 import { whatsappService, WhatsAppConfig, defaultWhatsAppConfig } from '../services/whatsappService';
@@ -16,6 +17,7 @@ import toast from 'react-hot-toast';
 import { activityLogService } from '../services/activityLogService';
 
 export default function Notifications() {
+  const { legacyAuth: auth } = useAuthSession();
   const { settings } = useSettings();
   const isAr = settings.language === 'ar';
   
@@ -90,7 +92,7 @@ export default function Notifications() {
       setLoadingAlerts(false);
     });
     return unsub;
-  }, [roleLoading, role, hasPermission]);
+  }, [roleLoading, role, hasPermission, auth]);
 
   // 2. Fetch WhatsApp Configurations on startup
   useEffect(() => {

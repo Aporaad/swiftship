@@ -1,12 +1,27 @@
 import type { AuthGateway } from '../../contracts/auth.gateway';
 import type { AuthViewModel } from '../../../features/auth/types';
+import type { CurrentUserDto, SessionState } from '../../dtos/auth.dto';
 import type { GatewayPage, GatewayQuery } from '../../contracts/common.gateway';
+import {
+  auth as legacyAuth,
+  completeSignIn as completeLegacySignIn,
+  onAuthStateChanged,
+  signInWithPassword as verifyLegacyCredentials,
+  signOut as legacySignOut,
+  type User as LegacyAuthUser,
+} from '../../../lib/supabase-adapter';
+import {
+  mapLegacyAuthUserToDto,
+  mapLegacyAuthUserToSessionState,
+} from '../../dtos/mappers/auth-session.mapper';
 import { supabase } from '../supabase.client';
 import { mapRow, mapSupabaseError } from '../supabase.mapper';
 
 const mapSession = (row: Record<string, unknown>): AuthViewModel => ({ id: String(row.session_id ?? '') });
 
 export class CurrentSupabaseAuthGateway implements AuthGateway {
+  private pendingUser: LegacyAuthUser | null = null;
+
   async list(query: GatewayQuery = {}): Promise<GatewayPage<AuthViewModel>> {
     const limit = Math.min(Math.max(query.limit ?? 50, 1), 200);
     const offset = Math.max(query.offset ?? 0, 0);
@@ -22,14 +37,38 @@ export class CurrentSupabaseAuthGateway implements AuthGateway {
     return data ? mapRow(data, mapSession) : null;
   }
 
-  async getCurrentSession(): Promise<AuthViewModel | null> {
-    const { data, error } = await supabase.auth.getSession();
-    if (error) throw mapSupabaseError(error);
-    return data.session ? { id: data.session.user.id } : null;
+  async authenticate(identifier: string, password: string): Promise<CurrentUserDto> {
+    const { user } = await verifyLegacyCredentials(identifier, password);
+    this.pendingUser = user;
+    return mapLegacyAuthUserToDto(user);
+  }
+
+  completeSignIn(userId: string): void {
+    if (!this.pendingUser || this.pendingUser.uid !== userId) {
+      throw new Error('No matching verified sign-in is waiting for completion.');
+    }
+    completeLegacySignIn(this.pendingUser);
+    this.pendingUser = null;
+  }
+
+  cancelPendingSignIn(): void {
+    this.pendingUser = null;
+  }
+
+  async getCurrentSession(): Promise<SessionState> {
+    return mapLegacyAuthUserToSessionState(legacyAuth.currentUser);
+  }
+
+  subscribeToSession(listener: (state: SessionState) => void): () => void {
+    return onAuthStateChanged(legacyAuth, (user: LegacyAuthUser | null) => {
+      listener(mapLegacyAuthUserToSessionState(user));
+    });
   }
 
   async signOut(): Promise<void> {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw mapSupabaseError(error);
+    this.pendingUser = null;
+    await legacySignOut(legacyAuth);
   }
 }
+
+export const currentSupabaseAuthGateway = new CurrentSupabaseAuthGateway();

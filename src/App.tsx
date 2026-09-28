@@ -4,9 +4,7 @@
  */
 
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { useEffect, useState } from 'react';
-import { onAuthStateChanged, User } from './lib/supabase-adapter';
-import { auth } from './lib/supabase-adapter';
+import { useAuthSession } from './features/auth/AuthSessionProvider';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -31,51 +29,8 @@ import BrowserViewer from './pages/BrowserViewer';
 import { SettingsProvider } from './context/SettingsContext';
 
 export default function App() {
-  const [user, setUser] = useState<User | null>(() => {
-    try {
-      const saved = sessionStorage.getItem('swiftship_persisted_user');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed) {
-          return {
-            ...parsed,
-            getIdToken: async () => 'session_token'
-          } as unknown as User;
-        }
-      }
-    } catch (_) { }
-    // Clean legacy localStorage key if present
-    try { localStorage.removeItem('swiftship_persisted_user'); } catch (_) { }
-    return null;
-  });
-  const [loading, setLoading] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return !sessionStorage.getItem('swiftship_persisted_user');
-    }
-    return true;
-  });
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setLoading(false);
-      try {
-        if (currentUser) {
-          sessionStorage.setItem('swiftship_persisted_user', JSON.stringify({
-            uid: currentUser.uid,
-            email: currentUser.email,
-            displayName: currentUser.displayName,
-            emailVerified: currentUser.emailVerified
-          }));
-          localStorage.removeItem('swiftship_persisted_user');
-        } else {
-          sessionStorage.removeItem('swiftship_persisted_user');
-          localStorage.removeItem('swiftship_persisted_user');
-        }
-      } catch (_) { }
-    });
-    return unsubscribe;
-  }, []);
+  const { state, user } = useAuthSession();
+  const loading = state.status === 'loading';
 
   if (loading) {
     return (

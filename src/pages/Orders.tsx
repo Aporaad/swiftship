@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'; // استيراد التفاعلات لاجل عرض البيانات 
 import { useLocation } from 'react-router-dom'; // استيراد الموقع لاجل عرض البيانات  
 import CopyToClipboard from '../components/CopyToClipboard'; // استيراد نسخ النص لاجل النسخ 
-import { collection, onSnapshot, orderBy, query, where, addDoc, setDoc, doc, updateDoc, getDoc, getDocs, deleteDoc, db, auth, handleSupabaseError, OperationType, safeToDate } from '../lib/supabase'; // استيراد قاعدة البيانات
+import { collection, onSnapshot, orderBy, query, where, addDoc, setDoc, doc, updateDoc, getDoc, getDocs, deleteDoc, db, handleSupabaseError, OperationType, safeToDate } from '../lib/supabase'; // استيراد قاعدة البيانات
 import { useSettings } from '../context/SettingsContext'; // استيراد الإعدادات
 import { useRole } from '../hooks/useRole'; // استيراد الأدوار
+import { useAuthSession } from '../features/auth/AuthSessionProvider';
 import { notificationService } from '../services/notificationService'; // استيراد خدمات الإشعارات
 import toast from 'react-hot-toast'; // استيراد خدمات الإشعارات لاجل عرض الاشعارات 
 import { activityLogService } from '../services/activityLogService'; // استيراد خدمات السجلات لاجل كتابة السجلات 
@@ -49,6 +50,7 @@ import EditOrderModal from '../components/orders/EditOrderModal';
 import { CustomerCreateModal, ShippingCompanyCreateModal, SourceCreateModal } from '../components/entities/EntityCreateModals';
 
 export default function Orders() { // دالة عرض الطلبات 
+  const { legacyAuth: auth } = useAuthSession();
   const { settings, t } = useSettings(); // استيراد الإعدادات لاجل عرض الإعدادات 
   const { activeCurrencies, rates: dbRates } = useExchangeRates(); // استيراد اسعار الصرف لاجل عرض اسعار الصرف 
   const { role, hasPermission, profile, loading: roleLoading } = useRole();  // استيراد الأدوار لاجل عرض الأدوار 

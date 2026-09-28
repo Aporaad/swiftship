@@ -1,1 +1,5 @@
-export type { AuthViewModel } from '../../data/dtos/auth.dto';
+export type {
+  AuthViewModel,
+  CurrentUserDto,
+  SessionState,
+} from '../../data/dtos/auth.dto';

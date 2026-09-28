@@ -1,5 +1,6 @@
 import { collection, addDoc, serverTimestamp } from '../lib/supabase-adapter';
-import { auth, db } from '../lib/supabase-adapter';
+import { db } from '../lib/supabase-adapter';
+import { currentSupabaseAuthGateway } from '../data/current-supabase/gateways/auth.gateway';
 
 export type ActivityAction =
   | 'login'
@@ -84,16 +85,17 @@ class ActivityLogService {
     details?: Record<string, any>
   ): Promise<void> {
     try {
-      const user = auth.currentUser;
-      if (!user) return;
+      const session = await currentSupabaseAuthGateway.getCurrentSession();
+      if (session.status !== 'authenticated') return;
+      const user = session.user;
 
       // Get user profile from PostgreSQL to get name/role
       const { doc, getDoc } = await import('../lib/supabase-adapter');
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      const userDoc = await getDoc(doc(db, 'users', user.id));
       const userData = userDoc.exists() ? userDoc.data() : {};
 
       const logEntry: ActivityLog = {
-        userId: user.uid,
+        userId: user.id,
         userName: userData.fullName || user.email || 'Unknown',
         userRole: userData.role || 'Unknown',
         action,

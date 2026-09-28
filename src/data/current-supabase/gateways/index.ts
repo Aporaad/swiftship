@@ -1,6 +1,6 @@
 export { CurrentSupabaseOrdersGateway } from './orders.gateway';
 export { CurrentSupabaseRolesGateway } from './roles.gateway';
-export { CurrentSupabaseAuthGateway } from './auth.gateway';
+export { CurrentSupabaseAuthGateway, currentSupabaseAuthGateway } from './auth.gateway';
 export { CurrentSupabaseBrowserGateway } from './browser.gateway';
 export { CurrentSupabaseFinanceEntriesGateway } from './finance-entries.gateway';
 export { currentSupabaseUsersGateway } from './users.gateway';

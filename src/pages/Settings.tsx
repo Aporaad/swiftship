@@ -7,6 +7,7 @@ import {
   Calendar, HardDrive, History, Lock, Unlock, AlertTriangle, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { useRole } from '../hooks/useRole';
+import { useAuthSession } from '../features/auth/AuthSessionProvider';
 import { useSettings } from '../context/SettingsContext';
 import type { CustomCurrency } from '../context/SettingsContext';
 import ConfirmModal from '../components/ConfirmModal';
@@ -14,7 +15,6 @@ import { activityLogService } from '../services/activityLogService';
 import { notificationService } from '../services/notificationService';
 import { currencyService, Currency, CurPriceEntry } from '../services/currencyService';
 import { useExchangeRates } from '../hooks/useExchangeRates';
-import { auth } from '../lib/supabase-adapter';
 
 type SettingsTab = 'interface' | 'general' | 'currency' | 'admin' | 'logistics';
 
@@ -100,6 +100,7 @@ interface BackupRecord {
 // MAIN COMPONENT
 // ─────────────────────────────────────
 export default function Settings() {
+  const { legacyAuth: auth } = useAuthSession();
   const [saving, setSaving] = useState(false);
   const [backupLoading, setBackupLoading] = useState(false);
   const [importLoading, setImportLoading] = useState(false);

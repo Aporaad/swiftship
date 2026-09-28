@@ -27,7 +27,7 @@ import {
   Info
 } from 'lucide-react';
 import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, arrayUnion } from '../lib/supabase-adapter';
-import { db, auth } from '../lib/supabase-adapter';
+import { db } from '../lib/supabase-adapter';
 import { useSettings } from '../context/SettingsContext';
 import { useOrderStatuses } from '../hooks/useOrderStatuses';
 import { Link, useNavigate } from 'react-router-dom';
@@ -35,6 +35,7 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet'
 import L from 'leaflet';
 
 import { useRole } from '../hooks/useRole';
+import { useAuthSession } from '../features/auth/AuthSessionProvider';
 
 // Fix typical leaflet icon issues
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -53,6 +54,7 @@ interface TrackingUpdate {
 }
 
 export default function Tracking() {
+  const { legacyAuth: auth } = useAuthSession();
   const { settings, t } = useSettings();
   const navigate = useNavigate();
   const { role, hasPermission, loading: roleLoading } = useRole();
@@ -99,7 +101,7 @@ export default function Tracking() {
       }
     };
     checkStaffStatus();
-  }, [role, roleLoading, hasPermission, navigate]);
+  }, [role, roleLoading, hasPermission, navigate, auth]);
 
   const getTranslatedStatus = (status: string) => {
     if (!status) return '';

@@ -30,7 +30,8 @@ import {
   writeBatch,
 } from "../lib/supabase-adapter";
 import { currencyService } from "./currencyService";
-import { db, auth, supabase } from "../lib/supabase-adapter";
+import { db, supabase } from "../lib/supabase-adapter";
+import { currentSupabaseAuthGateway } from '../data/current-supabase/gateways/auth.gateway';
 import { activityLogService } from "./activityLogService";
 import { accountingHierarchyService, hierarchyCodeRules, naturalBalanceDelta } from "./accountingHierarchyService";
 import { financialEntryService } from './financialEntryService';
@@ -1541,6 +1542,8 @@ class FinancialAccountService {
     entities: AutomaticVoucherEntities,
   ): Promise<boolean> {
     try {
+      const session = await currentSupabaseAuthGateway.getCurrentSession();
+      const currentUser = session.status === 'authenticated' ? session.user : null;
       const isAr = entities.isAr ?? true;
       const orderIdentifier = String(order?.id || order?.orderNumber || order?.order_number || 'unknown-order');
       const automationKey = entities.automationKey || `auto-voucher:${orderIdentifier}:rule:${ruleId}`;
@@ -1666,7 +1669,7 @@ class FinancialAccountService {
         currency: entities.currencyOriginal || "YER",
         debitAccount: { id: debitId, code: debitCode },
         creditAccount: { id: creditId, code: creditCode },
-        createdByUid: auth.currentUser?.uid || "system",
+        createdByUid: currentUser?.id || "system",
         createdByName: entities.profileName || "System Auto",
         orderId: order.id,
         orderNumber: order.orderNumber,
@@ -1679,7 +1682,7 @@ class FinancialAccountService {
         // حالة الترحيل ستُستخدم في createFromLegacyVoucher — postingStatus is used inside recordJournalEntry via createFromLegacyVoucher
         postingStatus,
       } as any);
-      console.log('automatic voucher fired successfully', { automationKey, amount, currency: entities.currencyOriginal || "YER", debitAccount: { id: debitId, code: debitCode }, creditAccount: { id: creditId, code: creditCode }, createdByUid: auth.currentUser?.uid || "system", createdByName: entities.profileName || "System Auto", amountSources: entities.amountSources, amountBreakdown: entities.amountBreakdown, postingStatus });
+      console.log('automatic voucher fired successfully', { automationKey, amount, currency: entities.currencyOriginal || "YER", debitAccount: { id: debitId, code: debitCode }, creditAccount: { id: creditId, code: creditCode }, createdByUid: currentUser?.id || "system", createdByName: entities.profileName || "System Auto", amountSources: entities.amountSources, amountBreakdown: entities.amountBreakdown, postingStatus });
       return true;
 
     } catch (err) {

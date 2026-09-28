@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { doc, onSnapshot, updateDoc, setDoc, deleteDoc } from '../lib/supabase-adapter';
-import { onAuthStateChanged, User } from '../lib/supabase-adapter';
-import { auth, db } from '../lib/supabase-adapter';
-import { clearAllLocalData, signOut as adapterSignOut } from '../lib/supabase-adapter';
+import { db } from '../lib/supabase-adapter';
+import { clearAllLocalData } from '../lib/supabase-adapter';
 import { DEFAULT_ROLE_PERMISSIONS } from '../lib/permissions';
 import { useSettings } from '../context/SettingsContext';
+import { useAuthSession } from '../features/auth/AuthSessionProvider';
 
 const getDeviceAndBrowser = () => {
   if (typeof window === 'undefined') return 'Unknown';
@@ -32,11 +32,11 @@ const getDeviceAndBrowser = () => {
 };
 
 export function useRole(enableHeartbeat: boolean = false) {
+  const { user, signOut } = useAuthSession();
   const [role, setRole] = useState<string | null>(null);
   const [permissions, setPermissions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<any>(null);
-  const [user, setUser] = useState<User | null>(auth.currentUser);
   const [sessionId, setSessionId] = useState<string>('sess-loading');
 
   // جلب إعدادات مهلة خمول المستخدم بالدقائق من Context تلقائياً بدلاً من القيمة الثابتة
@@ -92,8 +92,8 @@ export function useRole(enableHeartbeat: boolean = false) {
     // Clear all local cache data
     clearAllLocalData();
 
-    await adapterSignOut().catch(console.error);
-  }, []);
+    await signOut().catch(console.error);
+  }, [signOut]);
 
   /**
    * إعادة ضبط مؤقت الخمول بناءً على مهلة خمول الجلسة الديناميكية من الإعدادات
@@ -122,43 +122,26 @@ export function useRole(enableHeartbeat: boolean = false) {
     };
   }, [enableHeartbeat, user, resetInactivityTimer]);
 
-  useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      if (!u) {
-        setRole(null);
-        setPermissions([]);
-        setProfile(null);
-        setLoading(false);
-        setSessionId('sess-loggedout');
-        sessionIdRef.current = 'sess-loggedout';
-        if (typeof window !== 'undefined') {
-          // Clear all stored custom/standard session attributes to avoid stale logins crossing paths
-          for (let i = sessionStorage.length - 1; i >= 0; i--) {
-            const key = sessionStorage.key(i);
-            if (key && (key.startsWith('swiftship_session_id') || key.startsWith('swiftship_session_created'))) {
-              sessionStorage.removeItem(key);
-            }
-          }
-        }
-      }
-    });
-
-    return () => unsubAuth();
-  }, []);
-
   // Compute or retrieve a unique, user-specific, tab-isolated session ID
   useEffect(() => {
     if (!user) {
       setSessionId('sess-loggedout');
       sessionIdRef.current = 'sess-loggedout';
+      if (typeof window !== 'undefined') {
+        for (let index = sessionStorage.length - 1; index >= 0; index -= 1) {
+          const key = sessionStorage.key(index);
+          if (key && (key.startsWith('swiftship_session_id_') || key.startsWith('swiftship_session_created_'))) {
+            sessionStorage.removeItem(key);
+          }
+        }
+      }
       return;
     }
 
-    const storageKey = `swiftship_session_id_${user.uid}`;
+    const storageKey = `swiftship_session_id_${user.id}`;
     let id = sessionStorage.getItem(storageKey);
     if (!id) {
-      id = `sess-${user.uid.substring(0, 5)}-${Math.floor(100000 + Math.random() * 900000)}-${Date.now()}`;
+      id = `sess-${user.id.substring(0, 5)}-${Math.floor(100000 + Math.random() * 900000)}-${Date.now()}`;
       sessionStorage.setItem(storageKey, id);
     }
     setSessionId(id);
@@ -172,7 +155,7 @@ export function useRole(enableHeartbeat: boolean = false) {
     const updateSessionHeartbeat = async () => {
       try {
         const sessionRef = doc(db, 'sessions', sessionId);
-        const createdTimeKey = `swiftship_session_created_${user.uid}`;
+        const createdTimeKey = `swiftship_session_created_${user.id}`;
         const createdTimeStr = sessionStorage.getItem(createdTimeKey) || new Date().toISOString();
         if (!sessionStorage.getItem(createdTimeKey)) {
           sessionStorage.setItem(createdTimeKey, createdTimeStr);
@@ -187,8 +170,8 @@ export function useRole(enableHeartbeat: boolean = false) {
         // Build session data with ISO timestamps for DB columns
         await setDoc(sessionRef, {
           id: sessionId,
-          userId: user.uid,
-          user_id: user.uid,
+          userId: user.id,
+          user_id: user.id,
           createdAt: createdTimeStr,
           created_at: createdTimeStr,
           lastSeen: nowISO,
@@ -257,8 +240,8 @@ export function useRole(enableHeartbeat: boolean = false) {
       if (sessionDoc.exists()) {
         const sessionData = sessionDoc.data();
         if (sessionData.force_logout === true || sessionData.forceLogout === true) {
-          const keyId = `swiftship_session_id_${user.uid}`;
-          const keyCreated = `swiftship_session_created_${user.uid}`;
+          const keyId = `swiftship_session_id_${user.id}`;
+          const keyCreated = `swiftship_session_created_${user.id}`;
           sessionStorage.removeItem(keyId);
           sessionStorage.removeItem(keyCreated);
           // حذف سجل الجلسة من قاعدة البيانات ثم تسجيل الخروج
@@ -276,7 +259,7 @@ export function useRole(enableHeartbeat: boolean = false) {
     if (!enableHeartbeat || !user || loading) return;
     const updateLastSeen = () => {
       const nowISO = new Date().toISOString();
-      updateDoc(doc(db, 'users', user.uid), {
+      updateDoc(doc(db, 'users', user.id), {
         last_seen: Date.now(), // عدد مليثاني - للمقارنات التحليلية
         last_seen_at: nowISO,  // نص للعرض
       }).catch(() => {/* silently ignore */ });
@@ -303,14 +286,14 @@ export function useRole(enableHeartbeat: boolean = false) {
 
     let unsubRole: (() => void) | null = null;
 
-    const unsub = onSnapshot(doc(db, 'users', user.uid), (userDoc) => {
+    const unsub = onSnapshot(doc(db, 'users', user.id), (userDoc) => {
       if (userDoc.exists()) {
         const userData = userDoc.data();
 
         // ── FORCE LOGOUT: admin requested remote session termination ──
         if (userData.forceLogout === true || userData.force_logout === true) {
           // Clear the flag first, then sign out
-          updateDoc(doc(db, 'users', user.uid), { forceLogout: false, force_logout: false, forceLogoutAt: null })
+          updateDoc(doc(db, 'users', user.id), { forceLogout: false, force_logout: false, forceLogoutAt: null })
             .catch(console.error);
           // حذف سجل الجلسة من DB وتسجيل الخروج
           // Delete session from DB and sign out
@@ -386,7 +369,7 @@ export function useRole(enableHeartbeat: boolean = false) {
 
           // Auto-create the user document if it's missing (one-time check)
           import('../lib/supabase-adapter').then(({ setDoc, doc }) => {
-            setDoc(doc(db, 'users', user.uid), {
+            setDoc(doc(db, 'users', user.id), {
               email: user.email,
               username: user.email?.split('@')[0] || 'admin',
               fullName: 'Root Admin',
@@ -402,12 +385,12 @@ export function useRole(enableHeartbeat: boolean = false) {
             const q = query(collection(db, 'users'), where('email', '==', user.email));
             getDocs(q).then((snap) => {
               if (!snap.empty) {
-                const legacyDoc = snap.docs.find(d => d.id !== user.uid);
+                const legacyDoc = snap.docs.find(d => d.id !== user.id);
                 if (legacyDoc) {
                   const data = legacyDoc.data();
-                  setDoc(doc(db, 'users', user.uid), {
+                  setDoc(doc(db, 'users', user.id), {
                     ...data,
-                    uid: user.uid,
+                    uid: user.id,
                     updatedAt: Date.now()
                   }).catch(console.error);
                   // The snapshot will trigger again automatically

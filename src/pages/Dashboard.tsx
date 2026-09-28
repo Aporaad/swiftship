@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { collection, onSnapshot, query, limit, orderBy, addDoc, where, doc, getDoc, setDoc } from '../lib/supabase-adapter';
-import { db, auth, safeToDate } from '../lib/supabase-adapter';
+import { db, safeToDate } from '../lib/supabase-adapter';
 import { financialAccountService } from '../services/financialAccountService';
 import { 
   Package, 
@@ -26,6 +26,7 @@ import {
   Lock
 } from 'lucide-react';
 import { useRole } from '../hooks/useRole';
+import { useAuthSession } from '../features/auth/AuthSessionProvider';
 import { useSettings } from '../context/SettingsContext';
 import { useExchangeRates } from '../hooks/useExchangeRates';
 import { 
@@ -44,6 +45,7 @@ import {
 const LOCKED = '🔒 مقيد';
 
 export default function Dashboard() {
+  const { legacyAuth: auth } = useAuthSession();
   const navigate = useNavigate();
   const { role, hasPermission, profile, loading: roleLoading } = useRole();
   const { settings, updateSettings, t } = useSettings();

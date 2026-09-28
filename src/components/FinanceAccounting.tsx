@@ -5,7 +5,8 @@ import {
   DollarSign, Activity, FileSpreadsheet, PlusCircle, Scale, Receipt, Sparkles, TrendingUp, RefreshCw, X,
   FolderTree, Wrench, Users, Coins, UserCheck, Eye, ChevronDown, ChevronUp, Edit2, Lock, Trash2, ArrowRightLeft
 } from 'lucide-react';
-import { db, auth } from '../lib/supabase-adapter';
+import { db } from '../lib/supabase-adapter';
+import { useAuthSession } from '../features/auth/AuthSessionProvider';
 import { collection, doc, updateDoc, writeBatch, deleteDoc, onSnapshot, query, orderBy, increment, getDocs, where } from '../lib/supabase-adapter';
 import { notificationService } from '../services/notificationService';
 import AccountingHierarchyManagement from './AccountingHierarchyManagement';
@@ -35,6 +36,7 @@ export default function FinanceAccounting({
   settings,
   initialTab = 'general_ledger'
 }: FinanceAccountingProps) {
+  const { user: currentUser } = useAuthSession();
   const [accountingTab, setAccountingTab] = useState<string>(initialTab);
   const { activeCurrencies, rates: dbRates } = useExchangeRates();
 
@@ -862,8 +864,8 @@ export default function FinanceAccounting({
           currency: adjustData.currency,
           salaryMonth: adjustSalaryMonth,
           notes: adjustData.notes || (isAr ? `صرف راتب شهر ${adjustSalaryMonth}` : `Salary payment for ${adjustSalaryMonth}`),
-          createdByUid: auth.currentUser?.uid || 'system',
-          createdByName: auth.currentUser?.email?.split('@')[0] || 'Finance Auditor'
+          createdByUid: currentUser?.id || 'system',
+          createdByName: currentUser?.email?.split('@')[0] || 'Finance Auditor'
         });
       }
 
@@ -884,8 +886,8 @@ export default function FinanceAccounting({
           refNumber: voucherCode,
           module: 'adjustment',
           createdAt: timestamp,
-          createdByUid: auth.currentUser?.uid || 'system',
-          createdByName: auth.currentUser?.email?.split('@')[0] || 'Finance Auditor'
+          createdByUid: currentUser?.id || 'system',
+          createdByName: currentUser?.email?.split('@')[0] || 'Finance Auditor'
         }
       );
 
@@ -1064,7 +1066,7 @@ Continue?`
             creditAccount: type === 'Credit'
               ? { id: linkedAccountId, code: linkedAccountCode || '2120' }
               : { id: systemAccs['sys_cash_account'], code: '1111-0' },
-            createdByUid: auth.currentUser?.uid || 'system',
+            createdByUid: currentUser?.id || 'system',
             createdByName: 'Finance Auditor'
           });
         }
@@ -1077,7 +1079,7 @@ Continue?`
         batch.update(docRef, {
           status: 'settled',
           settledAt: new Date(timestamp).toISOString(),
-          settledByUid: auth.currentUser?.uid || 'system',
+          settledByUid: currentUser?.id || 'system',
           amountSettled: exp.amountOriginal ?? exp.amount ?? 0,
           amountOutstanding: 0,
         });
@@ -1098,7 +1100,7 @@ Continue?`
             currency: 'YER',
             debitAccount: { id: exp.recipientAccountId, code: '2120' },
             creditAccount: { id: systemAccs['sys_cash_account'], code: '1111-0' },
-            createdByUid: auth.currentUser?.uid || 'system',
+            createdByUid: currentUser?.id || 'system',
             createdByName: 'Finance Auditor'
           });
         }
@@ -1196,7 +1198,7 @@ Continue?`
           currency: settings.currency || 'YER',
           debitAccount: { id: systemAccs['sys_cash_account'], code: '1111-0' },
           creditAccount: { id: courierAccountId, code: '2120' },
-          createdByUid: auth.currentUser?.uid || 'system',
+          createdByUid: currentUser?.id || 'system',
           createdByName: 'Finance Auditor',
         });
       }
@@ -1233,7 +1235,7 @@ Continue?`
       await updateDoc(docRef, {
         status: 'settled',
         settledAt: new Date().toISOString(),
-        settledByUid: auth.currentUser?.uid || 'system',
+        settledByUid: currentUser?.id || 'system',
         amountOutstanding: 0,
       });
 
@@ -1403,7 +1405,7 @@ Continue?`
           currency: 'YER',
           debitAccount: { id: systemAccs['sys_cash_account'], code: '1111-0' },
           creditAccount: { id: linkedAccountId, code: linkedAccountCode || '1130' },
-          createdByUid: auth.currentUser?.uid || 'system',
+          createdByUid: currentUser?.id || 'system',
           createdByName: 'Finance Auditor'
         });
       }
@@ -1567,7 +1569,7 @@ Continue?`
               <span class="meta-label">${isAr ? 'تاريخ التصدير:' : 'Date Issued:'}</span> ${formatDateTime()}
             </div>
             <div>
-              <span class="meta-label">${isAr ? 'المحاسب المسؤول:' : 'Approved by Email:'}</span> ${auth.currentUser?.email || 'admin@alxpress.system'}
+              <span class="meta-label">${isAr ? 'المحاسب المسؤول:' : 'Approved by Email:'}</span> ${currentUser?.email || 'admin@alxpress.system'}
             </div>
           </div>
           ${content}
