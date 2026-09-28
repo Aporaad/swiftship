@@ -415,8 +415,6 @@ class FinancialAccountService {
         if (entityType !== "system" && options?.updateEntity !== false) {
           await updateDoc(doc(db, this.getEntityCollection(entityType), entityId), {
             accountId: existing.id,
-            financialAccountId: existing.id,
-            financialAccountCode: existing.accountCode,
             updatedAt: now,
           });
         }
@@ -485,8 +483,6 @@ class FinancialAccountService {
           const entityCollection = this.getEntityCollection(entityType);
           const entityUpdateData: any = {
             accountId: accountId,
-            financialAccountId: accountId,
-            financialAccountCode: accountCode,
             updatedAt: now,
           };
           if (monthlySalary !== undefined) {
@@ -497,7 +493,7 @@ class FinancialAccountService {
             entityUpdateData,
           );
         } catch (e) {
-          console.warn("Could not update entity doc with financial id", e);
+          console.warn("Could not update entity doc with account_id", e);
         }
       }
 
@@ -1073,94 +1069,6 @@ class FinancialAccountService {
         "[FinancialAccountService] Error updating account name:",
         error,
       );
-    }
-  }
-
-  /**
-   * Settle pending custodies for a courier
-   */
-  async settlePendingCustodies(
-    courierId: string,
-    amountToSettle: number,
-    currency: string,
-  ): Promise<void> {
-    try {
-      const exchangeRates = await this.getExchangeRates();
-      const q = query(
-        collection(db, "expenses"),
-        where("recipientEntityId", "==", courierId),
-        where("status", "==", "Pending"),
-      );
-      const snap = await getDocs(q);
-
-      const pending = snap.docs
-        .map((d) => ({ id: d.id, ...(d.data() as any) }))
-        .filter((e: any) => e.type === "Custody")
-        .sort((a: any, b: any) => a.createdAt - b.createdAt);
-
-      let remainingToSettle = amountToSettle;
-      const batch = writeBatch(db);
-      let settled = false;
-
-      for (const expense of pending) {
-        if (remainingToSettle <= 0) break;
-
-        const expenseCurrency = expense.currency || "YER";
-        const currentRemitted = parseFloat(expense.remittedAmount) || 0;
-        const totalAmount = parseFloat(expense.amount) || 0;
-        const availableToSettleExpenseCurrency = totalAmount - currentRemitted;
-
-        if (availableToSettleExpenseCurrency <= 0) continue;
-
-        // Convert available to settle back to our budget currency for comparison
-        const availableToSettleBudgetCurrency = this.convertToTargetCurrency(
-          availableToSettleExpenseCurrency,
-          expenseCurrency,
-          currency,
-          exchangeRates,
-        );
-
-        const settleAmountBudgetCurrency = Math.min(
-          remainingToSettle,
-          availableToSettleBudgetCurrency,
-        );
-
-        // Convert settle amount to expense currency to update the expense record
-        const settleAmountExpenseCurrency = this.convertToTargetCurrency(
-          settleAmountBudgetCurrency,
-          currency,
-          expenseCurrency,
-          exchangeRates,
-        );
-
-        const newRemitted = currentRemitted + settleAmountExpenseCurrency;
-        const isFullySettled = newRemitted >= totalAmount - 0.01; // Avoid floating point issues
-
-        batch.update(doc(db, "expenses", expense.id), {
-          status: isFullySettled ? "Settled" : "Pending",
-          remittedAmount: newRemitted,
-          updatedAt: Date.now(),
-        });
-
-        remainingToSettle -= settleAmountBudgetCurrency;
-        settled = true;
-
-        // Log this settlement
-        activityLogService.log("settle_custody", expense.id, {
-          amount: settleAmountBudgetCurrency,
-          currency,
-        });
-      }
-
-      if (settled) {
-        await batch.commit();
-      }
-    } catch (error) {
-      console.error(
-        "[FinancialAccountService] Error settling pending custodies:",
-        error,
-      );
-      throw error;
     }
   }
 
@@ -1792,7 +1700,6 @@ class FinancialAccountService {
    *    - Collects the opposite account ID (if it's a double-entry with another account).
    *    - Deletes both legs of the double entry.
    *    - Deletes the associated master `main_entry` document.
-   *    - Deletes any `expenses` documents linked to this transaction refNumber or accountId.
    * 4. Deletes the `accounts` document.
    * 5. Deletes the core entity document (from `customers`, `couriers`, or `users`).
    * 6. Recalculates and synces balances for all opposite accounts affected by the deletions.
@@ -1900,12 +1807,6 @@ class FinancialAccountService {
               }
             });
 
-            // Delete associated expenses document if matches refNumber
-            const expQ = query(collection(db, "expenses"), where("expenseNumber", "==", refNo));
-            const expSnap = await getDocs(expQ);
-            expSnap.docs.forEach(d => {
-              batch.delete(d.ref);
-            });
           }
         }
 
@@ -1919,25 +1820,6 @@ class FinancialAccountService {
           batch.delete(ref);
         });
 
-
-        // Delete any expenses directly linked to this account ID or entity ID
-        const expAccountQ = query(collection(db, "expenses"), where("linkedAccountId", "==", accountId));
-        const expAccountSnap = await getDocs(expAccountQ);
-        expAccountSnap.docs.forEach(d => {
-          batch.delete(d.ref);
-        });
-
-        const expFinancialQ = query(collection(db, "expenses"), where("financialAccountId", "==", accountId));
-        const expFinancialSnap = await getDocs(expFinancialQ);
-        expFinancialSnap.docs.forEach(d => {
-          batch.delete(d.ref);
-        });
-
-        const expRecipientQ = query(collection(db, "expenses"), where("recipientEntityId", "==", entityId));
-        const expRecipientSnap = await getDocs(expRecipientQ);
-        expRecipientSnap.docs.forEach(d => {
-          batch.delete(d.ref);
-        });
 
         // Delete the main accounts document
         batch.delete(accountDoc.ref);

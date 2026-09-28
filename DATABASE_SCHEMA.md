@@ -29,19 +29,19 @@
 21. `entry_module`
 22. `entry_payment_details`
 23. `entry_type`
-24. `expenses`
-25. `financial_legacy_migration_map`
-26. `financial_migration_exceptions`
-27. `items_category`
-28. `jobs_req`
-29. `main_entry`
-30. `notifications`
-31. `order_items`
-32. `order_option`
-33. `order_status`
-34. `orders`
-35. `orders_history`
-36. `portal_tickets`
+24. `financial_legacy_migration_map`
+25. `financial_migration_exceptions`
+26. `items_category`
+27. `jobs_req`
+28. `main_entry`
+29. `notifications`
+30. `order_items`
+31. `order_option`
+32. `order_status`
+33. `orders`
+34. `orders_history`
+35. `portal_tickets`
+36. `portal_user_migration_map`
 37. `portal_users`
 38. `products`
 39. `report_settings`
@@ -65,8 +65,8 @@
 ### `acc_main`
 ```text
 acc_main {
-  "id": text
-  "account_id": text -> account.id
+  "acc_main_id": text
+  "account_id": text
   "account_code": text
   "acc_name_ar": text
   "acc_name_en": text
@@ -81,8 +81,8 @@ acc_main {
 ### `acc_sub`
 ```text
 acc_sub {
-  "id": text
-  "acc_main_id": text -> acc_main.id
+  "acc_sub_id": text
+  "acc_main_id": text
   "account_code": text
   "acc_name_ar": text
   "acc_name_en": text
@@ -98,8 +98,8 @@ acc_sub {
 ### `acc_sub_group`
 ```text
 acc_sub_group {
-  "id": text
-  "acc_sub_id": text -> acc_sub.id
+  "acc_sub_group_id": text
+  "acc_sub_id": text
   "account_code": text
   "acc_name_ar": text
   "acc_name_en": text
@@ -116,7 +116,7 @@ acc_sub_group {
 ### `account`
 ```text
 account {
-  "id": text
+  "account_id": text
   "account_code": text
   "acc_name_ar": text
   "acc_name_en": text
@@ -132,7 +132,7 @@ account {
 ### `account_id_migration_map`
 ```text
 account_id_migration_map {
-  "id": text
+  "migration_map_id": text
   "old_account_id": text
   "old_account_code": text
   "new_account_id": text
@@ -143,31 +143,31 @@ account_id_migration_map {
 ### `account_trans`
 ```text
 account_trans {
-  "id": text
-  "entry_id": text -> main_entry.id
+  "account_trans_id": text
+  "main_entry_id": text
   "line_no": integer
   "trans_type": text
-  "account_id": text -> accounts.id
+  "account_id": text -> accounts.account_id
   "account_cur_no": integer -> currency.cur_id
   "amount": numeric
   "amount_original": numeric
   "currency_original_no": integer -> currency.cur_id
-  "currency_price_id": integer -> cur_price.id
-  "currency_price_seq": integer -> cur_price.id
+  "currency_price_id": integer -> cur_price.cur_price_id
+  "currency_price_seq": integer -> cur_price.cur_price_id
   "entity_type": text
   "entity_id": text
   "payment_method": text
-  "order_id": text -> orders.id
-  "shipment_id": text -> shipments.id
-  "custody_id": text -> custody_advances.id
+  "order_id": text -> orders.order_id
+  "shipment_id": text -> shipments.shipment_id
+  "custody_id": text
   "auto_rule_id": text
   "automation_key": text
   "description": text
   "note": text
   "created_at": timestamp with time zone
   "updated_at": timestamp with time zone
-  "created_by_uid": text -> users.id
-  "updated_by_uid": text -> users.id
+  "created_by_uid": text -> users.user_id
+  "updated_by_uid": text -> users.user_id
   "conversion_rate": numeric
   "amount_original_text": text
   "account_currency_price_id": integer
@@ -179,13 +179,13 @@ account_trans {
 ### `accounts`
 ```text
 accounts {
-  "id": text
+  "account_id": text
   "account_code": text
   "currency": text
   "entity_id": text
   "type": text
-  "acc_sub_id": text -> acc_sub.id
-  "group_id": text -> acc_sub_group.id
+  "acc_sub_id": text
+  "group_id": text
   "entity_type": text
   "account_seq": integer
   "acc_name_ar": text
@@ -193,9 +193,9 @@ accounts {
   "limited_balance": numeric
   "cur_no": integer -> currency.cur_id
   "is_active": boolean
-  "createdAt": timestamp with time zone
-  "updatedAt": timestamp with time zone
-  "lastRecalculatedAt": timestamp with time zone
+  "created_at": timestamp with time zone
+  "updated_at": timestamp with time zone
+  "last_recalculated_at": timestamp with time zone
   "balance": numeric
   "account_number": text
   "account_prefix": text
@@ -211,140 +211,94 @@ accounts {
 ### `activity_logs`
 ```text
 activity_logs {
-  "id": text
+  "activity_log_id": text
   "data": jsonb {
-    "action"
-    "target"
-    "userId"
-    "details" {
-      "customerName"
-      "totalCostYER"
-      "cascadeDeletion" {
-        "orders"
-        "expenses"
-        "orderIds"
-        "products"
-        "shipments"
-        "mainEntries"
-        "accountTrans"
-        "whatsappLogs"
-        "notifications"
-        "ordersHistory"
-        "activityLogsDeleted"
-      }
-      "id"
-    }
-    "userName"
+    "details",
+    "userName",
     "userRole"
-    "timestamp"
   }
-  "userId": text -> users.id
+  "user_id": text -> users.user_id
   "action": text
   "category": text
   "target": text
   "type": text
-  "createdAt": timestamp with time zone
+  "created_at": timestamp with time zone
 }
 ```
 
 ### `announcements`
 ```text
 announcements {
-  "id": text
+  "announcement_id": text
   "data": jsonb {
-    "id"
+    "content",
+    "id",
+    "priority",
+    "target_audience",
+    "targetAudience",
     "title"
-    "content"
-    "isActive"
-    "priority"
-    "createdAt"
-    "is_active"
-    "created_at"
-    "targetAudience"
-    "target_audience"
   }
   "created_at": timestamp with time zone
   "title": text
-  "isActive": boolean
+  "is_active": boolean
   "priority": text
-  "createdBy": text -> users.id
-  "createdAt": timestamp with time zone
+  "created_by": text -> users.user_id
 }
 ```
 
 ### `assets`
 ```text
 assets {
-  "id": text
-  "data": jsonb {
-    "cost"
-    "type"
-    "notes"
-    "nameAr"
-    "nameEn"
-    "status"
-    "category"
-    "currency"
-    "assetCode"
-    "createdAt"
-    "purchaseDate"
-    "maintenanceLogs"
-    "assignedCourierId"
-    "financialAccountId"
-    "assignedCourierName"
-    "financialAccountCode"
-  }
+  "asset_id": text
   "created_at": timestamp with time zone
-  "assetCode": text
-  "account_id": text -> accounts.id
+  "asset_code": text
+  "account_id": text -> accounts.account_id
   "status": text
   "currency": text
   "is_active": boolean
   "type": text
   "account_code": text
+  "name_ar": text
+  "name_en": text
 }
 ```
 
 ### `auto_entries`
 ```text
 auto_entries {
-  "id": text
+  "auto_entry_id": text
   "status_id": integer
   "name_ar": text
   "name_en": text
   "is_active": boolean
   "amount_source": text
   "data": jsonb {
-    "id"
-    "nameAr"
-    "nameEn"
-    "isActive"
-    "statusId"
-    "updatedAt"
-    "amountSource"
-    "debitAccount" {
-      "id"
-      "code"
-      "name"
-      "type"
-    }
+    "amount_source",
+    "amount_sources",
+    "amount_strategy",
+    "amountSource",
+    "amountSources",
+    "amountStrategy",
+    "autoPost",
+    "creditAccount",
+    "cur_no",
+    "curNo",
+    "currencyId",
+    "debitAccount",
+    "descriptionTempAr",
+    "descriptionTempEn",
+    "id",
+    "name_ar",
+    "name_en",
+    "nameAr",
+    "nameEn",
+    "skip_when_zero",
+    "skipWhenZero",
     "statusNameAr"
-    "creditAccount" {
-      "id"
-      "code"
-      "name"
-      "type"
-    }
-    "descriptionTempAr"
-    "descriptionTempEn"
-    "createdAt"
-    "skipWhenZero"
-    "amountSources"
-    "amountStrategy"
   }
   "created_at": timestamp with time zone
   "updated_at": timestamp with time zone
-  "amount_sources": jsonb []
+  "amount_sources": jsonb
   "amount_strategy": text
   "currency": text
   "skip_when_zero": boolean
@@ -355,8 +309,19 @@ auto_entries {
 ### `browser_pages`
 ```text
 browser_pages {
-  "id": text
-  "data": jsonb {}
+  "browser_page_id": text
+  "data": jsonb {
+    "autoLogin",
+    "category",
+    "isPinned",
+    "name",
+    "password",
+    "sortOrder",
+    "tabColor",
+    "url",
+    "username",
+    "viewMode"
+  }
   "created_at": timestamp with time zone
 }
 ```
@@ -364,54 +329,29 @@ browser_pages {
 ### `couriers`
 ```text
 couriers {
-  "id": text
-  "data": jsonb {
-    "type"
-    "email"
-    "level"
-    "notes"
-    "phone"
-    "levels"
-    "address"
-    "currency"
-    "disabled"
-    "fullName"
-    "isActive"
-    "accountId"
-    "createdAt"
-    "is_active"
-    "updatedAt"
-    "account_id"
-    "courierType"
-    "gpsLocation"
-    "commissionRate"
-    "courierCustomId"
-    "financialBalance"
-    "financialCurrency"
-    "financialAccountId"
-    "financialAccountCode"
-    "city"
-    "country"
-    "systemUserId"
-  }
-  "account_id": text -> accounts.id
+  "courier_id": text
+  "account_id": text -> accounts.account_id
   "currency": text
   "is_active": boolean
-  "type": text
-  "levels": text
+  "full_name": text
+  "name_ar": text
+  "name_en": text
+  "courier_type": text
+  "courier_level": text
+  "commission_rate": numeric
 }
 ```
 
 ### `cur_price`
 ```text
 cur_price {
-  "id": integer
+  "cur_price_id": integer
   "cur_no": integer -> currency.cur_id
   "price": numeric
   "day_date": timestamp with time zone
   "seq": integer
-  "updateBy": text
-  "createdAt": timestamp with time zone
+  "updated_by": text
+  "created_at": timestamp with time zone
 }
 ```
 
@@ -420,13 +360,13 @@ cur_price {
 currency {
   "cur_id": integer
   "code": character varying
-  "main_nameAR": text
-  "sup_nameAR": text
-  "main_nameEn": text
-  "sup_nameEn": text
-  "isDefault": boolean
-  "createdAt": timestamp with time zone
-  "isActive": boolean
+  "main_name_ar": text
+  "sub_name_ar": text
+  "main_name_en": text
+  "sub_name_en": text
+  "is_default": boolean
+  "created_at": timestamp with time zone
+  "is_active": boolean
   "symbol": character varying
   "flag": character varying
 }
@@ -435,7 +375,7 @@ currency {
 ### `cust_details`
 ```text
 cust_details {
-  "id": text
+  "cust_detail_id": text
   "user_uid": text
   "customer_id": text
   "join_by": text
@@ -444,47 +384,25 @@ cust_details {
   "created_at": bigint
   "updated_at": bigint
   "data": jsonb {
-    "age"
-    "gender"
-    "joinBy"
-    "location" {
-      "lat"
-      "lng"
-      "city"
-      "street"
-      "country"
-      "governorate"
-      "addressDetails"
-    }
-    "createdAt"
-    "updatedAt"
+    "acquisitionSource",
+    "address",
+    "age",
+    "bodyDetails",
+    "city",
+    "company_name",
+    "country",
+    "gender",
+    "gps_location",
+    "id_number",
+    "joinBy",
+    "location",
+    "max_debt",
+    "notes",
+    "onboardingCompleted",
+    "preferredCategories",
+    "privacyPolicyAgreed",
+    "privacyPolicyAgreedAt",
     "referrerId"
-    "bodyDetails" {
-      "coatSize"
-      "shoeSize"
-      "pantsSize"
-      "shortsSize"
-      "preferredColors"
-      "heightCm"
-      "weightKg"
-    }
-    "acquisitionSource" {
-      "notes"
-      "joinBy"
-      "referrerId"
-    }
-    "onboardingCompleted"
-    "preferredCategories"
-    "privacyPolicyAgreed"
-    "privacyPolicyAgreedAt"
-    "city"
-    "notes"
-    "address"
-    "country"
-    "max_debt"
-    "id_number"
-    "company_name"
-    "gps_location"
   }
 }
 ```
@@ -492,79 +410,58 @@ cust_details {
 ### `custody_advances`
 ```text
 custody_advances {
-  "id": text
+  "custody_advance_id": text
   "custody_number": text
   "recipient_type": text
   "recipient_id": text
   "recipient_name": text
-  "recipient_account_id": text -> accounts.id
+  "recipient_account_id": text -> accounts.account_id
   "amount_original": numeric
   "currency_original_no": integer -> currency.cur_id
-  "currency_price_id": integer -> cur_price.id
-  "currency_price_seq": integer -> cur_price.id
+  "currency_price_id": integer -> cur_price.cur_price_id
+  "currency_price_seq": integer -> cur_price.cur_price_id
   "amount_settled": numeric
   "amount_outstanding": numeric
   "status": text
-  "issued_entry_id": text -> main_entry.id
-  "settlement_entry_id": text -> main_entry.id
+  "issued_entry_id": text
+  "settlement_entry_id": text
   "note": text
   "issued_at": timestamp with time zone
-  "issued_by_uid": text -> users.id
+  "issued_by_uid": text -> users.user_id
   "settled_at": timestamp with time zone
-  "settled_by_uid": text -> users.id
+  "settled_by_uid": text -> users.user_id
   "created_at": timestamp with time zone
   "updated_at": timestamp with time zone
-  "created_by_uid": text -> users.id
-  "updated_by_uid": text -> users.id
+  "created_by_uid": text -> users.user_id
+  "updated_by_uid": text -> users.user_id
 }
 ```
 
 ### `customers`
 ```text
 customers {
-  "id": text
-  "data": jsonb {
-    "email"
-    "level"
-    "notes"
-    "phone"
-    "levels"
-    "address"
-    "join_by"
-    "disabled"
-    "fullName"
-    "isActive"
-    "accountId"
-    "createdAt"
-    "is_active"
-    "updatedAt"
-    "account_id"
-    "referrer_id"
-    "gps_location"
-    "financialBalance"
-    "financialCurrency"
-    "financialAccountId"
-    "financialAccountCode"
-    "joinBy"
-    "username"
-    "portalUid"
-    "referrerId"
-    "gpsLocation"
-  }
-  "account_id": text -> accounts.id
+  "customer_id": text
+  "account_id": text -> accounts.account_id
   "is_active": boolean
-  "levels": text
   "join_by": text
   "referrer_id": text
+  "full_name": text
+  "name_ar": text
+  "name_en": text
+  "customer_level": text
+  "created_at": timestamp with time zone
+  "updated_at": timestamp with time zone
+  "created_by": text
+  "updated_by": text
 }
 ```
 
 ### `default_accounts`
 ```text
 default_accounts {
-  "id": text
+  "default_account_id": text
   "default_key": text
-  "account_id": text -> accounts.id
+  "account_id": text -> accounts.account_id
   "acc_name_ar": text
   "acc_name_en": text
   "cur_no": integer -> currency.cur_id
@@ -577,42 +474,26 @@ default_accounts {
 ### `employees`
 ```text
 employees {
-  "id": text
-  "account_id": text -> accounts.id
-  "monthlySalary": numeric
+  "employee_id": text
+  "account_id": text -> accounts.account_id
+  "monthly_salary": numeric
   "currency": text
-  "jobsType": text
-  "data": jsonb {
-    "role"
-    "email"
-    "userId"
-    "currency"
-    "disabled"
-    "fullName"
-    "jobsType"
-    "accountId"
-    "createdAt"
-    "createdBy"
-    "updatedAt"
-    "account_id"
-    "monthlySalary"
-    "financialBalance"
-    "financialAccountId"
-    "financialAccountCode"
-    "notes"
-    "phone"
-    "address"
-    "commissionRate"
-  }
-  "createdAt": timestamp with time zone
-  "createdBy": text
+  "created_at": timestamp with time zone
+  "created_by": text
+  "full_name": text
+  "name_ar": text
+  "name_en": text
+  "job_type": text
+  "commission_rate": numeric
+  "updated_at": timestamp with time zone
+  "updated_by": text
 }
 ```
 
 ### `entry_module`
 ```text
 entry_module {
-  "id": text
+  "entry_module_id": text
   "code": text
   "name_ar": text
   "name_en": text
@@ -620,19 +501,19 @@ entry_module {
   "is_active": boolean
   "created_at": timestamp with time zone
   "updated_at": timestamp with time zone
-  "created_by_uid": text -> users.id
-  "updated_by_uid": text -> users.id
+  "created_by_uid": text -> users.user_id
+  "updated_by_uid": text -> users.user_id
 }
 ```
 
 ### `entry_payment_details`
 ```text
 entry_payment_details {
-  "id": text
-  "entry_id": text -> main_entry.id
+  "entry_payment_detail_id": text
+  "main_entry_id": text
   "allocation_no": integer
   "payment_method": text
-  "account_id": text -> accounts.id
+  "account_id": text -> accounts.account_id
   "amount_original": numeric
   "currency_original_no": integer -> currency.cur_id
   "bank_reference": text
@@ -640,66 +521,63 @@ entry_payment_details {
   "note": text
   "created_at": timestamp with time zone
   "updated_at": timestamp with time zone
-  "created_by_uid": text -> users.id
-  "updated_by_uid": text -> users.id
+  "created_by_uid": text -> users.user_id
+  "updated_by_uid": text -> users.user_id
 }
 ```
 
 ### `entry_type`
 ```text
 entry_type {
-  "id": text
+  "entry_type_id": text
   "code": text
-  "module_id": text -> entry_module.id
+  "module_id": text
   "name_ar": text
   "name_en": text
   "note": text
   "is_active": boolean
   "created_at": timestamp with time zone
   "updated_at": timestamp with time zone
-  "created_by_uid": text -> users.id
-  "updated_by_uid": text -> users.id
+  "created_by_uid": text -> users.user_id
+  "updated_by_uid": text -> users.user_id
 }
 ```
 
-### `expenses`
+### `financial_legacy_migration_map`
 ```text
-expenses {
-  "id": text
-  "data": jsonb {
-    "type"
-    "notes"
-    "amount"
-    "status"
-    "category"
-    "currency"
-    "createdAt"
-    "recipientId"
-    "salaryMonth"
-    "createdByUid"
-    "createdByName"
-    "expenseNumber"
-    "recipientName"
-    "createdByEmail"
-    "financialAccountId"
-    "financialAccountCode"
-    "amountInDefaultCurrency"
-  }
-  "expense_number": text
-  "transactionsID": text
-  "account_id": text -> accounts.id
-  "category": text
-  "amount": numeric
-  "currency": text
-  "createdAt": timestamp with time zone
-  "cur_no": integer -> currency.cur_id
+financial_legacy_migration_map {
+  "legacy_table": text
+  "legacy_id": text
+  "target_table": text
+  "target_id": text
+  "migration_status": text
+  "migrated_at": timestamp with time zone
+  "verified_at": timestamp with time zone
+  "verified_by_uid": text -> users.user_id
+}
+```
+
+### `financial_migration_exceptions`
+```text
+financial_migration_exceptions {
+  "migration_exception_id": text
+  "legacy_table": text
+  "legacy_id": text
+  "exception_code": text
+  "severity": text
+  "description": text
+  "resolution_status": text
+  "resolved_by_uid": text -> users.user_id
+  "resolved_at": timestamp with time zone
+  "created_at": timestamp with time zone
+  "updated_at": timestamp with time zone
 }
 ```
 
 ### `items_category`
 ```text
 items_category {
-  "id": text
+  "items_category_id": text
   "code": text
   "name_ar": text
   "name_en": text
@@ -714,120 +592,116 @@ items_category {
   "requires_review": boolean
   "is_active": boolean
   "details": jsonb {
-    "group"
-    "hazardReview"
+    "group",
+    "hazardReview",
+    "highValueReview"
   }
-  "createdAt": bigint
-  "updatedAt": bigint
+  "created_at": bigint
+  "updated_at": bigint
 }
 ```
 
 ### `jobs_req`
 ```text
 jobs_req {
-  "id": text
+  "jobs_req_id": text
   "data": jsonb {
-    "city"
-    "email"
-    "notes"
-    "phone"
+    "address",
+    "city",
+    "email",
+    "experienceYears",
+    "fullName",
+    "idNumber",
+    "jobPosition",
+    "notes",
+    "phone",
+    "qualification",
+    "refCode",
     "status"
-    "address"
-    "refCode"
-    "fullName"
-    "idNumber"
-    "createdAt"
-    "updatedAt"
-    "jobPosition"
-    "qualification"
-    "experienceYears"
   }
   "email": text
   "phone": text
   "status": text
   "category": text
-  "refCode": text
-  "createdAt": timestamp with time zone
+  "ref_code": text
+  "created_at": timestamp with time zone
 }
 ```
 
 ### `main_entry`
 ```text
 main_entry {
-  "id": text
+  "main_entry_id": text
   "entry_number": text
-  "module_id": text -> entry_module.id
-  "entry_type_id": text -> entry_type.id
+  "module_id": text
+  "entry_type_id": text
   "entry_category": text
   "posting_status": text
   "description": text
   "notes": text
   "attachments": ARRAY
   "payment_method": text
-  "order_id": text -> orders.id
-  "shipment_id": text -> shipments.id
-  "custody_id": text -> custody_advances.id
+  "order_id": text -> orders.order_id
+  "shipment_id": text -> shipments.shipment_id
+  "custody_id": text
   "automation_key": text
   "auto_rule_id": text
   "is_automatic": boolean
-  "reverses_entry_id": text -> main_entry.id
+  "reverses_entry_id": text
   "effective_at": timestamp with time zone
   "posted_at": timestamp with time zone
   "voided_at": timestamp with time zone
   "created_at": timestamp with time zone
   "updated_at": timestamp with time zone
-  "created_by_uid": text -> users.id
-  "updated_by_uid": text -> users.id
-  "posted_by_uid": text -> users.id
-  "voided_by_uid": text -> users.id
+  "created_by_uid": text -> users.user_id
+  "updated_by_uid": text -> users.user_id
+  "posted_by_uid": text -> users.user_id
+  "voided_by_uid": text -> users.user_id
 }
 ```
 
 ### `notifications`
 ```text
 notifications {
-  "id": text
+  "notification_id": text
   "data": jsonb {
-    "read"
+    "associatedUserIds",
+    "category",
+    "creatorId",
+    "creatorName",
+    "isPublic",
+    "message",
+    "read",
+    "title",
     "type"
-    "title"
-    "userId"
-    "message"
-    "orderId"
-    "category"
-    "isPublic"
-    "createdAt"
-    "creatorId"
-    "creatorName"
-    "associatedUserIds"
   }
-  "userId": text
+  "user_id": text
   "category": text
-  "isPublic": boolean
+  "is_public": boolean
   "read": boolean
   "type": text
-  "createdAt": timestamp with time zone
+  "created_at": timestamp with time zone
 }
 ```
 
 ### `order_items`
 ```text
 order_items {
-  "items_id": text
-  "order_id": text -> orders.id
+  "order_item_id": text
+  "order_id": text -> orders.order_id
   "product_id": text -> products.product_id
   "product_price": numeric
   "product_url": text
   "tracking_number": text
-  "produc_source_id": text -> sources.id
-  "produc_source_url": text
+  "product_source_id": text
+  "product_source_url": text
   "product_cooler": text
   "nota": text
   "quantity": numeric
   "total_price": numeric
-  "total__weight": numeric
+  "total_weight": numeric
   "total_cbm": numeric
-  "packaging_option_id": text -> order_option.id
+  "packaging_option_id": text
   "packaging_option_price": numeric
   "is_insured": boolean
   "insurance_fee": numeric
@@ -842,38 +716,30 @@ order_items {
 ### `order_option`
 ```text
 order_option {
-  "id": text
-  "type": text
+  "order_option_id": text
+  "code": text
   "name_ar": text
   "name_en": text
   "price": numeric
-  "duration": integer
-  "details": text
-  "code": text
-  "is_active": boolean
   "data": jsonb {
-    "id"
-    "code"
+    "code",
+    "details",
+    "duration",
+    "id",
+    "name_ar",
+    "name_en",
+    "nameAr",
+    "nameEn",
+    "price",
     "type"
-    "price"
-    "nameAr"
-    "nameEn"
-    "details"
-    "name_ar"
-    "name_en"
-    "duration"
-    "isActive"
-    "is_active"
   }
-  "createdAt": bigint
-  "updatedAt": bigint
 }
 ```
 
 ### `order_status`
 ```text
 order_status {
-  "id": text
+  "order_status_id": text
   "name_ar": text
   "name_en": text
   "is_first": boolean
@@ -882,16 +748,15 @@ order_status {
   "color": text
   "code": text
   "data": jsonb {
-    "id"
-    "code"
-    "color"
-    "isLast"
-    "nameAr"
-    "nameEn"
-    "isFirst"
+    "code",
+    "color",
+    "description",
+    "id",
+    "isFirst",
+    "isLast",
+    "nameAr",
+    "nameEn",
     "sortOrder"
-    "description"
-    "updatedAt"
   }
   "created_at": timestamp with time zone
   "updated_at": timestamp with time zone
@@ -901,90 +766,90 @@ order_status {
 ### `orders`
 ```text
 orders {
-  "id": text
+  "order_id": text
   "data": jsonb {
-    "currency"
-    "payLater"
-    "totalCBM"
-    "courierId"
-    "amountPaid"
-    "bankAmount"
-    "cashAmount"
-    "couponRate"
-    "customerId"
-    "employeeId"
-    "couponValue"
-    "productsSum"
-    "totalWeight"
-    "exchangeRate"
-    "isStaffOrder"
-    "orderPartyId"
-    "packagingFee"
-    "paidCurrency"
-    "totalCostSAR"
-    "totalCostYER"
-    "bankAccountId"
-    "bankReference"
-    "cartShareCode"
-    "cashAccountId"
-    "couponEnabled"
-    "directApprove"
-    "firedTriggers"
-    "locationYemen"
-    "orderCurrency"
-    "paymentMethod"
-    "paymentStatus"
-    "sheinRedPrice"
-    "sourcing_cost"
-    "deliveryStatus"
-    "orderPartyType"
-    "profitSaudiSAR"
-    "amountRemaining"
-    "exchangeRateUSD"
-    "exchangeRateYER"
-    "profitPerKgRate"
-    "shippingCompany"
-    "shippingCostSAR"
-    "packagingFeeRate"
-    "profitCompanySAR"
+    "addShippingEnabled",
+    "amountPaid",
+    "amountRemaining",
+    "bankAccountId",
+    "bankAmount",
+    "bankCommissionEnabled",
+    "bankCommissionRate",
+    "bankCommissionType",
+    "bankReference",
+    "cartShareCode",
+    "cashAccountId",
+    "cashAmount",
+    "cbmShippingRateValue",
+    "companyProfitRate",
+    "couponEnabled",
+    "couponRate",
+    "couponValue",
+    "courierId",
+    "currency",
+    "customerAccountId",
+    "customerId",
+    "deductSourcingCostFromCourier",
+    "deliveryCourierFee",
+    "deliveryCourierFeeCurrency",
+    "deliveryCourierFeeOrderCurrency",
+    "deliveryStatus",
+    "directApprove",
+    "employeeId",
+    "exchangeRate",
+    "exchangeRateUSD",
+    "exchangeRateYER",
+    "externalOrderNumber",
+    "firedTriggers",
+    "homeDeliveryEnabled",
+    "isStaffOrder",
+    "locationYemen",
+    "orderCurrency",
+    "orderPartyAccountId",
+    "orderPartyId",
+    "orderPartyType",
+    "orderStatus",
+    "packagingFee",
+    "packagingFeeEnabled",
+    "packagingFeeRate",
+    "paidCurrency",
+    "payLater",
+    "paymentMethod",
+    "paymentStatus",
+    "product_insurance_fee",
+    "productInsuranceFee",
+    "productsSum",
+    "profitCompanySAR",
+    "profitPerKgRate",
+    "profitSaudiSAR",
+    "sheinRedPrice",
+    "shippingCompany",
+    "shippingCostSAR",
+    "shippingCourierFeeRate",
+    "sourcing_cost",
+    "sourcingCostAmount",
+    "totalCBM",
+    "totalCostSAR",
+    "totalCostYER",
+    "totalWeight",
     "viaShippingAgent"
-    "companyProfitRate"
-    "customerAccountId"
-    "addShippingEnabled"
-    "bankCommissionRate"
-    "bankCommissionType"
-    "deliveryCourierFee"
-    "sourcingCostAmount"
-    "externalOrderNumber"
-    "homeDeliveryEnabled"
-    "orderPartyAccountId"
-    "packagingFeeEnabled"
-    "productInsuranceFee"
-    "cbmShippingRateValue"
-    "bankCommissionEnabled"
-    "product_insurance_fee"
-    "shippingCourierFeeRate"
-    "deliveryCourierFeeCurrency"
-    "deductSourcingCostFromCourier"
-    "deliveryCourierFeeOrderCurrency"
-    "updatedAt"
   }
   "order_number": text
   "tracking_number": text
-  "customer_id": text -> customers.id
+  "customer_id": text -> customers.customer_id
   "order_status1": text
-  "createdAt": timestamp with time zone
-  "order_status_id": text -> order_status.id
-  "order_source_id": text -> sources.id
+  "created_at": timestamp with time zone
+  "order_status_id": text
+  "order_source_id": text
   "order_source_type": text
-  "delivery_courier_id": text -> couriers.id
-  "shipping_courier_id": text -> couriers.id
+  "delivery_courier_id": text -> couriers.courier_id
+  "shipping_courier_id": text -> couriers.courier_id
   "order_party_id": text
   "order_party_type": text
   "is_staff_order": boolean
-  "employee_id": text -> employees.id
-  "courier_id": text -> couriers.id
-  "order_party_account_id": text -> accounts.id
+  "employee_id": text -> employees.employee_id
+  "courier_id": text -> couriers.courier_id
+  "order_party_account_id": text -> accounts.account_id
   "created_by_name": text
   "updated_at": timestamp with time zone
   "updated_by": text
@@ -994,490 +859,169 @@ orders {
 ### `orders_history`
 ```text
 orders_history {
-  "id": text
-  "order_id": text -> orders.id
-  "order_number": text
-  "shipment_id": text -> shipments.id
-  "journal_entry_id": text
-  "account_transaction_id": text
-  "activity_log_id": text
+  "orders_history_id": text
+  "order_id": text -> orders.order_id
+  "shipment_id": text -> shipments.shipment_id
   "event_type": text
-  "event_category": text
-  "operation": text
+  "action": text
   "entity_type": text
   "actor_id": text
   "actor_name": text
   "actor_role": text
-  "source": text
   "summary": text
-  "before_data": jsonb {}
-  "after_data": jsonb {}
-  "metadata": jsonb {
-    "changes" {
-      "id" {
-        "after"
-        "before"
-      }
-      "createdAt" {
-        "after"
-        "before"
-      }
-      "courier_id" {
-        "after"
-        "before"
-      }
-      "updated_at" {
-        "after"
-        "before"
-      }
-      "updated_by" {
-        "after"
-        "before"
-      }
-      "customer_id" {
-        "after"
-        "before"
-      }
-      "employee_id" {
-        "after"
-        "before"
-      }
-      "order_number" {
-        "after"
-        "before"
-      }
-      "data.currency" {
-        "after"
-        "before"
-      }
-      "data.payLater" {
-        "after"
-        "before"
-      }
-      "data.totalCBM" {
-        "after"
-        "before"
-      }
-      "order_status1" {
-        "after"
-        "before"
-      }
-      "data.courierId" {
-        "after"
-        "before"
-      }
-      "is_staff_order" {
-        "after"
-        "before"
-      }
-      "order_party_id" {
-        "after"
-        "before"
-      }
-      "created_by_name" {
-        "after"
-        "before"
-      }
-      "data.amountPaid" {
-        "after"
-        "before"
-      }
-      "data.bankAmount" {
-        "after"
-        "before"
-      }
-      "data.cashAmount" {
-        "after"
-        "before"
-      }
-      "data.couponRate" {
-        "after"
-        "before"
-      }
-      "data.customerId" {
-        "after"
-        "before"
-      }
-      "data.employeeId" {
-        "after"
-        "before"
-      }
-      "order_source_id" {
-        "after"
-        "before"
-      }
-      "order_status_id" {
-        "after"
-        "before"
-      }
-      "tracking_number" {
-        "after"
-        "before"
-      }
-      "data.couponValue" {
-        "after"
-        "before"
-      }
-      "data.productsSum" {
-        "after"
-        "before"
-      }
-      "data.totalWeight" {
-        "after"
-        "before"
-      }
-      "order_party_type" {
-        "after"
-        "before"
-      }
-      "data.exchangeRate" {
-        "after"
-        "before"
-      }
-      "data.isStaffOrder" {
-        "after"
-        "before"
-      }
-      "data.orderPartyId" {
-        "after"
-        "before"
-      }
-      "data.packagingFee" {
-        "after"
-        "before"
-      }
-      "data.paidCurrency" {
-        "after"
-        "before"
-      }
-      "data.totalCostSAR" {
-        "after"
-        "before"
-      }
-      "data.totalCostYER" {
-        "after"
-        "before"
-      }
-      "order_source_type" {
-        "after"
-        "before"
-      }
-      "data.bankAccountId" {
-        "after"
-        "before"
-      }
-      "data.bankReference" {
-        "after"
-        "before"
-      }
-      "data.cartShareCode" {
-        "after"
-        "before"
-      }
-      "data.cashAccountId" {
-        "after"
-        "before"
-      }
-      "data.couponEnabled" {
-        "after"
-        "before"
-      }
-      "data.directApprove" {
-        "after"
-        "before"
-      }
-      "data.firedTriggers" {
-        "after"
-        "before"
-      }
-      "data.locationYemen" {
-        "after"
-        "before"
-      }
-      "data.orderCurrency" {
-        "after"
-        "before"
-      }
-      "data.paymentMethod" {
-        "after"
-        "before"
-      }
-      "data.paymentStatus" {
-        "after"
-        "before"
-      }
-      "data.sheinRedPrice" {
-        "after"
-        "before"
-      }
-      "data.sourcing_cost" {
-        "after"
-        "before"
-      }
-      "data.deliveryStatus" {
-        "after"
-        "before"
-      }
-      "data.orderPartyType" {
-        "after"
-        "before"
-      }
-      "data.profitSaudiSAR" {
-        "after"
-        "before"
-      }
-      "delivery_courier_id" {
-        "after"
-        "before"
-      }
-      "shipping_courier_id" {
-        "after"
-        "before"
-      }
-      "data.amountRemaining" {
-        "after"
-        "before"
-      }
-      "data.exchangeRateUSD" {
-        "after"
-        "before"
-      }
-      "data.exchangeRateYER" {
-        "after"
-        "before"
-      }
-      "data.profitPerKgRate" {
-        "after"
-        "before"
-      }
-      "data.shippingCompany" {
-        "after"
-        "before"
-      }
-      "data.shippingCostSAR" {
-        "after"
-        "before"
-      }
-      "data.packagingFeeRate" {
-        "after"
-        "before"
-      }
-      "data.profitCompanySAR" {
-        "after"
-        "before"
-      }
-      "data.viaShippingAgent" {
-        "after"
-        "before"
-      }
-      "data.companyProfitRate" {
-        "after"
-        "before"
-      }
-      "data.customerAccountId" {
-        "after"
-        "before"
-      }
-      "order_party_account_id" {
-        "after"
-        "before"
-      }
-      "data.addShippingEnabled" {
-        "after"
-        "before"
-      }
-      "data.bankCommissionRate" {
-        "after"
-        "before"
-      }
-      "data.bankCommissionType" {
-        "after"
-        "before"
-      }
-      "data.deliveryCourierFee" {
-        "after"
-        "before"
-      }
-      "data.sourcingCostAmount" {
-        "after"
-        "before"
-      }
-      "data.externalOrderNumber" {
-        "after"
-        "before"
-      }
-      "data.homeDeliveryEnabled" {
-        "after"
-        "before"
-      }
-      "data.orderPartyAccountId" {
-        "after"
-        "before"
-      }
-      "data.packagingFeeEnabled" {
-        "after"
-        "before"
-      }
-      "data.productInsuranceFee" {
-        "after"
-        "before"
-      }
-      "data.cbmShippingRateValue" {
-        "after"
-        "before"
-      }
-      "data.bankCommissionEnabled" {
-        "after"
-        "before"
-      }
-      "data.product_insurance_fee" {
-        "after"
-        "before"
-      }
-      "data.shippingCourierFeeRate" {
-        "after"
-        "before"
-      }
-      "data.deliveryCourierFeeCurrency" {
-        "after"
-        "before"
-      }
-      "data.deductSourcingCostFromCourier" {
-        "after"
-        "before"
-      }
-      "data.deliveryCourierFeeOrderCurrency" {
-        "after"
-        "before"
-      }
-      "weight" {
-        "after"
-        "before"
-      }
-      "tax_fee" {
-        "after"
-        "before"
-      }
-      "order_id" {
-        "after"
-        "before"
-      }
-      "customs_fee" {
-        "after"
-        "before"
-      }
-      "carton_count" {
-        "after"
-        "before"
-      }
-      "shipping_cost" {
-        "after"
-        "before"
-      }
-      "shipment_status" {
-        "after"
-        "before"
-      }
-      "other_category_fee" {
-        "after"
-        "before"
-      }
-      "category_fees_total" {
-        "after"
-        "before"
-      }
-      "content_category_id" {
-        "after"
-        "before"
-      }
-      "shipping_company_id" {
-        "after"
-        "before"
-      }
-      "shipping_category_id" {
-        "after"
-        "before"
-      }
-      "category_fee_currency" {
-        "after"
-        "before"
-      }
-      "content_category_name" {
-        "after"
-        "before"
-      }
-    }
-    "trigger"
-    "changedFields"
-    "deletedOrderId"
-    "orderReference"
+  "before_data": jsonb {
+    "action",
+    "category",
+    "courier_id",
+    "created_at",
+    "created_by_name",
+    "customer_id",
+    "data",
+    "delivery_courier_id",
+    "employee_id",
+    "id",
+    "is_staff_order",
+    "order_number",
+    "order_party_account_id",
+    "order_party_id",
+    "order_party_type",
+    "order_source_id",
+    "order_source_type",
+    "order_status_id",
+    "order_status1",
+    "shipping_courier_id",
+    "target",
+    "tracking_number",
+    "type",
+    "updated_at",
+    "updated_by",
+    "user_id"
   }
-  "occurred_at": timestamp with time zone
+  "after_data": jsonb {
+    "action",
+    "amountOriginal",
+    "carton_count",
+    "category",
+    "category_fee_currency",
+    "category_fees_total",
+    "content_category_id",
+    "content_category_name",
+    "courier_id",
+    "created_at",
+    "created_by_name",
+    "createdAt",
+    "currencyOriginalNo",
+    "customer_id",
+    "customs_fee",
+    "data",
+    "delivery_courier_id",
+    "description",
+    "effectiveAt",
+    "employee_id",
+    "entryCategory",
+    "entryNumber",
+    "id",
+    "is_staff_order",
+    "order_id",
+    "order_number",
+    "order_party_account_id",
+    "order_party_id",
+    "order_party_type",
+    "order_source_id",
+    "order_source_type",
+    "order_status_id",
+    "order_status1",
+    "other_category_fee",
+    "paymentMethod",
+    "postingStatus",
+    "shipment_id",
+    "shipment_status",
+    "shipping_category_id",
+    "shipping_company_id",
+    "shipping_cost",
+    "shipping_courier_id",
+    "target",
+    "tax_fee",
+    "tracking_number",
+    "type",
+    "updated_at",
+    "updated_by",
+    "user_id",
+    "weight"
+  }
+  "metadata": jsonb {
+    "accountTransCount",
+    "activityAction",
+    "activityDetails",
+    "activityTarget",
+    "changedFields",
+    "changes",
+    "deletedOrderId",
+    "mainEntryId",
+    "orderId",
+    "orderReference",
+    "shipmentId",
+    "trigger"
+  }
   "created_at": timestamp with time zone
-  "main_entry_id": text -> main_entry.id
-  "account_trans_count": integer
 }
 ```
 
 ### `portal_tickets`
 ```text
 portal_tickets {
-  "id": text
+  "portal_ticket_id": text
   "data": jsonb {
-    "type"
-    "status"
-    "message"
-    "replies" [
-      "id"
-      "sender"
-      "message"
-      "createdAt"
-    ]
-    "subject"
+    "message",
+    "replies",
+    "status",
+    "subject",
+    "type",
+    "userName",
+    "userRole",
     "userUid"
-    "userName"
-    "userRole"
-    "createdAt"
-    "updatedAt"
   }
   "created_at": timestamp with time zone
   "type": text
   "status": text
-  "userUid": text -> portal_users.id
-  "createdAt": timestamp with time zone
+  "user_uid": text -> portal_users.portal_user_id
+}
+```
+
+### `portal_user_migration_map`
+```text
+portal_user_migration_map {
+  "portal_user_migration_map_id": text
+  "portal_user_id": text -> portal_users.portal_user_id
+  "old_uid": text
+  "migrated_at": timestamp with time zone
 }
 ```
 
 ### `portal_users`
 ```text
 portal_users {
-  "id": text
+  "portal_user_id": text
   "data": jsonb {
-    "uid"
-    "type"
-    "email"
-    "notes"
-    "phone"
-    "joinBy"
-    "address"
-    "fullName"
+    "address",
+    "approvalStatus",
+    "commercialRegisterUrl",
+    "email",
+    "financialCurrency",
+    "fullName",
+    "gpsLocation",
+    "identityDocUrl",
+    "joinBy",
+    "notes",
+    "onboardingCompleted",
+    "password",
+    "phone",
+    "portalRole",
+    "profileImageUrl",
+    "referrerId",
+    "type",
+    "uid",
     "username"
-    "createdAt"
-    "updatedAt"
-    "portalRole"
-    "referrerId"
-    "gpsLocation"
-    "linkedAccId"
-    "approvalStatus"
-    "identityDocUrl"
-    "profileImageUrl"
-    "financialBalance"
-    "linkedCustomerId"
-    "financialCurrency"
-    "financialAccountId"
-    "onboardingCompleted"
-    "financialAccountCode"
-    "commercialRegisterUrl"
   }
   "created_at": timestamp with time zone
   "portal_role": text
@@ -1485,9 +1029,14 @@ portal_users {
   "email": text
   "disabled": boolean
   "approval_status": text
-  "linkedAccId": text
   "join_by": text
   "referrer_id": text
+  "full_name": text
+  "name_ar": text
+  "name_en": text
+  "account_id": text -> accounts.account_id
+  "linked_customer_id": text -> customers.customer_id
+  "is_disabled": boolean
 }
 ```
 
@@ -1500,7 +1049,7 @@ products {
   "product_url": text
   "product_price_currency": integer -> currency.cur_id
   "unit_price": numeric
-  "item_category_id": text -> items_category.id
+  "item_category_id": text -> items_category.items_category_id
   "is_allowed": boolean
   "cbm": numeric
   "width": numeric
@@ -1517,10 +1066,10 @@ products {
 ### `report_settings`
 ```text
 report_settings {
-  "id": text
+  "report_setting_id": text
   "default_currency": text
   "alternative_currency": text
-  "exchange_rates": jsonb {}
+  "exchange_rates": jsonb
   "updated_at": timestamp with time zone
 }
 ```
@@ -1528,8 +1077,21 @@ report_settings {
 ### `report_templates`
 ```text
 report_templates {
-  "id": text
-  "data": jsonb {}
+  "report_template_id": text
+  "data": jsonb {
+    "activeReport",
+    "filters",
+    "name",
+    "searchTerm",
+    "selectedCompanyId",
+    "selectedCourierId",
+    "selectedCustomerId",
+    "selectedExpenseCategory",
+    "selectedOrderId",
+    "selectedUserId",
+    "sortBy",
+    "sortOrder"
+  }
   "created_by": uuid
 }
 ```
@@ -1537,27 +1099,18 @@ report_templates {
 ### `returned_products`
 ```text
 returned_products {
-  "return_id": text
-  "order_id": text
-  "order_item_id": text -> order_items.items_id
+  "returned_product_id": text
+  "return_number": text
+  "order_id": text -> orders.order_id
   "product_id": text -> products.product_id
-  "customer_id": text
+  "order_item_id": text -> order_items.order_item_id
+  "customer_id": text -> customers.customer_id
   "customer_name": text
-  "product_name": text
-  "product_url": text
-  "quantity": integer
-  "return_reason": text
-  "return_type": text
-  "return_status": text
-  "return_condition": text
+  "quantity": numeric
   "refund_amount": numeric
-  "refund_currency": text
-  "is_insured": boolean
-  "insurance_refund": numeric
+  "return_reason": text
   "notes": text
-  "returned_at": timestamp with time zone
-  "processed_by": text
-  "processed_at": timestamp with time zone
+  "status": text
   "created_at": timestamp with time zone
   "created_by": text
   "updated_at": timestamp with time zone
@@ -1568,13 +1121,11 @@ returned_products {
 ### `roles`
 ```text
 roles {
-  "id": text
+  "role_id": text
   "data": jsonb {
+    "isDefault",
+    "permissions",
     "title"
-    "updatedAt"
-    "permissions"
-    "createdAt"
-    "isDefault"
   }
 }
 ```
@@ -1582,30 +1133,28 @@ roles {
 ### `salary_history`
 ```text
 salary_history {
-  "id": text
+  "salary_history_id": text
   "data": jsonb {
-    "notes"
-    "amount"
-    "paidAt"
-    "status"
-    "currency"
-    "accountId"
-    "createdAt"
-    "employeeId"
-    "accountCode"
-    "salaryMonth"
+    "accountCode",
+    "amount",
+    "createdByName",
+    "createdByUid",
+    "currency",
+    "employeeId",
+    "employeeName",
+    "notes",
+    "paidAt",
+    "salaryMonth",
+    "status",
     "voucherCode"
-    "createdByUid"
-    "employeeName"
-    "createdByName"
   }
-  "transactionsID": text
-  "account_id": text -> accounts.id
-  "user_id": text -> users.id
+  "transactions_id": text
+  "account_id": text -> accounts.account_id
+  "user_id": text -> users.user_id
   "amount": numeric
   "currency": text
   "month": text
-  "createdAt": timestamp with time zone
+  "created_at": timestamp with time zone
   "cur_no": integer -> currency.cur_id
 }
 ```
@@ -1613,80 +1162,116 @@ salary_history {
 ### `sessions`
 ```text
 sessions {
-  "id": text
-  "data": jsonb {
-    "id"
-    "role"
-    "email"
-    "userId"
-    "fullName"
-    "lastSeen"
-    "createdAt"
-    "deviceInfo"
-    "lastSeenAt"
-    "forceLogout"
-  }
-  "user_id": text -> users.id
-  "createdAt": timestamp with time zone
-  "lastSeen": timestamp with time zone
-  "forceLogout": boolean
+  "session_id": text
+  "user_id": text -> users.user_id
+  "created_at": timestamp with time zone
+  "last_seen": timestamp with time zone
+  "force_logout": boolean
+  "device_info": text
+  "role": text
+  "full_name": text
+  "email": text
 }
 ```
 
 ### `settings`
 ```text
 settings {
-  "id": text
+  "setting_id": text
   "data": jsonb {
-    "logoUrl"
-    "margins"
-    "fontSize"
-    "showLogo"
-    "paperSize"
-    "showTaxId"
-    "taxNumber"
-    "fontFamily"
-    "subtitleAr"
-    "subtitleEn"
-    "tableStyle"
-    "showBarcode"
-    "footerTextAr"
-    "footerTextEn"
-    "primaryColor"
-    "showDateTime"
-    "signature1Ar"
-    "signature1En"
-    "signature2Ar"
-    "signature2En"
-    "signature3Ar"
-    "signature3En"
-    "headerTitleAr"
-    "headerTitleEn"
-    "showSignatures"
-    "gridColumns"
+    "apiKey",
+    "autoBackupEnabled",
+    "autoUpdateExchangeRates",
+    "backupCollections",
+    "backupCount",
+    "backupEncrypted",
+    "backupRetentionDays",
+    "backupSchedule",
+    "cbmShippingRateApiUrl",
+    "companyAddress",
+    "companyEmail",
+    "companyName",
+    "companyPhone",
+    "companyWebsite",
+    "config",
+    "currency",
+    "currencySymbol",
+    "customCurrencies",
+    "data",
+    "defaultAppDuration",
+    "defaultBankCommissionRate",
+    "defaultCbmShippingRate",
+    "defaultCompanyProfitRate",
+    "defaultCourierCommissionRate",
+    "defaultDeliveryFee",
+    "defaultDestinationCountry",
+    "defaultFactoryDuration",
+    "defaultOrderCurrency",
+    "defaultPackagingFee",
+    "defaultProductInsuranceFee",
+    "defaultProductInsuranceType",
+    "defaultProfitPerKg",
+    "defaultSheinDuration",
+    "defaultShippingDuration",
+    "defaultYemenDeliveryDuration",
+    "enabled",
+    "exchangeRatesApiUrl",
+    "exchangeRateSAR",
+    "exchangeRateUSD",
+    "exchangeRateYER",
+    "fontFamily",
+    "fontSize",
+    "footerTextAr",
+    "footerTextEn",
+    "gridColumns",
+    "headerTitleAr",
+    "headerTitleEn",
+    "invoiceLogo",
+    "invoiceNotes",
+    "language",
+    "lastAutoBackupAt",
+    "lastBackup",
+    "lastCbmRateUpdate",
+    "lastCbmRateUpdatedBy",
+    "lastExchangeRateUpdate",
+    "lastExchangeRateUpdatedBy",
+    "lastExchangeRateUpdateTime",
+    "logoUrl",
+    "margins",
+    "orderPrefix",
+    "orders_cost",
+    "orderStartNumber",
+    "packaging",
+    "paperSize",
+    "primaryColor",
+    "protectSensitiveOrderDelete",
+    "provider",
+    "setting_id",
+    "showBarcode",
+    "showDateTime",
+    "showLogo",
+    "showSignatures",
+    "showTaxId",
+    "signature1Ar",
+    "signature1En",
+    "signature2Ar",
+    "signature2En",
+    "signature3Ar",
+    "signature3En",
+    "subtitleAr",
+    "subtitleEn",
+    "systemLogo",
+    "systemName",
+    "tableStyle",
+    "taxId",
+    "taxNumber",
+    "templates",
+    "theme",
+    "triggers",
+    "user_setting_id",
+    "userid",
+    "userSessionTimeout",
     "visibleMetrics"
-    "config" {
-      "token"
-      "sender"
-      "customUrl"
-      "accountSid"
-      "customBody"
-      "instanceId"
-      "customMethod"
-      "customHeaders"
-    }
-    "enabled"
-    "provider"
-    "triggers" {
-      "onOrderCreated"
-      "onPaymentReceived"
-      "onOrderStatusChanged"
-    }
-    "templates" {
-      "onOrderCreated"
-      "onPaymentReceived"
-      "onOrderStatusChanged"
-    }
   }
   "category": text
 }
@@ -1695,18 +1280,18 @@ settings {
 ### `shipments`
 ```text
 shipments {
-  "id": text
-  "order_id": text -> orders.id
+  "shipment_id": text
+  "order_id": text -> orders.order_id
   "tracking_number": text
   "shipping_company_id": text
   "courier_id": text
   "shipment_status": text
   "shipping_cost": numeric
   "weight": numeric
-  "data": jsonb {}
-  "createdAt": timestamp with time zone
+  "data": jsonb
+  "created_at": timestamp with time zone
   "shipping_category_id": text
-  "content_category_id": text -> items_category.id
+  "content_category_id": text
   "content_category_name": text
   "carton_count": numeric
   "customs_fee": numeric
@@ -1720,117 +1305,80 @@ shipments {
 ### `shipping_companies`
 ```text
 shipping_companies {
-  "id": text
-  "data": jsonb {
-    "name"
-    "notes"
-    "phone"
-    "address"
-    "accountId"
-    "createdAt"
-    "updatedAt"
-    "account_id"
-    "tracking_url"
-    "contact_person"
-    "financialBalance"
-    "trackingIDPrefix"
-    "trackingID_prefix"
-    "financialAccountId"
-    "shippingCompanyUrl"
-    "financialAccountCode"
-    "shipping_company_url"
-  }
+  "shipping_company_id": text
   "name": text
   "shipping_company_url": text
-  "trackingID_prefix": text
-  "account_id": text -> accounts.id
+  "tracking_id_prefix": text
+  "account_id": text -> accounts.account_id
+  "name_ar": text
+  "name_en": text
 }
 ```
 
 ### `sources`
 ```text
 sources {
-  "id": text
-  "data": jsonb {
-    "name"
-    "type"
-    "notes"
-    "location"
-    "accountId"
-    "createdAt"
-    "sourceUrl"
-    "updatedAt"
-    "account_id"
-    "source_url"
-    "source_name"
-    "contact_info"
-    "supplierType"
-    "financialBalance"
-    "financialAccountId"
-    "financialAccountCode"
-  }
+  "source_id": text
   "name": text
   "type": text
   "source_url": text
-  "account_id": text -> accounts.id
+  "account_id": text -> accounts.account_id
+  "name_ar": text
+  "name_en": text
 }
 ```
 
 ### `user_settings`
 ```text
 user_settings {
-  "id": text
-  "userid": text -> users.id
+  "user_setting_id": text
   "data": jsonb {
-    "theme"
-    "userId"
-    "userid"
-    "fontSize"
-    "language"
-    "created_at"
+    "dashboardGridColumns",
+    "fontSize",
+    "language",
+    "theme",
+    "userid",
     "visibleMetrics"
-    "dashboardGridColumns"
   }
   "created_at": timestamp with time zone
+  "user_id": text
 }
 ```
 
 ### `users`
 ```text
 users {
-  "id": text
-  "role": text -> roles.id
+  "user_id": text
+  "role": text -> roles.role_id
   "username": text
   "email": text
   "disabled": boolean
-  "linkedType": text
-  "linkedEntity": text
-  "fullName": text
+  "linked_type": text
+  "linked_entity": text
+  "full_name": text
   "password": text
-  "systemPin": text
-  "isRoot": boolean
+  "system_pin": text
+  "is_root": boolean
   "phone": text
   "address": text
-  "createdAt": bigint
-  "updatedAt": bigint
-  "lastSeen": bigint
-  "lastSeenAt": text
+  "created_at": bigint
+  "updated_at": bigint
+  "last_seen": bigint
+  "last_seen_at": text
 }
 ```
 
 ### `whatsapp_logs`
 ```text
 whatsapp_logs {
-  "id": text
+  "whatsapp_log_id": text
   "data": jsonb {
-    "phone"
+    "errorMsg",
+    "eventType",
+    "externalResponse",
+    "message",
+    "phone",
     "status"
-    "message"
-    "orderId"
-    "errorMsg"
-    "createdAt"
-    "eventType"
-    "externalResponse"
   }
 }
 ```

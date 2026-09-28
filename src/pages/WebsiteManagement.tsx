@@ -164,7 +164,7 @@ export default function WebsiteManagement() {
       await supabase.from('portal_users').update({ data: cleanPayload }).eq('portal_user_id', userObj.id);
 
       if (status === 'approved') {
-        const entityId = userObj.linkedAccId || userObj.linkedCustomerId || userObj.id;
+        const entityId = userObj.linkedCustomerId || userObj.id;
         const name = userObj.fullName || userObj.email;
         if (userObj.portalRole === 'customer') {
           await financialAccountService.createAccountForEntity('customer', entityId, name, 'YER');
@@ -1788,4 +1788,3 @@ export default function WebsiteManagement() {
     </div>
   );
 }
-

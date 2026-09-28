@@ -6,12 +6,11 @@ import {
   FolderTree, Wrench, Users, Coins, UserCheck, Eye, ChevronDown, ChevronUp, Edit2, Lock, Trash2, ArrowRightLeft
 } from 'lucide-react';
 import { db, auth } from '../lib/supabase-adapter';
-import { collection, addDoc, doc, updateDoc, writeBatch, deleteDoc, onSnapshot, query, orderBy, increment, getDocs, where } from '../lib/supabase-adapter';
+import { collection, doc, updateDoc, writeBatch, deleteDoc, onSnapshot, query, orderBy, increment, getDocs, where } from '../lib/supabase-adapter';
 import { notificationService } from '../services/notificationService';
 import AccountingHierarchyManagement from './AccountingHierarchyManagement';
 import AssetsPortfolio from './AssetsPortfolio';
 import OrderStatusManagementTab from './OrderStatusManagementTab';
-import { useExpenseCategories } from '../hooks/useExpenseCategories';
 import { financialAccountService } from '../services/financialAccountService';
 import { accountingHierarchyService } from '../services/accountingHierarchyService';
 import { useRole } from '../hooks/useRole';
@@ -21,7 +20,6 @@ import { useExchangeRates } from '../hooks/useExchangeRates';
 
 interface FinanceAccountingProps {
   orders: any[];
-  expenses: any[];
   couriers: any[];
   customers: any[];
   isAr: boolean;
@@ -31,7 +29,6 @@ interface FinanceAccountingProps {
 
 export default function FinanceAccounting({
   orders,
-  expenses,
   couriers,
   customers,
   isAr,
@@ -39,7 +36,6 @@ export default function FinanceAccounting({
   initialTab = 'general_ledger'
 }: FinanceAccountingProps) {
   const [accountingTab, setAccountingTab] = useState<string>(initialTab);
-  const EXPENSE_CATEGORIES_DYNAMIC = useExpenseCategories();
   const { activeCurrencies, rates: dbRates } = useExchangeRates();
 
   // Selected order details drawer state
@@ -85,6 +81,7 @@ export default function FinanceAccounting({
   const [assets, setAssets] = useState<any[]>([]);
   // Real-time financial accounts sync
   const [financialAccounts, setFinancialAccounts] = useState<any[]>([]);
+  const [custodyAdvances, setCustodyAdvances] = useState<any[]>([]);
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'assets'), (snap) => {
@@ -103,6 +100,27 @@ export default function FinanceAccounting({
     });
     return () => unsub();
   }, []);
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'custody_advances'), (snap) => {
+      setCustodyAdvances(snap.docs.map((row: { id: any; data: () => any }) => ({ id: row.id, ...row.data() })));
+    }, (error) => {
+      console.error('Error loading custody advances:', error);
+    });
+    return () => unsub();
+  }, []);
+
+  const normalizedCustodyAdvances = useMemo(() => custodyAdvances.map((row: any) => ({
+    ...row,
+    recipientId: row.recipientId ?? row.recipient_id,
+    recipientName: row.recipientName ?? row.recipient_name,
+    recipientAccountId: row.recipientAccountId ?? row.recipient_account_id,
+    amount: Number(row.amountOriginal ?? row.amount_original ?? 0),
+    currency: row.currency ?? 'YER',
+    status: String(row.status ?? '').toLowerCase() === 'settled' ? 'Settled' : row.status,
+    expenseNumber: row.custodyNumber ?? row.custody_number ?? row.id,
+  })), [custodyAdvances]);
+
   const postingFinancialAccounts = useMemo(
     () => accountingHierarchyService.filterPostingAccounts(financialAccounts),
     [financialAccounts],
@@ -151,7 +169,7 @@ export default function FinanceAccounting({
   // New states for Unified Ledger and Salary Audits
   const [accountTransactions, setAccountTransactions] = useState<any[]>([]);
   const [financialEntries, setFinancialEntries] = useState<any[]>([]);
-  const [moduleFilter, setModuleFilter] = useState<'all' | 'order' | 'expenses' | 'custody' | 'payment' | 'salary' | 'adjustment'>('all');
+  const [moduleFilter, setModuleFilter] = useState<'all' | 'order' | 'custody' | 'payment' | 'salary' | 'adjustment'>('all');
   const [isSalaryPayment, setIsSalaryPayment] = useState(false);
   const [adjustSalaryMonth, setAdjustSalaryMonth] = useState('');
   const [bulkReconciliationLoading, setBulkReconciliationLoading] = useState(false);
@@ -269,7 +287,7 @@ export default function FinanceAccounting({
       .reduce((sum, a) => sum + convertToYER(a.cost || 0, a.currency || 'YER'), 0);
   }, [assets, settings]);
 
-  // 1. Double-Entry General Chronology Ledger (Unified & Grouped from account_trans and unlinked expenses)
+  // 1. Double-Entry General Chronology Ledger from the new financial tables.
   const ledgerEntries = useMemo(() => {
     const groupedMap = new Map<string, { debitLeg?: any; creditLeg?: any; legs: any[] }>();
 
@@ -309,7 +327,7 @@ export default function FinanceAccounting({
       const creditAcc = creditLeg ? financialAccounts.find(a => a.id === creditLeg.accountId) : null;
 
       const isSourcing = sample.entityType === 'courier' && (() => {
-        const c = couriers.find(currCourier => currCourier.id === sample.entityId || currCourier.financialAccountId === sample.accountId);
+        const c = couriers.find(currCourier => currCourier.id === sample.entityId || currCourier.accountId === sample.accountId);
         return c?.courierType === 'sourcing' || c?.financialCurrency === 'SAR';
       })() || sample.currencyOriginal === 'SAR' || debitAcc?.currency === 'SAR' || creditAcc?.currency === 'SAR';
 
@@ -354,60 +372,6 @@ export default function FinanceAccounting({
         allLegs: group.legs
       });
     });
-
-    // لا تُضاف expenses إلى دفتر التشغيل؛ فهي مرحلة إرث جرى حذف بياناتها المعتمدة.
-    /* expenses legacy rendering intentionally omitted. */
-    /*
-    expenses.forEach(exp => {
-      if (exp.linkedAccountId || exp.financialAccountId) return;
-
-      const date = exp.createdAt ? new Date(exp.createdAt) : new Date();
-      const convertedAmt = convertToYER(exp.amount || 0, exp.currency);
-      const isManualDebit = exp.notes && (exp.notes.includes('[MANUAL-DEBIT]') || exp.notes.includes('قيد تسوية مدين'));
-
-      if (isManualDebit) {
-        entries.push({
-          id: `EXP-UNLINKED-${exp.id}`,
-          groupKey: `EXP-UNLINKED-${exp.id}`,
-          refNumber: exp.expenseNumber || 'EXP-UNLINKED',
-          date,
-          title: exp.notes.replace('[MANUAL-DEBIT]', '').trim(),
-          notes: isAr ? 'تسوية حسابية يدوية داخلية للأصول' : 'Bilateral manual treasury entry',
-          debitPartyName: exp.recipientName || (isAr ? 'الخزينة العامة' : 'Central Treasury'),
-          creditPartyName: isAr ? 'حساب التسويات' : 'Adjustment Account',
-          isDoubleEntry: false,
-          type: 'Debit',
-          amount: convertedAmt,
-          currency: 'YER',
-          amountOriginal: exp.amount,
-          currencyOriginal: exp.currency,
-          module: 'adjustment',
-          allLegs: []
-        });
-      } else {
-        const catObj = EXPENSE_CATEGORIES_DYNAMIC.find((c: { id: any; }) => c.id === exp.category) || EXPENSE_CATEGORIES_DYNAMIC.find((c: { id: string; }) => c.id === 'other');
-        const catLabel = catObj ? (isAr ? catObj.labelAr : catObj.labelEn) : (isAr ? 'مصروف تشغيلي' : 'Operational Expense');
-        entries.push({
-          id: `EXP-UNLINKED-${exp.id}`,
-          groupKey: `EXP-UNLINKED-${exp.id}`,
-          refNumber: exp.expenseNumber || 'EXP-UNLINKED',
-          date,
-          title: isAr ? `سند صرف [${catLabel}]: ${exp.notes}` : `Expense voucher [${catLabel}]: ${exp.notes}`,
-          notes: isAr ? 'خصم المصروف من الخزينة مباشرة (غير مرتبط بحساب)' : 'Direct expense safe outflow (unlinked)',
-          debitPartyName: isAr ? `مصروفات [${catLabel}]` : `Expense [${catLabel}]`,
-          creditPartyName: exp.recipientName || (isAr ? 'خزينة المكتب' : 'Office Safe'),
-          isDoubleEntry: false,
-          type: 'Credit',
-          amount: convertedAmt,
-          currency: 'YER',
-          amountOriginal: exp.amount,
-          currencyOriginal: exp.currency,
-          module: 'expenses',
-          allLegs: []
-        });
-      }
-    });
-    */
 
     // Sort chronologically (oldest to newest for correct running balances, then reverse for display)
     const sorted = entries.sort((a, b) => a.date.getTime() - b.date.getTime());
@@ -561,7 +525,7 @@ export default function FinanceAccounting({
     // ── 4200: Manual debit (inflow) adjustments ──────────────────────────
     const totalAdjustInflows = 0; // Handled implicitly in account balances
 
-    // ── 5000: All operating expenses ─────────────────────────────────────
+    // ── 5000: Operating costs derived from posted ledger entries ─────────
     // Sum of all accounts starting with 5 (Expenses)
     const netOperatingCosts = financialAccounts
       .filter(a => a.accountCode?.startsWith('5') || a.accountCode?.startsWith('EXP'))
@@ -642,22 +606,9 @@ export default function FinanceAccounting({
       const parsedCreatedAt = editJournalData.createdAt ? new Date(editJournalData.createdAt).getTime() : Date.now();
       const batch = writeBatch(db);
 
-      const isUnlinked = selectedEditEntry.id.startsWith('EXP-UNLINKED-');
       const affectedAccountIds = new Set<string>();
 
-      if (isUnlinked) {
-        const expId = selectedEditEntry.id.replace('EXP-UNLINKED-', '');
-        const expRef = doc(db, 'expenses', expId);
-
-        batch.update(expRef, {
-          amount: rawAmt,
-          currency: editJournalData.currencyOriginal,
-          amountInDefaultCurrency: convertedAmt,
-          notes: editJournalData.notes,
-          createdAt: parsedCreatedAt,
-          updatedAt: Date.now()
-        });
-      } else {
+      {
         const txId = selectedEditEntry.id;
         const refNum = selectedEditEntry.refNumber;
 
@@ -709,22 +660,6 @@ export default function FinanceAccounting({
 
             batch.update(txDoc.ref, updateData);
 
-            if (txData.refNumber) {
-              const expQ = query(collection(db, 'expenses'), where('expenseNumber', '==', txData.refNumber));
-              const expSnaps = await getDocs(expQ);
-              if (!expSnaps.empty) {
-                expSnaps.forEach((expDoc) => {
-                  batch.update(expDoc.ref, {
-                    amount: rawAmt,
-                    currency: editJournalData.currencyOriginal,
-                    amountInDefaultCurrency: convertedAmt,
-                    notes: editJournalData.notes,
-                    createdAt: parsedCreatedAt,
-                    updatedAt: Date.now()
-                  });
-                });
-              }
-            }
           }
         }
 
@@ -825,12 +760,6 @@ export default function FinanceAccounting({
       // Delete master entry document from main_entry if present
       if (entryToDelete.journalEntryId) {
         batch.delete(doc(db, 'main_entry', entryToDelete.journalEntryId));
-      }
-
-      // Delete unlinked expense document if present
-      if (entryToDelete.id && entryToDelete.id.startsWith('EXP-UNLINKED-')) {
-        const expId = entryToDelete.id.replace('EXP-UNLINKED-', '');
-        batch.delete(doc(db, 'expenses', expId));
       }
 
       await batch.commit();
@@ -960,33 +889,6 @@ export default function FinanceAccounting({
         }
       );
 
-      // 3. Insert into general daily ledger expense/cash flow so it displays correctly
-      const trgName = trgAccount.nameAr || trgAccount.entityName;
-      const srcName = srcAccount.nameAr || srcAccount.entityName;
-      const notesLabel = `[DOUBLE-ENTRY] ${adjustData.title || (isAr ? 'قيد تسوية' : 'Adjustment Voucher')} (من حـ/: ${trgAccount.accountCode} - ${trgName} -> إلى حـ/: ${srcAccount.accountCode} - ${srcName})`;
-
-      const payload = {
-        expenseNumber: voucherCode,
-        category: isSalaryPayment ? 'salary' : 'accounting',
-        type: isSalaryPayment ? 'Salary' : 'General',
-        amount: amountVal,
-        currency: adjustData.currency,
-        amountInDefaultCurrency: convertedAmt,
-        recipientId: trgAccount.entityId || 'adjustment',
-        recipientName: trgAccount.entityName || (isAr ? 'التعديلات المحاسبية' : 'Ledger Adjustments'),
-        notes: notesLabel + (adjustData.notes ? ` : ${adjustData.notes}` : ''),
-        status: 'Completed',
-        createdByUid: auth.currentUser?.uid || 'system',
-        createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
-        createdByName: auth.currentUser?.email?.split('@')[0] || 'Finance Auditor',
-        createdAt: timestamp,
-        financialAccountId: targetAccountId,
-        financialAccountCode: trgAccount.accountCode,
-        salaryMonth: isSalaryPayment ? adjustSalaryMonth : null
-      };
-
-      await addDoc('exp_' + voucherCode, collection(db, 'expenses'), payload);
-
       notificationService.notify({
         title: isAr ? 'تم تقييد القيد بنجاح' : 'Adjustment Logged',
         message: isAr ? 'تم حفظ القيد المزدوج ترحيله إلى اليومية المساعدة بنجاح.' : 'Double-entry journal voucher registered successfully.',
@@ -1025,12 +927,12 @@ export default function FinanceAccounting({
     if (!cour) return null;
 
     // Custodies assigned
-    const courierExpenses = expenses.filter(e => e.type === 'Custody' && e.recipientId === auditedCourierId);
+    const courierExpenses = normalizedCustodyAdvances.filter(e => e.recipientId === auditedCourierId);
 
     // Shipments handled
     const courierOrders = orders.filter(o => o.deliveryCourierId === auditedCourierId || o.shippingCourierId === auditedCourierId);
 
-    const linkedAccount = financialAccounts.find(a => a.id === cour.financialAccountId || a.entityId === cour.financialAccountId);
+    const linkedAccount = financialAccounts.find(a => a.id === cour.accountId || a.entityId === cour.accountId);
     const currency = linkedAccount?.currency || cour.financialCurrency || 'YER';
 
     const totalCustodyIssued = courierExpenses.reduce((sum, exp) => sum + convertToYER(exp.amount || 0, exp.currency), 0);
@@ -1063,7 +965,7 @@ export default function FinanceAccounting({
       successRate,
       currency
     };
-  }, [auditedCourierId, couriers, expenses, orders, settings, financialAccounts]);
+  }, [auditedCourierId, couriers, normalizedCustodyAdvances, orders, settings, financialAccounts]);
 
   // Courier transactions list
   const courierTransactions = useMemo(() => {
@@ -1140,8 +1042,8 @@ Continue?`
 
       // 1. Reconcile current financial balance if not zero
       if (currentBalance !== 0) {
-        const linkedAccountId = cour.financialAccountId;
-        const linkedAccountCode = cour.financialAccountCode;
+        const linkedAccountId = cour.accountId;
+        const linkedAccountCode = cour.accountCode;
 
         if (linkedAccountId) {
           const type = currentBalance > 0 ? 'Credit' : 'Debit'; // Credit to reduce balance, Debit to increase it
@@ -1171,15 +1073,16 @@ Continue?`
       // 2. Settle all pending open custodies
       const pendingCustodies = courierAuditSheet.custodies.filter(c => c.status === 'Pending');
       for (const exp of pendingCustodies) {
-        const docRef = doc(db, 'expenses', exp.id);
+        const docRef = doc(db, 'custody_advances', exp.id);
         batch.update(docRef, {
-          status: 'Settled',
-          settledAt: timestamp,
-          settledByEmail: auth.currentUser?.email || 'admin@swiftship.system',
-          settledByName: 'Finance Auditor'
+          status: 'settled',
+          settledAt: new Date(timestamp).toISOString(),
+          settledByUid: auth.currentUser?.uid || 'system',
+          amountSettled: exp.amountOriginal ?? exp.amount ?? 0,
+          amountOutstanding: 0,
         });
 
-        if (exp.linkedAccountId) {
+        if (exp.recipientAccountId) {
           const settledAmount = financialAccountService.convertToDefaultCurrency(
             parseFloat(exp.amount || 0),
             exp.currency || 'YER',
@@ -1193,7 +1096,7 @@ Continue?`
             refNumber: `${exp.expenseNumber}-SET`,
             amount: settledAmount,
             currency: 'YER',
-            debitAccount: { id: exp.linkedAccountId, code: exp.linkedAccountCode || '2120' },
+            debitAccount: { id: exp.recipientAccountId, code: '2120' },
             creditAccount: { id: systemAccs['sys_cash_account'], code: '1111-0' },
             createdByUid: auth.currentUser?.uid || 'system',
             createdByName: 'Finance Auditor'
@@ -1213,23 +1116,6 @@ Continue?`
           paymentStatus: isAr ? 'خالص' : 'Fully Paid',
           courierRemittedAt: timestamp
         });
-      });
-
-      // 4. Create one big adjustment document in expenses
-      const expensesRef = collection(db, 'expenses');
-      await addDoc('exp_' + mainVoucherCode, expensesRef, {
-        expenseNumber: mainVoucherCode,
-        type: 'General',
-        amount: Math.abs(currentBalance) + courierAuditSheet.totalUnremittedCashValue,
-        currency: 'YER',
-        recipientId: cour.id,
-        recipientName: cour.fullName,
-        notes: `[MANUAL-DEBIT] قيد مطابقة شامل وإقفال ذمة المندوب ${cour.fullName}`,
-        status: 'Completed',
-        createdByUid: auth.currentUser?.uid || 'system',
-        createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
-        createdByName: 'Finance Auditor',
-        createdAt: timestamp
       });
 
       await batch.commit();
@@ -1287,30 +1173,33 @@ Continue?`
         });
       });
 
-      // Insert a Double-Entry safe box inflow receipt voucher
+      // Register the remittance as a proper double-entry voucher.
       const randStr = Math.floor(1000 + Math.random() * 9000);
       const voucherCode = `REMIT-${randStr}`;
-      const remitsRef = collection(db, 'expenses');
-
-      const payload = {
-        expenseNumber: voucherCode,
-        type: 'General',
-        amount: courierAuditSheet.totalUnremittedCashValue,
-        currency: currency,
-        amountInDefaultCurrency: isSourcing
-          ? courierAuditSheet.totalUnremittedCashValue * (dbRates.SAR || 1)
-          : courierAuditSheet.totalUnremittedCashValue,
-        recipientId: courierAuditSheet.courier.id,
-        recipientName: courierAuditSheet.courier.fullName,
-        notes: `[MANUAL-DEBIT] توريد تحصيلات شحنات المندوب ${courierAuditSheet.courier.fullName}`,
-        status: 'Completed',
-        createdByUid: auth.currentUser?.uid || 'system',
-        createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
-        createdByName: 'Finance Auditor',
-        createdAt: Date.now()
-      };
-
-      await addDoc('exp_' + voucherCode, remitsRef, payload);
+      const courierAccountId = courierAuditSheet.courier.accountId;
+      if (courierAccountId) {
+        const systemAccs = await financialAccountService.ensureSystemAccounts(currency);
+        const amount = financialAccountService.convertToDefaultCurrency(
+          courierAuditSheet.totalUnremittedCashValue,
+          currency,
+          settings.currency || 'YER',
+          dbRates,
+        );
+        await financialAccountService.recordTransaction({
+          date: Date.now(),
+          description: isAr
+            ? `توريد تحصيلات شحنات المندوب ${courierAuditSheet.courier.fullName}`
+            : `Courier cargo remittance: ${courierAuditSheet.courier.fullName}`,
+          module: 'payment',
+          refNumber: voucherCode,
+          amount,
+          currency: settings.currency || 'YER',
+          debitAccount: { id: systemAccs['sys_cash_account'], code: '1111-0' },
+          creditAccount: { id: courierAccountId, code: '2120' },
+          createdByUid: auth.currentUser?.uid || 'system',
+          createdByName: 'Finance Auditor',
+        });
+      }
       await batch.commit();
 
       notificationService.notify({
@@ -1340,12 +1229,12 @@ Continue?`
     )) return;
 
     try {
-      const docRef = doc(db, 'expenses', custodyDocId);
+      const docRef = doc(db, 'custody_advances', custodyDocId);
       await updateDoc(docRef, {
-        status: 'Settled',
-        settledAt: Date.now(),
-        settledByEmail: auth.currentUser?.email || 'admin@swiftship.system',
-        settledByName: 'Finance Auditor'
+        status: 'settled',
+        settledAt: new Date().toISOString(),
+        settledByUid: auth.currentUser?.uid || 'system',
+        amountOutstanding: 0,
       });
 
       notificationService.notify({
@@ -1486,32 +1375,12 @@ Continue?`
 
       // --- Register Credit in Customer's Financial Account ---
       const customerRecord = customerLedgerDetails.customer;
-      const linkedAccountId = customerRecord.financialAccountId;
-      const linkedAccountCode = customerRecord.financialAccountCode;
+      const linkedAccountId = customerRecord.accountId;
+      const linkedAccountCode = customerRecord.accountCode;
 
-      // Record cash inflow adjustment voucher in ledger safe box
+      // Record cash inflow directly as a new-model payment voucher.
       const randStr = Math.floor(1000 + Math.random() * 9000);
       const voucherNum = `RCV-${randStr}`;
-      const adjustmentsRef = collection(db, 'expenses');
-
-      const payload = {
-        expenseNumber: voucherNum,
-        type: 'General',
-        amount: amountVal,
-        currency: 'YER',
-        recipientId: customerLedgerDetails.customer.id,
-        recipientName: customerLedgerDetails.customer.fullName,
-        notes: `[MANUAL-DEBIT] سند قبض دفعة على الحساب للعميل: ${customerLedgerDetails.customer.fullName} - ${payNotes || ''}`,
-        status: 'Completed',
-        createdByUid: auth.currentUser?.uid || 'system',
-        createdByEmail: auth.currentUser?.email || 'admin@swiftship.system',
-        createdByName: 'Finance Auditor',
-        createdAt: Date.now(),
-        financialAccountId: linkedAccountId || null,
-        financialAccountCode: linkedAccountCode || null
-      };
-
-      await addDoc('exp_' + voucherNum, adjustmentsRef, payload);
 
       if (linkedAccountId) {
         const convertedPaid = financialAccountService.convertToDefaultCurrency(
@@ -1954,7 +1823,6 @@ Continue?`
                 >
                   <option value="all">{isAr ? 'جميع الوحدات' : 'All Modules'}</option>
                   <option value="order">{isAr ? 'طلبات الشحن الشحنات' : 'Cargo Orders'}</option>
-                  <option value="expenses">{isAr ? 'مصروفات عامة' : 'Expenses'}</option>
                   <option value="custody">{isAr ? 'عهد مالية' : 'Custodies'}</option>
                   <option value="payment">{isAr ? 'قبض دفعات' : 'Customer Payments'}</option>
                   <option value="salary">{isAr ? 'صرف رواتب' : 'Salaries'}</option>
@@ -3249,7 +3117,7 @@ Continue?`
                                 }`}>
                                 {tx.module === 'salary' ? (isAr ? 'راتب' : 'Salary') :
                                   tx.module === 'order' ? (isAr ? 'طلب' : 'Order') :
-                                    tx.module === 'expenses' ? (isAr ? 'مصروف' : 'Expense') :
+                                    tx.module === 'expense' ? (isAr ? 'مصروف' : 'Expense') :
                                       tx.module || '—'}
                               </span>
                             </td>

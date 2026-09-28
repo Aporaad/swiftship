@@ -17,18 +17,12 @@ export default function Accounting() {
   const queryParams = new URLSearchParams(location.search);
   const activeSubTab = queryParams.get('subtab') || undefined;
 
-  const [expenses, setExpenses] = useState<any[]>([]);
   const [couriers, setCouriers] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
 
   useEffect(() => {
     if (roleLoading || !canViewFinance) return;
-
-    // Fetch expenses
-    const unsubExp = onSnapshot(query(collection(db, 'expenses'), orderBy('createdAt', 'desc')), (snap) => {
-      setExpenses(snap.docs.map((doc: { id: any; data: () => any; }) => ({ id: doc.id, ...doc.data() })));
-    });
 
     // Fetch couriers
     const unsubCouriers = onSnapshot(collection(db, 'couriers'), (snap) => {
@@ -46,7 +40,6 @@ export default function Accounting() {
     });
 
     return () => {
-      unsubExp();
       unsubCouriers();
       unsubOrders();
       unsubCustomers();
@@ -93,7 +86,6 @@ export default function Accounting() {
       {/* Accounting Component */}
       <FinanceAccounting
         orders={orders}
-        expenses={expenses}
         couriers={couriers}
         customers={customers}
         isAr={isAr}

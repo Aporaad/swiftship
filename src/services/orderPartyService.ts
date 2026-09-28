@@ -7,7 +7,8 @@ export type OrderParty = {
   phone?: string;
   address?: string;
   email?: string;
-  financialAccountId?: string;
+  /** Canonical financial relation. */
+  accountId?: string;
   financialAccountCode?: string;
   raw: any;
 };
@@ -22,7 +23,7 @@ function toParty(raw: any, type: OrderPartyType): OrderParty {
     phone: raw.phone || raw.mobile || '',
     address: raw.address || raw.location || '',
     email: raw.email || '',
-    financialAccountId: raw.financialAccountId || raw.accountId || raw.account_id || '',
+    accountId: raw.accountId || raw.account_id || raw.financialAccountId || '',
     financialAccountCode: raw.financialAccountCode || raw.accountCode || '',
     raw,
   };
@@ -75,7 +76,7 @@ export function toOrderPartyPayload(party: OrderParty) {
     orderPartyId: party.id,
     orderPartyType: party.type,
     isStaffOrder: party.type !== 'customer',
-    orderPartyAccountId: party.financialAccountId || '',
+    orderPartyAccountId: party.accountId || '',
     employeeId: party.type === 'employee' ? party.id : '',
     courierId: party.type === 'courier' ? party.id : '',
   };

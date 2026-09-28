@@ -229,8 +229,6 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
         notes: newAsset.notes,
         maintenanceLogs: [],
         accountId: account.id,
-        financialAccountId: account.id,
-        financialAccountCode: account.accountCode,
         createdAt: Date.now()
       });
 

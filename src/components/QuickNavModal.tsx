@@ -40,7 +40,7 @@ export default function QuickNavModal({ isOpen, onClose }: QuickNavModalProps) {
     { name: isAr ? 'التتبع' : 'Tracking', path: '/tracking', icon: Truck, permission: 'track_order', desc: isAr ? 'حالة الشحن والتتبع الدولي' : 'Real-time transit state tracking' },
     { name: isAr ? 'العملاء' : 'Customers', path: '/customers', icon: Users, permission: 'view_customers', desc: isAr ? 'دليل وأرصدة ومحافظ العملاء' : 'Customer registry, ledgers & wallets' },
     { name: isAr ? 'المناديب' : 'Couriers', path: '/couriers', icon: Truck, permission: 'view_couriers', desc: isAr ? 'مناديب التوصيل المحلي والعهد' : 'Local couriers & settlement logs' },
-    { name: isAr ? 'المصروفات والعهد' : 'Expenses & Custody', path: '/expenses', icon: Wallet, permission: 'view_finance', desc: isAr ? 'إدارة الحسابات المالية والعهد والمصروفات' : 'Global finance ledger, expenses & custody' },
+    { name: isAr ? 'القيود والسندات والعهد' : 'Entries, Vouchers & Custody', path: '/finance', icon: Wallet, permission: 'view_finance', desc: isAr ? 'إدارة القيود والسندات والعهد من المركز المالي الموحد' : 'Unified entries, vouchers and custody center' },
     { name: isAr ? 'المحاسبة' : 'Accounting', path: '/accounting', icon: FileText, permission: 'view_finance', desc: isAr ? 'إغلاق الحسابات ومطابقات القيود' : 'Account balancing & matching settlements' },
     { name: isAr ? 'المصادر' : 'Sources', path: '/sources', icon: MapPin, permission: 'view_sources', desc: isAr ? 'محطات ومصادر التوريد الخارجية' : 'External shipping pipelines & sources' },
     { name: isAr ? 'التقارير' : 'Reports', path: '/reports', icon: FileText, permission: 'view_reports', desc: isAr ? 'تقارير مالية وتحليلية شاملة' : 'Detailed analytics & financial reports' },
@@ -52,9 +52,6 @@ export default function QuickNavModal({ isOpen, onClose }: QuickNavModalProps) {
   // Filter based on user configuration & permissions
   const filteredNavItems = navItems.filter(item => {
     if (roleLoading) return false;
-    if (item.path === '/expenses') {
-      return hasPermission('view_finance') || hasPermission('view_expenses') || hasPermission('view_custody');
-    }
     return hasPermission(item.permission);
   });
 

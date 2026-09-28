@@ -35,7 +35,7 @@ interface GlobalSearchModalProps {
   searchQuery: string;
 }
 
-type SearchCategory = 'all' | 'orders' | 'users' | 'customers' | 'couriers' | 'sources' | 'expenses' | 'accounting' | 'system';
+type SearchCategory = 'all' | 'orders' | 'users' | 'customers' | 'couriers' | 'sources' | 'accounting' | 'system';
 
 export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: GlobalSearchModalProps) {
   const { settings } = useSettings();
@@ -54,7 +54,6 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
   const [customersData, setCustomersData] = useState<any[]>([]);
   const [couriersData, setCouriersData] = useState<any[]>([]);
   const [sourcesData, setSourcesData] = useState<any[]>([]);
-  const [expensesData, setExpensesData] = useState<any[]>([]);
   const [accountsData, setAccountsData] = useState<any[]>([]);
   const [journalData, setJournalData] = useState<any[]>([]);
   const [salaryData, setSalaryData] = useState<any[]>([]);
@@ -70,7 +69,6 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
         getDocs(collection(db, 'customers')),
         getDocs(collection(db, 'couriers')),
         getDocs(collection(db, 'sources')),
-        getDocs(collection(db, 'expenses')),
         getDocs(collection(db, 'accounts')),
         getDocs(collection(db, 'main_entry')),
         getDocs(collection(db, 'salary_history')),
@@ -86,7 +84,6 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
         customersSnap,
         couriersSnap,
         sourcesSnap,
-        expensesSnap,
         accountsSnap,
         journalSnap,
         salarySnap,
@@ -99,7 +96,6 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
       if (customersSnap) setCustomersData(customersSnap.docs.map((d: any) => ({ id: d.id, _searchType: 'customer', ...d.data() })));
       if (couriersSnap) setCouriersData(couriersSnap.docs.map((d: any) => ({ id: d.id, _searchType: 'courier', ...d.data() })));
       if (sourcesSnap) setSourcesData(sourcesSnap.docs.map((d: any) => ({ id: d.id, _searchType: 'source', ...d.data() })));
-      if (expensesSnap) setExpensesData(expensesSnap.docs.map((d: any) => ({ id: d.id, _searchType: 'expense', ...d.data() })));
       if (accountsSnap) setAccountsData(accountsSnap.docs.map((d: any) => ({ id: d.id, _searchType: 'account', ...d.data() })));
       if (journalSnap) setJournalData(journalSnap.docs.map((d: any) => ({ id: d.id, _searchType: 'journal', ...d.data() })));
       if (salarySnap) setSalaryData(salarySnap.docs.map((d: any) => ({ id: d.id, _searchType: 'salary', ...d.data() })));
@@ -122,7 +118,6 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
       setCustomersData([]);
       setCouriersData([]);
       setSourcesData([]);
-      setExpensesData([]);
       setAccountsData([]);
       setJournalData([]);
       setSalaryData([]);
@@ -192,17 +187,6 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
     );
   });
 
-  const matchedExpenses = expensesData.filter(ex => {
-    if (!cleanText) return true;
-    return (
-      String(ex.recipientName || '').toLowerCase().includes(cleanText) ||
-      String(ex.notes || '').toLowerCase().includes(cleanText) ||
-      String(ex.createdByName || '').toLowerCase().includes(cleanText) ||
-      String(ex.amount || '').toLowerCase().includes(cleanText) ||
-      String(ex.type || '').toLowerCase().includes(cleanText)
-    );
-  });
-
   const matchedAccounts = accountsData.filter(a => {
     if (!cleanText) return true;
     return (
@@ -259,7 +243,7 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
     { id: 'couriers', nameAr: 'المناديب', nameEn: 'Couriers', path: '/couriers' },
     { id: 'roles', nameAr: 'الصلاحيات والأدوار', nameEn: 'Roles & Permissions', path: '/roles' },
     { id: 'settings', nameAr: 'الإعدادات', nameEn: 'Settings', path: '/settings' },
-    { id: 'expenses', nameAr: 'المصروفات والعهد', nameEn: 'Expenses & Custody', path: '/expenses' },
+    { id: 'finance', nameAr: 'القيود والسندات', nameEn: 'Entries & Vouchers', path: '/finance' },
     { id: 'accounting', nameAr: 'المحاسبة والقيود', nameEn: 'Accounting & Ledger', path: '/accounting' },
     { id: 'reports', nameAr: 'التقارير والإحصائيات', nameEn: 'Reports & Statistics', path: '/reports' },
     { id: 'notifications', nameAr: 'الإشعارات', nameEn: 'Notifications', path: '/notifications' },
@@ -281,7 +265,6 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
     ...matchedCustomers.map(c => ({ ...c, _displayType: isAr ? 'عميل كلي' : 'Customer', _color: 'emerald' })),
     ...matchedCouriers.map(cr => ({ ...cr, _displayType: isAr ? 'مندوب توزيع' : 'Courier', _color: 'amber' })),
     ...matchedSources.map(s => ({ ...s, _displayType: isAr ? 'مصدر توريد' : 'Source', _color: 'blue' })),
-    ...matchedExpenses.map(ex => ({ ...ex, _displayType: isAr ? 'حركة مالية' : 'Finance', _color: 'rose' })),
     ...matchedAccounts.map(a => ({ ...a, _displayType: isAr ? 'حساب مالي' : 'Account', _color: 'indigo' })),
     ...matchedJournal.map(j => ({ ...j, _displayType: isAr ? 'قيد محاسبي' : 'Journal Entry', _color: 'violet' })),
     ...matchedSalary.map(s => ({ ...s, _displayType: isAr ? 'سند راتب' : 'Salary Record', _color: 'lime' })),
@@ -362,7 +345,6 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
       case 'customers': return matchedCustomers.map(c => ({ ...c, _displayType: isAr ? 'عميل كلي' : 'Customer', _color: 'emerald' }));
       case 'couriers': return matchedCouriers.map(cr => ({ ...cr, _displayType: isAr ? 'مندوب توزيع' : 'Courier', _color: 'amber' }));
       case 'sources': return matchedSources.map(s => ({ ...s, _displayType: isAr ? 'مصدر توريد' : 'Source', _color: 'blue' }));
-      case 'expenses': return matchedExpenses.map(ex => ({ ...ex, _displayType: isAr ? 'حركة مالية' : 'Finance', _color: 'rose' }));
       case 'accounting': return [
         ...matchedAccounts.map(a => ({ ...a, _displayType: isAr ? 'حساب مالي' : 'Account', _color: 'indigo' })),
         ...matchedJournal.map(j => ({ ...j, _displayType: isAr ? 'قيد محاسبي' : 'Journal Entry', _color: 'violet' })),
@@ -384,7 +366,6 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
     { key: 'customers', ar: 'العملاء', en: 'Customers', count: matchedCustomers.length, color: 'emerald-400' },
     { key: 'couriers', ar: 'المندوبين', en: 'Couriers', count: matchedCouriers.length, color: 'amber-400' },
     { key: 'accounting', ar: 'المحاسبة', en: 'Accounting', count: matchedAccounts.length + matchedJournal.length + matchedSalary.length, color: 'indigo-400' },
-    { key: 'expenses', ar: 'المصروفات', en: 'Expenses', count: matchedExpenses.length, color: 'rose-400' },
     { key: 'system', ar: 'النظام', en: 'System', count: matchedRoles.length + matchedFeatures.length + Math.min(50, matchedActivity.length), color: 'gold-400' }
   ];
 
@@ -395,7 +376,6 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
       case 'customer': return <User className="w-4 h-4 text-emerald-400" />;
       case 'courier': return <Truck className="w-4 h-4 text-amber-400" />;
       case 'source': return <Globe className="w-4 h-4 text-blue-400" />;
-      case 'expense': return <Wallet className="w-4 h-4 text-rose-400" />;
       case 'account': return <DollarSign className="w-4 h-4 text-indigo-400" />;
       case 'journal': return <FileText className="w-4 h-4 text-violet-400" />;
       case 'salary': return <Wallet className="w-4 h-4 text-lime-400" />;
@@ -543,7 +523,6 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
                               <span className="text-[8px] text-slate-500 font-bold">
                                 {type === 'order' && formatStatus(item.orderStatus || item.order_status)}
                                 {type === 'user' && getRoleLabel(item.role)}
-                                {type === 'expense' && `${item.amount} ${item.currency || 'YER'}`}
                                 {type === 'customer' && (isAr ? 'ملف نشط' : 'Active')}
                                 {type === 'courier' && (isAr ? 'تأدية عهدة' : 'Courier')}
                                 {type === 'source' && (item.type || 'App')}
@@ -556,7 +535,6 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
                               {type === 'customer' && item.fullName}
                               {type === 'courier' && item.fullName}
                               {type === 'source' && (item.source_name || item.name)}
-                              {type === 'expense' && (item.notes ? item.notes.substring(0, 30) + '...' : item.recipientName || (isAr ? 'مصروف عام' : 'Expense'))}
                               {type === 'account' && item.entityName}
                               {type === 'journal' && item.description}
                               {type === 'salary' && item.employeeName}
@@ -571,7 +549,6 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
                               {type === 'customer' && item.phone}
                               {type === 'courier' && item.phone}
                               {type === 'source' && (item.location || '—')}
-                              {type === 'expense' && `${isAr ? 'بواسطة' : 'By'}: ${item.createdByName || '—'}`}
                               {type === 'account' && item.accountCode}
                               {type === 'journal' && item.entryNumber}
                               {type === 'salary' && item.salaryMonth}
@@ -593,7 +570,7 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
                             else if (type === 'customer') targetPath = '/customers';
                             else if (type === 'courier') targetPath = '/couriers';
                             else if (type === 'source') targetPath = '/sources';
-                            else if (type === 'expense') targetPath = '/expenses';
+                            else if (type === 'finance' || type === 'account' || type === 'journal' || type === 'salary') targetPath = '/finance';
                             else if (type === 'account') targetPath = '/accounting';
                             else if (type === 'journal') targetPath = '/accounting';
                             else if (type === 'salary') targetPath = '/salary-history';
@@ -677,7 +654,6 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
                         {selectedItem._searchType === 'customer' && (isAr ? 'نشط بالنظام' : 'Active Customer')}
                         {selectedItem._searchType === 'courier' && (isAr ? 'مسجل ومصرح للخدمة' : 'Authorized Courier')}
                         {selectedItem._searchType === 'source' && (selectedItem.type || 'App')}
-                        {selectedItem._searchType === 'expense' && (selectedItem.type || 'General')}
                       </span>
                     </div>
                   </div>

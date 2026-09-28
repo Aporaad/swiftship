@@ -228,10 +228,10 @@ export default function EditOrderModal({
   };
   const selectOrderParty = async (party: OrderParty) => {
     const entityType = party.type === 'employee' ? 'employee' : party.type === 'courier' ? 'courier' : 'customer';
-    const account = party.financialAccountId
+    const account = party.accountId
       ? null
       : await financialAccountService.createAccountForEntity(entityType, party.id, party.name, settings?.currency || 'YER');
-    const resolved = account ? { ...party, financialAccountId: account.id, financialAccountCode: account.accountCode } : party;
+    const resolved = account ? { ...party, accountId: account.id } : party;
     setFormData((prev: any) => ({ ...prev, ...toOrderPartyPayload(resolved) }));
   };
 
@@ -1632,3 +1632,4 @@ export default function EditOrderModal({
     </div>
   );
 }
+

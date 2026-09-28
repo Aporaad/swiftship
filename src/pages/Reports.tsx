@@ -819,7 +819,7 @@ export default function Reports() {
     return () => unsub();
   }, [filters.accountId, filters.entityId, filters.startDate, filters.endDate, accounts, activeReport, selectedCustomerId, selectedCourierId, selectedUserId, selectedOrderId, selectedExpenseCategory, orders, customers, users, EXPENSE_CATEGORIES_DYNAMIC, selectedPackagingAccountIds, selectedOrdersCostAccountIds, selectedShippingCompaniesAccountIds]);
 
-  // Save changes to print settings template in PostgreSQL 
+  // Save changes to print settings template in supabase 
   const handleSavePrintSettings = async () => {
     setSavingTemplate(true);
     try {

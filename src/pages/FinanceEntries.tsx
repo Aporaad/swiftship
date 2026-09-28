@@ -63,7 +63,7 @@ export default function FinanceEntries() {
       const currencyCodeById = new Map(loadedCurrencies.map((item) => [item.id, item.code]));
       setCurrencies(loadedCurrencies);
       setAccounts((accountResult.data || []).map((item: any) => ({
-        id: item.account_id, nameAr: item.acc_name_ar || item.account_id, nameEn: item.acc_name_en,
+        id: item.account_id, nameAr: item.acc_name_ar || item.acc_name_en || item.id, nameEn: item.acc_name_en,
         curNo: Number(item.cur_no), currencyCode: currencyCodeById.get(Number(item.cur_no)) || '—',
         isActive: Boolean(item.is_active), isPosting: Boolean(item.acc_sub_id), accSubId: item.acc_sub_id || undefined, entityId: item.entity_id || undefined,
         entityType: item.entity_type || undefined, entityName: item.acc_name_ar || item.acc_name_en || item.account_id,
@@ -123,7 +123,7 @@ export default function FinanceEntries() {
     { id: 'compound' as const, label: 'القيود المركبة', icon: ListTree, access: can(isAdmin, hasPermission, 'view_compound_entries', 'view_finance') },
     { id: 'temporary' as const, label: 'القيودالمؤقتة', icon: FileClock, access: can(isAdmin, hasPermission, 'view_temporary_entries', 'view_finance') },
     { id: 'receipt' as const, label: 'سندات القبض', icon: ReceiptText, access: can(isAdmin, hasPermission, 'view_receipt_vouchers', 'view_finance') },
-    { id: 'payment' as const, label: 'سندات الصرف', icon: CreditCard, access: can(isAdmin, hasPermission, 'view_payment_vouchers', 'view_expenses') },
+    { id: 'payment' as const, label: 'سندات الصرف', icon: CreditCard, access: can(isAdmin, hasPermission, 'view_payment_vouchers', 'view_finance') },
     { id: 'custody' as const, label: 'العهد والسلف', icon: Wallet, access: can(isAdmin, hasPermission, 'view_custody_advances', 'view_custody') },
     { id: 'movement' as const, label: 'حركة الحسابات', icon: Landmark, access: can(isAdmin, hasPermission, 'view_account_movements', 'view_financial_accounts') },
     { id: 'settings' as const, label: 'إعدادات القيود', icon: Settings2, access: can(isAdmin, hasPermission, 'view_entry_settings', 'view_auto_entries') },
@@ -138,17 +138,17 @@ export default function FinanceEntries() {
    */
   const entryPermissions = (subject: string, legacy: string) => ({
     canView:         can(isAdmin, hasPermission, `view_${subject}`,             legacy),
-    canCreate:       can(isAdmin, hasPermission, `create_${subject}`,           subject.includes('payment') ? 'add_expenses' : 'add_finance'),
-    canEdit:         can(isAdmin, hasPermission, `edit_${subject}`,             subject.includes('payment') ? 'edit_expenses' : 'edit_finance'),
+    canCreate:       can(isAdmin, hasPermission, `create_${subject}`,           subject.includes('payment') ? 'create_payment_vouchers' : 'add_finance'),
+    canEdit:         can(isAdmin, hasPermission, `edit_${subject}`,             subject.includes('payment') ? 'edit_payment_vouchers' : 'edit_finance'),
     canPost:         can(isAdmin, hasPermission, `post_${subject}`,             can(isAdmin, hasPermission, subject === 'temporary_entries' ? 'post_temporary_entries' : 'post_financial_entries', 'add_finance') ? subject === 'temporary_entries' ? 'post_temporary_entries' : 'post_financial_entries' : 'add_finance'),
-    canDelete:       can(isAdmin, hasPermission, `delete_${subject}`,           subject.includes('payment') ? 'delete_expenses' : 'edit_finance'),
+    canDelete:       can(isAdmin, hasPermission, `delete_${subject}`,           subject.includes('payment') ? 'delete_payment_vouchers' : 'edit_finance'),
     canVoid:         can(isAdmin, hasPermission, 'void_financial_entries',      'edit_finance'),
     canReverse:      can(isAdmin, hasPermission, 'reverse_financial_entries',   'edit_finance'),
     // صلاحيات جديدة — New permissions
     canPrint:        can(isAdmin, hasPermission, `print_${subject}`,            'view_finance'),
     canExport:       can(isAdmin, hasPermission, `export_${subject}`,           'view_finance'),
     canEditPosted:   can(isAdmin, hasPermission, `edit_posted_${subject}`,      'edit_finance'),
-    canDeletePosted: can(isAdmin, hasPermission, `delete_posted_${subject}`,    subject.includes('payment') ? 'delete_expenses' : 'edit_finance'),
+    canDeletePosted: can(isAdmin, hasPermission, `delete_posted_${subject}`,    subject.includes('payment') ? 'delete_posted_payment_vouchers' : 'edit_finance'),
     canUnpostOrder:  can(isAdmin, hasPermission, 'unpost_posted_orders',        'edit_orders'),
   });
 
@@ -170,9 +170,9 @@ export default function FinanceEntries() {
     {activeTab === 'compound'  && <CompoundEntriesTab  {...common} {...entryPermissions('compound_entries',  'view_finance')} />}
     {activeTab === 'temporary' && <TemporaryEntriesTab {...common} {...entryPermissions('temporary_entries', 'view_finance')} />}
     {activeTab === 'receipt'   && <ReceiptVouchersTab  {...common} {...entryPermissions('receipt_vouchers',  'view_finance')} />}
-    {activeTab === 'payment'   && <PaymentVouchersTab  {...common} {...entryPermissions('payment_vouchers',  'view_expenses')} />}
+    {activeTab === 'payment'   && <PaymentVouchersTab  {...common} {...entryPermissions('payment_vouchers',  'view_payment_vouchers')} />}
     {activeTab === 'movement'  && <AccountMovementTab  lines={transactions} entries={entries} accounts={accounts} currencies={currencies} canView={can(isAdmin, hasPermission, 'view_account_movements', 'view_financial_accounts')} canExport={can(isAdmin, hasPermission, 'export_account_movements', 'view_financial_accounts')} canPrint={can(isAdmin, hasPermission, 'print_account_movements', 'view_financial_accounts')} />}
-    {activeTab === 'custody'   && <CustodyAdvancesTab  items={custodies} accounts={accounts} currencies={currencies} canView={can(isAdmin, hasPermission, 'view_custody_advances', 'view_custody')} canCreate={can(isAdmin, hasPermission, 'create_custody_advances', 'add_expenses')} canSettle={can(isAdmin, hasPermission, 'settle_custody_advances', 'edit_expenses')} createdByUid={createdByUid} onChanged={refresh} />}
+    {activeTab === 'custody'   && <CustodyAdvancesTab  items={custodies} accounts={accounts} currencies={currencies} canView={can(isAdmin, hasPermission, 'view_custody_advances', 'view_custody')} canCreate={can(isAdmin, hasPermission, 'create_custody_advances', 'create_finance')} canSettle={can(isAdmin, hasPermission, 'settle_custody_advances', 'edit_finance')} createdByUid={createdByUid} onChanged={refresh} />}
     {activeTab === 'settings'  && <EntrySettingsTab    modules={modules} entryTypes={entryTypes} canView={can(isAdmin, hasPermission, 'view_entry_settings', 'view_auto_entries')} canCreate={can(isAdmin, hasPermission, 'create_entry_settings', 'add_auto_entries')} canEdit={can(isAdmin, hasPermission, 'edit_entry_settings', 'edit_auto_entries')} canDelete={can(isAdmin, hasPermission, 'delete_entry_settings', 'delete_auto_entries')} onChanged={refresh} />}
   </div>;
 }

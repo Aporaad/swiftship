@@ -509,3 +509,34 @@
 - [x] [2026-09-26 05:32:00] تصحيح دالة العملة `accounting_system_currency_id` لاستعلام `is_default = true AND is_active = true` بدلاً من `isDefault` و `isActive`.
 - [x] [2026-09-26 05:32:00] إجراء اختبار معاملي ناجح للـ RPC `secure_create_financial_entry` بتثبيت استجابة JSON سليمة وإنشاء القيد وتحديث شجرة الحسابات بنجاح 100%.
 - [x] [2026-09-26 05:32:00] الفحص التراكمي النهائي لقاعدة البيانات وتأكيد خلو PostgreSQL تماماً (0 دوال) من أي مراجع قديمة لعمود `id` أو مسميات camelcase.
+
+
+## [2026-09-27 08:46] — استعادة السجل وتنظيف الإرث المالي
+
+- [x] استعادة النسخة المحفوظة من `todo.md` من سجل الجلسة السابقة بدل استبدالها بملخص.
+- [x] التحقق الحي من عدم وجود `expenses` و`journal_entries` و`account_transactions`.
+- [x] تطبيق `202609270009_drop_legacy_financial_tables_after_cutover` بصيغة idempotent.
+- [x] إزالة مراجع الكتابة والحذف إلى `expenses` من `FinanceAccounting.tsx` وتحويل التدفقات إلى النموذج الجديد.
+- [ ] استكمال التدقيق السطري لخطة حقول قاعدة البيانات، وفحص جميع مراجع `journal_entries` و`account_transactions` في الكود والمخطط.
+- [ ] تشغيل فحوص TypeScript والاختبارات والبناء من Windows الأصلي لأن أدوات Node تتعطل على مجلد Windows المركب في Linux.
+
+[2026-09-28 03:45] - Fixed Dashboard React #185 by removing unstable expenses dependency; fixed chart dimensions; pending browser E2E.
+- [x] توثيق كامل لجداول قاعدة البيانات الـ 51 والحقول والعلاقات واستخراج أسماء الحقول التي داخل حقول data في ملف DATABASE_SCHEMA.md. [2026-09-28 05:29:36]
+
+
+## [2026-09-28 05:53:10 +03:00] — مهمة إعادة تحليل خطة ما قبل API — AI Model: Manus
+- [x] إعادة فحص اتصال مجلد المشروع بعد إصلاح الربط.
+- [x] مراجعة الخطة السابقة والنسخة الموسعة المؤقتة.
+- [x] مطابقة نتائج تحليل Supabase مع تغييرات الكود والمخطط الحديثة.
+- [x] حفظ الخطة السابقة في `system_pre_api_restructure_plan_ar.previous_20260928.md`.
+- [x] نقل الخطة الموسعة إلى `system_pre_api_restructure_plan_ar.md` وإنشاء نسخة versioned باسم `system_pre_api_restructure_plan_ar_v2.md`.
+- [x] تجهيز الخطة للبدء بالتنفيذ عبر مراحل Baseline ثم Contracts ثم Gateways ثم Auth/RBAC ثم `alx_api`.
+- [x] لم يتم تنفيذ SQL أو Migration أو تعديل في قاعدة البيانات ضمن هذه المهمة.
+
+
+## [2026-09-28 06:17:33 +03:00] — إعادة مواءمة خطة ما قبل API مع الخطة الأصلية — AI Model: Manus
+- [x] مقارنة الخطة الأصلية والخطة الجديدة وتحديد أن الهيكل الأصلي أوضح وأنسب للتنفيذ.
+- [x] إعادة بناء الخطة الحالية انطلاقاً من الخطة الأصلية بدلاً من الإبقاء على الملحق الموسع المختلف.
+- [x] تحديث الفروقات الضرورية فقط: مفاتيح entity-specific، `main_entry` و`account_trans`، `order_party`، `orders_history`، `returned_products`، مخاطر RLS وSECURITY DEFINER وElectron.
+- [x] الحفاظ على مراحل الخطة الأصلية من Baseline والجرد وGateway وAuth وFeature Refactor وServer Split وReadiness Review.
+- [x] لم يتم تنفيذ SQL أو Migration أو تعديل في قاعدة البيانات.

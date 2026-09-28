@@ -3,6 +3,11 @@
 export interface Customer {
   id: string;
   fullName: string;
+  /** Normalized bilingual name columns; optional during the migration window. */
+  nameAr?: string;
+  nameEn?: string;
+  /** Canonical financial relation; balances are derived from ledger entries. */
+  accountId?: string;
   phone: string;
   email?: string;
   address?: string;
@@ -19,6 +24,11 @@ export interface Customer {
 export interface Courier {
   id: string;
   fullName: string;
+  /** Normalized bilingual name columns; optional during the migration window. */
+  nameAr?: string;
+  nameEn?: string;
+  /** Canonical financial relation; balances are derived from ledger entries. */
+  accountId?: string;
   phone: string;
   email?: string;
   address?: string;

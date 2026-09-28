@@ -6,7 +6,15 @@ import { financialAccountService } from '../services/financialAccountService';
 function extractRows(data: any[]): any[] {
   return (data || []).map(row => {
     const payload = typeof row.data === 'string' ? JSON.parse(row.data) : (row.data || {});
-    return { id: row.id, ...payload };
+    return {
+      id: row.portal_user_id || row.id,
+      ...payload,
+      fullName: row.full_name || payload.fullName || '',
+      linkedCustomerId: row.linked_customer_id || payload.customerId || '',
+      accountId: row.account_id || '',
+      portalRole: row.portal_role || payload.portalRole,
+      approvalStatus: row.approval_status || payload.approvalStatus,
+    };
   });
 }
 
@@ -36,7 +44,7 @@ export default function PendingPortalApprovalsModal({ isOpen, onClose }: { isOpe
     setActioningId(user.id);
     try {
       const userRole = user.portalRole || user.portal_role;
-      const targetEntityId = user.linkedAccId || user.id;
+      const targetEntityId = user.linkedCustomerId || user.id;
 
       // 1. Update portal_users table status to approved
       const existingUserDoc = pendingUsers.find(u => u.id === user.id) || {};

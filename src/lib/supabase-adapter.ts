@@ -264,6 +264,12 @@ export function sanitizeDataPayload(table: string, data: Record<string, any>): R
   ];
   commonSystemKeys.forEach(k => delete clean[k]);
 
+  // Financial truth is the canonical account_id plus ledger-derived balances.
+  // Never recreate the retired duplicated financial fields in JSON payloads.
+  ['financialAccountId', 'financialAccountCode', 'financialBalance',
+    'financial_account_id', 'financial_account_code', 'financial_balance']
+    .forEach(k => delete clean[k]);
+
   // 2. Remove table-specific mapped direct columns
   const tableMapping = DIRECT_COLUMNS_MAP[table];
   if (tableMapping) {
@@ -394,7 +400,7 @@ export function extractRowPayload(table: string, row: any): any {
     if (combined.createdAt && !combined.created_at) combined.created_at = combined.createdAt;
   }
 
-  if (table === 'main_entry' || table === 'journal_entries') {
+  if (table === 'main_entry') {
     if (combined.entry_number && !combined.entryNumber) combined.entryNumber = combined.entry_number;
     if (combined.entryNumber && !combined.entry_number) combined.entry_number = combined.entryNumber;
     if (combined.entry_number && !combined.journalEntryNumber) combined.journalEntryNumber = combined.entry_number;
@@ -777,10 +783,7 @@ export async function createUserWithEmailAndPassword(authInstance: any, email: s
 }
 
 export function collection(dbInstance: any, path: string) {
-  let targetPath = path;
-  if (path === 'account_transactions') targetPath = 'account_trans';
-  if (path === 'journal_entries') targetPath = 'main_entry';
-  return new SupabaseQuery(targetPath);
+  return new SupabaseQuery(path);
 }
 
 export function doc(...args: any[]) {
@@ -878,14 +881,14 @@ export async function getDocFromServer(docRef: DocRef) {
 }
 
 const DIRECT_COLUMNS_MAP: Record<string, Record<string, string>> = {
-  employees: { accountId: 'account_id', monthlySalary: 'monthly_salary', currency: 'currency', jobsType: 'jobs_type', createdAt: 'created_at', createdBy: 'created_by' },
+  employees: { fullName: 'full_name', nameAr: 'name_ar', nameEn: 'name_en', accountId: 'account_id', monthlySalary: 'monthly_salary', currency: 'currency', jobsType: 'job_type', jobType: 'job_type', createdAt: 'created_at', createdBy: 'created_by' },
   users: { role: 'role', username: 'username', email: 'email', disabled: 'disabled', linkedType: 'linked_type', linkedEntity: 'linked_entity', fullName: 'full_name', password: 'password', systemPin: 'system_pin', isRoot: 'is_root', phone: 'phone', address: 'address', createdAt: 'created_at', updatedAt: 'updated_at', lastSeen: 'last_seen', lastSeenAt: 'last_seen_at' },
-  portal_users: { portalRole: 'portal_role', username: 'username', email: 'email', disabled: 'disabled', approvalStatus: 'approval_status', linkedAccId: 'linked_acc_id', linkedCustomerId: 'linked_acc_id' },
+  portal_users: { portalRole: 'portal_role', username: 'username', email: 'email', disabled: 'disabled', isDisabled: 'is_disabled', approvalStatus: 'approval_status', linkedCustomerId: 'linked_customer_id', accountId: 'account_id', fullName: 'full_name', nameAr: 'name_ar', nameEn: 'name_en' },
   sessions: { userId: 'user_id', fullName: 'full_name', email: 'email', role: 'role', deviceInfo: 'device_info', createdAt: 'created_at', lastSeen: 'last_seen', forceLogout: 'force_logout' },
   settings: { category: 'category' },
   user_settings: { userId: 'user_id' },
-  customers: { accountId: 'account_id', disabled: 'is_active', level: 'levels', levels: 'levels' },
-  couriers: { accountId: 'account_id', financialCurrency: 'currency', currency: 'currency', disabled: 'is_active', courierType: 'type', type: 'type', level: 'levels', levels: 'levels' },
+  customers: { fullName: 'full_name', nameAr: 'name_ar', nameEn: 'name_en', accountId: 'account_id', disabled: 'is_active', level: 'customer_level', customerLevel: 'customer_level', levels: 'customer_level' },
+  couriers: { fullName: 'full_name', nameAr: 'name_ar', nameEn: 'name_en', accountId: 'account_id', financialCurrency: 'currency', currency: 'currency', disabled: 'is_active', courierType: 'courier_type', type: 'courier_type', level: 'courier_level', levels: 'courier_level' },
   account: { accountCode: 'account_code', code: 'account_code', account_code: 'account_code', accNameAr: 'acc_name_ar', nameAr: 'acc_name_ar', acc_name_ar: 'acc_name_ar', accNameEn: 'acc_name_en', nameEn: 'acc_name_en', acc_name_en: 'acc_name_en', balance: 'balance', curNo: 'cur_no', currencyId: 'cur_no', cur_no: 'cur_no', isActive: 'is_active', is_active: 'is_active', accountType: 'account_type', account_type: 'account_type', createdAt: 'created_at', updatedAt: 'updated_at' },
   acc_main: { accountId: 'account_id', account_id: 'account_id', accountCode: 'account_code', code: 'account_code', account_code: 'account_code', accNameAr: 'acc_name_ar', nameAr: 'acc_name_ar', acc_name_ar: 'acc_name_ar', accNameEn: 'acc_name_en', nameEn: 'acc_name_en', acc_name_en: 'acc_name_en', balance: 'balance', curNo: 'cur_no', currencyId: 'cur_no', cur_no: 'cur_no', isActive: 'is_active', is_active: 'is_active', createdAt: 'created_at', updatedAt: 'updated_at' },
   acc_sub: { accMainId: 'acc_main_id', acc_main_id: 'acc_main_id', accountCode: 'account_code', code: 'account_code', account_code: 'account_code', accNameAr: 'acc_name_ar', nameAr: 'acc_name_ar', acc_name_ar: 'acc_name_ar', accNameEn: 'acc_name_en', nameEn: 'acc_name_en', acc_name_en: 'acc_name_en', balance: 'balance', curNo: 'cur_no', currencyId: 'cur_no', cur_no: 'cur_no', isActive: 'is_active', is_active: 'is_active', allowsDirectAccounts: 'allows_direct_accounts', allows_direct_accounts: 'allows_direct_accounts', createdAt: 'created_at', updatedAt: 'updated_at' },
@@ -894,12 +897,10 @@ const DIRECT_COLUMNS_MAP: Record<string, Record<string, string>> = {
   account_id_migration_map: { oldAccountId: 'old_account_id', oldAccountCode: 'old_account_code', newAccountId: 'new_account_id', migratedAt: 'migrated_at' },
   accounts: { accountCode: 'account_code', code: 'account_code', balance: 'balance', currency: 'currency', entityId: 'entity_id', entityType: 'entity_type', type: 'type', accountType: 'type', accSubId: 'acc_sub_id', groupId: 'group_id', accountSeq: 'account_seq', accNameAr: 'acc_name_ar', nameAr: 'acc_name_ar', accNameEn: 'acc_name_en', nameEn: 'acc_name_en', limitedBalance: 'limited_balance', curNo: 'cur_no', currencyId: 'cur_no', isActive: 'is_active', createdAt: 'created_at', updatedAt: 'updated_at', lastRecalculatedAt: 'last_recalculated_at', accountNumber: 'account_number', accountPrefix: 'account_prefix', entityName: 'entity_name', notes: 'notes' },
   orders: { orderNumber: 'order_number', trackingNumber: 'tracking_number', customerId: 'customer_id', orderPartyId: 'order_party_id', orderPartyType: 'order_party_type', isStaffOrder: 'is_staff_order', employeeId: 'employee_id', courierId: 'courier_id', orderPartyAccountId: 'order_party_account_id', orderStatusId: 'order_status_id', order_status_id: 'order_status_id', createdAt: 'created_at', orderSourceId: 'order_source_id', order_source_id: 'order_source_id', orderSourceType: 'order_source_type', order_source_type: 'order_source_type', deliveryCourierId: 'delivery_courier_id', delivery_courier_id: 'delivery_courier_id', shippingCourierId: 'shipping_courier_id', shipping_courier_id: 'shipping_courier_id', createdByName: 'created_by_name', created_by_name: 'created_by_name', updatedAt: 'updated_at', updated_at: 'updated_at', updatedBy: 'updated_by', updated_by: 'updated_by' },
-  shipping_companies: { name: 'name', shippingCompanyUrl: 'shipping_company_url', trackingIDPrefix: 'tracking_id_prefix', trackingID_prefix: 'tracking_id_prefix', accountId: 'account_id', financialAccountId: 'account_id' },
-  sources: { name: 'name', supplierType: 'type', type: 'type', sourceUrl: 'source_url', accountId: 'account_id', financialAccountId: 'account_id' },
-  expenses: { expenseNumber: 'expense_number', transactionsID: 'transactions_id', linkedAccountId: 'account_id', financialAccountId: 'account_id', accountId: 'account_id', category: 'category', amount: 'amount', currency: 'currency', curNo: 'cur_no', currencyId: 'cur_no', createdAt: 'created_at' },
+  shipping_companies: { name: 'name', nameAr: 'name_ar', nameEn: 'name_en', shippingCompanyUrl: 'shipping_company_url', trackingIDPrefix: 'tracking_id_prefix', trackingID_prefix: 'tracking_id_prefix', accountId: 'account_id' },
+  sources: { name: 'name', nameAr: 'name_ar', nameEn: 'name_en', supplierType: 'type', type: 'type', sourceUrl: 'source_url', accountId: 'account_id' },
   salary_history: { transactionsID: 'transactions_id', financialAccountId: 'account_id', accountId: 'account_id', userId: 'user_id', amount: 'amount', currency: 'currency', curNo: 'cur_no', currencyId: 'cur_no', salaryMonth: 'month', month: 'month', createdAt: 'created_at' },
-  journal_entries: { transactionID: 'transactions_id', accountId: 'account_id', createdByUid: 'created_by_uid', curNo: 'cur_no', currencyId: 'cur_no', createdAt: 'created_at', orderId: 'order_id', orderNumber: 'order_number', shipmentId: 'shipment_id', automationKey: 'automation_key', autoRuleId: 'auto_rule_id', statusId: 'status_id', isAutomatic: 'is_automatic' },
-  assets: { linkedAccountId: 'account_id', accountId: 'account_id', financialAccountId: 'account_id', financialAccountCode: 'account_code', status: 'status', currency: 'currency', isActive: 'is_active', assetCode: 'asset_code', type: 'type', createdAt: 'created_at' },
+  assets: { nameAr: 'name_ar', nameEn: 'name_en', linkedAccountId: 'account_id', accountId: 'account_id', status: 'status', currency: 'currency', isActive: 'is_active', assetCode: 'asset_code', type: 'type', createdAt: 'created_at' },
   notifications: { userId: 'user_id', category: 'category', isPublic: 'is_public', read: 'read', type: 'type', createdAt: 'created_at' },
   activity_logs: { userUid: 'user_id', userId: 'user_id', action: 'action', category: 'category', entityName: 'target', target: 'target', type: 'type', timestamp: 'created_at', createdAt: 'created_at' },
   jobs_req: { email: 'email', phone: 'phone', status: 'status', category: 'category', refCode: 'ref_code', createdAt: 'created_at' },
@@ -946,14 +947,11 @@ const TABLE_PRIMARY_KEY_MAP: Record<string, string> = {
   acc_sub_group: 'acc_sub_group_id',
   default_accounts: 'default_account_id',
   main_entry: 'main_entry_id',
-  journal_entries: 'main_entry_id',
   account_trans: 'account_trans_id',
-  account_transactions: 'account_trans_id',
   roles: 'role_id',
   announcements: 'announcement_id',
   activity_logs: 'activity_log_id',
   notifications: 'notification_id',
-  expenses: 'expense_id',
   salary_history: 'salary_history_id',
   assets: 'asset_id',
   sources: 'source_id',
@@ -991,7 +989,9 @@ const EXPLICIT_FINANCIAL_TABLES = new Set([
   'account', 'acc_main', 'acc_sub', 'acc_sub_group', 'default_accounts', 'account_id_migration_map',
   'accounts', 'entry_module', 'entry_type', 'main_entry', 'account_trans', 'custody_advances',
   'financial_legacy_migration_map', 'financial_migration_exceptions', 'users', 'products', 'order_items',
-  'returned_products', 'sessions'
+  'returned_products', 'sessions',
+  // These entity tables no longer have a data JSONB column after phase 8.
+  'customers', 'couriers', 'employees', 'sources', 'shipping_companies', 'assets'
   //  'announcements', 'portal_users', 'sources',
   // 'couriers', 'customers', 'employees', 'activity_logs', 'notifications', 'jobs_req', 'portal_tickets',
   // 'shipments', 'orders_history', 'order_status', 'auto_entries', 'shipping_companies', 'assets',
@@ -1169,7 +1169,10 @@ export async function addAssDoc(newID: any, arg1: any, collectionRef: SupabaseQu
 
   if (!isOfflineMode()) {
     const directCols = extractDirectColumns(table, rawClean);
-    const { error } = await supabase.from(table).insert({ [pkCol]: id, assetCode, ...directCols, data });
+    const writePayload = usesExplicitFinancialColumns(table)
+      ? { [pkCol]: id, assetCode, ...directCols }
+      : { [pkCol]: id, assetCode, ...directCols, data };
+    const { error } = await supabase.from(table).insert(writePayload);
     if (error) {
       throw createWriteError('insert', table, error);
     }
@@ -1425,7 +1428,7 @@ export function notifyOrderDeletionInCache(orderIds: string[]) {
 
   // 4. إعادة ضبط التوقيتات للجداول المتأثرة لإلزام المزامنة الشبكية التالية
   // Invalidate fetch timestamps for affected relational tables
-  ['orders', 'shipments', 'order_items', 'products', 'main_entry', 'account_trans', 'expenses', 'notifications', 'whatsapp_logs', 'orders_history'].forEach(table => {
+  ['orders', 'shipments', 'order_items', 'products', 'main_entry', 'account_trans', 'notifications', 'whatsapp_logs', 'orders_history'].forEach(table => {
     delete lastFetchTimestamps[table];
     delete activeFetches[table];
   });

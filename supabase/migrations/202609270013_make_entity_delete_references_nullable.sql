@@ -1,0 +1,3 @@
+﻿-- Migration 202609270013
+-- Entity/account foreign keys use ON DELETE SET NULL so purge can remove an entity without violating historical order references.
+-- Applied to customers, couriers, employees, orders, portal_users.

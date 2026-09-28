@@ -29,7 +29,6 @@ export default function GlobalEntityLedgerModal() {
   
   const [entityData, setEntityData] = useState<any>(null);
   const [orders, setOrders] = useState<any[]>([]);
-  const [expenses, setExpenses] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
   // خريطة رؤوس القيود: entryId → بيانات القيد
   // Journal entry headers map: entryId → entry data
@@ -61,7 +60,6 @@ export default function GlobalEntityLedgerModal() {
     if (!isOpen || !entityId || !entityType) {
       setEntityData(null);
       setOrders([]);
-      setExpenses([]);
       setTransactions([]);
       return;
     }
@@ -89,16 +87,7 @@ export default function GlobalEntityLedgerModal() {
       setOrders(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     }, (err) => console.error("Error fetching orders:", err));
 
-    // 3. Fetch expenses (only relevant for Couriers)
-    let unsubExpenses = () => {};
-    if (entityType === 'courier') {
-      const qExp = query(collection(db, 'expenses'), where('recipientId', '==', entityId));
-      unsubExpenses = onSnapshot(qExp, (snap) => {
-        setExpenses(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      }, (err) => console.error("Error fetching expenses:", err));
-    }
-
-    // 4. Fetch Ledger Account Transactions from account_trans
+    // 3. Fetch Ledger Account Transactions from account_trans
     const qTx = query(collection(db, 'account_trans'), where('entity_id', '==', entityId));
     const unsubTx = onSnapshot(qTx, (snap) => {
       setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -108,7 +97,7 @@ export default function GlobalEntityLedgerModal() {
       setLoading(false);
     });
 
-    // 5. الاستماع لجدول main_entry لبناء خريطة حالة الترحيل
+    // 4. الاستماع لجدول main_entry لبناء خريطة حالة الترحيل
     //    Subscribe to main_entry to build posting-status map for this entity
     const unsubMainEntries = onSnapshot(collection(db, 'main_entry'), (snap) => {
       const map = new Map<string, any>();
@@ -123,7 +112,6 @@ export default function GlobalEntityLedgerModal() {
     return () => {
       unsubEntity();
       unsubOrders();
-      unsubExpenses();
       unsubTx();
       unsubMainEntries();
     };

@@ -29,7 +29,8 @@ export interface PortalUserPayload {
   portal_role?: string;
   approval_status?: 'approved' | 'pending_approval' | 'rejected';
   disabled?: boolean;
-  linkedAccId?: string;
+  linkedCustomerId?: string;
+  accountId?: string;
   fullName?: string;
   phone?: string;
   customerId?: string;
@@ -73,9 +74,13 @@ export class PortalUserService {
           username: row.username || payload.username || '',
           email: row.email || payload.email || '',
           portal_role: row.portal_role || payload.portalRole || 'client',
-          disabled: Boolean(row.disabled ?? payload.disabled ?? false),
+          disabled: Boolean(row.is_disabled ?? row.disabled ?? payload.disabled ?? false),
           approval_status: row.approval_status || payload.approvalStatus || 'approved',
-          linkedAccId: row.linkedAccId || payload.linkedAccId || '',
+          linkedCustomerId: row.linked_customer_id || payload.customerId || '',
+          accountId: row.account_id || '',
+          fullName: row.full_name || payload.fullName || '',
+          nameAr: row.name_ar || '',
+          nameEn: row.name_en || '',
           createdAt: row.created_at || payload.createdAt || Date.now(),
           ...payload
         };
@@ -96,7 +101,7 @@ export class PortalUserService {
       });
 
       return portalList.map(u => {
-        const custId = u.customerId || u.linkedAccId;
+        const custId = u.customerId || u.linkedCustomerId;
         const details = detailsMap.get(u.id) || detailsMap.get(custId) || {};
         const customer = customersMap.get(custId) || {};
         return {
@@ -166,21 +171,24 @@ export class PortalUserService {
         portal_role: userPayload.portal_role || 'client',
         disabled: userPayload.disabled || false,
         approval_status: userPayload.approval_status || 'approved',
-        linkedAccId: userPayload.linkedAccId || userPayload.customerId || '',
+        linked_customer_id: userPayload.linkedCustomerId || userPayload.customerId || null,
+        account_id: userPayload.accountId || null,
+        full_name: userPayload.fullName || userPayload.username,
+        is_disabled: userPayload.disabled || false,
         created_at: nowIso,
         data: {
           password: userPayload.password || '',
           fullName: userPayload.fullName || userPayload.username,
           phone: userPayload.phone || '',
-          customerId: userPayload.customerId || userPayload.linkedAccId || '',
+          customerId: userPayload.customerId || userPayload.linkedCustomerId || '',
           createdAt: now
         }
       };
 
       await supabase.from('portal_users').insert(userRecord);
 
-      if (detailsPayload && (userPayload.customerId || userPayload.linkedAccId)) {
-        const custId = userPayload.customerId || userPayload.linkedAccId || '';
+      if (detailsPayload && (userPayload.customerId || userPayload.linkedCustomerId)) {
+        const custId = userPayload.customerId || userPayload.linkedCustomerId || '';
         await this.saveCustomerDetails(custId, puserId, detailsPayload);
       }
 
@@ -227,6 +235,12 @@ export class PortalUserService {
       const updateRow: any = {
         data: updatedPayload
       };
+      if (userPayload.fullName) updateRow.full_name = userPayload.fullName;
+      if (userPayload.customerId || userPayload.linkedCustomerId) {
+        updateRow.linked_customer_id = userPayload.customerId || userPayload.linkedCustomerId;
+      }
+      if (userPayload.accountId) updateRow.account_id = userPayload.accountId;
+      if (userPayload.disabled !== undefined) updateRow.is_disabled = userPayload.disabled;
       if (userPayload.username) updateRow.username = userPayload.username.trim();
       if (userPayload.email) updateRow.email = userPayload.email.trim();
       if (userPayload.portal_role) updateRow.portal_role = userPayload.portal_role;
@@ -235,8 +249,8 @@ export class PortalUserService {
 
       await supabase.from('portal_users').update(updateRow).eq('portal_user_id', puserId);
 
-      if (detailsPayload && (userPayload.customerId || prevData.customerId || existingData?.linkedAccId)) {
-        const custId = userPayload.customerId || prevData.customerId || existingData?.linkedAccId;
+      if (detailsPayload && (userPayload.customerId || prevData.customerId || existingData?.linked_customer_id)) {
+        const custId = userPayload.customerId || prevData.customerId || existingData?.linked_customer_id;
         await this.saveCustomerDetails(custId, puserId, detailsPayload as CustomerDetailsPayload);
       }
 

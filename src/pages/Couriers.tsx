@@ -349,14 +349,7 @@ export default function Couriers() {
       console.error("Error loading orders:", error);
     });
 
-    // 3. Subscribe to Expenses (Smart Custody sync)
-    const unsubExpenses = onSnapshot(collection(db, 'expenses'), (snap) => {
-      setAllExpenses(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (error) => {
-      console.error("Error loading expenses:", error);
-    });
-
-    // 4. Subscribe to Accounts    
+    // 3. Subscribe to Accounts
     const unsubAccounts = onSnapshot(collection(db, 'accounts'), (snap) => {
       setAccounts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     }, (error) => {
@@ -366,7 +359,6 @@ export default function Couriers() {
     return () => {
       unsubCouriers();
       unsubOrders();
-      unsubExpenses();
       unsubAccounts();
     };
   }, [roleLoading]);
@@ -416,20 +408,8 @@ export default function Couriers() {
       setOrdersLoading(false);
     });
 
-    const qExpenses = query(
-      collection(db, 'expenses'),
-      where('recipientId', '==', courier.id),
-      orderBy('createdAt', 'desc')
-    );
-
-    const unsubExpenses = onSnapshot(qExpenses, (snap) => {
-      setCourierExpenses(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => {
-      console.error("Error fetching courier expenses:", err);
-      setCourierExpenses([]);
-    });
-
-    setDetailsUnsubs([unsubOrders, unsubExpenses]);
+    setCourierExpenses([]);
+    setDetailsUnsubs([unsubOrders]);
   };
 
   const handleCloseDetails = () => {

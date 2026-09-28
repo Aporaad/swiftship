@@ -766,10 +766,10 @@ export default function Orders() { // دالة عرض الطلبات
   };
 
   const ensureOrderPartyFinancialAccount = async (party: OrderParty): Promise<OrderParty> => {
-    if (party.financialAccountId) return party;
+    if (party.accountId) return party;
     const entityType = party.type === 'employee' ? 'employee' : party.type === 'courier' ? 'courier' : 'customer';
     const account = await financialAccountService.createAccountForEntity(entityType, party.id, party.name, settings.currency || 'YER');
-    return { ...party, financialAccountId: account.id, financialAccountCode: account.accountCode };
+    return { ...party, accountId: account.id };
   };
 
   const selectOrderParty = async (party: OrderParty) => {
@@ -1425,12 +1425,6 @@ export default function Orders() { // دالة عرض الطلبات
             }
             );
 
-            // Automatically settle pending custodies تنقيص العهده
-            await financialAccountService.settlePendingCustodies(
-              saudiCourier.id,
-              amountInCourierCurrency,
-              courierCurrency
-            );
           } catch (e) {
             console.error('Failed to deduct sourcing from courier', e);
           }
@@ -1828,8 +1822,6 @@ export default function Orders() { // دالة عرض الطلبات
         location: sourceFormData.location,
         notes: sourceFormData.notes,
         accountId: account.id,
-        financialAccountId: account.id,
-        financialAccountCode: account.accountCode,
         createdAt: Date.now()
       });
 
@@ -1894,8 +1886,6 @@ export default function Orders() { // دالة عرض الطلبات
         address: shippingCompanyFormData.address,
         notes: shippingCompanyFormData.notes,
         accountId: account.id,
-        financialAccountId: account.id,
-        financialAccountCode: account.accountCode,
         createdAt: Date.now()
       });
 
@@ -2019,7 +2009,7 @@ export default function Orders() { // دالة عرض الطلبات
       const selectedOrderPartyRaw = selectedOrderParty?.raw || null;
       const selectedOrderAccountId = selectedOrder.orderPartyAccountId
         || selectedOrder.order_party_account_id
-        || selectedOrderParty?.financialAccountId
+        || selectedOrderParty?.accountId
         || selectedOrderPartyRaw?.financialAccountId
         || selectedOrderPartyRaw?.accountId
         || null;
@@ -2137,7 +2127,6 @@ export default function Orders() { // دالة عرض الطلبات
                 createdByName: profile?.fullName || 'System Auto-Commission',
                 createdAt: Date.now()
               };
-              await addDoc(commissionNumber, collection(db, 'expenses'), commissionPayload);
             }
 
             if (linkedAccountId) {
@@ -2203,14 +2192,13 @@ export default function Orders() { // دالة عرض الطلبات
             createdByName: profile?.fullName || 'System Auto-Custody',
             createdAt: Date.now()
           };
-          await addDoc(expenseNumber, collection(db, 'expenses'), custodyPayload);
         }
 
         const customerRecord = selectedOrderPartyRaw;
         if (linkedAccountId && selectedOrderAccountId) {
           try {
             await financialAccountService.triggerAutomaticVoucher('custody_payment', selectedOrder, {
-              courier: { financialAccountId: linkedAccountId, financialAccountCode: linkedAccountCode },
+              courier: { accountId: linkedAccountId, accountCode: linkedAccountCode },
               customer: customerRecord,
               orderParty: selectedOrderParty,
               isAr,
@@ -2277,13 +2265,12 @@ export default function Orders() { // دالة عرض الطلبات
             createdByName: profile?.fullName || 'System Auto-Wage',
             createdAt: Date.now()
           };
-          await addDoc(wageNumber, collection(db, 'expenses'), wagePayload);
         }
 
         if (linkedAccountId) {
           try {
             await financialAccountService.triggerAutomaticVoucher('delivery_wage', selectedOrder, {
-              courier: { financialAccountId: linkedAccountId, financialAccountCode: linkedAccountCode },
+              courier: { accountId: linkedAccountId, accountCode: linkedAccountCode },
               orderParty: selectedOrderParty,
               isAr,
               rawAmount: convertedFee,
@@ -2796,7 +2783,7 @@ export default function Orders() { // دالة عرض الطلبات
 
       const currencyRecord = activeCurrencies.find((c: any) => String(c.code).toUpperCase() === paymentCurrency) || { cur_id: 1, code: paymentCurrency };
       const orderParty = findOrderParty(selectedOrder, customers, employees, couriers);
-      const partyAccountId = selectedOrder.orderPartyAccountId || selectedOrder.order_party_account_id || orderParty?.financialAccountId || orderParty?.raw?.financialAccountId || orderParty?.raw?.accountId;
+      const partyAccountId = selectedOrder.orderPartyAccountId || selectedOrder.order_party_account_id || orderParty?.accountId || orderParty?.raw?.financialAccountId || orderParty?.raw?.accountId;
       const partyAccount = financialAccounts.find((account: any) => account.id === partyAccountId);
       if (paymentFormData.method === 'Deferred') {
         toast.error(isAr ? 'الدفع الآجل ليس قبضًا فعليًا؛ أنشئ سندًا آجلًا مستقلًا ثم سجل التحصيل عند الاستلام.' : 'Deferred payment is not a collection; record it in a separate deferred voucher.');
@@ -2935,7 +2922,7 @@ export default function Orders() { // دالة عرض الطلبات
         const orderPartyRaw = orderParty?.raw || null;
         const orderPartyAccountId = ord.orderPartyAccountId
           || ord.order_party_account_id
-          || orderParty?.financialAccountId
+          || orderParty?.accountId
           || orderPartyRaw?.financialAccountId
           || orderPartyRaw?.accountId
           || null;
@@ -3003,7 +2990,6 @@ export default function Orders() { // دالة عرض الطلبات
                   createdByName: profile?.fullName || 'System Auto-Commission',
                   createdAt: Date.now()
                 };
-                await addDoc(commissionNumber, collection(db, 'expenses'), commissionPayload);
               }
 
               if (linkedAccountId) {
@@ -3067,14 +3053,13 @@ export default function Orders() { // دالة عرض الطلبات
               createdByName: profile?.fullName || 'System Auto-Custody',
               createdAt: Date.now()
             };
-            await addDoc(expenseNumber, collection(db, 'expenses'), custodyPayload);
           }
 
           const customerRecord = orderPartyRaw;
           if (linkedAccountId && orderPartyAccountId) {
             try {
               await financialAccountService.triggerAutomaticVoucher('custody_payment', ord, {
-                courier: { financialAccountId: linkedAccountId, financialAccountCode: linkedAccountCode },
+                courier: { accountId: linkedAccountId, accountCode: linkedAccountCode },
                 customer: customerRecord,
                 orderParty,
                 isAr,
@@ -3139,13 +3124,12 @@ export default function Orders() { // دالة عرض الطلبات
               createdByName: profile?.fullName || 'System Auto-Wage',
               createdAt: Date.now()
             };
-            await addDoc(wageNumber, collection(db, 'expenses'), wagePayload);
           }
 
           if (linkedAccountId) {
             try {
               await financialAccountService.triggerAutomaticVoucher('delivery_wage', ord, {
-                courier: { financialAccountId: linkedAccountId, financialAccountCode: linkedAccountCode },
+                courier: { accountId: linkedAccountId, accountCode: linkedAccountCode },
                 orderParty,
                 isAr,
                 rawAmount: convertedFee,
@@ -4422,7 +4406,7 @@ export default function Orders() { // دالة عرض الطلبات
         settings={settings}
         initialName={customerFormData.fullName}
         onCreated={(customer) => {
-          void selectOrderParty({ id: customer.id, type: 'customer', name: customer.fullName, phone: customer.phone, email: customer.email, financialAccountId: customer.financialAccountId, financialAccountCode: customer.financialAccountCode, raw: customer });
+          void selectOrderParty({ id: customer.id, type: 'customer', name: customer.fullName, phone: customer.phone, email: customer.email, accountId: customer.accountId, raw: customer });
           setCustomerFormData({ fullName: '', phone: '', email: '', gps_location: '', address: '', notes: '' });
         }}
       />
@@ -4749,3 +4733,5 @@ export default function Orders() { // دالة عرض الطلبات
     </div>
   );
 }
+
+

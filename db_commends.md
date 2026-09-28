@@ -419,3 +419,110 @@ $function$;
 
 
 
+
+## 2026-09-27 08:59 — AI Model: Manus current session model
+- `apply_migration(drop_legacy_financial_tables_after_cutover)` — تثبيت حذف الجداول الإرثية بصيغة idempotent.
+- `apply_migration(complete_safe_field_normalization)` — إضافة وتعبئة الحقول المعيارية وحذف الروابط الخالية.
+- `apply_migration(drop_replaced_entity_columns)` — حذف أعمدة levels/type/jobs_type بعد النقل.
+- استعلامات تحقق قراءة فقط للمخطط والهجرات والروابط والتوازن والأسطر اليتيمة.
+2026-09-27 09:31: apply_migration fix_multicurrency_entry_balance_validation.
+2026-09-27 10:21: apply_migration remove_ambiguous_order_delete_overload ثم make_entity_delete_references_nullable.
+[2026-09-28 03:45:00] Applied frontend-only React/Recharts fix; no SQL executed in this step.
+
+
+## [2026-09-28 04:08:00] — AI Model: GPT-5.2
+- أمر SQL منفذ: لا يوجد.
+- سبب الإدراج: تم استخدام قراءة مخطط Supabase فقط لتحديث `DATABASE_SCHEMA.md` دون تعديل قاعدة البيانات.
+
+## [2026-09-28 05:29:36] — AI Model: Gemini 3.6 Flash (High)
+```sql
+-- 1. استعلام قائمة جميع الجداول ومكونات حقولها في schema public:
+SELECT 
+    t.table_name,
+    c.column_name,
+    c.data_type,
+    c.udt_name,
+    c.ordinal_position
+FROM information_schema.tables t
+JOIN information_schema.columns c ON t.table_name = c.table_name AND t.table_schema = c.table_schema
+WHERE t.table_schema = 'public' AND t.table_type = 'BASE TABLE'
+ORDER BY t.table_name, c.ordinal_position;
+
+-- 2. استعلام المفاتيح الخارجية والروابط بين الجداول:
+SELECT
+    tc.table_name AS source_table,
+    kcu.column_name AS source_column,
+    ccu.table_name AS foreign_table,
+    ccu.column_name AS foreign_column
+FROM 
+    information_schema.table_constraints AS tc 
+    JOIN information_schema.key_column_usage AS kcu
+      ON tc.constraint_name = kcu.constraint_name
+      AND tc.table_schema = kcu.table_schema
+    JOIN information_schema.constraint_column_usage AS ccu
+      ON ccu.constraint_name = tc.constraint_name
+      AND ccu.table_schema = tc.table_schema
+WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema='public';
+
+-- 3. استعلام استخراج أسماء الحقول التي داخل حقول jsonb عبر جميع الجداول:
+SELECT 'roles' as tbl, 'data' as col, ARRAY_AGG(DISTINCT k) as keys FROM (SELECT jsonb_object_keys(data) k FROM roles WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'portal_users', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM portal_users WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'portal_tickets', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM portal_tickets WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'whatsapp_logs', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM whatsapp_logs WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'report_templates', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM report_templates WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'order_option', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM order_option WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'settings', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM settings WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'items_category', 'details', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(details) k FROM items_category WHERE details IS NOT NULL AND jsonb_typeof(details)='object') s
+UNION ALL
+SELECT 'announcements', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM announcements WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'orders_history', 'before_data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(before_data) k FROM orders_history WHERE before_data IS NOT NULL AND jsonb_typeof(before_data)='object') s
+UNION ALL
+SELECT 'orders_history', 'after_data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(after_data) k FROM orders_history WHERE after_data IS NOT NULL AND jsonb_typeof(after_data)='object') s
+UNION ALL
+SELECT 'orders_history', 'metadata', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(metadata) k FROM orders_history WHERE metadata IS NOT NULL AND jsonb_typeof(metadata)='object') s
+UNION ALL
+SELECT 'salary_history', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM salary_history WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'shipments', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM shipments WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'auto_entries', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM auto_entries WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'order_status', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM order_status WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'orders', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM orders WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'report_settings', 'exchange_rates', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(exchange_rates) k FROM report_settings WHERE exchange_rates IS NOT NULL AND jsonb_typeof(exchange_rates)='object') s
+UNION ALL
+SELECT 'notifications', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM notifications WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'browser_pages', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM browser_pages WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'jobs_req', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM jobs_req WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'activity_logs', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM activity_logs WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'user_settings', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM user_settings WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'cust_details', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM cust_details WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s;
+```
+
+
+
+## [2026-09-28 05:53:10 +03:00] — AI Model: Manus
+### حالة أوامر قاعدة البيانات
+- لم يتم تنفيذ أي أمر SQL أو Migration أو DDL أو DML خلال إعادة تحليل الخطة وتوسيعها.
+- عمليات Supabase المستخدمة كانت قراءة/استكشاف فقط: قائمة المشروع، المخطط، المهاجرات، ومستشاري الأمن والأداء.
+- لا توجد نتيجة SQL جديدة تحتاج إلى تسجيلها في هذا التاريخ.
+
+
+## [2026-09-28 06:17:33 +03:00] — AI Model: Manus
+- لم يتم تنفيذ أي أمر SQL أو Migration أو DDL أو DML أثناء إعادة مواءمة الخطة مع النسخة الأصلية.
+- التغييرات اقتصرت على إعادة صياغة ملف الخطة والتوثيق النصي.

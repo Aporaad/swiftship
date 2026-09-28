@@ -164,8 +164,6 @@ export default function Sources() {
         await addDoc(scId, collection(db, 'shipping_companies'), {
           ...payload,
           accountId: account.id,
-          financialAccountId: account.id,
-          financialAccountCode: account.accountCode,
           createdAt: Date.now()
         });
         activityLogService.log('add_shipping_company', shippingFormData.name, { ...shippingFormData });
@@ -265,8 +263,6 @@ export default function Sources() {
         await addDoc(srcId, collection(db, 'sources'), {
           ...payload,
           accountId: account.id,
-          financialAccountId: account.id,
-          financialAccountCode: account.accountCode,
           createdAt: Date.now()
         });
         activityLogService.log('add_source', formData.source_name, { ...formData });

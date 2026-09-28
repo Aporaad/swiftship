@@ -12,6 +12,7 @@ const get = async (path: string) => {
       Accept: 'application/json',
       Prefer: 'count=exact',
     },
+    signal: AbortSignal.timeout(10000),
   });
   expect(response.ok).toBe(true);
   return response;
@@ -19,20 +20,20 @@ const get = async (path: string) => {
 
 describe.runIf(canVerify)('Supabase read-only verification', () => {
   it('has 18 editable item-category seeds and category fields on product and shipment resources', async () => {
-    const categories = await get('items_category?select=id,code,name_ar,is_active&limit=100');
+    const categories = await get('items_category?select=items_category_id,code,name_ar,is_active&limit=100');
     const categoryRows = await categories.json();
     expect(categoryRows.length).toBeGreaterThan(0);
     expect(categories.headers.get('content-range')).toMatch(/\/\d+$/);
 
-    await expect(get('products?select=id,item_category_id&limit=1')).resolves.toBeDefined();
-    await expect(get('shipments?select=id,content_category_id,carton_count,customs_fee,tax_fee&limit=1')).resolves.toBeDefined();
+    await expect(get('products?select=product_id,item_category_id&limit=1')).resolves.toBeDefined();
+    await expect(get('shipments?select=shipment_id,content_category_id,carton_count,customs_fee,tax_fee&limit=1')).resolves.toBeDefined();
   }, 30000);
 
   it('has no source, shipping company, or asset without a linked account', async () => {
     const [sources, carriers, assets] = await Promise.all([
-      get('sources?select=id&account_id=is.null&limit=1'),
-      get('shipping_companies?select=id&account_id=is.null&limit=1'),
-      get('assets?select=id&account_id=is.null&limit=1'),
+      get('sources?select=source_id&account_id=is.null&limit=1'),
+      get('shipping_companies?select=shipping_company_id&account_id=is.null&limit=1'),
+      get('assets?select=asset_id&account_id=is.null&limit=1'),
     ]);
     await expect(sources.json()).resolves.toEqual([]);
     await expect(carriers.json()).resolves.toEqual([]);
@@ -41,8 +42,8 @@ describe.runIf(canVerify)('Supabase read-only verification', () => {
 
   it('exposes linked source and shipping-company ledgers in their assigned sections', async () => {
     const [sources, carriers] = await Promise.all([
-      get('accounts?select=id,account_code&entity_type=eq.source&limit=1'),
-      get('accounts?select=id,account_code&entity_type=eq.shipping_company&limit=1'),
+      get('accounts?select=account_id,account_code&entity_type=eq.source&limit=1'),
+      get('accounts?select=account_id,account_code&entity_type=eq.shipping_company&limit=1'),
     ]);
     const sourceRows = await sources.json();
     const carrierRows = await carriers.json();

@@ -185,7 +185,8 @@ export function CustomerCreateModal({
             portal_role: portalFormData.portal_role || 'client',
             approval_status: 'approved',
             customerId: reference.id,
-            linkedAccId: account.id,
+            linkedCustomerId: reference.id,
+            accountId: account.id,
             fullName: formData.fullName,
             phone: formData.phone
           },
@@ -217,8 +218,7 @@ export function CustomerCreateModal({
       const customer = {
         id: reference.id,
         ...formData,
-        financialAccountId: account.id,
-        financialAccountCode: account.accountCode,
+        accountId: account.id,
         portalUserId
       };
 
@@ -749,8 +749,7 @@ export function EmployeeCreateModal({
       const createdEmp = {
         id: newId,
         ...empData,
-        financialAccountId: account.id,
-        financialAccountCode: account.accountCode,
+        accountId: account.id,
         systemUserId
       };
 
@@ -1260,8 +1259,7 @@ export function CourierCreateModal({
       const createdCourier = {
         id: newId,
         ...courierData,
-        financialAccountId: account.id,
-        financialAccountCode: account.accountCode,
+        accountId: account.id,
         systemUserId
       };
 
@@ -1610,7 +1608,7 @@ export function SourceCreateModal({ isOpen, onClose, isAr, settings, onCreated }
       const source = { id, ...formData, name: formData.source_name, createdAt: Date.now() };
       await addDoc(id, collection(db, 'sources'), source);
       const account = await financialAccountService.createAccountForEntity('source', id, formData.source_name, settings.currency || settings.defaultOrderCurrency || 'YER', undefined, { accountPrefix: '2140', parentCode: '2140', accountType: 'Liability', notes: `حساب ذمم مصدر طلبات: ${formData.source_name}`, updateEntity: false });
-      const accountLink = { accountId: account.id, financialAccountId: account.id, financialAccountCode: account.accountCode };
+      const accountLink = { accountId: account.id };
       await updateDoc(doc(db, 'sources', id), accountLink);
       Object.assign(source, accountLink);
       activityLogService.log('add_source', formData.source_name, { ...formData });
@@ -1651,7 +1649,7 @@ export function ShippingCompanyCreateModal({ isOpen, onClose, isAr, settings, on
       const company = { id, ...formData, createdAt: Date.now() };
       await addDoc(id, collection(db, 'shipping_companies'), company);
       const account = await financialAccountService.createAccountForEntity('shipping_company', id, formData.name, settings.currency || settings.defaultOrderCurrency || 'YER', undefined, { accountPrefix: '2150', parentCode: '2150', accountType: 'Liability', notes: `حساب ذمم شركة شحن: ${formData.name}`, updateEntity: false });
-      const accountLink = { accountId: account.id, financialAccountId: account.id, financialAccountCode: account.accountCode };
+      const accountLink = { accountId: account.id };
       await updateDoc(doc(db, 'shipping_companies', id), accountLink);
       Object.assign(company, accountLink);
       activityLogService.log('add_shipping_company', formData.name, { ...formData });
@@ -1686,4 +1684,3 @@ function FormField({ label, children, required = false, icon }: { label: string;
 function ModalActions({ isAr, submitting, onClose }: { isAr: boolean; submitting: boolean; onClose: () => void }) {
   return <div className="flex justify-end gap-3 border-t border-slate-800 pt-4"><button type="button" onClick={onClose} className="rounded-xl px-5 py-2.5 text-xs font-bold text-slate-400 transition hover:bg-slate-800">{isAr ? 'إلغاء' : 'Cancel'}</button><button type="submit" disabled={submitting} className="rounded-xl bg-gradient-to-r from-[#d4af37] to-yellow-600 px-5 py-2.5 text-xs font-black text-black transition disabled:opacity-50">{submitting ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'تأمين وحفظ البيانات' : 'Save')}</button></div>;
 }
-

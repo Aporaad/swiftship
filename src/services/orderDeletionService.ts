@@ -7,7 +7,6 @@ export interface OrderDeletionSummary {
   products: number;
   journalEntries: number;
   accountTransactions: number;
-  expenses: number;
   notifications: number;
   whatsappLogs: number;
   ordersHistory: number;
@@ -41,4 +40,3 @@ export async function deleteOrdersWithDependents(orderIds: string[]): Promise<Or
 
   return data as OrderDeletionSummary;
 }
-

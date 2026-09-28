@@ -69,11 +69,11 @@ export default function Dashboard() {
   // DB States
   const [orders, setOrders] = useState<any[]>([]);
   const [couriers, setCouriers] = useState<any[]>([]);
-  const [expenses, setExpenses] = useState<any[]>([]);
+  const expenses: any[] = [];
   const [realLogs, setRealLogs] = useState<any[]>([]);
   const [customersCount, setCustomersCount] = useState(0);
   const [couriersCount, setCouriersCount] = useState(0);
-  const [expensesCount, setExpensesCount] = useState(0);
+  const expensesCount = 0;
   const [loading, setLoading] = useState(true);
   const [financialAccounts, setFinancialAccounts] = useState<any[]>([]);
 
@@ -106,13 +106,6 @@ export default function Dashboard() {
       setCouriersCount(snap.docs.length);
       const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
       setCouriers(list);
-    });
-
-    // Listen to expenses count & list
-    const unsubExpenses = onSnapshot(collection(db, 'expenses'), (snap) => {
-      setExpensesCount(snap.docs.length);
-      const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
-      setExpenses(list);
     });
 
     // Listen to orders
@@ -159,12 +152,11 @@ export default function Dashboard() {
     return () => {
       unsubCustomers();
       unsubCouriers();
-      unsubExpenses();
       unsubOrders();
       unsubLogs();
       unsubAccounts();
     };
-  }, [role, roleLoading, settings?.currency]);
+  }, [role, roleLoading]);
 
   // Dynamically compute stats from real DB
   useEffect(() => {
@@ -238,7 +230,7 @@ export default function Dashboard() {
       amountRemaining: netReceivables,
       amountPaid: totalRevenues - netReceivables, // Simple approximation for cash
     });
-  }, [orders, customersCount, expenses, financialAccounts, settings]);
+  }, [orders, customersCount, financialAccounts, settings.currency, dbRates.USD, dbRates.SAR]);
 
   // Generate daily shipping volume dynamically
   const volumeChartData = React.useMemo(() => {
@@ -1168,7 +1160,7 @@ export default function Dashboard() {
               </div>
             ) : null}
             <div className="relative w-full h-[160px] flex items-center justify-center">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height={160} minWidth={0}>
                 <PieChart>
                   <Pie
                     data={statusChartData}
@@ -1291,7 +1283,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <button onClick={() => navigate('/expenses')} className="w-full bg-[#d4af37]/5 hover:bg-[#d4af37]/15 text-[#d4af37] border border-[#d4af37]/15 hover:border-[#d4af37]/35 py-2 rounded-xl text-[10px] font-black transition-all duration-300 tracking-wider mt-4">
+            <button onClick={() => navigate('/finance')} className="w-full bg-[#d4af37]/5 hover:bg-[#d4af37]/15 text-[#d4af37] border border-[#d4af37]/15 hover:border-[#d4af37]/35 py-2 rounded-xl text-[10px] font-black transition-all duration-300 tracking-wider mt-4">
               {isAr ? 'عـرض الـتـقـريـر الـمـالـي' : 'DOWNLOAD DETAILED LEDGER'}
             </button>
           </div>
@@ -1479,7 +1471,7 @@ export default function Dashboard() {
           </button>
 
           <button 
-            onClick={() => navigate('/expenses')} 
+            onClick={() => navigate('/finance')} 
             className="p-4 rounded-xl bg-[#09090b] border border-[#d4af37]/20 hover:border-[#d4af37] text-white hover:text-[#d4af37] transition-all duration-300 font-bold text-xs flex flex-col items-center justify-center gap-2 shadow-lg group"
           >
             <div className="p-2 rounded-lg bg-[#d4af37]/5 text-[#d4af37] group-hover:scale-105 transition-all">
@@ -1489,7 +1481,7 @@ export default function Dashboard() {
           </button>
 
           <button 
-            onClick={() => navigate('/expenses')} 
+            onClick={() => navigate('/finance')} 
             className="p-4 rounded-xl bg-[#09090b] border border-[#d4af37]/20 hover:border-[#d4af37] text-white hover:text-[#d4af37] transition-all duration-300 font-bold text-xs flex flex-col items-center justify-center gap-2 shadow-lg group"
           >
             <div className="p-2 rounded-lg bg-[#d4af37]/5 text-[#d4af37] group-hover:scale-105 transition-all">
