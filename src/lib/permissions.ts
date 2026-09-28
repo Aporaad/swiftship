@@ -359,6 +359,8 @@ export const ALL_PERMISSIONS: PermissionDefinition[] = [
   { id: 'edit_order_defaults', labelAr: 'تعديل الإعدادات الافتراضية للطلبات', labelEn: 'Edit Default Order Settings', category: 'admin' },
   { id: 'view_order_defaults', labelAr: 'عرض الإعدادات الافتراضية للطلبات', labelEn: 'View Default Order Settings', category: 'admin' },
   { id: 'edit_company_info', labelAr: 'تعديل كرت تعريف وسجل وعنوان الشركة والمستند الضريبي', labelEn: 'Update Corporate Card details & Tax Registration', category: 'admin' },
+  { id: 'view_website_management', labelAr: 'عرض واجهة إدارة الموقع الإلكتروني', labelEn: 'View Website Management', category: 'admin' },
+  { id: 'manage_website', labelAr: 'إدارة إعدادات ومحتوى الموقع الإلكتروني', labelEn: 'Manage Website Settings & Content', category: 'admin' },
   { id: 'manage_whatsapp', labelAr: 'التحكم وحفظ مفاتيح ربط واتساب السحابي ودرجات التفعيل', labelEn: 'Configure UltraMsg/Twilio WhatsApp routing setups', category: 'admin' },
   { id: 'manage_backup', labelAr: 'التحكم وإجراء النسخ التلقائي وبناء ملفات استيراد وتوطين الكيانات والمطابقة للمدراء', labelEn: 'Perform Rebase backups: Import / Export datablocks', category: 'admin' },
 
