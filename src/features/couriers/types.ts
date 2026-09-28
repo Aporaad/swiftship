@@ -1,2 +1,1 @@
-// Feature types boundary: couriers.
-export interface CouriersViewModel { id: string; }
+export type { CouriersViewModel } from '../../data/dtos/couriers.dto';

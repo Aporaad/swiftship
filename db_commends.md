@@ -596,3 +596,62 @@ SELECT 'cust_details', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_k
 ## [2026-09-28 10:07:49 +03:00] — AI Model: Manus
 - لم يتم تنفيذ SQL أو Migration أو DDL أو DML أثناء تصحيح نطاق المرحلة الثالثة.
 - حذف Registry الزائد وتحديث الخطة تغييرات كود وتوثيق فقط.
+
+
+## [2026-09-28 10:22:45 +03:00] — AI Model: Manus
+- لم يتم تنفيذ SQL أو Migration أو DDL أو DML خلال مرحلة DTOs وMappers وSchemas.
+- التغييرات دائمة على مستوى عقود الكود فقط، دون تعديل Schema أو بيانات Supabase.
+
+## [2026-09-28 10:50:49] — AI Model: Gemini 3.6 Flash (High)
+```sql
+-- 1. استعلام قائمة جميع الجداول ومكونات حقولها في schema public:
+SELECT 
+    t.table_name,
+    c.column_name,
+    c.data_type,
+    c.udt_name,
+    c.ordinal_position
+FROM information_schema.tables t
+JOIN information_schema.columns c ON t.table_name = c.table_name AND t.table_schema = c.table_schema
+WHERE t.table_schema = 'public' AND t.table_type = 'BASE TABLE'
+ORDER BY t.table_name, c.ordinal_position;
+
+-- 2. استعلام المفاتيح الخارجية والروابط بين الجداول:
+SELECT
+    tc.table_name AS source_table,
+    kcu.column_name AS source_column,
+    ccu.table_name AS foreign_table,
+    ccu.column_name AS foreign_column
+FROM 
+    information_schema.table_constraints AS tc 
+    JOIN information_schema.key_column_usage AS kcu
+      ON tc.constraint_name = kcu.constraint_name
+      AND tc.table_schema = kcu.table_schema
+    JOIN information_schema.constraint_column_usage AS ccu
+      ON ccu.constraint_name = tc.constraint_name
+      AND ccu.table_schema = tc.table_schema
+WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema='public';
+
+-- 3. استعلام استخراج أسماء الحقول داخل أعمدة JSONB لقاعدة البيانات الحية:
+SELECT 'auto_entries' as tbl, 'data' as col, ARRAY_AGG(DISTINCT k) as keys FROM (SELECT jsonb_object_keys(data) k FROM auto_entries WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'roles', 'permissions', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(permissions) k FROM roles WHERE permissions IS NOT NULL AND jsonb_typeof(permissions)='object') s;
+```
+
+
+
+## [2026-09-28 14:05:35 +03:00] — فحص أعمدة العملاء ومرفقاتهم في public — AI Model: Manus
+
+```sql
+select table_name, column_name, data_type, udt_name from information_schema.columns where table_schema = 'public' and (table_name in ('customers', 'cust_details', 'portal_users', 'order_attachments') or table_name ilike '%customer%file%' or table_name ilike '%customer%doc%' or table_name ilike '%customer%attach%') order by table_name, ordinal_position limit 200;
+```
+
+النتيجة: أعمدة `customers` و`cust_details` و`portal_users` تطابق العقود المستخدمة. ظهر `order_attachments` للطلبات، ولم يظهر جدول ملفات/مرفقات خاص بالعملاء.
+
+## [2026-09-28 14:05:47 +03:00] — فحص مفاتيح ملفات العملاء في JSONB — AI Model: Manus
+
+```sql
+select distinct k.key as data_key from public.cust_details d cross join lateral jsonb_object_keys(d.data) as k(key) where d.data is not null and (k.key ilike '%file%' or k.key ilike '%attach%' or k.key ilike '%doc%' or k.key ilike '%image%') limit 100;
+```
+
+النتيجة: صفر مفاتيح مطابقة؛ لم تُقرأ قيم البيانات ولم يُنفذ أي تغيير على قاعدة البيانات.

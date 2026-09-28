@@ -1,2 +1,1 @@
-// Feature types boundary: auth.
-export interface AuthViewModel { id: string; }
+export type { AuthViewModel } from '../../data/dtos/auth.dto';

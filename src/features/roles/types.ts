@@ -1,13 +1,4 @@
-export interface RoleViewModel {
-  roleId: string;
-  title: string | null;
-  isDefault: boolean;
-  permissions: string[];
-  createdAt: string | null;
-  updatedAt: string | null;
-  createdBy: string | null;
-  updatedBy: string | null;
-}
+export type { RolesViewModel as RoleViewModel } from '../../data/dtos/roles.dto';
 
 export interface RoleListFilters {
   search?: string;
@@ -15,9 +6,4 @@ export interface RoleListFilters {
   offset?: number;
 }
 
-export interface SaveRoleInput {
-  roleId: string;
-  title: string | null;
-  isDefault: boolean;
-  permissions: string[];
-}
+export type { RolesCreateInput as SaveRoleInput } from '../../data/dtos/roles.dto';

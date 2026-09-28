@@ -1,2 +1,1 @@
-// Feature types boundary: reports.
-export interface ReportsViewModel { id: string; }
+export type { ReportsViewModel } from '../../data/dtos/reports.dto';

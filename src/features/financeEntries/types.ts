@@ -1,2 +1,1 @@
-// Feature types: FinanceEntries (entries and vouchers only).
-export interface FinanceEntryViewModel { entryId: string; status: string; }
+export type { FinanceEntryViewModel } from '../../data/dtos/finance-entries.dto';

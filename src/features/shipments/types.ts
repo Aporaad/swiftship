@@ -1,2 +1,1 @@
-// Feature types boundary: shipments.
-export interface ShipmentsViewModel { id: string; }
+export type { ShipmentsViewModel } from '../../data/dtos/shipments.dto';

@@ -1,2 +1,1 @@
-// Feature types boundary: notifications.
-export interface NotificationsViewModel { id: string; }
+export type { NotificationsViewModel } from '../../data/dtos/notifications.dto';

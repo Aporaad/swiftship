@@ -695,6 +695,36 @@ ViewModel
 
 لا تستخدم نفس Interface لكل هذه الأغراض.
 
+### 4.1.1 مسارات DTOs الدائمة
+
+يتم حفظ العقود الدائمة المنفصلة في:
+
+```text
+src/data/dtos/
+├── common.dto.ts
+├── auth.dto.ts
+├── browser.dto.ts
+├── users.dto.ts
+├── roles.dto.ts
+├── customers.dto.ts
+├── orders.dto.ts
+├── products.dto.ts
+├── sources.dto.ts
+├── shipments.dto.ts
+├── couriers.dto.ts
+├── employees.dto.ts
+├── accounting.dto.ts
+├── finance-entries.dto.ts
+├── notifications.dto.ts
+├── reports.dto.ts
+├── site-management.dto.ts
+└── settings.dto.ts
+```
+
+ويتم تحديث `src/features/<feature>/types.ts` ليصدر ViewModel الخاص بالـFeature فقط، بينما تبقى `DatabaseRow`, `ApiDto`, `CreateInput`, و`UpdateInput` داخل DTO الخاص بالـFeature. تستخدم `src/features/<feature>/schemas/` دوال تحقق مكافئة لـZod لأن Zod غير مثبت ضمن المشروع حالياً، ولا يتم إضافة مكتبة جديدة في هذه المرحلة.
+
+توجد تحويلات الصفوف إلى DTOs في `src/data/dtos/mappers/`، بحيث يبقى كل اسم Legacy مثل `order_status_id` أو `data` داخل Mapper ولا يصل إلى `ApiDto` أو `ViewModel`.
+
 ### 4.2 نموذج أولي للطلب
 
 يجب اعتماد شكل قانوني مثل:

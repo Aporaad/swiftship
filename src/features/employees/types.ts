@@ -1,2 +1,1 @@
-// Feature types boundary: employees.
-export interface EmployeesViewModel { id: string; }
+export type { EmployeesViewModel } from '../../data/dtos/employees.dto';

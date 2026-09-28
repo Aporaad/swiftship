@@ -3,6 +3,7 @@ import type { GatewayPage, GatewayQuery } from '../../contracts/common.gateway';
 import type { RoleViewModel } from '../../../features/roles/types';
 import { supabase } from '../supabase.client';
 import { mapRow, mapSupabaseError } from '../supabase.mapper';
+import { asIsoUtc } from '../../dtos/common.dto';
 
 function mapRole(row: Record<string, unknown>): RoleViewModel {
   return {
@@ -12,8 +13,8 @@ function mapRole(row: Record<string, unknown>): RoleViewModel {
     permissions: Array.isArray(row.permissions)
       ? [...new Set(row.permissions.filter((value): value is string => typeof value === 'string'))].sort()
       : [],
-    createdAt: typeof row.created_at === 'string' ? row.created_at : null,
-    updatedAt: typeof row.updated_at === 'string' ? row.updated_at : null,
+    createdAt: typeof row.created_at === 'string' ? asIsoUtc(row.created_at) : null,
+    updatedAt: typeof row.updated_at === 'string' ? asIsoUtc(row.updated_at) : null,
     createdBy: typeof row.created_by === 'string' ? row.created_by : null,
     updatedBy: typeof row.updated_by === 'string' ? row.updated_by : null,
   };

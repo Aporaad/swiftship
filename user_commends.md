@@ -586,3 +586,88 @@ siteManagement قسم اداره الموقع الخاص بالشركه
 
 اما الاشياء الدائمه عادي تتوسع فيها قليلا في نطاق الخطه
 وركز عند اضافه شي جديد ليس مذكور ضمن بيانات المرحله  بالخطه يجب ان تقوم بتضمينه داخل الخطه
+
+
+## [2026-09-28 10:22:45 +03:00] — User Command — AI Model: Manus
+يالله انتقل الآن لتنفيذ المرحلة الرابعة من الخطة بالكامل وبدقة متناهية.
+
+وتاكد ياحيوان انك بتمشي على مراحل الخطه بالظبط وعدم تجاوز او تجاهل خطوه منها وعدم تنفيذ اي خطوه من خارج الخطه
+
+[2026-09-28 10:55:19 +03:00] Model: Manus | Command: Now continue the task based on the inherited context and files. | Follow-up: حاول تسرع اكثر | Action: direct Supabase + src DTO expansion.
+
+## [2026-09-28 10:50:49] — AI Model: Gemini 3.6 Flash (High)
+```text
+قم ياعاده عمل توثيق كامل لجداول قاعده البيانات @mcp:supabas والحقول الخاصه بها والعلافات بين الجداول داخل ملف @[f:\system\swiftship-tracker\swiftshift2\SWIFTSHIP_SYSTEM\DATABASE_SCHEMA.md] 
+بحيث اولا بتم ذكر اسماء الجداول فقط 
+وقم ذكر الحقول الخاصه بكل جدول بحيث يتم ذكر اسم الحقل ونوع البيانات الخاصه به فقط واذا كان الحقل مرتبط بجدول اخر يتم الاشاره الى الارتباط واذا كان الحقل من نوع jsonb  مثل حقل Data يتم ذكر الحقل واستخراج اسماء الحقول التي داخله وذكرها مثلا 
+""
+auto_entries{
+"id",
+"name_ar"
+"name_en"
+"data" {
+	"id",
+	"currencyId"
+	"descriptionTempAr"
+	"name_ar"
+	"amount_source"
+	"isActive"
+	"autoPost"
+},
+"status_id"
+}
+
+""
+
+
+@mcp:supabase:
+```
+
+
+
+## [2026-09-28 11:19:40 +03:00] — مراجعة الجلسة السابقة والاستعداد لمتابعة المرحلة الرابعة — AI Model: Manus
+
+نص أمر المستخدم كما ورد:
+
+```text
+دعنا نكمل تنفيذ خطه اصلاح وتهيئه هيكل النظام وتجهيزه لانشاء api
+الخطه تم الوصول في تنفيذها الى منتصف المرحله الرابعه راجع الجلسه السابقه
+الخطه موجوده في مجلد المشروع  في ملف "system_pre_api_restructure_plan_ar.md"
+وملفات سير العمل و توثيق التنفيذ موجودات في مجلد "docs\pre-api" داخل المشروع
+تم ربط مجلد المشروع المحلي بالجلسه وتم توصيل قاعده بيانات المشروع supabase بالجلسه ايضا
+قم بمراجعه جلسه التنفيذ السابقه وراجع مجلد المشروع وملفات التوثيق وسير العمل والخطه حتى تفهم كل شي وتصبح مستعد لمواصله التنفيذ
+```
+
+## [2026-09-28 12:35:46 +03:00] — إعادة توصيل مجلد المشروع — AI Model: Manus
+
+نص أمر المستخدم كما ورد:
+
+```text
+إعادة توصيل مجلد المشروع المحلي
+```
+
+
+## [2026-09-28 13:33:51 +03:00] — طلب تسريع وإكمال الخطوة — AI Model: Manus
+> مالك امك انت ثلاث ساعات على خطوه واحده سريع نشتي ننتقل للخطوه الي بعدها
+
+
+## [2026-09-28 13:53:19 +03:00] — استئناف المهمة بعد ضغط السياق — AI Model: Manus
+نص أمر المستخدم كما ورد:
+
+```text
+Now continue the task based on the inherited context and files. Re-read all relevant skills to the current task before proceeding. The most recently used skills were: 'workflow-composer'
+```
+
+## [2026-09-28 14:00:25 +03:00] — تأكيد نجاح الفحص وطلب الانتقال — AI Model: Manus
+نص المستخدم كما ورد:
+
+```text
+PS F:\system\swiftship-tracker\swiftshift2\SWIFTSHIP_SYSTEM> npm run check -- --pretty false
+
+> swiftship@4.0.0 check
+> tsc --noEmit --pretty false
+
+PS F:\system\swiftship-tracker\swiftshift2\SWIFTSHIP_SYSTEM> 
+
+جاهز يالله الي بعده سريع
+```

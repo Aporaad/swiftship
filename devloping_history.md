@@ -1371,3 +1371,45 @@
 - تم حذف `featureGateways.ts` لأنه Registry عام لم يكن ضمن تصميم المرحلة.
 - تم الإبقاء على العقود وملف Gateway مستقل لكل Feature فقط.
 - تم تحديث الخطة وتقرير المرحلة لمنع Business Logic وorchestration أو UI داخل الطبقة المؤقتة.
+
+
+## [2026-09-28 10:22:45 +03:00] — تنفيذ المرحلة 4 DTOs وMappers — AI Model: Manus
+- تم إنشاء DTOs دائمة منفصلة لجميع Features.
+- تم تحديث Feature types لتصدر ViewModels من DTOs بدلاً من خلط الأنواع.
+- تم إنشاء Mapper لكل Feature لعزل DatabaseRow وLegacy fields عن ApiDto.
+- تم إنشاء Schemas محلية لكل CreateInput وUpdateInput دون إضافة dependency جديدة.
+- تم اعتماد ISO UTC typed strings وMoneyDto.
+- لم يتم تنفيذ Auth Provider أو UI integration أو API Endpoint أو SQL.
+
+
+## [2026-09-28 10:40:07 +03:00] — تحقق المرحلة الرابعة — AI Model: Manus
+- تحقق وجود جميع DTOs وMappers وSchemas لكل Features بنجاح.
+- فحص TypeScript الموجه انتهى بالرمز 137 بسبب بيئة التنفيذ، لذلك لم يتم اعتباره نتيجة compile ناجحة أو فاشلة.
+- لم يتم الانتقال إلى المرحلة الخامسة.
+
+[2026-09-28 10:55:19 +03:00] Phase 4: Expanded Customers, Orders, Products, and Shipments DTOs with database fields, audit fields, raw data preservation, and updated mappers.
+
+## [2026-09-28 10:50:49] — إعادة توثيق مخطط قاعدة البيانات الـ 51 جدولاً — AI Model: Gemini 3.6 Flash (High)
+- إجراء استعلام حقيقي ومباشر عبر `supabase.execute_sql` لمعاينة جداول قاعدة البيانات ومكوناتها في schema `public`.
+- توثيق أسماء 51 جدولاً صريحاً في مقدمة ملف `DATABASE_SCHEMA.md`.
+- استخراج وتوثيق أسماء وأنواع بيانات كافة الأعمدة بكل جدول بصيغة `field_name: data_type`.
+- ربط وتحديد المفاتيح الخارجية والعلاقات المرجعية بين الجداول بصيغة `-> foreign_table.column_name`.
+- استخراج مفاتيح وهيكل كائنات `jsonb` للحقول المركبة (مثل `auto_entries.data` و `roles.permissions`) وعرضها بالشكل المطلوب.
+- تحديث التوثيق كاملاً في `DATABASE_SCHEMA.md` مع الالتزام التام بقواعد التطوير والنظام المحددة.
+
+
+
+## [2026-09-28 12:42:02 +03:00] — مراجعة نقطة الاستكمال للمرحلة الرابعة — AI Model: Manus
+- تمت مراجعة خطة إعادة الهيكلة وتقارير `docs/pre-api` وسياق التنفيذ السابق. المرحلة الرابعة غير مغلقة: فحص TypeScript المسجل انتهى بالرمز 137 ولم يثبت نجاح التجميع، ومطابقة اكتمال الحقول ما زالت مطلوبة.
+- مصادر متطلبات الحقول المعتمدة حسب توجيه المستخدم هي صفحات ومكونات وملفات `lib` والخدمات والـhooks والأنواع القديمة فقط (`src/pages`, `src/components`, `src/lib`, `src/services`, `src/hooks`, `src/types.ts`)؛ ومخطط `public` فقط دون `auth`.
+- ملاحظة من التدقيق القديم: نموذج العميل يجمع `lat` و`lng` لكن خدمة `saveCustomerDetails` لا تضعهما في `cust_details.data`. كما يحتوي مسار البوابة القديم على `password` ضمن `portal_users.data`، ولذلك يجب ألا يظهر ضمن DTO القراءة وأن يعامل كقيمة حساسة.
+- لا تغيير على كود المصدر ولا SQL/DDL/DML في هذه المراجعة. تعذر الاتصال الحي بموصل Supabase أثناء إعادة الفحص بسبب `unexpected EOF`؛ لا تعتمد هذه المحاولة كفحص حديث للمخطط.
+- الخطوة التالية: استكمال تدقيق الحقول لكل Feature ومفاتيح JSONB وملفات العميل، ثم تحديث DTOs والـMappers والـSchemas واختبارها قبل أي إغلاق للمرحلة.
+
+
+## [2026-09-28 13:42:10 +03:00] — متابعة DTOs وMapper verification — AI Model: Manus
+- عُدّلت ViewModels التوافقية في DTOs لتقبل شكل مخرجات Gateways المرحلة الثالثة مع إبقاء ApiDtos الكاملة دون تعديل Gateways.
+- أزيلت دالة `stringList` المكررة؛ Typecheck المحدود لعقود DTO والـMappers والـSchemas اكتمل بنجاح.
+- أضيف `src/data/dtos/legacy-field-contracts.test.ts` باختبارات مابينغ لـcustomer details وportal account (من دون كشف كلمة المرور)، order/shipment JSONB، تفاصيل الفئات، job applications، ticket replies، notification/activity payloads، ومرفقات قيود المالية.
+- تعذر اعتماد التنفيذ runtime: Vitest التنفيذي غير قابل للتنفيذ على mount، وبيئة node_modules الخاصة بويندوز غير متوافقة مع esbuild في sandbox. كما تعذر `npm run check` الكامل لأن ملفات root مفقودة من mount ولأن TypeScript 6 يرفض `baseUrl` دون `ignoreDeprecations`؛ لم تُغيّر إعدادات المشروع لتجاوز ذلك.
+- لا تغييرات SQL أو قاعدة بيانات. المرحلة الرابعة غير مغلقة إلى حين تشغيل الاختبارات والفحص الكامل في البيئة المحلية.

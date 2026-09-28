@@ -910,3 +910,17 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 ## [2026-09-28 08:54:05 +03:00] — إضافة Sources وجرد src — AI Model: Manus
 - لم يتم تنفيذ أي SQL أو Migration أو DDL أو DML أثناء إضافة `Sources` أو جرد مكونات `src`.
 - التغييرات اقتصرت على حدود Features وملفات التوثيق فقط.
+
+[2026-09-28 10:55:19 +03:00] Phase 4 DB inspection: read public information_schema directly from Supabase project ejrojwbbflzchasvgexr; no schema documentation file used as source.
+
+## [2026-09-28 10:50:49] — توثيق واستعلام مخطط قاعدة البيانات الـ 51 جدولاً — AI Model: Gemini 3.6 Flash (High)
+- استعلام schema public الحية عبر `supabase.execute_sql` للحصول على أسماء الجداول والأعمدة والأنواع والمفاتيح الأجنبية والتركيبات.
+- استخراج حقول كائنات `jsonb` للجداول النشطة (مثل `auto_entries.data` و `roles.permissions`).
+- تحديث التوثيق كاملاً في `DATABASE_SCHEMA.md` دون تعديل بنية الجداول أو تنفيذ أي DDL/DML.
+
+
+
+## [2026-09-28 14:05:35 +03:00] — التحقق الحي من مخطط العملاء في public — AI Model: Manus
+- تنفيذ استعلام `information_schema.columns` للقراءة فقط على `public` لتحديد أعمدة `customers`, `cust_details`, `portal_users`, `order_attachments` وأي جداول بأسماء ملفات/مستندات العملاء. تطابقت أعمدة جداول العملاء الأساسية مع DTOs؛ لم يظهر جدول مرفقات خاص بالعملاء.
+- استعلام مفاتيح JSONB في `public.cust_details.data` بحثاً عن مفاتيح file/attachment/document/image أعاد صفراً. ولم تُقرأ قيم بيانات العملاء.
+- صحح توثيق `DATABASE_SCHEMA.md` لجدول `cust_details` حسب النتيجة الحية. هذا تعديل توثيقي فقط؛ لم يُنفذ DDL أو DML ولم تتغير القاعدة أو RLS.

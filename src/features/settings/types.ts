@@ -1,2 +1,1 @@
-// Feature types boundary: settings.
-export interface SettingsViewModel { id: string; }
+export type { SettingsViewModel } from '../../data/dtos/settings.dto';

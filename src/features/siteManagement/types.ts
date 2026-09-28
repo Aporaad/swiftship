@@ -1,2 +1,1 @@
-// Feature types: company website management, content and templates.
-export interface SiteManagementViewModel { siteId: string; }
+export type { SiteManagementViewModel } from '../../data/dtos/site-management.dto';

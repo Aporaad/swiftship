@@ -1,2 +1,1 @@
-// Feature types boundary: orders.
-export interface OrdersViewModel { id: string; }
+export type { OrdersViewModel } from '../../data/dtos/orders.dto';
