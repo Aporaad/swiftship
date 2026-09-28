@@ -27,7 +27,7 @@ import admin, {
   signInWithEmailAndPassword,
   setDoc,
   createUserWithEmailAndPassword,
-} from '../src/lib/supabase-adapter';
+} from '../../src/lib/supabase-adapter';
 
 // ── نوع عميل قاعدة البيانات / Database client type ──────────────
 export interface DbClient {

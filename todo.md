@@ -769,3 +769,20 @@
 - [x] نجاح `npm run build` للواجهة والخادم؛ بقيت تحذيرات Vite/esbuild غير حاجبة المتعلقة بـ`import.meta` في CJS وحجم بعض chunks.
 - [x] لا SQL أو تغيير لقاعدة البيانات أو RLS؛ لم يبدأ API أو المرحلة 7 أو ترحيل صفحات Legacy.
 - [ ] المرحلة التالية وفق الخطة: المرحلة 7 — تفكيك `server.ts`؛ لم تُنفذ ضمن هذا التدقيق.
+
+## [2026-09-28 20:30:00 +03:00] — استكمال وتنفيذ المرحلة السابعة (تفكيك server.ts) وتجهيز المرحلة الثامنة — AI Model: Gemini 3.6 Flash (Medium)
+- [x] تفكيك واستخراج وظائف `server.ts` الرئيسي وتقسيمه إلى وحدات مستقلة داخل المجلد `server/`:
+  - `server/app.ts`: تطبيق Express، نقطة فحص الصحة `/api/health` ووسيط الجاهزية.
+  - `server/current-db/client.ts`: عميل ومصادقة قاعدة البيانات المؤقتة.
+  - `server/jobs/`: وظائف التسويات المالية والمزامنة الخلفية (`account-reconciliation.ts`, `tracking-sync.ts`).
+  - `server/routes/`: مسارات المصادقة والواتساب والتتبع (`auth.ts`, `whatsapp.ts`, `tracking.ts`).
+  - `server/browser-proxy/route.ts`: مسار متصفح البروكسي الداخلي.
+  - `server/dev-server.ts`: دمج Vite في التطوير والملفات الثابتة في الإنتاج.
+  - `server/heartbeatAuth.ts` و `server/legacy-compat.ts`.
+- [x] إعادة صياغة `server.ts` ليكون ملف تنسيق فقط (Orchestrator).
+- [x] إصلاح مسار الاستيراد في `server/current-db/client.ts`.
+- [x] فحص التجميع الكامل عبر TypeScript `npx tsc --noEmit` بنجاح (0 أخطاء).
+- [x] فحص واجتياز اختبارات الوحدة الخاصة بالخادم `server/app.test.ts` (4/4 ناجحة).
+- [x] إعداد وتوثيق تقرير المرحلة السابعة في `docs/pre-api/phase7-server-split.md`.
+- [ ] التجهيز للمرحلة التالية: المرحلة 8 — إصلاح خدمة Realtime والعمليات الخلفية.
+

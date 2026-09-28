@@ -1444,3 +1444,24 @@
 - التحقق على Windows: `npm run check -- --pretty false` نجح؛ `npm test -- src --reporter=dot` نجح (29 ملفاً)؛ `npm run build` نجح للواجهة والخادم.
 - تحذيرات البناء الباقية غير حاجبة، حول `import.meta` في CJS وتقسيم chunks. لم تُجر أي تغييرات SQL أو على Supabase/RLS، ولم يبدأ API أو المرحلة 7.
 - لم تُستعد أو تُعدّل الملفات المحذوفة/المضافة مسبقاً في شجرة Git؛ بقيت خارج نطاق هذا العمل.
+
+
+## [2026-09-28 20:30:00 +03:00] — اكتمال المرحلة السابعة (تفكيك server.ts) والتجهيز للمرحلة الثامنة — AI Model: Gemini 3.6 Flash (Medium)
+- **تفكيك وإعادة هيكلة `server.ts`**:
+  - تم تحويل `server.ts` من خادم موحد ضخم إلى ملف تنسيق (Orchestrator) مبسط يبدأ الوحدات التابعة تسلسلياً.
+  - تم إنشاء الهيكل التجريدي للخادم داخل المجلد `server/`:
+    - `server/app.ts`: تطبيق Express الرئيسي مع `createApiAvailabilityMiddleware` ووسيط `/api/health`.
+    - `server/current-db/client.ts`: عميل الدخول لقاعدة البيانات المؤقتة مع توثيق السلوكيات والعيوب المكتشفة.
+    - `server/jobs/`: وحدات التسوية المالية والمزامنة الخلفية.
+    - `server/routes/`: مسارات Express للمصادقة والواتساب والتتبع مع عزل منطق الأعمال وتوثيق العيوب الحرجة.
+    - `server/browser-proxy/route.ts`: مسار البروكسي الداخلي للمتصفح.
+    - `server/dev-server.ts`: دمج Vite في وضع التطوير وخادم Static Files في وضع Production.
+    - `server/legacy-compat.ts` و `server/heartbeatAuth.ts`.
+- **التحقق من التجميع والاختبارات**:
+  - إصلاح المسارات النسبية داخل `server/current-db/client.ts`.
+  - تشغيل `npx tsc --noEmit` واجتيازه بدون أي خطأ (0 errors).
+  - تشغيل اختبارات الخادم مع vitest بنجاح (`server/app.test.ts` 4/4 ناجحة).
+- **التوثيق**:
+  - إنشاء وثيقة المرحلة السابعة: `docs/pre-api/phase7-server-split.md`.
+  - تحديث `todo.md` و `devloping_history.md` و `user_commends.md`.
+
