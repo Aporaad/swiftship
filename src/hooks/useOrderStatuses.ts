@@ -11,7 +11,7 @@ export interface OrderStatusItem {
   color?: string;        // badge style / hex
   code?: string;
   description?: string;
-  createdAt?: number;
+  createdAt?: string;
 }
 
 export const DEFAULT_ORDER_STATUSES: OrderStatusItem[] = [
@@ -41,7 +41,8 @@ export function useOrderStatuses() {
             await setDoc(doc(db, 'order_status', String(st.id)), {
               ...st,
               sortOrder: st.id,
-              createdAt: Date.now()
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
             });
           }
         }
@@ -67,7 +68,7 @@ export function useOrderStatuses() {
           color: data.color || 'blue',
           code: data.code || '',
           description: data.description || '',
-          createdAt: data.createdAt
+          createdAt: data.createdAt || data.created_at
         };
       });
 

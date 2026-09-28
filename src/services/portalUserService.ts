@@ -123,7 +123,7 @@ export class PortalUserService {
   async saveCustomerDetails(customerId: string, userUid: string, details: CustomerDetailsPayload): Promise<any> {
     try {
       const detailsId = `cust_dtl_${customerId.replace(/[^a-zA-Z0-9]/g, '')}`;
-      const now = Date.now();
+      const now = new Date().toISOString();
       const payload = {
         id: detailsId,
         user_uid: userUid || '',
@@ -161,7 +161,6 @@ export class PortalUserService {
   async createPortalUser(userPayload: PortalUserPayload, detailsPayload?: CustomerDetailsPayload): Promise<any> {
     try {
       const puserId = `puser_${Math.random().toString(36).substring(2, 11)}`;
-      const now = Date.now();
       const nowIso = new Date().toISOString();
 
       const userRecord = {
@@ -181,7 +180,7 @@ export class PortalUserService {
           fullName: userPayload.fullName || userPayload.username,
           phone: userPayload.phone || '',
           customerId: userPayload.customerId || userPayload.linkedCustomerId || '',
-          createdAt: now
+          createdAt: nowIso
         }
       };
 
@@ -218,7 +217,7 @@ export class PortalUserService {
    */
   async updatePortalUser(puserId: string, userPayload: Partial<PortalUserPayload>, detailsPayload?: Partial<CustomerDetailsPayload>): Promise<void> {
     try {
-      const now = Date.now();
+      const now = new Date().toISOString();
 
       // Fetch existing row first
       const { data: existingData } = await supabase.from('portal_users').select('*').eq('portal_user_id', puserId).single();

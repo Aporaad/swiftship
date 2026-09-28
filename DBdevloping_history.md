@@ -870,3 +870,43 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 - تم تعديل الخطة فقط لتعكس التغييرات المؤكدة في Supabase: مفاتيح entity-specific، `main_entry`، `account_trans`، `order_party`، `orders_history`، `returned_products`، وخرائط مستخدمي البوابة.
 - تم إبقاء إصلاحات RLS وSECURITY DEFINER و`search_path` والفهارس كمهام لاحقة منفصلة ومراجعة.
 - لم يتم تنفيذ SQL أو DDL أو DML أو Migration أو تعديل جدول أو دالة أو Policy أو Index.
+
+
+## [2026-09-28 06:35:20 +03:00] — Baseline وجرد قاعدة البيانات قبل API — AI Model: Manus
+- تم اعتماد نتائج التحليل السابق لمشروع Supabase والمهاجرات حتى 2026-09-27 كمدخلات قراءة فقط.
+- تم تثبيت مخاطر المفاتيح canonical، `main_entry`، `account_trans`، `order_party`، `orders_history`، `returned_products`، وRLS/SECURITY DEFINER ضمن تقارير المرحلة.
+- لم يتم تنفيذ أي SQL أو DDL أو DML أو Migration أو تعديل جدول أو دالة أو Policy أو Index.
+
+
+## [2026-09-28 06:56:40 +03:00] — Data Access Map قراءة وتحليل فقط — AI Model: Manus
+- تم ربط العمليات المرصودة بالجداول الحالية `orders` و`order_items` و`order_party` و`orders_history` و`main_entry` و`account_trans` و`returned_products` وغيرها لأغراض التوثيق فقط.
+- لم يتم تنفيذ أي SQL أو DDL أو DML أو Migration أو تعديل على المخطط.
+
+
+## [2026-09-28 07:29:32 +03:00] — تجهيز Migration توحيد التاريخ وroles — AI Model: Manus
+### القرارات
+- كل التواريخ تصبح `timestamptz`، وقيم Epoch الحالية بالمللي ثانية تحول عبر `to_timestamp(value / 1000.0)`.
+- `orders.order_status_id` هو المصدر المعتمد.
+- نقل `roles.data` إلى حقول `title` و`is_default` و`permissions` مع إزالة التكرار ثم حذف `data`.
+- ضمان حقول التدقيق الأربعة في جميع جداول public.
+### حالة التنفيذ
+- تم تجهيز SQL في `20260928080000_standardize_audit_timestamps_and_roles.sql`.
+- لم ينفذ SQL أو DDL أو Migration بعد.
+
+
+## [2026-09-28 08:15:36 +03:00] — تطبيق standardize_audit_timestamps_and_roles — AI Model: Manus
+- تم تطبيق Migration بنجاح على المشروع `ejrojwbbflzchasvgexr`.
+- تم تحويل Epoch milliseconds في الحقول المستهدفة إلى `timestamptz`.
+- تم نقل `roles.data` إلى `title`, `is_default`, `permissions` وحذف `data`.
+- تم التحقق من عدم وجود أي جدول public ناقص لحقول التدقيق الأربعة.
+- لم يتضمن التنفيذ أي تغيير على RLS أو السياسات حسب قرار المستخدم.
+
+
+## [2026-09-28 08:49:55 +03:00] — إغلاق Feature Boundaries دون Database Changes — AI Model: Manus
+- لم يتم تنفيذ SQL أو Migration أو DDL أو DML أثناء استكمال المرحلة 2.
+- تعديل `FinanceEntries` و`accounting/expenses` كان تنظيم ملفات وخطة فقط.
+
+
+## [2026-09-28 08:54:05 +03:00] — إضافة Sources وجرد src — AI Model: Manus
+- لم يتم تنفيذ أي SQL أو Migration أو DDL أو DML أثناء إضافة `Sources` أو جرد مكونات `src`.
+- التغييرات اقتصرت على حدود Features وملفات التوثيق فقط.

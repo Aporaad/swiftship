@@ -525,19 +525,29 @@ Presentation
 ```text
 src/features/
 ├── auth/
+├── browser/
 ├── users/
 ├── roles/
 ├── customers/
 ├── orders/
+├── products/
+├── sources/
 ├── shipments/
 ├── couriers/
 ├── employees/
 ├── accounting/
-├── expenses/
+├── financeEntries/
 ├── notifications/
 ├── reports/
+├── siteManagement/
 └── settings/
 ```
+
+> **قرار نطاق ملزم:** لا يوجد Feature مستقل باسم `expenses`. المصروفات جزء من Feature `accounting`، وتكون حدودها الداخلية تحت `src/features/accounting/expenses/` عند الحاجة، مع بقاء القيود والسندات داخل Feature المالية نفسه. لا يجوز حذف جدول أو وظيفة المصروفات من النظام أو قاعدة البيانات بسبب إعادة الهيكلة.
+
+> **قرار نطاق مالي ملزم:** `FinanceEntries` هو Feature مستقل في المسار `src/features/financeEntries/`، ويضم القيود والسندات وكل دورات القيد المرتبطة بها: القيود العامة، القيود المركبة، القيود المؤقتة، سندات القبض، سندات الصرف، الترحيل، العكس، الإلغاء، وإعدادات القيد. أما `accounting` فيضم دليل الحسابات والحسابات والعملات والأرصدة والعهد والمصروفات، ولا يتم دمج حدود `FinanceEntries` داخل صفحات أو خدمات `accounting`.
+
+> **قرار نطاق النظام والويب ملزم:** `Browser` هو Feature مستقل للمتصفح الداخلي الخاص بالنظام، ويملك `BrowserViewer.tsx` وحالة التصفح الداخلي والتكاملات المرتبطة به. `siteManagement` هو Feature مستقل لإدارة موقع الشركة، ويملك `WebsiteManagement.tsx` وإعدادات الموقع والقوالب والمحتوى. يجب تضمين هذين الـFeature في كل جرد ومرحلة لاحقة، ولا يجوز إبقاؤهما كصفحات Legacy غير مصنفة.
 
 كل Feature يحتوي مبدئياً على:
 
@@ -562,6 +572,32 @@ feature/
 - `api.ts`: عقد استدعاء Gateway.
 - `schemas`: تحقق من Response/Input.
 - `types.ts`: أنواع Feature وDTOs.
+
+### 2.1 مخرجات المرحلة 2 الإلزامية
+
+يجب أن يحتوي كل Feature على الحدود الأولية التالية دون نقل كل منطق الصفحات دفعة واحدة:
+
+```text
+src/features/<feature>/
+├── components/   # عرض فقط
+├── hooks/        # حالة الواجهة واستدعاء Application Services
+├── services/     # Business Logic على مستوى Feature، بلا SQL
+├── schemas/      # Input/Response validation
+├── types.ts      # View Models وFeature DTOs
+├── api.ts        # عقد Feature API/Gateway فقط
+└── index.ts      # Public exports
+```
+
+وتكون خريطة الحدود المالية كالآتي:
+
+| Feature | النطاق المسموح | ما لا يدخل فيه |
+|---|---|---|
+| `accounting` | دليل الحسابات، الحسابات، العملات، الرصيد المشتق، العهد، المصروفات | إنشاء أو ترحيل القيود والسندات |
+| `financeEntries` / `FinanceEntries` | القيود العامة والمركبة والمؤقتة، سندات القبض والصرف، الترحيل والعكس والإلغاء وإعدادات القيد | إدارة دليل الحسابات كواجهة مستقلة أو حذف المصروفات |
+
+### 2.2 معيار إغلاق المرحلة 2
+
+لا تنتقل المرحلة إلى Data Gateway حتى توجد حدود Features لجميع الوحدات في `src/features`، ويكون `expenses` داخلاً تحت `accounting`، و`financeEntries` مستقلاً، ولا توجد صفحة أو Component جديد يملك SQL أو Supabase import مباشرة. يتم توثيق الملفات التي ستبقى Legacy مؤقتاً، وتوثيق مالك كل عملية Business Logic وFeature API المرشح لها.
 
 ---
 

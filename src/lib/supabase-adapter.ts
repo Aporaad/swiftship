@@ -768,7 +768,7 @@ export async function createUserWithEmailAndPassword(authInstance: any, email: s
     password: pass,
     role: 'Customer',
     disabled: false,
-    created_at: Date.now(),
+    created_at: new Date().toISOString(),
   }).select('*').single();
 
   if (error) {
@@ -884,6 +884,7 @@ const DIRECT_COLUMNS_MAP: Record<string, Record<string, string>> = {
   employees: { fullName: 'full_name', nameAr: 'name_ar', nameEn: 'name_en', accountId: 'account_id', monthlySalary: 'monthly_salary', currency: 'currency', jobsType: 'job_type', jobType: 'job_type', createdAt: 'created_at', createdBy: 'created_by' },
   users: { role: 'role', username: 'username', email: 'email', disabled: 'disabled', linkedType: 'linked_type', linkedEntity: 'linked_entity', fullName: 'full_name', password: 'password', systemPin: 'system_pin', isRoot: 'is_root', phone: 'phone', address: 'address', createdAt: 'created_at', updatedAt: 'updated_at', lastSeen: 'last_seen', lastSeenAt: 'last_seen_at' },
   portal_users: { portalRole: 'portal_role', username: 'username', email: 'email', disabled: 'disabled', isDisabled: 'is_disabled', approvalStatus: 'approval_status', linkedCustomerId: 'linked_customer_id', accountId: 'account_id', fullName: 'full_name', nameAr: 'name_ar', nameEn: 'name_en' },
+  roles: { title: 'title', isDefault: 'is_default', permissions: 'permissions', createdAt: 'created_at', updatedAt: 'updated_at', createdBy: 'created_by', updatedBy: 'updated_by' },
   sessions: { userId: 'user_id', fullName: 'full_name', email: 'email', role: 'role', deviceInfo: 'device_info', createdAt: 'created_at', lastSeen: 'last_seen', forceLogout: 'force_logout' },
   settings: { category: 'category' },
   user_settings: { userId: 'user_id' },
@@ -1034,15 +1035,6 @@ export function extractDirectColumns(table: string, data: Record<string, any>): 
       }
       if (key === 'disabled' && (table === 'customers' || table === 'couriers')) {
         extracted[col] = !val;
-      } else if ((table === 'users' || table === 'items_category' || table === 'order_option' || table === 'cust_details') && (col === 'createdAt' || col === 'updatedAt' || col === 'lastSeen' || col === 'created_at' || col === 'updated_at')) {
-        if (typeof val === 'string') {
-          const parsed = Date.parse(val);
-          extracted[col] = isNaN(parsed) ? (Number(val) || Date.now()) : Math.floor(parsed);
-        } else if (typeof val === 'number') {
-          extracted[col] = Math.floor(val);
-        } else {
-          extracted[col] = val;
-        }
       } else if (
         col.endsWith('_at') ||
         col.endsWith('At') ||

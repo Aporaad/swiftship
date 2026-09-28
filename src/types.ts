@@ -17,8 +17,8 @@ export interface Customer {
   financialCurrency?: string;
   financialAccountCode?: string;
   financialAccountId?: string;
-  createdAt?: number;
-  updatedAt?: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Courier {
@@ -42,8 +42,8 @@ export interface Courier {
   financialCurrency?: string;
   financialAccountCode?: string;
   financialAccountId?: string;
-  createdAt?: number;
-  updatedAt?: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Transaction {

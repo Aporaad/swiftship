@@ -1244,3 +1244,98 @@
 - تم تحديث وصف Supabase إلى PostgreSQL 17.6.1 والمهاجرات حتى 2026-09-27، وإضافة الوضع الحالي للمفاتيح canonical والمحاسبة الجديدة ومخاطر الأمن الضرورية.
 - تم الحفاظ على النسخة السابقة والنسخة versioned دون حذف.
 - لم يتم تعديل منطق التطبيق أو تشغيل Build/Test ضمن هذه المهمة.
+
+
+## [2026-09-28 06:35:20 +03:00] — تنفيذ Baseline والجرد الأولي قبل alx_api — AI Model: Manus
+### المنفذ
+- تثبيت commit المرجع `684912285c39a268aa3ce23aa98e4cad300e202c`.
+- جرد البنية العليا ومجلدات `src` و`server` و`supabase/migrations` و`alx_api` و`alx_web`.
+- تسجيل أن `alx_api` مساحة خطة وليست تطبيق API.
+- تشغيل فحوص baseline دون تعديل: `npm run check` انتهى بمهلة، و`npm test` و`npm run build` تأثرا بخطأ `ENOTCONN` من المجلد المركب.
+- إنشاء تقارير المرحلة في `docs/pre-api/`: baseline، current-state، feature-inventory، risks-register.
+### القرار
+- لا تعتمد نتائج فحوص Node من مجلد Windows المركب كحكم على الكود؛ يعاد تشغيلها من Windows الأصلي.
+- الخطوة التالية بعد اعتماد baseline هي إكمال Data Access Map ثم Canonical Contracts وMapper tests.
+- لم يتم تعديل منطق التطبيق أو تنفيذ SQL/Migration.
+
+
+## [2026-09-28 06:56:40 +03:00] — اعتماد Windows Baseline وإنشاء Data Access Map — AI Model: Manus
+- تم اعتماد `npm run check` من Windows الأصلي بنجاح.
+- تم اعتماد `npm run build` من Windows الأصلي بنجاح، مع تسجيل تحذيرات `import.meta` في CJS وحجم chunk واعتماد المحول المباشر.
+- سجلت الاختبارات 35 ملفاً ناجحاً، ملفاً واحداً فاشلاً، وملفاً متخطياً؛ 129 اختباراً ناجحاً، اختباراً فاشلاً واحداً بسبب timeout في Supabase REST، و3 متخطاة.
+- تم إنشاء `docs/pre-api/data-access-map.md` لربط Features بالصفحات والخدمات والجداول والعمليات والآثار ومرشحي Gateway.
+- لم يتم تعديل منطق التطبيق أو تنفيذ SQL/Migration.
+
+
+## [2026-09-28 07:29:32 +03:00] — تجهيز توحيد التواريخ وroles وحقول التدقيق — AI Model: Manus
+- اعتماد `timestamptz` لجميع حقول التاريخ، وتحويل Epoch milliseconds القديمة بدلاً من اعتماد `bigint`.
+- اعتماد `orders.order_status_id` كمصدر الحالة canonical.
+- تجهيز نقل `roles.data` إلى `title` و`is_default` و`permissions` مع إزالة تكرار permissions وحذف `data`.
+- تجهيز ضمان وجود `created_at` و`updated_at` و`created_by` و`updated_by` في كل جدول public.
+- إنشاء Migration محلية للمراجعة: `supabase/migrations/20260928080000_standardize_audit_timestamps_and_roles.sql`.
+- لم تطبق Migration بعد بانتظار اعتماد التطبيق النهائي بسبب تغيير مخطط وحذف عمود `roles.data`.
+
+
+## [2026-09-28 08:15:36 +03:00] — تطبيق Migration وبدء Canonical Contracts — AI Model: Manus
+- تم تطبيق `standardize_audit_timestamps_and_roles` على Supabase بعد إصلاح defaults القديمة وتجنب تشغيل legacy triggers أثناء backfill العام.
+- تم تعديل `src/lib/supabase-adapter.ts` لمنع إرسال Epoch numbers لحقول `timestamptz` وإضافة mapping لجدول `roles`.
+- تم تعديل `portalUserService.ts` و`useOrderStatuses.ts` لإرسال ISO timestamps.
+- تم إنشاء `src/contracts/canonical.ts` و`src/mappers/roleMapper.ts`.
+- تم تحديث `schema-field-map.md` بنتيجة التطبيق.
+
+
+## [2026-09-28 08:17:53 +03:00] — إنشاء Order Mapper وGateway Interfaces — AI Model: Manus
+- تم إنشاء `src/mappers/orderMapper.ts` ويعتمد `order_status_id` حصراً كمصدر حالة الطلب.
+- تم إنشاء `src/contracts/gateways.ts` لتعريف حدود الوصول بين Business Logic وطبقة البيانات.
+- لم يتم إضافة Endpoint أو تعديل UI؛ المرحلة الحالية تجهز حدود API فقط.
+
+
+## [2026-09-28 08:28:37 +03:00] — تصحيح ترتيب التنفيذ والبدء بالمرحلة 2 — AI Model: Manus
+- تمت مراجعة الخطة، وتأكد أن Feature Boundaries هي المرحلة 2 وتسبق تفعيل Data Gateway في المرحلة 3.
+- أوقف فحص Gateway غير المكتمل ولم يتم ربطه بالواجهة أو API.
+- تم إنشاء `src/features/roles` كعينة منخفضة المخاطر وفق الهيكل المعتمد.
+- تم فصل `RoleApplicationService` عن UI وSupabase، وإضافة schema validation واختبار وحدة.
+- لم يتم تنفيذ SQL أو Migration أو تغيير قاعدة البيانات في هذه الخطوة.
+
+
+## [2026-09-28 08:44:31 +03:00] — استكمال المرحلة 2 بإضافة FinanceEntries — AI Model: Manus
+- تم تعديل الخطة لإزالة `expenses` كـFeature مستقل؛ المصروفات باقية داخل `accounting/expenses`.
+- تم تثبيت `FinanceEntries` كـFeature مستقل يضم القيود والسندات ودورات الترحيل والعكس والإلغاء وإعدادات القيد.
+- تم حذف الهياكل السابقة `src/contracts`, `src/gateways`, `src/mappers` قبل المرحلة 3 حسب طلب المستخدم.
+- تم إنشاء حدود جميع Features المحددة في الخطة، بما فيها `financeEntries`، مع ملفات `components`, `hooks`, `services`, `schemas`, `types.ts`, `api.ts`, `index.ts`.
+- تم إنشاء `docs/pre-api/feature-boundaries.md` وتحديث `feature-inventory.md`.
+- لم يتم نقل صفحات Legacy أو تنفيذ SQL أو تفعيل Gateway.
+
+
+## [2026-09-28 08:49:55 +03:00] — إغلاق المرحلة 2 Feature Boundaries — AI Model: Manus
+- تم إنشاء الهيكل الكامل لجميع Features حسب الخطة.
+- تم فصل `FinanceEntries` للقيود والسندات عن `accounting`.
+- تم إبقاء `expenses` داخل `accounting/expenses` دون حذف أي وظيفة أو جدول.
+- تم حذف الهياكل السابقة التي سبقت المرحلة 3.
+- تم إنشاء `feature-boundaries.md` و`legacy-boundary-map.md` وتحديث الجرد.
+- تم التحقق من TypeScript لملفات الحدود الجديدة.
+- المرحلة 3 Data Gateway لم تبدأ بعد التزاماً بالترتيب المرحلي.
+
+
+## [2026-09-28 08:50:56 +03:00] — فصل Products كFeature مستقل — AI Model: Manus
+- تم إضافة `products` إلى خطة المرحلة 2.
+- أصبحت ملكية المنتجات والتصنيفات وحركة البنود ضمن `src/features/products`، بينما تبقى الطلبات ضمن `orders`.
+- تم تحديث خرائط Feature وLegacy والجرد.
+- لم يتم تنفيذ SQL أو Migration أو بدء المرحلة 3.
+
+
+## [2026-09-28 08:54:05 +03:00] — Sources وComplete src Inventory — AI Model: Manus
+- تم إضافة `src/features/sources` كFeature مستقل.
+- تم تحديث الخطة لفصل Sources عن Orders وAccounting.
+- تم جرد مناطق الصفحات والمكونات والخدمات والـhooks والـlib والـcontext والتقارير والأدوات وFeatures.
+- تم توثيق الملكية الانتقالية لكل مجموعة في `src-complete-inventory.md`.
+- تم تثبيت أن كل مرحلة لاحقة تعيد فحص جميع `src/` قبل التنفيذ.
+- لم يتم تنفيذ SQL أو Migration أو بدء المرحلة 3.
+
+
+## [2026-09-28 09:21:41 +03:00] — إضافة Browser وsiteManagement — AI Model: Manus
+- تم اعتماد `Browser` للمتصفح الداخلي كFeature مستقل.
+- تم اعتماد `siteManagement` لإدارة موقع الشركة كFeature مستقل.
+- تم إنشاء القالب الكامل للمرحلة 2 وتحديث الخطة ومصفوفات الملكية والجرد.
+- تم تثبيت قاعدة أن كل المراحل القادمة تفحص جميع مكونات `src/` وتضمّن هذين Feature.
+- لم يتم تنفيذ SQL أو Migration أو بدء المرحلة 3.

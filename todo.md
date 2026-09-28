@@ -540,3 +540,140 @@
 - [x] تحديث الفروقات الضرورية فقط: مفاتيح entity-specific، `main_entry` و`account_trans`، `order_party`، `orders_history`، `returned_products`، مخاطر RLS وSECURITY DEFINER وElectron.
 - [x] الحفاظ على مراحل الخطة الأصلية من Baseline والجرد وGateway وAuth وFeature Refactor وServer Split وReadiness Review.
 - [x] لم يتم تنفيذ SQL أو Migration أو تعديل في قاعدة البيانات.
+
+
+## [2026-09-28 06:35:20 +03:00] — بدء تنفيذ المرحلة الأولى Baseline والجرد — AI Model: Manus
+- [x] تثبيت commit المرجعي `684912285c39a268aa3ce23aa98e4cad300e202c`.
+- [x] فحص بنية النظام و`alx_web` و`alx_api` و`server` و`src` و`supabase/migrations`.
+- [x] تشغيل `npm run check` و`npm test -- --run` و`npm run build` قراءةً فقط وتسجيل النتائج.
+- [x] إنشاء `docs/pre-api/baseline-report.md`.
+- [x] إنشاء `docs/pre-api/current-state.md`.
+- [x] إنشاء `docs/pre-api/feature-inventory.md`.
+- [x] إنشاء `docs/pre-api/risks-register.md`.
+- [ ] إعادة تشغيل check/test/build من Windows الأصلي أو بيئة مستقرة؛ نتائج مجلد Windows المركب غير معتمدة نهائياً بسبب timeout وENOTCONN.
+- [ ] استكمال Data Access Map سطرياً لكل Page/Service قبل بدء Canonical Contracts.
+- [x] لم يتم تعديل كود التطبيق أو تنفيذ SQL/Migration.
+
+
+## [2026-09-28 06:56:40 +03:00] — استكمال المرحلة الأولى والانتقال إلى Data Access Map — AI Model: Manus
+- [x] اعتماد نتائج `npm run check` الناجحة من Windows الأصلي.
+- [x] اعتماد نجاح `npm run build` من Windows الأصلي مع تسجيل تحذيرات CJS/chunk/import.
+- [x] توثيق نتيجة الاختبارات: 129 ناجحاً، اختبار واحد فاشل بسبب timeout في Supabase REST، و3 متخطاة.
+- [x] إنشاء `docs/pre-api/data-access-map.md` بخريطة الصفحات والخدمات والجداول والآثار ومرشحي Gateway.
+- [ ] إعادة اختبار `server/supabaseReadOnlyVerification.test.ts` بعد معالجة timeout البيئي.
+- [ ] إكمال المطابقة field-by-field وRPC-by-RPC قبل إنشاء Canonical Contracts.
+
+
+## [2026-09-28 07:11:40 +03:00] — مطابقة Schema وRPC الفعلية — AI Model: Manus
+- [x] قراءة مخطط Supabase الفعلي للمشروع `ejrojwbbflzchasvgexr`.
+- [x] مطابقة الحقول والعلاقات للهوية والعملاء والأطراف والطلبات والشحنات والمالية والبوابة.
+- [x] قراءة سجل المهاجرات الفعلي حتى `20260927072100`.
+- [x] قراءة signatures وsecurity definer وACL وsearch_path metadata للدوال الحساسة.
+- [x] إنشاء `docs/pre-api/schema-field-map.md`.
+- [x] إنشاء `docs/pre-api/rpc-register.md`.
+- [ ] اعتماد Status dictionary وRPC ownership matrix قبل Canonical DTOs.
+- [ ] معالجة RLS/anon/search_path عبر Migration مستقلة ومراجعة، وليس ضمن تعريف العقود.
+- [x] لم يتم تنفيذ أي RPC تشغيلية أو SQL تغييري أو Migration.
+
+
+## [2026-09-28 07:29:32 +03:00] — قرارات المستخدم وتجهيز تغيير قاعدة البيانات — AI Model: Manus
+- [x] تحديث `schema-field-map.md` بقرارات `timestamptz` و`order_status_id` وroles وحقول التدقيق.
+- [x] تجهيز Migration `20260928080000_standardize_audit_timestamps_and_roles.sql`.
+- [ ] اعتماد تطبيق Migration على مشروع Supabase.
+- [ ] بعد التطبيق: فحص schema والبيانات، ثم تحديث TypeScript contracts وmappers.
+
+
+## [2026-09-28 08:15:36 +03:00] — تطبيق Migration والانتقال إلى Canonical Contracts — AI Model: Manus
+- [x] تطبيق `standardize_audit_timestamps_and_roles` على Supabase بنجاح.
+- [x] التحقق من حذف `roles.data` ونقل `title` و`is_default` و`permissions` وإزالة تكرار الصلاحيات.
+- [x] التحقق من أن كل جداول `public` تحتوي `created_at`, `updated_at`, `created_by`, `updated_by`.
+- [x] التحقق من أن الحقول الزمنية المستهدفة أصبحت `timestamptz`.
+- [x] إنشاء `src/contracts/canonical.ts`.
+- [x] إنشاء `src/mappers/roleMapper.ts`.
+- [x] تعديل المحول والخدمات لإرسال ISO timestamps واعتماد `order_status_id`.
+- [ ] ربط Role Mapper بصفحة إدارة الأدوار ومخزن الصلاحيات.
+- [ ] إنشاء Order/Status Mapper ثم Gateway interfaces.
+
+
+## [2026-09-28 08:17:53 +03:00] — Canonical Contracts وGateway Interfaces — AI Model: Manus
+- [x] اجتياز الفحص السريع لعقود `canonical.ts` و`roleMapper.ts`.
+- [x] إنشاء `src/mappers/orderMapper.ts` مع اعتماد `order_status_id` فقط.
+- [x] إنشاء `src/contracts/gateways.ts` لفصل Business Logic عن UI وSupabase.
+- [ ] إنشاء implementations للـRoleGateway وOrderGateway فوق المحول الحالي.
+- [ ] كتابة اختبارات mapper وstatus transition قبل تعريض API.
+
+
+## [2026-09-28 08:28:37 +03:00] — تصحيح المسار والبدء بالمرحلة 2 Feature Boundaries — AI Model: Manus
+- [x] مراجعة الخطة المعتمدة والتأكد أن المرحلة 2 تسبق تفعيل Data Gateway.
+- [x] إيقاف فحص Gateway غير المكتمل؛ لم يتم ربطه بالواجهة أو API.
+- [x] إنشاء Feature `src/features/roles` كأول Feature منخفض المخاطر وفق الهيكل: `components`, `hooks`, `services`, `schemas`, `types.ts`, `api.ts`, `index.ts`.
+- [x] إنشاء `RoleApplicationService` وschema validation بدون SQL أو Supabase imports.
+- [x] إضافة اختبار وحدة لمنطق Feature roles.
+- [ ] إغلاق معيار المرحلة 2 بعد مراجعة بقية حدود Feature roles وتوثيق الملفات legacy.
+- [ ] عدم الانتقال إلى تفعيل Gateway implementations قبل إغلاق المرحلة 2.
+
+
+## [2026-09-28 08:37:25 +03:00] — استكمال المرحلة 2 وتصحيح النطاق المالي — AI Model: Manus
+- [x] تثبيت أن `expenses` ليست Feature مستقلاً ولا جدولاً محذوفاً؛ هي نطاق داخلي تحت `accounting`.
+- [x] تثبيت `FinanceEntries` كـFeature مستقل للقيود والسندات ودورات الترحيل والعكس والإلغاء.
+- [x] تحديث الخطة وإضافة مصفوفة Feature Boundaries.
+- [x] حذف الهياكل السابقة المنشأة خارج مسار المرحلة 3: `src/contracts`, `src/gateways`, `src/mappers`.
+- [x] إنشاء حدود جميع Features المطلوبة: auth, users, roles, customers, orders, shipments, couriers, employees, accounting, financeEntries, notifications, reports, settings.
+- [x] إنشاء النطاق الداخلي `src/features/accounting/expenses` دون إنشاء `src/features/expenses`.
+- [x] إنشاء `docs/pre-api/feature-boundaries.md`.
+- [ ] مراجعة ملفات Legacy وربط كل صفحة بمالك Feature قبل إغلاق المرحلة 2 نهائياً.
+- [ ] يمنع الانتقال إلى المرحلة 3 حتى اكتمال مراجعة Legacy واعتماد مصفوفة الحدود.
+
+
+## [2026-09-28 08:44:31 +03:00] — FinanceEntries وإغلاق الهيكل الأولي للمرحلة 2 — AI Model: Manus
+- [x] إضافة `src/features/financeEntries` كFeature مستقل للقيود والسندات.
+- [x] إبقاء المصروفات في `src/features/accounting/expenses` وعدم إنشاء `src/features/expenses`.
+- [x] ملء ملفات `types.ts`, `api.ts`, `index.ts` لجميع Features وعدم ترك حدود فارغة.
+- [x] تحديث `feature-inventory.md` لعكس فصل Accounting عن FinanceEntries.
+- [x] التحقق من حذف `src/contracts`, `src/gateways`, `src/mappers` السابقة.
+- [ ] مراجعة Legacy السطرية لكل صفحة/خدمة وإرفاق Feature Owner وAPI candidate قبل إغلاق المرحلة 2 نهائياً.
+
+
+## [2026-09-28 08:49:55 +03:00] — إغلاق المرحلة 2 Feature Boundaries — AI Model: Manus
+- [x] إنشاء `docs/pre-api/legacy-boundary-map.md` مع مالك كل Feature ومصدر Legacy وAPI candidate.
+- [x] توثيق أن `Accounting` يملك المصروفات عبر `accounting/expenses`.
+- [x] توثيق أن `FinanceEntries` يملك القيود والسندات كFeature مستقل.
+- [x] التحقق من وجود الهيكل الكامل لكل Features المطلوبة وعدم وجود `src/features/expenses`.
+- [x] التحقق من حذف هياكل Gateway/Mappers السابقة قبل بدء المرحلة 3.
+- [x] اجتياز TypeScript check لحدود Features الجديدة.
+- [x] المرحلة 2 مكتملة؛ المرحلة 3 لم تبدأ بعد.
+
+
+## [2026-09-28 08:50:56 +03:00] — إضافة Products كFeature مستقل — AI Model: Manus
+- [x] إضافة `products` إلى الخطة وهيكل Features.
+- [x] فصل ملكية المنتجات والتصنيفات وحركة البنود عن `orders`.
+- [x] إبقاء المرتجعات ضمن تنسيق Products/Orders دون إنشاء Feature مرتجعات مستقل.
+- [x] تحديث `feature-boundaries.md`, `legacy-boundary-map.md`, و`feature-inventory.md`.
+- [x] إنشاء `src/features/products` وفق قالب المرحلة 2.
+
+
+## [2026-09-28 08:50:56 +03:00] — اكتمال حدود Products ضمن المرحلة 2 — AI Model: Manus
+- [x] إنشاء `src/features/products` وفق قالب المرحلة 2.
+- [x] فصل Products عن Orders في Feature Boundaries وLegacy Map وFeature Inventory.
+- [x] التحقق من بقاء `expenses` داخل `accounting` وFinanceEntries مستقلاً.
+- [x] التحقق من عدم وجود هياكل المرحلة 3 القديمة.
+- [x] المرحلة 2 الهيكلية مكتملة؛ لم تبدأ المرحلة 3.
+
+
+## [2026-09-28 08:54:05 +03:00] — إضافة Sources وجرد src الكامل — AI Model: Manus
+- [x] إضافة `sources` كFeature مستقل لمصادر الطلب وشركات الشحن والأصول.
+- [x] تحديث الخطة وFeature Boundaries وLegacy Map وFeature Inventory.
+- [x] فحص مناطق `src/pages`, `src/components`, `src/services`, `src/hooks`, `src/lib`, `src/context`, `src/reports`, `src/utils`, و`src/features`.
+- [x] فحص المجلدات الفرعية المالية والطلبات والشحنات والمكونات العامة.
+- [x] إنشاء `docs/pre-api/src-complete-inventory.md` وربط المكونات بمالك Feature.
+- [x] تثبيت قاعدة إعادة فحص جميع `src/` قبل كل مرحلة لاحقة.
+- [x] لا يوجد `src/features/expenses`; المصروفات داخل `accounting/expenses`.
+
+
+## [2026-09-28 09:21:41 +03:00] — إضافة Browser وsiteManagement — AI Model: Manus
+- [x] إضافة `browser` كFeature مستقل للمتصفح الداخلي الخاص بالنظام.
+- [x] إضافة `siteManagement` كFeature مستقل لإدارة موقع الشركة.
+- [x] إنشاء هيكل المرحلة 2 الكامل لكلا Feature: `components`, `hooks`, `services`, `schemas`, `types.ts`, `api.ts`, `index.ts`.
+- [x] تحديث الخطة وجميع مصفوفات Feature وLegacy وInventory.
+- [x] تثبيت إلزامية تضمين Browser وsiteManagement في كل جرد ومرحلة لاحقة.
+- [ ] لا يبدأ Gateway أو API قبل اكتمال اعتماد المرحلة 2 المحدثة.

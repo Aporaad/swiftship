@@ -526,3 +526,53 @@ SELECT 'cust_details', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_k
 ## [2026-09-28 06:17:33 +03:00] — AI Model: Manus
 - لم يتم تنفيذ أي أمر SQL أو Migration أو DDL أو DML أثناء إعادة مواءمة الخطة مع النسخة الأصلية.
 - التغييرات اقتصرت على إعادة صياغة ملف الخطة والتوثيق النصي.
+
+
+## [2026-09-28 06:35:20 +03:00] — AI Model: Manus
+- لم يتم تنفيذ أي أمر SQL أو Migration أو DDL أو DML خلال مرحلة Baseline والجرد.
+- فحوص المرحلة كانت على الكود والملفات فقط، مع الاعتماد على نتائج Supabase القراءة السابقة.
+
+
+## [2026-09-28 06:56:40 +03:00] — AI Model: Manus
+- لم يتم تنفيذ أي أمر SQL أو Migration أو DDL أو DML أثناء اعتماد Windows baseline وإنشاء Data Access Map.
+- تم استخدام نتائج الاختبارات والملفات والمهاجرات الموجودة للتوثيق فقط.
+
+
+## [2026-09-28 07:29:32 +03:00] — AI Model: Manus
+### SQL مُجهز ولم يُنفذ
+- الملف: `supabase/migrations/20260928080000_standardize_audit_timestamps_and_roles.sql`
+- النطاق: توحيد `timestamptz`، نقل `roles.data`، اعتماد `order_status_id`، وإضافة حقول التدقيق الأربعة لكل جدول public.
+- الحالة: Prepared only؛ لم يتم استدعاء `apply_migration` ولم تنفذ أي DDL/DML.
+
+
+## [2026-09-28 08:15:36 +03:00] — AI Model: Manus
+### SQL/Migration executed
+- Executed migration: `standardize_audit_timestamps_and_roles`.
+- Result: Success after removing legacy numeric defaults before timestamp conversion and omitting generic audit backfill that activated a broken legacy `orders_history` trigger.
+- Verified: `roles.data` removed; permissions normalized; all public tables contain four audit columns; target dates are `timestamptz`.
+
+
+## [2026-09-28 08:17:53 +03:00] — AI Model: Manus
+- لم يتم تنفيذ SQL أو Migration إضافية أثناء إنشاء Canonical Contracts وGateway Interfaces وMappers.
+- آخر تغيير قاعدة بيانات موثق هو Migration `standardize_audit_timestamps_and_roles` المطبقة بنجاح.
+
+
+## [2026-09-28 08:28:37 +03:00] — AI Model: Manus
+- لم يتم تنفيذ أي SQL أو DDL أو DML أو Migration أثناء تصحيح الترتيب وتنفيذ Feature roles في المرحلة 2.
+
+
+## [2026-09-28 08:44:31 +03:00] — AI Model: Manus
+- لم يتم تنفيذ SQL أو Migration أو DDL أو DML أثناء إضافة `FinanceEntries` أو نقل `expenses` إلى النطاق الداخلي لـ`accounting`.
+
+
+## [2026-09-28 08:50:56 +03:00] — AI Model: Manus
+- لم يتم تنفيذ أي SQL أو DDL أو DML أو Migration عند فصل `products` كFeature مستقل.
+
+
+## [2026-09-28 08:54:05 +03:00] — AI Model: Manus
+- لم يتم تنفيذ SQL أو Migration أو DDL أو DML أثناء إضافة `Sources` أو جرد مكونات `src`.
+
+
+## [2026-09-28 09:21:41 +03:00] — AI Model: Manus
+- لم يتم تنفيذ SQL أو Migration أو DDL أو DML أثناء إضافة `browser` و`siteManagement`.
+- التغييرات اقتصرت على Feature boundaries والملفات التوثيقية.
