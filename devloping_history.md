@@ -1339,3 +1339,35 @@
 - تم إنشاء القالب الكامل للمرحلة 2 وتحديث الخطة ومصفوفات الملكية والجرد.
 - تم تثبيت قاعدة أن كل المراحل القادمة تفحص جميع مكونات `src/` وتضمّن هذين Feature.
 - لم يتم تنفيذ SQL أو Migration أو بدء المرحلة 3.
+
+
+## [2026-09-28 09:29:49 +03:00] — بدء المرحلة 3 Data Gateway — AI Model: Manus
+- تمت إعادة مراجعة خطة المرحلة 3 والجرد الكامل لمناطق `src` قبل التنفيذ.
+- تم تحديث تصميم العقود ليشمل جميع Features المعتمدة، بما فيها `browser`, `products`, `sources`, `financeEntries`, و`siteManagement`.
+- تم إنشاء `src/data/contracts`, `src/data/current-supabase`, و`src/data/http` حسب الخطة.
+- تم إنشاء Pagination وMapper وأخطاء موحدة، وتنفيذ Orders/Roles Supabase Gateways فقط دون ربط UI.
+- نتيجة Windows `TS5023` تخص عدم دعم `--ignoreConfig` في نسخة TypeScript، وليست نتيجة compile صحيحة.
+- لم يتم إنشاء API Endpoint أو تغيير قاعدة البيانات أو حذف Legacy.
+
+
+## [2026-09-28 09:45:37 +03:00] — Current Supabase Feature Gateway Registry — AI Model: Manus
+- تم إنشاء Registry لجميع Features ذات جداول موثقة داخل `src/data/current-supabase/gateways/featureGateways.ts`.
+- تم ربط Browser وProducts وSources وShipments وCouriers وEmployees وAccounting وFinanceEntries وNotifications وReports وSiteManagement وSettings بالجداول الموثقة.
+- تم إبقاء Browser وReports وSiteManagement خلف Mapping محدود لا يكشف JSONB الخام.
+- لم يتم تفعيل Registry داخل صفحات React ولم يتم تنفيذ كتابة على قاعدة البيانات.
+
+
+## [2026-09-28 09:52:52 +03:00] — إكمال كل تفاصيل المرحلة 3 — AI Model: Manus
+- تم تنفيذ Gateway مستقل لكل Feature معتمد، وليس الاكتفاء بأمثلة الخطة أو Registry عام.
+- تم تنفيذ Gateways خاصة لـAuth وBrowser وOrders وRoles وFinanceEntries وSiteManagement/Settings.
+- تم تنفيذ Gateways للكيانات Users وCustomers وProducts وSources وShipments وCouriers وEmployees وAccounting وNotifications وReports.
+- تم تصحيح FinanceEntries وفق `main_entry.posting_status` وحقول الفاعل والتوقيت الفعلية.
+- تم تجاوز فحص TypeScript بناءً على توجيه المستخدم بعد توضيح أن `--ignoreConfig` غير مدعوم في نسخة Windows؛ تحقق وجود جميع الملفات نجح.
+- لم يتم ربط UI أو إنشاء API أو تنفيذ SQL.
+
+
+## [2026-09-28 10:07:49 +03:00] — تصحيح نطاق المرحلة الثالثة — AI Model: Manus
+- تمت مراجعة المرحلة باعتبارها طبقة انتقال مؤقتة لخدمة إنشاء API لاحقاً.
+- تم حذف `featureGateways.ts` لأنه Registry عام لم يكن ضمن تصميم المرحلة.
+- تم الإبقاء على العقود وملف Gateway مستقل لكل Feature فقط.
+- تم تحديث الخطة وتقرير المرحلة لمنع Business Logic وorchestration أو UI داخل الطبقة المؤقتة.

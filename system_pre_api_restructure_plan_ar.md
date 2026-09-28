@@ -611,11 +611,22 @@ src/features/<feature>/
 src/data/
 ├── contracts/
 │   ├── auth.gateway.ts
+│   ├── browser.gateway.ts
 │   ├── users.gateway.ts
+│   ├── roles.gateway.ts
 │   ├── customers.gateway.ts
 │   ├── orders.gateway.ts
+│   ├── products.gateway.ts
+│   ├── sources.gateway.ts
 │   ├── shipments.gateway.ts
-│   └── accounting.gateway.ts
+│   ├── couriers.gateway.ts
+│   ├── employees.gateway.ts
+│   ├── accounting.gateway.ts
+│   ├── finance-entries.gateway.ts
+│   ├── notifications.gateway.ts
+│   ├── reports.gateway.ts
+│   ├── site-management.gateway.ts
+│   └── settings.gateway.ts
 ├── current-supabase/
 │   ├── supabase.client.ts
 │   ├── supabase.mapper.ts
@@ -641,6 +652,8 @@ OrdersGateway
 CurrentSupabaseOrdersGateway
 ```
 
+> **قاعدة تنفيذ ملزمة مضافة:** المثال السابق لا يحد النطاق. يجب إنشاء Gateway مستقل لكل Feature المعتمد في المرحلة 2، بما في ذلك `auth`, `browser`, `users`, `roles`, `customers`, `orders`, `products`, `sources`, `shipments`, `couriers`, `employees`, `accounting`, `financeEntries`, `notifications`, `reports`, `siteManagement`, و`settings`. لا يكفي Registry عام أو Gateway واحد بديلاً عن ملفات Features المستقلة.
+
 لاحقاً تنفذ بواسطة:
 
 ```text
@@ -659,6 +672,10 @@ HttpOrdersGateway
 - يفرض Pagination.
 - يحدد الحقول المسموح بها.
 - يعزل Realtime خلف Subscription Contract.
+
+### 3.1 ضابط النطاق الانتقالي
+
+طبقة `src/data/current-supabase` و`src/data/http` في هذه المرحلة مؤقتة لتسهيل الانتقال إلى API فقط. لا تحتوي على Business Logic دائم، ولا Registry عام، ولا orchestration جديد، ولا ربط مباشر مع UI. أي مكوّن إضافي غير مذكور في تصميم المرحلة يجب إما إدراجه صراحة هنا قبل إنشائه أو عدم إنشائه. أما التوسعات الدائمة فتؤجل إلى المرحلة التي تخصها، ولا تستخدم هذه الطبقة المؤقتة كبديل عنها.
 
 ---
 
