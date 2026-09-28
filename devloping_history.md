@@ -1465,3 +1465,27 @@
   - إنشاء وثيقة المرحلة السابعة: `docs/pre-api/phase7-server-split.md`.
   - تحديث `todo.md` و `devloping_history.md` و `user_commends.md`.
 
+
+## [2026-09-28 20:55:00 +03:00] — اكتمال المرحلة الثامنة (إصلاح Realtime والعمليات الخلفية) والتجهيز للمرحلة التاسعة — AI Model: Gemini 3.6 Flash (Medium)
+- **إعادة هيكلة الوظائف الخلفية وإطارات العمل**:
+  - إنشاء `server/jobs/types.ts` و `server/jobs/job-runner.ts` لتطبيق العناصر المعمارية الثمانية لكل عملية خلفية:
+    1. Input
+    2. Trigger
+    3. Preconditions
+    4. Transaction boundary
+    5. Idempotency key
+    6. Retry policy
+    7. Audit event
+    8. Failure behavior
+  - إعادة صياغة `server/jobs/account-reconciliation.ts`: إلغاء التنفيذ العشوائي المالي داخل Realtime Listener، وتطبيق إلغاء الارتداد (Debounce 500ms) وتحديد الشروط والمخرجات ومأثر التكرار.
+  - إعادة صياغة `server/jobs/tracking-sync.ts`: إخضاع مزامنة التتبع الخارجي الدوري للتحقق من الشروط المسبقة وسياسة التكرار وإمكانيات Idempotency.
+  - تطوير `server/jobs/custody-settlement.ts`: تسوية عهد المناديب كوظيفة خلفية مع كتابة سجلات التدقيق في `activity_logs`.
+- **التحقق والاختبارات**:
+  - إنشاء `server/jobs/jobs.test.ts` واجتياز 6/6 اختبارات وحدة بنجاح.
+  - فحص TypeScript `npx tsc --noEmit` بنجاح كامل دون أخطاء (0 errors).
+  - نجاح البناء الإنتاجي `npm run build`.
+- **التوثيق**:
+  - إنشاء وثيقة المرحلة الثامنة: `docs/pre-api/phase8-jobs-refactor.md`.
+  - تحديث `todo.md` و `devloping_history.md` و `user_commends.md`.
+
+

@@ -1,9 +1,7 @@
 /**
- * وظيفة مزامنة التتبع الدوري (Tracking Sync Job)
- * Periodic Tracking Synchronisation — fetches external tracking data and persists updates.
- *
- * هذا الملف مُستخرج من server.ts لعزل منطق مزامنة الشحن عن بقية الخادم.
- * Extracted from server.ts to isolate shipping-sync logic.
+ * وظيفة مزامنة التتبع الدوري (Tracking Sync Job) — Phase 8
+ * Periodic Tracking Synchronisation — refactored into a structured background job
+ * with Preconditions, Idempotency, Retries, Audit Logging, and Failure Handling.
  */
 
 import {
@@ -15,9 +13,10 @@ import {
   query,
   where,
 } from '../current-db/client';
+import type { BackgroundJobDefinition, BackgroundJobContext, JobExecutionResult } from './types';
+import { runBackgroundJob } from './job-runner';
 
 // ── خريطة تحويل حالات التتبع إلى العربية ──────────────────────────
-// Status translation map — English tracking statuses to Arabic UI labels
 const STATUS_MAP_TO_AR: Record<string, string> = {
   InfoReceived:           'تم تسجيل الطلب',
   InTransit:              'جاري الشحن لليمن',
@@ -55,19 +54,16 @@ const STATUS_MAP_TO_AR: Record<string, string> = {
 
 /**
  * تحويل حالة التتبع الخارجية إلى عربية.
- * Normalises an external tracking status to an Arabic UI label.
  */
 export function normalizeTrackingStatus(status: string | undefined): string {
   if (!status) return 'تم تسجيل الطلب';
   if (STATUS_MAP_TO_AR[status]) return STATUS_MAP_TO_AR[status];
-  // فحص جزئي غير حساس لحالة الأحرف / Case-insensitive partial match
   for (const key of Object.keys(STATUS_MAP_TO_AR)) {
     if (status.toLowerCase().includes(key.toLowerCase())) return STATUS_MAP_TO_AR[key];
   }
   return status;
 }
 
-// ── نوع إعداد API التتبع ─────────────────────────────────────────
 export interface TrackingApiConfig {
   enabled: boolean;
   provider: 'aftership' | '17track' | 'trackingmore' | 'parcelsapp' | 'sandbox' | string;
@@ -91,11 +87,6 @@ export interface ExternalTrackingResult {
 
 /**
  * جلب بيانات التتبع من API خارجي.
- * Fetches tracking data from an external API provider.
- *
- * @param trackingNumber - رقم التتبع / Tracking number
- * @param apiConfig - إعداد API التتبع / Tracking API configuration
- * @returns نتيجة التتبع الخارجي أو null / External tracking result or null
  */
 export async function fetchExternalTracking(
   trackingNumber: string,
@@ -200,7 +191,6 @@ export async function fetchExternalTracking(
         let attempts = 0;
         const maxAttempts = 6;
 
-        // استطلاع حتى اكتمال التتبع / Poll until tracking is done
         while (!json.done && uuid && attempts < maxAttempts) {
           await new Promise(r => setTimeout(r, 1500));
           const pollRes = await fetch(`https://parcelsapp.com/api/v3/shipments/tracking?apiKey=${apiConfig.apiKey}&uuid=${uuid}`);
@@ -241,21 +231,44 @@ export async function fetchExternalTracking(
   return null;
 }
 
+// ── DTOs لمشغل مزامنة التتبع ─────────────────────────────────────
+export interface TrackingSyncInput {
+  targetStatuses?: string[];
+}
+
+export interface TrackingSyncOutput {
+  syncedOrdersCount: number;
+  updatedOrdersCount: number;
+}
+
+let dbInstance: any = null;
+
 /**
- * تزامن دوري للطلبات النشطة مع بيانات التتبع الخارجية.
- * Periodic sync of active orders with external tracking data.
- *
- * @param db - كائن قاعدة البيانات / Database client object
+ * تعريف وظيفة مزامنة التتبع الدوري بموجب معايير المرحلة الثامنة.
  */
-export async function syncActiveOrders(db: any): Promise<void> {
-  console.log('[TrackingSync] Starting periodic tracking synchronisation...');
+export const trackingSyncJob: BackgroundJobDefinition<TrackingSyncInput, TrackingSyncOutput> = {
+  name: 'tracking_sync',
 
-  try {
-    const configSnap = await getDoc(doc(db, 'settings', 'logistics_api'));
+  // 1. الشروط المسبقة / Preconditions
+  preconditions: async (_input, _context) => {
+    if (!dbInstance) {
+      return { valid: false, reason: 'Database client is not initialized' };
+    }
+    const configSnap = await getDoc(doc(dbInstance, 'settings', 'logistics_api'));
     const apiConfig = configSnap.exists() ? configSnap.data() as TrackingApiConfig : null;
-    if (!apiConfig?.enabled) return;
 
-    const activeStatuses = [
+    if (!apiConfig || !apiConfig.enabled) {
+      return { valid: false, reason: 'Logistics API is disabled in settings' };
+    }
+    return { valid: true };
+  },
+
+  // 2. الحد المعاملي والتنفيذ الفعلي / Transactional execution boundary
+  execute: async (input, _context) => {
+    const configSnap = await getDoc(doc(dbInstance, 'settings', 'logistics_api'));
+    const apiConfig = configSnap.data() as TrackingApiConfig;
+
+    const activeStatuses = input.targetStatuses || [
       'تم تسجيل الطلب',
       'جاري الشحن لليمن',
       'في التخليص الجمركي',
@@ -263,11 +276,18 @@ export async function syncActiveOrders(db: any): Promise<void> {
     ];
 
     const ordersSnap = await getDocs(
-      query(collection(db, 'orders'), where('orderStatus', 'in', activeStatuses)),
+      query(collection(dbInstance, 'orders'), where('orderStatus', 'in', activeStatuses)),
     );
-    if (ordersSnap.empty) return;
+
+    if (ordersSnap.empty) {
+      return { syncedOrdersCount: 0, updatedOrdersCount: 0 };
+    }
+
+    let syncedOrdersCount = 0;
+    let updatedOrdersCount = 0;
 
     for (const orderDoc of ordersSnap.docs) {
+      syncedOrdersCount++;
       const data = orderDoc.data();
       const trackingNumber = data.trackingNumber;
       if (!trackingNumber) continue;
@@ -279,6 +299,7 @@ export async function syncActiveOrders(db: any): Promise<void> {
         const statusChanged = normalizedStatus !== data.orderStatus;
 
         if (historyChanged || statusChanged) {
+          updatedOrdersCount++;
           const updatePayload: any = {
             history: result.history,
             orderStatus: normalizedStatus,
@@ -286,10 +307,9 @@ export async function syncActiveOrders(db: any): Promise<void> {
           };
           if (result.location) updatePayload.locationYemen = result.location;
 
-          await updateDoc(doc(db, 'orders', orderDoc.id), updatePayload);
+          await updateDoc(doc(dbInstance, 'orders', orderDoc.id), updatePayload);
 
-          // تحديث سجل التتبع العام / Update public tracking record
-          const publicRef = doc(db, 'public_tracking', trackingNumber.toUpperCase());
+          const publicRef = doc(dbInstance, 'public_tracking', trackingNumber.toUpperCase());
           const publicSnap = await getDoc(publicRef);
           if (publicSnap.exists()) {
             await updateDoc(publicRef, {
@@ -302,13 +322,42 @@ export async function syncActiveOrders(db: any): Promise<void> {
         }
       }
 
-      // تأخير بسيط لتجنب ضغط الطلبات / Small delay to avoid API flooding
-      await new Promise(r => setTimeout(r, 500));
+      await new Promise(r => setTimeout(r, 400));
     }
 
-    console.log('[TrackingSync] Synchronisation cycle completed.');
-  } catch (err: any) {
-    console.error('[TrackingSync] Background synchronisation failed:', err.message);
-    throw err;
-  }
+    return { syncedOrdersCount, updatedOrdersCount };
+  },
+
+  defaultOptions: {
+    audit: true,
+    retryPolicy: {
+      maxRetries: 2,
+      initialDelayMs: 1000,
+      backoffFactor: 2,
+    },
+  },
+};
+
+/**
+ * تشغيل مزامنة التتبع كـ Background Job آمن مع IdempotencyKey.
+ */
+export async function syncActiveOrders(
+  db: any,
+  targetStatuses?: string[],
+): Promise<JobExecutionResult<TrackingSyncOutput>> {
+  dbInstance = db;
+  const timeWindowKey = Math.floor(Date.now() / 60000); // مفتاح دقيقة واحدة
+  const idempotencyKey = `tracking_sync_${timeWindowKey}`;
+
+  const context: BackgroundJobContext = {
+    jobName: 'tracking_sync',
+    trigger: 'cron',
+    idempotencyKey,
+  };
+
+  return runBackgroundJob(
+    trackingSyncJob,
+    { targetStatuses },
+    context,
+  );
 }

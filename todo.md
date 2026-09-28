@@ -784,5 +784,17 @@
 - [x] فحص التجميع الكامل عبر TypeScript `npx tsc --noEmit` بنجاح (0 أخطاء).
 - [x] فحص واجتياز اختبارات الوحدة الخاصة بالخادم `server/app.test.ts` (4/4 ناجحة).
 - [x] إعداد وتوثيق تقرير المرحلة السابعة في `docs/pre-api/phase7-server-split.md`.
-- [ ] التجهيز للمرحلة التالية: المرحلة 8 — إصلاح خدمة Realtime والعمليات الخلفية.
+- [x] التجهيز للمرحلة التالية: المرحلة 8 — إصلاح خدمة Realtime والعمليات الخلفية.
+
+## [2026-09-28 20:55:00 +03:00] — استكمال وتنفيذ المرحلة الثامنة (إصلاح خدمة Realtime والعمليات الخلفية) وتجهيز المرحلة التاسعة — AI Model: Gemini 3.6 Flash (Medium)
+- [x] بناء إطار عمل الوظائف الخلفية الآمن (`server/jobs/types.ts` و `server/jobs/job-runner.ts`) يفرض العناصر الهيكلية الثمانية المعتمدة (Input, Trigger, Preconditions, Transaction boundary, Idempotency key, Retry policy, Audit event, Failure behavior).
+- [x] إعادة هيكلة وظيفة مطابقة أرصدة الحسابات (`server/jobs/account-reconciliation.ts`) وإلغاء التنفيذ المالي العشوائي في Realtime Listener واستبداله بـ Debounced Listener ومذكرة IdempotencyKey.
+- [x] إعادة هيكلة وظيفة مزامنة التتبع الدوري (`server/jobs/tracking-sync.ts`) لتخضع للشروط الثمانية ومنع تكرار التحديث المتزامن.
+- [x] تطوير وظيفة تسوية عهد المناديب (`server/jobs/custody-settlement.ts`) وكتابة سجلات التدقيق بها.
+- [x] إنشاء واستكمال 6 اختبارات وحدة لـ Phase 8 في `server/jobs/jobs.test.ts` واجتيازها بنجاح (6/6 ناجحة).
+- [x] فحص التجميع الكامل عبر TypeScript `npx tsc --noEmit` بنجاح (0 أخطاء).
+- [x] نجاح البناء الإنتاجي بالكامل `npm run build`.
+- [x] توثيق تقرير المرحلة الثامنة في `docs/pre-api/phase8-jobs-refactor.md`.
+- [ ] المرحلة التالية: المرحلة 9 — تنظيم الصفحات الكبيرة.
+
 
