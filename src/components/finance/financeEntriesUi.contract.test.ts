@@ -58,7 +58,7 @@ describe('عقد واجهة القيود الجديدة', () => {
 
   it('يعرض تحصيل الطلب بعملة الدفع المحفوظة ويعتمدها عند إنشاء سند القبض', () => {
     const modal = source('../orders/PaymentModal.tsx');
-    const orders = source('../../pages/Orders.tsx');
+    const orders = readFileSync(resolve(process.cwd(), 'src', 'features', 'orders', 'pages', 'OrdersPage.tsx'), 'utf8');
     expect(modal).toContain('selectedOrder?.paidCurrency || selectedOrder?.currency');
     expect(orders).toContain('selectedOrder.paidCurrency || selectedOrder.currency || selectedOrder.orderCurrency');
   });

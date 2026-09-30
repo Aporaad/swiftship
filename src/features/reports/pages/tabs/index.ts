@@ -1,0 +1,1 @@
+export { PrintDesignerPageTab } from './PrintDesignerPageTab';

@@ -1,0 +1,205 @@
+/**
+ * @file FinancialOverviewReport.tsx
+ * @description تقرير التحليل المالي والأرباح العام
+ * Financial overview report - P&L metrics, treasury balances, charts
+ */
+
+import React from 'react';
+import { TrendingUp, ArrowDownLeft, CheckCircle2 } from 'lucide-react';
+import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { format } from 'date-fns';
+import { REPORT_COLORS } from '../../types/reports.types';
+
+// ألوان الرسوم البيانية
+const COLORS = REPORT_COLORS;
+
+interface FinancialOverviewReportProps {
+  isAr: boolean;
+  reportMetrics: {
+    revenue: number;
+    costs: number;
+    profit: number;
+    packagingCosts: number;
+    operationalCosts: number;
+    shippingCosts: number;
+    salaryCosts: number;
+  };
+  treasuryBalances: {
+    yer: { in: number; out: number; balance: number };
+    usd: { in: number; out: number; balance: number };
+    sar: { in: number; out: number; balance: number };
+    combinedTotalYER: number;
+  };
+  pnlData: { name: string; value: number }[];
+  filteredData: { orders: any[] };
+}
+
+// ─── FinancialOverviewReport Component ────────────────────────────────────
+const FinancialOverviewReport: React.FC<FinancialOverviewReportProps> = ({
+  isAr,
+  reportMetrics,
+  treasuryBalances,
+  pnlData,
+  filteredData
+}) => {
+  return (
+                <div className="space-y-6">
+                  {/* KPI card decks */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="p-4 bg-gradient-to-br from-blue-950/20 to-slate-950 border border-blue-900/30 rounded-2xl relative">
+                      <span className="text-[10px] text-slate-500 font-black block uppercase mb-1">{isAr ? 'إجمالي الايرادات' : 'Gross Revenue'}</span>
+                      <span className="text-lg font-mono font-black text-blue-400">{reportMetrics.revenue.toLocaleString()} <span className="text-[9px] text-slate-500">YER</span></span>
+                      <div className="flex items-center gap-1.5 text-[9px] text-slate-400 mt-2">
+                        <TrendingUp className="w-3.5 h-3.5 text-blue-400" />
+                        <span>{isAr ? 'سجل الإيرادات المؤكدة' : 'Audit aggregate'}</span>
+                      </div>
+                    </div>
+                    <div className="p-4 bg-gradient-to-br from-rose-950/20 to-slate-950 border border-rose-900/30 rounded-2xl relative">
+                      <span className="text-[10px] text-slate-500 font-black block uppercase mb-1">{isAr ? 'إجمالي المصاريف والمستندات' : 'Expenditures'}</span>
+                      <span className="text-lg font-mono font-black text-rose-400">{reportMetrics.costs.toLocaleString()} <span className="text-[9px] text-slate-550">YER</span></span>
+                      <div className="flex items-center gap-1.5 text-[9px] text-slate-500 mt-2">
+                        <ArrowDownLeft className="w-3.5 h-3.5 text-rose-400" />
+                        <span>{isAr ? 'سندات صرف تشغيلية ورواتب' : 'OpEx aggregate'}</span>
+                      </div>
+                    </div>
+                    <div className="p-4 bg-gradient-to-br from-amber-950/10 to-slate-950 border border-amber-900/30 rounded-2xl relative">
+                      <span className="text-[10px] text-slate-500 font-black block uppercase mb-1">{isAr ? 'صافي أرباح الشركة' : 'Net Corporate Profits'}</span>
+                      <span className="text-lg font-mono font-black text-[#d4af37]">{reportMetrics.profit.toLocaleString()} <span className="text-[9px] text-slate-550">YER</span></span>
+                      <div className="flex items-center gap-1.5 text-[9px] text-emerald-400 mt-2">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>{isAr ? 'عائد السيولة الصافي' : 'Net liquidity'}</span>
+                      </div>
+                    </div>
+                    <div className="p-4 bg-[#121215] border border-slate-850 rounded-2xl">
+                      <span className="text-[10px] text-slate-500 font-black block uppercase mb-1">{isAr ? 'هامش الأمان الربحي' : 'Profit Margin %'}</span>
+                      <span className="text-lg font-mono font-black text-emerald-400">
+                        {reportMetrics.revenue > 0 ? ((reportMetrics.profit / reportMetrics.revenue) * 100).toFixed(1) : '0'}%
+                      </span>
+                      <div className="flex items-center gap-1.5 text-[9px] text-slate-500 mt-2">
+                        <span>{isAr ? 'الكفاءة الهامشية' : 'Corporate performance'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Currency Treasuries and Exchange conversion live status */}
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 pt-1">
+                    <div className="p-4 bg-slate-900/40 border border-slate-800/60 rounded-2xl flex flex-col justify-between">
+                      <div>
+                        <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block mb-1">{isAr ? 'صندوق الريال اليمني YER' : 'YER Cash Box'}</span>
+                        <span className="text-base font-mono font-black text-emerald-400">{(treasuryBalances.yer.balance || 0).toLocaleString()} <span className="text-[9px] text-slate-500">YER</span></span>
+                      </div>
+                      <div className="text-[9px] text-slate-500 font-medium mt-2 flex justify-between border-t border-slate-850 pt-1.5">
+                        <span>{isAr ? 'المقبوضات: ' : 'Inflow: '}{(treasuryBalances.yer.in || 0).toLocaleString()}</span>
+                        <span>{isAr ? 'المدفوعات: ' : 'Outflow: '}{(treasuryBalances.yer.out || 0).toLocaleString()}</span>
+                      </div>
+                    </div>
+                    <div className="p-4 bg-slate-900/40 border border-slate-800/60 rounded-2xl flex flex-col justify-between">
+                      <div>
+                        <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block mb-1">{isAr ? 'صندوق الدولار الأمريكي USD' : 'USD Cash Box'}</span>
+                        <span className="text-base font-mono font-black text-blue-400">{(treasuryBalances.usd.balance || 0).toLocaleString()} <span className="text-[9px] text-slate-550">USD</span></span>
+                      </div>
+                      <div className="text-[9px] text-slate-500 font-medium mt-2 flex justify-between border-t border-slate-850 pt-1.5">
+                        <span>{isAr ? 'المقبوضات: ' : 'Inflow: '}{(treasuryBalances.usd.in || 0).toLocaleString()}</span>
+                        <span>{isAr ? 'المدفوعات: ' : 'Outflow: '}{(treasuryBalances.usd.out || 0).toLocaleString()}</span>
+                      </div>
+                    </div>
+                    <div className="p-4 bg-slate-900/40 border border-slate-800/60 rounded-2xl flex flex-col justify-between">
+                      <div>
+                        <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider block mb-1">{isAr ? 'صندوق الريال السعودي SAR' : 'SAR Cash Box'}</span>
+                        <span className="text-base font-mono font-black text-[#d4af37]">{(treasuryBalances.sar.balance || 0).toLocaleString()} <span className="text-[9px] text-slate-550">SAR</span></span>
+                      </div>
+                      <div className="text-[9px] text-slate-500 font-medium mt-2 flex justify-between border-t border-slate-850 pt-1.5">
+                        <span>{isAr ? 'المقبوضات: ' : 'Inflow: '}{(treasuryBalances.sar.in || 0).toLocaleString()}</span>
+                        <span>{isAr ? 'المدفوعات: ' : 'Outflow: '}{(treasuryBalances.sar.out || 0).toLocaleString()}</span>
+                      </div>
+                    </div>
+                    <div className="p-4 bg-[#d4af37]/5 border border-[#d4af37]/20 rounded-2xl flex flex-col justify-between">
+                      <div>
+                        <span className="text-[10px] text-amber-500 font-extrabold uppercase tracking-wider block mb-1">{isAr ? 'السيولة الموحدة بالريال اليمني' : 'Combined Vault Equiv.'}</span>
+                        <span className="text-base font-mono font-black text-[#d4af37]">{(treasuryBalances.combinedTotalYER || 0).toLocaleString()} <span className="text-[9px]">YER</span></span>
+                      </div>
+                      <p className="text-[9px] text-slate-400 font-medium mt-2 leading-snug border-t border-slate-850/50 pt-1.5">
+                        {isAr ? 'إجمالي الأصول النقدية الموحدة بالأسعار المحددة في النظام.' : 'Consolidated hard-cash balances across all currencies.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Profit detail and sub-breakdown items */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                    <div className="p-5 bg-black/25 border border-slate-850 rounded-2xl space-y-3">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-slate-500 font-bold">{isAr ? 'رواتب الموظفين:' : 'Staff salaries:'}</span>
+                        <span className="font-mono font-black text-rose-400">-{reportMetrics.salaryCosts.toLocaleString()} YER</span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-slate-500 font-bold">{isAr ? 'مصاريف التشغيل والمحروقات:' : 'OpEx & Fuels:'}</span>
+                        <span className="font-mono font-black text-rose-400">-{reportMetrics.operationalCosts.toLocaleString()} YER</span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-slate-500 font-bold">{isAr ? 'تكاليف شركات الشحن تجميع:' : 'Sourcing shipping fees:'}</span>
+                        <span className="font-mono font-black text-rose-400">-{reportMetrics.shippingCosts.toLocaleString()} YER</span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs pt-1.5 border-t border-slate-850">
+                        <span className="text-slate-300 font-black">{isAr ? 'مجموع ميزانية النفقات:' : 'Opex Budget Sum:'}</span>
+                        <span className="font-mono font-black text-rose-500">-{reportMetrics.costs.toLocaleString()} YER</span>
+                      </div>
+                    </div>
+
+                    {/* Chart visualizers */}
+                    <div className="md:col-span-2 h-[220px] bg-black/25 border border-slate-850 rounded-2xl p-4">
+                      <span className="text-[10px] text-slate-500 font-black uppercase tracking-wider block mb-3">{isAr ? 'نبض التدفق المالي للسيولة والربحية' : 'Profit Stream Dynamics'}</span>
+                      <ResponsiveContainer width="100%" height="90%">
+                        <PieChart>
+                          <Pie
+                            data={pnlData}
+                            cx="50%"
+                            cy="45%"
+                            innerRadius={50}
+                            outerRadius={70}
+                            paddingAngle={5}
+                            dataKey="value"
+                          >
+                            {pnlData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            contentStyle={{ backgroundColor: '#09090b', border: '1px solid #d4af3720', borderRadius: '12px', fontSize: '10px' }}
+                          />
+                          <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} iconType="circle" />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* Financial overview ledger table */}
+                  <div className="pt-4">
+                    <span className="text-xs font-black text-white block mb-3">{isAr ? 'آخر فواتير التوريد والصادر المحاسبي' : 'Latest Financial Inflow Logs'}</span>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs text-start border-collapse">
+                        <thead>
+                          <tr className="text-slate-500 border-b border-slate-850 font-bold">
+                            <th className="py-2.5 px-3">{isAr ? 'الرقم المرجعي' : 'Ref Key'}</th>
+                            <th className="py-2.5 px-3">{isAr ? 'التاريخ' : 'Date'}</th>
+                            <th className="py-2.5 px-3">{isAr ? 'البيان' : 'Statement'}</th>
+                            <th className="py-2.5 px-3 text-right">{isAr ? 'القيمة' : 'Value'}</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-850/40">
+                          {filteredData.orders.slice(0, 5).map(o => (
+                            <tr key={o.id} className="hover:bg-slate-900/10">
+                              <td className="py-2.5 px-3 font-mono font-black text-[#d4af37]">{o.orderNumber}</td>
+                              <td className="py-2.5 px-3 text-slate-500">{format(new Date(o.createdAt || Date.now()), 'yyyy-MM-dd')}</td>
+                              <td className="py-2.5 px-3 text-slate-300 truncate max-w-[200px]">{o.customerName} - {isAr ? 'فاتورة شحن وتوريد بضاعة' : 'Cargo Invoice'}</td>
+                              <td className="py-2.5 px-3 text-right font-mono font-extrabold text-emerald-400">+{o.totalPrice?.toLocaleString()} YER</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+  );
+};
+
+export default FinancialOverviewReport;
