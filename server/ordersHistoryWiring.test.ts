@@ -3,7 +3,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const projectRoot = path.resolve(import.meta.dirname, '..');
-const ordersPage = readFileSync(path.join(projectRoot, 'src/pages/Orders.tsx'), 'utf8');
+const ordersPage = readFileSync(path.join(projectRoot, 'src/features/orders/pages/OrdersPage.tsx'), 'utf8');
 const historyModal = readFileSync(path.join(projectRoot, 'src/components/orders/OrderHistoryModal.tsx'), 'utf8');
 
 describe('orders history UI wiring', () => {

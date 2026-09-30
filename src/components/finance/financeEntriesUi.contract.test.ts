@@ -6,7 +6,7 @@ const source = (name: string) => readFileSync(resolve(process.cwd(), 'src', 'com
 
 describe('عقد واجهة القيود الجديدة', () => {
   it('لا يطلب عمود accounts.entity_name غير الموجود ويستخدم أسماء الحسابات الصريحة', () => {
-    const page = readFileSync(resolve(process.cwd(), 'src', 'pages', 'FinanceEntries.tsx'), 'utf8');
+    const page = readFileSync(resolve(process.cwd(), 'src', 'features', 'financeEntries', 'pages', 'FinanceEntriesPage.tsx'), 'utf8');
     expect(page).toContain("acc_name_ar || item.acc_name_en || item.id");
     expect(page).not.toContain('item.entity_name');
   });

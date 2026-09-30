@@ -15,7 +15,7 @@ describe('database write failure guard', () => {
   });
 
   it('places the primary order write before its products, shipments, history, and notifications', () => {
-    const orders = projectFile('src/pages/Orders.tsx');
+    const orders = projectFile('src/features/orders/pages/OrdersPage.tsx');
     const primaryWrite = orders.indexOf("await addDoc(payload.orderNumber, collection(db, 'orders'), payload);");
     expect(primaryWrite).toBeGreaterThan(-1);
     expect(orders.indexOf('حفظ المنتجات الرئيسية في products')).toBeGreaterThan(primaryWrite);

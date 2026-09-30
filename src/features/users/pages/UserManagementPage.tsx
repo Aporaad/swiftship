@@ -1,13 +1,3 @@
-
-import { UserListTab } from '../components/UserListTab';
-import { UserRolesTab } from '../components/UserRolesTab';
-import { UserSessionsTab } from '../components/UserSessionsTab';
-import { UserActivityLogsTab } from '../components/UserActivityLogsTab';
-import { AddUserModal } from '../components/AddUserModal';
-import { EditUserModal } from '../components/EditUserModal';
-import { ChangePasswordModal } from '../components/ChangePasswordModal';
-import { RoleFormModal } from '../components/RoleFormModal';
-
 import React, { useState, useEffect } from 'react';
 import {
   collection, onSnapshot, doc, updateDoc, setDoc, deleteDoc,
@@ -36,7 +26,252 @@ import { financialAccountService } from '../../../services/financialAccountServi
 import { DEFAULT_ROLE_PERMISSIONS } from '../../../lib/permissions';
 import { useAccountBalances } from '../../../hooks/useAccountBalances';
 
-import { PERMISSION_GROUPS, ALL_PERMISSIONS } from '../constants/permissionGroups';
+// ══════════════════════════════════════════════════════════════
+// PERMISSIONS — FULL SYSTEM COVERAGE
+// ══════════════════════════════════════════════════════════════
+const PERMISSION_GROUPS = (isAr: boolean) => [
+  {
+    group: isAr ? '🏠 عام' : '🏠 General',
+    perms: [
+      { id: 'view_dashboard', label: isAr ? 'عرض لوحة التحكم والإحصائيات' : 'View Dashboard & Statistics' },
+      { id: 'view_statistics', label: isAr ? 'عرض الإحصائيات المالية التفصيلية' : 'View Detailed Financial Statistics' },
+    ]
+  },
+  {
+    group: isAr ? '📦 الطلبات والتتبع' : '📦 Orders & Tracking',
+    perms: [
+      { id: 'view_orders', label: isAr ? 'عرض قائمة الطلبات' : 'View Orders List' },
+      { id: 'track_order', label: isAr ? 'تتبع الطلبات' : 'Access Live Order Tracking' },
+      { id: 'add_orders', label: isAr ? 'إضافة الطلبات' : 'Add Orders' },
+      { id: 'edit_orders', label: isAr ? 'تعديل الطلبات' : 'Edit Orders' },
+      { id: 'update_order_status', label: isAr ? 'تحديث حالة الطلب فقط' : 'Update Order Status Only' },
+      { id: 'delete_orders', label: isAr ? 'حذف الطلبات' : 'Delete Orders' },
+      { id: 'edit_delivered_orders', label: isAr ? 'تعديل الطلبات بعد التسليم' : 'Edit Orders After Delivery' },
+      { id: 'print_orders', label: isAr ? 'طباعة وتصدير الفواتير' : 'Print & Export Invoices' },
+      { id: 'export_orders', label: isAr ? 'تصدير بيانات الطلبات' : 'Export Orders Data' },
+      { id: 'edit_order_defaults_creation', label: isAr ? 'تعديل الأسعار الافتراضية عند إنشاء طلب' : 'Edit Default Prices When Creating Order' },
+      { id: 'unpost_posted_orders', label: isAr ? 'الغاء ترحيل الطلبات المرحله' : 'Unpost Posted Orders' },
+    ]
+
+  },
+  {
+    group: isAr ? '⚙️ مراحل وحالات الطلب' : '⚙️ Order Status Stages',
+    perms: [
+      { id: 'view_order_statuses', label: isAr ? 'استعراض مراحل الطلب' : 'View Order Status Stages' },
+      { id: 'add_order_statuses', label: isAr ? 'إضافة مرحلة طلب جديدة' : 'Add New Order Status Stage' },
+      { id: 'edit_order_statuses', label: isAr ? 'تعديل مراحل الطلب' : 'Edit Order Status Stages' },
+      { id: 'delete_order_statuses', label: isAr ? 'حذف مراحل الطلب' : 'Delete Order Status Stage' },
+    ]
+  },
+  {
+    group: isAr ? '⚡ القيود التلقائية' : '⚡ Auto Entry Rules',
+    perms: [
+      { id: 'view_auto_entries', label: isAr ? 'عرض القيود التلقائية' : 'View Auto Entry Rules' },
+      { id: 'add_auto_entries', label: isAr ? 'إضافة قيد تلقائي' : 'Add Auto Entry Rule' },
+      { id: 'edit_auto_entries', label: isAr ? 'تعديل القيود التلقائية' : 'Edit Auto Entry Rules' },
+      { id: 'delete_auto_entries', label: isAr ? 'حذف قيد تلقائي' : 'Delete Auto Entry Rule' },
+    ]
+  },
+  {
+    group: isAr ? '👥 العملاء' : '👥 Customers',
+    perms: [
+      { id: 'view_customers', label: isAr ? 'عرض قائمة العملاء' : 'View Customers List' },
+      { id: 'add_customers', label: isAr ? 'إضافة العملاء' : 'Add Customers' },
+      { id: 'edit_customers', label: isAr ? 'تعديل العملاء' : 'Edit Customers' },
+      { id: 'delete_customers', label: isAr ? 'حذف العملاء' : 'Delete Customers' },
+    ]
+  },
+  {
+    group: isAr ? '🚚 المناديب' : '🚚 Couriers',
+    perms: [
+      { id: 'view_couriers', label: isAr ? 'عرض المناديب' : 'View Couriers' },
+      { id: 'add_couriers', label: isAr ? 'إضافة المناديب' : 'Add Couriers' },
+      { id: 'edit_couriers', label: isAr ? 'تعديل المناديب' : 'Edit Couriers' },
+      { id: 'delete_couriers', label: isAr ? 'حذف المناديب' : 'Delete Couriers' },
+    ]
+  },
+  {
+    group: isAr ? '💰 المالية العامة والحسابات' : '💰 General Finance & Accounts',
+    perms: [
+      { id: 'view_finance', label: isAr ? 'عرض البيانات المالية العامة' : 'View General Financial Data' },
+      { id: 'add_finance', label: isAr ? 'إضافة المدفوعات والعمليات المالية' : 'Add Payments & Finance' },
+      { id: 'edit_finance', label: isAr ? 'تعديل المدفوعات والعمليات المالية' : 'Edit Payments & Finance' },
+      { id: 'view_expenses', label: isAr ? 'رؤية المصروفات والتكاليف' : 'View Expenses & Costs' },
+      { id: 'add_expenses', label: isAr ? 'إضافة المصروفات' : 'Add Expenses' },
+      { id: 'edit_expenses', label: isAr ? 'تعديل المصروفات وتسوية العهد' : 'Edit Expenses & Reconcile' },
+      { id: 'delete_expenses', label: isAr ? 'حذف المصروفات' : 'Delete Expenses' },
+      { id: 'edit_exchange_rates', label: isAr ? 'تعديل أسعار الصرف' : 'Edit Exchange Rates' },
+      { id: 'view_financial_accounts', label: isAr ? 'عرض أرصدة وكشوفات الحسابات المالية' : 'View Financial Account Balances & Statements' },
+      { id: 'manage_financial_accounts', label: isAr ? 'إدارة وتعديل أرصدة الحسابات المالية' : 'Manage Financial Account Balances & Adjustments' },
+      { id: 'view_account_movements', label: isAr ? 'استعراض حركة الحسابات' : 'View Account Movements' },
+      { id: 'print_account_movements', label: isAr ? 'طباعة حركة الحسابات' : 'Print Account Movements' },
+      { id: 'export_account_movements', label: isAr ? 'تصدير حركة الحسابات (CSV/XLS)' : 'Export Account Movements' },
+      { id: 'view_custody_advances', label: isAr ? 'عرض سجل العهد والسلف' : 'View Custody Advances' },
+      { id: 'create_custody_advances', label: isAr ? 'إنشاء عهدة/سلفة جديدة' : 'Create Custody Advance' },
+      { id: 'settle_custody_advances', label: isAr ? 'تسوية العهد والسلف' : 'Settle Custody Advances' },
+    ]
+  },
+  {
+    group: isAr ? '📖 القيود العامة والمركبة والمؤقتة' : '📖 General, Compound & Temp Entries',
+    perms: [
+      // القيود العامة
+      { id: 'view_general_entries', label: isAr ? 'استعراض القيود العامة' : 'View General Entries' },
+      { id: 'create_general_entries', label: isAr ? 'إنشاء قيد عام جديد' : 'Create General Entry' },
+      { id: 'edit_general_entries', label: isAr ? 'تعديل مسودات القيود العامة' : 'Edit General Entry Drafts' },
+      { id: 'delete_general_entries', label: isAr ? 'حذف مسودات القيود العامة' : 'Delete General Entry Drafts' },
+      { id: 'post_general_entries', label: isAr ? 'ترحيل واعتماد القيود العامة' : 'Post General Entries' },
+      { id: 'print_general_entries', label: isAr ? 'طباعة القيود العامة' : 'Print General Entries' },
+      { id: 'export_general_entries', label: isAr ? 'تصدير القيود العامة (CSV/XLS)' : 'Export General Entries' },
+      { id: 'edit_posted_general_entries', label: isAr ? 'تعديل القيود العامة المرحّلة (صلاحية خاصة)' : 'Edit Posted General Entries' },
+      { id: 'delete_posted_general_entries', label: isAr ? 'حذف القيود العامة المرحّلة (صلاحية خاصة)' : 'Delete Posted General Entries' },
+
+      // القيود المركبة
+      { id: 'view_compound_entries', label: isAr ? 'استعراض القيود المركبة' : 'View Compound Entries' },
+      { id: 'create_compound_entries', label: isAr ? 'إنشاء قيد مركب جديد' : 'Create Compound Entry' },
+      { id: 'edit_compound_entries', label: isAr ? 'تعديل مسودات القيود المركبة' : 'Edit Compound Entry Drafts' },
+      { id: 'delete_compound_entries', label: isAr ? 'حذف مسودات القيود المركبة' : 'Delete Compound Entry Drafts' },
+      { id: 'post_compound_entries', label: isAr ? 'ترحيل واعتماد القيود المركبة' : 'Post Compound Entries' },
+      { id: 'print_compound_entries', label: isAr ? 'طباعة القيود المركبة' : 'Print Compound Entries' },
+      { id: 'export_compound_entries', label: isAr ? 'تصدير القيود المركبة (CSV/XLS)' : 'Export Compound Entries' },
+      { id: 'edit_posted_compound_entries', label: isAr ? 'تعديل القيود المركبة المرحّلة (صلاحية خاصة)' : 'Edit Posted Compound Entries' },
+      { id: 'delete_posted_compound_entries', label: isAr ? 'حذف القيود المركبة المرحّلة (صلاحية خاصة)' : 'Delete Posted Compound Entries' },
+
+      // القيود المؤقتة
+      { id: 'view_temporary_entries', label: isAr ? 'استعراض القيود المؤقتة' : 'View Temporary Entries' },
+      { id: 'create_temporary_entries', label: isAr ? 'إنشاء قيد مؤقت جديد' : 'Create Temporary Entry' },
+      { id: 'edit_temporary_entries', label: isAr ? 'تعديل القيود المؤقتة' : 'Edit Temporary Entries' },
+      { id: 'delete_temporary_entries', label: isAr ? 'حذف القيود المؤقتة' : 'Delete Temporary Entries' },
+      { id: 'post_temporary_entries', label: isAr ? 'ترحيل واعتماد القيود المؤقتة' : 'Post Temporary Entries' },
+      { id: 'print_temporary_entries', label: isAr ? 'طباعة القيود المؤقتة' : 'Print Temporary Entries' },
+      { id: 'export_temporary_entries', label: isAr ? 'تصدير القيود المؤقتة (CSV/XLS)' : 'Export Temporary Entries' },
+      { id: 'edit_posted_temporary_entries', label: isAr ? 'تعديل القيود المؤقتة المرحّلة (صلاحية خاصة)' : 'Edit Posted Temporary Entries' },
+      { id: 'delete_posted_temporary_entries', label: isAr ? 'حذف القيود المؤقتة المرحّلة (صلاحية خاصة)' : 'Delete Posted Temporary Entries' },
+
+      // عمليات حساسة
+      { id: 'reverse_financial_entries', label: isAr ? 'إنشاء قيود عكسية' : 'Create Reversing Entries' },
+      { id: 'void_financial_entries', label: isAr ? 'إبطال القيود المرحّلة' : 'Void Posted Financial Entries' },
+    ]
+  },
+  {
+    group: isAr ? '🧾 سندات القبض والصرف' : '🧾 Receipt & Payment Vouchers',
+    perms: [
+      // سندات القبض
+      { id: 'view_receipt_vouchers', label: isAr ? 'استعراض سندات القبض' : 'View Receipt Vouchers' },
+      { id: 'create_receipt_vouchers', label: isAr ? 'إنشاء سند قبض جديد (نقدي/بنكي/متعدد)' : 'Create Receipt Voucher' },
+      { id: 'edit_receipt_vouchers', label: isAr ? 'تعديل مسودات سندات القبض' : 'Edit Receipt Voucher Drafts' },
+      { id: 'delete_receipt_vouchers', label: isAr ? 'حذف مسودات سندات القبض' : 'Delete Receipt Voucher Drafts' },
+      { id: 'post_receipt_vouchers', label: isAr ? 'ترحيل واعتماد سندات القبض' : 'Post Receipt Vouchers' },
+      { id: 'print_receipt_vouchers', label: isAr ? 'طباعة سندات القبض' : 'Print Receipt Vouchers' },
+      { id: 'export_receipt_vouchers', label: isAr ? 'تصدير سندات القبض (CSV/XLS)' : 'Export Receipt Vouchers' },
+      { id: 'edit_posted_receipt_vouchers', label: isAr ? 'تعديل سندات القبض المرحّلة (صلاحية خاصة)' : 'Edit Posted Receipt Vouchers' },
+      { id: 'delete_posted_receipt_vouchers', label: isAr ? 'حذف سندات القبض المرحّلة (صلاحية خاصة)' : 'Delete Posted Receipt Vouchers' },
+
+      // سندات الصرف
+      { id: 'view_payment_vouchers', label: isAr ? 'استعراض سندات الصرف' : 'View Payment Vouchers' },
+      { id: 'create_payment_vouchers', label: isAr ? 'إنشاء سند صرف جديد (نقدي/بنكي/متعدد)' : 'Create Payment Voucher' },
+      { id: 'edit_payment_vouchers', label: isAr ? 'تعديل مسودات سندات الصرف' : 'Edit Payment Voucher Drafts' },
+      { id: 'delete_payment_vouchers', label: isAr ? 'حذف مسودات سندات الصرف' : 'Delete Payment Voucher Drafts' },
+      { id: 'post_payment_vouchers', label: isAr ? 'ترحيل واعتماد سندات الصرف' : 'Post Payment Vouchers' },
+      { id: 'print_payment_vouchers', label: isAr ? 'طباعة سندات الصرف' : 'Print Payment Vouchers' },
+      { id: 'export_payment_vouchers', label: isAr ? 'تصدير سندات الصرف (CSV/XLS)' : 'Export Payment Vouchers' },
+      { id: 'edit_posted_payment_vouchers', label: isAr ? 'تعديل سندات الصرف المرحّلة (صلاحية خاصة)' : 'Edit Posted Payment Vouchers' },
+      { id: 'delete_posted_payment_vouchers', label: isAr ? 'حذف سندات الصرف المرحّلة (صلاحية خاصة)' : 'Delete Posted Payment Vouchers' },
+    ]
+  },
+  {
+    group: isAr ? '⚙️ إعدادات وأنواع القيود' : '⚙️ Entry Settings & Types',
+    perms: [
+      { id: 'view_entry_settings', label: isAr ? 'استعراض فئات وأنواع وقواعد القيود' : 'View Entry Settings & Types' },
+      { id: 'create_entry_settings', label: isAr ? 'إنشاء فئة أو نوع قيد جديد' : 'Create Entry Settings & Types' },
+      { id: 'edit_entry_settings', label: isAr ? 'تعديل فئات وأنواع وقواعد القيود' : 'Edit Entry Settings & Types' },
+      { id: 'delete_entry_settings', label: isAr ? 'حذف فئة أو نوع قيد' : 'Delete Entry Settings & Types' },
+    ]
+  },
+  {
+    group: isAr ? '📊 التقارير' : '📊 Reports',
+    perms: [
+      { id: 'view_reports', label: isAr ? 'عرض التقارير المالية' : 'View Financial Reports' },
+    ]
+  },
+  {
+    group: isAr ? '\U0001f5fa\ufe0f مصادر الشراء والتوريد' : '\U0001f5fa\ufe0f Purchase & Supply Sources',
+    perms: [
+      { id: 'view_sources', label: isAr ? 'عرض مصادر الشراء (تطبيقات ومصانع)' : 'View Purchase Sources (Apps & Factories)' },
+      { id: 'add_sources', label: isAr ? 'إضافة مصدر شراء جديد' : 'Add New Purchase Source' },
+      { id: 'edit_sources', label: isAr ? 'تعديل بيانات مصدر الشراء' : 'Edit Purchase Source' },
+      { id: 'delete_sources', label: isAr ? 'حذف مصدر الشراء' : 'Delete Purchase Source' },
+    ]
+  },
+  {
+    group: isAr ? '\U0001f69b شركات الشحن والنقل' : '\U0001f69b Shipping Companies & Carriers',
+    perms: [
+      { id: 'view_shipping_companies', label: isAr ? 'عرض قائمة شركات الشحن والناقلين' : 'View Shipping Companies & Carriers' },
+      { id: 'add_shipping_companies', label: isAr ? 'إضافة شركة شحن جديدة' : 'Add New Shipping Company' },
+      { id: 'edit_shipping_companies', label: isAr ? 'تعديل بيانات شركة الشحن' : 'Edit Shipping Company' },
+      { id: 'delete_shipping_companies', label: isAr ? 'حذف شركة شحن من السجل' : 'Delete Shipping Company' },
+    ]
+  },
+  {
+    group: isAr ? '🔔 الإشعارات' : '🔔 Notifications',
+    perms: [
+      { id: 'view_notifications', label: isAr ? 'عرض صفحة الإشعارات' : 'View Notifications' },
+      { id: 'send_notifications', label: isAr ? 'إرسال إشعارات مخصصة وتجريبية' : 'Send Custom Notifications' },
+      { id: 'manage_notifications', label: isAr ? 'إدارة وحذف الإشعارات' : 'Manage & Delete Notifications' },
+      { id: 'view_edit_notification_settings', label: isAr ? 'عرض وتعديل إعدادات الإشعارات (قوالب WhatsApp)' : 'View & Edit Notification Settings (WhatsApp Templates)' },
+      { id: 'notify_orders', label: isAr ? 'استقبال إشعارات الطلبات' : 'Receive Order Notifications' },
+      { id: 'notify_finance', label: isAr ? 'استقبال إشعارات المالية' : 'Receive Finance Notifications' },
+      { id: 'notify_system', label: isAr ? 'استقبال إشعارات النظام والأمان' : 'Receive System & Security Notifications' },
+    ]
+  },
+  {
+    group: isAr ? '\U0001f9d1\u200d\U0001f4bc سجل الموظفين' : '\U0001f9d1\u200d\U0001f4bc Employees Ledger',
+    perms: [
+      { id: 'view_employees', label: isAr ? 'عرض سجل الموظفين والرواتب' : 'View Employees & Salaries' },
+      { id: 'add_employees', label: isAr ? 'إضافة موظف جديد وإنشاء حسابه' : 'Enroll New Employee & Ledger' },
+      { id: 'edit_employees', label: isAr ? 'تعديل بيانات الموظف والراتب' : 'Edit Employee Details & Salary' },
+      { id: 'delete_employees', label: isAr ? 'حذف الموظف وحسابه المالي' : 'Delete Employee & Financial Account' },
+    ]
+  },
+  {
+    group: isAr ? '\U0001f464 مستخدمو النظام' : '\U0001f464 System Users (Dashboard Accounts)',
+    perms: [
+      { id: 'view_users', label: isAr ? 'عرض قائمة مستخدمي لوحة التحكم' : 'View Dashboard User Accounts' },
+      { id: 'add_users', label: isAr ? 'إنشاء حساب مستخدم جديد' : 'Create New Dashboard User' },
+      { id: 'edit_users', label: isAr ? 'تعديل دور ومعلومات المستخدم' : 'Edit User Role & Info' },
+      { id: 'delete_users', label: isAr ? 'حذف حساب مستخدم من النظام' : 'Delete Dashboard User Account' },
+      { id: 'reset_passwords', label: isAr ? 'إعادة تعيين كلمة مرور المستخدم' : 'Reset User Password' },
+      { id: 'disable_accounts', label: isAr ? 'تعطيل أو تفعيل حساب مستخدم' : 'Disable & Enable User Account' },
+      { id: 'terminate_sessions', label: isAr ? 'إنهاء جلسة مستخدم إجباراً' : 'Force Terminate User Session' },
+      { id: 'view_activity_log', label: isAr ? 'عرض سجل النشاط والمراجعة' : 'View Full Activity & Audit Log' },
+    ]
+  },
+  {
+    group: isAr ? '\U0001f6e1\ufe0f الأدوار والصلاحيات' : '\U0001f6e1\ufe0f Roles & Permissions',
+    perms: [
+      { id: 'view_roles', label: isAr ? 'عرض الأدوار والصلاحيات' : 'View Roles & Permissions' },
+      { id: 'add_roles', label: isAr ? 'إنشاء أدوار جديدة' : 'Create New Roles' },
+      { id: 'edit_roles', label: isAr ? 'تعديل الأدوار والصلاحيات' : 'Edit Roles & Permissions' },
+      { id: 'delete_roles', label: isAr ? 'حذف الأدوار' : 'Delete Roles' },
+    ]
+  },
+  {
+    group: isAr ? '⚙️ الإعدادات' : '⚙️ Settings',
+    perms: [
+      { id: 'settings', label: isAr ? 'الوصول لإعدادات النظام' : 'Access System Settings' },
+      { id: 'edit_interface_settings', label: isAr ? 'إدارة التنسيق والواجهات واللغة' : 'Configure Themes & Locale' },
+      { id: 'edit_general_settings', label: isAr ? 'تعديل الإعدادات العامة للنظام' : 'Edit General Settings' },
+      { id: 'edit_company_info', label: isAr ? 'تعديل معلومات الشركة' : 'Edit Company Information' },
+      { id: 'view_order_defaults', label: isAr ? 'عرض الإعدادات الافتراضية للطلبات' : 'View Default Order Settings' },
+      { id: 'edit_order_defaults', label: isAr ? 'تعديل الإعدادات الافتراضية للطلبات' : 'Edit Default Order Settings' },
+      { id: 'manage_whatsapp', label: isAr ? 'إعدادات واتساب والتنبيهات (قديم)' : 'WhatsApp & Alert Settings (Legacy)' },
+      { id: 'manage_backup', label: isAr ? 'إدارة النسخ الاحتياطية' : 'Manage Backups' },
+    ]
+  },
+];
+
+// Flat permissions list for checking
+const ALL_PERMISSIONS = (isAr: boolean) =>
+  PERMISSION_GROUPS(isAr).flatMap(g => g.perms);
 
 const ROOT_EMAILS = ['alsrhyarslan5@gmail.com', 'arslan.alshamari@gmail.com', 'engaporaad1@gmail.com', 'admin@swiftship.system', 'apo.1.read@gmail.com'];
 
@@ -753,10 +988,9 @@ export default function UserManagementPage() {
 
   const isUserOnline = (user: any) => !user.disabled && user.lastSeen && Date.now() - user.lastSeen < 5 * 60 * 1000;
 
-  const getTimeSince = (ts: any) => {
+  const getTimeSince = (ts: number) => {
     if (!ts) return t('غير معروف', 'Unknown');
-    const numTs = typeof ts === 'number' ? ts : (typeof ts === 'string' ? (Date.parse(ts) || Number(ts)) : Date.now());
-    const diff = Date.now() - numTs;
+    const diff = Date.now() - ts;
     const mins = Math.floor(diff / 60000);
     const hours = Math.floor(mins / 60);
     const days = Math.floor(hours / 24);
@@ -933,154 +1167,984 @@ export default function UserManagementPage() {
       {/* ══════════════════════════════════════════════════ */}
       {/* TAB 1: USERS                                      */}
       {/* ══════════════════════════════════════════════════ */}
-      {/* DELEGATED MODULAR TABS */}
       {activeTab === 'users' && (
-        <UserListTab
-          isAr={isAr}
-          t={t}
-          filteredUsers={filteredUsers}
-          searchTerm={search}
-          setSearchTerm={setSearch}
-          filterRole={roleFilter}
-          setFilterRole={setRoleFilter}
-          filterStatus={statusFilter}
-          setFilterStatus={setStatusFilter}
-          roles={roles}
-          role={role}
-          hasPermission={hasPermission}
-          ROOT_EMAILS={ROOT_EMAILS}
-          onlineUsersCount={activeSessions.length}
-          couriersList={couriersList}
-          employeesList={employeesList}
-          getRoleBadgeStyle={getRoleBadgeStyle}
-          getTempBanRemaining={getTempBanRemaining}
-          getTimeSince={getTimeSince}
-          isUserOnline={isUserOnline}
-          handleToggleStatus={handleToggleStatus}
-          handleOpenEdit={handleOpenEdit}
-          handleResetPassword={handleResetPassword}
-          setSessionTargetUser={setSessionTargetUser}
-          setIsSessionModalOpen={setIsSessionModalOpen}
-          handleDeleteUser={(id: string, name: string) => handleDeleteUser(id, name)}
-          handleOpenAdd={() => setIsAddModalOpen(true)}
-        />
+        <div className="bg-[#121215] border border-slate-800/50 rounded-3xl overflow-hidden shadow-2xl">
+          <div className="p-4 border-b border-slate-800/50 bg-black/30 flex flex-wrap gap-3">
+            <div className="relative flex-1 min-w-[180px]">
+              <Search className={`absolute ${isAr ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4`} />
+              <input type="text" placeholder={t('بحث بالاسم أو البريد أو المعرف...', 'Search by name, email or username...')} value={search} onChange={e => setSearch(e.target.value)}
+                className={`w-full ${isAr ? 'pr-9 pl-4' : 'pl-9 pr-4'} py-2.5 bg-black/50 border border-slate-800 rounded-xl focus:border-[#d4af37]/60 outline-none text-xs text-white placeholder:text-slate-600 font-bold`} />
+            </div>
+            <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)} className="bg-black/50 border border-slate-800 text-slate-300 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-[#d4af37]/50">
+              <option value="all">{t('جميع الأدوار', 'All Roles')}</option>
+              {roles.filter(r => r.id !== 'courier' && r.id !== 'Courier').map(r => <option key={r.id} value={r.id}>{r.title || r.id}</option>)}
+            </select>
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="bg-black/50 border border-slate-800 text-slate-300 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-[#d4af37]/50">
+              <option value="all">{t('جميع الحالات', 'All Status')}</option>
+              <option value="online">{t('متصل الآن', 'Online Now')}</option>
+              <option value="active">{t('نشط', 'Active')}</option>
+              <option value="disabled">{t('معطَّل', 'Disabled')}</option>
+            </select>
+            <div className="flex items-center gap-2 px-3 py-2 bg-emerald-950/10 border border-emerald-900/20 rounded-xl text-[10px] font-bold text-emerald-400">
+              <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span>
+              {activeSessions.length} {t('متصل', 'online')}
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full" dir={isAr ? 'rtl' : 'ltr'}>
+              <thead className="bg-[#0a0a0d] text-slate-500 text-[10px] font-black uppercase tracking-wider border-b border-slate-800/50">
+                <tr>
+                  <th className="p-4 text-start">{t('المستخدم والمعرف', 'User Account')}</th>
+                  <th className="p-4 text-start">{t('البريد الإلكتروني', 'Email')}</th>
+                  <th className="p-4 text-start">{t('الدور والصلاحية', 'Role')}</th>
+                  <th className="p-4 text-center">PIN</th>
+                  <th className="p-4 text-center">{t('الحالة', 'Status')}</th>
+                  <th className="p-4 text-center">{t('آخر ظهور', 'Last Seen')}</th>
+                  <th className="p-4 text-center">{t('إجراءات', 'Actions')}</th>
+                </tr>
+              </thead>
+              <tbody className="text-xs divide-y divide-slate-800/30 bg-black/10">
+                {filteredUsers.map(user => {
+                  const isRootTarget = ROOT_EMAILS.includes(user.email) || user.isRoot;
+                  const online = isUserOnline(user);
+                  const tempBanLeft = getTempBanRemaining(user);
+                  return (
+                    <tr key={user.id} className={`hover:bg-slate-900/20 transition-colors ${user.disabled ? 'opacity-60' : ''}`}>
+                      <td className="p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#121215] to-[#070708] border border-slate-800 text-[#d4af37] flex items-center justify-center font-black text-xs shrink-0 relative">
+                            {user.fullName?.substring(0, 2)}
+                            {isRootTarget && <Crown className="w-3 h-3 text-yellow-500 absolute -top-1.5 -right-1.5 animate-bounce" />}
+                            {online && <span className="absolute -bottom-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-[#0a0a0d]"></span>}
+                          </div>
+                          <div>
+                            <div className="font-extrabold text-white">{user.fullName}</div>
+                            <div className="text-[9px] font-mono text-slate-500 mt-0.5 flex items-center gap-1.5">
+                              <span>@{user.username || 'not_set'}</span>
+                            </div>
+                            {user.linkedEntity && (
+                              <div className="text-[9px] font-bold text-cyan-400 bg-cyan-950/40 border border-cyan-900/40 px-2 py-0.5 rounded-lg flex items-center gap-1 w-max mt-1">
+                                🔗 {user.linkedType === 'courier' ? t('مندوب:', 'Courier:') : t('موظف:', 'Employee:')}{' '}
+                                {
+                                  user.linkedType === 'courier'
+                                    ? couriersList.find(c => c.id === user.linkedEntity)?.fullName || user.linkedEntity
+                                    : employeesList.find(e => e.id === user.linkedEntity)?.fullName || user.linkedEntity
+                                }
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-4 font-mono text-slate-400 text-[10px]" dir="ltr">{user.email}</td>
+                      <td className="p-4"><span className={`px-2.5 py-1 rounded-lg border text-[9px] font-black uppercase tracking-wider ${getRoleBadgeStyle(user.role)}`}>{user.role}</span></td>
+                      <td className="p-4 text-center font-mono text-slate-400 font-semibold text-[11px] tracking-widest">{user.systemPin || '—'}</td>
+                      <td className="p-4 text-center">
+                        {user.disabled ? (
+                          <div className="flex flex-col items-center gap-1">
+                            <span className="bg-rose-950/20 text-rose-400 border border-rose-900/30 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase">
+                              {tempBanLeft ? t('حظر مؤقت', 'TEMP BAN') : t('معطَّل', 'DISABLED')}
+                            </span>
+                            {tempBanLeft && <span className="text-[8px] text-orange-400 font-mono font-bold">{tempBanLeft}</span>}
+                          </div>
+                        ) : (
+                          <span className="bg-emerald-950/20 text-emerald-400 border border-emerald-900/30 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase">{t('نشط', 'ACTIVE')}</span>
+                        )}
+                      </td>
+                      <td className="p-4 text-center text-[9px] text-slate-500 font-bold">{getTimeSince(user.lastSeen)}</td>
+                      <td className="p-4">
+                        <div className="flex items-center justify-center gap-1">
+                          {(role === 'Admin' || hasPermission('disable_accounts')) && (
+                            <button onClick={() => handleToggleStatus(user)} title={user.disabled ? t('تفعيل', 'Enable') : t('تعطيل', 'Disable')}
+                              className={`p-1.5 rounded-lg border transition-all ${user.disabled ? 'text-emerald-400 bg-emerald-950/10 border-emerald-900/30 hover:bg-emerald-950/30' : 'text-rose-400 bg-rose-950/10 border-rose-900/30 hover:bg-rose-950/30'}`}>
+                              {user.disabled ? <UserCheck className="w-3.5 h-3.5" /> : <UserX className="w-3.5 h-3.5" />}
+                            </button>
+                          )}
+                          {(role === 'Admin' || hasPermission('edit_users')) && (
+                            <button onClick={() => handleOpenEdit(user)} title={t('تعديل', 'Edit')} className="p-1.5 rounded-lg border text-slate-400 hover:text-white bg-slate-900/50 border-slate-800 hover:border-[#d4af37]/30 transition-all">
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {(role === 'Admin' || hasPermission('reset_passwords')) && (
+                            <button onClick={() => handleResetPassword(user)} title={t('إعادة تعيين كلمة المرور', 'Reset Password')} className="p-1.5 rounded-lg border text-amber-400 bg-amber-950/10 border-amber-900/30 hover:bg-amber-950/30 transition-all">
+                              <Key className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {(role === 'Admin' || hasPermission('terminate_sessions')) && !isRootTarget && online && (
+                            <button onClick={() => { setSessionTargetUser(user); setIsSessionModalOpen(true); }} title={t('إنهاء الجلسة', 'End Session')} className="p-1.5 rounded-lg border text-rose-400 bg-rose-950/10 border-rose-900/30 hover:bg-rose-950/30 transition-all">
+                              <WifiOff className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {(role === 'Admin' || hasPermission('delete_users')) && !isRootTarget && (
+                            <button onClick={() => handleDeleteUser(user.id, user.fullName)} title={t('حذف', 'Delete')} className="p-1.5 rounded-lg border text-rose-500 bg-rose-950/10 border-rose-900/30 hover:bg-rose-950/30 transition-all">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {filteredUsers.length === 0 && (
+                  <tr><td colSpan={8} className="p-16 text-center text-slate-600 font-bold text-[10px] uppercase tracking-widest">{t('[ لا يوجد موظفون مطابقون ]', '[ no staff profiles matched ]')}</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
+      {/* ══════════════════════════════════════════════════ */}
+      {/* TAB 2: ROLES & PERMISSIONS                        */}
+      {/* ══════════════════════════════════════════════════ */}
       {activeTab === 'roles' && (
-        <UserRolesTab
-          isAr={isAr}
-          t={t}
-          roles={roles}
-          users={usersWithLiveBalance}
-          role={role}
-          hasPermission={hasPermission}
-          canManage={role === 'Admin' || hasPermission('add_roles')}
-          handleOpenRoleModal={(r?: any) => r ? handleOpenEditRole(r) : handleOpenAddRole()}
-          handleDeleteRole={(roleId: string) => {
-            const r = roles.find(item => item.id === roleId);
-            handleDeleteRole(roleId, r?.title || roleId);
-          }}
-        />
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {roles.map(r => {
+            const usersInRole = users.filter(u => u.role === r.id).length;
+            const hasAll = r.permissions?.includes('*');
+            const allPerms = ALL_PERMISSIONS(isAr);
+            return (
+              <div key={r.id} className="bg-gradient-to-b from-[#121215] to-[#0a0a0d] border border-slate-800/50 rounded-2xl overflow-hidden hover:border-[#d4af37]/25 transition-all flex flex-col shadow-lg">
+                <div className="p-4 border-b border-slate-800/40 flex justify-between items-start bg-black/20">
+                  <div>
+                    <h3 className="font-extrabold text-[#d4af37] text-sm mb-0.5">{r.title || r.id}</h3>
+                    <span className="text-[9px] text-slate-500 font-mono uppercase tracking-widest" dir="ltr">{r.id}</span>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-[9px] text-slate-500 font-bold">{usersInRole} {t('مستخدم', 'users')}</span>
+                      {hasAll && <span className="bg-amber-950/20 text-[#d4af37] border border-[#d4af37]/20 px-1.5 py-0.5 rounded text-[8px] font-black">{t('صلاحيات كاملة ★', 'FULL ACCESS ★')}</span>}
+                    </div>
+                  </div>
+                  <div className="flex gap-1">
+                    {(role === 'Admin' || hasPermission('edit_roles')) && (
+                      <button onClick={() => handleOpenEditRole(r)} className="p-1.5 text-slate-400 border border-slate-800 bg-slate-950 hover:text-[#d4af37] hover:border-[#d4af37]/30 rounded-lg transition-all"><Edit2 className="w-3.5 h-3.5" /></button>
+                    )}
+                    {r.id !== 'Admin' && (role === 'Admin' || hasPermission('delete_roles')) && (
+                      <button onClick={() => handleDeleteRole(r.id, r.title || r.id)} className="p-1.5 text-rose-400 border border-slate-800 bg-slate-950 hover:bg-rose-950/20 hover:border-rose-500/30 rounded-lg transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
+                    )}
+                  </div>
+                </div>
+                <div className="p-4 flex-1">
+                  <div className="text-[9px] font-black text-slate-600 mb-2 uppercase tracking-wider">{t('الصلاحيات الممنوحة:', 'Granted Permissions:')}</div>
+                  {hasAll ? (
+                    <div className="text-[9px] text-[#d4af37] font-bold bg-[#d4af37]/5 border border-[#d4af37]/10 rounded-lg p-2 text-center">
+                      ★ {t('جميع صلاحيات النظام', 'All System Permissions')} ({allPerms.length} {t('صلاحية', 'permissions')})
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      {(() => {
+                        const permsArr = Array.isArray(r.permissions) ? r.permissions : [];
+                        return (
+                          <>
+                            {permsArr.slice(0, 8).map((pId: string) => {
+                              const perm = allPerms.find(ap => ap.id === pId);
+                              return <span key={pId} className="bg-slate-900/80 text-slate-300 border border-slate-800/60 px-1.5 py-0.5 rounded text-[8px] font-bold">{perm?.label || pId}</span>;
+                            })}
+                            {permsArr.length > 8 && (
+                              <span className="bg-slate-900 text-slate-500 border border-slate-800 px-1.5 py-0.5 rounded text-[8px] font-bold">+{permsArr.length - 8} {t('أخرى', 'more')}</span>
+                            )}
+                            {permsArr.length === 0 && <span className="text-slate-600 text-[10px] italic">{t('لا توجد صلاحيات', 'No permissions assigned')}</span>}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
 
+      {/* ══════════════════════════════════════════════════ */}
+      {/* TAB 3: ACTIVE SESSIONS                            */}
+      {/* ══════════════════════════════════════════════════ */}
       {activeTab === 'sessions' && (
-        <UserSessionsTab
-          isAr={isAr}
-          t={t}
-          sessions={activeSessions}
-          users={usersWithLiveBalance}
-          sessionId={sessionId}
-          currentUserDoc={currentUserDoc}
-          ROOT_EMAILS={ROOT_EMAILS}
-          getRoleBadgeStyle={getRoleBadgeStyle}
-          getTimeSince={getTimeSince}
-          setConfirmConfig={setConfirmConfig}
-          handleRevokeSession={(sId: string) => {
-            const u = users.find(item => item.id === sId);
-            if (u) handleSessionAction(u, 'force_logout');
-          }}
-        />
+        <div className="space-y-4">
+          {/* Stats */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: t('متصلون الآن', 'Online Now'), value: onlineSessionsCount, color: 'emerald', Icon: MonitorCheck },
+              { label: t('إجمالي الموظفين', 'Total Staff'), value: users.length, color: 'blue', Icon: UsersIcon },
+              { label: t('حسابات معطَّلة', 'Disabled'), value: users.filter(u => u.disabled).length, color: 'rose', Icon: UserX },
+              { label: t('حظر مؤقت', 'Temp Banned'), value: users.filter(u => u.disabled && u.tempBanUntil).length, color: 'orange', Icon: Timer },
+            ].map((stat, i) => (
+              <div key={i} className={`bg-black/40 border border-${stat.color}-900/20 rounded-2xl p-4 flex items-center gap-3`}>
+                <stat.Icon className={`w-5 h-5 text-${stat.color}-400 shrink-0`} />
+                <div>
+                  <div className={`text-xl font-black text-${stat.color}-400`}>{stat.value}</div>
+                  <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">{stat.label}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Session Termination Info */}
+          <div className="bg-amber-950/10 border border-amber-900/20 rounded-2xl p-4 flex items-start gap-3">
+            <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div className="text-[10px] text-amber-300/80 font-bold leading-relaxed">
+              {t(
+                'يعمل نظام إنهاء الجلسات بشكل فوري: عند النقر على "إجراء"، يُرسَل أمر إلى Supabase يُلتقط تلقائياً من المستخدم المستهدف خلال ثوانٍ ويُعيد توجيهه لصفحة تسجيل الدخول.',
+                'Session termination works in real-time: clicking an action sends a Supabase command that the target user\'s session picks up within seconds and redirects them to login.'
+              )}
+            </div>
+          </div>
+
+          {/* Sessions Table */}
+          <div className="bg-[#121215] border border-slate-800/50 rounded-2xl overflow-hidden">
+            <div className="p-4 border-b border-slate-800/40 bg-black/30 flex items-center justify-between">
+              <h3 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
+                <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
+                {t('جميع المستخدمين — حالة الجلسات', 'All Users — Session Status')}
+              </h3>
+              <span className="text-[9px] text-slate-500 font-bold">{t('يتجدد كل دقيقة', 'Refreshes every minute')}</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full" dir={isAr ? 'rtl' : 'ltr'}>
+                <thead className="bg-[#0a0a0d] text-slate-500 text-[10px] font-black uppercase tracking-wider border-b border-slate-800/40">
+                  <tr>
+                    <th className="p-4 text-start">{t('المستخدم', 'User')}</th>
+                    <th className="p-4 text-start">{t('الدور', 'Role')}</th>
+                    <th className="p-4 text-center">{t('الجهاز / المتصفح', 'Device / Browser')}</th>
+                    <th className="p-4 text-center">{t('آخر نشاط', 'Last Activity')}</th>
+                    <th className="p-4 text-center">{t('إجراء الجلسة', 'Session Action')}</th>
+                  </tr>
+                </thead>
+                <tbody className="text-xs divide-y divide-slate-800/30">
+                  {dbSessions.sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0)).map(sess => {
+                    const isSelf = sessionId === sess.id;
+                    const isRoot = ROOT_EMAILS.includes(sess.email) || sess.role === 'Admin';
+                    const isOnline = isSessionOnline(sess);
+                    const statusDotColor = isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500';
+                    return (
+                      <tr key={sess.id} className="transition-colors hover:bg-emerald-950/5">
+                        <td className="p-4">
+                          <div className="flex items-center gap-3">
+                            <div className="relative w-8 h-8 rounded-xl bg-gradient-to-br from-[#121215] to-[#070708] border border-slate-800 text-[#d4af37] flex items-center justify-center font-black text-[10px]">
+                              {sess.fullName?.substring(0, 2)}
+                              <span className={`absolute -bottom-1 -right-1 w-2 h-2 ${statusDotColor} rounded-full border border-[#0a0a0d]`}></span>
+                              {isRoot && <Crown className="w-2.5 h-2.5 text-yellow-400 absolute -top-1 -right-1" />}
+                            </div>
+                            <div>
+                              <div className="font-bold text-white text-[11px] flex items-center gap-1.5 flex-wrap">
+                                {sess.fullName}
+                                {isSelf && <span className="text-[8px] text-[#d4af37] font-black bg-[#d4af37]/10 border border-[#d4af37]/20 px-1.5 py-0.5 rounded">{t('جلستك الحالية', 'CURRENT TAB')}</span>}
+                                {isOnline ? (
+                                  <span className="text-[8px] text-emerald-400 font-bold bg-emerald-950/40 border border-emerald-900/30 px-1.5 py-0.5 rounded-md uppercase tracking-wide">{t('متصل الآن', 'Online')}</span>
+                                ) : (
+                                  <span className="text-[8px] text-slate-400 font-bold bg-slate-950/40 border border-slate-900/30 px-1.5 py-0.5 rounded-md uppercase tracking-wide">{t('خامل', 'Idle')}</span>
+                                )}
+                              </div>
+                              <div className="text-[9px] text-slate-500 font-mono">@{sess.email || sess.userId}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-4"><span className={`px-2 py-0.5 rounded-md border text-[9px] font-black uppercase ${getRoleBadgeStyle(sess.role)}`}>{sess.role}</span></td>
+                        <td className="p-4 text-center text-[10px] font-bold text-slate-400">{sess.deviceInfo || t('غير معروف', 'Unknown')}</td>
+                        <td className="p-4 text-center text-[10px] font-bold text-slate-400">{getTimeSince(sess.lastSeen || sess.last_seen)}</td>
+                        <td className="p-4 text-center">
+                          {isSelf || (isRoot && !ROOT_EMAILS.includes(currentUserDoc?.email)) ? (
+                            <span className="text-[#d4af37] text-[9px] font-black bg-[#d4af37]/10 border border-[#d4af37]/25 px-2 py-1 rounded-lg">
+                              {isSelf ? t('جلستك', 'Your Session') : t('محمي', 'Protected')}
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setConfirmConfig({
+                                  isOpen: true,
+                                  type: 'danger',
+                                  title: t('إنهاء الجلسة المحددة', 'Terminate Selected Session'),
+                                  message: t(`هل أنت متأكد من إنهاء جلسة ${sess.fullName} على الجهاز "${sess.deviceInfo || 'غير معروف'}"؟`, `Are you sure you want to terminate ${sess.fullName}'s session on "${sess.deviceInfo || 'Unknown'}"?`),
+                                  onConfirm: async () => {
+                                    try {
+                                      await updateDoc(doc(db, 'sessions', sess.id), { forceLogout: true });
+                                      await activityLogService.log('terminate_session', sess.fullName, { sessionId: sess.id, deviceInfo: sess.deviceInfo });
+                                      notificationService.notify({
+                                        title: t('تم تسجيل الخروج', 'Logged Out'),
+                                        message: t('تم إرسال أمر الخروج للجلسة بنجاح', 'Logout command sent successfully'),
+                                        type: 'success',
+                                        category: 'system'
+                                      });
+                                    } catch (err: any) {
+                                      notificationService.notify({
+                                        title: t('خطأ', 'Error'),
+                                        message: err.message,
+                                        type: 'error',
+                                        category: 'system'
+                                      });
+                                    }
+                                  }
+                                });
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-950/20 text-rose-400 border border-rose-900/30 hover:bg-rose-950/40 rounded-lg text-[9px] font-black transition-all mx-auto"
+                            >
+                              <Zap className="w-3 h-3" /> {t('إنهاء الجلسة', 'Terminate')}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {dbSessions.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="p-8 text-center text-slate-600 font-bold text-xs uppercase tracking-widest">
+                        {t('لا توجد جلسات نشطة حالياً', 'NO ACTIVE SESSIONS FOUND')}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       )}
 
+      {/* ══════════════════════════════════════════════════ */}
+      {/* TAB 4: ACTIVITY LOG                               */}
+      {/* ══════════════════════════════════════════════════ */}
       {activeTab === 'activity' && (
-        <UserActivityLogsTab
-          isAr={isAr}
-          activityLogs={activityLogs}
-          users={usersWithLiveBalance}
-          hasPermission={hasPermission}
-        />
+        <div className="space-y-4">
+          {!hasPermission('view_activity_log') ? (
+            <div className="flex flex-col items-center justify-center p-12 bg-[#121215] border border-slate-800 rounded-2xl text-center">
+              <ShieldAlert className="w-12 h-12 text-rose-500 mb-4 animate-pulse" />
+              <p className="text-slate-500 text-sm font-bold">{t('ليس لديك صلاحية عرض سجل النشاط', 'No permission to view activity log')}</p>
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-3 p-4 bg-black/30 border border-slate-800/50 rounded-2xl">
+                <select value={logFilter} onChange={e => setLogFilter(e.target.value)} className="bg-black/50 border border-slate-800 text-slate-300 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-[#d4af37]/50">
+                  <option value="all">{t('جميع الأنواع', 'All Actions')}</option>
+                  {['add_user', 'edit_user', 'disable_user', 'enable_user', 'delete_user', 'reset_password', 'force_logout', 'temp_ban', 'add_role', 'edit_role', 'delete_role', 'add_order', 'edit_order', 'delete_order', 'edit_delivered_order', 'change_exchange_rate', 'add_expense', 'add_customer'].map(a => (
+                    <option key={a} value={a}>{getActionMeta(a, isAr).label}</option>
+                  ))}
+                </select>
+                <select value={logUserFilter} onChange={e => setLogUserFilter(e.target.value)} className="bg-black/50 border border-slate-800 text-slate-300 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-[#d4af37]/50">
+                  <option value="all">{t('جميع المستخدمين', 'All Users')}</option>
+                  {users.map(u => <option key={u.id} value={u.id}>{u.fullName}</option>)}
+                </select>
+                <select value={logLimit} onChange={e => setLogLimit(Number(e.target.value))} className="bg-black/50 border border-slate-800 text-slate-300 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-[#d4af37]/50">
+                  {[25, 50, 100, 200].map(n => <option key={n} value={n}>{n} {t('سجل', 'records')}</option>)}
+                </select>
+                <div className="flex items-center gap-2 text-[10px] text-slate-500 font-bold">
+                  <Activity className="w-3.5 h-3.5" /> {filteredLogs.length} {t('سجل', 'records')}
+                </div>
+              </div>
+
+              <div className="bg-[#121215] border border-slate-800/50 rounded-2xl overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full" dir={isAr ? 'rtl' : 'ltr'}>
+                    <thead className="bg-[#0a0a0d] text-slate-500 text-[10px] font-black uppercase tracking-wider border-b border-slate-800/40">
+                      <tr>
+                        <th className="p-4 text-start">{t('النشاط', 'Action')}</th>
+                        <th className="p-4 text-start">{t('الموظف', 'Staff')}</th>
+                        <th className="p-4 text-start">{t('الهدف', 'Target')}</th>
+                        <th className="p-4 text-start">{t('تفاصيل', 'Details')}</th>
+                        <th className="p-4 text-center">{t('الوقت', 'Time')}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-xs divide-y divide-slate-800/30">
+                      {filteredLogs.map(log => {
+                        const meta = getActionMeta(log.action, isAr);
+                        const ts = log.timestamp?.toDate ? log.timestamp.toDate() : log.timestamp ? new Date(log.timestamp) : null;
+                        return (
+                          <tr key={log.id} className="hover:bg-slate-900/10 transition-colors">
+                            <td className="p-4">
+                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-${meta.color}-950/20 text-${meta.color}-400 border border-${meta.color}-900/20 text-[9px] font-black`}>
+                                {meta.icon} {meta.label}
+                              </span>
+                            </td>
+                            <td className="p-4">
+                              <div className="font-bold text-white text-[11px]">{log.userName || '—'}</div>
+                              <div className="text-[9px] text-slate-500 font-bold uppercase">{log.userRole || ''}</div>
+                            </td>
+                            <td className="p-4 text-slate-300 font-bold text-[11px]">{log.target || '—'}</td>
+                            <td className="p-4 max-w-xs">
+                              {log.details && Object.keys(log.details).length > 0 ? (
+                                <div className="text-[9px] text-slate-500 font-mono truncate">
+                                  {Object.entries(log.details).slice(0, 2).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join(' | ')}
+                                </div>
+                              ) : <span className="text-slate-700 text-[9px]">—</span>}
+                            </td>
+                            <td className="p-4 text-center text-[9px] text-slate-500 font-bold whitespace-nowrap">
+                              {ts ? ts.toLocaleString(isAr ? 'ar-EG' : 'en-US', { dateStyle: 'short', timeStyle: 'short' }) : '—'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {filteredLogs.length === 0 && (
+                        <tr><td colSpan={5} className="p-16 text-center text-slate-600 font-bold text-[10px] uppercase tracking-widest">{t('[ لا توجد سجلات ]', '[ no activity logs ]')}</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       )}
 
-      {/* Add User Modal */}
-      <AddUserModal
-        isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
-        isAr={isAr}
-        t={t}
-        addFormData={addFormData}
-        setAddFormData={setAddFormData}
-        handleAddUser={handleAddUser}
-        addLoading={addLoading}
-        roles={roles}
-        couriersList={couriersList}
-        employeesList={employeesList}
-      />
+      {/* ══════════════════════════════════════════════════ */}
+      {/* SESSION ACTION MODAL — ENHANCED                   */}
+      {/* ══════════════════════════════════════════════════ */}
+      {isSessionModalOpen && sessionTargetUser && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div className="bg-gradient-to-b from-[#141418] to-[#0a0a0d] border border-rose-900/30 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden">
+            <div className="p-5 border-b border-rose-900/20 flex justify-between items-center bg-rose-950/10">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-rose-950/30 border border-rose-900/30 rounded-xl flex items-center justify-center">
+                  <Zap className="w-4 h-4 text-rose-400" />
+                </div>
+                <div>
+                  <h3 className="font-black text-white text-xs uppercase tracking-widest">{t('إجراءات الجلسة', 'Session Actions')}</h3>
+                  <p className="text-[9px] text-rose-400/70 font-bold mt-0.5">{sessionTargetUser.fullName} — @{sessionTargetUser.username || sessionTargetUser.email}</p>
+                </div>
+              </div>
+              <button onClick={() => { setIsSessionModalOpen(false); setSessionTargetUser(null); }} className="text-slate-500 hover:text-white bg-slate-900 border border-slate-800 p-1.5 rounded-lg transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
-      {/* Edit User Modal */}
-      <EditUserModal
-        isOpen={isEditModalOpen}
-        onClose={() => { setIsEditModalOpen(false); setSelectedUser(null); }}
-        isAr={isAr}
-        t={t}
-        selectedUser={selectedUser}
-        editFormData={editFormData}
-        setEditFormData={setEditFormData}
-        handleUpdateUser={handleUpdateUser}
-        editLoading={editLoading}
-        roles={roles}
-        couriersList={couriersList}
-        employeesList={employeesList}
-        ROOT_EMAILS={ROOT_EMAILS}
-      />
+            {/* User Info */}
+            <div className="px-5 pt-4 pb-2">
+              <div className="flex items-center gap-3 p-3 bg-black/40 border border-slate-800/50 rounded-xl mb-4">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#121215] to-[#070708] border border-slate-800 text-[#d4af37] flex items-center justify-center font-black text-sm">
+                  {sessionTargetUser.fullName?.substring(0, 2)}
+                </div>
+                <div className="flex-1">
+                  <div className="text-xs font-black text-white">{sessionTargetUser.fullName}</div>
+                  <div className="text-[9px] text-slate-500 font-mono">{sessionTargetUser.email}</div>
+                </div>
+                <span className={`px-2 py-0.5 rounded border text-[9px] font-black uppercase ${getRoleBadgeStyle(sessionTargetUser.role)}`}>{sessionTargetUser.role}</span>
+                {isUserOnline(sessionTargetUser) ? (
+                  <span className="flex items-center gap-1 text-[9px] text-emerald-400 font-black">
+                    <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span>{t('نشط', 'ACTIVE')}
+                  </span>
+                ) : (
+                  <span className="text-[9px] text-slate-600 font-bold">{t('غير متصل', 'OFFLINE')}</span>
+                )}
+              </div>
 
-      {/* Change Password Modal */}
-      <ChangePasswordModal
-        isOpen={isPasswordModalOpen}
-        onClose={() => { setIsPasswordModalOpen(false); setPasswordTargetUser(null); }}
-        isAr={isAr}
-        t={t}
-        passwordTargetUser={passwordTargetUser}
-        newPasswordValue={newPasswordValue}
-        setNewPasswordValue={setNewPasswordValue}
-        handleAdminChangePassword={handleAdminChangePassword}
-        passwordLoading={passwordLoading}
-      />
+              {/* Warning */}
+              <div className="flex items-start gap-2 p-3 bg-amber-950/10 border border-amber-900/20 rounded-xl mb-4">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                <p className="text-[9px] text-amber-300/80 font-bold leading-relaxed">
+                  {t('الإجراءات أدناه تؤثر على جلسة هذا المستخدم فوراً. سيتلقى المستخدم إشعاراً وسيُعاد توجيهه لصفحة تسجيل الدخول.', 'Actions below immediately affect this user\'s session. They will be redirected to login.')}
+                </p>
+              </div>
+            </div>
 
-      {/* Role Form Modal */}
-      <RoleFormModal
-        isOpen={isRoleModalOpen}
-        onClose={() => setIsRoleModalOpen(false)}
-        selectedRole={selectedRole}
-        roleFormData={roleFormData}
-        setRoleFormData={setRoleFormData}
-        roleActiveTab={roleActiveTab}
-        setRoleActiveTab={setRoleActiveTab}
-        permSearch={permSearch}
-        setPermSearch={setPermSearch}
-        expandedGroups={expandedGroups}
-        setExpandedGroups={setExpandedGroups}
-        selectAllInActiveTab={selectAllInActiveTab}
-        deselectAllInActiveTab={deselectAllInActiveTab}
-        getFilteredPerms={getFilteredPerms}
-        toggleGroup={toggleGroup}
-        togglePermission={togglePermission}
-        handleSaveRole={handleSaveRole}
-        savingRole={savingRole}
-        isAr={isAr}
-        allPermissionsCount={ALL_PERMISSIONS(isAr).length}
-        t={t}
-      />
+            {/* Actions List */}
+            <div className="px-5 pb-5 space-y-2">
+              {SESSION_ACTIONS(isAr).map(action => {
+                const Icon = action.icon;
+                return (
+                  <button
+                    key={action.id}
+                    onClick={() => {
+                      setIsSessionModalOpen(false);
+                      setConfirmConfig({
+                        isOpen: true,
+                        type: action.severity as any,
+                        title: action.label,
+                        message: isAr
+                          ? `هل أنت متأكد من تنفيذ "${action.label}" على حساب ${sessionTargetUser.fullName}؟`
+                          : `Are you sure you want to "${action.label}" for ${sessionTargetUser.fullName}?`,
+                        onConfirm: () => handleSessionAction(sessionTargetUser, action.id)
+                      });
+                    }}
+                    className={`w-full flex items-start gap-3 p-3.5 rounded-xl border border-${action.color}-900/20 bg-${action.color}-950/10 hover:bg-${action.color}-950/25 transition-all text-start group`}
+                  >
+                    <div className={`w-8 h-8 rounded-lg bg-${action.color}-950/30 border border-${action.color}-900/30 flex items-center justify-center shrink-0`}>
+                      <Icon className={`w-4 h-4 text-${action.color}-400`} />
+                    </div>
+                    <div className="flex-1">
+                      <div className={`text-xs font-black text-${action.color}-300 group-hover:text-${action.color}-200 transition-colors`}>{action.label}</div>
+                      <div className="text-[9px] text-slate-500 mt-0.5 leading-relaxed">{action.desc}</div>
+                    </div>
+                    <ChevronRight className={`w-3.5 h-3.5 text-${action.color}-500 shrink-0 mt-1`} />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
+      {/* ══════════════════════════════════════════════════ */}
+      {/* ADD USER MODAL                                     */}
+      {/* ══════════════════════════════════════════════════ */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/20 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-5 border-b border-slate-800/50 flex justify-between items-center bg-black/40 shrink-0">
+              <h3 className="font-black text-white text-xs uppercase tracking-widest flex items-center gap-2"><Crown className="w-4 h-4 text-[#d4af37]" />{t('إضافة موظف جديد', 'Add New Staff Member')}</h3>
+              <button type="button" onClick={() => setIsAddModalOpen(false)} className="text-slate-500 hover:text-white bg-slate-900 border border-slate-800 p-1.5 rounded-lg"><X className="w-4 h-4" /></button>
+            </div>
+            <form onSubmit={handleAddUser} className="p-6 space-y-4 overflow-y-auto flex-1 text-start" dir={isAr ? 'rtl' : 'ltr'}>
+              {/*name*/}
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الاسم الكامل', 'Full Name')} *</label>
+                <input
+                  required
+                  tabIndex={1}
+                  type="text"
+                  value={addFormData.fullName}
+                  onChange={e => setAddFormData({ ...addFormData, fullName: e.target.value })}
+                  className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none transition-all"
+                />
+              </div>
+              {/*username*/}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('اسم المستخدم', 'Username')} *</label>
+                  <input
+                    required
+                    tabIndex={2}
+                    type="text"
+                    placeholder="arslan_ops"
+                    value={addFormData.username}
+                    onChange={e => setAddFormData({ ...addFormData, username: e.target.value })}
+                    className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono transition-all"
+                    dir="ltr"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('رمز PIN', 'Security PIN')}</label>
+                  <input
+                    tabIndex={3}
+                    type="text"
+                    maxLength={4}
+                    placeholder="1234"
+                    value={addFormData.systemPin}
+                    onChange={e => setAddFormData({ ...addFormData, systemPin: e.target.value })}
+                    className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-center tracking-widest transition-all"
+                  />
+                </div>
+              </div>
+              {/*email*/}
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('البريد الإلكتروني', 'Email')} *</label>
+                <input
+                  required
+                  tabIndex={4}
+                  type="email"
+                  placeholder="name@company.com"
+                  value={addFormData.email}
+                  onChange={e => setAddFormData({ ...addFormData, email: e.target.value })}
+                  className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono transition-all"
+                  dir="ltr"
+                />
+              </div>
+              {/*password*/}
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('كلمة المرور', 'Password')} *</label>
+                <div className="relative">
+                  <input
+                    required
+                    tabIndex={5}
+                    type={showPassword ? 'text' : 'password'}
+                    value={addFormData.password}
+                    onChange={e => setAddFormData({ ...addFormData, password: e.target.value })}
+                    placeholder="••••••••"
+                    className={`w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-xs font-bold transition-all ${isAr ? 'pr-4 pl-10' : 'pl-4 pr-10'}`}
+                    dir="ltr"
+                  />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className={`absolute ${isAr ? 'left-3' : 'right-3'} top-1/2 -translate-y-1/2 text-slate-500 hover:text-white`}>
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+              {/*role*/}
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الدور والصلاحية', 'Assigned Role')}</label>
+                <select
+                  tabIndex={6}
+                  value={addFormData.role}
+                  onChange={e => setAddFormData({ ...addFormData, role: e.target.value })}
+                  className="w-full bg-black/50 border border-slate-800 text-white rounded-xl py-3 px-4 focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none text-xs font-bold transition-all font-sans"
+                >
+                  {roles.filter(r => r.id !== 'courier' && r.id !== 'Courier').map(r => <option key={r.id} value={r.id}>{r.title || r.id}</option>)}
+                </select>
+              </div>
+
+              {/* Entity Linking Block */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-black/40 p-3.5 rounded-xl border border-slate-800/80">
+                <div>
+                  <label className="block text-[10px] font-black text-[#d4af37] mb-1.5 uppercase tracking-wider">{t('الربط مع كيان (شخص/حساب)', 'Link User to Entity')}</label>
+                  <select
+                    value={addFormData.linkedType}
+                    onChange={e => setAddFormData({ ...addFormData, linkedType: e.target.value, linkedEntity: '' })}
+                    className="w-full bg-black/50 border border-slate-800 text-white rounded-xl p-2.5 outline-none text-xs font-bold"
+                  >
+                    <option value="none">{t('غير مرتبط (حساب مستقل)', 'Standalone User')}</option>
+                    <option value="employee">{t('موظف (Employee)', 'Employee')}</option>
+                    <option value="courier">{t('مندوب (Courier)', 'Courier')}</option>
+                  </select>
+                </div>
+                {addFormData.linkedType !== 'none' && (
+                  <div>
+                    <label className="block text-[10px] font-black text-[#d4af37] mb-1.5 uppercase tracking-wider">
+                      {addFormData.linkedType === 'employee' ? t('اختر الموظف المرتبط', 'Select Employee') : t('اختر المندوب المرتبط', 'Select Courier')}
+                    </label>
+                    <select
+                      value={addFormData.linkedEntity}
+                      onChange={e => setAddFormData({ ...addFormData, linkedEntity: e.target.value })}
+                      className="w-full bg-black/50 border border-slate-800 text-white rounded-xl p-2.5 outline-none text-xs font-bold"
+                    >
+                      <option value="">{t('اختر الكيان...', 'Select target...')}</option>
+                      {addFormData.linkedType === 'employee'
+                        ? employeesList.map(e => <option key={e.id} value={e.id}>{e.fullName} ({e.jobsType || 'موظف'})</option>)
+                        : couriersList.map(c => <option key={c.id} value={c.id}>{c.fullName || c.name} ({c.phone || ''})</option>)
+                      }
+                    </select>
+                  </div>
+                )}
+              </div>
+              {/*end form fields */}
+              <div className="pt-4 flex justify-end gap-3 border-t border-slate-800/50 shrink-0">
+                <button type="button" onClick={() => setIsAddModalOpen(false)} className="px-5 py-2.5 text-slate-400 font-bold bg-slate-900 border border-slate-800 hover:bg-slate-850 rounded-xl text-xs transition active:scale-95">{t('إلغاء', 'Cancel')}</button>
+                <button type="submit" disabled={addLoading} className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] disabled:opacity-50 text-black font-black text-xs rounded-xl shadow-md transition active:scale-95">
+                  {addLoading ? t('جاري الإنشاء...', 'Creating...') : t('إنشاء الحساب', 'Create Account')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════ */}
+      {/* EDIT USER MODAL                                    */}
+      {/* ══════════════════════════════════════════════════ */}
+      {isEditModalOpen && selectedUser && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/20 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-5 border-b border-slate-800/50 flex justify-between items-center bg-black/40 shrink-0">
+              <h3 className="font-black text-white text-xs uppercase tracking-widest">{t('تعديل بيانات الموظف', 'Edit Staff Member')}</h3>
+              <button type="button" onClick={() => { setIsEditModalOpen(false); setSelectedUser(null); }} className="text-slate-500 hover:text-white bg-slate-900 border border-slate-800 p-1.5 rounded-lg"><X className="w-4 h-4" /></button>
+            </div>
+            <form onSubmit={handleUpdateUser} className="p-6 space-y-4 overflow-y-auto flex-1 text-start" dir={isAr ? 'rtl' : 'ltr'}>
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الاسم الكامل', 'Full Name')}</label>
+                <input
+                  required
+                  tabIndex={1}
+                  type="text"
+                  value={editFormData.fullName}
+                  onChange={e => setEditFormData({ ...editFormData, fullName: e.target.value })}
+                  className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none transition-all"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('اسم المستخدم', 'Username')}</label>
+                  <input
+                    required
+                    tabIndex={2}
+                    type="text"
+                    value={editFormData.username}
+                    onChange={e => setEditFormData({ ...editFormData, username: e.target.value })}
+                    className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold-focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono transition-all"
+                    dir="ltr"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">PIN</label>
+                  <input
+                    tabIndex={3}
+                    type="text"
+                    maxLength={4}
+                    value={editFormData.systemPin}
+                    onChange={e => setEditFormData({ ...editFormData, systemPin: e.target.value })}
+                    className="w-full bg-black/50 border border-slate-800 text-slate-100 rounded-xl py-3 px-4 text-xs font-bold focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono text-center tracking-widest transition-all"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('الدور والصلاحية', 'Assigned Role')}</label>
+                <select
+                  tabIndex={4}
+                  disabled={ROOT_EMAILS.includes(selectedUser.email) || selectedUser.isRoot}
+                  value={editFormData.role}
+                  onChange={e => setEditFormData({ ...editFormData, role: e.target.value })}
+                  className="w-full bg-black/50 border border-slate-800 text-white rounded-xl py-3 px-4 focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed font-sans transition-all"
+                >
+                  {roles.filter(r => r.id !== 'courier' && r.id !== 'Courier').map(r => <option key={r.id} value={r.id}>{r.title || r.id}</option>)}
+                </select>
+              </div>
+
+              {/* Entity Linking Block */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-black/40 p-3.5 rounded-xl border border-slate-800/80">
+                <div>
+                  <label className="block text-[10px] font-black text-[#d4af37] mb-1.5 uppercase tracking-wider">{t('الربط مع كيان (شخص/حساب)', 'Link User to Entity')}</label>
+                  <select
+                    value={editFormData.linkedType}
+                    onChange={e => setEditFormData({ ...editFormData, linkedType: e.target.value, linkedEntity: '' })}
+                    className="w-full bg-black/50 border border-slate-800 text-white rounded-xl p-2.5 outline-none text-xs font-bold"
+                  >
+                    <option value="none">{t('غير مرتبط (حساب مستقل)', 'Standalone User')}</option>
+                    <option value="employee">{t('موظف (Employee)', 'Employee')}</option>
+                    <option value="courier">{t('مندوب (Courier)', 'Courier')}</option>
+                  </select>
+                </div>
+                {editFormData.linkedType !== 'none' && (
+                  <div>
+                    <label className="block text-[10px] font-black text-[#d4af37] mb-1.5 uppercase tracking-wider">
+                      {editFormData.linkedType === 'employee' ? t('اختر الموظف المرتبط', 'Select Employee') : t('اختر المندوب المرتبط', 'Select Courier')}
+                    </label>
+                    <select
+                      value={editFormData.linkedEntity}
+                      onChange={e => setEditFormData({ ...editFormData, linkedEntity: e.target.value })}
+                      className="w-full bg-black/50 border border-slate-800 text-white rounded-xl p-2.5 outline-none text-xs font-bold"
+                    >
+                      <option value="">{t('اختر الكيان...', 'Select target...')}</option>
+                      {editFormData.linkedType === 'employee'
+                        ? employeesList.map(e => <option key={e.id} value={e.id}>{e.fullName} ({e.jobsType || 'موظف'})</option>)
+                        : couriersList.map(c => <option key={c.id} value={c.id}>{c.fullName || c.name} ({c.phone || ''})</option>)
+                      }
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {!ROOT_EMAILS.includes(selectedUser.email) && !selectedUser.isRoot && (
+                <div className="bg-black/30 border border-slate-800 rounded-xl p-4 shrink-0">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <div onClick={() => setEditFormData({ ...editFormData, disabled: !editFormData.disabled })}
+                      className={`w-11 h-6 rounded-full border transition-all flex items-center relative cursor-pointer ${editFormData.disabled ? 'bg-rose-900/30 border-rose-700/40' : 'bg-slate-800 border-slate-700'}`}>
+                      <span className={`w-4 h-4 rounded-full transition-all absolute ${editFormData.disabled ? 'bg-rose-400 right-1' : 'bg-slate-500 left-1'}`}></span>
+                    </div>
+                    <div>
+                      <span className={`block text-xs font-black uppercase ${editFormData.disabled ? 'text-rose-400' : 'text-slate-400'}`}>{editFormData.disabled ? t('الحساب معطَّل', 'Account Disabled') : t('الحساب نشط', 'Account Active')}</span>
+                      <span className="block text-[9px] text-slate-600 mt-0.5">{t('يمنع تسجيل الدخول فوراً', 'Instantly prevents login')}</span>
+                    </div>
+                  </label>
+                </div>
+              )}
+
+              <div className="pt-4 flex justify-end gap-3 border-t border-slate-800/50 shrink-0">
+                <button type="button" onClick={() => { setIsEditModalOpen(false); setSelectedUser(null); }} className="px-5 py-2.5 text-slate-400 font-bold bg-slate-900 border border-slate-800 hover:bg-slate-850 rounded-xl text-xs transition active:scale-95">{t('إلغاء', 'Cancel')}</button>
+                <button type="submit" disabled={editLoading} className="px-5 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] disabled:opacity-50 text-black font-black text-xs rounded-xl shadow-md transition active:scale-95">
+                  {editLoading ? t('جاري الحفظ...', 'Saving...') : t('حفظ التغييرات', 'Save Changes')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════ */}
+      {/* DIRECT CHANGE PASSWORD MODAL                       */}
+      {/* ══════════════════════════════════════════════════ */}
+      {isPasswordModalOpen && passwordTargetUser && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/20 rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-5 border-b border-slate-800/50 flex justify-between items-center bg-black/40 shrink-0">
+              <h3 className="font-black text-white text-xs uppercase tracking-widest flex items-center gap-2">
+                <Key className="w-4 h-4 text-amber-400" />
+                {t('تغيير كلمة المرور مباشرة', 'Direct Password Change')}
+              </h3>
+              <button type="button" onClick={() => { setIsPasswordModalOpen(false); setPasswordTargetUser(null); }} className="text-slate-500 hover:text-white bg-slate-900 border border-slate-800 p-1.5 rounded-lg">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={handleAdminChangePassword} className="p-6 space-y-4 overflow-y-auto flex-1 text-start" dir={isAr ? 'rtl' : 'ltr'}>
+              <div className="flex items-center gap-3 p-3 bg-black/40 border border-slate-800/40 rounded-xl shrink-0">
+                <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 text-[#d4af37] flex items-center justify-center font-black text-[10px]">
+                  {passwordTargetUser.fullName?.substring(0, 2)}
+                </div>
+                <div>
+                  <div className="text-xs font-black text-white">{passwordTargetUser.fullName}</div>
+                  <div className="text-[9px] text-slate-500 font-mono">{passwordTargetUser.email}</div>
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{t('كلمة المرور الجديدة', 'New Password')}</label>
+                <input
+                  required
+                  tabIndex={1}
+                  type="text"
+                  placeholder="••••••••"
+                  value={newPasswordValue}
+                  onChange={e => setNewPasswordValue(e.target.value)}
+                  className="w-full bg-black/50 border border-slate-800 rounded-xl py-3 px-4 text-xs font-bold text-white focus:border-[#d4af37]/60 focus:ring-1 focus:ring-[#d4af37]/30 outline-none font-mono transition-all"
+                  dir="ltr"
+                />
+                <span className="block text-[8px] text-slate-500 mt-1">{t('سيتغير تسجيل الدخول للمستخدم فوراً بهذا المفتاح دون الحاجة لبريده الإلكتروني.', 'This will instantly change the user\'s password in Supabase Authentication directly.')}</span>
+              </div>
+              <div className="pt-3 flex justify-end gap-3 border-t border-slate-800/50 shrink-0">
+                <button type="button" onClick={() => { setIsPasswordModalOpen(false); setPasswordTargetUser(null); }} className="px-5 py-2.5 text-slate-400 font-bold bg-slate-900 border border-slate-800 hover:bg-slate-850 rounded-xl text-xs transition active:scale-95">{t('إلغاء', 'Cancel')}</button>
+                <button type="submit" disabled={passwordLoading} className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-700 hover:from-amber-700 hover:to-amber-500 disabled:opacity-50 text-black font-black text-xs rounded-xl shadow-md transition active:scale-95">
+                  {passwordLoading ? t('جاري التغيير...', 'Changing...') : t('تغيير الآن', 'Change Now')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════ */}
+      {/* ROLE MODAL — ENHANCED WITH TABS                     */}
+      {/* ══════════════════════════════════════════════════ */}
+      {isRoleModalOpen && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div className="bg-gradient-to-b from-[#121215] to-[#08080a] border border-[#d4af37]/30 rounded-3xl shadow-2xl w-full max-w-4xl max-h-[92vh] overflow-hidden flex flex-col">
+
+            {/* Header */}
+            <div className="p-5 border-b border-slate-800/80 flex justify-between items-center bg-black/60 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="rounded-2xl border border-[#d4af37]/30 bg-[#d4af37]/10 p-2.5 text-[#f4d870]">
+                  <Shield className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-white text-base">
+                    {selectedRole ? t('تعديل صلاحيات الدور', 'Edit Role Permissions') : t('إنشاء دور مخصص جديد', 'Create Custom Role')}
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    {t('توزيع وتخصيص مستويات الوصول لجميع واجهات وعمليات النظام بالتبويبات', 'Configure granular access levels for all system modules using tabbed sections')}
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setIsRoleModalOpen(false)} className="text-slate-400 hover:text-white bg-slate-900 border border-slate-800 p-2 rounded-xl transition">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveRole} className="flex flex-col flex-1 overflow-hidden" dir={isAr ? 'rtl' : 'ltr'}>
+              <div className="p-5 space-y-4 overflow-y-auto flex-1">
+
+                {/* Role Title and ID inputs */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-2xl border border-slate-800 bg-black/40 p-4">
+                  <div>
+                    <label className="block text-xs font-black text-slate-300 mb-1.5">{t('اسم الدور (بالعربي)', 'Role Title')} *</label>
+                    <input required type="text" placeholder={t('مثل: مدير المالية والمحاسبة', 'e.g. Finance & Accounting Manager')} value={roleFormData.title} onChange={e => setRoleFormData({ ...roleFormData, title: e.target.value })} className="w-full border border-slate-800 rounded-xl p-3 bg-slate-950 text-white focus:border-[#d4af37]/60 outline-none text-xs font-bold" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-black text-slate-300 mb-1.5">{t('المعرّف (بالإنجليزي)', 'Role ID (English)')} *</label>
+                    <input required disabled={!!selectedRole} type="text" placeholder="Finance_Manager" value={roleFormData.id} onChange={e => setRoleFormData({ ...roleFormData, id: e.target.value })} className="w-full border border-slate-800 rounded-xl p-3 bg-slate-950 text-white focus:border-[#d4af37]/60 outline-none text-xs font-bold font-mono disabled:opacity-40 disabled:cursor-not-allowed" dir="ltr" />
+                  </div>
+                </div>
+
+                {/* ── شريط تبويبات الأقسام — Category Tabs Bar ── */}
+                <div className="flex gap-2 overflow-x-auto border-b border-slate-800 pb-2.5 pt-1 text-xs">
+                  {[
+                    { id: 'all', label: t('🌐 جميع الأقسام', '🌐 All Modules') },
+                    { id: 'entries', label: t('📖 القيود المحاسبية', '📖 Journal Entries') },
+                    { id: 'vouchers', label: t('🧾 سندات القبض والصرف', '🧾 Vouchers') },
+                    { id: 'finance_accounts', label: t('💰 المالية والحسابات', '💰 Finance & Accounts') },
+                    { id: 'general_orders', label: t('📦 عام والطلبات', '📦 General & Orders') },
+                    { id: 'people', label: t('👥 الأشخاص والمستخدمون', '👥 Users & People') },
+                    { id: 'settings', label: t('⚙️ الإعدادات والتلقائية', '⚙️ Settings & Rules') },
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setRoleActiveTab(tab.id)}
+                      className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl px-3.5 py-2 font-black transition ${roleActiveTab === tab.id
+                        ? 'bg-[#d4af37] text-slate-950 shadow-md'
+                        : 'bg-slate-900/80 text-slate-400 hover:bg-slate-800 hover:text-white border border-slate-800'
+                        }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Toolbar */}
+                <div className="flex items-center flex-wrap gap-2.5 rounded-xl border border-slate-800 bg-slate-950/60 p-2.5">
+                  <button type="button" onClick={selectAllInActiveTab}
+                    className="px-3 py-1.5 bg-[#d4af37]/15 text-[#f4d870] border border-[#d4af37]/30 rounded-lg text-xs font-black hover:bg-[#d4af37]/25 transition-all">
+                    {t('تحديد كل هذا القسم', 'Select Section')}
+                  </button>
+                  <button type="button" onClick={deselectAllInActiveTab}
+                    className="px-3 py-1.5 bg-slate-900 text-slate-400 border border-slate-800 rounded-lg text-xs font-black hover:bg-slate-800 transition-all">
+                    {t('إلغاء كل هذا القسم', 'Deselect Section')}
+                  </button>
+
+                  <div className="flex-1 relative min-w-[160px]">
+                    <Search className={`absolute ${isAr ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 text-slate-500 w-3.5 h-3.5`} />
+                    <input type="text" placeholder={t('بحث سريع في الصلاحيات...', 'Filter permissions...')} value={permSearch} onChange={e => setPermSearch(e.target.value)}
+                      className={`w-full ${isAr ? 'pr-9 pl-3' : 'pl-9 pr-3'} py-1.5 bg-black/60 border border-slate-800 rounded-lg text-xs text-white font-bold outline-none focus:border-[#d4af37]/60`} />
+                  </div>
+
+                  <span className="text-xs font-mono font-black text-[#f4d870] bg-slate-900 px-3 py-1 rounded-lg border border-slate-800">
+                    {roleFormData.permissions.length}/{ALL_PERMISSIONS(isAr).length} {t('محدد', 'selected')}
+                  </span>
+                </div>
+
+                {/* Permission Groups List */}
+                <div className="space-y-3 max-h-[48vh] overflow-y-auto pr-1">
+                  {getFilteredPerms().map(group => {
+                    const groupPermsIds = group.perms.map(p => p.id);
+                    const activePermissions = Array.isArray(roleFormData.permissions) ? roleFormData.permissions : [];
+                    const allChecked = groupPermsIds.every(id => activePermissions.includes(id));
+                    const someChecked = groupPermsIds.some(id => activePermissions.includes(id));
+                    const isExpanded = expandedGroups[group.group] !== false; // default expanded
+                    return (
+                      <div key={group.group} className="bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+                        <div className="px-4 py-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between cursor-pointer hover:bg-slate-850 transition"
+                          onClick={() => setExpandedGroups(prev => ({ ...prev, [group.group]: !isExpanded }))}>
+                          <div className="flex items-center gap-3">
+                            <div onClick={e => { e.stopPropagation(); toggleGroup(group.group, !allChecked); }}
+                              className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-all ${allChecked ? 'bg-[#d4af37] border-[#d4af37] text-slate-950' : someChecked ? 'bg-[#d4af37]/30 border-[#d4af37]/60' : 'border-slate-700'}`}>
+                              {allChecked && <CheckCircle2 className="w-3.5 h-3.5" />}
+                              {someChecked && !allChecked && <div className="w-2.5 h-1 bg-[#d4af37] rounded-sm"></div>}
+                            </div>
+                            <span className="text-xs font-black text-white">{group.group}</span>
+                            <span className="text-[10px] font-mono font-bold text-slate-400 bg-slate-950 px-2 py-0.5 rounded-md border border-slate-800">
+                              {group.perms.filter(p => activePermissions.includes(p.id)).length} / {group.perms.length}
+                            </span>
+                          </div>
+                          <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                        </div>
+
+                        {isExpanded && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-px bg-slate-800/40">
+                            {group.perms.map(perm => {
+                              const isChecked = activePermissions.includes(perm.id);
+                              return (
+                                <label key={perm.id} onClick={() => togglePermission(perm.id)}
+                                  className={`flex items-center gap-3 p-3 cursor-pointer transition-all select-none ${isChecked ? 'bg-[#d4af37]/10' : 'bg-slate-950/70 hover:bg-slate-900'}`}>
+                                  <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-all ${isChecked ? 'bg-[#d4af37] border-[#d4af37] text-slate-950 font-black' : 'border-slate-700 hover:border-slate-500'}`}>
+                                    {isChecked && <CheckCircle2 className="w-3.5 h-3.5" />}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-xs font-bold text-white leading-snug">{perm.label}</div>
+                                    <div className="text-[9px] text-slate-500 font-mono mt-0.5 truncate">{perm.id}</div>
+                                  </div>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {getFilteredPerms().length === 0 && (
+                    <div className="p-8 text-center text-xs font-bold text-slate-500 bg-slate-950/60 rounded-2xl border border-slate-800">
+                      {t('لا توجد صلاحيات تطابق معايير البحث أو التبويب المحدد.', 'No permissions match your search or selected tab.')}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="p-5 border-t border-slate-800 bg-black/60 flex items-center justify-between shrink-0">
+                <span className="text-xs font-mono text-slate-400">
+                  {t('إجمالي الصلاحيات المختارة:', 'Selected:')} <span className="font-bold text-[#f4d870]">{roleFormData.permissions.length}</span>
+                </span>
+                <div className="flex items-center gap-3">
+                  <button type="button" onClick={() => setIsRoleModalOpen(false)} className="px-5 py-2.5 text-slate-400 font-bold bg-slate-900 border border-slate-800 hover:bg-slate-800 rounded-xl text-xs">{t('إلغاء', 'Cancel')}</button>
+                  <button type="submit" disabled={savingRole} className="px-6 py-2.5 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black font-black rounded-xl shadow-lg transition-all active:scale-[0.98] text-xs disabled:opacity-50">
+                    {savingRole ? t('جاري الحفظ...', 'Saving...') : t('حفظ الدور والصلاحيات', 'Save Role & Permissions')}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <ConfirmModal
         isOpen={confirmConfig.isOpen}
