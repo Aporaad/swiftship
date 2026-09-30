@@ -26,7 +26,7 @@ describe('حذف الطلبات الذري', () => {
 
   it('يستدعي الإجراء الذري من واجهة الخدمة ولا يعتمد حذف جدول orders مباشرةً', () => {
     const service = read('src/services/orderDeletionService.ts');
-    const ordersPage = read('src/pages/Orders.tsx');
+    const ordersPage = read('src/features/orders/pages/OrdersPage.tsx');
     const modal = read('src/components/orders/DeleteOrderModal.tsx');
     expect(service).toContain("supabase.rpc('delete_orders_with_dependents'");
     expect(service).toContain('normalizeOrderIds');

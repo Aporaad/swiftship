@@ -6,8 +6,8 @@ const projectFile = (relativePath: string) => readFileSync(resolve(process.cwd()
 
 describe('products management tab wiring', () => {
   it('registers a dedicated products tab in the orders interface', () => {
-    const orders = projectFile('src/pages/Orders.tsx');
-    expect(orders).toContain("import ProductsManagementTab from '../components/orders/ProductsManagementTab'");
+    const orders = projectFile('src/features/orders/pages/OrdersPage.tsx');
+    expect(orders).toContain("import ProductsManagementTab from '../../../components/orders/ProductsManagementTab'");
     expect(orders).toContain('<ProductsManagementTab');
     expect(orders).toContain('canManage={canManageOrders}');
     expect(orders).toContain("ordersTab === 'products'");

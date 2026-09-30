@@ -17,8 +17,8 @@ describe('linked financial accounts wiring', () => {
   });
 
   it('creates accounts from every source, carrier and asset entry path', () => {
-    const sources = read('../src/pages/Sources.tsx');
-    const orders = read('../src/pages/Orders.tsx');
+    const sources = read('../src/features/sources/pages/SourcesPage.tsx');
+    const orders = read('../src/features/orders/pages/OrdersPage.tsx');
     const assets = read('../src/components/AssetsPortfolio.tsx');
     expect(sources).toContain("ensureFinancialAccount('source'");
     expect(sources).toContain("ensureFinancialAccount('shipping_company'");

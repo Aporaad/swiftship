@@ -16,7 +16,7 @@ describe('items categories wiring', () => {
   });
 
   it('mounts the independent categories tab and passes categories to product and shipment forms', () => {
-    const orders = read('../src/pages/Orders.tsx');
+    const orders = read('../src/features/orders/pages/OrdersPage.tsx');
     const create = read('../src/components/orders/CreateOrderModal.tsx');
     const edit = read('../src/components/orders/EditOrderModal.tsx');
     const shipment = read('../src/components/shipments/ShipmentFormModal.tsx');
