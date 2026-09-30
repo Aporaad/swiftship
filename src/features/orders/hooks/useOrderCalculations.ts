@@ -49,6 +49,8 @@ interface UseOrderCalculationsInput {
   couriers: any[];
   /** العملة الافتراضية للطلب */
   orderCurrency: string;
+  /** العملة الافتراضية للنظام (تُستعمل قبل YER كـ fallback لرسوم التوصيل) */
+  systemCurrency?: string;
 }
 
 /**
@@ -76,6 +78,7 @@ export function useOrderCalculations(input: UseOrderCalculationsInput): OrderCal
     dbRates,
     couriers,
     orderCurrency,
+    systemCurrency,
   } = input;
 
   return useMemo<OrderCalculations>(() => {
@@ -214,7 +217,7 @@ export function useOrderCalculations(input: UseOrderCalculationsInput): OrderCal
       ? parseFloat(formData.deliveryCourierFee as any) || 0
       : 0;
     const paymentCurrency = formData.currency || orderCurrency;
-    const deliveryFeeCurrency = formData.deliveryCourierFeeCurrency || 'YER';
+    const deliveryFeeCurrency = formData.deliveryCourierFeeCurrency || systemCurrency || 'YER';
 
     const currencyTotals = calculateOrderPaymentTotals({
       orderSubtotal: totalOrderSAR,
@@ -273,5 +276,6 @@ export function useOrderCalculations(input: UseOrderCalculationsInput): OrderCal
     dbRates,
     couriers,
     orderCurrency,
+    systemCurrency,
   ]);
 }

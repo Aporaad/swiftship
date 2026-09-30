@@ -6,11 +6,11 @@ const projectFile = (relativePath: string) => readFileSync(resolve(process.cwd()
 
 describe('products management tab wiring', () => {
   it('registers a dedicated products tab in the orders interface', () => {
-    const orders = projectFile('src/features/orders/pages/OrdersPage.tsx');
-    expect(orders).toContain("import ProductsManagementTab from '../../../components/orders/ProductsManagementTab'");
-    expect(orders).toContain('<ProductsManagementTab');
-    expect(orders).toContain('canManage={canManageOrders}');
-    expect(orders).toContain("ordersTab === 'products'");
+    const ordersShell = projectFile('src/features/orders/pages/subcomponents/OrdersPageShell.tsx');
+    expect(ordersShell).toContain("import ProductsManagementTab from '../../../../components/orders/ProductsManagementTab'");
+    expect(ordersShell).toContain('<ProductsManagementTab');
+    expect(ordersShell).toContain('canManage={canManageOrders}');
+    expect(ordersShell).toContain("ordersTab === 'products'");
   });
 
   it('provides products CRUD, search, category filtering, and sorting through the products table', () => {

@@ -4,19 +4,26 @@ import { describe, expect, it } from 'vitest';
 
 const projectRoot = path.resolve(import.meta.dirname, '..');
 const ordersPage = readFileSync(path.join(projectRoot, 'src/features/orders/pages/OrdersPage.tsx'), 'utf8');
+const statusHandler = readFileSync(path.join(projectRoot, 'src/features/orders/services/updateOrderStatusHandler.ts'), 'utf8');
+const ordersShell = readFileSync(path.join(projectRoot, 'src/features/orders/pages/subcomponents/OrdersPageShell.tsx'), 'utf8');
+const ordersDialogs = readFileSync(path.join(projectRoot, 'src/features/orders/pages/subcomponents/OrdersPageDialogs.tsx'), 'utf8');
+const ordersTable = readFileSync(path.join(projectRoot, 'src/features/orders/components/OrdersTable.tsx'), 'utf8');
+const shipmentsTable = readFileSync(path.join(projectRoot, 'src/features/orders/components/ShipmentsTable.tsx'), 'utf8');
 const historyModal = readFileSync(path.join(projectRoot, 'src/components/orders/OrderHistoryModal.tsx'), 'utf8');
 
 describe('orders history UI wiring', () => {
   it('provides a history action for both orders and shipments', () => {
     expect(ordersPage).toContain('const handleOpenOrderHistory');
     expect(ordersPage).toContain('const handleOpenShipmentHistory');
-    expect(ordersPage).toContain('onClick={() => handleOpenOrderHistory(ord)}');
-    expect(ordersPage).toContain('onClick={() => handleOpenShipmentHistory(ship)}');
+    expect(ordersShell).toContain('onOpenOrderHistory={handleOpenOrderHistory}');
+    expect(ordersShell).toContain('onOpenHistory={handleOpenShipmentHistory}');
+    expect(ordersTable).toContain('onClick={() => onOpenOrderHistory(ord)}');
+    expect(shipmentsTable).toContain('onClick={() => onOpenHistory(ship)}');
   });
 
   it('mounts the history modal with the active context and renders a clear event table with detailed snapshots', () => {
-    expect(ordersPage).toContain('<OrderHistoryModal');
-    expect(ordersPage).toContain('context={orderHistoryContext}');
+    expect(ordersDialogs).toContain('<OrderHistoryModal');
+    expect(ordersDialogs).toContain('context={orderHistoryContext}');
     expect(historyModal).toContain('سجل الأحداث والتغييرات');
     expect(historyModal).toContain('تفاصيل التغييرات');
     expect(historyModal).toContain('كل صف يمثل حدثًا واحدًا');
@@ -51,12 +58,12 @@ describe('orders history UI wiring', () => {
   });
 
   it('checks the order audit history before a status change and executes every skipped stage in order', () => {
-    expect(ordersPage).toContain('orderHistoryService.listForContext');
-    expect(ordersPage).toContain('getProcessedStatusIds(statusHistory)');
-    expect(ordersPage).toContain('planOrderStatusTransition');
-    expect(ordersPage).toContain('transitionPlan.stagesToProcess');
-    expect(ordersPage).toContain('for (const stage of transitionPlan.stagesToProcess)');
-    expect(ordersPage).toContain('purchaseSource');
-    expect(ordersPage).toContain('shippingCompany');
+    expect(statusHandler).toContain('orderHistoryService.listForContext');
+    expect(statusHandler).toContain('getProcessedStatusIds(statusHistory)');
+    expect(statusHandler).toContain('planOrderStatusTransition');
+    expect(statusHandler).toContain('transitionPlan.stagesToProcess');
+    expect(statusHandler).toContain('for (const stage of transitionPlan.stagesToProcess)');
+    expect(statusHandler).toContain('purchaseSource');
+    expect(statusHandler).toContain('shippingCompany');
   });
 });

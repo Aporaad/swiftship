@@ -5,7 +5,8 @@
  */
 
 import React from 'react';
-import { PrintTemplateDesignerTab, PrintTemplateSettings } from '../../components/PrintTemplateDesignerTab';
+import { PrintTemplateDesignerTab } from '../../components/PrintTemplateDesignerTab';
+import type { PrintTemplateSettings } from '../../types/reports.types';
 
 interface PrintDesignerPageTabProps {
   isAr: boolean;

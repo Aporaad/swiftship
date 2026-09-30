@@ -944,3 +944,16 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 
 ## [2026-09-30 00:32:00] Phase 9 Completion DB Audit
 - Database schema untouched. Refactoring performed exclusively on React page structures and business logic hooks.
+
+
+## [2026-09-30 06:15:36 +03:00] — فحص metadata لقاعدة Supabase خلال تدقيق المرحلة التاسعة — AI Model: Manus (معرّف النموذج الخلفي غير ظاهر)
+- تم التحقق للقراءة فقط من المشروع `ejrojwbbflzchasvgexr`؛ الحالة `ACTIVE_HEALTHY`، إصدار PostgreSQL 17.6.1.
+- أداة سرد الجداول أظهرت 51 جدولًا في `public`؛ RLS مفعل على جدول واحد فقط ومعطل على 50، و22 جدولًا بها JSONB، مع بقاء عمودي `password` و`system_pin` في `public.users`.
+- لم تتم قراءة قيم صفوف، ولم ينفذ SQL أو DDL/DML أو Migration، ولم تتغير القاعدة أو السياسات. لذلك لم يضف أمر SQL إلى `db_commends.md`.
+- تقرير التدقيق: `docs/pre-api/phase9-audit-2026-09-30.md`.
+
+
+## [2026-09-30 08:23:00 +03:00] — تحقق المرحلة التاسعة — دون تغييرات قاعدة بيانات — AI Model: Manus (معرّف النموذج الخلفي غير ظاهر)
+- اقتصرت التغييرات على TypeScript/React والاختبارات والتوثيق؛ لم يتم الاتصال بقاعدة Supabase في هذه الجولة.
+- لم ينفذ SQL أو DDL أو DML أو Migration، ولم تتغير البيانات أو الجداول أو RLS والسياسات.
+- لذلك لم تتم إضافة أمر إلى `db_commends.md`.

@@ -28,12 +28,14 @@ describe('order party wiring', () => {
 
   it('uses the shared list picker in both order forms and keeps account resolution party-aware', () => {
     const createModal = projectFile('src/components/orders/CreateOrderModal.tsx');
+    const createStep1 = projectFile('src/features/orders/components/create-order-modal/CreateOrderStep1.tsx');
     const editModal = projectFile('src/components/orders/EditOrderModal.tsx');
+    const editStep1 = projectFile('src/features/orders/components/edit-order-modal/EditOrderStep1.tsx');
     const picker = projectFile('src/components/orders/OrderPartyPicker.tsx');
     const financialService = projectFile('src/services/financialAccountService.ts');
     const partyService = projectFile('src/services/orderPartyService.ts');
     expect(createModal).toContain('OrderPartyPicker');
-    expect(editModal).toContain('OrderPartyPicker');
+    expect(editStep1).toContain('OrderPartyPicker');
     expect(picker).toContain('الطلب لموظف/مندوب');
     expect(picker).toContain('الاختيار من القائمة');
     expect(picker).toContain('role="dialog"');
@@ -41,7 +43,7 @@ describe('order party wiring', () => {
     expect(picker).toContain('createPortal');
     expect(picker).toContain('document.body');
     expect(picker).toContain('z-[999999]');
-    expect(createModal).toContain('!formData.customerId && !isStaffOrder');
+    expect(createStep1).toContain('!formData.customerId && !isStaffOrder');
     expect(partyService).toContain("if (staffOnly && party.type === 'customer') return false;");
     expect(financialService).toContain('entities.orderParty || entities.customer');
     expect(createModal).toContain('orderCurrency, currency: orderCurrency, exchangeRate: 1');

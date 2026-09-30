@@ -58,9 +58,9 @@ describe('عقد واجهة القيود الجديدة', () => {
 
   it('يعرض تحصيل الطلب بعملة الدفع المحفوظة ويعتمدها عند إنشاء سند القبض', () => {
     const modal = source('../orders/PaymentModal.tsx');
-    const orders = readFileSync(resolve(process.cwd(), 'src', 'features', 'orders', 'pages', 'OrdersPage.tsx'), 'utf8');
+    const orders = readFileSync(resolve(process.cwd(), 'src', 'features', 'orders', 'services', 'collectOrderPaymentHandler.ts'), 'utf8');
     expect(modal).toContain('selectedOrder?.paidCurrency || selectedOrder?.currency');
-    expect(orders).toContain('selectedOrder.paidCurrency || selectedOrder.currency || selectedOrder.orderCurrency');
+    expect(orders).toMatch(/selectedOrder\.paidCurrency\s*\|\|\s*selectedOrder\.currency\s*\|\|\s*selectedOrder\.orderCurrency/);
   });
 
   it('يعرض تفاصيل طريقة الدفع ومراجع البنك والاستحقاق ويمنع المختلط خارج القيد المركب', () => {

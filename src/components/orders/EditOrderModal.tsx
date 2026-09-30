@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
-  X, Edit2, Trash2, Calendar, Package, DollarSign, CreditCard, AlertCircle,
-  User, ShoppingCart, Truck, CheckCircle2, ChevronRight, ChevronLeft, Calculator, FileText, ShieldCheck, Wallet, Building, ArrowRightLeft, Coins, Hash, Boxes
+  X, Edit2, DollarSign, AlertCircle,
+  User, ShoppingCart, Truck, CheckCircle2, ChevronRight, ChevronLeft
 } from 'lucide-react';
 import { doc, updateDoc, addDoc, collection, db } from '../../lib/supabase';
 import { notificationService } from '../../services/notificationService';
@@ -10,11 +10,14 @@ import { calculateShipmentCategoryFees } from '../../services/itemCategoryServic
 import { financialAccountService } from '../../services/financialAccountService';
 import { buildOrderParties, findOrderParty, toOrderPartyPayload, type OrderParty } from '../../services/orderPartyService';
 import { calculateOrderPaymentTotals } from '../../services/orderCurrencyService';
-import { amountInWords } from '../../lib/numberToWords';
 import { validateOrderPaymentInput } from '../../services/orderPaymentDataService';
 import FinancialCalculatorModal from '../finance/FinancialCalculatorModal';
-import OrderPartyPicker from './OrderPartyPicker';
 import ProductPickerModal, { SystemProductRecord } from './ProductPickerModal';
+import EditOrderStep1 from '../../features/orders/components/edit-order-modal/EditOrderStep1';
+import EditOrderStep2 from '../../features/orders/components/edit-order-modal/EditOrderStep2';
+import EditOrderStep3 from '../../features/orders/components/edit-order-modal/EditOrderStep3';
+import EditOrderStep4 from '../../features/orders/components/edit-order-modal/EditOrderStep4';
+import EditOrderStep5 from '../../features/orders/components/edit-order-modal/EditOrderStep5';
 
 interface EditOrderModalProps {
   isOpen: boolean;
@@ -41,27 +44,6 @@ const STEPS = [
   { id: 4, titleAr: 'المالية والدفع', titleEn: 'Financials & Payment', icon: DollarSign },
   { id: 5, titleAr: 'الخلاصة والتأكيد', titleEn: 'Summary & Confirm', icon: CheckCircle2 },
 ];
-
-function FeeSummary({
-  label,
-  value,
-  currency,
-  emphasized = false,
-}: {
-  label: string;
-  value: number | string | undefined;
-  currency?: string;
-  emphasized?: boolean;
-}) {
-  return (
-    <div className={`rounded-lg border p-2 ${emphasized ? 'border-cyan-400/35 bg-cyan-500/10' : 'border-slate-800 bg-slate-950/70'}`}>
-      <span className="block text-[8px] uppercase font-black text-slate-500 truncate">{label}</span>
-      <span className={`block mt-0.5 text-[11px] font-mono font-black ${emphasized ? 'text-cyan-300' : 'text-slate-200'}`}>
-        {(Number(value) || 0).toLocaleString()} {currency || 'SAR'}
-      </span>
-    </div>
-  );
-}
 
 export default function EditOrderModal({
   isOpen,
@@ -774,797 +756,87 @@ export default function EditOrderModal({
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar text-start text-xs font-bold">
 
           {/* STEP 1: Customer & Source */}
+          {/* STEP 1: Customer & Source */}
           {currentStep === 1 && (
-            <div className="space-y-4 animate-fade-in">
-              <div className="bg-slate-950/40 p-5 rounded-2xl border border-slate-800 space-y-4">
-                <span className="text-blue-400 uppercase text-[10px] block font-black">{isAr ? 'العميل والحساب' : 'Customer Account'}</span>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div className="md:col-span-3">
-                    <label className="block text-slate-500 mb-2">{isAr ? 'تحديد طرف الطلب والحساب المالي' : 'Order party and financial account'}</label>
-                    <OrderPartyPicker
-                      isAr={isAr}
-                      parties={orderParties}
-                      selectedParty={selectedOrderParty}
-                      staffOnly={Boolean(formData.isStaffOrder)}
-                      onStaffOnlyChange={setIsStaffOrder}
-                      onSelect={selectOrderParty}
-                      onClear={clearOrderParty}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-500 mb-1">{isAr ? 'اسم العميل' : 'Customer Name'}</label>
-                    <input
-                      type="text"
-                      value={formData.customerName}
-                      onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
-                      className="w-full bg-slate-955 border border-slate-800 text-white rounded-xl p-3 outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-500 mb-1">{isAr ? 'رقم الهاتف' : 'Phone'}</label>
-                    <input
-                      type="text"
-                      value={formData.customerPhone}
-                      onChange={(e) => setFormData({ ...formData, customerPhone: e.target.value })}
-                      className="w-full bg-slate-955 border border-slate-800 text-white rounded-xl p-3 outline-none font-mono"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-slate-950/40 p-5 rounded-2xl border border-slate-800 space-y-4">
-                <span className="text-blue-400 uppercase text-[10px] block font-black">{isAr ? 'المصدر والتتبع' : 'Source & Tracking'}</span>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-slate-500 mb-1">{isAr ? 'مصدر الطلب' : 'Order Source'}</label>
-                    <select
-                      value={formData.orderSourceId}
-                      onChange={(e) => {
-                        const s = sources.find((src) => src.id === e.target.value);
-                        setFormData({
-                          ...formData,
-                          orderSourceId: e.target.value,
-                          orderSourceName: s ? s.name || s.source_name : '',
-                          orderSourceType: s ? s.type || 'App' : 'App',
-                        });
-                      }}
-                      className="w-full bg-slate-955 border border-slate-800 text-white rounded-xl p-3 outline-none cursor-pointer"
-                    >
-                      <option value="">{isAr ? '-- اختر المصدر --' : '-- Choose Source --'}</option>
-                      {sources.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name || s.source_name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-500 mb-1">{isAr ? 'رقم الفاتورة الأصلي (سلة/متجر)' : 'External Reference'}</label>
-                    <input
-                      type="text"
-                      value={formData.externalOrderNumber}
-                      onChange={(e) => setFormData({ ...formData, externalOrderNumber: e.target.value })}
-                      className="w-full bg-slate-955 border border-slate-800 text-white rounded-xl p-3 outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-500 mb-1">{isAr ? 'رقم التتبع الموحد' : 'Tracking Number'}</label>
-                    <input
-                      type="text"
-                      value={formData.trackingNumber}
-                      onChange={(e) => setFormData({ ...formData, trackingNumber: e.target.value })}
-                      className="w-full bg-slate-955 border border-slate-800 text-white rounded-xl p-3 outline-none font-mono"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
+            <EditOrderStep1
+              isAr={isAr}
+              orderParties={orderParties}
+              selectedOrderParty={selectedOrderParty}
+              formData={formData}
+              setFormData={setFormData}
+              setIsStaffOrder={setIsStaffOrder}
+              selectOrderParty={selectOrderParty}
+              clearOrderParty={clearOrderParty}
+              sources={sources}
+            />
           )}
 
           {/* STEP 2: Products & Items */}
+          {/* STEP 2: Products & Items */}
           {currentStep === 2 && (
-            <div className="bg-slate-950/40 p-5 rounded-2xl border border-slate-800 space-y-4 animate-fade-in">
-              <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-                <span className="text-blue-400 uppercase text-[10px] font-black">{isAr ? 'الأصناف والمنتجات' : 'Products & Items'}</span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsProductPickerOpen(true)}
-                    className="bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 px-3 py-1.5 rounded-xl text-[10px] font-black flex items-center gap-1.5 cursor-pointer transition-all"
-                  >
-                    <Boxes className="w-3.5 h-3.5 text-indigo-400" />
-                    {isAr ? 'اختيار منتج من القائمة' : 'Select Product from Catalog'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={addItemRow}
-                    className="bg-cyan-600/10 hover:bg-cyan-600/20 text-cyan-400 border border-cyan-500/20 px-3 py-1.5 rounded-xl text-[10px] font-black cursor-pointer"
-                  >
-                    ➕ {isAr ? 'إضافة منتج' : 'Add Item'}
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-2.5">
-                {items.map((item, idx) => (
-                  <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-slate-900/60 p-3 rounded-xl border border-slate-850">
-                    <div className="col-span-4">
-                      <label className="block text-[9px] text-slate-500 mb-0.5">{isAr ? 'اسم المنتج' : 'Item Name'}</label>
-                      <input
-                        type="text"
-                        value={item.productName || ''}
-                        onChange={(e) => updateItemRow(idx, 'productName', e.target.value)}
-                        className="w-full bg-slate-955 border border-slate-800 text-white rounded-lg p-2 text-[11px]"
-                      />
-                    </div>
-
-                    <div className="col-span-3">
-                      <label className="block text-[9px] text-slate-500 mb-0.5">{isAr ? 'رابط المنتج' : 'Product URL'}</label>
-                      <input
-                        type="text"
-                        value={item.productUrl || ''}
-                        onChange={(e) => updateItemRow(idx, 'productUrl', e.target.value)}
-                        className="w-full bg-slate-955 border border-slate-800 text-white rounded-lg p-2 text-[11px]"
-                      />
-                    </div>
-
-                    <div className="col-span-2">
-                      <label className="block text-[9px] text-slate-500 mb-0.5">{isAr ? 'السعر (SAR)' : 'Price'}</label>
-                      <input
-                        type="number"
-                        value={item.productPrice || 0}
-                        onChange={(e) => updateItemRow(idx, 'productPrice', parseFloat(e.target.value) || 0)}
-                        className="w-full bg-slate-955 border border-slate-800 text-white rounded-lg p-2 text-[11px] font-mono text-center"
-                      />
-                    </div>
-
-                    <div className="col-span-2">
-                      <label className="block text-[9px] text-slate-500 mb-0.5">{isAr ? 'الكمية' : 'Qty'}</label>
-                      <input
-                        type="number"
-                        value={item.quantity || 1}
-                        onChange={(e) => updateItemRow(idx, 'quantity', parseInt(e.target.value) || 1)}
-                        className="w-full bg-slate-955 border border-slate-800 text-white rounded-lg p-2 text-[11px] font-mono text-center"
-                      />
-                    </div>
-
-                    <div className="col-span-1 flex justify-center pt-3">
-                      <button
-                        type="button"
-                        onClick={() => removeItemRow(idx)}
-                        disabled={items.length === 1}
-                        className="text-rose-500 hover:text-rose-400 p-1.5 rounded-lg disabled:opacity-30 cursor-pointer"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    {/* Packaging Type Sub-Row & Insurance */}
-                    <div className="col-span-12 flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-850 text-[10px] text-start">
-                      <div className="flex items-center gap-2">
-                        <span className="font-black text-cyan-400">{isAr ? 'فئة الصنف:' : 'Item category:'}</span>
-                        <select
-                          value={item.itemCategoryId || ''}
-                          onChange={(e) => {
-                            const selectedId = e.target.value;
-                            const category = itemCategories.find((entry: any) => entry.id === selectedId);
-                            updateItemRow(idx, 'itemCategoryId', selectedId);
-                            updateItemRow(idx, 'itemCategoryName', category ? (isAr ? category.nameAr : category.nameEn) : '');
-                          }}
-                          className="bg-slate-950 border border-slate-800 text-white font-bold rounded-xl px-2.5 py-1 text-[11px] outline-none cursor-pointer focus:border-cyan-400"
-                        >
-                          <option value="">{isAr ? '-- بدون فئة --' : '-- No category --'}</option>
-                          {itemCategories.map((category: any) => <option key={category.id} value={category.id}>{isAr ? category.nameAr : category.nameEn}</option>)}
-                        </select>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-black text-amber-400 flex items-center gap-1">
-                          <Package className="w-3.5 h-3.5" />
-                          {isAr ? 'نوع التغليف (order_option):' : 'Packaging Type:'}
-                        </span>
-                        <select
-                          value={item.packagingOptionId || ''}
-                          onChange={(e) => {
-                            const selectedId = e.target.value;
-                            const foundOpt = packagingOptions?.find((o: any) => o.id === selectedId);
-                            updateItemRow(idx, 'packagingOptionId', selectedId);
-                            updateItemRow(idx, 'packagingOptionName', foundOpt ? (isAr ? foundOpt.nameAr : foundOpt.nameEn) : '');
-                            updateItemRow(idx, 'packagingOptionPrice', foundOpt ? (parseFloat(foundOpt.price) || 0) : 0);
-                          }}
-                          className="bg-slate-950 border border-slate-800 text-white font-bold rounded-xl px-2.5 py-1 text-[11px] outline-none cursor-pointer focus:border-[#d4af37]"
-                        >
-                          <option value="">{isAr ? '-- بدون تغليف خاص (0) --' : '-- Standard (0) --'}</option>
-                          {(packagingOptions || []).map((pkg: any) => (
-                            <option key={pkg.id} value={pkg.id}>
-                              {isAr ? pkg.nameAr : pkg.nameEn} {pkg.price > 0 ? `(+${pkg.price} SAR)` : '(مجاني)'}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="flex items-center gap-2 border-r border-slate-800 pr-3">
-                        <label className="flex items-center gap-1.5 cursor-pointer text-slate-300 font-bold">
-                          <input
-                            type="checkbox"
-                            checked={Boolean(item.isInsured)}
-                            onChange={(e) => updateItemRow(idx, 'isInsured', e.target.checked)}
-                            className="w-3.5 h-3.5 rounded border-slate-700 bg-slate-950 text-indigo-500 focus:ring-indigo-400 cursor-pointer"
-                          />
-                          <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
-                          <span>{isAr ? 'تأمين المنتج' : 'Insure Product'}</span>
-                        </label>
-                        {item.isInsured && (
-                          <span className="text-indigo-300 font-mono font-bold text-[10px] bg-indigo-950/60 border border-indigo-800/40 px-2 py-0.5 rounded-lg">
-                            +{(parseFloat(item.insuranceFee) || 0).toLocaleString()} {orderCurrency}
-                          </span>
-                        )}
-                      </div>
-                      {item.packagingOptionPrice > 0 && (
-                        <span className="text-emerald-400 font-mono font-bold">
-                          +{((parseFloat(item.packagingOptionPrice) || 0) * (parseFloat(item.quantity) || 1)).toLocaleString()} SAR
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <EditOrderStep2
+              isAr={isAr}
+              items={items}
+              addItemRow={addItemRow}
+              updateItemRow={updateItemRow}
+              removeItemRow={removeItemRow}
+              setIsProductPickerOpen={setIsProductPickerOpen}
+              itemCategories={itemCategories}
+              packagingOptions={packagingOptions}
+              orderCurrency={orderCurrency}
+            />
           )}
 
           {/* STEP 3: Shipping & Logistics */}
           {currentStep === 3 && (
-            <div className="bg-slate-950/40 p-5 rounded-2xl border border-slate-800 space-y-4 animate-fade-in">
-              <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-                <span className="text-blue-400 uppercase text-[10px] font-black">{isAr ? 'مسارات الشحن' : 'Shipping Tracks'}</span>
-                <button
-                  type="button"
-                  onClick={addShippingRow}
-                  className="bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-400 border border-emerald-500/20 px-3 py-1.5 rounded-xl text-[10px] font-black cursor-pointer"
-                >
-                  ➕ {isAr ? 'إضافة مسار شحن' : 'Add Track'}
-                </button>
-              </div>
-
-              <div className="space-y-3">
-                {shippings.map((sh, idx) => (
-                  <div key={sh.id || idx} className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-slate-900/60 p-3 rounded-xl border border-slate-850">
-                    <div>
-                      <label className="block text-[9px] text-slate-500 mb-0.5">{isAr ? 'شركة الشحن' : 'Carrier'}</label>
-                      <select
-                        value={sh.shippingCompany || ''}
-                        onChange={(e) => updateShippingRow(idx, 'shippingCompany', e.target.value)}
-                        className="w-full bg-slate-955 border border-slate-800 text-white rounded-lg p-2.5 text-[11px] cursor-pointer"
-                      >
-                        {shippingCompanies.map((sc) => (
-                          <option key={sc.id} value={sc.name}>
-                            {sc.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-[9px] text-slate-500 mb-0.5">{isAr ? 'فئة الشحن (order_option)' : 'Shipping Category'}</label>
-                      <select
-                        value={sh.shippingCategoryId || ''}
-                        onChange={(e) => {
-                          const selectedId = e.target.value;
-                          const foundOpt = shippingCategoryOptions?.find((o: any) => o.id === selectedId);
-                          updateShippingRow(idx, 'shippingCategoryId', selectedId);
-                          updateShippingRow(idx, 'shippingCategoryName', foundOpt ? (isAr ? foundOpt.nameAr : foundOpt.nameEn) : '');
-                          updateShippingRow(idx, 'shippingCategoryPrice', foundOpt ? (parseFloat(foundOpt.price) || 0) : 0);
-                          if (foundOpt?.duration !== undefined) {
-                            updateShippingRow(idx, 'shippingDuration', String(foundOpt.duration));
-                          }
-                        }}
-                        className="w-full bg-slate-955 border border-slate-800 text-cyan-300 font-bold rounded-lg p-2.5 text-[11px] cursor-pointer"
-                      >
-                        <option value="">{isAr ? '-- عادي --' : '-- Standard --'}</option>
-                        {(shippingCategoryOptions || []).map((cat: any) => (
-                          <option key={cat.id} value={cat.id}>
-                            {isAr ? cat.nameAr : cat.nameEn} {cat.duration ? `(${cat.duration}d)` : ''} {cat.price > 0 ? `(+${cat.price} SAR)` : ''}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-[9px] text-slate-500 mb-0.5">{isAr ? 'تكلفة الشحن (SAR)' : 'Cost (SAR)'}</label>
-                      <input
-                        type="number"
-                        value={sh.shippingCost || 0}
-                        onChange={(e) => updateShippingRow(idx, 'shippingCost', parseFloat(e.target.value) || 0)}
-                        className="w-full bg-slate-955 border border-slate-800 text-[#d4af37] rounded-lg p-2.5 text-[11px] font-mono"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[9px] text-slate-500 mb-0.5">{isAr ? 'مكان التصدير' : 'Source'}</label>
-                      <input
-                        type="text"
-                        value={sh.shippingSource || ''}
-                        onChange={(e) => updateShippingRow(idx, 'shippingSource', e.target.value)}
-                        className="w-full bg-slate-955 border border-slate-800 text-white rounded-lg p-2.5 text-[11px]"
-                      />
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1">
-                        <label className="block text-[9px] text-slate-500 mb-0.5">{isAr ? 'الوجهة' : 'Destination'}</label>
-                        <input
-                          type="text"
-                          value={sh.shippingDestination || ''}
-                          onChange={(e) => updateShippingRow(idx, 'shippingDestination', e.target.value)}
-                          className="w-full bg-slate-955 border border-slate-800 text-white rounded-lg p-2.5 text-[11px]"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removeShippingRow(idx)}
-                        className="text-rose-500 hover:text-rose-400 p-1.5 rounded-lg pt-4 cursor-pointer"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    <div className="md:col-span-4 grid grid-cols-1 lg:grid-cols-7 gap-2.5 border-t border-cyan-500/15 pt-3">
-                      <div className="lg:col-span-2">
-                        <label className="block text-[9px] text-cyan-300 mb-0.5 font-black">{isAr ? 'فئة محتوى الشحنة' : 'Shipment content category'}</label>
-                        <select
-                          value={sh.contentCategoryId || ''}
-                          onChange={(e) => updateShippingRow(idx, 'contentCategoryId', e.target.value)}
-                          className="w-full bg-slate-950 border border-cyan-500/25 text-white rounded-lg p-2.5 text-[11px] cursor-pointer focus:border-cyan-400 outline-none"
-                        >
-                          <option value="">{isAr ? '-- بدون فئة --' : '-- No category --'}</option>
-                          {itemCategories.map((category: any) => (
-                            <option key={category.id} value={category.id}>{isAr ? category.nameAr : category.nameEn}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-[9px] text-slate-500 mb-0.5">{isAr ? 'عدد الكراتين' : 'Cartons'}</label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={sh.cartonCount ?? 0}
-                          onChange={(e) => updateShippingRow(idx, 'cartonCount', Math.max(0, parseInt(e.target.value, 10) || 0))}
-                          className="w-full bg-slate-950 border border-slate-800 text-white rounded-lg p-2.5 text-[11px] font-mono text-center"
-                        />
-                      </div>
-                      <FeeSummary label={isAr ? 'جمارك' : 'Customs'} value={sh.customsFee} currency={sh.categoryFeeCurrency} />
-                      <FeeSummary label={isAr ? 'ضريبة' : 'Tax'} value={sh.taxFee} currency={sh.categoryFeeCurrency} />
-                      <FeeSummary label={isAr ? 'رسوم أخرى' : 'Other fees'} value={sh.otherCategoryFee} currency={sh.categoryFeeCurrency} />
-                      <FeeSummary label={isAr ? 'إجمالي رسوم الفئة' : 'Category fees total'} value={sh.categoryFeesTotal} currency={sh.categoryFeeCurrency} emphasized />
-                      <p className="lg:col-span-7 text-[9px] text-slate-500">
-                        {isAr ? 'تُحفظ هذه الرسوم مع الشحنة فقط ولا تدخل في إجمالي الطلب أو مدفوعاته.' : 'These fees are stored with this shipment only and are excluded from the order total and payments.'}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <EditOrderStep3
+              isAr={isAr}
+              shippings={shippings}
+              addShippingRow={addShippingRow}
+              updateShippingRow={updateShippingRow}
+              removeShippingRow={removeShippingRow}
+              shippingCompanies={shippingCompanies}
+              shippingCategoryOptions={shippingCategoryOptions}
+              itemCategories={itemCategories}
+            />
           )}
 
           {/* STEP 4: Financials & Payment */}
           {currentStep === 4 && (
-            <div className="space-y-5 animate-fade-in">
-              {/* Top inputs row: fees */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-slate-950/40 border border-slate-800 p-4 rounded-2xl text-xs font-bold">
-                <div>
-                  <label className="block text-slate-500 mb-1">{isAr ? `رسوم التغليف العامة (${orderCurrency})` : `Packaging Fee (${orderCurrency})`}</label>
-                  <input
-                    type="number"
-                    value={formData.packagingFee || ''}
-                    onChange={(e) => setFormData({ ...formData, packagingFee: parseFloat(e.target.value) || 0 })}
-                    className="w-full bg-slate-955 border border-slate-800 text-white font-mono rounded-xl p-2.5 outline-none"
-                    placeholder="0.00"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-500 mb-1">{isAr ? `أجرة التوصيل (${formData.deliveryCourierFeeCurrency || settings?.currency || 'YER'})` : `Delivery Fee (${formData.deliveryCourierFeeCurrency || settings?.currency || 'YER'})`}</label>
-                  <input
-                    type="number"
-                    value={formData.deliveryCourierFee || ''}
-                    onChange={(e) => setFormData({ ...formData, deliveryCourierFee: parseFloat(e.target.value) || 0 })}
-                    className="w-full bg-slate-955 border border-slate-800 text-white font-mono rounded-xl p-2.5 outline-none"
-                  />
-                  <p className="mt-1 text-[10px] font-mono text-amber-300/80">≈ {currencyTotals.deliveryFeeOrderCurrency.toLocaleString(undefined, { maximumFractionDigits: 2 })} {orderCurrency}</p>
-                </div>
-
-                {formData.orderSourceType === 'SHEIN' && (
-                  <div>
-                    <label className="block text-slate-500 mb-1">{isAr ? `سعر شي إن الأحمر (${orderCurrency})` : `SHEIN Red Price (${orderCurrency})`}</label>
-                    <input
-                      type="number"
-                      value={formData.sheinRedPrice || ''}
-                      onChange={(e) => setFormData({ ...formData, sheinRedPrice: parseFloat(e.target.value) || 0 })}
-                      className="w-full bg-slate-955 border border-slate-800 text-white font-mono rounded-xl p-2.5 outline-none"
-                      placeholder="0.00"
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* ── Two-Column: Financial Breakdown (left) vs Payment (right) ── */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-
-                {/* ═══ LEFT: Financial Breakdown ═══ */}
-                <div className="p-4 bg-slate-955 rounded-2xl border border-slate-800 shadow-xl space-y-2.5 text-xs">
-                  <div className="flex items-center gap-2 pb-2.5 border-b border-slate-800">
-                    <Calculator className="w-4 h-4 text-[#d4af37]" />
-                    <span className="text-[11px] text-slate-300 font-extrabold uppercase tracking-widest">
-                      {isAr ? 'الكشف المالي التفصيلي' : 'Financial Breakdown'}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-500 font-bold">{isAr ? '🛍 قيمة المنتجات:' : '🛍 Products Value:'}</span>
-                    <span className="font-mono text-white font-bold">{(productsSum || 0).toLocaleString()} {orderCurrency}</span>
-                  </div>
-
-                  {shippingsCostSum > 0 && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-500 font-bold">{isAr ? '🚚 تكاليف الشحن:' : '🚚 Shipping Cost:'}</span>
-                      <span className="font-mono text-blue-300 font-bold">{shippingsCostSum.toLocaleString()} {orderCurrency}</span>
-                    </div>
-                  )}
-
-                  {itemsPackagingSum > 0 && (
-                    <div className="flex justify-between items-center text-amber-300">
-                      <span className="font-bold">{isAr ? '📦 رسوم تغليف المنتجات المخصصة:' : '📦 Packaging Options Fee:'}</span>
-                      <span className="font-mono font-bold">+{itemsPackagingSum.toLocaleString()} {orderCurrency}</span>
-                    </div>
-                  )}
-
-                  {shippingsCategorySum > 0 && (
-                    <div className="flex justify-between items-center text-cyan-300">
-                      <span className="font-bold">{isAr ? '⚡️ رسوم فئات الشحن السريع:' : '⚡️ Shipping Category Speed Fees:'}</span>
-                      <span className="font-mono font-bold">+{shippingsCategorySum.toLocaleString()} {orderCurrency}</span>
-                    </div>
-                  )}
-
-                  {(formData.packagingFee || 0) > 0 && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-500 font-bold">{isAr ? '📦 رسوم تغليف وشحن محلي:' : '📦 Local Freight & Wrapping:'}</span>
-                      <span className="font-mono text-purple-200 font-bold">{(formData.packagingFee || 0).toLocaleString()} {orderCurrency}</span>
-                    </div>
-                  )}
-
-                  {(formData.deliveryCourierFee || 0) > 0 && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-500 font-bold">{isAr ? '🛵 أجرة توصيل المندوب:' : '🛵 Delivery Fee:'}</span>
-                      <span className="font-mono text-amber-200 font-bold">
-                        {(formData.deliveryCourierFee || 0).toLocaleString()} {formData.deliveryCourierFeeCurrency || settings?.currency || 'YER'}
-                      </span>
-                    </div>
-                  )}
-
-                  <div className="border-t border-slate-800 pt-2 space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="font-black text-slate-300 text-xs">{isAr ? '📊 الإجمالي بعملة الطلب:' : '📊 Total in Order Currency:'}</span>
-                      <span className="font-black font-mono text-slate-200 text-sm bg-slate-900 px-3 py-1 rounded-xl border border-slate-800">
-                        {Math.ceil(totalOrderSAR).toLocaleString()} {orderCurrency}
-                      </span>
-                    </div>
-
-                    <div className="bg-emerald-950/30 border border-emerald-800/40 rounded-xl px-3.5 py-2.5">
-                      <div className="flex justify-between items-center">
-                        <span className="font-black text-emerald-300 text-xs">{isAr ? `💰 الإجمالي بعملة الدفع (${paymentCurrency}):` : `💰 Total in ${paymentCurrency}:`}</span>
-                        <span className="font-black font-mono text-emerald-300 text-base">
-                          {Math.ceil(totalOrderYER).toLocaleString()} {paymentCurrency}
-                        </span>
-                      </div>
-                      {totalOrderYER > 0 && (
-                        <p className="text-[10px] text-emerald-400/80 font-bold mt-1 italic">
-                          {amountInWords(totalOrderYER, paymentCurrency, isAr ? 'ar' : 'en')}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* ═══ RIGHT: Payment Details (مطابق لنموذج سند القبض) ═══ */}
-                <div className="p-4 bg-slate-955 rounded-2xl border border-[#d4af37]/20 shadow-xl space-y-3.5 text-xs">
-                  <div className="flex items-center justify-between pb-2.5 border-b border-slate-800">
-                    <div className="flex items-center gap-2">
-                      <CreditCard className="w-4 h-4 text-[#d4af37]" />
-                      <span className="text-[11px] text-slate-300 font-extrabold uppercase tracking-widest">
-                        {isAr ? 'وسائل وحسابات التحصيل' : 'Payment Methods & Receipt Accounts'}
-                      </span>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setIsCalcOpen(true)}
-                      className="inline-flex items-center gap-1.5 rounded-xl border border-[#d4af37]/40 bg-[#d4af37]/10 hover:bg-[#d4af37]/25 px-2.5 py-1 text-xs font-bold text-[#f4d870] transition active:scale-95 cursor-pointer"
-                      title={isAr ? 'فتح الآلة الحاسبة والمصارفة' : 'Calculator & Currency Exchange'}
-                    >
-                      <Calculator className="h-4 w-4 text-[#f4d870]" />
-                      <span>{isAr ? 'حاسبة ومصارفة' : 'Calc & Rates'}</span>
-                    </button>
-                  </div>
-
-                  {/* Payment Type Buttons */}
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black uppercase text-slate-400 block">
-                      {isAr ? 'نوع وسيلة الدفع' : 'Payment Type'}
-                    </label>
-                    <div className="grid grid-cols-4 gap-2">
-                      {[
-                        { id: 'Cash', labelAr: 'نقد (صندوق)', labelEn: 'Cash Box', icon: Wallet },
-                        { id: 'Bank', labelAr: 'بنك (تحويل)', labelEn: 'Bank Transfer', icon: Building },
-                        { id: 'Deferred', labelAr: 'آجل (من حساب اخر)', labelEn: 'On Credit', icon: FileText },//مهم : يتم تطوير حاله من حساب اخر بحيث يمكن اختيار حساب مالي اخر غير حساب العميل ليتم تقييد الفاتوره من هذا الحساب 
-                        { id: 'Mixed', labelAr: 'متعدد (مختلط)', labelEn: 'Multi / Split', icon: ArrowRightLeft },
-                      ].map((type) => {
-                        const Icon = type.icon;
-                        const isSelected = (formData.paymentMethod || 'Cash') === type.id;
-                        return (
-                          <button
-                            key={type.id}
-                            type="button"
-                            onClick={() => {
-                              const newMethod = type.id;
-                              const updates: any = { paymentMethod: newMethod };
-                              if (newMethod === 'Cash' && !formData.cashAccountId && cashAccountsList[0]) {
-                                updates.cashAccountId = cashAccountsList[0].id;
-                              }
-                              if (newMethod === 'Bank' && !formData.bankAccountId && bankAccountsList[0]) {
-                                updates.bankAccountId = bankAccountsList[0].id;
-                              }
-                              if (newMethod === 'Mixed') {
-                                if (!formData.cashAccountId && cashAccountsList[0]) updates.cashAccountId = cashAccountsList[0].id;
-                                if (!formData.bankAccountId && bankAccountsList[0]) updates.bankAccountId = bankAccountsList[0].id;
-                              }
-                              if (newMethod === 'Deferred') {
-                                updates.amountPaid = 0;
-                              }
-                              setFormData({ ...formData, ...updates });
-                            }}
-                            className={`flex flex-col items-center justify-center p-2 rounded-xl border font-bold text-[10px] transition-all cursor-pointer ${isSelected
-                              ? 'bg-[#d4af37]/15 border-[#d4af37] text-[#d4af37] shadow-md ring-1 ring-[#d4af37]/30'
-                              : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-850 hover:text-slate-200'
-                              }`}
-                          >
-                            <Icon className="w-4 h-4 mb-1" />
-                            <span>{isAr ? type.labelAr : type.labelEn}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Currency Picker & Rate */}
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <div className="bg-slate-900 border border-slate-800 p-2 rounded-xl">
-                      <span className="text-[9px] font-black uppercase text-[#d4af37] block mb-1">{isAr ? 'عملة الدفع' : 'Payment Currency'}</span>
-                      <select
-                        value={paymentCurrency}
-                        onChange={(e) => {
-                          const newCurrency = e.target.value;
-                          const rateOrder = getCurrencyRate(orderCurrency);
-                          const ratePayment = getCurrencyRate(newCurrency);
-                          setFormData({ ...formData, currency: newCurrency, exchangeRate: rateOrder / ratePayment });
-                        }}
-                        className="w-full bg-slate-955 text-white font-bold text-xs p-1.5 rounded-lg border border-slate-800 outline-none cursor-pointer"
-                      >
-                        {activeCurrencies.map((c: any) => (
-                          <option className="bg-slate-900 text-white" key={c.code} value={c.code}>
-                            {isAr ? (c.main_nameAR || c.sup_nameAR || c.code) : (c.main_nameEn || c.sup_nameEn || c.code)} ({c.code})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="bg-slate-900 border border-slate-800 p-2 rounded-xl">
-                      <span className="text-[9px] font-black uppercase text-slate-400 block mb-1">
-                        {isAr ? `سعر الصرف (${orderCurrency}/${paymentCurrency})` : `Rate (${orderCurrency}/${paymentCurrency})`}
-                      </span>
-                      <input
-                        type="number"
-                        step="any"
-                        value={(getCurrencyRate(orderCurrency) / getCurrencyRate(paymentCurrency)).toFixed(4)}
-                        readOnly
-                        className="w-full bg-slate-955 border border-slate-800 text-white font-mono font-bold text-xs p-1.5 rounded-lg text-center outline-none disabled:opacity-50"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Cash Box Account Selector */}
-                  {((formData.paymentMethod || 'Cash') === 'Cash' || (formData.paymentMethod || 'Cash') === 'Mixed') && (
-                    <div className="bg-slate-900/80 border border-slate-800 p-2.5 rounded-xl space-y-1.5">
-                      <label className="text-[10px] font-black text-amber-400 flex items-center gap-1">
-                        <Wallet className="w-3.5 h-3.5" />
-                        <span>{isAr ? 'حساب الصندوق القابض (الصناديق)' : 'Cash Box Receiving Account'}</span>
-                      </label>
-                      <select
-                        value={formData.cashAccountId || ''}
-                        onChange={(e) => setFormData({ ...formData, cashAccountId: e.target.value })}
-                        className="w-full bg-slate-955 text-white font-bold text-xs p-2 rounded-lg border border-slate-800 outline-none cursor-pointer focus:border-[#d4af37]"
-                      >
-                        <option value="">{isAr ? '-- اختر حساب الصندوق --' : '-- Select Cash Account --'}</option>
-                        {cashAccountsList.map((acc: any) => (
-                          <option key={acc.id} value={acc.id} className="bg-slate-900 text-white">
-                            {acc.name || acc.accNameAr || acc.id} ({acc.id})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-
-                  {/* Bank Account Selector & Reference */}
-                  {((formData.paymentMethod || 'Cash') === 'Bank' || (formData.paymentMethod || 'Cash') === 'Mixed') && (
-                    <div className="bg-slate-900/80 border border-slate-800 p-2.5 rounded-xl space-y-2">
-                      <label className="text-[10px] font-black text-cyan-400 flex items-center gap-1">
-                        <Building className="w-3.5 h-3.5" />
-                        <span>{isAr ? 'حساب البنك القابض (البنوك)' : 'Bank Receiving Account'}</span>
-                      </label>
-                      <select
-                        value={formData.bankAccountId || ''}
-                        onChange={(e) => setFormData({ ...formData, bankAccountId: e.target.value })}
-                        className="w-full bg-slate-955 text-white font-bold text-xs p-2 rounded-lg border border-slate-800 outline-none cursor-pointer focus:border-cyan-400"
-                      >
-                        <option value="">{isAr ? '-- اختر حساب البنك --' : '-- Select Bank Account --'}</option>
-                        {bankAccountsList.map((acc: any) => (
-                          <option key={acc.id} value={acc.id} className="bg-slate-900 text-white">
-                            {acc.name || acc.accNameAr || acc.id} ({acc.id})
-                          </option>
-                        ))}
-                      </select>
-
-                      <div>
-                        <label className="text-[9px] font-bold text-slate-400 block mb-1">
-                          {isAr ? 'رقم المرجع / الحوالة البنكية' : 'Bank Reference #'}
-                        </label>
-                        <input
-                          type="text"
-                          value={formData.bankReference || ''}
-                          onChange={(e) => setFormData({ ...formData, bankReference: e.target.value })}
-                          placeholder={isAr ? 'رقم الإشعار أو الحوالة...' : 'Transfer Ref / Voucher #'}
-                          className="w-full bg-slate-955 border border-slate-800 text-white font-mono font-bold text-xs p-2 rounded-lg outline-none focus:border-cyan-400"
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Deferred Notice */}
-                  {(formData.paymentMethod || 'Cash') === 'Deferred' && (
-                    <div className="p-3 bg-amber-950/20 border border-amber-800/40 rounded-xl text-[10px] text-amber-300 font-bold leading-relaxed">
-                      {isAr
-                        ? '📌 الدفع الآجل: سيتم ترحيل كامل قيمة الفاتورة كمديونية على حساب العميل دون تحصيل مبالغ نقدية حالاً.'
-                        : '📌 On Credit: Full invoice value will be registered as outstanding debt on customer balance.'}
-                    </div>
-                  )}
-
-                  {/* Mixed Payment Split Amounts */}
-                  {(formData.paymentMethod || 'Cash') === 'Mixed' && (
-                    <div className="grid grid-cols-2 gap-2 bg-slate-900/90 border border-slate-800 p-2.5 rounded-xl">
-                      <div>
-                        <label className="text-[9px] font-bold text-amber-400 block mb-1">
-                          {isAr ? 'مبلغ الصندوق' : 'Cash Split Amount'}
-                        </label>
-                        <input
-                          type="number"
-                          value={formData.cashAmount || ''}
-                          onChange={(e) => {
-                            const val = parseFloat(e.target.value) || 0;
-                            const bVal = parseFloat(formData.bankAmount || '0') || 0;
-                            setFormData({
-                              ...formData,
-                              cashAmount: val,
-                              amountPaid: val + bVal,
-                            });
-                          }}
-                          placeholder="0.00"
-                          className="w-full bg-slate-955 border border-slate-800 text-amber-300 font-mono font-bold text-xs p-2 rounded-lg outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[9px] font-bold text-cyan-400 block mb-1">
-                          {isAr ? 'مبلغ البنك' : 'Bank Split Amount'}
-                        </label>
-                        <input
-                          type="number"
-                          value={formData.bankAmount || ''}
-                          onChange={(e) => {
-                            const val = parseFloat(e.target.value) || 0;
-                            const cVal = parseFloat(formData.cashAmount || '0') || 0;
-                            setFormData({
-                              ...formData,
-                              bankAmount: val,
-                              amountPaid: cVal + val,
-                            });
-                          }}
-                          placeholder="0.00"
-                          className="w-full bg-slate-955 border border-slate-800 text-cyan-300 font-mono font-bold text-xs p-2 rounded-lg outline-none"
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Cash / Advance Payment Amount Input with Presets */}
-                  {(formData.paymentMethod || 'Cash') !== 'Deferred' && (formData.paymentMethod || 'Cash') !== 'Mixed' && (
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] text-slate-400 font-bold flex justify-between items-center">
-                        <span className="text-[#d4af37]">{isAr ? `الدفعة المقدمة / المحصلة (${paymentCurrency})` : `Amount Paid (${paymentCurrency})`}</span>
-                        <div className="flex gap-1.5 text-[9px]">
-                          <button
-                            type="button"
-                            onClick={() => setFormData({ ...formData, amountPaid: 0 })}
-                            className="bg-slate-900 text-slate-400 hover:text-white px-1.5 py-0.5 rounded font-bold cursor-pointer"
-                          >
-                            0%
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setFormData({ ...formData, amountPaid: Math.ceil(totalOrderYER / 2) })}
-                            className="bg-slate-900 text-slate-400 hover:text-white px-1.5 py-0.5 rounded font-bold cursor-pointer"
-                          >
-                            50%
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setFormData({ ...formData, amountPaid: Math.ceil(totalOrderYER) })}
-                            className="bg-slate-900 text-slate-400 hover:text-white px-1.5 py-0.5 rounded font-bold cursor-pointer"
-                          >
-                            100%
-                          </button>
-                        </div>
-                      </label>
-                      <input
-                        type="number"
-                        value={formData.amountPaid ?? ''}
-                        onChange={(e) => setFormData({ ...formData, amountPaid: parseFloat(e.target.value) || 0 })}
-                        className="w-full bg-slate-955 border border-slate-800 text-emerald-400 font-mono font-black text-sm p-2.5 rounded-xl outline-none focus:border-emerald-500"
-                        placeholder="0.00"
-                      />
-                    </div>
-                  )}
-
-                  {/* Remaining Balance Summary */}
-                  <div className="flex justify-between items-center bg-slate-900/80 p-2.5 rounded-xl border border-slate-800">
-                    <span className="text-slate-400 font-bold text-[11px]">{isAr ? 'المتبقي ذمة:' : 'Remaining Balance:'}</span>
-                    <span className={`font-mono font-black text-sm ${remainingYER > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                      {Math.ceil(remainingYER).toLocaleString()} {paymentCurrency}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <EditOrderStep4
+              isAr={isAr}
+              formData={formData}
+              settings={settings}
+              setFormData={setFormData}
+              orderCurrency={orderCurrency}
+              paymentCurrency={paymentCurrency}
+              productsSum={productsSum}
+              shippingsCostSum={shippingsCostSum}
+              itemsPackagingSum={itemsPackagingSum}
+              shippingsCategorySum={shippingsCategorySum}
+              totalOrderSAR={totalOrderSAR}
+              totalOrderYER={totalOrderYER}
+              currencyTotals={currencyTotals}
+              activeCurrencies={activeCurrencies}
+              getCurrencyRate={getCurrencyRate}
+              cashAccountsList={cashAccountsList}
+              bankAccountsList={bankAccountsList}
+              setIsCalcOpen={setIsCalcOpen}
+              remainingYER={remainingYER}
+            />
           )}
 
           {/* STEP 5: Summary & Confirm */}
           {currentStep === 5 && (
-            <div className="space-y-5 animate-fade-in">
-              <div className="p-4 bg-blue-950/20 border border-blue-900/30 rounded-2xl flex items-center gap-3">
-                <ShieldCheck className="w-6 h-6 text-blue-400 shrink-0" />
-                <div>
-                  <h4 className="text-xs font-black text-blue-300">
-                    {isAr ? 'مراجعة التعديلات النهائية قبل الحفظ' : 'Review changes before saving'}
-                  </h4>
-                  <p className="text-[10px] text-slate-400 font-bold mt-0.5">
-                    {isAr ? 'تأكد من مطابقة كافة البيانات المعدلة للطلب' : 'Verify order modifications below'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-bold">
-                <div className="bg-slate-950/40 p-4 rounded-2xl border border-slate-800 space-y-2">
-                  <span className="text-slate-400 block border-b border-slate-800 pb-1">{isAr ? 'العميل:' : 'Customer:'}</span>
-                  <p className="text-white">{formData.customerName}</p>
-                  <p className="text-slate-400 font-mono">{formData.customerPhone}</p>
-                </div>
-
-                <div className="bg-slate-950/40 p-4 rounded-2xl border border-slate-800 space-y-2">
-                  <span className="text-slate-400 block border-b border-slate-800 pb-1">{isAr ? 'المالية:' : 'Financials:'}</span>
-                  <p className="text-amber-300 font-mono">إجمالي الطلب: {Math.ceil(totalOrderSAR).toLocaleString()} {orderCurrency}</p>
-                  <p className="text-emerald-400 font-mono">إجمالي الدفع: {Math.ceil(totalOrderYER).toLocaleString()} {paymentCurrency}</p>
-                  <p className="text-rose-400 font-mono">المتبقي: {Math.ceil(remainingYER).toLocaleString()} {paymentCurrency}</p>
-                </div>
-              </div>
-            </div>
+            <EditOrderStep5
+              isAr={isAr}
+              formData={formData}
+              totalOrderSAR={totalOrderSAR}
+              totalOrderYER={totalOrderYER}
+              remainingYER={remainingYER}
+              orderCurrency={orderCurrency}
+              paymentCurrency={paymentCurrency}
+            />
           )}
 
           {/* Footer Controls */}
@@ -1632,4 +904,3 @@ export default function EditOrderModal({
     </div>
   );
 }
-

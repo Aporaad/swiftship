@@ -28,6 +28,8 @@ interface AddUserModalProps {
   roles: any[];
   couriersList: any[];
   employeesList: any[];
+  showPassword?: boolean;
+  setShowPassword?: (show: boolean) => void;
 }
 
 export const AddUserModal: React.FC<AddUserModalProps> = ({
@@ -42,8 +44,15 @@ export const AddUserModal: React.FC<AddUserModalProps> = ({
   roles,
   couriersList,
   employeesList,
+  showPassword: controlledShowPassword,
+  setShowPassword: controlledSetShowPassword,
 }) => {
-  const [showPassword, setShowPassword] = useState(false);
+  const [localShowPassword, setLocalShowPassword] = useState(false);
+  const showPassword = controlledShowPassword ?? localShowPassword;
+  const setShowPassword = (show: boolean) => {
+    controlledSetShowPassword?.(show);
+    if (!controlledSetShowPassword) setLocalShowPassword(show);
+  };
 
   if (!isOpen) return null;
 

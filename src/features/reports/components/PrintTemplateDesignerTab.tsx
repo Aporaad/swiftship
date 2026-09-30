@@ -1,38 +1,9 @@
 import React from 'react';
 import { RefreshCw, Save, Palette, RotateCcw, Download as DownloadIcon, Check, Eye } from 'lucide-react';
+import type { PrintTemplateSettings } from '../types/reports.types';
+import { notificationService } from '../../../services/notificationService';
 
-const notificationService = {
-  success: (msg: string) => console.log(msg),
-  error: (msg: string) => console.error(msg),
-  notify: (opts: any) => console.log(opts),
-};
-
-export interface PrintTemplateSettings {
-  headerTitleAr: string;
-  headerTitleEn: string;
-  subtitleAr: string;
-  subtitleEn: string;
-  footerTextAr: string;
-  footerTextEn: string;
-  logoUrl: string;
-  showLogo: boolean;
-  paperSize: 'A4' | 'A4_Landscape' | '80mm' | '58mm';
-  margins: 'none' | 'minimal' | 'default';
-  fontSize: 'xs' | 'sm' | 'md' | 'lg';
-  primaryColor: string;
-  taxNumber: string;
-  showBarcode: boolean;
-  showSignatures: boolean;
-  signature1Ar: string;
-  signature1En: string;
-  signature2Ar: string;
-  signature2En: string;
-  signature3Ar: string;
-  signature3En: string;
-  showDateTime?: boolean;
-  tableStyle?: string;
-  fontFamily?: string;
-}
+export type { PrintTemplateSettings } from '../types/reports.types';
 
 interface PrintTemplateDesignerTabProps {
   isAr: boolean;

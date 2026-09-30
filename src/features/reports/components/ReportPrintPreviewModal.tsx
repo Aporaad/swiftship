@@ -1,7 +1,7 @@
 import React from 'react';
 import { Printer } from 'lucide-react';
 import { format } from 'date-fns';
-import { PrintTemplateSettings } from './PrintTemplateDesignerTab';
+import type { PrintTemplateSettings } from '../types/reports.types';
 
 interface ReportPrintPreviewModalProps {
   isPreviewModalOpen: boolean;
@@ -25,8 +25,11 @@ interface ReportPrintPreviewModalProps {
   filteredData: any;
   reportMetrics: any;
   accountTransactions: any[];
+  ledgerMetrics?: any;
+  initialPrintZoomScale?: number;
   triggerNativePrint: () => void;
   convertToYER: (amount: number, currency: string) => number;
+  convertCurrency?: (amount: number, from: string, to: string) => number;
 }
 
 export const ReportPrintPreviewModal: React.FC<ReportPrintPreviewModalProps> = ({
@@ -51,12 +54,15 @@ export const ReportPrintPreviewModal: React.FC<ReportPrintPreviewModalProps> = (
   filteredData,
   reportMetrics,
   accountTransactions,
+  ledgerMetrics: providedLedgerMetrics,
+  initialPrintZoomScale = 0.85,
   triggerNativePrint,
   convertToYER,
+  convertCurrency: providedConvertCurrency,
 }) => {
-  const [printZoomScale, setPrintZoomScale] = React.useState<number>(0.85);
-  const convertCurrency = (val: number, _from?: string, _to?: string) => val;
-  const ledgerMetrics = { totalDebit: 0, totalCredit: 0, balance: 0, displayRows: [] };
+  const [printZoomScale, setPrintZoomScale] = React.useState<number>(initialPrintZoomScale);
+  const convertCurrency = providedConvertCurrency || ((val: number) => val);
+  const ledgerMetrics = providedLedgerMetrics || { totalDebit: 0, totalCredit: 0, balance: 0, displayRows: [] };
 
   if (!isPreviewModalOpen) return null;
 

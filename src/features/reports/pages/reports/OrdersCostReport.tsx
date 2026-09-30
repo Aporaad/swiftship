@@ -20,6 +20,7 @@ interface OrdersCostReportProps {
   handleSaveAccountSelection: (type: string) => void;
   convertCurrency: (amount: number, from: string, to: string) => number;
   convertToYER: (amount: number, currency: string) => number;
+  searchMatchList: (list: any[], key: string) => any[];
   MultiAccountSelectorComponent: React.ComponentType<any>;
 }
 
@@ -36,9 +37,9 @@ const OrdersCostReport: React.FC<OrdersCostReportProps> = ({
   handleSaveAccountSelection,
   convertCurrency,
   convertToYER,
+  searchMatchList,
   MultiAccountSelectorComponent
 }) => {
-  const searchMatchList = (list: any[], _key: string) => list || [];
   const orders = (filteredData as any).orders || [];
   const couriers = (filteredData as any).couriers || [];
   return (

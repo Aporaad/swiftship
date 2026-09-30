@@ -860,3 +860,20 @@ OrdersPage.tsx يوجد بداخلها عد صفحات وتبويبات مثل �
 
 
 
+
+
+## [2026-09-30 06:12:27 +03:00] — نص أمر المستخدم كما ورد — AI Model: Manus (معرّف النموذج الخلفي غير ظاهر في الجلسة)
+```text
+لديك مشروع منصه alx الطلبات والشحن الالكتروني موجود في مستودع GitHub  الموصل بالجلسه 
+حاليا يتم تنفيذ خطه اصلاح هيكل النظام والتجهيز لبنا api   وتم الوصول بالخطه الى المرحله التاسعه 
+و اريدك الان ان تقوم بجلب اخر تحديث من المستودع وعمل فحص شامل ومراجعه للوضع الحالي والى اين وصل التنفيذ وايضا اريدك ان تقوم بالتاكد من  تنفيذ المرحله التاسعه على اكمل وجهه وفحص اذا كان هناك  اخطاء والنواقص   وايضا اجرا فحص عملي لملفات واكواد النظام والتاكد من عمل كل مكونات االنظام بدون مشاكل 
+
+والتجهيز بعدها لتنفيذ المرحله العاشره
+<attachment filename="system_pre_api_restructure_plan_ar.md" local_path="/home/ubuntu/upload/system_pre_api_restructure_plan_ar.md" />
+```
+
+
+## [2026-09-30 08:20:24 +03:00] — نص أمر المستخدم كما ورد — AI Model: Manus (معرّف النموذج الخلفي غير ظاهر في الجلسة)
+```text
+Now continue the task based on the inherited context and files. Re-read all relevant skills to the current task before proceeding. The most recently used skills were: 'workflow-composer', 'manus-config'
+```

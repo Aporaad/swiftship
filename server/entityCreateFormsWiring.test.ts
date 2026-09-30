@@ -7,7 +7,7 @@ const projectFile = (relativePath: string) => readFileSync(resolve(process.cwd()
 describe('shared entity create forms wiring', () => {
   it('uses the same customer, source, and shipping company create modals from the entity pages and the order flow', () => {
     const sharedForms = projectFile('src/components/entities/EntityCreateModals.tsx');
-    const orders = projectFile('src/features/orders/pages/OrdersPage.tsx');
+    const orders = projectFile('src/features/orders/pages/subcomponents/OrdersPageDialogs.tsx');
     const customers = projectFile('src/features/customers/pages/CustomersPage.tsx');
     const sources = projectFile('src/features/sources/pages/SourcesPage.tsx');
 

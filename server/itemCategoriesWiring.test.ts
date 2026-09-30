@@ -17,18 +17,23 @@ describe('items categories wiring', () => {
 
   it('mounts the independent categories tab and passes categories to product and shipment forms', () => {
     const orders = read('../src/features/orders/pages/OrdersPage.tsx');
+    const ordersShell = read('../src/features/orders/pages/subcomponents/OrdersPageShell.tsx');
+    const ordersDialogs = read('../src/features/orders/pages/subcomponents/OrdersPageDialogs.tsx');
     const create = read('../src/components/orders/CreateOrderModal.tsx');
     const edit = read('../src/components/orders/EditOrderModal.tsx');
+    const createStep3 = read('../src/features/orders/components/create-order-modal/CreateOrderStep3.tsx');
+    const editStep3 = read('../src/features/orders/components/edit-order-modal/EditOrderStep3.tsx');
     const shipment = read('../src/components/shipments/ShipmentFormModal.tsx');
     expect(orders).toContain("'item-categories'");
-    expect(orders).toContain('<ItemCategoriesManagementTab');
-    expect(orders).toContain('itemCategories={activeItemCategories}');
+    expect(ordersShell).toContain('<ItemCategoriesManagementTab');
+    expect(ordersShell).toContain("ordersTab === 'item-categories'");
+    expect(ordersDialogs).toContain('itemCategories={activeItemCategories}');
     expect(create).toContain('itemCategoryId');
     expect(edit).toContain('itemCategoryId');
     expect(create).toContain('ShipmentFeeCell');
-    expect(create).toContain('Shipment content category');
-    expect(edit).toContain('FeeSummary');
-    expect(edit).toContain('Shipment content category');
+    expect(createStep3).toContain('Shipment content category');
+    expect(editStep3).toContain('FeeSummary');
+    expect(editStep3).toContain('Shipment content category');
     expect(shipment).toContain('shipment-content-category-fees');
     expect(shipment).toContain('calculateShipmentCategoryFees');
   });

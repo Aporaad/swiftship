@@ -15,12 +15,12 @@ describe('database write failure guard', () => {
   });
 
   it('places the primary order write before its products, shipments, history, and notifications', () => {
-    const orders = projectFile('src/features/orders/pages/OrdersPage.tsx');
-    const primaryWrite = orders.indexOf("await addDoc(payload.orderNumber, collection(db, 'orders'), payload);");
+    const createOrderHandler = projectFile('src/features/orders/services/createOrderHandler.ts');
+    const primaryWrite = createOrderHandler.indexOf('await createOrderRecord(payload.orderNumber, payload);');
     expect(primaryWrite).toBeGreaterThan(-1);
-    expect(orders.indexOf('حفظ المنتجات الرئيسية في products')).toBeGreaterThan(primaryWrite);
-    expect(orders.indexOf('حفظ شحنات الطلب في جدول الشحنات')).toBeGreaterThan(primaryWrite);
-    expect(orders.indexOf("activityLogService.log('add_order'")).toBeGreaterThan(primaryWrite);
-    expect(orders.indexOf('await notificationService.notify({')).toBeGreaterThan(primaryWrite);
+    expect(createOrderHandler.indexOf('حفظ المنتجات الرئيسية في products')).toBeGreaterThan(primaryWrite);
+    expect(createOrderHandler.indexOf('حفظ شحنات الطلب في جدول الشحنات')).toBeGreaterThan(primaryWrite);
+    expect(createOrderHandler.indexOf('activityLogService.log("add_order"')).toBeGreaterThan(primaryWrite);
+    expect(createOrderHandler.indexOf('await notificationService.notify({', primaryWrite)).toBeGreaterThan(primaryWrite);
   });
 });

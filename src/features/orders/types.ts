@@ -6,6 +6,17 @@
  * لا تُستورد هنا أي أنواع من Supabase أو Firebase مباشرة.
  */
 
+import type {
+  OrderCreateInput,
+  OrderSupplementalData,
+  OrderUpdateInput,
+  OrdersViewModel,
+} from '../../data/dtos/orders.dto';
+import type {
+  ShipmentSupplementalData,
+  ShipmentsViewModel,
+} from '../../data/dtos/shipments.dto';
+
 export type { OrdersViewModel } from '../../data/dtos/orders.dto';
 
 // ======== بيانات إنشاء الطلب (Order Create Form) ========
@@ -120,6 +131,39 @@ export interface ShippingRow {
   _isCalculated?: boolean;
 }
 
+/** نموذج إنشاء/تعديل الشحنة كما تستخدمه نافذة إدارة الشحنات - Shipment form model */
+export interface ShipmentFormData {
+  id: string;
+  orderId: string;
+  trackingNumber: string;
+  shippingCompany: string;
+  shippingCompanyId: string;
+  courierId: string;
+  shippingType: string;
+  shippingSource: string;
+  shippingDestination: string;
+  shipmentStatus: string;
+  shippingCost: number;
+  weight: number;
+  packagingFees: number;
+  shippingCategoryId: string;
+  shippingCategoryName: string;
+  shippingCategoryPrice: number;
+  shippingDate: string;
+  shippingDuration: string;
+  expectedArrival: string;
+  deliveryDate: string;
+  notes: string;
+  contentCategoryId: string;
+  contentCategoryName: string;
+  cartonCount: number;
+  customsFee: number;
+  taxFee: number;
+  otherCategoryFee: number;
+  categoryFeesTotal: number;
+  categoryFeeCurrency: string;
+}
+
 // ======== بيانات الدفع (Payment Form) ========
 
 /** توزيع دفعة واحدة في الدفع المختلط - Single allocation in mixed payment */
@@ -211,4 +255,68 @@ export interface CustomerFormData {
   gps_location: string;
   address: string;
   notes: string;
+}
+
+/**
+ * Order records may arrive through legacy camelCase rows or explicit snake_case DTOs.
+ * Both names stay declared during the compatibility phase; neither alias is removed here.
+ */
+export interface OrderFeatureRecord extends Omit<OrdersViewModel, 'orderStatusId' | 'createdAt'> {
+  order_id?: string;
+  order_number?: string;
+  tracking_number?: string | null;
+  order_status_id?: string | number | null;
+  orderStatusId?: string | number | null;
+  orderStatus?: string | null;
+  order_status?: string | null;
+  created_at?: string | number | null;
+  createdAt?: string | number | null;
+  data?: Partial<OrderSupplementalData> | null;
+}
+
+/** Shipment records preserve both database and legacy adapter aliases. */
+export interface ShipmentFeatureRecord extends ShipmentsViewModel {
+  shipment_id?: string;
+  order_id?: string | null;
+  tracking_number?: string | null;
+  shipping_company_id?: string | null;
+  shipment_status?: string | null;
+  data?: Partial<ShipmentSupplementalData> | null;
+}
+
+export interface OrderCreateAggregateInput {
+  order: OrderCreateInput;
+  items: ItemRow[];
+  shipments: ShippingRow[];
+}
+
+export interface OrderUpdateAggregateInput {
+  orderId: string;
+  changes: OrderUpdateInput;
+}
+
+export interface OrderStatusDescriptor {
+  id: number;
+  nameAr: string;
+  nameEn: string;
+  isFirst: boolean;
+  isLast: boolean;
+  sortOrder?: number;
+  color?: string;
+  code?: string;
+  description?: string;
+  createdAt?: string;
+}
+
+export type OrderStatusTransitionReason =
+  | 'same_status'
+  | 'backward_transition'
+  | 'status_previously_processed'
+  | 'unknown_status';
+
+export interface OrderStatusTransitionPlan {
+  allowed: boolean;
+  reason?: OrderStatusTransitionReason;
+  stagesToProcess: OrderStatusDescriptor[];
+  skippedStages: OrderStatusDescriptor[];
 }

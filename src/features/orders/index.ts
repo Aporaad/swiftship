@@ -1,3 +1,11 @@
 export type { OrdersViewModel } from './types';
 export type { OrdersFeatureApi } from './api';
+export { legacyOrdersApi, createLegacyOrdersApi } from './services/legacyOrdersApi';
+export { useOrderData } from './hooks/useOrderData';
+export { useOrderFilters } from './hooks/useOrderFilters';
+export { useOrderCalculations } from './hooks/useOrderCalculations';
+export { useOrderMutations } from './hooks/useOrderMutations';
+export { OrdersTable } from './components/OrdersTable';
+export { OrderFilters } from './components/OrderFilters';
+export { ShipmentsTable } from './components/ShipmentsTable';
 export { default as OrdersPage } from './pages/OrdersPage';

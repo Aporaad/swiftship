@@ -27,6 +27,7 @@ describe('حذف الطلبات الذري', () => {
   it('يستدعي الإجراء الذري من واجهة الخدمة ولا يعتمد حذف جدول orders مباشرةً', () => {
     const service = read('src/services/orderDeletionService.ts');
     const ordersPage = read('src/features/orders/pages/OrdersPage.tsx');
+    const ordersDialogs = read('src/features/orders/pages/subcomponents/OrdersPageDialogs.tsx');
     const modal = read('src/components/orders/DeleteOrderModal.tsx');
     expect(service).toContain("supabase.rpc('delete_orders_with_dependents'");
     expect(service).toContain('normalizeOrderIds');
@@ -34,7 +35,7 @@ describe('حذف الطلبات الذري', () => {
     expect(ordersPage).toContain('handleOpenBatchDelete');
     expect(ordersPage).toContain('ordersPendingDelete');
     expect(ordersPage).toContain('deleteOrdersWithDependents');
-    expect(ordersPage).toContain('orderCount={ordersPendingDelete.length || 1}');
+    expect(ordersDialogs).toContain('orderCount={ordersPendingDelete.length || 1}');
     expect(modal).toContain('orderCount?: number');
     expect(modal).toContain('activity_logs will be preserved');
   });

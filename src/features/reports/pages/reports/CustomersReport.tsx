@@ -16,6 +16,7 @@ interface CustomersReportProps {
   setSelectedCustomerId: (id: string | null) => void;
   searchMatchList: (list: any[], key: string) => any[];
   convertToYER: (amount: number, currency: string) => number;
+  convertCurrency: (amount: number, from: string, to: string) => number;
 }
 
 // ─── CustomersReport Component ──────────────────────────────────────────────
@@ -27,10 +28,10 @@ const CustomersReport: React.FC<CustomersReportProps> = ({
   selectedCustomerId,
   setSelectedCustomerId,
   searchMatchList,
-  convertToYER
+  convertToYER,
+  convertCurrency
 }) => {
   const customers = (filteredData as any).customers || [];
-  const convertCurrency = (amt: number, _from?: string, _to?: string) => amt;
   return (
       <div>
                 <div className="space-y-6">
@@ -228,4 +229,3 @@ const CustomersReport: React.FC<CustomersReportProps> = ({
 };
 
 export default CustomersReport;
-

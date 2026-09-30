@@ -9,6 +9,7 @@
  */
 
 import { useState } from 'react';
+import { ORDER_DEFAULT_VALUES } from '../constants/orders.constants';
 import type {
   OrderFormData,
   ShippingRow,
@@ -39,8 +40,8 @@ const defaultItemRow = (): ItemRow => ({
 /** صف الشحن الافتراضي الجديد - Default new shipping row */
 const defaultShippingRow = (): ShippingRow => ({
   id: Math.random().toString(36).substr(2, 9),
-  shippingType: 'بري',
-  shippingCompany: 'Aramex',
+  shippingType: ORDER_DEFAULT_VALUES.shippingType,
+  shippingCompany: ORDER_DEFAULT_VALUES.shippingCompany,
   shippingSource: '',
   shippingDestination: '',
   shippingDate: '',
@@ -56,7 +57,7 @@ const defaultShippingRow = (): ShippingRow => ({
   taxFee: 0,
   otherCategoryFee: 0,
   categoryFeesTotal: 0,
-  categoryFeeCurrency: 'SAR',
+  categoryFeeCurrency: ORDER_DEFAULT_VALUES.categoryFeeCurrency,
 });
 
 /** بيانات نموذج الطلب الافتراضية - Default order form data */
@@ -73,16 +74,16 @@ const defaultOrderFormData = (orderCurrency: string, currency: string): OrderFor
   orderPartyAccountId: '',
   orderSourceId: '',
   orderSourceName: '',
-  orderSourceType: 'App',
+  orderSourceType: ORDER_DEFAULT_VALUES.sourceType,
   externalOrderNumber: '',
   trackingNumber: '',
   addShippingEnabled: false,
-  shippingCompany: 'Aramex',
+  shippingCompany: ORDER_DEFAULT_VALUES.shippingCompany,
   shippingCourierId: '',
   shippingCourierFeeRate: 30,
   deliveryCourierId: '',
   deliveryCourierFee: 4000,
-  deliveryCourierFeeCurrency: currency || 'YER',
+  deliveryCourierFeeCurrency: currency || ORDER_DEFAULT_VALUES.paymentCurrency,
   orderCurrency,
   currency: orderCurrency,
   exchangeRate: 1,
@@ -93,7 +94,7 @@ const defaultOrderFormData = (orderCurrency: string, currency: string): OrderFor
   packagingFee: 0,
   sheinRedPrice: 0,
   amountPaid: 0,
-  paymentMethod: 'Cash',
+  paymentMethod: ORDER_DEFAULT_VALUES.paymentMethod,
   notes: '',
   deductSourcingCostFromCourier: false,
   sourcing_cost: 'system',
@@ -101,9 +102,9 @@ const defaultOrderFormData = (orderCurrency: string, currency: string): OrderFor
 
 /** بيانات نموذج التحديث الافتراضية - Default status update form data */
 const defaultUpdateFormData = (): UpdateFormData => ({
-  orderStatus: 'طلب معلق',
-  deliveryStatus: 'في الانتظار',
-  locationYemen: 'مستودع صنعاء الرئيسي',
+  orderStatus: ORDER_DEFAULT_VALUES.orderStatus,
+  deliveryStatus: ORDER_DEFAULT_VALUES.deliveryStatus,
+  locationYemen: ORDER_DEFAULT_VALUES.deliveryLocation,
   internalNotes: '',
   shippingCourierId: '',
   deliveryCourierId: '',
@@ -112,13 +113,13 @@ const defaultUpdateFormData = (): UpdateFormData => ({
 /** بيانات نموذج الدفع الافتراضية - Default payment form data */
 const defaultPaymentFormData = (): PaymentFormData => ({
   amount: '',
-  method: 'Cash',
+  method: ORDER_DEFAULT_VALUES.paymentMethod,
   receivingAccountId: '',
   bankReference: '',
   allocations: [],
   notes: '',
   pin: '',
-  paymentCurrency: 'YER',
+  paymentCurrency: ORDER_DEFAULT_VALUES.paymentCurrency,
   voucherDate: '',
   voucherNumber: '',
 });
@@ -249,7 +250,7 @@ export function useOrderFormState(
   });
   const [sourceFormData, setSourceFormData] = useState<SourceFormData>({
     source_name: '',
-    type: 'App',
+    type: ORDER_DEFAULT_VALUES.sourceType,
     source_url: '',
     contact_info: '',
     location: '',
@@ -294,9 +295,8 @@ export function useOrderFormState(
     });
     setItems([defaultItemRow()]);
     setShippings([defaultShippingRow()]);
-    setCustomerFormData({ fullName: '', phone: '', email: '', gps_location: '', address: '', notes: '' });
     setBankCommissionEnabled(false);
-    setBankCommissionRate(settings?.defaultBankCommissionRate ?? 3);
+    setBankCommissionRate(3);
     setBankCommissionType('percentage');
     setCouponEnabled(false);
     setCouponRate(0);
@@ -304,12 +304,8 @@ export function useOrderFormState(
     setPackagingFeeEnabled(false);
     setPackagingFeeRate(0);
     setHomeDeliveryEnabled(false);
-    setViaShippingAgent(false);
     setPayLater(false);
     setDirectApprove(false);
-    setProfitPerKgRate(settings?.defaultProfitPerKg ?? 19);
-    setCbmShippingRateValue(settings?.defaultCbmShippingRate ?? 1400);
-    setAddShippingEnabled(false);
   };
 
   // ── مساعدات صفوف المنتجات ──
@@ -498,3 +494,11 @@ export function useOrderFormState(
     removeUpdateShippingRow,
   };
 }
+
+export {
+  defaultItemRow as createDefaultItemRow,
+  defaultShippingRow as createDefaultShippingRow,
+  defaultOrderFormData as createDefaultOrderFormData,
+  defaultUpdateFormData as createDefaultUpdateFormData,
+  defaultPaymentFormData as createDefaultPaymentFormData,
+};

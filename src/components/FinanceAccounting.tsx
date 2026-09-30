@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { db } from '../lib/supabase-adapter';
 import { useAuthSession } from '../features/auth/AuthSessionProvider';
-import { collection, doc, updateDoc, writeBatch, deleteDoc, onSnapshot, query, orderBy, increment, getDocs, where } from '../lib/supabase-adapter';
+import { collection, doc, updateDoc, writeBatch, deleteDoc, query, orderBy, increment, getDocs, where } from '../lib/supabase-adapter';
 import { notificationService } from '../services/notificationService';
 import AccountingHierarchyManagement from './AccountingHierarchyManagement';
 import AssetsPortfolio from './AssetsPortfolio';
@@ -18,15 +18,10 @@ import { useRole } from '../hooks/useRole';
 import { formatDate, formatDateTime, now } from '../lib/dateUtils';
 
 import { useExchangeRates } from '../hooks/useExchangeRates';
-
-interface FinanceAccountingProps {
-  orders: any[];
-  couriers: any[];
-  customers: any[];
-  isAr: boolean;
-  settings: any;
-  initialTab?: string;
-}
+import type { FinanceAccountingProps } from './financeAccounting/FinanceAccountingTypes';
+import FinanceAccountingTabNavigation from './financeAccounting/FinanceAccountingTabNavigation';
+import FinanceAccountingTabPanel from './financeAccounting/FinanceAccountingTabPanel';
+import { useFinanceAccountingData } from './financeAccounting/useFinanceAccountingData';
 
 export default function FinanceAccounting({
   orders,
@@ -79,38 +74,15 @@ export default function FinanceAccounting({
     return formatAmountWithEquiv(amount || 0, currency || 'YER');
   };
 
-  // Real-time assets sync for dynamic pricing in Chart of Accounts
-  const [assets, setAssets] = useState<any[]>([]);
-  // Real-time financial accounts sync
-  const [financialAccounts, setFinancialAccounts] = useState<any[]>([]);
-  const [custodyAdvances, setCustodyAdvances] = useState<any[]>([]);
-
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'assets'), (snap) => {
-      setAssets(snap.docs.map((doc: { id: any; data: () => any; }) => ({ id: doc.id, ...doc.data() })));
-    }, (error) => {
-      console.error("Error loading assets for balance list:", error);
-    });
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'accounts'), (snap) => {
-      setFinancialAccounts(snap.docs.map((doc: { id: any; data: () => any; }) => ({ id: doc.id, ...doc.data() })));
-    }, (error) => {
-      console.error("Error loading financial accounts:", error);
-    });
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'custody_advances'), (snap) => {
-      setCustodyAdvances(snap.docs.map((row: { id: any; data: () => any }) => ({ id: row.id, ...row.data() })));
-    }, (error) => {
-      console.error('Error loading custody advances:', error);
-    });
-    return () => unsub();
-  }, []);
+  const {
+    assets,
+    financialAccounts,
+    custodyAdvances,
+    accountTransactions,
+    financialEntries,
+    salaryHistory,
+    employees,
+  } = useFinanceAccountingData();
 
   const normalizedCustodyAdvances = useMemo(() => custodyAdvances.map((row: any) => ({
     ...row,
@@ -122,11 +94,57 @@ export default function FinanceAccounting({
     status: String(row.status ?? '').toLowerCase() === 'settled' ? 'Settled' : row.status,
     expenseNumber: row.custodyNumber ?? row.custody_number ?? row.id,
   })), [custodyAdvances]);
-
   const postingFinancialAccounts = useMemo(
     () => accountingHierarchyService.filterPostingAccounts(financialAccounts),
     [financialAccounts],
   );
+  const { role, hasPermission } = useRole();
+  const canEditFinance = role === 'Admin' || hasPermission('edit_finance');
+
+  // New states for Unified Ledger and Salary Audits
+  const [moduleFilter, setModuleFilter] = useState<'all' | 'order' | 'custody' | 'payment' | 'salary' | 'adjustment'>('all');
+  const [isSalaryPayment, setIsSalaryPayment] = useState(false);
+  const [adjustSalaryMonth, setAdjustSalaryMonth] = useState('');
+  const [bulkReconciliationLoading, setBulkReconciliationLoading] = useState(false);
+
+  // ── Salary History tab states ──
+  const [salarySearch, setSalarySearch] = useState('');
+  const [salaryEmployeeFilter, setSalaryEmployeeFilter] = useState('all');
+  const [salaryMonthFilter, setSalaryMonthFilter] = useState('');
+  const [selectedSalaryVoucher, setSelectedSalaryVoucher] = useState<any>(null);
+  // Employee Statement sub-view
+  const [employeeStatementId, setEmployeeStatementId] = useState<string | null>(null);
+  const [empStmtDateFilter, setEmpStmtDateFilter] = useState<'all' | '30days' | 'custom'>('all');
+  const [empStmtStartDate, setEmpStmtStartDate] = useState('');
+  const [empStmtEndDate, setEmpStmtEndDate] = useState('');
+
+  // Edit Journal Entry State
+  const [isEditJournalOpen, setIsEditJournalOpen] = useState(false);
+  const [selectedEditEntry, setSelectedEditEntry] = useState<any | null>(null);
+  const [editJournalLoading, setEditJournalLoading] = useState(false);
+  const [editJournalData, setEditJournalData] = useState({
+    amountOriginal: '',
+    currencyOriginal: 'YER',
+    notes: '',
+    createdAt: '',
+    debitAccountId: '',
+    creditAccountId: ''
+  });
+
+  // Delete Entry with PIN Modal State
+  const [isDeletePinModalOpen, setIsDeletePinModalOpen] = useState(false);
+  const [entryToDelete, setEntryToDelete] = useState<any | null>(null);
+  const [deletePin, setDeletePin] = useState('');
+  const [deletePinError, setDeletePinError] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  useEffect(() => {
+    // Default adjustSalaryMonth to current month YYYY-MM
+    const now = new Date();
+    const YYYY = now.getFullYear();
+    const MM = String(now.getMonth() + 1).padStart(2, '0');
+    setAdjustSalaryMonth(`${YYYY}-${MM}`);
+  }, []);
 
   // Selection states
   const [auditedCourierId, setAuditedCourierId] = useState('');
@@ -167,84 +185,6 @@ export default function FinanceAccounting({
     notes: ''
   });
   const [adjustLoading, setAdjustLoading] = useState(false);
-
-  // New states for Unified Ledger and Salary Audits
-  const [accountTransactions, setAccountTransactions] = useState<any[]>([]);
-  const [financialEntries, setFinancialEntries] = useState<any[]>([]);
-  const [moduleFilter, setModuleFilter] = useState<'all' | 'order' | 'custody' | 'payment' | 'salary' | 'adjustment'>('all');
-  const [isSalaryPayment, setIsSalaryPayment] = useState(false);
-  const [adjustSalaryMonth, setAdjustSalaryMonth] = useState('');
-  const [bulkReconciliationLoading, setBulkReconciliationLoading] = useState(false);
-
-  // ── Salary History tab states ──
-  const [salaryHistory, setSalaryHistory] = useState<any[]>([]);
-  const [employees, setEmployees] = useState<any[]>([]);
-  const [salarySearch, setSalarySearch] = useState('');
-  const [salaryEmployeeFilter, setSalaryEmployeeFilter] = useState('all');
-  const [salaryMonthFilter, setSalaryMonthFilter] = useState('');
-  const [selectedSalaryVoucher, setSelectedSalaryVoucher] = useState<any>(null);
-  // Employee Statement sub-view
-  const [employeeStatementId, setEmployeeStatementId] = useState<string | null>(null);
-  const [empStmtDateFilter, setEmpStmtDateFilter] = useState<'all' | '30days' | 'custom'>('all');
-  const [empStmtStartDate, setEmpStmtStartDate] = useState('');
-  const [empStmtEndDate, setEmpStmtEndDate] = useState('');
-
-  const { role, hasPermission } = useRole();
-  const canEditFinance = role === 'Admin' || hasPermission('edit_finance');
-
-  // Edit Journal Entry State
-  const [isEditJournalOpen, setIsEditJournalOpen] = useState(false);
-  const [selectedEditEntry, setSelectedEditEntry] = useState<any | null>(null);
-  const [editJournalLoading, setEditJournalLoading] = useState(false);
-  const [editJournalData, setEditJournalData] = useState({
-    amountOriginal: '',
-    currencyOriginal: 'YER',
-    notes: '',
-    createdAt: '',
-    debitAccountId: '',
-    creditAccountId: ''
-  });
-
-  // Delete Entry with PIN Modal State
-  const [isDeletePinModalOpen, setIsDeletePinModalOpen] = useState(false);
-  const [entryToDelete, setEntryToDelete] = useState<any | null>(null);
-  const [deletePin, setDeletePin] = useState('');
-  const [deletePinError, setDeletePinError] = useState('');
-  const [deleteLoading, setDeleteLoading] = useState(false);
-
-  useEffect(() => {
-    // Default adjustSalaryMonth to current month YYYY-MM
-    const now = new Date();
-    const YYYY = now.getFullYear();
-    const MM = String(now.getMonth() + 1).padStart(2, '0');
-    setAdjustSalaryMonth(`${YYYY}-${MM}`);
-
-    // دفتر الأستاذ الجديد: أسطر account_trans ورؤوس main_entry المرحّلة.
-    const unsubEntries = onSnapshot(collection(db, 'main_entry'), (snap) => {
-      setFinancialEntries(snap.docs.map((doc: { id: any; data: () => any; }) => ({ id: doc.id, ...doc.data() })));
-    }, (error) => console.error('Error loading main_entry:', error));
-    const unsub = onSnapshot(collection(db, 'account_trans'), (snap) => {
-      setAccountTransactions(snap.docs.map((doc: { id: any; data: () => any; }) => {
-        const row: any = { id: doc.id, ...doc.data() };
-        return { ...row, type: row.type || row.transType, amount: row.amount ?? row.amountOriginal, amountOriginal: row.amountOriginal, entryId: row.entryId };
-      }));
-    }, (error) => console.error('Error loading account_trans:', error));
-    return () => { unsubEntries(); unsub(); };
-  }, []);
-
-  // Load salary history & employees for the Salary History tab
-  useEffect(() => {
-    const qHist = query(collection(db, 'salary_history'), orderBy('createdAt', 'desc'));
-    const unsubH = onSnapshot(qHist, (snap) => {
-      setSalaryHistory(snap.docs.map((d: { id: any; data: () => any; }) => ({ id: d.id, ...d.data() })));
-    }, (err) => console.error('[SalaryTab] salary_history error:', err));
-
-    const unsubE = onSnapshot(collection(db, 'users'), (snap) => {
-      setEmployees(snap.docs.map((d: { id: any; data: () => any; }) => ({ id: d.id, ...d.data() })));
-    }, (err) => console.error('[SalaryTab] users error:', err));
-
-    return () => { unsubH(); unsubE(); };
-  }, []);
 
   // Quick Customer FIFO Settle payment state
   const [isPayModalOpen, setIsPayModalOpen] = useState(false);
@@ -1676,89 +1616,13 @@ Continue?`
 
       </div>
 
-      {/* Tab Selectors header */}
-      <div className="flex flex-wrap border-b border-slate-850 gap-4 mb-2">
-        <button
-          onClick={() => setAccountingTab('general_ledger')}
-          className={`pb-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 flex items-center gap-1.5 ${accountingTab === 'general_ledger'
-            ? 'border-[#d4af37] text-white'
-            : 'border-transparent text-slate-500 hover:text-slate-350'
-            }`}
-        >
-          <Scale className="w-3.5 h-3.5 animate-pulse" />
-          {isAr ? '⚖️ الدفتر اليومي والمقاصة' : 'Daily Double-Entry Ledger'}
-        </button>
-        <button
-          onClick={() => setAccountingTab('courier_audit')}
-          className={`pb-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 flex items-center gap-1.5 ${accountingTab === 'courier_audit'
-            ? 'border-[#d4af37] text-white'
-            : 'border-transparent text-slate-500 hover:text-slate-350'
-            }`}
-        >
-          <Truck className="w-3.5 h-3.5" />
-          {isAr ? '🔑حسابات المناديب' : 'Courier Custody Statement'}
-        </button>
-        <button
-          onClick={() => setAccountingTab('customer_audit')}
-          className={`pb-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 flex items-center gap-1.5 ${accountingTab === 'customer_audit'
-            ? 'border-[#d4af37] text-white'
-            : 'border-transparent text-slate-500 hover:text-slate-350'
-            }`}
-        >
-          <User className="w-3.5 h-3.5" />
-          {isAr ? '👥 حسابات العملاء' : 'Customer Account Audits'}
-        </button>
-
-        {/* Tab 7: Salary History & Employee Statements */}
-        <button
-          onClick={() => setAccountingTab('salary_history')}
-          className={`pb-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 flex items-center gap-1.5 ${accountingTab === 'salary_history'
-            ? 'border-[#d4af37] text-white'
-            : 'border-transparent text-slate-500 hover:text-slate-350'
-            }`}
-        >
-          <Users className="w-3.5 h-3.5 text-[#d4af37]" />
-          {isAr ? '💼حسابات الموظفين' : 'Salary History & Staff Statements'}
-        </button>
-
-        {/* Tab 6: Assets Management */}
-        <button
-          onClick={() => setAccountingTab('assets_management')}
-          className={`pb-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 flex items-center gap-1.5 ${accountingTab === 'assets_management'
-            ? 'border-[#d4af37] text-white'
-            : 'border-transparent text-slate-500 hover:text-slate-350'
-            }`}
-        >
-          <Wrench className="w-3.5 h-3.5 text-[#d4af37]" />
-          {isAr ? '📦الأصول الثابتة' : 'Assets & Maintenance Portfolio'}
-        </button>
-        {/* Tab 4: Chart of Accounts */}
-        <button
-          onClick={() => setAccountingTab('chart_of_accounts')}
-          className={`pb-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 flex items-center gap-1.5 ${accountingTab === 'chart_of_accounts'
-            ? 'border-[#d4af37] text-white'
-            : 'border-transparent text-slate-500 hover:text-slate-350'
-            }`}
-        >
-          <FolderTree className="w-3.5 h-3.5 text-[#d4af37]" />
-          {isAr ? '🌳 الشجرة المحاسبية' : 'Chart of Accounts'}
-        </button>
-
-        {/* Tab 5: Financial Accounts Dashboard */}
-        <button
-          onClick={() => setAccountingTab('financial_accounts')}
-          className={`pb-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 flex items-center gap-1.5 ${accountingTab === 'financial_accounts'
-            ? 'border-[#d4af37] text-white'
-            : 'border-transparent text-slate-500 hover:text-slate-350'
-            }`}
-        >
-          <Wallet className="w-3.5 h-3.5 text-[#d4af37]" />
-          {isAr ? '💳 إدارة الحسابات المالية' : 'Financial Accounts'}
-        </button>        
-      </div>
-
+      <FinanceAccountingTabNavigation
+        accountingTab={accountingTab}
+        isAr={isAr}
+        onTabChange={setAccountingTab}
+      />
       {/* RENDER TAB 1: GENERAL DOUBLE-ENTRY LEDGER */}
-      {accountingTab === 'general_ledger' && (
+      <FinanceAccountingTabPanel active={accountingTab === 'general_ledger'}>
         <div className="space-y-6">
 
           {/* Advanced Multi-Filters Desk && Quick voucher adjustment trigger */}
@@ -2059,10 +1923,9 @@ Continue?`
 
           </div>
         </div>
-      )}
-
+      </FinanceAccountingTabPanel>
       {/* RENDER TAB 2: INDIVIDUAL COURIER CUSTODY & DELIVERIES AUDIT */}
-      {accountingTab === 'courier_audit' && (
+      <FinanceAccountingTabPanel active={accountingTab === 'courier_audit'}>
         <div className="space-y-6">
           <div className="bg-[#121215] border border-slate-850 p-6 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex-1">
@@ -2321,10 +2184,9 @@ Continue?`
             </div>
           )}
         </div>
-      )}
-
+      </FinanceAccountingTabPanel>
       {/* RENDER TAB 3: INDIVIDUAL CUSTOMER ACCOUNT RECONCILIATION */}
-      {accountingTab === 'customer_audit' && (
+      <FinanceAccountingTabPanel active={accountingTab === 'customer_audit'}>
         <div className="space-y-6 flex flex-col">
           <div className="bg-[#121215] border border-slate-850 p-6 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex-1">
@@ -2484,9 +2346,8 @@ Continue?`
             </div>
           )}
         </div>
-      )}
-
-      {accountingTab === 'financial_accounts' && (
+      </FinanceAccountingTabPanel>
+      <FinanceAccountingTabPanel active={accountingTab === 'financial_accounts'}>
         <div className="space-y-6">
           {/* Dashboard Header & Quick Actions */}
           <div className="bg-[#121215] border border-slate-850 p-5 rounded-3xl space-y-4">
@@ -2740,24 +2601,22 @@ Continue?`
             </div>
           </div>
         </div>
-      )}
-
+      </FinanceAccountingTabPanel>
       {/* RENDER TAB 4: CHART OF ACCOUNTS TREE */}
-      {accountingTab === 'chart_of_accounts' && (
+      <FinanceAccountingTabPanel active={accountingTab === 'chart_of_accounts'}>
         <AccountingHierarchyManagement isAr={isAr} canEdit={canEditFinance} />
-      )}
-
+      </FinanceAccountingTabPanel>
       {/* RENDER TAB 5: PHYSICAL ASSETS PORTFOLIO & MAINTENANCE */}
-      {accountingTab === 'assets_management' && (
+      <FinanceAccountingTabPanel active={accountingTab === 'assets_management'}>
         <AssetsPortfolio
           isAr={isAr}
           settings={settings}
           couriers={couriers}
         />
-      )}
-
+      </FinanceAccountingTabPanel>
       {/* RENDER TAB 7: SALARY HISTORY & EMPLOYEE STATEMENTS */}
-      {accountingTab === 'salary_history' && (() => {
+      <FinanceAccountingTabPanel active={accountingTab === 'salary_history'}>
+        {(() => {
         // ── Derived data ──
         const filteredSalaries = salaryHistory.filter(item => {
           const q = salarySearch.toLowerCase();
@@ -3167,7 +3026,8 @@ Continue?`
             )}
           </div>
         );
-      })()}
+        })()}
+      </FinanceAccountingTabPanel>
       {/* ════════════ SALARY SLIP VOUCHER MODAL ════════════ */}
       {selectedSalaryVoucher && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 no-print">

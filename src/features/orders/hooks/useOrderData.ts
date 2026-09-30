@@ -1,26 +1,9 @@
-/**
- * useOrderData.ts
- * ---------------
- * Hook مسؤول عن جلب جميع بيانات صفحة الطلبات من قاعدة البيانات.
- * Responsible for fetching all data needed by the Orders page from the database.
- *
- * يتبع مبدأ الفصل بين Business Logic وUI.
- * Follows separation of concerns between Business Logic and UI.
- */
+import { useEffect, useState } from 'react';
+import { handleSupabaseError, OperationType } from '../../../lib/supabase';
+import type { OrdersFeatureApi } from '../api';
+import { legacyOrdersApi } from '../services/legacyOrdersApi';
 
-import { useState, useEffect } from 'react';
-import {
-  collection,
-  onSnapshot,
-  orderBy,
-  query,
-  doc,
-  handleSupabaseError,
-  OperationType,
-  db,
-} from '../../../lib/supabase';
-
-/** بيانات جلب الطلبات وكافة الكيانات المرتبطة - All data fetched for the orders page */
+/** Data needed by the orders page; shapes remain legacy-compatible during phase 9. */
 export interface OrderDataState {
   orders: any[];
   customers: any[];
@@ -36,13 +19,14 @@ export interface OrderDataState {
 }
 
 /**
- * useOrderData
- * Hook يُدير اشتراكات Realtime لجميع المجموعات اللازمة لصفحة الطلبات.
- * Manages realtime subscriptions for all collections needed by the Orders page.
- *
- * @param enabled - إذا كان false لن يبدأ الجلب (يُستخدم مع roleLoading)
+ * Subscribe to the same legacy collections and transform their snapshots exactly as
+ * OrdersPage previously did. The injected API makes the data boundary replaceable
+ * without changing realtime timing or payload aliases.
  */
-export function useOrderData(enabled: boolean): OrderDataState {
+export function useOrderData(
+  enabled: boolean,
+  api: OrdersFeatureApi = legacyOrdersApi,
+): OrderDataState {
   const [orders, setOrders] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
@@ -56,48 +40,33 @@ export function useOrderData(enabled: boolean): OrderDataState {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // لا تبدأ الجلب إذا لم يكتمل تحميل الأدوار
-    // Do not start fetching until roles are loaded
     if (!enabled) return;
 
-    // ── اشتراك الطلبات (مرتبة من الأحدث) ──
-    const unsubOrders = onSnapshot(
-      query(collection(db, 'orders'), orderBy('createdAt', 'desc')),
-      (snap) => {
-        setOrders(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    const unsubOrders = api.collections.orders.subscribe(
+      ({ records }) => {
+        setOrders(records as any[]);
         setLoading(false);
       },
       (error) => handleSupabaseError(error, OperationType.LIST, 'orders'),
     );
 
-    // ── اشتراك العملاء ──
-    const unsubCustomers = onSnapshot(collection(db, 'customers'), (snap) => {
-      setCustomers(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    const unsubCustomers = api.collections.customers.subscribe(({ records }) => {
+      setCustomers(records as any[]);
     });
 
-    // ── اشتراك الموظفين (المفعّلون فقط) ──
-    const unsubEmployees = onSnapshot(collection(db, 'employees'), (snap) => {
-      setEmployees(
-        snap.docs
-          .map((d) => ({ id: d.id, ...d.data() }))
-          .filter((entry: any) => !entry.disabled),
-      );
+    const unsubEmployees = api.collections.employees.subscribe(({ records }) => {
+      setEmployees(records.filter((entry: any) => !entry.disabled) as any[]);
     });
 
-    // ── اشتراك المناديب ──
-    const unsubCouriers = onSnapshot(collection(db, 'couriers'), (snap) => {
-      setCouriers(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    const unsubCouriers = api.collections.couriers.subscribe(({ records }) => {
+      setCouriers(records as any[]);
     });
 
-    // ── اشتراك الحسابات المالية (الورقية المفعّلة فقط) ──
-    const unsubFinancialAccounts = onSnapshot(collection(db, 'accounts'), (snap) => {
+    const unsubFinancialAccounts = api.collections.accounts.subscribe(({ records }) => {
       setFinancialAccounts(
-        snap.docs
-          .map((d) => ({ id: d.id, ...d.data() }))
-          .filter(
-            (account: any) =>
-              account.isActive !== false &&
-              Boolean(account.accSubId || account.acc_sub_id),
+        records
+          .filter((account: any) =>
+            account.isActive !== false && Boolean(account.accSubId || account.acc_sub_id),
           )
           .map((account: any) => ({
             id: account.id,
@@ -113,64 +82,48 @@ export function useOrderData(enabled: boolean): OrderDataState {
       );
     });
 
-    // ── اشتراك المصادر ──
-    const unsubSources = onSnapshot(collection(db, 'sources'), (snap) => {
-      setSources(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    const unsubSources = api.collections.sources.subscribe(({ records }) => {
+      setSources(records as any[]);
     });
 
-    // ── اشتراك قواعد القيود التلقائية ──
-    const unsubAutoVoucherRules = onSnapshot(
-      doc(db, 'settings', 'automatic_voucher_rules'),
-      (snap) => {
-        if (snap.exists()) {
-          const data = snap.data();
-          if (data?.data && Array.isArray(data.data)) {
-            setAutoVoucherRules(data.data);
-          }
-        }
-      },
-    );
+    const unsubAutoVoucherRules = api.collections.settings.subscribe((record) => {
+      if (record && record.data) {
+        setAutoVoucherRules(record.data as any[]);
+      }
+    });
 
-    // ── اشتراك شركات الشحن ──
-    const unsubShippingCompanies = onSnapshot(
-      collection(db, 'shipping_companies'),
-      (snap) => {
+    const unsubShippingCompanies = api.collections.shippingCompanies.subscribe(
+      ({ records }) => {
         setShippingCompanies(
-          snap.docs.map((d) => ({
-            id: d.id,
-            name: d.data().name || 'بدون اسم',
-            ...d.data(),
+          records.map((record: any) => ({
+            id: record.id,
+            name: record.name || 'بدون اسم',
+            ...record,
           })),
         );
       },
       (error) => {
         console.error(
-          'FIRESTORE ERROR ON shipping_companies SNAPSHOT LISTENER:',
+          'FIRESTORE ERROR ON shipping_companies SNAPSHOT LISTENER IN ORDERS.tsx:',
           error,
         );
       },
     );
 
-    // ── اشتراك المنتجات ──
-    const unsubProducts = onSnapshot(
-      collection(db, 'products'),
-      (snap) => {
-        setAllProducts(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    const unsubProducts = api.collections.products.subscribe(
+      ({ records }) => {
+        setAllProducts(records as any[]);
       },
       (error) => handleSupabaseError(error, OperationType.LIST, 'products'),
     );
 
-    // ── اشتراك الشحنات ──
-    const unsubShipments = onSnapshot(
-      collection(db, 'shipments'),
-      (snap) => {
-        setAllShipments(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    const unsubShipments = api.collections.shipments.subscribe(
+      ({ records }) => {
+        setAllShipments(records as any[]);
       },
       (error) => handleSupabaseError(error, OperationType.LIST, 'shipments'),
     );
 
-    // تنظيف جميع الاشتراكات عند إلغاء التركيب
-    // Cleanup all subscriptions on unmount
     return () => {
       unsubOrders();
       unsubCustomers();
@@ -183,7 +136,7 @@ export function useOrderData(enabled: boolean): OrderDataState {
       unsubProducts();
       unsubShipments();
     };
-  }, [enabled]);
+  }, [api, enabled]);
 
   return {
     orders,
