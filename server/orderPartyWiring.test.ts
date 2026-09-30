@@ -32,7 +32,7 @@ describe('order party wiring', () => {
     const editModal = projectFile('src/components/orders/EditOrderModal.tsx');
     const editStep1 = projectFile('src/features/orders/components/edit-order-modal/EditOrderStep1.tsx');
     const picker = projectFile('src/components/orders/OrderPartyPicker.tsx');
-    const financialService = projectFile('src/services/financialAccountService.ts');
+    const financialResolver = projectFile('src/services/financialAccountAutomaticVoucher.ts');
     const partyService = projectFile('src/services/orderPartyService.ts');
     expect(createModal).toContain('OrderPartyPicker');
     expect(editStep1).toContain('OrderPartyPicker');
@@ -45,7 +45,7 @@ describe('order party wiring', () => {
     expect(picker).toContain('z-[999999]');
     expect(createStep1).toContain('!formData.customerId && !isStaffOrder');
     expect(partyService).toContain("if (staffOnly && party.type === 'customer') return false;");
-    expect(financialService).toContain('entities.orderParty || entities.customer');
+    expect(financialResolver).toContain('entities.orderParty || entities.customer');
     expect(createModal).toContain('orderCurrency, currency: orderCurrency, exchangeRate: 1');
     expect(editModal).toContain('currency: loadedOrderCurrency');
   });

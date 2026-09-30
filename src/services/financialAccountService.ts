@@ -38,245 +38,19 @@ import { financialEntryService } from './financialEntryService';
 import { Transaction } from "../types";
 //import { Settings } from "../contexts/SettingsContext";
 
-export type AccountEntityType = "customer" | "courier" | "employee" | "source" | "shipping_company" | "asset" | "system";
-
-export interface FinancialAccount {
-  id?: string;
-  accountCode: string; // e.g. '1130-0001'
-  accountPrefix: string; // e.g. '1130'
-  accountNumber: string; // e.g. '0001'
-  entityType: AccountEntityType;
-  entityId: string; // PostgreSQL document ID of customer/courier/employee
-  entityName: string; // Display name
-  currency: string; // Default currency from settings
-  balance: number; // Current balance in default currency
-  debitTotal: number; // Total debits
-  creditTotal: number; // Total credits
-  isActive: boolean;
-  createdAt: number;
-  updatedAt: number;
-  notes?: string;
-  monthlySalary?: number; // Default monthly salary (for employees)
-  type?: "Asset" | "Liability" | "Equity" | "Revenue" | "Expense";
-  parentCode?: string;
-  accSubId?: string;
-  groupId?: string;
-  accountSeq?: number;
-  accNameAr?: string;
-  accNameEn?: string;
-  limitedBalance?: number;
-  curNo?: number;
-  lastRecalculatedAt?: number | string;
-}
-
-export interface AccountTransaction {
-  id?: string;
-  accountId: string; // Financial account ID
-  accountCode: string; // Account code for display
-  entityType: AccountEntityType;
-  entityId: string;
-  entityName: string;
-  type: "Debit" | "Credit";
-  amount: number; // Amount in target account currency
-  currency: string; // Account currency (YER, USD, SAR)
-  curNo?: number; // Reference to currency.cur_id
-  amountOriginal: number; // Amount in original voucher currency
-  currencyOriginal: string; // Original voucher currency
-  description: string; // Transaction description
-  refNumber: string; // Reference number (expense/order/adjustment)
-  module://مهم:يجب اضافه العديد من التصنيفات
-  | "expense"
-  | "order"
-  | "adjustment"
-  | "custody"
-  | "payment"
-  | "salary"
-  | string;
-  salaryMonth?: string; // e.g. '2026-06' for salary payments
-  createdAt: number;
-  createdByUid?: string;
-  createdByName?: string;
-  journalEntryId?: string;
-  journalEntryNumber?: string;
-  orderId?: string;
-  orderNumber?: string;
-  shipmentId?: string;
-  automationKey?: string;
-  autoRuleId?: string;
-}
-
-export interface JournalEntry {
-  id?: string;
-  entryNumber: string; // رقم القيد (reference sequence)
-  createdAt: number; // التاريخ (timestamp)
-  description: string; // البيان
-  attachments?: string[]; // المستندات الداعمة
-  notes?: string; // ملاحظة أخرى
-
-  // الطرف المدين (3 حقول: الاسم، الكود، المعرف)
-  debitAccountId: string;
-  debitAccountName: string;
-  debitAccountCode: string;
-
-  // الطرف الدائن (3 حقول: الاسم، الكود، المعرف)
-  creditAccountId: string;
-  creditAccountName: string;
-  creditAccountCode: string;
-
-  amount: number; // المبلغ الأصلي
-  currency: string; // العملة الأصلية
-  curNo?: number; // Reference to currency.cur_id
-  amountDebitCurrency: number; // المبلغ بعملة المدين
-  amountCreditCurrency: number; // المبلغ بعملة الدائن
-
-  module: string; // فئة القيد (طلبات / مصروفات / قيد يومي / إلخ)
-  refNumber: string; // المعني من الفئة (رقم الطلب / نوع المصروف / إلخ)
-  orderId?: string;
-  orderNumber?: string;
-  shipmentId?: string;
-  automationKey?: string;
-  autoRuleId?: string;
-  statusId?: number;
-  isAutomatic?: boolean;
-  amountSources?: string[];
-  amountBreakdown?: Array<{ source: string; amount: number; currency: string; convertedAmount: number }>;
-  /** حالة الترحيل: 'posted' فوري، 'draft' مسودة — Posting status: posted=immediate, draft=unposted */
-  postingStatus?: 'posted' | 'draft';
-
-  createdByUid: string; // المعرف للمستخدم المدخل للعملية
-  createdByName: string; // الاسم للمستخدم المدخل للعملية
-}
-
-export interface AutomaticVoucherEntities {
-  courier?: any;
-  deliveryCourier?: any;
-  shippingCourier?: any;
-  customer?: any;
-  orderParty?: any;
-  purchaseSource?: any;
-  shippingCompany?: any;
-  sourcing_cost?: any;
-  isAr?: boolean;
-  rawAmount?: number;
-  amountOriginal?: number;
-  currencyOriginal?: string;
-  expenseNumber?: string;
-  profileName?: string;
-  statusId?: number | string;
-  automationKey?: string;
-  autoRuleId?: string;
-  amountSources?: string[];
-  amountBreakdown?: any[];
-  /** تجاوز اختياري للحساب المدين (مثل حساب الصندوق/البنك الذي اختاره المستخدم في نموذج إنشاء الطلب) */
-  debitAccountOverride?: { id: string; code?: string; name?: string };
-  /**
-   * ترحيل القيد فوراً أم حفظه كمسودة غير مرحّلة
-   * Auto post the entry immediately (posted) or save as draft (draft).
-   * Defaults to true if not provided.
-   */
-  autoPost?: boolean;
-}
-
-// Account prefix ranges per entity type
-// Customer accounts are ASSETS (owed to us)    → 1130
-// Courier accounts are LIABILITIES (we owe or they hold custody) → 2120
-// Employee accounts are LIABILITIES (salary obligations) → 2130
-// Order sources are LIABILITIES (supplier payables) → 2140
-// Shipping companies are LIABILITIES (carrier payables) → 2150
-// Assets are ASSETS; a category-specific prefix can override the default 1200.
-// System utility accounts                         → varies, default 5000
-/** توافق مرحلي للحسابات التي سبقت زرع الشجرة فقط؛ لا يستعمل عند جاهزية الشجرة. */
-const LEGACY_ACCOUNT_PREFIXES: Record<AccountEntityType, string> = {
-  customer: "1130",
-  courier: "2120",
-  employee: "2130",
-  source: "2140",
-  shipping_company: "2150",
-  asset: "1240",
-  system: "5000",
-};
-
+import { LEGACY_ACCOUNT_PREFIXES } from './financialAccountTypes';
+import type { AccountEntityType, AccountTransaction, AutomaticVoucherEntities, FinancialAccount, JournalEntry } from './financialAccountTypes';
+export type { AccountEntityType, AccountTransaction, AutomaticVoucherEntities, FinancialAccount, JournalEntry } from './financialAccountTypes';
+import { resolveAutomaticVoucherAccount } from './financialAccountAutomaticVoucher';
+import { convertToTargetCurrency as convertToTargetCurrencyValue } from './financialAccountCurrency';
 class FinancialAccountService {
-  private resolveAutomaticVoucherAccount(
+    private resolveAutomaticVoucherAccount(
     accountConfig: any,
     systemAccounts: Record<string, string>,
     order: any,
     entities: AutomaticVoucherEntities,
   ): { id: string; code: string } {
-    if (!accountConfig?.id) {
-      throw new Error('Automatic voucher account configuration is incomplete.');
-    }
-
-    const linkedAccount = (entity: any) => {
-      if (!entity || typeof entity !== 'object') return null;
-      const id = entity.financialAccountId || entity.accountId || entity.linkedAccountId || entity.account_id;
-      if (!id) return null;
-      return {
-        id: String(id),
-        code: String(entity.financialAccountCode || entity.accountCode || entity.linkedAccountCode || accountConfig.code || ''),
-      };
-    };
-
-    const sourceKey = String(order?.sourcing_cost || order?.sourcsystemAccountsingCostSource || '').trim().toLowerCase();
-    const costOnCourier = Boolean(order?.deductSourcingCostFromCourier)
-      || ['courier', 'delivery_courier', 'courier_linked', 'مندوب'].includes(sourceKey);
-    const defaultKey = String(accountConfig.defaultKey || accountConfig.id || '').trim();
-    const fallbackOrderCost = () => ({
-      id: String(systemAccounts.sys_orders_cost || systemAccounts.sys_sourcing_cost || 'sys_orders_cost'),
-      code: String(accountConfig.code || ''),
-    });
-
-    let candidate: { id: string; code: string } | null = null;
-    switch (accountConfig.id) {
-      case 'customer_linked':
-        candidate = linkedAccount(entities.orderParty || entities.customer);
-        break;
-      case 'delivery_courier_linked':
-        candidate = linkedAccount(entities.deliveryCourier || entities.courier);
-        break;
-      case 'shipping_courier_linked':
-        candidate = linkedAccount(entities.shippingCourier || entities.courier);
-        break;
-      case 'courier_linked':
-        candidate = linkedAccount(entities.courier || entities.deliveryCourier || entities.shippingCourier);
-        break;
-      case 'purchase_source_linked':
-        candidate = linkedAccount(entities.purchaseSource);
-        break;
-      case 'shipping_company_linked':
-        candidate = linkedAccount(entities.shippingCompany);
-        break;
-      case 'payment_account_linked':
-      case 'payment_account_dynamic':
-      case 'selected_payment_account':
-        candidate = linkedAccount((entities as any).paymentAccount)
-          || (entities.debitAccountOverride?.id ? { id: String(entities.debitAccountOverride.id), code: String(entities.debitAccountOverride.code || '') } : null)
-          || (order?.cashAccountId ? { id: String(order.cashAccountId), code: String(order.cashAccountCode || '') } : null)
-          || (order?.bankAccountId ? { id: String(order.bankAccountId), code: String(order.bankAccountCode || '') } : null)
-          || (order?.receivingAccountId ? { id: String(order.receivingAccountId), code: '' } : null)
-          || (order?.paymentDetails?.[0]?.accountId ? { id: String(order.paymentDetails[0].accountId), code: '' } : null)
-          || (order?.cash_account_id ? { id: String(order.cash_account_id), code: '' } : null)
-          || (order?.bank_account_id ? { id: String(order.bank_account_id), code: '' } : null);
-        break;
-      case 'product_cost_source':
-      case 'sourcing_cost':
-        candidate = costOnCourier
-          ? linkedAccount(entities.courier || entities.deliveryCourier || entities.shippingCourier || entities.sourcing_cost)
-          : linkedAccount(entities.sourcing_cost);
-        return candidate || fallbackOrderCost();
-      case 'order_cost_account':
-        return fallbackOrderCost();
-      default:
-        return {
-          id: String(systemAccounts[defaultKey] || systemAccounts[accountConfig.id] || accountConfig.id),
-          code: String(accountConfig.code || ''),
-        };
-    }
-
-    if (!candidate?.id) {
-      throw new Error(`Unable to resolve linked account for automatic voucher target: ${accountConfig.id}`);
-    }
-    return candidate;
+    return resolveAutomaticVoucherAccount(accountConfig, systemAccounts, order, entities);
   }
   /**
    * Generates strictly unique, non-colliding account identifiers:
@@ -978,26 +752,13 @@ class FinancialAccountService {
    *
    * لا يوجد افتراض بأن YER هي العملة الأساس — العملة الأساس هي التي rate=1
    */
-  convertToTargetCurrency(
+    convertToTargetCurrency(
     amount: number,
     fromCurrency: string,
     targetCurrency: string,
     exchangeRates: Record<string, number | undefined>,
   ): number {
-    if (!fromCurrency || !targetCurrency || fromCurrency === targetCurrency) return amount;
-
-    // rate[X] = كم وحدة أساس = 1 وحدة X
-    const fromRate = typeof exchangeRates[fromCurrency] === 'number' && (exchangeRates[fromCurrency] as number) > 0
-      ? (exchangeRates[fromCurrency] as number)
-      : 1;
-    const toRate = typeof exchangeRates[targetCurrency] === 'number' && (exchangeRates[targetCurrency] as number) > 0
-      ? (exchangeRates[targetCurrency] as number)
-      : 1;
-
-    // تحويل: A → عملة أساس → B
-    // amount_in_base = amount * fromRate
-    // amount_in_B = amount_in_base / toRate
-    return (amount * fromRate) / toRate;
+    return convertToTargetCurrencyValue(amount, fromCurrency, targetCurrency, exchangeRates);
   }
 
   /**

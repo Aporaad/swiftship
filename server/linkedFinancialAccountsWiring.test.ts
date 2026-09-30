@@ -5,11 +5,11 @@ const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf
 
 describe('linked financial accounts wiring', () => {
   it('defines separate accounting sections and entity types for sources, carriers and assets', () => {
-    const service = read('../src/services/financialAccountService.ts');
+    const accountTypes = read('../src/services/financialAccountTypes.ts');
     const chart = read('../src/components/ChartOfAccounts.tsx');
-    expect(service).toContain('source: "2140"');
-    expect(service).toContain('shipping_company: "2150"');
-    expect(service).toContain('asset: "1240"');
+    expect(accountTypes).toContain('source: "2140"');
+    expect(accountTypes).toContain('shipping_company: "2150"');
+    expect(accountTypes).toContain('asset: "1240"');
     expect(chart).toContain("code: '2140'");
     expect(chart).toContain("code: '2150'");
     expect(chart).toContain("code: '1240'");

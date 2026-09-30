@@ -40,6 +40,7 @@ describe('عقد إعادة هيكلة شجرة الحسابات', () => {
   it('يعرض إدارة الشجرة والحسابات الافتراضية ويمنع اختيار العقد التنظيمية', () => {
     const component = read('src/components/AccountingHierarchyManagement.tsx');
     const accountingPage = read('src/components/FinanceAccounting.tsx');
+    const adjustmentModal = read('src/components/finance/ManualJournalAdjustmentModal.tsx');
     expect(component).toContain("setActiveTab('defaults')");
     expect(component).toContain("['default_accounts', setDefaultAccounts]");
     expect(component).toContain('filterPostingAccounts(accounts, true)');
@@ -66,13 +67,14 @@ describe('عقد إعادة هيكلة شجرة الحسابات', () => {
     expect(component).toContain('switchUnifiedAccountKind');
     expect(accountingPage).toContain('AccountingHierarchyManagement');
     expect(accountingPage).toContain('filterPostingAccounts(financialAccounts)');
-    expect(accountingPage).toContain('postingFinancialAccounts.filter');
+    expect(adjustmentModal).toContain('postingFinancialAccounts.filter');
   });
 
   it('يحافظ على خريطة تدقيق للمعرفات ويضع ضمانات الترحيل والعملة داخل قاعدة البيانات', () => {
     const rekeyMigration = read('supabase/migrations/202608270070_rekey_accounts_to_account_codes.sql');
     const guardMigration = read('supabase/migrations/202608270075_enforce_accounting_posting_guards.sql');
     const adapter = read('src/lib/supabase-adapter.ts');
+    const adapterColumns = read('src/lib/supabase-adapter-columns.ts');
     expect(rekeyMigration).toContain('CREATE TABLE IF NOT EXISTS public.account_id_migration_map');
     expect(rekeyMigration).toContain("id !~ '^\\d{4}-\\d{4}$' OR id <> account_code");
     expect(rekeyMigration).toContain('ON UPDATE CASCADE');
@@ -80,8 +82,8 @@ describe('عقد إعادة هيكلة شجرة الحسابات', () => {
     expect(guardMigration).toContain('sync_account_balance_after_transaction');
     expect(guardMigration).toContain('accounting_to_system_currency');
     expect(guardMigration).toContain('limited_balance');
-    expect(adapter).toContain("balance: 'balance'");
-    expect(adapter).toContain("account_id_migration_map");
+    expect(adapterColumns).toContain("balance: 'balance'");
+    expect(adapterColumns).toContain("account_id_migration_map");
     expect(adapter).toContain('const collectionCaches');
     expect(adapter).toContain('async function ensureCache(table: string)');
   });
