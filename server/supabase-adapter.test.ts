@@ -1,12 +1,39 @@
 import { describe, expect, it } from 'vitest';
-import { supabase } from '../src/lib/supabase-adapter';
+import { resolveSupabaseConfig } from '../src/lib/supabase-config';
 
-describe('Supabase adapter runtime configuration', () => {
-  it('initializes the original application adapter with the injected project URL', () => {
-    const client = supabase as unknown as { supabaseUrl?: string; supabaseKey?: string };
-    expect(client.supabaseUrl).toBe(process.env.SUPABASE_URL);
-    expect(client.supabaseUrl).not.toContain('placeholder-project.supabase.co');
-    expect(client.supabaseKey).toBe(process.env.SUPABASE_ANON_KEY);
-    expect(client.supabaseKey).not.toBe('placeholder-key');
+describe('Supabase configuration resolution', () => {
+  it('prefers process Vite variables over server aliases and build-time values', () => {
+    const config = resolveSupabaseConfig(
+      {
+        VITE_SUPABASE_URL: 'https://client.example.test',
+        SUPABASE_URL: 'https://server.example.test',
+        VITE_SUPABASE_ANON_KEY: 'client-key',
+        SUPABASE_ANON_KEY: 'server-key',
+      },
+      {
+        VITE_SUPABASE_URL: 'https://build.example.test',
+        VITE_SUPABASE_ANON_KEY: 'build-key',
+      },
+    );
+
+    expect(config).toEqual({
+      url: 'https://client.example.test',
+      anonKey: 'client-key',
+    });
+  });
+
+  it('falls back through server aliases to Vite-injected values and then empty strings', () => {
+    expect(
+      resolveSupabaseConfig(
+        { SUPABASE_URL: 'https://server.example.test', SUPABASE_ANON_KEY: 'server-key' },
+        { VITE_SUPABASE_URL: 'https://build.example.test', VITE_SUPABASE_ANON_KEY: 'build-key' },
+      ),
+    ).toEqual({ url: 'https://server.example.test', anonKey: 'server-key' });
+
+    expect(
+      resolveSupabaseConfig({}, { VITE_SUPABASE_URL: 'https://build.example.test', VITE_SUPABASE_ANON_KEY: 'build-key' }),
+    ).toEqual({ url: 'https://build.example.test', anonKey: 'build-key' });
+
+    expect(resolveSupabaseConfig()).toEqual({ url: '', anonKey: '' });
   });
 });

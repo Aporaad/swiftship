@@ -1,5 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   collection, onSnapshot, query, orderBy, getDocs, doc, setDoc, getDoc, where, addDoc, deleteDoc
 } from '../../../lib/supabase-adapter';
@@ -12,10 +11,9 @@ import {
 } from 'recharts';
 import {
   FileText, TrendingUp, DollarSign, Users, Truck, Package,
-  Search, Filter, Download as DownloadIcon, Printer,
-  Calendar, ArrowUpRight, ArrowDownLeft, ChevronRight,
-  Settings as SettingsIcon, AlertCircle, RefreshCw, Layers, Layout,
-  Save, CheckCircle2, ChevronDown, Check, Coins, Eye, ShoppingCart, UserCheck,
+  ArrowUpRight, ArrowDownLeft, ChevronRight,
+  Settings as SettingsIcon, AlertCircle, Layers, Layout,
+  Save, CheckCircle2, Coins, Eye, ShoppingCart, UserCheck,
   Bookmark, Trash2, Palette, Sparkles
 } from 'lucide-react';
 import { printContent } from '../../../lib/printUtils';
@@ -28,207 +26,9 @@ import { useExchangeRates } from '../../../hooks/useExchangeRates';
 import { PrintDesignerPageTab } from './tabs/PrintDesignerPageTab';
 import ReportsTabContent from './tabs/ReportsTabContent';
 import { ReportPrintPreviewModal } from '../components/ReportPrintPreviewModal';
+import MultiAccountSelector from '../components/MultiAccountSelector';
+import ReportsContextFilters from '../components/ReportsContextFilters';
 import { DEFAULT_PRINT_SETTINGS, REPORT_TYPES, type PrintTemplateSettings, type ReportFilter } from '../types/reports.types';
-
-interface MultiAccountSelectorProps {
-  selectedIds: string[];
-  setSelectedIds: React.Dispatch<React.SetStateAction<string[]>>;
-  labelAr: string;
-  labelEn: string;
-  accounts: any[];
-  isAr: boolean;
-  onSave?: () => void;
-}
-
-const MultiAccountSelector: React.FC<MultiAccountSelectorProps> = ({
-  selectedIds,
-  setSelectedIds,
-  labelAr,
-  labelEn,
-  accounts,
-  isAr,
-  onSave
-}) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [filterQuery, setFilterQuery] = useState('');
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
-
-  const filteredAccounts = accounts.filter(acc =>
-    (acc.name || '').toLowerCase().includes(filterQuery.toLowerCase()) ||
-    (acc.accountCode || '').toLowerCase().includes(filterQuery.toLowerCase()) ||
-    (acc.entityName || '').toLowerCase().includes(filterQuery.toLowerCase())
-  );
-
-  const toggleSelection = (id: string) => {
-    setSelectedIds(prev =>
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-    );
-  };
-
-  const selectAll = () => {
-    const allFilteredIds = filteredAccounts.map(a => a.id);
-    setSelectedIds(prev => {
-      const otherSelected = prev.filter(id => !allFilteredIds.includes(id));
-      return [...otherSelected, ...allFilteredIds];
-    });
-  };
-
-  const deselectAll = () => {
-    const allFilteredIds = filteredAccounts.map(a => a.id);
-    setSelectedIds(prev => prev.filter(id => !allFilteredIds.includes(id)));
-  };
-
-  const selectedAccounts = accounts.filter(acc => selectedIds.includes(acc.id));
-
-  return (
-    <div className="relative" ref={containerRef}>
-      <span className="text-[10px] text-slate-400 font-bold block uppercase mb-1.5 tracking-wider">
-        {isAr ? labelAr : labelEn}
-      </span>
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className={`w-full bg-slate-950 border rounded-2xl px-4 py-3 text-start flex justify-between items-center transition-all cursor-pointer shadow-inner relative focus:outline-none focus:ring-2 focus:ring-[#d4af37]/20 ${isOpen ? 'border-[#d4af37] ring-2 ring-[#d4af37]/10' : 'border-slate-800 hover:border-slate-700'
-          }`}
-      >
-        <div className="flex flex-wrap items-center gap-1.5 overflow-hidden flex-1 select-none">
-          {selectedAccounts.length === 0 ? (
-            <span className="text-xs text-slate-500 font-bold italic">
-              {isAr ? 'اضغط لتحديد الحسابات من الشجرة ماليًا...' : 'Click to select accounts...'}
-            </span>
-          ) : (
-            <>
-              <span className="bg-[#d4af37]/25 text-[#d4af37] text-[10px] px-2 py-0.5 rounded-full font-black font-mono shrink-0">
-                {selectedAccounts.length}
-              </span>
-              <div className="flex flex-wrap gap-1">
-                {selectedAccounts.slice(0, 4).map(acc => (
-                  <span key={acc.id} className="bg-[#d4af37]/10 text-[#d4af37] border border-[#d4af37]/20 px-2 py-0.5 rounded-lg text-[9px] font-bold flex items-center gap-1">
-                    {acc.entityName || acc.name}
-                    <span className="text-slate-500 text-[8px] font-mono">[{acc.accountCode}]</span>
-                  </span>
-                ))}
-                {selectedAccounts.length > 4 && (
-                  <span className="bg-slate-900 border border-slate-800 text-slate-400 px-1.5 py-0.5 rounded-lg text-[8.5px] font-black">
-                    +{selectedAccounts.length - 4} {isAr ? 'حسابات إضافية' : 'others'}
-                  </span>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 shrink-0 ${isOpen ? 'rotate-180 text-[#d4af37]' : ''}`} />
-      </button>
-
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -8, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -8, scale: 0.96 }}
-            transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-            className="absolute z-[100] left-0 right-0 mt-2 bg-slate-950/98 backdrop-blur-md border border-slate-800 rounded-2xl shadow-2xl overflow-hidden p-3.5 space-y-3"
-          >
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
-              <input
-                type="text"
-                placeholder={isAr ? 'البحث باسم الحساب أو كود الدليل...' : 'Search by account name or code...'}
-                value={filterQuery}
-                onChange={e => setFilterQuery(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-850 rounded-xl pl-9 pr-4 py-2 text-[11px] text-white outline-none focus:border-[#d4af37]/45 focus:bg-slate-900 transition-all font-bold placeholder:text-slate-550"
-              />
-            </div>
-
-            <div className="flex justify-between items-center text-[10px] border-b border-slate-900 pb-2 px-1">
-              <span className="text-slate-500 font-bold">
-                {isAr ? `${filteredAccounts.length} حساب متاح` : `${filteredAccounts.length} accounts available`}
-              </span>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={selectAll}
-                  className="text-[#d4af37] hover:text-[#e4cf67] font-black transition-colors"
-                >
-                  {isAr ? 'تحديد الكل' : 'Select All'}
-                </button>
-                <span className="text-slate-800">|</span>
-                <button
-                  type="button"
-                  onClick={deselectAll}
-                  className="text-slate-400 hover:text-slate-300 font-black transition-colors"
-                >
-                  {isAr ? 'إلغاء التحديد' : 'Clear All'}
-                </button>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1 max-h-[190px] overflow-y-auto pr-1">
-              {filteredAccounts.map(acc => {
-                const isSelected = selectedIds.includes(acc.id);
-                return (
-                  <div
-                    key={acc.id}
-                    onClick={() => toggleSelection(acc.id)}
-                    className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border text-[11px] font-bold cursor-pointer transition-all select-none ${isSelected
-                      ? 'bg-[#d4af37]/10 text-[#d4af37] border-[#d4af37]/35'
-                      : 'bg-slate-900/10 text-slate-400 border-transparent hover:bg-slate-900/40 hover:text-white'
-                      }`}
-                  >
-                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all shrink-0 ${isSelected ? 'bg-[#d4af37] border-[#d4af37] text-black animate-scale-in' : 'border-slate-800 bg-slate-950'
-                      }`}>
-                      {isSelected && <Check className="w-3 h-3 stroke-[3.5]" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="truncate">{acc.entityName || acc.name}</span>
-                        <span className="font-mono text-[9px] text-[#d4af37] shrink-0 font-black">[{acc.accountCode}]</span>
-                      </div>
-                      <div className="flex justify-between items-center text-[9px] text-slate-500 mt-0.5 font-mono">
-                        <span>{isAr ? 'الرصيد الحالي:' : 'Current Balance:'} {(acc.balance || 0).toLocaleString()} {acc.currency || 'SAR'}</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-              {filteredAccounts.length === 0 && (
-                <p className="text-[10px] text-slate-500 italic text-center py-4">{isAr ? 'لا توجد حسابات مطابقة للبحث' : 'No matching accounts found.'}</p>
-              )}
-            </div>
-
-            {onSave && (
-              <div className="pt-2 border-t border-slate-900">
-                <button
-                  type="button"
-                  onClick={() => {
-                    onSave();
-                    setIsOpen(false);
-                  }}
-                  className="w-full bg-[#d4af37] hover:bg-[#c49f27] text-black text-[11px] font-black py-2 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 group"
-                >
-                  <Save className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
-                  {isAr ? 'حفظ التغييرات ومزامنة البيانات' : 'Save & Sync Changes'}
-                </button>
-              </div>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-};
 
 export default function ReportsPage() {
   const { settings } = useSettings();
@@ -1462,202 +1262,35 @@ export default function ReportsPage() {
           {/* RIGHT: Analytical content panels */}
           <div className="lg:col-span-8 space-y-6">
 
-            {/* Context Filters */}
-            <div className="bg-[#111114] border border-slate-850 p-5 rounded-3xl space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <span className="text-xs font-black text-[#d4af37] uppercase flex items-center gap-2">
-                  <Filter className="w-4 h-4" />
-                  {isAr ? 'مصفاة البيانات الاحترافية' : 'Professional Filter Deck'}
-                </span>
-
-                {/* Export/Template controls */}
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => setShowSaveTemplateForm(!showSaveTemplateForm)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all border ${showSaveTemplateForm
-                      ? 'bg-rose-500/10 border-rose-500/35 text-rose-400'
-                      : 'bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 text-indigo-400'
-                      }`}
-                  >
-                    <Bookmark className="w-3.5 h-3.5" />
-                    {isAr ? 'حفظ الفلترة الحالية كقالب' : 'Save Preset'}
-                  </button>
-                  <button
-                    onClick={() => setIsPreviewModalOpen(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#d4af37]/10 hover:bg-[#d4af37]/20 border border-[#d4af37]/35 text-[#d4af37] rounded-xl text-xs font-black transition-all"
-                  >
-                    <Printer className="w-3.5 h-3.5" />
-                    {isAr ? 'معاينة وطباعة القالب' : 'Paper Config'}
-                  </button>
-                  <button
-                    onClick={handleExportExcel}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/35 text-emerald-400 rounded-xl text-xs font-black transition-all"
-                  >
-                    <DownloadIcon className="w-3.5 h-3.5" />
-                    {isAr ? 'تصدير Excel' : 'Excel'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Saved Configuration Inline Form */}
-              {showSaveTemplateForm && (
-                <div className="bg-slate-950/60 border border-[#d4af37]/25 p-4 rounded-2xl flex flex-col md:flex-row items-stretch md:items-center gap-3 animate-fade-slide-in">
-                  <div className="flex-1 space-y-1">
-                    <label className="text-[10px] font-black text-[#d4af37] uppercase block">{isAr ? 'اسم القالب المخصص للطلب الحالي' : 'Custom Template Name'}</label>
-                    <input
-                      type="text"
-                      placeholder={isAr ? 'مثال: تقرير مبيعات الربع الأول للمندوب رائد' : 'e.g. Q1 Sales Report for Courier Raed'}
-                      value={newTemplateName}
-                      onChange={e => setNewTemplateName(e.target.value)}
-                      className="w-full bg-[#111114] border border-slate-850 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-[#d4af37]"
-                    />
-                  </div>
-                  <div className="flex items-end gap-2 shrink-0 self-end md:self-auto pt-3 md:pt-0">
-                    <button
-                      onClick={handleSaveFilterTemplate}
-                      disabled={isSavingFilterTemplate}
-                      className="px-4 py-2 bg-[#d4af37] hover:bg-yellow-600 disabled:opacity-50 text-black text-xs font-black rounded-xl transition flex items-center gap-1.5"
-                    >
-                      {isSavingFilterTemplate ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                      {isAr ? 'حفظ بـ Cloud' : 'Save to Cloud'}
-                    </button>
-                    <button
-                      onClick={() => { setShowSaveTemplateForm(false); setNewTemplateName(''); }}
-                      className="px-4 py-2 bg-slate-900 border border-slate-850 text-slate-400 hover:text-white text-xs font-bold rounded-xl transition"
-                    >
-                      {isAr ? 'إلغاء' : 'Cancel'}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Date range picker - Start */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-500 px-1 uppercase block">{isAr ? 'تاريخ البدء' : 'Date range start'}</label>
-                  <div className="relative">
-                    <Calendar className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
-                    <input
-                      type="date"
-                      value={filters.startDate}
-                      onChange={e => setFilters(prev => ({ ...prev, startDate: e.target.value }))}
-                      className="w-full bg-slate-950 border border-slate-850 rounded-xl pl-9 pr-4 py-2 text-xs font-bold text-white outline-none focus:border-[#d4af37]/45"
-                    />
-                  </div>
-                </div>
-
-                {/* Date range picker - End */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-550 px-1 uppercase block">{isAr ? 'تاريخ نهاية المدى' : 'Date range end'}</label>
-                  <div className="relative">
-                    <Calendar className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
-                    <input
-                      type="date"
-                      value={filters.endDate}
-                      onChange={e => setFilters(prev => ({ ...prev, endDate: e.target.value }))}
-                      className="w-full bg-slate-950 border border-slate-850 rounded-xl pl-9 pr-4 py-2 text-xs font-bold text-white outline-none focus:border-[#d4af37]/45"
-                    />
-                  </div>
-                </div>
-
-                {/* Conditional configuration based on active sidebar selected report */}
-                {activeReport === 'expenses' ? (
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-500 px-1 uppercase block">{isAr ? 'التصنيف المحاسبي' : 'Accounting Class'}</label>
-                    <select
-                      value={filters.type}
-                      onChange={e => setFilters(prev => ({ ...prev, type: e.target.value }))}
-                      className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-[#d4af37]/45"
-                    >
-                      <option value="all">{isAr ? 'جميع التصنيفات' : 'All Categories'}</option>
-                      {EXPENSE_CATEGORIES_DYNAMIC.map(cat => (
-                        <option key={cat.id} value={cat.id}>{isAr ? cat.labelAr : cat.labelEn}</option>
-                      ))}
-                    </select>
-                  </div>
-                ) : activeReport === 'account_ledger' ? (
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-550 px-1 uppercase block">{isAr ? 'تحديد الحساب المالي المباشر' : 'Select Chart Ledger'}</label>
-                    <select
-                      value={filters.accountId || ''}
-                      onChange={e => setFilters(prev => ({ ...prev, accountId: e.target.value }))}
-                      className="w-full bg-rose-500/10 border border-rose-500/20 text-[#d4af37] rounded-xl px-3 py-2 text-xs font-black outline-none focus:border-[#d4af37]/40"
-                    >
-                      <option value="" className="text-black">-- {isAr ? 'اختر حساب للتدقيق' : 'Select Ledger Account'} --</option>
-                      {accounts
-                        .sort((a, b) => (a.accountCode || '').localeCompare(b.accountCode || ''))
-                        .map(acc => (
-                          <option key={acc.id} value={acc.id} className="text-black">
-                            [{acc.accountCode}] - {acc.entityName || acc.name} ({acc.currency || 'SAR'})
-                          </option>
-                        ))
-                      }
-                    </select>
-                  </div>
-                ) : ['customers', 'couriers', 'users'].includes(activeReport) ? (
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-550 px-1 uppercase block">
-                      {activeReport === 'customers' ? (isAr ? 'فلترة حسب العميل المحدد' : 'Filter by Customer') :
-                        activeReport === 'couriers' ? (isAr ? 'فلترة حسب المندوب المحدد' : 'Filter by Courier') :
-                          (isAr ? 'فلترة حسب الموظف' : 'Filter by User')}
-                    </label>
-                    <select
-                      value={filters.entityId || ''}
-                      onChange={e => setFilters(prev => ({ ...prev, entityId: e.target.value }))}
-                      className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none focus:border-[#d4af37]/45"
-                    >
-                      <option value="">{isAr ? 'جميع الجهات السجلية (الكل)' : 'Show All'}</option>
-                      {(activeReport === 'customers' ? customers : activeReport === 'couriers' ? couriers : users).map(entity => (
-                        <option key={entity.id} value={entity.id} className="text-black">
-                          {entity.fullName || entity.displayName || entity.email}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : (
-                  // default search bar inside reports context
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-550 px-1 uppercase block">{isAr ? 'بحث سريع وعام' : 'Global searching match'}</label>
-                    <div className="relative">
-                      <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
-                      <input
-                        type="text"
-                        placeholder={isAr ? 'ابحث هنا الاسم، رقم الهاتف، البيان' : 'Search keyword...'}
-                        value={searchTerm}
-                        onChange={e => setSearchTerm(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-850 rounded-xl pl-9 pr-4 py-2 text-xs font-bold text-white outline-none focus:border-[#d4af37]/45"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Advanced Sorting control */}
-              {!['account_ledger'].includes(activeReport) && (
-                <div className="flex items-center gap-3 pt-2 text-xs text-slate-400">
-                  <span>{isAr ? 'ترتيب النتائج حسب:' : 'Sort results by:'}</span>
-                  <button
-                    onClick={() => setSortBy('date')}
-                    className={`px-3 py-1 rounded-lg border transition-all ${sortBy === 'date' ? 'bg-[#d4af37]/10 text-[#d4af37] border-[#d4af37]/35 font-bold' : 'border-slate-850 hover:text-white'}`}
-                  >
-                    {isAr ? 'التاريخ الفعلي' : 'Submission Date'}
-                  </button>
-                  <button
-                    onClick={() => setSortBy('amount')}
-                    className={`px-3 py-1 rounded-lg border transition-all ${sortBy === 'amount' ? 'bg-[#d4af37]/10 text-[#d4af37] border-[#d4af37]/35 font-bold' : 'border-slate-850 hover:text-white'}`}
-                  >
-                    {isAr ? 'المقدار / السعر' : 'Monetary Value'}
-                  </button>
-                  <span className="text-slate-700">|</span>
-                  <button
-                    onClick={() => setSortOrder(p => p === 'asc' ? 'desc' : 'asc')}
-                    className="hover:text-white border border-slate-850 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase flex items-center gap-1"
-                  >
-                    {sortOrder === 'desc' ? (isAr ? 'تنازلي (الأحدث/الأعلى)' : 'Descending') : (isAr ? 'تصاعدي (الأقدم/الأقل)' : 'Ascending')}
-                  </button>
-                </div>
-              )}
-            </div>
+            <ReportsContextFilters
+              isAr={isAr}
+              activeReport={activeReport}
+              filters={filters}
+              onFilterChange={(field, value) => setFilters(prev => ({ ...prev, [field]: value }))}
+              expenseCategories={EXPENSE_CATEGORIES_DYNAMIC}
+              accounts={accounts}
+              customers={customers}
+              couriers={couriers}
+              users={users}
+              searchTerm={searchTerm}
+              onSearchTermChange={setSearchTerm}
+              showSaveTemplateForm={showSaveTemplateForm}
+              onToggleSaveTemplateForm={() => setShowSaveTemplateForm(!showSaveTemplateForm)}
+              onCloseSaveTemplateForm={() => {
+                setShowSaveTemplateForm(false);
+                setNewTemplateName('');
+              }}
+              newTemplateName={newTemplateName}
+              onTemplateNameChange={setNewTemplateName}
+              onSaveFilterTemplate={handleSaveFilterTemplate}
+              isSavingFilterTemplate={isSavingFilterTemplate}
+              onOpenPrintSettings={() => setIsPreviewModalOpen(true)}
+              onExportExcel={handleExportExcel}
+              sortBy={sortBy}
+              onSortByChange={value => setSortBy(value)}
+              sortOrder={sortOrder}
+              onSortOrderToggle={() => setSortOrder(previous => previous === 'asc' ? 'desc' : 'asc')}
+            />
 
             {/* LIVE DISPLAY AREA */}
             <div className="bg-[#111114] border border-slate-850 rounded-3xl p-6 min-h-[450px]">

@@ -15,87 +15,21 @@ import { activityLogService } from '../../../services/activityLogService';
 import { notificationService } from '../../../services/notificationService';
 import { currencyService, Currency, CurPriceEntry } from '../../../services/currencyService';
 import { useExchangeRates } from '../../../hooks/useExchangeRates';
+import { FieldInput, FieldLabel, FieldTextarea, SectionCard, ToggleSwitch } from './tabs/settingsHelpers';
+import { InterfaceSettingsTab } from './tabs/InterfaceSettingsTab';
+import { GeneralSettingsTab } from './tabs/GeneralSettingsTab';
+import { CurrencySettingsTab } from './tabs/CurrencySettingsTab';
+import { AdminSecuritySettingsTab } from './tabs/AdminSecuritySettingsTab';
+import { LogisticsSettingsTab } from './tabs/LogisticsSettingsTab';
+import type { BackupRecord, LogisticsSettings, NewCurrencyFormValues, SettingsConfirmConfig, SettingsExportFormat } from '../types';
+import { CbmRateNotFoundError, fetchCbmRateFromApi } from '../services/fetchCbmRateFromApi';
+import { testLogisticsConnection } from '../services/testLogisticsConnection';
 
 type SettingsTab = 'interface' | 'general' | 'currency' | 'admin' | 'logistics';
 
 // ─────────────────────────────────────
-// REUSABLE FIELD COMPONENTS
-// ─────────────────────────────────────
-const FieldLabel = ({ children, locked = false }: { children: React.ReactNode; locked?: boolean }) => (
-  <label className="block text-[10px] font-black text-slate-500 uppercase mb-2 tracking-wider">
-    {children}{locked && <span className="ml-1 text-rose-400">🔒</span>}
-  </label>
-);
-
-const FieldInput = ({ disabled = false, ...props }: React.InputHTMLAttributes<HTMLInputElement>) => (
-  <input
-    {...props}
-    disabled={disabled}
-    className={`w-full bg-black/50 border border-slate-800 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start transition ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-slate-700'} ${props.className || ''}`}
-  />
-);
-
-const FieldTextarea = ({ disabled = false, ...props }: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => (
-  <textarea
-    {...props}
-    disabled={disabled}
-    className={`w-full bg-black/50 border border-slate-800 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none text-start transition ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-slate-700'}`}
-  />
-);
-
-const SectionCard = ({ title, icon: Icon, children, className = '', badge }: { title: string; icon: any; children: React.ReactNode; className?: string; badge?: string }) => (
-  <section className={`bg-[#121215] border border-slate-850 p-6 rounded-3xl shadow-lg relative overflow-hidden group ${className}`}>
-    <div className="absolute top-0 right-0 w-24 h-24 bg-[#d4af37]/3 rounded-full -mr-12 -mt-12 opacity-30 group-hover:scale-110 transition-transform duration-500"></div>
-    <h2 className="text-sm font-black text-white mb-5 flex items-center gap-2 border-b border-slate-800/50 pb-4 relative z-10 uppercase tracking-wider">
-      <Icon className="w-4 h-4 text-[#d4af37]" />
-      {title}
-      {badge && <span className="mr-auto text-[9px] font-black bg-[#d4af37]/20 text-[#d4af37] px-2 py-0.5 rounded-full">{badge}</span>}
-    </h2>
-    <div className="relative z-10">{children}</div>
-  </section>
-);
-
-const ToggleSwitch = ({
-  checked, onChange, label, description, icon: Icon, locked = false
-}: { checked: boolean; onChange: (v: boolean) => void; label: string; description?: string; icon?: any; locked?: boolean }) => (
-  <div className="flex items-center p-4 bg-black/40 rounded-2xl border border-slate-800 gap-4">
-    {Icon && (
-      <div className="bg-[#d4af37]/10 border border-[#d4af37]/25 text-[#d4af37] p-2.5 rounded-xl shrink-0">
-        <Icon className="w-5 h-5" />
-      </div>
-    )}
-    <div className="flex-1 text-start">
-      <h4 className="text-xs font-black text-white uppercase tracking-wider">
-        {label}{locked && <span className="ml-1 text-rose-400">🔒</span>}
-      </h4>
-      {description && <p className="text-[10px] text-slate-500 font-bold mt-0.5">{description}</p>}
-    </div>
-    <label className={`relative inline-flex items-center ${locked ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => !locked && onChange(e.target.checked)}
-        className="sr-only peer"
-        disabled={locked}
-      />
-      <div className="w-11 h-6 bg-slate-800 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-slate-800 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-600"></div>
-    </label>
-  </div>
-);
-
-// ─────────────────────────────────────
 // BACKUP RECORD TYPE
 // ─────────────────────────────────────
-interface BackupRecord {
-  id: string;
-  timestamp: string;
-  savedAt: number;
-  createdBy: string;
-  type: 'auto' | 'manual';
-  collections?: string[];
-  size?: number;
-}
-
 // ─────────────────────────────────────
 // MAIN COMPONENT
 // ─────────────────────────────────────
@@ -108,7 +42,7 @@ export default function SettingsPage() {
   const [apiLoading, setApiLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<SettingsTab>('interface');
-  const [exportFormat, setExportFormat] = useState<'json' | 'csv'>('json');
+  const [exportFormat, setExportFormat] = useState<SettingsExportFormat>('json');
 
   // Backup history state
   const [backupHistory, setBackupHistory] = useState<BackupRecord[]>([]);
@@ -129,17 +63,7 @@ export default function SettingsPage() {
   const [editDbCurrencyModalOpen, setEditDbCurrencyModalOpen] = useState(false);
 
   // New DB Currency Form State
-  const [newCurrency, setNewCurrency] = useState<{
-    code: string;
-    main_nameAR: string;
-    sup_nameAR: string;
-    main_nameEn: string;
-    sup_nameEn: string;
-    symbol: string;
-    flag: string;
-    initialRate: number;
-    isActive: boolean;
-  }>({
+  const [newCurrency, setNewCurrency] = useState<NewCurrencyFormValues>({
     code: '',
     main_nameAR: '',
     sup_nameAR: '',
@@ -178,12 +102,7 @@ export default function SettingsPage() {
   });
 
   // Logistics API state
-  const [logisticsSettings, setLogisticsSettings] = useState<{
-    enabled: boolean;
-    provider: string;
-    apiKey: string;
-    defaultDestinationCountry?: string;
-  }>({
+  const [logisticsSettings, setLogisticsSettings] = useState<LogisticsSettings>({
     enabled: false,
     provider: 'aftership',
     apiKey: '',
@@ -257,9 +176,7 @@ export default function SettingsPage() {
   }, [showBackupHistory]);
 
   // ─── CONFIRM MODAL ──────────────────
-  const [confirmConfig, setConfirmConfig] = useState<{
-    isOpen: boolean; title: string; message: string; onConfirm: () => void; type: 'danger' | 'warning' | 'info';
-  }>({ isOpen: false, title: '', message: '', onConfirm: () => { }, type: 'danger' });
+  const [confirmConfig, setConfirmConfig] = useState<SettingsConfirmConfig>({ isOpen: false, title: '', message: '', onConfirm: () => { }, type: 'danger' });
 
   if (roleLoading) {
     return (
@@ -840,6 +757,52 @@ export default function SettingsPage() {
     return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
   };
 
+  const handleFetchCbmRate = async () => {
+    const apiUrl = localSettings.cbmShippingRateApiUrl;
+    if (!apiUrl) return;
+
+    try {
+      const newRate = await fetchCbmRateFromApi(apiUrl);
+      const now = new Date();
+      const updaterName = profile?.fullName || auth.currentUser?.email || 'Unknown';
+      setLocalSettings(previous => ({
+        ...previous,
+        defaultCbmShippingRate: newRate,
+        lastCbmRateUpdate: now.toLocaleString(isAr ? 'ar-YE' : 'en-US'),
+        lastCbmRateUpdatedBy: updaterName,
+      }));
+      alert(isAr ? `✅ تم تحديث سعر CBM إلى: ${newRate} USD/m³` : `✅ CBM rate updated to: ${newRate} USD/m³`);
+    } catch (error) {
+      const message = error instanceof CbmRateNotFoundError
+        ? (isAr ? 'لم يتم إيجاد سعر CBM في الاستجابة' : 'CBM rate not found in API response')
+        : error instanceof Error ? error.message : String(error);
+      alert((isAr ? '❌ خطأ في جلب سعر CBM: ' : '❌ Error fetching CBM rate: ') + message);
+    }
+  };
+
+  const handleClearCache = () => {
+    localStorage.clear();
+    activityLogService.log('clear_cache', 'Browser LocalStorage');
+    window.location.reload();
+  };
+
+  const handleTestLogisticsConnection = async () => {
+    setApiLoading(true);
+    setApiError(null);
+    try {
+      const result = await testLogisticsConnection(logisticsSettings);
+      if (result.success) {
+        alert(`✅ ${result.message}`);
+      } else {
+        setApiError(result.error || 'Connection failed');
+      }
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setApiLoading(false);
+    }
+  };
+
   // ─── TABS CONFIG ────────────────────
   const tabs: { id: SettingsTab; label: string; icon: any; show?: boolean }[] = [
     { id: 'interface', label: t('tabInterface'), icon: Palette, show: true },
@@ -915,1041 +878,108 @@ export default function SettingsPage() {
       {/* TAB 1: INTERFACE                  */}
       {/* ══════════════════════════════════ */}
       {activeTab === 'interface' && (
-        <div className="space-y-5 animate-fade-slide-in">
-          <SectionCard title={isAr ? 'المظهر والوضع' : 'Theme & Mode'} icon={Palette}>
-            <FieldLabel>{t('theme')}</FieldLabel>
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { value: 'dark', label: isAr ? 'الوضع المظلم الفاخر' : 'Luxury Dark', icon: '🌙', desc: isAr ? 'خلفية داكنة وعرض ذهبي' : 'Dark background & gold accents' },
-                { value: 'light', label: isAr ? 'الوضع الفاتح' : 'Light Mode', icon: '☀️', desc: isAr ? 'خلفية بيضاء وعرض مضيء' : 'Clean white background' },
-              ].map(opt => (
-                <button key={opt.value} type="button"
-                  disabled={!canEditInterface}
-                  onClick={() => setLocalSettings({ ...localSettings, theme: opt.value as any })}
-                  className={`p-4 rounded-2xl border-2 transition-all text-start ${localSettings.theme === opt.value ? 'border-[#d4af37] bg-[#d4af37]/10 shadow-[0_0_15px_rgba(212,175,55,0.15)]' : 'border-slate-800 bg-black/40 hover:border-slate-700'} ${!canEditInterface ? 'opacity-65 cursor-not-allowed' : ''}`}
-                >
-                  <div className="text-2xl mb-2">{opt.icon}</div>
-                  <div className={`font-black text-xs uppercase tracking-wide ${localSettings.theme === opt.value ? 'text-[#d4af37]' : 'text-slate-400'}`}>{opt.label}</div>
-                  <div className="text-[10px] text-slate-500 mt-0.5 font-bold">{opt.desc}</div>
-                  {localSettings.theme === opt.value && <div className="mt-2 flex items-center gap-1 text-[#d4af37] text-[9px] font-black"><CheckCircle className="w-3 h-3" /> {isAr ? 'محدد' : 'Active'}</div>}
-                </button>
-              ))}
-            </div>
-          </SectionCard>
-
-          <SectionCard title={isAr ? 'حجم الخط' : 'Font Size'} icon={Type}>
-            <FieldLabel>{isAr ? 'اختر حجم خط النظام' : 'Choose system font size'}</FieldLabel>
-            <div className="grid grid-cols-4 gap-3">
-              {[{ value: 'sm', label: t('fontSizeSm'), px: '13px' }, { value: 'md', label: t('fontSizeMd'), px: '14px' }, { value: 'lg', label: t('fontSizeLg'), px: '15px' }, { value: 'xl', label: t('fontSizeXl'), px: '16px' }].map(opt => (
-                <button key={opt.value} type="button"
-                  disabled={!canEditInterface}
-                  onClick={() => setLocalSettings({ ...localSettings, fontSize: opt.value as any })}
-                  className={`p-3 rounded-xl border-2 transition-all text-center ${localSettings.fontSize === opt.value ? 'border-[#d4af37] bg-[#d4af37]/10 text-[#d4af37]' : 'border-slate-800 bg-black/40 text-slate-400 hover:border-slate-700'} ${!canEditInterface ? 'opacity-65 cursor-not-allowed' : ''}`}
-                >
-                  <div className="font-black text-xs mb-1">{opt.label}</div>
-                  <div className="text-[10px] text-slate-500 font-mono">{opt.px}</div>
-                </button>
-              ))}
-            </div>
-          </SectionCard>
-
-          <SectionCard title={isAr ? 'لغة النظام' : 'System Language'} icon={Globe}>
-            <FieldLabel>{isAr ? 'لغة الواجهة الرئيسية' : 'Main Interface Language'}</FieldLabel>
-            <div className="flex p-1 bg-black/40 border border-slate-800 rounded-2xl">
-              <button type="button" disabled={!canEditInterface} onClick={() => setLocalSettings({ ...localSettings, language: 'ar' })}
-                className={`flex-1 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${localSettings.language === 'ar' ? 'bg-[#d4af37] text-black shadow-md' : 'text-slate-400 hover:text-slate-200'} ${!canEditInterface ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >🇾🇪 العربية</button>
-              <button type="button" disabled={!canEditInterface} onClick={() => setLocalSettings({ ...localSettings, language: 'en' })}
-                className={`flex-1 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${localSettings.language === 'en' ? 'bg-[#d4af37] text-black shadow-md' : 'text-slate-400 hover:text-slate-200'} ${!canEditInterface ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >🇺🇸 ENGLISH</button>
-            </div>
-          </SectionCard>
-        </div>
+        <InterfaceSettingsTab
+          isAr={isAr}
+          settings={localSettings}
+          setSettings={setLocalSettings}
+          canEditInterface={canEditInterface}
+          t={t}
+        />
       )}
 
-      {/* ══════════════════════════════════ */}
+            {/* ══════════════════════════════════ */}
       {/* TAB 2: GENERAL SYSTEM              */}
       {/* ══════════════════════════════════ */}
       {activeTab === 'general' && (
-        <div className="space-y-5 animate-fade-slide-in">
-          <SectionCard title={isAr ? 'هوية النظام والعلامة التجارية' : 'System Branding & Identity'} icon={Settings2}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div className="md:col-span-2">
-                <FieldLabel>{t('systemName')}</FieldLabel>
-                <FieldInput type="text" disabled={!canEditGeneral} value={localSettings.systemName || ''} onChange={e => setLocalSettings({ ...localSettings, systemName: e.target.value })} placeholder="alx" />
-              </div>
-              <div>
-                <FieldLabel>{t('systemLogo')}</FieldLabel>
-                <div className="flex items-center gap-3">
-                  {localSettings.systemLogo ? (
-                    <div className="relative group">
-                      <img src={localSettings.systemLogo} alt="Logo" className="w-16 h-16 object-contain rounded-xl border border-slate-800 bg-black/50 p-2" />
-                      <button disabled={!canEditGeneral} onClick={() => setLocalSettings({ ...localSettings, systemLogo: '' })} className="absolute -top-2 -right-2 w-5 h-5 bg-rose-600 rounded-full flex disabled:opacity-50 disabled:cursor-not-allowed items-center justify-center opacity-0 group-hover:opacity-100 transition"><X className="w-3 h-3 text-white" /></button>
-                    </div>
-                  ) : (
-                    <div className="w-16 h-16 rounded-xl border border-slate-800 bg-black/50 flex items-center justify-center text-slate-600"><Image className="w-6 h-6" /></div>
-                  )}
-                  <button type="button" disabled={!canEditGeneral} onClick={() => logoInputRef.current?.click()} className="flex-1 bg-black/40 border border-slate-800 hover:border-[#d4af37]/40 text-slate-300 hover:text-white py-3 px-4 rounded-xl text-xs font-black transition flex items-center gap-2 justify-center disabled:opacity-50 disabled:cursor-not-allowed"><Upload className="w-4 h-4" />{isAr ? 'رفع شعار' : 'Upload Logo'}</button>
-                </div>
-              </div>
-              <div>
-                <FieldLabel>{t('orderPrefix')}</FieldLabel>
-                <FieldInput type="text" disabled={!canEditGeneral} value={localSettings.orderPrefix || 'ALX'} onChange={e => setLocalSettings({ ...localSettings, orderPrefix: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') })} placeholder="ALX" maxLength={5} className="font-mono uppercase" dir="ltr" />
-                <p className="text-[10px] text-slate-500 mt-1.5 font-bold">{isAr ? `مثال: ${localSettings.orderPrefix || 'ALX'}-2601-1001` : `Example: ${localSettings.orderPrefix || 'ALX'}-2601-1001`}</p>
-              </div>
-              <div>
-                <FieldLabel>{t('orderStartNumber')}</FieldLabel>
-                <FieldInput type="number" disabled={!canEditGeneral} value={localSettings.orderStartNumber ?? 1001} onChange={e => setLocalSettings({ ...localSettings, orderStartNumber: parseInt(e.target.value) || 1001 })} min={1} className="font-mono" dir="ltr" />
-              </div>
-              <div className="md:col-span-2">
-                <button type="button" disabled={!canEditGeneral} onClick={handleResetCounter} className="flex items-center gap-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 hover:border-amber-500/40 px-4 py-2.5 rounded-xl text-xs font-black transition disabled:opacity-50 disabled:cursor-not-allowed"><RefreshCw className="w-4 h-4" />{t('resetCounter')}</button>
-              </div>
-            </div>
-          </SectionCard>
-
-          {canEditCompany && (
-            <SectionCard title={t('companyIdentity')} icon={Building}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div className="md:col-span-2">
-                  <FieldLabel>{isAr ? 'اسم الشركة' : 'Company Name'}</FieldLabel>
-                  <FieldInput type="text" value={localSettings.companyName} onChange={e => setLocalSettings({ ...localSettings, companyName: e.target.value })} />
-                </div>
-                {[
-                  { key: 'companyPhone', label: isAr ? 'هاتف الشركة' : 'Phone', placeholder: '+967 700 000 000', dir: 'ltr' },
-                  { key: 'companyEmail', label: isAr ? 'البريد الإلكتروني' : 'Email', placeholder: 'info@company.com', dir: 'ltr' },
-                  { key: 'companyWebsite', label: isAr ? 'الموقع الإلكتروني' : 'Website', placeholder: 'www.company.com', dir: 'ltr' },
-                  { key: 'taxId', label: isAr ? 'الرقم الضريبي' : 'Tax ID', placeholder: 'TAX-967-001', dir: 'ltr' },
-                ].map(f => (
-                  <div key={f.key}>
-                    <FieldLabel>{f.label}</FieldLabel>
-                    <FieldInput type="text" value={(localSettings as any)[f.key] || ''} onChange={e => setLocalSettings({ ...localSettings, [f.key]: e.target.value })} placeholder={f.placeholder} dir={f.dir as any} className="font-mono" />
-                  </div>
-                ))}
-                <div className="md:col-span-2">
-                  <FieldLabel>{isAr ? 'عنوان الشركة' : 'Company Address'}</FieldLabel>
-                  <FieldTextarea rows={2} value={localSettings.companyAddress || ''} onChange={e => setLocalSettings({ ...localSettings, companyAddress: e.target.value })} />
-                </div>
-              </div>
-            </SectionCard>
-          )}
-        </div>
+        <GeneralSettingsTab
+          isAr={isAr}
+          settings={localSettings}
+          setSettings={setLocalSettings}
+          canEditGeneral={canEditGeneral}
+          canEditCompany={canEditCompany}
+          logoInputRef={logoInputRef}
+          handleResetCounter={handleResetCounter}
+          t={t}
+        />
       )}
 
-      {/* ══════════════════════════════════ */}
+            {/* ══════════════════════════════════ */}
       {/* ══════════════════════════════════ */}
       {/* TAB 3: CURRENCIES & RATES         */}
       {/* ══════════════════════════════════ */}
       {activeTab === 'currency' && (
-        <div className="space-y-5 animate-fade-slide-in">
-
-          {/* Main Currency */}
-          <SectionCard title={isAr ? 'العملة الرئيسية للنظام' : 'Main System Currency'} icon={DollarSign}>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              <div className="md:col-span-2">
-                <FieldLabel locked={!canEditRates}>{t('mainCurrency')}</FieldLabel>
-                <select disabled={!canEditRates} value={localSettings.currency}
-                  onChange={e => {
-                    const selected = dbCurrencies.find(c => c.code === e.target.value);
-                    setLocalSettings({ ...localSettings, currency: e.target.value, currencySymbol: selected?.symbol || localSettings.currencySymbol });
-                  }}
-                  className="w-full bg-black/50 border border-slate-800 text-white rounded-xl p-3.5 text-xs font-bold outline-none focus:border-[#d4af37]/60 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {dbCurrencies.filter(c => c.isActive).map(c => (
-                    <option key={c.cur_id} value={c.code}>{c.flag} {c.main_nameAR} ({c.code})</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <FieldLabel locked={!canEditRates}>{t('currencySymbol')}</FieldLabel>
-                <FieldInput type="text" disabled={!canEditRates} value={localSettings.currencySymbol} onChange={e => setLocalSettings({ ...localSettings, currencySymbol: e.target.value })} className="text-center font-mono" maxLength={5} />
-              </div>
-            </div>
-          </SectionCard>
-
-          {/* Exchange Rates Quick View & DB Sync */}
-          <SectionCard title={isAr ? 'أسعار الصرف الحية  ' : 'Core Live Exchange Rates'} icon={RefreshCw}>
-            {!canEditRates && (
-              <div className="flex items-center gap-2 text-amber-400 bg-amber-950/20 border border-amber-900/30 p-3 rounded-xl mb-4 text-xs font-bold">
-                <ShieldAlert className="w-4 h-4 shrink-0" />
-                {isAr ? 'أسعار الصرف للعرض فقط - تعديلها مخصص للمدير أو المحاسب' : 'View-only. Admin/Accountant can edit.'}
-              </div>
-            )}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {dbCurrencies.filter(c => c.code !== 'YER').map(cur => (
-                <div key={cur.cur_id} className="bg-black/30 p-4 rounded-2xl border border-slate-800 flex flex-col justify-between gap-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-white flex items-center gap-2">
-                      <span>{cur.flag || '🌍'}</span>
-                      <span>{cur.main_nameAR} ({cur.code})</span>
-                    </span>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${cur.isActive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
-                      {cur.isActive ? (isAr ? 'نشطة' : 'Active') : (isAr ? 'معطلة' : 'Disabled')}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="relative flex-1">
-                      <input
-                        type="number"
-                        step="any"
-                        disabled={!canEditRates || !cur.isActive}
-                        defaultValue={cur.currentPrice || 0}
-                        key={`${cur.cur_id}_${cur.currentPrice}`}
-                        onBlur={e => {
-                          const val = parseFloat(e.target.value);
-                          if (val > 0 && val !== cur.currentPrice) {
-                            handleUpdateExchangeRatePrice(cur.cur_id, cur.code, val);
-                          }
-                        }}
-                        className="w-full bg-black/60 border border-slate-800 rounded-xl p-3 text-xs font-mono font-bold text-white focus:border-[#d4af37]/60 outline-none dir-ltr pr-20 disabled:opacity-40"
-                      />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-[#d4af37] bg-[#d4af37]/10 px-1.5 py-0.5 rounded">
-                        {cur.code}→YER
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleViewHistory(cur)}
-                      className="p-3 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-[#d4af37] rounded-xl text-xs font-bold transition flex items-center gap-1 shrink-0"
-                      title={isAr ? 'سجل أسعار الصرف التاريخي' : 'Rate History'}
-                    >
-                      <History className="w-4 h-4" />
-                      <span className="hidden sm:inline">{isAr ? 'السجل (seq)' : 'History'}</span>
-                    </button>
-                  </div>
-                  {cur.lastSeq && (
-                    <div className="text-[10px] text-slate-500 font-mono flex items-center justify-between border-t border-slate-850 pt-2">
-                      <span>{isAr ? `التسلسل الحالي: seq #${cur.lastSeq}` : `Seq #${cur.lastSeq}`}</span>
-                      <span>{cur.lastUpdateBy ? (isAr ? `بواسطة: ${cur.lastUpdateBy}` : `By: ${cur.lastUpdateBy}`) : ''}</span>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </SectionCard>
-
-          {/* ── ALL CURRENCIES LIST FROM DATABASE ─────────── */}
-          <SectionCard title={isAr ? 'جدول العملات' : 'Database Currency Catalog'} icon={DollarSign} badge={`${dbCurrencies.length} ${isAr ? 'عملة' : 'currencies'}`}>
-            <div className="space-y-2.5 mb-4">
-              {dbCurrencies.map(cur => (
-                <div key={cur.cur_id} className={`flex items-center gap-3 p-4 rounded-2xl border transition-all ${cur.isActive ? 'border-slate-800 bg-black/40' : 'border-rose-950/30 bg-rose-950/10 opacity-75'}`}>
-                  <span className="text-2xl shrink-0">{cur.flag || '🌍'}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-black text-white font-mono">{cur.code}</span>
-                      <span className="text-[11px] text-slate-300 font-bold truncate">{cur.main_nameAR}</span>
-                      <span className="text-[9px] text-slate-500 font-mono">({cur.main_nameEn})</span>
-                      {cur.isDefault && (
-                        <span className="text-[9px] bg-[#d4af37]/20 text-[#d4af37] px-2 py-0.5 rounded-full font-black">
-                          {isAr ? 'العملة الأساسية' : 'Default'}
-                        </span>
-                      )}
-                      {!cur.isActive && (
-                        <span className="text-[9px] bg-rose-500/20 text-rose-400 px-2 py-0.5 rounded-full font-black">
-                          {isAr ? 'معطلة (لن تنشأ بها قيود)' : 'Disabled'}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3 mt-1 text-[11px]">
-                      <span className="font-mono text-[#d4af37] font-bold">{cur.symbol || cur.code}</span>
-                      <span className="text-slate-400 font-mono">
-                        {cur.code === 'YER' ? '1 YER (العملة المرجعية)' : `1 ${cur.code} = ${cur.currentPrice ?? '—'} YER`}
-                      </span>
-                      {cur.lastSeq && (
-                        <span className="text-[9px] text-slate-500 font-mono">
-                          (seq #{cur.lastSeq})
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    {/* View History */}
-                    <button
-                      type="button"
-                      onClick={() => handleViewHistory(cur)}
-                      className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-[#d4af37] hover:border-[#d4af37]/30 transition"
-                      title={isAr ? 'عرض سجل تغيير أسعار الصرف' : 'View Price History'}
-                    >
-                      <History className="w-4 h-4" />
-                    </button>
-
-                    {/* Edit Currency */}
-                    {canEditRates && (
-                      <button
-                        type="button"
-                        onClick={() => handleOpenEditDbCurrencyModal(cur)}
-                        className="p-2 rounded-xl bg-blue-950/20 border border-blue-900/30 text-blue-400 hover:bg-blue-950/40 transition"
-                        title={isAr ? 'تعديل كافة بيانات العملة' : 'Edit Currency Specifications'}
-                      >
-                        <Edit3 className="w-4 h-4" />
-                      </button>
-                    )}
-
-                    {/* Toggle Active / Disabled */}
-                    {canEditRates && (
-                      <button
-                        type="button"
-                        onClick={() => handleToggleCurrencyActive(cur.cur_id, cur.code, cur.isActive)}
-                        className={`p-2 rounded-xl border transition-all ${cur.isActive ? 'bg-emerald-950/20 text-emerald-400 border-emerald-900/40 hover:bg-emerald-950/40' : 'bg-rose-950/30 text-rose-400 border-rose-900/50 hover:bg-rose-950/50'}`}
-                        title={cur.isActive ? (isAr ? 'تعطيل العملة' : 'Disable Currency') : (isAr ? 'تفعيل العملة' : 'Enable Currency')}
-                      >
-                        <Power className="w-4 h-4" />
-                      </button>
-                    )}
-
-                    {/* Delete Currency */}
-                    {canEditRates && !['USD', 'SAR', 'YER'].includes(cur.code.toUpperCase()) && (
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteCurrency(cur.cur_id, cur.code)}
-                        className="p-2 rounded-xl bg-rose-950/20 border border-rose-900/30 text-rose-400 hover:bg-rose-950/40 transition"
-                        title={isAr ? 'حذف العملة' : 'Delete Currency'}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Add New Currency Form */}
-            {canEditRates && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setShowAddCurrency(!showAddCurrency)}
-                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl border-2 border-dashed border-slate-700 hover:border-[#d4af37]/50 text-slate-400 hover:text-[#d4af37] text-xs font-black transition"
-                >
-                  <Plus className="w-4 h-4" />
-                  {isAr ? 'إضافة عملة جديدة إلى جدول currency' : 'Add New Currency to Database'}
-                </button>
-
-                {showAddCurrency && (
-                  <div className="mt-4 p-5 bg-[#d4af37]/5 border border-[#d4af37]/20 rounded-2xl space-y-4 animate-fade-slide-in">
-                    <h4 className="text-xs font-black text-[#d4af37] uppercase tracking-wider">{isAr ? 'بيانات العملة الجديدة الكاملة (cur_id متسلسل تلقائياً)' : 'Full New Currency Specifications'}</h4>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                      <div>
-                        <FieldLabel>{isAr ? 'كود العملة (code) *' : 'Code *'}</FieldLabel>
-                        <FieldInput
-                          type="text"
-                          maxLength={5}
-                          placeholder="EUR"
-                          className="font-mono uppercase"
-                          dir="ltr"
-                          value={newCurrency.code}
-                          onChange={e => setNewCurrency({ ...newCurrency, code: e.target.value.toUpperCase() })}
-                        />
-                      </div>
-                      <div>
-                        <FieldLabel>{isAr ? 'الاسم الرئيسي بالعربي (main_nameAR) *' : 'Main Name AR *'}</FieldLabel>
-                        <FieldInput type="text" placeholder="ريال يمني / يورو" value={newCurrency.main_nameAR} onChange={e => setNewCurrency({ ...newCurrency, main_nameAR: e.target.value })} />
-                      </div>
-                      <div>
-                        <FieldLabel>{isAr ? 'اسم الفئة الفرعية بالعربي (sup_nameAR)' : 'Sub Name AR'}</FieldLabel>
-                        <FieldInput type="text" placeholder="فلس / سنت" value={newCurrency.sup_nameAR} onChange={e => setNewCurrency({ ...newCurrency, sup_nameAR: e.target.value })} />
-                      </div>
-                      <div>
-                        <FieldLabel>{isAr ? 'الاسم الرئيسي بالإنجليزي (main_nameEn)' : 'Main Name EN'}</FieldLabel>
-                        <FieldInput type="text" placeholder="Euro / Yemeni Rial" dir="ltr" value={newCurrency.main_nameEn} onChange={e => setNewCurrency({ ...newCurrency, main_nameEn: e.target.value })} />
-                      </div>
-                      <div>
-                        <FieldLabel>{isAr ? 'اسم الفئة الفرعية بالإنجليزي (sup_nameEn)' : 'Sub Name EN'}</FieldLabel>
-                        <FieldInput type="text" placeholder="Cent / Fils" dir="ltr" value={newCurrency.sup_nameEn} onChange={e => setNewCurrency({ ...newCurrency, sup_nameEn: e.target.value })} />
-                      </div>
-                      <div>
-                        <FieldLabel>{isAr ? 'الرمز (symbol) *' : 'Symbol *'}</FieldLabel>
-                        <FieldInput type="text" placeholder="€ / ر.ي / $" maxLength={6} className="text-center font-mono" value={newCurrency.symbol} onChange={e => setNewCurrency({ ...newCurrency, symbol: e.target.value })} />
-                      </div>
-                      <div>
-                        <FieldLabel>{isAr ? 'رمز علم الدولة (flag)' : 'Flag Emoji'}</FieldLabel>
-                        <FieldInput type="text" placeholder="🇪🇺 / 🇾🇪" maxLength={4} className="text-center" value={newCurrency.flag} onChange={e => setNewCurrency({ ...newCurrency, flag: e.target.value })} />
-                      </div>
-                      <div>
-                        <FieldLabel>{isAr ? 'سعر الصرف الأولي (initialRate) *' : 'Initial Rate to YER *'}</FieldLabel>
-                        <FieldInput type="number" step="any" placeholder="580" dir="ltr" className="font-mono" value={newCurrency.initialRate || ''} onChange={e => setNewCurrency({ ...newCurrency, initialRate: parseFloat(e.target.value) || 0 })} />
-                      </div>
-                      <div className="flex items-end md:col-span-4">
-                        <label className="flex items-center gap-2 cursor-pointer pb-1.5">
-                          <input type="checkbox" checked={newCurrency.isActive !== false} onChange={e => setNewCurrency({ ...newCurrency, isActive: e.target.checked })} className="rounded border-slate-700 bg-slate-900 text-yellow-600 focus:ring-0" />
-                          <span className="text-xs font-black text-slate-300">{isAr ? 'تفعيل العملة المباشر (isActive = true)' : 'Enable Active Status Immediately'}</span>
-                        </label>
-                      </div>
-                    </div>
-                    <div className="flex gap-3 pt-2">
-                      <button onClick={handleAddCurrency} className="flex-1 bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black py-3 rounded-xl font-black text-xs transition flex items-center justify-center gap-2 shadow-md cursor-pointer">
-                        <Plus className="w-4 h-4" />{isAr ? 'حفظ وإضافة العملة' : 'Save Currency'}
-                      </button>
-                      <button onClick={() => { setShowAddCurrency(false); setNewCurrency({ code: '', main_nameAR: '', sup_nameAR: '', main_nameEn: '', sup_nameEn: '', symbol: '', flag: '', initialRate: 0, isActive: true }); }} className="px-5 bg-black/40 border border-slate-800 text-slate-400 rounded-xl font-black text-xs transition hover:text-white cursor-pointer">
-                        {isAr ? 'إلغاء' : 'Cancel'}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </SectionCard>
-
-          {/* API Auto Update */}
-          {canEditRates && (
-            <SectionCard title={isAr ? 'التحديث التلقائي من API' : 'Auto API Update'} icon={RefreshCw}>
-              <div className="space-y-4">
-                <ToggleSwitch
-                  checked={localSettings.autoUpdateExchangeRates || false}
-                  onChange={v => setLocalSettings({ ...localSettings, autoUpdateExchangeRates: v })}
-                  label={t('autoUpdateRates')}
-                  description={isAr ? 'جلب تحديثات أسعار الصرف تلقائياً عند تشغيل النظام' : 'Auto-fetch exchange rates on system startup'}
-                  icon={RefreshCw}
-                />
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                  <div className="md:col-span-2">
-                    <FieldLabel>{t('apiUrl')}</FieldLabel>
-                    <FieldInput type="text" value={localSettings.exchangeRatesApiUrl || 'https://open.er-api.com/v6/latest/USD'} onChange={e => setLocalSettings({ ...localSettings, exchangeRatesApiUrl: e.target.value })} dir="ltr" className="font-mono" />
-                  </div>
-                  <button type="button" onClick={fetchExchangeRates} disabled={apiLoading}
-                    className="w-full bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black py-3.5 rounded-xl font-black text-xs transition flex items-center justify-center gap-2 disabled:from-slate-800 disabled:to-slate-900 disabled:cursor-not-allowed"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${apiLoading ? 'animate-spin' : ''}`} />
-                    {apiLoading ? (isAr ? 'جاري الجلب...' : 'Fetching...') : t('updateNow')}
-                  </button>
-                </div>
-                {apiError && <div className="text-[11px] text-rose-400 font-bold bg-rose-950/20 border border-rose-900/30 p-3 rounded-xl">{apiError}</div>}
-              </div>
-            </SectionCard>
-          )}
-        </div>
+        <CurrencySettingsTab
+          isAr={isAr}
+          localSettings={localSettings}
+          setLocalSettings={setLocalSettings}
+          t={t}
+          canEditRates={canEditRates}
+          dbCurrencies={dbCurrencies}
+          handleUpdateExchangeRatePrice={handleUpdateExchangeRatePrice}
+          handleViewHistory={handleViewHistory}
+          handleOpenEditDbCurrencyModal={handleOpenEditDbCurrencyModal}
+          handleToggleCurrencyActive={handleToggleCurrencyActive}
+          handleDeleteCurrency={handleDeleteCurrency}
+          showAddCurrency={showAddCurrency}
+          setShowAddCurrency={setShowAddCurrency}
+          newCurrency={newCurrency}
+          setNewCurrency={setNewCurrency}
+          handleAddCurrency={handleAddCurrency}
+          fetchExchangeRates={fetchExchangeRates}
+          apiLoading={apiLoading}
+          apiError={apiError}
+        />
       )}
 
       {/* ══════════════════════════════════ */}
       {/* TAB 4: ADMIN SETTINGS             */}
       {/* ══════════════════════════════════ */}
       {activeTab === 'admin' && (
-        <div className="space-y-5 animate-fade-slide-in">
-
-          {/* Order Defaults */}
-          {canViewOrderDefaults && (
-            <SectionCard title={t('orderDefaults')} icon={Package}>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {[
-                  { key: 'defaultPackagingFee', label: t('defaultPackagingFee'), unit: isAr ? 'ر.س' : 'SAR' },
-                  { key: 'defaultBankCommissionRate', label: t('defaultBankCommission'), unit: '%' },
-                  { key: 'defaultCompanyProfitRate', label: t('defaultCompanyProfit'), unit: '%' },
-                  { key: 'defaultDeliveryFee', label: t('defaultDeliveryFee'), unit: 'YER' },
-                  { key: 'defaultCourierCommissionRate', label: t('defaultCourierCommission'), unit: '%' },
-                ].map(f => (
-                  <div key={f.key}>
-                    <FieldLabel locked={!canEditOrderDefaults}>{f.label}</FieldLabel>
-                    <div className="relative">
-                      <FieldInput
-                        type="number"
-                        step="any"
-                        value={(localSettings as any)[f.key] ?? 0}
-                        onChange={e => canEditOrderDefaults && setLocalSettings({ ...localSettings, [f.key]: parseFloat(e.target.value) || 0 })}
-                        disabled={!canEditOrderDefaults}
-                        className="font-mono pr-12"
-                        dir="ltr"
-                      />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-[#d4af37] bg-[#d4af37]/10 px-1.5 py-0.5 rounded">{f.unit}</span>
-                    </div>
-                  </div>
-                ))}
-
-                {/* العملة الافتراضية المعتمدة لأسعار الطلبات */}
-                <div>
-                  <FieldLabel locked={!canEditOrderDefaults}>
-                    {isAr ? 'العملة الافتراضية للطلب (من جدول العملات currency)' : 'Default Order Currency (from currency table)'}
-                  </FieldLabel>
-                  <select
-                    disabled={!canEditOrderDefaults}
-                    value={localSettings.defaultOrderCurrency || 'SAR'}
-                    onChange={e => canEditOrderDefaults && setLocalSettings({ ...localSettings, defaultOrderCurrency: e.target.value })}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white font-bold focus:outline-none focus:border-[#d4af37] disabled:opacity-65 cursor-pointer font-mono"
-                  >
-                    {(activeCurrencies && activeCurrencies.length > 0 ? activeCurrencies : dbCurrencies).map(c => (
-                      <option key={c.cur_id || c.code} value={c.code}>
-                        {c.code} - {c.main_nameAR || c.main_nameEn || c.code} ({c.symbol || c.code})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* رسوم تامين المنتجات */}
-                <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-3 bg-black/30 p-3 rounded-2xl border border-slate-800">
-                  <div>
-                    <FieldLabel locked={!canEditOrderDefaults}>
-                      {isAr ? 'رسوم تامين المنتجات' : 'Product Insurance Fee'}
-                    </FieldLabel>
-                    <div className="relative">
-                      <FieldInput
-                        type="number"
-                        step="any"
-                        value={localSettings.defaultProductInsuranceFee ?? 0}
-                        onChange={e => canEditOrderDefaults && setLocalSettings({ ...localSettings, defaultProductInsuranceFee: parseFloat(e.target.value) || 0 })}
-                        disabled={!canEditOrderDefaults}
-                        className="font-mono pr-12"
-                        dir="ltr"
-                      />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-[#d4af37] bg-[#d4af37]/10 px-1.5 py-0.5 rounded">
-                        {localSettings.defaultProductInsuranceType === 'percentage' ? '%' : (localSettings.defaultOrderCurrency || 'SAR')}
-                      </span>
-                    </div>
-                  </div>
-                  <div>
-                    <FieldLabel locked={!canEditOrderDefaults}>
-                      {isAr ? 'طريقة احتساب رسوم التأمين' : 'Insurance Calculation Mode'}
-                    </FieldLabel>
-                    <select
-                      disabled={!canEditOrderDefaults}
-                      value={localSettings.defaultProductInsuranceType || 'fixed'}
-                      onChange={e => canEditOrderDefaults && setLocalSettings({ ...localSettings, defaultProductInsuranceType: e.target.value as 'fixed' | 'percentage' })}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white font-bold focus:outline-none focus:border-[#d4af37] disabled:opacity-65 cursor-pointer"
-                    >
-                      <option value="fixed">{isAr ? 'سعر ثابت (بعملة الطلب الافتراضية)' : 'Fixed Price (Base Currency)'}</option>
-                      <option value="percentage">{isAr ? 'نسبة مئوية من سعر المنتج (%)' : 'Percentage of Product Price (%)'}</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-              <div className="mt-4 p-3 bg-[#d4af37]/5 border border-[#d4af37]/15 rounded-xl text-[10px] text-slate-400 font-bold">
-                💡 {isAr ? 'هذه القيم ستُملأ تلقائياً عند إنشاء أي طلب جديد.' : 'These defaults auto-fill when creating new orders.'}
-              </div>
-              {!canEditOrderDefaults && (
-                <div className="mt-3 p-3 bg-amber-950/20 border border-amber-900/30 rounded-xl text-[10px] text-amber-400 font-bold flex items-center gap-2">
-                  🔒 {isAr ? 'لديك صلاحية العرض فقط. تواصل مع المدير لتعديل هذه الإعدادات.' : 'You have view-only access. Contact an admin to modify these settings.'}
-                </div>
-              )}
-            </SectionCard>
-          )}
-
-          {/* Default Shipping Durations */}
-          {canViewOrderDefaults && (
-            <SectionCard title={isAr ? 'مدد الشحن الافتراضية للطلبات (أيام)' : 'Default Order Shipping Durations (Days)'} icon={Clock}>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5">
-                {[
-                  { key: 'defaultSheinDuration', label: isAr ? 'مدة شي ان' : 'SHEIN Duration' },
-                  { key: 'defaultAppDuration', label: isAr ? 'مدة التطبيقات' : 'Apps Duration' },
-                  { key: 'defaultFactoryDuration', label: isAr ? 'مدة المصانع' : 'Factory Duration' },
-                  { key: 'defaultYemenDeliveryDuration', label: isAr ? 'مدة التوصيل لليمن' : 'Yemen Delivery Duration' },
-                  { key: 'defaultShippingDuration', label: isAr ? 'مدة الشحن الافتراضية للطلبات' : 'Default Order Duration' },
-                ].map(f => (
-                  <div key={f.key}>
-                    <FieldLabel locked={!canEditOrderDefaults}>{f.label}</FieldLabel>
-                    <div className="relative">
-                      <FieldInput
-                        type="number"
-                        value={(localSettings as any)[f.key] ?? 0}
-                        onChange={e => canEditOrderDefaults && setLocalSettings({ ...localSettings, [f.key]: parseInt(e.target.value) || 0 })}
-                        disabled={!canEditOrderDefaults}
-                        className="font-mono pr-16"
-                        dir="ltr"
-                      />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-[#d4af37] bg-[#d4af37]/10 px-1.5 py-0.5 rounded">{isAr ? 'يوم' : 'Days'}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </SectionCard>
-          )}
-
-          {/* Factory / Manufacturer Order Defaults */}
-          {canViewOrderDefaults && (
-            <SectionCard
-              title={isAr ? 'إعدادات طلبات المصنع والمورد الدولي' : 'Factory & International Supplier Defaults'}
-              icon={Package}
-              badge={isAr ? 'شحن بالحجم' : 'CBM Freight'}
-            >
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {/* Profit per KG */}
-                <div>
-                  <FieldLabel locked={!canEditOrderDefaults}>
-                    {isAr ? 'نسبة الربح للكيلو (SAR/كجم)' : 'Profit Rate per KG (SAR/kg)'}
-                  </FieldLabel>
-                  <div className="relative">
-                    <FieldInput
-                      type="number"
-                      step="any"
-                      disabled={!canEditOrderDefaults}
-                      value={localSettings.defaultProfitPerKg ?? 19}
-                      onChange={e => canEditOrderDefaults && setLocalSettings({ ...localSettings, defaultProfitPerKg: parseFloat(e.target.value) || 0 })}
-                      className="font-mono pr-16"
-                      dir="ltr"
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-amber-400 bg-amber-950/30 px-1.5 py-0.5 rounded">SAR/kg</span>
-                  </div>
-                  <p className="text-[10px] text-slate-500 mt-1.5 font-bold">
-                    {isAr ? 'أرباح الشركة = إجمالي الوزن (كج) × هذه النسبة' : 'Company profit = Total weight (kg) × this rate'}
-                  </p>
-                </div>
-
-                {/* CBM Shipping Rate */}
-                <div>
-                  <FieldLabel locked={!canEditOrderDefaults}>
-                    {isAr ? 'سعر شحن الـ CBM الحالي (دولار USD/m³)' : 'Current CBM Shipping Rate (USD/m³)'}
-                  </FieldLabel>
-                  <div className="relative">
-                    <FieldInput
-                      type="number"
-                      step="any"
-                      disabled={!canEditOrderDefaults}
-                      value={localSettings.defaultCbmShippingRate ?? 1400}
-                      onChange={e => canEditOrderDefaults && setLocalSettings({ ...localSettings, defaultCbmShippingRate: parseFloat(e.target.value) || 0 })}
-                      className="font-mono pr-20"
-                      dir="ltr"
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-blue-400 bg-blue-950/30 px-1.5 py-0.5 rounded">SAR/m³</span>
-                  </div>
-                  <p className="text-[10px] text-slate-500 mt-1.5 font-bold">
-                    {isAr ? 'تكلفة الشحن = إجمالي CBM × هذا السعر' : 'Shipping cost = Total CBM × this rate'}
-                  </p>
-                </div>
-
-                {/* CBM Rate API URL */}
-                {canEditOrderDefaults && (
-                  <div className="md:col-span-2">
-                    <FieldLabel>
-                      {isAr ? 'رابط API لتحديث سعر الـ CBM تلقائياً (اختياري)' : 'API URL for auto-updating CBM rate (optional)'}
-                    </FieldLabel>
-                    <div className="flex gap-3">
-                      <FieldInput
-                        type="text"
-                        value={localSettings.cbmShippingRateApiUrl || ''}
-                        onChange={e => canEditOrderDefaults && setLocalSettings({ ...localSettings, cbmShippingRateApiUrl: e.target.value })}
-                        placeholder="https://api.example.com/cbm-rate"
-                        dir="ltr"
-                        className="font-mono flex-1"
-                      />
-                      {localSettings.cbmShippingRateApiUrl && (
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            try {
-                              const res = await fetch(localSettings.cbmShippingRateApiUrl!);
-                              if (!res.ok) throw new Error('API request failed');
-                              const data = await res.json();
-                              const rate = data.cbm_rate || data.rate || data.value || data.price;
-                              if (rate && !isNaN(parseFloat(rate))) {
-                                const newRate = parseFloat(rate);
-                                const now = new Date();
-                                const updaterName = profile?.fullName || auth.currentUser?.email || 'Unknown';
-                                setLocalSettings(prev => ({
-                                  ...prev,
-                                  defaultCbmShippingRate: newRate,
-                                  lastCbmRateUpdate: now.toLocaleString(isAr ? 'ar-YE' : 'en-US'),
-                                  lastCbmRateUpdatedBy: updaterName
-                                }));
-                                alert(isAr ? `✅ تم تحديث سعر CBM إلى: ${newRate} USD/m³` : `✅ CBM rate updated to: ${newRate} USD/m³`);
-                              } else {
-                                throw new Error(isAr ? 'لم يتم إيجاد سعر CBM في الاستجابة' : 'CBM rate not found in API response');
-                              }
-                            } catch (err: any) {
-                              alert((isAr ? '❌ خطأ في جلب سعر CBM: ' : '❌ Error fetching CBM rate: ') + err.message);
-                            }
-                          }}
-                          className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white py-2 px-4 rounded-xl font-black text-xs transition flex items-center gap-2 whitespace-nowrap"
-                        >
-                          <RefreshCw className="w-3.5 h-3.5" />
-                          {isAr ? 'جلب السعر' : 'Fetch Rate'}
-                        </button>
-                      )}
-                    </div>
-                    {localSettings.lastCbmRateUpdate && (
-                      <p className="text-[10px] text-slate-500 mt-1.5 font-bold">
-                        {isAr ? `آخر تحديث: ${localSettings.lastCbmRateUpdate} بواسطة ${localSettings.lastCbmRateUpdatedBy}` : `Last updated: ${localSettings.lastCbmRateUpdate} by ${localSettings.lastCbmRateUpdatedBy}`}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-              <div className="mt-4 p-3 bg-blue-950/20 border border-blue-900/30 rounded-xl text-[10px] text-blue-400 font-bold">
-                🏭 {isAr ? 'تُستخدم هذه الإعدادات لطلبات المصنع والمورد الدولي فقط.' : 'These settings apply to Factory & International Supplier order types only.'}
-              </div>
-            </SectionCard>
-          )}
-
-          {/* Invoice Settings */}
-          {canEditOrderDefaults && (
-            <SectionCard title={t('invoiceSettings')} icon={FileText}>
-              <div className="space-y-5">
-                <div>
-                  <FieldLabel>{t('invoiceLogo')}</FieldLabel>
-                  <div className="flex items-center gap-4">
-                    {localSettings.invoiceLogo ? (
-                      <div className="relative group">
-                        <img src={localSettings.invoiceLogo} alt="Invoice Logo" className="w-20 h-20 object-contain rounded-xl border border-slate-800 bg-black/50 p-2" />
-                        <button onClick={() => setLocalSettings({ ...localSettings, invoiceLogo: '' })} className="absolute -top-2 -right-2 w-5 h-5 bg-rose-600 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition"><X className="w-3 h-3 text-white" /></button>
-                      </div>
-                    ) : (
-                      <div className="w-20 h-20 rounded-xl border border-slate-800 bg-black/50 flex items-center justify-center text-slate-600"><Image className="w-7 h-7" /></div>
-                    )}
-                    <button type="button" onClick={() => invoiceLogoInputRef.current?.click()} className="flex-1 bg-black/40 border border-slate-800 hover:border-[#d4af37]/40 text-slate-300 hover:text-white py-3 px-4 rounded-xl text-xs font-black transition flex items-center gap-2 justify-center"><Upload className="w-4 h-4" />{isAr ? 'رفع شعار الفاتورة' : 'Upload Invoice Logo'}</button>
-                  </div>
-                </div>
-                <div>
-                  <FieldLabel>{t('invoiceNotes')}</FieldLabel>
-                  <FieldTextarea rows={3} value={localSettings.invoiceNotes || ''} onChange={e => setLocalSettings({ ...localSettings, invoiceNotes: e.target.value })} />
-                </div>
-              </div>
-            </SectionCard>
-          )}
-
-          {/* Security */}
-          {canManageBackup && (
-            <SectionCard title={t('securitySettings')} icon={Shield}>
-              <div className="space-y-4">
-                <ToggleSwitch checked={localSettings.protectSensitiveOrderDelete || false} onChange={v => setLocalSettings({ ...localSettings, protectSensitiveOrderDelete: v })} label={t('protectOrderDelete')} description={isAr ? 'منع حذف الطلبات ذات المدفوعات إلا بعد إدخال رمز PIN' : 'Prevent deletion of orders with payments without PIN'} icon={Shield} />
-
-                <div className="pt-2">
-                  <FieldLabel>{isAr ? 'مهلة جلسة المستخدم (بالدقائق - 0 للتعطيل)' : 'User Session Timeout (Minutes - 0 to disable)'}</FieldLabel>
-                  <FieldInput
-                    type="number"
-                    min="0"
-                    placeholder="30"
-                    value={localSettings.userSessionTimeout !== undefined ? localSettings.userSessionTimeout : ''}
-                    onChange={e => {
-                      const val = parseInt(e.target.value, 10);
-                      setLocalSettings({ ...localSettings, userSessionTimeout: isNaN(val) ? 0 : val });
-                    }}
-                  />
-                  <p className="mt-1 text-[11px] text-slate-500">
-                    {isAr
-                      ? 'عند تفعيل الخيار، سيتم تسجيل خروج الموظف تلقائياً في حال عدم لمس النظام أو القيام بأي نشاط طوال هذه المدة.'
-                      : 'When enabled, the user will be automatically logged out after this period of inactivity/idleness.'}
-                  </p>
-                </div>
-              </div>
-            </SectionCard>
-          )}
-
-          {/* ══════════════════════════════════ */}
-          {/* ADVANCED BACKUP SYSTEM            */}
-          {/* ══════════════════════════════════ */}
-          {canManageBackup && (
-            <SectionCard title={isAr ? 'نظام النسخ الاحتياطي المتقدم' : 'Advanced Backup System'} icon={HardDrive}>
-
-              {/* Backup Stats Row */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-                {[
-                  { icon: Archive, label: isAr ? 'إجمالي النسخ' : 'Total Backups', value: localSettings.backupCount || 0, color: 'text-[#d4af37]' },
-                  { icon: Clock, label: isAr ? 'آخر نسخة' : 'Last Backup', value: localSettings.lastBackup ? (localSettings.lastBackup.split(' ')[0] || '—') : '—', color: 'text-emerald-400' },
-                  { icon: Calendar, label: isAr ? 'الجدولة' : 'Schedule', value: localSettings.backupSchedule === 'daily' ? (isAr ? 'يومي' : 'Daily') : localSettings.backupSchedule === 'weekly' ? (isAr ? 'أسبوعي' : 'Weekly') : localSettings.backupSchedule === 'monthly' ? (isAr ? 'شهري' : 'Monthly') : (isAr ? 'يدوي' : 'Manual'), color: 'text-blue-400' },
-                  { icon: HardDrive, label: isAr ? 'الاحتفاظ' : 'Retention', value: `${localSettings.backupRetentionDays || 30} ${isAr ? 'يوم' : 'days'}`, color: 'text-purple-400' },
-                ].map((stat, idx) => (
-                  <div key={idx} className="bg-black/40 border border-slate-800/50 rounded-2xl p-3 flex flex-col items-center text-center gap-1">
-                    <stat.icon className={`w-5 h-5 ${stat.color}`} />
-                    <div className={`text-sm font-black ${stat.color}`}>{stat.value}</div>
-                    <div className="text-[9px] text-slate-500 font-bold uppercase">{stat.label}</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Auto Backup Toggle */}
-              <div className="space-y-3 mb-5">
-                <ToggleSwitch
-                  checked={localSettings.autoBackupEnabled || false}
-                  onChange={v => setLocalSettings({ ...localSettings, autoBackupEnabled: v })}
-                  label={t('autoBackup')}
-                  description={isAr ? 'حفظ نسخة احتياطية تلقائياً في Supabase عند انتهاء الوقت المحدد' : 'Auto-save backup to Supabase on schedule'}
-                  icon={Archive}
-                />
-
-                {/* Backup Schedule */}
-                <div>
-                  <FieldLabel>{isAr ? 'جدولة النسخ الاحتياطي' : 'Backup Schedule'}</FieldLabel>
-                  <div className="grid grid-cols-4 gap-2">
-                    {[
-                      { v: 'manual', label: isAr ? 'يدوي' : 'Manual', icon: '🖐️' },
-                      { v: 'daily', label: isAr ? 'يومي' : 'Daily', icon: '📅' },
-                      { v: 'weekly', label: isAr ? 'أسبوعي' : 'Weekly', icon: '📆' },
-                      { v: 'monthly', label: isAr ? 'شهري' : 'Monthly', icon: '🗓️' },
-                    ].map(opt => (
-                      <button key={opt.v} type="button"
-                        onClick={() => setLocalSettings({ ...localSettings, backupSchedule: opt.v as any })}
-                        className={`p-2.5 rounded-xl border-2 text-center transition ${localSettings.backupSchedule === opt.v ? 'border-[#d4af37] bg-[#d4af37]/10 text-[#d4af37]' : 'border-slate-800 bg-black/40 text-slate-400 hover:border-slate-700'}`}
-                      >
-                        <div className="text-base mb-0.5">{opt.icon}</div>
-                        <div className="text-[9px] font-black">{opt.label}</div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Retention Days */}
-                <div>
-                  <FieldLabel>{isAr ? 'مدة الاحتفاظ بالنسخ (أيام)' : 'Backup Retention Period (days)'}</FieldLabel>
-                  <div className="flex gap-2 items-center">
-                    {[7, 14, 30, 60, 90].map(days => (
-                      <button key={days} type="button"
-                        onClick={() => setLocalSettings({ ...localSettings, backupRetentionDays: days })}
-                        className={`flex-1 py-2 rounded-xl border text-[10px] font-black transition ${localSettings.backupRetentionDays === days ? 'border-[#d4af37] bg-[#d4af37]/10 text-[#d4af37]' : 'border-slate-800 bg-black/40 text-slate-500 hover:border-slate-700'}`}
-                      >{days}</button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Collections to Backup */}
-              <div className="mb-5">
-                <FieldLabel>{isAr ? 'الفئات المشمولة في النسخة الاحتياطية' : 'Collections to Backup'}</FieldLabel>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                  {[
-                    { key: 'orders', label: '📦 ' + (isAr ? 'الطلبات' : 'Orders') },
-                    { key: 'customers', label: '👥 ' + (isAr ? 'العملاء' : 'Customers') },
-                    { key: 'couriers', label: '🚚 ' + (isAr ? 'المناديب' : 'Couriers') },
-                    { key: 'expenses', label: '💰 ' + (isAr ? 'المصروفات' : 'Expenses') },
-                    { key: 'accounts', label: '🧾 ' + (isAr ? 'الحسابات' : 'Accounts') },
-                    { key: 'main_entry', label: '📝 ' + (isAr ? 'القيود المحاسبية' : 'Main Entries') },
-                    { key: 'account_trans', label: '📊 ' + (isAr ? 'أسطر الحركة' : 'Account Trans') },
-                    { key: 'salary_history', label: '💵 ' + (isAr ? 'الرواتب' : 'Salaries') },
-                    { key: 'users', label: '👤 ' + (isAr ? 'الموظفون' : 'Staff') },
-                    { key: 'roles', label: '🛡️ ' + (isAr ? 'الأدوار' : 'Roles') },
-                    { key: 'sources', label: '🗺️ ' + (isAr ? 'المصادر' : 'Sources') },
-                    { key: 'settings', label: '⚙️ ' + (isAr ? 'الإعدادات' : 'Settings') },
-                  ].map(col => (
-                    <label key={col.key} className={`flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition ${exportSelections[col.key] ? 'border-[#d4af37]/50 bg-[#d4af37]/10 text-white' : 'border-slate-800 bg-black/40 text-slate-400 hover:border-slate-700'}`}>
-                      <input type="checkbox" checked={exportSelections[col.key]} onChange={e => setExportSelections({ ...exportSelections, [col.key]: e.target.checked })} className="rounded border-slate-700 bg-slate-900 text-yellow-600 focus:ring-0" />
-                      <span className="text-xs font-bold">{col.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Export Format */}
-              <div className="mb-5">
-                <FieldLabel>{isAr ? 'صيغة ملف الصادرة' : 'Export File Format'}</FieldLabel>
-                <div className="flex gap-3">
-                  {[
-                    { value: 'json', label: 'JSON', desc: isAr ? 'كامل + استيراد' : 'Full + importable', icon: '{}' },
-                    { value: 'csv', label: 'CSV / Excel', desc: isAr ? 'جداول للإكسيل' : 'Spreadsheet', icon: '📊' },
-                  ].map(fmt => (
-                    <button key={fmt.value} type="button" onClick={() => setExportFormat(fmt.value as any)}
-                      className={`flex-1 p-3 rounded-xl border-2 text-center transition ${exportFormat === fmt.value ? 'border-[#d4af37] bg-[#d4af37]/10 text-[#d4af37]' : 'border-slate-800 bg-black/40 text-slate-400 hover:border-slate-700'}`}
-                    >
-                      <div className="font-mono font-black text-xs">{fmt.icon} {fmt.label}</div>
-                      <div className="text-[9px] text-slate-500 mt-0.5">{fmt.desc}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5">
-                <button type="button" onClick={() => runBackup('manual')} disabled={backupLoading}
-                  className="bg-gradient-to-r from-[#d4af37] to-yellow-600 hover:from-yellow-600 hover:to-[#d4af37] text-black py-3.5 rounded-xl font-black text-xs transition flex items-center justify-center gap-2 disabled:from-slate-800 disabled:to-slate-900 disabled:cursor-not-allowed shadow"
-                >
-                  <Download className="w-4 h-4" />
-                  {backupLoading ? (isAr ? 'جاري التصدير...' : 'Exporting...') : `${t('exportBackup')} (${exportFormat.toUpperCase()})`}
-                </button>
-                <button type="button" onClick={() => fileInputRef.current?.click()} disabled={importLoading}
-                  className="bg-black/40 border border-slate-800 text-slate-300 py-3.5 rounded-xl font-black text-xs hover:border-[#d4af37]/40 hover:text-white transition flex items-center justify-center gap-2"
-                >
-                  <Upload className="w-4 h-4" />
-                  {importLoading ? (isAr ? 'جاري الاستيراد...' : 'Importing...') : `${t('importBackup')} (JSON)`}
-                </button>
-              </div>
-
-              {/* ── BACKUP HISTORY ─────────────── */}
-              <div className="border-t border-slate-800/50 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowBackupHistory(!showBackupHistory)}
-                  className="w-full flex items-center justify-between text-xs font-black text-slate-400 hover:text-white transition py-2 group"
-                >
-                  <span className="flex items-center gap-2"><History className="w-4 h-4 text-[#d4af37]" />{isAr ? 'سجل النسخ الاحتياطية' : 'Backup History'}</span>
-                  {showBackupHistory ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                </button>
-
-                {showBackupHistory && (
-                  <div className="mt-3 space-y-2 animate-fade-slide-in">
-                    {backupHistoryLoading ? (
-                      <div className="flex justify-center py-4"><div className="w-6 h-6 animate-spin rounded border-2 border-[#d4af37]/25 border-t-[#d4af37]"></div></div>
-                    ) : backupHistory.length === 0 ? (
-                      <div className="text-center py-6 text-slate-600 text-xs font-bold">
-                        {isAr ? 'لا توجد نسخ احتياطية محفوظة بعد' : 'No backups saved yet'}
-                      </div>
-                    ) : (
-                      backupHistory.map(backup => (
-                        <div key={backup.id} className="flex items-center gap-3 p-3 bg-black/40 border border-slate-800/50 rounded-xl">
-                          <div className={`p-1.5 rounded-lg ${backup.type === 'auto' ? 'bg-blue-500/15 text-blue-400' : 'bg-[#d4af37]/15 text-[#d4af37]'}`}>
-                            {backup.type === 'auto' ? <RefreshCw className="w-3.5 h-3.5" /> : <Archive className="w-3.5 h-3.5" />}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="text-[10px] font-black text-white font-mono">{new Date(backup.savedAt).toLocaleDateString(isAr ? 'ar-YE' : 'en-US')}</span>
-                              <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full ${backup.type === 'auto' ? 'bg-blue-500/20 text-blue-400' : 'bg-[#d4af37]/20 text-[#d4af37]'}`}>
-                                {backup.type === 'auto' ? (isAr ? 'تلقائي' : 'Auto') : (isAr ? 'يدوي' : 'Manual')}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-3 mt-0.5">
-                              <span className="text-[9px] text-slate-500 font-mono">{new Date(backup.savedAt).toLocaleTimeString(isAr ? 'ar-YE' : 'en-US')}</span>
-                              {backup.size && <span className="text-[9px] text-slate-600 font-mono">{formatBytes(backup.size)}</span>}
-                              <span className="text-[9px] text-slate-600">{backup.createdBy}</span>
-                            </div>
-                          </div>
-                          <div className="flex gap-1.5 shrink-0">
-                            <button
-                              onClick={() => setConfirmConfig({
-                                isOpen: true,
-                                title: isAr ? 'استعادة هذه النسخة' : 'Restore This Backup',
-                                message: isAr
-                                  ? `⚠️ هذا سيستبدل بياناتك الحالية ببيانات نسخة ${new Date(backup.savedAt).toLocaleDateString('ar-YE')}. متأكد؟`
-                                  : `⚠️ This will overwrite current data with backup from ${new Date(backup.savedAt).toLocaleDateString()}. Are you sure?`,
-                                type: 'warning',
-                                onConfirm: () => restoreFromSupabase(backup.id)
-                              })}
-                              className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition" title={isAr ? 'استعادة' : 'Restore'}
-                            >
-                              <RefreshCw className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => setConfirmConfig({
-                                isOpen: true,
-                                title: isAr ? 'حذف هذه النسخة' : 'Delete This Backup',
-                                message: isAr ? 'هل تريد حذف هذه النسخة الاحتياطية نهائياً؟' : 'Permanently delete this backup record?',
-                                type: 'danger',
-                                onConfirm: () => deleteBackupRecord(backup.id)
-                              })}
-                              className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition" title={isAr ? 'حذف' : 'Delete'}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Cache Clear */}
-              <div className="pt-4 border-t border-slate-800/50 mt-4">
-                <button type="button"
-                  onClick={() => setConfirmConfig({
-                    isOpen: true,
-                    title: isAr ? 'مسح ذاكرة التخزين المؤقت' : 'Clear Local Cache',
-                    message: isAr ? 'هذا سيمسح بيانات التخزين المؤقت للمتصفح ويُعيد تحميل النظام.' : 'This will clear browser local storage and reload.',
-                    type: 'danger',
-                    onConfirm: () => { localStorage.clear(); activityLogService.log('clear_cache', 'Browser LocalStorage'); window.location.reload(); }
-                  })}
-                  className="w-full bg-rose-500/10 text-rose-400 border border-rose-500/20 py-2.5 rounded-xl font-black text-xs hover:bg-rose-500/20 transition"
-                >
-                  🗑️ {isAr ? 'مسح الكاش وإعادة التحميل' : 'Clear Cache & Reload'}
-                </button>
-              </div>
-            </SectionCard>
-          )}
-        </div>
+        <AdminSecuritySettingsTab
+          isAr={isAr}
+          localSettings={localSettings}
+          setLocalSettings={setLocalSettings}
+          t={t}
+          canViewOrderDefaults={canViewOrderDefaults}
+          canEditOrderDefaults={canEditOrderDefaults}
+          canManageBackup={canManageBackup}
+          activeCurrencies={activeCurrencies}
+          dbCurrencies={dbCurrencies}
+          invoiceLogoInputRef={invoiceLogoInputRef}
+          exportSelections={exportSelections}
+          setExportSelections={setExportSelections}
+          exportFormat={exportFormat}
+          setExportFormat={setExportFormat}
+          backupLoading={backupLoading}
+          importLoading={importLoading}
+          fileInputRef={fileInputRef}
+          runBackup={runBackup}
+          showBackupHistory={showBackupHistory}
+          setShowBackupHistory={setShowBackupHistory}
+          backupHistoryLoading={backupHistoryLoading}
+          backupHistory={backupHistory}
+          formatBytes={formatBytes}
+          setConfirmConfig={setConfirmConfig}
+          restoreFromSupabase={restoreFromSupabase}
+          deleteBackupRecord={deleteBackupRecord}
+          onFetchCbmRate={handleFetchCbmRate}
+          onClearCache={handleClearCache}
+        />
       )}
 
       {/* ══════════════════════════════════ */}
       {/* TAB 5: LOGISTICS                   */}
       {/* ══════════════════════════════════ */}
       {activeTab === 'logistics' && (
-        <div className="space-y-5 animate-fade-slide-in">
-          {canManageAdmin ? (
-            <SectionCard title={isAr ? 'الربط المباشر مع شركات الشحن (API)' : 'Logistics External API Hooks'} icon={Globe}>
-              <div className="bg-black/30 border border-[#d4af37]/20 p-4 rounded-xl mb-6">                
-                <p className="text-[10px] text-slate-400 font-medium">
-                  {isAr
-                    ? 'عند تفعيل الخيار، سيقوم خادم alx بالاتصال بالـ API الخارجي تلقائياً لجلب المسارات بمجرد إدخال رقم تتبع صالح.'
-                    : 'Once enabled, our internal server orchestrator automatically maps global checkpoints when queried.'}
-                </p>
-              </div>
-
-              <div className="mb-6">
-                <ToggleSwitch
-                  checked={logisticsSettings.enabled}
-                  onChange={(v) => setLogisticsSettings({ ...logisticsSettings, enabled: v })}
-                  label={isAr ? 'تفعيل الربط التلقائي للمسارات' : 'Enable Automated Live Sync (Global Networks)'}
-                  description={isAr ? 'سيطلب النظام الحالات من الموفر المعين بشكل مباشر' : 'Queries integrated API endpoints seamlessly.'}
-                />
-              </div>
-
-              <div className="space-y-4 pt-4 border-t border-slate-800">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <div>
-                    <FieldLabel>{isAr ? 'مزود الخدمة (API)' : 'External Provider'}</FieldLabel>
-                    <select
-                      value={logisticsSettings.provider}
-                      onChange={(e) => setLogisticsSettings({ ...logisticsSettings, provider: e.target.value })}
-                      className="w-full bg-black/50 border border-slate-800 rounded-xl p-3.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none"
-                    >
-                      <option value="aftership">AfterShip API (باقة مجانية متاحة)</option>
-                      <option value="17track">17TRACK API (إصدار تجريبي)</option>
-                      <option value="trackingmore">TrackingMore (باقة مجانية متاحة)</option>
-                      <option value="parcelsapp">ParcelsApp.com (باقة عالمية)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <FieldLabel>{isAr ? 'مفتاح الربط (API Key)' : 'Access Key / Token'}</FieldLabel>
-                    <FieldInput
-                      type="password"
-                      value={logisticsSettings.apiKey}
-                      onChange={(e) => setLogisticsSettings({ ...logisticsSettings, apiKey: e.target.value })}
-                      placeholder="asat_XXXXXXXXXXXXXXXXXXXXXXXX"
-                    />
-                  </div>
-                  {logisticsSettings.provider === 'parcelsapp' && (
-                    <div className="md:col-span-2">
-                      <FieldLabel>{isAr ? 'بلد الوجهة الافتراضي (ParcelsApp)' : 'Default Destination Country (ParcelsApp)'}</FieldLabel>
-                      <FieldInput
-                        type="text"
-                        value={logisticsSettings.defaultDestinationCountry}
-                        onChange={(e) => setLogisticsSettings({ ...logisticsSettings, defaultDestinationCountry: e.target.value })}
-                        placeholder="Yemen"
-                      />
-                      <p className="text-[10px] text-slate-500 mt-1.5 font-bold">
-                        {isAr ? 'يتطلب ParcelsApp v3 تحديد بلد الوجهة لضمان دقة النتائج.' : 'ParcelsApp v3 requires a destination country for accurate tracking resolution.'}
-                      </p>
-                    </div>
-                  )}
-                  <div className="md:col-span-2 flex items-center gap-3">
-                    <button
-                      type="button"
-                      disabled={apiLoading || !logisticsSettings.apiKey}
-                      onClick={async () => {
-                        setApiLoading(true);
-                        setApiError(null);
-                        try {
-                          const res = await fetch('/api/tracking/test-connection', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(logisticsSettings)
-                          });
-                          const json = await res.json();
-                          if (res.ok && json.success) {
-                            alert(`✅ ${json.message}`);
-                          } else {
-                            setApiError(json.error || 'Connection failed');
-                          }
-                        } catch (err: any) {
-                          setApiError(err.message);
-                        } finally {
-                          setApiLoading(false);
-                        }
-                      }}
-                      className="bg-black/40 border border-slate-800 hover:border-[#d4af37]/40 text-slate-300 hover:text-white py-2.5 px-6 rounded-xl text-[10px] font-black tracking-widest uppercase transition flex items-center gap-2 justify-center disabled:opacity-50"
-                    >
-                      {apiLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
-                      {isAr ? 'اختبار الاتصال بالخادم' : 'Test API Connection'}
-                    </button>
-                    {apiError && (
-                      <div className="flex items-center gap-2 text-rose-500 text-[10px] font-bold">
-                        <AlertTriangle className="w-3.5 h-3.5" />
-                        <span>{apiError}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </SectionCard>
-          ) : (
-            <div className="flex bg-rose-500/10 text-rose-400 p-6 rounded-2xl border border-rose-500/20 font-extrabold flex-col items-center justify-center gap-4 py-16">
-              <ShieldAlert className="w-12 h-12" />
-              <h3 className="text-xl">{isAr ? 'وصول مرفوض' : 'Access Denied'}</h3>
-              <p className="text-xs text-center">{isAr ? 'هذا القسم يتطلب صلاحية أعلى للوصول.' : 'Elevated clearance required for API configurations.'}</p>
-            </div>
-          )}
-        </div>
+        <LogisticsSettingsTab
+          isAr={isAr}
+          canManageAdmin={canManageAdmin}
+          logisticsSettings={logisticsSettings}
+          setLogisticsSettings={setLogisticsSettings}
+          apiLoading={apiLoading}
+          apiError={apiError}
+          onTestConnection={handleTestLogisticsConnection}
+        />
       )}
 
       <ConfirmModal

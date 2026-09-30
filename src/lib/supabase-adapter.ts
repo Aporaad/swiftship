@@ -1,31 +1,19 @@
 import { createClient } from '@supabase/supabase-js';
+import { resolveSupabaseConfig } from './supabase-config';
 
 // ── قراءة lazy للمتغيرات حتى تعمل بعد تحميل dotenv ────────────────────────
 // لا تُقرأ كثوابت عالمية عند تهيئة الموديول — استخدم دوال getter
-function getSupabaseUrl(): string {
-  return (typeof process !== 'undefined' && (
-    process.env?.VITE_SUPABASE_URL ||
-    process.env?.SUPABASE_URL
-  )) ||
-    ((import.meta as any).env?.VITE_SUPABASE_URL) ||
-    "";
-}
-
-function getSupabaseAnonKey(): string {
-  return (typeof process !== 'undefined' && (
-    process.env?.VITE_SUPABASE_ANON_KEY ||
-    process.env?.SUPABASE_ANON_KEY
-  )) ||
-    ((import.meta as any).env?.VITE_SUPABASE_ANON_KEY) ||
-    "";
+function getSupabaseConfig() {
+  const processEnv = typeof process !== 'undefined' ? process.env : {};
+  const viteEnv = ((import.meta as any).env ?? {}) as Record<string, string | undefined>;
+  return resolveSupabaseConfig(processEnv, viteEnv);
 }
 
 let actualSupabaseClient: any = null;
 
 function getSupabaseClient() {
   if (!actualSupabaseClient) {
-    const resolvedUrl = getSupabaseUrl();
-    const resolvedKey = getSupabaseAnonKey();
+    const { url: resolvedUrl, anonKey: resolvedKey } = getSupabaseConfig();
 
     if (!resolvedUrl || resolvedUrl === "https://placeholder-project.supabase.co") {
       console.warn('[Supabase Adapter] Warning: Supabase URL is missing or placeholder. Environment variables might not be loaded yet.');

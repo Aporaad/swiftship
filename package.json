@@ -19,6 +19,7 @@
     "lint": "tsc --noEmit",
     "check": "tsc --noEmit",
     "test": "vitest run",
+    "test:supabase-integration": "cross-env RUN_SUPABASE_INTEGRATION_TESTS=1 vitest run server/supabase-env.test.ts",
     "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3001 && cross-env NODE_ENV=development electron .\"",
     "electron:build": "npm run build:all && electron-builder --win",
     "electron:build:dir": "npm run build:all && electron-builder --win --dir"
