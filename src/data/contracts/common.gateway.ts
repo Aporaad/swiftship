@@ -1,3 +1,5 @@
+import type { ErrorDetails } from '../../shared/contracts/error.contracts';
+
 export interface GatewayQuery {
   limit?: number;
   offset?: number;
@@ -16,8 +18,6 @@ export interface EntityGateway<T> {
   getById(id: string): Promise<T | null>;
 }
 
-export interface GatewayFailure {
-  code: string;
-  message: string;
+export interface GatewayFailure extends ErrorDetails {
   cause?: unknown;
 }

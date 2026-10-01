@@ -1783,3 +1783,14 @@
 ## [2026-10-01 04:56:00 +03:00] — إصلاح Accounting strict — AI Model: Manus
 
 تم إغلاق خطأ فهرسة AccountingImportLevel وتحويل catches استيراد الشجرة إلى unknown مع رسالة آمنة. strict العام أصبح 207، ونطاق Orders/Accounting ما زال 86 خطأ implicit-any يتطلب نمذجة legacy collections.
+
+
+## [2026-10-01 06:12:46 +03:00] — المرحلة 12: عقود الأخطاء وحالات التحميل — AI Model: Manus
+
+أُضيف `src/shared/contracts/error.contracts.ts` كعقد محايد عن واجهة المستخدم، ويعرّف `ErrorDetails` و`ErrorEnvelope` بالشكل `{ success: false, error: { code, message, details, requestId } }` و`ApplicationError` القابل للتحويل إلى envelope. تطبّع `mapSupabaseError` أخطاء قاعدة البيانات برسالة عامة آمنة، وتبقي السبب الأصلي في `causeValue` الداخلي دون إدراجه في استجابة الواجهة. أصبح `ApiClient` يرمي `ApiClientError` بعقد موحد، ويحافظ على `requestId` من جسم الرد أو `x-request-id` ويستخدم رسالة HTTP آمنة عند غياب جسم صالح.
+
+تم توسيع `src/shared/contracts/ui.contracts.ts` ليحدد حالات `idle`, `loading`, `success`, `empty`, `error`, `submitting`, و`success-after-mutation`، مع `runQuery` و`runMutation`. لا تحمل حالتا loading/error نسخة بيانات قديمة، ويعتبر `runQuery` القائمة الفارغة حالة empty افتراضيًا مع دعم predicate مخصص للأنواع الأخرى. أضيفت اختبارات لعقد الأخطاء، عدم كشف رسالة Supabase الخام، requestId، وتسلسل حالات القراءة والكتابة.
+
+التحقق النهائي: `npm run check` ناجح؛ `npm test -- --reporter=dot` نجح بـ231 اختبارًا و8 متخطاة؛ `npm run build` ناجح مع تحذيرات البناء المعروفة سابقًا (حجم chunk و`import.meta` مع CJS)؛ `git diff --check` ناجح. strict override ما زال يفشل بـ207 أخطاء baseline، ولذلك لم يُفعل `strict: true` ولم تُعلن المرحلة 11 مغلقة. جرت محاولة إصلاح سريعة للـstrict بالتوازي، لكن تعديلات المحاسبة الناتجة كسرت `npm run check`؛ تم التراجع عنها كاملةً والإبقاء فقط على تغييرات المرحلة 12 المجتازة. لم تُنفذ SQL ولم تتغير قاعدة البيانات أو RLS.
+
+المرحلة 12 منفذة في عقدها وحدود البيانات وأدوات الانتقال، لكن لا يُعلن إغلاقها الكامل قبل ترحيل كل مستهلكي Query/Mutation القديمة إلى الحالة المشتركة؛ كما تبقى المرحلة 11 سابقة غير مغلقة حتى معالجة strict/any وفق الخطة.

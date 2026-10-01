@@ -1,0 +1,32 @@
+import { describe, expect, it, vi } from 'vitest';
+import { ApiClient, ApiClientError } from './api-client';
+
+describe('ApiClient', () => {
+  it('throws a normalized envelope and preserves the server request id', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      success: false,
+      error: { code: 'ORDER_STATUS_INVALID', message: 'Invalid transition', details: [], requestId: 'req-42' },
+    }), { status: 409, headers: { 'content-type': 'application/json' } }));
+    const client = new ApiClient({ baseUrl: 'https://api.example.test', fetchImpl });
+
+    await expect(client.get('/orders/1')).rejects.toMatchObject({
+      name: 'ApiClientError',
+      code: 'ORDER_STATUS_INVALID',
+      message: 'Invalid transition',
+      requestId: 'req-42',
+      toEnvelope: expect.any(Function),
+    });
+  });
+
+  it('uses a stable safe fallback for non-JSON HTTP failures', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response('upstream secret', { status: 502 }));
+    const client = new ApiClient({ baseUrl: 'https://api.example.test', fetchImpl });
+
+    const request = client.get('/health');
+    await expect(request).rejects.toBeInstanceOf(ApiClientError);
+    await expect(request).rejects.toMatchObject({
+      code: 'API_REQUEST_FAILED',
+      message: 'API request failed with status 502.',
+    });
+  });
+});

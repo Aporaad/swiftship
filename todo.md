@@ -1084,3 +1084,13 @@
 - [x] تحويل catches استيراد الشجرة إلى `unknown`.
 - [x] strict العام: 207 أخطاء؛ نطاق Orders/Accounting: 86 خطأ.
 - [ ] استكمال نمذجة legacy collections وإزالة implicit-any في Orders/Accounting.
+
+
+## [2026-10-01 06:12:46 +03:00] — المرحلة 12: عقود الأخطاء وحالات Query/Mutation — AI Model: Manus
+- [x] إضافة عقد `ErrorDetails` و`ErrorEnvelope` و`ApplicationError` المحايد في `src/shared/contracts/error.contracts.ts`.
+- [x] تطبيع أخطاء Supabase عند حد Data Gateway برسالة عامة آمنة وحفظ السبب الخام داخليًا فقط.
+- [x] توحيد أخطاء ApiClient، قراءة `requestId` من الجسم أو ترويسة الاستجابة، واستخدام fallback آمن.
+- [x] إضافة `AsyncState` وحالات idle/loading/success/empty/error/submitting/success-after-mutation مع `runQuery` و`runMutation`.
+- [x] `npm run check` و`npm test` (231 ناجحًا، 8 متخطاة) و`npm run build` و`git diff --check` ناجحة.
+- [ ] استكمال ترحيل مستهلكي Query/Mutation القديمة إلى العقد الموحد قبل إعلان المرحلة 12 مغلقة.
+- [ ] إغلاق المرحلة 11: strict override ما زال يظهر 207 أخطاء؛ لم يُفعّل `strict: true` ولم تُغلق إزالة `any` في Orders/Accounting.
