@@ -1044,3 +1044,7 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 - لم تُنفذ أوامر SQL.
 - لم تتغير الجداول أو الأعمدة أو RLS أو migrations.
 - التغييرات اقتصرت على عقود TypeScript وadapter للواجهة وتوحيد حالات Query/Mutation.
+
+
+## [2026-10-01 20:23:00 +0000] — API Foundation — AI Model: Manus
+لم تُنفذ أوامر SQL، ولم تتغير الجداول أو الأعمدة أو RLS أو migrations. الدفعة تخص طبقة HTTP والعقود فقط.

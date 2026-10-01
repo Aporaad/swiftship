@@ -38,7 +38,7 @@ const currentDirPath = currentFilePath
   : (typeof __dirname !== 'undefined' ? __dirname : process.cwd());
 
 // ── استيراد وحدات الخادم / Import server modules ─────────────────
-import { createApp } from './server/app';
+import { createApiErrorHandler, createApp } from './server/app';
 import { createDbClient, authenticateServerSession } from './server/current-db/client';
 import { startAccountReconciliationListener } from './server/jobs/account-reconciliation';
 import { registerAuthRoutes } from './server/routes/auth';
@@ -72,6 +72,7 @@ async function startServer(): Promise<void> {
   registerAuthRoutes(app, db, auth);
   registerWhatsAppRoutes(app, db);
   registerTrackingRoutes(app, db);
+  app.use('/api', createApiErrorHandler());
 
   // 6. مسار احتياطي لـ API / API fallback
   app.all('/api/*', (_req, res) => {

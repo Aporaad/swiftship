@@ -1893,3 +1893,11 @@
 - يعيد `200` مع `{ status: 'ready', checks: { database: true } }` عند جاهزية قاعدة البيانات، و`503` مع `not_ready` عند عدم الجاهزية.
 - أضيفت `readinessResponse` pure function لاختبار العقد دون اعتماد HTTP خارجي.
 - أضيفت اختبارات contract للحالتين، مع إبقاء `/api/health` متاحًا دون اتصال قاعدة البيانات.
+
+## [2026-10-01 20:23:00 +0000] — API Foundation: عقود HTTP ونقاط الاتصال — AI Model: Manus
+- أضيف `createRequestIdMiddleware` لإنشاء أو تمرير `x-request-id` وربطه بـ`res.locals`.
+- أضيف `createApiErrorHandler` لإرجاع `ErrorEnvelope` آمن بعد تسجيل كل مسارات API.
+- أضيف `apiFoundationContract` والمسار العام `GET /api/v1/contract` لتوثيق المسارات الحالية وغير المفعلة.
+- تم إبقاء `current-user`, `customers`, و`couriers` غير مفعلة حتى بناء server-auth middleware؛ هذا يمنع كشف بيانات الأعمال دون تفويض.
+- أضيفت اختبارات request ID وcontract، ونجح TypeScript و10 اختبارات مستهدفة.
+- لا تغييرات SQL أو DB أو RLS.

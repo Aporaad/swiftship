@@ -66,3 +66,15 @@ React / Electron / alx_web → HTTP API → Application Gateway → Supabase
 - لم يتم نقل أي Feature إلى API ولم يتم تغيير قاعدة البيانات أو RLS.
 
 **التحقق:** TypeScript ناجح واختبارات `server/app.test.ts` ناجحة (6 اختبارات).
+
+
+## تنفيذ API Foundation — 2026-10-01 20:23:00 +0000 — AI Model: Manus
+تم تنفيذ وتوثيق أساس HTTP:
+
+- request ID middleware موحد عبر `x-request-id` مع UUID fallback.
+- ErrorEnvelope handler آمن مركب بعد جميع routes في `server.ts`.
+- `/api/v1/contract` ككتالوج versioned لنقاط الاتصال وحالة auth والتفعيل.
+- توثيق route وDTO وpermission وaudit وretry وtransaction boundary في `api-foundation-contract-2026-10-01.md`.
+- إبقاء current-user وCustomers وCouriers غير مفعلة حتى بناء server-auth middleware؛ لا يتم تجاوز بوابة التفويض.
+
+**التحقق:** TypeScript ناجح، و10 اختبارات مستهدفة ناجحة (8 app + 2 ApiClient). لم تُنفذ SQL ولم تتغير قاعدة البيانات أو RLS.

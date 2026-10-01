@@ -701,3 +701,9 @@ select distinct k.key as data_key from public.cust_details d cross join lateral 
 ```text
 لا يوجد أمر SQL أو تغيير قاعدة بيانات ضمن تنفيذ إغلاق المرحلتين 11 و12 وتجهيز المرحلة 13.
 ```
+
+
+## [2026-10-01 20:23:00 +0000] — AI Model: Manus
+```text
+لا يوجد أمر SQL في دفعة API Foundation؛ التغييرات تخص HTTP contracts وrequest ID وErrorEnvelope فقط.
+```

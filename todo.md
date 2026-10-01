@@ -1190,3 +1190,11 @@
 ## [2026-10-01 20:15:30 +0000] — بدء المرحلة 13 — AI Model: Manus
 - [x] إضافة `/api/readiness` بعقد `ready/not_ready` وحالة HTTP 200/503.
 - [x] إضافة `readinessResponse` pure contract واختبارات الحالات الجاهزة وغير الجاهزة.
+
+## [2026-10-01 20:23:00 +0000] — API Foundation — AI Model: Manus
+- [x] جرد نقاط الاتصال الحالية وعقود `ErrorEnvelope` و`ApiClient`.
+- [x] إضافة `x-request-id` middleware مع UUID fallback وإرجاعه في response.
+- [x] إضافة `/api/v1/contract` لتوثيق المسارات وحالة التفعيل والتفويض.
+- [x] إضافة `ErrorEnvelope` handler عام بعد تسجيل routes في `server.ts`.
+- [x] توثيق route وDTO وpermission وaudit وretry وtransaction boundary.
+- [ ] بناء server-auth middleware قبل تفعيل Customers/Couriers/current-user.

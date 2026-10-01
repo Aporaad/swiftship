@@ -90,3 +90,7 @@
 
 ## بدء المرحلة 13 فعليًا — 2026-10-01 20:15:30 +0000 — AI Model: Manus
 أصبح `GET /api/readiness` أول route منفذًا في المرحلة 13 مع عقد آمن لا يعرض أسرارًا أو رسائل قاعدة بيانات خام. فحص TypeScript واختبارات `server/app.test.ts` ناجحان. لم يبدأ بعد نقل Auth أو Customers أو أي mutation.
+
+
+## API Foundation checkpoint — 2026-10-01 20:23:00 +0000 — AI Model: Manus
+أصبح أساس HTTP موحدًا وقابلًا للاختبار: request ID، ErrorEnvelope، وعقد versioned عبر `/api/v1/contract`. المسارات الحساسة للبيانات غير مفعلة حتى بناء server-auth middleware قابل للاختبار. الوثيقة التفصيلية هي `docs/pre-api/api-foundation-contract-2026-10-01.md`.
