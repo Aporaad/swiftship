@@ -1927,3 +1927,7 @@
 
 ## [2026-10-02 00:17:00 +0300] — Rollback نطاق API Foundation غير المعتمد — AI Model: Manus
 تمت إزالة الكود التنفيذي الذي أضيف تحت اسم API Foundation ولم يكن ضمن النطاق المعتمد بعد مراجعة الخطة: request-id/versioned API contract، ErrorEnvelope handler الخاص بالـAPI، Customers/Couriers server routes وserver-auth، وحقن session header في ApiClient. تم الحفاظ على سجلات التوثيق التاريخية وعدم حذفها. لا SQL ولا DB changes.
+
+
+## [2026-10-02 00:31:30 +0300] — Typed EditOrder وAsync unification — AI Model: Manus
+أزيلت حالات `any` من `EditOrderModal.tsx` عبر العقود المشتركة وadapter typed دون حذف JSX. تم توحيد حالات query/mutation في مستهلكي Orders المحددين و`FinanceEntriesPage` عبر `AsyncState`، مع الحفاظ على رسائل الواجهة ومسارات الحفظ. `npm run check` و237 اختبارًا والبناء الإنتاجي نجحت. لم يُنفذ كود مرحلة 13 خارج الخطة؛ نطاقها المعتمد يتطلب `alx_web` الذي طلب المستخدم تجاوزه.

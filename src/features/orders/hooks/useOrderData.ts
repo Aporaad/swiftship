@@ -205,8 +205,8 @@ export function useOrderData(
   const [allProducts, setAllProducts] = useState<ProductRecord[]>([]);
   const [allShipments, setAllShipments] = useState<ShipmentRecord[]>([]);
   const [autoVoucherRules, setAutoVoucherRules] = useState<AutoVoucherRule[]>([]);
-  const [loading, setLoading] = useState(true);
   const [ordersQuery, setOrdersQuery] = useState<AsyncState<OrderRecord[]>>({ status: 'loading' });
+  const loading = ordersQuery.status === 'loading';
 
   useEffect(() => {
     if (!enabled) return;
@@ -220,7 +220,6 @@ export function useOrderData(
         void runQuery(async () => parsedOrders, (state) => {
           setOrdersQuery(state);
           if (state.status === 'success') setOrders(state.data);
-          setLoading(state.status === 'loading');
         });
       },
       (error) => handleSupabaseError(error, OperationType.LIST, 'orders'),

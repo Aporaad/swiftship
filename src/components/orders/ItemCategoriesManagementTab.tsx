@@ -30,8 +30,8 @@ export default function ItemCategoriesManagementTab({ isAr, canManage }: ItemCat
   const [form, setForm] = useState<CategoryForm>(emptyForm());
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [deleting, setDeleting] = useState<ItemCategory | null>(null);
-  const [submitting, setSubmitting] = useState(false);
   const [saveState, setSaveState] = useState<AsyncState<void>>({ status: 'idle' });
+  const submitting = saveState.status === 'submitting';
 
   const visible = categories.filter((category) => {
     const query = search.trim().toLowerCase();
@@ -60,7 +60,6 @@ export default function ItemCategoriesManagementTab({ isAr, canManage }: ItemCat
       toast.error(isAr ? 'اسم الفئة بالعربية والكود مطلوبان' : 'Arabic name and code are required');
       return;
     }
-    setSubmitting(true);
     await runMutation(async () => {
       const payload = {
         ...form,
@@ -77,7 +76,6 @@ export default function ItemCategoriesManagementTab({ isAr, canManage }: ItemCat
       setSaveState(state);
       if (state.status === 'error') toast.error(state.error.message || (isAr ? 'تعذر حفظ الفئة' : 'Could not save category'));
     });
-    setSubmitting(false);
   };
 
   const price = (value: number, currency: string) => `${Number(value || 0).toLocaleString()} ${currency}`;

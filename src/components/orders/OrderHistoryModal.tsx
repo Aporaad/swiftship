@@ -187,25 +187,21 @@ export function EventDetails({ event, isAr }: { event: OrderHistoryEvent; isAr: 
 
 export default function OrderHistoryModal({ isOpen, context, onClose, isAr }: OrderHistoryModalProps) {
   const [events, setEvents] = useState<OrderHistoryEvent[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const [historyQuery, setHistoryQuery] = useState<AsyncState<OrderHistoryEvent[]>>({ status: 'idle' });
+  const loading = historyQuery.status === 'loading';
+  const error = historyQuery.status === 'error' ? historyQuery.error.message : '';
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [filters, setFilters] = useState<OrderHistoryFilters>(defaultOrderHistoryFilters);
 
   useEffect(() => {
     if (!isOpen || !context) return;
     let active = true;
-    setLoading(true);
-    setError('');
     setExpandedId(null);
     setFilters(defaultOrderHistoryFilters);
     void runQuery(() => orderHistoryService.listForContext(context), (state) => {
       if (!active) return;
       setHistoryQuery(state);
-      setLoading(state.status === 'loading');
-      if (state.status === 'success') { setEvents(state.data); setError(''); }
-      if (state.status === 'error') setError(state.error.message);
+      if (state.status === 'success') setEvents(state.data);
     });
     return () => { active = false; };
   }, [isOpen, context?.orderId, context?.shipmentId]);

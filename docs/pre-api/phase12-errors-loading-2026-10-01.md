@@ -96,3 +96,7 @@
 
 ## حالة الإغلاق بعد rollback — 2026-10-02 00:17 +0300 — AI Model: Manus
 المستهلكون الستة المحددون مرحلون، لكن النطاق الكامل للنظام ما زال يحتوي حالات loading/error/submitting محلية ومستهلكين خارج العقد الموحد. لا يتم اعتماد إغلاق المرحلة 12 على مستوى كل المكونات قبل ترحيل هذه الحالات والتحقق من السلوك.
+
+
+## دفعة Async إضافية — 2026-10-02 00:31 +0300 — AI Model: Manus
+تم توحيد loading/error/submitting في `ProductsManagementTab` و`ProductPickerModal` و`ItemCategoriesManagementTab` و`OrderHistoryModal` و`useOrderData` و`FinanceEntriesPage` عبر `AsyncState`. الاختبارات الكاملة نجحت: 67 ملفًا و237 اختبارًا. ما زالت مكونات مالية أخرى تحتوي حالات error/busy محلية، ولذلك لم يُعلن إغلاق المرحلة 12 على مستوى كل نطاق النظام.
