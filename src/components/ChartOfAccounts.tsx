@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { CurrencySelect } from './common/CurrencySelect';
 import {
   FolderTree, Folder, FolderOpen, ChevronRight, ChevronDown, PlusCircle, Trash2,
   Search, Scale, X, Activity, ShieldCheck, RefreshCw, Edit2, FileText, FileSpreadsheet, Printer,
@@ -855,11 +856,13 @@ export default function ChartOfAccounts({
                 </div>
                 <div>
                   <label className="block text-[9px] font-black text-slate-500 mb-1 uppercase">{isAr ? 'العملة' : 'Currency'}</label>
-                  <select value={newAccount.currency} onChange={e => setNewAccount(p => ({ ...p, currency: e.target.value }))} className="w-full bg-black/40 border border-slate-800 text-white rounded-xl px-3 py-2 text-xs font-black outline-none focus:border-[#d4af37]">
-                    {(activeCurrencies.length > 0 ? activeCurrencies : [{ code: 'YER', main_nameAR: 'ريال يمني' }, { code: 'SAR', main_nameAR: 'ريال سعودي' }, { code: 'USD', main_nameAR: 'دولار أمريكي' }]).map(c => (
-                      <option key={c.code} value={c.code}>{c.code} — {(c as any).main_nameAR || c.code}</option>
-                    ))}
-                  </select>
+                  <CurrencySelect
+                    isAr={isAr}
+                    currencies={(activeCurrencies.length > 0 ? activeCurrencies : [{ code: 'YER', main_nameAR: 'ريال يمني' }, { code: 'SAR', main_nameAR: 'ريال سعودي' }, { code: 'USD', main_nameAR: 'دولار أمريكي' }]).map(c => ({ id: c.code, code: c.code, nameAr: (c as any).main_nameAR }))}
+                    value={newAccount.currency}
+                    onChange={currency => setNewAccount(p => ({ ...p, currency }))}
+                    className="w-full bg-black/40 border border-slate-800 text-white rounded-xl px-3 py-2 text-xs font-black outline-none focus:border-[#d4af37]"
+                  />
                 </div>
               </div>
               <div>
@@ -926,11 +929,13 @@ export default function ChartOfAccounts({
                 </div>
                 <div>
                   <label className="block text-[9px] font-black text-slate-500 mb-1 uppercase">{isAr ? 'العملة' : 'Currency'}</label>
-                  <select value={newAccount.currency} onChange={e => setNewAccount(p => ({ ...p, currency: e.target.value }))} className="w-full bg-black/40 border border-slate-800 text-white rounded-xl px-3 py-2 text-xs font-black outline-none focus:border-[#d4af37]">
-                    {(activeCurrencies.length > 0 ? activeCurrencies : [{ code: 'YER', main_nameAR: 'ريال يمني' }, { code: 'SAR', main_nameAR: 'ريال سعودي' }, { code: 'USD', main_nameAR: 'دولار أمريكي' }]).map(c => (
-                      <option key={c.code} value={c.code}>{c.code} — {(c as any).main_nameAR || c.code}</option>
-                    ))}
-                  </select>
+                  <CurrencySelect
+                    isAr={isAr}
+                    currencies={(activeCurrencies.length > 0 ? activeCurrencies : [{ code: 'YER', main_nameAR: 'ريال يمني' }, { code: 'SAR', main_nameAR: 'ريال سعودي' }, { code: 'USD', main_nameAR: 'دولار أمريكي' }]).map(c => ({ id: c.code, code: c.code, nameAr: (c as any).main_nameAR }))}
+                    value={newAccount.currency}
+                    onChange={currency => setNewAccount(p => ({ ...p, currency }))}
+                    className="w-full bg-black/40 border border-slate-800 text-white rounded-xl px-3 py-2 text-xs font-black outline-none focus:border-[#d4af37]"
+                  />
                 </div>
               </div>
               <div>

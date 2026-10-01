@@ -42,4 +42,20 @@ describe('CurrencySelect', () => {
     expect(html).toContain('EUR — Euro (€)');
     expect(html).toContain('disabled=""');
   });
+
+  it('supports numeric option values and marks the default currency', () => {
+    const html = renderToStaticMarkup(
+      <CurrencySelect
+        isAr={false}
+        currencies={[{ id: 7, code: 'SAR', isDefault: true }]}
+        optionValue="id"
+        showDefaultMarker
+        value="7"
+        onChange={() => undefined}
+      />,
+    );
+
+    expect(html).toContain('value="7"');
+    expect(html).toContain('SAR (Default)');
+  });
 });

@@ -1,4 +1,5 @@
 import React from 'react';
+import { CurrencySelect } from '../../../../components/common/CurrencySelect';
 import { X, Search, UserPlus, CreditCard, DollarSign, AlertCircle, Package, Trash2, Calendar, Calculator, ChevronRight, ChevronLeft, User, ShoppingCart, Truck, CheckCircle2, ShieldCheck, FileText, Wallet, Building, ArrowRightLeft, Boxes } from 'lucide-react';
 import { amountInWords, paidAmountInWords, currencyNameAr, currencyNameEn, numberToWordsAr, numberToWordsEn } from '../../../../lib/numberToWords';
 
@@ -358,22 +359,17 @@ export default function CreateOrderStep4(props: any) {
                     <div className="grid grid-cols-2 gap-3">
                       <div className="bg-slate-900 border border-slate-800 p-2.5 rounded-xl">
                         <span className="text-[9px] font-black uppercase text-[#d4af37] block mb-1">{isAr ? 'عملة الدفع' : 'Payment Currency'}</span>
-                        <select
-                          value={formData.currency}
-                          onChange={(e) => {
-                            const newCurrency = e.target.value;
-                            const rateOrder = getCurrencyRate(orderCurrency);
-                            const ratePayment = getCurrencyRate(newCurrency);
-                            setFormData({ ...formData, currency: newCurrency, exchangeRate: rateOrder / ratePayment });
-                          }}
-                          className="w-full bg-slate-955 text-white font-bold text-xs p-2 rounded-lg border border-slate-800 outline-none cursor-pointer"
-                        >
-                          {activeCurrencies.map((c) => (
-                            <option className="bg-slate-900 text-white" key={c.code} value={c.code}>
-                              {isAr ? (c.main_nameAR || c.sup_nameAR || c.code) : (c.main_nameEn || c.sup_nameEn || c.code)} ({c.code})
-                            </option>
-                          ))}
-                        </select>
+                        <CurrencySelect
+                        isAr={isAr}
+                        currencies={activeCurrencies.map(c => ({ id: c.code, code: c.code, nameAr: c.main_nameAR || c.sup_nameAR, nameEn: c.main_nameEn || c.sup_nameEn }))}
+                        value={formData.currency}
+                        onChange={newCurrency => {
+                          const rateOrder = getCurrencyRate(orderCurrency);
+                          const ratePayment = getCurrencyRate(newCurrency);
+                          setFormData({ ...formData, currency: newCurrency, exchangeRate: rateOrder / ratePayment });
+                        }}
+                        className="w-full bg-slate-955 text-white font-bold text-xs p-2 rounded-lg border border-slate-800 outline-none cursor-pointer"
+                      />
                       </div>
                       <div className="bg-slate-900 border border-slate-600 p-2.5 rounded-xl">
                         <span className="text-[9px] font-black uppercase text-slate-400 block mb-1">

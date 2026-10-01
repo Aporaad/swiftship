@@ -14,6 +14,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
+import { CurrencySelect } from '../common/CurrencySelect';
 import { AlertTriangle, ArrowLeft, ArrowRight, Save, Trash2, Plus } from 'lucide-react';
 import {
   financialEntryService,
@@ -668,17 +669,15 @@ export default function EntryForm({
         </label>
         <label className="text-xs font-bold text-slate-300">
           عملة الرأس
-          <select
-            value={currencyId}
-            onChange={(e) => setCurrencyId(Number(e.target.value))}
-            className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"
-          >
-            {currencies.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.code}{c.isDefault ? ' — افتراضية' : ''}
-              </option>
-            ))}
-          </select>
+          <CurrencySelect
+              isAr={false}
+              currencies={currencies.map(c => ({ id: c.id, code: c.code, isDefault: c.isDefault }))}
+              optionValue="id"
+              showDefaultMarker
+              value={String(currencyId)}
+              onChange={value => setCurrencyId(Number(value))}
+              className="flex-1 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-black text-emerald-300 transition-all duration-200 focus:scale-[1.01] focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/40 focus:outline-none"
+            />
         </label>
       </div>
 

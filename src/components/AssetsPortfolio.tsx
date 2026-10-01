@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { CurrencySelect } from './common/CurrencySelect';
 import {
   Truck, Search, Wrench, X, PlusCircle, Trash2, Calendar, DollarSign,
   Activity, CheckCircle, AlertTriangle, ShieldCheck, RefreshCw, User, ClipboardList, Package, Printer
@@ -1003,17 +1004,13 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
                 </div>
                 <div>
                   <label className="block text-[9.5px] font-black text-slate-500 mb-1 uppercase">{isAr ? 'العملة' : 'Billed original'}</label>
-                  <select
+                  <CurrencySelect
+                    isAr={isAr}
+                    currencies={activeCurrencies.map(c => ({ id: c.code, code: c.code }))}
                     value={newAsset.currency}
-                    onChange={e => setNewAsset(prev => ({ ...prev, currency: e.target.value }))}
+                    onChange={currency => setNewAsset(prev => ({ ...prev, currency }))}
                     className="w-full bg-black/40 border border-[#1e1e24] text-white rounded-xl px-3 py-2 text-xs font-black cursor-pointer"
-                  >
-                    {activeCurrencies.map(c => (
-                      <option key={c.code} value={c.code}>
-                        {c.code}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </div>
               </div>
 
@@ -1149,17 +1146,13 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
                 </div>
                 <div>
                   <label className="block text-[9.5px] font-black text-slate-500 mb-1 uppercase">{isAr ? 'العملة' : 'Billed curr'}</label>
-                  <select
+                  <CurrencySelect
+                    isAr={isAr}
+                    currencies={activeCurrencies.map(c => ({ id: c.code, code: c.code }))}
                     value={newMaint.currency}
-                    onChange={e => setNewMaint(prev => ({ ...prev, currency: e.target.value }))}
+                    onChange={currency => setNewMaint(prev => ({ ...prev, currency }))}
                     className="w-full bg-black/40 border border-slate-850 text-white rounded-xl px-2 py-2 text-[10px] font-black outline-none focus:border-[#d4af37] cursor-pointer"
-                  >
-                    {activeCurrencies.map(c => (
-                      <option key={c.code} value={c.code}>
-                        {c.code}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </div>
               </div>
 

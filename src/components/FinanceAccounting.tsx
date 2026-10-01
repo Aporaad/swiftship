@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { CurrencySelect } from './common/CurrencySelect';
 import {
   FileText, Search, CreditCard, ShieldAlert, CheckCircle, Wallet, ArrowUpRight,
   ArrowDownLeft, HelpCircle, User, Truck, Calendar, Printer, Download, Star, ExternalLink,
@@ -739,17 +740,13 @@ return (
                 </div>
                 <div className="text-start">
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'العملة' : 'Currency'}</label>
-                  <select
+                  <CurrencySelect
+                    isAr={isAr}
+                    currencies={activeCurrencies.map(c => ({ id: c.code, code: c.code }))}
                     value={editJournalData.currencyOriginal}
-                    onChange={(e) => setEditJournalData({ ...editJournalData, currencyOriginal: e.target.value })}
+                    onChange={currency => setEditJournalData(prev => ({ ...prev, currencyOriginal: currency }))}
                     className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer font-mono bg-[#121215]"
-                  >
-                    {activeCurrencies.map(c => (
-                      <option key={c.code} value={c.code}>
-                        {c.code}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </div>
               </div>
 

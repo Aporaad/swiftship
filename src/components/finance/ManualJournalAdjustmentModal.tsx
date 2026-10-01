@@ -1,4 +1,5 @@
 import React from 'react';
+import { CurrencySelect } from '../common/CurrencySelect';
 import { RefreshCw, Scale, X } from 'lucide-react';
 import { financialAccountService } from '../../services/financialAccountService';
 
@@ -455,17 +456,13 @@ export default function ManualJournalAdjustmentModal({
                 </div>
                 <div>
                   <label className="block text-[9.5px] font-black text-slate-500 mb-1 uppercase">{isAr ? 'العملة' : 'Rate Original'}</label>
-                  <select
+                  <CurrencySelect
+                    isAr={isAr}
+                    currencies={activeCurrencies.map(c => ({ id: c.code, code: c.code }))}
                     value={adjustData.currency}
-                    onChange={e => setAdjustData(prev => ({ ...prev, currency: e.target.value }))}
+                    onChange={currency => setAdjustData(prev => ({ ...prev, currency }))}
                     className="w-full bg-black/40 border border-slate-850 text-white rounded-xl px-3 py-2 text-xs font-black outline-none focus:border-[#d4af37] cursor-pointer"
-                  >
-                    {activeCurrencies.map(c => (
-                      <option key={c.code} value={c.code}>
-                        {c.code}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </div>
               </div>
 

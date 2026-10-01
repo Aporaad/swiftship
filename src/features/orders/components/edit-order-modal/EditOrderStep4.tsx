@@ -1,4 +1,5 @@
 import { ArrowRightLeft, Building, Calculator, CreditCard, FileText, Wallet } from 'lucide-react';
+import { CurrencySelect } from '../../../../components/common/CurrencySelect';
 import { amountInWords } from '../../../../lib/numberToWords';
 
 export default function EditOrderStep4(props: any) {
@@ -196,22 +197,17 @@ export default function EditOrderStep4(props: any) {
                   <div className="grid grid-cols-2 gap-2.5">
                     <div className="bg-slate-900 border border-slate-800 p-2 rounded-xl">
                       <span className="text-[9px] font-black uppercase text-[#d4af37] block mb-1">{isAr ? 'عملة الدفع' : 'Payment Currency'}</span>
-                      <select
+                      <CurrencySelect
+                        isAr={isAr}
+                        currencies={activeCurrencies.map(c => ({ id: c.code, code: c.code, nameAr: c.main_nameAR || c.sup_nameAR, nameEn: c.main_nameEn || c.sup_nameEn }))}
                         value={paymentCurrency}
-                        onChange={(e) => {
-                          const newCurrency = e.target.value;
+                        onChange={newCurrency => {
                           const rateOrder = getCurrencyRate(orderCurrency);
                           const ratePayment = getCurrencyRate(newCurrency);
                           setFormData({ ...formData, currency: newCurrency, exchangeRate: rateOrder / ratePayment });
                         }}
                         className="w-full bg-slate-955 text-white font-bold text-xs p-1.5 rounded-lg border border-slate-800 outline-none cursor-pointer"
-                      >
-                        {activeCurrencies.map((c: any) => (
-                          <option className="bg-slate-900 text-white" key={c.code} value={c.code}>
-                            {isAr ? (c.main_nameAR || c.sup_nameAR || c.code) : (c.main_nameEn || c.sup_nameEn || c.code)} ({c.code})
-                          </option>
-                        ))}
-                      </select>
+                      />
                     </div>
                     <div className="bg-slate-900 border border-slate-800 p-2 rounded-xl">
                       <span className="text-[9px] font-black uppercase text-slate-400 block mb-1">

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { CurrencySelect } from '../../../components/common/CurrencySelect';
 import {
   collection,
   onSnapshot,
@@ -739,17 +740,13 @@ export default function EmployeesPage() {
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'عملة الراتب' : 'Currency'}</label>
-                  <select
+                  <CurrencySelect
+                    isAr={isAr}
+                    currencies={activeCurrencies.map(c => ({ id: c.code, code: c.code, nameAr: c.main_nameAR || c.sup_nameAR, nameEn: c.main_nameEn || c.sup_nameEn }))}
                     value={addFormData.currency}
-                    onChange={(e) => setAddFormData({ ...addFormData, currency: e.target.value })}
+                    onChange={currency => setAddFormData({ ...addFormData, currency })}
                     className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer"
-                  >
-                    {activeCurrencies.map(c => (
-                      <option key={c.code} value={c.code}>
-                        {c.code} ({isAr ? (c.main_nameAR || c.sup_nameAR) : (c.main_nameEn || c.sup_nameEn)})
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </div>
               </div>
 
@@ -950,17 +947,13 @@ export default function EmployeesPage() {
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">{isAr ? 'عملة الراتب' : 'Currency'}</label>
-                  <select
+                  <CurrencySelect
+                    isAr={isAr}
+                    currencies={activeCurrencies.map(c => ({ id: c.code, code: c.code, nameAr: c.main_nameAR || c.sup_nameAR, nameEn: c.main_nameEn || c.sup_nameEn }))}
                     value={editFormData.currency}
-                    onChange={(e) => setEditFormData({ ...editFormData, currency: e.target.value })}
+                    onChange={currency => setEditFormData({ ...editFormData, currency })}
                     className="w-full bg-black/50 border border-slate-850 text-white rounded-xl p-3 focus:border-[#d4af37]/60 outline-none text-xs font-bold cursor-pointer"
-                  >
-                    {activeCurrencies.map(c => (
-                      <option key={c.code} value={c.code}>
-                        {c.code} ({isAr ? (c.main_nameAR || c.sup_nameAR) : (c.main_nameEn || c.sup_nameEn)})
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </div>
               </div>
 
