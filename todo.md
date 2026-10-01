@@ -1151,3 +1151,10 @@
 - [x] تضييق `FinanceAccountingProps` وحالات `FinanceAccounting` وإجراءات أخطاء المحاسبة دون كسر `npm run check`.
 - [ ] ما زال يلزم إغلاق `ActionDependencies` و`EditOrderModal` تدريجيًا قبل إعلان المرحلة 11 مغلقة.
 - [ ] لا يبدأ إغلاق المرحلة 12 أو المرحلة 13 قبل احترام هذا التسلسل.
+
+## [2026-10-01 19:56:00 +0000] — دفعة عقود إجراءات المحاسبة
+- [x] إغلاق عقد dependencies لإجراءات `financeAccountingCourierActions.ts` بعقد `ActionDependencies` صريح.
+- [x] إغلاق عقد dependencies لإجراءات `financeAccountingLedgerActions.ts` بعقد `ActionDependencies` صريح.
+- [x] التحقق عبر `npm run check -- --pretty false`.
+- [ ] `financeAccountingJournalActions.ts` لم يُستبدل بعقد غير متوافق؛ يحتاج adapter typed مستقل للـservice والـlegacy records.
+- [ ] `EditOrderModal` لم يُعدل في هذه الدفعة؛ سيُرحّل عبر adapter مستقل بعد تثبيت نموذج البيانات.

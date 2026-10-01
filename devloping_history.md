@@ -1854,3 +1854,14 @@
 - تم استعادة `EditOrderModal` بعد تجربة ترحيل واسعة غير آمنة سببت أخطاء عابرة للحدود.
 - تم تضييق `FinanceAccountingProps` وحالات العرض المالية، وإزالة أنواع `any` من `FinanceAccounting.tsx` ومن أخطاء إجراءات المحاسبة، مع نجاح فحص TypeScript.
 - لم يتم تنفيذ SQL أو تغيير قاعدة البيانات.
+
+## [2026-10-01 19:56:00 +0000] — عقود إجراءات المحاسبة Courier وLedger
+- أُضيف عقد typed صريح لـ`financeAccountingCourierActions.ts` يشمل Batch وDocRef وخدمة الحسابات والإشعارات وسجل التسويات.
+- أُضيف عقد typed صريح لـ`financeAccountingLedgerActions.ts` يشمل المستخدم وسجلات التصدير والتنسيق.
+- تم تطبيع القيم الخام للمبالغ والمعرفات عند حد التسوية بدل تمرير `any` إلى منطق الأعمال.
+- نجح `npm run check -- --pretty false`.
+- لم يتم تنفيذ SQL أو تعديل قاعدة البيانات.
+
+## [2026-10-01 19:57:00 +0000] — جرد Async ومسارات Orders المتبقية
+- أُعيد حصر `runQuery/runMutation` في Orders وFinance؛ `ReturnedProductsTab` هو المستهلك الموحد الحالي ضمن النطاق.
+- سُجلت مسارات ProductsManagement وProductPicker وItemCategories وOrderHistory وuseOrderData كمتبقيات legacy للمرحلة 12.

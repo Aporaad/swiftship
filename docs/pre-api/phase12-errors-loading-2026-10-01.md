@@ -71,3 +71,8 @@
 
 ## تصحيح مرجع الجلسة — 2026-10-01 19:44 +0000 — Manus
 تم اعتماد حالة الجلسة الصحيحة: المرحلة 12 ليست مغلقة بالكامل؛ الأساس المشترك موجود، وترحيل بعض مستهلكي `runMutation` تم، لكن التسلسل يظل متوقفًا على إغلاق متبقيات المرحلة 11 ثم استكمال مستهلكي Query/Mutation القديمة.
+
+## إعادة حصر المستهلكين — 2026-10-01 19:57 +0000 — Manus
+- المستهلك الموحد الحالي: `ReturnedProductsTab.tsx` فقط ضمن النطاق المفحوص.
+- المستهلكون legacy المتبقون: `ProductsManagementTab`, `ProductPickerModal`, `ItemCategoriesManagementTab`, `OrderHistoryModal`, و`useOrderData`، إضافة إلى Journal Actions.
+- لا تُعلن المرحلة 12 مغلقة قبل ترحيل هذه المسارات تدريجيًا إلى `runQuery/runMutation` مع اختبارات سلوك.

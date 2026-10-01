@@ -1,6 +1,4 @@
-import type * as React from 'react';
 
-type ActionDependencies = Record<string, any>;
 
 interface LedgerExportEntry {
   type: string;
@@ -10,6 +8,14 @@ interface LedgerExportEntry {
   party?: string;
   amount: number;
   runningBalance: number;
+}
+
+interface ActionDependencies {
+  currentUser?: { email?: string | null } | null;
+  filteredLedgerEntries: LedgerExportEntry[];
+  formatDate: () => string;
+  formatDateTime: (date?: number | string | Date) => string;
+  isAr: boolean;
 }
 
 export function createFinanceAccountingLedgerActions(dependencies: ActionDependencies) {

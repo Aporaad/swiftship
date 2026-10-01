@@ -1,31 +1,61 @@
-import type * as React from 'react';
+import type { Transaction } from '../../types';
 
-type ActionDependencies = Record<string, any>;
+interface BatchHandle {
+  update: (reference: DocReference, data: Record<string, unknown>) => void;
+  commit: () => Promise<void>;
+}
+interface CourierAuditSheet {
+  courier: CourierAuditRecord;
+  custodies: CustodyRecord[];
+  currentUnremittedCargoCash: CourierOrderRecord[];
+  totalUnremittedCashValue: number;
+}
+interface DocReference { type: string; path: string; id: string; }
+interface NotificationPayload { title: string; message: string; type: 'info' | 'success' | 'warning' | 'error'; orderId?: string; userId?: string; associatedUserIds?: string[]; isPublic?: boolean; category?: 'order' | 'finance' | 'system'; }
+interface FinanceAccountService {
+  ensureSystemAccounts: (currency: string) => Promise<Record<string, string>>;
+  convertToDefaultCurrency: (amount: number, fromCurrency: string, toCurrency: string, rates: Record<string, number>) => number;
+  recordTransaction: (payload: Transaction) => Promise<void>;
+}
+interface ActionDependencies {
+  courierAuditSheet: CourierAuditSheet | null;
+  currentUser?: { id?: string } | null;
+  db: unknown; dbRates: Record<string, number>;
+  doc: (...args: unknown[]) => DocReference;
+  financialAccountService: FinanceAccountService; isAr: boolean;
+  notificationService: { notify: (payload: NotificationPayload) => Promise<void> };
+  setBulkReconciliationLoading: (value: boolean) => void;
+  setCargoRemitLoading: (value: boolean) => void;
+  settings: { currency?: string };
+  updateDoc: (reference: DocReference, data: Record<string, unknown>) => Promise<void>;
+  writeBatch: (db: unknown) => BatchHandle;
+}
 
 interface CourierAuditRecord {
-  fullName: string;
+  id?: string;
+  fullName?: string;
   financialBalance?: number;
-  accountId?: string;
+  accountId?: string | null;
   accountCode?: string;
   courierType?: string;
 }
 
 interface CustodyRecord {
-  id: string;
-  status?: string;
-  amountOriginal?: number;
+  id?: string;
+  status?: unknown;
+  amountOriginal?: unknown;
   amount?: number | string;
-  amountSettled?: number;
-  amountOutstanding?: number;
-  recipientAccountId?: string;
-  currency?: string;
-  expenseNumber?: string;
+  amountSettled?: unknown;
+  amountOutstanding?: unknown;
+  recipientAccountId?: unknown;
+  currency?: string | null;
+  expenseNumber?: unknown;
 }
 
 interface CourierOrderRecord {
   id: string;
-  amountPaid?: number | string;
-  amountRemaining?: number | string;
+  amountPaid?: number | string | null;
+  amountRemaining?: number | string | null;
 }
 
 const errorMessage = (error: unknown, fallback: string): string =>
@@ -108,7 +138,7 @@ Continue?`
 
         if (exp.recipientAccountId) {
           const settledAmount = financialAccountService.convertToDefaultCurrency(
-            parseFloat(exp.amount || 0),
+            parseFloat(String(exp.amount || 0)),
             exp.currency || 'YER',
             settings.currency || 'SAR',
             dbRates
@@ -117,10 +147,10 @@ Continue?`
             date: timestamp,
             description: isAr ? `تسوية عهدة تلقائية: ${exp.expenseNumber}` : `Auto custody settlement: ${exp.expenseNumber}`,
             module: 'custody',
-            refNumber: `${exp.expenseNumber}-SET`,
+            refNumber: `${String(exp.expenseNumber ?? exp.id ?? 'custody')}-SET`,
             amount: settledAmount,
             currency: 'YER',
-            debitAccount: { id: exp.recipientAccountId, code: '2120' },
+            debitAccount: { id: String(exp.recipientAccountId), code: '2120' },
             creditAccount: { id: systemAccs['sys_cash_account'], code: '1111-0' },
             createdByUid: currentUser?.id || 'system',
             createdByName: 'Finance Auditor'

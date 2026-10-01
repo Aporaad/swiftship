@@ -67,3 +67,11 @@
 - المرجع الصحيح: `OUH2bdAMJZvmN1qpeL9bzd`، وآخر commit مرجعي فيه `d955663`.
 - `main` الحالي متقدم عنه ويحتوي تحسينات مستقرة إضافية، لكنه لا يغير قرار التسلسل: المرحلة 11 مفتوحة، والمرحلة 12 متقدمة غير مغلقة، والمرحلة 13 لم تبدأ.
 - آخر inventory عملي: تبقى عقود `ActionDependencies` و`EditOrderModal`، مع نجاح `npm run check` بعد كل دفعة.
+
+## تحديث تنفيذ المتابعة — 2026-10-01 19:56 +0000
+- Courier وLedger Actions أصبح لهما عقود dependencies typed صريحة.
+- Journal Actions وEditOrderModal ما زالا ضمن inventory المتبقي، لذلك لم تُغلق المرحلة 11 رسميًا بعد.
+
+## جرد Async — 2026-10-01 19:57 +0000
+- يوجد مستهلك موحد واحد فقط في Orders/Finance ضمن الجرد الحالي: `ReturnedProductsTab`.
+- توجد خمسة مسارات Orders legacy تحتاج ترحيلًا تدريجيًا قبل إغلاق المرحلة 12.
