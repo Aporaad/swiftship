@@ -230,3 +230,8 @@ src/shared/contracts/finance.contracts.ts
 
 ## تصحيح مرجع الجلسة — 2026-10-01 19:44 +0000 — Manus
 الجلسة المرجعية الصحيحة هي `OUH2bdAMJZvmN1qpeL9bzd`. آخر نقطة فيها أكدت أن المرحلة 11 ما زالت مفتوحة بسبب `any` في حدود Finance/Orders، وأن المرحلة 12 متقدمة لكنها لم تُغلق. تمت مطابقة `main` الحالي مع ذلك المرجع، ولم يتم اعتماد المرحلة 13.
+
+## دفعة عقود الإجراءات — 2026-10-01 19:56 +0000 — Manus
+- أُغلق عقد `ActionDependencies` في Courier وLedger Actions.
+- بقي Journal Actions و`EditOrderModal` مفتوحين؛ لم تُستخدم casts واسعة أو تغييرات سلوكية غير متحققة.
+- فحص TypeScript ناجح، ولا توجد تغييرات قاعدة بيانات.
