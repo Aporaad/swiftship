@@ -185,7 +185,15 @@ export function startAccountReconciliationListener(db: any): () => void {
 
       const timer = setTimeout(async () => {
         pendingAccountReconciliations.delete(accountId);
-        await executeAccountReconciliation(accountId, 'realtime_listener', db);
+        try {
+          const result = await executeAccountReconciliation(accountId, 'realtime_listener', db);
+          if (!result.success) {
+            console.error(`[Reconciliation] Account '${accountId}' failed after retries:`, result.error?.code);
+          }
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : 'Unknown reconciliation failure';
+          console.error(`[Reconciliation] Account '${accountId}' listener error:`, message);
+        }
       }, 500);
 
       pendingAccountReconciliations.set(accountId, timer);

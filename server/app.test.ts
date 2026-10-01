@@ -49,6 +49,24 @@ describe('API availability middleware', () => {
     },
   );
 
+  it.each(['/health', '/browser-proxy'])(
+    'keeps mounted %s available when database services are unavailable',
+    (path) => {
+      const middleware = createApiAvailabilityMiddleware(() => false);
+      const response = createResponse();
+      const next = vi.fn();
+
+      middleware(
+        { baseUrl: '/api', path } as Request,
+        response as unknown as Response,
+        next as NextFunction,
+      );
+
+      expect(next).toHaveBeenCalledOnce();
+      expect(response.status).not.toHaveBeenCalled();
+    },
+  );
+
   it('continues when database services are ready', () => {
     const middleware = createApiAvailabilityMiddleware(() => true);
     const response = createResponse();

@@ -7,7 +7,8 @@ export function createApiAvailabilityMiddleware(
   isDatabaseReady: () => boolean,
 ): RequestHandler {
   return (req, res, next) => {
-    if (req.path === '/api/health' || req.path === '/api/browser-proxy') {
+    const mountedPath = req.path.startsWith('/api/') ? req.path : `${req.baseUrl}${req.path}`;
+    if (mountedPath === '/api/health' || mountedPath === '/api/browser-proxy') {
       return next();
     }
 

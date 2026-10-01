@@ -13,6 +13,7 @@ import type {
 // ── سجل مفاتيح التكرار المنفذة في الذاكرة ────────────────────────────
 // In-memory registry of recently executed idempotency keys (TTL: 1 hour)
 const processedKeys = new Map<string, { timestamp: number; result: JobExecutionResult }>();
+const inFlightJobs = new Map<string, Promise<JobExecutionResult>>();
 const KEY_TTL_MS = 60 * 60 * 1000;
 
 function cleanupExpiredKeys(): void {
@@ -58,7 +59,7 @@ export function getProcessedKeyResult(key: string): JobExecutionResult | undefin
  * 5. Audit Logging
  * 6. Graceful Failure Behavior
  */
-export async function runBackgroundJob<TInput, TOutput>(
+async function executeBackgroundJob<TInput, TOutput>(
   definition: BackgroundJobDefinition<TInput, TOutput>,
   input: TInput,
   context: BackgroundJobContext,
@@ -180,4 +181,28 @@ export async function runBackgroundJob<TInput, TOutput>(
   console.error(`[JobRunner] Job '${jobName}' permanently failed after ${attempt} attempt(s).`);
 
   return failureResult;
+}
+
+/**
+ * يمنع السباق داخل نفس العملية: الطلب الثاني ينتظر نتيجة التنفيذ الأول.
+ * Cross-process durability still belongs to the database transaction/RPC layer.
+ */
+export async function runBackgroundJob<TInput, TOutput>(
+  definition: BackgroundJobDefinition<TInput, TOutput>,
+  input: TInput,
+  context: BackgroundJobContext,
+  options?: JobOptions,
+): Promise<JobExecutionResult<TOutput>> {
+  const existing = inFlightJobs.get(context.idempotencyKey);
+  if (existing) return existing as Promise<JobExecutionResult<TOutput>>;
+
+  const execution = executeBackgroundJob(definition, input, context, options);
+  inFlightJobs.set(context.idempotencyKey, execution);
+  try {
+    return await execution;
+  } finally {
+    if (inFlightJobs.get(context.idempotencyKey) === execution) {
+      inFlightJobs.delete(context.idempotencyKey);
+    }
+  }
 }
