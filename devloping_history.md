@@ -1955,3 +1955,8 @@
 - اكتمل تحويل عمليات `EntryWorkspaceTab` الفردية والجماعية إلى `runMutation` مع اشتقاق مؤشرات busy/delete من الحالة الموحدة.
 - تم تحويل `useWebsiteManagementData` إلى `runQuery` مع نتيجة aggregate typed، مع إبقاء setter توافقياً للصفحة الحالية.
 - `npm run check` والاختبارات السابقة ناجحة.
+
+## [2026-10-02 01:15:00 +0300] — بدء مرحلة DB Readiness — AI Model: Manus
+- أُنشئ التقرير `docs/pre-api/phase8-db-readiness-2026-10-02.md` من `DATABASE_SCHEMA.md` وملفات migrations.
+- التقييم ثابت المصدر يثبت 51 جدولاً ومجالات JSONB ومفاتيح وعلاقات موثقة جزئياً، لكنه لا يثبت counts أو RLS أو grants الحية.
+- لم يتم تنفيذ SQL أو فتح اتصال قاعدة بيانات؛ لا إصلاحات بيانات في هذه المرحلة.

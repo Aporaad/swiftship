@@ -1083,3 +1083,8 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 - لم تُنفذ أوامر SQL.
 - لم تتغير الجداول أو الأعمدة أو العلاقات أو RLS أو migrations.
 - جميع التغييرات الحالية تخص عقود TypeScript وحالة واجهة المستخدم وPortal Gateway.
+
+## [2026-10-02 01:15:00 +0300] — مرحلة DB Readiness قراءة فقط — AI Model: Manus
+- لم تُنفذ أي أوامر SQL.
+- تم تحليل `DATABASE_SCHEMA.md` وملفات `supabase/migrations` محلياً فقط.
+- تم تصنيف فحوصات counts وRLS وgrants وforeign-key violations كفحوصات معلقة تحتاج connector قراءة حي.
