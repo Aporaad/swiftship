@@ -1012,3 +1012,7 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 
 ## [2026-10-01 04:38:00 +03:00] — تحقق قاعدة البيانات أثناء إكمال DTOs المالية — AI Model: Manus
 لم تُنفذ أي أوامر SQL أو DDL/DML أو migrations، ولم تتغير الجداول أو الأعمدة أو العلاقات أو RLS.
+
+
+## [2026-10-01 04:46:00 +03:00] — تحقق قاعدة البيانات أثناء دفعة strict/any — AI Model: Manus
+لم تُنفذ أوامر SQL أو migrations أو تغييرات على مخطط قاعدة البيانات أو RLS؛ التغييرات TypeScript واختبارات واعتماد تطوير فقط.

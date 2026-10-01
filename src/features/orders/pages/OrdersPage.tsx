@@ -580,8 +580,9 @@ export default function OrdersPage() { // دالة عرض الطلبات
       const resolved = await ensureOrderPartyFinancialAccount(party);
       setFormData((prev) => ({ ...prev, ...toOrderPartyPayload(resolved) }));
       setCustomerSearchQuery('');
-    } catch (error: any) {
-      notificationService.notify({ title: isAr ? 'تعذر ربط الحساب المالي' : 'Financial account link failed', message: error?.message || (isAr ? 'تعذر تجهيز الحساب المالي لطرف الطلب.' : 'Unable to prepare the party financial account.'), type: 'error', category: 'order' });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : (isAr ? 'تعذر تجهيز الحساب المالي لطرف الطلب.' : 'Unable to prepare the party financial account.');
+      notificationService.notify({ title: isAr ? 'تعذر ربط الحساب المالي' : 'Financial account link failed', message, type: 'error', category: 'order' });
     }
   };
 

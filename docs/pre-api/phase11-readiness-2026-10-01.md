@@ -130,3 +130,10 @@ src/shared/contracts/finance.contracts.ts
 ### تدقيق الإغلاق الإجرائي
 
 أظهر فحص قواعد المرحلة أن `strict: true` غير مفعّل وأن strict override ينتج 238 خطأً، كما يوجد 436 تطابقًا لـ`any` في النطاق الموسع. لذلك لا يمكن إعلان المرحلة 11 مكتملة بالكامل أو الانتقال إلى المرحلة 12 دون تنفيذ تنظيف واسع مستقل للـstrict/any؛ تم إبقاء هذه البنود مفتوحة بدل إخفائها أو ادعاء إنجازها.
+
+
+## دفعة strict/any وعقود UI المشتركة — 2026-10-01 04:46 +03:00 — AI Model: Manus
+
+تم تثبيت baseline strict جديد: انخفضت أخطاء `tsc --strict` من 238 إلى 220 بعد إضافة `@types/react-dom`. أضيفت عقود مشتركة في `src/shared/contracts/ui.contracts.ts` لـ`PaginationMeta` و`PaginationState` و`AsyncState` و`ErrorDetails`، مع `createPaginationMeta` و`errorDetailsFromUnknown` واختبارات مستقلة (10 اختبارات ناجحة). كما أزيل catch صريح من نوع `any` في OrdersPage واستُخدم `unknown` مع فحص `instanceof Error`.
+
+لا يزال تفعيل strict الكامل غير آمن حتى معالجة 220 خطأ متبقيًا؛ لم يتم تعديل tsconfig لإخفاء الأخطاء.

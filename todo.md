@@ -1061,3 +1061,11 @@
 - [ ] تفعيل `strict: true` بعد معالجة أخطائه الحالية (238 خطأ strict override).
 - [ ] إزالة `any` من Auth/Orders/Accounting وفق القياس الحالي (436 تطابقًا في النطاق الموسع).
 - [ ] إكمال Pagination/Error-state policy والصلاحيات كعناصر إجرائية قبل إعلان المرحلة 11 مكتملة والانتقال للمرحلة 12.
+
+
+## [2026-10-01 04:46 +03:00] — دفعة strict/any وUI contracts — AI Model: Manus
+- [x] تثبيت `@types/react-dom` وتقليل strict baseline من 238 إلى 220.
+- [x] إضافة عقود `PaginationMeta` و`PaginationState` و`AsyncState` و`ErrorDetails` واختبارها.
+- [x] إزالة catch صريح من نوع `any` في OrdersPage.
+- [ ] معالجة 220 خطأ strict المتبقي تدريجيًا قبل تفعيل `strict: true`.
+- [ ] استكمال إزالة any من Orders/Accounting وبقية النطاقات دون casts غير موثقة.

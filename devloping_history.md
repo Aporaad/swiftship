@@ -1768,3 +1768,8 @@
 ## [2026-10-01 04:38:00 +03:00] — المرحلة 11: CustodyAdvance وOrders/Products — AI Model: Manus
 
 اكتمل الترحيل التدريجي للعهدة ومبالغ الطلبات والمنتجات إلى `OriginalAmount` و`Amount` و`CurrencyCode` حيث يسمح العقد الفعلي، مع تحديث mappers ونجاح 222 اختبارًا و8 متخطاة وcheck والبناء. أظهر تدقيق الإغلاق أن strict override ينتج 238 خطأً وأن قياس any في النطاق الموسع 436 تطابقًا؛ لذلك بقيت بنود strict/any/Pagination/Error-state والصلاحيات مفتوحة ولم يُعلن إغلاق المرحلة بالكامل.
+
+
+## [2026-10-01 04:46:00 +03:00] — دفعة strict/any وعقود UI — AI Model: Manus
+
+أضيفت `ui.contracts.ts` بعقود Pagination وAsync/Error states واختبارات 10 حالات، وثُبتت `@types/react-dom` فانخفض strict baseline إلى 220 خطأ. أزيل catch صريح `any` من OrdersPage واستُخدم unknown مع فحص Error. بقي strict غير مفعّل حتى معالجة الأخطاء تدريجيًا.
