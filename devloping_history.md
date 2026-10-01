@@ -1711,3 +1711,12 @@
 أضيف `MoneyDisplay.test.tsx` لاختبار الإشارة والرقم والعملة والفئة، مع الحفاظ على اختبارات `CurrencySelect`. نجح `npm run check`، ونجحت الاختبارات الكاملة بـ63 ملفًا و214 اختبارًا، ونجح `npm run build` مع التحذيرات البنيوية المعروفة سابقًا فقط.
 
 تم تأجيل DataTable وFilterBar وPagination وStatusBadge وEntitySelect وAsyncState وEmptyState وErrorState وPermissionGate وAuditPreview لأن الجرد الحالي يخلط جداول وتقارير وفلاتر وقواعد عمل مختلفة، أو لا يثبت ثلاث حالات متكافئة. هذا يتوافق مع قاعدة الخطة التي تمنع إنشاء مكوّن عام ضخم.
+
+
+## [2026-10-01 03:55:00 +03:00] — التدقيق النهائي لعناصر المرحلة 10 — AI Model: Manus
+
+تم تنفيذ جرد إضافي لـDataTable وFilterBar وPagination وStatusBadge وEntitySelect وAsyncState وEmptyState وErrorState وPermissionGate وAuditPreview. لم يتم تعديل الشيفرة لأن المرشحين المتبقين إما غير موجودين كمكوّنات متكررة، أو موجودون مسبقًا، أو يخلطون عقودًا مختلفة بين التقارير والعمليات والصلاحيات والطباعة.
+
+`PermissionGate` موجود مسبقًا بعقد typed واختبارات تغطي الصلاحية المفردة وanyOf وallOf وfallback، و`FormField` و`ConfirmModal` موجودان مسبقًا. كما لم يثبت وجود pagination فعلي متكرر؛ ظهور `pageSize` الذي عُثر عليه مرتبط بإعدادات المستند/الطباعة. هذا القرار يطبق قاعدة الخطة التي تمنع إنشاء مكوّن عام ضخم أو تغيير السلوك بلا تطابق مثبت.
+
+بهذا اكتمل نطاق المرحلة 10 القابل للتنفيذ بأمان: CurrencySelect في 13 موضعًا، MoneyDisplay في مجموعة دفتر الحساب، وتدقيق العناصر المتبقية مع توثيق الاستبعاد. لا SQL ولا تغييرات قاعدة بيانات/RLS.

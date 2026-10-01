@@ -972,3 +972,13 @@
 - [x] نجاح `npm run check`، الاختبارات الكاملة: 63 ملفًا ناجحًا و3 متخطاة؛ 214 اختبارًا ناجحًا و8 متخطاة، والبناء الإنتاجي.
 - [x] توثيق أن عناصر DataTable/FilterBar/Pagination/StatusBadge/EntitySelect/AsyncState/EmptyState/ErrorState/PermissionGate/AuditPreview لم تُستخرج لعدم وجود ثلاث حالات متكافئة مثبتة أو لوجود اختلافات سلوكية.
 - [x] لا SQL ولا تغييرات قاعدة بيانات/RLS.
+
+
+## [2026-10-01 03:55 +03:00] — تدقيق نهائي لعناصر المرحلة العاشرة المتبقية — AI Model: Manus
+- [x] فحص `DataTable` و`FilterBar` و`Pagination`: لا توجد ثلاثة عقود متطابقة؛ التكرارات الحالية مرتبطة بتقارير وفلاتر وجداول مختلفة.
+- [x] التحقق من `PermissionGate`: مكوّن قائم في `src/features/auth/components/PermissionGate.tsx` مع اختبارات تغطي permission وanyOf وallOf وfallback، ولم يتم إنشاء بديل.
+- [x] التحقق من `FormField` و`ConfirmModal`: مكونات قائمة ومستخدمة مركزيًا.
+- [x] فحص `StatusBadge` و`EntitySelect` و`AsyncState` و`EmptyState` و`ErrorState` و`AuditPreview`: لا يوجد عقد ثلاثي متطابق يحقق قاعدة الاستخراج دون تغيير سياق الأعمال.
+- [x] عدم تعديل الشيفرة في هذه الجولة لأن النتيجة الصحيحة حسب الخطة هي عدم إنشاء مكوّن عام مصطنع.
+- [x] لا SQL ولا تغييرات قاعدة بيانات/RLS.
+- [ ] بدء المرحلة 11 بعد اعتماد إغلاق المرحلة 10: تنظيف الأنواع والحقول حسب ترتيب الخطة.
