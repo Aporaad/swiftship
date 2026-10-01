@@ -1738,3 +1738,8 @@
 أزيلت aliases غير المستخدمة في التقارير والشحنات والقيود، ووُحد اسم `FinanceEntriesDatabaseRow` إلى `FinanceEntryDatabaseRow` لمطابقة `FinanceEntryApiDto`. كما أضيف return type صريح إلى `mapCustodyAdvanceRowToDto`. لم تُجر إعادة تسمية واسعة لـ`OrdersDatabaseRow` أو `ShipmentsApiDto` لأن بعضها أسماء موارد Collection وتحتاج convention migration موحدًا قبل تغييرها.
 
 تم تسجيل `OrdersWritePayload` وحقول legacy المزدوجة في `OrderFeatureRecord` و`ShipmentFeatureRecord` كدين ترحيل خاص بالـcompatibility adapter، لا كـaliases جديدة. التحقق: check ناجح واختبارات DTO 15/15، ولا تغييرات قاعدة بيانات.
+
+
+## [2026-10-01 04:12:00 +03:00] — المرحلة 11: بداية توحيد معرفات الكيانات — AI Model: Manus
+
+بعد إغلاق جرد DTOs والـmappers، بدأ البند الثالث من ترتيب الخطة بإضافة `src/shared/contracts/identifiers.ts`. يحتوي العقد على `EntityId` و`NumericEntityId` والأنواع الاختيارية، وربطت به عقود المالية المشتركة. التغيير type-only ولا يبدل تمثيل البيانات الحالي ولا يضيف aliases في صفوف قاعدة البيانات. التحقق: check واختبارات DTO والمكونات 20/20. المرحلة 11 ما زالت مفتوحة حتى تنفيذ الحالات والتواريخ والعملات وPagination والأخطاء والصلاحيات.

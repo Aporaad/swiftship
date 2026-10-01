@@ -987,3 +987,8 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 ## [2026-10-01 04:10:00 +03:00] — تحقق قاعدة البيانات أثناء جرد DTOs — AI Model: Manus
 - لم تُنفذ أوامر SQL أو Migration أو DDL/DML.
 - لم تتغير الجداول أو الأعمدة أو العلاقات أو RLS؛ التغييرات اقتصرت على TypeScript DTOs وmappers والاختبارات والتوثيق.
+
+
+## [2026-10-01 04:12:00 +03:00] — تحقق قاعدة البيانات أثناء عقد المعرفات — AI Model: Manus
+- لم تُنفذ أوامر SQL أو DDL/DML أو Migration.
+- لم تتغير الجداول أو الأعمدة أو العلاقات أو RLS؛ التغيير TypeScript type-only.
