@@ -1773,3 +1773,8 @@
 ## [2026-10-01 04:46:00 +03:00] — دفعة strict/any وعقود UI — AI Model: Manus
 
 أضيفت `ui.contracts.ts` بعقود Pagination وAsync/Error states واختبارات 10 حالات، وثُبتت `@types/react-dom` فانخفض strict baseline إلى 220 خطأ. أزيل catch صريح `any` من OrdersPage واستُخدم unknown مع فحص Error. بقي strict غير مفعّل حتى معالجة الأخطاء تدريجيًا.
+
+
+## [2026-10-01 04:52:00 +03:00] — إصلاحات strict في tracking — AI Model: Manus
+
+تم إصلاح nullability في tracking-sync، وتحويل catches إلى unknown، وإزالة dead branch وany من tracking route. انخفض baseline strict إلى 208 خطأ، مع إبقاء الأخطاء المتبقية ظاهرة للتحويل إلى عقود domain حقيقية.

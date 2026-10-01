@@ -137,3 +137,8 @@ src/shared/contracts/finance.contracts.ts
 تم تثبيت baseline strict جديد: انخفضت أخطاء `tsc --strict` من 238 إلى 220 بعد إضافة `@types/react-dom`. أضيفت عقود مشتركة في `src/shared/contracts/ui.contracts.ts` لـ`PaginationMeta` و`PaginationState` و`AsyncState` و`ErrorDetails`، مع `createPaginationMeta` و`errorDetailsFromUnknown` واختبارات مستقلة (10 اختبارات ناجحة). كما أزيل catch صريح من نوع `any` في OrdersPage واستُخدم `unknown` مع فحص `instanceof Error`.
 
 لا يزال تفعيل strict الكامل غير آمن حتى معالجة 220 خطأ متبقيًا؛ لم يتم تعديل tsconfig لإخفاء الأخطاء.
+
+
+## دفعة nullability وdead-code — 2026-10-01 04:52 +03:00 — AI Model: Manus
+
+أصلحت nullability في `server/jobs/tracking-sync.ts` باستخدام guards محلية، وحولت catches إلى `unknown`. أصلحت فرعًا مستحيلًا في `server/routes/tracking.ts` كان يجعل `externalResult` من نوع `never` تحت strict، وأزلت payload/catch من نوع any. انخفض strict baseline من 220 إلى 208 خطأ. لم يتم تفعيل strict بعد، وما زالت أخطاء implicit-any في مكونات Orders/Accounting وغيرها تتطلب نماذج domain typed فعلية.

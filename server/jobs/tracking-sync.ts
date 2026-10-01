@@ -144,7 +144,8 @@ export async function fetchExternalTracking(
           coordinates: null,
         })).sort((a: any, b: any) => a.timestamp - b.timestamp);
         externalStatus = t.e === 10 ? 'Delivered' : (t.e === 30 || t.e === 40 ? 'InTransit' : 'Processing');
-        externalLocation = externalHistory.length > 0 ? externalHistory[externalHistory.length - 1].location : 'Unknown';
+        const history = externalHistory;
+        externalLocation = history && history.length > 0 ? history[history.length - 1].location : 'Unknown';
       }
     }
 
@@ -166,7 +167,8 @@ export async function fetchExternalTracking(
             coordinates: null,
           })).sort((a: any, b: any) => a.timestamp - b.timestamp);
           externalStatus = t.delivery_status || 'InTransit';
-          externalLocation = externalHistory.length > 0 ? externalHistory[externalHistory.length - 1].location : 'Unknown';
+          const history = externalHistory;
+          externalLocation = history && history.length > 0 ? history[history.length - 1].location : 'Unknown';
         }
       }
     }
@@ -217,12 +219,14 @@ export async function fetchExternalTracking(
 
           externalStatus = shipment.status
             || (shipment.states.length > 0 ? (shipment.states[shipment.states.length - 1].state || shipment.states[shipment.states.length - 1].status) : 'InTransit');
-          externalLocation = externalHistory.length > 0 ? externalHistory[externalHistory.length - 1].location : 'Unknown';
+          const history = externalHistory;
+          externalLocation = history && history.length > 0 ? history[history.length - 1].location : 'Unknown';
         }
       }
     }
-  } catch (err: any) {
-    console.error(`[TrackingSync] External tracking fetch error (${trackingNumber}):`, err.message);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[TrackingSync] External tracking fetch error (${trackingNumber}):`, message);
   }
 
   if (externalHistory) {
