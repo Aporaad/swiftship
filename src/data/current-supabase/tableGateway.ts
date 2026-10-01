@@ -15,14 +15,19 @@ function normalizeQuery(query: GatewayQuery = {}) {
 export function createTableGateway<T>(
   table: string,
   idColumn: string,
+  selectColumns: readonly string[],
   mapper: (row: Record<string, unknown>) => T,
 ): EntityGateway<T> {
+  if (selectColumns.length === 0 || !selectColumns.includes(idColumn)) {
+    throw new Error(`Gateway for '${table}' must declare a non-empty select allowlist including '${idColumn}'.`);
+  }
+  const selection = selectColumns.join(',');
   return {
     async list(query = {}): Promise<GatewayPage<T>> {
       const { limit, offset } = normalizeQuery(query);
       let request = supabase
         .from(table)
-        .select('*', { count: 'exact' })
+        .select(selection, { count: 'exact' })
         .range(offset, offset + limit - 1);
 
       if (query.search?.trim()) {
@@ -38,7 +43,7 @@ export function createTableGateway<T>(
     async getById(id: string): Promise<T | null> {
       const { data, error } = await supabase
         .from(table)
-        .select('*')
+        .select(selection)
         .eq(idColumn, id)
         .maybeSingle();
       if (error) throw mapSupabaseError(error);

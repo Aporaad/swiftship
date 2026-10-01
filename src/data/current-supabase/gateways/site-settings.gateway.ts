@@ -4,5 +4,5 @@ import type { SiteManagementViewModel } from '../../../features/siteManagement/t
 import type { SettingsViewModel } from '../../../features/settings/types';
 import { createTableGateway } from '../tableGateway';
 
-export const currentSupabaseSiteManagementGateway: SiteManagementGateway = createTableGateway<SiteManagementViewModel>('announcements', 'announcement_id', (row) => ({ siteId: String(row.announcement_id ?? '') }));
-export const currentSupabaseSettingsGateway: SettingsGateway = createTableGateway<SettingsViewModel>('settings', 'setting_id', (row) => ({ id: String(row.setting_id ?? '') }));
+export const currentSupabaseSiteManagementGateway: SiteManagementGateway = createTableGateway<SiteManagementViewModel>('announcements', 'announcement_id', ['announcement_id'], (row) => ({ siteId: String(row.announcement_id ?? '') }));
+export const currentSupabaseSettingsGateway: SettingsGateway = createTableGateway<SettingsViewModel>('settings', 'setting_id', ['setting_id'], (row) => ({ id: String(row.setting_id ?? '') }));

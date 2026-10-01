@@ -77,10 +77,12 @@ export async function createDbClient(): Promise<DbClient> {
 export async function authenticateServerSession(auth: any, db: any): Promise<void> {
   if (!auth || !db) return;
 
-  // ⚠️ بيانات اعتماد ثابتة — عيب حرج موثوق، لا تُنقل لـ API الجديدة
-  // ⚠️ Hardcoded credentials — documented critical defect, do NOT copy to alx_api
-  const systemEmail = 'admin@swiftship.system';
-  const systemPassword = 'swiftship@system_pw_2026';
+  const systemEmail = process.env.SWIFTSHIP_SYSTEM_EMAIL?.trim();
+  const systemPassword = process.env.SWIFTSHIP_SYSTEM_PASSWORD;
+  if (!systemEmail || !systemPassword) {
+    console.warn('[DB Client] Server session authentication is disabled: SWIFTSHIP_SYSTEM_EMAIL/PASSWORD are missing.');
+    return;
+  }
 
   try {
     await signInWithEmailAndPassword(auth, systemEmail, systemPassword);
@@ -100,9 +102,6 @@ export async function authenticateServerSession(auth: any, db: any): Promise<voi
           role: 'Admin',
           isRoot: true,
           disabled: false,
-          systemPin: '000000',
-          // ⚠️ password مخزّن بالنص — عيب حرج / ⚠️ plain-text password — critical defect
-          password: systemPassword,
           createdAt: Date.now(),
         });
       } catch (regErr: any) {

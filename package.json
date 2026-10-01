@@ -47,13 +47,6 @@
         "to": "app/server.cjs.map"
       },
       {
-        "from": ".env",
-        "to": "app/.env",
-        "filter": [
-          "**/*"
-        ]
-      },
-      {
         "from": "dist",
         "to": "app/dist",
         "filter": [

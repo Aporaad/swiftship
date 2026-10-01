@@ -16,6 +16,7 @@
  */
 
 import type { Express } from 'express';
+import bcrypt from 'bcryptjs';
 import {
   admin,
   doc,
@@ -33,13 +34,31 @@ import {
 
 // ── قائمة البريد الإلكتروني للمستخدمين الجذر ────────────────────
 // ⚠️ ROOT_EMAILS ثابتة في الكود — عيب حرج / hardcoded root emails — critical defect
-const ROOT_EMAILS = [
-  'alsrhyarslan5@gmail.com',
-  'arslan.alshamari@gmail.com',
-  'engaporaad1@gmail.com',
-  'admin@swiftship.system',
-  'apo.1.read@gmail.com',
-];
+const ROOT_EMAILS = (process.env.SWIFTSHIP_ROOT_EMAILS ?? '')
+  .split(',')
+  .map((email) => email.trim().toLowerCase())
+  .filter(Boolean);
+const SYSTEM_ADMIN_EMAIL = (process.env.SWIFTSHIP_SYSTEM_EMAIL ?? '').trim().toLowerCase();
+
+async function hasPasswordResetAuthority(req: { header(name: string): string | undefined }, db: any): Promise<boolean> {
+  const authorization = req.header('authorization');
+  if (!authorization?.startsWith('Bearer ')) return false;
+  const sessionId = authorization.slice(7).trim();
+  if (!sessionId) return false;
+  const sessions = await getDocs(query(collection(db, 'sessions'), where('id', '==', sessionId), limit(1)));
+  if (sessions.empty) return false;
+  const session = sessions.docs[0].data() as Record<string, unknown>;
+  if (session.force_logout === true || session.forceLogout === true) return false;
+  const userId = typeof session.user_id === 'string' ? session.user_id : typeof session.userId === 'string' ? session.userId : '';
+  if (!userId) return false;
+  const users = await getDocs(query(collection(db, 'users'), where('id', '==', userId), limit(1)));
+  if (users.empty) return false;
+  const user = users.docs[0].data() as Record<string, unknown>;
+  if (user.disabled === true) return false;
+  const role = typeof user.role === 'string' ? user.role.toLowerCase() : '';
+  const permissions = Array.isArray(user.permissions) ? user.permissions : [];
+  return role === 'admin' || user.isRoot === true || permissions.includes('reset_passwords');
+}
 
 /**
  * تسجيل مسارات المصادقة على تطبيق Express.
@@ -60,11 +79,19 @@ export function registerAuthRoutes(app: Express, db: any, auth: any): void {
     if (newPassword.length < 6) {
       return res.status(400).json({ error: 'Password must be at least 6 characters' });
     }
+    try {
+      if (!(await hasPasswordResetAuthority(req, db))) {
+        return res.status(403).json({ error: 'Admin password-reset permission required' });
+      }
+    } catch {
+      return res.status(503).json({ error: 'Authorization service unavailable' });
+    }
 
     try {
       // ⚠️ تخزين كلمة المرور كنص صريح — عيب حرج / plain-text — critical defect
       const userRef = doc(db, 'users', uid);
-      await updateDoc(userRef, { password: newPassword });
+      const passwordHash = await bcrypt.hash(newPassword, 12);
+      await updateDoc(userRef, { password_hash: passwordHash, password: null });
       console.log(`[Auth] Changed password in PostgreSQL for user ${uid}`);
       return res.json({ success: true });
     } catch (err: any) {
@@ -85,8 +112,8 @@ export function registerAuthRoutes(app: Express, db: any, auth: any): void {
       const idLower = identifier.toLowerCase();
       let email = idLower;
 
-      if (idLower === 'admin') {
-        email = 'admin@swiftship.system';
+      if (idLower === 'admin' && SYSTEM_ADMIN_EMAIL) {
+        email = SYSTEM_ADMIN_EMAIL;
       }
 
       let userDoc: any = null;
@@ -147,7 +174,7 @@ export function registerAuthRoutes(app: Express, db: any, auth: any): void {
               fullName: email.toLowerCase().split('@')[0].toUpperCase() + ' (Root)',
               role: 'Admin',
               isRoot: true,
-              password,
+              password_hash: await bcrypt.hash(password, 12),
               disabled: false,
               createdAt: Date.now(),
             }, { merge: true });
@@ -191,7 +218,7 @@ export function registerAuthRoutes(app: Express, db: any, auth: any): void {
                 fullName: email.toLowerCase().split('@')[0].toUpperCase() + ' (Root)',
                 role: 'Admin',
                 isRoot: true,
-                password,
+                password_hash: await bcrypt.hash(password, 12),
                 disabled: false,
                 createdAt: Date.now(),
               }, { merge: true });
@@ -209,7 +236,7 @@ export function registerAuthRoutes(app: Express, db: any, auth: any): void {
             fullName: email.split('@')[0].toUpperCase() + ' (Root)',
             role: 'Admin',
             isRoot: true,
-            password,
+            password_hash: await bcrypt.hash(password, 12),
             disabled: false,
           };
           userDocId = uid;
@@ -224,11 +251,12 @@ export function registerAuthRoutes(app: Express, db: any, auth: any): void {
         return res.status(403).json({ error: 'This account is currently disabled.' });
       }
 
-      // ⚠️ مقارنة كلمة المرور كنص صريح — عيب حرج / plain-text comparison — critical defect
-      if (userDoc.password) {
-        if (userDoc.password !== password) {
+      if (typeof userDoc.password_hash === 'string' && userDoc.password_hash.length > 0) {
+        if (!(await bcrypt.compare(password, userDoc.password_hash))) {
           return res.status(401).json({ error: 'Invalid login credentials' });
         }
+      } else if (typeof userDoc.password === 'string' && userDoc.password.length > 0) {
+        return res.status(409).json({ error: 'Password migration required' });
       }
 
       // توليد رمز مخصص / Generate custom token
@@ -242,7 +270,7 @@ export function registerAuthRoutes(app: Express, db: any, auth: any): void {
       if (customToken) {
         return res.json({ success: true, customToken, email });
       }
-      return res.json({ success: true, useClientAuth: true, email, isLegacyNoPasswordDoc: !userDoc.password });
+      return res.json({ success: true, useClientAuth: true, email, isLegacyNoPasswordDoc: !userDoc.password_hash });
     } catch (err: any) {
       console.error('[Auth] Verify login backend error:', err);
       return res.status(500).json({ error: err.message || 'Verification failed' });
