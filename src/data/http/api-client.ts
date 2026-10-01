@@ -14,20 +14,6 @@ export class ApiClientError extends ApplicationError {
   }
 }
 
-export function getLocalSessionId(): string | null {
-  if (typeof sessionStorage === 'undefined') return null;
-  const direct = sessionStorage.getItem('swiftship_session_id');
-  if (direct) return direct;
-  for (let index = 0; index < sessionStorage.length; index += 1) {
-    const key = sessionStorage.key(index);
-    if (key?.startsWith('swiftship_session_id_')) {
-      const value = sessionStorage.getItem(key);
-      if (value) return value;
-    }
-  }
-  return null;
-}
-
 export class ApiClient {
   private readonly fetchImpl: typeof fetch;
 
@@ -41,13 +27,7 @@ export class ApiClient {
       if (value !== undefined) url.searchParams.set(key, String(value));
     }
 
-    const sessionId = getLocalSessionId();
-    const response = await this.fetchImpl(url, {
-      headers: {
-        Accept: 'application/json',
-        ...(sessionId ? { Authorization: `Bearer ${sessionId}` } : {}),
-      },
-    });
+    const response = await this.fetchImpl(url, { headers: { Accept: 'application/json' } });
     if (!response.ok) {
       let body: unknown = null;
       try {

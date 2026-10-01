@@ -250,3 +250,7 @@ src/shared/contracts/finance.contracts.ts
 
 ## تدقيق مطابق للخطة المرفقة — 2026-10-02 00:08 +0300 — AI Model: Manus
 الخطة المرفقة تشترط في المرحلة 11: `strict: true`، منع `any` في Auth/Orders/Accounting، استخدام `unknown` عند حدود البيانات، وعدم تصدير Database Rows إلى React. تحقق `npx tsc --noEmit --strict --pretty false` بنجاح، و`strict: true` موجود في `tsconfig.json`، لكن ما زالت حالات `any` فعلية في `src/components/orders/EditOrderModal.tsx` (Props، formData، items/shippings، callbacks، catch). لذلك **المرحلة 11 غير مغلقة بالكامل** وفق نص الخطة، رغم إغلاق أجزاء Finance/Orders typed boundaries وتوثيقها سابقًا.
+
+
+## حالة الإغلاق بعد rollback — 2026-10-02 00:17 +0300 — AI Model: Manus
+ما زالت المرحلة 11 غير مغلقة على مستوى النظام: strict check ناجح، لكن `EditOrderModal.tsx` يحتوي any فعليًا، خصوصًا Props وformData وitems/shippings وcallbacks. لا يتم اعتماد الإغلاق قبل استبدال هذه العقود بعقود typed قابلة للفحص.

@@ -1064,3 +1064,7 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 
 ## [2026-10-02 00:08:00 +0300] — تدقيق الخطة — AI Model: Manus
 لم تُنفذ أوامر SQL ولم تتغير قاعدة البيانات أو RLS أو migrations؛ هذه الدفعة تدقيق قراءة للكود والخطة والتوثيق فقط.
+
+
+## [2026-10-02 00:17:00 +0300] — Rollback API Foundation — AI Model: Manus
+لم تُنفذ أوامر SQL ولم تتغير الجداول أو الأعمدة أو RLS أو migrations؛ العملية rollback للكود فقط.

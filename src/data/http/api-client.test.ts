@@ -29,22 +29,4 @@ describe('ApiClient', () => {
       message: 'API request failed with status 502.',
     });
   });
-
-  it('sends the local session identifier as a bearer token', async () => {
-    vi.stubGlobal('sessionStorage', {
-      length: 1,
-      key: (index: number) => index === 0 ? 'swiftship_session_id_user-1' : null,
-      getItem: (key: string) => key === 'swiftship_session_id_user-1' ? 'sess-user-1' : null,
-    });
-    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response('{}', { status: 200 }));
-    const client = new ApiClient({ baseUrl: 'https://api.example.test', fetchImpl });
-
-    await client.get('/api/v1/customers');
-
-    expect(fetchImpl).toHaveBeenCalledWith(
-      new URL('https://api.example.test/api/v1/customers'),
-      { headers: { Accept: 'application/json', Authorization: 'Bearer sess-user-1' } },
-    );
-    vi.unstubAllGlobals();
-  });
 });

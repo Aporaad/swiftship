@@ -38,15 +38,12 @@ const currentDirPath = currentFilePath
   : (typeof __dirname !== 'undefined' ? __dirname : process.cwd());
 
 // ── استيراد وحدات الخادم / Import server modules ─────────────────
-import { createApiErrorHandler, createApp } from './server/app';
-import { createLocalSessionVerifier } from './server/auth/server-auth';
+import { createApp } from './server/app';
 import { createDbClient, authenticateServerSession } from './server/current-db/client';
 import { startAccountReconciliationListener } from './server/jobs/account-reconciliation';
 import { registerAuthRoutes } from './server/routes/auth';
 import { registerWhatsAppRoutes } from './server/routes/whatsapp';
 import { registerTrackingRoutes } from './server/routes/tracking';
-import { createCustomersGateway, registerCustomersRoutes } from './server/routes/customers';
-import { createCouriersGateway, registerCouriersRoutes } from './server/routes/couriers';
 import { registerBrowserProxyRoute } from './server/browser-proxy/route';
 import { attachViteDevMiddleware, attachProductionStaticFiles } from './server/dev-server';
 
@@ -75,17 +72,6 @@ async function startServer(): Promise<void> {
   registerAuthRoutes(app, db, auth);
   registerWhatsAppRoutes(app, db);
   registerTrackingRoutes(app, db);
-  registerCustomersRoutes(
-    app,
-    createCustomersGateway(db),
-    createLocalSessionVerifier(db),
-  );
-  registerCouriersRoutes(
-    app,
-    createCouriersGateway(db),
-    createLocalSessionVerifier(db),
-  );
-  app.use('/api', createApiErrorHandler());
 
   // 6. مسار احتياطي لـ API / API fallback
   app.all('/api/*', (_req, res) => {

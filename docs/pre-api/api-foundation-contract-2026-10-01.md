@@ -112,3 +112,7 @@ Supabase adapter
 5. يستخدم `ApiClient` session ID الموجود في sessionStorage، وليس Supabase Auth token.
 
 أي ذكر سابق لـ`supabase.auth.getUser` في هذه الوثيقة يُعد ملغى بهذا التصحيح.
+
+
+## قرار rollback — 2026-10-02 00:16 +0300 — AI Model: Manus
+تمت إزالة routes وmiddleware وrequest-id contract وApiClient session-header التي أضيفت ضمن نطاق API Foundation غير المعتمد في الخطة الحالية. تم الحفاظ على كامل السجل السابق؛ هذا الإدخال يوثق القرار فقط.

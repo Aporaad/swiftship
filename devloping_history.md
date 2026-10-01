@@ -1924,3 +1924,6 @@
 
 ## [2026-10-02 00:08:00 +0300] — تدقيق مطابق للخطة المرفقة — AI Model: Manus
 تمت مطابقة الخطة المرفقة مع `phase11-readiness`, `phase12-errors-loading`, `phase13-api-foundation-readiness` والكود الحالي. النتيجة غير مكتملة: strict check ناجح لكن `EditOrderModal` يحتفظ بـany فعلي، المرحلة 12 موحدة في ستة مستهلكين فقط مع بقاء حالات محلية إضافية، والمرحلة 13 الفعلية في الخطة تخص `alx_web` ولم تُنفذ مخرجاتها. تم توثيق الفجوات وعدم اعتماد الانتقال إلى `alx_api` الإنتاجية.
+
+## [2026-10-02 00:17:00 +0300] — Rollback نطاق API Foundation غير المعتمد — AI Model: Manus
+تمت إزالة الكود التنفيذي الذي أضيف تحت اسم API Foundation ولم يكن ضمن النطاق المعتمد بعد مراجعة الخطة: request-id/versioned API contract، ErrorEnvelope handler الخاص بالـAPI، Customers/Couriers server routes وserver-auth، وحقن session header في ApiClient. تم الحفاظ على سجلات التوثيق التاريخية وعدم حذفها. لا SQL ولا DB changes.

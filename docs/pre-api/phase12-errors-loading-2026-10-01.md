@@ -92,3 +92,7 @@
 
 ## تدقيق مطابق للخطة المرفقة — 2026-10-02 00:08 +0300 — AI Model: Manus
 المستهلكون المرحلون في نطاق Orders يستخدمون `runQuery`/`runMutation`: `ProductsManagementTab`, `ProductPickerModal`, `ItemCategoriesManagementTab`, `OrderHistoryModal`, `useOrderData`, و`ReturnedProductsTab`. لكن الفحص أظهر 62 علامة لحالات loading/submitting/error محلية في نطاق Orders/Features، منها `loadingProducts`, `submittingProduct`, `loadingItems`, و`loading`/`error` في `OrderHistoryModal`. النتيجة: **المرحلة 12 مغلقة فقط لنطاق المستهلكين الستة الموثق، وليست مطابقة لإغلاق كل Query/Mutation في النظام** كما ينص معيار الخطة.
+
+
+## حالة الإغلاق بعد rollback — 2026-10-02 00:17 +0300 — AI Model: Manus
+المستهلكون الستة المحددون مرحلون، لكن النطاق الكامل للنظام ما زال يحتوي حالات loading/error/submitting محلية ومستهلكين خارج العقد الموحد. لا يتم اعتماد إغلاق المرحلة 12 على مستوى كل المكونات قبل ترحيل هذه الحالات والتحقق من السلوك.

@@ -731,3 +731,9 @@ select distinct k.key as data_key from public.cust_details d cross join lateral 
 ```text
 لا يوجد أمر SQL؛ تم تنفيذ تدقيق للخطة والمراحل 11 و12 و13 فقط.
 ```
+
+
+## [2026-10-02 00:17:00 +0300] — AI Model: Manus
+```text
+لا يوجد أمر SQL؛ تم rollback لكود API Foundation غير المعتمد فقط.
+```

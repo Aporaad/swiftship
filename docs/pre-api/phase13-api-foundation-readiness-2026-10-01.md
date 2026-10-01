@@ -110,3 +110,7 @@ React / Electron / alx_web → HTTP API → Application Gateway → Supabase
 
 ## تدقيق مطابق للخطة المرفقة — 2026-10-02 00:08 +0300 — AI Model: Manus
 الخطة المرفقة تعرف المرحلة 13 بأنها **تخفيض اعتماد `alx_web` على Supabase**، وتشترط `alx_web/src/api`, `alx_web/src/contracts`, Portal Gateway، Public Tracking DTO دون PII، Portal User Session DTO، legacy-supabase isolation، وfeature flag. هذه المخرجات غير موجودة في المستودع الحالي؛ فحص المسارات أثبت غياب `alx_web/src/api`, `alx_web/src/contracts`, و`alx_web/src/lib/legacy-supabase`. ما نُفذ سابقًا تحت اسم API Foundation هو نطاق مختلف داخل النظام، وليس إغلاقًا للمرحلة 13 حسب الخطة المرفقة. لذلك لا يعتمد هذا التدقيق المرحلة 13 ولا يوصي ببدء `alx_api` الإنتاجية.
+
+
+## Rollback نطاق غير معتمد — 2026-10-02 00:17 +0300 — AI Model: Manus
+بعد مطابقة الخطة وطلب المستخدم، أزيلت مخرجات API Foundation التي لم تكن ضمن النطاق المعتمد في الخطة الحالية. بقي السجل التاريخي محفوظًا، ولا يمثل هذا الملف اعتمادًا لبدء API إنتاجية.
