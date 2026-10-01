@@ -1206,7 +1206,7 @@ Low
 - Shipment.
 - User.
 - Account.
-- Journal Entry.
+- Main Entry.
 
 إذا تغير Mapper دون قصد تفشل Golden Test وتكشف التغيير.
 
