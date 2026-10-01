@@ -45,7 +45,7 @@ import ManualJournalAdjustmentModal from './finance/ManualJournalAdjustmentModal
 import CustomerFifoPaymentModal from './finance/CustomerFifoPaymentModal';
 import { useFinanceAccountingData } from './financeAccounting/useFinanceAccountingData';
 import { useFinanceAccountingSelectors } from './financeAccounting/useFinanceAccountingSelectors';
-import { createFinanceAccountingJournalActions } from './financeAccounting/financeAccountingJournalActions';
+import { createFinanceAccountingMainEntryActions } from './financeAccounting/financeAccountingMainEntryActions';
 import { createFinanceAccountingCourierActions } from './financeAccounting/financeAccountingCourierActions';
 import { createFinanceAccountingLedgerActions } from './financeAccounting/financeAccountingLedgerActions';
 
@@ -384,7 +384,7 @@ export default function FinanceAccounting({
   }, [auditedCustomerId, customers, accountTransactions, orders, isAr]);
 
   // Domain actions live outside the page shell; behavior remains in their original handlers.
-  const { handleEditJournalSubmit, handleDeleteJournalSubmit, handleAddAdjustment, handleCustomerFIFOPayment } = createFinanceAccountingJournalActions({ adjustData, adjustLoading, adjustSalaryMonth, auditedCustomerId, collection, currentUser, customerLedgerDetails, db, dbRates, deletePin, doc, editJournalData, employees, entryToDelete, financialAccountService, getDocs, isAr, isSalaryPayment, notificationService, orders, payAmount, payLoading, payNotes, postingFinancialAccounts, query, selectedEditEntry, setAdjustData, setAdjustLoading, setDeleteLoading, setDeletePin, setDeletePinError, setEditJournalLoading, setEntryToDelete, setIsAdjustmentModalOpen, setIsDeletePinModalOpen, setIsEditJournalOpen, setIsPayModalOpen, setIsSalaryPayment, setPayAmount, setPayLoading, setPayNotes, setSelectedEditEntry, setSourceAccountId, setTargetAccountId, setTargetType, settings, sourceAccountId, targetAccountId, targetType, where, writeBatch });
+  const { handleEditJournalSubmit, handleDeleteJournalSubmit, handleAddAdjustment, handleCustomerFIFOPayment } = createFinanceAccountingMainEntryActions({ adjustData, adjustLoading, adjustSalaryMonth, auditedCustomerId, collection, currentUser, customerLedgerDetails, db, dbRates, deletePin, doc, editJournalData, employees, entryToDelete, financialAccountService, getDocs, isAr, isSalaryPayment, notificationService, orders, payAmount, payLoading, payNotes, postingFinancialAccounts, query, selectedEditEntry, setAdjustData, setAdjustLoading, setDeleteLoading, setDeletePin, setDeletePinError, setEditJournalLoading, setEntryToDelete, setIsAdjustmentModalOpen, setIsDeletePinModalOpen, setIsEditJournalOpen, setIsPayModalOpen, setIsSalaryPayment, setPayAmount, setPayLoading, setPayNotes, setSelectedEditEntry, setSourceAccountId, setTargetAccountId, setTargetType, settings, sourceAccountId, targetAccountId, targetType, where, writeBatch });
   const { handleFullCourierReconciliation, handleBulkRemitCourierCash, handleDirectSettleCustody } = createFinanceAccountingCourierActions({ courierAuditSheet, currentUser, db, dbRates, doc, financialAccountService, isAr, notificationService, setBulkReconciliationLoading, setCargoRemitLoading, settings, updateDoc, writeBatch });
   const { exportLedgerToCSV, triggerPrint } = createFinanceAccountingLedgerActions({ currentUser, filteredLedgerEntries, formatDate, formatDateTime, isAr });
 
