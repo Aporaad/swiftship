@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { amountOrNull, currencyCodeOrNull, isoDateOrNull, statusCodeOrNull } from './value-primitives';
+import { amountOrNull, approvalStatusOrNull, currencyCodeOrNull, isoDateOrNull, statusCodeOrNull } from './value-primitives';
 
 describe('value primitives', () => {
   it('accepts only real calendar dates in date-only format', () => {
@@ -27,5 +27,11 @@ describe('value primitives', () => {
     expect(statusCodeOrNull('  قيد الطلب ')).toBe('قيد الطلب');
     expect(statusCodeOrNull('Paid')).toBe('Paid');
     expect(statusCodeOrNull('')).toBeNull();
+  });
+
+  it('keeps approval statuses in their independent bounded domain', () => {
+    expect(approvalStatusOrNull('approved')).toBe('approved');
+    expect(approvalStatusOrNull('pending_approval')).toBe('pending_approval');
+    expect(approvalStatusOrNull('suspended')).toBeNull();
   });
 });

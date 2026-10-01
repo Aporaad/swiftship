@@ -1,4 +1,5 @@
 import type { AuditDto, IsoUtcString, NumericValue } from './common.dto';
+import type { IsoDateString } from '../../shared/contracts/value-primitives';
 
 /** Non-column fields written by ShipmentFormModal and retained in the JSON payload. */
 export interface ShipmentSupplementalData {
@@ -13,6 +14,13 @@ export interface ShipmentSupplementalData {
   notes?: string | null;
   shippingCategoryName?: string | null;
   shippingCategoryPrice?: NumericValue | null;
+}
+
+/** Normalized view shape: shipment calendar fields are date-only, never timestamps. */
+export interface ShipmentSupplementalViewData extends Omit<ShipmentSupplementalData, 'shippingDate' | 'expectedArrival' | 'deliveryDate'> {
+  shippingDate?: IsoDateString | null;
+  expectedArrival?: IsoDateString | null;
+  deliveryDate?: IsoDateString | null;
 }
 
 export interface ShipmentDatabaseRow {
@@ -58,7 +66,7 @@ export interface ShipmentsApiDto {
   otherCategoryFee: number | null;
   categoryFeesTotal: number | null;
   categoryFeeCurrency: string | null;
-  shipmentData: ShipmentSupplementalData;
+  shipmentData: ShipmentSupplementalViewData;
   createdAt: IsoUtcString | null;
   updatedAt: IsoUtcString | null;
   createdBy: string | null;

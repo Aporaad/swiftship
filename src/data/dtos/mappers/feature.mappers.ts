@@ -5,6 +5,8 @@
   numberOrNull,
   textOrNull,
   asIsoUtc,
+  isoDateOrNull,
+  approvalStatusOrNull,
 } from '../common.dto';
 import type { AuthApiDto, AuthDatabaseRow } from '../auth.dto';
 import type { BrowserApiDto, BrowserDatabaseRow, BrowserPageData } from '../browser.dto';
@@ -184,7 +186,7 @@ export function mapPortalUserRowToDto(row: PortalUserDatabaseRow): PortalUserApi
     username: textOrNull(row.username),
     email: textOrNull(row.email),
     portalRole: textOrNull(row.portal_role),
-    approvalStatus: textOrNull(row.approval_status),
+    approvalStatus: approvalStatusOrNull(row.approval_status),
     disabled: Boolean(row.disabled ?? row.is_disabled),
     linkedCustomerId: textOrNull(row.linked_customer_id),
     accountId: textOrNull(row.account_id),
@@ -492,10 +494,10 @@ export function mapShipmentsRowToDto(row: ShipmentDatabaseRow): ShipmentsApiDto 
       shippingSource: textOrNull(data.shippingSource),
       shippingDestination: textOrNull(data.shippingDestination),
       packagingFees: numberOrNull(data.packagingFees as number | string | null),
-      shippingDate: textOrNull(data.shippingDate),
+      shippingDate: isoDateOrNull(data.shippingDate),
       shippingDuration: textOrNull(data.shippingDuration),
-      expectedArrival: textOrNull(data.expectedArrival),
-      deliveryDate: textOrNull(data.deliveryDate),
+      expectedArrival: isoDateOrNull(data.expectedArrival),
+      deliveryDate: isoDateOrNull(data.deliveryDate),
       notes: textOrNull(data.notes),
       shippingCategoryName: textOrNull(data.shippingCategoryName),
       shippingCategoryPrice: numberOrNull(data.shippingCategoryPrice as number | string | null),

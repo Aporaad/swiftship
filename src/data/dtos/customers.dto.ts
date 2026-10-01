@@ -1,4 +1,5 @@
 import type { AuditDto, IsoUtcString, NumericValue } from './common.dto';
+import type { ApprovalStatus } from '../../shared/contracts/value-primitives';
 
 /** Allowlisted customer profile fields read and written by the legacy customer screens/services. */
 export interface CustomerProfileData {
@@ -62,7 +63,7 @@ export interface PortalUserApiDto {
   username: string | null;
   email: string | null;
   portalRole: string | null;
-  approvalStatus: string | null;
+  approvalStatus: ApprovalStatus | null;
   disabled: boolean;
   linkedCustomerId: string | null;
   accountId: string | null;
@@ -81,7 +82,7 @@ export interface PortalUserCreateInput {
   email: string;
   password: string;
   portalRole?: string;
-  approvalStatus?: 'approved' | 'pending_approval' | 'rejected';
+  approvalStatus?: ApprovalStatus;
   disabled?: boolean;
   linkedCustomerId?: string | null;
   accountId?: string | null;

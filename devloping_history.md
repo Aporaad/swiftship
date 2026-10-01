@@ -1748,3 +1748,8 @@
 ## [2026-10-01 04:18:00 +03:00] — المرحلة 11: primitives للقيم — AI Model: Manus
 
 أضيف `src/shared/contracts/value-primitives.ts` بعقود ومطبعّات `IsoDateString` و`CurrencyCode` و`Amount` و`StatusCode`. التحقق يرفض التاريخ غير الحقيقي، العملة غير الصالحة، المبلغ غير finite، والحالة الفارغة، مع الحفاظ على casing وقيم الحالات legacy. تم تصديرها من `src/data/dtos/common.dto.ts`. لم يحدث ترحيل واسع للحقول بعد لأن الحقول الحالية تجمع بين timestamp وdate-only، وبين amounts أصلية ومحولة، وبين status domains مستقلة؛ دمجها دون تصنيف سيؤدي إلى تغيير سلوكي. التحقق: check و19 اختبارًا ناجحة.
+
+
+## [2026-10-01 04:21:00 +03:00] — المرحلة 11: ترحيل DTO الشحن ونطاق الاعتماد — AI Model: Manus
+
+فُصل عقد `ShipmentSupplementalViewData` عن payload الشحن، وتمت معالجة حقول التاريخ date-only بواسطة `isoDateOrNull` داخل mapper. أضيف نطاق `ApprovalStatus` مستقل وتضييق `PortalUserApiDto` و`PortalUserCreateInput` مع تحويل الحالات غير المعروفة إلى null. التحقق الكامل: 219 اختبارًا ناجحًا و8 متخطاة، check والبناء ناجحان. ما زالت نطاقات posting/payment/order-shipment وترحيل العملات والمبالغ مفتوحة.

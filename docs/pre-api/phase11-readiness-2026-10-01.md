@@ -90,3 +90,12 @@ src/shared/contracts/finance.contracts.ts
 تم تصدير المطبعّات من `src/data/dtos/common.dto.ts` حتى تستخدمها حدود DTO بدل نسخ parsing محلية. لم يتم فرض Union عام للحالات لأن الجرد أثبت وجود مجموعات مستقلة: حالات الطلب والشحن بالعربية والإنجليزية، حالات الدفع (`Paid`/`Partial Paid`/`Unpaid`)، حالات الترحيل (`draft`/`posted`/`voided`)، وحالات الاعتماد. توحيدها في قيمة واحدة الآن سيغير سلوكًا تجاريًا؛ لذلك تم تثبيت primitive محافظ أولًا.
 
 اختبارات الحدود: 19/19 ناجحة، وTypeScript check ناجح. لم تُنفذ SQL أو Migratons. ما زال ترحيل DTOs المحددة إلى primitives مفتوحًا وسيتم تنفيذه مجموعةً مجموعةً بعد مطابقة الحقول، مع عدم تحويل timestamps إلى date-only أو العكس.
+
+
+## ترحيل DTOs الأول وتوحيد نطاق الاعتماد — 2026-10-01 04:21 +03:00 — AI Model: Manus
+
+نُقل DTO الشحن تدريجيًا عبر فصل `ShipmentSupplementalData` الخاص بالـpayload المرن عن `ShipmentSupplementalViewData` الخاص بالعرض. حقول `shippingDate` و`expectedArrival` و`deliveryDate` في شكل العرض أصبحت `IsoDateString | null`، ويقوم `mapShipmentsRowToDto` باستخدام `isoDateOrNull` بدل تمرير نص خام. بقي شكل الإدخال مرنًا حتى لا تتأثر نماذج HTML أو payloadات legacy.
+
+بدأ توحيد نطاق الحالات المستقل للاعتماد بإضافة `ApprovalStatus` بقيم `approved | pending_approval | rejected`، وتضييق `PortalUserApiDto` و`PortalUserCreateInput` إليه. يقوم mapper بتحويل القيمة غير المعروفة إلى null بدل معاملتها كاعتماد صالح. لم تُخلط هذه القيم مع حالات الطلب أو الدفع أو الترحيل.
+
+التحقق: `npm run check` ناجح، الاختبارات الكاملة 219 ناجحًا و8 متخطاة، والبناء ناجح مع تحذيرات البنية السابقة فقط. لا SQL أو تغييرات قاعدة بيانات.

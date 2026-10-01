@@ -123,12 +123,14 @@ export function booleanOrDefault(value: unknown, fallback = false): boolean {
 
 export {
   amountOrNull,
+  approvalStatusOrNull,
   currencyCodeOrNull,
   isoDateOrNull,
   statusCodeOrNull,
 } from '../../shared/contracts/value-primitives';
 export type {
   Amount,
+  ApprovalStatus,
   CurrencyCode,
   IsoDateString,
   StatusCode,

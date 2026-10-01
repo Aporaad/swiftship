@@ -1022,3 +1022,13 @@
 - [x] تصدير المطبعّات من `common.dto.ts` واختبارها: 19/19، مع نجاح TypeScript check.
 - [ ] ترحيل DTOs المحددة تدريجيًا إلى primitives بعد تصنيف كل حقل: timestamp أو date-only أو amount أصلي أو amount محوّل.
 - [ ] توحيد اتحادات الحالات المتخصصة فقط، دون دمج حالات مختلفة تجاريًا.
+
+
+## [2026-10-01 04:21 +03:00] — ترحيل DTOs وتوحيد ApprovalStatus — AI Model: Manus
+- [x] فصل `ShipmentSupplementalData` للـpayload عن `ShipmentSupplementalViewData` للعرض.
+- [x] تحويل تواريخ الشحن/الوصول/التسليم في mapper إلى `IsoDateString | null`.
+- [x] إنشاء نطاق `ApprovalStatus` مستقل بالقيم الثلاث المعتمدة.
+- [x] تضييق `PortalUserApiDto` و`PortalUserCreateInput` واستخدام allowlist في mapper.
+- [x] نجاح check والاختبارات الكاملة والبناء.
+- [ ] ترحيل نطاقات الحالات التالية مستقلًا: posting، payment، order/shipment.
+- [ ] ترحيل DTOs المالية إلى `CurrencyCode` و`Amount` بعد فصل amounts الأصلية عن المحولة.
