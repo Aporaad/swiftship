@@ -10,7 +10,13 @@ export interface ReportOrder {
   courierId?: string;
   shippingCompany?: string;
   shippingCompanyId?: string;
+  trackingNumber?: string;
+  destinationCity?: string;
+  destinationCountry?: string;
+  updatedAt?: string | number | Date | null;
   totalPrice?: string | number;
+  totalCostSAR?: string | number;
+  totalCostYER?: string | number;
   amountPaid?: string | number;
   amountRemaining?: string | number;
   shippingCostSAR?: string | number;
@@ -69,6 +75,9 @@ export interface ReportAccount {
   id: string;
   entityType?: string;
   entityId?: string;
+  entityName?: string;
+  name?: string;
+  accountCode?: string;
   currency?: string;
   balance?: string | number;
   [key: string]: string | number | boolean | null | undefined;

@@ -211,7 +211,7 @@ export function useOrderOptions() {
       };
       await setDoc(doc(db, 'order_option', newId), payload);
       return newId;
-    } catch (err: any) {
+    } catch (err) {
       console.error('[useOrderOptions] addOption error:', err);
       throw err;
     }
@@ -224,7 +224,7 @@ export function useOrderOptions() {
         updatedAt: Date.now()
       };
       await updateDoc(doc(db, 'order_option', id), payload);
-    } catch (err: any) {
+    } catch (err) {
       console.error('[useOrderOptions] updateOption error:', err);
       throw err;
     }
@@ -233,7 +233,7 @@ export function useOrderOptions() {
   const deleteOption = async (id: string) => {
     try {
       await deleteDoc(doc(db, 'order_option', id));
-    } catch (err: any) {
+    } catch (err) {
       console.error('[useOrderOptions] deleteOption error:', err);
       throw err;
     }
@@ -245,7 +245,7 @@ export function useOrderOptions() {
         isActive: !currentStatus,
         updatedAt: Date.now()
       });
-    } catch (err: any) {
+    } catch (err) {
       console.error('[useOrderOptions] toggleOptionStatus error:', err);
       throw err;
     }

@@ -13,6 +13,9 @@ import {
   paidAmountInWords
 } from '../../lib/numberToWords';
 import { calculateShipmentCategoryFees } from '../../services/itemCategoryService';
+import type { ItemCategory } from '../../services/itemCategoryService';
+import type { Currency } from '../../services/currencyService';
+import type { Settings } from '../../context/SettingsContext';
 import OrderPartyPicker from './OrderPartyPicker';
 import FinancialCalculatorModal from '../finance/FinancialCalculatorModal';
 import ProductPickerModal, { SystemProductRecord } from './ProductPickerModal';
@@ -21,8 +24,18 @@ import CreateOrderStep2 from '../../features/orders/components/create-order-moda
 import CreateOrderStep3 from '../../features/orders/components/create-order-modal/CreateOrderStep3';
 import CreateOrderStep4 from '../../features/orders/components/create-order-modal/CreateOrderStep4';
 import CreateOrderStep5 from '../../features/orders/components/create-order-modal/CreateOrderStep5';
+import type { OrderStatusItem } from '../../hooks/useOrderStatuses';
 
-interface CreateOrderModalProps {
+type Step1Props = React.ComponentProps<typeof CreateOrderStep1>;
+type Step2Props = React.ComponentProps<typeof CreateOrderStep2>;
+type Step3Props = React.ComponentProps<typeof CreateOrderStep3>;
+type Step4Props = React.ComponentProps<typeof CreateOrderStep4>;
+type Step5Props = React.ComponentProps<typeof CreateOrderStep5>;
+type CurrencyOption = Currency & { price?: number };
+type FinancialAccountOption = Step4Props['cashAccountsList'][number] & { accSubId?: string | null };
+type OrderCreateSettings = Settings & Step2Props['settings'] & Step3Props['settings'];
+
+export interface CreateOrderModalProps {
   isOpen: boolean;
   onClose: () => void;
   isAr: boolean;
@@ -32,34 +45,34 @@ interface CreateOrderModalProps {
   isSubmitting: boolean;
 
   // Form State
-  formData: any;
-  setFormData: (data: any) => void;
+  formData: Step1Props['formData'];
+  setFormData: Step1Props['setFormData'];
   previewOrderNumber: string;
 
-  customerProfileStats: any;
-  orderParties: any[];
-  selectedOrderParty: any;
+  customerProfileStats: Step1Props['customerProfileStats'];
+  orderParties: Step1Props['orderParties'];
+  selectedOrderParty: Step1Props['selectedOrderParty'];
   isStaffOrder: boolean;
   setIsStaffOrder: (value: boolean) => void;
-  selectOrderParty: (party: any) => void;
+  selectOrderParty: Step1Props['selectOrderParty'];
   customerSearchQuery: string;
   setCustomerSearchQuery: (query: string) => void;
-  filteredCustomers: any[];
-  selectCustomer: (c: any) => void;
+  filteredCustomers: Step1Props['filteredCustomers'];
+  selectCustomer: Step1Props['selectCustomer'];
   clearSelectedCustomer: () => void;
   setIsAddCustomerOpen: (open: boolean) => void;
-  setCustomerFormData: (data: any) => void;
+  setCustomerFormData: Step1Props['setCustomerFormData'];
 
   setIsAddSourceOpen: (open: boolean) => void;
-  sources: any[];
+  sources: Step1Props['sources'] & Step5Props['sources'];
 
   cartShareCode: string;
   setCartShareCode: (code: string) => void;
 
   // Items State
-  items: any[];
+  items: Step2Props['items'];
   addItemRow: () => void;
-  updateItemRow: (idx: number, field: string, val: any) => void;
+  updateItemRow: Step2Props['updateItemRow'];
   removeItemRow: (idx: number) => void;
 
   // Adjustments State
@@ -77,13 +90,13 @@ interface CreateOrderModalProps {
   setAddShippingEnabled: (v: boolean) => void;
 
   // Shippings State
-  shippings: any[];
+  shippings: Step3Props['shippings'] & Step4Props['shippings'] & Step5Props['shippings'];
   addShippingRow: () => void;
-  updateShippingRow: (idx: number, fieldOrObj: string | Record<string, any>, val?: any) => void;
+  updateShippingRow: (idx: number, fieldOrObj: string | Partial<Step3Props['shippings'][number]>, val?: unknown) => void;
   removeShippingRow: (idx: number) => void;
-  shippingCompanies: any[];
+  shippingCompanies: Step3Props['shippingCompanies'];
   setIsAddShippingCompanyOpen: (open: boolean) => void;
-  setActiveAddShippingIndex: (idx: any) => void;
+  setActiveAddShippingIndex: Step3Props['setActiveAddShippingIndex'];
 
   packagingFeeEnabled: boolean;
   setPackagingFeeEnabled: (v: boolean) => void;
@@ -91,22 +104,22 @@ interface CreateOrderModalProps {
   setPackagingFeeRate: (v: number) => void;
 
   // Couriers State
-  couriers: any[];
+  couriers: Step3Props['couriers'] & Step4Props['couriers'] & Step5Props['couriers'];
   profitPerKgRate: number;
   setProfitPerKgRate: (v: number) => void;
   cbmShippingRateValue: number;
   setCbmShippingRateValue: (v: number) => void;
-  settings: any;
+  settings: OrderCreateSettings;
 
   // Calculations
-  calcs: any;
-  activeCurrencies: any[];
-  financialAccounts?: any[];
+  calcs: Step3Props['calcs'] & Step4Props['calcs'] & Step5Props['calcs'];
+  activeCurrencies: CurrencyOption[];
+  financialAccounts?: FinancialAccountOption[];
 
   // Order Options (order_option)
-  packagingOptions?: any[];
-  shippingCategoryOptions?: any[];
-  itemCategories?: any[];
+  packagingOptions?: Step2Props['packagingOptions'];
+  shippingCategoryOptions?: Step3Props['shippingCategoryOptions'];
+  itemCategories?: ItemCategory[];
 
   // ====== خيارات جديدة: توصيل للمنزل، عبر مندوب شحن، الدفع لاحقاً، الحفظ والاعتماد ======
   // New feature checkboxes: home delivery, via shipping agent, pay later, direct approve
@@ -120,7 +133,7 @@ interface CreateOrderModalProps {
   setDirectApprove: (v: boolean) => void;
   // ترتيب حالات الطلب المحملة من DB للاستخدام في تحديد ID الحالة
   // Order statuses loaded from DB for dynamic status ID assignment
-  orderStatuses?: any[];
+  orderStatuses?: OrderStatusItem[];
 
   // Action
   handleCreateOrder: (e: React.FormEvent) => void;
@@ -294,17 +307,17 @@ export default function CreateOrderModal(
       targetIndex = items.length;
       addItemRow();
     }
-    Object.keys(newItem).forEach((key) => {
-      updateItemRow(targetIndex, key, (newItem as any)[key]);
+    (Object.keys(newItem) as Array<keyof typeof newItem>).forEach((key) => {
+      updateItemRow(targetIndex, key, newItem[key]);
     });
   };
 
   // Filter available cash box and bank accounts from financialAccounts
   const cashAccountsList = (financialAccounts || []).filter(
-    (a: any) => a.accSubId === '111' || (a.id && String(a.id).startsWith('111'))
+    (account) => account.accSubId === '111' || String(account.id).startsWith('111')
   );
   const bankAccountsList = (financialAccounts || []).filter(
-    (a: any) => a.accSubId === '112' || (a.id && String(a.id).startsWith('112'))
+    (account) => account.accSubId === '112' || String(account.id).startsWith('112')
   );
 
   const getCurrencyRate = (code: string) => {
@@ -312,14 +325,14 @@ export default function CreateOrderModal(
     if (code === 'YER') return 1;
     const found = activeCurrencies?.find((c) => c.code === code);
     if (found && found.currentPrice && found.currentPrice > 0) return found.currentPrice;
-    if (found && (found as any).price && (found as any).price > 0) return (found as any).price;
+    if (found?.price && found.price > 0) return found.price;
     if (code === 'SAR') return 140;
     if (code === 'USD') return 535;
     return 1;
   };
 
   const updateShipmentContentCategory = (idx: number, categoryId: string, cartonValue?: number) => {
-    const category = itemCategories.find((entry: any) => entry.id === categoryId);
+    const category = itemCategories.find((entry) => entry.id === categoryId);
     const fees = calculateShipmentCategoryFees(category, cartonValue ?? shippings[idx]?.cartonCount);
     updateShippingRow(idx, {
       contentCategoryId: category?.id || '',
@@ -596,7 +609,11 @@ export default function CreateOrderModal(
               <FinancialCalculatorModal
                 isOpen={isCalcOpen}
                 onClose={() => setIsCalcOpen(false)}
-                currencies={activeCurrencies}
+                currencies={activeCurrencies.map((currency) => ({
+                  id: currency.cur_id,
+                  code: currency.code,
+                  isDefault: currency.is_default,
+                }))}
               />
             </div>
           </div>

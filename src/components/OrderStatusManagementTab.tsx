@@ -1,4 +1,3 @@
-type AdapterDocument = { id: string; data: () => Record<string, unknown> };
 import React, { useState, useEffect } from 'react';
 import {
   Layers, Plus, Edit2, Trash2, CheckCircle2, ShieldCheck, ArrowUp, ArrowDown,
@@ -16,6 +15,35 @@ import { useRole } from '../hooks/useRole';
 import { useExchangeRates } from '../hooks/useExchangeRates';
 import toast from 'react-hot-toast';
 
+type AdapterDocument = { id: string; data: () => Record<string, unknown> };
+type SystemAccountOption = {
+  id: string;
+  entityId?: string;
+  entityType?: string;
+  accountCode?: string;
+  entityName?: string;
+  name?: string;
+};
+
+function readAccountText(record: Record<string, unknown>, key: string): string | undefined {
+  const value = record[key];
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return undefined;
+}
+
+function toSystemAccountOption(document: AdapterDocument): SystemAccountOption {
+  const data = document.data();
+  return {
+    id: document.id,
+    entityId: readAccountText(data, 'entityId'),
+    entityType: readAccountText(data, 'entityType'),
+    accountCode: readAccountText(data, 'accountCode'),
+    entityName: readAccountText(data, 'entityName'),
+    name: readAccountText(data, 'name'),
+  };
+}
+
 interface OrderStatusManagementTabProps {
   isAr: boolean;
   initialSubTab?: 'statuses' | 'entries';
@@ -31,7 +59,7 @@ export default function OrderStatusManagementTab({
   const { activeCurrencies, loading: currenciesLoading } = useExchangeRates();
   const { statuses, loading: statusesLoading, getFirstStatus, getLastStatus } = useOrderStatuses();
   const [autoEntries, setAutoEntries] = useState<AutoEntryRule[]>([]);
-  const [accounts, setAccounts] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<SystemAccountOption[]>([]);
   const [loadingEntries, setLoadingEntries] = useState(true);
 
   // Granular Permissions
@@ -115,7 +143,7 @@ export default function OrderStatusManagementTab({
     });
 
     const unsubAccs = onSnapshot(collection(db, 'accounts'), (snap) => {
-      setAccounts(snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() })));
+      setAccounts(snap.docs.map((document: AdapterDocument) => toSystemAccountOption(document)));
     });
 
     return () => {
@@ -192,7 +220,7 @@ export default function OrderStatusManagementTab({
       await setDoc(doc(db, 'order_status', String(targetId)), payload, { merge: true });
       toast.success(isAr ? 'تم حفظ المرحلة بنجاح' : 'Stage saved successfully');
       setIsStatusModalOpen(false);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to save status:', err);
       toast.error(isAr ? 'حدث خطأ أثناء حفظ المرحلة' : 'Error saving status');
     }
@@ -1079,7 +1107,7 @@ export default function OrderStatusManagementTab({
                       if (acc) {
                         setEntryFormData(prev => ({
                           ...prev,
-                          debitAccount: { id: acc.entityId || acc.id, code: acc.accountCode || '', name: acc.entityName || acc.name, type: 'system' }
+                          debitAccount: { id: acc.entityId || acc.id, code: acc.accountCode || '', name: acc.entityName || acc.name || acc.accountCode || '', type: 'system' }
                         }));
                       }
                     }}
@@ -1145,7 +1173,7 @@ export default function OrderStatusManagementTab({
                       if (acc) {
                         setEntryFormData(prev => ({
                           ...prev,
-                          creditAccount: { id: acc.entityId || acc.id, code: acc.accountCode || '', name: acc.entityName || acc.name, type: 'system' }
+                          creditAccount: { id: acc.entityId || acc.id, code: acc.accountCode || '', name: acc.entityName || acc.name || acc.accountCode || '', type: 'system' }
                         }));
                       }
                     }}

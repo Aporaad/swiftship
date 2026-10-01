@@ -10,31 +10,47 @@ export type OrderParty = {
   /** Canonical financial relation. */
   accountId?: string;
   financialAccountCode?: string;
-  raw: any;
+  raw: Record<string, unknown>;
 };
 
 const normalized = (value: unknown) => String(value ?? '').trim().toLocaleLowerCase();
 
-function toParty(raw: any, type: OrderPartyType): OrderParty {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function readPartyText(raw: Record<string, unknown>, ...keys: string[]): string {
+  for (const key of keys) {
+    const value = raw[key];
+    if (typeof value === 'string' && value.trim()) return value;
+    if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  }
+  return '';
+}
+
+function toParty(value: unknown, type: OrderPartyType): OrderParty | null {
+  if (!isRecord(value)) return null;
+  const id = readPartyText(value, 'id');
+  if (!id) return null;
   return {
-    id: String(raw.id),
+    id,
     type,
-    name: raw.fullName || raw.name || raw.username || raw.email || String(raw.id),
-    phone: raw.phone || raw.mobile || '',
-    address: raw.address || raw.location || '',
-    email: raw.email || '',
-    accountId: raw.accountId || raw.account_id || raw.financialAccountId || '',
-    financialAccountCode: raw.financialAccountCode || raw.accountCode || '',
-    raw,
+    name: readPartyText(value, 'fullName', 'name', 'username', 'email') || id,
+    phone: readPartyText(value, 'phone', 'mobile'),
+    address: readPartyText(value, 'address', 'location'),
+    email: readPartyText(value, 'email'),
+    accountId: readPartyText(value, 'accountId', 'account_id', 'financialAccountId'),
+    financialAccountCode: readPartyText(value, 'financialAccountCode', 'accountCode'),
+    raw: value,
   };
 }
 
-export function buildOrderParties(customers: any[] = [], employees: any[] = [], couriers: any[] = []): OrderParty[] {
+export function buildOrderParties(customers: readonly unknown[] = [], employees: readonly unknown[] = [], couriers: readonly unknown[] = []): OrderParty[] {
   return [
     ...customers.map((entry) => toParty(entry, 'customer')),
     ...employees.map((entry) => toParty(entry, 'employee')),
     ...couriers.map((entry) => toParty(entry, 'courier')),
-  ];
+  ].filter((party): party is OrderParty => party !== null);
 }
 
 export function filterOrderParties(parties: OrderParty[], queryText = '', staffOnly = false): OrderParty[] {
@@ -50,16 +66,22 @@ export function filterOrderParties(parties: OrderParty[], queryText = '', staffO
   });
 }
 
-export function findOrderParty(order: any, customers: any[] = [], employees: any[] = [], couriers: any[] = []): OrderParty | null {
-  const partyType = (order?.customerType || order?.orderPartyType || (order?.isStaffOrder ? 'employee' : 'customer')) as OrderPartyType;
+export function findOrderParty(order: unknown, customers: readonly unknown[] = [], employees: readonly unknown[] = [], couriers: readonly unknown[] = []): OrderParty | null {
+  if (!isRecord(order)) return null;
+  const requestedType = order.customerType ?? order.orderPartyType;
+  const partyType: OrderPartyType = requestedType === 'employee'
+    ? 'employee'
+    : requestedType === 'courier'
+      ? 'courier'
+      : order.isStaffOrder === true ? 'employee' : 'customer';
   const partyId = partyType === 'employee'
-    ? (order?.employeeId || order?.employee_id || order?.orderPartyId)
+    ? (order.employeeId || order.employee_id || order.orderPartyId)
     : partyType === 'courier'
-      ? (order?.courierId || order?.courier_id || order?.orderPartyId)
-      : (order?.customerId || order?.customer_id || order?.orderPartyId);
+      ? (order.courierId || order.courier_id || order.orderPartyId)
+      : (order.customerId || order.customer_id || order.orderPartyId);
   if (!partyId) return null;
   const collection = partyType === 'employee' ? employees : partyType === 'courier' ? couriers : customers;
-  const match = collection.find((entry) => String(entry.id) === String(partyId));
+  const match = collection.find((entry) => isRecord(entry) && String(entry.id) === String(partyId));
   return match ? toParty(match, partyType) : null;
 }
 

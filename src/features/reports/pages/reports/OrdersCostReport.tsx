@@ -1,4 +1,5 @@
 import type { ReportAccount, ReportCourier, ReportOrder, ReportTransaction } from '../../report-row-types';
+import type { MultiAccountSelectorProps } from '../../types/reports.types';
 /**
  * @file OrdersCostReport.tsx
  * @description تقرير تكاليف الطلبات والشحنات
@@ -9,11 +10,16 @@ import React from 'react';
 import { format } from 'date-fns';
 import { Layers } from 'lucide-react';
 
+function reportAmount(value: unknown): number {
+  const parsed = typeof value === 'number' ? value : Number.parseFloat(String(value ?? 0));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 interface OrdersCostReportProps {
   isAr: boolean;
-  filteredData: { orders: any[] };
-  accounts: any[];
-  accountTransactions: any[];
+  filteredData: { orders: ReportOrder[]; couriers?: ReportCourier[] };
+  accounts: ReportAccount[];
+  accountTransactions: ReportTransaction[];
   selectedOrdersCostAccountIds: string[];
   setSelectedOrdersCostAccountIds: React.Dispatch<React.SetStateAction<string[]>>;
   selectedOrderId: string | null;
@@ -21,8 +27,8 @@ interface OrdersCostReportProps {
   handleSaveAccountSelection: (type: string) => void;
   convertCurrency: (amount: number, from: string, to: string) => number;
   convertToYER: (amount: number, currency: string) => number;
-  searchMatchList: (list: any[], key: string) => any[];
-  MultiAccountSelectorComponent: React.ComponentType<any>;
+  searchMatchList: (list: ReportOrder[], key: string) => ReportOrder[];
+  MultiAccountSelectorComponent: React.ComponentType<MultiAccountSelectorProps>;
 }
 
 // ─── OrdersCostReport Component ─────────────────────────────────────────────
@@ -41,8 +47,8 @@ const OrdersCostReport: React.FC<OrdersCostReportProps> = ({
   searchMatchList,
   MultiAccountSelectorComponent
 }) => {
-  const orders = (filteredData as any).orders || [];
-  const couriers = (filteredData as any).couriers || [];
+  const orders = filteredData.orders;
+  const couriers = filteredData.couriers || [];
   return (
       <div>
                 <div className="space-y-6">
@@ -52,7 +58,7 @@ const OrdersCostReport: React.FC<OrdersCostReportProps> = ({
                     const alternativeCurrency = displayCurrency === 'SAR' ? 'YER' : 'SAR';
 
                     const totalConsolidatedBalance = displayAccounts.reduce(
-                      (sum, a) => sum + convertCurrency(parseFloat(a.balance as any) || 0, a.currency || 'SAR', displayCurrency),
+                      (sum, a) => sum + convertCurrency(reportAmount(a.balance), a.currency || 'SAR', displayCurrency),
                       0
                     );
 
@@ -69,14 +75,16 @@ const OrdersCostReport: React.FC<OrdersCostReportProps> = ({
 
                     // Transactions on selected cost accounts
                     const costAccountIds = displayAccounts.map(a => a.id);
-                    const costTxs = accountTransactions.filter(tx => costAccountIds.includes(tx.accountId) || costAccountIds.includes(tx.entityId));
+                    const costTxs = accountTransactions.filter(tx =>
+                      costAccountIds.includes(tx.accountId ?? '') || costAccountIds.includes(tx.entityId ?? '')
+                    );
 
                     const totalCostDebit = costTxs
                       .filter(tx => tx.type === 'Debit')
                       .reduce((sum, tx) => {
                         const txAcc = accounts.find((a: ReportAccount) => a.id === tx.accountId);
                         const txCurrency = txAcc?.currency || tx.currency || 'SAR';
-                        return sum + convertCurrency(parseFloat(tx.amount) || 0, txCurrency, displayCurrency);
+                        return sum + convertCurrency(reportAmount(tx.amount), txCurrency, displayCurrency);
                       }, 0);
 
                     const totalCostCredit = costTxs
@@ -84,7 +92,7 @@ const OrdersCostReport: React.FC<OrdersCostReportProps> = ({
                       .reduce((sum, tx) => {
                         const txAcc = accounts.find((a: ReportAccount) => a.id === tx.accountId);
                         const txCurrency = txAcc?.currency || tx.currency || 'SAR';
-                        return sum + convertCurrency(parseFloat(tx.amount) || 0, txCurrency, displayCurrency);
+                        return sum + convertCurrency(reportAmount(tx.amount), txCurrency, displayCurrency);
                       }, 0);
 
                     const netCostFromLedger = totalCostDebit - totalCostCredit;
@@ -238,7 +246,11 @@ const OrdersCostReport: React.FC<OrdersCostReportProps> = ({
                               }
 
                               // Retrieve related financial transactions
-                              const relatedTxs = accountTransactions.filter(tx => tx.refNumber === o.orderNumber || tx.description?.includes(o.orderNumber));
+                              const orderNumber = o.orderNumber || '';
+                              const relatedTxs = accountTransactions.filter(tx =>
+                                (orderNumber !== '' && tx.refNumber === orderNumber) ||
+                                (orderNumber !== '' && tx.description?.includes(orderNumber))
+                              );
                               const shippingCourier = couriers.find((c: ReportCourier) => c.id === o.shippingCourierId);
                               const deliveryCourier = couriers.find((c: ReportCourier) => c.id === o.deliveryCourierId);
 
@@ -304,13 +316,13 @@ const OrdersCostReport: React.FC<OrdersCostReportProps> = ({
                                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                     <div className="p-4 bg-slate-900/60 border border-slate-850 rounded-xl">
                                       <span className="text-[10px] text-slate-500 font-black block uppercase mb-1">{isAr ? 'قيمة الشحنة والمبيعات' : 'Order Cargo Value'}</span>
-                                      <span className="text-md font-mono font-black text-white">{((parseFloat(o.totalCostSAR) || 0) - (parseFloat(o.shippingCostSAR) || 0) - (parseFloat(o.packagingFee) || 0)).toLocaleString() || 0} <span className="text-[10px] text-slate-500">SAR</span></span>
+                                      <span className="text-md font-mono font-black text-white">{(reportAmount(o.totalCostSAR) - reportAmount(o.shippingCostSAR) - reportAmount(o.packagingFee)).toLocaleString() || 0} <span className="text-[10px] text-slate-500">SAR</span></span>
                                       <p className="text-[9px] text-slate-550 mt-1">{isAr ? 'القيمة بدون احتساب الرسوم الإضافية' : 'Base inventory shipping value'}</p>
                                     </div>
                                     <div className="p-4 bg-slate-900/60 border border-slate-850 rounded-xl">
                                       <span className="text-[10px] text-slate-500 font-black block uppercase mb-1">{isAr ? 'رسوم الشحن والتغليف المضافة' : 'Surcharges (Shipping & Pkg)'}</span>
                                       <span className="text-md font-mono font-black text-[#d4af37]">
-                                        {((o.shippingCostSAR || 0) + (o.packagingFee || 0)).toLocaleString()} <span className="text-[10px]">SAR</span>
+                                        {(reportAmount(o.shippingCostSAR) + reportAmount(o.packagingFee)).toLocaleString()} <span className="text-[10px]">SAR</span>
                                       </span>
                                       <p className="text-[9px] text-slate-550 mt-1">{isAr ? `شحن: ${o.shippingCostSAR || 0} / تغليف: ${o.packagingFee || 0}` : 'Aggregated surcharges sum'}</p>
                                     </div>
@@ -368,7 +380,7 @@ const OrdersCostReport: React.FC<OrdersCostReportProps> = ({
                                           ) : (
                                             relatedTxs.map((tx) => (
                                               <tr key={tx.id} className="hover:bg-slate-950/15 font-medium">
-                                                <td className="py-3 px-3 text-slate-550">{format(new Date(tx.createdAt), 'yyyy-MM-dd HH:mm')}</td>
+                                                <td className="py-3 px-3 text-slate-550">{tx.createdAt ? format(new Date(tx.createdAt), 'yyyy-MM-dd HH:mm') : '-'}</td>
                                                 <td className="py-3 px-3 font-mono font-bold text-slate-350">{tx.refNumber}</td>
                                                 <td className="py-3 px-3 text-center">
                                                   <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${tx.type === 'Debit' ? 'bg-rose-500/10 text-rose-400' : 'bg-emerald-500/10 text-emerald-400'}`}>
@@ -377,10 +389,10 @@ const OrdersCostReport: React.FC<OrdersCostReportProps> = ({
                                                 </td>
                                                 <td className="py-3 px-3 text-white max-w-xs truncate">{tx.description}</td>
                                                 <td className="py-3 px-3 text-right font-mono font-extrabold text-rose-400">
-                                                  {tx.type === 'Debit' ? `${(parseFloat(tx.amount) || 0).toLocaleString()} ${tx.currencyOriginal || 'SAR'}` : '-'}
+                                                  {tx.type === 'Debit' ? `${reportAmount(tx.amount).toLocaleString()} ${tx.currencyOriginal || 'SAR'}` : '-'}
                                                 </td>
                                                 <td className="py-3 px-3 text-right font-mono font-extrabold text-emerald-400">
-                                                  {tx.type === 'Credit' ? `${(parseFloat(tx.amount) || 0).toLocaleString()} ${tx.currencyOriginal || 'SAR'}` : '-'}
+                                                  {tx.type === 'Credit' ? `${reportAmount(tx.amount).toLocaleString()} ${tx.currencyOriginal || 'SAR'}` : '-'}
                                                 </td>
                                               </tr>
                                             ))

@@ -1,5 +1,30 @@
 import React from 'react';
 import { Truck, Activity, CheckCircle2, Search, Plus, ExternalLink, Edit2, Trash2, Layers } from 'lucide-react';
+import type { OrderRecord, ShipmentRecord } from '../../features/orders/types';
+import type { OrderStatusItem } from '../../hooks/useOrderStatuses';
+
+interface ShipmentsStudioTabProps {
+  isAr: boolean;
+  allShipments?: ShipmentRecord[];
+  shipmentSearchQuery?: string;
+  setShipmentSearchQuery?: (query: string) => void;
+  shipmentStatusFilter?: string;
+  setShipmentStatusFilter?: (status: string) => void;
+  shipmentCarrierFilter?: string;
+  setShipmentCarrierFilter?: (carrier: string) => void;
+  filteredShipmentsList?: ShipmentRecord[];
+  orders?: OrderRecord[];
+  couriers?: Array<{ id: string; fullName?: string | null; courierType?: string | null }>;
+  shippingCompanies?: Array<{ id: string; name: string }>;
+  orderStatusesList?: OrderStatusItem[];
+  copyToClipboard?: (text: string) => void;
+  handleOpenAddShipmentModal?: () => void;
+  handleOpenEditShipmentModal?: (shipment: ShipmentRecord) => void;
+  handleOpenShipmentHistory?: (shipment: ShipmentRecord) => void;
+  handleQuickShipmentStatusChange?: (shipmentId: string, status: string) => void;
+  setShipmentToDelete?: React.Dispatch<React.SetStateAction<ShipmentRecord | null>>;
+  setIsDeleteShipmentModalOpen?: (isOpen: boolean) => void;
+}
 
 export const ShipmentsStudioTab = ({
   isAr,
@@ -22,7 +47,7 @@ export const ShipmentsStudioTab = ({
   handleQuickShipmentStatusChange,
   setShipmentToDelete,
   setIsDeleteShipmentModalOpen,
-}: any) => {
+}: ShipmentsStudioTabProps) => {
   return (
     <div className="space-y-6">
       {/* Shipments Studio Header Metrics */}
@@ -41,7 +66,7 @@ export const ShipmentsStudioTab = ({
           <div>
             <span className="text-[10px] font-bold text-slate-500 block uppercase">{isAr ? 'شحنات جارية' : 'In-Transit'}</span>
             <span className="text-xl font-black text-amber-400 font-mono mt-0.5 block">
-              {allShipments.filter((s: any) => (s.shipmentStatus || s.status) !== 'تم التسليم' && (s.shipmentStatus || s.status) !== 'ملغي').length}
+              {allShipments.filter((shipment) => (shipment.shipmentStatus || shipment.status) !== 'تم التسليم' && (shipment.shipmentStatus || shipment.status) !== 'ملغي').length}
             </span>
           </div>
           <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-amber-400">
@@ -53,7 +78,7 @@ export const ShipmentsStudioTab = ({
           <div>
             <span className="text-[10px] font-bold text-slate-500 block uppercase">{isAr ? 'شحنات سلمت' : 'Delivered'}</span>
             <span className="text-xl font-black text-emerald-400 font-mono mt-0.5 block">
-              {allShipments.filter((s: any) => (s.shipmentStatus || s.status) === 'تم التسليم').length}
+              {allShipments.filter((shipment) => (shipment.shipmentStatus || shipment.status) === 'تم التسليم').length}
             </span>
           </div>
           <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-emerald-400">
@@ -65,7 +90,7 @@ export const ShipmentsStudioTab = ({
           <div>
             <span className="text-[10px] font-bold text-slate-500 block uppercase">{isAr ? 'شحنات مستقلة (بدون طلب)' : 'Standalone Shipments'}</span>
             <span className="text-xl font-black text-cyan-400 font-mono mt-0.5 block">
-              {allShipments.filter((s: any) => !s.orderId && !s.order_id).length}
+              {allShipments.filter((shipment) => !shipment.orderId && !shipment.order_id).length}
             </span>
           </div>
           <div className="p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-2xl text-cyan-400">
@@ -95,7 +120,7 @@ export const ShipmentsStudioTab = ({
             className="bg-black/40 border border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-300 outline-none cursor-pointer"
           >
             <option value="all">{isAr ? 'جميع الحالات' : 'All Statuses'}</option>
-            {orderStatusesList.map((st: any) => (
+            {orderStatusesList.map((st) => (
               <option key={st.id} value={st.nameAr}>{isAr ? st.nameAr : st.nameEn}</option>
             ))}
           </select>
@@ -107,7 +132,7 @@ export const ShipmentsStudioTab = ({
             className="bg-black/40 border border-slate-800 rounded-xl px-3 py-2 text-xs font-bold text-slate-300 outline-none cursor-pointer"
           >
             <option value="all">{isAr ? 'جميع شركات الشحن' : 'All Carriers'}</option>
-            {shippingCompanies.map((sc: any) => (
+            {shippingCompanies.map((sc) => (
               <option key={sc.id} value={sc.name}>{sc.name}</option>
             ))}
           </select>
@@ -146,10 +171,10 @@ export const ShipmentsStudioTab = ({
                   </td>
                 </tr>
               ) : (
-                filteredShipmentsList.map((ship: any) => {
-                  const linkedOrd = orders.find((o: any) => o.id === (ship.orderId || ship.order_id) || o.orderNumber === (ship.orderId || ship.order_id));
+                filteredShipmentsList.map((ship) => {
+                  const linkedOrd = orders.find((order) => order.id === (ship.orderId || ship.order_id) || order.orderNumber === (ship.orderId || ship.order_id));
                   const carrierName = ship.shippingCompany || ship.shipping_company_id || 'Aramex';
-                  const courierRecord = couriers.find((c: any) => c.id === (ship.courierId || ship.courier_id));
+                  const courierRecord = couriers.find((courier) => courier.id === (ship.courierId || ship.courier_id));
                   const statusVal = ship.shipmentStatus || ship.status || 'في الانتظار';
 
                   return (
@@ -159,7 +184,7 @@ export const ShipmentsStudioTab = ({
                           <span>{ship.trackingNumber || ship.tracking_number || ship.id}</span>
                           {copyToClipboard && (
                             <button
-                              onClick={() => copyToClipboard(ship.trackingNumber || ship.tracking_number)}
+                              onClick={() => copyToClipboard(ship.trackingNumber || ship.tracking_number || '')}
                               className="text-slate-500 hover:text-[#d4af37] transition"
                             >
                               <ExternalLink className="w-3 h-3" />
@@ -222,7 +247,7 @@ export const ShipmentsStudioTab = ({
                               onChange={(e) => handleQuickShipmentStatusChange(ship.id, e.target.value)}
                               className="bg-slate-900 border border-slate-800 text-slate-300 rounded-lg text-[10px] font-bold p-1 outline-none cursor-pointer"
                             >
-                              {orderStatusesList.map((st: any) => (
+                              {orderStatusesList.map((st) => (
                                 <option key={st.id} value={st.nameAr}>{isAr ? st.nameAr : st.nameEn}</option>
                               ))}
                             </select>

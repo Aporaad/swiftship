@@ -2,41 +2,10 @@ import React from 'react';
 import { AlertCircle, Package, RefreshCw, RotateCcw, Search, ShieldCheck, ShoppingBag, X } from 'lucide-react';
 import { RETURN_CONDITION_LIST, RETURN_STATUS_LIST, RETURN_TYPE_LIST } from '../../../../../services/returnedProductService';
 import type { ReturnCondition, ReturnType as ReturnedType, ReturnedProduct, ReturnStatus } from '../../../../../services/returnedProductService';
+import type { ReturnOrder, ReturnOrderItem } from './types';
 import { FieldLabel } from './helpers';
 import { RETURN_INPUT_CLASS_NAME } from './constants';
 
-type ReturnOrder = {
-  id?: string;
-  orderNumber?: string;
-  order_number?: string;
-  customerName?: string;
-  customer_name?: string;
-  customer?: string;
-  customerPhone?: string;
-  customer_phone?: string;
-  phone?: string;
-  totalAmount?: number | string;
-  total_amount?: number | string;
-  currency?: string;
-  createdAt?: string | number | Date;
-};
-type ReturnOrderItem = {
-  id?: string;
-  items_id?: string;
-  product_cooler?: string;
-  product_name?: string;
-  productName?: string;
-  product_url?: string;
-  productUrl?: string;
-  product_id?: string;
-  productId?: string;
-  quantity?: number | string;
-  total_price?: number | string;
-  product_price?: number | string;
-  is_insured?: boolean;
-  insurance_fee?: number | string;
-  items_status?: string;
-};
 type ReturnFormData = {
   order_id?: string;
   customer_id?: string;

@@ -21,6 +21,15 @@ import {
   ReturnedProductsDeleteDialog,
 } from '../../features/orders/pages/subcomponents/returned-products';
 import type { ReturnedProductsTabProps } from '../../features/orders/pages/subcomponents/returned-products';
+import type { ReturnOrder, ReturnOrderItem } from '../../features/orders/pages/subcomponents/returned-products/types';
+
+function errorMessage(error: unknown): string | undefined {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') {
+    return error.message;
+  }
+  return undefined;
+}
 
 export default function ReturnedProductsTab({
   isAr,
@@ -58,8 +67,8 @@ export default function ReturnedProductsTab({
 
   // ────────── State: اختيار الطلب والمنتج في نموذج الإرجاع ──────────
   // Mandatory order and product selection state in return modal
-  const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
-  const [selectedOrderItem, setSelectedOrderItem] = useState<any | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<ReturnOrder | null>(null);
+  const [selectedOrderItem, setSelectedOrderItem] = useState<ReturnOrderItem | null>(null);
   const [orderSearchQuery, setOrderSearchQuery] = useState('');
 
   // قائمة الطلبات المفلترة داخل نافذة إضافة المرتجع
@@ -68,7 +77,7 @@ export default function ReturnedProductsTab({
       return allOrders.slice(0, 40);
     }
     const q = orderSearchQuery.toLowerCase().trim();
-    return allOrders.filter((o: any) => {
+    return allOrders.filter((o) => {
       const num = String(o.orderNumber || o.order_number || o.id || '').toLowerCase();
       const cust = String(o.customerName || o.customer_name || '').toLowerCase();
       const phone = String(o.customerPhone || o.customer_phone || o.phone || '').toLowerCase();
@@ -83,16 +92,16 @@ export default function ReturnedProductsTab({
     const ordNum = selectedOrder.orderNumber || selectedOrder.order_number;
 
     const directItems = Array.isArray(selectedOrder.items) ? selectedOrder.items : [];
-    const matchedItems = allOrderItems.filter((it: any) => {
+    const matchedItems = allOrderItems.filter((it) => {
       return (ordId && it.order_id === ordId) || (ordNum && it.order_id === ordNum);
     });
 
-    const map = new Map<string, any>();
-    directItems.forEach((it: any, idx: number) => {
+    const map = new Map<string, ReturnOrderItem>();
+    directItems.forEach((it, idx) => {
       const key = it.items_id || it.id || `direct_${idx}`;
       map.set(key, it);
     });
-    matchedItems.forEach((it: any) => {
+    matchedItems.forEach((it) => {
       const key = it.items_id || it.id;
       if (key) map.set(key, it);
     });
@@ -101,7 +110,7 @@ export default function ReturnedProductsTab({
   }, [selectedOrder, allOrderItems]);
 
   // اختيار طلب من القائمة
-  const handleSelectOrder = (order: any) => {
+  const handleSelectOrder = (order: ReturnOrder) => {
     setSelectedOrder(order);
     setSelectedOrderItem(null);
     const ordNo = order.orderNumber || order.order_number || order.id || '';
@@ -128,7 +137,7 @@ export default function ReturnedProductsTab({
   };
 
   // اختيار منتج من منتجات الطلب
-  const handleSelectOrderItem = (item: any) => {
+  const handleSelectOrderItem = (item: ReturnOrderItem) => {
     setSelectedOrderItem(item);
     const pName = item.product_cooler || item.product_name || item.productName || 'منتج';
     const pUrl = item.product_url || item.productUrl || '';
@@ -235,13 +244,13 @@ export default function ReturnedProductsTab({
     setEditingReturn(ret);
     // البحث عن الطلب المرتبط
     const matched = allOrders.find(
-      (o: any) => o.id === ret.order_id || o.orderNumber === ret.order_id || o.order_number === ret.order_id
+      (o) => o.id === ret.order_id || o.orderNumber === ret.order_id || o.order_number === ret.order_id
     );
     setSelectedOrder(matched || null);
 
     // البحث عن بند الطلب المرتبط
     const matchedItem = allOrderItems.find(
-      (it: any) => ret.order_item_id && (it.items_id === ret.order_item_id || it.id === ret.order_item_id)
+      (it) => ret.order_item_id && (it.items_id === ret.order_item_id || it.id === ret.order_item_id)
     );
     setSelectedOrderItem(matchedItem || null);
     setOrderSearchQuery('');
@@ -360,8 +369,8 @@ export default function ReturnedProductsTab({
         toast.success(isAr ? 'تم إضافة المرتجع بنجاح وتحديث السجلات' : 'Return added successfully');
       }
       setIsFormOpen(false);
-    } catch (err: any) {
-      toast.error(err?.message || (isAr ? 'تعذر حفظ المرتجع' : 'Could not save return'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isAr ? 'تعذر حفظ المرتجع' : 'Could not save return'));
     } finally {
       setSubmitting(false);
     }
@@ -384,8 +393,8 @@ export default function ReturnedProductsTab({
 
       toast.success(isAr ? 'تم تحديث الحالة' : 'Status updated');
       setQuickStatusItem(null);
-    } catch (err: any) {
-      toast.error(err?.message || (isAr ? 'تعذر تحديث الحالة' : 'Update failed'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isAr ? 'تعذر تحديث الحالة' : 'Update failed'));
     }
   };
 
@@ -397,8 +406,8 @@ export default function ReturnedProductsTab({
       toast.success(isAr ? 'تم حذف المرتجع' : 'Return deleted');
       setDeletingReturn(null);
       setIsDeleteConfirmOpen(false);
-    } catch (err: any) {
-      toast.error(err?.message || (isAr ? 'تعذر الحذف' : 'Delete failed'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isAr ? 'تعذر الحذف' : 'Delete failed'));
     }
   };
 

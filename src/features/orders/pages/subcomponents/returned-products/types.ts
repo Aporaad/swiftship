@@ -8,7 +8,14 @@ export interface ReturnedOrderRecord {
   order_number?: string;
   customerName?: string;
   customer_name?: string;
+  customer?: string;
+  customerId?: string;
+  customer_id?: string;
+  customerPhone?: string;
+  customer_phone?: string;
+  phone?: string;
   currency?: string;
+  items?: ReturnedOrderItemRecord[] | null;
 }
 
 export interface ReturnedCustomerRecord {
@@ -35,12 +42,28 @@ export interface ReturnedOrderItemRecord {
   order_id?: string | null;
   product_id?: string | null;
   product_price?: number | null;
+  total_price?: number | string | null;
+  productName?: string | null;
+  product_name?: string | null;
   product_url?: string | null;
-  tracking_number?: string | null;
+  productUrl?: string | null;
+  productId?: string | null;
   product_cooler?: string | null;
-  quantity?: number | null;
+  is_insured?: boolean | null;
+  insurance_fee?: number | string | null;
+  tracking_number?: string | null;
+  quantity?: number | string | null;
   items_status?: string | null;
 }
+
+export interface ReturnOrder extends Partial<ReturnedOrderRecord> {
+  customer?: string;
+  totalAmount?: number | string;
+  total_amount?: number | string;
+  createdAt?: string | number | Date;
+}
+
+export type ReturnOrderItem = ReturnedOrderItemRecord;
 
 export interface ReturnedProductsTabProps {
   isAr: boolean;

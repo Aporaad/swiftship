@@ -40,8 +40,59 @@ const REDUNDANT_LEGACY_ACTIVITY_EVENTS = new Set([
   'activity.delete_order',
 ]);
 
-function readEvent(doc: any): OrderHistoryEvent {
-  return { ...doc.data(), id: doc.id } as OrderHistoryEvent;
+type OrderHistoryDocument = { id: string; data: () => unknown };
+type OrderHistorySnapshot = { docs?: OrderHistoryDocument[] };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function readText(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+function readRecord(value: unknown): Record<string, unknown> | undefined {
+  return isRecord(value) ? value : undefined;
+}
+
+type TimestampLike = { toDate: () => Date };
+
+function isTimestampLike(value: unknown): value is TimestampLike {
+  return isRecord(value) && typeof value.toDate === 'function';
+}
+
+function readTime(value: unknown): string | number | undefined {
+  if (typeof value === 'string' || typeof value === 'number') return value;
+  if (value instanceof Date) return value.toISOString();
+  return isTimestampLike(value) ? value.toDate().toISOString() : undefined;
+}
+
+function readEvent(doc: OrderHistoryDocument): OrderHistoryEvent {
+  const data = doc.data();
+  const event = isRecord(data) ? data : {};
+  return {
+    id: doc.id,
+    orderId: readText(event.orderId ?? event.order_id),
+    orderNumber: readText(event.orderNumber ?? event.order_number),
+    shipmentId: readText(event.shipmentId ?? event.shipment_id),
+    journalEntryId: readText(event.journalEntryId ?? event.journal_entry_id),
+    accountTransactionId: readText(event.accountTransactionId ?? event.account_transaction_id),
+    activityLogId: readText(event.activityLogId ?? event.activity_log_id),
+    eventType: readText(event.eventType ?? event.event_type) ?? 'legacy.unknown',
+    eventCategory: readText(event.eventCategory ?? event.event_category) ?? 'legacy',
+    operation: readText(event.operation) ?? 'unknown',
+    entityType: readText(event.entityType ?? event.entity_type) ?? 'unknown',
+    actorId: readText(event.actorId ?? event.actor_id),
+    actorName: readText(event.actorName ?? event.actor_name),
+    actorRole: readText(event.actorRole ?? event.actor_role),
+    source: readText(event.source),
+    summary: readText(event.summary),
+    beforeData: readRecord(event.beforeData ?? event.before_data),
+    afterData: readRecord(event.afterData ?? event.after_data),
+    metadata: readRecord(event.metadata),
+    occurredAt: readTime(event.occurredAt ?? event.occurred_at),
+    createdAt: readTime(event.createdAt ?? event.created_at),
+  };
 }
 
 function eventTime(event: OrderHistoryEvent): number {
@@ -60,7 +111,7 @@ function deduplicate(events: OrderHistoryEvent[]): OrderHistoryEvent[] {
 class OrderHistoryService {
   async listForContext(context: OrderHistoryContext): Promise<OrderHistoryEvent[]> {
     const history = collection(db, 'orders_history');
-    const reads: Promise<any>[] = [];
+    const reads: Promise<OrderHistorySnapshot>[] = [];
 
     if (context.orderId) {
       reads.push(getDocs(query(history, where('orderId', '==', context.orderId), orderBy('occurredAt', 'desc'), limit(250))));

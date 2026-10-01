@@ -125,12 +125,15 @@ export function createCollectOrderPaymentHandler<T extends LegacyOrderRecord>(
         employees,
         couriers
       );
+      const rawPartyAccountId = orderParty?.raw.financialAccountId ?? orderParty?.raw.accountId;
+      const rawPartyAccountIdText = typeof rawPartyAccountId === 'string' || typeof rawPartyAccountId === 'number'
+        ? String(rawPartyAccountId)
+        : '';
       const partyAccountId =
         selectedOrder.orderPartyAccountId ||
         selectedOrder.order_party_account_id ||
         orderParty?.accountId ||
-        orderParty?.raw?.financialAccountId ||
-        orderParty?.raw?.accountId;
+        rawPartyAccountIdText;
       const partyAccount = financialAccounts.find(
         (account: FinancialAccountRecord) => account.id === partyAccountId
       );

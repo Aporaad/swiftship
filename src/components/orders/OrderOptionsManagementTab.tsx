@@ -109,8 +109,8 @@ export default function OrderOptionsManagementTab({
           type: formData.type,
           nameAr: formData.nameAr.trim(),
           nameEn: formData.nameEn.trim() || formData.nameAr.trim(),
-          price: parseFloat(formData.price as any) || 0,
-          duration: formData.type === 'shipping_category' ? (parseInt(formData.duration as any, 10) || 0) : undefined,
+          price: Number.isFinite(formData.price) ? formData.price : 0,
+          duration: formData.type === 'shipping_category' ? (Number.isFinite(formData.duration) ? formData.duration : 0) : undefined,
           details: formData.details.trim(),
           isActive: formData.isActive,
           code: formData.code.trim().toUpperCase()
@@ -121,8 +121,8 @@ export default function OrderOptionsManagementTab({
           type: formData.type,
           nameAr: formData.nameAr.trim(),
           nameEn: formData.nameEn.trim() || formData.nameAr.trim(),
-          price: parseFloat(formData.price as any) || 0,
-          duration: formData.type === 'shipping_category' ? (parseInt(formData.duration as any, 10) || 0) : undefined,
+          price: Number.isFinite(formData.price) ? formData.price : 0,
+          duration: formData.type === 'shipping_category' ? (Number.isFinite(formData.duration) ? formData.duration : 0) : undefined,
           details: formData.details.trim(),
           isActive: formData.isActive,
           code: formData.code.trim().toUpperCase() || (formData.type === 'packaging' ? 'PKG_' + Date.now().toString().slice(-4) : 'SHP_' + Date.now().toString().slice(-4))
@@ -130,9 +130,10 @@ export default function OrderOptionsManagementTab({
         toast.success(isAr ? 'تم إنشاء الخيار الجديد بنجاح' : 'New option created successfully');
       }
       setIsModalOpen(false);
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      toast.error(err.message || (isAr ? 'حدث خطأ أثناء الحفظ' : 'Failed to save option'));
+      const message = err instanceof Error ? err.message : '';
+      toast.error(message || (isAr ? 'حدث خطأ أثناء الحفظ' : 'Failed to save option'));
     } finally {
       setIsSubmitting(false);
     }
@@ -147,7 +148,7 @@ export default function OrderOptionsManagementTab({
       toast.success(isAr ? 'تم حذف الخيار بنجاح' : 'Option deleted successfully');
       setIsDeleteModalOpen(false);
       setOptionToDelete(null);
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
       toast.error(isAr ? 'فشل حذف الخيار' : 'Failed to delete option');
     } finally {
@@ -164,7 +165,7 @@ export default function OrderOptionsManagementTab({
           ? (isAr ? `تم تعطيل خيار (${opt.nameAr})` : `Disabled option (${opt.nameEn})`)
           : (isAr ? `تم تفعيل خيار (${opt.nameAr})` : `Activated option (${opt.nameEn})`)
       );
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
       toast.error(isAr ? 'تعذر تغيير حالة الخيار' : 'Could not change status');
     }

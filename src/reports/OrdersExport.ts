@@ -1,13 +1,28 @@
 // دوال تصدير قائمة الطلبات — مفصولة من Orders.tsx
 import { printContent } from '../lib/printUtils';
 import { activityLogService } from '../services/activityLogService';
+import type { OrderRecord } from '../features/orders/types';
+
+function orderDate(value: OrderRecord['createdAt']): Date {
+  if (value instanceof Date) return value;
+  if (value && typeof value === 'object' && typeof value.toDate === 'function') {
+    return value.toDate();
+  }
+  if (typeof value === 'string' || typeof value === 'number') return new Date(value);
+  return new Date();
+}
+
+function orderAmount(value: unknown): number {
+  const parsed = typeof value === 'number' ? value : Number.parseFloat(String(value ?? 0));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
 
 /**
  * exportOrdersToPDF
  * طباعة كشف الشحنات والطلبيات
  */
 export function exportOrdersToPDF(
-  filteredOrdersList: any[],
+  filteredOrdersList: OrderRecord[],
   isAr: boolean
 ): void {
   const reportTitle = isAr ? 'كشف حركة الشحنات والطلبيات' : 'Logistics Orders Ledger';
@@ -23,7 +38,7 @@ export function exportOrdersToPDF(
  * تصدير قائمة الطلبات إلى ملف CSV
  */
 export function exportOrdersToCSV(
-  filteredOrdersList: any[],
+  filteredOrdersList: OrderRecord[],
   isAr: boolean
 ): void {
   const headers = [
@@ -43,14 +58,14 @@ export function exportOrdersToCSV(
   filteredOrdersList.forEach(o => {
     const row = [
       `"${o.orderNumber || ''}"`,
-      `"${new Date(o.createdAt || Date.now()).toLocaleDateString()}"`,
+      `"${orderDate(o.createdAt).toLocaleDateString()}"`,
       `"${(o.customerName || '').replace(/"/g, '""')}"`,
       `"${o.customerPhone || ''}"`,
       `"${o.orderStatus || ''}"`,
       `"${o.orderSourceName || o.orderSourceType || ''}"`,
-      (parseFloat(o.amountPaid || 0) + parseFloat(o.amountRemaining || 0)),
-      o.amountPaid || 0,
-      o.amountRemaining || 0
+      (orderAmount(o.amountPaid) + orderAmount(o.amountRemaining)),
+      orderAmount(o.amountPaid),
+      orderAmount(o.amountRemaining)
     ];
     csvLines.push(row.join(','));
   });

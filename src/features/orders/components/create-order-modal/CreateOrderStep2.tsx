@@ -7,7 +7,7 @@ type NumericValue = number | string | null | undefined;
 type SelectOption = { id: string; nameAr?: string | null; nameEn?: string | null; price?: number | string | null };
 const toNumber = (value: NumericValue): number => typeof value === 'number' ? value : Number.parseFloat(value ?? '') || 0;
 
-type OrderSettings = { defaultProductInsuranceFee: number; defaultProductInsuranceType: string };
+type OrderSettings = { defaultProductInsuranceFee?: number; defaultProductInsuranceType?: string };
 type CreateOrderStep2Props = {
   isAr: boolean;
   items: ItemRow[];

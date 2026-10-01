@@ -10,8 +10,8 @@ export type StatusTransitionPlan = {
 
 function statusIdFromEvent(event: OrderHistoryEvent): number | null {
   if (event.eventType !== 'order.status_changed' && event.eventType !== 'order.created') return null;
-  const after = event.afterData || {};
-  const raw = (after as any).order_status_id ?? (after as any).orderStatusId ?? (after as any).orderStatus;
+  const after = event.afterData ?? {};
+  const raw = after.order_status_id ?? after.orderStatusId ?? after.orderStatus;
   const id = Number(raw);
   return Number.isInteger(id) && id > 0 ? id : null;
 }

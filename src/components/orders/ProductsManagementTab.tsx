@@ -19,6 +19,7 @@ import { useExchangeRates } from '../../hooks/useExchangeRates';
 import { useRole } from '../../hooks/useRole';
 import { createReturnedProductFromOrderItem } from '../../services/returnedProductService';
 import ReturnedProductsTab from './ReturnedProductsTab';
+import type { ReturnedCustomerRecord, ReturnedOrderItemRecord, ReturnedOrderRecord } from '../../features/orders/pages/subcomponents/returned-products/types';
 
 // ────────────────────── Types ──────────────────────
 
@@ -68,6 +69,15 @@ type OrderItem = {
   created_by?: string;
 };
 
+interface CollectionDocument {
+  id: string;
+  data: () => unknown;
+}
+
+interface CollectionSnapshot {
+  docs: CollectionDocument[];
+}
+
 /** أنماط نموذج المنتج الرئيسي - Form for master product */
 type ProductForm = {
   product_name_ar: string;
@@ -94,6 +104,146 @@ const ITEM_STATUS_LIST = [
   'قيد الطلب', 'محجوز بالميناء', 'تم مصادرته', 'وصل المخزن', 'تم التسليم', 'مرتجع'
 ];
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function readText(record: Record<string, unknown>, ...keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === 'string' && value.trim()) return value;
+    if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  }
+  return undefined;
+}
+
+function readNumber(record: Record<string, unknown>, key: string): number | undefined {
+  const value = record[key];
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
+function toMasterProduct(document: CollectionDocument): MasterProduct {
+  const record = asRecord(document.data());
+  const productNameAr = readText(record, 'product_name_ar', 'productName', 'name');
+  const unitPrice = readNumber(record, 'unit_price') ?? readNumber(record, 'productPrice');
+  return {
+    product_id: readText(record, 'product_id') || document.id,
+    product_name_ar: productNameAr,
+    product_name_en: readText(record, 'product_name_en'),
+    product_url: readText(record, 'product_url'),
+    unit_price: unitPrice,
+    item_category_id: readText(record, 'item_category_id'),
+    is_allowed: record.is_allowed !== false,
+    cbm: readNumber(record, 'cbm'),
+    width: readNumber(record, 'width'),
+    height: readNumber(record, 'height'),
+    length: readNumber(record, 'length'),
+    weight: readNumber(record, 'weight'),
+    created_at: readText(record, 'created_at'),
+    created_by: readText(record, 'created_by'),
+    productName: productNameAr,
+    name: readText(record, 'name'),
+    productPrice: unitPrice,
+  };
+}
+
+function toOrderItem(document: CollectionDocument): OrderItem {
+  const record = asRecord(document.data());
+  return {
+    items_id: readText(record, 'items_id') || document.id,
+    order_id: readText(record, 'order_id'),
+    product_id: readText(record, 'product_id'),
+    product_price: readNumber(record, 'product_price'),
+    product_url: readText(record, 'product_url'),
+    tracking_number: readText(record, 'tracking_number'),
+    produc_source_id: readText(record, 'produc_source_id'),
+    product_cooler: readText(record, 'product_cooler'),
+    nota: readText(record, 'nota'),
+    quantity: readNumber(record, 'quantity'),
+    total_price: readNumber(record, 'total_price'),
+    total__weight: readNumber(record, 'total__weight'),
+    total_cbm: readNumber(record, 'total_cbm'),
+    packaging_option_id: readText(record, 'packaging_option_id'),
+    packaging_option_price: readNumber(record, 'packaging_option_price'),
+    is_insured: record.is_insured === true,
+    insurance_fee: readNumber(record, 'insurance_fee'),
+    items_status: readText(record, 'items_status'),
+    created_at: readText(record, 'created_at'),
+    created_by: readText(record, 'created_by'),
+  };
+}
+
+function toReturnedOrder(document: CollectionDocument): ReturnedOrderRecord {
+  const record = asRecord(document.data());
+  return {
+    id: document.id,
+    orderNumber: readText(record, 'orderNumber', 'order_number'),
+    order_number: readText(record, 'order_number', 'orderNumber'),
+    customerName: readText(record, 'customerName', 'customer_name', 'customer'),
+    customer_name: readText(record, 'customer_name', 'customerName', 'customer'),
+    customer: readText(record, 'customer'),
+    customerId: readText(record, 'customerId', 'customer_id'),
+    customer_id: readText(record, 'customer_id', 'customerId'),
+    customerPhone: readText(record, 'customerPhone', 'customer_phone', 'phone'),
+    customer_phone: readText(record, 'customer_phone', 'customerPhone', 'phone'),
+    phone: readText(record, 'phone'),
+    currency: readText(record, 'currency'),
+    items: Array.isArray(record.items)
+      ? record.items.map((item, index) => toReturnedOrderItem(item, `direct_${index}`))
+      : undefined,
+  };
+}
+
+function toReturnedOrderItem(value: unknown, fallbackId: string): ReturnedOrderItemRecord {
+  const record = asRecord(value);
+  const itemId = readText(record, 'items_id', 'id') || fallbackId;
+  return {
+    items_id: itemId,
+    id: readText(record, 'id') || itemId,
+    order_id: readText(record, 'order_id'),
+    product_id: readText(record, 'product_id', 'productId'),
+    productId: readText(record, 'productId', 'product_id'),
+    product_price: readNumber(record, 'product_price'),
+    total_price: readText(record, 'total_price') ?? readNumber(record, 'total_price'),
+    product_cooler: readText(record, 'product_cooler'),
+    product_name: readText(record, 'product_name', 'productName'),
+    productName: readText(record, 'productName', 'product_name'),
+    product_url: readText(record, 'product_url', 'productUrl'),
+    productUrl: readText(record, 'productUrl', 'product_url'),
+    quantity: readText(record, 'quantity') ?? readNumber(record, 'quantity'),
+    is_insured: record.is_insured === true,
+    insurance_fee: readText(record, 'insurance_fee') ?? readNumber(record, 'insurance_fee'),
+    tracking_number: readText(record, 'tracking_number'),
+    items_status: readText(record, 'items_status'),
+  };
+}
+
+function toReturnedCustomer(document: CollectionDocument): ReturnedCustomerRecord {
+  const record = asRecord(document.data());
+  return {
+    id: document.id,
+    fullName: readText(record, 'fullName', 'full_name', 'name'),
+    full_name: readText(record, 'full_name', 'fullName', 'name'),
+    customer_id: readText(record, 'customer_id', 'id') || document.id,
+    name: readText(record, 'name', 'fullName', 'full_name'),
+  };
+}
+
+function errorMessage(error: unknown): string | undefined {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') {
+    return error.message;
+  }
+  return undefined;
+}
+
 // ────────────────────── Helpers ──────────────────────
 
 const inp = 'w-full bg-black/35 border border-slate-800 rounded-xl py-2.5 px-3 text-xs font-bold text-white outline-none focus:border-[#d4af37]/60';
@@ -117,8 +267,8 @@ export default function ProductsManagementTab({
   isAr: boolean;
   canManage: boolean;
   orderCurrency?: string;
-  orders?: any[];
-  customers?: any[];
+  orders?: ReturnedOrderRecord[];
+  customers?: ReturnedCustomerRecord[];
 }) {
   const { legacyAuth: auth } = useAuthSession();
   const { role, hasPermission } = useRole();
@@ -130,13 +280,13 @@ export default function ProductsManagementTab({
   const [activeSubTab, setActiveSubTab] = useState<'master' | 'movements' | 'returns'>('master');
 
   // ──────────── قائمة الطلبات والعملاء - Orders & Customers ────────────
-  const [localOrders, setLocalOrders] = useState<any[]>([]);
-  const [localCustomers, setLocalCustomers] = useState<any[]>([]);
+  const [localOrders, setLocalOrders] = useState<ReturnedOrderRecord[]>([]);
+  const [localCustomers, setLocalCustomers] = useState<ReturnedCustomerRecord[]>([]);
 
   useEffect(() => {
     if (!propOrders || propOrders.length === 0) {
-      const unsub = onSnapshot(collection(db, 'orders'), (snap: any) => {
-        setLocalOrders(snap.docs.map((d: any) => ({ id: d.id, ...d.data() })));
+      const unsub = onSnapshot(collection(db, 'orders'), (snap: CollectionSnapshot) => {
+        setLocalOrders(snap.docs.map(toReturnedOrder));
       });
       return () => unsub?.();
     }
@@ -144,8 +294,8 @@ export default function ProductsManagementTab({
 
   useEffect(() => {
     if (!propCustomers || propCustomers.length === 0) {
-      const unsub = onSnapshot(collection(db, 'customers'), (snap: any) => {
-        setLocalCustomers(snap.docs.map((d: any) => ({ id: d.id, ...d.data() })));
+      const unsub = onSnapshot(collection(db, 'customers'), (snap: CollectionSnapshot) => {
+        setLocalCustomers(snap.docs.map(toReturnedCustomer));
       });
       return () => unsub?.();
     }
@@ -186,8 +336,8 @@ export default function ProductsManagementTab({
   // ──────────── جلب المنتجات الرئيسية ────────────
   // Fetch master products from 'products' table
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'products'), (snap: any) => {
-      setProducts(snap.docs.map((d: any) => ({ product_id: d.id, ...d.data() })));
+    const unsub = onSnapshot(collection(db, 'products'), (snap: CollectionSnapshot) => {
+      setProducts(snap.docs.map(toMasterProduct));
       setLoadingProducts(false);
     }, () => setLoadingProducts(false));
     return () => unsub?.();
@@ -196,15 +346,15 @@ export default function ProductsManagementTab({
   // ──────────── جلب بنود الطلبات ────────────
   // Fetch order items from 'order_items' table
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'order_items'), (snap: any) => {
-      const items = snap.docs.map((d: any) => ({ items_id: d.id, ...d.data() }));
+    const unsub = onSnapshot(collection(db, 'order_items'), (snap: CollectionSnapshot) => {
+      const items = snap.docs.map(toOrderItem);
       setOrderItems(items);
       setLoadingItems(false);
 
       // احتساب عدد الطلبات لكل منتج رئيسي
       // Count order_items per master product
       const counts: Record<string, number> = {};
-      items.forEach((it: OrderItem) => {
+      items.forEach((it) => {
         if (it.product_id) {
           counts[it.product_id] = (counts[it.product_id] || 0) + 1;
         }
@@ -304,8 +454,8 @@ export default function ProductsManagementTab({
       }
       toast.success(isAr ? 'تم حفظ المنتج' : 'Product saved');
       setIsProductModalOpen(false);
-    } catch (err: any) {
-      toast.error(err?.message || (isAr ? 'تعذر حفظ المنتج' : 'Could not save product'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isAr ? 'تعذر حفظ المنتج' : 'Could not save product'));
     } finally {
       setSubmittingProduct(false);
     }
@@ -316,8 +466,8 @@ export default function ProductsManagementTab({
       await deleteDoc(doc(db, 'products', p.product_id));
       toast.success(isAr ? 'تم حذف المنتج' : 'Product deleted');
       setDeletingProduct(null);
-    } catch (err: any) {
-      toast.error(err?.message || (isAr ? 'تعذر حذف المنتج' : 'Could not delete product'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isAr ? 'تعذر حذف المنتج' : 'Could not delete product'));
     }
   };
 
@@ -326,7 +476,7 @@ export default function ProductsManagementTab({
   const returnItem = async (item: OrderItem) => {
     try {
       // 1. البحث عن الطلب المرتبط بالبند
-      const matchedOrder = ordersList.find((o: any) =>
+      const matchedOrder = ordersList.find((o) =>
         o.id === item.order_id ||
         o.orderNumber === item.order_id ||
         o.order_number === item.order_id
@@ -357,9 +507,9 @@ export default function ProductsManagementTab({
           : 'Product returned and automatically added to returns records'
       );
       setReturningItem(null);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to return item:', err);
-      toast.error(err?.message || (isAr ? 'تعذر إرجاع المنتج' : 'Return failed'));
+      toast.error(errorMessage(err) || (isAr ? 'تعذر إرجاع المنتج' : 'Return failed'));
     }
   };
 
@@ -372,8 +522,8 @@ export default function ProductsManagementTab({
       });
       toast.success(isAr ? 'تم تحديث الحالة' : 'Status updated');
       setEditingItem(null);
-    } catch (err: any) {
-      toast.error(err?.message || (isAr ? 'تعذر تحديث الحالة' : 'Update failed'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isAr ? 'تعذر تحديث الحالة' : 'Update failed'));
     }
   };
 
@@ -383,8 +533,8 @@ export default function ProductsManagementTab({
       await deleteDoc(doc(db, 'order_items', item.items_id));
       toast.success(isAr ? 'تم حذف بند الطلب' : 'Order item deleted');
       setDeletingItem(null);
-    } catch (err: any) {
-      toast.error(err?.message || (isAr ? 'تعذر الحذف' : 'Delete failed'));
+    } catch (err) {
+      toast.error(errorMessage(err) || (isAr ? 'تعذر الحذف' : 'Delete failed'));
     }
   };
 
@@ -500,7 +650,7 @@ export default function ProductsManagementTab({
               {/* فلتر مسموح/محظور */}
               <select
                 value={productAllowedFilter}
-                onChange={e => setProductAllowedFilter(e.target.value as any)}
+                onChange={e => setProductAllowedFilter(e.target.value as 'all' | 'allowed' | 'blocked')}
                 className={inp + ' max-w-[140px]'}
               >
                 <option value="all">{isAr ? 'الكل' : 'All'}</option>

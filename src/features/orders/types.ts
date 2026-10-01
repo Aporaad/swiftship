@@ -90,6 +90,7 @@ export interface UpdateFormData {
 export interface ItemRow {
   productName: string;
   productNameEn?: string;
+  sku?: string;
   productUrl: string;
   name?: string;
   price?: number;
@@ -107,10 +108,12 @@ export interface ItemRow {
   product_id?: string;
   productId?: string;
   packagingOptionId?: string;
+  packagingOptionName?: string;
   packagingOptionPrice?: number;
   isInsured?: boolean;
   insuranceFee?: number;
   itemCategoryId?: string;
+  itemCategoryName?: string;
   item_category_id?: string;
 }
 

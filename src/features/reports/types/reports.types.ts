@@ -8,6 +8,7 @@ import {
   TrendingUp, FileText, Package, ShoppingCart, Truck,
   Users, UserCheck, Layers
 } from 'lucide-react';
+import type { ReportAccount } from '../report-row-types';
 
 // ─── Filter Interface ───────────────────────────────────────────────────────
 export interface ReportFilter {
@@ -99,7 +100,7 @@ export interface MultiAccountSelectorProps {
   setSelectedIds: React.Dispatch<React.SetStateAction<string[]>>;
   labelAr: string;
   labelEn: string;
-  accounts: any[];
+  accounts: ReportAccount[];
   isAr: boolean;
   onSave?: () => void;
 }

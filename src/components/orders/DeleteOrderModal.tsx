@@ -1,9 +1,10 @@
 import React from 'react';
 import { X } from 'lucide-react';
+import type { OrderRecord } from '../../features/orders/types';
 
 interface DeleteOrderModalProps {
   isOpen: boolean;
-  orderToDelete: any;
+  orderToDelete: OrderRecord | null;
   orderCount?: number;
   isDeleting?: boolean;
   deletePin: string;

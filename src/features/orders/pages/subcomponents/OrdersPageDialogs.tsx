@@ -1,5 +1,5 @@
 import React from 'react';
-import CreateOrderModal from '../../../../components/orders/CreateOrderModal';
+import CreateOrderModal, { type CreateOrderModalProps } from '../../../../components/orders/CreateOrderModal';
 import EditOrderModal from '../../../../components/orders/EditOrderModal';
 import { CustomerCreateModal, ShippingCompanyCreateModal, SourceCreateModal } from '../../../../components/entities/EntityCreateModals';
 import UpdateStatusModal from '../../../../components/orders/UpdateStatusModal';
@@ -10,13 +10,17 @@ import DeleteOrderModal from '../../../../components/orders/DeleteOrderModal';
 import ShipmentFormModal from '../../../../components/shipments/ShipmentFormModal';
 import ConfirmModal from '../../../../components/ConfirmModal';
 import type { ItemCategory } from '../../../../services/itemCategoryService';
-import type { ItemRow, OrderFormData, PaymentFormData, ShippingRow, ShipmentFormData } from '../../types';
+import type { ItemRow, OrderFormData, PaymentFormData, ShippingRow, ShipmentFormData, UpdateFormData } from '../../types';
 import type { OrderDataState } from '../../hooks/useOrderData';
 import type { OrderHistoryContext } from '../../../../services/orderHistoryService';
+import type { OrderStatusItem } from '../../../../hooks/useOrderStatuses';
+import type { Currency } from '../../../../services/currencyService';
 
 export interface OrdersPageDialogsProps {
   [key: string]: unknown;
 }
+
+type CreateDialogProps = CreateOrderModalProps;
 
 type DialogValues = Record<string, unknown> & {
   [key: string]: unknown;
@@ -26,17 +30,17 @@ type DialogValues = Record<string, unknown> & {
   isAddCustomerOpen: boolean; setIsAddCustomerOpen: React.Dispatch<React.SetStateAction<boolean>>;
   isAddSourceOpen: boolean; setIsAddSourceOpen: React.Dispatch<React.SetStateAction<boolean>>;
   isAddShippingCompanyOpen: boolean; setIsAddShippingCompanyOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  isAr: boolean; settings: React.ComponentProps<typeof CreateOrderModal>['settings']; employees: unknown[]; customers: unknown[]; sources: unknown[];
-  customerFormData: Record<string, string>; setCustomerFormData: React.Dispatch<React.SetStateAction<Record<string, string>>>;
-  selectOrderParty: (...args: unknown[]) => unknown; setFormData: React.Dispatch<React.SetStateAction<OrderFormData>>;
+  isAr: boolean; settings: CreateDialogProps['settings']; employees: OrderDataState['employees']; customers: OrderDataState['customers']; sources: CreateDialogProps['sources'];
+  customerFormData: CreateDialogProps['setCustomerFormData'] extends React.Dispatch<React.SetStateAction<infer T>> ? T : never; setCustomerFormData: CreateDialogProps['setCustomerFormData'];
+  selectOrderParty: CreateDialogProps['selectOrderParty']; setFormData: React.Dispatch<React.SetStateAction<OrderFormData>>;
   activeAddShippingIndex: number | string | null; updateUpdateShippingRow: (...args: unknown[]) => unknown; updateShippingRow: (...args: unknown[]) => unknown;
   setActiveAddShippingIndex: React.Dispatch<React.SetStateAction<number | string | null>>; shippingCompanyFormData: Record<string, string>;
   isUpdateModalOpen: boolean; setIsUpdateModalOpen: React.Dispatch<React.SetStateAction<boolean>>; selectedOrder: OrderDataState['orders'][number] | null;
-  updateFormData: Record<string, string>; setUpdateFormData: React.Dispatch<React.SetStateAction<Record<string, string>>>; updateShippings: ShippingRow[];
-  setUpdateShippings: React.Dispatch<React.SetStateAction<ShippingRow[]>>; orderStatusesList: unknown[]; couriers: unknown[]; canManageOrders: boolean; isSubmitting: boolean;
-  handleUpdateStatus: (...args: unknown[]) => unknown; shippingCompanies: unknown[]; role: string | null; hasPermission: (permission: string) => boolean;
+  updateFormData: UpdateFormData; setUpdateFormData: React.Dispatch<React.SetStateAction<UpdateFormData>>; updateShippings: ShippingRow[];
+  setUpdateShippings: React.Dispatch<React.SetStateAction<ShippingRow[]>>; orderStatusesList: OrderStatusItem[]; couriers: OrderDataState['couriers']; canManageOrders: boolean; isSubmitting: boolean;
+  handleUpdateStatus: (...args: unknown[]) => unknown; shippingCompanies: OrderDataState['shippingCompanies']; role: string | null; hasPermission: (permission: string) => boolean;
   isPaymentModalOpen: boolean; setIsPaymentModalOpen: React.Dispatch<React.SetStateAction<boolean>>; paymentFormData: React.ComponentProps<typeof PaymentModal>['paymentFormData'];
-  setPaymentFormData: React.ComponentProps<typeof PaymentModal>['setPaymentFormData']; financialAccounts: NonNullable<React.ComponentProps<typeof PaymentModal>['financialAccounts']>; activeCurrencies: NonNullable<React.ComponentProps<typeof PaymentModal>['activeCurrencies']>; dbRates: NonNullable<React.ComponentProps<typeof PaymentModal>['dbRates']>;
+  setPaymentFormData: React.ComponentProps<typeof PaymentModal>['setPaymentFormData']; financialAccounts: OrderDataState['financialAccounts']; activeCurrencies: Currency[]; dbRates: NonNullable<React.ComponentProps<typeof PaymentModal>['dbRates']>;
   handleCollectPayment: (...args: unknown[]) => unknown; setSelectedOrder: React.Dispatch<React.SetStateAction<OrderDataState['orders'][number] | null>>;
   isDetailsModalOpen: boolean; setIsDetailsModalOpen: React.Dispatch<React.SetStateAction<boolean>>; orderHistoryContext: OrderHistoryContext | null; isOrderHistoryOpen: boolean;
   setIsOrderHistoryOpen: React.Dispatch<React.SetStateAction<boolean>>; setOrderHistoryContext: React.Dispatch<React.SetStateAction<OrderHistoryContext | null>>;
@@ -44,16 +48,16 @@ type DialogValues = Record<string, unknown> & {
   isBatchUpdating: boolean; deletePin: string; deleteError: string; setDeletePin: React.Dispatch<React.SetStateAction<string>>; setDeleteError: React.Dispatch<React.SetStateAction<string>>;
   setIsDeleteModalOpen: React.Dispatch<React.SetStateAction<boolean>>; setOrdersPendingDelete: React.Dispatch<React.SetStateAction<OrderDataState['orders'][number][]>>; handleVerifyDeletePin: () => unknown;
   isAddShipmentModalOpen: boolean; isEditShipmentModalOpen: boolean; shipmentFormData: ShipmentFormData; setShipmentFormData: React.Dispatch<React.SetStateAction<ShipmentFormData>>; orders: OrderDataState['orders'][number][];
-  shippingCategoryOptions: unknown[]; activeItemCategories: ItemCategory[]; handleSaveShipmentSubmit: (...args: unknown[]) => unknown;
+  shippingCategoryOptions: ItemCategory[]; activeItemCategories: ItemCategory[]; handleSaveShipmentSubmit: (...args: unknown[]) => unknown;
   setIsAddShipmentModalOpen: React.Dispatch<React.SetStateAction<boolean>>; setIsEditShipmentModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
   isDeleteShipmentModalOpen: boolean; setIsDeleteShipmentModalOpen: React.Dispatch<React.SetStateAction<boolean>>; shipmentToDelete: { id: string; trackingNumber?: string | null } | null; handleDeleteShipmentSubmit: () => unknown;
-  canEditOrderDefaultsCreation: boolean; formData: OrderFormData; previewOrderNumber: string; customerProfileStats: unknown; orderParties: unknown[]; selectedOrderParty: unknown;
-  setIsStaffOrder: (value: boolean) => void; customerSearchQuery: string; setCustomerSearchQuery: (value: string) => void; filteredCustomers: unknown[]; selectCustomer: (customer: unknown) => void;
-  clearSelectedCustomer: () => void; cartShareCode: string; setCartShareCode: (value: string) => void; items: ItemRow[]; addItemRow: () => void; updateItemRow: (idx: number, field: string, value: unknown) => void; removeItemRow: (idx: number) => void;
+  canEditOrderDefaultsCreation: boolean; formData: OrderFormData; previewOrderNumber: string; customerProfileStats: CreateDialogProps['customerProfileStats']; orderParties: CreateDialogProps['orderParties']; selectedOrderParty: CreateDialogProps['selectedOrderParty'];
+  setIsStaffOrder: CreateDialogProps['setIsStaffOrder']; customerSearchQuery: string; setCustomerSearchQuery: (value: string) => void; filteredCustomers: CreateDialogProps['filteredCustomers']; selectCustomer: CreateDialogProps['selectCustomer'];
+  clearSelectedCustomer: CreateDialogProps['clearSelectedCustomer']; cartShareCode: string; setCartShareCode: (value: string) => void; items: CreateDialogProps['items']; addItemRow: () => void; updateItemRow: CreateDialogProps['updateItemRow']; removeItemRow: (idx: number) => void;
   bankCommissionEnabled: boolean; setBankCommissionEnabled: (value: boolean) => void; bankCommissionType: 'percentage' | 'fixed'; setBankCommissionType: (value: 'percentage' | 'fixed') => void; bankCommissionRate: number; setBankCommissionRate: (value: number) => void;
-  couponEnabled: boolean; setCouponEnabled: (value: boolean) => void; couponRate: number; setCouponRate: (value: number) => void; addShippingEnabled: boolean; setAddShippingEnabled: (value: boolean) => void; shippings: ShippingRow[]; addShippingRow: () => void; removeShippingRow: () => void;
-  packagingFeeEnabled: boolean; setPackagingFeeEnabled: (value: boolean) => void; packagingFeeRate: number; setPackagingFeeRate: (value: number) => void; profitPerKgRate: number; setProfitPerKgRate: (value: number) => void; cbmShippingRateValue: number; setCbmShippingRateValue: (value: number) => void; calcs: unknown; packagingOptions: unknown[]; itemCategories: unknown[];
-  homeDeliveryEnabled: boolean; setHomeDeliveryEnabled: (value: boolean) => void; viaShippingAgent: boolean; setViaShippingAgent: (value: boolean) => void; payLater: boolean; setPayLater: (value: boolean) => void; directApprove: boolean; setDirectApprove: (value: boolean) => void; handleCreateOrder: (...args: unknown[]) => unknown;
+  couponEnabled: boolean; setCouponEnabled: (value: boolean) => void; couponRate: number; setCouponRate: (value: number) => void; addShippingEnabled: boolean; setAddShippingEnabled: (value: boolean) => void; shippings: CreateDialogProps['shippings']; addShippingRow: () => void; removeShippingRow: CreateDialogProps['removeShippingRow'];
+  packagingFeeEnabled: boolean; setPackagingFeeEnabled: (value: boolean) => void; packagingFeeRate: number; setPackagingFeeRate: (value: number) => void; profitPerKgRate: number; setProfitPerKgRate: (value: number) => void; cbmShippingRateValue: number; setCbmShippingRateValue: (value: number) => void; calcs: CreateDialogProps['calcs']; packagingOptions: NonNullable<CreateDialogProps['packagingOptions']>; itemCategories: NonNullable<CreateDialogProps['itemCategories']>;
+  homeDeliveryEnabled: boolean; setHomeDeliveryEnabled: (value: boolean) => void; viaShippingAgent: boolean; setViaShippingAgent: (value: boolean) => void; payLater: boolean; setPayLater: (value: boolean) => void; directApprove: boolean; setDirectApprove: (value: boolean) => void; handleCreateOrder: CreateDialogProps['handleCreateOrder'];
 };
 
 export function OrdersPageDialogs(props: OrdersPageDialogsProps) {

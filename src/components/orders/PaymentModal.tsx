@@ -17,26 +17,16 @@ import {
 import { amountInWords } from '../../lib/numberToWords';
 import { financialAccountService } from '../../services/financialAccountService';
 import FinancialCalculatorModal from '../finance/FinancialCalculatorModal';
+import type { OrderRecord, PaymentAllocation, PaymentFormData } from '../../features/orders/types';
 
-type CollectionMethod = 'Cash' | 'Bank' | 'Deferred' | 'Mixed';
-type Allocation = { id: string; method: 'Cash' | 'Bank'; amount: string; receivingAccountId: string; bankReference: string };
+type CollectionMethod = PaymentFormData['method'];
+type Allocation = PaymentAllocation;
 
 interface PaymentModalProps {
   isOpen: boolean;
-  selectedOrder: any;
-  paymentFormData: {
-    amount: string;
-    method: CollectionMethod;
-    receivingAccountId?: string;
-    bankReference?: string;
-    allocations?: Allocation[];
-    notes: string;
-    pin: string;
-    voucherDate?: string;
-    voucherNumber?: string;
-    paymentCurrency?: string;
-  };
-  setPaymentFormData: (v: any) => void;
+  selectedOrder: OrderRecord | null;
+  paymentFormData: PaymentFormData;
+  setPaymentFormData: React.Dispatch<React.SetStateAction<PaymentFormData>>;
   isSubmitting: boolean;
   isAr: boolean;
   financialAccounts?: Array<{ id: string; name: string; currency?: string; curNo?: number; accSubId?: string; accountCode?: string; isPosting?: boolean }>;
@@ -119,7 +109,7 @@ export default function PaymentModal({
   const voucherDate = safeFormData.voucherDate || new Date().toLocaleString(isAr ? 'ar-YE' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' });
 
   // حساب المتبقي للطلب بعملة الطلب وبتحويل ديناميكي لعملة الدفع المختارة
-  const orderRemainingRaw = parseFloat(selectedOrder?.amountRemaining || 0);
+  const orderRemainingRaw = parseFloat(String(selectedOrder?.amountRemaining || 0));
   const orderRemaining = isNaN(orderRemainingRaw) ? 0 : orderRemainingRaw;
   const orderRemainingInPaymentCurrency = (paymentCurrency === defaultOrderCurrency)
     ? orderRemaining

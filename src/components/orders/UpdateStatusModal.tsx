@@ -1,24 +1,75 @@
 import React from 'react';
 import { Plus, AlertCircle, Calendar, Trash2 } from 'lucide-react';
+import type { OrderRecord, ShippingRow, UpdateFormData } from '../../features/orders/types';
+
+type StatusOption = { id: string | number; nameAr: string; nameEn: string };
+type CourierOption = { id: string; fullName: string; courierType: string; governorate?: string; provinceId?: string | number };
+type ShippingCompanyOption = { id: string; name: string };
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function readText(record: Record<string, unknown>, ...keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === 'string' && value.trim()) return value;
+    if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  }
+  return undefined;
+}
+
+function toStatusOption(value: unknown): StatusOption | null {
+  const record = asRecord(value);
+  const id = record.id;
+  const nameAr = readText(record, 'nameAr');
+  const nameEn = readText(record, 'nameEn');
+  if ((typeof id !== 'string' && typeof id !== 'number') || !nameAr || !nameEn) return null;
+  return { id, nameAr, nameEn };
+}
+
+function toCourierOption(value: unknown): CourierOption | null {
+  const record = asRecord(value);
+  const id = readText(record, 'id', 'courierId', 'courier_id');
+  const fullName = readText(record, 'fullName', 'full_name', 'name');
+  if (!id || !fullName) return null;
+  const provinceId = record.provinceId ?? record.province_id;
+  return {
+    id,
+    fullName,
+    courierType: readText(record, 'courierType', 'type', 'courier_type') || '',
+    governorate: readText(record, 'governorate'),
+    provinceId: typeof provinceId === 'string' || typeof provinceId === 'number' ? provinceId : undefined,
+  };
+}
+
+function toShippingCompanyOption(value: unknown): ShippingCompanyOption | null {
+  const record = asRecord(value);
+  const id = readText(record, 'id', 'shippingCompanyId', 'shipping_company_id');
+  const name = readText(record, 'name', 'nameAr', 'nameEn', 'name_ar', 'name_en');
+  return id && name ? { id, name } : null;
+}
 
 interface UpdateStatusModalProps {
   isOpen: boolean;
-  selectedOrder: any;
-  updateFormData: any;
-  setUpdateFormData: (data: any) => void;
-  updateShippings: any[];
-  setUpdateShippings: (shippings: any[]) => void;
-  orderStatusesList: any[];
-  couriers: any[];
+  selectedOrder: OrderRecord | null;
+  updateFormData: UpdateFormData;
+  setUpdateFormData: React.Dispatch<React.SetStateAction<UpdateFormData>>;
+  updateShippings: ShippingRow[];
+  setUpdateShippings: React.Dispatch<React.SetStateAction<ShippingRow[]>>;
+  orderStatusesList: unknown[];
+  couriers: unknown[];
   canManageOrders: boolean;
   isSubmitting: boolean;
   isAr: boolean;
   onClose: () => void;
   onSubmit: (e: React.FormEvent) => void;
   setIsAddShippingCompanyOpen: (open: boolean) => void;
-  setActiveAddShippingIndex: (index: any) => void;
-  shippingCompanies: any[];
-  role: string;
+  setActiveAddShippingIndex: (index: number | string | null) => void;
+  shippingCompanies: unknown[];
+  role: string | null;
   hasPermission: (perm: string) => boolean;
 }
 
@@ -44,6 +95,19 @@ export default function UpdateStatusModal({
 }: UpdateStatusModalProps) {
   if (!isOpen || !selectedOrder) return null;
 
+  const statusOptions = orderStatusesList.flatMap((status) => {
+    const option = toStatusOption(status);
+    return option ? [option] : [];
+  });
+  const courierOptions = couriers.flatMap((courier) => {
+    const option = toCourierOption(courier);
+    return option ? [option] : [];
+  });
+  const shippingCompanyOptions = shippingCompanies.flatMap((company) => {
+    const option = toShippingCompanyOption(company);
+    return option ? [option] : [];
+  });
+
   const addUpdateShippingRow = () => {
     const today = new Date().toISOString().split('T')[0];
     setUpdateShippings([
@@ -63,14 +127,10 @@ export default function UpdateStatusModal({
     ]);
   };
 
-  const updateUpdateShippingRow = (idx: number, fieldOrObj: string | Record<string, any>, val?: any) => {
-    setUpdateShippings((updateShippings || []).map((sh, i) => {
-      if (i !== idx) return sh;
-      if (typeof fieldOrObj === 'string') {
-        return { ...sh, [fieldOrObj]: val };
-      }
-      return { ...sh, ...fieldOrObj };
-    }));
+  const updateUpdateShippingRow = (idx: number, patch: Partial<ShippingRow>) => {
+    setUpdateShippings((current) => current.map((shipping, index) =>
+      index === idx ? { ...shipping, ...patch } : shipping
+    ));
   };
 
   const removeUpdateShippingRow = (idx: number) => {
@@ -106,7 +166,7 @@ export default function UpdateStatusModal({
                       : 'border-slate-800'
                   }`}
                 >
-                  {orderStatusesList.map((st) => (
+                  {statusOptions.map((st) => (
                     <option key={st.id} value={st.nameAr}>
                       {isAr ? st.nameAr : st.nameEn}
                     </option>
@@ -164,7 +224,7 @@ export default function UpdateStatusModal({
                   className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 outline-none text-xs font-bold"
                 >
                   <option value="">{isAr ? '-- اختر موظف التعبئة والتجميع --' : '-- Choose Aggregator --'}</option>
-                  {couriers
+                  {courierOptions
                     .filter((c) => c.courierType === 'sourcing')
                     .map((c) => (
                       <option key={c.id} value={c.id}>
@@ -184,7 +244,7 @@ export default function UpdateStatusModal({
                   className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 outline-none text-xs font-bold"
                 >
                   <option value="">{isAr ? '-- اختر مندوب التوزيع النهائي --' : '-- Choose Final Courier --'}</option>
-                  {couriers
+                  {courierOptions
                     .filter((c) => c.courierType === 'local' || !c.courierType)
                     .map((c) => (
                       <option key={c.id} value={c.id}>
@@ -236,7 +296,7 @@ export default function UpdateStatusModal({
                           <label className="block text-slate-500 mb-1">{isAr ? 'نوع الشحن' : 'Mode'}</label>
                           <select
                             value={sh.shippingType || 'بري'}
-                            onChange={(e) => updateUpdateShippingRow(idx, 'shippingType', e.target.value)}
+                            onChange={(e) => updateUpdateShippingRow(idx, { shippingType: e.target.value })}
                             className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold cursor-pointer"
                           >
                             <option value="بري">{isAr ? 'Overland بري' : 'Land - Overland'}</option>
@@ -263,10 +323,10 @@ export default function UpdateStatusModal({
                           </div>
                           <select
                             value={sh.shippingCompany || ''}
-                            onChange={(e) => updateUpdateShippingRow(idx, 'shippingCompany', e.target.value)}
+                            onChange={(e) => updateUpdateShippingRow(idx, { shippingCompany: e.target.value })}
                             className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold cursor-pointer"
                           >
-                            {shippingCompanies.map((sc) => (
+                            {shippingCompanyOptions.map((sc) => (
                               <option key={sc.id} value={sc.name}>
                                 {sc.name}
                               </option>
@@ -279,7 +339,7 @@ export default function UpdateStatusModal({
                           <input
                             type="text"
                             value={sh.shippingSource || ''}
-                            onChange={(e) => updateUpdateShippingRow(idx, 'shippingSource', e.target.value)}
+                            onChange={(e) => updateUpdateShippingRow(idx, { shippingSource: e.target.value })}
                             placeholder={isAr ? 'مثال: الصين، الرياض...' : 'e.g. China'}
                             className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold"
                           />
@@ -290,7 +350,7 @@ export default function UpdateStatusModal({
                           <input
                             type="text"
                             value={sh.shippingDestination || ''}
-                            onChange={(e) => updateUpdateShippingRow(idx, 'shippingDestination', e.target.value)}
+                            onChange={(e) => updateUpdateShippingRow(idx, { shippingDestination: e.target.value })}
                             placeholder={isAr ? 'مثال: صنعاء، عدن...' : 'e.g. Sanaa'}
                             className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold"
                           />
@@ -301,7 +361,7 @@ export default function UpdateStatusModal({
                           <input
                             type="number"
                             value={sh.shippingCost || 0}
-                            onChange={(e) => updateUpdateShippingRow(idx, 'shippingCost', parseFloat(e.target.value) || 0)}
+                            onChange={(e) => updateUpdateShippingRow(idx, { shippingCost: Number(e.target.value) || 0 })}
                             className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-mono"
                           />
                         </div>
@@ -376,7 +436,7 @@ export default function UpdateStatusModal({
                               type="date"
                               id={`upd-expected-date-${idx}`}
                               value={sh.expectedArrival || ''}
-                              onChange={(e) => updateUpdateShippingRow(idx, 'expectedArrival', e.target.value)}
+                              onChange={(e) => updateUpdateShippingRow(idx, { expectedArrival: e.target.value })}
                               className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans pr-9"
                             />
                             <button
@@ -397,7 +457,7 @@ export default function UpdateStatusModal({
                           <input
                             type="number"
                             value={sh.packagingFees || 0}
-                            onChange={(e) => updateUpdateShippingRow(idx, 'packagingFees', parseFloat(e.target.value) || 0)}
+                            onChange={(e) => updateUpdateShippingRow(idx, { packagingFees: Number(e.target.value) || 0 })}
                             className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-mono"
                           />
                         </div>
@@ -409,7 +469,7 @@ export default function UpdateStatusModal({
                               type="date"
                               id={`upd-delivery-date-${idx}`}
                               value={sh.deliveryDate || ''}
-                              onChange={(e) => updateUpdateShippingRow(idx, 'deliveryDate', e.target.value)}
+                              onChange={(e) => updateUpdateShippingRow(idx, { deliveryDate: e.target.value })}
                               className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans pr-9"
                             />
                             <button

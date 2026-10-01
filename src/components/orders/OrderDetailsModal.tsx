@@ -4,17 +4,44 @@ import QRCode from 'qrcode';
 import CopyToClipboard from '../CopyToClipboard';
 import { safeToDate } from '../../lib/supabase';
 import { generateOrderInvoicePDF } from '../../reports/OrderInvoicePrint';
+import type { Settings } from '../../context/SettingsContext';
+import type { OrderRecord } from '../../features/orders/types';
+import type { OrderStatusItem } from '../../hooks/useOrderStatuses';
+
+interface OrderDetailsItem {
+  productName?: string | null;
+  packagingOptionName?: string | null;
+  quantity?: number | string | null;
+  productUrl?: string | null;
+  name?: string | null;
+  productPrice?: number | string | null;
+  price?: number | string | null;
+}
+
+type OrderDetailsRecord = OrderRecord & {
+  customer?: { name?: string | null; fullName?: string | null; phone?: string | null } | null;
+  source?: { name?: string | null } | null;
+  items?: OrderDetailsItem[] | null;
+  productsSum?: number | string | null;
+  couponEnabled?: boolean;
+  couponRate?: number | string | null;
+  packagingFee?: number | string | null;
+  deliveryCourierFee?: number | string | null;
+};
+
+function amountValue(value: unknown): number {
+  const amount = typeof value === 'number' ? value : Number.parseFloat(String(value ?? 0));
+  return Number.isFinite(amount) ? amount : 0;
+}
 
 interface OrderDetailsModalProps {
   isOpen: boolean;
-  selectedOrder: any;
+  selectedOrder: OrderDetailsRecord | null;
   onClose: () => void;
   isAr: boolean;
-  settings: any;
-  orderStatusesList: any;
+  settings: Settings;
+  orderStatusesList: OrderStatusItem[];
 }
-
-type OrderStatusRecord = { id?: number; sortOrder?: number; nameAr?: string; nameEn?: string };
 
 export default function OrderDetailsModal({
   isOpen,
@@ -47,6 +74,12 @@ export default function OrderDetailsModal({
   }, [isOpen, selectedOrder]);
 
   if (!isOpen || !selectedOrder) return null;
+
+  const productsSum = selectedOrder.productsSum !== undefined && selectedOrder.productsSum !== null
+    ? amountValue(selectedOrder.productsSum)
+    : amountValue(selectedOrder.totalCostSAR) - amountValue(selectedOrder.profitCompanySAR)
+      - amountValue(selectedOrder.shippingCostSAR) - amountValue(selectedOrder.packagingFee);
+  const statusId = String(selectedOrder.order_status_id ?? '');
 
   return (
     <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in overflow-y-auto font-sans">
@@ -131,7 +164,7 @@ export default function OrderDetailsModal({
                 <div className="text-slate-400 font-bold">
                   {isAr ? 'حالة الشحنة الطردية:' : 'Cargo Current State:'}{' '}
                   {(() => {
-                    const currentStatusItem = orderStatusesList.find((s: OrderStatusRecord) => s.sortOrder == selectedOrder.order_status_id || s.sortOrder == selectedOrder.order_status_id || s.id == selectedOrder.order_status_id);
+                    const currentStatusItem = orderStatusesList.find((status) => String(status.sortOrder ?? status.id) === statusId);
                     return (
                       <span className="px-2.5 py-0.5 rounded-xl border border-[#d4af37]/20 bg-[#d4af37]/5 text-[#d4af37] font-bold max-w-max text-[10px]">
                         {selectedOrder.order_status_id + ' : ' + (isAr ? currentStatusItem?.nameAr : currentStatusItem?.nameEn) /*مهم: هنا يجب جلب اسم المرحله من جدول المراحل بناء على رقم المرحله*/}
@@ -162,40 +195,37 @@ export default function OrderDetailsModal({
               <div className="flex justify-between">
                 <span>{isAr ? 'تكلفة المنتجات الأصلية:' : 'Original Products:'}</span>
                 <span className="text-slate-300 font-mono">
-                  {(selectedOrder.productsSum !== undefined
-                    ? selectedOrder.productsSum
-                    : (parseFloat(selectedOrder.totalCostSAR) - parseFloat(selectedOrder.profitCompanySAR || 0) - parseFloat(selectedOrder.shippingCostSAR || 0) - parseFloat(selectedOrder.packagingFee || 0))
-                  ).toLocaleString()} SAR
+                  {productsSum.toLocaleString()} SAR
                 </span>
               </div>
-              {selectedOrder.couponEnabled && (parseFloat(selectedOrder.couponRate) > 0) && (
+              {selectedOrder.couponEnabled && amountValue(selectedOrder.couponRate) > 0 && (
                 <div className="flex justify-between text-rose-450/90">
                   <span>{isAr ? 'كوبون الخصم للمشتريات (مبلغ):' : 'Purchase Coupon Discount:'}</span>
-                  <span className="font-mono">-{parseFloat(selectedOrder.couponRate).toLocaleString()} SAR</span>
+                  <span className="font-mono">-{amountValue(selectedOrder.couponRate).toLocaleString()} SAR</span>
                 </div>
               )}
-              {parseFloat(selectedOrder.shippingCostSAR || '0') > 0 && (
+              {amountValue(selectedOrder.shippingCostSAR) > 0 && (
                 <div className="flex justify-between">
                   <span>{isAr ? 'تكلفة الشحن والتخليص:' : 'Shipping Cost:'}</span>
-                  <span className="text-slate-300 font-mono">{parseFloat(selectedOrder.shippingCostSAR).toLocaleString()} SAR</span>
+                  <span className="text-slate-300 font-mono">{amountValue(selectedOrder.shippingCostSAR).toLocaleString()} SAR</span>
                 </div>
               )}
-              {parseFloat(selectedOrder.profitCompanySAR || '0') > 0 && (
+              {amountValue(selectedOrder.profitCompanySAR) > 0 && (
                 <div className="flex justify-between">
                   <span>{isAr ? 'رسوم اخرى:' : 'other fees:'}</span>
-                  <span className="text-slate-300 font-mono">{parseFloat(selectedOrder.profitCompanySAR).toLocaleString()} SAR</span>
+                  <span className="text-slate-300 font-mono">{amountValue(selectedOrder.profitCompanySAR).toLocaleString()} SAR</span>
                 </div>
               )}
-              {parseFloat(selectedOrder.packagingFee || '0') > 0 && (
+              {amountValue(selectedOrder.packagingFee) > 0 && (
                 <div className="flex justify-between">
                   <span>{isAr ? 'رسوم التغليف:' : 'Packaging Fee:'}</span>
-                  <span className="text-slate-300 font-mono">{parseFloat(selectedOrder.packagingFee).toLocaleString()} SAR</span>
+                  <span className="text-slate-300 font-mono">{amountValue(selectedOrder.packagingFee).toLocaleString()} SAR</span>
                 </div>
               )}
-              {parseFloat(selectedOrder.deliveryCourierFee || '0') > 0 && (
+              {amountValue(selectedOrder.deliveryCourierFee) > 0 && (
                 <div className="flex justify-between text-yellow-400/80">
                   <span>{isAr ? 'أجرة التوصيل الداخلي:' : 'Internal Delivery Wage:'}</span>
-                  <span className="font-mono">{parseFloat(selectedOrder.deliveryCourierFee).toLocaleString()} YER</span>
+                  <span className="font-mono">{amountValue(selectedOrder.deliveryCourierFee).toLocaleString()} YER</span>
                 </div>
               )}
             </div>
@@ -204,19 +234,19 @@ export default function OrderDetailsModal({
               <div className="bg-slate-955 border border-slate-800 p-2.5 rounded-lg flex flex-col justify-between">
                 <span className="text-[10px] text-slate-500 font-bold">{isAr ? 'إجمالي قيمة الفاتورة' : 'Total Invoice Due'}</span>
                 <span className="font-mono text-white text-xs font-black mt-1">
-                  {((parseFloat(selectedOrder.amountPaid) || 0) + (parseFloat(selectedOrder.amountRemaining) || 0)).toLocaleString()} YER
+                  {(amountValue(selectedOrder.amountPaid) + amountValue(selectedOrder.amountRemaining)).toLocaleString()} YER
                 </span>
               </div>
               <div className="bg-emerald-950/10 border border-emerald-950/20 p-2.5 rounded-lg flex flex-col justify-between">
                 <span className="text-[10px] text-emerald-400 font-bold">{isAr ? 'المقدار المقبوض' : 'Settled Balance'}</span>
                 <span className="font-mono text-emerald-400 text-xs font-black mt-1">
-                  {(parseFloat(selectedOrder.amountPaid) || 0).toLocaleString()} YER
+                  {amountValue(selectedOrder.amountPaid).toLocaleString()} YER
                 </span>
               </div>
               <div className="bg-rose-950/10 border border-rose-950/20 p-2.5 rounded-lg flex flex-col justify-between">
                 <span className="text-[10px] text-rose-455 font-bold">{isAr ? 'المديونية المتبقية' : 'Remaining Arrears'}</span>
                 <span className="font-mono text-rose-455 text-xs font-black mt-1">
-                  {(parseFloat(selectedOrder.amountRemaining) || 0).toLocaleString()} YER
+                  {amountValue(selectedOrder.amountRemaining).toLocaleString()} YER
                 </span>
               </div>
             </div>
@@ -239,7 +269,7 @@ export default function OrderDetailsModal({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-850">
-                    {selectedOrder.items.map((it: any, index: number) => (
+                    {selectedOrder.items.map((it, index) => (
                       <tr key={index}>
                         <td className="p-2.5 text-white font-bold">{it.productName || (isAr ? `طرد رقم ${index + 1}` : `Cargo item ${index + 1}`)}</td>
                         <td className="p-2.5 text-center">
@@ -280,7 +310,7 @@ export default function OrderDetailsModal({
               </div>
 
               <div className="relative border-r-2 border-slate-800 mr-2 md:mr-4 pr-4 md:pr-6 space-y-6 py-2 animate-fade-in text-start">
-                {selectedOrder.shippingDetails.map((sh: any, index: number) => {
+                {selectedOrder.shippingDetails.map((sh, index) => {
                   const isDelivered = !!sh.deliveryDate;
                   const hasSea = sh.shippingType === 'بحري';
                   const hasAir = sh.shippingType === 'جوي';
@@ -377,14 +407,14 @@ export default function OrderDetailsModal({
                             <div className="text-start">
                               <span className="text-slate-500 font-sans text-[10px] block">{isAr ? 'أجرة النقل:' : 'Freight Cost:'}</span>
                               <span className="text-white font-extrabold text-xs">
-                                {(parseFloat(sh.shippingCost) || 0).toLocaleString()} <span className="text-[10px] font-normal font-sans">SAR</span>
+                                {(amountValue(sh.shippingCost) || 0).toLocaleString()} <span className="text-[10px] font-normal font-sans">SAR</span>
                               </span>
                             </div>
                             {sh.packagingFees ? (
                               <div className="text-start border-r border-slate-800 pr-4">
                                 <span className="text-slate-500 font-sans text-[10px] block">{isAr ? 'أجور التغليف والصناديق:' : 'Packaging Fees:'}</span>
                                 <span className="text-slate-300 font-bold text-xs">
-                                  {(parseFloat(sh.packagingFees) || 0).toLocaleString()} <span className="text-[10px] font-normal font-sans">SAR</span>
+                                  {(amountValue(sh.packagingFees) || 0).toLocaleString()} <span className="text-[10px] font-normal font-sans">SAR</span>
                                 </span>
                               </div>
                             ) : null}
@@ -393,7 +423,7 @@ export default function OrderDetailsModal({
                           <div className="text-end bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-850">
                             <span className="text-[9px] text-slate-500 font-sans block leading-none mb-1">{isAr ? 'إجمالي تكاليف هذه الشحنة:' : 'Segment Total Fees:'}</span>
                             <span className="text-emerald-400 font-black text-sm">
-                              {((parseFloat(sh.shippingCost) || 0) + (parseFloat(sh.packagingFees) || 0)).toLocaleString()}{' '}
+                              {((amountValue(sh.shippingCost) || 0) + (amountValue(sh.packagingFees) || 0)).toLocaleString()}{' '}
                               <span className="text-[10px] font-sans">SAR</span>
                             </span>
                           </div>
@@ -407,12 +437,12 @@ export default function OrderDetailsModal({
               {/* Yemen Delivery Summary */}
               {(() => {
                 const totalTransitDays = (selectedOrder.shippingDetails || []).reduce(
-                  (sum: number, s: any) => sum + (parseInt(s.shippingDuration) || 0), 0
+                  (sum, shipment) => sum + (Number.parseInt(shipment.shippingDuration, 10) || 0), 0
                 );
                 const yemenDuration = settings?.defaultYemenDeliveryDuration ?? 5;
                 const totalExpected = totalTransitDays + yemenDuration;
-                const lastDispatch = (selectedOrder.shippingDetails || []).reduce((latest: string, s: any) => {
-                  return s.shippingDate > latest ? s.shippingDate : latest;
+                const lastDispatch = (selectedOrder.shippingDetails || []).reduce((latest, shipment) => {
+                  return shipment.shippingDate > latest ? shipment.shippingDate : latest;
                 }, '');
                 let yemenArrivalDate = '';
                 if (lastDispatch) {

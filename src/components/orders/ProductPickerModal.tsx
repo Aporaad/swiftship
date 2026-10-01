@@ -47,6 +47,38 @@ export interface SystemProductRecord extends Partial<Product> {
   updatedAt?: number | string;
 }
 
+interface ProductDocumentSnapshot {
+  id: string;
+  data: () => unknown;
+}
+
+interface ProductCollectionSnapshot {
+  docs: ProductDocumentSnapshot[];
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function readText(data: Record<string, unknown>, ...keys: string[]): string {
+  for (const key of keys) {
+    const value = data[key];
+    if (typeof value === 'string' && value.trim()) return value;
+    if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  }
+  return '';
+}
+
+function readTimestamp(data: Record<string, unknown>, ...keys: string[]): string | number | undefined {
+  for (const key of keys) {
+    const value = data[key];
+    if (typeof value === 'string' || (typeof value === 'number' && Number.isFinite(value))) return value;
+  }
+  return undefined;
+}
+
 interface ProductPickerModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -78,15 +110,16 @@ export default function ProductPickerModal({
     setLoading(true);
     const unsubscribe = onSnapshot(
       collection(db, 'products'),
-      (snapshot: any) => {
-        const fetchedProducts: SystemProductRecord[] = snapshot.docs.map((entry: any) => {
-          const data = entry.data() || {};
-          const pId = data.product_id || entry.id;
+      (snapshot: ProductCollectionSnapshot) => {
+        const fetchedProducts: SystemProductRecord[] = snapshot.docs.map((entry) => {
+          const data = asRecord(entry.data());
+          const pId = readText(data, 'product_id') || entry.id;
           const price = Number(data.unit_price ?? data.unitPrice ?? data.productPrice ?? data.product_price ?? 0);
-          const nameAr = data.product_name_ar || data.productName || data.name || 'منتج';
-          const nameEn = data.product_name_en || '';
+          const nameAr = readText(data, 'product_name_ar', 'productName', 'name') || 'منتج';
+          const nameEn = readText(data, 'product_name_en');
 
           return {
+            ...data,
             id: pId,
             product_id: pId,
             product_name_ar: nameAr,
@@ -96,10 +129,10 @@ export default function ProductPickerModal({
             unit_price: price,
             unitPrice: price,
             productPrice: price,
-            product_url: data.product_url || data.productUrl || '',
-            productUrl: data.product_url || data.productUrl || '',
-            item_category_id: data.item_category_id || data.itemCategoryId || '',
-            itemCategoryId: data.item_category_id || data.itemCategoryId || '',
+            product_url: readText(data, 'product_url', 'productUrl'),
+            productUrl: readText(data, 'product_url', 'productUrl'),
+            item_category_id: readText(data, 'item_category_id', 'itemCategoryId'),
+            itemCategoryId: readText(data, 'item_category_id', 'itemCategoryId'),
             is_allowed: data.is_allowed !== false && data.isAllowed !== false,
             isAllowed: data.is_allowed !== false && data.isAllowed !== false,
             cbm: Number(data.cbm || 0),
@@ -107,18 +140,17 @@ export default function ProductPickerModal({
             height: Number(data.height || 0),
             length: Number(data.length || 0),
             weight: Number(data.weight || 0),
-            sku: data.sku || '',
-            description: data.description || data.notes || '',
-            createdAt: data.created_at || data.createdAt,
-            updatedAt: data.updated_at || data.updatedAt,
-            ...data,
+            sku: readText(data, 'sku'),
+            description: readText(data, 'description', 'notes'),
+            createdAt: readTimestamp(data, 'created_at', 'createdAt'),
+            updatedAt: readTimestamp(data, 'updated_at', 'updatedAt'),
           };
         });
 
         setProducts(fetchedProducts);
         setLoading(false);
       },
-      (error: any) => {
+      (error: unknown) => {
         console.warn('[ProductPickerModal] Error fetching master products catalog:', error);
         setLoading(false);
       }

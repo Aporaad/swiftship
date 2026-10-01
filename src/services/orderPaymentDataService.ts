@@ -29,7 +29,41 @@ export interface OrderPaymentFormFields {
   paidCurrency?: string;
 }
 
-const num = (value: any): number => {
+interface OrderPaymentContext {
+  orderNumber?: string | number | null;
+  paidCurrency?: string | null;
+  currency?: string | null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function readRecordText(value: unknown, ...keys: string[]): string {
+  if (!isRecord(value)) return '';
+  for (const key of keys) {
+    const field = value[key];
+    if (typeof field === 'string' && field.trim()) return field;
+    if (typeof field === 'number' && Number.isFinite(field)) return String(field);
+  }
+  return '';
+}
+
+function readPaymentMethod(value: unknown): OrderPaymentMethod | null {
+  switch (value) {
+    case 'Cash':
+    case 'Bank':
+    case 'Mixed':
+    case 'Deferred':
+      return value;
+    default:
+      return null;
+  }
+}
+
+const num = (value: unknown): number => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (typeof value !== 'string') return 0;
   const parsed = parseFloat(value);
   return Number.isFinite(parsed) ? parsed : 0;
 };
@@ -40,14 +74,17 @@ const num = (value: any): number => {
  */
 export function buildDownPaymentAllocations(
   fields: OrderPaymentFormFields,
-  financialAccounts: any[] = []
+  financialAccounts: readonly unknown[] = []
 ): OrderDownPaymentAllocation[] {
-  const method = (fields.paymentMethod || 'Cash') as OrderPaymentMethod;
+  const method = readPaymentMethod(fields.paymentMethod || 'Cash');
+  if (!method) return [];
   const enrich = (accountId: string) => {
-    const account = financialAccounts.find((acc: any) => acc && acc.id === accountId);
+    const account = financialAccounts.find((candidate) =>
+      isRecord(candidate) && String(candidate.id ?? '') === accountId
+    );
     return {
-      accountCode: account?.accSubId || account?.accountCode || account?.account_code || '',
-      accountName: account?.name || account?.accNameAr || account?.acc_name_ar || accountId,
+      accountCode: readRecordText(account, 'accSubId', 'accountCode', 'account_code'),
+      accountName: readRecordText(account, 'name', 'accNameAr', 'acc_name_ar') || accountId,
     };
   };
 
@@ -91,7 +128,8 @@ export function validateOrderPaymentInput(
   totalInPaymentCurrency: number,
   isAr: boolean
 ): string | null {
-  const method = (fields.paymentMethod || 'Cash') as OrderPaymentMethod;
+  const method = readPaymentMethod(fields.paymentMethod || 'Cash');
+  if (!method) return null;
   const paid = num(fields.amountPaid);
 
   if (method === 'Deferred') {
@@ -161,17 +199,20 @@ export function validateOrderPaymentInput(
 /** التحقق من وجود قيد دفعة مقدمة سابق للطلب (لمنع التكرار عند التعديل) */
 export async function hasDownPaymentEntry(orderId: string): Promise<boolean> {
   try {
-    const { data, error } = await (supabase as any)
+    const result: unknown = await supabase
       .from('main_entry')
       .select('main_entry_id')
       .eq('order_id', orderId)
       .eq('auto_rule_id', 'order_down_payment')
       .limit(1);
+    if (!isRecord(result)) return false;
+    const { data, error } = result;
     if (error) {
-      console.warn('[orderPaymentDataService] hasDownPaymentEntry query failed:', error.message);
+      const message = isRecord(error) && typeof error.message === 'string' ? error.message : 'Unknown query error';
+      console.warn('[orderPaymentDataService] hasDownPaymentEntry query failed:', message);
       return false;
     }
-    return (data || []).length > 0;
+    return Array.isArray(data) && data.length > 0;
   } catch (err) {
     console.warn('[orderPaymentDataService] hasDownPaymentEntry error:', err);
     return false;
@@ -184,13 +225,13 @@ export async function hasDownPaymentEntry(orderId: string): Promise<boolean> {
  * يعيد قائمة معرفات القواعد المنفذة.
  */
 export async function executeOrderDownPaymentEntries(options: {
-  order: any;
+  order: OrderPaymentContext;
   statusId: number | string;
   fields: OrderPaymentFormFields;
-  financialAccounts?: any[];
-  customer?: any;
-  courier?: any;
-  orderParty?: any;
+  financialAccounts?: readonly unknown[];
+  customer?: unknown;
+  courier?: unknown;
+  orderParty?: unknown;
   isAr?: boolean;
   profileName?: string;
 }): Promise<string[]> {
