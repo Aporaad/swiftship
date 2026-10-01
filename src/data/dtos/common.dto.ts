@@ -120,3 +120,16 @@ export function numberOrNull(value: NumericValue | null | undefined): number | n
 export function booleanOrDefault(value: unknown, fallback = false): boolean {
   return typeof value === 'boolean' ? value : fallback;
 }
+
+export {
+  amountOrNull,
+  currencyCodeOrNull,
+  isoDateOrNull,
+  statusCodeOrNull,
+} from '../../shared/contracts/value-primitives';
+export type {
+  Amount,
+  CurrencyCode,
+  IsoDateString,
+  StatusCode,
+} from '../../shared/contracts/value-primitives';
