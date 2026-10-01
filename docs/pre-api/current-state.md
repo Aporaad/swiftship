@@ -45,3 +45,8 @@
 - `strict: true` مفعّل، وفحص TypeScript والاختبارات (231 ناجحًا، 8 متخطاة) والبناء ناجحة.
 - أنواع `any` الفعلية في `src/features/auth`, `src/features/orders`, و`src/features/accounting`: صفر.
 - ما زال هناك دين legacy: 132 نوعًا في `src/components/orders` و48 في `src/components/financeAccounting`. لذلك المرحلة 11 لم تُغلق بعد؛ استكمال التنظيف يسبق اعتماد انتقال المرحلة 12. لا تغييرات DB.
+
+
+## حالة بعد رفع main — 2026-10-01 07:39 +03:00 — AI Model: Manus
+
+آخر commit على `main` هو `3d1578d` (ويتضمن دمج تحديث `72514dc`). فحوص TypeScript والاختبارات (231 ناجحًا، 8 متخطاة) والبناء ناجحة، والـworking tree نظيف. ما زالت المرحلة 11 مفتوحة بسبب Any في legacy Orders/Accounting؛ محاولة تنظيف متوازية سببت أكثر من 1000 تشخيص TypeScript وأُعيدت قبل الحفظ. لا يبدأ ترحيل مستهلكي المرحلة 12 قبل استكمال الأنواع على دفعات مستقرة. لا تغييرات DB.
