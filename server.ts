@@ -44,6 +44,7 @@ import { startAccountReconciliationListener } from './server/jobs/account-reconc
 import { registerAuthRoutes } from './server/routes/auth';
 import { registerWhatsAppRoutes } from './server/routes/whatsapp';
 import { registerTrackingRoutes } from './server/routes/tracking';
+import { registerApiFoundationRoutes } from './server/routes/api-foundation';
 import { registerBrowserProxyRoute } from './server/browser-proxy/route';
 import { attachViteDevMiddleware, attachProductionStaticFiles } from './server/dev-server';
 
@@ -72,6 +73,7 @@ async function startServer(): Promise<void> {
   registerAuthRoutes(app, db, auth);
   registerWhatsAppRoutes(app, db);
   registerTrackingRoutes(app, db);
+  registerApiFoundationRoutes(app, db);
 
   // 6. مسار احتياطي لـ API / API fallback
   app.all('/api/*', (_req, res) => {

@@ -1295,3 +1295,15 @@
 - [x] إكمال realtime audit للـsnapshots الأساسية مع حالات success/empty/error.
 - [x] اجتياز TypeScript وVitest وdiff check.
 - [x] إغلاق المرحلة 12 على مستوى النظام.
+
+## [2026-10-02 01:55:00 +0300] — تنفيذ وإغلاق المرحلة 13 ضمن swiftship فقط — AI Model: Manus
+- [x] تثبيت عقد API Foundation versioned عبر `/api/v1/contract`.
+- [x] إضافة request ID موحد مع UUID fallback وحد أقصى لطول المعرف.
+- [x] إضافة ErrorEnvelope آمن لا يعرض رسائل قاعدة البيانات الخام.
+- [x] إضافة local-session verifier لمسارات القراءة باستخدام `public.sessions` و`public.users` فقط.
+- [x] تفعيل `GET /api/v1/customers` و`GET /api/v1/couriers` بصلاحيات `customers:read` و`couriers:read`.
+- [x] إضافة DTO mapping allowlist لا يعيد password أو phone أو raw data.
+- [x] إضافة اختبارات contract للـrequest ID وErrorEnvelope وPII وpermissions.
+- [x] نجاح typecheck والاختبارات والبناء.
+- [x] عدم لمس `alx_web` بناءً على توجيه المهمة الحالي.
+- [x] إغلاق المرحلة 13 في نطاق النظام المحدد.

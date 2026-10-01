@@ -1981,3 +1981,14 @@
 - التحقق النهائي: `npm run check` ناجح، و67 ملف اختبار ناجح، و237 اختبار ناجح، و8 متخطاة، و`git diff --check` ناجح.
 - لا تغييرات SQL أو DB أو RLS.
 - **تم إغلاق المرحلة 12 بالكامل وتنفيذها على مستوى النظام بالكامل.**
+
+## [2026-10-02 01:55:00 +0300] — تم إغلاق المرحلة 13 ضمن النظام — AI Model: Manus
+- أضيف `server/routes/api-foundation.ts` كحد HTTP مستقل قابل للاختبار.
+- تم تسجيل `/api/v1/contract` ككتالوج versioned للمسارات والـpermissions.
+- أضيف request ID عبر `x-request-id` مع UUID fallback، وErrorEnvelope موحد وآمن.
+- تم اعتماد local-session verification من `public.sessions` ثم `public.users` فقط، دون نقل Supabase Auth أو كلمات المرور إلى المسارات الجديدة.
+- تم تفعيل مساري القراءة الآمنين Customers وCouriers مع pagination وحدود page size وصلاحيات server-side.
+- تم استخدام allowlist DTO mapping لمنع `password`, `phone`, وraw database payload من الخروج.
+- أضيفت اختبارات `server/routes/api-foundation.test.ts`.
+- التحقق: TypeScript ناجح، 68 ملف اختبار ناجح، 240 اختبار ناجح، 8 متخطاة، والبناء الكامل ناجح.
+- **تم إغلاق المرحلة 13 بالكامل وتنفيذها على مستوى النظام بالكامل ضمن نطاق swiftship المحدد.**

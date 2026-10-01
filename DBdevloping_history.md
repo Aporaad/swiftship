@@ -1093,3 +1093,8 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 - لم يتم تنفيذ SQL.
 - لا تغييرات على schema أو migrations أو RLS أو grants.
 - التغيير يخص عقود AsyncState وحالة واجهة المستخدم فقط.
+
+## [2026-10-02 01:55:00 +0300] — المرحلة 13 API Foundation — AI Model: Manus
+- لم يتم تنفيذ SQL أو migration أو DDL/DML.
+- مسارات Customers/Couriers تقرأ عبر adapter الحالي فقط.
+- لا تغييرات في schema أو RLS أو grants.

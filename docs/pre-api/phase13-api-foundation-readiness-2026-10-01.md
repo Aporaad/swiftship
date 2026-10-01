@@ -132,3 +132,8 @@ React / Electron / alx_web → HTTP API → Application Gateway → Supabase
 
 ## دفعة 01:12 — AI Model: Manus
 تم نقل `AnnouncementsPage` في `alx_web` إلى `PortalGateway.getAnnouncements()` و`runQuery`. أضيف DTO آمن للإعلانات وAsync contract محلي للموقع. الـ HTTP endpoint المتوقع هو `/api/v1/portal/announcements`، بينما fallback الحالي يعبر legacy boundary فقط إلى حين نشر endpoint والتحقق من auth.
+
+## الإغلاق التنفيذي داخل swiftship — 2026-10-02 01:55 +0300 — AI Model: Manus
+بناءً على توجيه المهمة الأخير، تم استبعاد `alx_web` من هذه الدفعة وتنفيذ المرحلة 13 داخل مستودع النظام فقط. أضيفت طبقة API Foundation مستقلة تشمل `/api/v1/contract`، request ID، ErrorEnvelope، local-session verifier، ومساري Customers/Couriers للقراءة فقط مع permissions وDTO allowlist واختبارات contract. لم يتم نقل Orders أو Accounting mutations، ولم تُنقل كلمات المرور أو رسائل قاعدة البيانات الخام. typecheck والاختبارات والبناء ناجحة.
+
+**تم إغلاق المرحلة 13 بالكامل وتنفيذها على مستوى النظام بالكامل ضمن نطاق swiftship المحدد.**
