@@ -106,3 +106,7 @@ React / Electron / alx_web → HTTP API → Application Gateway → Supabase
 
 ## تصحيح مصدر المصادقة — 2026-10-01 20:56:00 +0000 — AI Model: Manus
 تم إلغاء الاعتماد السابق على Supabase Auth. verifier المرحلة 13 يعتمد حصريًا على `public.sessions` و`public.users` عبر adapter المحلي. يتم إرسال session ID المحلي من `sessionStorage` بواسطة ApiClient، والتحقق من force logout وdisabled وlast_seen قبل تفعيل Customers/Couriers.
+
+
+## تدقيق مطابق للخطة المرفقة — 2026-10-02 00:08 +0300 — AI Model: Manus
+الخطة المرفقة تعرف المرحلة 13 بأنها **تخفيض اعتماد `alx_web` على Supabase**، وتشترط `alx_web/src/api`, `alx_web/src/contracts`, Portal Gateway، Public Tracking DTO دون PII، Portal User Session DTO، legacy-supabase isolation، وfeature flag. هذه المخرجات غير موجودة في المستودع الحالي؛ فحص المسارات أثبت غياب `alx_web/src/api`, `alx_web/src/contracts`, و`alx_web/src/lib/legacy-supabase`. ما نُفذ سابقًا تحت اسم API Foundation هو نطاق مختلف داخل النظام، وليس إغلاقًا للمرحلة 13 حسب الخطة المرفقة. لذلك لا يعتمد هذا التدقيق المرحلة 13 ولا يوصي ببدء `alx_api` الإنتاجية.

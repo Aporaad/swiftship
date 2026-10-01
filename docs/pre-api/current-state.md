@@ -106,3 +106,7 @@
 
 ## Local auth correction — 2026-10-01 20:56:00 +0000 — AI Model: Manus
 مصدر الوثوقية المعتمد الآن هو `public.sessions` ثم `public.users` فقط. تم حذف الاعتماد على Supabase Auth من API Foundation، ويستخدم ApiClient session ID المحلي عند استدعاء Customers/Couriers.
+
+
+## تدقيق الخطة المرفقة — 2026-10-02 00:08 +0300 — AI Model: Manus
+الحكم الحالي: **المراحل 11 و12 و13 ليست مغلقة بالكامل وفق الخطة المرفقة**. المرحلة 11 ما زال فيها `any` فعلي داخل `EditOrderModal`. المرحلة 12 لديها ترحيل ناجح للمستهلكين الستة المحددين، لكن توجد حالات Async محلية إضافية خارج العقد الموحد. المرحلة 13 في الخطة تخص `alx_web`، بينما الدفعات السابقة نفذت API Foundation داخل النظام؛ مخرجات `alx_web/src/api`, `alx_web/src/contracts`, Portal/Public Tracking وfeature flag لم تنفذ. لا يعتمد الانتقال إلى `alx_api` قبل معالجة هذه الفجوات.

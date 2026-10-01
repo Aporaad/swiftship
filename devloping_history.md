@@ -1920,3 +1920,7 @@
 
 ## [2026-10-01 20:56:00 +0000] — تصحيح المصادقة إلى public.users/public.sessions — AI Model: Manus
 تم تصحيح الانحراف السابق وإزالة `supabase.auth` من API Foundation. أصبح verifier المحلي يقرأ session document من `public.sessions`، ثم user document من `public.users`، ويرفض الجلسات المنتهية أو force-logout أو المستخدمين المعطلين. تم اشتقاق permissions من role/is_root، وتم تحديث `ApiClient` لإرسال session ID المحلي من sessionStorage. لا يعتمد التنفيذ على access token أو Supabase Auth.
+
+
+## [2026-10-02 00:08:00 +0300] — تدقيق مطابق للخطة المرفقة — AI Model: Manus
+تمت مطابقة الخطة المرفقة مع `phase11-readiness`, `phase12-errors-loading`, `phase13-api-foundation-readiness` والكود الحالي. النتيجة غير مكتملة: strict check ناجح لكن `EditOrderModal` يحتفظ بـany فعلي، المرحلة 12 موحدة في ستة مستهلكين فقط مع بقاء حالات محلية إضافية، والمرحلة 13 الفعلية في الخطة تخص `alx_web` ولم تُنفذ مخرجاتها. تم توثيق الفجوات وعدم اعتماد الانتقال إلى `alx_api` الإنتاجية.

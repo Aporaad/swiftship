@@ -246,3 +246,7 @@ src/shared/contracts/finance.contracts.ts
 - الحفاظ على فصل Business Logic عن UI وعدم تعديل مخطط قاعدة البيانات.
 
 **التحقق:** `npm run check` ناجح، الاختبارات الكاملة 235 ناجحة و8 متخطاة، والبناء ناجح مع تحذيرات baseline الخاصة بحجم chunks و`import.meta` في CJS.
+
+
+## تدقيق مطابق للخطة المرفقة — 2026-10-02 00:08 +0300 — AI Model: Manus
+الخطة المرفقة تشترط في المرحلة 11: `strict: true`، منع `any` في Auth/Orders/Accounting، استخدام `unknown` عند حدود البيانات، وعدم تصدير Database Rows إلى React. تحقق `npx tsc --noEmit --strict --pretty false` بنجاح، و`strict: true` موجود في `tsconfig.json`، لكن ما زالت حالات `any` فعلية في `src/components/orders/EditOrderModal.tsx` (Props، formData، items/shippings، callbacks، catch). لذلك **المرحلة 11 غير مغلقة بالكامل** وفق نص الخطة، رغم إغلاق أجزاء Finance/Orders typed boundaries وتوثيقها سابقًا.
