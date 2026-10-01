@@ -1,5 +1,5 @@
 import type { AuditDto, IsoUtcString, NumericValue } from './common.dto';
-import type { PostingStatus } from '../../shared/contracts/value-primitives';
+import type { ConvertedAmount, ExchangeRate, OriginalAmount, PostingStatus } from '../../shared/contracts/value-primitives';
 
 export interface FinanceEntryDatabaseRow {
   main_entry_id: string;
@@ -92,10 +92,10 @@ export interface FinanceEntryLineDto {
   direction: string;
   accountId: string;
   accountCurrencyId: number | null;
-  amount: number;
-  originalAmount: number | null;
+  amount: ConvertedAmount;
+  originalAmount: OriginalAmount | null;
   originalCurrencyId: number | null;
-  conversionRate: number | null;
+  conversionRate: ExchangeRate | null;
   entityType: string | null;
   entityId: string | null;
   paymentMethod: string | null;
@@ -108,7 +108,7 @@ export interface FinanceEntryPaymentDetailDto {
   allocationNumber: number;
   paymentMethod: string;
   accountId: string | null;
-  originalAmount: number;
+  originalAmount: OriginalAmount;
   originalCurrencyId: number | null;
   bankReference: string | null;
   dueAt: IsoUtcString | null;

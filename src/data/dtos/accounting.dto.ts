@@ -1,4 +1,5 @@
 import type { AuditDto, IsoUtcString, NumericValue } from './common.dto';
+import type { CurrencyCode } from '../../shared/contracts/value-primitives';
 
 export interface AccountingDatabaseRow {
   account_id: string;
@@ -138,7 +139,7 @@ export interface AccountingApiDto {
   groupId: string | null;
   sequence: number | null;
   currencyId: number | null;
-  currencyCode: string | null;
+  currencyCode: CurrencyCode | null;
   balance: number;
   debitTotal: number;
   creditTotal: number;
@@ -155,7 +156,7 @@ export interface AccountingApiDto {
 
 export interface CurrencyApiDto {
   currencyId: number;
-  code: string;
+  code: CurrencyCode;
   nameAr: string | null;
   subNameAr: string | null;
   nameEn: string | null;

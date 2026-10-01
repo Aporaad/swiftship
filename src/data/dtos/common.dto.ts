@@ -124,8 +124,11 @@ export function booleanOrDefault(value: unknown, fallback = false): boolean {
 export {
   amountOrNull,
   approvalStatusOrNull,
+  convertedAmountOrNull,
   currencyCodeOrNull,
+  exchangeRateOrNull,
   isoDateOrNull,
+  originalAmountOrNull,
   orderStatusOrNull,
   paymentStatusOrNull,
   postingStatusOrNull,
@@ -135,8 +138,11 @@ export {
 export type {
   Amount,
   ApprovalStatus,
+  ConvertedAmount,
   CurrencyCode,
+  ExchangeRate,
   IsoDateString,
+  OriginalAmount,
   OrderStatus,
   PaymentStatus,
   PostingStatus,

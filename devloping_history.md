@@ -1758,3 +1758,8 @@
 ## [2026-10-01 04:27:00 +03:00] — المرحلة 11: توحيد نطاقات الحالات — AI Model: Manus
 
 تم توحيد PostingStatus وPaymentStatus وOrderStatus وShipmentStatus كنطاقات مستقلة. أُضيفت مطبعات الحالات، ودُعمت aliases الدفع، وضُيقت DTOs الخاصة بالعرض وmappers دون تغيير Database Rows أو payloadات legacy. رُبط FinancialPostingStatus بالعقد canonical مع استبعاد voided من مدخلات الإنشاء. التحقق: 221 اختبارًا ناجحًا و8 متخطاة، check والبناء ناجحان.
+
+
+## [2026-10-01 04:33:00 +03:00] — المرحلة 11: ترحيل العملات والمبالغ — AI Model: Manus
+
+أضيفت أنواع `OriginalAmount` و`ConvertedAmount` و`ExchangeRate` ومطبعاتها، وطُبقت على خطوط القيود وتفاصيل الدفع. تم تضييق رموز العملات في Accounting وCurrency وOrder DTOs إلى `CurrencyCode` مع فصل الرموز النصية عن IDs الرقمية. حُدثت mappers دون تغيير payloadات legacy. التحقق: 222 اختبارًا ناجحًا و8 متخطاة، check والبناء ناجحان.

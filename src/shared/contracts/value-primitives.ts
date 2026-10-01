@@ -2,6 +2,9 @@
 export type IsoDateString = string & { readonly __brand: 'IsoDateString' };
 export type CurrencyCode = string & { readonly __brand: 'CurrencyCode' };
 export type Amount = number & { readonly __brand: 'Amount' };
+export type OriginalAmount = number & { readonly __brand: 'OriginalAmount' };
+export type ConvertedAmount = number & { readonly __brand: 'ConvertedAmount' };
+export type ExchangeRate = number & { readonly __brand: 'ExchangeRate' };
 export type StatusCode = string & { readonly __brand: 'StatusCode' };
 export type ApprovalStatus = 'approved' | 'pending_approval' | 'rejected';
 export type PostingStatus = 'draft' | 'posted' | 'voided';
@@ -30,6 +33,27 @@ export function amountOrNull(value: unknown): Amount | null {
   if (value === null || value === undefined || value === '') return null;
   const parsed = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
   return Number.isFinite(parsed) ? (parsed as Amount) : null;
+}
+
+function finiteNumberOrNull(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function originalAmountOrNull(value: unknown): OriginalAmount | null {
+  const parsed = finiteNumberOrNull(value);
+  return parsed === null ? null : (parsed as OriginalAmount);
+}
+
+export function convertedAmountOrNull(value: unknown): ConvertedAmount | null {
+  const parsed = finiteNumberOrNull(value);
+  return parsed === null ? null : (parsed as ConvertedAmount);
+}
+
+export function exchangeRateOrNull(value: unknown): ExchangeRate | null {
+  const parsed = finiteNumberOrNull(value);
+  return parsed === null || parsed <= 0 ? null : (parsed as ExchangeRate);
 }
 
 export function statusCodeOrNull(value: unknown): StatusCode | null {

@@ -5,8 +5,12 @@
   numberOrNull,
   textOrNull,
   asIsoUtc,
+  convertedAmountOrNull,
+  currencyCodeOrNull,
+  exchangeRateOrNull,
   isoDateOrNull,
   approvalStatusOrNull,
+  originalAmountOrNull,
   orderStatusOrNull,
   paymentStatusOrNull,
   postingStatusOrNull,
@@ -25,6 +29,7 @@ import type { CouriersApiDto, CouriersDatabaseRow, CourierProfile } from '../cou
 import type { EmployeesApiDto, EmployeesDatabaseRow } from '../employees.dto';
 import type { AccountingApiDto, AccountingDatabaseRow, CurrencyApiDto, CurrencyDatabaseRow, CurrencyPriceApiDto, CurrencyPriceDatabaseRow, CustodyAdvanceApiDto, CustodyAdvanceDatabaseRow } from '../accounting.dto';
 import type { AccountTransactionDatabaseRow, EntryPaymentDetailDatabaseRow, FinanceEntryDatabaseRow, FinanceEntryApiDto, FinanceEntryLineDto, FinanceEntryPaymentDetailDto } from '../finance-entries.dto';
+import type { ConvertedAmount, CurrencyCode, OriginalAmount } from '../../../shared/contracts/value-primitives';
 import type { ActivityLogApiDto, ActivityLogDatabaseRow, NotificationPayload, NotificationsApiDto, NotificationsDatabaseRow } from '../notifications.dto';
 import type { ReportPrintTemplateData, ReportSettingsApiDto, ReportSettingsDatabaseRow, ReportTemplateApiDto, ReportTemplateDatabaseRow } from '../reports.dto';
 import type { AnnouncementContent, JobApplicationData, JobRequestApiDto, JobRequestDatabaseRow, PortalTicketApiDto, PortalTicketDatabaseRow, SiteManagementApiDto, SiteManagementDatabaseRow } from '../site-management.dto';
@@ -301,7 +306,7 @@ export function mapOrdersRowToDto(row: OrdersDatabaseRow, related: OrderRelatedD
     createdByName: textOrNull(row.created_by_name),
     totalAmount: numberOrNull(orderData.totalAmount ?? orderData.totalPrice),
     totalPrice: numberOrNull(orderData.totalPrice ?? orderData.totalAmount),
-    currency: orderData.currency ?? orderData.orderCurrency ?? null,
+    currency: currencyCodeOrNull(orderData.currency ?? orderData.orderCurrency),
     notes: orderData.notes ?? null,
     paymentStatus: paymentStatusOrNull(orderData.paymentStatus),
     status: orderStatusOrNull(orderData.status ?? orderData.orderStatus),
@@ -568,7 +573,7 @@ export function mapAccountingRowToDto(row: AccountingDatabaseRow, currencyCode?:
     groupId: textOrNull(row.group_id),
     sequence: row.account_seq,
     currencyId: row.cur_no,
-    currencyCode: currencyCode ?? textOrNull(row.currency),
+    currencyCode: currencyCodeOrNull(currencyCode ?? row.currency),
     balance: numberOrNull(row.balance) ?? 0,
     debitTotal: numberOrNull(row.debit_total) ?? 0,
     creditTotal: numberOrNull(row.credit_total) ?? 0,
@@ -587,7 +592,7 @@ export function mapAccountingRowToDto(row: AccountingDatabaseRow, currencyCode?:
 export function mapCurrencyRowToDto(row: CurrencyDatabaseRow): CurrencyApiDto {
   return {
     currencyId: row.cur_id,
-    code: row.code,
+    code: currencyCodeOrNull(row.code) ?? (row.code as CurrencyCode),
     nameAr: textOrNull(row.main_name_ar),
     subNameAr: textOrNull(row.sub_name_ar),
     nameEn: textOrNull(row.main_name_en),
@@ -643,10 +648,10 @@ export function mapAccountTransactionRowToDto(row: AccountTransactionDatabaseRow
     direction: row.trans_type,
     accountId: row.account_id,
     accountCurrencyId: row.account_cur_no,
-    amount: numberOrNull(row.amount) ?? 0,
-    originalAmount: numberOrNull(row.amount_original),
+    amount: convertedAmountOrNull(row.amount) ?? (0 as ConvertedAmount),
+    originalAmount: originalAmountOrNull(row.amount_original),
     originalCurrencyId: row.currency_original_no,
-    conversionRate: numberOrNull(row.conversion_rate),
+    conversionRate: exchangeRateOrNull(row.conversion_rate),
     entityType: textOrNull(row.entity_type),
     entityId: textOrNull(row.entity_id),
     paymentMethod: textOrNull(row.payment_method),
@@ -661,7 +666,7 @@ export function mapEntryPaymentDetailRowToDto(row: EntryPaymentDetailDatabaseRow
     allocationNumber: row.allocation_no,
     paymentMethod: row.payment_method,
     accountId: textOrNull(row.account_id),
-    originalAmount: numberOrNull(row.amount_original) ?? 0,
+    originalAmount: originalAmountOrNull(row.amount_original) ?? (0 as OriginalAmount),
     originalCurrencyId: row.currency_original_no,
     bankReference: textOrNull(row.bank_reference),
     dueAt: isoOrNull(row.due_at),

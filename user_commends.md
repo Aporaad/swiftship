@@ -958,3 +958,11 @@ Now continue the task based on the inherited context and files. Re-read all rele
 [2026-10-01T04:24:40+03:00]
 أكمل النطاق التالي من المرحلة الحادية عشرة وهو توحيد حالات الترحيل (PostingStatus) وحالات الدفع (PaymentStatus). وحالات الطلب والشحن
 ```
+
+
+## [2026-10-01 04:33:00 +03:00] — نص أمر المستخدم كما ورد — AI Model: Manus
+```text
+[2026-10-01T04:29:40+03:00]
+ابدأ بتنفيذ ترحيل DTOs العملات والمبالغ
+ والفصل بين CurrencyCode وAmount وExchangeRateوOriginalAmountوConvertedAmount.
+```

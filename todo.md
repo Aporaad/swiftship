@@ -1041,3 +1041,13 @@
 - [x] تحديث mappers المالية والطلبات والشحن دون دمج domains مختلفة.
 - [x] نجاح check، الاختبارات الكاملة: 221 ناجحًا و8 متخطاة، والبناء.
 - [ ] الانتقال إلى ترحيل DTOs العملات والمبالغ، مع فصل original amount عن converted amount.
+
+
+## [2026-10-01 04:33 +03:00] — ترحيل CurrencyCode وأدوار المبالغ — AI Model: Manus
+- [x] إضافة `OriginalAmount` و`ConvertedAmount` و`ExchangeRate` كمجالات رقمية مستقلة.
+- [x] إضافة مطبعات تحقق للأرقام وسعر الصرف الموجب.
+- [x] تطبيق أدوار المبالغ على `FinanceEntryLineDto` و`FinanceEntryPaymentDetailDto`.
+- [x] تطبيق `CurrencyCode` على رموز العملات في Accounting وCurrency وOrder DTOs.
+- [x] تحديث mappers مع إبقاء currency IDs منفصلة عن CurrencyCode وعدم اختراع fallback.
+- [x] نجاح check والاختبارات الكاملة: 222 ناجحًا و8 متخطاة، والبناء.
+- [ ] استكمال ترحيل CustodyAdvance والمبالغ المالية في Orders/Products مع فصل original/converted عند توفر الحقلين فعليًا.

@@ -108,3 +108,12 @@ src/shared/contracts/finance.contracts.ts
 تم تضييق `FinanceEntryApiDto.postingStatus` و`OrderApiDto.paymentStatus/status` و`ShipmentsApiDto.status`، مع إبقاء Database Rows وpayloadات النماذج legacy نصية عند الحاجة. المطبعات تدعم aliases الدفع lowercase/underscore وتعيد القيمة canonical، بينما ترفض PostingStatus غير المعروف. تم ربط `FinancialPostingStatus` بالخطة canonical مع إبقاء `voided` نتيجة lifecycle لا حالة إنشاء عادية.
 
 تم تحديث mappers المالية والطلبات والشحن، وإضافة اختبارات الحالات. التحقق: check ناجح، 221 اختبارًا ناجحًا و8 متخطاة، والبناء ناجح مع تحذيرات البناء السابقة فقط. لا SQL أو تغييرات قاعدة بيانات.
+
+
+## ترحيل CurrencyCode وأدوار المبالغ — 2026-10-01 04:33 +03:00 — AI Model: Manus
+
+أضيفت primitives مستقلة: `CurrencyCode`، `OriginalAmount`، `ConvertedAmount`، و`ExchangeRate`. تم توفير مطبعات تتحقق من الأرقام finite، وترفض سعر الصرف غير الموجب، ولا تخلط المبلغ الأصلي بالمحوّل.
+
+تم تطبيقها تدريجيًا على حدود DTOs التالية: `FinanceEntryLineDto.amount` أصبح `ConvertedAmount`، و`originalAmount` أصبح `OriginalAmount`، و`conversionRate` أصبح `ExchangeRate`; كما أصبح `FinanceEntryPaymentDetailDto.originalAmount` من نوع `OriginalAmount`. تم تضييق `AccountingApiDto.currencyCode` و`CurrencyApiDto.code` و`OrderApiDto.currency` إلى `CurrencyCode` مع إبقاء معرفات العملات الرقمية منفصلة عن الرموز النصية.
+
+تم تحديث mappers لاستخدام المطبعّات وعدم اختراع fallback لرمز العملة، مع إبقاء Database Rows وpayloadات legacy العامة دون تغيير. التحقق: check ناجح، 222 اختبارًا ناجحًا و8 متخطاة، والبناء ناجح مع تحذيرات البناء السابقة فقط. لا SQL أو تغييرات قاعدة بيانات.

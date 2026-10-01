@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { amountOrNull, approvalStatusOrNull, currencyCodeOrNull, isoDateOrNull, orderStatusOrNull, paymentStatusOrNull, postingStatusOrNull, shipmentStatusOrNull, statusCodeOrNull } from './value-primitives';
+import { amountOrNull, approvalStatusOrNull, convertedAmountOrNull, currencyCodeOrNull, exchangeRateOrNull, isoDateOrNull, orderStatusOrNull, originalAmountOrNull, paymentStatusOrNull, postingStatusOrNull, shipmentStatusOrNull, statusCodeOrNull } from './value-primitives';
 
 describe('value primitives', () => {
   it('accepts only real calendar dates in date-only format', () => {
@@ -21,6 +21,14 @@ describe('value primitives', () => {
     expect(amountOrNull('NaN')).toBeNull();
     expect(amountOrNull(Infinity)).toBeNull();
     expect(amountOrNull({ value: 1 })).toBeNull();
+  });
+
+  it('keeps original, converted, and exchange-rate roles explicit', () => {
+    expect(originalAmountOrNull('100.25')).toBe(100.25);
+    expect(convertedAmountOrNull(200)).toBe(200);
+    expect(exchangeRateOrNull('0.5')).toBe(0.5);
+    expect(exchangeRateOrNull(0)).toBeNull();
+    expect(exchangeRateOrNull('NaN')).toBeNull();
   });
 
   it('trims status labels but preserves their legacy value and casing', () => {
