@@ -743,3 +743,8 @@ select distinct k.key as data_key from public.cust_details d cross join lateral 
 ```text
 لا يوجد أمر SQL؛ الدفعة تخص typed contracts وتوحيد حالات loading/error/submitting فقط.
 ```
+
+## [2026-10-02 00:56:00 +0300] — AI Model: Manus
+```text
+لا يوجد أمر SQL في هذه الدفعة؛ تم تنفيذ تغييرات TypeScript وPortal Gateway فقط دون اتصال كتابة بقاعدة البيانات.
+```

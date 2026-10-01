@@ -118,3 +118,14 @@ React / Electron / alx_web → HTTP API → Application Gateway → Supabase
 
 ## مراجعة التنفيذ — 2026-10-02 00:31 +0300 — AI Model: Manus
 لم يُنفذ نطاق جديد للمرحلة 13. السبب: الخطة المعتمدة تعرف المرحلة بأنها مخرجات داخل `alx_web`، والمستخدم طلب تجاوز `alx_web`، كما أن مجلد المشروع غير موجود في المستودع الحالي. تم رفض إدخال API Foundation بديل حتى لا يحدث تنفيذ خارج الخطة.
+
+## بدء النطاق الصحيح — 2026-10-02 00:56:00 +0300 — AI Model: Manus
+تم جلب مستودع الموقع `Aporaad/alx_web` وبدأ تنفيذ مخرجات المرحلة 13 داخله:
+
+- إنشاء `src/api` و`src/contracts`.
+- إضافة `PublicTrackingDto` لا يحتوي PII و`PortalUserSessionDto` لا يحتوي كلمات مرور أو tokens.
+- إضافة `PortalGateway` وHTTP implementation قابلة للتبديل خلف `VITE_PORTAL_API_ENABLED` و`VITE_PORTAL_API_BASE_URL`.
+- عزل Supabase implementation في `src/lib/legacy-supabase` مع إبقاء `src/lib/supabase.ts` compatibility re-export مؤقتاً.
+- لم يتم تفعيل HTTP flag افتراضياً، ولم تُنقل الاستعلامات القديمة دفعة واحدة قبل اعتماد endpoints وحماية الملكية.
+
+التحقق: `npm run build` في alx_web ناجح. لا SQL أو تغييرات DB/RLS. الخطوة التالية هي نقل أول قراءة read-only إلى Portal Gateway بعد تثبيت endpoint server contract، ثم إزالة imports المباشرة تدريجياً.

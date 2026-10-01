@@ -1072,3 +1072,9 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 
 ## [2026-10-02 00:31:30 +0300] — AI Model: Manus
 لم تُنفذ أوامر SQL، ولم تتغير الجداول أو الأعمدة أو RLS أو migrations. التغييرات تخص TypeScript وUI Async contracts فقط.
+
+## [2026-10-02 00:56:00 +0300] — توثيق قاعدة البيانات للدفعة الحالية — AI Model: Manus
+- لم تُنفذ أي أوامر SQL.
+- لم تتغير الجداول أو الأعمدة أو العلاقات أو RLS أو migrations.
+- `CustodyAdvancesTab` استمر باستخدام الخدمة المالية الحالية وحدودها الذرية دون تعديل قاعدة البيانات.
+- عقود `PublicTrackingDto` و`PortalUserSessionDto` في alx_web تعريفات TypeScript فقط ولا تنفذ وصولاً مباشراً لقاعدة البيانات.

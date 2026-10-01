@@ -1931,3 +1931,13 @@
 
 ## [2026-10-02 00:31:30 +0300] — Typed EditOrder وAsync unification — AI Model: Manus
 أزيلت حالات `any` من `EditOrderModal.tsx` عبر العقود المشتركة وadapter typed دون حذف JSX. تم توحيد حالات query/mutation في مستهلكي Orders المحددين و`FinanceEntriesPage` عبر `AsyncState`، مع الحفاظ على رسائل الواجهة ومسارات الحفظ. `npm run check` و237 اختبارًا والبناء الإنتاجي نجحت. لم يُنفذ كود مرحلة 13 خارج الخطة؛ نطاقها المعتمد يتطلب `alx_web` الذي طلب المستخدم تجاوزه.
+
+## [2026-10-02 00:56:00 +0300] — دفعة Async للمرحلة 12 وتهيئة Portal Gateway للمرحلة 13 — AI Model: Manus
+- تم استبدال `busy/error` المحليين في `src/components/finance/CustodyAdvancesTab.tsx` بعقد `AsyncState` و`runMutation` لعمليتي إصدار العهدة وتسويتها.
+- بقيت حدود التحقق ورسائل الواجهة ومسارات الخدمة المالية كما هي؛ لا تغيير في transaction boundary أو سلوك القيد الذري.
+- تم جلب مستودع الموقع `Aporaad/alx_web` وبدء المرحلة 13 داخله بدلاً من إدخال API خارج الخطة في النظام الرئيسي.
+- أضيفت عقود `PublicTrackingDto` الخالية من PII و`PortalUserSessionDto` الخالية من الأسرار.
+- أضيف `PortalGateway` وHTTP implementation خلف feature flag، مع fallback آمن غير متصل بـAPI عند تعطيل العلم.
+- نُقلت implementation Supabase القديمة إلى `src/lib/legacy-supabase/supabase.ts` وأصبح `src/lib/supabase.ts` ملف توافق deprecated فقط.
+- التحقق: `npm run check` و`npm test -- --reporter=dot` في النظام الرئيسي ناجحان (67 ملفاً، 237 اختباراً، 3 متخطاة، 8 اختبارات متخطاة)، و`npm run build` ناجح. بناء `alx_web` ناجح.
+- لا SQL ولا تغييرات قاعدة بيانات أو RLS.

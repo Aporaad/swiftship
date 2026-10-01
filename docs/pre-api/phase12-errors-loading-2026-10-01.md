@@ -100,3 +100,8 @@
 
 ## دفعة Async إضافية — 2026-10-02 00:31 +0300 — AI Model: Manus
 تم توحيد loading/error/submitting في `ProductsManagementTab` و`ProductPickerModal` و`ItemCategoriesManagementTab` و`OrderHistoryModal` و`useOrderData` و`FinanceEntriesPage` عبر `AsyncState`. الاختبارات الكاملة نجحت: 67 ملفًا و237 اختبارًا. ما زالت مكونات مالية أخرى تحتوي حالات error/busy محلية، ولذلك لم يُعلن إغلاق المرحلة 12 على مستوى كل نطاق النظام.
+
+## متابعة تنفيذ — 2026-10-02 00:56:00 +0300 — AI Model: Manus
+تم ترحيل عمليتي إصدار وتسوية العهد في `src/components/finance/CustodyAdvancesTab.tsx` إلى `AsyncState` و`runMutation`. أصبحت حالة `submitting` ومعلومات الخطأ ناتجة عن العقد المشترك، مع إبقاء أخطاء التحقق ضمن نفس العقد. لم يُعلن الإغلاق الشامل للمرحلة 12 بعد لأن بقية المكونات المالية ما زالت تحتاج جرداً وترحيلاً تدريجياً.
+
+التحقق: `npm run check` ناجح، و`npm test -- --reporter=dot` ناجح (237 اختباراً ناجحاً و8 متخطاة)، والبناء ناجح. لا SQL أو DB/RLS changes.
