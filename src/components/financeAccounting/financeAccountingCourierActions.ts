@@ -28,6 +28,9 @@ interface CourierOrderRecord {
   amountRemaining?: number | string;
 }
 
+const errorMessage = (error: unknown, fallback: string): string =>
+  error instanceof Error && error.message ? error.message : fallback;
+
 export function createFinanceAccountingCourierActions(dependencies: ActionDependencies) {
   const { courierAuditSheet, currentUser, db, dbRates, doc, financialAccountService, isAr, notificationService, setBulkReconciliationLoading, setCargoRemitLoading, settings, updateDoc, writeBatch } = dependencies;
 
@@ -148,11 +151,11 @@ Continue?`
           : `Audit successful: All custodies, cargo collections, and balances resolved to 0 YER for ${cour.fullName}.`,
         type: 'success'
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       notificationService.notify({
         title: 'Audit transaction failed',
-        message: err.message || 'Error executing full courier reconciliation.',
+        message: errorMessage(err, 'Error executing full courier reconciliation.'),
         type: 'error'
       });
     } finally {
@@ -228,11 +231,11 @@ Continue?`
           : `Remittance logged: safely deposited ${amountLabel} from Courier collections.`,
         type: 'success'
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       notificationService.notify({
         title: 'Fm transaction error',
-        message: err.message || 'Remittance transaction failed.',
+        message: errorMessage(err, 'Remittance transaction failed.'),
         type: 'error'
       });
     } finally {
@@ -263,11 +266,11 @@ Continue?`
           : `Disgorged open trust for courier ${recipientName}. Safebox recalculated.`,
         type: 'success'
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       notificationService.notify({
         title: 'Writeback fault',
-        message: err.message || 'Could not discharge custody row in PostgreSQL.',
+        message: errorMessage(err, 'Could not discharge custody row in PostgreSQL.'),
         type: 'error'
       });
     }

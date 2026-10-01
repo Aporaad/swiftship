@@ -20,8 +20,8 @@ export interface FinanceTransactionRow {
 }
 
 export interface FinanceEntryRow extends FinanceTransactionRow { postingStatus?: string; entryNumber?: string; }
-export interface FinanceCourierRow { id?: string; accountId?: string; courierType?: string; financialCurrency?: string; [key: string]: unknown; }
-export interface FinanceSettings { currency?: string; [key: string]: unknown; }
+export interface FinanceCourierRow { id?: string; accountId?: string | null; courierType?: string | null; financialCurrency?: string | null; }
+export interface FinanceSettings { currency?: string; }
 interface LedgerGroup { debitLeg?: FinanceTransactionRow; creditLeg?: FinanceTransactionRow; legs: FinanceTransactionRow[]; }
 interface LedgerEntry {
   id: string; groupKey: string; journalEntryId: string | null; refNumber: string; date: Date;

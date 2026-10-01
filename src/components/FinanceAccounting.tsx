@@ -4,6 +4,13 @@ const numericValue = (value: unknown): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+interface FinanceEntryState {
+  refNumber?: string;
+  module?: string;
+  title?: string;
+  [key: string]: unknown;
+}
+
 import { CurrencySelect } from './common/CurrencySelect';
 import {
   FileText, Search, CreditCard, ShieldAlert, CheckCircle, Wallet, ArrowUpRight,
@@ -55,7 +62,7 @@ export default function FinanceAccounting({
   const { activeCurrencies, rates: dbRates } = useExchangeRates();
 
   // Selected order details drawer state
-  const [selectedOrderDetails, setSelectedOrderDetails] = useState<any | null>(null);
+  const [selectedOrderDetails, setSelectedOrderDetails] = useState<FinanceEntryState | null>(null);
 
   const formatAmountWithEquiv = (amount: number, currency: string) => {
     const formatted = `${amount.toLocaleString()} ${currency}`;
@@ -81,7 +88,7 @@ export default function FinanceAccounting({
     employees,
   } = useFinanceAccountingData();
 
-  const normalizedCustodyAdvances = useMemo(() => custodyAdvances.map((row: any) => ({
+  const normalizedCustodyAdvances = useMemo(() => custodyAdvances.map((row) => ({
     ...row,
     recipientId: row.recipientId ?? row.recipient_id,
     recipientName: row.recipientName ?? row.recipient_name,
@@ -108,7 +115,7 @@ export default function FinanceAccounting({
   const [salarySearch, setSalarySearch] = useState('');
   const [salaryEmployeeFilter, setSalaryEmployeeFilter] = useState('all');
   const [salaryMonthFilter, setSalaryMonthFilter] = useState('');
-  const [selectedSalaryVoucher, setSelectedSalaryVoucher] = useState<any>(null);
+  const [selectedSalaryVoucher, setSelectedSalaryVoucher] = useState<Record<string, unknown> | null>(null);
   // Employee Statement sub-view
   const [employeeStatementId, setEmployeeStatementId] = useState<string | null>(null);
   const [empStmtDateFilter, setEmpStmtDateFilter] = useState<'all' | '30days' | 'custom'>('all');
@@ -117,7 +124,7 @@ export default function FinanceAccounting({
 
   // Edit Journal Entry State
   const [isEditJournalOpen, setIsEditJournalOpen] = useState(false);
-  const [selectedEditEntry, setSelectedEditEntry] = useState<any | null>(null);
+  const [selectedEditEntry, setSelectedEditEntry] = useState<FinanceEntryState | null>(null);
   const [editJournalLoading, setEditJournalLoading] = useState(false);
   const [editJournalData, setEditJournalData] = useState({
     amountOriginal: '',
@@ -130,7 +137,7 @@ export default function FinanceAccounting({
 
   // Delete Entry with PIN Modal State
   const [isDeletePinModalOpen, setIsDeletePinModalOpen] = useState(false);
-  const [entryToDelete, setEntryToDelete] = useState<any | null>(null);
+  const [entryToDelete, setEntryToDelete] = useState<FinanceEntryState | null>(null);
   const [deletePin, setDeletePin] = useState('');
   const [deletePinError, setDeletePinError] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -158,7 +165,7 @@ export default function FinanceAccounting({
   const [customEndDate, setCustomEndDate] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'Debit' | 'Credit'>('all');
   const [currencyFilter, setCurrencyFilter] = useState<'all' | 'YER' | 'USD' | 'SAR'>('all');
-  const [selectedLedgerEntry, setSelectedLedgerEntry] = useState<any | null>(null);
+  const [selectedLedgerEntry, setSelectedLedgerEntry] = useState<FinanceEntryState | null>(null);
 
   // Target sub-account selection state for manual adjustment modal
   const [targetType, setTargetType] = useState<'general' | 'customer' | 'courier' | 'employee' | 'system' | string>('general');
@@ -190,7 +197,7 @@ export default function FinanceAccounting({
   const [payLoading, setPayLoading] = useState(false);
 
   // Print modal state
-  const [printData, setPrintData] = useState<any>(null);
+  const [printData, setPrintData] = useState<Record<string, unknown> | null>(null);
 
   // Currency utility converter
   const convertToYER = (amount: number, currency: string) => {
@@ -250,9 +257,9 @@ export default function FinanceAccounting({
 
     // Calculation for dynamic physical COD cash holdings
     const currentUnremittedCargoCash = orders
-      .filter(o => o.deliveryCourierId === auditedCourierId && (o.orderStatus === 'تم التسليم' || o.orderStatus === 'Delivered') && parseFloat(o.amountRemaining || 0) > 0);
+      .filter(o => o.deliveryCourierId === auditedCourierId && (o.orderStatus === 'تم التسليم' || o.orderStatus === 'Delivered') && numericValue(o.amountRemaining) > 0);
 
-    const totalUnremittedCashValue = currentUnremittedCargoCash.reduce((sum, o) => sum + parseFloat(o.amountRemaining || 0), 0);
+    const totalUnremittedCashValue = currentUnremittedCargoCash.reduce((sum, o) => sum + numericValue(o.amountRemaining), 0);
     const totalUnremittedCashValueInTargetCurrency = currency === 'SAR' ? totalUnremittedCashValue / (dbRates.SAR || 1) : totalUnremittedCashValue;
 
     const totalOrdersDelivered = courierOrders.filter(o => o.orderStatus === 'تم التسليم' || o.orderStatus === 'Delivered').length;
@@ -331,7 +338,7 @@ export default function FinanceAccounting({
     const customerTx = accountTransactions.filter(tx => tx.entityType === 'customer' && tx.entityId === auditedCustomerId);
     const sortedTx = [...customerTx].sort((a, b) => numericValue(a.createdAt) - numericValue(b.createdAt));
 
-    const rows: any[] = [];
+    const rows: Array<Record<string, unknown>> = [];
     let cumulativeBalance = 0; // Cumulative customer debt (YER)
 
     sortedTx.forEach(tx => {

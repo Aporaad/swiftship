@@ -35,6 +35,9 @@ const getOrderTimestamp = (value: CustomerOrderRecord['createdAt']): number => {
   return 0;
 };
 
+const errorMessage = (error: unknown, fallback: string): string =>
+  error instanceof Error && error.message ? error.message : fallback;
+
 export function createFinanceAccountingJournalActions(dependencies: ActionDependencies) {
   const { adjustData, adjustLoading, adjustSalaryMonth, auditedCustomerId, collection, currentUser, customerLedgerDetails, db, dbRates, deletePin, doc, editJournalData, employees, entryToDelete, financialAccountService, getDocs, isAr, isSalaryPayment, notificationService, orders, payAmount, payLoading, payNotes, postingFinancialAccounts, query, selectedEditEntry, setAdjustData, setAdjustLoading, setDeleteLoading, setDeletePin, setDeletePinError, setEditJournalLoading, setEntryToDelete, setIsAdjustmentModalOpen, setIsDeletePinModalOpen, setIsEditJournalOpen, setIsPayModalOpen, setIsSalaryPayment, setPayAmount, setPayLoading, setPayNotes, setSelectedEditEntry, setSourceAccountId, setTargetAccountId, setTargetType, settings, sourceAccountId, targetAccountId, targetType, where, writeBatch } = dependencies;
 
@@ -95,7 +98,7 @@ export function createFinanceAccountingJournalActions(dependencies: ActionDepend
               exchangeRates
             );
 
-            const updateData: any = {
+            const updateData: Record<string, unknown> = {
               amount: legNewAmount,
               amountOriginal: rawAmt,
               currencyOriginal: editJournalData.currencyOriginal,
@@ -150,11 +153,11 @@ export function createFinanceAccountingJournalActions(dependencies: ActionDepend
 
       setIsEditJournalOpen(false);
       setSelectedEditEntry(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       notificationService.notify({
         title: isAr ? 'خطأ' : 'Error',
-        message: err.message || 'Could not update entry',
+        message: errorMessage(err, 'Could not update entry'),
         type: 'error'
       });
     } finally {
@@ -193,7 +196,7 @@ export function createFinanceAccountingJournalActions(dependencies: ActionDepend
 
       // Find all transaction legs related to this voucher
       if (entryToDelete.allLegs && entryToDelete.allLegs.length > 0) {
-        entryToDelete.allLegs.forEach((leg: any) => {
+        entryToDelete.allLegs.forEach((leg: { id?: string; accountId?: string }) => {
           if (leg.id) {
             batch.delete(doc(db, 'account_trans', leg.id));
           }
@@ -235,9 +238,9 @@ export function createFinanceAccountingJournalActions(dependencies: ActionDepend
       setIsDeletePinModalOpen(false);
       setEntryToDelete(null);
       setDeletePin('');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error deleting entry:", err);
-      setDeletePinError(err.message || 'Failed to delete entry');
+      setDeletePinError(errorMessage(err, 'Failed to delete entry'));
     } finally {
       setDeleteLoading(false);
     }
@@ -363,11 +366,11 @@ export function createFinanceAccountingJournalActions(dependencies: ActionDepend
       setSourceAccountId('');
       setTargetAccountId('');
       setIsSalaryPayment(false);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       notificationService.notify({
         title: 'Error write-back',
-        message: err.message || 'Failed to persist manual voucher entry.',
+        message: errorMessage(err, 'Failed to persist manual voucher entry.'),
         type: 'error'
       });
     } finally {
@@ -486,11 +489,11 @@ export function createFinanceAccountingJournalActions(dependencies: ActionDepend
       setIsPayModalOpen(false);
       setPayAmount('');
       setPayNotes('');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       notificationService.notify({
         title: 'FIFO writeback error',
-        message: err.message || 'Error executing balance clearance.',
+        message: errorMessage(err, 'Error executing balance clearance.'),
         type: 'error'
       });
     } finally {

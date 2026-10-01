@@ -1143,3 +1143,11 @@
 - [ ] إغلاق legacy ActionDependencies وEditOrderModal المتبقية قبل اعتماد جاهزية المرحلة 13.
 - [ ] الانتقال إلى تأسيس API boundary في المرحلة 13 بعد تصفير inventory المتبقي والتحقق الكامل.
 - [x] حفظ checkpoint `6f62d8b` ورفعه بنجاح إلى `origin/main` بتاريخ 2026-10-01 19:36 +0000.
+
+## [2026-10-01 19:44:00 +0000] — مطابقة الجلسة الصحيحة OUH2bdAMJZvmN1qpeL9bzd
+- [x] مراجعة الجلسة الصحيحة وتأكيد أن آخر commit مرجعي للمرحلة 12 هو `d955663` على فرع `task/phase12-errors-loading`.
+- [x] مطابقة ذلك مع `main` الحالي الذي يحتوي commits لاحقة `c661f1c`, `6f62d8b`, و`802d34c`.
+- [x] استعادة `EditOrderModal` إلى آخر حالة مستقرة بعد رفض محاولة ترحيل واسعة سببت انتشار تشخيصات إلى `OrdersPageDialogs`.
+- [x] تضييق `FinanceAccountingProps` وحالات `FinanceAccounting` وإجراءات أخطاء المحاسبة دون كسر `npm run check`.
+- [ ] ما زال يلزم إغلاق `ActionDependencies` و`EditOrderModal` تدريجيًا قبل إعلان المرحلة 11 مغلقة.
+- [ ] لا يبدأ إغلاق المرحلة 12 أو المرحلة 13 قبل احترام هذا التسلسل.

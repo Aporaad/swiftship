@@ -1,11 +1,28 @@
 import type { ReactNode } from 'react';
 
+export interface FinanceAccountingEntity {
+  id: string;
+  deliveryCourierId?: string | null;
+  shippingCourierId?: string | null;
+  customerId?: string | null;
+  accountId?: string | null;
+  entityId?: string | null;
+  financialCurrency?: string | null;
+  orderStatus?: string | null;
+  amountRemaining?: number | string | null;
+  currency?: string | null;
+}
+
+export interface FinanceAccountingSettings {
+  currency?: string;
+}
+
 export interface FinanceAccountingProps {
-  orders: any[];
-  couriers: any[];
-  customers: any[];
+  orders: FinanceAccountingEntity[];
+  couriers: FinanceAccountingEntity[];
+  customers: FinanceAccountingEntity[];
   isAr: boolean;
-  settings: any;
+  settings: FinanceAccountingSettings;
   initialTab?: string;
 }
 
