@@ -1069,3 +1069,11 @@
 - [x] إزالة catch صريح من نوع `any` في OrdersPage.
 - [ ] معالجة 220 خطأ strict المتبقي تدريجيًا قبل تفعيل `strict: true`.
 - [ ] استكمال إزالة any من Orders/Accounting وبقية النطاقات دون casts غير موثقة.
+
+
+## [2026-10-01 04:52 +03:00] — دفعة nullability وtracking strict — AI Model: Manus
+- [x] إصلاح 9 أخطاء nullability في tracking-sync باستخدام guards محلية.
+- [x] تحويل catches وpayloadات tracking الصريحة من any إلى unknown/Record.
+- [x] إصلاح dead branch في tracking route تحت strict.
+- [x] خفض strict baseline إلى 208 خطأ.
+- [ ] إكمال implicit-any في Orders/Accounting وباقي أخطاء strict قبل تفعيل strict true.

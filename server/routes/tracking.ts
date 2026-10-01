@@ -123,7 +123,7 @@ export function registerTrackingRoutes(app: Express, db: any): void {
 
       // 3. دمج البيانات / Synthesise internal + external
       let trackingData: any = null;
-      if (internalDocData || externalResult) {
+        if (internalDocData) {
         const statusToUse = normalizeTrackingStatus(
           externalResult?.status ?? internalDocData?.status ?? internalDocData?.orderStatus,
         );
@@ -144,7 +144,7 @@ export function registerTrackingRoutes(app: Express, db: any): void {
             const statusChanged = statusToUse !== (internalDocData.status || internalDocData.orderStatus);
 
             if (historyChanged || statusChanged) {
-              const updatePayload: any = {
+              const updatePayload: Record<string, unknown> = {
                 history: externalResult.history,
                 orderStatus: statusToUse,
                 updatedAt: Date.now(),
@@ -165,8 +165,9 @@ export function registerTrackingRoutes(app: Express, db: any): void {
               }
               console.log(`[TrackingRoutes] Auto-sync persisted for ${trackingNumber}`);
             }
-          } catch (persistenceErr: any) {
-            console.error('[TrackingRoutes] Auto-sync failed:', persistenceErr.message);
+          } catch (persistenceErr: unknown) {
+            const message = persistenceErr instanceof Error ? persistenceErr.message : String(persistenceErr);
+            console.error('[TrackingRoutes] Auto-sync failed:', message);
           }
         }
       } else if (externalResult) {
