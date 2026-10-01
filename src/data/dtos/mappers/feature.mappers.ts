@@ -18,7 +18,7 @@ import type { ShipmentDatabaseRow, ShipmentsApiDto } from '../shipments.dto';
 import type { CouriersApiDto, CouriersDatabaseRow, CourierProfile } from '../couriers.dto';
 import type { EmployeesApiDto, EmployeesDatabaseRow } from '../employees.dto';
 import type { AccountingApiDto, AccountingDatabaseRow, CurrencyApiDto, CurrencyDatabaseRow, CurrencyPriceApiDto, CurrencyPriceDatabaseRow, CustodyAdvanceApiDto, CustodyAdvanceDatabaseRow } from '../accounting.dto';
-import type { AccountTransactionDatabaseRow, EntryPaymentDetailDatabaseRow, FinanceEntriesDatabaseRow, FinanceEntryApiDto, FinanceEntryLineDto, FinanceEntryPaymentDetailDto } from '../finance-entries.dto';
+import type { AccountTransactionDatabaseRow, EntryPaymentDetailDatabaseRow, FinanceEntryDatabaseRow, FinanceEntryApiDto, FinanceEntryLineDto, FinanceEntryPaymentDetailDto } from '../finance-entries.dto';
 import type { ActivityLogApiDto, ActivityLogDatabaseRow, NotificationPayload, NotificationsApiDto, NotificationsDatabaseRow } from '../notifications.dto';
 import type { ReportPrintTemplateData, ReportSettingsApiDto, ReportSettingsDatabaseRow, ReportTemplateApiDto, ReportTemplateDatabaseRow } from '../reports.dto';
 import type { AnnouncementContent, JobApplicationData, JobRequestApiDto, JobRequestDatabaseRow, PortalTicketApiDto, PortalTicketDatabaseRow, SiteManagementApiDto, SiteManagementDatabaseRow } from '../site-management.dto';
@@ -605,7 +605,7 @@ export function mapCurrencyPriceRowToDto(row: CurrencyPriceDatabaseRow): Currenc
   };
 }
 
-export function mapCustodyAdvanceRowToDto(row: CustodyAdvanceDatabaseRow) {
+export function mapCustodyAdvanceRowToDto(row: CustodyAdvanceDatabaseRow): CustodyAdvanceApiDto {
   return {
     custodyAdvanceId: row.custody_advance_id,
     custodyNumber: textOrNull(row.custody_number),
@@ -664,7 +664,7 @@ export function mapEntryPaymentDetailRowToDto(row: EntryPaymentDetailDatabaseRow
 }
 
 export function mapFinanceEntryRowToDto(
-  row: FinanceEntriesDatabaseRow,
+  row: FinanceEntryDatabaseRow,
   lines: FinanceEntryLineDto[] = [],
   paymentDetails: FinanceEntryPaymentDetailDto[] = [],
 ): FinanceEntryApiDto {

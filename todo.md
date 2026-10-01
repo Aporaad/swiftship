@@ -993,3 +993,14 @@
 - [x] نجاح `npm run check` واختبارات DTO/PermissionGate: 20 اختبارًا ناجحًا.
 - [x] لا SQL ولا تغييرات قاعدة بيانات/RLS.
 - [ ] استكمال جرد أسماء DTOs وmappers قبل أي إعادة تسمية إضافية.
+
+
+## [2026-10-01 04:10 +03:00] — استكمال جرد DTOs والـmappers — AI Model: Manus
+- [x] تصنيف طبقات `DatabaseRow` و`ApiDto` و`ViewModel` و`CreateInput/UpdateInput` عبر جميع ملفات `src/data/dtos`.
+- [x] مراجعة `feature.mappers.ts` والتأكد من وجود Row → ApiDto mapper للميزات الرئيسية، مع إضافة return type صريح لـ`mapCustodyAdvanceRowToDto`.
+- [x] إزالة aliases غير المستخدمة: `ReportsApiDto`, `ReportsDatabaseRow`, `ShipmentsDatabaseRow`, `FinanceEntriesViewModel`.
+- [x] توحيد `FinanceEntriesDatabaseRow` إلى `FinanceEntryDatabaseRow` وتحديث mapper واختبار العقد.
+- [x] إبقاء `OrdersWritePayload` وحقول `OrderFeatureRecord/ShipmentFeatureRecord` كـmigration debt موثق لأنها تخص compatibility adapter متعدد الكيانات.
+- [x] نجاح `npm run check` واختبارات DTO: 15/15.
+- [x] لا SQL ولا تغييرات قاعدة بيانات/RLS.
+- [ ] الانتقال إلى تنظيف معرفات الكيانات بعد تثبيت convention موحد للأسماء.

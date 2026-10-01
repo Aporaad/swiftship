@@ -36,7 +36,6 @@ export interface ReportTemplateDatabaseRow {
   updated_at: string | null;
   updated_by: string | null;
 }
-export type ReportsDatabaseRow = ReportTemplateDatabaseRow;
 
 export interface ReportSettingsDatabaseRow {
   report_setting_id: string;
@@ -57,7 +56,6 @@ export interface ReportTemplateApiDto {
   updatedAt: IsoUtcString | null;
   updatedBy: string | null;
 }
-export type ReportsApiDto = ReportTemplateApiDto;
 
 export interface ReportSettingsApiDto {
   reportSettingId: string;
@@ -70,4 +68,4 @@ export interface ReportSettingsApiDto {
 
 export type ReportsCreateInput = Omit<ReportTemplateApiDto, 'reportTemplateId' | 'createdAt' | 'updatedAt' | 'createdBy' | 'updatedBy'>;
 export type ReportsUpdateInput = Partial<ReportsCreateInput>;
-export type ReportsViewModel = Partial<ReportsApiDto> & { id: string };
+export type ReportsViewModel = Partial<ReportTemplateApiDto> & { id: string };

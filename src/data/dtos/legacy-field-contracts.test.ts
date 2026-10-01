@@ -15,7 +15,7 @@ import type {
   CustomersDatabaseRow,
   PortalUserDatabaseRow,
 } from './customers.dto';
-import type { FinanceEntriesDatabaseRow } from './finance-entries.dto';
+import type { FinanceEntryDatabaseRow } from './finance-entries.dto';
 import type { ActivityLogDatabaseRow, NotificationsDatabaseRow } from './notifications.dto';
 import type { OrdersDatabaseRow } from './orders.dto';
 import type { ProductCategoryDatabaseRow } from './products.dto';
@@ -125,7 +125,7 @@ describe('legacy feature field projections', () => {
   });
 
   it('preserves attachments associated with finance entries without dropping notes', () => {
-    const dto = mapFinanceEntryRowToDto(asRow<FinanceEntriesDatabaseRow>({
+    const dto = mapFinanceEntryRowToDto(asRow<FinanceEntryDatabaseRow>({
       main_entry_id: 'entry-1', created_at: timestamp, is_automatic: false,
       attachments: ['customer-proof.pdf', 'receipt.jpg'], notes: 'Customer documents',
     }));

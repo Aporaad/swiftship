@@ -1729,3 +1729,12 @@
 أُنشئ العقد canonical `src/shared/contracts/finance.contracts.ts` ونُقلت إليه الأنواع `FinanceAccount`, `FinanceCurrency`, `FinanceModule`, و`FinanceEntryType`. تم تحديث جميع المستهلكين إلى المصدر المشترك، وإزالة التعريفات المحلية، مع الحفاظ على `balance` و`isDefault` كحقول اختيارية لتغطية اختلافات القراءة الحالية دون تغيير السلوك. لم تُصدّر Database Rows إلى React ولم تُعدّل DTOs الكتابة أو mappers.
 
 التحقق: `npm run check` ناجح، واختبارات DTO وPermissionGate ناجحة (20/20). لم تُنفذ SQL ولم تتغير قاعدة البيانات أو RLS.
+
+
+## [2026-10-01 04:10:00 +03:00] — المرحلة 11: جرد DTOs والـmappers — AI Model: Manus
+
+تم فحص طبقات `DatabaseRow` و`ApiDto` و`ViewModel` و`CreateInput/UpdateInput` في جميع ملفات DTO، وفحص mapper المركزي واختبارات الحقول القديمة. تبين أن الفصل الأساسي قائم: صفوف المصدر snake_case، DTOs الناتجة camelCase، ViewModels عقود قراءة للبوابات، وInputs عقود كتابة.
+
+أزيلت aliases غير المستخدمة في التقارير والشحنات والقيود، ووُحد اسم `FinanceEntriesDatabaseRow` إلى `FinanceEntryDatabaseRow` لمطابقة `FinanceEntryApiDto`. كما أضيف return type صريح إلى `mapCustodyAdvanceRowToDto`. لم تُجر إعادة تسمية واسعة لـ`OrdersDatabaseRow` أو `ShipmentsApiDto` لأن بعضها أسماء موارد Collection وتحتاج convention migration موحدًا قبل تغييرها.
+
+تم تسجيل `OrdersWritePayload` وحقول legacy المزدوجة في `OrderFeatureRecord` و`ShipmentFeatureRecord` كدين ترحيل خاص بالـcompatibility adapter، لا كـaliases جديدة. التحقق: check ناجح واختبارات DTO 15/15، ولا تغييرات قاعدة بيانات.

@@ -39,7 +39,6 @@ export interface ShipmentDatabaseRow {
   created_by: string | null;
   updated_by: string | null;
 }
-export type ShipmentsDatabaseRow = ShipmentDatabaseRow;
 
 export interface ShipmentsApiDto {
   shipmentId: string;

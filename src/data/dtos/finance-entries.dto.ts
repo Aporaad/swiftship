@@ -1,6 +1,6 @@
 import type { AuditDto, IsoUtcString, NumericValue } from './common.dto';
 
-export interface FinanceEntriesDatabaseRow {
+export interface FinanceEntryDatabaseRow {
   main_entry_id: string;
   entry_number: string | null;
   module_id: string | null;
@@ -167,5 +167,4 @@ export interface FinanceEntryUpdateInput {
   effectiveAt?: IsoUtcString | null;
 }
 export type FinanceEntryViewModel = Partial<FinanceEntryApiDto> & Pick<FinanceEntryApiDto, 'entryId'> & { status?: string | null };
-export type FinanceEntriesViewModel = FinanceEntryViewModel;
-export type FinanceEntriesAudit = AuditDto;
+export type FinanceEntryAudit = AuditDto;
