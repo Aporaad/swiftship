@@ -1,7 +1,7 @@
 import type { AuditDto, IsoUtcString, NumericValue } from './common.dto';
 import type { OrderItemApiDto } from './products.dto';
 import type { ShipmentsApiDto } from './shipments.dto';
-import type { CurrencyCode, OrderStatus, PaymentStatus } from '../../shared/contracts/value-primitives';
+import type { Amount, CurrencyCode, OrderStatus, PaymentStatus } from '../../shared/contracts/value-primitives';
 
 /** Explicit allowlist of operational/financial keys written by the legacy Orders page into orders.data. */
 export interface OrderSupplementalData {
@@ -134,8 +134,8 @@ export interface OrderApiDto {
   courierId: string | null;
   orderPartyAccountId: string | null;
   createdByName: string | null;
-  totalAmount: number | null;
-  totalPrice: number | null;
+  totalAmount: Amount | null;
+  totalPrice: Amount | null;
   currency: CurrencyCode | null;
   notes: string | null;
   paymentStatus: PaymentStatus | null;

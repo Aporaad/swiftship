@@ -117,3 +117,16 @@ src/shared/contracts/finance.contracts.ts
 تم تطبيقها تدريجيًا على حدود DTOs التالية: `FinanceEntryLineDto.amount` أصبح `ConvertedAmount`، و`originalAmount` أصبح `OriginalAmount`، و`conversionRate` أصبح `ExchangeRate`; كما أصبح `FinanceEntryPaymentDetailDto.originalAmount` من نوع `OriginalAmount`. تم تضييق `AccountingApiDto.currencyCode` و`CurrencyApiDto.code` و`OrderApiDto.currency` إلى `CurrencyCode` مع إبقاء معرفات العملات الرقمية منفصلة عن الرموز النصية.
 
 تم تحديث mappers لاستخدام المطبعّات وعدم اختراع fallback لرمز العملة، مع إبقاء Database Rows وpayloadات legacy العامة دون تغيير. التحقق: check ناجح، 222 اختبارًا ناجحًا و8 متخطاة، والبناء ناجح مع تحذيرات البناء السابقة فقط. لا SQL أو تغييرات قاعدة بيانات.
+
+
+## إكمال ترحيل CustodyAdvance وOrders/Products — 2026-10-01 04:38 +03:00 — AI Model: Manus
+
+تم ترحيل `CustodyAdvanceApiDto` إلى `OriginalAmount` للحقول `amountOriginal` و`amountSettled` و`amountOutstanding`، مع إبقاء `currencyOriginalId` كمعرف رقمي مستقل. تم ترحيل إجماليات `OrderApiDto` إلى `Amount`، وحقول مبالغ العرض في `ProductsApiDto` و`ProductCategoryApiDto` و`OrderItemApiDto` و`ReturnedProductApiDto` إلى `Amount`، ورموز العملات إلى `CurrencyCode` حيث يوجد رمز فعلي.
+
+أعيدت mappers لاستخدام `amountOrNull` و`originalAmountOrNull` و`currencyCodeOrNull`، ولم تتم إعادة تسمية الحقول legacy أو اعتبار مبلغ منفرد converted/original بلا دليل من قاعدة البيانات. لا توجد حقول converted فعلية في Orders/Products يمكن فصلها بأمان في الجولة الحالية.
+
+التحقق: check ناجح، الاختبارات الكاملة 222 ناجحًا و8 متخطاة، والبناء ناجح. لا SQL أو تغييرات قاعدة بيانات.
+
+### تدقيق الإغلاق الإجرائي
+
+أظهر فحص قواعد المرحلة أن `strict: true` غير مفعّل وأن strict override ينتج 238 خطأً، كما يوجد 436 تطابقًا لـ`any` في النطاق الموسع. لذلك لا يمكن إعلان المرحلة 11 مكتملة بالكامل أو الانتقال إلى المرحلة 12 دون تنفيذ تنظيف واسع مستقل للـstrict/any؛ تم إبقاء هذه البنود مفتوحة بدل إخفائها أو ادعاء إنجازها.

@@ -1051,3 +1051,13 @@
 - [x] تحديث mappers مع إبقاء currency IDs منفصلة عن CurrencyCode وعدم اختراع fallback.
 - [x] نجاح check والاختبارات الكاملة: 222 ناجحًا و8 متخطاة، والبناء.
 - [ ] استكمال ترحيل CustodyAdvance والمبالغ المالية في Orders/Products مع فصل original/converted عند توفر الحقلين فعليًا.
+
+
+## [2026-10-01 04:38 +03:00] — CustodyAdvance وOrders/Products — AI Model: Manus
+- [x] ترحيل مبالغ CustodyAdvance إلى `OriginalAmount` مع إبقاء currency ID منفصلًا.
+- [x] ترحيل إجماليات OrderApiDto إلى `Amount`.
+- [x] ترحيل مبالغ Products/OrderItems/ReturnedProducts وProductCategory إلى `Amount` وCurrencyCode عند توفر رمز العملة.
+- [x] التحقق الكامل: 222 اختبارًا ناجحًا و8 متخطاة، check والبناء.
+- [ ] تفعيل `strict: true` بعد معالجة أخطائه الحالية (238 خطأ strict override).
+- [ ] إزالة `any` من Auth/Orders/Accounting وفق القياس الحالي (436 تطابقًا في النطاق الموسع).
+- [ ] إكمال Pagination/Error-state policy والصلاحيات كعناصر إجرائية قبل إعلان المرحلة 11 مكتملة والانتقال للمرحلة 12.

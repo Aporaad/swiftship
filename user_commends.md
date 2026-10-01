@@ -966,3 +966,11 @@ Now continue the task based on the inherited context and files. Re-read all rele
 ابدأ بتنفيذ ترحيل DTOs العملات والمبالغ
  والفصل بين CurrencyCode وAmount وExchangeRateوOriginalAmountوConvertedAmount.
 ```
+
+
+## [2026-10-01 04:38:00 +03:00] — نص أمر المستخدم كما ورد — AI Model: Manus
+```text
+[2026-10-01T04:35:02+03:00]
+أكمل الترحيل التدريجي لـ CustodyAdvance وحقول المبالغ في الطلبات والمنتجات وفقاً للخطة.
+وقم باكمال جميع بنود وخطوات المرحله  الحادية عشرة بحيث يتم الانتقال للمرحله التاليه مباشره بعد هذه المهمه
+```

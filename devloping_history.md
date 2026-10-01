@@ -1763,3 +1763,8 @@
 ## [2026-10-01 04:33:00 +03:00] — المرحلة 11: ترحيل العملات والمبالغ — AI Model: Manus
 
 أضيفت أنواع `OriginalAmount` و`ConvertedAmount` و`ExchangeRate` ومطبعاتها، وطُبقت على خطوط القيود وتفاصيل الدفع. تم تضييق رموز العملات في Accounting وCurrency وOrder DTOs إلى `CurrencyCode` مع فصل الرموز النصية عن IDs الرقمية. حُدثت mappers دون تغيير payloadات legacy. التحقق: 222 اختبارًا ناجحًا و8 متخطاة، check والبناء ناجحان.
+
+
+## [2026-10-01 04:38:00 +03:00] — المرحلة 11: CustodyAdvance وOrders/Products — AI Model: Manus
+
+اكتمل الترحيل التدريجي للعهدة ومبالغ الطلبات والمنتجات إلى `OriginalAmount` و`Amount` و`CurrencyCode` حيث يسمح العقد الفعلي، مع تحديث mappers ونجاح 222 اختبارًا و8 متخطاة وcheck والبناء. أظهر تدقيق الإغلاق أن strict override ينتج 238 خطأً وأن قياس any في النطاق الموسع 436 تطابقًا؛ لذلك بقيت بنود strict/any/Pagination/Error-state والصلاحيات مفتوحة ولم يُعلن إغلاق المرحلة بالكامل.

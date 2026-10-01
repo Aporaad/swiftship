@@ -1,4 +1,5 @@
 import type { AuditDto, IsoUtcString, NumericValue } from './common.dto';
+import type { Amount, CurrencyCode } from '../../shared/contracts/value-primitives';
 
 export interface ProductsDatabaseRow {
   product_id: string;
@@ -102,7 +103,7 @@ export interface ProductsApiDto {
   nameEn: string | null;
   url: string | null;
   priceCurrencyId: number | null;
-  unitPrice: number | null;
+  unitPrice: Amount | null;
   categoryId: string | null;
   isAllowed: boolean;
   cbm: number | null;
@@ -123,12 +124,12 @@ export interface ProductCategoryApiDto {
   nameEn: string | null;
   description: string | null;
   hsCodeHint: string | null;
-  customsPerCarton: number | null;
-  taxPerCarton: number | null;
-  otherFeesPerCarton: number | null;
+  customsPerCarton: Amount | null;
+  taxPerCarton: Amount | null;
+  otherFeesPerCarton: Amount | null;
   customsRate: number | null;
   taxRate: number | null;
-  feeCurrency: string | null;
+  feeCurrency: CurrencyCode | null;
   requiresReview: boolean;
   isActive: boolean;
   details: Record<string, unknown>;
@@ -142,7 +143,7 @@ export interface OrderItemApiDto {
   orderItemId: string;
   orderId: string;
   productId: string | null;
-  productPrice: number | null;
+  productPrice: Amount | null;
   productUrl: string | null;
   trackingNumber: string | null;
   sourceId: string | null;
@@ -150,13 +151,13 @@ export interface OrderItemApiDto {
   cooler: string | null;
   note: string | null;
   quantity: number;
-  totalPrice: number | null;
+  totalPrice: Amount | null;
   totalWeight: number | null;
   totalCbm: number | null;
   packagingOptionId: string | null;
-  packagingOptionPrice: number | null;
+  packagingOptionPrice: Amount | null;
   isInsured: boolean;
-  insuranceFee: number | null;
+  insuranceFee: Amount | null;
   status: string | null;
   createdAt: IsoUtcString;
   updatedAt: IsoUtcString | null;
@@ -178,10 +179,10 @@ export interface ReturnedProductApiDto {
   type: string | null;
   status: string;
   condition: string | null;
-  refundAmount: number | null;
-  refundCurrency: string | null;
+  refundAmount: Amount | null;
+  refundCurrency: CurrencyCode | null;
   isInsured: boolean;
-  insuranceRefund: number | null;
+  insuranceRefund: Amount | null;
   notes: string | null;
   returnedAt: IsoUtcString | null;
   processedBy: string | null;

@@ -1,5 +1,5 @@
 import type { AuditDto, IsoUtcString, NumericValue } from './common.dto';
-import type { CurrencyCode } from '../../shared/contracts/value-primitives';
+import type { CurrencyCode, OriginalAmount } from '../../shared/contracts/value-primitives';
 
 export interface AccountingDatabaseRow {
   account_id: string;
@@ -184,10 +184,10 @@ export interface CustodyAdvanceApiDto {
   recipientId: string;
   recipientName: string | null;
   recipientAccountId: string | null;
-  amountOriginal: number;
+  amountOriginal: OriginalAmount;
   currencyOriginalId: number | null;
-  amountSettled: number;
-  amountOutstanding: number;
+  amountSettled: OriginalAmount;
+  amountOutstanding: OriginalAmount;
   status: string;
   issuedEntryId: string | null;
   settlementEntryId: string | null;
