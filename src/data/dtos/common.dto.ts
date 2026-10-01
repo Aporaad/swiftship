@@ -126,6 +126,10 @@ export {
   approvalStatusOrNull,
   currencyCodeOrNull,
   isoDateOrNull,
+  orderStatusOrNull,
+  paymentStatusOrNull,
+  postingStatusOrNull,
+  shipmentStatusOrNull,
   statusCodeOrNull,
 } from '../../shared/contracts/value-primitives';
 export type {
@@ -133,5 +137,9 @@ export type {
   ApprovalStatus,
   CurrencyCode,
   IsoDateString,
+  OrderStatus,
+  PaymentStatus,
+  PostingStatus,
+  ShipmentStatus,
   StatusCode,
 } from '../../shared/contracts/value-primitives';

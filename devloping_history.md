@@ -1753,3 +1753,8 @@
 ## [2026-10-01 04:21:00 +03:00] — المرحلة 11: ترحيل DTO الشحن ونطاق الاعتماد — AI Model: Manus
 
 فُصل عقد `ShipmentSupplementalViewData` عن payload الشحن، وتمت معالجة حقول التاريخ date-only بواسطة `isoDateOrNull` داخل mapper. أضيف نطاق `ApprovalStatus` مستقل وتضييق `PortalUserApiDto` و`PortalUserCreateInput` مع تحويل الحالات غير المعروفة إلى null. التحقق الكامل: 219 اختبارًا ناجحًا و8 متخطاة، check والبناء ناجحان. ما زالت نطاقات posting/payment/order-shipment وترحيل العملات والمبالغ مفتوحة.
+
+
+## [2026-10-01 04:27:00 +03:00] — المرحلة 11: توحيد نطاقات الحالات — AI Model: Manus
+
+تم توحيد PostingStatus وPaymentStatus وOrderStatus وShipmentStatus كنطاقات مستقلة. أُضيفت مطبعات الحالات، ودُعمت aliases الدفع، وضُيقت DTOs الخاصة بالعرض وmappers دون تغيير Database Rows أو payloadات legacy. رُبط FinancialPostingStatus بالعقد canonical مع استبعاد voided من مدخلات الإنشاء. التحقق: 221 اختبارًا ناجحًا و8 متخطاة، check والبناء ناجحان.

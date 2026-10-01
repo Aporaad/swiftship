@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { amountOrNull, approvalStatusOrNull, currencyCodeOrNull, isoDateOrNull, statusCodeOrNull } from './value-primitives';
+import { amountOrNull, approvalStatusOrNull, currencyCodeOrNull, isoDateOrNull, orderStatusOrNull, paymentStatusOrNull, postingStatusOrNull, shipmentStatusOrNull, statusCodeOrNull } from './value-primitives';
 
 describe('value primitives', () => {
   it('accepts only real calendar dates in date-only format', () => {
@@ -33,5 +33,21 @@ describe('value primitives', () => {
     expect(approvalStatusOrNull('approved')).toBe('approved');
     expect(approvalStatusOrNull('pending_approval')).toBe('pending_approval');
     expect(approvalStatusOrNull('suspended')).toBeNull();
+  });
+
+  it('keeps posting statuses bounded to the accounting lifecycle', () => {
+    expect(postingStatusOrNull('draft')).toBe('draft');
+    expect(postingStatusOrNull('posted')).toBe('posted');
+    expect(postingStatusOrNull('voided')).toBe('voided');
+    expect(postingStatusOrNull('approved')).toBeNull();
+  });
+
+  it('normalizes payment status aliases without mixing order status domains', () => {
+    expect(paymentStatusOrNull('paid')).toBe('Paid');
+    expect(paymentStatusOrNull('partial_paid')).toBe('Partial Paid');
+    expect(paymentStatusOrNull('Unpaid')).toBe('Unpaid');
+    expect(paymentStatusOrNull('posted')).toBeNull();
+    expect(orderStatusOrNull(' طلب معلق ')).toBe('طلب معلق');
+    expect(shipmentStatusOrNull('in_transit')).toBe('in_transit');
   });
 });

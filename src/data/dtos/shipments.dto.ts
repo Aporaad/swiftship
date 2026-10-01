@@ -1,5 +1,5 @@
 import type { AuditDto, IsoUtcString, NumericValue } from './common.dto';
-import type { IsoDateString } from '../../shared/contracts/value-primitives';
+import type { IsoDateString, ShipmentStatus } from '../../shared/contracts/value-primitives';
 
 /** Non-column fields written by ShipmentFormModal and retained in the JSON payload. */
 export interface ShipmentSupplementalData {
@@ -54,7 +54,7 @@ export interface ShipmentsApiDto {
   trackingNumber: string | null;
   shippingCompanyId: string | null;
   courierId: string | null;
-  status: string | null;
+  status: ShipmentStatus | null;
   shippingCost: number | null;
   weight: number | null;
   shippingCategoryId: string | null;

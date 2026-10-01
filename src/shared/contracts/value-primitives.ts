@@ -4,6 +4,10 @@ export type CurrencyCode = string & { readonly __brand: 'CurrencyCode' };
 export type Amount = number & { readonly __brand: 'Amount' };
 export type StatusCode = string & { readonly __brand: 'StatusCode' };
 export type ApprovalStatus = 'approved' | 'pending_approval' | 'rejected';
+export type PostingStatus = 'draft' | 'posted' | 'voided';
+export type PaymentStatus = 'Paid' | 'Partial Paid' | 'Unpaid';
+export type OrderStatus = string & { readonly __brand: 'OrderStatus' };
+export type ShipmentStatus = string & { readonly __brand: 'ShipmentStatus' };
 
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const CURRENCY_PATTERN = /^[A-Z0-9][A-Z0-9_-]{1,9}$/;
@@ -36,4 +40,25 @@ export function statusCodeOrNull(value: unknown): StatusCode | null {
 
 export function approvalStatusOrNull(value: unknown): ApprovalStatus | null {
   return value === 'approved' || value === 'pending_approval' || value === 'rejected' ? value : null;
+}
+
+export function postingStatusOrNull(value: unknown): PostingStatus | null {
+  return value === 'draft' || value === 'posted' || value === 'voided' ? value : null;
+}
+
+export function paymentStatusOrNull(value: unknown): PaymentStatus | null {
+  if (value === 'Paid' || value === 'paid') return 'Paid';
+  if (value === 'Partial Paid' || value === 'partial_paid' || value === 'partial') return 'Partial Paid';
+  if (value === 'Unpaid' || value === 'unpaid') return 'Unpaid';
+  return null;
+}
+
+export function orderStatusOrNull(value: unknown): OrderStatus | null {
+  const status = statusCodeOrNull(value);
+  return status ? (status as unknown as OrderStatus) : null;
+}
+
+export function shipmentStatusOrNull(value: unknown): ShipmentStatus | null {
+  const status = statusCodeOrNull(value);
+  return status ? (status as unknown as ShipmentStatus) : null;
 }

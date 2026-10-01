@@ -1,8 +1,9 @@
 import { supabase } from '../lib/supabase-adapter';
+import type { PaymentStatus, PostingStatus } from '../shared/contracts/value-primitives';
 
 export type FinancialPaymentMethod = 'cash' | 'bank' | 'mixed' | 'deferred';
 export type FinancialEntryCategory = 'General' | 'Compound' | 'Temp' | 'Reversing';
-export type FinancialPostingStatus = 'draft' | 'posted';
+export type FinancialPostingStatus = Exclude<PostingStatus, 'voided'>;
 export type FinancialTransactionType = 'Debit' | 'Credit';
 
 export interface FinancialEntryPriceReference {
@@ -522,7 +523,7 @@ class FinancialEntryService {
     return data;
   }
 
-  async recordOrderPayment(orderId: string, paymentAmount: number, entry: FinancialEntryInput, updatedByUid?: string): Promise<{ orderId: string; entryId: string; amountPaid: number; amountRemaining: number; paymentStatus: 'Paid' | 'Partial Paid' }> {
+  async recordOrderPayment(orderId: string, paymentAmount: number, entry: FinancialEntryInput, updatedByUid?: string): Promise<{ orderId: string; entryId: string; amountPaid: number; amountRemaining: number; paymentStatus: Exclude<PaymentStatus, 'Unpaid'> }> {
     if (!orderId?.trim() || !hasValidPositiveNumber(paymentAmount)) throw new Error('معرف الطلب ومبلغ الدفعة الموجب مطلوبان.');
     if (entry.orderId !== orderId) throw new Error('مرجع الطلب ومبلغ سند القبض يجب أن يطابقا الدفعة.');
     const { data, error } = await (supabase as any).rpc('secure_record_order_payment', {
@@ -644,4 +645,3 @@ class FinancialEntryService {
 }
 
 export const financialEntryService = new FinancialEntryService();
-

@@ -1,4 +1,5 @@
 import type { AuditDto, IsoUtcString, NumericValue } from './common.dto';
+import type { PostingStatus } from '../../shared/contracts/value-primitives';
 
 export interface FinanceEntryDatabaseRow {
   main_entry_id: string;
@@ -120,7 +121,7 @@ export interface FinanceEntryApiDto {
   moduleId: string | null;
   entryTypeId: string | null;
   category: string | null;
-  postingStatus: string | null;
+  postingStatus: PostingStatus | null;
   description: string | null;
   notes: string | null;
   attachments: string[];

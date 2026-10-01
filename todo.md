@@ -1032,3 +1032,12 @@
 - [x] نجاح check والاختبارات الكاملة والبناء.
 - [ ] ترحيل نطاقات الحالات التالية مستقلًا: posting، payment، order/shipment.
 - [ ] ترحيل DTOs المالية إلى `CurrencyCode` و`Amount` بعد فصل amounts الأصلية عن المحولة.
+
+
+## [2026-10-01 04:27 +03:00] — توحيد نطاقات الحالات — AI Model: Manus
+- [x] إضافة `PostingStatus` مستقل (`draft`, `posted`, `voided`) وربطه بـFinanceEntryApiDto وFinancialPostingStatus.
+- [x] إضافة `PaymentStatus` مستقل (`Paid`, `Partial Paid`, `Unpaid`) مع تطبيع aliases lowercase/underscore.
+- [x] إضافة `OrderStatus` و`ShipmentStatus` branded مع الحفاظ على الحالات الديناميكية العربية والإنجليزية.
+- [x] تحديث mappers المالية والطلبات والشحن دون دمج domains مختلفة.
+- [x] نجاح check، الاختبارات الكاملة: 221 ناجحًا و8 متخطاة، والبناء.
+- [ ] الانتقال إلى ترحيل DTOs العملات والمبالغ، مع فصل original amount عن converted amount.

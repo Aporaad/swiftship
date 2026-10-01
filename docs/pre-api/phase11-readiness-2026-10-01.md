@@ -99,3 +99,12 @@ src/shared/contracts/finance.contracts.ts
 بدأ توحيد نطاق الحالات المستقل للاعتماد بإضافة `ApprovalStatus` بقيم `approved | pending_approval | rejected`، وتضييق `PortalUserApiDto` و`PortalUserCreateInput` إليه. يقوم mapper بتحويل القيمة غير المعروفة إلى null بدل معاملتها كاعتماد صالح. لم تُخلط هذه القيم مع حالات الطلب أو الدفع أو الترحيل.
 
 التحقق: `npm run check` ناجح، الاختبارات الكاملة 219 ناجحًا و8 متخطاة، والبناء ناجح مع تحذيرات البنية السابقة فقط. لا SQL أو تغييرات قاعدة بيانات.
+
+
+## توحيد نطاقات PostingStatus وPaymentStatus وOrder/ShipmentStatus — 2026-10-01 04:27 +03:00 — AI Model: Manus
+
+أُضيفت النطاقات المستقلة التالية إلى عقد القيم: `PostingStatus` بقيم `draft | posted | voided`، و`PaymentStatus` بقيم `Paid | Partial Paid | Unpaid`، و`OrderStatus` و`ShipmentStatus` كقيم نصية branded تحفظ أسماء الحالات الديناميكية العربية والإنجليزية القادمة من جدول `order_status`.
+
+تم تضييق `FinanceEntryApiDto.postingStatus` و`OrderApiDto.paymentStatus/status` و`ShipmentsApiDto.status`، مع إبقاء Database Rows وpayloadات النماذج legacy نصية عند الحاجة. المطبعات تدعم aliases الدفع lowercase/underscore وتعيد القيمة canonical، بينما ترفض PostingStatus غير المعروف. تم ربط `FinancialPostingStatus` بالخطة canonical مع إبقاء `voided` نتيجة lifecycle لا حالة إنشاء عادية.
+
+تم تحديث mappers المالية والطلبات والشحن، وإضافة اختبارات الحالات. التحقق: check ناجح، 221 اختبارًا ناجحًا و8 متخطاة، والبناء ناجح مع تحذيرات البناء السابقة فقط. لا SQL أو تغييرات قاعدة بيانات.
