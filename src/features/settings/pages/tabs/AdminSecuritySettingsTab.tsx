@@ -7,6 +7,7 @@ import {
 import type { Settings } from '../../../../context/SettingsContext';
 import type { TranslationKey } from '../../../../translations';
 import type { Currency } from '../../../../services/currencyService';
+import { CurrencySelect } from '../../../../components/common/CurrencySelect';
 import type { BackupRecord, SettingsConfirmConfig, SettingsExportFormat } from '../../types';
 import { SectionCard, FieldLabel, FieldInput, FieldTextarea, ToggleSwitch } from './settingsHelpers';
 
@@ -107,18 +108,14 @@ export function AdminSecuritySettingsTab({
                   <FieldLabel locked={!canEditOrderDefaults}>
                     {isAr ? 'العملة الافتراضية للطلب (من جدول العملات currency)' : 'Default Order Currency (from currency table)'}
                   </FieldLabel>
-                  <select
+                  <CurrencySelect
+                    isAr={isAr}
+                    currencies={(activeCurrencies && activeCurrencies.length > 0 ? activeCurrencies : dbCurrencies).map(c => ({ id: c.cur_id || c.code, code: c.code, nameAr: c.main_nameAR, nameEn: c.main_nameEn, symbol: c.symbol, flag: c.flag }))}
                     disabled={!canEditOrderDefaults}
                     value={localSettings.defaultOrderCurrency || 'SAR'}
-                    onChange={e => canEditOrderDefaults && setLocalSettings({ ...localSettings, defaultOrderCurrency: e.target.value })}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white font-bold focus:outline-none focus:border-[#d4af37] disabled:opacity-65 cursor-pointer font-mono"
-                  >
-                    {(activeCurrencies && activeCurrencies.length > 0 ? activeCurrencies : dbCurrencies).map(c => (
-                      <option key={c.cur_id || c.code} value={c.code}>
-                        {c.code} - {c.main_nameAR || c.main_nameEn || c.code} ({c.symbol || c.code})
-                      </option>
-                    ))}
-                  </select>
+                    onChange={value => canEditOrderDefaults && setLocalSettings({ ...localSettings, defaultOrderCurrency: value })}
+                    data-testid="default-order-currency"
+                  />
                 </div>
 
                 {/* رسوم تامين المنتجات */}
