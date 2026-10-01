@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Download, Printer, Search } from 'lucide-react';
-import type { FinanceAccount, FinanceCurrency } from './EntryForm';
+import type { FinanceAccount, FinanceCurrency } from '../../shared/contracts/finance.contracts';
 import type { FinanceEntryRow } from './EntryWorkspaceTab';
 
 export interface FinanceAccountTransactionRow {

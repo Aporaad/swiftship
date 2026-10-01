@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Edit3, Plus, Save, Trash2, X } from 'lucide-react';
 import { financialEntrySettingsService } from '../../services/financialEntrySettingsService';
-import type { FinanceEntryType, FinanceModule } from './EntryForm';
+import type { FinanceEntryType, FinanceModule } from '../../shared/contracts/finance.contracts';
 
 interface Props {
   modules: FinanceModule[];

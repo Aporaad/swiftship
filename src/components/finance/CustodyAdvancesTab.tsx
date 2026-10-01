@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { CurrencySelect } from '../common/CurrencySelect';
 import { CheckCircle2, Plus, WalletCards } from 'lucide-react';
 import { financialEntryService, type FinancialPaymentMethod } from '../../services/financialEntryService';
-import type { FinanceAccount, FinanceCurrency } from './EntryForm';
+import type { FinanceAccount, FinanceCurrency } from '../../shared/contracts/finance.contracts';
 
 export interface CustodyAdvanceRow {
   id: string; custodyNumber: string; recipientId: string; recipientName: string; recipientType: string; recipientAccountId?: string;

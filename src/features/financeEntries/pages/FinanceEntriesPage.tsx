@@ -10,7 +10,7 @@ import PaymentVouchersTab from '../../../components/finance/PaymentVouchersTab';
 import AccountMovementTab, { type FinanceAccountTransactionRow } from '../../../components/finance/AccountMovementTab';
 import CustodyAdvancesTab, { type CustodyAdvanceRow } from '../../../components/finance/CustodyAdvancesTab';
 import EntrySettingsTab from '../../../components/finance/EntrySettingsTab';
-import type { FinanceAccount, FinanceCurrency, FinanceEntryType, FinanceModule } from '../../../components/finance/EntryForm';
+import type { FinanceAccount, FinanceCurrency, FinanceEntryType, FinanceModule } from '../../../shared/contracts/finance.contracts';
 import type { FinanceEntryRow, FinancePaymentDetailRow } from '../../../components/finance/EntryWorkspaceTab';
 
 type TabId = 'general' | 'compound' | 'temporary' | 'movement' | 'receipt' | 'payment' | 'custody' | 'settings';

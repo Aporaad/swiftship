@@ -23,17 +23,12 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { currencyService, type ExchangeRates } from '../../services/currencyService';
-
-export interface FinanceCurrencyOption {
-  id: number;
-  code: string;
-  isDefault?: boolean;
-}
+import type { FinanceCurrency } from '../../shared/contracts/finance.contracts';
 
 interface FinancialCalculatorModalProps {
   isOpen: boolean;
   onClose: () => void;
-  currencies?: FinanceCurrencyOption[];
+  currencies?: FinanceCurrency[];
   initialTab?: 'calc' | 'exchange';
 }
 

@@ -14,6 +14,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
+import type { FinanceAccount, FinanceCurrency, FinanceEntryType, FinanceModule } from '../../shared/contracts/finance.contracts';
 import { CurrencySelect } from '../common/CurrencySelect';
 import { AlertTriangle, ArrowLeft, ArrowRight, Save, Trash2, Plus } from 'lucide-react';
 import {
@@ -29,22 +30,6 @@ import AccountPickerModal from './AccountPickerModal';
 
 // ─────────────────────────── أنواع مشتركة ───────────────────────────
 
-export interface FinanceCurrency { id: number; code: string; isDefault: boolean; }
-export interface FinanceAccount {
-  id: string;
-  nameAr: string;
-  nameEn?: string;
-  curNo: number;
-  currencyCode: string;
-  isActive: boolean;
-  isPosting: boolean;
-  accSubId?: string;
-  entityId?: string;
-  entityType?: string;
-  entityName?: string;
-}
-export interface FinanceModule { id: string; code: string; nameAr: string; isActive?: boolean; }
-export interface FinanceEntryType { id: string; moduleId: string; code: string; nameAr: string; isActive?: boolean; }
 
 type FormLine = {
   id: string;

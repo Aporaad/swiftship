@@ -9,6 +9,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
+import type { FinanceAccount, FinanceCurrency, FinanceEntryType, FinanceModule } from '../../../shared/contracts/finance.contracts';
 import { AlertTriangle, Plus, Save, Trash2, ArrowRight, ArrowLeft, Calendar, User, Calculator } from 'lucide-react';
 import {
   financialEntryService,
@@ -20,22 +21,6 @@ import AccountPickerModal from '../AccountPickerModal';
 import FinancialCalculatorModal from '../FinancialCalculatorModal';
 import { amountInWords } from '../../../lib/numberToWords';
 
-export interface FinanceCurrency { id: number; code: string; isDefault: boolean; }
-export interface FinanceAccount {
-  id: string;
-  nameAr: string;
-  nameEn?: string;
-  curNo: number;
-  currencyCode: string;
-  isActive: boolean;
-  isPosting: boolean;
-  accSubId?: string;
-  entityId?: string;
-  entityType?: string;
-  balance?: number;
-}
-export interface FinanceModule { id: string; code: string; nameAr: string; isActive?: boolean; }
-export interface FinanceEntryType { id: string; moduleId: string; code: string; nameAr: string; isActive?: boolean; }
 
 export type CompoundFormLine = {
   id: string;

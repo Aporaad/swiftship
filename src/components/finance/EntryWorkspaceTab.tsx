@@ -23,6 +23,7 @@
  */
 
 import { useMemo, useState } from 'react';
+import type { FinanceAccount, FinanceCurrency, FinanceEntryType, FinanceModule } from '../../shared/contracts/finance.contracts';
 import {
   BookOpen, Building, CheckCircle2, CreditCard, Download, Edit3,
   Eye, FilePlus2, Layers, ReceiptText, RotateCcw, Search,
@@ -38,14 +39,6 @@ import EntryDetailsModal, { type EntryTransactionLine } from './EntryDetailsModa
 import EntryDeleteConfirmModal from './EntryDeleteConfirmModal';
 
 // ── أنواع البيانات ── Types
-export interface FinanceAccount {
-  id: string; nameAr: string; nameEn?: string; curNo: number; currencyCode: string;
-  isActive: boolean; isPosting: boolean; accSubId?: string; entityId?: string;
-  entityType?: string; entityName?: string;
-}
-export interface FinanceCurrency { id: number; code: string; isDefault: boolean; }
-export interface FinanceModule { id: string; code: string; nameAr: string; isActive?: boolean; }
-export interface FinanceEntryType { id: string; moduleId: string; code: string; nameAr: string; isActive?: boolean; }
 
 export interface FinanceEntryRow {
   id: string; entryNumber: string; moduleId: string; entryTypeId: string;

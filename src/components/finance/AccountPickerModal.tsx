@@ -6,7 +6,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Search, X, Building2, ChevronLeft } from 'lucide-react';
-import type { FinanceAccount } from './EntryForm';
+import type { FinanceAccount } from '../../shared/contracts/finance.contracts';
 
 interface AccountPickerModalProps {
   /** قائمة الحسابات المتاحة للاختيار */

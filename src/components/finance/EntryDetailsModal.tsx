@@ -30,7 +30,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 
-import type { FinanceAccount, FinanceCurrency, FinanceEntryType, FinanceModule } from './EntryForm';
+import type { FinanceAccount, FinanceCurrency, FinanceEntryType, FinanceModule } from '../../shared/contracts/finance.contracts';
 import type { FinanceEntryRow } from './EntryWorkspaceTab';
 
 export interface EntryTransactionLine {
