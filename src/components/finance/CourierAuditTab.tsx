@@ -19,6 +19,31 @@ interface CourierAuditTabProps {
   dbRates: Record<string, number>;
 }
 
+type AuditDateValue = number | string | Date | { toDate: () => Date };
+
+interface AuditCustody {
+  id: string;
+  status?: string;
+  expenseNumber?: string;
+  notes?: string;
+  createdByName?: string;
+  createdAt?: AuditDateValue;
+  amount?: number;
+  currency?: string;
+  settledAt?: AuditDateValue;
+  recipientName?: string;
+}
+
+const formatAuditDate = (value?: AuditDateValue): string => {
+  if (value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function') {
+    return value.toDate().toLocaleDateString();
+  }
+  if (typeof value === 'number' || typeof value === 'string' || value instanceof Date) {
+    return new Date(value).toLocaleDateString();
+  }
+  return new Date().toLocaleDateString();
+};
+
 export default function CourierAuditTab({ isAr, couriers, auditedCourierId, setAuditedCourierId, courierAuditSheet, triggerPrint, formatCurrencyWithYerEquiv, handleBulkRemitCourierCash, cargoRemitLoading, handleFullCourierReconciliation, bulkReconciliationLoading, handleDirectSettleCustody, courierTransactions, formatAmountWithEquiv, dbRates }: CourierAuditTabProps) {
   return (
         <div className="space-y-6">
@@ -140,7 +165,7 @@ export default function CourierAuditTab({ isAr, couriers, auditedCourierId, setA
                   </h3>
 
                   <div className="divide-y divide-slate-850 space-y-2.5 max-h-60 overflow-y-auto pr-1">
-                    {courierAuditSheet.custodies.map((cust) => {
+                    {courierAuditSheet.custodies.map((cust: AuditCustody) => {
                       const isSettled = cust.status === 'Settled';
                       return (
                         <div key={cust.id} className="pt-2.5 flex items-center justify-between text-xs">
@@ -150,7 +175,7 @@ export default function CourierAuditTab({ isAr, couriers, auditedCourierId, setA
                             </span>
                             <span className="text-slate-300 font-bold">{cust.notes || (isAr ? 'سند عهدة' : 'Custody Slip')}</span>
                             <span className="text-[9px] text-slate-550 block font-normal">
-                              بواسطة: {cust.createdByName || 'المسؤول'} • {cust.createdAt?.toDate ? cust.createdAt.toDate().toLocaleDateString() : new Date(cust.createdAt || Date.now()).toLocaleDateString()}
+                              بواسطة: {cust.createdByName || 'المسؤول'} • {formatAuditDate(cust.createdAt)}
                             </span>
                           </div>
 
@@ -158,7 +183,7 @@ export default function CourierAuditTab({ isAr, couriers, auditedCourierId, setA
                             <div>
                               <span className="text-[#d4af37] font-mono font-black block">{formatAmountWithEquiv(cust.amount || 0, cust.currency || 'YER')}</span>
                               {isSettled ? (
-                                <span className="text-[8.5px] font-black text-emerald-400 bg-emerald-950/25 px-1.5 rounded uppercase">{isAr ? `مسواة في: ${cust.settledAt ? new Date(cust.settledAt).toLocaleDateString() : ''}` : 'Settled'}</span>
+                                <span className="text-[8.5px] font-black text-emerald-400 bg-emerald-950/25 px-1.5 rounded uppercase">{isAr ? `مسواة في: ${cust.settledAt ? formatAuditDate(cust.settledAt) : ''}` : 'Settled'}</span>
                               ) : (
                                 <span className="text-[8.5px] font-black text-amber-500 bg-amber-950/25 px-1.5 rounded uppercase animate-pulse">{isAr ? 'علقة جارية' : 'Active Pending'}</span>
                               )}
@@ -166,7 +191,7 @@ export default function CourierAuditTab({ isAr, couriers, auditedCourierId, setA
 
                             {!isSettled && (
                               <button
-                                onClick={() => handleDirectSettleCustody(cust.id, cust.recipientName)}
+                                onClick={() => handleDirectSettleCustody(cust.id, cust.recipientName ?? '')}
                                 className="bg-emerald-500 hover:bg-emerald-600 text-black px-2.5 py-1 rounded-lg text-[9px] font-black transition-all"
                               >
                                 {isAr ? 'تسوية عاجلة' : 'Settle'}

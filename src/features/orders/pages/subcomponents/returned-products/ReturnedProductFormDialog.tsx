@@ -5,13 +5,65 @@ import type { ReturnCondition, ReturnType as ReturnedType, ReturnedProduct, Retu
 import { FieldLabel } from './helpers';
 import { RETURN_INPUT_CLASS_NAME } from './constants';
 
+type ReturnOrder = {
+  id?: string;
+  orderNumber?: string;
+  order_number?: string;
+  customerName?: string;
+  customer_name?: string;
+  customer?: string;
+  customerPhone?: string;
+  customer_phone?: string;
+  phone?: string;
+  totalAmount?: number | string;
+  total_amount?: number | string;
+  currency?: string;
+  createdAt?: string | number | Date;
+};
+type ReturnOrderItem = {
+  id?: string;
+  items_id?: string;
+  product_cooler?: string;
+  product_name?: string;
+  productName?: string;
+  product_url?: string;
+  productUrl?: string;
+  product_id?: string;
+  productId?: string;
+  quantity?: number | string;
+  total_price?: number | string;
+  product_price?: number | string;
+  is_insured?: boolean;
+  insurance_fee?: number | string;
+  items_status?: string;
+};
+type ReturnFormData = {
+  order_id?: string;
+  customer_id?: string;
+  customer_name?: string;
+  order_item_id?: string;
+  product_id?: string;
+  product_name?: string;
+  product_url?: string;
+  quantity?: number;
+  return_condition?: ReturnCondition;
+  return_type?: ReturnedType;
+  return_status?: ReturnStatus;
+  returned_at?: string;
+  return_reason?: string;
+  refund_amount?: number;
+  refund_currency?: string;
+  is_insured?: boolean;
+  insurance_refund?: number;
+  notes?: string;
+};
 export interface ReturnedProductFormDialogProps {
   isOpen: boolean; isAr: boolean; orderCurrency: string; inp?: string;
-  editingReturn: ReturnedProduct | null; selectedOrder: any | null; selectedOrderProducts: any[]; selectedOrderItem: any | null;
-  setSelectedOrder: (order: any | null) => void; setSelectedOrderItem: (item: any | null) => void;
+  editingReturn: ReturnedProduct | null; selectedOrder: ReturnOrder | null; selectedOrderProducts: ReturnOrderItem[]; selectedOrderItem: ReturnOrderItem | null;
+  setSelectedOrder: (order: ReturnOrder | null) => void; setSelectedOrderItem: (item: ReturnOrderItem | null) => void;
   setIsFormOpen: (open: boolean) => void; handleSaveReturn: (event: React.FormEvent) => void;
-  modalFilteredOrders: any[]; orderSearchQuery: string; setOrderSearchQuery: (value: string) => void; handleSelectOrder: (order: any) => void;
-  formData: any; setFormData: React.Dispatch<React.SetStateAction<any>>; handleSelectOrderItem: (item: any) => void;
+  modalFilteredOrders: ReturnOrder[]; orderSearchQuery: string; setOrderSearchQuery: (value: string) => void; handleSelectOrder: (order: ReturnOrder) => void;
+  formData: ReturnFormData; setFormData: React.Dispatch<React.SetStateAction<ReturnFormData>>; handleSelectOrderItem: (item: ReturnOrderItem) => void;
   submitting: boolean;
 }
 
@@ -107,7 +159,7 @@ export function ReturnedProductFormDialog({ isOpen, isAr, orderCurrency, inp = R
                       onClick={() => {
                         setSelectedOrder(null);
                         setSelectedOrderItem(null);
-                        setFormData(f => ({
+                        setFormData((f) => ({
                           ...f,
                           order_id: '',
                           customer_id: '',
@@ -144,7 +196,7 @@ export function ReturnedProductFormDialog({ isOpen, isAr, orderCurrency, inp = R
                           {isAr ? 'لم يتم العثور على طلبات مطابقة للبحث' : 'No matching orders found'}
                         </div>
                       ) : (
-                        modalFilteredOrders.map((ord: any) => {
+                        modalFilteredOrders.map((ord: ReturnOrder) => {
                           const oNum = ord.orderNumber || ord.order_number || ord.id;
                           const cName = ord.customerName || ord.customer_name || ord.customer || (isAr ? 'عميل' : 'Customer');
                           const cPhone = ord.customerPhone || ord.customer_phone || ord.phone || '';
@@ -227,7 +279,7 @@ export function ReturnedProductFormDialog({ isOpen, isAr, orderCurrency, inp = R
                       <input
                         required
                         value={formData.product_name || ''}
-                        onChange={e => setFormData(f => ({ ...f, product_name: e.target.value }))}
+                        onChange={e => setFormData((f) => ({ ...f, product_name: e.target.value }))}
                         className={inp}
                         placeholder={isAr ? 'اسم المنتج المرتجع' : 'Returned product name'}
                       />
@@ -242,7 +294,7 @@ export function ReturnedProductFormDialog({ isOpen, isAr, orderCurrency, inp = R
                     </p>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">
-                      {selectedOrderProducts.map((item: any, idx: number) => {
+                      {selectedOrderProducts.map((item: ReturnOrderItem, idx: number) => {
                         const pName = item.product_cooler || item.product_name || item.productName || (isAr ? 'منتج غير محدد' : 'Unnamed Item');
                         const pQty = item.quantity || 1;
                         const pPrice = item.total_price || item.product_price || 0;
@@ -312,7 +364,7 @@ export function ReturnedProductFormDialog({ isOpen, isAr, orderCurrency, inp = R
                           <input
                             required
                             value={formData.product_name || ''}
-                            onChange={e => setFormData(f => ({ ...f, product_name: e.target.value }))}
+                            onChange={e => setFormData((f) => ({ ...f, product_name: e.target.value }))}
                             className={inp}
                             placeholder={isAr ? 'اسم المنتج المرتجع' : 'Returned product name'}
                           />
@@ -324,14 +376,14 @@ export function ReturnedProductFormDialog({ isOpen, isAr, orderCurrency, inp = R
                           min="1"
                           max={selectedOrderItem?.quantity || 999}
                           value={formData.quantity || 1}
-                          onChange={e => setFormData(f => ({ ...f, quantity: Number(e.target.value) }))}
+                          onChange={e => setFormData((f) => ({ ...f, quantity: Number(e.target.value) }))}
                           className={inp}
                         />
                       </FieldLabel>
                       <FieldLabel label={isAr ? 'حالة المنتج المُرتجع' : 'Product Condition'}>
                         <select
                           value={formData.return_condition || 'مستخدم'}
-                          onChange={e => setFormData(f => ({ ...f, return_condition: e.target.value as ReturnCondition }))}
+                          onChange={e => setFormData((f) => ({ ...f, return_condition: e.target.value as ReturnCondition }))}
                           className={inp}
                         >
                           {RETURN_CONDITION_LIST.map((c, idx) => (
@@ -345,7 +397,7 @@ export function ReturnedProductFormDialog({ isOpen, isAr, orderCurrency, inp = R
                       <input
                         type="url"
                         value={formData.product_url || ''}
-                        onChange={e => setFormData(f => ({ ...f, product_url: e.target.value }))}
+                        onChange={e => setFormData((f) => ({ ...f, product_url: e.target.value }))}
                         className={inp}
                         placeholder="https://..."
                       />
@@ -368,7 +420,7 @@ export function ReturnedProductFormDialog({ isOpen, isAr, orderCurrency, inp = R
                       <FieldLabel label={isAr ? 'نوع الإرجاع' : 'Return Type'}>
                         <select
                           value={formData.return_type || 'استرداد'}
-                          onChange={e => setFormData(f => ({ ...f, return_type: e.target.value as ReturnedType }))}
+                          onChange={e => setFormData((f) => ({ ...f, return_type: e.target.value as ReturnedType }))}
                           className={inp}
                         >
                           {RETURN_TYPE_LIST.map((t, idx) => (
@@ -379,7 +431,7 @@ export function ReturnedProductFormDialog({ isOpen, isAr, orderCurrency, inp = R
                       <FieldLabel label={isAr ? 'حالة المرتجع' : 'Return Status'}>
                         <select
                           value={formData.return_status || 'معلق'}
-                          onChange={e => setFormData(f => ({ ...f, return_status: e.target.value as ReturnStatus }))}
+                          onChange={e => setFormData((f) => ({ ...f, return_status: e.target.value as ReturnStatus }))}
                           className={inp}
                         >
                           {RETURN_STATUS_LIST.map((s, idx) => (
@@ -391,7 +443,7 @@ export function ReturnedProductFormDialog({ isOpen, isAr, orderCurrency, inp = R
                         <input
                           type="date"
                           value={formData.returned_at ? String(formData.returned_at).split('T')[0] : ''}
-                          onChange={e => setFormData(f => ({ ...f, returned_at: e.target.value }))}
+                          onChange={e => setFormData((f) => ({ ...f, returned_at: e.target.value }))}
                           className={inp}
                         />
                       </FieldLabel>
@@ -403,7 +455,7 @@ export function ReturnedProductFormDialog({ isOpen, isAr, orderCurrency, inp = R
                       required
                       rows={3}
                       value={formData.return_reason || ''}
-                      onChange={e => setFormData(f => ({ ...f, return_reason: e.target.value }))}
+                      onChange={e => setFormData((f) => ({ ...f, return_reason: e.target.value }))}
                       className={inp + ' resize-none'}
                       placeholder={isAr ? 'اكتب سبب الإرجاع بالتفصيل (مثل: عيب مصنعي، مقاس غير مناسب)...' : 'Describe the return reason in detail...'}
                     />
@@ -424,14 +476,14 @@ export function ReturnedProductFormDialog({ isOpen, isAr, orderCurrency, inp = R
                           min="0"
                           step="0.01"
                           value={formData.refund_amount || 0}
-                          onChange={e => setFormData(f => ({ ...f, refund_amount: Number(e.target.value) }))}
+                          onChange={e => setFormData((f) => ({ ...f, refund_amount: Number(e.target.value) }))}
                           className={inp}
                         />
                       </FieldLabel>
                       <FieldLabel label={isAr ? 'عملة الاسترداد' : 'Refund Currency'}>
                         <select
                           value={formData.refund_currency || 'YER'}
-                          onChange={e => setFormData(f => ({ ...f, refund_currency: e.target.value }))}
+                          onChange={e => setFormData((f) => ({ ...f, refund_currency: e.target.value }))}
                           className={inp}
                         >
                           <option value="YER">YER — ريال يمني</option>
@@ -447,7 +499,7 @@ export function ReturnedProductFormDialog({ isOpen, isAr, orderCurrency, inp = R
                         type="checkbox"
                         id="return-is-insured"
                         checked={Boolean(formData.is_insured)}
-                        onChange={e => setFormData(f => ({ ...f, is_insured: e.target.checked }))}
+                        onChange={e => setFormData((f) => ({ ...f, is_insured: e.target.checked }))}
                         className="w-4 h-4 accent-cyan-500 cursor-pointer"
                       />
                       <label htmlFor="return-is-insured" className="text-xs text-cyan-300 font-bold cursor-pointer">
@@ -462,7 +514,7 @@ export function ReturnedProductFormDialog({ isOpen, isAr, orderCurrency, inp = R
                           min="0"
                           step="0.01"
                           value={formData.insurance_refund || 0}
-                          onChange={e => setFormData(f => ({ ...f, insurance_refund: Number(e.target.value) }))}
+                          onChange={e => setFormData((f) => ({ ...f, insurance_refund: Number(e.target.value) }))}
                           className={inp}
                         />
                       </FieldLabel>
@@ -486,7 +538,7 @@ export function ReturnedProductFormDialog({ isOpen, isAr, orderCurrency, inp = R
                 <textarea
                   rows={2}
                   value={formData.notes || ''}
-                  onChange={e => setFormData(f => ({ ...f, notes: e.target.value }))}
+                  onChange={e => setFormData((f) => ({ ...f, notes: e.target.value }))}
                   className={inp + ' resize-none'}
                   placeholder={isAr ? 'أي ملاحظات إضافية حول فحص المنتج أو سياسة الإرجاع…' : 'Any additional notes…'}
                 />

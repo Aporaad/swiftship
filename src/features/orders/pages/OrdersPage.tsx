@@ -39,11 +39,17 @@ import type {
   SourceFormData,
   ShipmentFormData,
   UpdateFormData,
+  OrderFeatureRecord,
+  OrderRecord,
+  ShipmentRecord,
+  ItemRow,
+  ShippingRow,
 } from '../types';
 import OrderHistoryModal from '../../../components/orders/OrderHistoryModal'; // استيراد سجل تدقيق الطلبات والشحنات
 import { buildOrderParties, findOrderParty, toOrderPartyPayload, type OrderParty } from '../../../services/orderPartyService';
 import { calculateOrderPaymentTotals } from '../../../services/orderCurrencyService';
 import { deleteOrdersWithDependents, type OrderDeletionSummary } from '../../../services/orderDeletionService';
+import type { OrderHistoryContext } from '../../../services/orderHistoryService';
 import { ORDER_STATUS_FALLBACKS } from '../constants/orders.constants';
 import { ORDER_TAB_QUERY_ALIASES } from '../constants/orderTabAliases';
 import { createOrderHandler } from '../services/createOrderHandler';
@@ -53,7 +59,7 @@ import { createSaveShipmentHandler } from '../services/saveShipmentHandler';
 import { createCollectOrderPaymentHandler } from '../services/collectOrderPaymentHandler';
 import { createBatchUpdateOrderStatusHandler } from '../services/batchUpdateOrderStatusHandler';
 import { createUpdateOrderStatusHandler } from '../services/updateOrderStatusHandler';
-import { useOrderData } from '../hooks/useOrderData';
+import { useOrderData, type OrderDataState } from '../hooks/useOrderData';
 import { useOrderFormState } from '../hooks/useOrderFormState';
 import { useOrderFilters } from '../hooks/useOrderFilters';
 import { useOrderCalculations } from '../hooks/useOrderCalculations';
@@ -74,6 +80,28 @@ import UpdateStatusModal from '../../../components/orders/UpdateStatusModal';
 import CreateOrderModal from '../../../components/orders/CreateOrderModal';
 import EditOrderModal from '../../../components/orders/EditOrderModal';
 import { CustomerCreateModal, ShippingCompanyCreateModal, SourceCreateModal } from '../../../components/entities/EntityCreateModals';
+import type { TranslationKey } from '../../../translations';
+
+type FeatureOrderRecord = OrderFeatureRecord;
+type CustomerRecord = OrderDataState['customers'][number];
+
+const toText = (value: unknown): string =>
+  typeof value === 'string' ? value : value == null ? '' : String(value);
+const toNumber = (value: unknown): number =>
+  typeof value === 'number'
+    ? value
+    : typeof value === 'string'
+      ? Number.parseFloat(value) || 0
+      : 0;
+const toDate = (value: unknown): Date => {
+  if (value instanceof Date) return value;
+  if (typeof value === 'string' || typeof value === 'number') return new Date(value);
+  if (typeof value === 'object' && value !== null && 'toDate' in value) {
+    const dateFactory = value.toDate;
+    if (typeof dateFactory === 'function') return dateFactory();
+  }
+  return new Date();
+};
 
 export default function OrdersPage() { // دالة عرض الطلبات 
   const { legacyAuth: auth } = useAuthSession();
@@ -136,12 +164,12 @@ export default function OrdersPage() { // دالة عرض الطلبات
   // Modals & Panels States 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false); //  متغير مكونات الحاله الخاص ب فتح النافذة الاضافية 
   const [isEditOrderModalOpen, setIsEditOrderModalOpen] = useState(false); // نافذة تعديل بيانات الطلب الكلية
-  const [orderToEdit, setOrderToEdit] = useState<any>(null); // الطلب المحدد للتعديل الكامل
+  const [orderToEdit, setOrderToEdit] = useState<OrderRecord | null>(null); // الطلب المحدد للتعديل الكامل
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false); //  متغير مكونات الحاله الخاص ب فتح النافذة التعديل 
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false); //  متغير مكونات الحاله الخاص ب فتح نافذة الدفع 
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false); //  متغير مكونات الحاله الخاص ب فتح نافذة التفاصيل 
   const [isOrderHistoryOpen, setIsOrderHistoryOpen] = useState(false); // نافذة سجل تدقيق الطلب أو الشحنة
-  const [orderHistoryContext, setOrderHistoryContext] = useState<any>(null); // العنصر المعروض سجله
+  const [orderHistoryContext, setOrderHistoryContext] = useState<OrderHistoryContext | null>(null); // العنصر المعروض سجله
   const [isAddCustomerOpen, setIsAddCustomerOpen] = useState(false); //  متغير مكونات الحاله الخاص ب فتح نافذة اضافة عميل 
   const [isAddShippingCompanyOpen, setIsAddShippingCompanyOpen] = useState(false); //  متغير مكونات الحاله الخاص ب فتح نافذة اضافة شركة شحن 
   const [isAddSourceOpen, setIsAddSourceOpen] = useState(false); //  متغير مكونات الحاله الخاص ب فتح نافذة اضافة مصدر 
@@ -154,11 +182,11 @@ export default function OrdersPage() { // دالة عرض الطلبات
 
 
   // Focus Orders States
-  const [selectedOrder, setSelectedOrder] = useState<any>(null); //   متغير مكونات حالة الطلب المحدد ويستخدم لعرض تفاصيل الطلب   
+  const [selectedOrder, setSelectedOrder] = useState<OrderRecord | null>(null); //   متغير مكونات حالة الطلب المحدد ويستخدم لعرض تفاصيل الطلب
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]); //   متغير مكونات حالة الطلبات المحددة ويستخدم ل تحديث جماعي   
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false); //   متغير مكونات حالة حذف الطلب ويستخدم ل حذف جماعي   
-  const [orderToDelete, setOrderToDelete] = useState<any>(null); //   متغير مكونات حالة الطلب المراد حذفه ويستخدم ل حذف جماعي   
-  const [ordersPendingDelete, setOrdersPendingDelete] = useState<any[]>([]); // الطلبات التي أكد المدير حذفها في العملية الحالية
+  const [orderToDelete, setOrderToDelete] = useState<OrderRecord | null>(null); //   متغير مكونات حالة الطلب المراد حذفه ويستخدم ل حذف جماعي
+  const [ordersPendingDelete, setOrdersPendingDelete] = useState<OrderRecord[]>([]); // الطلبات التي أكد المدير حذفها في العملية الحالية
   const [deletePin, setDeletePin] = useState(''); //   متغير مكونات حالة رمز الحذف ويستخدم ل حذف جماعي   
   const [deleteError, setDeleteError] = useState(''); //   متغير مكونات حالة خطأ الحذف ويستخدم ل حذف جماعي   
   const [isBatchUpdating, setIsBatchUpdating] = useState(false); //  تحديث جماعي
@@ -181,6 +209,9 @@ export default function OrdersPage() { // دالة عرض الطلبات
     enrichedOrders,
     filteredOrdersList,
   } = useOrderFilters({ orders, customers, employees, couriers, sources });
+  const typedFilteredOrdersList = filteredOrdersList.filter(
+    (order): order is OrderRecord => typeof order.id === 'string',
+  );
 
   const location = useLocation(); //  الموقع
 
@@ -233,8 +264,8 @@ export default function OrdersPage() { // دالة عرض الطلبات
   const [isAddShipmentModalOpen, setIsAddShipmentModalOpen] = useState(false); //  إضافة شحنة جديدة 
   const [isEditShipmentModalOpen, setIsEditShipmentModalOpen] = useState(false); //  تعديل الشحنة 
   const [isDeleteShipmentModalOpen, setIsDeleteShipmentModalOpen] = useState(false); //  حذف الشحنة 
-  const [shipmentToEdit, setShipmentToEdit] = useState<any>(null); //  تعديل الشحنة 
-  const [shipmentToDelete, setShipmentToDelete] = useState<any>(null); //  حذف الشحنة 
+  const [shipmentToEdit, setShipmentToEdit] = useState<ShipmentRecord | null>(null); //  تعديل الشحنة
+  const [shipmentToDelete, setShipmentToDelete] = useState<ShipmentRecord | null>(null); //  حذف الشحنة
 
   //بيانات الشحنة 
   const [shipmentFormData, setShipmentFormData] = useState<ShipmentFormData>({
@@ -274,7 +305,7 @@ export default function OrdersPage() { // دالة عرض الطلبات
 
   // Order Upgrade states
   const [customerSearchQuery, setCustomerSearchQuery] = useState('');// البحث عن العميل  ويستخدم لترقية الطلب 
-  const [selectedCustomerProfile, setSelectedCustomerProfile] = useState<any>(null);//عرض تفاصيل العميل  
+  const [selectedCustomerProfile, setSelectedCustomerProfile] = useState<OrderRecord | null>(null);//عرض تفاصيل العميل
   const [previewOrderNumber, setPreviewOrderNumber] = useState('');// داله ارجاع رقم الطلب الذي سوف يتم تحديثه    
 
   // Products Adjustments
@@ -444,7 +475,7 @@ export default function OrdersPage() { // دالة عرض الطلبات
   useEffect(() => {
     if (formData.customerId && formData.orderPartyType === 'customer') {
       const custOrders = orders.filter(o => o.customerId === formData.customerId);
-      const totalUnpaid = custOrders.reduce((sum, o) => sum + (parseFloat(o.amountRemaining || '0')), 0);
+      const totalUnpaid = custOrders.reduce((sum, o) => sum + toNumber(o.amountRemaining), 0);
       if (totalUnpaid > 0 && !loading) {
         setCustomerUnpaidAlert(totalUnpaid);
       } else {
@@ -513,9 +544,9 @@ export default function OrdersPage() { // دالة عرض الطلبات
 
     const custOrders = orders.filter(o => o.customerId === formData.customerId);
     const totalOrdersCount = custOrders.length;
-    const totalOutstandingDebt = custOrders.reduce((sum, o) => sum + parseFloat(o.amountRemaining || '0'), 0);
+    const totalOutstandingDebt = custOrders.reduce((sum, o) => sum + toNumber(o.amountRemaining), 0);
     const lastOrder = custOrders[0];
-    const lastOrderDate = lastOrder ? (lastOrder.createdAt && typeof lastOrder.createdAt.toDate === 'function' ? lastOrder.createdAt.toDate() : new Date(lastOrder.createdAt || Date.now())) : null;
+    const lastOrderDate = lastOrder ? toDate(lastOrder.createdAt) : null;
 
     let tier = 'Regular';
     if (totalOrdersCount >= 5 && totalOutstandingDebt === 0) tier = 'VIP';
@@ -531,7 +562,7 @@ export default function OrdersPage() { // دالة عرض الطلبات
   }, [formData.customerId, customers, orders]);
 
   // Select customer from search results -- اختيار العميل من نتائج البحث 
-  const selectCustomer = (c: any) => {
+  const selectCustomer = (c: CustomerRecord) => {
     setFormData(prev => ({
       ...prev,
       customerId: c.id,
@@ -543,7 +574,7 @@ export default function OrdersPage() { // دالة عرض الطلبات
       isStaffOrder: false,
       employeeId: '',
       courierId: '',
-      orderPartyAccountId: c.financialAccountId || c.accountId || ''
+      orderPartyAccountId: toText(c.financialAccountId || c.accountId)
     }));
     setCustomerSearchQuery('');
   };
@@ -594,7 +625,7 @@ export default function OrdersPage() { // دالة عرض الطلبات
    * @param order - كائن الطلب (يحتوي على exchangeRateYER, exchangeRateUSD, currency)
    * @returns خريطة أسعار كاملة { [code]: rate_vs_base }
    */
-  const buildOrderRates = (order?: any) => {
+  const buildOrderRates = (order?: OrderRecord) => {
     // ابدأ بالأسعار الحالية من DB
     const rates = { ...dbRates };
     if (!order) return rates;
@@ -681,7 +712,7 @@ export default function OrdersPage() { // دالة عرض الطلبات
   });
 
   // Delete Orders with Admin PIN Verification. The SQL procedure executes all dependent deletes atomically.
-  const openOrderDeletionModal = (candidates: any[]) => {
+  const openOrderDeletionModal = (candidates: OrderRecord[]) => {
     if (role !== 'Admin') {
       toast.error(isAr ? 'حذف الطلبات مخصص للمدراء فقط.' : 'Order deletion is restricted to administrators.');
       return;
@@ -694,7 +725,7 @@ export default function OrdersPage() { // دالة عرض الطلبات
     setDeleteError('');
     setIsDeleteModalOpen(true);
   };
-  const handleDeleteOrderClick = (order: any) => openOrderDeletionModal([order]);
+  const handleDeleteOrderClick = (order: OrderRecord) => openOrderDeletionModal([order]);
   const handleOpenBatchDelete = () => openOrderDeletionModal(orders.filter((order) => selectedOrderIds.includes(String(order.id))));
 
   // حذف الطلبات من قاعدة البيانات: لا تنفذ الواجهة أي حذف مباشر لجدول orders.
@@ -729,8 +760,8 @@ export default function OrdersPage() { // دالة عرض الطلبات
       setOrdersPendingDelete([]);
       setDeletePin('');
       setDeleteError('');
-    } catch (err: any) {
-      const message = err?.message || (isAr ? 'تعذر حذف الطلبات المحددة.' : 'Unable to delete the selected orders.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : (isAr ? 'تعذر حذف الطلبات المحددة.' : 'Unable to delete the selected orders.');
       setDeleteError(isAr ? `فشل حذف الطلبات: ${message}` : `Order deletion failed: ${message}`);
     } finally {
       setIsBatchUpdating(false);
@@ -791,7 +822,7 @@ export default function OrdersPage() { // دالة عرض الطلبات
     setItems([...items, { productName: '', productUrl: '', quantity: 1, productPrice: 0, weight: 0, cbm: 0, length: 0, width: 0, height: 0, trackingNumber: '' }]);
   };
   // تعديل صف من المنتجات
-  const updateItemRow = (idx: number, field: string, val: any) => {
+  const updateItemRow = (idx: number, field: keyof ItemRow, val: unknown) => {
     setItems(prev => {
       const updated = [...prev];
       updated[idx] = { ...updated[idx], [field]: val };
@@ -841,7 +872,7 @@ export default function OrdersPage() { // دالة عرض الطلبات
     }
   };
   // تعديل صف بيانات الشحنات
-  const updateShippingRow = (idx: number, fieldOrObj: string | Record<string, any>, val?: any) => {
+  const updateShippingRow = (idx: number, fieldOrObj: string | Record<string, unknown>, val?: unknown) => {
     setShippings(prev => {
       const updated = [...prev];
       if (typeof fieldOrObj === 'string') {
@@ -903,10 +934,10 @@ export default function OrdersPage() { // دالة عرض الطلبات
   useEffect(() => {
     if (formData.orderSourceType === 'Factory') {
       const totalCBM = items.reduce((sum, i) => sum + (parseFloat(String(i.quantity || 0)) * parseFloat(String(i.cbm || 0))), 0);
-      const cbmShippingRateUSD = parseFloat(cbmShippingRateValue as any) || 0;
+      const cbmShippingRateUSD = parseFloat(String(cbmShippingRateValue)) || 0;
       const cbmShippingUSD = totalCBM * cbmShippingRateUSD;
-      const exUSD = parseFloat(formData.exchangeRateUSD as any) || 535;
-      const exYER = parseFloat(formData.exchangeRateYER as any) || 140;
+      const exUSD = parseFloat(String(formData.exchangeRateUSD)) || 535;
+      const exYER = parseFloat(String(formData.exchangeRateYER)) || 140;
       const calculatedShippingCostSAR = Math.round((cbmShippingUSD * exUSD) / exYER) || 0;
 
       setShippings(prev => {
@@ -954,7 +985,7 @@ export default function OrdersPage() { // دالة عرض الطلبات
     }]);
   };
   // تعديل صف بيانات الشحن
-  const updateUpdateShippingRow = (idx: number, fieldOrObj: string | Record<string, any>, val?: any) => {
+  const updateUpdateShippingRow = (idx: number, fieldOrObj: string | Record<string, unknown>, val?: unknown) => {
     setUpdateShippings(prev => {
       const updated = [...prev];
       if (typeof fieldOrObj === 'string') {
@@ -1021,7 +1052,7 @@ export default function OrdersPage() { // دالة عرض الطلبات
   }, [isDetailsModalOpen, selectedOrder]);
 
   //  نسخ رمز التتبع
-  const copyToClipboard = (text: string) => {
+  const copyToClipboard = (text: string | undefined) => {
     if (!text) return;
     navigator.clipboard.writeText(text);
     notificationService.notify({
@@ -1038,7 +1069,7 @@ export default function OrdersPage() { // دالة عرض الطلبات
     if (selectedOrderIds.length === filteredOrdersList.length && filteredOrdersList.length > 0) {
       setSelectedOrderIds([]);
     } else {
-      setSelectedOrderIds(filteredOrdersList.map(o => o.id));
+      setSelectedOrderIds(filteredOrdersList.map(o => String(o.id)));
     }
   };
   // تحديد طلب واحد
@@ -1049,31 +1080,33 @@ export default function OrdersPage() { // دالة عرض الطلبات
   };
 
   // ─── Modal Opener Helpers ────────────────────────────────────────────────────
-  const handleOpenEditOrder = (ord: any) => {
+  const handleOpenEditOrder = (ord: OrderRecord) => {
     setOrderToEdit(ord);
     setIsEditOrderModalOpen(true);
   };
 
-  const handleOpenUpdateStatus = (ord: any) => {
+  const handleOpenUpdateStatus = (ord: OrderRecord) => {
     setSelectedOrder(ord);
     setUpdateFormData({
-      orderStatus: ord.orderStatus || ord.order_status || '',
+      orderStatus: ord.orderStatus || toText(ord.order_status),
       deliveryStatus: ord.deliveryStatus || 'في الانتظار',
       locationYemen: ord.locationYemen || 'مستودع صنعاء الرئيسي',
-      internalNotes: ord.internalNotes || ord.notes || '',
-      shippingCourierId: ord.shippingCourierId || ord.courier_id || '',
+      internalNotes: ord.internalNotes || toText(ord.notes),
+      shippingCourierId: ord.shippingCourierId || toText(ord.courier_id),
       deliveryCourierId: ord.deliveryCourierId || ''
     });
     setUpdateShippings(ord.shippingDetails || ord.shippings || []);
     setIsUpdateModalOpen(true);
   };
 
-  const handleOpenCollectPayment = (ord: any) => {
+  const handleOpenCollectPayment = (ord: OrderRecord) => {
     setSelectedOrder(ord);
     const ordCur = (ord.paidCurrency || ord.currency || ord.orderCurrency || 'YER').toUpperCase();
     setPaymentFormData({
       amount: String(ord.amountRemaining || ''),
-      method: ord.paymentMethod || 'Cash',
+      method: ord.paymentMethod === 'Bank' || ord.paymentMethod === 'Deferred' || ord.paymentMethod === 'Mixed'
+        ? ord.paymentMethod
+        : 'Cash',
       receivingAccountId: '',
       bankReference: '',
       allocations: [],
@@ -1084,7 +1117,7 @@ export default function OrdersPage() { // دالة عرض الطلبات
     setIsPaymentModalOpen(true);
   };
 
-  const handleOpenDeleteOrder = (ord: any) => openOrderDeletionModal([ord]);
+  const handleOpenDeleteOrder = (ord: OrderRecord) => openOrderDeletionModal([ord]);
 
   // تحصيل دفعة مالية من العميل
   const handleCollectPayment = createCollectOrderPaymentHandler({
@@ -1125,7 +1158,7 @@ export default function OrdersPage() { // دالة عرض الطلبات
     updateOrderRecord,
   });;
   // ── Shipments Management Studio Helpers ──
-  const handleOpenOrderHistory = (order: any) => {
+  const handleOpenOrderHistory = (order: OrderRecord) => {
     setOrderHistoryContext({
       entityType: 'order',
       orderId: order.id,
@@ -1135,7 +1168,7 @@ export default function OrdersPage() { // دالة عرض الطلبات
     setIsOrderHistoryOpen(true);
   };
 
-  const handleOpenShipmentHistory = (shipment: any) => {
+  const handleOpenShipmentHistory = (shipment: ShipmentRecord) => {
     const orderReference = shipment.orderId || shipment.order_id || '';
     const linkedOrder = orders.find((order) => order.id === orderReference || order.orderNumber === orderReference || order.order_number === orderReference);
     setOrderHistoryContext({
@@ -1184,7 +1217,7 @@ export default function OrdersPage() { // دالة عرض الطلبات
     setIsAddShipmentModalOpen(true);
   };
   // تعديل بيانات الشحنه
-  const handleOpenEditShipmentModal = (shipment: any) => {
+  const handleOpenEditShipmentModal = (shipment: ShipmentRecord) => {
     setShipmentToEdit(shipment);
     setShipmentFormData({
       id: shipment.id,
@@ -1240,7 +1273,7 @@ export default function OrdersPage() { // دالة عرض الطلبات
         message: isAr ? `تم تعديل حالة الشحنة إلى: ${newStatus}` : `Shipment status updated to: ${newStatus}`,
         type: 'success'
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to quick update shipment status:', err);
     }
   };
@@ -1257,7 +1290,7 @@ export default function OrdersPage() { // دالة عرض الطلبات
       });
       setIsDeleteShipmentModalOpen(false);
       setShipmentToDelete(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to delete shipment:', err);
     } finally {
       setIsSubmitting(false);
@@ -1277,7 +1310,7 @@ export default function OrdersPage() { // دالة عرض الطلبات
       if (shipmentCourierFilter !== 'all' && (sh.courierId || sh.courier_id) !== shipmentCourierFilter) return false;
 
       return true;
-    }).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    }).sort((a, b) => toNumber(b.createdAt) - toNumber(a.createdAt));
   }, [allShipments, shipmentSearchQuery, shipmentStatusFilter, shipmentCarrierFilter, shipmentCourierFilter]);
 
   //اريد اضافه جدول مخصص لحالات الطلب في قاده البيانات وضافه واجهه مخصصه لاداره الحالات 
@@ -1320,10 +1353,10 @@ export default function OrdersPage() { // دالة عرض الطلبات
   return (
     <OrdersPageShell
       isAr={isAr}
-      t={t}
-      role={role}
+      t={(key: string) => t(key as TranslationKey)}
+      role={role || ''}
       hasPermission={hasPermission}
-      filteredOrdersList={filteredOrdersList}
+      filteredOrdersList={typedFilteredOrdersList}
       canAddOrders={canAddOrders}
       resetCreateForm={resetCreateForm}
       setIsAddModalOpen={setIsAddModalOpen}

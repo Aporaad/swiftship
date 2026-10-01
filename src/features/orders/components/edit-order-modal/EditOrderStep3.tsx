@@ -11,7 +11,25 @@ function FeeSummary({ label, value, currency, emphasized = false }: { label: str
   );
 }
 
-export default function EditOrderStep3(props: any) {
+import type { ShippingRow } from '../../types';
+type NumericValue = number | string | null | undefined;
+const toNumber = (value: NumericValue): number => typeof value === 'number' ? value : Number.parseFloat(value ?? '') || 0;
+type ShippingCompanyOption = { id: string; name: string };
+type SelectOption = { id: string; nameAr?: string | null; nameEn?: string | null; price?: number | string | null; duration?: number | string | null };
+type ShippingRowView = ShippingRow & { shippingCategoryId?: string };
+type CategoryOption = { id: string; nameAr?: string | null; nameEn?: string | null };
+type EditOrderStep3Props = {
+  isAr: boolean;
+  shippings: ShippingRowView[];
+  addShippingRow: () => void;
+  updateShippingRow: (index: number, field: keyof ShippingRowView, value?: unknown) => void;
+  removeShippingRow: (index: number) => void;
+  shippingCompanies: ShippingCompanyOption[];
+  shippingCategoryOptions: SelectOption[];
+  itemCategories: CategoryOption[];
+};
+
+export default function EditOrderStep3(props: EditOrderStep3Props) {
   const { isAr, shippings, addShippingRow, updateShippingRow, removeShippingRow, shippingCompanies, shippingCategoryOptions, itemCategories } = props;
 
   return (
@@ -28,7 +46,7 @@ export default function EditOrderStep3(props: any) {
               </div>
 
               <div className="space-y-3">
-                {shippings.map((sh, idx) => (
+                {shippings.map((sh: ShippingRowView, idx: number) => (
                   <div key={sh.id || idx} className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-slate-900/60 p-3 rounded-xl border border-slate-850">
                     <div>
                       <label className="block text-[9px] text-slate-500 mb-0.5">{isAr ? 'شركة الشحن' : 'Carrier'}</label>
@@ -37,7 +55,7 @@ export default function EditOrderStep3(props: any) {
                         onChange={(e) => updateShippingRow(idx, 'shippingCompany', e.target.value)}
                         className="w-full bg-slate-955 border border-slate-800 text-white rounded-lg p-2.5 text-[11px] cursor-pointer"
                       >
-                        {shippingCompanies.map((sc) => (
+                        {shippingCompanies.map((sc: ShippingCompanyOption) => (
                           <option key={sc.id} value={sc.name}>
                             {sc.name}
                           </option>
@@ -51,10 +69,10 @@ export default function EditOrderStep3(props: any) {
                         value={sh.shippingCategoryId || ''}
                         onChange={(e) => {
                           const selectedId = e.target.value;
-                          const foundOpt = shippingCategoryOptions?.find((o: any) => o.id === selectedId);
+                          const foundOpt = shippingCategoryOptions?.find((o: SelectOption) => o.id === selectedId);
                           updateShippingRow(idx, 'shippingCategoryId', selectedId);
                           updateShippingRow(idx, 'shippingCategoryName', foundOpt ? (isAr ? foundOpt.nameAr : foundOpt.nameEn) : '');
-                          updateShippingRow(idx, 'shippingCategoryPrice', foundOpt ? (parseFloat(foundOpt.price) || 0) : 0);
+                          updateShippingRow(idx, 'shippingCategoryPrice', foundOpt ? (toNumber(foundOpt.price) || 0) : 0);
                           if (foundOpt?.duration !== undefined) {
                             updateShippingRow(idx, 'shippingDuration', String(foundOpt.duration));
                           }
@@ -62,9 +80,9 @@ export default function EditOrderStep3(props: any) {
                         className="w-full bg-slate-955 border border-slate-800 text-cyan-300 font-bold rounded-lg p-2.5 text-[11px] cursor-pointer"
                       >
                         <option value="">{isAr ? '-- عادي --' : '-- Standard --'}</option>
-                        {(shippingCategoryOptions || []).map((cat: any) => (
+                        {(shippingCategoryOptions || []).map((cat: SelectOption) => (
                           <option key={cat.id} value={cat.id}>
-                            {isAr ? cat.nameAr : cat.nameEn} {cat.duration ? `(${cat.duration}d)` : ''} {cat.price > 0 ? `(+${cat.price} SAR)` : ''}
+                            {isAr ? cat.nameAr : cat.nameEn} {cat.duration ? `(${cat.duration}d)` : ''} {toNumber(cat.price) > 0 ? `(+${cat.price} SAR)` : ''}
                           </option>
                         ))}
                       </select>
@@ -75,7 +93,7 @@ export default function EditOrderStep3(props: any) {
                       <input
                         type="number"
                         value={sh.shippingCost || 0}
-                        onChange={(e) => updateShippingRow(idx, 'shippingCost', parseFloat(e.target.value) || 0)}
+                        onChange={(e) => updateShippingRow(idx, 'shippingCost', toNumber(e.target.value) || 0)}
                         className="w-full bg-slate-955 border border-slate-800 text-[#d4af37] rounded-lg p-2.5 text-[11px] font-mono"
                       />
                     </div>
@@ -118,7 +136,7 @@ export default function EditOrderStep3(props: any) {
                           className="w-full bg-slate-950 border border-cyan-500/25 text-white rounded-lg p-2.5 text-[11px] cursor-pointer focus:border-cyan-400 outline-none"
                         >
                           <option value="">{isAr ? '-- بدون فئة --' : '-- No category --'}</option>
-                          {itemCategories.map((category: any) => (
+                          {itemCategories.map((category: CategoryOption) => (
                             <option key={category.id} value={category.id}>{isAr ? category.nameAr : category.nameEn}</option>
                           ))}
                         </select>

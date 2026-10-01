@@ -2,9 +2,73 @@ import React, { useState } from 'react';
 import { Search, Filter, Download, Plus, Eye, Activity, Edit2, Truck, DollarSign, Printer, Trash2, Calendar, ChevronDown, RefreshCw } from 'lucide-react';
 import { financialAccountService } from '../../services/financialAccountService';
 
-const safeToDate = (val: any): Date => {
+type OrderValue = string | number | null | undefined;
+type OrderRecord = {
+  id: string;
+  orderStatus?: string;
+  orderNumber?: string;
+  customerId?: string;
+  customerName?: string;
+  customerPhone?: string;
+  createdAt?: string | number | Date;
+  order_status_id?: OrderValue;
+  orderSourceName?: string;
+  orderSourceType?: string;
+  amountPaid?: OrderValue;
+  amountRemaining?: OrderValue;
+  currency?: string;
+  exchangeRateUSD?: number;
+  exchangeRateSAR?: number;
+};
+type StatusRecord = { id: string | number; nameAr?: string; nameEn?: string; sortOrder?: number };
+type CourierRecord = { id: string; fullName?: string };
+type SettingsRecord = { currency?: string };
+type OrdersTableDeckProps = {
+  isAr?: boolean;
+  filteredOrders?: OrderRecord[];
+  filteredOrdersList?: OrderRecord[];
+  orders?: OrderRecord[];
+  searchTerm?: string;
+  setSearchTerm?: (value: string) => void;
+  searchText?: string;
+  setSearchText?: (value: string) => void;
+  statusFilter?: string;
+  setStatusFilter?: (value: string) => void;
+  sourceFilter?: string;
+  setSourceFilter?: (value: string) => void;
+  courierFilter?: string;
+  setCourierFilter?: (value: string) => void;
+  canManageOrders?: boolean;
+  role?: string;
+  hasPermission?: (permission: string) => boolean;
+  handleOpenCreateOrder?: () => void;
+  setIsDetailsModalOpen?: (open: boolean) => void;
+  setSelectedOrder?: (order: OrderRecord) => void;
+  handleOpenOrderHistory?: (order: OrderRecord) => void;
+  handleOpenEditOrder?: (order: OrderRecord) => void;
+  handleOpenUpdateStatus?: (order: OrderRecord) => void;
+  handleOpenCollectPayment?: (order: OrderRecord) => void;
+  generateOrderInvoicePDF?: (order: OrderRecord, isAr: boolean, settings: SettingsRecord) => void;
+  settings?: SettingsRecord;
+  handleOpenDeleteOrder?: (order: OrderRecord) => void;
+  sources?: Array<{ id: string; name?: string }>;
+  couriers?: CourierRecord[];
+  orderStatusesList?: StatusRecord[];
+  dbRates?: { USD: number; SAR: number };
+  sortBy?: string;
+  setSortBy?: (value: string) => void;
+  selectedOrderIds?: string[];
+  setSelectedOrderIds?: React.Dispatch<React.SetStateAction<string[]>>;
+  exportOrdersToPDF?: (orders: OrderRecord[], isAr: boolean) => void;
+  exportOrdersToCSV?: (orders: OrderRecord[], isAr: boolean) => void;
+  handleOpenBatchDelete?: () => void;
+  isBatchUpdating?: boolean;
+};
+
+const safeToDate = (val: unknown): Date => {
   if (!val) return new Date();
   if (val instanceof Date) return val;
+  if (typeof val !== 'string' && typeof val !== 'number') return new Date();
   const parsed = new Date(val);
   return isNaN(parsed.getTime()) ? new Date() : parsed;
 };
@@ -49,7 +113,7 @@ export const OrdersTableDeck = ({
   exportOrdersToCSV = () => {},
   handleOpenBatchDelete = () => {},
   isBatchUpdating = false,
-}: any) => {
+}: OrdersTableDeckProps) => {
   const filteredOrdersList = filteredOrdersListProp || filteredOrders || orders || [];
   const searchText = searchTextProp !== undefined ? searchTextProp : (searchTerm !== undefined ? searchTerm : '');
   const setSearchText = setSearchTextProp || setSearchTerm || (() => {});
@@ -64,7 +128,7 @@ export const OrdersTableDeck = ({
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
-      setSelectedOrderIds(filteredOrdersList.map((o: any) => o.id));
+      setSelectedOrderIds(filteredOrdersList.map((o: OrderRecord) => o.id));
     } else {
       setSelectedOrderIds([]);
     }
@@ -87,7 +151,7 @@ export const OrdersTableDeck = ({
                 { title: isAr ? 'الطلبات النشطة اليوم' : 'Active Orders Today', val: orders.filter(o => o.orderStatus !== 'تم التسليم' && o.orderStatus !== 'ملغي').length, color: 'text-[#d4af37] bg-[#d4af37]/10' },
                 { title: isAr ? 'بانتظار التوزيع لليمن' : 'In Local Dist', val: orders.filter(o => o.orderStatus === 'وصل مركز التوزيع في اليمن').length, color: 'text-amber-400 bg-amber-950/20' },
                 { title: isAr ? 'شحنات سلمت بنجاح' : 'Delivered Ledger', val: orders.filter(o => o.orderStatus === 'تم التسليم').length, color: 'text-emerald-400 bg-emerald-950/20' },
-                { title: isAr ? 'مبالغ معلقة للتحصيل' : 'Remaining To Collect', val: orders.reduce((sum, o) => sum + financialAccountService.convertToDefaultCurrency(parseFloat(o.amountRemaining || '0'), o.currency || 'YER', settings.currency || 'YER', { USD: o.exchangeRateUSD || dbRates.USD, SAR: o.exchangeRateSAR || dbRates.SAR }), 0).toLocaleString() + ' ' + (settings.currency || 'YER'), color: 'text-rose-400 bg-rose-950/20' }
+                { title: isAr ? 'مبالغ معلقة للتحصيل' : 'Remaining To Collect', val: orders.reduce((sum, o) => sum + financialAccountService.convertToDefaultCurrency(parseFloat(String(o.amountRemaining || '0')), o.currency || 'YER', settings.currency || 'YER', { USD: o.exchangeRateUSD || dbRates.USD, SAR: o.exchangeRateSAR || dbRates.SAR }), 0).toLocaleString() + ' ' + (settings.currency || 'YER'), color: 'text-rose-400 bg-rose-950/20' }
               ].map((k, i) => (
                 <div key={i} className="bg-gradient-to-b from-[#0d0d10] to-[#070709] border border-[#d4af37]/15 p-4 rounded-2xl relative overflow-hidden shadow-md">
                   <div className="absolute right-0 top-0 w-16 h-16 bg-gradient-to-br from-[#d4af37]/5 to-transparent rounded-full blur-xl"></div>
@@ -267,8 +331,8 @@ export const OrdersTableDeck = ({
                         {/* Financial status */}
                         <td className="p-4 text-start">
                           {(() => {
-                            const paidTotal = parseFloat(ord.amountPaid || 0);
-                            const remainVal = parseFloat(ord.amountRemaining || 0);
+                            const paidTotal = parseFloat(String(ord.amountPaid || 0));
+                            const remainVal = parseFloat(String(ord.amountRemaining || 0));
                             const totalFinal = paidTotal + remainVal;
 
                             return (

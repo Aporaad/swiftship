@@ -1,3 +1,4 @@
+type AdapterDocument = { id: string; data: () => Record<string, unknown> };
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot, doc } from '../lib/supabase-adapter';
 import { db } from '../lib/supabase-adapter';
@@ -84,13 +85,13 @@ export default function GlobalEntityLedgerModal() {
     }
 
     const unsubOrders = onSnapshot(qOrders, (snap) => {
-      setOrders(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setOrders(snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() })));
     }, (err) => console.error("Error fetching orders:", err));
 
     // 3. Fetch Ledger Account Transactions from account_trans
     const qTx = query(collection(db, 'account_trans'), where('entity_id', '==', entityId));
     const unsubTx = onSnapshot(qTx, (snap) => {
-      setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setTransactions(snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() })));
       setLoading(false);
     }, (err) => {
       console.error("Error fetching transactions:", err);
@@ -101,7 +102,7 @@ export default function GlobalEntityLedgerModal() {
     //    Subscribe to main_entry to build posting-status map for this entity
     const unsubMainEntries = onSnapshot(collection(db, 'main_entry'), (snap) => {
       const map = new Map<string, any>();
-      snap.docs.forEach(d => {
+      snap.docs.forEach((d: AdapterDocument) => {
         map.set(d.id, d.data());
       });
       setMainEntriesMap(map);

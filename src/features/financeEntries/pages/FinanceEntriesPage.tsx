@@ -60,7 +60,7 @@ export default function FinanceEntriesPage() {
       setUsersMap(uMap);
 
       const loadedCurrencies = (currencyResult.data || []).map((item: any) => ({ id: Number(item.cur_id), code: item.code, isDefault: Boolean(item.is_default) }));
-      const currencyCodeById = new Map(loadedCurrencies.map((item) => [item.id, item.code]));
+      const currencyCodeById = new Map(loadedCurrencies.map((item: { id: number; code: string }) => [item.id, item.code]));
       setCurrencies(loadedCurrencies);
       setAccounts((accountResult.data || []).map((item: any) => ({
         id: item.account_id, nameAr: item.acc_name_ar || item.acc_name_en || item.id, nameEn: item.acc_name_en,

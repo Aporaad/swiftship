@@ -1,3 +1,4 @@
+type AdapterDocument = { id: string; data: () => Record<string, unknown> };
 import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, doc, updateDoc, deleteDoc, addDoc } from '../../../lib/supabase-adapter';
 import { db, handlePostgreSQLError, OperationType } from '../../../lib/supabase-adapter';
@@ -94,7 +95,7 @@ export default function SourcesPage() {
   useEffect(() => {
     if (roleLoading) return;
     const unsub = onSnapshot(collection(db, 'sources'), (snap) => {
-      setSources(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setSources(snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() })));
       setLoading(false);
     }, (error) => {
       handlePostgreSQLError(error, OperationType.LIST, 'sources');
@@ -105,7 +106,7 @@ export default function SourcesPage() {
   useEffect(() => {
     if (roleLoading) return;
     const unsubSec = onSnapshot(collection(db, 'shipping_companies'), (snap) => {
-      setShippingCompanies(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setShippingCompanies(snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() })));
     }, (error) => {
       console.error("Error fetching shipping companies:", error);
     });

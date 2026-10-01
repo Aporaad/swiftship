@@ -1,3 +1,4 @@
+import type { ReportAccount, ReportCourier, ReportOrder, ReportTransaction } from '../../report-row-types';
 /**
  * @file OrdersCostReport.tsx
  * @description تقرير تكاليف الطلبات والشحنات
@@ -57,13 +58,13 @@ const OrdersCostReport: React.FC<OrdersCostReportProps> = ({
 
                     // Aggregation from active orders
                     const totalDirectShippingCostSAR = filteredData.orders
-                      .filter(o => o.orderStatus !== 'Cancelled')
-                      .reduce((sum, o) => sum + (parseFloat(o.shippingCostSAR as any) || 0), 0);
+                      .filter((o: ReportOrder) => o.orderStatus !== 'Cancelled')
+                      .reduce((sum: number, o: ReportOrder) => sum + (parseFloat(String(o.shippingCostSAR ?? 0)) || 0), 0);
                     const totalDirectShippingCostDisplay = convertCurrency(totalDirectShippingCostSAR, 'SAR', displayCurrency);
 
                     const totalDirectPackagingFeeSAR = filteredData.orders
-                      .filter(o => o.orderStatus !== 'Cancelled')
-                      .reduce((sum, o) => sum + (parseFloat(o.packagingFee as any) || 0), 0);
+                      .filter((o: ReportOrder) => o.orderStatus !== 'Cancelled')
+                      .reduce((sum: number, o: ReportOrder) => sum + (parseFloat(String(o.packagingFee ?? 0)) || 0), 0);
                     const totalDirectPackagingFeeDisplay = convertCurrency(totalDirectPackagingFeeSAR, 'SAR', displayCurrency);
 
                     // Transactions on selected cost accounts
@@ -73,7 +74,7 @@ const OrdersCostReport: React.FC<OrdersCostReportProps> = ({
                     const totalCostDebit = costTxs
                       .filter(tx => tx.type === 'Debit')
                       .reduce((sum, tx) => {
-                        const txAcc = accounts.find(a => a.id === tx.accountId);
+                        const txAcc = accounts.find((a: ReportAccount) => a.id === tx.accountId);
                         const txCurrency = txAcc?.currency || tx.currency || 'SAR';
                         return sum + convertCurrency(parseFloat(tx.amount) || 0, txCurrency, displayCurrency);
                       }, 0);
@@ -81,7 +82,7 @@ const OrdersCostReport: React.FC<OrdersCostReportProps> = ({
                     const totalCostCredit = costTxs
                       .filter(tx => tx.type === 'Credit')
                       .reduce((sum, tx) => {
-                        const txAcc = accounts.find(a => a.id === tx.accountId);
+                        const txAcc = accounts.find((a: ReportAccount) => a.id === tx.accountId);
                         const txCurrency = txAcc?.currency || tx.currency || 'SAR';
                         return sum + convertCurrency(parseFloat(tx.amount) || 0, txCurrency, displayCurrency);
                       }, 0);
@@ -226,7 +227,7 @@ const OrdersCostReport: React.FC<OrdersCostReportProps> = ({
                           // SELECTED ORDER DRILL DOWN STATEMENT DETAIL REPORT
                           <div className="space-y-6">
                             {(() => {
-                              const o = orders.find(ord => ord.id === selectedOrderId || ord.orderNumber === selectedOrderId);
+                              const o = orders.find((ord: ReportOrder) => ord.id === selectedOrderId || ord.orderNumber === selectedOrderId);
                               if (!o) {
                                 return (
                                   <div className="p-8 text-center text-slate-500">
@@ -238,8 +239,8 @@ const OrdersCostReport: React.FC<OrdersCostReportProps> = ({
 
                               // Retrieve related financial transactions
                               const relatedTxs = accountTransactions.filter(tx => tx.refNumber === o.orderNumber || tx.description?.includes(o.orderNumber));
-                              const shippingCourier = couriers.find(c => c.id === o.shippingCourierId);
-                              const deliveryCourier = couriers.find(c => c.id === o.deliveryCourierId);
+                              const shippingCourier = couriers.find((c: ReportCourier) => c.id === o.shippingCourierId);
+                              const deliveryCourier = couriers.find((c: ReportCourier) => c.id === o.deliveryCourierId);
 
                               return (
                                 <div className="space-y-6">

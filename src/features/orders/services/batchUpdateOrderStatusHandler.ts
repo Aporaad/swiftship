@@ -5,24 +5,40 @@ import { notificationService } from "../../../services/notificationService";
 import { whatsappService } from "../../../services/whatsappService";
 import { findOrderParty } from "../../../services/orderPartyService";
 import { ORDER_STATUS_FALLBACKS } from "../constants/orders.constants";
+import type { OrderRecord, OrderStatusDescriptor } from "../types";
+
+type LegacyPartyRecord = {
+  id?: string; accountId?: string | null; financialAccountId?: string | null; fullName?: string | null;
+  name?: string | null; phone?: string | null; address?: string | null; [key: string]: unknown;
+};
+type LegacyOrderRecord = OrderRecord;
+type LegacyCourierRecord = LegacyPartyRecord & { courierType?: string; commissionRate?: string | number | null; financialAccountCode?: string | null };
+type AuthContext = { currentUser?: { uid?: string; email?: string | null } | null };
+type ProfileRecord = { fullName?: string };
+type SettingsRecord = { currency?: string };
+type AutoVoucherRule = { id?: string; isActive?: boolean };
+type RateBuilder = (order: LegacyOrderRecord) => Record<string, number>;
+type OrderMutation = (id: string, changes: Record<string, unknown>) => Promise<unknown>;
+const toText = (value: unknown): string => typeof value === "string" ? value : value == null ? "" : String(value);
+const toNumber = (value: unknown): number => typeof value === "number" ? value : typeof value === "string" ? Number.parseFloat(value) || 0 : 0;
 
 export interface BatchUpdateOrderStatusDependencies {
-  auth: any;
-  autoVoucherRules: any[];
-  buildOrderRates: (...args: any[]) => any;
-  couriers: any[];
-  customers: any[];
+  auth: AuthContext;
+  autoVoucherRules: AutoVoucherRule[];
+  buildOrderRates: RateBuilder;
+  couriers: LegacyCourierRecord[];
+  customers: LegacyPartyRecord[];
   dbRates: Record<string, number>;
-  employees: any[];
+  employees: LegacyPartyRecord[];
   isAr: boolean;
-  orders: any[];
-  orderStatusesList: any[];
-  profile: any;
+  orders: LegacyOrderRecord[];
+  orderStatusesList: OrderStatusDescriptor[];
+  profile: ProfileRecord | null;
   selectedOrderIds: string[];
   setIsBatchUpdating: (value: boolean) => void;
   setSelectedOrderIds: (ids: string[]) => void;
-  settings: any;
-  updateOrderRecord: (...args: any[]) => Promise<any>;
+  settings: SettingsRecord;
+  updateOrderRecord: OrderMutation;
 }
 
 export function createBatchUpdateOrderStatusHandler(
@@ -82,7 +98,7 @@ export function createBatchUpdateOrderStatusHandler(
         const newStageId =
           newStatusItem?.id || ORDER_STATUS_FALLBACKS.individualUpdate;
 
-        const remainingVal = parseFloat(ord.amountRemaining || "0");
+        const remainingVal = toNumber(ord.amountRemaining);
         const courierId = ord.deliveryCourierId;
         const shippingCourierId = ord.shippingCourierId;
         const orderParty = findOrderParty(ord, customers, employees, couriers);
@@ -95,7 +111,7 @@ export function createBatchUpdateOrderStatusHandler(
           orderPartyRaw?.accountId ||
           null;
 
-        let extraUpdateFields: any = {};
+        let extraUpdateFields: Record<string, unknown> = {};
 
         const getStageIdByName = (statusName: string) => {
           const item = orderStatusesList.find(
@@ -123,12 +139,8 @@ export function createBatchUpdateOrderStatusHandler(
           const courierRecord = couriers.find(c => c.id === shippingCourierId);
           if (courierRecord) {
             const isSourcing = courierRecord.courierType === "sourcing";
-            const exchangeRate = parseFloat(
-              ord.exchangeRateYER || dbRates.SAR || 1
-            );
-            const commissionProfitOriginal = parseFloat(
-              ord.profitSaudiSAR || "0"
-            );
+            const exchangeRate = toNumber(ord.exchangeRateYER) || dbRates.SAR || 1;
+            const commissionProfitOriginal = toNumber(ord.profitSaudiSAR);
             const commissionProfit = isSourcing
               ? commissionProfitOriginal
               : commissionProfitOriginal * exchangeRate;
@@ -169,8 +181,8 @@ export function createBatchUpdateOrderStatusHandler(
                   linkedAccountId,
                   linkedAccountCode,
                   notes: isAr
-                    ? `عمولة شحن تلقائية (${courierRecord.commissionRate}%) للطلب رقم: ${ord.orderNumber}`
-                    : `Auto-commission (${courierRecord.commissionRate}%) for order: ${ord.orderNumber}`,
+                    ? `عمولة شحن تلقائية (${courierRecord.commissionRate}%) للطلب رقم: ${toText(ord.orderNumber)}`
+                    : `Auto-commission (${courierRecord.commissionRate}%) for order: ${toText(ord.orderNumber)}`,
                   status: "Approved",
                   createdByUid: auth.currentUser?.uid || "system",
                   createdByEmail:
@@ -255,8 +267,8 @@ export function createBatchUpdateOrderStatusHandler(
               linkedAccountId,
               linkedAccountCode,
               notes: isAr
-                ? `عهدة تلقائية مرحلة من تسليم الطلب رقم: ${ord.orderNumber}`
-                : `Auto-custody generated from delivery of order: ${ord.orderNumber}`,
+                ? `عهدة تلقائية مرحلة من تسليم الطلب رقم: ${toText(ord.orderNumber)}`
+                : `Auto-custody generated from delivery of order: ${toText(ord.orderNumber)}`,
               status: "Pending",
               createdByUid: auth.currentUser?.uid || "system",
               createdByEmail:
@@ -295,7 +307,7 @@ export function createBatchUpdateOrderStatusHandler(
 
           extraUpdateFields = {
             ...extraUpdateFields,
-            amountPaid: parseFloat(ord.amountPaid || "0") + remainingVal,
+            amountPaid: toNumber(ord.amountPaid) + remainingVal,
             amountRemaining: 0,
             paymentStatus: "Paid",
           };
@@ -303,7 +315,7 @@ export function createBatchUpdateOrderStatusHandler(
         }
 
         // 3. delivery_wage trigger
-        const deliveryFee = parseFloat(ord.deliveryCourierFee || "0");
+        const deliveryFee = toNumber(ord.deliveryCourierFee);
         if (
           shouldFire("delivery_wage", "تم التسليم") &&
           courierId &&
@@ -348,8 +360,8 @@ export function createBatchUpdateOrderStatusHandler(
               linkedAccountId,
               linkedAccountCode,
               notes: isAr
-                ? `أجور توصيل تلقائية لتسليم الطلب رقم: ${ord.orderNumber}`
-                : `Auto-wage for delivery of order: ${ord.orderNumber}`,
+                ? `أجور توصيل تلقائية لتسليم الطلب رقم: ${toText(ord.orderNumber)}`
+                : `Auto-wage for delivery of order: ${toText(ord.orderNumber)}`,
               status: "Approved",
               createdByUid: auth.currentUser?.uid || "system",
               createdByEmail:
@@ -389,10 +401,10 @@ export function createBatchUpdateOrderStatusHandler(
         // 4. company_profit trigger
         if (
           shouldFire("company_profit", "تم التسليم") &&
-          parseFloat(ord.profitCompanySAR || "0") > 0
+          toNumber(ord.profitCompanySAR) > 0
         ) {
           try {
-            const profitValSAR = parseFloat(ord.profitCompanySAR || "0");
+            const profitValSAR = toNumber(ord.profitCompanySAR);
             const profitConverted =
               financialAccountService.convertToDefaultCurrency(
                 profitValSAR,
@@ -507,11 +519,11 @@ export function createBatchUpdateOrderStatusHandler(
         category: "order",
       });
       setSelectedOrderIds([]);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       notificationService.notify({
         title: isAr ? "خطأ في التحديث" : "Batch Update Error",
-        message: err.message || "Error executing batch action",
+        message: err instanceof Error ? err.message : "Error executing batch action",
         type: "error",
         category: "order",
       });

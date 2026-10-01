@@ -1,4 +1,17 @@
-export type OrderFilterRecord = Record<string, any>;
+export interface OrderFilterRecord {
+  [key: string]: unknown;
+}
+
+const readText = (value: unknown): string =>
+  typeof value === "string" ? value : value == null ? "" : String(value);
+const readNumber = (value: unknown): number => {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+};
 
 export interface OrderFilterCriteria {
   searchText: string;
@@ -37,37 +50,38 @@ export function enrichOrders(
 
     if (partyType === "employee") {
       const employee = employees.find(record => record.id === partyId);
-      partyName = employee?.fullName || employee?.name || "";
-      partyPhone = employee?.phone || "";
-      partyAddress = employee?.address || "";
+      partyName = readText(employee?.fullName || employee?.name);
+      partyPhone = readText(employee?.phone);
+      partyAddress = readText(employee?.address);
     } else if (partyType === "courier") {
       const courier = couriers.find(record => record.id === partyId);
-      partyName = courier?.fullName || courier?.name || "";
-      partyPhone = courier?.phone || "";
+      partyName = readText(courier?.fullName || courier?.name);
+      partyPhone = readText(courier?.phone);
     } else {
       const customerId = order.customerId || order.customer_id || partyId;
       const customer = customers.find(record => record.id === customerId);
-      partyName = customer?.fullName || customer?.name || "";
-      partyPhone = customer?.phone || customer?.mobile || "";
-      partyAddress = customer?.address || "";
+      partyName = readText(customer?.fullName || customer?.name);
+      partyPhone = readText(customer?.phone || customer?.mobile);
+      partyAddress = readText(customer?.address);
     }
 
     const sourceId = order.orderSourceId || order.order_source_id;
     const source = sources.find(record => record.id === sourceId);
-    const sourceName =
-      source?.name || order.orderSourceType || order.order_source_type || "";
+    const sourceName = readText(
+      source?.name || order.orderSourceType || order.order_source_type
+    );
 
     return {
       ...order,
-      customerName: partyName || order.customerName || "",
-      customerPhone: partyPhone || order.customerPhone || "",
-      customerAddress: partyAddress || order.customerAddress || "",
+      customerName: partyName || readText(order.customerName),
+      customerPhone: partyPhone || readText(order.customerPhone),
+      customerAddress: partyAddress || readText(order.customerAddress),
       orderSourceName: sourceName,
       customerId: order.customerId || order.customer_id || "",
       orderPartyId: order.orderPartyId || order.order_party_id || "",
       orderPartyType:
         order.orderPartyType || order.order_party_type || "customer",
-      isStaffOrder: order.isStaffOrder ?? order.is_staff_order ?? false,
+      isStaffOrder: Boolean(order.isStaffOrder ?? order.is_staff_order ?? false),
       employeeId: order.employeeId || order.employee_id || "",
       courierId: order.courierId || order.courier_id || "",
       orderPartyAccountId:
@@ -129,13 +143,13 @@ export function filterAndSortOrders(
     })
     .sort((a, b) => {
       if (sortBy === "date-desc")
-        return (b.createdAt || 0) - (a.createdAt || 0);
-      if (sortBy === "date-asc") return (a.createdAt || 0) - (b.createdAt || 0);
+        return readNumber(b.createdAt) - readNumber(a.createdAt);
+      if (sortBy === "date-asc") return readNumber(a.createdAt) - readNumber(b.createdAt);
       if (sortBy === "amount-desc") {
         return (
-          parseFloat(b.amountPaid || 0) +
-          parseFloat(b.amountRemaining || 0) -
-          (parseFloat(a.amountPaid || 0) + parseFloat(a.amountRemaining || 0))
+          readNumber(b.amountPaid) +
+          readNumber(b.amountRemaining) -
+          (readNumber(a.amountPaid) + readNumber(a.amountRemaining))
         );
       }
       return 0;

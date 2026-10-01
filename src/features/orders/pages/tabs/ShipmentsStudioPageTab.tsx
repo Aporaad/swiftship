@@ -7,7 +7,7 @@
 import React from 'react';
 import { ShipmentsStudioTab } from '../../../../components/orders/ShipmentsStudioTab';
 
-export const ShipmentsStudioPageTab: React.FC<any> = (props) => {
+export const ShipmentsStudioPageTab: React.FC<React.ComponentProps<typeof ShipmentsStudioTab>> = (props) => {
   return <ShipmentsStudioTab {...props} />;
 };
 

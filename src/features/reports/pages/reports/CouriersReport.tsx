@@ -1,3 +1,4 @@
+import type { ReportAccount, ReportCourier, ReportExpense, ReportOrder, ReportTransaction } from '../../report-row-types';
 /**
  * @file CouriersReport.tsx
  * @description تقرير المناديب والتحصيلات والعهدة المعلقة
@@ -54,12 +55,12 @@ const CouriersReport: React.FC<CouriersReportProps> = ({
                           </thead>
                           <tbody>
                             {searchMatchList(filteredData.couriers, 'fullName').map((c) => {
-                              const acc = accounts.find(a => a.entityType === 'courier' && a.entityId === c.id);
+                              const acc = accounts.find((a: ReportAccount) => a.entityType === 'courier' && a.entityId === c.id);
                               const bal = acc ? acc.balance : (c.financialBalance || 0);
                               const cur = acc ? acc.currency : (c.financialCurrency || 'SAR');
                               const pendingCustody = expenses
-                                .filter(e => e.recipientEntityId === c.id && e.type === 'Custody' && e.status === 'Pending')
-                                .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+                                .filter((e: ReportExpense) => e.recipientEntityId === c.id && e.type === 'Custody' && e.status === 'Pending')
+                                .reduce((sum: number, e: ReportExpense) => sum + (parseFloat(String(e.amount ?? 0)) || 0), 0);
                               return (
                                 <tr key={c.id} className="bg-slate-900/10 hover:bg-slate-900/30 rounded-xl text-center cursor-pointer transition" onClick={() => setSelectedCourierId(c.id)}>
                                   <td className="py-3 px-3 font-bold text-white text-start">{c.fullName}</td>
@@ -90,16 +91,16 @@ const CouriersReport: React.FC<CouriersReportProps> = ({
                     // SELECTED COURIER DETAIL DISPLAY SECTION
                     <div className="space-y-6 animate-fade-in">
                       {(() => {
-                        const courier = couriers.find(c => c.id === selectedCourierId);
+                        const courier = couriers.find((c: ReportCourier) => c.id === selectedCourierId);
                         if (!courier) return <p className="text-slate-500">Courier not found.</p>;
 
-                        const coOrders = filteredData.orders.filter(o => o.shippingCourierId === courier.id || o.deliveryCourierId === courier.id || o.courierId === courier.id);
+                        const coOrders = filteredData.orders.filter((o: ReportOrder) => o.shippingCourierId === courier.id || o.deliveryCourierId === courier.id || o.courierId === courier.id);
                         const totalAssigned = coOrders.length;
-                        const deliveredCo = coOrders.filter(o => ['Completed', 'Delivered', 'تم التسليم'].includes(o.orderStatus));
+                        const deliveredCo = coOrders.filter((o: ReportOrder) => ['Completed', 'Delivered', 'تم التسليم'].includes(o.orderStatus ?? ''));
                         const successRate = totalAssigned > 0 ? Math.round((deliveredCo.length / totalAssigned) * 105) : 0;
                         const pendingCustody = expenses
-                          .filter(e => e.recipientEntityId === courier.id && e.type === 'Custody' && e.status === 'Pending')
-                          .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+                          .filter((e: ReportExpense) => e.recipientEntityId === courier.id && e.type === 'Custody' && e.status === 'Pending')
+                          .reduce((sum: number, e: ReportExpense) => sum + (parseFloat(String(e.amount ?? 0)) || 0), 0);
 
                         return (
                           <div className="space-y-6">
@@ -125,13 +126,13 @@ const CouriersReport: React.FC<CouriersReportProps> = ({
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                               <div className="p-4 bg-amber-500/5 border border-amber-500/15 rounded-2xl">
                                 <span className="text-[10px] text-amber-500 font-bold block mb-1">{isAr ? 'العهدة المالية المعلقة بذمته' : 'Pending Custody Owed'}</span>
-                                <span className="text-lg font-mono font-black text-amber-500">{pendingCustody.toLocaleString()} {(() => { const acc = accounts.find(a => a.entityType === 'courier' && a.entityId === courier.id); return acc ? acc.currency : (courier.financialCurrency || 'SAR'); })()}</span>
+                                <span className="text-lg font-mono font-black text-amber-500">{pendingCustody.toLocaleString()} {(() => { const acc = accounts.find((a: ReportAccount) => a.entityType === 'courier' && a.entityId === courier.id); return acc ? acc.currency : (courier.financialCurrency || 'SAR'); })()}</span>
                                 <p className="text-[9px] text-slate-655 mt-1">{isAr ? 'مبالغ تحت التسوية والمحاسبة اليومية' : 'Unsettled cash from deliveries'}</p>
                               </div>
                               <div className="p-4 bg-emerald-500/5 border border-emerald-500/15 rounded-2xl">
                                 <span className="text-[10px] text-emerald-400 font-bold block mb-1">{isAr ? 'الرصيد الجاري المستحق' : 'Aggregate Account Balance'}</span>
                                 <span className="text-lg font-mono font-black text-emerald-400">{(() => {
-                                  const acc = accounts.find(a => a.entityType === 'courier' && a.entityId === courier.id);
+                                  const acc = accounts.find((a: ReportAccount) => a.entityType === 'courier' && a.entityId === courier.id);
                                   const bal = acc ? acc.balance : (courier.financialBalance || 0);
                                   const cur = acc ? acc.currency : (courier.financialCurrency || 'SAR');
                                   return `${bal.toLocaleString()} ${cur}`;

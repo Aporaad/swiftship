@@ -1,19 +1,30 @@
 import { addDoc, collection, db, deleteDoc, doc, onSnapshot, updateDoc } from '../../../../../lib/supabase';
+import type { ReturnedProduct } from '../../../../../services/returnedProductService';
+
+type SnapshotDocument = { id: string; data: () => Record<string, unknown> };
+type CollectionSnapshot = { docs: SnapshotDocument[] };
+type OrderRow = { id: string } & Record<string, unknown>;
+type OrderItemRow = { items_id: string } & Record<string, unknown>;
+
+const toReturnedProduct = (document: SnapshotDocument): ReturnedProduct => ({
+  ...document.data(),
+  return_id: document.id,
+});
 
 export const returnedProductsGateway = {
-  subscribeOrders(onData: (rows: any[]) => void) {
-    return onSnapshot(collection(db, 'orders'), (snap: any) => {
-      onData(snap.docs.map((d: any) => ({ id: d.id, ...d.data() })));
+  subscribeOrders(onData: (rows: OrderRow[]) => void) {
+    return onSnapshot(collection(db, 'orders'), (snap: CollectionSnapshot) => {
+      onData(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
   },
-  subscribeOrderItems(onData: (rows: any[]) => void) {
-    return onSnapshot(collection(db, 'order_items'), (snap: any) => {
-      onData(snap.docs.map((d: any) => ({ items_id: d.id, ...d.data() })));
+  subscribeOrderItems(onData: (rows: OrderItemRow[]) => void) {
+    return onSnapshot(collection(db, 'order_items'), (snap: CollectionSnapshot) => {
+      onData(snap.docs.map((d) => ({ items_id: d.id, ...d.data() })));
     });
   },
-  subscribeReturns(onData: (rows: any[]) => void, onError: () => void) {
-    return onSnapshot(collection(db, 'returned_products'), (snap: any) => {
-      onData(snap.docs.map((d: any) => ({ return_id: d.id, ...d.data() })));
+  subscribeReturns(onData: (rows: ReturnedProduct[]) => void, onError: () => void) {
+    return onSnapshot(collection(db, 'returned_products'), (snap: CollectionSnapshot) => {
+      onData(snap.docs.map(toReturnedProduct));
     }, onError);
   },
   updateReturn(returnId: string, payload: Record<string, unknown>) {

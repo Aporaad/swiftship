@@ -240,7 +240,7 @@ export default function EditOrderModal({
     const defaultInsuranceType = settings?.defaultProductInsuranceType || 'fixed';
     let rowInsuranceFee = 0;
     if (defaultInsuranceType === 'percentage') {
-      rowInsuranceFee = (selectedProd.price * 1) * (defaultInsuranceFee / 100);
+      rowInsuranceFee = (selectedProd.price ?? 0) * (defaultInsuranceFee / 100);
     } else {
       rowInsuranceFee = defaultInsuranceFee * 1;
     }

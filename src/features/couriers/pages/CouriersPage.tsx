@@ -1,3 +1,4 @@
+type AdapterDocument = { id: string; data: () => Record<string, unknown> };
 import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, doc, updateDoc, addDoc, setDoc, deleteDoc, query, where, orderBy, or } from '../../../lib/supabase-adapter';
 import { db, auth } from '../../../lib/supabase-adapter';
@@ -106,7 +107,7 @@ export default function CouriersPage() {
       where('entity_id', '==', selectedCourier.id)
     );
     const unsubTx = onSnapshot(qTx, (snap) => {
-      setCourierTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setCourierTransactions(snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() })));
     }, (err) => {
       console.error("Error fetching transactions for courier:", err);
     });
@@ -340,7 +341,7 @@ export default function CouriersPage() {
     // 1. Subscribe to Couriers
     const qCouriers = query(collection(db, 'couriers'), orderBy('createdAt', 'desc'));
     const unsubCouriers = onSnapshot(qCouriers, (snap) => {
-      setCouriers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setCouriers(snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() })));
       setLoading(false);
     }, (error) => {
       handlePostgreSQLError(error, OperationType.LIST, 'couriers');
@@ -348,14 +349,14 @@ export default function CouriersPage() {
 
     // 2. Subscribe to Orders (Smart Custody / Performance sync)
     const unsubOrders = onSnapshot(collection(db, 'orders'), (snap) => {
-      setAllOrders(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setAllOrders(snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() })));
     }, (error) => {
       console.error("Error loading orders:", error);
     });
 
     // 3. Subscribe to Accounts
     const unsubAccounts = onSnapshot(collection(db, 'accounts'), (snap) => {
-      setAccounts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setAccounts(snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() })));
     }, (error) => {
       console.error("Error loading accounts:", error);
     });
@@ -404,7 +405,7 @@ export default function CouriersPage() {
     );
 
     const unsubOrders = onSnapshot(qOrders, (snap) => {
-      setCourierOrders(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setCourierOrders(snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() })));
       setOrdersLoading(false);
     }, (err) => {
       console.error("Error fetching courier orders:", err);
@@ -549,7 +550,7 @@ export default function CouriersPage() {
           'courier',
           newCourierRef.id,
           addFormData.fullName,
-          type === 'sourcing' ? settings.defaultOrderCurrency : settings.currency
+          type === 'sourcing' ? (settings.defaultOrderCurrency ?? settings.currency ?? 'YER') : (settings.currency ?? 'YER')
         );
       } catch (accErr) {
         console.warn('[Couriers] Could not create financial account:', accErr);

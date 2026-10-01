@@ -28,7 +28,7 @@ export function useItemCategories() {
 
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'items_category'), async (snapshot) => {
-      const records = snapshot.docs.map((row: any) => normalize(row.id, row.data()));
+      const records: ItemCategory[] = snapshot.docs.map((row: any) => normalize(row.id, row.data()));
       if (records.length === 0) {
         await Promise.all(DEFAULT_ITEM_CATEGORIES.map((category) => setDoc(doc(db, 'items_category', category.id), {
           ...category, createdAt: Date.now(), updatedAt: Date.now(),

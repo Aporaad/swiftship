@@ -27,6 +27,14 @@ export const DEFAULT_ORDER_STATUSES: OrderStatusItem[] = [
   { id: 10, nameAr: 'ملغي', nameEn: 'Cancelled', isFirst: false, isLast: false, color: 'rose', code: 'cancelled', description: 'طلب ملغي' }
 ];
 
+type StatusDocument = { id: string; data: () => Record<string, unknown> };
+
+const readStatusValue = (data: Record<string, unknown>, key: string, legacyKey: string): unknown => data[key] ?? data[legacyKey];
+const readStatusText = (data: Record<string, unknown>, key: string, legacyKey: string): string => {
+  const value = readStatusValue(data, key, legacyKey);
+  return typeof value === 'string' ? value : value == null ? '' : String(value);
+};
+
 export function useOrderStatuses() {
   const [statuses, setStatuses] = useState<OrderStatusItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,20 +63,20 @@ export function useOrderStatuses() {
 
     // 2. Real-time subscription to order_status table
     const unsub = onSnapshot(collection(db, 'order_status'), (snap) => {
-      const list: OrderStatusItem[] = snap.docs.map(d => {
+      const list: OrderStatusItem[] = snap.docs.map((d: StatusDocument) => {
         const data = d.data();
         const numericId = typeof data.id === 'number' ? data.id : parseInt(d.id, 10) || 0;
         return {
           id: numericId,
-          nameAr: data.nameAr || data.name_ar || '',
-          nameEn: data.nameEn || data.name_en || '',
-          isFirst: !!(data.isFirst ?? data.is_first),
-          isLast: !!(data.isLast ?? data.is_last),
-          sortOrder: data.sortOrder ?? numericId,
-          color: data.color || 'blue',
-          code: data.code || '',
-          description: data.description || '',
-          createdAt: data.createdAt || data.created_at
+          nameAr: readStatusText(data, 'nameAr', 'name_ar'),
+          nameEn: readStatusText(data, 'nameEn', 'name_en'),
+          isFirst: Boolean(readStatusValue(data, 'isFirst', 'is_first')),
+          isLast: Boolean(readStatusValue(data, 'isLast', 'is_last')),
+          sortOrder: typeof data.sortOrder === 'number' ? data.sortOrder : numericId,
+          color: readStatusText(data, 'color', 'color') || 'blue',
+          code: readStatusText(data, 'code', 'code'),
+          description: readStatusText(data, 'description', 'description'),
+          createdAt: typeof (data.createdAt ?? data.created_at) === 'string' ? (data.createdAt ?? data.created_at) as string : undefined
         };
       });
 

@@ -7,6 +7,9 @@
 
 import { useMemo, useState } from 'react';
 import { enrichOrders, filterAndSortOrders } from '../services/orderFilterService';
+import type { OrderFeatureRecord } from '../types';
+
+type LegacyFilterRecord = Record<string, unknown>;
 
 /** حالة الفلترة والبحث - Filter and search state */
 export interface OrderFilterState {
@@ -23,16 +26,16 @@ export interface OrderFilterState {
 }
 
 interface UseOrderFiltersOptions {
-  orders: any[];
-  customers: any[];
-  employees: any[];
-  couriers: any[];
-  sources: any[];
+  orders: OrderFeatureRecord[];
+  customers: LegacyFilterRecord[];
+  employees: LegacyFilterRecord[];
+  couriers: LegacyFilterRecord[];
+  sources: LegacyFilterRecord[];
 }
 
 interface UseOrderFiltersResult extends OrderFilterState {
-  filteredOrdersList: any[];
-  enrichedOrders: any[];
+  filteredOrdersList: LegacyFilterRecord[];
+  enrichedOrders: LegacyFilterRecord[];
 }
 
 export function useOrderFilters({
@@ -49,7 +52,7 @@ export function useOrderFilters({
   const [sortBy, setSortBy] = useState('date-desc');
 
   const enrichedOrders = useMemo(
-    () => enrichOrders(orders, { customers, employees, couriers, sources }),
+    () => enrichOrders(orders.map((order) => ({ ...order })), { customers, employees, couriers, sources }),
     [orders, customers, employees, couriers, sources],
   );
 

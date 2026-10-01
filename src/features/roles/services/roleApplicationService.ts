@@ -19,7 +19,7 @@ export class RoleApplicationService {
     return this.api.saveRole({
       ...input,
       roleId: input.roleId.trim(),
-      title: input.title?.trim() || null,
+      title: input.title?.trim() || '',
       permissions: [...new Set(input.permissions.map((permission) => permission.trim()))].sort(),
     });
   }

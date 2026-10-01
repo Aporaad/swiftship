@@ -19,7 +19,7 @@ import { useRole } from '../../../hooks/useRole';
 import { useAuthSession } from '../../../features/auth/AuthSessionProvider';
 import { useSettings } from '../../../context/SettingsContext';
 import { notificationService } from '../../../services/notificationService';
-import { activityLogService } from '../../../services/activityLogService';
+import { activityLogService, type ActivityAction } from '../../../services/activityLogService';
 import ConfirmModal from '../../../components/ConfirmModal';
 import ConfirmDeletePinModal from '../../../components/ConfirmDeletePinModal';
 import { financialAccountService } from '../../../services/financialAccountService';
@@ -320,8 +320,53 @@ const getActionMeta = (action: string, isAr: boolean) => {
 // SESSION TERMINATION OPTIONS
 // ══════════════════════════════════════════════════════════════
 type SessionAction = 'force_logout' | 'disable_account' | 'temp_ban_1h' | 'temp_ban_24h' | 'temp_ban_72h';
+type TabId = 'users' | 'roles' | 'sessions' | 'activity';
+type DataRecord = Record<string, unknown>;
+type SnapshotDoc = { id: string; data: () => DataRecord };
+type SnapshotResult = { docs: SnapshotDoc[] };
+type TimestampValue = number | string | { toDate: () => Date };
+type ManagedUser = DataRecord & {
+  id: string; fullName: string; email: string; username: string; role: string;
+  roleId?: string; disabled: boolean; isRoot?: boolean; lastSeen?: number;
+  tempBanUntil?: number | null; createdAt?: number; linkedType?: string | null;
+  linkedEntity?: string | null; systemPin?: string; financialAccountId?: string | null;
+  accountId?: string | null; financialAccountCode?: string | null;
+  financialBalance?: number; financialCurrency?: string;
+};
+type RoleRecord = DataRecord & { id: string; title: string; permissions: string[] };
+type EntityRecord = DataRecord & { id: string; fullName: string };
+type AccountRecord = DataRecord & { id: string; entityId?: string; accountCode?: string; balance?: number; currency?: string };
+type SessionRecord = DataRecord & { id: string; fullName: string; email: string; role: string; deviceInfo: string; lastSeen: number; last_seen: number };
+type ActivityRecord = { id: string; action: string; userId?: string; userName?: string; userRole?: string; target?: string; details?: Record<string, unknown>; timestamp?: TimestampValue };
+type ErrorLike = { message?: string; code?: string };
 
-const SESSION_ACTIONS = (isAr: boolean): { id: SessionAction; label: string; desc: string; icon: React.ComponentType<any>; color: string; severity: string }[] => [
+const asRecord = (value: unknown): DataRecord =>
+  typeof value === 'object' && value !== null ? value as DataRecord : {};
+const asString = (value: unknown, fallback = ''): string => typeof value === 'string' ? value : fallback;
+const asNumber = (value: unknown, fallback = 0): number => typeof value === 'number' ? value : fallback;
+const getErrorMessage = (error: unknown): string => error instanceof Error ? error.message : asString(asRecord(error).message, 'Operation failed');
+const toUser = (id: string, raw: DataRecord): ManagedUser => ({
+  ...raw, id, fullName: asString(raw.fullName, 'User'), email: asString(raw.email),
+  username: asString(raw.username), role: asString(raw.role, asString(raw.roleId, 'Employee')),
+  roleId: typeof raw.roleId === 'string' ? raw.roleId : undefined,
+  disabled: raw.disabled === true, isRoot: raw.isRoot === true,
+  lastSeen: typeof raw.lastSeen === 'number' ? raw.lastSeen : undefined,
+  tempBanUntil: typeof raw.tempBanUntil === 'number' ? raw.tempBanUntil : null,
+  createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : undefined,
+});
+const toRole = (id: string, raw: DataRecord): RoleRecord => ({
+  ...raw, id, title: asString(raw.title, id),
+  permissions: Array.isArray(raw.permissions) ? raw.permissions.filter((permission): permission is string => typeof permission === 'string') : [],
+});
+const toEntity = (id: string, raw: DataRecord): EntityRecord => ({ ...raw, id, fullName: asString(raw.fullName, id) });
+const toAccount = (id: string, raw: DataRecord): AccountRecord => ({ ...raw, id,
+  entityId: typeof raw.entityId === 'string' ? raw.entityId : undefined,
+  accountCode: typeof raw.accountCode === 'string' ? raw.accountCode : undefined,
+  balance: typeof raw.balance === 'number' ? raw.balance : undefined,
+  currency: typeof raw.currency === 'string' ? raw.currency : undefined,
+});
+
+const SESSION_ACTIONS = (isAr: boolean): { id: SessionAction; label: string; desc: string; icon: React.ComponentType; color: string; severity: string }[] => [
   {
     id: 'force_logout',
     label: isAr ? 'إنهاء الجلسة فوراً' : 'Force Logout Now',
@@ -374,16 +419,16 @@ export default function UserManagementPage() {
   const isAr = settings.language === 'ar';
   const t = (ar: string, en: string) => isAr ? ar : en;
 
-  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'sessions' | 'activity'>('users');
+  const [activeTab, setActiveTab] = useState<TabId>('users');
   const [roleActiveTab, setRoleActiveTab] = useState<string>('all');
 
   // ── Data ─────────────────────────────────────────────────
-  const [users, setUsers] = useState<any[]>([]);
-  const [accounts, setAccounts] = useState<any[]>([]);  // financial accounts for employees
-  const [employeesList, setEmployeesList] = useState<any[]>([]);
-  const [couriersList, setCouriersList] = useState<any[]>([]);
-  const [roles, setRoles] = useState<any[]>([]);
-  const [activityLogs, setActivityLogs] = useState<any[]>([]);
+  const [users, setUsers] = useState<ManagedUser[]>([]);
+  const [accounts, setAccounts] = useState<AccountRecord[]>([]);  // financial accounts for employees
+  const [employeesList, setEmployeesList] = useState<EntityRecord[]>([]);
+  const [couriersList, setCouriersList] = useState<EntityRecord[]>([]);
+  const [roles, setRoles] = useState<RoleRecord[]>([]);
+  const [activityLogs, setActivityLogs] = useState<ActivityRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
   // ── Live transaction-based balances (real-time from account_trans) ────
@@ -399,8 +444,8 @@ export default function UserManagementPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSessionModalOpen, setIsSessionModalOpen] = useState(false);
-  const [sessionTargetUser, setSessionTargetUser] = useState<any>(null);
-  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [sessionTargetUser, setSessionTargetUser] = useState<ManagedUser | null>(null);
+  const [selectedUser, setSelectedUser] = useState<ManagedUser | null>(null);
   const [addLoading, setAddLoading] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
   const [savingRole, setSavingRole] = useState(false);
@@ -409,7 +454,7 @@ export default function UserManagementPage() {
   const roleBlockRef = React.useRef(false);
 
   // -- Multidevice Sessions --
-  const [dbSessions, setDbSessions] = useState<any[]>([]);
+  const [dbSessions, setDbSessions] = useState<SessionRecord[]>([]);
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
@@ -421,7 +466,7 @@ export default function UserManagementPage() {
 
   // -- Direct Password Change --
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
-  const [passwordTargetUser, setPasswordTargetUser] = useState<any>(null);
+  const [passwordTargetUser, setPasswordTargetUser] = useState<ManagedUser | null>(null);
   const [newPasswordValue, setNewPasswordValue] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
 
@@ -438,18 +483,18 @@ export default function UserManagementPage() {
   // Listen to Employees and Couriers for dynamic user linking
   useEffect(() => {
     if (roleLoading) return;
-    const unsubEmp = onSnapshot(collection(db, 'employees'), snap => {
-      setEmployeesList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    const unsubEmp = onSnapshot(collection(db, 'employees'), (snap: SnapshotResult) => {
+      setEmployeesList(snap.docs.map(d => toEntity(d.id, d.data())));
     });
-    const unsubCour = onSnapshot(collection(db, 'couriers'), snap => {
-      setCouriersList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    const unsubCour = onSnapshot(collection(db, 'couriers'), (snap: SnapshotResult) => {
+      setCouriersList(snap.docs.map(d => toEntity(d.id, d.data())));
     });
     return () => { unsubEmp(); unsubCour(); };
   }, [roleLoading]);
 
   // ── Roles ────────────────────────────────────────────────
   const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<any>(null);
+  const [selectedRole, setSelectedRole] = useState<RoleRecord | null>(null);
   const [roleFormData, setRoleFormData] = useState({ id: '', title: '', permissions: [] as string[] });
   const [permSearch, setPermSearch] = useState('');
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
@@ -476,8 +521,8 @@ export default function UserManagementPage() {
   // ══════════════════════════════════════════════════════════
   useEffect(() => {
     if (roleLoading) return;
-    const unsubRoles = onSnapshot(collection(db, 'roles'), (snap) => {
-      const fetchedRoles = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const unsubRoles = onSnapshot(collection(db, 'roles'), (snap: SnapshotResult) => {
+      const fetchedRoles = snap.docs.map(d => toRole(d.id, d.data()));
       setRoles(fetchedRoles);
     }, err => {
       console.error("[UserManagement] Error listening to roles:", err);
@@ -491,7 +536,7 @@ export default function UserManagementPage() {
     const initRoles = async () => {
       try {
         const snap = await getDocs(collection(db, 'roles'));
-        const fetchedRoles = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const fetchedRoles = snap.docs.map(d => toRole(d.id, d.data()));
 
         const defaultRoles = [
           { id: 'Admin', title: isAr ? 'مدير النظام' : 'System Admin', permissions: ['*'] },
@@ -523,11 +568,12 @@ export default function UserManagementPage() {
 
   useEffect(() => {
     if (roleLoading) return;
-    const unsub = onSnapshot(collection(db, 'sessions'), snap => {
+    const unsub = onSnapshot(collection(db, 'sessions'), (snap: SnapshotResult) => {
       const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
       const all = snap.docs.map(d => {
         const rawData = d.data();
-        const payload = typeof rawData.data === 'string' ? JSON.parse(rawData.data) : (rawData.data || {});
+        const parsedPayload: unknown = typeof rawData.data === 'string' ? JSON.parse(rawData.data) : rawData.data;
+        const payload = asRecord(parsedPayload);
 
         const rawLastSeen = rawData.last_seen || rawData.lastSeen || payload.last_seen_at || payload.last_seen;
         let lastSeenMs = 0;
@@ -537,10 +583,11 @@ export default function UserManagementPage() {
           if (!isNaN(parsed)) lastSeenMs = parsed;
         }
 
-        const fullName = payload.full_name || payload.fullName || rawData.fullName || rawData.full_name || (rawData.email ? rawData.email.split('@')[0] : 'User');
-        const email = payload.email || rawData.email || '';
-        const role = payload.role || rawData.role || 'Employee';
-        const deviceInfo = payload.device_info || payload.deviceInfo || rawData.deviceInfo || rawData.device_info || 'Unknown';
+        const rawEmail = asString(payload.email, asString(rawData.email));
+        const fullName = asString(payload.full_name, asString(payload.fullName, asString(rawData.fullName, asString(rawData.full_name, rawEmail ? rawEmail.split('@')[0] : 'User'))));
+        const email = rawEmail;
+        const role = asString(payload.role, asString(rawData.role, 'Employee'));
+        const deviceInfo = asString(payload.device_info, asString(payload.deviceInfo, asString(rawData.deviceInfo, asString(rawData.device_info, 'Unknown'))));
 
         return {
           id: d.id,
@@ -555,16 +602,16 @@ export default function UserManagementPage() {
         };
       });
 
-      setDbSessions(all.filter((s: any) => s.lastSeen > 0 ? s.lastSeen > twentyFourHoursAgo : true));
+      setDbSessions(all.filter((session): session is SessionRecord => session.lastSeen > 0 ? session.lastSeen > twentyFourHoursAgo : true));
     }, err => console.error("Error fetching sessions:", err));
     return unsub;
   }, [roleLoading]);
 
   useEffect(() => {
     if (roleLoading) return;
-    const unsub = onSnapshot(collection(db, 'users'), snap => {
-      const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setUsers(all.filter((u: any) => u.role !== 'Courier' && u.roleId !== 'courier' && u.role !== 'courier'));
+    const unsub = onSnapshot(collection(db, 'users'), (snap: SnapshotResult) => {
+      const all = snap.docs.map(d => toUser(d.id, d.data()));
+      setUsers(all.filter(u => u.role !== 'Courier' && u.roleId !== 'courier' && u.role !== 'courier'));
       setLoading(false);
     }, err => handleSupabaseError(err, OperationType.LIST, 'users'));
     return unsub;
@@ -573,17 +620,29 @@ export default function UserManagementPage() {
   // ── Subscribe to financial accounts (for employee balance display) ────────────
   useEffect(() => {
     if (roleLoading) return;
-    const unsub = onSnapshot(collection(db, 'accounts'), (snap: any) => {
-      setAccounts(snap.docs.map((d: any) => ({ id: d.id, ...d.data() })));
-    }, (err: any) => console.warn('[UserManagement] Could not load accounts:', err));
+    const unsub = onSnapshot(collection(db, 'accounts'), (snap: SnapshotResult) => {
+      setAccounts(snap.docs.map(d => toAccount(d.id, d.data())));
+    }, (err: unknown) => console.warn('[UserManagement] Could not load accounts:', err));
     return () => unsub();
   }, [roleLoading]);
 
   useEffect(() => {
     if (roleLoading || !hasPermission('view_activity_log')) return;
     const q = query(collection(db, 'activity_logs'), orderBy('timestamp', 'desc'), limit(200));
-    const unsub = onSnapshot(q, snap =>
-      setActivityLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+    const unsub = onSnapshot(q, (snap: SnapshotResult) =>
+      setActivityLogs(snap.docs.map(d => {
+        const data = d.data();
+        return {
+          id: d.id,
+          action: asString(data.action),
+          userId: typeof data.userId === 'string' ? data.userId : undefined,
+          userName: typeof data.userName === 'string' ? data.userName : undefined,
+          userRole: typeof data.userRole === 'string' ? data.userRole : undefined,
+          target: typeof data.target === 'string' ? data.target : undefined,
+          details: asRecord(data.details),
+          timestamp: typeof data.timestamp === 'number' || typeof data.timestamp === 'string' || (typeof data.timestamp === 'object' && data.timestamp !== null && 'toDate' in data.timestamp && typeof data.timestamp.toDate === 'function') ? data.timestamp as TimestampValue : undefined,
+        };
+      }))
     );
     return unsub;
   }, [roleLoading]);
@@ -605,7 +664,7 @@ export default function UserManagementPage() {
   // ══════════════════════════════════════════════════════════
   // USER ACTIONS
   // ══════════════════════════════════════════════════════════
-  const handleOpenEdit = (user: any) => {
+  const handleOpenEdit = (user: ManagedUser) => {
     setSelectedUser(user);
     setEditFormData({
       fullName: user.fullName || '', username: user.username || '',
@@ -654,7 +713,7 @@ export default function UserManagementPage() {
     }
   };
 
-  const handleToggleStatus = async (user: any) => {
+  const handleToggleStatus = async (user: ManagedUser) => {
     const isRootTarget = ROOT_EMAILS.includes(user.email) || user.isRoot;
     if (isRootTarget) return notificationService.notify({ title: t('محمي', 'Protected'), message: t('لا يمكن تعطيل المسؤول الرئيسي', 'Cannot disable root admin'), type: 'error', category: 'system' });
     const action = user.disabled ? t('تفعيل', 'Enable') : t('تعطيل', 'Disable');
@@ -682,7 +741,7 @@ export default function UserManagementPage() {
     });
   };
 
-  const handleResetPassword = (user: any) => {
+  const handleResetPassword = (user: ManagedUser) => {
     setPasswordTargetUser(user);
     setNewPasswordValue('');
     setIsPasswordModalOpen(true);
@@ -745,10 +804,10 @@ export default function UserManagementPage() {
       setIsPasswordModalOpen(false);
       setPasswordTargetUser(null);
       setNewPasswordValue('');
-    } catch (err: any) {
+    } catch (err: unknown) {
       notificationService.notify({
         title: t('خطأ', 'Error'),
-        message: err.message,
+        message: getErrorMessage(err),
         type: 'error',
         category: 'system'
       });
@@ -762,7 +821,7 @@ export default function UserManagementPage() {
     if (addLoading || addBlockRef.current) return;
     addBlockRef.current = true;
     setAddLoading(true);
-    let secondaryApp: any;
+    let secondaryApp: ReturnType<typeof initializeApp> | undefined;
     try {
       const emailQ = query(collection(db, 'users'), where('email', '==', addFormData.email.toLowerCase()));
       if (!(await getDocs(emailQ)).empty) throw new Error(t('البريد مستخدم مسبقاً', 'Email already registered'));
@@ -797,10 +856,11 @@ export default function UserManagementPage() {
       notificationService.notify({ title: t('تم إنشاء الحساب', 'Account Created'), message: t(`تم إنشاء حساب ${addFormData.fullName}`, `${addFormData.fullName} account created`), type: 'success', category: 'system' });
       setIsAddModalOpen(false);
       setAddFormData({ fullName: '', username: '', email: '', password: '', systemPin: '', role: 'Employee', linkedType: 'none', linkedEntity: '' });
-    } catch (err: any) {
-      let msg = err.message;
-      if (err.code === 'auth/email-already-in-use') msg = t('البريد مسجل في نظام المصادقة', 'Email already in auth system');
-      else if (err.code === 'auth/weak-password') msg = t('كلمة المرور ضعيفة جداً (6+ أحرف)', 'Password too weak (min 6 chars)');
+    } catch (err: unknown) {
+      const authError = asRecord(err) as ErrorLike;
+      let msg = getErrorMessage(err);
+      if (authError.code === 'auth/email-already-in-use') msg = t('البريد مسجل في نظام المصادقة', 'Email already in auth system');
+      else if (authError.code === 'auth/weak-password') msg = t('كلمة المرور ضعيفة جداً (6+ أحرف)', 'Password too weak (min 6 chars)');
       notificationService.notify({ title: t('خطأ', 'Error'), message: msg, type: 'error', category: 'system' });
     } finally {
       setAddLoading(false);
@@ -812,16 +872,16 @@ export default function UserManagementPage() {
   // ══════════════════════════════════════════════════════════
   // SESSION TERMINATION — ENHANCED
   // ══════════════════════════════════════════════════════════
-  const handleSessionAction = async (user: any, action: SessionAction) => {
+  const handleSessionAction = async (user: ManagedUser, action: SessionAction) => {
     const isRootTarget = ROOT_EMAILS.includes(user.email) || user.isRoot;
     if (isRootTarget) {
       return notificationService.notify({ title: t('محمي', 'Protected'), message: t('لا يمكن إنهاء جلسة المسؤول الرئيسي', 'Cannot terminate root admin session'), type: 'error', category: 'system' });
     }
 
     const now = Date.now();
-    let updatePayload: Record<string, any> = {};
-    let logAction: any = 'terminate_session';
-    let logDetails: Record<string, any> = { targetUserId: user.id, action };
+    let updatePayload: DataRecord = {};
+    let logAction: ActivityAction = 'terminate_session';
+    let logDetails: DataRecord = { targetUserId: user.id, action };
     let successMsg = '';
 
     switch (action) {
@@ -861,8 +921,8 @@ export default function UserManagementPage() {
       notificationService.notify({ title: t('تم التنفيذ', 'Action Applied'), message: successMsg, type: 'error', category: 'system' });
       setIsSessionModalOpen(false);
       setSessionTargetUser(null);
-    } catch (err: any) {
-      notificationService.notify({ title: t('خطأ', 'Error'), message: err.message, type: 'error', category: 'system' });
+    } catch (err: unknown) {
+      notificationService.notify({ title: t('خطأ', 'Error'), message: getErrorMessage(err), type: 'error', category: 'system' });
     }
   };
 
@@ -870,7 +930,7 @@ export default function UserManagementPage() {
   // ROLE ACTIONS
   // ══════════════════════════════════════════════════════════
   const handleOpenAddRole = () => { setSelectedRole(null); setRoleFormData({ id: '', title: '', permissions: [] }); setIsRoleModalOpen(true); };
-  const handleOpenEditRole = (r: any) => {
+  const handleOpenEditRole = (r: RoleRecord) => {
     if (r.id === 'Admin') return notificationService.notify({ title: t('محمي', 'Protected'), message: t('لا يمكن تعديل صلاحيات مدير النظام', 'Cannot edit System Admin permissions'), type: 'error', category: 'system' });
     setSelectedRole(r); setRoleFormData({ id: r.id, title: r.title || r.id, permissions: r.permissions || [] }); setIsRoleModalOpen(true);
   };
@@ -992,9 +1052,9 @@ export default function UserManagementPage() {
     return map[roleName] || 'bg-slate-900 text-slate-400 border-slate-800';
   };
 
-  const isUserOnline = (user: any) => !user.disabled && user.lastSeen && Date.now() - user.lastSeen < 5 * 60 * 1000;
+  const isUserOnline = (user: ManagedUser) => Boolean(!user.disabled && user.lastSeen && Date.now() - user.lastSeen < 5 * 60 * 1000);
 
-  const getTimeSince = (ts: number) => {
+  const getTimeSince = (ts?: number) => {
     if (!ts) return t('غير معروف', 'Unknown');
     const diff = Date.now() - ts;
     const mins = Math.floor(diff / 60000);
@@ -1006,7 +1066,7 @@ export default function UserManagementPage() {
     return t(`منذ ${days} ي`, `${days}d ago`);
   };
 
-  const getTempBanRemaining = (user: any) => {
+  const getTempBanRemaining = (user: ManagedUser) => {
     if (!user.tempBanUntil) return null;
     const remaining = user.tempBanUntil - Date.now();
     if (remaining <= 0) return null;
@@ -1051,7 +1111,7 @@ export default function UserManagementPage() {
     })
     .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
-  const isSessionOnline = (sess: any) => {
+  const isSessionOnline = (sess: SessionRecord) => {
     const rawLastSeen = sess.lastSeen || sess.last_seen;
     let lastSeenMs = 0;
     if (typeof rawLastSeen === 'number') lastSeenMs = rawLastSeen;
@@ -1066,7 +1126,7 @@ export default function UserManagementPage() {
   const onlineSessionsCount = dbSessions.filter(isSessionOnline).length;
   const activeSessions = dbSessions;
 
-  const handleRequestTerminateSession = (session: any) => {
+  const handleRequestTerminateSession = (session: SessionRecord) => {
     setConfirmConfig({
       isOpen: true,
       type: 'danger',
@@ -1082,10 +1142,10 @@ export default function UserManagementPage() {
             type: 'success',
             category: 'system'
           });
-        } catch (err: any) {
+        } catch (err: unknown) {
           notificationService.notify({
             title: t('خطأ', 'Error'),
-            message: err.message,
+            message: getErrorMessage(err),
             type: 'error',
             category: 'system'
           });
@@ -1185,12 +1245,12 @@ export default function UserManagementPage() {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           return (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id as any)}
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all whitespace-nowrap flex-1 justify-center ${isActive ? 'bg-gradient-to-r from-[#d4af37]/20 to-transparent text-white border border-[#d4af37]/30 shadow-inner' : 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.02]'}`}>
               <Icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-[#d4af37]' : ''}`} />
               <span className="hidden sm:inline">{tab.label}</span>
               <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-black flex items-center gap-0.5 ${isActive ? 'bg-[#d4af37]/20 text-[#d4af37]' : 'bg-slate-800 text-slate-500'}`}>
-                {(tab as any).pulse && tab.count > 0 && <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span>}
+                {'pulse' in tab && tab.pulse && tab.count > 0 && <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span>}
                 {tab.count}
               </span>
             </button>

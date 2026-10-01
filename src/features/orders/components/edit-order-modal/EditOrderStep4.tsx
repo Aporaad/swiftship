@@ -1,8 +1,14 @@
 import { ArrowRightLeft, Building, Calculator, CreditCard, FileText, Wallet } from 'lucide-react';
 import { CurrencySelect } from '../../../../components/common/CurrencySelect';
+import type { OrderFormData } from '../../types';
 import { amountInWords } from '../../../../lib/numberToWords';
 
-export default function EditOrderStep4(props: any) {
+type CurrencyOption = { code: string; main_nameAR?: string | null; sup_nameAR?: string | null; main_nameEn?: string | null; sup_nameEn?: string | null };
+type AccountOption = { id: string; name?: string | null; account_name?: string | null; accNameAr?: string | null; code?: string | null };
+
+type EditOrderStep4Props = { isAr: boolean; formData: OrderFormData; settings?: { currency?: string }; setFormData: (data: OrderFormData) => void; orderCurrency: string; paymentCurrency: string; productsSum: number; shippingsCostSum: number; itemsPackagingSum: number; shippingsCategorySum: number; totalOrderSAR: number; totalOrderYER: number; currencyTotals: { deliveryFeeOrderCurrency: number }; activeCurrencies: CurrencyOption[]; getCurrencyRate: (currency: string) => number; cashAccountsList: AccountOption[]; bankAccountsList: AccountOption[]; setIsCalcOpen: (value: boolean) => void; remainingYER: number };
+
+export default function EditOrderStep4(props: EditOrderStep4Props) {
   const { isAr, formData, settings, setFormData, orderCurrency, paymentCurrency, productsSum, shippingsCostSum, itemsPackagingSum, shippingsCategorySum, totalOrderSAR, totalOrderYER, currencyTotals, activeCurrencies, getCurrencyRate, cashAccountsList, bankAccountsList, setIsCalcOpen, remainingYER } = props;
 
   return (
@@ -164,7 +170,7 @@ export default function EditOrderStep4(props: any) {
                             type="button"
                             onClick={() => {
                               const newMethod = type.id;
-                              const updates: any = { paymentMethod: newMethod };
+                              const updates: Record<string, string | number> = { paymentMethod: newMethod };
                               if (newMethod === 'Cash' && !formData.cashAccountId && cashAccountsList[0]) {
                                 updates.cashAccountId = cashAccountsList[0].id;
                               }
@@ -199,7 +205,7 @@ export default function EditOrderStep4(props: any) {
                       <span className="text-[9px] font-black uppercase text-[#d4af37] block mb-1">{isAr ? 'عملة الدفع' : 'Payment Currency'}</span>
                       <CurrencySelect
                         isAr={isAr}
-                        currencies={activeCurrencies.map(c => ({ id: c.code, code: c.code, nameAr: c.main_nameAR || c.sup_nameAR, nameEn: c.main_nameEn || c.sup_nameEn }))}
+                        currencies={activeCurrencies.map((c: CurrencyOption) => ({ id: c.code, code: c.code, nameAr: c.main_nameAR || c.sup_nameAR, nameEn: c.main_nameEn || c.sup_nameEn }))}
                         value={paymentCurrency}
                         onChange={newCurrency => {
                           const rateOrder = getCurrencyRate(orderCurrency);
@@ -236,7 +242,7 @@ export default function EditOrderStep4(props: any) {
                         className="w-full bg-slate-955 text-white font-bold text-xs p-2 rounded-lg border border-slate-800 outline-none cursor-pointer focus:border-[#d4af37]"
                       >
                         <option value="">{isAr ? '-- اختر حساب الصندوق --' : '-- Select Cash Account --'}</option>
-                        {cashAccountsList.map((acc: any) => (
+                        {cashAccountsList.map((acc: AccountOption) => (
                           <option key={acc.id} value={acc.id} className="bg-slate-900 text-white">
                             {acc.name || acc.accNameAr || acc.id} ({acc.id})
                           </option>
@@ -258,7 +264,7 @@ export default function EditOrderStep4(props: any) {
                         className="w-full bg-slate-955 text-white font-bold text-xs p-2 rounded-lg border border-slate-800 outline-none cursor-pointer focus:border-cyan-400"
                       >
                         <option value="">{isAr ? '-- اختر حساب البنك --' : '-- Select Bank Account --'}</option>
-                        {bankAccountsList.map((acc: any) => (
+                        {bankAccountsList.map((acc: AccountOption) => (
                           <option key={acc.id} value={acc.id} className="bg-slate-900 text-white">
                             {acc.name || acc.accNameAr || acc.id} ({acc.id})
                           </option>
@@ -301,7 +307,7 @@ export default function EditOrderStep4(props: any) {
                           value={formData.cashAmount || ''}
                           onChange={(e) => {
                             const val = parseFloat(e.target.value) || 0;
-                            const bVal = parseFloat(formData.bankAmount || '0') || 0;
+                            const bVal = Number(formData.bankAmount || 0) || 0;
                             setFormData({
                               ...formData,
                               cashAmount: val,
@@ -321,7 +327,7 @@ export default function EditOrderStep4(props: any) {
                           value={formData.bankAmount || ''}
                           onChange={(e) => {
                             const val = parseFloat(e.target.value) || 0;
-                            const cVal = parseFloat(formData.cashAmount || '0') || 0;
+                            const cVal = Number(formData.cashAmount || 0) || 0;
                             setFormData({
                               ...formData,
                               bankAmount: val,

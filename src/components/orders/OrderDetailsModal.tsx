@@ -14,6 +14,8 @@ interface OrderDetailsModalProps {
   orderStatusesList: any;
 }
 
+type OrderStatusRecord = { id?: number; sortOrder?: number; nameAr?: string; nameEn?: string };
+
 export default function OrderDetailsModal({
   isOpen,
   selectedOrder,
@@ -129,7 +131,7 @@ export default function OrderDetailsModal({
                 <div className="text-slate-400 font-bold">
                   {isAr ? 'حالة الشحنة الطردية:' : 'Cargo Current State:'}{' '}
                   {(() => {
-                    const currentStatusItem = orderStatusesList.find(s => s.sortOrder == selectedOrder.order_status_id || s.sortOrder == selectedOrder.order_status_id || s.id == selectedOrder.order_status_id);
+                    const currentStatusItem = orderStatusesList.find((s: OrderStatusRecord) => s.sortOrder == selectedOrder.order_status_id || s.sortOrder == selectedOrder.order_status_id || s.id == selectedOrder.order_status_id);
                     return (
                       <span className="px-2.5 py-0.5 rounded-xl border border-[#d4af37]/20 bg-[#d4af37]/5 text-[#d4af37] font-bold max-w-max text-[10px]">
                         {selectedOrder.order_status_id + ' : ' + (isAr ? currentStatusItem?.nameAr : currentStatusItem?.nameEn) /*مهم: هنا يجب جلب اسم المرحله من جدول المراحل بناء على رقم المرحله*/}
@@ -143,7 +145,7 @@ export default function OrderDetailsModal({
                 </div>
                 <div className="text-slate-400 font-bold">
                   {isAr ? 'تاريخ المعاملة:' : 'Invoice Date:'}{' '}
-                  <span className="text-white font-mono">{safeToDate(selectedOrder.createdAt).toLocaleString(isAr ? 'ar-EG' : 'en-US')}</span>
+                  <span className="text-white font-mono">{safeToDate(selectedOrder.createdAt)?.toLocaleString(isAr ? 'ar-EG' : 'en-US') || '—'}</span>
                 </div>
               </div>
             </div>

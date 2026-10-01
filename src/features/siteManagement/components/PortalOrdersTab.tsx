@@ -1,8 +1,12 @@
 import React from 'react';
 import { Globe, Activity, Users, User, Package, Briefcase, MessageSquare, Megaphone, Shield, Link as LinkIcon, CheckCircle2, Clock, AlertCircle, RefreshCw, Plus, Trash2, Check, X, Eye, Edit2, Send, Server, Key, Lock, Settings as SettingsIcon, ChevronRight, ArrowUpRight, Award, UserCheck, ShieldAlert, Cpu, Phone, Mail, MapPin } from 'lucide-react';
 
+type SiteTab = 'analytics' | 'portal_users' | 'pending' | 'orders' | 'tickets' | 'announcements' | 'jobs' | 'security' | 'api';
+type PortalOrder = { id: string; orderNumber?: string; trackingNumber?: string; createdAt?: string | number | Date; customerName?: string; recipientName?: string; customerPhone?: string; deliveryCity?: string; orderSourceName?: string; orderStatus?: string; status?: string; totalPrice?: string | number; totalAmount?: string | number };
 export interface PortalOrdersTabProps {
-  [key: string]: any;
+  activeTab: SiteTab;
+  isAr: boolean;
+  portalOrders: PortalOrder[];
 }
 
 export const PortalOrdersTab: React.FC<PortalOrdersTabProps> = (props) => {

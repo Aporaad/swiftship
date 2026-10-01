@@ -1,3 +1,4 @@
+type AdapterDocument = { id: string; data: () => Record<string, unknown> };
 import React, { useState, useEffect } from 'react';
 import { collection, onSnapshot, query, orderBy } from '../lib/supabase-adapter';
 import { db } from '../lib/supabase-adapter';
@@ -42,7 +43,7 @@ export default function SalaryHistory() {
     // 1. Subscribe to salary history
     const qHistory = query(collection(db, 'salary_history'), orderBy('createdAt', 'desc'));
     const unsubHistory = onSnapshot(qHistory, (snap) => {
-      setSalaryHistory(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setSalaryHistory(snap.docs.map((doc: AdapterDocument) => ({ id: doc.id, ...doc.data() })));
       setLoading(false);
     }, (err) => {
       console.error("[SalaryHistory] Error fetching salary history:", err);
@@ -51,7 +52,7 @@ export default function SalaryHistory() {
 
     // 2. Subscribe to users/staff for dropdown filter
     const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
-      setEmployees(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setEmployees(snap.docs.map((doc: AdapterDocument) => ({ id: doc.id, ...doc.data() })));
     }, (err) => {
       console.error("[SalaryHistory] Error fetching users:", err);
     });

@@ -62,6 +62,11 @@ export interface OrderFormData {
   // الدفع - Payment
   amountPaid: number;
   paymentMethod: string;
+  cashAccountId?: string;
+  bankAccountId?: string;
+  bankReference?: string;
+  cashAmount?: number;
+  bankAmount?: number;
   notes: string;
   deductSourcingCostFromCourier: boolean;
   sourcing_cost: string;
@@ -86,6 +91,11 @@ export interface ItemRow {
   productName: string;
   productNameEn?: string;
   productUrl: string;
+  name?: string;
+  price?: number;
+  unitPrice?: number;
+  notes?: string;
+  description?: string;
   quantity: number;
   productPrice: number;
   weight: number;
@@ -111,6 +121,15 @@ export interface ShippingRow {
   id: string;
   shippingType: string;
   shippingCompany: string;
+  trackingNumber?: string;
+  shipmentStatus?: string;
+  weight?: number;
+  shippingCategoryId?: string;
+  shipping_category_id?: string;
+  shippingCategoryName?: string;
+  shippingCategoryPrice?: number;
+  content_category_id?: string;
+  content_category_name?: string;
   shippingSource: string;
   shippingDestination: string;
   shippingDate: string;
@@ -257,32 +276,123 @@ export interface CustomerFormData {
   notes: string;
 }
 
-/**
- * Order records may arrive through legacy camelCase rows or explicit snake_case DTOs.
- * Both names stay declared during the compatibility phase; neither alias is removed here.
- */
-export interface OrderFeatureRecord extends Omit<OrdersViewModel, 'orderStatusId' | 'createdAt'> {
-  order_id?: string;
-  order_number?: string;
-  tracking_number?: string | null;
-  order_status_id?: string | number | null;
-  orderStatusId?: string | number | null;
+/** Canonical order row used by the Orders feature and its legacy-compatible adapters. */
+export interface OrderRecord {
+  id: string;
   orderStatus?: string | null;
-  order_status?: string | null;
+  status?: string | null;
+  orderNumber?: string | null;
+  order_number?: string | null;
+  order_id?: string | null;
+  trackingNumber?: string | null;
+  tracking_number?: string | null;
+  customerId?: string | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  customerAddress?: string | null;
+  orderStatusId?: string | number | null;
+  order_status_id?: string | number | null;
+  orderSourceId?: string | null;
+  order_source_id?: string | null;
+  orderSourceName?: string | null;
+  orderSourceType?: string | null;
+  orderPartyId?: string | null;
+  orderPartyType?: string | null;
+  orderPartyAccountId?: string | null;
+  order_party_account_id?: string | null;
+  isStaffOrder?: boolean;
+  employeeId?: string | null;
+  courierId?: string | null;
+  deliveryCourierId?: string | null;
+  shippingCourierId?: string | null;
+  amountPaid?: string | number | null;
+  amountRemaining?: string | number | null;
+  currency?: string | null;
+  orderCurrency?: string | null;
+  paidCurrency?: string | null;
+  paymentMethod?: string | null;
+  exchangeRate?: number | null;
+  exchangeRateUSD?: number | null;
+  exchangeRateSAR?: number | null;
+  exchangeRateYER?: number | null;
+  totalCostYER?: string | number | null;
+  totalCostSAR?: string | number | null;
+  totalOrderYER?: string | number | null;
+  deliveryStatus?: string | null;
+  locationYemen?: string | null;
+  internalNotes?: string | null;
+  shippingDetails?: ShippingRow[] | null;
+  shippings?: ShippingRow[] | null;
+  shippingCompany?: string | null;
+  shippingCompanyId?: string | null;
+  shipping_company_id?: string | null;
+  sourcing_cost?: string | number | null;
+  firedTriggers?: string[] | null;
+  profitCompanySAR?: string | number | null;
+  profitSaudiSAR?: string | number | null;
+  createdAt?: string | number | { toDate?: () => Date } | null;
   created_at?: string | number | null;
-  createdAt?: string | number | null;
-  data?: Partial<OrderSupplementalData> | null;
+  updatedAt?: string | number | null;
+  data?: Record<string, unknown> | null;
+  [key: string]: unknown;
 }
 
-/** Shipment records preserve both database and legacy adapter aliases. */
-export interface ShipmentFeatureRecord extends ShipmentsViewModel {
+/** Canonical shipment row used by the Orders feature and its legacy-compatible adapters. */
+export interface ShipmentRecord {
+  id: string;
   shipment_id?: string;
+  orderId?: string | null;
   order_id?: string | null;
+  trackingNumber?: string | null;
   tracking_number?: string | null;
+  shippingCompany?: string | null;
+  shippingCompanyId?: string | null;
   shipping_company_id?: string | null;
+  courierId?: string | null;
+  courier_id?: string | null;
+  shipmentStatus?: string | null;
   shipment_status?: string | null;
-  data?: Partial<ShipmentSupplementalData> | null;
+  status?: string | null;
+  shippingCost?: number | null;
+  weight?: number | null;
+  shippingType?: string | null;
+  shippingSource?: string | null;
+  shippingDestination?: string | null;
+  packagingFees?: number | null;
+  shippingCategoryId?: string | null;
+  shipping_category_id?: string | null;
+  shippingCategoryName?: string | null;
+  shippingCategoryPrice?: number | null;
+  shippingDate?: string | null;
+  shippingDuration?: string | null;
+  expectedArrival?: string | null;
+  deliveryDate?: string | null;
+  notes?: string | null;
+  contentCategoryId?: string | null;
+  content_category_id?: string | null;
+  contentCategoryName?: string | null;
+  content_category_name?: string | null;
+  cartonCount?: number | null;
+  carton_count?: number | null;
+  customsFee?: number | null;
+  customs_fee?: number | null;
+  taxFee?: number | null;
+  tax_fee?: number | null;
+  otherCategoryFee?: number | null;
+  other_category_fee?: number | null;
+  categoryFeesTotal?: number | null;
+  category_fees_total?: number | null;
+  categoryFeeCurrency?: string | null;
+  category_fee_currency?: string | null;
+  createdAt?: string | number | null;
+  updatedAt?: string | number | null;
+  data?: Record<string, unknown> | null;
+  [key: string]: unknown;
 }
+
+/** Backwards-compatible names kept as aliases to the canonical feature rows. */
+export type OrderFeatureRecord = OrderRecord;
+export type ShipmentFeatureRecord = ShipmentRecord;
 
 export interface OrderCreateAggregateInput {
   order: OrderCreateInput;

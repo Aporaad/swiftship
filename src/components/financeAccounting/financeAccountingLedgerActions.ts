@@ -2,6 +2,16 @@ import type * as React from 'react';
 
 type ActionDependencies = Record<string, any>;
 
+interface LedgerExportEntry {
+  type: string;
+  date: number | string | Date;
+  refNumber?: string;
+  title?: string;
+  party?: string;
+  amount: number;
+  runningBalance: number;
+}
+
 export function createFinanceAccountingLedgerActions(dependencies: ActionDependencies) {
   const { currentUser, filteredLedgerEntries, formatDate, formatDateTime, isAr } = dependencies;
 
@@ -15,7 +25,7 @@ export function createFinanceAccountingLedgerActions(dependencies: ActionDepende
         ? "تاريخ القيد,رقم سند النقر المرجعي,البيان وتفاصيل الحساب,المستفيد,مدين (+),دائن (-),رصيد المتوقع YER\n"
         : "Date/Time,Voucher ID,Particulars/Annotations,Counterparty,Debit (+),Credit (-),Running Balance YER\n";
 
-      filteredLedgerEntries.forEach(e => {
+      filteredLedgerEntries.forEach((e: LedgerExportEntry) => {
         const isDebit = e.type === 'Debit';
         const row = [
           formatDateTime(e.date),

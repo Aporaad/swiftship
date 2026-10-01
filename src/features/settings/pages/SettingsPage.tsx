@@ -9,7 +9,7 @@ import {
 import { useRole } from '../../../hooks/useRole';
 import { useAuthSession } from '../../../features/auth/AuthSessionProvider';
 import { useSettings } from '../../../context/SettingsContext';
-import type { CustomCurrency } from '../../../context/SettingsContext';
+import type { CustomCurrency, Settings } from '../../../context/SettingsContext';
 import ConfirmModal from '../../../components/ConfirmModal';
 import { activityLogService } from '../../../services/activityLogService';
 import { notificationService } from '../../../services/notificationService';
@@ -26,6 +26,9 @@ import { CbmRateNotFoundError, fetchCbmRateFromApi } from '../services/fetchCbmR
 import { testLogisticsConnection } from '../services/testLogisticsConnection';
 
 type SettingsTab = 'interface' | 'general' | 'currency' | 'admin' | 'logistics';
+type BackupRow = Record<string, unknown>;
+type BackupPayload = { version: string; timestamp: string; createdBy: string; type: 'manual' | 'auto'; collections: string[]; settings: Settings; data: Record<string, BackupRow[]> };
+const settingsErrorMessage = (error: unknown): string => error instanceof Error ? error.message : String(error);
 
 // ─────────────────────────────────────
 // BACKUP RECORD TYPE
@@ -299,8 +302,8 @@ export default function SettingsPage() {
       } else {
         throw new Error(isAr ? 'استجابة API غير صالحة' : 'Invalid API response');
       }
-    } catch (err: any) {
-      setApiError(err.message);
+    } catch (err: unknown) {
+      setApiError(settingsErrorMessage(err));
     } finally {
       setApiLoading(false);
     }
@@ -522,7 +525,7 @@ export default function SettingsPage() {
     }
     setBackupLoading(true);
     try {
-      const backupData: any = {
+      const backupData: BackupPayload = {
         version: '3.0',
         timestamp: new Date().toISOString(),
         createdBy: profile?.fullName || auth.currentUser?.email || 'Admin',
@@ -551,10 +554,10 @@ export default function SettingsPage() {
       // Download file based on format
       if (exportFormat === 'csv') {
         const csvParts: string[] = [];
-        for (const [col, rows] of Object.entries(backupData.data) as [string, any[]][]) {
+        for (const [col, rows] of Object.entries(backupData.data)) {
           if (!rows.length) continue;
           const headers = Object.keys(rows[0]).join(',');
-          const csvRows = rows.map((r: any) => Object.values(r).map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+          const csvRows = rows.map((r) => Object.values(r).map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
           csvParts.push(`\n=== ${col.toUpperCase()} ===\n${headers}\n${csvRows}`);
         }
         // Add UTF-8 BOM for Excel Arabic support
@@ -593,7 +596,7 @@ export default function SettingsPage() {
         lastBackup: new Date().toLocaleString(isAr ? 'ar-YE' : 'en-US'),
         lastAutoBackupAt: Date.now(),
         backupCount: newCount
-      } as any);
+      });
       setLocalSettings(prev => ({ ...prev, backupCount: newCount, lastBackup: new Date().toLocaleString(isAr ? 'ar-YE' : 'en-US') }));
 
       alert(isAr ? `✅ تم حفظ النسخة الاحتياطية رقم ${newCount} بنجاح!` : `✅ Backup #${newCount} saved successfully!`);
@@ -643,8 +646,8 @@ export default function SettingsPage() {
 
       alert(isAr ? '✅ تم استعادة البيانات بنجاح! سيتم إعادة تحميل الصفحة.' : '✅ Data restored! Reloading page.');
       window.location.reload();
-    } catch (err: any) {
-      alert((isAr ? '❌ فشل الاستعادة: ' : '❌ Restore failed: ') + err.message);
+    } catch (err: unknown) {
+      alert((isAr ? '❌ فشل الاستعادة: ' : '❌ Restore failed: ') + settingsErrorMessage(err));
     } finally {
       setBackupLoading(false);
     }
@@ -708,13 +711,13 @@ export default function SettingsPage() {
               activityLogService.log('backup_import', 'Restore from File');
               alert(isAr ? '✅ تم استعادة البيانات بنجاح!' : '✅ Data restored successfully!');
               window.location.reload();
-            } catch (err: any) {
-              alert((isAr ? '❌ خطأ في الاستعادة: ' : '❌ Restore error: ') + err.message);
+            } catch (err: unknown) {
+              alert((isAr ? '❌ خطأ في الاستعادة: ' : '❌ Restore error: ') + settingsErrorMessage(err));
             }
           }
         });
-      } catch (err: any) {
-        alert((isAr ? '❌ خطأ في قراءة الملف: ' : '❌ File parse error: ') + err.message);
+      } catch (err: unknown) {
+        alert((isAr ? '❌ خطأ في قراءة الملف: ' : '❌ File parse error: ') + settingsErrorMessage(err));
       } finally {
         setImportLoading(false);
       }
@@ -804,7 +807,7 @@ export default function SettingsPage() {
   };
 
   // ─── TABS CONFIG ────────────────────
-  const tabs: { id: SettingsTab; label: string; icon: any; show?: boolean }[] = [
+  const tabs: { id: SettingsTab; label: string; icon: React.ComponentType<{ className?: string }>; show?: boolean }[] = [
     { id: 'interface', label: t('tabInterface'), icon: Palette, show: true },
     { id: 'general', label: t('tabGeneral'), icon: Settings2, show: true },
     { id: 'currency', label: t('tabCurrency'), icon: DollarSign, show: true },
@@ -1047,7 +1050,7 @@ export default function SettingsPage() {
                             1 {historyCurrency.code} = <span className="text-[#d4af37] font-bold">{entry.price}</span> YER
                           </div>
                           <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                            {isAr ? `تاريخ التعديل: ${new Date(entry.day_date || entry.createdAt).toLocaleString('ar-YE')}` : `Date: ${new Date(entry.day_date || entry.createdAt).toLocaleString()}`}
+                            {isAr ? `تاريخ التعديل: ${new Date(entry.day_date || entry.createdAt || '').toLocaleString('ar-YE')}` : `Date: ${new Date(entry.day_date || entry.createdAt || '').toLocaleString()}`}
                           </div>
                         </div>
                       </div>

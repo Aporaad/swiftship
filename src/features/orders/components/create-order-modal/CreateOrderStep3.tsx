@@ -1,7 +1,44 @@
 import React from 'react';
 import { X, Search, UserPlus, CreditCard, DollarSign, AlertCircle, Package, Trash2, Calendar, Calculator, ChevronRight, ChevronLeft, User, ShoppingCart, Truck, CheckCircle2, ShieldCheck, FileText, Wallet, Building, ArrowRightLeft, Boxes } from 'lucide-react';
 
-export default function CreateOrderStep3(props: any) {
+import type { ItemRow, OrderCalculations, OrderFormData, ShippingRow } from '../../types';
+type NumericValue = number | string | null | undefined;
+const toNumber = (value: NumericValue): number => typeof value === 'number' ? value : Number.parseFloat(value ?? '') || 0;
+type ShippingCompanyOption = { id: string; name: string };
+type SelectOption = { id: string; nameAr?: string | null; nameEn?: string | null; price?: number | string | null; duration?: number | string | null };
+type ShippingRowView = ShippingRow & { shippingCategoryId?: string; shippingCategoryPrice?: NumericValue; trackingNumber?: string; packagingFee?: NumericValue };
+type CourierOption = { id: string; fullName?: string | null; commissionRate?: number | null; shippingCommissionRate?: number | null; deliveryCommissionRate?: number | null; courierType?: string | null; governorate?: string | null; provinceId?: string | null };
+type CreateOrderStep3Props = {
+  isAr: boolean;
+  formData: OrderFormData;
+  addShippingEnabled: boolean;
+  shippings: ShippingRowView[];
+  addShippingRow: () => void;
+  removeShippingRow: (index: number) => void;
+  updateShippingRow: (index: number, field: keyof ShippingRowView, value?: unknown) => void;
+  role: string;
+  hasPermission: (permission: string) => boolean;
+  setActiveAddShippingIndex: (index: number) => void;
+  setIsAddShippingCompanyOpen: (open: boolean) => void;
+  shippingCompanies: ShippingCompanyOption[];
+  shippingCategoryOptions: SelectOption[];
+  orderCurrency: string;
+  packagingFeeEnabled: boolean;
+  setPackagingFeeEnabled: (value: boolean) => void;
+  packagingFeeRate: number;
+  setPackagingFeeRate: (value: number) => void;
+  canEditOrderDefaultsCreation: boolean;
+  homeDeliveryEnabled: boolean;
+  setHomeDeliveryEnabled: (value: boolean) => void;
+  viaShippingAgent: boolean;
+  setViaShippingAgent: (value: boolean) => void;
+  couriers: CourierOption[];
+  setFormData: (data: OrderFormData) => void;
+  calcs: OrderCalculations;
+  settings: { currency?: string; defaultCourierCommissionRate?: number };
+};
+
+export default function CreateOrderStep3(props: CreateOrderStep3Props) {
   const {
     isAr, formData, addShippingEnabled, shippings, addShippingRow, removeShippingRow,
     updateShippingRow, role, hasPermission, setActiveAddShippingIndex,
@@ -35,7 +72,7 @@ export default function CreateOrderStep3(props: any) {
                   </div>
 
                   <div className="space-y-3.5">
-                    {shippings && shippings.map((sh, idx) => (
+                    {shippings && shippings.map((sh: ShippingRowView, idx: number) => (
                       <div key={sh.id || idx} className="bg-slate-900/50 p-4 rounded-2xl border border-slate-850 space-y-3 relative">
                         <div className="flex justify-between items-center border-b border-slate-850/60 pb-2">
                           <span className="text-[10px] font-black text-[#d4af37] bg-[#d4af37]/10 border border-[#d4af37]/20 px-2.5 py-0.5 rounded-lg">
@@ -87,7 +124,7 @@ export default function CreateOrderStep3(props: any) {
                               className="w-full bg-slate-955 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold cursor-pointer"
                             >
                               <option className="bg-slate-900 text-white" value="">{isAr ? '-- اختر شركة شحن --' : '-- Choose carrier --'}</option>
-                              {shippingCompanies.map((c) => (
+                              {shippingCompanies.map((c: ShippingCompanyOption) => (
                                 <option className="bg-slate-900 text-white" key={c.id} value={c.name}>{c.name}</option>
                               ))}
                             </select>
@@ -99,20 +136,18 @@ export default function CreateOrderStep3(props: any) {
                               value={sh.shippingCategoryId || ''}
                               onChange={(e) => {
                                 const selectedId = e.target.value;
-                                const foundOpt = shippingCategoryOptions?.find((o: any) => o.id === selectedId);
-                                updateShippingRow(idx, {
-                                  shippingCategoryId: selectedId,
-                                  shippingCategoryName: foundOpt ? (isAr ? foundOpt.nameAr : foundOpt.nameEn) : '',
-                                  shippingCategoryPrice: foundOpt ? (parseFloat(foundOpt.price) || 0) : 0,
-                                  shippingDuration: foundOpt?.duration !== undefined ? String(foundOpt.duration) : sh.shippingDuration
-                                });
+                                const foundOpt = shippingCategoryOptions?.find((o: SelectOption) => o.id === selectedId);
+                                updateShippingRow(idx, 'shippingCategoryId', selectedId);
+                                updateShippingRow(idx, 'shippingCategoryName', foundOpt ? (isAr ? foundOpt.nameAr : foundOpt.nameEn) : '');
+                                updateShippingRow(idx, 'shippingCategoryPrice', foundOpt ? (toNumber(foundOpt.price) || 0) : 0);
+                                updateShippingRow(idx, 'shippingDuration', foundOpt?.duration !== undefined ? String(foundOpt.duration) : sh.shippingDuration);
                               }}
                               className="w-full bg-slate-955 border border-slate-800 text-cyan-300 font-bold rounded-xl p-2.5 outline-none cursor-pointer focus:border-[#d4af37]"
                             >
                               <option className="bg-slate-900 text-white" value="">{isAr ? '-- عادي (اعتيادي) --' : '-- Standard --'}</option>
-                              {(shippingCategoryOptions || []).map((cat: any) => (
+                              {(shippingCategoryOptions || []).map((cat: SelectOption) => (
                                 <option className="bg-slate-900 text-white" key={cat.id} value={cat.id}>
-                                  {isAr ? cat.nameAr : cat.nameEn} {cat.duration ? `(${cat.duration} ${isAr ? 'أيام' : 'd'})` : ''} {cat.price > 0 ? `(+${cat.price} ${orderCurrency})` : ''}
+                                  {isAr ? cat.nameAr : cat.nameEn} {cat.duration ? `(${cat.duration} ${isAr ? 'أيام' : 'd'})` : ''} {toNumber(cat.price) > 0 ? `(+${cat.price} ${orderCurrency})` : ''}
                                 </option>
                               ))}
                             </select>
@@ -135,7 +170,7 @@ export default function CreateOrderStep3(props: any) {
                               type="number"
                               required
                               value={sh.shippingCost || 0}
-                              onChange={(e) => updateShippingRow(idx, 'shippingCost', parseFloat(e.target.value) || 0)}
+                              onChange={(e) => updateShippingRow(idx, 'shippingCost', toNumber(e.target.value) || 0)}
                               className="w-full bg-slate-955 border border-slate-800 text-[#d4af37] rounded-xl p-2.5 outline-none font-mono"
                             />
                           </div>
@@ -180,7 +215,8 @@ export default function CreateOrderStep3(props: any) {
                                     expected = dateObj.toISOString().split('T')[0];
                                   }
                                 }
-                                updateShippingRow(idx, { shippingDate: newDate, expectedArrival: expected });
+                                updateShippingRow(idx, 'shippingDate', newDate);
+                                updateShippingRow(idx, 'expectedArrival', expected);
                               }}
                               className="w-full bg-slate-955 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-sans"
                             />
@@ -205,7 +241,7 @@ export default function CreateOrderStep3(props: any) {
                                 className="w-full bg-slate-950 border border-cyan-500/25 text-white rounded-xl p-2.5 outline-none font-bold cursor-pointer focus:border-cyan-400"
                               >
                                 <option className="bg-slate-900 text-white" value="">{isAr ? '-- بدون فئة --' : '-- No category --'}</option>
-                                {itemCategories.map((category: any) => <option className="bg-slate-900 text-white" key={category.id} value={category.id}>{isAr ? category.nameAr : category.nameEn}</option>)}
+                                {itemCategories.map((category: SelectOption) => <option className="bg-slate-900 text-white" key={category.id} value={category.id}>{isAr ? category.nameAr : category.nameEn}</option>)}
                               </select>
                             </div>
                             <div>
@@ -245,7 +281,7 @@ export default function CreateOrderStep3(props: any) {
                         <input
                           type="number"
                           value={packagingFeeRate}
-                          onChange={(e) => canEditOrderDefaultsCreation && setPackagingFeeRate(parseFloat(e.target.value) || 0)}
+                          onChange={(e) => canEditOrderDefaultsCreation && setPackagingFeeRate(toNumber(e.target.value) || 0)}
                           disabled={!canEditOrderDefaultsCreation}
                           className="w-24 bg-slate-955 border border-slate-800 text-white rounded-xl p-1.5 text-center font-mono font-bold text-[11px] disabled:opacity-50"
                           placeholder="0"
@@ -348,8 +384,8 @@ export default function CreateOrderStep3(props: any) {
                           value={formData.shippingCourierId}
                           onChange={(e) => {
                             const selectedId = e.target.value;
-                            const selectedC = couriers.find(c => c.id === selectedId);
-                            const rate = (selectedC && selectedC.commissionRate !== undefined) ? parseFloat(selectedC.commissionRate) : (settings.defaultCourierCommissionRate ?? 30);
+                            const selectedC = couriers.find((c: CourierOption) => c.id === selectedId);
+                            const rate = (selectedC && selectedC.commissionRate !== undefined) ? toNumber(selectedC.commissionRate) : (settings.defaultCourierCommissionRate ?? 30);
                             setFormData({
                               ...formData,
                               shippingCourierId: selectedId,
@@ -359,7 +395,7 @@ export default function CreateOrderStep3(props: any) {
                           className="w-full bg-slate-955 border border-amber-700/50 text-white rounded-xl p-3 outline-none text-[11px] font-bold cursor-pointer focus:border-amber-400"
                         >
                           <option className="bg-slate-900 text-white" value="">{isAr ? '-- اختر موظف التجميع --' : '-- Choose Aggregator --'}</option>
-                          {couriers.filter(c => c.courierType === 'sourcing' || !c.courierType).map(c => (
+                          {couriers.filter((c: CourierOption) => c.courierType === 'sourcing' || !c.courierType).map((c: CourierOption) => (
                             <option className="bg-slate-900 text-white" key={c.id} value={c.id}>
                               {c.fullName}
                             </option>
@@ -380,7 +416,7 @@ export default function CreateOrderStep3(props: any) {
                         <input
                           type="number"
                           value={formData.shippingCourierFeeRate !== undefined ? formData.shippingCourierFeeRate : settings.defaultCourierCommissionRate}
-                          onChange={(e) => setFormData({ ...formData, shippingCourierFeeRate: parseFloat(e.target.value) || 0 })}
+                          onChange={(e) => setFormData({ ...formData, shippingCourierFeeRate: toNumber(e.target.value) || 0 })}
                           disabled={!canEditOrderDefaultsCreation}
                           readOnly={true}
                           className="w-full bg-slate-955 border border-amber-700/50 text-amber-300 rounded-xl p-3 outline-none font-mono text-xs text-center disabled:opacity-50 focus:border-amber-400"
@@ -405,7 +441,7 @@ export default function CreateOrderStep3(props: any) {
                           className="w-full bg-slate-955 border border-emerald-700/50 text-white rounded-xl p-3 outline-none text-[11px] font-bold cursor-pointer focus:border-emerald-400"
                         >
                           <option className="bg-slate-900 text-white" value="">{isAr ? '-- اختر مندوب التوصيل --' : '-- Choose Yemen Driver --'}</option>
-                          {couriers.filter(c => c.courierType === 'local' || !c.courierType).map(c => (
+                          {couriers.filter((c: CourierOption) => c.courierType === 'local' || !c.courierType).map((c: CourierOption) => (
                             <option className="bg-slate-900 text-white" key={c.id} value={c.id}>
                               {c.fullName} {c.governorate || c.provinceId ? `(${c.governorate || c.provinceId})` : ''}
                             </option>
@@ -423,7 +459,7 @@ export default function CreateOrderStep3(props: any) {
                         <input
                           type="number"
                           value={formData.deliveryCourierFee}
-                          onChange={(e) => setFormData({ ...formData, deliveryCourierFee: parseFloat(e.target.value) || 0 })}
+                          onChange={(e) => setFormData({ ...formData, deliveryCourierFee: toNumber(e.target.value) || 0 })}
                           disabled={!canEditOrderDefaultsCreation}
                           className="w-full bg-slate-955 border border-emerald-700/50 text-emerald-300 rounded-xl p-3 outline-none font-mono text-xs text-center disabled:opacity-50 focus:border-emerald-400"
                         />

@@ -1,25 +1,28 @@
 import type { Dispatch, FormEvent, SetStateAction } from "react";
-import { calculateShipmentCategoryFees } from "../../../services/itemCategoryService";
+import { calculateShipmentCategoryFees, type ItemCategory } from "../../../services/itemCategoryService";
 import { notificationService } from "../../../services/notificationService";
-import type { ShipmentFormData } from "../types";
+import type { ShipmentFeatureRecord, ShipmentFormData } from "../types";
 
-export interface SaveShipmentDependencies {
-  activeItemCategories: any[];
+const toNumber = (value: unknown): number => typeof value === "number" ? value : typeof value === "string" ? Number.parseFloat(value) || 0 : 0;
+type ShipmentMutation = (id: string, payload: Record<string, unknown>) => Promise<unknown>;
+
+export interface SaveShipmentDependencies<T extends ShipmentFeatureRecord = ShipmentFeatureRecord> {
+  activeItemCategories: Array<Partial<ItemCategory> & Pick<ItemCategory, 'id'>>;
   isAr: boolean;
   setIsAddShipmentModalOpen: Dispatch<SetStateAction<boolean>>;
   setIsEditShipmentModalOpen: Dispatch<SetStateAction<boolean>>;
   setIsSubmitting: Dispatch<SetStateAction<boolean>>;
-  setShipmentToEdit: Dispatch<SetStateAction<any>>;
+  setShipmentToEdit: Dispatch<SetStateAction<T | null>>;
   shipmentFormData: ShipmentFormData;
-  shipmentToEdit: any;
+  shipmentToEdit: ShipmentFeatureRecord | null;
   upsertShipment: (
     id: string,
-    payload: Record<string, any>
+    payload: Record<string, unknown>
   ) => Promise<unknown>;
 }
 
-export function createSaveShipmentHandler(
-  dependencies: SaveShipmentDependencies
+export function createSaveShipmentHandler<T extends ShipmentFeatureRecord>(
+  dependencies: SaveShipmentDependencies<T>
 ) {
   const {
     activeItemCategories,
@@ -65,13 +68,13 @@ export function createSaveShipmentHandler(
         shippingCompany: shipmentFormData.shippingCompany,
         courierId: shipmentFormData.courierId || "",
         shipmentStatus: shipmentFormData.shipmentStatus,
-        shippingCost: parseFloat(shipmentFormData.shippingCost as any) || 0,
-        weight: parseFloat(shipmentFormData.weight as any) || 0,
-        packagingFees: parseFloat(shipmentFormData.packagingFees as any) || 0,
+        shippingCost: toNumber(shipmentFormData.shippingCost) || 0,
+        weight: toNumber(shipmentFormData.weight) || 0,
+        packagingFees: toNumber(shipmentFormData.packagingFees) || 0,
         shippingCategoryId: shipmentFormData.shippingCategoryId || "",
         shippingCategoryName: shipmentFormData.shippingCategoryName || "",
         shippingCategoryPrice:
-          parseFloat(shipmentFormData.shippingCategoryPrice as any) || 0,
+          toNumber(shipmentFormData.shippingCategoryPrice) || 0,
         shippingType: shipmentFormData.shippingType,
         shippingSource: shipmentFormData.shippingSource,
         shippingDestination: shipmentFormData.shippingDestination,
@@ -105,11 +108,11 @@ export function createSaveShipmentHandler(
       setIsAddShipmentModalOpen(false);
       setIsEditShipmentModalOpen(false);
       setShipmentToEdit(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       notificationService.notify({
         title: isAr ? "خطأ" : "Error",
-        message: err.message || "Could not save shipment",
+        message: err instanceof Error ? err.message : "Could not save shipment",
         type: "error",
       });
     } finally {

@@ -4,8 +4,40 @@ import {
   WifiOff, Key, Zap, MonitorCheck, Users as UsersIcon, Info
 } from 'lucide-react';
 
+type TabUser = {
+  id: string; fullName: string; email: string; username: string; role: string;
+  roleId?: string; disabled: boolean; isRoot?: boolean; lastSeen?: number;
+  tempBanUntil?: number | null; linkedType?: string | null; linkedEntity?: string | null; systemPin?: string;
+};
+type TabRole = { id: string; title: string; permissions: string[] };
+type TabEntity = { id: string; fullName: string };
+type TabSession = { id: string; fullName: string; email: string; role: string; deviceInfo: string; userId?: string; lastSeen: number; last_seen: number };
+type TabActivityLog = { id: string; action: string; userId?: string; userName?: string; userRole?: string; target?: string; details?: Record<string, unknown>; timestamp?: number | string | { toDate: () => Date } };
+type Permission = { id: string; label: string };
+type RoleGroup = { group: string; perms: Permission[] };
+type ActionMeta = { color: string; label: string; icon: React.ReactNode };
+type ConfirmConfig = { isOpen: boolean; title: string; message: string; onConfirm: () => void; type: 'danger' | 'warning' | 'info' };
+
 export interface UserManagementTabContentProps {
-  [key: string]: any;
+  activeTab: 'users' | 'roles' | 'sessions' | 'activity'; isAr: boolean;
+  t: (ar: string, en: string) => string; hasPermission: (permission: string) => boolean;
+  filteredUsers: TabUser[]; search: string; setSearch: React.Dispatch<React.SetStateAction<string>>;
+  roleFilter: string; setRoleFilter: React.Dispatch<React.SetStateAction<string>>;
+  statusFilter: string; setStatusFilter: React.Dispatch<React.SetStateAction<string>>;
+  roles: TabRole[]; activeSessions: TabSession[]; onlineSessionsCount: number; ROOT_EMAILS: string[];
+  couriersList: TabEntity[]; employeesList: TabEntity[]; role: string | null | undefined;
+  getRoleBadgeStyle: (role: string) => string; getTempBanRemaining: (user: TabUser) => string | null;
+  getTimeSince: (timestamp?: number) => string; isUserOnline: (user: TabUser) => boolean;
+  handleToggleStatus: (user: TabUser) => void | Promise<void>; handleOpenEdit: (user: TabUser) => void;
+  handleResetPassword: (user: TabUser) => void; setSessionTargetUser: React.Dispatch<React.SetStateAction<TabUser | null>>;
+  setIsSessionModalOpen: React.Dispatch<React.SetStateAction<boolean>>; handleDeleteUser: (id: string, name: string) => void | Promise<void>;
+  users: TabUser[]; dbSessions: TabSession[]; sessionId: string | null | undefined; currentUserDoc: TabUser | null | undefined;
+  setConfirmConfig: React.Dispatch<React.SetStateAction<ConfirmConfig>>; filteredLogs: TabActivityLog[];
+  logFilter: string; setLogFilter: React.Dispatch<React.SetStateAction<string>>; logUserFilter: string; setLogUserFilter: React.Dispatch<React.SetStateAction<string>>;
+  logLimit: number; setLogLimit: React.Dispatch<React.SetStateAction<number>>; getActionMeta: (action: string, isAr: boolean) => ActionMeta;
+  isSessionOnline: (session: TabSession) => boolean; handleRequestTerminateSession: (session: TabSession) => void;
+  handleOpenEditRole: (role: TabRole) => void; handleDeleteRole: (id: string, title: string) => void;
+  ALL_PERMISSIONS: (isAr: boolean) => Permission[];
 }
 
 /**
@@ -306,7 +338,7 @@ export const UserManagementTabContent: React.FC<UserManagementTabContentProps> =
                         <td className="p-4 text-center text-[10px] font-bold text-slate-400">{sess.deviceInfo || t('غير معروف', 'Unknown')}</td>
                         <td className="p-4 text-center text-[10px] font-bold text-slate-400">{getTimeSince(sess.lastSeen || sess.last_seen)}</td>
                         <td className="p-4 text-center">
-                          {isSelf || (isRoot && !ROOT_EMAILS.includes(currentUserDoc?.email)) ? (
+                          {isSelf || (isRoot && !ROOT_EMAILS.includes(currentUserDoc?.email ?? '')) ? (
                             <span className="text-[#d4af37] text-[9px] font-black bg-[#d4af37]/10 border border-[#d4af37]/25 px-2 py-1 rounded-lg">
                               {isSelf ? t('جلستك', 'Your Session') : t('محمي', 'Protected')}
                             </span>
@@ -382,7 +414,9 @@ export const UserManagementTabContent: React.FC<UserManagementTabContentProps> =
                     <tbody className="text-xs divide-y divide-slate-800/30">
                       {filteredLogs.map(log => {
                         const meta = getActionMeta(log.action, isAr);
-                        const ts = log.timestamp?.toDate ? log.timestamp.toDate() : log.timestamp ? new Date(log.timestamp) : null;
+                        const ts = typeof log.timestamp === 'object' && log.timestamp !== null && 'toDate' in log.timestamp
+                          ? log.timestamp.toDate()
+                          : typeof log.timestamp === 'string' || typeof log.timestamp === 'number' ? new Date(log.timestamp) : null;
                         return (
                           <tr key={log.id} className="hover:bg-slate-900/10 transition-colors">
                             <td className="p-4">

@@ -38,3 +38,10 @@
 أُضيفت عقود الأخطاء المشتركة وحالات Query/Mutation للمرحلة 12، وطُبقت على حدّي Supabase Data Gateway وApiClient. `npm run check` ناجح، والاختبارات 231 ناجحة و8 متخطاة، والبناء ناجح مع تحذيرات chunk الكبيرة و`import.meta` المعروفة. لا توجد تغييرات على قاعدة البيانات أو RLS. تقرير التفاصيل في `phase12-errors-loading-2026-10-01.md`.
 
 المرحلة 11 ما زالت مفتوحة: `npx tsc --noEmit --strict` يعرض 207 تشخيصات، ولم يتم تفعيل `strict: true`. كما أن مستهلكي Query/Mutation القديمة لم تُرحّل جميعها بعد إلى المنفذين المشتركين؛ لذلك لا يُعلن إغلاق المرحلة 12 أو التسلسل السابق قبل استكمال هذين البندين.
+
+
+## تحديث checkpoint — 2026-10-01 07:26 +03:00 — AI Model: Manus
+
+- `strict: true` مفعّل، وفحص TypeScript والاختبارات (231 ناجحًا، 8 متخطاة) والبناء ناجحة.
+- أنواع `any` الفعلية في `src/features/auth`, `src/features/orders`, و`src/features/accounting`: صفر.
+- ما زال هناك دين legacy: 132 نوعًا في `src/components/orders` و48 في `src/components/financeAccounting`. لذلك المرحلة 11 لم تُغلق بعد؛ استكمال التنظيف يسبق اعتماد انتقال المرحلة 12. لا تغييرات DB.

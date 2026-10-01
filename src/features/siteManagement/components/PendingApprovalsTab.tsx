@@ -1,8 +1,14 @@
 import React from 'react';
 import { Globe, Activity, Users, User, Package, Briefcase, MessageSquare, Megaphone, Shield, Link as LinkIcon, CheckCircle2, Clock, AlertCircle, RefreshCw, Plus, Trash2, Check, X, Eye, Edit2, Send, Server, Key, Lock, Settings as SettingsIcon, ChevronRight, ArrowUpRight, Award, UserCheck, ShieldAlert, Cpu, Phone, Mail, MapPin } from 'lucide-react';
 
+type SiteTab = 'analytics' | 'portal_users' | 'pending' | 'orders' | 'tickets' | 'announcements' | 'jobs' | 'security' | 'api';
+type PendingUser = { id: string; fullName?: string; email: string; phone?: string; city?: string; portalRole?: string; createdAt?: string | number | Date };
 export interface PendingApprovalsTabProps {
-  [key: string]: any;
+  activeTab: SiteTab;
+  isAr: boolean;
+  pendingUsers: PendingUser[];
+  actionId: string | null;
+  handleUserApproval: (user: PendingUser, status: 'approved' | 'rejected') => void;
 }
 
 export const PendingApprovalsTab: React.FC<PendingApprovalsTabProps> = (props) => {

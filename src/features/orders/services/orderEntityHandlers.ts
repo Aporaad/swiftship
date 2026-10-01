@@ -10,11 +10,16 @@ import type {
   SourceFormData,
 } from "../types";
 
+type EntityPayload = Record<string, unknown>;
+type EntityCreator = (id: string, payload: EntityPayload) => Promise<{ id: string }>;
+type SettingsRecord = { currency?: string };
+type ShippingRowUpdater = (index: number, field: string, value: string) => void;
+
 export interface OrderEntityHandlersDependencies {
   activeAddShippingIndex: number | string | null;
-  createCustomerRecord: (...args: any[]) => Promise<{ id: string }>;
-  createShippingCompanyRecord: (...args: any[]) => Promise<{ id: string }>;
-  createSourceRecord: (...args: any[]) => Promise<{ id: string }>;
+  createCustomerRecord: EntityCreator;
+  createShippingCompanyRecord: EntityCreator;
+  createSourceRecord: EntityCreator;
   customerFormData: CustomerFormData;
   isAr: boolean;
   isSubmitting: boolean;
@@ -28,11 +33,11 @@ export interface OrderEntityHandlersDependencies {
   setIsSubmitting: Dispatch<SetStateAction<boolean>>;
   setShippingCompanyFormData: Dispatch<SetStateAction<ShippingCompanyFormData>>;
   setSourceFormData: Dispatch<SetStateAction<SourceFormData>>;
-  settings: any;
+  settings: SettingsRecord;
   shippingCompanyFormData: ShippingCompanyFormData;
   sourceFormData: SourceFormData;
-  updateShippingRow: (...args: any[]) => any;
-  updateUpdateShippingRow: (...args: any[]) => any;
+  updateShippingRow: ShippingRowUpdater;
+  updateUpdateShippingRow: ShippingRowUpdater;
 }
 
 export function createOrderEntityHandlers(
@@ -133,7 +138,7 @@ export function createOrderEntityHandlers(
           type: "success",
           category: "system",
         });
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error(err);
         handleSupabaseError(err, OperationType.CREATE, "customers");
       } finally {

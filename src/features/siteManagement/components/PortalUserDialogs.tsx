@@ -2,8 +2,24 @@ import React from 'react';
 import { Globe, Activity, Users, User, Package, Briefcase, MessageSquare, Megaphone, Shield, Link as LinkIcon, CheckCircle2, Clock, AlertCircle, RefreshCw, Plus, Trash2, Check, X, Eye, Edit2, Send, Server, Key, Lock, Settings as SettingsIcon, ChevronRight, ArrowUpRight, Award, UserCheck, ShieldAlert, Cpu, Phone, Mail, MapPin } from 'lucide-react';
 import LocationMapPickerModal from '../../../components/common/LocationMapPickerModal';
 
+type PortalUserRecord = { id: string; username?: string; email?: string; fullName?: string; phone?: string; customerDetails?: { address?: string; city?: string; country?: string; company_name?: string; max_debt?: string | number; gps_location?: string } };
+type PortalUserFormData = { username: string; email: string; password: string; fullName: string; phone: string; portal_role: string; approval_status: string; disabled: boolean; country: string; city: string; address: string; company_name: string; max_debt: number; id_number: string; notes: string; lat: number; lng: number; gps_location: string };
+type LocationData = { country?: string; city?: string; governorate?: string; street?: string; addressDetails?: string; lat?: number; lng?: number; gps_location?: string };
 export interface PortalUserDialogsProps {
-  [key: string]: any;
+  showCreatePUserModal: boolean;
+  editingPUser: PortalUserRecord | null;
+  viewingPUser: PortalUserRecord | null;
+  isPUserMapOpen: boolean;
+  isAr: boolean;
+  setShowCreatePUserModal: (value: boolean) => void;
+  setEditingPUser: (user: PortalUserRecord | null) => void;
+  setViewingPUser: (user: PortalUserRecord | null) => void;
+  setIsPUserMapOpen: (value: boolean) => void;
+  handleEditPUserSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+  handleCreatePUserSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+  pUserFormData: PortalUserFormData;
+  setPUserFormData: React.Dispatch<React.SetStateAction<PortalUserFormData>>;
+  actionId: string | null;
 }
 
 export const PortalUserDialogs: React.FC<PortalUserDialogsProps> = (props) => {
@@ -359,7 +375,7 @@ export const PortalUserDialogs: React.FC<PortalUserDialogsProps> = (props) => {
           lng: pUserFormData.lng,
           gps_location: pUserFormData.gps_location
         }}
-        onSelectLocation={(data) => {
+        onSelectLocation={(data: LocationData) => {
           setPUserFormData(prev => ({
             ...prev,
             country: data.country || prev.country,

@@ -1,3 +1,12 @@
+type AdapterDocument = { id: string; data: () => Record<string, unknown> };
+type EmployeeAccountTransaction = Record<string, unknown> & {
+  id: string;
+  entryId?: string;
+  entry_id?: string;
+  createdAt?: string | number | Date | null;
+  type?: unknown;
+  amount?: unknown;
+};
 import React, { useState, useEffect } from 'react';
 import { CurrencySelect } from '../../../components/common/CurrencySelect';
 import {
@@ -144,7 +153,7 @@ export default function EmployeesPage() {
     const unsub = onSnapshot(
       collection(db, 'employees'),
       (snap) => {
-        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const list = snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() }));
         setEmployees(list);
         setLoading(false);
       },
@@ -396,7 +405,7 @@ export default function EmployeesPage() {
         where('accountId', '==', accId)
       );
       const snap = await getDocs(q);
-      const rawTxs = snap.docs.map(d => {
+      const rawTxs: EmployeeAccountTransaction[] = snap.docs.map((d: AdapterDocument) => {
         const row = d.data();
         return {
           id: d.id,
@@ -408,12 +417,14 @@ export default function EmployeesPage() {
 
       // جلب رؤوس القيود المرتبطة من main_entry للتحقق من حالة الترحيل
       // Fetch linked main_entry headers to check posting status
-      const entryIds = Array.from(new Set(rawTxs.map(t => t.entryId || t.entry_id).filter(Boolean)));
-      const mainEntryMap = new Map<string, any>();
+      const entryIds = Array.from(new Set(rawTxs
+        .map((transaction) => transaction.entryId || transaction.entry_id)
+        .filter((entryId): entryId is string => typeof entryId === 'string' && entryId.length > 0)));
+      const mainEntryMap = new Map<string, Record<string, unknown>>();
       if (entryIds.length > 0) {
         try {
           const mainSnap = await getDocs(collection(db, 'main_entry'));
-          mainSnap.docs.forEach(d => {
+          mainSnap.docs.forEach((d: AdapterDocument) => {
             if (entryIds.includes(d.id)) {
               mainEntryMap.set(d.id, d.data());
             }
@@ -435,7 +446,7 @@ export default function EmployeesPage() {
       });
 
 
-      txs.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      txs.sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime());
       setStatementModal({ isOpen: true, employee: emp, transactions: txs, loading: false });
     } catch (err) {
       console.error('Error loading statement of account:', err);
@@ -560,8 +571,9 @@ export default function EmployeesPage() {
             </thead>
             <tbody className="text-xs divide-y divide-slate-850 bg-black/10">
               {filteredEmployees.map((emp) => {
-                const accId = emp.financialAccountId || emp.accountId;
-                const liveBal = accId && liveBalances[accId] !== undefined ? liveBalances[accId] : (emp.financialBalance || 0);
+                const accId = String(emp.financialAccountId || emp.accountId || '');
+                const currentBalance = accId ? liveBalances.byId[accId] ?? liveBalances.byCode[accId] : undefined;
+                const liveBal = currentBalance ?? emp.financialBalance ?? 0;
 
                 return (
                   <tr key={emp.id} className={`hover:bg-slate-950/40 transition-colors ${emp.disabled ? 'opacity-65' : ''}`}>
@@ -1047,7 +1059,7 @@ export default function EmployeesPage() {
                 <div>
                   <span className="block text-[9px] font-black text-slate-500 uppercase">{isAr ? 'الرصيد المحاسبي المتبقي' : 'Running Balance'}</span>
                   <span className="block text-xs font-mono font-bold text-emerald-400 mt-1">
-                    {(liveBalances[statementModal.employee.financialAccountId || statementModal.employee.accountId] || statementModal.employee.financialBalance || 0).toLocaleString()} {statementModal.employee.currency || 'YER'}
+                    {(liveBalances.byId[String(statementModal.employee.financialAccountId || statementModal.employee.accountId || '')] ?? liveBalances.byCode[String(statementModal.employee.financialAccountId || statementModal.employee.accountId || '')] ?? statementModal.employee.financialBalance ?? 0).toLocaleString()} {statementModal.employee.currency || 'YER'}
                   </span>
                 </div>
               </div>

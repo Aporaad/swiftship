@@ -15,7 +15,55 @@ import type {
   ShippingRow,
 } from "../types";
 
-type RelatedRecord = Record<string, any>;
+interface RelatedRecord {
+  id?: string;
+  name?: string | null;
+  nameAr?: string | null;
+  nameEn?: string | null;
+  financialAccountId?: string | null;
+  accountId?: string | null;
+  financialAccountCode?: string | null;
+  accountCode?: string | null;
+}
+
+interface CurrencyRecord {
+  code?: string;
+  cur_id?: string | number;
+}
+
+interface OrderSettings {
+  currency?: string;
+}
+
+interface UserProfile {
+  fullName?: string;
+}
+
+function toNumber(value: unknown, fallback = 0): number {
+  const parsed = typeof value === "number" ? value : parseFloat(String(value ?? ""));
+  return Number.isNaN(parsed) ? fallback : parsed;
+}
+
+function readStringField(value: unknown, key: string): string | undefined {
+  if (typeof value !== "object" || value === null || !(key in value)) return undefined;
+  const field = Reflect.get(value, key);
+  return typeof field === "string" ? field : undefined;
+}
+
+function readRelatedRecord(value: unknown): RelatedRecord | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  return {
+    id: readStringField(value, "id"),
+    name: readStringField(value, "name"),
+    nameAr: readStringField(value, "nameAr"),
+    nameEn: readStringField(value, "nameEn"),
+    financialAccountId: readStringField(value, "financialAccountId"),
+    accountId: readStringField(value, "accountId"),
+    financialAccountCode: readStringField(value, "financialAccountCode"),
+    accountCode: readStringField(value, "accountCode"),
+  };
+}
+
 type CreateOrderMutationSet = Pick<
   OrderMutations,
   | "createOrderRecord"
@@ -27,16 +75,16 @@ type CreateOrderMutationSet = Pick<
 export interface CreateOrderHandlerDependencies {
   isSubmitting: boolean;
   isAr: boolean;
-  formData: any;
-  settings: any;
-  profile: any;
+  formData: OrderFormData;
+  settings: OrderSettings;
+  profile: UserProfile | null;
   customers: RelatedRecord[];
   couriers: RelatedRecord[];
   orderStatusesList: OrderStatusDescriptor[];
-  activeCurrencies: RelatedRecord[];
+  activeCurrencies: CurrencyRecord[];
   selectedOrderParty: OrderParty | null;
-  items: any[];
-  shippings: any[];
+  items: ItemRow[];
+  shippings: ShippingRow[];
   orderCurrency: string;
   bankCommissionType: "percentage" | "fixed";
   cartShareCode: string;
@@ -120,14 +168,14 @@ export function createOrderHandler(
     }
 
     const currentCalcs = computeCalculations();
-    const paidAmount = parseFloat(formData.amountPaid as any) || 0;
+    const paidAmount = toNumber(formData.amountPaid) || 0;
 
-    // First requirement: Deleted the condition that cash paid amount cannot be less than original products cost. Any amount is allowed.
+    // First requirement: Deleted the condition that cash paid amount cannot be less than original products cost. All amounts are allowed.
     if (formData.orderSourceType === "SHEIN") {
-      const redPrice = parseFloat(formData.sheinRedPrice as any) || 0;
+      const redPrice = toNumber(formData.sheinRedPrice) || 0;
       const productsSum = items.reduce(
         (sum, i) =>
-          sum + parseFloat(i.quantity || 0) * parseFloat(i.productPrice || 0),
+          sum + toNumber(i.quantity || 0) * toNumber(i.productPrice || 0),
         0
       );
       const couponValue = couponEnabled ? couponRate : 0;
@@ -157,7 +205,7 @@ export function createOrderHandler(
         payStatus = "Unpaid";
       } else if (currentCalcs.remainingYER <= 0) {
         payStatus = "Paid"; // دفع كامل
-      } else if (parseFloat(formData.amountPaid as any) > 0) {
+      } else if (toNumber(formData.amountPaid) > 0) {
         payStatus = "Partial Paid"; // دفع جزئي
       } else {
         payStatus = "Unpaid"; // لم يتم الدفع
@@ -174,7 +222,7 @@ export function createOrderHandler(
           // البحث عن الحالة ذات الترتيب 3 من جدول حالات الطلب
           // Find status with sortOrder/id = 3 from order statuses table
           const stage3 = orderStatusesList.find(
-            (s: any) => s.id === 3 || s.sortOrder === 3
+            s => s.id === 3 || s.sortOrder === 3
           );
           return stage3 ? String(stage3.id) : "3";
         }
@@ -182,26 +230,26 @@ export function createOrderHandler(
           // حالة البداية (الأولى) من جدول حالات الطلب
           // First stage from order statuses table
           const stage1 = orderStatusesList.find(
-            (s: any) => s.id === 1 || s.isFirst === true || s.sortOrder === 1
+            s => s.id === 1 || s.isFirst === true || s.sortOrder === 1
           );
           return stage1 ? String(stage1.id) : "1";
         }
         // المنطق الافتراضي: إذا تم الدفع => الحالة الثانية، وإلا => الأولى
         // Default: paid amount present => stage 2 else stage 1
-        if (parseFloat(formData.amountPaid as any) > 0) {
+        if (toNumber(formData.amountPaid) > 0) {
           const stage2 = orderStatusesList.find(
-            (s: any) => s.id === 2 || s.sortOrder === 2
+            s => s.id === 2 || s.sortOrder === 2
           );
           return stage2 ? String(stage2.id) : "2";
         }
         const stage1 = orderStatusesList.find(
-          (s: any) => s.id === 1 || s.isFirst === true || s.sortOrder === 1
+          s => s.id === 1 || s.isFirst === true || s.sortOrder === 1
         );
         return stage1 ? String(stage1.id) : "1";
       })();
 
       const initialFiredTriggers = [""];
-      if (parseFloat(formData.amountPaid as any) > 0 && !payLater) {
+      if (toNumber(formData.amountPaid) > 0 && !payLater) {
         initialFiredTriggers.push("order_down_payment"); //مهم:هذا قيد دفعه من العميل
       }
 
@@ -210,9 +258,9 @@ export function createOrderHandler(
       const orderStatusText = (() => {
         if (directApprove) return isAr ? "معتمد" : "Approved";
         if (payLater) return isAr ? "طلب معلق" : "Pending Order";
-        if (parseFloat(formData.amountPaid as any) > 0) {
+        if (toNumber(formData.amountPaid) > 0) {
           const stage2 = orderStatusesList.find(
-            (s: any) => s.id === 2 || s.sortOrder === 2
+            s => s.id === 2 || s.sortOrder === 2
           );
           return stage2
             ? isAr
@@ -270,8 +318,8 @@ export function createOrderHandler(
         bankCommissionRate: formData.bankCommissionRate,
         bankCommissionType,
         companyProfitRate: formData.companyProfitRate,
-        packagingFee: parseFloat(formData.packagingFee as any) || 0,
-        sheinRedPrice: parseFloat(formData.sheinRedPrice as any) || 0,
+        packagingFee: toNumber(formData.packagingFee) || 0,
+        sheinRedPrice: toNumber(formData.sheinRedPrice) || 0,
         cartShareCode,
         bankCommissionEnabled,
         couponEnabled,
@@ -284,7 +332,7 @@ export function createOrderHandler(
         totalCBM: currentCalcs.totalCBM,
         totalCostSAR: currentCalcs.totalOrderSAR,
         totalCostYER: currentCalcs.totalOrderYER,
-        amountPaid: parseFloat(formData.amountPaid as any) || 0,
+        amountPaid: toNumber(formData.amountPaid) || 0,
         amountRemaining: currentCalcs.remainingYER,
         paymentStatus: payStatus,
         // حفظ خيارات الحفظ الإضافية في سجل الطلب
@@ -295,18 +343,18 @@ export function createOrderHandler(
         directApprove: directApprove,
         paymentMethod: payLater
           ? "Deferred"
-          : (formData as any).paymentMethod || "Cash",
-        cashAccountId: (formData as any).cashAccountId || null,
-        bankAccountId: (formData as any).bankAccountId || null,
-        bankReference: (formData as any).bankReference || "",
-        cashAmount: parseFloat((formData as any).cashAmount as any) || 0,
-        bankAmount: parseFloat((formData as any).bankAmount as any) || 0,
-        profitPerKgRate: parseFloat(profitPerKgRate as any) || 19,
-        cbmShippingRateValue: parseFloat(cbmShippingRateValue as any) || 1400,
+          : formData.paymentMethod || "Cash",
+        cashAccountId: formData.cashAccountId || null,
+        bankAccountId: formData.bankAccountId || null,
+        bankReference: formData.bankReference || "",
+        cashAmount: toNumber(formData.cashAmount) || 0,
+        bankAmount: toNumber(formData.bankAmount) || 0,
+        profitPerKgRate: toNumber(profitPerKgRate) || 19,
+        cbmShippingRateValue: toNumber(cbmShippingRateValue) || 1400,
         addShippingEnabled,
         shippingCostSAR: currentCalcs.shippingCostSAR,
         shippingCourierFeeRate: viaShippingAgent
-          ? parseFloat(formData.shippingCourierFeeRate as any) || 0
+          ? toNumber(formData.shippingCourierFeeRate) || 0
           : 0,
         profitSaudiSAR: viaShippingAgent ? currentCalcs.profitSaudiSAR : 0,
         profitCompanySAR: currentCalcs.profitCompanySAR,
@@ -327,7 +375,7 @@ export function createOrderHandler(
         shippingCompany: formData.shippingCompany,
         externalOrderNumber: formData.externalOrderNumber,
         deliveryCourierFee: homeDeliveryEnabled
-          ? parseFloat(formData.deliveryCourierFee as any) || 0
+          ? toNumber(formData.deliveryCourierFee) || 0
           : 0,
         deliveryCourierFeeCurrency: currentCalcs.deliveryCourierFeeCurrency,
         deliveryCourierFeeOrderCurrency:
@@ -346,7 +394,7 @@ export function createOrderHandler(
         // إيجاد cur_id لعملة الطلب الافتراضية من جدول currency لاستخدامه في product_price_currency
         // Look up cur_id for the default order currency to use as product_price_currency FK
         const orderCurrencyRecord = activeCurrencies?.find(
-          (c: any) =>
+          c =>
             String(c.code || "").toUpperCase() ===
             String(orderCurrency || "").toUpperCase()
         );
@@ -354,15 +402,15 @@ export function createOrderHandler(
           orderCurrencyRecord?.cur_id || orderCurrencyRecord?.code || null;
 
         for (const item of items) {
-          const qty = parseFloat(item.quantity || 1);
-          const unitPrice = parseFloat(
+          const qty = toNumber(item.quantity || 1);
+          const unitPrice = toNumber(
             item.productPrice || item.price || item.unitPrice || 0
           );
-          const weight = parseFloat(item.weight || 0);
-          const cbm = parseFloat(item.cbm || 0);
+          const weight = toNumber(item.weight || 0);
+          const cbm = toNumber(item.cbm || 0);
           const isInsured = Boolean(item.isInsured);
           const insuranceFee = isInsured
-            ? parseFloat(item.insuranceFee) || 0
+            ? toNumber(item.insuranceFee) || 0
             : 0;
 
           // ── التحقق من معرف المنتج: إذا كان المنتج موجود مسبقاً (product_id مملوء) فلا تنشئه مجدداً ──
@@ -396,9 +444,9 @@ export function createOrderHandler(
                 item.itemCategoryId || item.item_category_id || null,
               is_allowed: true,
               cbm: cbm,
-              width: parseFloat(item.width || 0),
-              height: parseFloat(item.height || 0),
-              length: parseFloat(item.length || 0),
+              width: toNumber(item.width || 0),
+              height: toNumber(item.height || 0),
+              length: toNumber(item.length || 0),
               weight: weight,
               created_at: new Date().toISOString(),
               created_by: profile?.fullName || "system",
@@ -428,7 +476,7 @@ export function createOrderHandler(
             total__weight: weight * qty,
             total_cbm: cbm * qty,
             packaging_option_id: item.packagingOptionId || null,
-            packaging_option_price: parseFloat(item.packagingOptionPrice || 0),
+            packaging_option_price: toNumber(item.packagingOptionPrice || 0),
             is_insured: isInsured,
             insurance_fee: insuranceFee,
             items_status: "قيد الطلب",
@@ -443,7 +491,7 @@ export function createOrderHandler(
       // حفظ شحنات الطلب في جدول الشحنات
       // Save order shipments to dedicated shipments table - always save if shippings exist
       const shippingsToSave = (shippings || []).filter(
-        (s: any) =>
+        s =>
           s && (s.shippingCompany || s.trackingNumber || s.shippingCost)
       );
       for (const ship of shippingsToSave) {
@@ -472,9 +520,9 @@ export function createOrderHandler(
             formData.deliveryCourierId || formData.shippingCourierId || null,
           shipment_status: ship.shipmentStatus || "طلب معلق",
           shipmentStatus: ship.shipmentStatus || "طلب معلق",
-          shipping_cost: parseFloat(ship.shippingCost || 0),
-          shippingCost: parseFloat(ship.shippingCost || 0),
-          weight: parseFloat(ship.weight || 0),
+          shipping_cost: toNumber(ship.shippingCost || 0),
+          shippingCost: toNumber(ship.shippingCost || 0),
+          weight: toNumber(ship.weight || 0),
           shipping_category_id:
             ship.shippingCategoryId || ship.shipping_category_id || null,
           shippingCategoryId:
@@ -487,16 +535,16 @@ export function createOrderHandler(
             ship.contentCategoryName || ship.content_category_name || "",
           contentCategoryName:
             ship.contentCategoryName || ship.content_category_name || "",
-          carton_count: parseFloat(ship.cartonCount || 0),
-          cartonCount: parseFloat(ship.cartonCount || 0),
-          customs_fee: parseFloat(ship.customsFee || 0),
-          customsFee: parseFloat(ship.customsFee || 0),
-          tax_fee: parseFloat(ship.taxFee || 0),
-          taxFee: parseFloat(ship.taxFee || 0),
-          other_category_fee: parseFloat(ship.otherCategoryFee || 0),
-          otherCategoryFee: parseFloat(ship.otherCategoryFee || 0),
-          category_fees_total: parseFloat(ship.categoryFeesTotal || 0),
-          categoryFeesTotal: parseFloat(ship.categoryFeesTotal || 0),
+          carton_count: toNumber(ship.cartonCount || 0),
+          cartonCount: toNumber(ship.cartonCount || 0),
+          customs_fee: toNumber(ship.customsFee || 0),
+          customsFee: toNumber(ship.customsFee || 0),
+          tax_fee: toNumber(ship.taxFee || 0),
+          taxFee: toNumber(ship.taxFee || 0),
+          other_category_fee: toNumber(ship.otherCategoryFee || 0),
+          otherCategoryFee: toNumber(ship.otherCategoryFee || 0),
+          category_fees_total: toNumber(ship.categoryFeesTotal || 0),
+          categoryFeesTotal: toNumber(ship.categoryFeesTotal || 0),
           category_fee_currency: ship.categoryFeeCurrency || "",
           categoryFeeCurrency: ship.categoryFeeCurrency || "",
           createdAt: Date.now(),
@@ -515,7 +563,7 @@ export function createOrderHandler(
 
       // --- Financial Account Impact ---
       const customerRecord =
-        selectedOrderParty?.raw ||
+        readRelatedRecord(selectedOrderParty?.raw) ||
         customers.find(c => c.id === formData.customerId);
       const courierRecord = couriers.find(
         c => c.id === formData.shippingCourierId
@@ -561,7 +609,7 @@ export function createOrderHandler(
           }
           );*/
 
-          const paidVal = parseFloat(formData.amountPaid as any) || 0;
+          const paidVal = toNumber(formData.amountPaid) || 0;
           const paidCurrency = formData.currency;
           if (paidVal > 0) {
             const convertedPaid =
@@ -669,13 +717,13 @@ export function createOrderHandler(
       const shippingsCostSum = shippings.reduce(
         (sum, s) =>
           sum +
-          parseFloat(s.shippingCost || 0) +
-          parseFloat(s.packagingFees || 0),
+          toNumber(s.shippingCost || 0) +
+          toNumber(s.packagingFees || 0),
         0
       );
       // packagingFeeRate is now a fixed SAR amount (not percentage)
-      /*const shippingPackagingFixed = packagingFeeEnabled ? (parseFloat(packagingFeeRate as any) || 0) : 0;
-      const packagingFeeSAR = parseFloat(formData.packagingFee as any || 0);
+      /*const shippingPackagingFixed = packagingFeeEnabled ? (toNumber(packagingFeeRate) || 0) : 0;
+      const packagingFeeSAR = toNumber(formData.packagingFee || 0);
 
 
       if (packagingFeeSAR > 0 && systemAccs['sys_packaging_fees']) {
@@ -704,7 +752,7 @@ export function createOrderHandler(
         }
       }*/
 
-      // Record Shipping Cost Debit (for any order type with shipping cost)
+      // Record Shipping Cost Debit (for every order type with shipping cost)
       // Only apply if deduction on courier is not set, and shipping costs are not merged with product costs
       // قيد تنفيذ الشحن على الشركه عند الشحن من التطبيق ويزيد مصاريف الشركه
       /*if (
@@ -785,10 +833,10 @@ export function createOrderHandler(
       }
 
       // Automatically dispatch simulated API dispatch status for WhatsApp + SMS in logs/panel
-      const remainingVal = parseFloat(String(payload.amountRemaining || "0"));
+      const remainingVal = toNumber(payload.amountRemaining || "0");
       const totalCostYERVal =
-        parseFloat(String(payload.amountPaid || "0")) +
-        parseFloat(String(payload.amountRemaining || "0"));
+        toNumber(payload.amountPaid || "0") +
+        toNumber(payload.amountRemaining || "0");
       const smsMessage = isAr
         ? `عزيزنا العميل ${customerDisplayName}، تم تأكيد طلبك رقم: (${orderNumber}) بنجاح. حالة الشحنة: (${payload.orderStatus}). تتبع مع: ${payload.shippingCompany}، تتبع رقم: ${payload.trackingNumber || "قيد الرفع"}. القيمة الإجمالية: ${totalCostYERVal.toLocaleString()} YER، المتبقي: ${remainingVal.toLocaleString()} YER.`
         : `Dear ${customerDisplayName}, your order ${orderNumber} has been confirmed. Status: ${payload.orderStatus}. Track with ${payload.shippingCompany}: ${payload.trackingNumber || "Pending"}. Total: ${totalCostYERVal.toLocaleString()} YER, Remaining: ${remainingVal.toLocaleString()} YER.`;

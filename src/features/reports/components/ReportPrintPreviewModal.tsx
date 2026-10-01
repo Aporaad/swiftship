@@ -2,6 +2,7 @@ import React from 'react';
 import { Printer } from 'lucide-react';
 import { format } from 'date-fns';
 import type { PrintTemplateSettings } from '../types/reports.types';
+import type { ReportCourier, ReportCustomer, ReportExpense, ReportOrder, ReportShippingCompany, ReportTransaction, ReportUser } from '../report-row-types';
 
 interface ReportPrintPreviewModalProps {
   isPreviewModalOpen: boolean;
@@ -293,9 +294,9 @@ export const ReportPrintPreviewModal: React.FC<ReportPrintPreviewModalProps> = (
                       if (activeReport === 'customers' && selectedCustomerId !== null) {
                         const cust = customers.find(c => c.id === selectedCustomerId);
                         if (!cust) return <p className="text-center py-4 font-bold text-slate-500">Customer not found</p>;
-                        const custOrders = filteredData.orders.filter(o => o.customerId === cust.id || o.customerName === cust.fullName || o.customerPhone === cust.phone);
-                        const grossSum = custOrders.reduce((sum, o) => sum + convertCurrency(parseFloat(o.totalPrice) || 0, o.currency || 'YER', 'YER'), 0);
-                        const paidSum = custOrders.reduce((sum, o) => sum + convertCurrency(parseFloat(o.amountPaid) || 0, o.currency || 'YER', 'YER'), 0);
+                        const custOrders: ReportOrder[] = (filteredData.orders as ReportOrder[]).filter((o) => o.customerId === cust.id || o.customerName === cust.fullName || o.customerPhone === cust.phone);
+                        const grossSum = custOrders.reduce((sum: number, o: ReportOrder) => sum + convertCurrency(parseFloat(String(o.totalPrice ?? '0')) || 0, o.currency || 'YER', 'YER'), 0);
+                        const paidSum = custOrders.reduce((sum: number, o: ReportOrder) => sum + convertCurrency(parseFloat(String(o.amountPaid ?? '0')) || 0, o.currency || 'YER', 'YER'), 0);
                         return (
                           <div className="space-y-4 text-xs">
                             <h4 className="font-extrabold text-[#000] border-b pb-1 text-sm">{isAr ? `كشف حساب تفصيلي للعميل: ${cust.fullName}` : `Statement Of Account: ${cust.fullName}`}</h4>
@@ -323,8 +324,8 @@ export const ReportPrintPreviewModal: React.FC<ReportPrintPreviewModalProps> = (
                                     <td className="p-2 border-r border-slate-300 font-mono font-bold text-yellow-600">{o.orderNumber || o.id}</td>
                                     <td className="p-2 border-r border-slate-300 text-slate-500">{o.createdAt ? format(new Date(o.createdAt), 'yyyy-MM-dd') : '-'}</td>
                                     <td className="p-2 border-r border-slate-300 text-stone-600 uppercase font-bold text-[9px]">{o.orderStatus}</td>
-                                    <td className="p-2 border-r border-slate-300 text-center text-emerald-600 font-bold">{(parseFloat(o.amountPaid) || 0).toLocaleString()} YER</td>
-                                    <td className="p-2 text-right font-mono font-bold">{parseFloat(o.totalPrice || '0').toLocaleString()} YER</td>
+                                    <td className="p-2 border-r border-slate-300 text-center text-emerald-600 font-bold">{(parseFloat(String(o.amountPaid ?? '0')) || 0).toLocaleString()} YER</td>
+                                    <td className="p-2 text-right font-mono font-bold">{(parseFloat(String(o.totalPrice ?? '0')) || 0).toLocaleString()} YER</td>
                                   </tr>
                                 ))}
                                 {custOrders.length === 0 && (
@@ -347,7 +348,7 @@ export const ReportPrintPreviewModal: React.FC<ReportPrintPreviewModalProps> = (
                       if (activeReport === 'couriers' && selectedCourierId !== null) {
                         const courier = couriers.find(c => c.id === selectedCourierId);
                         if (!courier) return <p className="text-center py-4 font-bold text-slate-500">Courier not found</p>;
-                        const coOrders = filteredData.orders.filter(o => o.shippingCourierId === courier.id || o.deliveryCourierId === courier.id || o.courierId === courier.id || o.courierName === courier.fullName);
+                        const coOrders: ReportOrder[] = (filteredData.orders as ReportOrder[]).filter((o) => o.shippingCourierId === courier.id || o.deliveryCourierId === courier.id || o.courierId === courier.id || o.courierName === courier.fullName);
                         return (
                           <div className="space-y-4 text-xs">
                             <h4 className="font-extrabold text-[#000] border-b pb-1 text-sm">{isAr ? `مسند تصفية العهد والمالية للمندوب: ${courier.fullName}` : `Courier Debt & Custody Settlement: ${courier.fullName}`}</h4>
@@ -374,7 +375,7 @@ export const ReportPrintPreviewModal: React.FC<ReportPrintPreviewModalProps> = (
                                     <td className="p-2 border-r border-slate-300 font-mono font-bold text-yellow-600">{o.orderNumber || o.id}</td>
                                     <td className="p-2 border-r border-slate-300 font-bold text-black">{o.customerName}</td>
                                     <td className="p-2 border-r border-slate-300 text-center uppercase font-bold text-[9px]">{o.orderStatus}</td>
-                                    <td className="p-2 text-right font-mono font-bold text-rose-500">{(parseFloat(o.amountRemaining) || 0).toLocaleString()} YER</td>
+                                    <td className="p-2 text-right font-mono font-bold text-rose-500">{(parseFloat(String(o.amountRemaining ?? '0')) || 0).toLocaleString()} YER</td>
                                   </tr>
                                 ))}
                                 {coOrders.length === 0 && (
@@ -391,7 +392,7 @@ export const ReportPrintPreviewModal: React.FC<ReportPrintPreviewModalProps> = (
                       // 4. Shipping Carriers view print details
                       if (activeReport === 'shipping_companies' && selectedCompanyId !== null) {
                         const sc = shippingCompanies.find(c => c.name === selectedCompanyId || c.id === selectedCompanyId) || { name: selectedCompanyId, type: 'INTERNATIONAL', phone: '-', dueAmount: 0 };
-                        const coOrders = filteredData.orders.filter(o => o.shippingCompany === sc.name || o.shippingCompanyId === sc.id);
+                        const coOrders: ReportOrder[] = (filteredData.orders as ReportOrder[]).filter((o) => o.shippingCompany === sc.name || o.shippingCompanyId === sc.id);
                         return (
                           <div className="space-y-4 text-xs">
                             <h4 className="font-extrabold text-[#000] border-b pb-1 text-sm">{isAr ? `كشف أداء وحساب شركة الشحن والمسار: ${sc.name}` : `Shipping Carrier Auditing: ${sc.name}`}</h4>
@@ -418,7 +419,7 @@ export const ReportPrintPreviewModal: React.FC<ReportPrintPreviewModalProps> = (
                                     <td className="p-2 border-r border-slate-300 font-mono font-bold text-yellow-600">{o.orderNumber || o.id}</td>
                                     <td className="p-2 border-r border-slate-300 text-black">{o.customerName}</td>
                                     <td className="p-2 border-r border-slate-300 text-center font-bold text-[9px] uppercase">{o.orderStatus}</td>
-                                    <td className="p-2 text-right font-mono font-black">{parseFloat(o.totalPrice || '0').toLocaleString()} YER</td>
+                                    <td className="p-2 text-right font-mono font-black">{(parseFloat(String(o.totalPrice ?? '0')) || 0).toLocaleString()} YER</td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -469,8 +470,8 @@ export const ReportPrintPreviewModal: React.FC<ReportPrintPreviewModalProps> = (
 
                       // 6. Expense category breakdown printout card
                       if (activeReport === 'expenses' && selectedExpenseCategory !== null) {
-                        const catExpenses = filteredData.expenses.filter(e => e.category === selectedExpenseCategory);
-                        const catSum = catExpenses.reduce((sum, e) => sum + convertToYER(parseFloat(e.amount) || 0, e.currency || 'YER'), 0);
+                        const catExpenses = filteredData.expenses.filter((e: ReportExpense) => e.category === selectedExpenseCategory);
+                        const catSum = catExpenses.reduce((sum: number, e: ReportExpense) => sum + convertToYER(parseFloat(String(e.amount ?? 0)) || 0, e.currency || 'YER'), 0);
                         return (
                           <div className="space-y-4 text-xs">
                             <h4 className="font-extrabold text-[#000] border-b pb-1 text-sm">{isAr ? `كشف تفصيلي لمصروفات تصنيف: ${selectedExpenseCategory}` : `Expense Statement Category: ${selectedExpenseCategory}`}</h4>
@@ -485,7 +486,7 @@ export const ReportPrintPreviewModal: React.FC<ReportPrintPreviewModalProps> = (
                                 </tr>
                               </thead>
                               <tbody>
-                                {catExpenses.map(e => (
+                                {catExpenses.map((e: ReportExpense) => (
                                   <tr key={e.id} className="border-b border-slate-200 font-medium">
                                     <td className="p-2 border-r border-slate-300 font-mono font-bold text-yellow-600">{e.expenseNumber}</td>
                                     <td className="p-2 border-r border-slate-300 text-black">{e.recipientName}</td>
@@ -566,7 +567,7 @@ export const ReportPrintPreviewModal: React.FC<ReportPrintPreviewModalProps> = (
                             </thead>
                             <tbody>
                               {activeReport === 'expenses' ? (
-                                filteredData.expenses.map(e => (
+                                filteredData.expenses.map((e: ReportExpense) => (
                                   <tr key={e.id} className="border-b border-slate-300 font-medium">
                                     <td className="p-3 border-r border-slate-300 font-mono text-slate-700">{e.expenseNumber}</td>
                                     <td className="p-3 border-r border-slate-300 uppercase">{e.category}</td>
@@ -577,12 +578,12 @@ export const ReportPrintPreviewModal: React.FC<ReportPrintPreviewModalProps> = (
                                 ))
                               ) : activeReport === 'account_ledger' ? (
                                 ledgerMetrics ? (
-                                  ledgerMetrics.displayRows.map(tx => {
-                                    const amt = parseFloat(tx.amount) || 0;
+                                  ledgerMetrics.displayRows.map((tx: ReportTransaction) => {
+                                    const amt = parseFloat(String(tx.amount ?? 0)) || 0;
                                     return (
                                       <tr key={tx.id} className="border-b border-slate-300 font-medium">
                                         <td className="p-3 border-r border-slate-300 font-mono text-slate-600">
-                                          {format(new Date(tx.createdAt), 'yyyy-MM-dd HH:mm')}
+                                          {tx.createdAt != null ? format(new Date(tx.createdAt), 'yyyy-MM-dd HH:mm') : '-'}
                                         </td>
                                         <td className="p-3 border-r border-slate-300 font-mono text-slate-700">{tx.refNumber}</td>
                                         <td className="p-3 border-r border-slate-300 text-slate-900 font-semibold">{tx.description}</td>
@@ -593,7 +594,7 @@ export const ReportPrintPreviewModal: React.FC<ReportPrintPreviewModalProps> = (
                                           {tx.type === 'Credit' ? `-${amt.toLocaleString()}` : '-'}
                                         </td>
                                         <td className="p-3 text-right font-mono font-black">
-                                          {tx.runningBalance.toLocaleString()} {tx.currencyOriginal || tx.currency || 'SAR'}
+                                          {Number(tx.runningBalance ?? 0).toLocaleString()} {tx.currencyOriginal || tx.currency || 'SAR'}
                                         </td>
                                       </tr>
                                     );
@@ -606,7 +607,7 @@ export const ReportPrintPreviewModal: React.FC<ReportPrintPreviewModalProps> = (
                                   </tr>
                                 )
                               ) : activeReport === 'customers' ? (
-                                filteredData.customers.map(c => (
+                                filteredData.customers.map((c: ReportCustomer) => (
                                   <tr key={c.id} className="border-b border-slate-300 font-medium">
                                     <td className="p-3 border-r border-slate-300 font-bold">{c.fullName}</td>
                                     <td className="p-3 border-r border-slate-300 font-mono">{c.phone || '-'}</td>
@@ -615,7 +616,7 @@ export const ReportPrintPreviewModal: React.FC<ReportPrintPreviewModalProps> = (
                                   </tr>
                                 ))
                               ) : activeReport === 'couriers' ? (
-                                filteredData.couriers.map(c => (
+                                filteredData.couriers.map((c: ReportCourier) => (
                                   <tr key={c.id} className="border-b border-slate-300 font-medium">
                                     <td className="p-3 border-r border-slate-300 font-bold">{c.fullName}</td>
                                     <td className="p-3 border-r border-slate-300">{c.courierType === 'sourcing' ? (isAr ? 'تجميع خارجي' : 'Sourcing') : (isAr ? 'توزيع داخلي' : 'Local')}</td>
@@ -624,7 +625,7 @@ export const ReportPrintPreviewModal: React.FC<ReportPrintPreviewModalProps> = (
                                   </tr>
                                 ))
                               ) : activeReport === 'shipping_companies' ? (
-                                filteredData.shippingCompanies.map(sc => (
+                                filteredData.shippingCompanies.map((sc: ReportShippingCompany) => (
                                   <tr key={sc.id} className="border-b border-slate-300 font-medium">
                                     <td className="p-3 border-r border-slate-300 font-bold">{sc.name}</td>
                                     <td className="p-3 border-r border-slate-300 text-center font-bold text-[#d4af37] text-[10px] uppercase">{sc.type || 'INTERNATIONAL'}</td>
@@ -633,7 +634,7 @@ export const ReportPrintPreviewModal: React.FC<ReportPrintPreviewModalProps> = (
                                   </tr>
                                 ))
                               ) : activeReport === 'users' ? (
-                                filteredData.users.map(u => (
+                                filteredData.users.map((u: ReportUser) => (
                                   <tr key={u.id} className="border-b border-slate-300 font-medium">
                                     <td className="p-3 border-r border-slate-300 font-bold">{u.fullName}</td>
                                     <td className="p-3 border-r border-slate-300 uppercase text-slate-650 font-semibold">{u.role || '-'}</td>
@@ -642,7 +643,7 @@ export const ReportPrintPreviewModal: React.FC<ReportPrintPreviewModalProps> = (
                                   </tr>
                                 ))
                               ) : (
-                                filteredData.orders.map(o => (
+                                filteredData.orders.map((o: ReportOrder) => (
                                   <tr key={o.id} className="border-b border-slate-300 font-medium">
                                     <td className="p-3 border-r border-slate-300 font-mono text-[#d4af37]">{o.orderNumber}</td>
                                     <td className="p-3 border-r border-slate-300">{o.customerName}</td>

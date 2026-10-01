@@ -1,8 +1,19 @@
 import React from 'react';
 import { Globe, Activity, Users, User, Package, Briefcase, MessageSquare, Megaphone, Shield, Link as LinkIcon, CheckCircle2, Clock, AlertCircle, RefreshCw, Plus, Trash2, Check, X, Eye, Edit2, Send, Server, Key, Lock, Settings as SettingsIcon, ChevronRight, ArrowUpRight, Award, UserCheck, ShieldAlert, Cpu, Phone, Mail, MapPin } from 'lucide-react';
 
+type SiteTab = 'analytics' | 'portal_users' | 'pending' | 'orders' | 'tickets' | 'announcements' | 'jobs' | 'security' | 'api';
+type TicketReply = { sender?: string; createdAt: string | number | Date; message: string };
+type SupportTicket = { id: string; subject?: string; userName?: string; userEmail?: string; status?: string; message: string; replies?: TicketReply[] };
 export interface SupportTicketsTabProps {
-  [key: string]: any;
+  activeTab: SiteTab;
+  isAr: boolean;
+  tickets: SupportTicket[];
+  replyingTicketId: string | null;
+  setReplyingTicketId: (id: string | null) => void;
+  ticketReplyText: string;
+  setTicketReplyText: (value: string) => void;
+  handleReplyTicket: (id: string) => void;
+  actionId: string | null;
 }
 
 export const SupportTicketsTab: React.FC<SupportTicketsTabProps> = (props) => {
@@ -47,7 +58,7 @@ export const SupportTicketsTab: React.FC<SupportTicketsTabProps> = (props) => {
                   {Array.isArray(t.replies) && t.replies.length > 0 && (
                     <div className="space-y-2 pt-2 border-t border-white/[0.03]">
                       <span className="text-[10px] text-slate-500 font-bold block">الردود السابقة:</span>
-                      {t.replies.map((rep: any, idx: number) => (
+                      {t.replies.map((rep, idx) => (
                         <div key={idx} className="text-xs bg-slate-900/60 p-2.5 rounded-lg border border-slate-800">
                           <span className="text-amber-400 font-bold block text-[10px]">{rep.sender} ({new Date(rep.createdAt).toLocaleTimeString('en-GB')}):</span>
                           <p className="text-slate-300">{rep.message}</p>

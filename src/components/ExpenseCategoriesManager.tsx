@@ -1,3 +1,4 @@
+type AdapterDocument = { id: string; data: () => Record<string, unknown> };
 import React, { useState, useEffect } from 'react';
 import { Settings, Plus, Edit2, Trash2, X, AlertTriangle } from 'lucide-react';
 import { db } from '../lib/supabase-adapter';
@@ -31,7 +32,7 @@ export default function ExpenseCategoriesManager({ isAr }: ExpenseCategoriesMana
   useEffect(() => {
     // Fetch accounts to link
     const unsubAccs = onSnapshot(collection(db, 'accounts'), (snap) => {
-      setAccounts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setAccounts(snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() })));
     });
     return () => unsubAccs();
   }, []);

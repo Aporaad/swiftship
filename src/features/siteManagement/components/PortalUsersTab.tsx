@@ -1,8 +1,25 @@
 import React from 'react';
 import { Globe, Activity, Users, User, Package, Briefcase, MessageSquare, Megaphone, Shield, Link as LinkIcon, CheckCircle2, Clock, AlertCircle, RefreshCw, Plus, Trash2, Check, X, Eye, Edit2, Send, Server, Key, Lock, Settings as SettingsIcon, ChevronRight, ArrowUpRight, Award, UserCheck, ShieldAlert, Cpu, Phone, Mail, MapPin } from 'lucide-react';
 
+type SiteTab = 'analytics' | 'portal_users' | 'pending' | 'orders' | 'tickets' | 'announcements' | 'jobs' | 'security' | 'api';
+type PortalUser = { id: string; username?: string; email?: string; fullName?: string; phone?: string; portal_role?: string; portalRole?: string; approval_status?: string; approvalStatus?: string; disabled?: boolean; address?: string; customerDetails?: { address?: string; company_name?: string; gps_location?: string } };
 export interface PortalUsersTabProps {
-  [key: string]: any;
+  activeTab: SiteTab;
+  isAr: boolean;
+  portalUsers: PortalUser[];
+  pUserSearch: string;
+  setPUserSearch: (value: string) => void;
+  pUserRoleFilter: string;
+  setPUserRoleFilter: (value: string) => void;
+  pUserStatusFilter: string;
+  setPUserStatusFilter: (value: string) => void;
+  pUserDisabledFilter: string;
+  setPUserDisabledFilter: (value: string) => void;
+  handleOpenCreatePUser: () => void;
+  handleTogglePUserDisabled: (user: PortalUser) => void;
+  setViewingPUser: (user: PortalUser | null) => void;
+  handleOpenEditPUser: (user: PortalUser) => void;
+  handleDeletePUser: (user: PortalUser) => void;
 }
 
 export const PortalUsersTab: React.FC<PortalUsersTabProps> = (props) => {

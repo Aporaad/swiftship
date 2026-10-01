@@ -9,10 +9,52 @@ import OrderHistoryModal from '../../../../components/orders/OrderHistoryModal';
 import DeleteOrderModal from '../../../../components/orders/DeleteOrderModal';
 import ShipmentFormModal from '../../../../components/shipments/ShipmentFormModal';
 import ConfirmModal from '../../../../components/ConfirmModal';
+import type { ItemCategory } from '../../../../services/itemCategoryService';
+import type { ItemRow, OrderFormData, PaymentFormData, ShippingRow, ShipmentFormData } from '../../types';
+import type { OrderDataState } from '../../hooks/useOrderData';
+import type { OrderHistoryContext } from '../../../../services/orderHistoryService';
 
 export interface OrdersPageDialogsProps {
-  [key: string]: any;
+  [key: string]: unknown;
 }
+
+type DialogValues = Record<string, unknown> & {
+  [key: string]: unknown;
+  isAddModalOpen: boolean; setIsAddModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  isEditOrderModalOpen: boolean; setIsEditOrderModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  orderToEdit: OrderDataState['orders'][number] | null; setOrderToEdit: React.Dispatch<React.SetStateAction<OrderDataState['orders'][number] | null>>;
+  isAddCustomerOpen: boolean; setIsAddCustomerOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  isAddSourceOpen: boolean; setIsAddSourceOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  isAddShippingCompanyOpen: boolean; setIsAddShippingCompanyOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  isAr: boolean; settings: React.ComponentProps<typeof CreateOrderModal>['settings']; employees: unknown[]; customers: unknown[]; sources: unknown[];
+  customerFormData: Record<string, string>; setCustomerFormData: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  selectOrderParty: (...args: unknown[]) => unknown; setFormData: React.Dispatch<React.SetStateAction<OrderFormData>>;
+  activeAddShippingIndex: number | string | null; updateUpdateShippingRow: (...args: unknown[]) => unknown; updateShippingRow: (...args: unknown[]) => unknown;
+  setActiveAddShippingIndex: React.Dispatch<React.SetStateAction<number | string | null>>; shippingCompanyFormData: Record<string, string>;
+  isUpdateModalOpen: boolean; setIsUpdateModalOpen: React.Dispatch<React.SetStateAction<boolean>>; selectedOrder: OrderDataState['orders'][number] | null;
+  updateFormData: Record<string, string>; setUpdateFormData: React.Dispatch<React.SetStateAction<Record<string, string>>>; updateShippings: ShippingRow[];
+  setUpdateShippings: React.Dispatch<React.SetStateAction<ShippingRow[]>>; orderStatusesList: unknown[]; couriers: unknown[]; canManageOrders: boolean; isSubmitting: boolean;
+  handleUpdateStatus: (...args: unknown[]) => unknown; shippingCompanies: unknown[]; role: string | null; hasPermission: (permission: string) => boolean;
+  isPaymentModalOpen: boolean; setIsPaymentModalOpen: React.Dispatch<React.SetStateAction<boolean>>; paymentFormData: React.ComponentProps<typeof PaymentModal>['paymentFormData'];
+  setPaymentFormData: React.ComponentProps<typeof PaymentModal>['setPaymentFormData']; financialAccounts: NonNullable<React.ComponentProps<typeof PaymentModal>['financialAccounts']>; activeCurrencies: NonNullable<React.ComponentProps<typeof PaymentModal>['activeCurrencies']>; dbRates: NonNullable<React.ComponentProps<typeof PaymentModal>['dbRates']>;
+  handleCollectPayment: (...args: unknown[]) => unknown; setSelectedOrder: React.Dispatch<React.SetStateAction<OrderDataState['orders'][number] | null>>;
+  isDetailsModalOpen: boolean; setIsDetailsModalOpen: React.Dispatch<React.SetStateAction<boolean>>; orderHistoryContext: OrderHistoryContext | null; isOrderHistoryOpen: boolean;
+  setIsOrderHistoryOpen: React.Dispatch<React.SetStateAction<boolean>>; setOrderHistoryContext: React.Dispatch<React.SetStateAction<OrderHistoryContext | null>>;
+  isDeleteModalOpen: boolean; orderToDelete: OrderDataState['orders'][number] | null; setOrderToDelete: React.Dispatch<React.SetStateAction<OrderDataState['orders'][number] | null>>; ordersPendingDelete: OrderDataState['orders'][number][];
+  isBatchUpdating: boolean; deletePin: string; deleteError: string; setDeletePin: React.Dispatch<React.SetStateAction<string>>; setDeleteError: React.Dispatch<React.SetStateAction<string>>;
+  setIsDeleteModalOpen: React.Dispatch<React.SetStateAction<boolean>>; setOrdersPendingDelete: React.Dispatch<React.SetStateAction<OrderDataState['orders'][number][]>>; handleVerifyDeletePin: () => unknown;
+  isAddShipmentModalOpen: boolean; isEditShipmentModalOpen: boolean; shipmentFormData: ShipmentFormData; setShipmentFormData: React.Dispatch<React.SetStateAction<ShipmentFormData>>; orders: OrderDataState['orders'][number][];
+  shippingCategoryOptions: unknown[]; activeItemCategories: ItemCategory[]; handleSaveShipmentSubmit: (...args: unknown[]) => unknown;
+  setIsAddShipmentModalOpen: React.Dispatch<React.SetStateAction<boolean>>; setIsEditShipmentModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  isDeleteShipmentModalOpen: boolean; setIsDeleteShipmentModalOpen: React.Dispatch<React.SetStateAction<boolean>>; shipmentToDelete: { id: string; trackingNumber?: string | null } | null; handleDeleteShipmentSubmit: () => unknown;
+  canEditOrderDefaultsCreation: boolean; formData: OrderFormData; previewOrderNumber: string; customerProfileStats: unknown; orderParties: unknown[]; selectedOrderParty: unknown;
+  setIsStaffOrder: (value: boolean) => void; customerSearchQuery: string; setCustomerSearchQuery: (value: string) => void; filteredCustomers: unknown[]; selectCustomer: (customer: unknown) => void;
+  clearSelectedCustomer: () => void; cartShareCode: string; setCartShareCode: (value: string) => void; items: ItemRow[]; addItemRow: () => void; updateItemRow: (idx: number, field: string, value: unknown) => void; removeItemRow: (idx: number) => void;
+  bankCommissionEnabled: boolean; setBankCommissionEnabled: (value: boolean) => void; bankCommissionType: 'percentage' | 'fixed'; setBankCommissionType: (value: 'percentage' | 'fixed') => void; bankCommissionRate: number; setBankCommissionRate: (value: number) => void;
+  couponEnabled: boolean; setCouponEnabled: (value: boolean) => void; couponRate: number; setCouponRate: (value: number) => void; addShippingEnabled: boolean; setAddShippingEnabled: (value: boolean) => void; shippings: ShippingRow[]; addShippingRow: () => void; removeShippingRow: () => void;
+  packagingFeeEnabled: boolean; setPackagingFeeEnabled: (value: boolean) => void; packagingFeeRate: number; setPackagingFeeRate: (value: number) => void; profitPerKgRate: number; setProfitPerKgRate: (value: number) => void; cbmShippingRateValue: number; setCbmShippingRateValue: (value: number) => void; calcs: unknown; packagingOptions: unknown[]; itemCategories: unknown[];
+  homeDeliveryEnabled: boolean; setHomeDeliveryEnabled: (value: boolean) => void; viaShippingAgent: boolean; setViaShippingAgent: (value: boolean) => void; payLater: boolean; setPayLater: (value: boolean) => void; directApprove: boolean; setDirectApprove: (value: boolean) => void; handleCreateOrder: (...args: unknown[]) => unknown;
+};
 
 export function OrdersPageDialogs(props: OrdersPageDialogsProps) {
   const {
@@ -101,7 +143,7 @@ export function OrdersPageDialogs(props: OrdersPageDialogsProps) {
     shipmentToDelete,
     handleDeleteShipmentSubmit,
     // CreateOrderModal props are spread as an explicit pass-through below.
-  } = props;
+  } = props as unknown as DialogValues;
   const {
     canEditOrderDefaultsCreation,
     formData,
@@ -159,7 +201,7 @@ export function OrdersPageDialogs(props: OrdersPageDialogsProps) {
     directApprove,
     setDirectApprove,
     handleCreateOrder,
-  } = props;
+  } = props as unknown as DialogValues;
   const createFormData = formData;
   const setCreateFormData = setOrderFormData;
   return (
@@ -169,7 +211,7 @@ export function OrdersPageDialogs(props: OrdersPageDialogsProps) {
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         isAr={isAr}
-        role={role}
+        role={role || ''}
         hasPermission={hasPermission}
         canEditOrderDefaultsCreation={canEditOrderDefaultsCreation}
         isSubmitting={isSubmitting}
@@ -282,7 +324,7 @@ export function OrdersPageDialogs(props: OrdersPageDialogsProps) {
         onClose={() => setIsAddSourceOpen(false)}
         isAr={isAr}
         settings={settings}
-        onCreated={(source) => setFormData((previous) => ({ ...previous, orderSourceId: source.id, orderSourceName: source.name, orderSourceType: source.type }))}
+        onCreated={(source) => setFormData((previous: OrderFormData) => ({ ...previous, orderSourceId: source.id, orderSourceName: source.name, orderSourceType: source.type }))}
       />
       <ShippingCompanyCreateModal
         isOpen={isAddShippingCompanyOpen}
@@ -298,7 +340,7 @@ export function OrdersPageDialogs(props: OrdersPageDialogsProps) {
             }
             setActiveAddShippingIndex(null);
           } else {
-            setFormData((previous) => ({ ...previous, shippingCompany: company.name }));
+            setFormData((previous: OrderFormData) => ({ ...previous, shippingCompany: company.name }));
           }
         }}
       />
@@ -321,7 +363,7 @@ export function OrdersPageDialogs(props: OrdersPageDialogsProps) {
         setIsAddShippingCompanyOpen={setIsAddShippingCompanyOpen}
         setActiveAddShippingIndex={setActiveShippingIndex}
         shippingCompanies={shippingCompanies}
-        role={role}
+        role={role || ''}
         hasPermission={hasPermission}
       />
 

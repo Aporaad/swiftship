@@ -310,7 +310,7 @@ export function CourierDetailsModal({
                                     <span>إجمالي الرسوم: <span className="text-white font-mono">{((parseFloat(String(order.amountPaid)) || 0) + (parseFloat(String(order.amountRemaining)) || 0)).toLocaleString()} YER</span></span>
                                   </div>
                                   <div className="text-[9px] font-mono font-bold text-slate-500">
-                                    {new Date(order.createdAt).toLocaleDateString('ar-YE')}
+                                    {order.createdAt ? new Date(order.createdAt).toLocaleDateString('ar-YE') : ''}
                                   </div>
                                 </div>
                               </div>

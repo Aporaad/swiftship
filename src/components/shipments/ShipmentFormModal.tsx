@@ -525,7 +525,7 @@ export default function ShipmentFormModal({
       {isDeleteOpen && shipmentToDelete && (
         <ConfirmModal
           isOpen={isDeleteOpen}
-          onClose={onCloseDelete}
+          onClose={onCloseDelete ?? (() => { })}
           onConfirm={handleDeleteShipmentSubmit}
           title={isAr ? 'حذف الشحنة' : 'Delete Shipment'}
           message={isAr

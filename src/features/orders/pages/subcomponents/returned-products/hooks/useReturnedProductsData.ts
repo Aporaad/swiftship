@@ -1,17 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { ReturnedOrderItemRecord, ReturnedOrderRecord } from '../types';
 import type { ReturnedProduct } from '../../../../../../services/returnedProductService';
 import { returnedProductsGateway } from '../gateway';
 
 interface UseReturnedProductsDataArgs {
-  orders?: any[];
-  propOrderItems?: any[];
+  orders?: ReturnedOrderRecord[];
+  propOrderItems?: ReturnedOrderItemRecord[];
 }
 
 export function useReturnedProductsData({ orders, propOrderItems }: UseReturnedProductsDataArgs) {
   const [returns, setReturns] = useState<ReturnedProduct[]>([]);
   const [loading, setLoading] = useState(true);
-  const [internalOrders, setInternalOrders] = useState<any[]>([]);
-  const [internalOrderItems, setInternalOrderItems] = useState<any[]>([]);
+  const [internalOrders, setInternalOrders] = useState<ReturnedOrderRecord[]>([]);
+  const [internalOrderItems, setInternalOrderItems] = useState<ReturnedOrderItemRecord[]>([]);
 
   useEffect(() => {
     if (!orders || orders.length === 0) {

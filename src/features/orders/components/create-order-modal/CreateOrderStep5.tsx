@@ -2,7 +2,16 @@ import React from 'react';
 import { X, Search, UserPlus, CreditCard, DollarSign, AlertCircle, Package, Trash2, Calendar, Calculator, ChevronRight, ChevronLeft, User, ShoppingCart, Truck, CheckCircle2, ShieldCheck, FileText, Wallet, Building, ArrowRightLeft, Boxes } from 'lucide-react';
 import { numberToWordsAr, numberToWordsEn, currencyNameAr, currencyNameEn } from '../../../../lib/numberToWords';
 
-export default function CreateOrderStep5(props: any) {
+import type { ItemRow, OrderCalculations, OrderFormData, ShippingRow } from '../../types';
+type NumericValue = number | string | null | undefined;
+const toNumber = (value: NumericValue): number => typeof value === 'number' ? value : Number.parseFloat(value ?? '') || 0;
+type SourceOption = { id: string; name?: string | null; source_name?: string | null };
+type ShippingRowView = ShippingRow & { shippingCategoryPrice?: NumericValue; trackingNumber?: string; packagingFee?: NumericValue };
+type CourierOption = { id: string; fullName?: string | null; commissionRate?: number | null; shippingCommissionRate?: number | null; deliveryCommissionRate?: number | null };
+
+type CreateOrderStep5Props = { isAr: boolean; formData: OrderFormData & { order_status_id?: string | number | null }; setFormData: (data: OrderFormData) => void; directApprove: boolean; setDirectApprove: (value: boolean) => void; sources: SourceOption[]; items: ItemRow[]; orderCurrency: string; calcs: OrderCalculations; shippings: ShippingRowView[]; packagingFeeEnabled: boolean; packagingFeeRate: number; viaShippingAgent: boolean; couriers: CourierOption[]; getCurrencyRate: (currency: string) => number; homeDeliveryEnabled: boolean; bankCommissionEnabled: boolean; bankCommissionRate: number; bankCommissionType: 'percentage' | 'fixed'; couponEnabled: boolean; couponRate: number; amountInWords: (amount: number, currency: string, lang: 'ar' | 'en') => string };
+
+export default function CreateOrderStep5(props: CreateOrderStep5Props) {
   const {
     isAr, formData, setFormData, directApprove, setDirectApprove, sources, items,
     orderCurrency, calcs, shippings, packagingFeeEnabled, packagingFeeRate,
@@ -72,7 +81,7 @@ export default function CreateOrderStep5(props: any) {
                     <div className="flex justify-between">
                       <span className="text-slate-500">{isAr ? 'مصدر الطلب:' : 'Order Source:'}</span>
                       <span className="text-[#d4af37]">
-                        {sources.find(s => s.id === formData.orderSourceId)?.name || formData.orderSourceId || '—'}
+                        {sources.find((s: SourceOption) => s.id === formData.orderSourceId)?.name || formData.orderSourceId || '—'}
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -93,7 +102,7 @@ export default function CreateOrderStep5(props: any) {
                     <h4 className="text-xs font-black text-white">{isAr ? 'ملخص أصناف المنتجات' : 'Products & Items Summary'}</h4>
                   </div>
                   <div className="space-y-2 text-xs font-bold max-h-40 overflow-y-auto custom-scrollbar">
-                    {items.map((item, idx) => (
+                    {items.map((item: ItemRow, idx: number) => (
                       <div key={idx} className="p-2.5 bg-slate-900/60 rounded-xl border border-slate-850 text-[11px] space-y-1">
                         <div className="flex justify-between items-center">
                           <span className="text-white truncate max-w-[160px] font-black">{idx + 1}. {item.productName || '—'}</span>
@@ -118,7 +127,7 @@ export default function CreateOrderStep5(props: any) {
                     </div>
                     <div className="flex justify-between text-[11px] font-bold">
                       <span className="text-slate-500">{isAr ? 'إجمالي الوحدات:' : 'Total Units:'}</span>
-                      <span className="font-mono text-slate-300">{items.reduce((s: number, i: any) => s + (parseInt(i.quantity) || 0), 0)} {isAr ? 'قطعة' : 'pcs'}</span>
+                      <span className="font-mono text-slate-300">{items.reduce((s: number, i: ItemRow) => s + (parseInt(String(i.quantity), 10) || 0), 0)} {isAr ? 'قطعة' : 'pcs'}</span>
                     </div>
                   </div>
                 </div>
@@ -134,11 +143,11 @@ export default function CreateOrderStep5(props: any) {
                       <span className="text-slate-500">{isAr ? 'عدد مسارات الشحن:' : 'Shipping Tracks:'}</span>
                       <span className="text-slate-200">{shippings?.length || 0} {isAr ? 'مسارات' : 'tracks'}</span>
                     </div>
-                    {shippings && shippings.length > 0 && shippings.map((sh: any, idx: number) => (
+                    {shippings && shippings.length > 0 && shippings.map((sh: ShippingRowView, idx: number) => (
                       <div key={idx} className="bg-slate-900/50 rounded-xl p-2.5 border border-slate-850 space-y-1 text-[11px]">
                         <div className="flex justify-between">
                           <span className="text-[#d4af37] font-black">{isAr ? `مسار #${idx + 1}:` : `Track #${idx + 1}:`} {sh.shippingCompany || '—'}</span>
-                          <span className="text-blue-300 font-mono">{(parseFloat(sh.shippingCost) || 0).toLocaleString()} {orderCurrency}</span>
+                          <span className="text-blue-300 font-mono">{(toNumber(sh.shippingCost) || 0).toLocaleString()} {orderCurrency}</span>
                         </div>
                         {sh.shippingType && <div className="text-slate-500">{isAr ? 'النوع:' : 'Mode:'} {sh.shippingType}</div>}
                         {sh.shippingSource && sh.shippingDestination && (
@@ -146,10 +155,10 @@ export default function CreateOrderStep5(props: any) {
                         )}
                         {sh.trackingNumber && <div className="font-mono text-slate-400">🔍 {sh.trackingNumber}</div>}
                         {/* Shipping packaging fee per route */}
-                        {(parseFloat(sh.packagingFee) || 0) > 0 && (
+                        {(toNumber(sh.packagingFee) || 0) > 0 && (
                           <div className="flex justify-between text-[10px]">
                             <span className="text-slate-500">{isAr ? '📦 رسوم تغليف المسار:' : '📦 Track Packaging:'}</span>
-                            <span className="text-purple-300 font-mono">{(parseFloat(sh.packagingFee) || 0).toLocaleString()} {orderCurrency}</span>
+                            <span className="text-purple-300 font-mono">{(toNumber(sh.packagingFee) || 0).toLocaleString()} {orderCurrency}</span>
                           </div>
                         )}
                       </div>
@@ -169,25 +178,25 @@ export default function CreateOrderStep5(props: any) {
                         <span className="text-purple-200 font-mono">{(formData.packagingFee || 0).toLocaleString()} {orderCurrency}</span>
                       </div>
                     )}
-                    {items && items.reduce((sum: number, it: any) => sum + ((parseFloat(it.packagingOptionPrice) || 0) * (parseFloat(it.quantity) || 1)), 0) > 0 && (
+                    {items && items.reduce((sum: number, it: ItemRow) => sum + ((toNumber(it.packagingOptionPrice) || 0) * (toNumber(it.quantity) || 1)), 0) > 0 && (
                       <div className="flex justify-between text-amber-300">
                         <span>{isAr ? '📦 تغليف المنتجات المخصص:' : '📦 Custom Packaging Option:'}</span>
-                        <span className="font-mono">+{items.reduce((sum: number, it: any) => sum + ((parseFloat(it.packagingOptionPrice) || 0) * (parseFloat(it.quantity) || 1)), 0).toLocaleString()} {orderCurrency}</span>
+                        <span className="font-mono">+{items.reduce((sum: number, it: ItemRow) => sum + ((toNumber(it.packagingOptionPrice) || 0) * (toNumber(it.quantity) || 1)), 0).toLocaleString()} {orderCurrency}</span>
                       </div>
                     )}
-                    {items && items.reduce((sum: number, it: any) => sum + (it.isInsured ? (parseFloat(it.insuranceFee) || 0) : 0), 0) > 0 && (
+                    {items && items.reduce((sum: number, it: ItemRow) => sum + (it.isInsured ? (toNumber(it.insuranceFee) || 0) : 0), 0) > 0 && (
                       <div className="flex justify-between text-amber-400">
                         <span className="flex items-center gap-1">
                           <ShieldCheck className="w-3.5 h-3.5" />
                           {isAr ? '🛡️ رسوم تأمين المنتجات:' : '🛡️ Products Insurance Fee:'}
                         </span>
-                        <span className="font-mono">+{items.reduce((sum: number, it: any) => sum + (it.isInsured ? (parseFloat(it.insuranceFee) || 0) : 0), 0).toLocaleString()} {orderCurrency}</span>
+                        <span className="font-mono">+{items.reduce((sum: number, it: ItemRow) => sum + (it.isInsured ? (toNumber(it.insuranceFee) || 0) : 0), 0).toLocaleString()} {orderCurrency}</span>
                       </div>
                     )}
-                    {shippings && shippings.reduce((sum: number, sh: any) => sum + (parseFloat(sh.shippingCategoryPrice) || 0), 0) > 0 && (
+                    {shippings && shippings.reduce((sum: number, sh: ShippingRowView) => sum + (toNumber(sh.shippingCategoryPrice) || 0), 0) > 0 && (
                       <div className="flex justify-between text-cyan-300">
                         <span>{isAr ? '⚡️ فئات الشحن المسرّعة:' : '⚡️ Shipping Speed Categories:'}</span>
-                        <span className="font-mono">+{shippings.reduce((sum: number, sh: any) => sum + (parseFloat(sh.shippingCategoryPrice) || 0), 0).toLocaleString()} {orderCurrency}</span>
+                        <span className="font-mono">+{shippings.reduce((sum: number, sh: ShippingRowView) => sum + (toNumber(sh.shippingCategoryPrice) || 0), 0).toLocaleString()} {orderCurrency}</span>
                       </div>
                     )}
 
@@ -198,7 +207,7 @@ export default function CreateOrderStep5(props: any) {
                           <div className="flex justify-between">
                             <span className="text-slate-500">{isAr ? 'مندوب التجميع (سعودي):' : 'Saudi Aggregator:'}</span>
                             <span className="text-amber-300 font-bold">
-                              {couriers.find(c => c.id === formData.shippingCourierId)?.fullName || (isAr ? 'غير محدد' : 'N/A')}
+                              {couriers.find((c: CourierOption) => c.id === formData.shippingCourierId)?.fullName || (isAr ? 'غير محدد' : 'N/A')}
                             </span>
                           </div>
                           <div className="flex justify-between">
@@ -221,7 +230,7 @@ export default function CreateOrderStep5(props: any) {
                           <div className="flex justify-between">
                             <span className="text-slate-500">{isAr ? 'مندوب التوصيل (اليمن):' : 'Yemen Courier:'}</span>
                             <span className="text-emerald-300 font-bold">
-                              {couriers.find(c => c.id === formData.deliveryCourierId)?.fullName || (isAr ? 'غير محدد' : 'N/A')}
+                              {couriers.find((c: CourierOption) => c.id === formData.deliveryCourierId)?.fullName || (isAr ? 'غير محدد' : 'N/A')}
                             </span>
                           </div>
                           <div className="flex justify-between">
@@ -250,11 +259,11 @@ export default function CreateOrderStep5(props: any) {
                       <span className="text-slate-500">{isAr ? '🛍 قيمة المنتجات:' : '🛍 Products Value:'}</span>
                       <span className="font-mono text-white">{(calcs.productsSum || 0).toLocaleString()} {orderCurrency}</span>
                     </div>
-                    {shippings && shippings.length > 0 && shippings.reduce((s: number, sh: any) => s + (parseFloat(sh.shippingCost) || 0), 0) > 0 && (
+                    {shippings && shippings.length > 0 && shippings.reduce((s: number, sh: ShippingRowView) => s + (toNumber(sh.shippingCost) || 0), 0) > 0 && (
                       <div className="flex justify-between">
                         <span className="text-slate-500">{isAr ? '🚚 تكاليف الشحن:' : '🚚 Shipping Cost:'}</span>
                         <span className="font-mono text-blue-300">
-                          {shippings.reduce((sum: number, sh: any) => sum + (parseFloat(sh.shippingCost) || 0), 0).toLocaleString()} {orderCurrency}
+                          {shippings.reduce((sum: number, sh: ShippingRowView) => sum + (toNumber(sh.shippingCost) || 0), 0).toLocaleString()} {orderCurrency}
                         </span>
                       </div>
                     )}
@@ -296,7 +305,7 @@ export default function CreateOrderStep5(props: any) {
                     )}
                     {/* Courier commission in summary */}
                     {(() => {
-                      const sc = couriers.find(c => c.id === formData.shippingCourierId);
+                      const sc = couriers.find((c: CourierOption) => c.id === formData.shippingCourierId);
                       const commRate = sc?.commissionRate || 0;
                       const commValue = commRate > 0 ? Math.ceil(calcs.profitSaudiSAR) : 0;
                       return commRate > 0 ? (

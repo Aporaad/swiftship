@@ -1,7 +1,8 @@
 import type { ChangeEvent } from 'react';
 import { Activity, DollarSign, Edit2, Eye, Printer, Trash2, Truck } from 'lucide-react';
+import type { OrderRecord } from '../types';
 
-type OrdersTableRow = Record<string, any> & { id: string };
+type OrdersTableRow = OrderRecord;
 type OrderStatusRow = {
   id?: unknown;
   sortOrder?: unknown;
@@ -126,8 +127,8 @@ export function OrdersTable({
               {/* Financial status */}
               <td className="p-4 text-start">
                 {(() => {
-                  const paidTotal = parseFloat(ord.amountPaid || 0);
-                  const remainVal = parseFloat(ord.amountRemaining || 0);
+                  const paidTotal = parseFloat(String(ord.amountPaid ?? 0));
+                  const remainVal = parseFloat(String(ord.amountRemaining ?? 0));
                   const totalFinal = paidTotal + remainVal;
 
                   return (

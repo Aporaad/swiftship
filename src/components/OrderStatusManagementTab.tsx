@@ -1,3 +1,4 @@
+type AdapterDocument = { id: string; data: () => Record<string, unknown> };
 import React, { useState, useEffect } from 'react';
 import {
   Layers, Plus, Edit2, Trash2, CheckCircle2, ShieldCheck, ArrowUp, ArrowDown,
@@ -100,7 +101,7 @@ export default function OrderStatusManagementTab({
     autoEntryService.ensureAutoEntries();
 
     const unsubEntries = onSnapshot(collection(db, 'auto_entries'), (snap) => {
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as AutoEntryRule));
+      const list = snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() } as AutoEntryRule));
       if (list.length > 0) {
         setAutoEntries(list);
       } else {
@@ -114,7 +115,7 @@ export default function OrderStatusManagementTab({
     });
 
     const unsubAccs = onSnapshot(collection(db, 'accounts'), (snap) => {
-      setAccounts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setAccounts(snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() })));
     });
 
     return () => {

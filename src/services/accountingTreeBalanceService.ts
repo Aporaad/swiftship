@@ -132,10 +132,10 @@ export function calculateAccountingTreeBalances(input: {
     const systemValues = children.map((child) => child.systemBalance);
     const nativeBalance = hasMissingExchangeRate || nativeValues.some((value) => value === null)
       ? null
-      : nativeValues.reduce((sum, value) => sum + Number(value), 0);
+      : nativeValues.reduce<number>((sum, value) => sum + Number(value), 0);
     const systemBalance = hasMissingExchangeRate || systemValues.some((value) => value === null)
       ? null
-      : systemValues.reduce((sum, value) => sum + Number(value), 0);
+      : systemValues.reduce<number>((sum, value) => sum + Number(value), 0);
     return {
       currency,
       nativeBalance,
@@ -170,7 +170,7 @@ export function calculateAccountingTreeBalances(input: {
     const matched = roots
       .filter((root) => String(read(root, 'accountType', 'account_type') || '') === nature)
       .map((root) => rootBalances[String(root.id)]?.systemBalance ?? null);
-    return matched.some((value) => value === null) ? null : matched.reduce((sum, value) => sum + Number(value), 0);
+    return matched.some((value) => value === null) ? null : matched.reduce<number>((sum, value) => sum + Number(value), 0);
   };
   const assets = sumByNature('Asset');
   const liab = sumByNature('Liability');

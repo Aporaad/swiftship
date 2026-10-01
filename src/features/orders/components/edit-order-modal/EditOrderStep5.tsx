@@ -1,6 +1,17 @@
 import { ShieldCheck } from 'lucide-react';
+import type { OrderFormData } from '../../types';
 
-export default function EditOrderStep5(props: any) {
+type EditOrderStep5Props = {
+  isAr: boolean;
+  formData: OrderFormData;
+  totalOrderSAR: number;
+  totalOrderYER: number;
+  remainingYER: number;
+  orderCurrency: string;
+  paymentCurrency: string;
+};
+
+export default function EditOrderStep5(props: EditOrderStep5Props) {
   const { isAr, formData, totalOrderSAR, totalOrderYER, remainingYER, orderCurrency, paymentCurrency } = props;
 
   return (

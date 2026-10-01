@@ -277,7 +277,7 @@ async function ensureCache(table: string): Promise<any[]> {
           if (error) {
             console.warn(`[Supabase Adapter] Failed to load table ${table} from remote: ${error.message}. Falling back to offline/local cache.`);
           } else {
-            collectionCaches[table] = (data || []).map(row => extractRowPayload(table, row));
+            collectionCaches[table] = (data || []).map((row: Record<string, unknown>) => extractRowPayload(table, row));
 
             // Update local backup
             try {

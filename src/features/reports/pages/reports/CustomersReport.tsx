@@ -1,3 +1,4 @@
+import type { ReportAccount, ReportCustomer, ReportOrder, ReportTransaction } from '../../report-row-types';
 /**
  * @file CustomersReport.tsx
  * @description تقرير كشف العملاء والذمم والمديونيات
@@ -55,7 +56,7 @@ const CustomersReport: React.FC<CustomersReportProps> = ({
                           </thead>
                           <tbody>
                             {searchMatchList(filteredData.customers, 'fullName').map((c) => {
-                              const acc = accounts.find(a => a.entityType === 'customer' && a.entityId === c.id);
+                              const acc = accounts.find((a: ReportAccount) => a.entityType === 'customer' && a.entityId === c.id);
                               const bal = acc ? acc.balance : (c.financialBalance || 0);
                               const cur = acc ? acc.currency : (c.financialCurrency || 'SAR');
                               return (
@@ -80,14 +81,14 @@ const CustomersReport: React.FC<CustomersReportProps> = ({
                     // CUSTOMER DRILLDOWN DETAIL STATEMENT WINDOW
                     <div className="space-y-6 animate-fade-in">
                       {(() => {
-                        const cust = customers.find(c => c.id === selectedCustomerId);
+                        const cust = customers.find((c: ReportCustomer) => c.id === selectedCustomerId);
                         if (!cust) return <p className="text-slate-500">Customer not found.</p>;
 
-                        const custAcc = accounts.find(a => a.entityType === 'customer' && a.entityId === cust.id);
-                        const custOrders = filteredData.orders.filter(o => o.customerId === cust.id || o.customerName === cust.fullName || o.customerPhone === cust.phone);
-                        const grossSum = custOrders.reduce((sum, o) => sum + convertCurrency(parseFloat(o.totalPrice) || 0, o.currency || 'YER', 'YER'), 0);
-                        const paidSum = custOrders.reduce((sum, o) => sum + convertCurrency(parseFloat(o.amountPaid) || 0, o.currency || 'YER', 'YER'), 0);
-                        const remainDebt = custOrders.reduce((sum, o) => sum + convertCurrency(parseFloat(o.amountRemaining) || 0, o.currency || 'YER', 'YER'), 0);
+                        const custAcc = accounts.find((a: ReportAccount) => a.entityType === 'customer' && a.entityId === cust.id);
+                        const custOrders = filteredData.orders.filter((o: ReportOrder) => o.customerId === cust.id || o.customerName === cust.fullName || o.customerPhone === cust.phone);
+                        const grossSum = custOrders.reduce((sum: number, o: ReportOrder) => sum + convertCurrency(parseFloat(String(o.totalPrice ?? 0)) || 0, o.currency || 'YER', 'YER'), 0);
+                        const paidSum = custOrders.reduce((sum: number, o: ReportOrder) => sum + convertCurrency(parseFloat(String(o.amountPaid ?? 0)) || 0, o.currency || 'YER', 'YER'), 0);
+                        const remainDebt = custOrders.reduce((sum: number, o: ReportOrder) => sum + convertCurrency(parseFloat(String(o.amountRemaining ?? 0)) || 0, o.currency || 'YER', 'YER'), 0);
                         const statementsTxs = accountTransactions.filter(tx =>
                           (custAcc && tx.accountId === custAcc.id) ||
                           tx.entityId === cust.id ||

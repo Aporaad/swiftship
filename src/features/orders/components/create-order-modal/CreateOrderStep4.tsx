@@ -3,7 +3,18 @@ import { CurrencySelect } from '../../../../components/common/CurrencySelect';
 import { X, Search, UserPlus, CreditCard, DollarSign, AlertCircle, Package, Trash2, Calendar, Calculator, ChevronRight, ChevronLeft, User, ShoppingCart, Truck, CheckCircle2, ShieldCheck, FileText, Wallet, Building, ArrowRightLeft, Boxes } from 'lucide-react';
 import { amountInWords, paidAmountInWords, currencyNameAr, currencyNameEn, numberToWordsAr, numberToWordsEn } from '../../../../lib/numberToWords';
 
-export default function CreateOrderStep4(props: any) {
+import type { Dispatch, SetStateAction } from 'react';
+import type { ItemRow, OrderCalculations, OrderFormData, ShippingRow } from '../../types';
+type NumericValue = number | string | null | undefined;
+type CurrencyOption = { code: string; main_nameAR?: string | null; sup_nameAR?: string | null; main_nameEn?: string | null; sup_nameEn?: string | null };
+const toNumber = (value: NumericValue): number => typeof value === 'number' ? value : Number.parseFloat(value ?? '') || 0;
+type ShippingRowView = ShippingRow & { shippingCategoryPrice?: NumericValue; };
+type CourierOption = { id: string; fullName?: string | null; commissionRate?: number | null; shippingCommissionRate?: number | null; deliveryCommissionRate?: number | null };
+type AccountOption = { id: string; name?: string | null; account_name?: string | null; accNameAr?: string | null; code?: string | null };
+
+type CreateOrderStep4Props = { isAr: boolean; formData: OrderFormData & { order_status_id?: string | number | null }; setFormData: (data: OrderFormData) => void; orderCurrency: string; payLater: boolean; setPayLater: (value: boolean) => void; canEditOrderDefaultsCreation: boolean; profitPerKgRate: number; setProfitPerKgRate: (value: number) => void; cbmShippingRateValue: number; setCbmShippingRateValue: (value: number) => void; viaShippingAgent: boolean; packagingFeeEnabled: boolean; packagingFeeRate: number; items: ItemRow[]; shippings: ShippingRowView[]; bankCommissionEnabled: boolean; bankCommissionRate: number; bankCommissionType: 'percentage' | 'fixed'; couponEnabled: boolean; couponRate: number; calcs: OrderCalculations; couriers: CourierOption[]; cashAccountsList: AccountOption[]; bankAccountsList: AccountOption[]; activeCurrencies: CurrencyOption[]; getCurrencyRate: (currency: string) => number };
+
+export default function CreateOrderStep4(props: CreateOrderStep4Props) {
   const {
     isAr, formData, setFormData, orderCurrency, payLater, setPayLater,
     canEditOrderDefaultsCreation, profitPerKgRate, setProfitPerKgRate,
@@ -56,7 +67,7 @@ export default function CreateOrderStep4(props: any) {
                     <input
                       type="number"
                       value={formData.sheinRedPrice || ''}
-                      onChange={(e) => setFormData({ ...formData, sheinRedPrice: parseFloat(e.target.value) || 0 })}
+                      onChange={(e) => setFormData({ ...formData, sheinRedPrice: toNumber(e.target.value) || 0 })}
                       className="w-full bg-slate-955 border border-slate-805 text-white rounded-xl p-3 outline-none font-mono text-xs"
                       placeholder="0.00"
                     />
@@ -69,7 +80,7 @@ export default function CreateOrderStep4(props: any) {
                         {isAr ? 'نسبة الربح للكيلو (' + orderCurrency + '/كجم)' : 'Profit Rate per KG (' + orderCurrency + '/kg)'}
                       </label>
                       <input type="number" step="any" value={profitPerKgRate}
-                        onChange={(e) => setProfitPerKgRate(parseFloat(e.target.value) || 0)}
+                        onChange={(e) => setProfitPerKgRate(toNumber(e.target.value) || 0)}
                         disabled={!canEditOrderDefaultsCreation}
                         className="w-full bg-slate-955 border border-slate-805 text-white rounded-xl p-3 outline-none font-mono text-xs disabled:opacity-50" />
                     </div>
@@ -78,7 +89,7 @@ export default function CreateOrderStep4(props: any) {
                         {isAr ? 'سعر شحن الـ CBM (دولار USD/m³)' : 'CBM Shipping Rate (USD/m³)'}
                       </label>
                       <input type="number" step="any" value={cbmShippingRateValue}
-                        onChange={(e) => setCbmShippingRateValue(parseFloat(e.target.value) || 0)}
+                        onChange={(e) => setCbmShippingRateValue(toNumber(e.target.value) || 0)}
                         disabled={!canEditOrderDefaultsCreation}
                         className="w-full bg-slate-955 border border-slate-805 text-white rounded-xl p-3 outline-none font-mono text-xs disabled:opacity-50" />
                     </div>
@@ -89,7 +100,7 @@ export default function CreateOrderStep4(props: any) {
                     {isAr ? 'رسوم تغليف وشحن محلي (' + orderCurrency + ')' : 'KSA Wrapping Fee & Local Freight (' + orderCurrency + ')'}
                   </label>
                   <input type="number" value={formData.packagingFee || ''}
-                    onChange={(e) => setFormData({ ...formData, packagingFee: parseFloat(e.target.value) || 0 })}
+                    onChange={(e) => setFormData({ ...formData, packagingFee: toNumber(e.target.value) || 0 })}
                     disabled={!canEditOrderDefaultsCreation}
                     className="w-full bg-slate-955 border border-slate-805 text-white rounded-xl p-3 outline-none font-mono text-xs disabled:opacity-50"
                     placeholder="0.00" />
@@ -129,11 +140,11 @@ export default function CreateOrderStep4(props: any) {
                   </div>
 
                   {/* Shipping cost — only if shippings exist AND cost > 0 */}
-                  {shippings && shippings.length > 0 && shippings.reduce((s: number, sh: any) => s + (parseFloat(sh.shippingCost) || 0), 0) > 0 && (
+                  {shippings && shippings.length > 0 && shippings.reduce((s: number, sh: ShippingRow) => s + (toNumber(sh.shippingCost) || 0), 0) > 0 && (
                     <div className="flex justify-between items-center">
                       <span className="text-slate-500 font-bold">{isAr ? '🚚 تكاليف الشحن:' : '🚚 Shipping Cost:'}</span>
                       <span className="font-mono text-blue-300 font-bold">
-                        {shippings.reduce((s: number, sh: any) => s + (parseFloat(sh.shippingCost) || 0), 0).toLocaleString()} {orderCurrency}
+                        {shippings.reduce((s: number, sh: ShippingRow) => s + (toNumber(sh.shippingCost) || 0), 0).toLocaleString()} {orderCurrency}
                       </span>
                     </div>
                   )}
@@ -147,34 +158,34 @@ export default function CreateOrderStep4(props: any) {
                   )}
 
                   {/* Packaging options fees from order_option */}
-                  {items && items.reduce((sum: number, it: any) => sum + ((parseFloat(it.packagingOptionPrice) || 0) * (parseFloat(it.quantity) || 1)), 0) > 0 && (
+                  {items && items.reduce((sum: number, it: ItemRow) => sum + ((toNumber(it.packagingOptionPrice) || 0) * (toNumber(it.quantity) || 1)), 0) > 0 && (
                     <div className="flex justify-between items-center text-amber-300">
                       <span className="font-bold">{isAr ? '📦 رسوم تغليف المنتجات المخصصة:' : '📦 Products Packaging Options Fee:'}</span>
                       <span className="font-mono font-bold">
-                        +{items.reduce((sum: number, it: any) => sum + ((parseFloat(it.packagingOptionPrice) || 0) * (parseFloat(it.quantity) || 1)), 0).toLocaleString()} {orderCurrency}
+                        +{items.reduce((sum: number, it: ItemRow) => sum + ((toNumber(it.packagingOptionPrice) || 0) * (toNumber(it.quantity) || 1)), 0).toLocaleString()} {orderCurrency}
                       </span>
                     </div>
                   )}
 
                   {/* Product Insurance Fee */}
-                  {items && items.reduce((sum: number, it: any) => sum + (it.isInsured ? (parseFloat(it.insuranceFee) || 0) : 0), 0) > 0 && (
+                  {items && items.reduce((sum: number, it: ItemRow) => sum + (it.isInsured ? (toNumber(it.insuranceFee) || 0) : 0), 0) > 0 && (
                     <div className="flex justify-between items-center text-amber-400">
                       <span className="font-bold flex items-center gap-1">
                         <ShieldCheck className="w-3.5 h-3.5" />
                         {isAr ? '🛡️ رسوم تأمين المنتجات:' : '🛡️ Products Insurance Fee:'}
                       </span>
                       <span className="font-mono font-bold">
-                        +{items.reduce((sum: number, it: any) => sum + (it.isInsured ? (parseFloat(it.insuranceFee) || 0) : 0), 0).toLocaleString()} {orderCurrency}
+                        +{items.reduce((sum: number, it: ItemRow) => sum + (it.isInsured ? (toNumber(it.insuranceFee) || 0) : 0), 0).toLocaleString()} {orderCurrency}
                       </span>
                     </div>
                   )}
 
                   {/* Shipping category speed fees from order_option */}
-                  {shippings && shippings.reduce((sum: number, sh: any) => sum + (parseFloat(sh.shippingCategoryPrice) || 0), 0) > 0 && (
+                  {shippings && shippings.reduce((sum: number, sh: ShippingRowView) => sum + (toNumber(sh.shippingCategoryPrice) || 0), 0) > 0 && (
                     <div className="flex justify-between items-center text-cyan-300">
                       <span className="font-bold">{isAr ? '⚡️ رسوم فئات الشحن السريع:' : '⚡️ Shipping Category Speed Fees:'}</span>
                       <span className="font-mono font-bold">
-                        +{shippings.reduce((sum: number, sh: any) => sum + (parseFloat(sh.shippingCategoryPrice) || 0), 0).toLocaleString()} {orderCurrency}
+                        +{shippings.reduce((sum: number, sh: ShippingRowView) => sum + (toNumber(sh.shippingCategoryPrice) || 0), 0).toLocaleString()} {orderCurrency}
                       </span>
                     </div>
                   )}
@@ -218,7 +229,7 @@ export default function CreateOrderStep4(props: any) {
 
                   {/* Courier commission — rate + value */}
                   {(() => {
-                    const courier = couriers.find(c => c.id === formData.shippingCourierId);
+                    const courier = couriers.find((c: CourierOption) => c.id === formData.shippingCourierId);
                     const commRate = courier?.commissionRate || 0;
                     const commValue = commRate > 0 ? Math.ceil(calcs.profitSaudiSAR) : 0;
                     return commRate > 0 ? (
@@ -326,7 +337,7 @@ export default function CreateOrderStep4(props: any) {
                               type="button"
                               onClick={() => {
                                 const newMethod = type.id;
-                                const updates: any = { paymentMethod: newMethod };
+                                const updates: Record<string, string | number> = { paymentMethod: newMethod };
                                 if (newMethod === 'Cash' && !formData.cashAccountId && cashAccountsList[0]) {
                                   updates.cashAccountId = cashAccountsList[0].id;
                                 }
@@ -361,7 +372,7 @@ export default function CreateOrderStep4(props: any) {
                         <span className="text-[9px] font-black uppercase text-[#d4af37] block mb-1">{isAr ? 'عملة الدفع' : 'Payment Currency'}</span>
                         <CurrencySelect
                         isAr={isAr}
-                        currencies={activeCurrencies.map(c => ({ id: c.code, code: c.code, nameAr: c.main_nameAR || c.sup_nameAR, nameEn: c.main_nameEn || c.sup_nameEn }))}
+                        currencies={activeCurrencies.map((c: CurrencyOption) => ({ id: c.code, code: c.code, nameAr: c.main_nameAR || c.sup_nameAR, nameEn: c.main_nameEn || c.sup_nameEn }))}
                         value={formData.currency}
                         onChange={newCurrency => {
                           const rateOrder = getCurrencyRate(orderCurrency);
@@ -395,7 +406,7 @@ export default function CreateOrderStep4(props: any) {
                           className="w-full bg-slate-955 text-white font-bold text-xs p-2.5 rounded-lg border border-slate-800 outline-none cursor-pointer focus:border-[#d4af37]"
                         >
                           <option value="">{isAr ? '-- اختر حساب الصندوق --' : '-- Select Cash Account --'}</option>
-                          {cashAccountsList.map((acc: any) => (
+                          {cashAccountsList.map((acc: AccountOption) => (
                             <option key={acc.id} value={acc.id} className="bg-slate-900 text-white">
                               {acc.name || acc.accNameAr || acc.id} ({acc.id})
                             </option>
@@ -416,7 +427,7 @@ export default function CreateOrderStep4(props: any) {
                           className="w-full bg-slate-955 text-white font-bold text-xs p-2.5 rounded-lg border border-slate-800 outline-none cursor-pointer focus:border-cyan-400"
                         >
                           <option value="">{isAr ? '-- اختر حساب البنك --' : '-- Select Bank Account --'}</option>
-                          {bankAccountsList.map((acc: any) => (
+                          {bankAccountsList.map((acc: AccountOption) => (
                             <option key={acc.id} value={acc.id} className="bg-slate-900 text-white">
                               {acc.name || acc.accNameAr || acc.id} ({acc.id})
                             </option>
@@ -458,8 +469,8 @@ export default function CreateOrderStep4(props: any) {
                             type="number"
                             value={formData.cashAmount || ''}
                             onChange={(e) => {
-                              const val = parseFloat(e.target.value) || 0;
-                              const bVal = parseFloat(formData.bankAmount || '0') || 0;
+                              const val = toNumber(e.target.value) || 0;
+                              const bVal = toNumber(formData.bankAmount || '0') || 0;
                               setFormData({
                                 ...formData,
                                 cashAmount: val,
@@ -478,8 +489,8 @@ export default function CreateOrderStep4(props: any) {
                             type="number"
                             value={formData.bankAmount || ''}
                             onChange={(e) => {
-                              const val = parseFloat(e.target.value) || 0;
-                              const cVal = parseFloat(formData.cashAmount || '0') || 0;
+                              const val = toNumber(e.target.value) || 0;
+                              const cVal = toNumber(formData.cashAmount || '0') || 0;
                               setFormData({
                                 ...formData,
                                 bankAmount: val,
@@ -516,7 +527,7 @@ export default function CreateOrderStep4(props: any) {
                         <input
                           type="number"
                           value={formData.amountPaid || ''}
-                          onChange={(e) => setFormData({ ...formData, amountPaid: parseFloat(e.target.value) || 0 })}
+                          onChange={(e) => setFormData({ ...formData, amountPaid: toNumber(e.target.value) || 0 })}
                           className="w-full bg-slate-955 border border-slate-700 focus:border-emerald-500/50 text-emerald-400 font-black rounded-xl py-3 px-4 outline-none font-mono text-sm"
                           placeholder={'0.00 ' + formData.currency}
                         />

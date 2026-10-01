@@ -16,6 +16,13 @@ import { whatsappService, WhatsAppConfig, defaultWhatsAppConfig } from '../../..
 import toast from 'react-hot-toast';
 import { activityLogService } from '../../../services/activityLogService';
 
+type NotificationRecord = { id: string; createdAt: Date | null; read?: boolean; type?: string; eventType?: string; title?: string; message?: string; creatorId?: string; userId?: string; associatedUserIds?: string[]; category?: string };
+type DeliveryLog = { id: string; phone?: string; eventType?: string; message?: string; orderId?: string; status?: string; errorMsg?: string; createdAt: Date | null };
+type TestResult = { success: boolean; status?: string; errorMsg?: string; message?: string };
+type SnapshotDocument = { id: string; data: () => Record<string, unknown> | undefined };
+const asNotificationRecord = (value: unknown): Record<string, unknown> => value !== null && typeof value === 'object' ? value as Record<string, unknown> : {};
+const errorMessage = (error: unknown): string => error instanceof Error ? error.message : 'Unknown error';
+
 export default function NotificationsPage() {
   const { legacyAuth: auth } = useAuthSession();
   const { settings } = useSettings();
@@ -25,7 +32,7 @@ export default function NotificationsPage() {
   const [activeTab, setActiveTab] = useState<'alerts' | 'settings' | 'logs'>('alerts');
   
   // State variables
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const { role, hasPermission, loading: roleLoading } = useRole();
   const canSendNotif = role === 'Admin' || hasPermission('send_notifications');
   const canManageWhatsApp = role === 'Admin' || hasPermission('view_edit_notification_settings');
@@ -37,14 +44,14 @@ export default function NotificationsPage() {
   const [isSaving, setIsSaving] = useState(false);
   
   // WhatsApp Delivery Logs state
-  const [logs, setLogs] = useState<any[]>([]);
+  const [logs, setLogs] = useState<DeliveryLog[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(true);
   
   // Test message tool states
   const [testPhone, setTestPhone] = useState('');
   const [testMessage, setTestMessage] = useState('');
   const [isTesting, setIsTesting] = useState(false);
-  const [testResult, setTestResult] = useState<any>(null);
+  const [testResult, setTestResult] = useState<TestResult | null>(null);
 
   // Test connection states
   const [isTestingConnection, setIsTestingConnection] = useState(false);
@@ -67,16 +74,17 @@ export default function NotificationsPage() {
       const canOrderNotif = isAdmin || hasPermission('notify_orders');
       const canFinanceNotif = isAdmin || hasPermission('notify_finance');
       const canSystemNotif = isAdmin || hasPermission('notify_system');
-      const allNotifs = snap.docs.map(d => {
-        const data = d.data() as any;
+      const allNotifs = snap.docs.map((d: SnapshotDocument): NotificationRecord => {
+        const data = asNotificationRecord(d.data());
         return { id: d.id, ...data, createdAt: safeToDate(data.createdAt) };
       });
       // Strict category filtering — only show categories the user has permission for
-      const filtered = allNotifs.filter(n => {
+      const filtered = allNotifs.filter((n: NotificationRecord) => {
         if (!isAdmin) {
           const isCreator = n.creatorId === auth.currentUser?.uid;
           const isTarget = n.userId === auth.currentUser?.uid;
-          const isAssociated = Array.isArray(n.associatedUserIds) && n.associatedUserIds.includes(auth.currentUser?.uid);
+          const currentUid = auth.currentUser?.uid;
+          const isAssociated = Boolean(currentUid && Array.isArray(n.associatedUserIds) && n.associatedUserIds.includes(currentUid));
           if (!isCreator && !isTarget && !isAssociated) return false;
         }
         const cat = n.category || 'system';
@@ -116,8 +124,8 @@ export default function NotificationsPage() {
   useEffect(() => {
     const qLogs = query(collection(db, 'whatsapp_logs'), orderBy('createdAt', 'desc'), limit(150));
     const unsubLogs = onSnapshot(qLogs, (snap) => {
-      setLogs(snap.docs.map(d => {
-        const data = d.data() as any;
+      setLogs(snap.docs.map((d: SnapshotDocument): NotificationRecord => {
+        const data = asNotificationRecord(d.data());
         return { id: d.id, ...data, createdAt: safeToDate(data.createdAt) };
       }));
       setLoadingLogs(false);
@@ -142,9 +150,9 @@ export default function NotificationsPage() {
       await batch.commit();
       activityLogService.log('mark_all_read', 'All Notifications');
       toast.success(isAr ? 'تم تحديد جميع الإشعارات كمقروءة' : 'Marked all as read');
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error(e);
-      toast.error(e.message || 'Error executing action');
+      toast.error(errorMessage(e) || 'Error executing action');
     }
   };
 
@@ -171,9 +179,9 @@ export default function NotificationsPage() {
       await whatsappService.saveConfig(whatsappConfig);
       activityLogService.log('save_whatsapp_settings', whatsappConfig.provider);
       toast.success(isAr ? 'تم حفظ إعدادات وقوالب WhatsApp بنجاح!' : 'WhatsApp config and templates saved successfully!');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      toast.error(err.message || 'Failed to save configuration');
+      toast.error(errorMessage(err) || 'Failed to save configuration');
     } finally {
       setIsSaving(false);
     }
@@ -200,10 +208,10 @@ export default function NotificationsPage() {
       } else {
         toast.error(isAr ? `فشل الإرسال: ${result.errorMsg || ''}` : `Emit failed: ${result.errorMsg || ''}`);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setTestResult({ success: false, status: 'Failed', errorMsg: err.message });
-      toast.error(err.message || 'Diagnostic error');
+      setTestResult({ success: false, status: 'Failed', errorMsg: errorMessage(err) });
+      toast.error(errorMessage(err) || 'Diagnostic error');
     } finally {
       setIsTesting(false);
     }
@@ -229,10 +237,10 @@ export default function NotificationsPage() {
       } else {
         toast.error(isAr ? `فشل فحص الاتصال: ${res.message}` : `Connection check failed: ${res.message}`);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setConnectionStatus({ success: false, message: err.message || 'Connection test error' });
-      toast.error(err.message || 'Gateway connection failed');
+      setConnectionStatus({ success: false, message: errorMessage(err) || 'Connection test error' });
+      toast.error(errorMessage(err) || 'Gateway connection failed');
     } finally {
       setIsTestingConnection(false);
     }
@@ -391,10 +399,10 @@ export default function NotificationsPage() {
                   <div 
                     key={notification.id} 
                     className={`p-5 hover:bg-[#0c0c0f] transition-all flex gap-4 cursor-pointer relative ${!notification.read ? 'bg-[#d4af37]/5' : ''}`}
-                    onClick={() => markAsRead(notification.id, notification.read)}
+                    onClick={() => markAsRead(notification.id, notification.read ?? false)}
                   >
                     <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 border transition-colors ${!notification.read ? 'bg-black/80 border-[#d4af37]/30 text-[#d4af37]' : 'bg-[#0e0e11] border-slate-850 text-slate-450'}`}>
-                      {getIcon(notification.type || notification.eventType)}
+                      {getIcon(notification.type || notification.eventType || 'system')}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-start mb-1 gap-2">

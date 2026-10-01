@@ -2,6 +2,32 @@ import type * as React from 'react';
 
 type ActionDependencies = Record<string, any>;
 
+interface CourierAuditRecord {
+  fullName: string;
+  financialBalance?: number;
+  accountId?: string;
+  accountCode?: string;
+  courierType?: string;
+}
+
+interface CustodyRecord {
+  id: string;
+  status?: string;
+  amountOriginal?: number;
+  amount?: number | string;
+  amountSettled?: number;
+  amountOutstanding?: number;
+  recipientAccountId?: string;
+  currency?: string;
+  expenseNumber?: string;
+}
+
+interface CourierOrderRecord {
+  id: string;
+  amountPaid?: number | string;
+  amountRemaining?: number | string;
+}
+
 export function createFinanceAccountingCourierActions(dependencies: ActionDependencies) {
   const { courierAuditSheet, currentUser, db, dbRates, doc, financialAccountService, isAr, notificationService, setBulkReconciliationLoading, setCargoRemitLoading, settings, updateDoc, writeBatch } = dependencies;
 
@@ -66,7 +92,7 @@ Continue?`
       }
 
       // 2. Settle all pending open custodies
-      const pendingCustodies = courierAuditSheet.custodies.filter(c => c.status === 'Pending');
+      const pendingCustodies = courierAuditSheet.custodies.filter((c: CustodyRecord) => c.status === 'Pending');
       for (const exp of pendingCustodies) {
         const docRef = doc(db, 'custody_advances', exp.id);
         batch.update(docRef, {
@@ -100,10 +126,10 @@ Continue?`
       }
 
       // 3. Remit all unremitted COD cargo cash
-      courierAuditSheet.currentUnremittedCargoCash.forEach(ord => {
+      courierAuditSheet.currentUnremittedCargoCash.forEach((ord: CourierOrderRecord) => {
         const orderRef = doc(db, 'orders', ord.id);
-        const prevPaid = parseFloat(ord.amountPaid || 0);
-        const rem = parseFloat(ord.amountRemaining || 0);
+        const prevPaid = parseFloat(String(ord.amountPaid || 0));
+        const rem = parseFloat(String(ord.amountRemaining || 0));
 
         batch.update(orderRef, {
           amountPaid: prevPaid + rem,
@@ -153,10 +179,10 @@ Continue?`
       const batch = writeBatch(db);
 
       // Update each unremitted cargo invoice
-      courierAuditSheet.currentUnremittedCargoCash.forEach(ord => {
+      courierAuditSheet.currentUnremittedCargoCash.forEach((ord: CourierOrderRecord) => {
         const orderRef = doc(db, 'orders', ord.id);
-        const prevPaid = parseFloat(ord.amountPaid || 0);
-        const rem = parseFloat(ord.amountRemaining || 0);
+        const prevPaid = parseFloat(String(ord.amountPaid || 0));
+        const rem = parseFloat(String(ord.amountRemaining || 0));
 
         batch.update(orderRef, {
           amountPaid: prevPaid + rem,

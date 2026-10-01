@@ -1,8 +1,18 @@
 import React from 'react';
 
 
+type SiteTab = 'analytics' | 'portal_users' | 'pending' | 'orders' | 'tickets' | 'announcements' | 'jobs' | 'security' | 'api';
+type TabTicket = { status?: string };
 export interface WebsiteManagementTabsProps {
-  [key: string]: any;
+  isAr: boolean;
+  activeTab: SiteTab;
+  setActiveTab: (tab: SiteTab) => void;
+  portalUsers: unknown[];
+  pendingUsers: unknown[];
+  portalOrders: unknown[];
+  tickets: TabTicket[];
+  announcements: unknown[];
+  pendingJobs: unknown[];
 }
 
 export const WebsiteManagementTabs: React.FC<WebsiteManagementTabsProps> = (props) => {
@@ -24,7 +34,7 @@ export const WebsiteManagementTabs: React.FC<WebsiteManagementTabsProps> = (prop
         ].map(tab => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
+            onClick={() => setActiveTab(tab.id as SiteTab)}
             className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap shrink-0 ${activeTab === tab.id
                 ? 'bg-gradient-to-r from-[#d4af37]/20 to-amber-900/20 text-[#d4af37] border border-[#d4af37]/40 shadow-lg shadow-black/30'
                 : 'bg-black/30 hover:bg-white/[0.03] text-slate-400 hover:text-white border border-white/[0.03]'

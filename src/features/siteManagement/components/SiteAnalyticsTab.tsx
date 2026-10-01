@@ -1,8 +1,21 @@
 import React from 'react';
 import { Globe, Activity, Users, User, Package, Briefcase, MessageSquare, Megaphone, Shield, Link as LinkIcon, CheckCircle2, Clock, AlertCircle, RefreshCw, Plus, Trash2, Check, X, Eye, Edit2, Send, Server, Key, Lock, Settings as SettingsIcon, ChevronRight, ArrowUpRight, Award, UserCheck, ShieldAlert, Cpu, Phone, Mail, MapPin } from 'lucide-react';
 
+type SiteTab = 'analytics' | 'portal_users' | 'pending' | 'orders' | 'tickets' | 'announcements' | 'jobs' | 'security' | 'api';
+type JobSummary = { status?: string };
 export interface SiteAnalyticsTabProps {
-  [key: string]: any;
+  activeTab: SiteTab;
+  isAr: boolean;
+  customersCount: number;
+  couriersCount: number;
+  suppliersCount: number;
+  approvedUsers: unknown[];
+  pendingUsers: unknown[];
+  portalUsers: unknown[];
+  pendingJobs: unknown[];
+  portalOrders: unknown[];
+  tickets: unknown[];
+  jobApplications: JobSummary[];
 }
 
 export const SiteAnalyticsTab: React.FC<SiteAnalyticsTabProps> = (props) => {

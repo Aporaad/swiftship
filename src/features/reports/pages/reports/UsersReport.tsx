@@ -1,3 +1,4 @@
+import type { ReportAccount, ReportOrder, ReportTransaction, ReportUser } from '../../report-row-types';
 /**
  * @file UsersReport.tsx
  * @description تقرير حسابات المستخدمين والرواتب
@@ -75,7 +76,7 @@ const UsersReport: React.FC<UsersReportProps> = ({
                     // SELECTED STAFF/USER ID DRILLDOWN DETAILED DISPLAY
                     <div className="space-y-6 animate-fade-in">
                       {(() => {
-                        const u = users.find(usr => usr.id === selectedUserId);
+                        const u = users.find((usr: ReportUser) => usr.id === selectedUserId);
                         if (!u) return <p className="text-slate-500">Staff record not found.</p>;
 
                         // Filter direct ledger payroll actions relating to their name in description

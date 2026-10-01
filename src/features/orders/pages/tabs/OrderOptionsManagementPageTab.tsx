@@ -7,7 +7,7 @@
 import React from 'react';
 import OrderOptionsManagementTab from '../../../../components/orders/OrderOptionsManagementTab';
 
-export const OrderOptionsManagementPageTab: React.FC<any> = (props) => {
+export const OrderOptionsManagementPageTab: React.FC<React.ComponentProps<typeof OrderOptionsManagementTab>> = (props) => {
   return <OrderOptionsManagementTab {...props} />;
 };
 

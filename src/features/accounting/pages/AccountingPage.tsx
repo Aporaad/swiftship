@@ -7,6 +7,9 @@ import { ShieldAlert, BookOpen } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import FinanceAccounting from '../../../components/FinanceAccounting';
 
+type AccountingRow = Record<string, unknown> & { id: string };
+type AccountingDocument = { id: string; data: () => Record<string, unknown> };
+
 export default function AccountingPage() {
   const { settings, t } = useSettings();
   const { role, hasPermission, loading: roleLoading } = useRole();
@@ -17,26 +20,26 @@ export default function AccountingPage() {
   const queryParams = new URLSearchParams(location.search);
   const activeSubTab = queryParams.get('subtab') || undefined;
 
-  const [couriers, setCouriers] = useState<any[]>([]);
-  const [orders, setOrders] = useState<any[]>([]);
-  const [customers, setCustomers] = useState<any[]>([]);
+  const [couriers, setCouriers] = useState<AccountingRow[]>([]);
+  const [orders, setOrders] = useState<AccountingRow[]>([]);
+  const [customers, setCustomers] = useState<AccountingRow[]>([]);
 
   useEffect(() => {
     if (roleLoading || !canViewFinance) return;
 
     // Fetch couriers
     const unsubCouriers = onSnapshot(collection(db, 'couriers'), (snap) => {
-      setCouriers(snap.docs.map((doc: { id: any; data: () => any; }) => ({ id: doc.id, ...doc.data() })));
+      setCouriers(snap.docs.map((doc: AccountingDocument) => ({ id: doc.id, ...doc.data() })));
     });
 
     // Fetch orders
     const unsubOrders = onSnapshot(query(collection(db, 'orders'), orderBy('createdAt', 'desc')), (snap) => {
-      setOrders(snap.docs.map((doc: { id: any; data: () => any; }) => ({ id: doc.id, ...doc.data() })));
+      setOrders(snap.docs.map((doc: AccountingDocument) => ({ id: doc.id, ...doc.data() })));
     });
 
     // Fetch customers
     const unsubCustomers = onSnapshot(collection(db, 'customers'), (snap) => {
-      setCustomers(snap.docs.map((doc: { id: any; data: () => any; }) => ({ id: doc.id, ...doc.data() })));
+      setCustomers(snap.docs.map((doc: AccountingDocument) => ({ id: doc.id, ...doc.data() })));
     });
 
     return () => {

@@ -20,8 +20,36 @@ import type {
   ShippingCompanyFormData,
   SourceFormData,
 } from '../types';
+import type { Settings } from '../../../context/SettingsContext';
+
+type OrderDefaultsSettings = Pick<Settings,
+  | 'defaultSheinDuration'
+  | 'defaultFactoryDuration'
+  | 'defaultAppDuration'
+  | 'defaultBankCommissionRate'
+  | 'defaultCompanyProfitRate'
+  | 'defaultPackagingFee'
+  | 'defaultDeliveryFee'
+  | 'defaultCourierCommissionRate'
+>;
 
 // ─── القيم الافتراضية ───────────────────────────────────────────────────────
+
+const numberSetting = (
+  settings: OrderDefaultsSettings | undefined,
+  key: keyof OrderDefaultsSettings,
+  fallback: number,
+): number => {
+  const value = settings?.[key];
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : fallback;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+  return fallback;
+};
 
 /** الصف الافتراضي لمنتج جديد - Default new item row */
 const defaultItemRow = (): ItemRow => ({
@@ -196,19 +224,19 @@ export interface OrderFormStateResult {
   setDirectApprove: (v: boolean) => void;
 
   /** إعادة تعيين نموذج الإنشاء - Reset creation form to defaults */
-  resetCreateForm: (orderCurrency: string, currency: string, settings?: any, dbRates?: Record<string, number>) => void;
+  resetCreateForm: (orderCurrency: string, currency: string, settings?: OrderDefaultsSettings, dbRates?: Record<string, number>) => void;
 
   // مساعدات صفوف المنتجات
   addItemRow: () => void;
-  updateItemRow: (idx: number, field: string, val: any) => void;
+  updateItemRow: (idx: number, field: string, val: unknown) => void;
   removeItemRow: (idx: number) => void;
 
   // مساعدات صفوف الشحن
-  addShippingRow: (settings?: any, orderSourceType?: string) => void;
-  updateShippingRow: (idx: number, fieldOrObj: string | Record<string, any>, val?: any) => void;
+  addShippingRow: (settings?: OrderDefaultsSettings, orderSourceType?: string) => void;
+  updateShippingRow: (idx: number, fieldOrObj: string | Record<string, unknown>, val?: unknown) => void;
   removeShippingRow: (idx: number, orderSourceType?: string) => void;
   addUpdateShippingRow: () => void;
-  updateUpdateShippingRow: (idx: number, fieldOrObj: string | Record<string, any>, val?: any) => void;
+  updateUpdateShippingRow: (idx: number, fieldOrObj: string | Record<string, unknown>, val?: unknown) => void;
   removeUpdateShippingRow: (idx: number) => void;
 }
 
@@ -278,7 +306,7 @@ export function useOrderFormState(
   const resetCreateForm = (
     oc: string,
     cur: string,
-    settings?: any,
+    settings?: OrderDefaultsSettings,
     dbRates?: Record<string, number>,
   ) => {
     setFormData({
@@ -287,11 +315,11 @@ export function useOrderFormState(
       exchangeRate: dbRates?.[oc] || 1,
       exchangeRateYER: dbRates?.[oc] || 1,
       exchangeRateUSD: dbRates?.['USD'] || 1,
-      bankCommissionRate: settings?.defaultBankCommissionRate ?? 3,
-      companyProfitRate: settings?.defaultCompanyProfitRate ?? 12,
-      packagingFee: settings?.defaultPackagingFee ?? 0,
-      deliveryCourierFee: settings?.defaultDeliveryFee ?? 4000,
-      shippingCourierFeeRate: settings?.defaultCourierCommissionRate ?? 30,
+      bankCommissionRate: numberSetting(settings, 'defaultBankCommissionRate', 3),
+      companyProfitRate: numberSetting(settings, 'defaultCompanyProfitRate', 12),
+      packagingFee: numberSetting(settings, 'defaultPackagingFee', 0),
+      deliveryCourierFee: numberSetting(settings, 'defaultDeliveryFee', 4000),
+      shippingCourierFeeRate: numberSetting(settings, 'defaultCourierCommissionRate', 30),
     });
     setItems([defaultItemRow()]);
     setShippings([defaultShippingRow()]);
@@ -316,7 +344,7 @@ export function useOrderFormState(
   };
 
   /** تعديل حقل في صف منتج محدد - Update a field in a product row */
-  const updateItemRow = (idx: number, field: string, val: any) => {
+  const updateItemRow = (idx: number, field: string, val: unknown) => {
     setItems((prev) => {
       const updated = [...prev];
       updated[idx] = { ...updated[idx], [field]: val };
@@ -333,14 +361,14 @@ export function useOrderFormState(
   // ── مساعدات صفوف الشحن (الإنشاء) ──
 
   /** إضافة صف شحن جديد - Add a new shipping row */
-  const addShippingRow = (settings?: any, orderSourceType?: string) => {
+  const addShippingRow = (settings?: OrderDefaultsSettings, orderSourceType?: string) => {
     const today = new Date().toISOString().split('T')[0];
     const defaultDuration =
       orderSourceType === 'SHEIN'
-        ? settings?.defaultSheinDuration ?? 12
+        ? numberSetting(settings, 'defaultSheinDuration', 12)
         : orderSourceType === 'Factory'
-        ? settings?.defaultFactoryDuration ?? 20
-        : settings?.defaultAppDuration ?? 10;
+        ? numberSetting(settings, 'defaultFactoryDuration', 20)
+        : numberSetting(settings, 'defaultAppDuration', 10);
     const arrivalDate = new Date();
     arrivalDate.setDate(arrivalDate.getDate() + defaultDuration);
     const expectedArrival = arrivalDate.toISOString().split('T')[0];
@@ -363,8 +391,8 @@ export function useOrderFormState(
   /** تعديل حقل في صف شحن محدد - Update a field in a shipping row */
   const updateShippingRow = (
     idx: number,
-    fieldOrObj: string | Record<string, any>,
-    val?: any,
+    fieldOrObj: string | Record<string, unknown>,
+    val?: unknown,
   ) => {
     setShippings((prev) => {
       const updated = [...prev];
@@ -414,8 +442,8 @@ export function useOrderFormState(
   /** تعديل حقل في صف شحن التحديث - Update a field in an update shipping row */
   const updateUpdateShippingRow = (
     idx: number,
-    fieldOrObj: string | Record<string, any>,
-    val?: any,
+    fieldOrObj: string | Record<string, unknown>,
+    val?: unknown,
   ) => {
     setUpdateShippings((prev) => {
       const updated = [...prev];

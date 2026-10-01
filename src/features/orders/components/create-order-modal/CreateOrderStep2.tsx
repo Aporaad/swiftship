@@ -1,7 +1,42 @@
 import React from 'react';
 import { X, Search, UserPlus, CreditCard, DollarSign, AlertCircle, Package, Trash2, Calendar, Calculator, ChevronRight, ChevronLeft, User, ShoppingCart, Truck, CheckCircle2, ShieldCheck, FileText, Wallet, Building, ArrowRightLeft, Boxes } from 'lucide-react';
 
-export default function CreateOrderStep2(props: any) {
+import type { Dispatch, SetStateAction } from 'react';
+import type { ItemRow, OrderFormData } from '../../types';
+type NumericValue = number | string | null | undefined;
+type SelectOption = { id: string; nameAr?: string | null; nameEn?: string | null; price?: number | string | null };
+const toNumber = (value: NumericValue): number => typeof value === 'number' ? value : Number.parseFloat(value ?? '') || 0;
+
+type OrderSettings = { defaultProductInsuranceFee: number; defaultProductInsuranceType: string };
+type CreateOrderStep2Props = {
+  isAr: boolean;
+  items: ItemRow[];
+  cartShareCode: string;
+  setCartShareCode: (value: string) => void;
+  setIsProductPickerOpen: (value: boolean) => void;
+  addItemRow: () => void;
+  updateItemRow: (index: number, field: keyof ItemRow | 'itemCategoryName' | 'packagingOptionName', value: ItemRow[keyof ItemRow] | string | null | undefined) => void;
+  removeItemRow: (index: number) => void;
+  settings: OrderSettings;
+  itemCategories: SelectOption[];
+  packagingOptions?: SelectOption[];
+  orderCurrency: string;
+  bankCommissionEnabled: boolean;
+  setBankCommissionEnabled: (value: boolean) => void;
+  bankCommissionType: 'percentage' | 'fixed';
+  setBankCommissionType: (value: 'percentage' | 'fixed') => void;
+  bankCommissionRate: number;
+  setBankCommissionRate: (value: number) => void;
+  couponEnabled: boolean;
+  setCouponEnabled: (value: boolean) => void;
+  couponRate: number;
+  setCouponRate: (value: number) => void;
+  formData: OrderFormData;
+  addShippingEnabled: boolean;
+  setAddShippingEnabled: (value: boolean) => void;
+};
+
+export default function CreateOrderStep2(props: CreateOrderStep2Props) {
   const {
     isAr, items, cartShareCode, setCartShareCode, setIsProductPickerOpen, addItemRow,
     updateItemRow, removeItemRow, settings, itemCategories, packagingOptions, orderCurrency,
@@ -95,7 +130,7 @@ export default function CreateOrderStep2(props: any) {
                 </div>
 
                 <div className="space-y-2.5">
-                  {items.map((item, idx) => (
+                  {items.map((item: ItemRow, idx: number) => (
                     <div key={idx} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-3 bg-slate-900/50 border border-slate-850/60 rounded-2xl hover:border-slate-800 transition">
                       <div className="col-span-3">
                         <input
@@ -114,7 +149,7 @@ export default function CreateOrderStep2(props: any) {
                           type="number"
                           value={item.productPrice || 0}
                           onChange={(e) => {
-                            const newPrice = parseFloat(e.target.value) || 0;
+                            const newPrice = toNumber(e.target.value) || 0;
                             updateItemRow(idx, 'productPrice', newPrice);
                             if (item.isInsured) {
                               const qty = Number(item.quantity || 1);
@@ -175,10 +210,10 @@ export default function CreateOrderStep2(props: any) {
                               value={item.length ?? ''}
                               onChange={(e) => {
                                 const newL = e.target.value;
-                                const w = parseFloat(item.width || 0);
-                                const h = parseFloat(item.height || 0);
+                                const w = toNumber(item.width || 0);
+                                const h = toNumber(item.height || 0);
                                 updateItemRow(idx, 'length', newL);
-                                updateItemRow(idx, 'cbm', parseFloat(((parseFloat(newL || '0') * w * h) / 1000000).toFixed(6)));
+                                updateItemRow(idx, 'cbm', toNumber(((toNumber(newL || '0') * w * h) / 1000000).toFixed(6)));
                               }}
                               placeholder="L"
                               className="w-full bg-slate-955 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold text-[11px] font-mono text-center"
@@ -191,10 +226,10 @@ export default function CreateOrderStep2(props: any) {
                               value={item.width ?? ''}
                               onChange={(e) => {
                                 const newW = e.target.value;
-                                const l = parseFloat(item.length || 0);
-                                const h = parseFloat(item.height || 0);
+                                const l = toNumber(item.length || 0);
+                                const h = toNumber(item.height || 0);
                                 updateItemRow(idx, 'width', newW);
-                                updateItemRow(idx, 'cbm', parseFloat(((l * parseFloat(newW || '0') * h) / 1000000).toFixed(6)));
+                                updateItemRow(idx, 'cbm', toNumber(((l * toNumber(newW || '0') * h) / 1000000).toFixed(6)));
                               }}
                               placeholder="W"
                               className="w-full bg-slate-955 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold text-[11px] font-mono text-center"
@@ -207,10 +242,10 @@ export default function CreateOrderStep2(props: any) {
                               value={item.height ?? ''}
                               onChange={(e) => {
                                 const newH = e.target.value;
-                                const l = parseFloat(item.length || 0);
-                                const w = parseFloat(item.width || 0);
+                                const l = toNumber(item.length || 0);
+                                const w = toNumber(item.width || 0);
                                 updateItemRow(idx, 'height', newH);
-                                updateItemRow(idx, 'cbm', parseFloat(((l * w * parseFloat(newH || '0')) / 1000000).toFixed(6)));
+                                updateItemRow(idx, 'cbm', toNumber(((l * w * toNumber(newH || '0')) / 1000000).toFixed(6)));
                               }}
                               placeholder="H"
                               className="w-full bg-slate-955 border border-slate-800 text-white rounded-xl p-2.5 outline-none font-bold text-[11px] font-mono text-center"
@@ -259,14 +294,14 @@ export default function CreateOrderStep2(props: any) {
                             value={item.itemCategoryId || ''}
                             onChange={(e) => {
                               const selectedId = e.target.value;
-                              const category = itemCategories.find((entry: any) => entry.id === selectedId);
+                              const category = itemCategories.find((entry: SelectOption) => entry.id === selectedId);
                               updateItemRow(idx, 'itemCategoryId', selectedId);
                               updateItemRow(idx, 'itemCategoryName', category ? (isAr ? category.nameAr : category.nameEn) : '');
                             }}
                             className="bg-slate-950 border border-slate-800 text-white font-bold rounded-xl px-3 py-1.5 text-[11px] outline-none cursor-pointer focus:border-cyan-400"
                           >
                             <option value="">{isAr ? '-- بدون فئة --' : '-- No category --'}</option>
-                            {itemCategories.map((category: any) => <option key={category.id} value={category.id}>{isAr ? category.nameAr : category.nameEn}</option>)}
+                            {itemCategories.map((category: SelectOption) => <option key={category.id} value={category.id}>{isAr ? category.nameAr : category.nameEn}</option>)}
                           </select>
                         </div>
                         <div className="flex items-center gap-2">
@@ -278,24 +313,24 @@ export default function CreateOrderStep2(props: any) {
                             value={item.packagingOptionId || ''}
                             onChange={(e) => {
                               const selectedId = e.target.value;
-                              const foundOpt = packagingOptions?.find((o: any) => o.id === selectedId);
+                              const foundOpt = packagingOptions?.find((o: SelectOption) => o.id === selectedId);
                               updateItemRow(idx, 'packagingOptionId', selectedId);
                               updateItemRow(idx, 'packagingOptionName', foundOpt ? (isAr ? foundOpt.nameAr : foundOpt.nameEn) : '');
-                              updateItemRow(idx, 'packagingOptionPrice', foundOpt ? (parseFloat(foundOpt.price) || 0) : 0);
+                              updateItemRow(idx, 'packagingOptionPrice', foundOpt ? (toNumber(foundOpt.price) || 0) : 0);
                             }}
                             className="bg-slate-950 border border-slate-800 text-white font-bold rounded-xl px-3 py-1.5 text-[11px] outline-none cursor-pointer focus:border-[#d4af37]"
                           >
                             <option value="">{isAr ? '-- بدون تغليف خاص (0) --' : '-- Standard (0) --'}</option>
-                            {(packagingOptions || []).map((pkg: any) => (
+                            {(packagingOptions || []).map((pkg: SelectOption) => (
                               <option key={pkg.id} value={pkg.id}>
-                                {isAr ? pkg.nameAr : pkg.nameEn} {pkg.price > 0 ? `(+${pkg.price} ${orderCurrency})` : '(مجاني)'}
+                                {isAr ? pkg.nameAr : pkg.nameEn} {toNumber(pkg.price) > 0 ? `(+${pkg.price} ${orderCurrency})` : '(مجاني)'}
                               </option>
                             ))}
                           </select>
                         </div>
-                        {item.packagingOptionPrice > 0 && (
+                        {(item.packagingOptionPrice || 0) > 0 && (
                           <span className="text-emerald-400 font-mono font-bold bg-emerald-950/20 border border-emerald-900/40 px-2 py-0.5 rounded-lg">
-                            +{((parseFloat(item.packagingOptionPrice) || 0) * (parseFloat(item.quantity) || 1)).toLocaleString()} {orderCurrency}
+                            +{((toNumber(item.packagingOptionPrice) || 0) * (toNumber(item.quantity) || 1)).toLocaleString()} {orderCurrency}
                           </span>
                         )}
 
@@ -365,7 +400,7 @@ export default function CreateOrderStep2(props: any) {
                         <input
                           type="number"
                           value={bankCommissionRate}
-                          onChange={(e) => setBankCommissionRate(parseFloat(e.target.value) || 0)}
+                          onChange={(e) => setBankCommissionRate(toNumber(e.target.value) || 0)}
                           className="w-20 bg-slate-955 border border-slate-800 text-white rounded-xl p-1.5 text-center font-mono font-bold text-[10px]"
                           placeholder={bankCommissionType === 'percentage' ? '%' : 'SAR'}
                         />
@@ -388,7 +423,7 @@ export default function CreateOrderStep2(props: any) {
                       <input
                         type="number"
                         value={couponRate}
-                        onChange={(e) => setCouponRate(parseFloat(e.target.value) || 0)}
+                        onChange={(e) => setCouponRate(toNumber(e.target.value) || 0)}
                         className="w-20 bg-slate-955 border border-slate-800 text-white rounded-xl p-1.5 text-center font-mono font-bold text-[10px]"
                         placeholder="0.00"
                       />

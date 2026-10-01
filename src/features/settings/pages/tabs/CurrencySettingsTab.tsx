@@ -210,7 +210,7 @@ export function CurrencySettingsTab({
                     {canEditRates && (
                       <button
                         type="button"
-                        onClick={() => handleToggleCurrencyActive(cur.cur_id, cur.code, cur.isActive)}
+                        onClick={() => handleToggleCurrencyActive(cur.cur_id, cur.code, cur.isActive ?? false)}
                         className={`p-2 rounded-xl border transition-all ${cur.isActive ? 'bg-emerald-950/20 text-emerald-400 border-emerald-900/40 hover:bg-emerald-950/40' : 'bg-rose-950/30 text-rose-400 border-rose-900/50 hover:bg-rose-950/50'}`}
                         title={cur.isActive ? (isAr ? 'تعطيل العملة' : 'Disable Currency') : (isAr ? 'تفعيل العملة' : 'Enable Currency')}
                       >

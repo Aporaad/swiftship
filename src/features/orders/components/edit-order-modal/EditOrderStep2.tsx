@@ -1,7 +1,23 @@
 import { Boxes, Package, ShieldCheck, Trash2 } from 'lucide-react';
 
-export default function EditOrderStep2(props: any) {
-  const { isAr, items, addItemRow, updateItemRow, removeItemRow, setIsProductPickerOpen, itemCategories, packagingOptions, orderCurrency, settings } = props;
+import type { ItemRow } from '../../types';
+type NumericValue = number | string | null | undefined;
+const toNumber = (value: NumericValue): number => typeof value === 'number' ? value : Number.parseFloat(value ?? '') || 0;
+type SelectOption = { id: string; nameAr?: string | null; nameEn?: string | null; price?: number | string | null };
+type EditOrderStep2Props = {
+  isAr: boolean;
+  items: ItemRow[];
+  addItemRow: () => void;
+  updateItemRow: (index: number, field: keyof ItemRow | 'itemCategoryName' | 'packagingOptionName', value: ItemRow[keyof ItemRow] | string | null | undefined) => void;
+  removeItemRow: (index: number) => void;
+  setIsProductPickerOpen: (open: boolean) => void;
+  itemCategories: SelectOption[];
+  packagingOptions?: SelectOption[];
+  orderCurrency: string;
+};
+
+export default function EditOrderStep2(props: EditOrderStep2Props) {
+  const { isAr, items, addItemRow, updateItemRow, removeItemRow, setIsProductPickerOpen, itemCategories, packagingOptions, orderCurrency } = props;
 
   return (
             <div className="bg-slate-950/40 p-5 rounded-2xl border border-slate-800 space-y-4 animate-fade-in">
@@ -27,7 +43,7 @@ export default function EditOrderStep2(props: any) {
               </div>
 
               <div className="space-y-2.5">
-                {items.map((item, idx) => (
+                {items.map((item: ItemRow, idx: number) => (
                   <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-slate-900/60 p-3 rounded-xl border border-slate-850">
                     <div className="col-span-4">
                       <label className="block text-[9px] text-slate-500 mb-0.5">{isAr ? 'اسم المنتج' : 'Item Name'}</label>
@@ -54,7 +70,7 @@ export default function EditOrderStep2(props: any) {
                       <input
                         type="number"
                         value={item.productPrice || 0}
-                        onChange={(e) => updateItemRow(idx, 'productPrice', parseFloat(e.target.value) || 0)}
+                        onChange={(e) => updateItemRow(idx, 'productPrice', toNumber(e.target.value) || 0)}
                         className="w-full bg-slate-955 border border-slate-800 text-white rounded-lg p-2 text-[11px] font-mono text-center"
                       />
                     </div>
@@ -88,14 +104,14 @@ export default function EditOrderStep2(props: any) {
                           value={item.itemCategoryId || ''}
                           onChange={(e) => {
                             const selectedId = e.target.value;
-                            const category = itemCategories.find((entry: any) => entry.id === selectedId);
+                            const category = itemCategories.find((entry: SelectOption) => entry.id === selectedId);
                             updateItemRow(idx, 'itemCategoryId', selectedId);
                             updateItemRow(idx, 'itemCategoryName', category ? (isAr ? category.nameAr : category.nameEn) : '');
                           }}
                           className="bg-slate-950 border border-slate-800 text-white font-bold rounded-xl px-2.5 py-1 text-[11px] outline-none cursor-pointer focus:border-cyan-400"
                         >
                           <option value="">{isAr ? '-- بدون فئة --' : '-- No category --'}</option>
-                          {itemCategories.map((category: any) => <option key={category.id} value={category.id}>{isAr ? category.nameAr : category.nameEn}</option>)}
+                          {itemCategories.map((category: SelectOption) => <option key={category.id} value={category.id}>{isAr ? category.nameAr : category.nameEn}</option>)}
                         </select>
                       </div>
                       <div className="flex items-center gap-2">
@@ -107,17 +123,17 @@ export default function EditOrderStep2(props: any) {
                           value={item.packagingOptionId || ''}
                           onChange={(e) => {
                             const selectedId = e.target.value;
-                            const foundOpt = packagingOptions?.find((o: any) => o.id === selectedId);
+                            const foundOpt = packagingOptions?.find((o: SelectOption) => o.id === selectedId);
                             updateItemRow(idx, 'packagingOptionId', selectedId);
                             updateItemRow(idx, 'packagingOptionName', foundOpt ? (isAr ? foundOpt.nameAr : foundOpt.nameEn) : '');
-                            updateItemRow(idx, 'packagingOptionPrice', foundOpt ? (parseFloat(foundOpt.price) || 0) : 0);
+                            updateItemRow(idx, 'packagingOptionPrice', foundOpt ? (toNumber(foundOpt.price) || 0) : 0);
                           }}
                           className="bg-slate-950 border border-slate-800 text-white font-bold rounded-xl px-2.5 py-1 text-[11px] outline-none cursor-pointer focus:border-[#d4af37]"
                         >
                           <option value="">{isAr ? '-- بدون تغليف خاص (0) --' : '-- Standard (0) --'}</option>
-                          {(packagingOptions || []).map((pkg: any) => (
+                          {(packagingOptions || []).map((pkg: SelectOption) => (
                             <option key={pkg.id} value={pkg.id}>
-                              {isAr ? pkg.nameAr : pkg.nameEn} {pkg.price > 0 ? `(+${pkg.price} SAR)` : '(مجاني)'}
+                              {isAr ? pkg.nameAr : pkg.nameEn} {toNumber(pkg.price) > 0 ? `(+${pkg.price} SAR)` : '(مجاني)'}
                             </option>
                           ))}
                         </select>
@@ -135,13 +151,13 @@ export default function EditOrderStep2(props: any) {
                         </label>
                         {item.isInsured && (
                           <span className="text-indigo-300 font-mono font-bold text-[10px] bg-indigo-950/60 border border-indigo-800/40 px-2 py-0.5 rounded-lg">
-                            +{(parseFloat(item.insuranceFee) || 0).toLocaleString()} {orderCurrency}
+                            +{(toNumber(item.insuranceFee) || 0).toLocaleString()} {orderCurrency}
                           </span>
                         )}
                       </div>
-                      {item.packagingOptionPrice > 0 && (
+                      {(item.packagingOptionPrice || 0) > 0 && (
                         <span className="text-emerald-400 font-mono font-bold">
-                          +{((parseFloat(item.packagingOptionPrice) || 0) * (parseFloat(item.quantity) || 1)).toLocaleString()} SAR
+                          +{((toNumber(item.packagingOptionPrice) || 0) * (toNumber(item.quantity) || 1)).toLocaleString()} SAR
                         </span>
                       )}
                     </div>

@@ -46,12 +46,23 @@ interface UseOrderCalculationsInput {
   /** أسعار الصرف من DB */
   dbRates: Record<string, number>;
   /** قائمة المناديب لحساب العمولة */
-  couriers: any[];
+  couriers: Array<Record<string, unknown>>;
   /** العملة الافتراضية للطلب */
   orderCurrency: string;
   /** العملة الافتراضية للنظام (تُستعمل قبل YER كـ fallback لرسوم التوصيل) */
   systemCurrency?: string;
 }
+
+const toNumber = (value: unknown): number => {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : 0;
+  }
+  if (typeof value === 'string') {
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+};
 
 /**
  * useOrderCalculations
@@ -84,44 +95,44 @@ export function useOrderCalculations(input: UseOrderCalculationsInput): OrderCal
   return useMemo<OrderCalculations>(() => {
     // 1. حساب إجمالي سعر المنتجات
     const productsSum = items.reduce(
-      (sum, i) => sum + parseFloat(i.quantity as any || 0) * parseFloat(i.productPrice as any || 0),
+      (sum, i) => sum + toNumber(i.quantity) * toNumber(i.productPrice),
       0,
     );
 
     // 2. حساب الوزن والحجم الإجمالي
     const totalWeight = items.reduce(
-      (sum, i) => sum + parseFloat(i.quantity as any || 0) * parseFloat(i.weight as any || 0),
+      (sum, i) => sum + toNumber(i.quantity) * toNumber(i.weight),
       0,
     );
 
     // حساب CBM تلقائياً إذا كانت الأبعاد متوفرة (مصادر المصانع)
     items.forEach((i) => {
       if (formData.orderSourceType === 'Factory') {
-        const length = parseFloat(i.length as any || 0);
-        const width = parseFloat(i.width as any || 0);
-        const height = parseFloat(i.height as any || 0);
+        const length = toNumber(i.length);
+        const width = toNumber(i.width);
+        const height = toNumber(i.height);
         if (length > 0 && width > 0 && height > 0) {
-          (i as any).cbm = parseFloat(((length * width * height) / 1_000_000).toFixed(6));
+          i.cbm = parseFloat(((length * width * height) / 1_000_000).toFixed(6));
         }
       }
     });
 
     const totalCBM = items.reduce(
-      (sum, i) => sum + parseFloat(i.quantity as any || 0) * parseFloat(i.cbm as any || 0),
+      (sum, i) => sum + toNumber(i.quantity) * toNumber(i.cbm),
       0,
     );
 
     // 3. رسوم التأمين الإجمالية
     const itemsInsuranceSum = items.reduce(
-      (sum: number, i: any) => sum + (i.isInsured ? parseFloat(i.insuranceFee) || 0 : 0),
+      (sum, i) => sum + (i.isInsured ? toNumber(i.insuranceFee) : 0),
       0,
     );
 
     // 4. حساب العمولة البنكية
     const bankCommValue = bankCommissionEnabled
       ? bankCommissionType === 'percentage'
-        ? productsSum * (parseFloat(bankCommissionRate as any) / 100)
-        : parseFloat(bankCommissionRate as any) || 0
+        ? productsSum * (toNumber(bankCommissionRate) / 100)
+        : toNumber(bankCommissionRate)
       : 0;
 
     // 5. قيمة الكوبون (مبلغ ثابت)
@@ -132,11 +143,11 @@ export function useOrderCalculations(input: UseOrderCalculationsInput): OrderCal
     // 6. إجمالي تكلفة الشحن من صفوف الشحن + رسوم التغليف
     const shippingsCostSum = shippings.reduce(
       (sum, s) =>
-        sum + parseFloat(s.shippingCost as any || 0) + parseFloat(s.packagingFees as any || 0),
+        sum + toNumber(s.shippingCost) + toNumber(s.packagingFees),
       0,
     );
     const shippingPackagingFixed = packagingFeeEnabled
-      ? parseFloat(packagingFeeRate as any) || 0
+      ? toNumber(packagingFeeRate)
       : 0;
     const totalShippingsCost = shippingsCostSum + shippingPackagingFixed;
 
@@ -150,8 +161,8 @@ export function useOrderCalculations(input: UseOrderCalculationsInput): OrderCal
 
     if (formData.orderSourceType === 'SHEIN') {
       // ── مصدر شي ان ──
-      const redPrice = parseFloat(formData.sheinRedPrice as any) || 0;
-      const generalPackagingFee = parseFloat(formData.packagingFee as any) || 0;
+      const redPrice = toNumber(formData.sheinRedPrice);
+      const generalPackagingFee = toNumber(formData.packagingFee);
       priceSAR = redPrice;
       shippingCostSAR = 0;
       totalOrderSAR = redPrice + generalPackagingFee + itemsInsuranceSum;
@@ -160,32 +171,32 @@ export function useOrderCalculations(input: UseOrderCalculationsInput): OrderCal
       const saudiCourier = couriers.find((c) => c.id === formData.shippingCourierId);
       const saudiRate =
         saudiCourier?.commissionRate !== undefined
-          ? parseFloat(saudiCourier.commissionRate)
+          ? toNumber(saudiCourier.commissionRate)
           : 0;
       profitSaudiSAR = rawProfitSAR * (saudiRate / 100);
       profitCompanySAR = rawProfitSAR - profitSaudiSAR + couponValue;
     } else if (formData.orderSourceType === 'Factory') {
       // ── مصادر المصانع ──
-      const rawProfitSAR = totalWeight * (parseFloat(profitPerKgRate as any) || 0);
+      const rawProfitSAR = totalWeight * (toNumber(profitPerKgRate));
       shippingCostSAR = totalShippingsCost;
-      const generalPackagingFee = parseFloat(formData.packagingFee as any) || 0;
+      const generalPackagingFee = toNumber(formData.packagingFee);
       totalOrderSAR = productsSum + rawProfitSAR + shippingCostSAR + generalPackagingFee + itemsInsuranceSum;
 
       const saudiCourier = couriers.find((c) => c.id === formData.shippingCourierId);
       const saudiRate =
         saudiCourier?.commissionRate !== undefined
-          ? parseFloat(saudiCourier.commissionRate)
+          ? toNumber(saudiCourier.commissionRate)
           : 0;
       profitSaudiSAR = rawProfitSAR * (saudiRate / 100);
       profitCompanySAR = rawProfitSAR - profitSaudiSAR + couponValue;
     } else {
       // ── التطبيقات (App) - الافتراضي ──
       const originalRawProfitSAR =
-        productsSum * ((parseFloat(formData.companyProfitRate as any) || 12) / 100);
+        productsSum * ((toNumber(formData.companyProfitRate) || 12) / 100);
       let rawProfitSAR = originalRawProfitSAR - bankCommValue;
 
       shippingCostSAR = addShippingEnabled || shippings.length > 0 ? totalShippingsCost : 0;
-      const generalPackagingFee = parseFloat(formData.packagingFee as any) || 0;
+      const generalPackagingFee = toNumber(formData.packagingFee);
 
       totalOrderSAR =
         productsSum +
@@ -200,9 +211,9 @@ export function useOrderCalculations(input: UseOrderCalculationsInput): OrderCal
         const saudiCourier = couriers.find((c) => c.id === formData.shippingCourierId);
         const saudiRate =
           formData.shippingCourierFeeRate !== undefined && formData.shippingCourierFeeRate !== null
-            ? parseFloat(formData.shippingCourierFeeRate as any) || 0
+            ? toNumber(formData.shippingCourierFeeRate)
             : saudiCourier?.commissionRate !== undefined
-            ? parseFloat(saudiCourier.commissionRate)
+            ? toNumber(saudiCourier.commissionRate)
             : 30;
         profitSaudiSAR = rawProfitSAR * (saudiRate / 100);
       } else {
@@ -214,7 +225,7 @@ export function useOrderCalculations(input: UseOrderCalculationsInput): OrderCal
 
     // ── رسوم التوصيل اليمن (فقط إذا كان التوصيل للمنزل مفعّلاً) ──
     const deliveryFeeRaw = homeDeliveryEnabled
-      ? parseFloat(formData.deliveryCourierFee as any) || 0
+      ? toNumber(formData.deliveryCourierFee)
       : 0;
     const paymentCurrency = formData.currency || orderCurrency;
     const deliveryFeeCurrency = formData.deliveryCourierFeeCurrency || systemCurrency || 'YER';
@@ -234,7 +245,7 @@ export function useOrderCalculations(input: UseOrderCalculationsInput): OrderCal
         ? totalProductsCostWithAdjustments + shippingCostSAR
         : totalProductsCostWithAdjustments;
 
-    const valPaid = parseFloat(formData.amountPaid as any) || 0;
+    const valPaid = toNumber(formData.amountPaid);
     const remainingYER = totalOrderYER - valPaid;
 
     return {

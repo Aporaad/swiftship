@@ -7,7 +7,7 @@
 import React from 'react';
 import { OrdersTableDeck } from '../../../../components/orders/OrdersTableDeck';
 
-export const OrdersDeckPageTab: React.FC<any> = (props) => {
+export const OrdersDeckPageTab: React.FC<React.ComponentProps<typeof OrdersTableDeck>> = (props) => {
   return <OrdersTableDeck {...props} />;
 };
 

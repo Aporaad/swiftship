@@ -2,6 +2,17 @@ import { collection, db, doc, getDoc, getDocs, query, supabase, where } from '..
 import { currentSupabaseAuthGateway } from '../data/current-supabase/gateways/auth.gateway';
 import type { AutomaticVoucherEntities } from './financialAccountTypes';
 
+interface AutomaticVoucherRule {
+  id: string;
+  isActive?: boolean;
+  debitAccount: unknown;
+  creditAccount: unknown;
+  descriptionTempAr?: string;
+  descriptionTempEn?: string;
+  nameAr?: string;
+  nameEn?: string;
+}
+
 export async function executeAutomaticVoucher(service: any, ruleId: string, order: any, entities: AutomaticVoucherEntities): Promise<boolean> {
     try {
       const session = await currentSupabaseAuthGateway.getCurrentSession();
@@ -22,7 +33,7 @@ export async function executeAutomaticVoucher(service: any, ruleId: string, orde
         console.info('[AutomaticVouchers] Duplicate execution prevented.', { automationKey, ruleId, orderIdentifier });
         return false;
       }
-      let rule = null;
+      let rule: AutomaticVoucherRule | null = null;
 
       // 1. Try to load from dedicated auto_entries table first
       try {
@@ -56,7 +67,7 @@ export async function executeAutomaticVoucher(service: any, ruleId: string, orde
 
       if (!rule) {
         const rules = await service.ensureAutomaticVoucherRules();
-        rule = rules.find((r) => r.id === ruleId);
+        rule = rules.find((r: AutomaticVoucherRule) => r.id === ruleId) || null;
       }
 
       if (!rule) {
@@ -85,9 +96,9 @@ export async function executeAutomaticVoucher(service: any, ruleId: string, orde
       const creditId = creditAccount.id;
       const creditCode = creditAccount.code;
 
-      let description = isAr
+      let description = (isAr
         ? rule.descriptionTempAr || rule.nameAr
-        : rule.descriptionTempEn || rule.nameEn;
+        : rule.descriptionTempEn || rule.nameEn) || '';
 
       description = description
         .replace("{orderNumber}", order.orderNumber || "")
@@ -143,7 +154,7 @@ export async function executeAutomaticVoucher(service: any, ruleId: string, orde
         amountBreakdown: entities.amountBreakdown,
         // حالة الترحيل ستُستخدم في createFromLegacyVoucher — postingStatus is used inside recordJournalEntry via createFromLegacyVoucher
         postingStatus,
-      } as any);
+      });
       console.log('automatic voucher fired successfully', { automationKey, amount, currency: entities.currencyOriginal || "YER", debitAccount: { id: debitId, code: debitCode }, creditAccount: { id: creditId, code: creditCode }, createdByUid: currentUser?.id || "system", createdByName: entities.profileName || "System Auto", amountSources: entities.amountSources, amountBreakdown: entities.amountBreakdown, postingStatus });
       return true;
 

@@ -1094,3 +1094,12 @@
 - [x] `npm run check` و`npm test` (231 ناجحًا، 8 متخطاة) و`npm run build` و`git diff --check` ناجحة.
 - [ ] استكمال ترحيل مستهلكي Query/Mutation القديمة إلى العقد الموحد قبل إعلان المرحلة 12 مغلقة.
 - [ ] إغلاق المرحلة 11: strict override ما زال يظهر 207 أخطاء؛ لم يُفعّل `strict: true` ولم تُغلق إزالة `any` في Orders/Accounting.
+
+
+## [2026-10-01 07:26:30 +03:00] — إغلاق دفعة TypeScript strict قبل متابعة الخطة — AI Model: Manus
+- [x] تفعيل `strict: true` في `tsconfig.json`، ونجح `npm run check -- --pretty false` بعد توحيد الأنواع.
+- [x] إزالة أنواع `any` الفعلية من `src/features/auth`, `src/features/orders`, و`src/features/accounting` (نتيجة المسح: صفر).
+- [x] الاختبارات الكاملة: 66 ملفًا ناجحًا، 3 متخطاة؛ 231 اختبارًا ناجحًا و8 متخطاة.
+- [x] `npm run build` و`git diff --check` ناجحان؛ ظهرت تحذيرات chunk size و`import.meta` في بناء الخادم فقط.
+- [ ] المرحلة 11 لم تُغلق بعد: ما زال 132 نوع `any` فعليًا في مكونات `src/components/orders` و48 في `src/components/financeAccounting` (باستثناء الاختبارات). إكمالها مطلوب قبل الانتقال وفق ترتيب الخطة.
+- [ ] حفظ هذا checkpoint بcommit ورفعه إلى فرع العمل؛ لا تغييرات قاعدة بيانات.

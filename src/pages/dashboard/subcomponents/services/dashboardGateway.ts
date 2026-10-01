@@ -1,13 +1,14 @@
+type AdapterDocument = { id: string; data: () => Record<string, unknown> };
 import { collection, onSnapshot, query, orderBy, limit } from '../../../../lib/supabase-adapter';
 import { db, safeToDate } from '../../../../lib/supabase-adapter';
 
 type DashboardGatewayHandlers = {
   setCustomersCount: (count: number) => void;
-  setCouriers: (couriers: any[]) => void;
+  setCouriers: (couriers: Array<Record<string, unknown> & { id: string }>) => void;
   setCouriersCount: (count: number) => void;
-  setOrders: (orders: any[]) => void;
-  setRealLogs: (logs: any[]) => void;
-  setFinancialAccounts: (accounts: any[]) => void;
+  setOrders: (orders: Array<Record<string, unknown> & { id: string }>) => void;
+  setRealLogs: (logs: Array<Record<string, unknown> & { id: string }>) => void;
+  setFinancialAccounts: (accounts: Array<Record<string, unknown> & { id: string }>) => void;
   setLoading: (loading: boolean) => void;
 };
 
@@ -18,14 +19,14 @@ export function subscribeDashboardData(handlers: DashboardGatewayHandlers): () =
 
   const unsubCouriers = onSnapshot(collection(db, 'couriers'), (snap) => {
     handlers.setCouriersCount(snap.docs.length);
-    const list = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() as any }));
+    const list = snap.docs.map((doc: AdapterDocument) => ({ id: doc.id, ...doc.data() }));
     handlers.setCouriers(list);
   });
 
   const qOrders = query(collection(db, 'orders'), orderBy('createdAt', 'desc'), limit(150));
   const unsubOrders = onSnapshot(qOrders, (snap) => {
-    const allOrders = snap.docs.map((doc) => {
-      const d = doc.data() as any;
+    const allOrders = snap.docs.map((doc: AdapterDocument) => {
+      const d = doc.data();
       return {
         id: doc.id,
         ...d,
@@ -41,8 +42,8 @@ export function subscribeDashboardData(handlers: DashboardGatewayHandlers): () =
 
   const qLogs = query(collection(db, 'activity_logs'), orderBy('timestamp', 'desc'), limit(5));
   const unsubLogs = onSnapshot(qLogs, (snap) => {
-    const logs = snap.docs.map((doc) => {
-      const d = doc.data() as any;
+    const logs = snap.docs.map((doc: AdapterDocument) => {
+      const d = doc.data();
       return {
         id: doc.id,
         ...d,
@@ -55,7 +56,7 @@ export function subscribeDashboardData(handlers: DashboardGatewayHandlers): () =
   });
 
   const unsubAccounts = onSnapshot(collection(db, 'accounts'), (snap) => {
-    handlers.setFinancialAccounts(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+    handlers.setFinancialAccounts(snap.docs.map((doc: AdapterDocument) => ({ id: doc.id, ...doc.data() })));
   }, (err) => {
     console.warn('Accounts subscript error:', err);
   });

@@ -2,8 +2,14 @@ import React from 'react';
 import { POSITION_LABELS } from '../constants';
 import { Globe, Activity, Users, User, Package, Briefcase, MessageSquare, Megaphone, Shield, Link as LinkIcon, CheckCircle2, Clock, AlertCircle, RefreshCw, Plus, Trash2, Check, X, Eye, Edit2, Send, Server, Key, Lock, Settings as SettingsIcon, ChevronRight, ArrowUpRight, Award, UserCheck, ShieldAlert, Cpu, Phone, Mail, MapPin } from 'lucide-react';
 
+type SiteTab = 'analytics' | 'portal_users' | 'pending' | 'orders' | 'tickets' | 'announcements' | 'jobs' | 'security' | 'api';
+type JobApplication = { id: string; jobPosition?: string; status?: string; fullName: string; refCode?: string; phone?: string; email?: string; city?: string; address?: string; qualification?: string; experienceYears?: number; idNumber?: string; createdAt?: string | number | Date; notes?: string };
 export interface JobApplicationsTabProps {
-  [key: string]: any;
+  activeTab: SiteTab;
+  isAr: boolean;
+  jobApplications: JobApplication[];
+  handleDeleteJob: (id: string) => void;
+  handleJobStatus: (id: string, status: string) => void;
 }
 
 export const JobApplicationsTab: React.FC<JobApplicationsTabProps> = (props) => {
@@ -30,7 +36,7 @@ export const JobApplicationsTab: React.FC<JobApplicationsTabProps> = (props) => 
           ) : (
             <div className="space-y-4">
               {jobApplications.map(app => {
-                const posObj = POSITION_LABELS[app.jobPosition] || { ar: app.jobPosition || 'وظيفة عامة', en: '' };
+                const posObj = (app.jobPosition ? POSITION_LABELS[app.jobPosition] : undefined) || { ar: app.jobPosition || 'وظيفة عامة', en: '' };
                 const appStatus = app.status || 'pending_review';
 
                 return (

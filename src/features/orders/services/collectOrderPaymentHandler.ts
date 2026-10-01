@@ -6,28 +6,38 @@ import {
   type FinancialPaymentMethod,
 } from "../../../services/financialEntryService";
 import { findOrderParty } from "../../../services/orderPartyService";
-import type { PaymentFormData } from "../types";
+import type { OrderRecord, PaymentFormData } from "../types";
 
-export interface CollectOrderPaymentDependencies {
-  activeCurrencies: any[];
-  couriers: any[];
-  customers: any[];
+type LegacyPartyRecord = {
+  id?: string; accountId?: string | null; financialAccountId?: string | null; fullName?: string | null;
+  name?: string | null; phone?: string | null; address?: string | null; [key: string]: unknown;
+};
+type LegacyOrderRecord = OrderRecord;
+type CurrencyRecord = { cur_id?: string | number; code?: string };
+type FinancialAccountRecord = { id: string; accSubId?: string | null; curNo?: string | number | null; currency?: string | null };
+type ProfileRecord = { id?: string; uid?: string };
+const toText = (value: unknown): string => typeof value === "string" ? value : value == null ? "" : String(value);
+
+export interface CollectOrderPaymentDependencies<T extends LegacyOrderRecord = LegacyOrderRecord> {
+  activeCurrencies: CurrencyRecord[];
+  couriers: LegacyPartyRecord[];
+  customers: LegacyPartyRecord[];
   dbRates: Record<string, number>;
-  employees: any[];
-  financialAccounts: any[];
+  employees: LegacyPartyRecord[];
+  financialAccounts: FinancialAccountRecord[];
   isAr: boolean;
   orderCurrency: string;
   paymentFormData: PaymentFormData;
-  profile: any;
-  selectedOrder: any;
+  profile: ProfileRecord | null;
+  selectedOrder: T | null;
   setIsPaymentModalOpen: Dispatch<SetStateAction<boolean>>;
   setIsSubmitting: Dispatch<SetStateAction<boolean>>;
   setPaymentFormData: Dispatch<SetStateAction<PaymentFormData>>;
-  setSelectedOrder: Dispatch<SetStateAction<any>>;
+  setSelectedOrder: Dispatch<SetStateAction<T | null>>;
 }
 
-export function createCollectOrderPaymentHandler(
-  dependencies: CollectOrderPaymentDependencies
+export function createCollectOrderPaymentHandler<T extends LegacyOrderRecord>(
+  dependencies: CollectOrderPaymentDependencies<T>
 ) {
   const {
     activeCurrencies,
@@ -86,9 +96,7 @@ export function createCollectOrderPaymentHandler(
             );
 
       // التحقق من أن مبلغ الدفعة بعملة الدفع لا يتجاوز المتبقي للطلب بعملة الدفع
-      const remainingBeforePayment = parseFloat(
-        selectedOrder.amountRemaining || 0
-      );
+      const remainingBeforePayment = typeof selectedOrder.amountRemaining === "number" ? selectedOrder.amountRemaining : Number.parseFloat(selectedOrder.amountRemaining || "0") || 0;
       const orderRemainingInPaymentCurrency =
         paymentCurrency === defaultOrderCurrency
           ? remainingBeforePayment
@@ -109,7 +117,7 @@ export function createCollectOrderPaymentHandler(
       }
 
       const currencyRecord = activeCurrencies.find(
-        (c: any) => String(c.code).toUpperCase() === paymentCurrency
+        (c: CurrencyRecord) => String(c.code).toUpperCase() === paymentCurrency
       ) || { cur_id: 1, code: paymentCurrency };
       const orderParty = findOrderParty(
         selectedOrder,
@@ -124,7 +132,7 @@ export function createCollectOrderPaymentHandler(
         orderParty?.raw?.financialAccountId ||
         orderParty?.raw?.accountId;
       const partyAccount = financialAccounts.find(
-        (account: any) => account.id === partyAccountId
+        (account: FinancialAccountRecord) => account.id === partyAccountId
       );
       if (paymentFormData.method === "Deferred") {
         toast.error(
@@ -158,7 +166,7 @@ export function createCollectOrderPaymentHandler(
         ...allocation,
         amount: Number(allocation.amount || 0),
         account: financialAccounts.find(
-          (account: any) => account.id === allocation.receivingAccountId
+          (account: FinancialAccountRecord) => account.id === allocation.receivingAccountId
         ),
         paymentMethod:
           allocation.method === "Bank"
@@ -212,12 +220,12 @@ export function createCollectOrderPaymentHandler(
         allocations.some(
           allocation =>
             allocation.paymentMethod === "cash" &&
-            allocation.account.accSubId !== "111"
+            allocation.account?.accSubId !== "111"
         ) ||
         allocations.some(
           allocation =>
             allocation.paymentMethod === "bank" &&
-            allocation.account.accSubId !== "112"
+            allocation.account?.accSubId !== "112"
         )
       ) {
         toast.error(
@@ -227,13 +235,16 @@ export function createCollectOrderPaymentHandler(
         );
         return;
       }
+      const validAllocations = allocations.filter(
+        (allocation): allocation is typeof allocation & { account: FinancialAccountRecord } => Boolean(allocation.account)
+      );
       const paymentMethod: FinancialPaymentMethod =
         paymentFormData.method === "Mixed"
           ? "mixed"
-          : allocations[0].paymentMethod;
+          : validAllocations[0].paymentMethod;
 
       const lines = [
-        ...allocations.map(allocation => {
+        ...validAllocations.map(allocation => {
           const isSameCur =
             Number(allocation.account.curNo) === Number(currencyRecord.cur_id);
           const lineAmount = isSameCur
@@ -269,8 +280,8 @@ export function createCollectOrderPaymentHandler(
                   dbRates
                 ),
           amountOriginal: Number(amountNum),
-          entityType: selectedOrder.orderPartyType || "customer",
-          entityId: selectedOrder.orderPartyId || selectedOrder.customerId,
+          entityType: toText(selectedOrder.orderPartyType) || "customer",
+          entityId: selectedOrder.customerId || undefined,
         },
       ];
 
@@ -278,18 +289,18 @@ export function createCollectOrderPaymentHandler(
         selectedOrder.id,
         orderPaymentAmountInOrderCurrency,
         {
-          entryNumber: `RCPT-${selectedOrder.orderNumber || selectedOrder.id}-${Date.now().toString().slice(-6)}`,
+          entryNumber: `RCPT-${toText(selectedOrder.orderNumber) || selectedOrder.id}-${Date.now().toString().slice(-6)}`,
           moduleId: "module_orders",
           entryTypeId: "type_order_payment",
           entryCategory: paymentMethod === "mixed" ? "Compound" : "General",
           postingStatus: "posted",
-          description: `${isAr ? "تحصيل دفعة للطلب" : "Order payment collection"} ${selectedOrder.orderNumber || selectedOrder.id}`,
+          description: `${isAr ? "تحصيل دفعة للطلب" : "Order payment collection"} ${toText(selectedOrder.orderNumber) || selectedOrder.id}`,
           notes: paymentFormData.notes || "",
           paymentMethod,
           orderId: selectedOrder.id,
           createdByUid: profile?.id || profile?.uid,
           lines,
-          paymentDetails: allocations.map(allocation => ({
+          paymentDetails: validAllocations.map(allocation => ({
             paymentMethod:
               allocation.paymentMethod === "bank"
                 ? ("bank" as const)
@@ -317,9 +328,9 @@ export function createCollectOrderPaymentHandler(
         pin: "",
         paymentCurrency: "YER",
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      toast.error(err.message || "Error collecting payment");
+      toast.error(err instanceof Error ? err.message : "Error collecting payment");
     } finally {
       setIsSubmitting(false);
     }

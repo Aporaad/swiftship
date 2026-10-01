@@ -2,6 +2,39 @@ import type * as React from 'react';
 
 type ActionDependencies = Record<string, any>;
 
+interface PostingAccount {
+  id: string;
+  accountCode?: string;
+  currency?: string;
+  entityType?: string;
+  entityId?: string;
+  entityName?: string;
+}
+
+interface EmployeeRecord {
+  systemPin?: string;
+}
+
+interface QueryDocumentLike {
+  ref: unknown;
+  data: () => { accountId?: string };
+}
+
+interface CustomerOrderRecord {
+  id: string;
+  customerId?: string;
+  amountRemaining?: number | string;
+  amountPaid?: number | string;
+  createdAt?: number | string | { toDate: () => Date };
+}
+
+const getOrderTimestamp = (value: CustomerOrderRecord['createdAt']): number => {
+  if (value && typeof value === 'object' && 'toDate' in value) return value.toDate().getTime();
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') return Number(value) || 0;
+  return 0;
+};
+
 export function createFinanceAccountingJournalActions(dependencies: ActionDependencies) {
   const { adjustData, adjustLoading, adjustSalaryMonth, auditedCustomerId, collection, currentUser, customerLedgerDetails, db, dbRates, deletePin, doc, editJournalData, employees, entryToDelete, financialAccountService, getDocs, isAr, isSalaryPayment, notificationService, orders, payAmount, payLoading, payNotes, postingFinancialAccounts, query, selectedEditEntry, setAdjustData, setAdjustLoading, setDeleteLoading, setDeletePin, setDeletePinError, setEditJournalLoading, setEntryToDelete, setIsAdjustmentModalOpen, setIsDeletePinModalOpen, setIsEditJournalOpen, setIsPayModalOpen, setIsSalaryPayment, setPayAmount, setPayLoading, setPayNotes, setSelectedEditEntry, setSourceAccountId, setTargetAccountId, setTargetType, settings, sourceAccountId, targetAccountId, targetType, where, writeBatch } = dependencies;
 
@@ -41,8 +74,8 @@ export function createFinanceAccountingJournalActions(dependencies: ActionDepend
         const txSnap = await getDocs(txQuery);
         const exchangeRates = dbRates;
 
-        const newDebitAcc = editJournalData.debitAccountId ? postingFinancialAccounts.find(a => a.id === editJournalData.debitAccountId) : null;
-        const newCreditAcc = editJournalData.creditAccountId ? postingFinancialAccounts.find(a => a.id === editJournalData.creditAccountId) : null;
+        const newDebitAcc = editJournalData.debitAccountId ? postingFinancialAccounts.find((a: PostingAccount) => a.id === editJournalData.debitAccountId) : null;
+        const newCreditAcc = editJournalData.creditAccountId ? postingFinancialAccounts.find((a: PostingAccount) => a.id === editJournalData.creditAccountId) : null;
 
         if (!txSnap.empty) {
           for (const txDoc of txSnap.docs) {
@@ -142,7 +175,7 @@ export function createFinanceAccountingJournalActions(dependencies: ActionDepend
     }
 
     // Check PIN against employee systemPins or master fallback PINs ('1234', '0000')
-    const isValidPin = employees.some(emp => emp.systemPin && emp.systemPin.trim() === trimmedPin) ||
+    const isValidPin = employees.some((emp: EmployeeRecord) => emp.systemPin && emp.systemPin.trim() === trimmedPin) ||
       trimmedPin === '1234' || trimmedPin === '0000';
 
     if (!isValidPin) {
@@ -172,7 +205,7 @@ export function createFinanceAccountingJournalActions(dependencies: ActionDepend
           ? query(collection(db, 'account_trans'), where('ref_number', '==', refNum))
           : query(collection(db, 'account_trans'), where('__name__', '==', entryToDelete.id));
         const snap = await getDocs(qTx);
-        snap.docs.forEach(d => {
+        snap.docs.forEach((d: QueryDocumentLike) => {
           batch.delete(d.ref);
           const data = d.data();
           if (data.accountId) affectedAccountIds.add(data.accountId);
@@ -254,8 +287,8 @@ export function createFinanceAccountingJournalActions(dependencies: ActionDepend
       const timestamp = Date.now();
       const randStr = Math.floor(1000 + Math.random() * 9000);
 
-      const srcAccount = postingFinancialAccounts.find(a => a.id === sourceAccountId || a.entityId === sourceAccountId);
-      const trgAccount = postingFinancialAccounts.find(a => a.id === targetAccountId || a.entityId === targetAccountId);
+      const srcAccount = postingFinancialAccounts.find((a: PostingAccount) => a.id === sourceAccountId || a.entityId === sourceAccountId);
+      const trgAccount = postingFinancialAccounts.find((a: PostingAccount) => a.id === targetAccountId || a.entityId === targetAccountId);
 
       if (!srcAccount || !trgAccount) {
         throw new Error(isAr ? 'أحد الحسابات المحددة غير موجود في الدفاتر.' : 'Selected accounts not found.');
@@ -360,11 +393,9 @@ export function createFinanceAccountingJournalActions(dependencies: ActionDepend
     try {
       // Find customer orders with remaining debt
       const unpaidOrders = orders
-        .filter(o => o.customerId === auditedCustomerId && parseFloat(o.amountRemaining || 0) > 0)
-        .sort((a, b) => {
-          const d1 = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : (a.createdAt || 0);
-          const d2 = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : (b.createdAt || 0);
-          return d1 - d2;
+        .filter((o: CustomerOrderRecord) => o.customerId === auditedCustomerId && parseFloat(String(o.amountRemaining || 0)) > 0)
+        .sort((a: CustomerOrderRecord, b: CustomerOrderRecord) => {
+          return getOrderTimestamp(a.createdAt) - getOrderTimestamp(b.createdAt);
         });
 
       if (unpaidOrders.length === 0) {

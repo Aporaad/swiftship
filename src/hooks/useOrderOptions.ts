@@ -97,6 +97,31 @@ export const DEFAULT_ORDER_OPTIONS: OrderOptionItem[] = [
   }
 ];
 
+type OptionDocument = { id: string; data: () => Record<string, unknown> };
+
+const readOptionText = (data: Record<string, unknown>, key: string, legacyKey?: string): string => {
+  const value = data[key] ?? (legacyKey ? data[legacyKey] : undefined);
+  return typeof value === 'string' ? value : value == null ? '' : String(value);
+};
+
+const readOptionNumber = (value: unknown): number | undefined => {
+  if (typeof value === 'number') return Number.isNaN(value) ? undefined : value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = parseFloat(value);
+    return Number.isNaN(parsed) ? undefined : parsed;
+  }
+  return undefined;
+};
+
+const readOptionInteger = (value: unknown): number | undefined => {
+  if (typeof value === 'number') return Number.isNaN(value) ? undefined : value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = parseInt(value, 10);
+    return Number.isNaN(parsed) ? undefined : parsed;
+  }
+  return undefined;
+};
+
 export function useOrderOptions() {
   const [options, setOptions] = useState<OrderOptionItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -124,20 +149,20 @@ export function useOrderOptions() {
 
     // 2. Real-time listener for order_option collection
     const unsub = onSnapshot(collection(db, 'order_option'), (snap) => {
-      const list: OrderOptionItem[] = snap.docs.map(d => {
+      const list: OrderOptionItem[] = snap.docs.map((d: OptionDocument) => {
         const data = d.data();
         return {
           id: d.id,
           type: (data.type === 'shipping_category' ? 'shipping_category' : 'packaging') as OrderOptionType,
-          nameAr: data.nameAr || data.name_ar || '',
-          nameEn: data.nameEn || data.name_en || '',
-          price: parseFloat(data.price) || 0,
-          details: data.details || data.description || '',
-          duration: data.duration !== undefined ? parseInt(data.duration, 10) : undefined,
-          isActive: data.isActive !== undefined ? !!data.isActive : (data.is_active !== undefined ? !!data.is_active : true),
-          code: data.code || '',
-          createdAt: data.createdAt,
-          updatedAt: data.updatedAt
+          nameAr: readOptionText(data, 'nameAr', 'name_ar'),
+          nameEn: readOptionText(data, 'nameEn', 'name_en'),
+          price: readOptionNumber(data.price) || 0,
+          details: readOptionText(data, 'details', 'description'),
+          duration: readOptionInteger(data.duration),
+          isActive: data.isActive !== undefined ? Boolean(data.isActive) : (data.is_active !== undefined ? Boolean(data.is_active) : true),
+          code: readOptionText(data, 'code'),
+          createdAt: readOptionNumber(data.createdAt),
+          updatedAt: readOptionNumber(data.updatedAt)
         };
       });
 

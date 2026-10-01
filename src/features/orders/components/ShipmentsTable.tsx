@@ -1,8 +1,13 @@
 import { Activity, Edit2, ExternalLink, Trash2 } from 'lucide-react';
+import type { ShipmentRecord } from '../types';
 
-type ShipmentTableRow = Record<string, any> & { id: string };
-type ShipmentOrderRow = Record<string, any> & { id: string };
-type ShipmentCourierRow = Record<string, any> & { id: string };
+type ShipmentTableRow = ShipmentRecord;
+type ShipmentOrderRow = {
+  id: string;
+  orderNumber?: string | null;
+  customerName?: string | null;
+};
+type ShipmentCourierRow = { id: string; fullName?: string | null };
 type ShipmentStatusOption = {
   id: string | number;
   nameAr: string;
@@ -74,7 +79,7 @@ export function ShipmentsTable({
                       <div className="font-mono font-black text-white text-xs flex items-center gap-1.5">
                         <span>{ship.trackingNumber || ship.tracking_number || ship.id}</span>
                         <button
-                          onClick={() => onCopyTrackingNumber(ship.trackingNumber || ship.tracking_number)}
+                          onClick={() => onCopyTrackingNumber(ship.trackingNumber || ship.tracking_number || undefined)}
                           className="text-slate-500 hover:text-[#d4af37] transition"
                         >
                           <ExternalLink className="w-3 h-3" />

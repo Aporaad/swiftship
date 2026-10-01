@@ -13,11 +13,25 @@ import { activityLogService } from '../../../services/activityLogService';
 import { initializeApp, deleteApp } from '../../../lib/supabase-adapter';
 import { getAuth, createUserWithEmailAndPassword } from '../../../lib/supabase-adapter';
 
+type DataRecord = Record<string, unknown>;
+type SnapshotDoc = { id: string; data: () => DataRecord };
+type SnapshotResult = { docs: SnapshotDoc[] };
+type UserRecord = DataRecord & { id: string; fullName: string; email: string; username: string; role: string; roleId?: string; disabled: boolean; isRoot?: boolean; systemPin?: string; createdAt?: number };
+type RoleRecord = DataRecord & { id: string; title: string; permissions: string[] };
+type OrderRecord = DataRecord & { orderPartyType?: string; isStaffOrder?: boolean; employeeId?: string; orderPartyId?: string; customerId?: string; amountPaid?: string | number; amountRemaining?: string | number; totalCostYER?: string | number; totalCostSAR?: string | number };
+const asRecord = (value: unknown): DataRecord => typeof value === 'object' && value !== null ? value as DataRecord : {};
+const asString = (value: unknown, fallback = ''): string => typeof value === 'string' ? value : fallback;
+const toUser = (id: string, raw: DataRecord): UserRecord => ({ ...raw, id, fullName: asString(raw.fullName, 'User'), email: asString(raw.email), username: asString(raw.username), role: asString(raw.role, asString(raw.roleId, 'Employee')), roleId: typeof raw.roleId === 'string' ? raw.roleId : undefined, disabled: raw.disabled === true, isRoot: raw.isRoot === true, systemPin: typeof raw.systemPin === 'string' ? raw.systemPin : undefined });
+const toRole = (id: string, raw: DataRecord): RoleRecord => ({ ...raw, id, title: asString(raw.title, id), permissions: Array.isArray(raw.permissions) ? raw.permissions.filter((permission): permission is string => typeof permission === 'string') : [] });
+const toOrder = (id: string, raw: DataRecord): OrderRecord => ({ ...raw, id, orderPartyType: typeof raw.orderPartyType === 'string' ? raw.orderPartyType : undefined, isStaffOrder: raw.isStaffOrder === true, employeeId: typeof raw.employeeId === 'string' ? raw.employeeId : undefined, orderPartyId: typeof raw.orderPartyId === 'string' ? raw.orderPartyId : undefined, customerId: typeof raw.customerId === 'string' ? raw.customerId : undefined, amountPaid: typeof raw.amountPaid === 'string' || typeof raw.amountPaid === 'number' ? raw.amountPaid : undefined, amountRemaining: typeof raw.amountRemaining === 'string' || typeof raw.amountRemaining === 'number' ? raw.amountRemaining : undefined, totalCostYER: typeof raw.totalCostYER === 'string' || typeof raw.totalCostYER === 'number' ? raw.totalCostYER : undefined, totalCostSAR: typeof raw.totalCostSAR === 'string' || typeof raw.totalCostSAR === 'number' ? raw.totalCostSAR : undefined });
+const numericValue = (value: string | number | undefined): number => typeof value === 'number' ? value : Number.parseFloat(value || '0') || 0;
+const errorMessage = (error: unknown): string => error instanceof Error ? error.message : asString(asRecord(error).message, 'Operation failed');
+
 export default function UsersPage() {
   const { settings, t } = useSettings();
-  const [users, setUsers] = useState<any[]>([]);
-  const [allOrders, setAllOrders] = useState<any[]>([]);
-  const [roles, setRoles] = useState<any[]>([]);
+  const [users, setUsers] = useState<UserRecord[]>([]);
+  const [allOrders, setAllOrders] = useState<OrderRecord[]>([]);
+  const [roles, setRoles] = useState<RoleRecord[]>([]);
   const { role, hasPermission, profile: currentUserDoc, loading: roleLoading } = useRole();
   const canAddUser = role === 'Admin' || hasPermission('add_users');
   const canEditUser = role === 'Admin' || hasPermission('edit_users');
@@ -49,8 +63,8 @@ export default function UsersPage() {
 
   useEffect(() => {
     if (roleLoading) return;
-    const unsubRoles = onSnapshot(collection(db, 'roles'), (snap) => {
-      const allRoles = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const unsubRoles = onSnapshot(collection(db, 'roles'), (snap: SnapshotResult) => {
+      const allRoles = snap.docs.map(d => toRole(d.id, d.data()));
       const staffRoles = allRoles.filter(r => r.id !== 'courier' && r.id !== 'Courier');
       setRoles(staffRoles);
     });
@@ -65,7 +79,7 @@ export default function UsersPage() {
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null);
 
   const [editFormData, setEditFormData] = useState({
     fullName: '',
@@ -91,16 +105,16 @@ export default function UsersPage() {
 
   useEffect(() => {
     if (roleLoading) return;
-    const unsub = onSnapshot(collection(db, 'users'), (snap) => {
-      const allUsers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      const staffOnly = allUsers.filter((u: any) => u.role !== 'Courier' && u.roleId !== 'courier' && u.role !== 'courier');
+    const unsub = onSnapshot(collection(db, 'users'), (snap: SnapshotResult) => {
+      const allUsers = snap.docs.map(d => toUser(d.id, d.data()));
+      const staffOnly = allUsers.filter(u => u.role !== 'Courier' && u.roleId !== 'courier' && u.role !== 'courier');
       setUsers(staffOnly);
       setLoading(false);
     }, (error) => {
       handlePostgreSQLError(error, OperationType.LIST, 'users');
     });
-    const unsubOrders = onSnapshot(collection(db, 'orders'), (snap) => {
-      setAllOrders(snap.docs.map((entry) => ({ id: entry.id, ...entry.data() })));
+    const unsubOrders = onSnapshot(collection(db, 'orders'), (snap: SnapshotResult) => {
+      setAllOrders(snap.docs.map(entry => toOrder(entry.id, entry.data())));
     }, (error) => console.error('Error loading employee order statistics:', error));
     return () => {
       unsub();
@@ -115,13 +129,13 @@ export default function UsersPage() {
     );
     return {
       total: orders.length,
-      paid: orders.reduce((sum, order) => sum + (parseFloat(order.amountPaid || 0) || 0), 0),
-      outstanding: orders.reduce((sum, order) => sum + (parseFloat(order.amountRemaining || 0) || 0), 0),
-      value: orders.reduce((sum, order) => sum + (parseFloat(order.totalCostYER || order.totalCostSAR || 0) || 0), 0),
+      paid: orders.reduce((sum, order) => sum + (numericValue(order.amountPaid)), 0),
+      outstanding: orders.reduce((sum, order) => sum + (numericValue(order.amountRemaining)), 0),
+      value: orders.reduce((sum, order) => sum + (numericValue(order.totalCostYER ?? order.totalCostSAR)), 0),
     };
   };
 
-  const handleOpenEdit = (user: any) => {
+  const handleOpenEdit = (user: UserRecord) => {
     setSelectedUser(user);
     setEditFormData({
       fullName: user.fullName || '',
@@ -186,10 +200,10 @@ export default function UsersPage() {
 
       setIsEditModalOpen(false);
       setSelectedUser(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       notificationService.notify({
         title: isAr ? 'فشل التحديث' : 'Operation Aborted',
-        message: err.message,
+        message: errorMessage(err),
         type: 'error'
       });
     } finally {
@@ -198,7 +212,7 @@ export default function UsersPage() {
     }
   };
 
-  const handleToggleStatus = async (user: any) => {
+  const handleToggleStatus = async (user: UserRecord) => {
     const isRootTarget = ROOT_EMAILS.includes(user.email) || user.isRoot;
     if (isRootTarget) {
       return notificationService.notify({
@@ -213,7 +227,7 @@ export default function UsersPage() {
       isOpen: true,
       title: isAr ? `${action} حساب مستخدم` : `Toggle status`,
       message: isAr ? `هل أنت متأكد من ${action} حساب الموظف ${user.fullName}؟` : `Are you sure you want to deactivate ${user.fullName}?`,
-      type: user.disabled ? 'success' : 'warning' as any,
+      type: user.disabled ? 'info' : 'warning',
       onConfirm: async () => {
         try {
           await updateDoc(doc(db, 'users', user.id), {
@@ -254,7 +268,7 @@ export default function UsersPage() {
     if (addLoading || addBlockRef.current) return;
     addBlockRef.current = true;
     setAddLoading(true);
-    let secondaryApp;
+    let secondaryApp: ReturnType<typeof initializeApp> | undefined;
     try {
       // Check if email or username already exists in PostgreSQL
       const emailQuery = query(collection(db, 'users'), where('email', '==', addFormData.email.toLowerCase()));
@@ -303,12 +317,13 @@ export default function UsersPage() {
 
       setIsAddModalOpen(false);
       setAddFormData({ fullName: '', username: '', email: '', password: '', systemPin: '', role: 'Employee' });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error adding user:", err);
-      let message = err.message;
-      if (err.code === 'auth/email-already-in-use') {
+      const authError = asRecord(err);
+      let message = errorMessage(err);
+      if (authError.code === 'auth/email-already-in-use') {
         message = isAr ? 'هذا البريد مسجل مسبقاً بحيازة نظام الحسابات' : 'This email is already registered in the auth system';
-      } else if (err.code === 'auth/weak-password') {
+      } else if (authError.code === 'auth/weak-password') {
         message = isAr ? 'كلمة المرور ضعيفة جداً' : 'Auth profile requires at least 6 characters strength';
       }
       notificationService.notify({

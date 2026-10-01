@@ -1,8 +1,41 @@
 import React from 'react';
 import { X, Search, UserPlus, CreditCard, DollarSign, AlertCircle, Package, Trash2, Calendar, Calculator, ChevronRight, ChevronLeft, User, ShoppingCart, Truck, CheckCircle2, ShieldCheck, FileText, Wallet, Building, ArrowRightLeft, Boxes } from 'lucide-react';
 import OrderPartyPicker from '../../../../components/orders/OrderPartyPicker';
+import type { CustomerFormData, OrderFormData } from '../../types';
+import type { OrderParty } from '../../../../services/orderPartyService';
 
-export default function CreateOrderStep1(props: any) {
+
+type CustomerOption = { id: string; fullName?: string | null; phone?: string | null };
+type SourceOption = { id: string; name?: string | null; source_name?: string | null; type?: string | null };
+type CreateOrderStep1Props = {
+  isAr: boolean;
+  role: string;
+  hasPermission: (permission: string) => boolean;
+  customerProfileStats: {
+    totalOutstandingDebt: number;
+    totalOrdersCount: number;
+    lastOrderDate: Date | null;
+    tier: string;
+  } | null;
+  orderParties: OrderParty[];
+  selectedOrderParty: OrderParty | null;
+  isStaffOrder: boolean;
+  setIsStaffOrder: (value: boolean) => void;
+  selectOrderParty: (party: OrderParty) => void;
+  clearSelectedCustomer: () => void;
+  formData: OrderFormData;
+  customerSearchQuery: string;
+  setCustomerSearchQuery: (query: string) => void;
+  filteredCustomers: CustomerOption[];
+  selectCustomer: (customer: CustomerOption) => void;
+  setCustomerFormData: React.Dispatch<React.SetStateAction<CustomerFormData>>;
+  setIsAddCustomerOpen: (open: boolean) => void;
+  setFormData: React.Dispatch<React.SetStateAction<OrderFormData>>;
+  setIsAddSourceOpen: (open: boolean) => void;
+  sources: SourceOption[];
+};
+
+export default function CreateOrderStep1(props: CreateOrderStep1Props) {
   const {
     isAr, role, hasPermission, customerProfileStats, orderParties, selectedOrderParty,
     isStaffOrder, setIsStaffOrder, selectOrderParty, clearSelectedCustomer, formData,
@@ -67,7 +100,7 @@ export default function CreateOrderStep1(props: any) {
                       {customerSearchQuery.trim() !== '' && (
                         <div className="absolute left-0 right-0 mt-1 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-20 max-h-48 overflow-y-auto divide-y divide-slate-800">
                           {filteredCustomers.length > 0 ? (
-                            filteredCustomers.map((c) => (
+                            filteredCustomers.map((c: CustomerOption) => (
                               <button
                                 type="button"
                                 key={c.id}
@@ -85,7 +118,7 @@ export default function CreateOrderStep1(props: any) {
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    setCustomerFormData((prev: any) => ({
+                                    setCustomerFormData((prev: CustomerFormData) => ({
                                       ...prev,
                                       fullName: customerSearchQuery,
                                     }));
@@ -164,7 +197,7 @@ export default function CreateOrderStep1(props: any) {
                       className="w-full bg-slate-950 border border-slate-805 text-white rounded-xl p-3 outline-none font-bold text-xs cursor-pointer focus:border-[#d4af37]"
                     >
                       <option value="">{isAr ? '-- اختر مصدر الشراء --' : '-- Choose Source --'}</option>
-                      {sources.map((s) => (
+                      {sources.map((s: SourceOption) => (
                         <option key={s.id} value={s.id}>{s.name || s.source_name} {s.type ? `(${s.type})` : ''}</option>
                       ))}
                     </select>

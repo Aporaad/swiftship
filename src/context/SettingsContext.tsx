@@ -4,6 +4,8 @@ import { supabase } from '../lib/supabase-adapter';
 import { currencyService } from '../services/currencyService';
 import { translations, Language, TranslationKey } from '../translations';
 
+type AuthUser = { uid: string };
+
 // Custom currency definition
 export interface CustomCurrency {
   id: string;          // unique key e.g. 'EUR', 'TRY'
@@ -188,7 +190,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [userSettings, setUserSettings] = useState<Partial<Settings>>({});
   const [loading, setLoading] = useState(true);
   const [userLoading, setUserLoading] = useState(false);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
 
   // Combine global and user settings
   const settings = { ...globalSettings, ...userSettings };
@@ -199,7 +201,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
 
   // Auth listener to trigger user settings fetch
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
+    const unsub = onAuthStateChanged(auth, (u: AuthUser | null) => {
       setUser(u);
       if (!u) {
         setUserSettings({});
@@ -269,11 +271,11 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         const mappedCustomCurrencies: CustomCurrency[] = allCurrencies.map(c => ({
           id: c.code,
           code: c.code,
-          name: c.main_nameAR,
+          name: c.main_nameAR || c.main_name_ar,
           symbol: c.symbol || c.code,
           rateToYER: c.currentPrice || (c.code === 'YER' ? 1 : 0),
           flag: c.flag,
-          isActive: c.isActive,
+          isActive: c.isActive ?? c.is_active,
         }));
 
         setGlobalSettings(prev => ({
@@ -289,7 +291,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     syncDbCurrencies();
 
     // Realtime channel for currency & cur_price
-    const channel = (supabase as any)
+    const channel = supabase
       .channel('settings_context_currencies')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'currency' }, () => syncDbCurrencies())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'cur_price' }, () => syncDbCurrencies())
@@ -298,7 +300,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     return () => {
       unsub();
       clearTimeout(timeout);
-      if (channel) (supabase as any).removeChannel(channel);
+      if (channel) supabase.removeChannel(channel);
     };
   }, []);
 
@@ -328,9 +330,9 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     Object.keys(newSettings).forEach((key) => {
       const k = key as keyof Settings;
       if (USER_SPECIFIC_KEYS.includes(k)) {
-        (userUpdates as any)[k] = newSettings[k];
+        Object.assign(userUpdates, { [k]: newSettings[k] });
       } else {
-        (globalUpdates as any)[k] = newSettings[k];
+        Object.assign(globalUpdates, { [k]: newSettings[k] });
       }
     });
 

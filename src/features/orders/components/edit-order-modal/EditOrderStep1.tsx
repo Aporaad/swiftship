@@ -1,6 +1,21 @@
 import OrderPartyPicker from '../../../../components/orders/OrderPartyPicker';
+import type { OrderParty } from '../../../../services/orderPartyService';
+import type { OrderFormData } from '../../types';
 
-export default function EditOrderStep1(props: any) {
+type SourceOption = { id: string; name?: string | null; source_name?: string | null; type?: string | null };
+type EditOrderStep1Props = {
+  isAr: boolean;
+  orderParties: OrderParty[];
+  selectedOrderParty: OrderParty | null;
+  formData: OrderFormData;
+  setFormData: (data: OrderFormData) => void;
+  setIsStaffOrder: (value: boolean) => void;
+  selectOrderParty: (party: OrderParty) => void;
+  clearOrderParty: () => void;
+  sources: SourceOption[];
+};
+
+export default function EditOrderStep1(props: EditOrderStep1Props) {
   const { isAr, orderParties, selectedOrderParty, formData, setFormData, setIsStaffOrder, selectOrderParty, clearOrderParty, sources } = props;
 
   return (
@@ -51,18 +66,18 @@ export default function EditOrderStep1(props: any) {
                     <select
                       value={formData.orderSourceId}
                       onChange={(e) => {
-                        const s = sources.find((src) => src.id === e.target.value);
+                        const s = sources.find((src: SourceOption) => src.id === e.target.value);
                         setFormData({
                           ...formData,
                           orderSourceId: e.target.value,
-                          orderSourceName: s ? s.name || s.source_name : '',
+                          orderSourceName: s ? s.name || s.source_name || '' : '',
                           orderSourceType: s ? s.type || 'App' : 'App',
                         });
                       }}
                       className="w-full bg-slate-955 border border-slate-800 text-white rounded-xl p-3 outline-none cursor-pointer"
                     >
                       <option value="">{isAr ? '-- اختر المصدر --' : '-- Choose Source --'}</option>
-                      {sources.map((s) => (
+                      {sources.map((s: SourceOption) => (
                         <option key={s.id} value={s.id}>
                           {s.name || s.source_name}
                         </option>

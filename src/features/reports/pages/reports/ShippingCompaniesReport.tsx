@@ -1,3 +1,4 @@
+import type { ReportAccount, ReportOrder, ReportShippingCompany, ReportTransaction } from '../../report-row-types';
 /**
  * @file ShippingCompaniesReport.tsx
  * @description تقرير شركات الشحن والعمولات
@@ -144,10 +145,10 @@ const ShippingCompaniesReport: React.FC<ShippingCompaniesReportProps> = ({
                           // SHIPPING CO DETAIL BLOCK DISPLAY
                           <div className="space-y-6">
                             {(() => {
-                              const sc = shippingCompanies.find(c => c.name === selectedCompanyId || c.id === selectedCompanyId) || { name: selectedCompanyId, type: 'INTERNATIONAL', phone: '-', dueAmount: 0 };
-                              const coOrders = filteredData.orders.filter(o => o.shippingCompany === sc.name || o.shippingCompanyId === sc.id);
-                              const totalSum = coOrders.reduce((sum, o) => sum + convertCurrency(parseFloat(o.totalPrice) || 0, o.currency || 'YER', 'YER'), 0);
-                              const paidSum = coOrders.reduce((sum, o) => sum + convertCurrency(parseFloat(o.amountPaid) || 0, o.currency || 'YER', 'YER'), 0);
+                              const sc = shippingCompanies.find((c: ReportShippingCompany) => c.name === selectedCompanyId || c.id === selectedCompanyId) || { name: selectedCompanyId, type: 'INTERNATIONAL', phone: '-', dueAmount: 0 };
+                              const coOrders = filteredData.orders.filter((o: ReportOrder) => o.shippingCompany === sc.name || o.shippingCompanyId === sc.id);
+                              const totalSum = coOrders.reduce((sum: number, o: ReportOrder) => sum + convertCurrency(parseFloat(String(o.totalPrice ?? 0)) || 0, o.currency || 'YER', 'YER'), 0);
+                              const paidSum = coOrders.reduce((sum: number, o: ReportOrder) => sum + convertCurrency(parseFloat(String(o.amountPaid ?? 0)) || 0, o.currency || 'YER', 'YER'), 0);
                               const linkedTxs = accountTransactions.filter(tx => tx.description?.toLowerCase().includes((sc?.name || '').toLowerCase()) || tx.description?.includes(sc?.name || ''));
 
                               const scDueInDisplay = convertCurrency(sc.dueAmount || 0, 'YER', displayCurrency);

@@ -1,18 +1,59 @@
 import type { Dispatch, SetStateAction } from 'react';
 import type { ReturnedProduct, ReturnStatus } from '../../../../../services/returnedProductService';
 
+
+export interface ReturnedOrderRecord {
+  id: string;
+  orderNumber?: string;
+  order_number?: string;
+  customerName?: string;
+  customer_name?: string;
+  currency?: string;
+}
+
+export interface ReturnedCustomerRecord {
+  id: string;
+  fullName?: string | null;
+  full_name?: string | null;
+  customer_id?: string | null;
+  name?: string | null;
+}
+
+export interface ReturnedProductRecord {
+  product_id: string;
+  product_name_ar?: string | null;
+  product_name_en?: string | null;
+  productName?: string | null;
+  name?: string | null;
+  product_url?: string | null;
+  productUrl?: string | null;
+}
+
+export interface ReturnedOrderItemRecord {
+  items_id: string;
+  id?: string;
+  order_id?: string | null;
+  product_id?: string | null;
+  product_price?: number | null;
+  product_url?: string | null;
+  tracking_number?: string | null;
+  product_cooler?: string | null;
+  quantity?: number | null;
+  items_status?: string | null;
+}
+
 export interface ReturnedProductsTabProps {
   isAr: boolean;
   canManage: boolean;
   orderCurrency?: string;
   /** قائمة الطلبات للبحث والاختيار منها - Orders list for search */
-  orders?: any[];
+  orders?: ReturnedOrderRecord[];
   /** قائمة العملاء للبحث والاختيار منهم - Customers list for search */
-  customers?: any[];
+  customers?: ReturnedCustomerRecord[];
   /** قائمة المنتجات الرئيسية - Master products list */
-  masterProducts?: any[];
+  masterProducts?: ReturnedProductRecord[];
   /** قائمة بنود الطلبات (حركة المنتجات) - Order items list */
-  orderItems?: any[];
+  orderItems?: ReturnedOrderItemRecord[];
 }
 
 export type ReturnFormData = Omit<ReturnedProduct, 'return_id' | 'created_at' | 'updated_at'>;

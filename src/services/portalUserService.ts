@@ -21,6 +21,16 @@ import {
 import { notificationService } from './notificationService';
 import { activityLogService } from './activityLogService';
 
+type PortalDbRow = Record<string, unknown>;
+type PortalPayload = Record<string, unknown>;
+type SavedDetailsResult = { id: string; [key: string]: unknown };
+type CreatedPortalUserResult = { id: string; portal_user_id: string; username: string; email: string; portal_role: string; disabled: boolean; approval_status: string; linked_customer_id: string | null; account_id: string | null; full_name: string; is_disabled: boolean; created_at: string; data: PortalPayload };
+type PortalUserResult = { id: string; username: string; email: string; portal_role: string; disabled: boolean; approval_status: string; linkedCustomerId: string; accountId: string; fullName: string; nameAr: string; nameEn: string; createdAt: string | number; customerDetails: PortalPayload; customerEntity: PortalPayload };
+const asPortalRecord = (value: unknown): PortalPayload => value !== null && typeof value === 'object' ? value as PortalPayload : {};
+const portalString = (row: PortalDbRow, key: string): string | undefined => typeof row[key] === 'string' ? row[key] as string : undefined;
+const portalValue = (row: PortalDbRow, key: string): unknown => row[key];
+const portalPayload = (row: PortalDbRow): PortalPayload => typeof row.data === 'string' ? asPortalRecord(JSON.parse(row.data)) : asPortalRecord(row.data);
+
 export interface PortalUserPayload {
   id?: string;
   username: string;
@@ -59,7 +69,7 @@ export class PortalUserService {
    * جلب كافة مستخدمي الموقع وإثرائهم بتفاصيل العملاء من cust_details
    * Fetch all portal users enriched with cust_details and customer information
    */
-  async getPortalUsers(): Promise<any[]> {
+  async getPortalUsers(): Promise<PortalUserResult[]> {
     try {
       const [pRes, dRes, cRes] = await Promise.all([
         supabase.from('portal_users').select('*'),
@@ -67,50 +77,47 @@ export class PortalUserService {
         supabase.from('customers').select('*')
       ]);
 
-      const portalList = (pRes.data || []).map(row => {
-        const payload = typeof row.data === 'string' ? JSON.parse(row.data) : (row.data || {});
+      const portalList = ((pRes.data || []) as PortalDbRow[]).map((row: PortalDbRow): Omit<PortalUserResult, 'customerDetails' | 'customerEntity'> & { customerId?: string } => {
+        const payload = portalPayload(row);
         return {
-          id: row.portal_user_id || row.id,
-          username: row.username || payload.username || '',
-          email: row.email || payload.email || '',
-          portal_role: row.portal_role || payload.portalRole || 'client',
-          disabled: Boolean(row.is_disabled ?? row.disabled ?? payload.disabled ?? false),
-          approval_status: row.approval_status || payload.approvalStatus || 'approved',
-          linkedCustomerId: row.linked_customer_id || payload.customerId || '',
-          accountId: row.account_id || '',
-          fullName: row.full_name || payload.fullName || '',
-          nameAr: row.name_ar || '',
-          nameEn: row.name_en || '',
-          createdAt: row.created_at || payload.createdAt || Date.now(),
+          id: portalString(row, 'portal_user_id') || portalString(row, 'id') || '',
+          username: portalString(row, 'username') || portalString(payload, 'username') || '',
+          email: portalString(row, 'email') || portalString(payload, 'email') || '',
+          portal_role: portalString(row, 'portal_role') || portalString(payload, 'portalRole') || 'client',
+          disabled: Boolean(portalValue(row, 'is_disabled') ?? portalValue(row, 'disabled') ?? portalValue(payload, 'disabled') ?? false),
+          approval_status: portalString(row, 'approval_status') || portalString(payload, 'approvalStatus') || 'approved',
+          linkedCustomerId: portalString(row, 'linked_customer_id') || portalString(payload, 'customerId') || '',
+          accountId: portalString(row, 'account_id') || '',
+          fullName: portalString(row, 'full_name') || portalString(payload, 'fullName') || '',
+          nameAr: portalString(row, 'name_ar') || '',
+          nameEn: portalString(row, 'name_en') || '',
+          createdAt: portalString(row, 'created_at') || portalString(payload, 'createdAt') || Date.now(),
+          customerId: portalString(payload, 'customerId'),
           ...payload
         };
       });
 
-      const detailsMap = new Map<string, any>();
-      (dRes.data || []).forEach(row => {
-        const payload = typeof row.data === 'string' ? JSON.parse(row.data) : (row.data || {});
-        const uid = row.user_uid || row.customer_id;
-        if (uid) detailsMap.set(uid, { id: row.cust_detail_id || row.id, user_uid: row.user_uid, customer_id: row.customer_id, ...payload });
+      const detailsMap = new Map<string, PortalPayload>();
+      ((dRes.data || []) as PortalDbRow[]).forEach((row: PortalDbRow) => {
+        const payload = portalPayload(row);
+        const uid = portalString(row, 'user_uid') || portalString(row, 'customer_id');
+        if (uid) detailsMap.set(uid, { id: portalString(row, 'cust_detail_id') || portalString(row, 'id') || '', user_uid: portalString(row, 'user_uid'), customer_id: portalString(row, 'customer_id'), ...payload });
       });
 
-      const customersMap = new Map<string, any>();
-      (cRes.data || []).forEach(row => {
-        const payload = typeof row.data === 'string' ? JSON.parse(row.data) : (row.data || {});
-        const custId = row.customer_id || row.id;
-        customersMap.set(custId, { id: custId, ...payload });
+      const customersMap = new Map<string, PortalPayload>();
+      ((cRes.data || []) as PortalDbRow[]).forEach((row: PortalDbRow) => {
+        const payload = portalPayload(row);
+        const custId = portalString(row, 'customer_id') || portalString(row, 'id');
+        if (custId) customersMap.set(custId, { id: custId, ...payload });
       });
 
-      return portalList.map(u => {
+      return portalList.map((u): PortalUserResult => {
         const custId = u.customerId || u.linkedCustomerId;
         const details = detailsMap.get(u.id) || detailsMap.get(custId) || {};
         const customer = customersMap.get(custId) || {};
-        return {
-          ...u,
-          customerDetails: details,
-          customerEntity: customer,
-        };
+        return { ...u, customerDetails: details, customerEntity: customer };
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[PortalUserService] getPortalUsers error:', error);
       return [];
     }
@@ -120,7 +127,7 @@ export class PortalUserService {
    * حفظ تفاصيل العميل الإضافية دائماً في جدول cust_details
    * Save customer additional details in cust_details table
    */
-  async saveCustomerDetails(customerId: string, userUid: string, details: CustomerDetailsPayload): Promise<any> {
+  async saveCustomerDetails(customerId: string, userUid: string, details: CustomerDetailsPayload): Promise<SavedDetailsResult> {
     try {
       const detailsId = `cust_dtl_${customerId.replace(/[^a-zA-Z0-9]/g, '')}`;
       const now = new Date().toISOString();
@@ -148,7 +155,7 @@ export class PortalUserService {
 
       await supabase.from('cust_details').upsert(payload, { onConflict: 'cust_detail_id' });
       return payload;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[PortalUserService] saveCustomerDetails error:', error);
       throw error;
     }
@@ -158,7 +165,7 @@ export class PortalUserService {
    * إنشاء مستخدم موقع جديد بجدول portal_users وربطه بالعميل و cust_details
    * Create a new website portal user in portal_users and bind to cust_details
    */
-  async createPortalUser(userPayload: PortalUserPayload, detailsPayload?: CustomerDetailsPayload): Promise<any> {
+  async createPortalUser(userPayload: PortalUserPayload, detailsPayload?: CustomerDetailsPayload): Promise<CreatedPortalUserResult> {
     try {
       const puserId = `puser_${Math.random().toString(36).substring(2, 11)}`;
       const nowIso = new Date().toISOString();
@@ -199,12 +206,12 @@ export class PortalUserService {
         type: 'success'
       });
 
-      return userRecord;
-    } catch (error: any) {
+      return { id: puserId, ...userRecord };
+    } catch (error: unknown) {
       console.error('[PortalUserService] createPortalUser error:', error);
       notificationService.notify({
         title: 'خطأ في إنشاء مستخدم الموقع',
-        message: error?.message || 'تعذر إنشاء حساب مستخدم الموقع',
+        message: (error instanceof Error ? error.message : undefined) || 'تعذر إنشاء حساب مستخدم الموقع',
         type: 'error'
       });
       throw error;
@@ -231,7 +238,7 @@ export class PortalUserService {
         updatedAt: now
       };
 
-      const updateRow: any = {
+      const updateRow: Record<string, unknown> = {
         data: updatedPayload
       };
       if (userPayload.fullName) updateRow.full_name = userPayload.fullName;
@@ -260,11 +267,11 @@ export class PortalUserService {
         message: 'تم حفظ التحديثات بنجاح',
         type: 'info'
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[PortalUserService] updatePortalUser error:', error);
       notificationService.notify({
         title: 'خطأ في التحديث',
-        message: error?.message || 'تعذر تحديث البيانات',
+        message: (error instanceof Error ? error.message : undefined) || 'تعذر تحديث البيانات',
         type: 'error'
       });
       throw error;
@@ -287,7 +294,7 @@ export class PortalUserService {
       });
 
       return newStatus;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[PortalUserService] togglePortalUserDisabled error:', error);
       throw error;
     }
@@ -307,7 +314,7 @@ export class PortalUserService {
         message: 'تم حذف حساب مستخدم الموقع بنجاح',
         type: 'success'
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[PortalUserService] deletePortalUser error:', error);
       throw error;
     }

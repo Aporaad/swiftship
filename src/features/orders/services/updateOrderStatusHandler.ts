@@ -12,38 +12,54 @@ import {
   planOrderStatusTransition,
 } from "../../../services/orderLifecycleService";
 import { ORDER_STATUS_FALLBACKS } from "../constants/orders.constants";
-import type { OrderStatusDescriptor, UpdateFormData } from "../types";
+import type { OrderRecord, OrderStatusDescriptor, ShippingRow, UpdateFormData } from "../types";
 
-type LegacyShipmentRecord = Record<string, any>;
+type LegacyPartyRecord = {
+  id?: string; accountId?: string | null; financialAccountId?: string | null;
+  fullName?: string | null; name?: string | null; phone?: string | null; address?: string | null;
+  [key: string]: unknown;
+};
+type LegacyOrderRecord = OrderRecord;
+type LegacyShipmentRecord = ShippingRow;
+type LegacyCourierRecord = LegacyPartyRecord & { courierType?: string; commissionRate?: string | number | null; financialAccountCode?: string | null };
+type AuthContext = { currentUser?: { uid?: string; email?: string | null } | null };
+type ProfileRecord = { id?: string; uid?: string; fullName?: string };
+type SettingsRecord = { currency?: string };
+type AutoVoucherRule = { id?: string; isActive?: boolean };
+type OrderMutation = (id: string, changes: Record<string, unknown>) => Promise<unknown>;
+type RateBuilder = (order: LegacyOrderRecord) => Record<string, number>;
+type ShipmentMutation = (id: string, payload: Record<string, unknown>) => Promise<unknown>;
+const toText = (value: unknown): string => typeof value === "string" ? value : value == null ? "" : String(value);
+const toNumber = (value: unknown): number => typeof value === "number" ? value : typeof value === "string" ? Number.parseFloat(value) || 0 : 0;
 
-export interface UpdateOrderStatusHandlerDependencies {
+export interface UpdateOrderStatusHandlerDependencies<T extends LegacyOrderRecord = LegacyOrderRecord> {
   isSubmitting: boolean;
   isAr: boolean;
-  auth: any;
-  autoVoucherRules: any[];
-  buildOrderRates: (...args: any[]) => any;
-  couriers: any[];
-  customers: any[];
+  auth: AuthContext;
+  autoVoucherRules: AutoVoucherRule[];
+  buildOrderRates: RateBuilder;
+  couriers: LegacyCourierRecord[];
+  customers: LegacyPartyRecord[];
   dbRates: Record<string, number>;
-  employees: any[];
-  getStatusByAny: (status: any) => any;
+  employees: LegacyPartyRecord[];
+  getStatusByAny: (status: string | number) => OrderStatusDescriptor | undefined;
   orderStatusesList: OrderStatusDescriptor[];
-  profile: any;
-  selectedOrder: any;
+  profile: ProfileRecord | null;
+  selectedOrder: T | null;
   setIsSubmitting: Dispatch<SetStateAction<boolean>>;
   setIsUpdateModalOpen: Dispatch<SetStateAction<boolean>>;
-  setSelectedOrder: Dispatch<SetStateAction<any>>;
-  settings: any;
-  shippingCompanies: any[];
-  sources: any[];
+  setSelectedOrder: Dispatch<SetStateAction<T | null>>;
+  settings: SettingsRecord;
+  shippingCompanies: LegacyPartyRecord[];
+  sources: LegacyPartyRecord[];
   updateFormData: UpdateFormData;
-  updateOrderRecord: (...args: any[]) => Promise<any>;
+  updateOrderRecord: OrderMutation;
   updateShippings: LegacyShipmentRecord[];
-  upsertShipment: (...args: any[]) => Promise<any>;
+  upsertShipment: ShipmentMutation;
 }
 
-export function createUpdateOrderStatusHandler(
-  dependencies: UpdateOrderStatusHandlerDependencies
+export function createUpdateOrderStatusHandler<T extends LegacyOrderRecord>(
+  dependencies: UpdateOrderStatusHandlerDependencies<T>
 ) {
   const {
     isSubmitting,
@@ -97,9 +113,9 @@ export function createUpdateOrderStatusHandler(
         newStatusItem?.id || ORDER_STATUS_FALLBACKS.individualUpdate;
       const statusHistory = await orderHistoryService.listForContext({
         orderId: selectedOrder.id,
-        orderNumber: selectedOrder.orderNumber,
+        orderNumber: toText(selectedOrder.orderNumber) || undefined,
         entityType: "order",
-        label: selectedOrder.orderNumber || selectedOrder.id,
+        label: toText(selectedOrder.orderNumber) || selectedOrder.id,
       });
       const transitionPlan = planOrderStatusTransition(
         orderStatusesList,
@@ -126,13 +142,13 @@ export function createUpdateOrderStatusHandler(
         return;
       }
 
-      const remainingVal = parseFloat(selectedOrder.amountRemaining || "0");
+      const remainingVal = toNumber(selectedOrder.amountRemaining);
       const courierId =
         updateFormData.deliveryCourierId || selectedOrder.deliveryCourierId;
       const shippingCourierId =
         updateFormData.shippingCourierId || selectedOrder.shippingCourierId;
 
-      let extraUpdateFields: any = {};
+      let extraUpdateFields: Record<string, unknown> = {};
 
       //مهم: استدعاء مرحله الطلب  بال id وليس الاسم
       const getStageIdByName = (statusName: string) => {
@@ -184,9 +200,7 @@ export function createUpdateOrderStatusHandler(
         if (customerRecord && selectedOrderAccountId) {
           try {
             if (!firedTriggers.includes("order_charge")) {
-              const totalBilledOriginal = parseFloat(
-                selectedOrder.totalCostYER || selectedOrder.totalOrderYER || "0"
-              );
+              const totalBilledOriginal = toNumber(selectedOrder.totalCostYER ?? selectedOrder.totalOrderYER);
               const convertedOrderAmount =
                 financialAccountService.convertToDefaultCurrency(
                   totalBilledOriginal,
@@ -209,7 +223,7 @@ export function createUpdateOrderStatusHandler(
               newFiredTriggers.push("order_charge");
             }
 
-            const paidVal = parseFloat(selectedOrder.amountPaid || "0");
+            const paidVal = toNumber(selectedOrder.amountPaid);
             if (paidVal > 0 && !firedTriggers.includes("order_down_payment")) {
               const convertedPaid =
                 financialAccountService.convertToDefaultCurrency(
@@ -262,12 +276,8 @@ export function createUpdateOrderStatusHandler(
         const courierRecord = couriers.find(c => c.id === shippingCourierId);
         if (courierRecord) {
           const isSourcing = courierRecord.courierType === "sourcing";
-          const exchangeRate = parseFloat(
-            selectedOrder.exchangeRateYER || dbRates.SAR || 1
-          );
-          const commissionProfitOriginal = parseFloat(
-            selectedOrder.profitSaudiSAR || "0"
-          );
+          const exchangeRate = toNumber(selectedOrder.exchangeRateYER) || dbRates.SAR || 1;
+          const commissionProfitOriginal = toNumber(selectedOrder.profitSaudiSAR);
           const commissionProfit = isSourcing
             ? commissionProfitOriginal
             : commissionProfitOriginal * exchangeRate;
@@ -437,7 +447,7 @@ export function createUpdateOrderStatusHandler(
         extraUpdateFields = {
           ...extraUpdateFields,
           amountPaid:
-            parseFloat(selectedOrder.amountPaid || "0") + remainingVal,
+            toNumber(selectedOrder.amountPaid) + remainingVal,
           amountRemaining: 0,
           paymentStatus: "Paid",
         };
@@ -445,7 +455,7 @@ export function createUpdateOrderStatusHandler(
       }
 
       // 3. delivery_wage trigger
-      const deliveryFee = parseFloat(selectedOrder.deliveryCourierFee || "0");
+      const deliveryFee = toNumber(selectedOrder.deliveryCourierFee);
       if (
         shouldFire("delivery_wage", "تم التسليم") &&
         courierId &&
@@ -529,12 +539,10 @@ export function createUpdateOrderStatusHandler(
       // 4. company_profit trigger
       if (
         shouldFire("company_profit", "تم التسليم") &&
-        parseFloat(selectedOrder.profitCompanySAR || "0") > 0
+        toNumber(selectedOrder.profitCompanySAR) > 0
       ) {
         try {
-          const profitValSAR = parseFloat(
-            selectedOrder.profitCompanySAR || "0"
-          );
+          const profitValSAR = toNumber(selectedOrder.profitCompanySAR);
           const profitConverted =
             financialAccountService.convertToDefaultCurrency(
               profitValSAR,
@@ -583,7 +591,7 @@ export function createUpdateOrderStatusHandler(
             company =>
               company.id === selectedOrder.shippingCompanyId ||
               company.id === selectedOrder.shipping_company_id ||
-              company.name === selectedOrder.shippingCompany
+              company.name === toText(selectedOrder.shippingCompany)
           );
           for (const stage of transitionPlan.stagesToProcess) {
             await autoEntryService.executeAutoEntriesForStatus(
@@ -597,7 +605,7 @@ export function createUpdateOrderStatusHandler(
                 orderParty: selectedOrderParty,
                 purchaseSource,
                 shippingCompany,
-                sourcing_cost: selectedOrder.sourcing_cost,
+                sourcing_cost: toText(selectedOrder.sourcing_cost),
                 isAr,
                 profileName: profile?.fullName || "User Logistics Update",
               }
@@ -642,9 +650,9 @@ export function createUpdateOrderStatusHandler(
               selectedOrder.trackingNumber ||
               selectedOrder.id,
             shippingCompanyId:
-              ship.shippingCompany || selectedOrder.shippingCompany || "Aramex",
+              ship.shippingCompany || toText(selectedOrder.shippingCompany) || "Aramex",
             shippingCompany:
-              ship.shippingCompany || selectedOrder.shippingCompany || "Aramex",
+              ship.shippingCompany || toText(selectedOrder.shippingCompany) || "Aramex",
             courierId:
               updateFormData.deliveryCourierId ||
               updateFormData.shippingCourierId ||
@@ -652,23 +660,23 @@ export function createUpdateOrderStatusHandler(
               "",
             shipmentStatus:
               updateFormData.orderStatus || ship.shipmentStatus || "معلق  ",
-            shippingCost: parseFloat(ship.shippingCost || 0),
-            weight: parseFloat(ship.weight || 0),
+            shippingCost: toNumber(ship.shippingCost),
+            weight: toNumber(ship.weight),
             shippingCategoryId: ship.shippingCategoryId || "",
             shippingCategoryName: ship.shippingCategoryName || "",
-            shippingCategoryPrice: parseFloat(ship.shippingCategoryPrice || 0),
+            shippingCategoryPrice: toNumber(ship.shippingCategoryPrice),
             contentCategoryId: ship.contentCategoryId || "",
             contentCategoryName: ship.contentCategoryName || "",
-            cartonCount: Math.max(0, parseFloat(ship.cartonCount || 0)),
-            customsFee: Math.max(0, parseFloat(ship.customsFee || 0)),
-            taxFee: Math.max(0, parseFloat(ship.taxFee || 0)),
+            cartonCount: Math.max(0, toNumber(ship.cartonCount)),
+            customsFee: Math.max(0, toNumber(ship.customsFee)),
+            taxFee: Math.max(0, toNumber(ship.taxFee)),
             otherCategoryFee: Math.max(
               0,
-              parseFloat(ship.otherCategoryFee || 0)
+              toNumber(ship.otherCategoryFee)
             ),
             categoryFeesTotal: Math.max(
               0,
-              parseFloat(ship.categoryFeesTotal || 0)
+              toNumber(ship.categoryFeesTotal)
             ),
             categoryFeeCurrency: ship.categoryFeeCurrency || "SAR",
             shippingType: ship.shippingType || "بري",
@@ -678,7 +686,7 @@ export function createUpdateOrderStatusHandler(
             shippingDuration: ship.shippingDuration || "",
             expectedArrival: ship.expectedArrival || "",
             deliveryDate: ship.deliveryDate || "",
-            packagingFees: parseFloat(ship.packagingFees || 0),
+            packagingFees: toNumber(ship.packagingFees),
             updatedAt: Date.now(),
           });
         }
@@ -686,10 +694,10 @@ export function createUpdateOrderStatusHandler(
 
       activityLogService.log(
         "edit_order",
-        selectedOrder.orderNumber || selectedOrder.id,
+        toText(selectedOrder.orderNumber) || selectedOrder.id,
         {
           orderId: selectedOrder.id,
-          orderNumber: selectedOrder.orderNumber || selectedOrder.id,
+          orderNumber: toText(selectedOrder.orderNumber) || selectedOrder.id,
           previousStatus: selectedOrder.orderStatus,
           newStatus: updateFormData.orderStatus,
           deliveryStatus: updateFormData.deliveryStatus,
@@ -705,7 +713,7 @@ export function createUpdateOrderStatusHandler(
             : "Logistic parameters recorded",
           type: "info",
           category: "order",
-          orderId: selectedOrder.orderNumber || selectedOrder.id,
+          orderId: toText(selectedOrder.orderNumber) || selectedOrder.id,
         });
 
         // Automatically dispatch real WhatsApp status update message
@@ -728,8 +736,8 @@ export function createUpdateOrderStatusHandler(
 
         // Automatically dispatch simulated status update notification via WhatsApp + SMS
         const smsMessage = isAr
-          ? `عزيزنا العميل ${selectedOrder.customerName}، تم تحديث حالة شحنتك رقم: (${selectedOrder.orderNumber || selectedOrder.id}) إلى: *${updateFormData.orderStatus}*. وموقع الشحنة حالياً: *${updateFormData.locationYemen || "قيد النقل"}*. المتبقي عليك: ${remainingVal.toLocaleString()} YER. شكراً لتعاملك معنا.`
-          : `Dear ${selectedOrder.customerName}, the status of your order (${selectedOrder.orderNumber || selectedOrder.id}) update to: *${updateFormData.orderStatus}*. Current position: *${updateFormData.locationYemen || "In-transit"}*. Bal: ${remainingVal.toLocaleString()} YER. Thank you for choosing us!`;
+          ? `عزيزنا العميل ${selectedOrder.customerName}، تم تحديث حالة شحنتك رقم: (${toText(selectedOrder.orderNumber) || selectedOrder.id}) إلى: *${updateFormData.orderStatus}*. وموقع الشحنة حالياً: *${updateFormData.locationYemen || "قيد النقل"}*. المتبقي عليك: ${remainingVal.toLocaleString()} YER. شكراً لتعاملك معنا.`
+          : `Dear ${selectedOrder.customerName}, the status of your order (${toText(selectedOrder.orderNumber) || selectedOrder.id}) update to: *${updateFormData.orderStatus}*. Current position: *${updateFormData.locationYemen || "In-transit"}*. Bal: ${remainingVal.toLocaleString()} YER. Thank you for choosing us!`;
 
         await notificationService.notify({
           title: isAr
@@ -737,7 +745,7 @@ export function createUpdateOrderStatusHandler(
             : "📲 Auto Status WhatsApp / SMS Sent",
           message: smsMessage,
           type: "success",
-          orderId: selectedOrder.orderNumber || selectedOrder.id,
+          orderId: toText(selectedOrder.orderNumber) || selectedOrder.id,
           category: "order",
         });
       } else if (newStatus !== "ملغي") {

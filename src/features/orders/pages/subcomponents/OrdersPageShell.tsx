@@ -11,11 +11,80 @@ import ProductsManagementTab from '../../../../components/orders/ProductsManagem
 import { OrdersTable } from '../../components/OrdersTable';
 import { OrderFilters } from '../../components/OrderFilters';
 import { ShipmentsTable } from '../../components/ShipmentsTable';
+import type { OrderRecord, OrdersTab, ShipmentRecord } from '../../types';
+import type { ExchangeRates } from '../../../../services/currencyService';
+import type { Settings } from '../../../../context/SettingsContext';
 
-export interface OrdersPageShellProps {
-  [key: string]: any;
+type StatusRecord = { id: string | number; nameAr: string; nameEn: string; sortOrder?: number };
+type CourierRecord = { id: string; fullName?: string };
+type ShippingCompanyRecord = { id: string; name: string };
+type SettingsRecord = Settings;
+
+type OrdersPageShellProps = {
   children?: React.ReactNode;
-}
+  isAr: boolean;
+  t: (key: string) => string;
+  role: string;
+  hasPermission: (permission: string) => boolean;
+  filteredOrdersList: OrderRecord[];
+  canAddOrders: boolean;
+  resetCreateForm: () => void;
+  setIsAddModalOpen: (open: boolean) => void;
+  ordersTab: string;
+  setOrdersTab: (tab: OrdersTab) => void;
+  orders: OrderRecord[];
+  allProducts: Array<{ id?: string }>;
+  allShipments: ShipmentRecord[];
+  canTrackOrders: boolean;
+  canViewOrderStatuses: boolean;
+  orderStatusesList: StatusRecord[];
+  orderOptionsList: Array<{ id?: string }>;
+  activeItemCategories: Array<{ id?: string }>;
+  canManageOrders: boolean;
+  orderCurrency: string;
+  searchText: string;
+  setSearchText: (value: string) => void;
+  statusFilter: string;
+  setStatusFilter: (value: string) => void;
+  courierFilter: string;
+  setCourierFilter: (value: string) => void;
+  sortBy: string;
+  setSortBy: (value: string) => void;
+  shipmentSearchQuery: string;
+  setShipmentSearchQuery: (value: string) => void;
+  shipmentStatusFilter: string;
+  setShipmentStatusFilter: (value: string) => void;
+  shipmentCarrierFilter: string;
+  setShipmentCarrierFilter: (value: string) => void;
+  shippingCompanies: ShippingCompanyRecord[];
+  handleOpenAddShipmentModal: () => void;
+  filteredShipmentsList: ShipmentRecord[];
+  couriers: CourierRecord[];
+  copyToClipboard: (value: string | undefined) => void;
+  handleQuickShipmentStatusChange: (shipmentId: string, status: string) => void;
+  handleOpenEditShipmentModal: (shipment: ShipmentRecord) => void;
+  handleOpenShipmentHistory: (shipment: ShipmentRecord) => void;
+  setShipmentToDelete: (shipment: ShipmentRecord) => void;
+  setIsDeleteShipmentModalOpen: (open: boolean) => void;
+  selectedOrderIds: string[];
+  exportOrdersToPDF?: (orders: OrderRecord[], isAr: boolean) => void;
+  exportOrdersToCSV?: (orders: OrderRecord[], isAr: boolean) => void;
+  handleOpenBatchDelete: () => void;
+  isBatchUpdating: boolean;
+  setSelectedOrderIds: React.Dispatch<React.SetStateAction<string[]>>;
+  handleSelectAll: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  handleToggleSelect: (id: string) => void;
+  handleOpenOrderHistory: (order: OrderRecord) => void;
+  handleOpenEditOrder: (order: OrderRecord) => void;
+  handleOpenUpdateStatus: (order: OrderRecord) => void;
+  handleOpenCollectPayment: (order: OrderRecord) => void;
+  setSelectedOrder: (order: OrderRecord | null) => void;
+  setIsDetailsModalOpen: (open: boolean) => void;
+  generateOrderInvoicePDF?: (order: OrderRecord, isAr: boolean, settings: SettingsRecord) => void;
+  handleOpenDeleteOrder: (order: OrderRecord) => void;
+  settings: SettingsRecord;
+  dbRates: ExchangeRates;
+};
 
 export function OrdersPageShell(props: OrdersPageShellProps) {
   const {
@@ -376,7 +445,7 @@ export function OrdersPageShell(props: OrdersPageShellProps) {
                 { title: isAr ? 'الطلبات النشطة اليوم' : 'Active Orders Today', val: orders.filter(o => o.orderStatus !== 'تم التسليم' && o.orderStatus !== 'ملغي').length, color: 'text-[#d4af37] bg-[#d4af37]/10' },
                 { title: isAr ? 'بانتظار التوزيع لليمن' : 'In Local Dist', val: orders.filter(o => o.orderStatus === 'وصل مركز التوزيع في اليمن').length, color: 'text-amber-400 bg-amber-950/20' },
                 { title: isAr ? 'شحنات سلمت بنجاح' : 'Delivered Ledger', val: orders.filter(o => o.orderStatus === 'تم التسليم').length, color: 'text-emerald-400 bg-emerald-950/20' },
-                { title: isAr ? 'مبالغ معلقة للتحصيل' : 'Remaining To Collect', val: orders.reduce((sum, o) => sum + financialAccountService.convertToDefaultCurrency(parseFloat(o.amountRemaining || '0'), o.currency || 'YER', settings.currency || 'YER', { USD: o.exchangeRateUSD || dbRates.USD, SAR: o.exchangeRateSAR || dbRates.SAR }), 0).toLocaleString() + ' ' + (settings.currency || 'YER'), color: 'text-rose-400 bg-rose-950/20' }
+                { title: isAr ? 'مبالغ معلقة للتحصيل' : 'Remaining To Collect', val: orders.reduce((sum, o) => sum + financialAccountService.convertToDefaultCurrency(parseFloat(String(o.amountRemaining || '0')), o.currency || 'YER', settings.currency || 'YER', { USD: o.exchangeRateUSD || dbRates.USD, SAR: o.exchangeRateSAR || dbRates.SAR }), 0).toLocaleString() + ' ' + (settings.currency || 'YER'), color: 'text-rose-400 bg-rose-950/20' }
               ].map((k, i) => (
                 <div key={i} className="bg-gradient-to-b from-[#0d0d10] to-[#070709] border border-[#d4af37]/15 p-4 rounded-2xl relative overflow-hidden shadow-md">
                   <div className="absolute right-0 top-0 w-16 h-16 bg-gradient-to-br from-[#d4af37]/5 to-transparent rounded-full blur-xl"></div>
@@ -478,7 +547,7 @@ export function OrdersPageShell(props: OrdersPageShellProps) {
                 onPrintInvoice={(order) => printOrderInvoice(order, isAr, settings)}
                 onDeleteOrder={handleOpenDeleteOrder}
                 formatCreatedAt={(value) =>
-                  safeToDate(value).toLocaleDateString(isAr ? 'ar-EG' : 'en-US')
+                  (safeToDate(value) ?? new Date()).toLocaleDateString(isAr ? 'ar-EG' : 'en-US')
                 }
               />
             </div>
