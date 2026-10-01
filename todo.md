@@ -1077,3 +1077,10 @@
 - [x] إصلاح dead branch في tracking route تحت strict.
 - [x] خفض strict baseline إلى 208 خطأ.
 - [ ] إكمال implicit-any في Orders/Accounting وباقي أخطاء strict قبل تفعيل strict true.
+
+
+## [2026-10-01 04:56 +03:00] — دفعة Accounting strict — AI Model: Manus
+- [x] إصلاح فهرسة `AccountingImportLevel` عند حدود XLSX validator.
+- [x] تحويل catches استيراد الشجرة إلى `unknown`.
+- [x] strict العام: 207 أخطاء؛ نطاق Orders/Accounting: 86 خطأ.
+- [ ] استكمال نمذجة legacy collections وإزالة implicit-any في Orders/Accounting.

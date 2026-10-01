@@ -254,8 +254,9 @@ export default function AccountingHierarchyManagement({ isAr, canEdit }: Props) 
       });
       if (!rawRows.length) preview.errors.push(isAr ? 'الملف لا يحتوي صفوفًا قابلة للاستيراد.' : 'The selected file has no importable rows.');
       setImportPreview(preview);
-    } catch (fileError: any) {
-      setError(fileError?.message || (isAr ? 'تعذر قراءة الملف. استخدم CSV أو XLS أو XLSX.' : 'Unable to read the file. Use CSV, XLS, or XLSX.'));
+    } catch (fileError: unknown) {
+      const message = fileError instanceof Error ? fileError.message : (isAr ? 'تعذر قراءة الملف. استخدم CSV أو XLS أو XLSX.' : 'Unable to read the file. Use CSV, XLS, or XLSX.');
+      setError(message);
     }
   };
   const executeImport = async () => {
@@ -266,18 +267,20 @@ export default function AccountingHierarchyManagement({ isAr, canEdit }: Props) 
     try {
       setImporting(true);
       for (const row of importPreview.rows) {
-        const table = tableByLevel[row.level];
+        // The validator guarantees this allowlisted level; this cast closes its legacy row boundary.
+        const level = row.level as AccountingImportLevel;
+        const table = tableByLevel[level];
         const payload = buildImportedTreePayload(row, nodes);
         await addDoc(row.id, collection(db, table), payload);
         created.push({ table, id: row.id });
-        nodes.set(row.id, { id: row.id, level: row.level, parentId: row.parentId, accountType: row.accountType, accSubId: row.level === 'group' ? row.parentId || undefined : undefined });
+        nodes.set(row.id, { id: row.id, level, parentId: row.parentId, accountType: row.accountType, accSubId: level === 'group' ? row.parentId || undefined : undefined });
       }
       setImportPreview(null);
-    } catch (importError: any) {
+    } catch (importError: unknown) {
       await Promise.all(created.reverse().map(async (createdRow) => {
         try { await deleteDoc(doc(db, createdRow.table, createdRow.id)); } catch (_) { /* preserving original error is more useful to the operator */ }
       }));
-      setError(importError?.message || (isAr ? 'تعذر استيراد الشجرة؛ أُجري تراجع عن السجلات التي أضيفت أثناء المحاولة.' : 'The tree import failed; records added during this attempt were rolled back.'));
+      setError(importError instanceof Error ? importError.message : (isAr ? 'تعذر استيراد الشجرة؛ أُجري تراجع عن السجلات التي أضيفت أثناء المحاولة.' : 'The tree import failed; records added during this attempt were rolled back.'));
     } finally {
       setImporting(false);
     }

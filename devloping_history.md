@@ -1778,3 +1778,8 @@
 ## [2026-10-01 04:52:00 +03:00] — إصلاحات strict في tracking — AI Model: Manus
 
 تم إصلاح nullability في tracking-sync، وتحويل catches إلى unknown، وإزالة dead branch وany من tracking route. انخفض baseline strict إلى 208 خطأ، مع إبقاء الأخطاء المتبقية ظاهرة للتحويل إلى عقود domain حقيقية.
+
+
+## [2026-10-01 04:56:00 +03:00] — إصلاح Accounting strict — AI Model: Manus
+
+تم إغلاق خطأ فهرسة AccountingImportLevel وتحويل catches استيراد الشجرة إلى unknown مع رسالة آمنة. strict العام أصبح 207، ونطاق Orders/Accounting ما زال 86 خطأ implicit-any يتطلب نمذجة legacy collections.

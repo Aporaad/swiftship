@@ -142,3 +142,8 @@ src/shared/contracts/finance.contracts.ts
 ## دفعة nullability وdead-code — 2026-10-01 04:52 +03:00 — AI Model: Manus
 
 أصلحت nullability في `server/jobs/tracking-sync.ts` باستخدام guards محلية، وحولت catches إلى `unknown`. أصلحت فرعًا مستحيلًا في `server/routes/tracking.ts` كان يجعل `externalResult` من نوع `never` تحت strict، وأزلت payload/catch من نوع any. انخفض strict baseline من 220 إلى 208 خطأ. لم يتم تفعيل strict بعد، وما زالت أخطاء implicit-any في مكونات Orders/Accounting وغيرها تتطلب نماذج domain typed فعلية.
+
+
+## دفعة strict في Accounting — 2026-10-01 04:56 +03:00 — AI Model: Manus
+
+تم إصلاح خطأ فهرسة `AccountingImportLevel` عند حد validator، وتحويل catches في استيراد الشجرة إلى `unknown` مع رسالة آمنة. انخفض strict العام من 208 إلى 207، وانخفض نطاق Accounting المباشر بخطأ واحد؛ ما زال نطاق Orders/Accounting يحتوي 86 خطأ strict، أغلبها implicit-any ناتج عن legacy collections غير typed.

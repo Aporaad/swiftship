@@ -1020,3 +1020,7 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 
 ## [2026-10-01 04:52:00 +03:00] — تحقق قاعدة البيانات أثناء إصلاحات strict — AI Model: Manus
 لم تُنفذ أوامر SQL أو تغييرات مخطط أو RLS؛ التغييرات محصورة في TypeScript والتوثيق.
+
+
+## [2026-10-01 04:56:00 +03:00] — تحقق قاعدة البيانات أثناء إصلاح Accounting strict
+لم تُنفذ أوامر SQL أو migrations أو تغييرات schema/RLS.
