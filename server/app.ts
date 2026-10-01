@@ -27,7 +27,7 @@ export function apiFoundationContract(): ApiFoundationContract {
       { method: 'GET', path: '/api/v1/contract', auth: 'public', mutation: false },
       { method: 'GET', path: '/api/v1/auth/current-user', auth: 'not-enabled', mutation: false },
       { method: 'GET', path: '/api/v1/customers', auth: 'server-auth-required', mutation: false },
-      { method: 'GET', path: '/api/v1/couriers', auth: 'not-enabled', mutation: false },
+      { method: 'GET', path: '/api/v1/couriers', auth: 'server-auth-required', mutation: false },
     ],
   };
 }

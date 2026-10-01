@@ -1,7 +1,9 @@
 import type { NextFunction, Request, Response } from 'express';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  createServerPermissionMiddleware,
   createServerAuthMiddleware,
+  createSupabaseSessionVerifier,
   createStaticTokenVerifier,
   parseBearerToken,
 } from './server-auth';
@@ -55,5 +57,35 @@ describe('server-auth middleware', () => {
 
     expect(res.locals.principal).toEqual(principal);
     expect(next).toHaveBeenCalledOnce();
+  });
+
+  it('verifies a Supabase access token and derives read permissions from admin metadata', async () => {
+    const verify = createSupabaseSessionVerifier({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: { id: 'user-1', email: 'admin@example.test', user_metadata: { role: 'Admin' } } },
+          error: null,
+        }),
+      },
+    });
+
+    await expect(verify('supabase-access-token')).resolves.toEqual({
+      id: 'user-1',
+      email: 'admin@example.test',
+      roles: ['Admin', 'customers:read', 'couriers:read'],
+    });
+  });
+
+  it('denies a principal without the required permission', () => {
+    const res = response();
+    const next = vi.fn();
+    createServerPermissionMiddleware('customers:read')(
+      {} as Request,
+      res as unknown as Response,
+      next,
+    );
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(next).not.toHaveBeenCalled();
   });
 });

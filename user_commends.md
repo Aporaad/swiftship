@@ -1124,3 +1124,14 @@ https://manus.im/share/xR07Pp2KeqN68wwZBKQ6Ju
 ابدأ فوراً بتنفيذ بناء server-auth middleware قابل للاختبار وتنفيذ بقيه الخطوات  Customers.
 ```
 **النطاق المنفذ:** server-auth middleware قابل للحقن والاختبار، وCustomers read-only route مع DTO وGateway typed.
+
+
+## [2026-10-01 20:41:00 +0000] — AI Model: Manus
+```text
+قم بتنفيذ بقيه عمليات المرحله 13 بالكامل دون توقف
+بناء server-auth middleware قابل للاختبار، ثم تفعيل قراءة Customers أو Couriers
+استبدل SWIFTSHIP_API_TOKEN المؤقت بـ verifier جلسة خادمي حقيقي ثم فعّل مسار Couriers بنفس العقد.
+
+وبقيه الخطوات كامل
+```
+**النطاق المنفذ:** Supabase session verifier حقيقي، permission middleware، وتفعيل Customers وCouriers read-only.

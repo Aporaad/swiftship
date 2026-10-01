@@ -90,3 +90,15 @@ React / Electron / alx_web → HTTP API → Application Gateway → Supabase
 - `SWIFTSHIP_API_TOKEN` حل bootstrap مؤقت، وليس بديلًا عن verifier جلسة الإنتاج.
 
 **التحقق:** TypeScript ناجح و16 اختبارًا مستهدفًا ناجحة. لم تُنفذ SQL ولم تتغير DB/RLS.
+
+
+## إكمال session verifier وتفعيل Couriers — 2026-10-01 20:41:00 +0000 — AI Model: Manus
+تم تنفيذ البوابة التالية من المرحلة 13:
+
+- استبدال `SWIFTSHIP_API_TOKEN` بـSupabase session verifier حقيقي يعتمد `auth.getUser(accessToken)`.
+- إضافة permission middleware قابل للاختبار.
+- تفعيل `GET /api/v1/couriers` بنفس عقد Customers.
+- حماية المسارين بصلاحيات `customers:read` و`couriers:read`.
+- إبقاء current-user مؤجلًا حتى لا يتم نقل legacy auth أو أي password field إلى API.
+
+**التحقق:** TypeScript ناجح و20 اختبارًا مستهدفًا ناجحة. لا SQL أو DB/RLS changes.

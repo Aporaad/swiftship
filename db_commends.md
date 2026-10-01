@@ -713,3 +713,9 @@ select distinct k.key as data_key from public.cust_details d cross join lateral 
 ```text
 لا يوجد أمر SQL في دفعة server-auth وCustomers read-only.
 ```
+
+
+## [2026-10-01 20:41:00 +0000] — AI Model: Manus
+```text
+لا يوجد أمر SQL في دفعة استبدال verifier وتفعيل Couriers؛ جميع العمليات HTTP الحالية read-only.
+```

@@ -1052,3 +1052,7 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 
 ## [2026-10-01 20:31:00 +0000] — server-auth وCustomers — AI Model: Manus
 لم تُنفذ أوامر SQL، ولم تتغير الجداول أو الأعمدة أو RLS أو migrations. التغييرات تخص middleware وHTTP read-only gateway فقط.
+
+
+## [2026-10-01 20:41:00 +0000] — Real session verifier وCouriers — AI Model: Manus
+لم تُنفذ أوامر SQL، ولم تتغير الجداول أو الأعمدة أو RLS أو migrations. التغيير اقتصر على التحقق من الجلسة، permission middleware، ومسارات GET read-only.

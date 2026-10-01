@@ -40,7 +40,7 @@ describe('Customers API route', () => {
     registerCustomersRoutes(app, gateway, async (token) => token === 'valid'
       ? { id: 'service-1', roles: ['customers:read'] }
       : null);
-    const [, authenticate, handler] = (app.get as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
+    const [, authenticate, authorize, handler] = (app.get as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
     const req = {
       header: () => 'Bearer valid',
       query: { limit: '20', offset: '0', search: 'one' },
@@ -49,7 +49,9 @@ describe('Customers API route', () => {
     const next = vi.fn();
 
     await authenticate(req as unknown as Request, res as unknown as Response, async () => {
-      await handler(req, res, next);
+      await authorize(req, res, async () => {
+        await handler(req, res, next);
+      });
     });
 
     expect(gateway.list).toHaveBeenCalledWith({ limit: 20, offset: 0, search: 'one' });

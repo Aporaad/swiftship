@@ -1206,3 +1206,11 @@
 - [x] تسجيل `GET /api/v1/customers` خلف server-auth وبصلاحية `customers:read`.
 - [x] إضافة اختبارات auth وCustomers؛ 16 اختبارًا مستهدفًا ناجحة.
 - [ ] نقل verifier من static API token إلى مزود تحقق جلسة خادمي حقيقي قبل اعتماد الإنتاج.
+
+## [2026-10-01 20:41:00 +0000] — Real session verifier وCouriers — AI Model: Manus
+- [x] استبدال `SWIFTSHIP_API_TOKEN` بـ`supabase.auth.getUser(accessToken)` عبر `createSupabaseSessionVerifier`.
+- [x] اشتقاق صلاحيات `customers:read` و`couriers:read` من metadata المستخدم الإداري.
+- [x] إضافة `createServerPermissionMiddleware` ومنع الوصول عند غياب الصلاحية.
+- [x] تفعيل `GET /api/v1/couriers` بنفس عقد Customers وDTO آمن وpagination/search.
+- [x] اختبار جلسة Supabase والصلاحيات ومساري Customers وCouriers.
+- [ ] تفعيل `current-user` بعد اعتماد session DTO النهائي؛ لا يتم نقل auth legacy غير الآمن.

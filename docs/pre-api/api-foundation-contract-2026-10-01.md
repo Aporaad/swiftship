@@ -88,3 +88,15 @@ Supabase adapter
 - لا توجد mutations أو transaction أو retry تلقائي.
 
 المساران `current-user` و`couriers` ما زالا غير مفعّلين حتى اكتمال verifier خادمي حقيقي وصلاحياتهما.
+
+
+## تحديث session verifier وCouriers — 2026-10-01 20:41:00 +0000 — AI Model: Manus
+تم استبدال bootstrap static token بالتحقق الحقيقي من جلسة Supabase:
+
+- `createSupabaseSessionVerifier` يستدعي `supabase.auth.getUser(accessToken)`.
+- لا يتم قبول token محلي أو secret مشترك كبديل عن جلسة Supabase.
+- `createServerPermissionMiddleware` يفرض صلاحيات `customers:read` و`couriers:read` بعد نجاح التحقق.
+- تم تفعيل `GET /api/v1/couriers` بنفس عقد Customers: Bearer session، DTO آمن، pagination/search، وread-only.
+- صلاحيات Admin/root تستخرج من metadata ولا تمنح أي mutation.
+
+أصبح Customers وCouriers مفعّلين، بينما `current-user` ما زال مؤجلًا حتى تثبيت DTO جلسة API مستقل لا يعيد legacy password fields.

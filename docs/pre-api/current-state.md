@@ -98,3 +98,7 @@
 
 ## Customers checkpoint — 2026-10-01 20:31:00 +0000 — AI Model: Manus
 تم تفعيل Customers read-only خلف server-auth قابل للاختبار. الـbootstrap الحالي يعتمد على `SWIFTSHIP_API_TOKEN` اختياريًا، والمسار لا يفتح عند غيابه. الخطوة التالية قبل الإنتاج هي استبدال static token بـverifier جلسة خادمي حقيقي، ثم تفعيل Couriers بنفس العقد.
+
+
+## Real session checkpoint — 2026-10-01 20:41:00 +0000 — AI Model: Manus
+تم استبدال static token بـSupabase `auth.getUser(accessToken)`، وتفعيل Customers وCouriers read-only بصلاحيات مستقلة. مسار current-user مؤجل لحين اعتماد DTO جلسة آمن لا يعتمد على auth legacy.

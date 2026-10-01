@@ -1909,3 +1909,11 @@
 - تم تسجيل `GET /api/v1/customers` خلف middleware المصادقة وبلا أي mutation.
 - الاختبارات المستهدفة: 16 ناجحة، وTypeScript ناجح.
 - لا تغييرات SQL أو DB أو RLS.
+
+## [2026-10-01 20:41:00 +0000] — Real Supabase session verifier وCouriers — AI Model: Manus
+- استبدل `createSupabaseSessionVerifier` static API token باستخدام `supabase.auth.getUser(token)` للتحقق الحقيقي من access token.
+- أضيف اشتقاق server-side للصلاحيات من user metadata، مع دعم صلاحيات Admin/root للقراءة فقط.
+- أضيف `createServerPermissionMiddleware`، وأصبح Customers يتطلب `customers:read`.
+- أضيف `server/routes/couriers.ts` وDTO/Gateway read-only، وتم تفعيل `GET /api/v1/couriers` خلف `couriers:read`.
+- جميع المسارات الجديدة بلا mutations أو SQL أو تغيير RLS.
+- نجحت 20 اختبارًا مستهدفًا وTypeScript.
