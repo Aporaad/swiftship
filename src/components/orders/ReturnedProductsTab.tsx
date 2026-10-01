@@ -285,7 +285,6 @@ export default function ReturnedProductsTab({
   // ────────── حفظ المرتجع - Save Return ──────────
   const handleSaveReturn = async (e: React.FormEvent) => {
     e.preventDefault();
-
     const validationError = validateReturnForm(formData);
     if (validationError === 'order') {
       toast.error(isAr ? 'يجب اختيار الطلب من قائمة الطلبات أولاً (إجباري)' : 'Please select an order first (mandatory)');
@@ -300,8 +299,7 @@ export default function ReturnedProductsTab({
       return;
     }
 
-    setMutationState(asyncState.submitting());
-    try {
+    const result = await runMutation(async () => {
       const currentUser = profile?.displayName || profile?.email || 'system';
       const nowIso = new Date().toISOString();
       const returnedAtIso = formData.returned_at?.trim()
@@ -310,74 +308,60 @@ export default function ReturnedProductsTab({
       const processedAtIso = formData.processed_at?.trim()
         ? (formData.processed_at.includes('T') ? formData.processed_at : new Date(formData.processed_at).toISOString())
         : null;
+      const commonPayload = {
+        ...formData,
+        order_id: formData.order_id?.trim() || null,
+        order_item_id: formData.order_item_id?.trim() || null,
+        product_id: formData.product_id?.trim() || null,
+        customer_id: formData.customer_id?.trim() || null,
+        processed_by: formData.processed_by?.trim() || null,
+        processed_at: processedAtIso,
+        returned_at: returnedAtIso,
+        quantity: Math.max(1, Number(formData.quantity) || 1),
+        refund_amount: Math.max(0, Number(formData.refund_amount) || 0),
+        insurance_refund: formData.is_insured ? Math.max(0, Number(formData.insurance_refund) || 0) : 0,
+        is_insured: Boolean(formData.is_insured),
+      };
 
       if (editingReturn) {
-        // تحديث مرتجع موجود - Update existing return
         await returnedProductsGateway.updateReturn(editingReturn.return_id, {
-          ...formData,
-          order_id: formData.order_id?.trim() || null,
-          order_item_id: formData.order_item_id?.trim() || null,
-          product_id: formData.product_id?.trim() || null,
-          customer_id: formData.customer_id?.trim() || null,
-          processed_by: formData.processed_by?.trim() || null,
-          processed_at: processedAtIso,
-          returned_at: returnedAtIso,
-          quantity: Math.max(1, Number(formData.quantity) || 1),
-          refund_amount: Math.max(0, Number(formData.refund_amount) || 0),
-          insurance_refund: formData.is_insured ? Math.max(0, Number(formData.insurance_refund) || 0) : 0,
-          is_insured: Boolean(formData.is_insured),
-          updated_at: nowIso,
-          updated_by: currentUser,
+          ...commonPayload, updated_at: nowIso, updated_by: currentUser,
         });
-        toast.success(isAr ? 'تم تحديث المرتجع بنجاح' : 'Return updated successfully');
-      } else {
-        // إنشاء مرتجع جديد - Create new return
-        const return_id = 'ret_' + Math.random().toString(36).substring(2, 11);
-        await returnedProductsGateway.createReturn(return_id, {
-          return_id,
-          ...formData,
-          order_id: formData.order_id?.trim() || null,
-          order_item_id: formData.order_item_id?.trim() || null,
-          product_id: formData.product_id?.trim() || null,
-          customer_id: formData.customer_id?.trim() || null,
-          processed_by: formData.processed_by?.trim() || null,
-          processed_at: processedAtIso,
-          returned_at: returnedAtIso,
-          quantity: Math.max(1, Number(formData.quantity) || 1),
-          refund_amount: Math.max(0, Number(formData.refund_amount) || 0),
-          insurance_refund: formData.is_insured ? Math.max(0, Number(formData.insurance_refund) || 0) : 0,
-          is_insured: Boolean(formData.is_insured),
-          return_status: formData.return_status || 'معلق',
-          return_type: formData.return_type || 'استرداد',
-          return_condition: formData.return_condition || 'مستخدم',
-          created_at: nowIso,
-          created_by: currentUser,
-          updated_at: nowIso,
-          updated_by: currentUser,
-        });
-
-        // إذا كان مرتبطاً ببند طلب محدد، يتم تحديث حالته في جدول حركة المنتجات إلى 'مرتجع' تلقائياً
-        if (formData.order_item_id) {
-          try {
-            await returnedProductsGateway.updateOrderItem(formData.order_item_id, {
-              items_status: 'مرتجع',
-              updated_at: new Date().toISOString(),
-            });
-          } catch (itemErr) {
-            console.warn('Could not update order_items status:', itemErr);
-          }
-        }
-
-        toast.success(isAr ? 'تم إضافة المرتجع بنجاح وتحديث السجلات' : 'Return added successfully');
+        return 'updated' as const;
       }
-      setIsFormOpen(false);
-    } catch (err) {
-      toast.error(errorMessage(err) || (isAr ? 'تعذر حفظ المرتجع' : 'Could not save return'));
-    } finally {
-      setMutationState(asyncState.mutationSucceeded());
-    }
-  };
 
+      const return_id = 'ret_' + Math.random().toString(36).substring(2, 11);
+      await returnedProductsGateway.createReturn(return_id, {
+        return_id, ...commonPayload,
+        return_status: formData.return_status || 'معلق',
+        return_type: formData.return_type || 'استرداد',
+        return_condition: formData.return_condition || 'مستخدم',
+        created_at: nowIso, created_by: currentUser, updated_at: nowIso, updated_by: currentUser,
+      });
+      if (formData.order_item_id) {
+        try {
+          await returnedProductsGateway.updateOrderItem(formData.order_item_id, {
+            items_status: 'مرتجع', updated_at: nowIso,
+          });
+        } catch (itemError) {
+          console.warn('Could not update order_items status:', itemError);
+        }
+      }
+      return 'created' as const;
+    }, setMutationState);
+
+    if (result.status === 'error') {
+      toast.error(result.error.message || (isAr ? 'تعذر حفظ المرتجع' : 'Could not save return'));
+      return;
+    }
+    const mutationData = result.status === 'success' || result.status === 'success-after-mutation'
+      ? result.data
+      : undefined;
+    toast.success(mutationData === 'updated'
+      ? (isAr ? 'تم تحديث المرتجع بنجاح' : 'Return updated successfully')
+      : (isAr ? 'تم إضافة المرتجع بنجاح وتحديث السجلات' : 'Return added successfully'));
+    setIsFormOpen(false);
+  };
   // ────────── تحديث الحالة السريع - Quick Status Update ──────────
   const handleQuickStatusSave = async () => {
     if (!quickStatusItem) return;

@@ -1834,3 +1834,16 @@
 ## [2026-10-01 08:28:19 +03:00] — التحقق النهائي قبل دفع دفعة Orders — AI Model: Manus
 
 بعد استعادة محاولة `EditOrderModal` غير المكتملة، نجح فحص TypeScript و`git diff --check`. نجحت مجموعة الاختبارات كاملةً: 67 ملفًا ناجحًا و3 متخطاة؛ 235 اختبارًا ناجحًا و8 متخطاة. البناء الإنتاجي ناجح مع تحذيرات البناء غير المانعة المعتادة. الدفعة الحالية جاهزة للدفع؛ لا تغييرات على قاعدة البيانات أو SQL.
+
+## [2026-10-01 19:36:00 +0000] — دفعة Typed Contracts وترحيل حفظ المرتجعات
+### المنفذ
+- تم تثبيت عقود `FinanceAccountRow` و`FinanceTransactionRow` و`FinanceEntryRow` و`FinanceSettings` في selector المحاسبة، وإزالة الأنواع غير الآمنة من مسار اختيار وعرض القيود.
+- تم تضييق بيانات `useFinanceAccountingData` وإضافة تحويل صريح للقيم القادمة من Gateway قبل إدخالها إلى React state.
+- تم تحديث العمليات الحسابية في `FinanceAccounting.tsx` باستخدام `numericValue` بدلاً من الاعتماد على coercion غير مضمون.
+- تم استبدال `React.FC<any>` في خطوات الطلب placeholder بعقد `PropsWithChildren<Record<string, never>>`.
+- تم نقل الحفظ الكامل لنموذج `ReturnedProductsTab` (إنشاء/تعديل/تحديث عنصر الطلب) إلى `runMutation` مع توحيد حالات submitting/error/success.
+### التحقق
+- `npm run check -- --pretty false` ناجح.
+- الاختبارات المستهدفة: 2 ملفات، 7 اختبارات ناجحة.
+### الحد المتبقي
+- ما زالت عقود legacy في `FinanceAccounting` Actions و`EditOrderModal` تحتاج دفعة مستقلة قبل إعلان الإغلاق الكامل للمرحلتين.

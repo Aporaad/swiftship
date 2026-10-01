@@ -1,4 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
+const numericValue = (value: unknown): number => {
+  const parsed = typeof value === 'number' ? value : Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 import { CurrencySelect } from './common/CurrencySelect';
 import {
   FileText, Search, CreditCard, ShieldAlert, CheckCircle, Wallet, ArrowUpRight,
@@ -311,7 +316,7 @@ export default function FinanceAccounting({
         type,
         normalizedDescription: title
       };
-    }).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    }).sort((a, b) => numericValue(b.createdAt) - numericValue(a.createdAt));
   }, [auditedCourierId, accountTransactions, isAr]);
 
   // Bulk Settle Courier's outstanding physical delivery receipts of COD cargo
@@ -324,7 +329,7 @@ export default function FinanceAccounting({
     if (!cust) return null;
 
     const customerTx = accountTransactions.filter(tx => tx.entityType === 'customer' && tx.entityId === auditedCustomerId);
-    const sortedTx = [...customerTx].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    const sortedTx = [...customerTx].sort((a, b) => numericValue(a.createdAt) - numericValue(b.createdAt));
 
     const rows: any[] = [];
     let cumulativeBalance = 0; // Cumulative customer debt (YER)
@@ -335,9 +340,9 @@ export default function FinanceAccounting({
       const amt = tx.amount || 0;
 
       if (isDebit) {
-        cumulativeBalance += amt;
+        cumulativeBalance += numericValue(amt);
       } else {
-        cumulativeBalance -= amt;
+        cumulativeBalance -= numericValue(amt);
       }
 
       rows.push({
@@ -356,8 +361,8 @@ export default function FinanceAccounting({
     // Reversed for display (newest events first)
     const reversedRows = [...rows].reverse();
 
-    const grossFreightValuation = sortedTx.filter(t => t.type === 'Debit').reduce((sum, t) => sum + (t.amount || 0), 0);
-    const netPaidRevenues = sortedTx.filter(t => t.type === 'Credit').reduce((sum, t) => sum + (t.amount || 0), 0);
+    const grossFreightValuation = sortedTx.filter(t => t.type === 'Debit').reduce((sum, t) => sum + numericValue(t.amount), 0);
+    const netPaidRevenues = sortedTx.filter(t => t.type === 'Credit').reduce((sum, t) => sum + numericValue(t.amount), 0);
     const outstandingDebits = cumulativeBalance > 0 ? cumulativeBalance : 0;
 
     return {

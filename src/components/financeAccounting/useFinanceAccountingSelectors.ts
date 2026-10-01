@@ -1,15 +1,49 @@
 import { useMemo } from 'react';
 import { accountingHierarchyService } from '../../services/accountingHierarchyService';
 import { financialAccountService } from '../../services/financialAccountService';
+type FinanceScalar = string | number | boolean | null | undefined;
+
+export interface FinanceAccountRow {
+  id?: string; category?: string; status?: string; cost?: FinanceScalar; currency?: string;
+  accountCode?: string; accountName?: string; nameAr?: string; nameEn?: string;
+  entityType?: string; entityName?: string; parentCode?: string; balance?: FinanceScalar;
+  [key: string]: unknown;
+}
+
+export interface FinanceTransactionRow {
+  id?: string; entryId?: string; journalEntryId?: string; type?: string; refNumber?: FinanceScalar;
+  journalEntryNumber?: FinanceScalar; currencyOriginal?: string; currency?: string;
+  createdAt?: string | number | Date; amount?: FinanceScalar; amountOriginal?: FinanceScalar;
+  accountId?: string; accountCode?: string; entityType?: string; entityId?: string;
+  entityName?: string; party?: string; description?: string; module?: string;
+  createdByUid?: string; createdByName?: string; [key: string]: unknown;
+}
+
+export interface FinanceEntryRow extends FinanceTransactionRow { postingStatus?: string; entryNumber?: string; }
+export interface FinanceCourierRow { id?: string; accountId?: string; courierType?: string; financialCurrency?: string; [key: string]: unknown; }
+export interface FinanceSettings { currency?: string; [key: string]: unknown; }
+interface LedgerGroup { debitLeg?: FinanceTransactionRow; creditLeg?: FinanceTransactionRow; legs: FinanceTransactionRow[]; }
+interface LedgerEntry {
+  id: string; groupKey: string; journalEntryId: string | null; refNumber: string; date: Date;
+  title: string; notes: string; party?: string; debitLeg?: FinanceTransactionRow; creditLeg?: FinanceTransactionRow;
+  debitPartyName: string; creditPartyName: string; debitAccountId: string; creditAccountId: string;
+  debitAccountCode: string; creditAccountCode: string; isDoubleEntry: boolean; type: 'Debit' | 'Credit' | 'Double';
+  amount: number; currency: string; amountOriginal: number; currencyOriginal: string; module: string;
+  createdByUid: string; createdByName: string; isSourcing: boolean; allLegs: FinanceTransactionRow[]; runningBalance?: number;
+}
+function numberValue(value: FinanceScalar): number {
+  return typeof value === 'number' ? value : Number(value ?? 0) || 0;
+}
+
 
 export interface FinanceAccountingSelectorsInput {
-  assets: any[];
-  financialAccounts: any[];
-  accountTransactions: any[];
-  financialEntries: any[];
-  couriers: any[];
+  assets: FinanceAccountRow[];
+  financialAccounts: FinanceAccountRow[];
+  accountTransactions: FinanceTransactionRow[];
+  financialEntries: FinanceEntryRow[];
+  couriers: FinanceCourierRow[];
   isAr: boolean;
-  settings: any;
+  settings: FinanceSettings;
   dbRates: Record<string, number>;
   searchLedgerQuery: string;
   typeFilter: string;
@@ -52,36 +86,36 @@ export function useFinanceAccountingSelectors({
   const vehiclesTotal = useMemo(() => {
     return assets
       .filter(a => a.category === 'Vehicles' && a.status === 'Active')
-      .reduce((sum, a) => sum + convertToYER(a.cost || 0, a.currency || 'YER'), 0);
+      .reduce((sum, a) => sum + convertToYER(numberValue(a.cost), a.currency || 'YER'), 0);
   }, [assets, settings]);
 
   const scannersTotal = useMemo(() => {
     return assets
       .filter(a => a.category === 'Inspection' && a.status === 'Active')
-      .reduce((sum, a) => sum + convertToYER(a.cost || 0, a.currency || 'YER'), 0);
+      .reduce((sum, a) => sum + convertToYER(numberValue(a.cost), a.currency || 'YER'), 0);
   }, [assets, settings]);
 
   const officeAssetsTotal = useMemo(() => {
     return assets
       .filter(a => a.category === 'Office' && a.status === 'Active')
-      .reduce((sum, a) => sum + convertToYER(a.cost || 0, a.currency || 'YER'), 0);
+      .reduce((sum, a) => sum + convertToYER(numberValue(a.cost), a.currency || 'YER'), 0);
   }, [assets, settings]);
 
   // 1. Double-Entry General Chronology Ledger from the new financial tables.
   const ledgerEntries = useMemo(() => {
-    const groupedMap = new Map<string, { debitLeg?: any; creditLeg?: any; legs: any[] }>();
+    const groupedMap = new Map<string, LedgerGroup>();
 
     // Group account_trans legs by entryId and keep posted, non-temporary main_entry heads only.
-    const entryById = new Map(financialEntries.map((entry: any) => [entry.id, entry]));
+    const entryById = new Map(financialEntries.map((entry) => [entry.id, entry]));
     accountTransactions
-      .map((tx: any) => {
-        const entry = entryById.get(tx.entryId);
+      .map((tx) => {
+        const entry = entryById.get(tx.entryId || '');
         return { ...tx, entry, journalEntryId: tx.entryId, refNumber: tx.refNumber || entry?.entryNumber, journalEntryNumber: entry?.entryNumber, currencyOriginal: tx.currencyOriginal || entry?.currencyOriginal };
       })
-      .filter((tx: any) => tx.entry?.postingStatus === 'posted')
+      .filter((tx) => tx.entry?.postingStatus === 'posted')
 
       .forEach(tx => {
-      const groupKey = tx.journalEntryId || (tx.refNumber ? `REF-${tx.refNumber}` : tx.id);
+      const groupKey = tx.entryId || (tx.refNumber ? `REF-${String(tx.refNumber)}` : tx.id || 'unknown');
       if (!groupedMap.has(groupKey)) {
         groupedMap.set(groupKey, { legs: [] });
       }
@@ -94,7 +128,7 @@ export function useFinanceAccountingSelectors({
       }
     });
 
-    const entries: any[] = [];
+    const entries: LedgerEntry[] = [];
 
     // Process grouped transactions into single consolidated voucher objects
     groupedMap.forEach((group, groupKey) => {
@@ -113,7 +147,7 @@ export function useFinanceAccountingSelectors({
 
       const accountCurrency = sample.currencyOriginal || sample.currency || (debitAcc?.currency || creditAcc?.currency) || (isSourcing ? 'SAR' : (settings.currency || 'YER'));
       const amountOriginal = sample.amountOriginal !== undefined ? sample.amountOriginal : sample.amount;
-      const convertedAmt = convertToYER(amountOriginal, accountCurrency);
+      const convertedAmt = convertToYER(numberValue(amountOriginal), accountCurrency);
 
       const debitPartyName = debitLeg
         ? `${debitLeg.accountCode || (debitAcc ? debitAcc.accountCode : '')} - ${debitLeg.entityName || (debitAcc ? (isAr ? debitAcc.nameAr : debitAcc.nameEn) : '')}`.replace(/^- /, '').trim()
@@ -127,9 +161,9 @@ export function useFinanceAccountingSelectors({
         id: sample.id || groupKey,
         groupKey,
         journalEntryId: sample.journalEntryId || null,
-        refNumber: sample.refNumber || sample.journalEntryNumber || 'TX-REF',
+        refNumber: String(sample.refNumber ?? sample.journalEntryNumber ?? 'TX-REF'),
         date,
-        title: sample.description || (debitLeg && creditLeg ? `${debitLeg.entityName || ''} ➔ ${creditLeg.entityName || ''}` : (sample.party || sample.entityName)),
+        title: String(sample.description || (debitLeg && creditLeg ? `${debitLeg.entityName || ''} ➔ ${creditLeg.entityName || ''}` : (sample.party || sample.entityName || ''))),
         notes: sample.description || '',
         debitLeg,
         creditLeg,
@@ -143,7 +177,7 @@ export function useFinanceAccountingSelectors({
         type: debitLeg && !creditLeg ? 'Debit' : (!debitLeg && creditLeg ? 'Credit' : 'Double'),
         amount: convertedAmt,
         currency: settings.currency || 'YER',
-        amountOriginal: amountOriginal,
+        amountOriginal: numberValue(amountOriginal),
         currencyOriginal: accountCurrency,
         module: sample.module || 'adjustment',
         createdByUid: sample.createdByUid || '',
@@ -181,12 +215,12 @@ export function useFinanceAccountingSelectors({
       const qr = searchLedgerQuery.toLowerCase();
       if (qr) {
         const matchesText = (
-          (e.refNumber || '').toLowerCase().includes(qr) ||
-          (e.title || '').toLowerCase().includes(qr) ||
-          (e.debitPartyName || '').toLowerCase().includes(qr) ||
-          (e.creditPartyName || '').toLowerCase().includes(qr) ||
-          (e.party || '').toLowerCase().includes(qr) ||
-          (e.notes || '').toLowerCase().includes(qr)
+          String(e.refNumber || '').toLowerCase().includes(qr) ||
+          String(e.title || '').toLowerCase().includes(qr) ||
+          String(e.debitPartyName || '').toLowerCase().includes(qr) ||
+          String(e.creditPartyName || '').toLowerCase().includes(qr) ||
+          String(e.party || '').toLowerCase().includes(qr) ||
+          String(e.notes || '').toLowerCase().includes(qr)
         );
         if (!matchesText) return false;
       }
@@ -271,7 +305,7 @@ export function useFinanceAccountingSelectors({
 
     // 2. Calculate actual YER balance from all YER-denominated cash accounts
     const yerCashAccounts = cashAccounts.filter(a => a.currency === 'YER');
-    const totalYerBalance = yerCashAccounts.reduce((sum, a) => sum + (parseFloat(a.balance as any) || 0), 0);
+    const totalYerBalance = yerCashAccounts.reduce((sum, a) => sum + (parseFloat(String(a.balance ?? 0)) || 0), 0);
 
     // 3. Foreign Currencies Card: Show the equivalent value of the YER treasury in USD and SAR as requested
     const usdEquivalent = totalYerBalance / (dbRates.USD || 1);
@@ -293,7 +327,7 @@ export function useFinanceAccountingSelectors({
     const totalCustomerRevenue = financialAccounts
       .filter(a => a.accountCode?.startsWith('4') || a.accountCode?.startsWith('REV'))
       .reduce((sum, a) => {
-        const balance = parseFloat(a.balance as any) || 0;
+        const balance = parseFloat(String(a.balance ?? 0)) || 0;
         return sum + financialAccountService.convertToDefaultCurrency(
           balance,
           a.currency || 'YER',
@@ -310,7 +344,7 @@ export function useFinanceAccountingSelectors({
     const netOperatingCosts = financialAccounts
       .filter(a => a.accountCode?.startsWith('5') || a.accountCode?.startsWith('EXP'))
       .reduce((sum, a) => {
-        const balance = parseFloat(a.balance as any) || 0;
+        const balance = parseFloat(String(a.balance ?? 0)) || 0;
         return sum + financialAccountService.convertToDefaultCurrency(
           balance,
           a.currency || 'YER',
@@ -323,7 +357,7 @@ export function useFinanceAccountingSelectors({
     const netReceivables = financialAccounts
       .filter(a => a.entityType === 'customer' || a.accountCode?.startsWith('1130'))
       .reduce((sum, a) => {
-        const balance = parseFloat(a.balance as any) || 0;
+        const balance = parseFloat(String(a.balance ?? 0)) || 0;
         return sum + financialAccountService.convertToDefaultCurrency(
           balance,
           a.currency || 'YER',
@@ -336,7 +370,7 @@ export function useFinanceAccountingSelectors({
     const activeCustodyLiabilities = financialAccounts
       .filter(a => a.entityType === 'courier' || a.accountCode?.startsWith('2120'))
       .reduce((sum, a) => {
-        const balance = parseFloat(a.balance as any) || 0;
+        const balance = parseFloat(String(a.balance ?? 0)) || 0;
         return sum + financialAccountService.convertToDefaultCurrency(
           balance,
           a.currency || 'YER',

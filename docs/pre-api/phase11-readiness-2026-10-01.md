@@ -223,3 +223,7 @@ src/shared/contracts/finance.contracts.ts
 أزيلت بقايا `any` من حد `FinanceAccountingDataGateway` في `SnapshotRow` والعقود الافتراضية للاشتراك، مع إبقاء مستهلكات `FinanceAccounting` القديمة متوافقة مؤقتاً عبر طبقة hook الحالية؛ لم يُفرض `unknown` على واجهة UI دفعة واحدة حتى لا تنتشر تشخيصات غير قابلة للمراجعة.
 
 **التحقق:** `npm run check -- --pretty false` ناجح، و`git diff --check` ناجح. بقيت أنواع legacy في نطاقات UI الأوسع، لذلك المرحلة 11 ما زالت **مفتوحة**. الدفعة التالية المقترحة هي typed row contracts لـ`FinanceAccounting` ثم مكونات `orders` الكبيرة، ملفاً ملفاً مع اختبارات المستهلكين.
+
+## دفعة تحقق إضافية — 2026-10-01 19:36 +0000 — Manus
+- أُغلقت عقود selector وhook المحاسبة المركزية بعقود صفوف صريحة وتحويلات رقمية آمنة.
+- بقيت عقود legacy في ActionDependencies وEditOrderModal خارج الإغلاق النهائي، وتم تسجيلها صراحة في TODO بدلاً من تجاوزها.

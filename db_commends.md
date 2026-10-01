@@ -675,3 +675,8 @@ select distinct k.key as data_key from public.cust_details d cross join lateral 
 
 ## [2026-09-30 00:32:00] - Model: Gemini 3.6 Flash
 -- No SQL statements executed.
+
+## [2026-10-01 19:36:00 +0000] — AI Model: Manus
+```sql
+-- لم يتم تنفيذ أي أمر SQL في هذه الدفعة؛ التغيير كان TypeScript/UI فقط.
+```
