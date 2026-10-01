@@ -30,10 +30,11 @@ describe('عقد إعادة هيكلة شجرة الحسابات', () => {
 
   it('يستخدم معرّف الحساب المالي كوده ويحل الحسابات الافتراضية من قاعدة البيانات', () => {
     const service = read('src/services/financialAccountService.ts');
-    expect(service).toContain('const candidateId = candidateCode;');
+    const accountFactory = read('src/services/financialAccountAccounts.ts');
+    expect(accountFactory).toContain('const candidateId = candidateCode;');
     expect(service).toContain('accountingHierarchyService.getDefaultAccount(acc.id)');
-    expect(service).toContain('limitedBalance');
-    expect(service).toContain('hasHierarchyStructure()');
+    expect(accountFactory).toContain('limitedBalance');
+    expect(accountFactory).toContain('hasHierarchyStructure()');
     expect(service).toContain('const newId = `salary_${params.employeeId}_');
   });
 

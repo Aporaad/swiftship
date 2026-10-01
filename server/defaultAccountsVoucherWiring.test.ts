@@ -14,11 +14,12 @@ describe('ربط الحسابات الافتراضية بالقيود التلق
     expect(migration).toContain('sys_shipping_costs');
   });
 
-  it('يحل الحسابات النظامية من default_accounts ولا يسمح بفallback إن كانت الشجرة جاهزة', () => {
+  it('يحل الحسابات النظامية من default_accounts ولا يسمح بفfallback إن كانت الشجرة جاهزة', () => {
     const service = read('src/services/financialAccountService.ts');
+    const rules = read('src/services/financialAccountVoucherRules.ts');
     expect(service).toContain('const configuredDefault = await accountingHierarchyService.getDefaultAccount(acc.id)');
     expect(service).toContain('الحساب الافتراضي «${acc.id}» غير مربوط أو معطّل في جدول default_accounts');
-    expect(service).toContain('defaultKey: account.defaultKey || account.id');
+    expect(rules).toContain('defaultKey: account.defaultKey || account.id');
   });
 
   it('يعرض ويحرر قواعد auto_entries باستخدام الحسابات الافتراضية والأطراف الديناميكية الموسعة', () => {
