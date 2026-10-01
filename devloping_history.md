@@ -1873,3 +1873,8 @@
 - تم تحديث النصوص الإنجليزية الظاهرة في المكونات من Journal Entry إلى Main Entry.
 - لا توجد تغييرات SQL أو schema في هذه الدفعة؛ migrations التاريخية بقيت كما هي للتوثيق.
 - تحقق TypeScript و37 اختبارًا مستهدفًا بنجاح.
+
+## [2026-10-01 20:03:00 +0000] — تسمية ملف إجراءات Main Entry
+- تمت إعادة تسمية `financeAccountingJournalActions.ts` إلى `financeAccountingMainEntryActions.ts`.
+- تم تحديث factory والاستيراد في `FinanceAccounting.tsx` دون تغيير السلوك.
+- فحص TypeScript ناجح والمستودع مرفوع إلى `origin/main`.

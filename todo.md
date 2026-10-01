@@ -1165,3 +1165,4 @@
 - [x] استبدال `accountTransactionId` النشط بـ`accountTransId` وربطه بعمود `account_trans_id`.
 - [x] تحديث مسميات الواجهات من Journal Entry إلى Main Entry.
 - [x] إبقاء migrations والسجلات التاريخية القديمة دون تعديل لأنها توثق مراحل ترحيل منفذة سابقًا.
+- [x] إعادة تسمية ملف إجراءات `financeAccountingJournalActions.ts` إلى `financeAccountingMainEntryActions.ts` وتحديث الاستيراد الوحيد.
