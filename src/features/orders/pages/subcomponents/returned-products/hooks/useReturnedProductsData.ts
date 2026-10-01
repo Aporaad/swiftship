@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { ReturnedOrderItemRecord, ReturnedOrderRecord } from '../types';
 import type { ReturnedProduct } from '../../../../../../services/returnedProductService';
 import { returnedProductsGateway } from '../gateway';
+import { asyncState, type AsyncState } from '../../../../../../shared/contracts/ui.contracts';
 
 interface UseReturnedProductsDataArgs {
   orders?: ReturnedOrderRecord[];
@@ -10,7 +11,7 @@ interface UseReturnedProductsDataArgs {
 
 export function useReturnedProductsData({ orders, propOrderItems }: UseReturnedProductsDataArgs) {
   const [returns, setReturns] = useState<ReturnedProduct[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [queryState, setQueryState] = useState<AsyncState<ReturnedProduct[]>>(asyncState.loading());
   const [internalOrders, setInternalOrders] = useState<ReturnedOrderRecord[]>([]);
   const [internalOrderItems, setInternalOrderItems] = useState<ReturnedOrderItemRecord[]>([]);
 
@@ -29,7 +30,10 @@ export function useReturnedProductsData({ orders, propOrderItems }: UseReturnedP
   }, [propOrderItems]);
 
   useEffect(() => {
-    const unsub = returnedProductsGateway.subscribeReturns(setReturns, () => setLoading(false));
+    const unsub = returnedProductsGateway.subscribeReturns((rows) => {
+      setReturns(rows);
+      setQueryState(rows.length === 0 ? asyncState.empty() : asyncState.success(rows));
+    }, (error) => setQueryState(asyncState.error(error, 'RETURNED_PRODUCTS_LOAD_FAILED')));
     return () => unsub?.();
   }, []);
 
@@ -39,5 +43,12 @@ export function useReturnedProductsData({ orders, propOrderItems }: UseReturnedP
     [propOrderItems, internalOrderItems]
   );
 
-  return { returns, setReturns, loading, allOrders, allOrderItems };
+  return {
+    returns,
+    setReturns,
+    loading: queryState.status === 'loading',
+    queryState,
+    allOrders,
+    allOrderItems,
+  };
 }

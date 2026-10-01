@@ -46,7 +46,7 @@ export function useFinanceAccountingData(): FinanceAccountingData {
     );
     const unsub = financeAccountingDataGateway.subscribeCollection(
       'account_trans',
-      (rows) => setAccountTransactions(rows.map((row: any) => ({
+      (rows) => setAccountTransactions(rows.map((row) => ({
         ...row,
         type: row.type || row.transType,
         amount: row.amount ?? row.amountOriginal,

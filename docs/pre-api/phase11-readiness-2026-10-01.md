@@ -216,3 +216,10 @@ src/shared/contracts/finance.contracts.ts
 ## تحقق ما قبل الدفع — 2026-10-01 08:28 +03:00 — AI Model: Manus
 
 بعد استعادة `EditOrderModal` إلى نسخته السابقة، نجح `npm run check -- --pretty false` و`git diff --check`. نجحت الاختبارات: 67 ملفًا و235 اختبارًا، مع 3 ملفات و8 اختبارات متخطاة. نجح `npm run build` مع تحذيرات غير مانعة. تبقى المرحلة 11 مفتوحة بسبب `any` legacy غير المعالجة؛ لا SQL ولا تغييرات قاعدة بيانات.
+
+
+## دفعة متابعة — 2026-10-01 08:19 +03:00 — Manus
+
+أزيلت بقايا `any` من حد `FinanceAccountingDataGateway` في `SnapshotRow` والعقود الافتراضية للاشتراك، مع إبقاء مستهلكات `FinanceAccounting` القديمة متوافقة مؤقتاً عبر طبقة hook الحالية؛ لم يُفرض `unknown` على واجهة UI دفعة واحدة حتى لا تنتشر تشخيصات غير قابلة للمراجعة.
+
+**التحقق:** `npm run check -- --pretty false` ناجح، و`git diff --check` ناجح. بقيت أنواع legacy في نطاقات UI الأوسع، لذلك المرحلة 11 ما زالت **مفتوحة**. الدفعة التالية المقترحة هي typed row contracts لـ`FinanceAccounting` ثم مكونات `orders` الكبيرة، ملفاً ملفاً مع اختبارات المستهلكين.

@@ -6,6 +6,7 @@
 
 import React, { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
+import { asyncState, runMutation, type AsyncState } from '../../shared/contracts/ui.contracts';
 import { useRole } from '../../hooks/useRole';
 import { calculateReturnStats } from '../../services/returnedProductService';
 import type { ReturnedProduct, ReturnStatus } from '../../services/returnedProductService';
@@ -163,7 +164,8 @@ export default function ReturnedProductsTab({
 
   // ────────── State: النموذج - Form ──────────
   const [formData, setFormData] = useState(createEmptyReturnForm());
-  const [submitting, setSubmitting] = useState(false);
+  const [mutationState, setMutationState] = useState<AsyncState<unknown>>(asyncState.idle());
+  const submitting = mutationState.status === 'submitting';
 
   // ────────── الصلاحيات - Permissions ──────────
   const can_view = role === 'Admin' || hasPermission('view_returned_products') || canManage;
@@ -298,7 +300,7 @@ export default function ReturnedProductsTab({
       return;
     }
 
-    setSubmitting(true);
+    setMutationState(asyncState.submitting());
     try {
       const currentUser = profile?.displayName || profile?.email || 'system';
       const nowIso = new Date().toISOString();
@@ -372,42 +374,43 @@ export default function ReturnedProductsTab({
     } catch (err) {
       toast.error(errorMessage(err) || (isAr ? 'تعذر حفظ المرتجع' : 'Could not save return'));
     } finally {
-      setSubmitting(false);
+      setMutationState(asyncState.mutationSucceeded());
     }
   };
 
   // ────────── تحديث الحالة السريع - Quick Status Update ──────────
   const handleQuickStatusSave = async () => {
     if (!quickStatusItem) return;
-    try {
-      const currentUser = profile?.displayName || profile?.email || 'system';
-      const now = new Date().toISOString();
-
-      await returnedProductsGateway.updateReturn(quickStatusItem.return_id, {
+    const currentUser = profile?.displayName || profile?.email || 'system';
+    const now = new Date().toISOString();
+    const result = await runMutation(() => returnedProductsGateway.updateReturn(quickStatusItem.return_id, {
         return_status: quickStatusValue,
         processed_by: quickStatusValue !== 'معلق' ? currentUser : null,
         processed_at: quickStatusValue !== 'معلق' ? now : null,
         updated_at: now,
         updated_by: currentUser,
-      });
-
+      }), setMutationState);
+    if (result.status !== 'error') {
       toast.success(isAr ? 'تم تحديث الحالة' : 'Status updated');
       setQuickStatusItem(null);
-    } catch (err) {
-      toast.error(errorMessage(err) || (isAr ? 'تعذر تحديث الحالة' : 'Update failed'));
+    } else {
+      toast.error(result.error.message || (isAr ? 'تعذر تحديث الحالة' : 'Update failed'));
     }
   };
 
   // ────────── حذف المرتجع - Delete Return ──────────
   const handleDelete = async () => {
     if (!deletingReturn) return;
-    try {
-      await returnedProductsGateway.deleteReturn(deletingReturn.return_id);
+    const result = await runMutation(
+      () => returnedProductsGateway.deleteReturn(deletingReturn.return_id),
+      setMutationState,
+    );
+    if (result.status !== 'error') {
       toast.success(isAr ? 'تم حذف المرتجع' : 'Return deleted');
       setDeletingReturn(null);
       setIsDeleteConfirmOpen(false);
-    } catch (err) {
-      toast.error(errorMessage(err) || (isAr ? 'تعذر الحذف' : 'Delete failed'));
+    } else {
+      toast.error(result.error.message || (isAr ? 'تعذر الحذف' : 'Delete failed'));
     }
   };
 

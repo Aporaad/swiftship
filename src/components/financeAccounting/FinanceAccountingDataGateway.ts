@@ -1,7 +1,7 @@
 import { collection, onSnapshot, orderBy, query } from '../../lib/supabase-adapter';
 import { db } from '../../lib/supabase-adapter';
 
-type SnapshotRow = { id: any; data: () => any };
+type SnapshotRow = { id: string; data: () => Record<string, unknown> };
 type Snapshot = { docs: SnapshotRow[] };
 type Unsubscribe = () => void;
 
@@ -9,7 +9,7 @@ const rowsFromSnapshot = (snapshot: Snapshot) =>
   snapshot.docs.map((row) => ({ id: row.id, ...row.data() }));
 
 export const financeAccountingDataGateway = {
-  subscribeCollection<T = any>(
+  subscribeCollection<T = Record<string, unknown>>(
     collectionName: string,
     onData: (rows: T[]) => void,
     onError: (error: unknown) => void,
@@ -19,7 +19,7 @@ export const financeAccountingDataGateway = {
     }, onError);
   },
 
-  subscribeOrderedCollection<T = any>(
+  subscribeOrderedCollection<T = Record<string, unknown>>(
     collectionName: string,
     field: string,
     onData: (rows: T[]) => void,

@@ -22,7 +22,7 @@ export const returnedProductsGateway = {
       onData(snap.docs.map((d) => ({ items_id: d.id, ...d.data() })));
     });
   },
-  subscribeReturns(onData: (rows: ReturnedProduct[]) => void, onError: () => void) {
+  subscribeReturns(onData: (rows: ReturnedProduct[]) => void, onError: (error: unknown) => void) {
     return onSnapshot(collection(db, 'returned_products'), (snap: CollectionSnapshot) => {
       onData(snap.docs.map(toReturnedProduct));
     }, onError);
