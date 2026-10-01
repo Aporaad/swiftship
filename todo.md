@@ -961,3 +961,14 @@
 - [x] نجاح `npm run check`، الاختبارات الكاملة: 62 ملفًا ناجحًا و3 متخطاة؛ 212 اختبارًا ناجحًا و8 متخطاة، والبناء الإنتاجي.
 - [x] لا SQL ولا تغييرات قاعدة بيانات/RLS.
 - [ ] استمرار تدقيق المواضع المتبقية التي ليست محددات اختيار مباشرة، خصوصًا `GeneralLedgerTab` و`CurrencySettingsTab` ومرشحي `MoneyDisplay`، قبل أي استخراج جديد.
+
+
+## [2026-10-01 03:48 +03:00] — تنفيذ MoneyDisplay ومراجعة عناصر المرحلة العاشرة — AI Model: Manus
+- [x] مطابقة العناصر المتوقعة في الخطة: DataTable، FilterBar، Pagination، ConfirmDialog، FormField، CurrencyField، MoneyDisplay، StatusBadge، EntitySelect، AsyncState، EmptyState، ErrorState، PermissionGate، AuditPreview.
+- [x] تأكيد أن `ConfirmModal` و`FormField` موجودان مسبقًا ويُستخدمان مركزيًا؛ لم يتم إنشاء بدائل مكررة.
+- [x] استخراج `MoneyDisplay` بعقد محدود للمبلغ/العملة/الإشارة، دون تحويل عملات أو خلط CSV/PDF والطباعة.
+- [x] نقل سبعة عروض متطابقة داخل `AccountLedgerReport` إلى `MoneyDisplay`.
+- [x] إضافة اختبارات MoneyDisplay؛ الاختبارات المستهدفة 6/6 ناجحة.
+- [x] نجاح `npm run check`، الاختبارات الكاملة: 63 ملفًا ناجحًا و3 متخطاة؛ 214 اختبارًا ناجحًا و8 متخطاة، والبناء الإنتاجي.
+- [x] توثيق أن عناصر DataTable/FilterBar/Pagination/StatusBadge/EntitySelect/AsyncState/EmptyState/ErrorState/PermissionGate/AuditPreview لم تُستخرج لعدم وجود ثلاث حالات متكافئة مثبتة أو لوجود اختلافات سلوكية.
+- [x] لا SQL ولا تغييرات قاعدة بيانات/RLS.

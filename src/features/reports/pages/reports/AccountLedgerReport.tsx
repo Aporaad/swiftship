@@ -7,6 +7,7 @@
 import React from 'react';
 import { format } from 'date-fns';
 import { Layers, AlertCircle } from 'lucide-react';
+import { MoneyDisplay } from '../../../../components/common/MoneyDisplay';
 
 interface AccountLedgerReportProps {
   isAr: boolean;
@@ -67,7 +68,7 @@ export const AccountLedgerReport: React.FC<AccountLedgerReportProps> = ({
                   {isAr ? 'رصيد الحساب المالي الإجمالي:' : 'Current Book Balance:'}
                 </span>
                 <span className={`text-md font-mono font-black ${(ledgerMetrics.selectedAccount.balance || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {(ledgerMetrics.selectedAccount.balance || 0).toLocaleString()} {ledgerMetrics.selectedAccount.currency || 'YER'}
+                  <MoneyDisplay amount={ledgerMetrics.selectedAccount.balance || 0} currency={ledgerMetrics.selectedAccount.currency || 'YER'} />
                 </span>
               </div>
             </div>
@@ -80,7 +81,7 @@ export const AccountLedgerReport: React.FC<AccountLedgerReportProps> = ({
                 {isAr ? 'الرصيد الافتتاحي (بداية المدة)' : 'Opening Balance'}
               </span>
               <span className={`text-base font-mono font-black ${(ledgerMetrics.openingBalance || 0) >= 0 ? 'text-slate-200' : 'text-rose-400'}`}>
-                {(ledgerMetrics.openingBalance || 0).toLocaleString()} <span className="text-[10px] font-sans text-slate-500">{ledgerMetrics.selectedAccount.currency}</span>
+                <MoneyDisplay amount={ledgerMetrics.openingBalance || 0} currency={ledgerMetrics.selectedAccount.currency} currencyClassName="text-[10px] font-sans text-slate-500" />
               </span>
             </div>
 
@@ -89,7 +90,7 @@ export const AccountLedgerReport: React.FC<AccountLedgerReportProps> = ({
                 {isAr ? 'إجمالي الحركات المدينة (+)' : 'Total Period Debits'}
               </span>
               <span className="text-base font-mono font-black text-emerald-400">
-                +{(ledgerMetrics.periodDebits || 0).toLocaleString()} <span className="text-[10px] font-sans text-slate-500">{ledgerMetrics.selectedAccount.currency}</span>
+                <MoneyDisplay prefix="+" amount={ledgerMetrics.periodDebits || 0} currency={ledgerMetrics.selectedAccount.currency} currencyClassName="text-[10px] font-sans text-slate-500" />
               </span>
             </div>
 
@@ -98,7 +99,7 @@ export const AccountLedgerReport: React.FC<AccountLedgerReportProps> = ({
                 {isAr ? 'إجمالي الحركات الدائنة (-)' : 'Total Period Credits'}
               </span>
               <span className="text-base font-mono font-black text-rose-400">
-                -{(ledgerMetrics.periodCredits || 0).toLocaleString()} <span className="text-[10px] font-sans text-slate-500">{ledgerMetrics.selectedAccount.currency}</span>
+                <MoneyDisplay prefix="-" amount={ledgerMetrics.periodCredits || 0} currency={ledgerMetrics.selectedAccount.currency} currencyClassName="text-[10px] font-sans text-slate-500" />
               </span>
             </div>
 
@@ -107,7 +108,7 @@ export const AccountLedgerReport: React.FC<AccountLedgerReportProps> = ({
                 {isAr ? 'الرصيد الختامي (نهاية المدة)' : 'Closing Balance'}
               </span>
               <span className={`text-base font-mono font-black ${(ledgerMetrics.closingBalance || 0) >= 0 ? 'text-[#d4af37]' : 'text-rose-400'}`}>
-                {(ledgerMetrics.closingBalance || 0).toLocaleString()} <span className="text-[10px] font-sans text-slate-500">{ledgerMetrics.selectedAccount.currency}</span>
+                <MoneyDisplay amount={ledgerMetrics.closingBalance || 0} currency={ledgerMetrics.selectedAccount.currency} currencyClassName="text-[10px] font-sans text-slate-500" />
               </span>
             </div>
           </div>
@@ -151,13 +152,13 @@ export const AccountLedgerReport: React.FC<AccountLedgerReportProps> = ({
                             {tx.description}
                           </td>
                           <td className="py-3 px-3 text-right font-mono font-black text-emerald-400">
-                            {tx.type === 'Debit' ? `+${amt.toLocaleString()}` : '-'}
+                            {tx.type === 'Debit' ? <MoneyDisplay prefix="+" amount={amt} /> : '-'}
                           </td>
                           <td className="py-3 px-3 text-right font-mono font-black text-rose-400">
-                            {tx.type === 'Credit' ? `-${amt.toLocaleString()}` : '-'}
+                            {tx.type === 'Credit' ? <MoneyDisplay prefix="-" amount={amt} /> : '-'}
                           </td>
                           <td className={`py-3 px-3 text-right font-mono font-black ${(tx.runningBalance || 0) >= 0 ? 'text-[#d4af37]' : 'text-rose-400'}`}>
-                            {(tx.runningBalance || 0).toLocaleString()} {ledgerMetrics.selectedAccount.currency}
+                            <MoneyDisplay amount={tx.runningBalance || 0} currency={ledgerMetrics.selectedAccount.currency} />
                           </td>
                         </tr>
                       );
