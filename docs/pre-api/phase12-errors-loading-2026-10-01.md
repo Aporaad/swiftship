@@ -76,3 +76,15 @@
 - المستهلك الموحد الحالي: `ReturnedProductsTab.tsx` فقط ضمن النطاق المفحوص.
 - المستهلكون legacy المتبقون: `ProductsManagementTab`, `ProductPickerModal`, `ItemCategoriesManagementTab`, `OrderHistoryModal`, و`useOrderData`، إضافة إلى Journal Actions.
 - لا تُعلن المرحلة 12 مغلقة قبل ترحيل هذه المسارات تدريجيًا إلى `runQuery/runMutation` مع اختبارات سلوك.
+
+
+## إغلاق المرحلة 12 — 2026-10-01 20:14:30 +0000 — AI Model: Manus
+تم ترحيل المستهلكين الخمسة المتبقين في نطاق Orders إلى العقد المشترك:
+
+1. `ProductsManagementTab` — `runQuery` للمنتجات وحركة البنود و`runMutation` لحفظ المنتج.
+2. `ProductPickerModal` — `runQuery` لنتائج الكتالوج.
+3. `ItemCategoriesManagementTab` — `runMutation` لحفظ الفئة.
+4. `OrderHistoryModal` — `runQuery` لجلب سجل الطلب.
+5. `useOrderData` — `runQuery` لنتائج orders ضمن الاشتراك الحي.
+
+**التحقق:** TypeScript ناجح، 67 ملف اختبار ناجح، 235 اختبارًا ناجحًا و8 متخطاة، والبناء ناجح. لا SQL أو تغييرات DB/RLS.

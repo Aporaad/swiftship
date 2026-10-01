@@ -80,3 +80,13 @@
 - النموذج النشط موحد على `main_entry` و`account_trans`.
 - حقول Order History النشطة موحدة على `mainEntryId` و`accountTransId`.
 - المراجع القديمة المتبقية في migrations/docs التاريخية فقط، ولم تُعدّل حفاظًا على سجل الترحيل.
+
+
+## تحديث الحالة — 2026-10-01 20:14:30 +0000 — AI Model: Manus
+- أُغلقت المرحلة 11 ضمن نطاق Typed Contracts في Finance/Orders.
+- أُغلقت المرحلة 12 ضمن نطاق AsyncState و`runQuery`/`runMutation` للمستهلكين الخمسة المحددين.
+- المرحلة 13 جاهزة للبدء، وأول نطاق تنفيذي هو HTTP health/readiness contract ثم Auth/Customers/Couriers read-only.
+- لم تُنفذ SQL ولم تتغير قاعدة البيانات أو RLS.
+
+## بدء المرحلة 13 فعليًا — 2026-10-01 20:15:30 +0000 — AI Model: Manus
+أصبح `GET /api/readiness` أول route منفذًا في المرحلة 13 مع عقد آمن لا يعرض أسرارًا أو رسائل قاعدة بيانات خام. فحص TypeScript واختبارات `server/app.test.ts` ناجحان. لم يبدأ بعد نقل Auth أو Customers أو أي mutation.

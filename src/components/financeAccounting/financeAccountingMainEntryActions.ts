@@ -1,30 +1,117 @@
 import type * as React from 'react';
+import { collection, db, doc, getDocs, query, where, writeBatch } from '../../lib/supabase-adapter';
+import { financialAccountService } from '../../services/financialAccountService';
+import { notificationService } from '../../services/notificationService';
+import type { AccountEntityType } from '../../services/financialAccountTypes';
 
-type ActionDependencies = Record<string, any>;
+type StateSetter<T> = React.Dispatch<React.SetStateAction<T>>;
+
+type EditMainEntryData = {
+  amountOriginal: string;
+  currencyOriginal: string;
+  notes: string;
+  createdAt: string;
+  debitAccountId: string;
+  creditAccountId: string;
+};
+
+type AdjustmentData = {
+  type: string;
+  amount: string;
+  currency: string;
+  title: string;
+  recipientName: string;
+  notes: string;
+};
+
+interface ActionDependencies {
+  adjustData: AdjustmentData;
+  adjustLoading: boolean;
+  adjustSalaryMonth: string;
+  auditedCustomerId: string;
+  collection: typeof collection;
+  currentUser: { id?: string | null; email?: string | null } | null;
+  customerLedgerDetails: { customer: { accountId?: string | null; accountCode?: string | null } } | null;
+  db: typeof db;
+  dbRates: Record<string, number>;
+  deletePin: string;
+  doc: typeof doc;
+  editJournalData: EditMainEntryData;
+  employees: EmployeeRecord[];
+  entryToDelete: FinanceEntryRecord | null;
+  financialAccountService: typeof financialAccountService;
+  getDocs: typeof getDocs;
+  isAr: boolean;
+  isSalaryPayment: boolean;
+  notificationService: typeof notificationService;
+  orders: CustomerOrderRecord[];
+  payAmount: string;
+  payLoading: boolean;
+  payNotes: string;
+  postingFinancialAccounts: PostingAccount[];
+  query: typeof query;
+  selectedEditEntry: FinanceEntryRecord | null;
+  settings: { currency?: string };
+  sourceAccountId: string;
+  targetAccountId: string;
+  targetType: string;
+  where: typeof where;
+  writeBatch: typeof writeBatch;
+  setAdjustData: StateSetter<AdjustmentData>;
+  setAdjustLoading: StateSetter<boolean>;
+  setDeleteLoading: StateSetter<boolean>;
+  setDeletePin: StateSetter<string>;
+  setDeletePinError: StateSetter<string>;
+  setEditJournalLoading: StateSetter<boolean>;
+  setEntryToDelete: StateSetter<FinanceEntryRecord | null>;
+  setIsAdjustmentModalOpen: StateSetter<boolean>;
+  setIsDeletePinModalOpen: StateSetter<boolean>;
+  setIsEditJournalOpen: StateSetter<boolean>;
+  setIsPayModalOpen: StateSetter<boolean>;
+  setIsSalaryPayment: StateSetter<boolean>;
+  setPayAmount: StateSetter<string>;
+  setPayLoading: StateSetter<boolean>;
+  setPayNotes: StateSetter<string>;
+  setSelectedEditEntry: StateSetter<FinanceEntryRecord | null>;
+  setSourceAccountId: StateSetter<string>;
+  setTargetAccountId: StateSetter<string>;
+  setTargetType: StateSetter<string>;
+}
 
 interface PostingAccount {
-  id: string;
+  id?: string;
   accountCode?: string;
   currency?: string;
-  entityType?: string;
+  entityType?: AccountEntityType;
   entityId?: string;
   entityName?: string;
 }
 
 interface EmployeeRecord {
+  id?: string;
   systemPin?: string;
 }
 
+interface FinanceEntryRecord {
+  id?: string;
+  mainEntryId?: string;
+  refNumber?: string;
+  debitAccountId?: string;
+  creditAccountId?: string;
+  allLegs?: Array<{ id?: string; accountId?: string }>;
+  [key: string]: unknown;
+}
+
 interface QueryDocumentLike {
-  ref: unknown;
+  ref: { type: string; path: string; id: string };
   data: () => { accountId?: string };
 }
 
 interface CustomerOrderRecord {
   id: string;
-  customerId?: string;
-  amountRemaining?: number | string;
-  amountPaid?: number | string;
+  customerId?: string | null;
+  amountRemaining?: number | string | null;
+  amountPaid?: number | string | null;
   createdAt?: number | string | { toDate: () => Date };
 }
 
@@ -43,6 +130,7 @@ export function createFinanceAccountingMainEntryActions(dependencies: ActionDepe
 
   const handleEditJournalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!selectedEditEntry) return;
     if (!editJournalData.amountOriginal || isNaN(parseFloat(editJournalData.amountOriginal))) {
       return notificationService.notify({
         title: isAr ? 'خطأ' : 'Error',
@@ -312,10 +400,10 @@ export function createFinanceAccountingMainEntryActions(dependencies: ActionDepe
         }
 
         await financialAccountService.recordSalaryPayment({
-          employeeId: trgAccount.entityId,
-          employeeName: trgAccount.entityName,
+          employeeId: trgAccount.entityId || '',
+          employeeName: trgAccount.entityName || '',
           accountId: targetAccountId,
-          accountCode: trgAccount.accountCode,
+          accountCode: trgAccount.accountCode || '',
           amount: convertedAmt,
           currency: adjustData.currency,
           salaryMonth: adjustSalaryMonth,
@@ -331,10 +419,10 @@ export function createFinanceAccountingMainEntryActions(dependencies: ActionDepe
         sourceAccountId,
         {
           accountId: targetAccountId,
-          accountCode: trgAccount.accountCode,
-          entityType: trgAccount.entityType,
-          entityId: trgAccount.entityId,
-          entityName: trgAccount.entityName,
+          accountCode: trgAccount.accountCode || '',
+          entityType: trgAccount.entityType || 'system',
+          entityId: trgAccount.entityId || '',
+          entityName: trgAccount.entityName || '',
           amount: convertedAmt,
           amountOriginal: amountVal,
           currencyOriginal: adjustData.currency,
@@ -418,8 +506,8 @@ export function createFinanceAccountingMainEntryActions(dependencies: ActionDepe
       for (const ord of unpaidOrders) {
         if (remainingPayment <= 0) break;
 
-        const ordRemaining = parseFloat(ord.amountRemaining || 0);
-        const ordPaid = parseFloat(ord.amountPaid || 0);
+        const ordRemaining = parseFloat(String(ord.amountRemaining || 0));
+        const ordPaid = parseFloat(String(ord.amountPaid || 0));
         const ordRef = doc(db, 'orders', ord.id);
 
         if (remainingPayment >= ordRemaining) {

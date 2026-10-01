@@ -235,3 +235,14 @@ src/shared/contracts/finance.contracts.ts
 - أُغلق عقد `ActionDependencies` في Courier وLedger Actions.
 - بقي Journal Actions و`EditOrderModal` مفتوحين؛ لم تُستخدم casts واسعة أو تغييرات سلوكية غير متحققة.
 - فحص TypeScript ناجح، ولا توجد تغييرات قاعدة بيانات.
+
+
+## إغلاق المرحلة 11 — 2026-10-01 20:14:30 +0000 — AI Model: Manus
+أُغلقت المرحلة 11 ضمن نطاقها التنفيذي المعتمد في Finance وOrders بعد تثبيت:
+
+- عقد `ActionDependencies` مستقل لإجراءات `Main Entry`.
+- إزالة `any` من Main Entry Actions.
+- ربط `EditOrderModal` بـ`editOrderModal.adapter.ts` typed مستقل.
+- الحفاظ على فصل Business Logic عن UI وعدم تعديل مخطط قاعدة البيانات.
+
+**التحقق:** `npm run check` ناجح، الاختبارات الكاملة 235 ناجحة و8 متخطاة، والبناء ناجح مع تحذيرات baseline الخاصة بحجم chunks و`import.meta` في CJS.

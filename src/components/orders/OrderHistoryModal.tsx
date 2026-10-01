@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, Clock3, FileText, Filter, PackageCheck, ReceiptText, RefreshCw, RotateCcw, Search, ScrollText, UserRound, X } from 'lucide-react';
 import { orderHistoryService, type OrderHistoryContext, type OrderHistoryEvent } from '../../services/orderHistoryService';
+import { runQuery, type AsyncState } from '../../shared/contracts/ui.contracts';
 import {
   appliedOrderHistoryFilterCount,
   defaultOrderHistoryFilters,
@@ -188,6 +189,7 @@ export default function OrderHistoryModal({ isOpen, context, onClose, isAr }: Or
   const [events, setEvents] = useState<OrderHistoryEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [historyQuery, setHistoryQuery] = useState<AsyncState<OrderHistoryEvent[]>>({ status: 'idle' });
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [filters, setFilters] = useState<OrderHistoryFilters>(defaultOrderHistoryFilters);
 
@@ -198,10 +200,13 @@ export default function OrderHistoryModal({ isOpen, context, onClose, isAr }: Or
     setError('');
     setExpandedId(null);
     setFilters(defaultOrderHistoryFilters);
-    orderHistoryService.listForContext(context)
-      .then((nextEvents) => { if (active) setEvents(nextEvents); })
-      .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : 'Unable to load history'); })
-      .finally(() => { if (active) setLoading(false); });
+    void runQuery(() => orderHistoryService.listForContext(context), (state) => {
+      if (!active) return;
+      setHistoryQuery(state);
+      setLoading(state.status === 'loading');
+      if (state.status === 'success') { setEvents(state.data); setError(''); }
+      if (state.status === 'error') setError(state.error.message);
+    });
     return () => { active = false; };
   }, [isOpen, context?.orderId, context?.shipmentId]);
 

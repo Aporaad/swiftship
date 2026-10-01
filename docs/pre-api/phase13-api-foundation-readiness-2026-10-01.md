@@ -45,3 +45,24 @@ React / Electron / alx_web → HTTP API → Application Gateway → Supabase
 - لا وصول مباشر جديد من UI إلى Supabase في المسار المرحّل.
 - لا تسريب لأسرار أو رسائل قاعدة بيانات خام.
 - توثيق route، DTO، permission، audit، retry، وtransaction boundary لكل مسار.
+
+
+## اعتماد بدء المرحلة 13 — 2026-10-01 20:14:30 +0000 — AI Model: Manus
+أُغلقت بوابتا المرحلتين 11 و12 ضمن نطاقهما التنفيذي، وأصبحت المرحلة 13 جاهزة للبدء. لا يُنقل Orders أو Accounting API في البداية.
+
+### أول مهمة تنفيذية معتمدة
+1. تثبيت HTTP health/readiness contract واختبار `ErrorEnvelope`.
+2. ربط المسار بحد Gateway قابل للاختبار دون كشف أسرار أو رسائل قاعدة بيانات خام.
+3. توثيق route وDTO وpermission وaudit وretry وtransaction boundary قبل أي mutation.
+
+**نتيجة الاعتماد:** المرحلة 13 جاهزة للتنفيذ في الدفعة التالية، ولم تُنفذ route جديدة في هذه الدفعة.
+
+## تنفيذ المهمة الأولى — 2026-10-01 20:15:30 +0000 — AI Model: Manus
+تم تنفيذ أول نطاق من المرحلة 13:
+
+- `GET /api/readiness` أصبح route رسميًا.
+- عقد الاستجابة يميز `ready` و`not_ready`، ويستخدم HTTP 200/503 وفق حالة قاعدة البيانات.
+- أضيف اختبار contract لـ`readinessResponse` للحالتين.
+- لم يتم نقل أي Feature إلى API ولم يتم تغيير قاعدة البيانات أو RLS.
+
+**التحقق:** TypeScript ناجح واختبارات `server/app.test.ts` ناجحة (6 اختبارات).

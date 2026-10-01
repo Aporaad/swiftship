@@ -1166,3 +1166,27 @@
 - [x] تحديث مسميات الواجهات من Journal Entry إلى Main Entry.
 - [x] إبقاء migrations والسجلات التاريخية القديمة دون تعديل لأنها توثق مراحل ترحيل منفذة سابقًا.
 - [x] إعادة تسمية ملف إجراءات `financeAccountingJournalActions.ts` إلى `financeAccountingMainEntryActions.ts` وتحديث الاستيراد الوحيد.
+
+## [2026-10-01 20:13:33 +0000] — إغلاق المرحلتين 11 و12 وتجهيز المرحلة 13 — AI Model: Manus
+- [x] بناء عقد  مستقل typed لإجراءات  وإزالة  من الملف.
+- [x] إنشاء وربط  كحد typed مستقل لتطبيع مدخلات  مع دعم الحقول القديمة دون خلطها بمنطق الواجهة.
+- [x] ترحيل مستهلكي Orders الخمسة إلى /: , , , , و.
+- [x] تشغيل TypeScript والاختبارات الكاملة والبناء: 67 ملف اختبار ناجح، 235 اختبارًا ناجحًا، 3 ملفات متخطاة، 8 اختبارات متخطاة، والبناء ناجح.
+- [x] إغلاق المرحلة 11 ضمن نطاق Typed Contracts في Finance/Orders.
+- [x] إغلاق المرحلة 12 ضمن نطاق AsyncState وQuery/Mutation للمستهلكين المحددين.
+- [x] اعتماد وثيقة جاهزية المرحلة 13 والبدء التالي المقترح: HTTP health/readiness contract.
+- [ ] المرحلة 13 التنفيذية لم تبدأ بعد؛ لا يتم إنشاء API route في هذه الدفعة.
+
+
+## [2026-10-01 20:14:30 +0000] — تصحيح توثيق إغلاق المرحلتين 11 و12 — AI Model: Manus
+- [x] بناء عقد `ActionDependencies` مستقل typed لإجراءات `Main Entry` وإزالة `any` من الملف.
+- [x] إنشاء وربط `editOrderModal.adapter.ts` كحد typed مستقل لتطبيع مدخلات `EditOrderModal`.
+- [x] ترحيل مستهلكي Orders الخمسة إلى `runQuery`/`runMutation`.
+- [x] تشغيل TypeScript والاختبارات الكاملة والبناء: 67 ملف اختبار ناجح، 235 اختبارًا ناجحًا، 3 ملفات متخطاة، 8 اختبارات متخطاة.
+- [x] إغلاق المرحلة 11 ضمن نطاق Typed Contracts في Finance/Orders.
+- [x] إغلاق المرحلة 12 ضمن نطاق AsyncState وQuery/Mutation للمستهلكين المحددين.
+- [x] اعتماد جاهزية المرحلة 13؛ أول مهمة لاحقة هي HTTP health/readiness contract.
+
+## [2026-10-01 20:15:30 +0000] — بدء المرحلة 13 — AI Model: Manus
+- [x] إضافة `/api/readiness` بعقد `ready/not_ready` وحالة HTTP 200/503.
+- [x] إضافة `readinessResponse` pure contract واختبارات الحالات الجاهزة وغير الجاهزة.

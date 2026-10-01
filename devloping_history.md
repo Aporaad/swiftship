@@ -1878,3 +1878,18 @@
 - تمت إعادة تسمية `financeAccountingJournalActions.ts` إلى `financeAccountingMainEntryActions.ts`.
 - تم تحديث factory والاستيراد في `FinanceAccounting.tsx` دون تغيير السلوك.
 - فحص TypeScript ناجح والمستودع مرفوع إلى `origin/main`.
+
+
+## [2026-10-01 20:14:30 +0000] — إغلاق Typed Contracts وAsync Consumers قبل المرحلة 13 — AI Model: Manus
+- استبدال عقد `Record<string, any>` في `financeAccountingMainEntryActions.ts` بعقد `ActionDependencies` مستقل typed.
+- إضافة `src/components/orders/editOrderModal.adapter.ts` لتطبيع snapshot الطلب والمنتجات والشحنات قبل دخول `EditOrderModal`.
+- ربط `EditOrderModal` بالـadapter typed دون تغيير مسار الحفظ أو خلط Business Logic مع UI.
+- ترحيل خمسة مستهلكين إلى `runQuery`/`runMutation`: `ProductsManagementTab`, `ProductPickerModal`, `ItemCategoriesManagementTab`, `OrderHistoryModal`, و`useOrderData`.
+- التحقق: `npm run check` ناجح؛ 67 ملف اختبار ناجح، 235 اختبارًا ناجحًا و8 متخطاة؛ `npm run build` ناجح مع تحذيرات baseline فقط.
+- لا SQL أو تغييرات قاعدة بيانات أو RLS.
+
+## [2026-10-01 20:15:30 +0000] — بدء المرحلة 13: HTTP readiness contract — AI Model: Manus
+- أضيف المسار `GET /api/readiness` في `server/app.ts`.
+- يعيد `200` مع `{ status: 'ready', checks: { database: true } }` عند جاهزية قاعدة البيانات، و`503` مع `not_ready` عند عدم الجاهزية.
+- أضيفت `readinessResponse` pure function لاختبار العقد دون اعتماد HTTP خارجي.
+- أضيفت اختبارات contract للحالتين، مع إبقاء `/api/health` متاحًا دون اتصال قاعدة البيانات.

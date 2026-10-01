@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 import { describe, expect, it, vi } from 'vitest';
-import { createApiAvailabilityMiddleware } from './app';
+import { createApiAvailabilityMiddleware, readinessResponse } from './app';
 
 function createResponse() {
   const response = {
@@ -62,5 +62,16 @@ describe('API availability middleware', () => {
 
     expect(next).toHaveBeenCalledOnce();
     expect(response.status).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [true, 'ready', 200],
+    [false, 'not_ready', 503],
+  ] as const)('returns the readiness contract for database=%s', (databaseReady, status, httpStatus) => {
+    expect(readinessResponse(databaseReady)).toEqual({
+      status,
+      checks: { database: databaseReady },
+    });
+    expect(httpStatus).toBe(databaseReady ? 200 : 503);
   });
 });

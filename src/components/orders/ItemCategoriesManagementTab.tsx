@@ -5,6 +5,7 @@ import ConfirmModal from '../ConfirmModal';
 import { useItemCategories } from '../../hooks/useItemCategories';
 import { ItemCategory } from '../../services/itemCategoryService';
 import { useExchangeRates } from '../../hooks/useExchangeRates';
+import { runMutation, type AsyncState } from '../../shared/contracts/ui.contracts';
 import { CurrencySelect } from '../common/CurrencySelect';
 
 interface ItemCategoriesManagementTabProps {
@@ -30,6 +31,7 @@ export default function ItemCategoriesManagementTab({ isAr, canManage }: ItemCat
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [deleting, setDeleting] = useState<ItemCategory | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [saveState, setSaveState] = useState<AsyncState<void>>({ status: 'idle' });
 
   const visible = categories.filter((category) => {
     const query = search.trim().toLowerCase();
@@ -59,7 +61,7 @@ export default function ItemCategoriesManagementTab({ isAr, canManage }: ItemCat
       return;
     }
     setSubmitting(true);
-    try {
+    await runMutation(async () => {
       const payload = {
         ...form,
         code: form.code.trim().toUpperCase(), nameAr: form.nameAr.trim(), nameEn: form.nameEn.trim() || form.nameAr.trim(),
@@ -71,10 +73,11 @@ export default function ItemCategoriesManagementTab({ isAr, canManage }: ItemCat
       else await addCategory(payload);
       toast.success(isAr ? 'تم حفظ فئة الصنف' : 'Item category saved');
       setIsModalOpen(false);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : '';
-      toast.error(message || (isAr ? 'تعذر حفظ الفئة' : 'Could not save category'));
-    } finally { setSubmitting(false); }
+    }, (state) => {
+      setSaveState(state);
+      if (state.status === 'error') toast.error(state.error.message || (isAr ? 'تعذر حفظ الفئة' : 'Could not save category'));
+    });
+    setSubmitting(false);
   };
 
   const price = (value: number, currency: string) => `${Number(value || 0).toLocaleString()} ${currency}`;

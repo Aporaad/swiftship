@@ -18,11 +18,12 @@ import EditOrderStep2 from '../../features/orders/components/edit-order-modal/Ed
 import EditOrderStep3 from '../../features/orders/components/edit-order-modal/EditOrderStep3';
 import EditOrderStep4 from '../../features/orders/components/edit-order-modal/EditOrderStep4';
 import EditOrderStep5 from '../../features/orders/components/edit-order-modal/EditOrderStep5';
+import { adaptEditOrderSnapshot } from './editOrderModal.adapter';
 
 interface EditOrderModalProps {
   isOpen: boolean;
   onClose: () => void;
-  orderToEdit: any;
+  orderToEdit: unknown;
   customers: any[];
   employees: any[];
   sources: any[];
@@ -48,7 +49,7 @@ const STEPS = [
 export default function EditOrderModal({
   isOpen,
   onClose,
-  orderToEdit,
+  orderToEdit: orderToEditInput,
   customers,
   employees,
   sources,
@@ -62,6 +63,7 @@ export default function EditOrderModal({
   settings,
   isAr,
 }: EditOrderModalProps) {
+  const normalizedOrder = adaptEditOrderSnapshot(orderToEditInput);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [stepErrors, setStepErrors] = useState<string | null>(null);
@@ -127,54 +129,54 @@ export default function EditOrderModal({
 
   // Load existing order data on mount/open
   useEffect(() => {
-    if (isOpen && orderToEdit) {
+    if (isOpen && normalizedOrder) {
       setCurrentStep(1);
       setStepErrors(null);
-      const loadedOrderCurrency = orderToEdit.orderCurrency || orderToEdit.currency || settings?.defaultOrderCurrency || settings?.currency || 'SAR';
+      const loadedOrderCurrency = normalizedOrder.orderCurrency || normalizedOrder.currency || settings?.defaultOrderCurrency || settings?.currency || 'SAR';
 
       setFormData({
-        customerId: orderToEdit.customerId || '',
-        customerName: orderToEdit.customerName || '',
-        customerPhone: orderToEdit.customerPhone || '',
-        customerAddress: orderToEdit.customerAddress || '',
-        orderPartyId: orderToEdit.orderPartyId || orderToEdit.customerId || '',
-        orderPartyType: orderToEdit.orderPartyType || (orderToEdit.isStaffOrder ? 'employee' : 'customer'),
-        isStaffOrder: Boolean(orderToEdit.isStaffOrder || (orderToEdit.orderPartyType && orderToEdit.orderPartyType !== 'customer')),
-        employeeId: orderToEdit.employeeId || '',
-        courierId: orderToEdit.courierId || '',
-        orderPartyAccountId: orderToEdit.orderPartyAccountId || orderToEdit.order_party_account_id || '',
-        orderSourceId: orderToEdit.orderSourceId || '',
-        orderSourceName: orderToEdit.orderSourceName || '',
-        orderSourceType: orderToEdit.orderSourceType || 'App',
-        externalOrderNumber: orderToEdit.externalOrderNumber || '',
-        trackingNumber: orderToEdit.trackingNumber || '',
-        shippingCompany: orderToEdit.shippingCompany || 'Aramex',
-        shippingCourierId: orderToEdit.shippingCourierId || '',
-        deliveryCourierId: orderToEdit.deliveryCourierId || '',
-        deliveryCourierFee: orderToEdit.deliveryCourierFee ?? 4000,
-        deliveryCourierFeeCurrency: orderToEdit.deliveryCourierFeeCurrency || settings?.currency || 'YER',
+        customerId: normalizedOrder.customerId || '',
+        customerName: normalizedOrder.customerName || '',
+        customerPhone: normalizedOrder.customerPhone || '',
+        customerAddress: normalizedOrder.customerAddress || '',
+        orderPartyId: normalizedOrder.orderPartyId || normalizedOrder.customerId || '',
+        orderPartyType: normalizedOrder.orderPartyType || (normalizedOrder.isStaffOrder ? 'employee' : 'customer'),
+        isStaffOrder: Boolean(normalizedOrder.isStaffOrder || (normalizedOrder.orderPartyType && normalizedOrder.orderPartyType !== 'customer')),
+        employeeId: normalizedOrder.employeeId || '',
+        courierId: normalizedOrder.courierId || '',
+        orderPartyAccountId: normalizedOrder.orderPartyAccountId || normalizedOrder.order_party_account_id || '',
+        orderSourceId: normalizedOrder.orderSourceId || '',
+        orderSourceName: normalizedOrder.orderSourceName || '',
+        orderSourceType: normalizedOrder.orderSourceType || 'App',
+        externalOrderNumber: normalizedOrder.externalOrderNumber || '',
+        trackingNumber: normalizedOrder.trackingNumber || '',
+        shippingCompany: normalizedOrder.shippingCompany || 'Aramex',
+        shippingCourierId: normalizedOrder.shippingCourierId || '',
+        deliveryCourierId: normalizedOrder.deliveryCourierId || '',
+        deliveryCourierFee: normalizedOrder.deliveryCourierFee ?? 4000,
+        deliveryCourierFeeCurrency: normalizedOrder.deliveryCourierFeeCurrency || settings?.currency || 'YER',
         orderCurrency: loadedOrderCurrency,
         currency: loadedOrderCurrency,
         exchangeRate: 1,
-        exchangeRateYER: orderToEdit.exchangeRateYER || 1,
-        exchangeRateUSD: orderToEdit.exchangeRateUSD || 1,
-        bankCommissionRate: orderToEdit.bankCommissionRate ?? 3,
-        companyProfitRate: orderToEdit.companyProfitRate ?? 12,
-        packagingFee: orderToEdit.packagingFee || 0,
-        sheinRedPrice: orderToEdit.sheinRedPrice || 0,
-        amountPaid: orderToEdit.amountPaid || 0,
-        paymentMethod: orderToEdit.paymentMethod || 'Cash',
-        cashAccountId: orderToEdit.cashAccountId || orderToEdit.cash_account_id || '',
-        bankAccountId: orderToEdit.bankAccountId || orderToEdit.bank_account_id || '',
-        bankReference: orderToEdit.bankReference || orderToEdit.bank_reference || '',
-        cashAmount: orderToEdit.cashAmount || orderToEdit.cash_amount || 0,
-        bankAmount: orderToEdit.bankAmount || orderToEdit.bank_amount || 0,
-        notes: orderToEdit.notes || '',
+        exchangeRateYER: normalizedOrder.exchangeRateYER || 1,
+        exchangeRateUSD: normalizedOrder.exchangeRateUSD || 1,
+        bankCommissionRate: normalizedOrder.bankCommissionRate ?? 3,
+        companyProfitRate: normalizedOrder.companyProfitRate ?? 12,
+        packagingFee: normalizedOrder.packagingFee || 0,
+        sheinRedPrice: normalizedOrder.sheinRedPrice || 0,
+        amountPaid: normalizedOrder.amountPaid || 0,
+        paymentMethod: normalizedOrder.paymentMethod || 'Cash',
+        cashAccountId: normalizedOrder.cashAccountId || normalizedOrder.cash_account_id || '',
+        bankAccountId: normalizedOrder.bankAccountId || normalizedOrder.bank_account_id || '',
+        bankReference: normalizedOrder.bankReference || normalizedOrder.bank_reference || '',
+        cashAmount: normalizedOrder.cashAmount || normalizedOrder.cash_amount || 0,
+        bankAmount: normalizedOrder.bankAmount || normalizedOrder.bank_amount || 0,
+        notes: normalizedOrder.notes || '',
       });
 
       setItems(
-        orderToEdit.items && orderToEdit.items.length > 0
-          ? JSON.parse(JSON.stringify(orderToEdit.items)).map((i: any) => ({
+        normalizedOrder.items && normalizedOrder.items.length > 0
+          ? JSON.parse(JSON.stringify(normalizedOrder.items)).map((i: any) => ({
             ...i,
             isInsured: Boolean(i.isInsured || i.is_insured),
             insuranceFee: i.insuranceFee || i.insurance_fee || 0,
@@ -183,14 +185,14 @@ export default function EditOrderModal({
       );
 
       setShippings(
-        orderToEdit.shippingDetails && orderToEdit.shippingDetails.length > 0
-          ? JSON.parse(JSON.stringify(orderToEdit.shippingDetails))
+        normalizedOrder.shippingDetails && normalizedOrder.shippingDetails.length > 0
+          ? JSON.parse(JSON.stringify(normalizedOrder.shippingDetails))
           : []
       );
     }
-  }, [isOpen, orderToEdit, settings]);
+  }, [isOpen, normalizedOrder, settings]);
 
-  if (!isOpen || !orderToEdit) return null;
+  if (!isOpen || !normalizedOrder) return null;
 
   const orderParties = buildOrderParties(customers, employees, couriers);
   const selectedOrderParty = findOrderParty(formData, customers, employees, couriers);
@@ -473,10 +475,10 @@ export default function EditOrderModal({
         orderPartyAccountId: formData.orderPartyAccountId || null,
         orderSourceId: formData.orderSourceId || null,
         orderSourceType: formData.orderSourceType || null,
-        trackingNumber: formData.trackingNumber || orderToEdit.orderNumber,
+        trackingNumber: formData.trackingNumber || normalizedOrder.orderNumber,
         deliveryCourierId: formData.deliveryCourierId || null,
         shippingCourierId: formData.shippingCourierId || null,
-        createdByName: orderToEdit.createdByName || orderToEdit.created_by_name || 'Admin',
+        createdByName: normalizedOrder.createdByName || normalizedOrder.created_by_name || 'Admin',
         updatedAt: new Date().toISOString(),
         updatedBy: 'Admin',
         // بيانات مالية وحسابية - تُخزَّن في data
@@ -514,9 +516,9 @@ export default function EditOrderModal({
 
       // تحديث بيانات الطلب الأساسية في جدول الطلبات
       // Update primary order record in orders table
-      await updateDoc(doc(db, 'orders', orderToEdit.id), payload);
+      await updateDoc(doc(db, 'orders', normalizedOrder.id), payload);
 
-      const targetOrderId = orderToEdit.id || orderToEdit.orderNumber;
+      const targetOrderId = normalizedOrder.id || normalizedOrder.orderNumber;
 
       // حفظ وإدراج منتجات الطلب في جدول المنتجات المخصص
       // ─── حفظ المنتجات الرئيسية في products وبنود الطلب في order_items ───
@@ -595,8 +597,8 @@ export default function EditOrderModal({
           const shipPayload = {
             order_id: targetOrderId,
             orderId: targetOrderId,
-            tracking_number: ship.trackingNumber || ship.tracking_number || formData.trackingNumber || orderToEdit.orderNumber,
-            trackingNumber: ship.trackingNumber || ship.tracking_number || formData.trackingNumber || orderToEdit.orderNumber,
+            tracking_number: ship.trackingNumber || ship.tracking_number || formData.trackingNumber || normalizedOrder.orderNumber,
+            trackingNumber: ship.trackingNumber || ship.tracking_number || formData.trackingNumber || normalizedOrder.orderNumber,
             shipping_company_id: ship.shippingCompany || formData.shippingCompany || 'Aramex',
             shippingCompanyId: ship.shippingCompany || formData.shippingCompany || 'Aramex',
             courier_id: formData.deliveryCourierId || formData.shippingCourierId || null,
@@ -625,15 +627,15 @@ export default function EditOrderModal({
         }
       }
 
-      activityLogService.log('edit_order', orderToEdit.orderNumber || orderToEdit.id, {
+      activityLogService.log('edit_order', normalizedOrder.orderNumber || normalizedOrder.id, {
         updatedFields: Object.keys(payload),
       });
 
       notificationService.notify({
         title: isAr ? 'تم تعديل الطلب' : 'Order Updated',
         message: isAr
-          ? `تم حفظ التعديلات على الطلب رقم ${orderToEdit.orderNumber || orderToEdit.id} بنجاح`
-          : `Order ${orderToEdit.orderNumber || orderToEdit.id} updated successfully`,
+          ? `تم حفظ التعديلات على الطلب رقم ${normalizedOrder.orderNumber || normalizedOrder.id} بنجاح`
+          : `Order ${normalizedOrder.orderNumber || normalizedOrder.id} updated successfully`,
         type: 'success',
         category: 'order',
       });
@@ -662,7 +664,7 @@ export default function EditOrderModal({
             <div className="flex items-center gap-2">
               <Edit2 className="w-5 h-5 text-blue-400" />
               <h3 className="font-black text-white text-base">
-                {isAr ? `تعديل بيانات الطلب الموحد (${orderToEdit.orderNumber || orderToEdit.id})` : `Edit Order (${orderToEdit.orderNumber || orderToEdit.id})`}
+                {isAr ? `تعديل بيانات الطلب الموحد (${normalizedOrder.orderNumber || normalizedOrder.id})` : `Edit Order (${normalizedOrder.orderNumber || normalizedOrder.id})`}
               </h3>
             </div>
             <button onClick={onClose} className="bg-slate-800 text-slate-400 hover:text-white p-1.5 rounded-xl cursor-pointer">

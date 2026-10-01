@@ -20,6 +20,7 @@ import { useRole } from '../../hooks/useRole';
 import { createReturnedProductFromOrderItem } from '../../services/returnedProductService';
 import ReturnedProductsTab from './ReturnedProductsTab';
 import type { ReturnedCustomerRecord, ReturnedOrderItemRecord, ReturnedOrderRecord } from '../../features/orders/pages/subcomponents/returned-products/types';
+import { runMutation, runQuery, type AsyncState } from '../../shared/contracts/ui.contracts';
 
 // ────────────────────── Types ──────────────────────
 
@@ -313,6 +314,7 @@ export default function ProductsManagementTab({
   const [products, setProducts] = useState<MasterProduct[]>([]);
   const [orderItemCounts, setOrderItemCounts] = useState<Record<string, number>>({});
   const [loadingProducts, setLoadingProducts] = useState(true);
+  const [productsQuery, setProductsQuery] = useState<AsyncState<MasterProduct[]>>({ status: 'loading' });
   const [productSearch, setProductSearch] = useState('');
   const [productCategoryFilter, setProductCategoryFilter] = useState('all');
   const [productAllowedFilter, setProductAllowedFilter] = useState<'all' | 'allowed' | 'blocked'>('all');
@@ -322,10 +324,12 @@ export default function ProductsManagementTab({
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [productForm, setProductForm] = useState<ProductForm>(emptyProductForm());
   const [submittingProduct, setSubmittingProduct] = useState(false);
+  const [productMutation, setProductMutation] = useState<AsyncState<boolean>>({ status: 'idle' });
 
   // ──────────── Order Items (Movements) State ────────────
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(true);
+  const [itemsQuery, setItemsQuery] = useState<AsyncState<OrderItem[]>>({ status: 'loading' });
   const [itemSearch, setItemSearch] = useState('');
   const [itemStatusFilter, setItemStatusFilter] = useState('all');
   const [returningItem, setReturningItem] = useState<OrderItem | null>(null);
@@ -337,8 +341,12 @@ export default function ProductsManagementTab({
   // Fetch master products from 'products' table
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'products'), (snap: CollectionSnapshot) => {
-      setProducts(snap.docs.map(toMasterProduct));
-      setLoadingProducts(false);
+      const nextProducts = snap.docs.map(toMasterProduct);
+      void runQuery(async () => nextProducts, (state) => {
+        setProductsQuery(state);
+        if (state.status === 'success') setProducts(state.data);
+        setLoadingProducts(state.status === 'loading');
+      });
     }, () => setLoadingProducts(false));
     return () => unsub?.();
   }, []);
@@ -348,8 +356,11 @@ export default function ProductsManagementTab({
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'order_items'), (snap: CollectionSnapshot) => {
       const items = snap.docs.map(toOrderItem);
-      setOrderItems(items);
-      setLoadingItems(false);
+      void runQuery(async () => items, (state) => {
+        setItemsQuery(state);
+        if (state.status === 'success') setOrderItems(state.data);
+        setLoadingItems(state.status === 'loading');
+      });
 
       // احتساب عدد الطلبات لكل منتج رئيسي
       // Count order_items per master product
@@ -428,7 +439,7 @@ export default function ProductsManagementTab({
       return;
     }
     setSubmittingProduct(true);
-    try {
+    const result = await runMutation(async () => {
       const payload = {
         product_name_ar:  productForm.product_name_ar.trim(),
         product_name_en:  productForm.product_name_en.trim() || productForm.product_name_ar.trim(),
@@ -452,13 +463,15 @@ export default function ProductsManagementTab({
           product_id: newId, ...payload, created_at: new Date().toISOString(),
         });
       }
+      return true;
+    }, setProductMutation);
+    if (result.status === 'success-after-mutation') {
       toast.success(isAr ? 'تم حفظ المنتج' : 'Product saved');
       setIsProductModalOpen(false);
-    } catch (err) {
-      toast.error(errorMessage(err) || (isAr ? 'تعذر حفظ المنتج' : 'Could not save product'));
-    } finally {
-      setSubmittingProduct(false);
+    } else if (result.status === 'error') {
+      toast.error(result.error.message || (isAr ? 'تعذر حفظ المنتج' : 'Could not save product'));
     }
+    setSubmittingProduct(false);
   };
 
   const deleteProduct = async (p: MasterProduct) => {

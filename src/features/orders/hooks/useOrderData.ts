@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { handleSupabaseError, OperationType } from '../../../lib/supabase';
+import { runQuery, type AsyncState } from '../../../shared/contracts/ui.contracts';
 import type {
   CouriersViewModel,
 } from '../../../data/dtos/couriers.dto';
@@ -205,17 +206,22 @@ export function useOrderData(
   const [allShipments, setAllShipments] = useState<ShipmentRecord[]>([]);
   const [autoVoucherRules, setAutoVoucherRules] = useState<AutoVoucherRule[]>([]);
   const [loading, setLoading] = useState(true);
+  const [ordersQuery, setOrdersQuery] = useState<AsyncState<OrderRecord[]>>({ status: 'loading' });
 
   useEffect(() => {
     if (!enabled) return;
 
     const unsubOrders = api.collections.orders.subscribe(
       ({ records }) => {
-        setOrders(records.flatMap((record) => {
+        const parsedOrders = records.flatMap((record) => {
           const parsed = parseOrderRecord(record);
           return parsed ? [parsed] : [];
-        }));
-        setLoading(false);
+        });
+        void runQuery(async () => parsedOrders, (state) => {
+          setOrdersQuery(state);
+          if (state.status === 'success') setOrders(state.data);
+          setLoading(state.status === 'loading');
+        });
       },
       (error) => handleSupabaseError(error, OperationType.LIST, 'orders'),
     );

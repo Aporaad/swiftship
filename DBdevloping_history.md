@@ -1038,3 +1038,9 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 ## [2026-10-01 20:02:00 +0000] — تدقيق أسماء الجداول بعد إعادة التسمية
 - لا يوجد SQL منفذ في هذه الدفعة.
 - تم التحقق من أن الكود النشط يقرأ `main_entry` و`account_trans`، مع إبقاء migrations التاريخية القديمة دون تعديل.
+
+
+## [2026-10-01 20:14:30 +0000] — AI Model: Manus — لا تغييرات قاعدة بيانات
+- لم تُنفذ أوامر SQL.
+- لم تتغير الجداول أو الأعمدة أو RLS أو migrations.
+- التغييرات اقتصرت على عقود TypeScript وadapter للواجهة وتوحيد حالات Query/Mutation.

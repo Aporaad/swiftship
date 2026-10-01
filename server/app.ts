@@ -19,13 +19,27 @@ export function createApiAvailabilityMiddleware(
   };
 }
 
+export function readinessResponse(isDatabaseReady: boolean): {
+  status: 'ready' | 'not_ready';
+  checks: { database: boolean };
+} {
+  return {
+    status: isDatabaseReady ? 'ready' : 'not_ready',
+    checks: { database: isDatabaseReady },
+  };
+}
+
 export function createApp(isDatabaseReady: () => boolean): Express {
   const app = express();
 
   app.use(express.json());
   app.use('/api/*', createApiAvailabilityMiddleware(isDatabaseReady));
   app.get('/api/health', (_req, res) => {
-    res.json({ status: 'ok', project: 'supabase-backend' });
+    res.status(200).json({ status: 'ok', project: 'supabase-backend' });
+  });
+  app.get('/api/readiness', (_req, res) => {
+    const ready = isDatabaseReady();
+    res.status(ready ? 200 : 503).json(readinessResponse(ready));
   });
 
   return app;

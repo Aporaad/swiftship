@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Boxes, ExternalLink, Search, X, CheckCircle2 } from 'lucide-react';
 import { collection, db, onSnapshot } from '../../lib/supabase';
+import { runQuery, type AsyncState } from '../../shared/contracts/ui.contracts';
 import { Product } from '../../services/productService';
 
 /**
@@ -100,6 +101,7 @@ export default function ProductPickerModal({
 }: ProductPickerModalProps) {
   const [products, setProducts] = useState<SystemProductRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [productsQuery, setProductsQuery] = useState<AsyncState<SystemProductRecord[]>>({ status: 'loading' });
   const [searchQuery, setSearchQuery] = useState('');
 
   // جلب كافة المنتجات المسجلة في جدول المنتجات الرئيسي بصورة حية
@@ -147,11 +149,15 @@ export default function ProductPickerModal({
           };
         });
 
-        setProducts(fetchedProducts);
-        setLoading(false);
+        void runQuery(async () => fetchedProducts, (state) => {
+          setProductsQuery(state);
+          setProducts(state.status === 'success' ? state.data : []);
+          setLoading(state.status === 'loading');
+        });
       },
       (error: unknown) => {
         console.warn('[ProductPickerModal] Error fetching master products catalog:', error);
+        setProductsQuery({ status: 'error', error: { code: 'PRODUCT_QUERY_FAILED', message: error instanceof Error ? error.message : 'Unable to load products' } });
         setLoading(false);
       }
     );

@@ -1097,3 +1097,16 @@ https://manus.im/share/xR07Pp2KeqN68wwZBKQ6Ju
 لحضه ركز لايوجد قسم او جدول باسم Journal كان قديما باسم Journal Entry. وتم تغييره الى Main Entry. وكان يوجد account_transaction وتم تغييره الى account_trans
 تاكد من وجود هذا التغييره و تطبيق في كل مكونات النظام.
 ```
+
+
+## [2026-10-01 20:14:30 +0000] — AI Model: Manus
+```text
+يالله الان ابدأ فوراً بتنفيذ بقية مهام إغلاق المرحلة الحادية عشرة والثانيه عشر
+بناء عقد مستقل لـJournal Actions.
+إنشاء adapter typed مستقل لـEditOrderModal.
+ترحيل مستهلكي runQuery/runMutation الخمسة.
+تشغيل الاختبارات الكاملة.
+إغلاق المرحلة 11 رسميًا، ثم المرحلة 12، ثم تجهيز المرحلة 13.
+وانتقل للمرحله 13 فورا بعدها
+```
+**التنفيذ:** تم اعتماد الاسم canonical `Main Entry Actions` بدل Journal Actions بما يطابق `main_entry` و`account_trans`.
