@@ -5,6 +5,7 @@ import { Search, Edit2, X, Plus, Trash2, Shield, CheckCircle2, RefreshCw } from 
 import { useRole } from '../../../hooks/useRole';
 import { useSettings } from '../../../context/SettingsContext';
 import { notificationService } from '../../../services/notificationService';
+import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
 
 import { ALL_PERMISSIONS, PERMISSION_CATEGORIES } from '../../../lib/permissions';
 
@@ -22,7 +23,8 @@ export default function RolesPage() {
   const { settings, t } = useSettings();
   const currentPermissions = AVAILABLE_PERMISSIONS(t, settings.language);
   const [roles, setRoles] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [queryState, setQueryState] = useState<AsyncState<any[]>>(asyncState.loading());
+  const loading = queryState.status === 'loading';
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState<any>(null);
@@ -32,7 +34,8 @@ export default function RolesPage() {
     title: '',
     permissions: [] as string[]
   });
-  const [saving, setSaving] = useState(false);
+  const [mutationState, setMutationState] = useState<AsyncState<void>>(asyncState.idle());
+  const saving = mutationState.status === 'submitting';
   const saveBlockRef = React.useRef(false);
 
   useEffect(() => {
@@ -40,9 +43,9 @@ export default function RolesPage() {
     const unsub = onSnapshot(collection(db, 'roles'), (snap: any) => {
       const fetchedRoles = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
       setRoles(fetchedRoles);
-      setLoading(false);
+      setQueryState(fetchedRoles.length > 0 ? asyncState.success(fetchedRoles) : asyncState.empty());
     }, (error: any) => {
-      setLoading(false);
+      setQueryState(asyncState.error<any[]>(error, 'ROLES_LOAD_FAILED'));
       handlePostgreSQLError(error, OperationType.LIST, 'roles');
     });
     return unsub;
@@ -125,25 +128,23 @@ export default function RolesPage() {
     }
     
     saveBlockRef.current = true;
-    setSaving(true);
-    try {
-      await setDoc(doc(db, 'roles', formData.id), {
+    const result = await runMutation(() => setDoc(doc(db, 'roles', formData.id), {
         title: formData.title,
         permissions: formData.permissions,
         updatedAt: Date.now()
-      });
+      }), setMutationState);
+    if (result.status === 'success-after-mutation') {
       notificationService.notify({
         title: settings.language === 'ar' ? 'تم الحفظ' : 'Saved Successfully',
         message: settings.language === 'ar' ? `تم حفظ دور ${formData.title} بنجاح` : `Role ${formData.title} has been successfully updated.`,
         type: 'success'
       });
       setIsModalOpen(false);
-    } catch (err) {
+    } else if (result.status === 'error') {
+      const err = result.error;
       handlePostgreSQLError(err, OperationType.UPDATE, 'roles');
-    } finally {
-      setSaving(false);
-      saveBlockRef.current = false;
     }
+    saveBlockRef.current = false;
   };
 
   const handleDelete = async (id: string) => {
@@ -151,9 +152,9 @@ export default function RolesPage() {
       return alert(settings.language === 'ar' ? 'لا يمكن حذف دور مدير النظام مطلقا' : 'Cannot delete Admin role');
     }
     if (!window.confirm(settings.language === 'ar' ? `هل أنت متأكد من حذف دور ${id}؟` : `Are you sure you want to delete role ${id}?`)) return;
-    try {
-      await deleteDoc(doc(db, 'roles', id));
-    } catch (err) {
+    const result = await runMutation(() => deleteDoc(doc(db, 'roles', id)), setMutationState);
+    if (result.status === 'error') {
+      const err = result.error;
       handlePostgreSQLError(err, OperationType.DELETE, 'roles');
     }
   };

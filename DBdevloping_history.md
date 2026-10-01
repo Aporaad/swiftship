@@ -1078,3 +1078,8 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 - لم تتغير الجداول أو الأعمدة أو العلاقات أو RLS أو migrations.
 - `CustodyAdvancesTab` استمر باستخدام الخدمة المالية الحالية وحدودها الذرية دون تعديل قاعدة البيانات.
 - عقود `PublicTrackingDto` و`PortalUserSessionDto` في alx_web تعريفات TypeScript فقط ولا تنفذ وصولاً مباشراً لقاعدة البيانات.
+
+## [2026-10-02 01:12:00 +0300] — دفعة Async المالية والإدارية — AI Model: Manus
+- لم تُنفذ أوامر SQL.
+- لم تتغير الجداول أو الأعمدة أو العلاقات أو RLS أو migrations.
+- جميع التغييرات الحالية تخص عقود TypeScript وحالة واجهة المستخدم وPortal Gateway.

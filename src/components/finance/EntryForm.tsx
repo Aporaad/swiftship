@@ -26,6 +26,7 @@ import {
   type FinancialPaymentMethod,
 } from '../../services/financialEntryService';
 import { supabase } from '../../lib/supabase-adapter';
+import { asyncState, runMutation, type AsyncState } from '../../shared/contracts/ui.contracts';
 import AccountPickerModal from './AccountPickerModal';
 
 // ─────────────────────────── أنواع مشتركة ───────────────────────────
@@ -253,8 +254,10 @@ export default function EntryForm({
     return otherLine?.accountId || '';
   });
 
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const [mutationState, setMutationState] = useState<AsyncState<void>>(asyncState.idle());
+  const saving = mutationState.status === 'submitting';
+  const error = mutationState.status === 'error' ? mutationState.error.message : '';
+  const setValidationError = (message: string) => setMutationState(asyncState.error<void>(new Error(message), 'FINANCE_FORM_VALIDATION_FAILED'));
 
   // ─────────────────────────── التهيئة التلقائية ───────────────────────────
 
@@ -499,18 +502,17 @@ export default function EntryForm({
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    setError('');
-    if (!canCreate) return setError('ليس لديك تصريح إنشاء هذا النوع من القيود.');
+    setMutationState(asyncState.idle());
+    if (!canCreate) return setValidationError('ليس لديك تصريح إنشاء هذا النوع من القيود.');
     if (!selectedCurrency || !entryTypeId || !moduleId || !description.trim()) {
-      return setError('أكمل رقم القيد والفئة والنوع والعملة والبيان.');
+      return setValidationError('أكمل رقم القيد والفئة والنوع والعملة والبيان.');
     }
-    if (saveAsPosted && !canPost) return setError('ليس لديك تصريح اعتماد وترحيل القيد.');
+    if (saveAsPosted && !canPost) return setValidationError('ليس لديك تصريح اعتماد وترحيل القيد.');
     if (paymentMethod === 'mixed' && category !== 'Compound') {
-      return setError('الدفع المختلط يحتاج قيدًا مركبًا لتمثيل كل حساب قبض أو صرف بساق مستقل.');
+      return setValidationError('الدفع المختلط يحتاج قيدًا مركبًا لتمثيل كل حساب قبض أو صرف بساق مستقل.');
     }
 
-    try {
-      setSaving(true);
+    const result = await runMutation(async () => {
 
       // في وضع السند: بناء الأسطر تلقائياً
       const effectiveLines = isVoucherMode ? buildVoucherLines() : lines;
@@ -518,16 +520,16 @@ export default function EntryForm({
       // التحقق من صحة أسطر السند
       if (isVoucherMode) {
         const cashBankAccId = paymentDetails[0]?.accountId;
-        if (!cashBankAccId) return setError('اختر حساب الصندوق أو البنك في تفاصيل الدفع.');
-        if (!otherPartyAccountId) return setError('اختر حساب الطرف الآخر.');
+        if (!cashBankAccId) throw new Error('اختر حساب الصندوق أو البنك في تفاصيل الدفع.');
+        if (!otherPartyAccountId) throw new Error('اختر حساب الطرف الآخر.');
         const amount = asNumber(paymentDetails[0]?.amountOriginal || '0');
-        if (amount <= 0) return setError('أدخل مبلغاً موجباً صحيحاً.');
+        if (amount <= 0) throw new Error('أدخل مبلغاً موجباً صحيحاً.');
       } else {
         // التحقق من توازن القيد العادي
         const debit = effectiveLines.filter((l) => l.transType === 'Debit').reduce((s, l) => s + asNumber(l.amountOriginal), 0);
         const credit = effectiveLines.filter((l) => l.transType === 'Credit').reduce((s, l) => s + asNumber(l.amountOriginal), 0);
         if (debit === 0 || debit !== credit) {
-          return setError('لا يمكن الحفظ: مجموع المدين والدائن غير متساوٍ بعملة رأس القيد.');
+          throw new Error('لا يمكن الحفظ: مجموع المدين والدائن غير متساوٍ بعملة رأس القيد.');
         }
       }
 
@@ -597,12 +599,8 @@ export default function EntryForm({
         await financialEntryService.create(entryPayload);
       }
 
-      onSaved();
-    } catch (cause: any) {
-      setError(cause?.message || 'تعذر حفظ القيد.');
-    } finally {
-      setSaving(false);
-    }
+    }, setMutationState);
+    if (result.status === 'success-after-mutation') onSaved();
   };
 
   // ─────────────────────────── العرض ───────────────────────────

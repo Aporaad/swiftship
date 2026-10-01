@@ -1252,3 +1252,10 @@
 - [x] عزل تطبيق Supabase القديم داخل `alx_web/src/lib/legacy-supabase` مع ملف توافق مؤقت.
 - [x] إضافة feature flag `VITE_PORTAL_API_ENABLED` و`PortalGateway` HTTP قابل للتبديل، مع إبقائه غير مفعل افتراضياً.
 - [ ] استكمال نقل الاستعلامات المباشرة المتبقية إلى Portal Gateway بعد اعتماد endpoints الخادم.
+
+## [2026-10-02 01:12:00 +0300] — دفعة إغلاق Async للمرحلة 12 — AI Model: Manus
+- [x] ترحيل نماذج `EntryForm` و`GeneralEntryForm` و`VoucherEntryForm` و`CompoundEntryForm` إلى `AsyncState` و`runMutation`.
+- [x] ترحيل `EntrySettingsTab` إلى عقد mutation الموحد.
+- [x] ترحيل عمليات الحذف/الترحيل الفردية والجماعية في `EntryWorkspaceTab` إلى العقد الموحد.
+- [x] ترحيل صفحة `RolesPage` للقراءة والكتابة والحذف إلى AsyncState.
+- [ ] استكمال بقية صفحات الإدارة والمكونات ذات async state قبل إعلان الإغلاق الشامل للمرحلة 12.

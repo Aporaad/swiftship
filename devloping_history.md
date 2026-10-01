@@ -1941,3 +1941,12 @@
 - نُقلت implementation Supabase القديمة إلى `src/lib/legacy-supabase/supabase.ts` وأصبح `src/lib/supabase.ts` ملف توافق deprecated فقط.
 - التحقق: `npm run check` و`npm test -- --reporter=dot` في النظام الرئيسي ناجحان (67 ملفاً، 237 اختباراً، 3 متخطاة، 8 اختبارات متخطاة)، و`npm run build` ناجح. بناء `alx_web` ناجح.
 - لا SQL ولا تغييرات قاعدة بيانات أو RLS.
+
+## [2026-10-02 01:12:00 +0300] — دفعة Async مالية وإدارية وبدء consumer فعلي للمرحلة 13 — AI Model: Manus
+- تم ترحيل نماذج `EntryForm` و`GeneralEntryForm` و`VoucherEntryForm` و`CompoundEntryForm` إلى `AsyncState` و`runMutation` مع فصل أخطاء التحقق عن أخطاء التنفيذ.
+- تم ترحيل `EntrySettingsTab` وعمليات `EntryWorkspaceTab` الفردية والجماعية، بما فيها الحذف والترحيل والإبطال والعكس، إلى الحالة الموحدة.
+- تم ترحيل `RolesPage` في القراءة اللحظية والحفظ والحذف إلى `AsyncState`/`runMutation`.
+- في `alx_web` أضيف `PortalAnnouncementDto` و`getAnnouncements()` إلى PortalGateway، ونُقلت `AnnouncementsPage` إلى `portalGateway` و`runQuery`.
+- التحقق: فحص TypeScript واختبارات النظام ناجحة (67 ملفاً، 237 اختباراً، 8 متخطاة)، وبناء alx_web ناجح.
+- المرحلة 12 لم تُعلن مغلقة على مستوى النظام بعد؛ ما زالت صفحات إدارة ومكونات async أخرى تحتاج الترحيل.
+- لا SQL ولا تغييرات DB/RLS.

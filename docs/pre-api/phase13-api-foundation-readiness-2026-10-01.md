@@ -129,3 +129,6 @@ React / Electron / alx_web → HTTP API → Application Gateway → Supabase
 - لم يتم تفعيل HTTP flag افتراضياً، ولم تُنقل الاستعلامات القديمة دفعة واحدة قبل اعتماد endpoints وحماية الملكية.
 
 التحقق: `npm run build` في alx_web ناجح. لا SQL أو تغييرات DB/RLS. الخطوة التالية هي نقل أول قراءة read-only إلى Portal Gateway بعد تثبيت endpoint server contract، ثم إزالة imports المباشرة تدريجياً.
+
+## دفعة 01:12 — AI Model: Manus
+تم نقل `AnnouncementsPage` في `alx_web` إلى `PortalGateway.getAnnouncements()` و`runQuery`. أضيف DTO آمن للإعلانات وAsync contract محلي للموقع. الـ HTTP endpoint المتوقع هو `/api/v1/portal/announcements`، بينما fallback الحالي يعبر legacy boundary فقط إلى حين نشر endpoint والتحقق من auth.
