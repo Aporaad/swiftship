@@ -126,7 +126,7 @@ export function extractRowPayload(table: string, row: any): any {
   if (table === 'main_entry') {
     if (combined.entry_number && !combined.entryNumber) combined.entryNumber = combined.entry_number;
     if (combined.entryNumber && !combined.entry_number) combined.entry_number = combined.entryNumber;
-    if (combined.entry_number && !combined.journalEntryNumber) combined.journalEntryNumber = combined.entry_number;
+    if (combined.entry_number && !combined.mainEntryNumber) combined.mainEntryNumber = combined.entry_number;
     if (combined.posting_status && !combined.postingStatus) combined.postingStatus = combined.posting_status;
     if (combined.postingStatus && !combined.posting_status) combined.posting_status = combined.postingStatus;
     if (combined.postingStatus && !combined.status) combined.status = combined.postingStatus;

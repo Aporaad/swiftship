@@ -18,7 +18,7 @@ const events: OrderHistoryEvent[] = [
   },
   {
     id: 'finance-change', eventType: 'financial.journal_insert', eventCategory: 'financial', operation: 'insert', entityType: 'journal_entry',
-    actorName: 'النظام', summary: 'تم إنشاء قيد مالي مرتبط بالطلب', occurredAt: '2026-07-15T21:15:00.000Z', journalEntryId: 'JE-3',
+    actorName: 'النظام', summary: 'تم إنشاء قيد مالي مرتبط بالطلب', occurredAt: '2026-07-15T21:15:00.000Z', mainEntryId: 'JE-3',
   },
 ];
 

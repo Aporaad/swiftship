@@ -106,7 +106,7 @@ export default function GeneralLedgerTab({
                   className="flex items-center gap-1.5 bg-[#d4af37]/10 hover:bg-[#d4af37]/20 border border-[#d4af37]/25 text-[#d4af37] px-3.5 py-2 rounded-xl text-xs font-black transition-all ml-auto lg:ml-0"
                 >
                   <PlusCircle className="w-3.5 h-3.5" />
-                  {isAr ? 'قيد تسوية وتعديل مالي' : 'Manual Journal Entry'}
+                  {isAr ? 'قيد تسوية وتعديل مالي' : 'Manual Main Entry'}
                 </button>
               </div>
             </div>

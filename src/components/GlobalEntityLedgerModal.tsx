@@ -32,7 +32,7 @@ export default function GlobalEntityLedgerModal() {
   const [orders, setOrders] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
   // خريطة رؤوس القيود: entryId → بيانات القيد
-  // Journal entry headers map: entryId → entry data
+  // Main entry headers map: entryId → entry data
   const [mainEntriesMap, setMainEntriesMap] = useState<Map<string, any>>(new Map());
   
   const [loading, setLoading] = useState(false);
@@ -200,7 +200,7 @@ export default function GlobalEntityLedgerModal() {
           title: tx.description ? tx.description : (isAr ? (currentType === 'Credit' ? 'إيداع نقدي للحساب' : 'سحب / تسوية من الحساب') : (currentType === 'Credit' ? 'Account Deposit' : 'Account Withdrawal')),
           description: isAr 
             ? `حركة حساب مركزية رقم القيد: ${refNo || 'Ledger-Tx'}`
-            : `System journal entry ref: ${refNo || 'Ledger-Tx'}`,
+            : `System main entry ref: ${refNo || 'Ledger-Tx'}`,
           ref: refNo
         });
       });
@@ -479,7 +479,7 @@ export default function GlobalEntityLedgerModal() {
                                 {item.module === 'order' ? (isAr ? 'شحنة/توصيل' : 'Shipment COD') :
                                  item.module === 'expense' ? (isAr ? 'عهدة/مصروف/أجور' : 'Disbursed') :
                                  item.module === 'payment' ? (isAr ? 'كاش مسدد' : 'COD Settled') :
-                                 (isAr ? 'تسوية مركزية' : 'Journal Entry')}
+                                 (isAr ? 'تسوية مركزية' : 'Main Entry')}
                               </span>
                             </td>
                             <td className="p-3 font-bold text-white text-start">

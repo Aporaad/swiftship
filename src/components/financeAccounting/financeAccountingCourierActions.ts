@@ -79,7 +79,7 @@ export function createFinanceAccountingCourierActions(dependencies: ActionDepend
 هل تريد الاستمرار؟`
       : `Warning: Confirm full audit reconciliation for ${cour.fullName}?
 This will:
-1. Zero out the financial account balance (${currentBalance.toLocaleString()} YER) with an offsetting journal entry.
+1. Zero out the financial account balance (${currentBalance.toLocaleString()} YER) with an offsetting main entry.
 2. Reconcile all outstanding open custodies.
 3. Settle and remit all unremitted COD cargo collections (${courierAuditSheet.totalUnremittedCashValue.toLocaleString()} YER).
 Continue?`

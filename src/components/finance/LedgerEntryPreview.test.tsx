@@ -29,7 +29,7 @@ describe('LedgerEntryPreview', () => {
       />,
     );
 
-    expect(markup).toContain('Financial Journal Entry Preview');
+    expect(markup).toContain('Financial Main Entry Preview');
     expect(markup).toContain('JV-2026-0001');
     expect(markup).toContain('single-voucher-print-wrapper');
     expect(markup).toContain('BALANCED JOURNAL VOUCHER');

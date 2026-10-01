@@ -56,8 +56,8 @@ export interface AccountTransaction {
   createdAt: number;
   createdByUid?: string;
   createdByName?: string;
-  journalEntryId?: string;
-  journalEntryNumber?: string;
+  mainEntryId?: string;
+  mainEntryNumber?: string;
   orderId?: string;
   orderNumber?: string;
   shipmentId?: string;

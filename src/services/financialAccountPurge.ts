@@ -53,13 +53,13 @@ export async function purgeEntityAndFinancialFootprint(service: any, entityType:
         const txSnap = await getDocs(txQuery);
 
         const refNumbers = new Set<string>();
-        const journalEntryIds = new Set<string>();
+        const mainEntryIds = new Set<string>();
 
         txSnap.docs.forEach((d) => {
           const tx = d.data();
-          const entryId = tx.entryId || tx.journalEntryId;
+          const entryId = tx.entryId || tx.mainEntryId;
           if (entryId) {
-            journalEntryIds.add(entryId);
+            mainEntryIds.add(entryId);
           }
           if (tx.refNumber) {
             refNumbers.add(tx.refNumber);
@@ -70,8 +70,8 @@ export async function purgeEntityAndFinancialFootprint(service: any, entityType:
         // 3. Fetch and delete all related transaction double-entry legs
         const allTxDocsToDelete = new Map<string, any>(); // docId -> docRef
 
-        if (journalEntryIds.size > 0) {
-          const jvIdsArray = Array.from(journalEntryIds);
+        if (mainEntryIds.size > 0) {
+          const jvIdsArray = Array.from(mainEntryIds);
           for (const jvId of jvIdsArray) {
             const q = query(collection(db, "account_trans"), where("entryId", "==", jvId));
             const snap = await getDocs(q);

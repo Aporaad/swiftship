@@ -122,7 +122,7 @@ export default function FinanceAccounting({
   const [empStmtStartDate, setEmpStmtStartDate] = useState('');
   const [empStmtEndDate, setEmpStmtEndDate] = useState('');
 
-  // Edit Journal Entry State
+  // Edit Main Entry State
   const [isEditJournalOpen, setIsEditJournalOpen] = useState(false);
   const [selectedEditEntry, setSelectedEditEntry] = useState<FinanceEntryState | null>(null);
   const [editJournalLoading, setEditJournalLoading] = useState(false);
@@ -669,7 +669,7 @@ return (
             <div className="p-4 border-b border-slate-850 flex justify-between items-center bg-[#07070a]/40 shrink-0">
               <h3 className="font-black text-white text-xs uppercase tracking-widest flex items-center gap-2">
                 <Edit2 className="w-4 h-4 text-[#d4af37]" />
-                {isAr ? 'تعديل كافة بيانات القيد المالي' : 'Full Journal Entry Editor'}
+                {isAr ? 'تعديل كافة بيانات القيد المالي' : 'Full Main Entry Editor'}
               </h3>
               <button
                 type="button"

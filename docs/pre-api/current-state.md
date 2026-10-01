@@ -75,3 +75,8 @@
 ## جرد Async — 2026-10-01 19:57 +0000
 - يوجد مستهلك موحد واحد فقط في Orders/Finance ضمن الجرد الحالي: `ReturnedProductsTab`.
 - توجد خمسة مسارات Orders legacy تحتاج ترحيلًا تدريجيًا قبل إغلاق المرحلة 12.
+
+## تحديث canonical naming — 2026-10-01 20:02 +0000
+- النموذج النشط موحد على `main_entry` و`account_trans`.
+- حقول Order History النشطة موحدة على `mainEntryId` و`accountTransId`.
+- المراجع القديمة المتبقية في migrations/docs التاريخية فقط، ولم تُعدّل حفاظًا على سجل الترحيل.

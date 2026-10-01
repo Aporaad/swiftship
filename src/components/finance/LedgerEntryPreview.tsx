@@ -26,7 +26,7 @@ export default function LedgerEntryPreview({
               <div>
                 <h3 className="text-sm font-black text-white flex items-center gap-1.5 uppercase tracking-wider">
                   <FileText className="w-4 h-4 text-[#d4af37]" />
-                  {isAr ? 'معاينة القيد المالي والترحيل الدفتري' : 'Financial Journal Entry Preview'}
+                  {isAr ? 'معاينة القيد المالي والترحيل الدفتري' : 'Financial Main Entry Preview'}
                 </h3>
                 <p className="text-[10px] text-slate-500 mt-1 leading-snug">
                   {isAr ? `رمز المستند المالي المرجعي: ${selectedLedgerEntry.refNumber}` : `Voucher Ref Node: ${selectedLedgerEntry.refNumber}`}

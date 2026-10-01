@@ -1034,3 +1034,7 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 
 ## [2026-10-01 19:56:00 +0000] — دفعة عقود الإجراءات
 - لم يتم تنفيذ SQL أو migrations أو تغييرات schema/RLS؛ التغيير TypeScript فقط.
+
+## [2026-10-01 20:02:00 +0000] — تدقيق أسماء الجداول بعد إعادة التسمية
+- لا يوجد SQL منفذ في هذه الدفعة.
+- تم التحقق من أن الكود النشط يقرأ `main_entry` و`account_trans`، مع إبقاء migrations التاريخية القديمة دون تعديل.

@@ -266,7 +266,7 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
     ...matchedCouriers.map(cr => ({ ...cr, _displayType: isAr ? 'مندوب توزيع' : 'Courier', _color: 'amber' })),
     ...matchedSources.map(s => ({ ...s, _displayType: isAr ? 'مصدر توريد' : 'Source', _color: 'blue' })),
     ...matchedAccounts.map(a => ({ ...a, _displayType: isAr ? 'حساب مالي' : 'Account', _color: 'indigo' })),
-    ...matchedJournal.map(j => ({ ...j, _displayType: isAr ? 'قيد محاسبي' : 'Journal Entry', _color: 'violet' })),
+    ...matchedJournal.map(j => ({ ...j, _displayType: isAr ? 'قيد محاسبي' : 'Main Entry', _color: 'violet' })),
     ...matchedSalary.map(s => ({ ...s, _displayType: isAr ? 'سند راتب' : 'Salary Record', _color: 'lime' })),
     ...matchedRoles.map(r => ({ ...r, _displayType: isAr ? 'صلاحية/دور' : 'Role', _color: 'fuchsia' })),
     ...matchedFeatures.map(f => ({ ...f, _searchType: 'system', _displayType: isAr ? 'واجهة/قسم' : 'System Feature', _color: 'gold' })),
@@ -347,7 +347,7 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
       case 'sources': return matchedSources.map(s => ({ ...s, _displayType: isAr ? 'مصدر توريد' : 'Source', _color: 'blue' }));
       case 'accounting': return [
         ...matchedAccounts.map(a => ({ ...a, _displayType: isAr ? 'حساب مالي' : 'Account', _color: 'indigo' })),
-        ...matchedJournal.map(j => ({ ...j, _displayType: isAr ? 'قيد محاسبي' : 'Journal Entry', _color: 'violet' })),
+        ...matchedJournal.map(j => ({ ...j, _displayType: isAr ? 'قيد محاسبي' : 'Main Entry', _color: 'violet' })),
         ...matchedSalary.map(s => ({ ...s, _displayType: isAr ? 'سند راتب' : 'Salary Record', _color: 'lime' }))
       ];
       case 'system': return [

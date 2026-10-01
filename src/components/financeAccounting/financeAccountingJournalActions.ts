@@ -122,8 +122,8 @@ export function createFinanceAccountingJournalActions(dependencies: ActionDepend
         }
 
         // Update master entry doc in main_entry if exists
-        if (selectedEditEntry.journalEntryId) {
-          const jvRef = doc(db, 'main_entry', selectedEditEntry.journalEntryId);
+        if (selectedEditEntry.mainEntryId) {
+          const jvRef = doc(db, 'main_entry', selectedEditEntry.mainEntryId);
           batch.update(jvRef, {
             amount: rawAmt,
             currency: editJournalData.currencyOriginal,
@@ -216,8 +216,8 @@ export function createFinanceAccountingJournalActions(dependencies: ActionDepend
       }
 
       // Delete master entry document from main_entry if present
-      if (entryToDelete.journalEntryId) {
-        batch.delete(doc(db, 'main_entry', entryToDelete.journalEntryId));
+      if (entryToDelete.mainEntryId) {
+        batch.delete(doc(db, 'main_entry', entryToDelete.mainEntryId));
       }
 
       await batch.commit();
