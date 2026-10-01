@@ -102,3 +102,7 @@
 
 ## Real session checkpoint — 2026-10-01 20:41:00 +0000 — AI Model: Manus
 تم استبدال static token بـSupabase `auth.getUser(accessToken)`، وتفعيل Customers وCouriers read-only بصلاحيات مستقلة. مسار current-user مؤجل لحين اعتماد DTO جلسة آمن لا يعتمد على auth legacy.
+
+
+## Local auth correction — 2026-10-01 20:56:00 +0000 — AI Model: Manus
+مصدر الوثوقية المعتمد الآن هو `public.sessions` ثم `public.users` فقط. تم حذف الاعتماد على Supabase Auth من API Foundation، ويستخدم ApiClient session ID المحلي عند استدعاء Customers/Couriers.

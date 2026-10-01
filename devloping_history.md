@@ -1917,3 +1917,6 @@
 - أضيف `server/routes/couriers.ts` وDTO/Gateway read-only، وتم تفعيل `GET /api/v1/couriers` خلف `couriers:read`.
 - جميع المسارات الجديدة بلا mutations أو SQL أو تغيير RLS.
 - نجحت 20 اختبارًا مستهدفًا وTypeScript.
+
+## [2026-10-01 20:56:00 +0000] — تصحيح المصادقة إلى public.users/public.sessions — AI Model: Manus
+تم تصحيح الانحراف السابق وإزالة `supabase.auth` من API Foundation. أصبح verifier المحلي يقرأ session document من `public.sessions`، ثم user document من `public.users`، ويرفض الجلسات المنتهية أو force-logout أو المستخدمين المعطلين. تم اشتقاق permissions من role/is_root، وتم تحديث `ApiClient` لإرسال session ID المحلي من sessionStorage. لا يعتمد التنفيذ على access token أو Supabase Auth.

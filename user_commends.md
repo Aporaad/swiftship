@@ -1135,3 +1135,10 @@ https://manus.im/share/xR07Pp2KeqN68wwZBKQ6Ju
 وبقيه الخطوات كامل
 ```
 **النطاق المنفذ:** Supabase session verifier حقيقي، permission middleware، وتفعيل Customers وCouriers read-only.
+
+
+## [2026-10-01 20:56:00 +0000] — AI Model: Manus
+```text
+احنا في النظام بنعتمد بالمصادقه والوثوقيه على جدول public.users و جدول public.sessions فقط والتحقق محلي ولانعتمد على supabase.auth وانشاء نظام مصادقه محلي
+```
+**التصحيح:** تم اعتماد users/sessions فقط في verifier ومسارات API، وإزالة مسار Supabase Auth من التنفيذ.

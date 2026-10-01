@@ -17,7 +17,7 @@ describe('Couriers API route', () => {
     }];
     const gateway = { list: vi.fn().mockResolvedValue({ items, limit: 10, offset: 0, hasMore: false }) };
     registerCouriersRoutes(app, gateway, async (token) => token === 'valid'
-      ? { id: 'admin-1', roles: ['couriers:read'] }
+      ? { id: 'admin-1', roles: ['couriers:read'], sessionId: 'session-1' }
       : null);
     const [, authenticate, authorize, handler] = (app.get as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
     const req = { header: () => 'Bearer valid', query: { limit: '10', offset: '0' } };
@@ -36,7 +36,7 @@ describe('Couriers API route', () => {
   it('returns permission denied for an authenticated principal without courier access', async () => {
     const app = { get: vi.fn() } as unknown as Express;
     const gateway = { list: vi.fn() };
-    registerCouriersRoutes(app, gateway, async () => ({ id: 'user-1', roles: [] }));
+    registerCouriersRoutes(app, gateway, async () => ({ id: 'user-1', roles: [], sessionId: 'session-1' }));
     const [, authenticate, authorize] = (app.get as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
     const req = { header: () => 'Bearer valid', query: {} };
     const res = response();

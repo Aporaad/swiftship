@@ -1,21 +1,14 @@
 import type { RequestHandler } from 'express';
+import { doc, getDoc } from '../current-db/client';
 
 export interface ServerPrincipal {
   id: string;
   email?: string | null;
   roles: string[];
+  sessionId: string;
 }
 
 export type TokenVerifier = (token: string) => Promise<ServerPrincipal | null>;
-
-interface SupabaseAuthClient {
-  auth?: {
-    getUser?: (token: string) => Promise<{
-      data?: { user?: { id?: string; email?: string; user_metadata?: unknown } | null };
-      error?: unknown;
-    }>;
-  };
-}
 
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -23,19 +16,32 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
-function rolesFromUserMetadata(metadata: unknown): string[] {
-  const record = asRecord(metadata);
-  const role = typeof record.role === 'string' ? record.role : null;
-  const roles = Array.isArray(record.roles)
-    ? record.roles.filter((value): value is string => typeof value === 'string')
-    : [];
-  const normalized = new Set(roles);
-  if (role) normalized.add(role);
-  if (role === 'Admin' || role === 'admin' || record.isRoot === true) {
-    normalized.add('customers:read');
-    normalized.add('couriers:read');
+function asString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function asBoolean(value: unknown): boolean {
+  return value === true || value === 'true';
+}
+
+function rolesFromUser(user: Record<string, unknown>, session: Record<string, unknown>): string[] {
+  const role = asString(user.role) ?? asString(session.role);
+  const roles = new Set<string>();
+  if (role) roles.add(role);
+  if (role === 'Admin' || role === 'admin' || asBoolean(user.is_root) || asBoolean(user.isRoot)) {
+    roles.add('customers:read');
+    roles.add('couriers:read');
   }
-  return [...normalized];
+  return [...roles];
+}
+
+function lastSeenMs(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  return null;
 }
 
 export function parseBearerToken(value: unknown): string | null {
@@ -44,18 +50,34 @@ export function parseBearerToken(value: unknown): string | null {
   return match?.[1] ?? null;
 }
 
-export function createSupabaseSessionVerifier(client: unknown): TokenVerifier {
-  return async (token) => {
-    const authClient = client as SupabaseAuthClient;
-    if (typeof authClient.auth?.getUser !== 'function') return null;
-    const result = await authClient.auth.getUser(token);
-    const user = result.data?.user;
-    if (result.error || !user?.id) return null;
-    return {
-      id: user.id,
-      email: user.email ?? null,
-      roles: rolesFromUserMetadata(user.user_metadata),
-    };
+export function createLocalSessionVerifier(db: unknown): TokenVerifier | null {
+  if (!db) return null;
+  return async (sessionId) => {
+    try {
+      const sessionSnapshot = await getDoc(doc(db, 'sessions', sessionId));
+      if (!sessionSnapshot.exists()) return null;
+      const session = asRecord(sessionSnapshot.data());
+      if (asBoolean(session.force_logout) || asBoolean(session.forceLogout)) return null;
+
+      const userId = asString(session.user_id) ?? asString(session.userId);
+      if (!userId) return null;
+      const userSnapshot = await getDoc(doc(db, 'users', userId));
+      if (!userSnapshot.exists()) return null;
+      const user = asRecord(userSnapshot.data());
+      if (asBoolean(user.disabled)) return null;
+
+      const seenAt = lastSeenMs(session.last_seen ?? session.lastSeen);
+      if (seenAt !== null && Date.now() - seenAt > 24 * 60 * 60 * 1000) return null;
+
+      return {
+        id: userId,
+        email: asString(user.email) ?? asString(session.email),
+        roles: rolesFromUser(user, session),
+        sessionId,
+      };
+    } catch {
+      return null;
+    }
   };
 }
 
@@ -68,49 +90,38 @@ export function createServerAuthMiddleware(
         success: false,
         error: {
           code: 'AUTH_NOT_CONFIGURED',
-          message: 'Server authentication is not configured.',
+          message: 'Local session authentication is not configured.',
           requestId: res.locals.requestId,
         },
       });
     }
 
-    const token = parseBearerToken(req.header('authorization'));
+    const token = parseBearerToken(req.header('authorization')) ?? req.header('x-session-id') ?? null;
     if (!token) {
       return res.status(401).json({
         success: false,
         error: {
           code: 'AUTH_REQUIRED',
-          message: 'A Bearer token is required.',
+          message: 'A local session identifier is required.',
           requestId: res.locals.requestId,
         },
       });
     }
 
-    try {
-      const principal = await verifyToken(token);
-      if (!principal) {
-        return res.status(401).json({
-          success: false,
-          error: {
-            code: 'AUTH_INVALID',
-            message: 'The supplied authentication token is invalid.',
-            requestId: res.locals.requestId,
-          },
-        });
-      }
-
-      res.locals.principal = principal;
-      return next();
-    } catch {
+    const principal = await verifyToken(token);
+    if (!principal) {
       return res.status(401).json({
         success: false,
         error: {
           code: 'AUTH_INVALID',
-          message: 'The supplied authentication token is invalid.',
+          message: 'The local session is invalid, expired, disabled, or terminated.',
           requestId: res.locals.requestId,
         },
       });
     }
+
+    res.locals.principal = principal;
+    return next();
   };
 }
 
@@ -122,19 +133,11 @@ export function createServerPermissionMiddleware(permission: string): RequestHan
         success: false,
         error: {
           code: 'PERMISSION_DENIED',
-          message: 'The authenticated principal lacks the required permission.',
+          message: 'The authenticated local user lacks the required permission.',
           requestId: res.locals.requestId,
         },
       });
     }
     return next();
   };
-}
-
-export function createStaticTokenVerifier(
-  expectedToken: string | undefined,
-  principal: ServerPrincipal,
-): TokenVerifier | null {
-  if (!expectedToken?.trim()) return null;
-  return async (token) => token === expectedToken ? principal : null;
 }

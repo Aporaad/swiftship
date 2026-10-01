@@ -1056,3 +1056,7 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 
 ## [2026-10-01 20:41:00 +0000] — Real session verifier وCouriers — AI Model: Manus
 لم تُنفذ أوامر SQL، ولم تتغير الجداول أو الأعمدة أو RLS أو migrations. التغيير اقتصر على التحقق من الجلسة، permission middleware، ومسارات GET read-only.
+
+
+## [2026-10-01 20:56:00 +0000] — تصحيح local auth — AI Model: Manus
+لم تُنفذ SQL ولم تتغير قاعدة البيانات. تم استخدام الجداول الحالية `public.sessions` و`public.users` للقراءة والتحقق فقط عبر adapter الموجود.

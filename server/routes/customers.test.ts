@@ -38,7 +38,7 @@ describe('Customers API route', () => {
     }];
     const gateway = { list: vi.fn().mockResolvedValue({ items, limit: 20, offset: 0, hasMore: false }) };
     registerCustomersRoutes(app, gateway, async (token) => token === 'valid'
-      ? { id: 'service-1', roles: ['customers:read'] }
+      ? { id: 'service-1', roles: ['customers:read'], sessionId: 'session-1' }
       : null);
     const [, authenticate, authorize, handler] = (app.get as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
     const req = {

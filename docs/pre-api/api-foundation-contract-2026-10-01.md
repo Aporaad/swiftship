@@ -100,3 +100,15 @@ Supabase adapter
 - صلاحيات Admin/root تستخرج من metadata ولا تمنح أي mutation.
 
 أصبح Customers وCouriers مفعّلين، بينما `current-user` ما زال مؤجلًا حتى تثبيت DTO جلسة API مستقل لا يعيد legacy password fields.
+
+
+## تصحيح مصدر المصادقة — 2026-10-01 20:56:00 +0000 — AI Model: Manus
+**تصحيح إلزامي:** لا يعتمد API Foundation على `supabase.auth` ولا على access tokens الصادرة منه. المصدر المعتمد هو نظام المصادقة المحلي:
+
+1. يستخرج الخادم `session_id` من `Authorization: Bearer <session_id>` أو `x-session-id`.
+2. يقرأ `public.sessions` ويتحقق من وجود الجلسة وعدم `force_logout` وحداثة `last_seen`.
+3. يقرأ `public.users` عبر `user_id` ويتحقق من عدم تعطيل المستخدم.
+4. يبني `ServerPrincipal` محليًا ويشتق `customers:read` و`couriers:read` من role/is_root.
+5. يستخدم `ApiClient` session ID الموجود في sessionStorage، وليس Supabase Auth token.
+
+أي ذكر سابق لـ`supabase.auth.getUser` في هذه الوثيقة يُعد ملغى بهذا التصحيح.

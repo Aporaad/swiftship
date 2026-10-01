@@ -1214,3 +1214,11 @@
 - [x] تفعيل `GET /api/v1/couriers` بنفس عقد Customers وDTO آمن وpagination/search.
 - [x] اختبار جلسة Supabase والصلاحيات ومساري Customers وCouriers.
 - [ ] تفعيل `current-user` بعد اعتماد session DTO النهائي؛ لا يتم نقل auth legacy غير الآمن.
+
+## [2026-10-01 20:56:00 +0000] — تصحيح الخطة: local users/sessions auth — AI Model: Manus
+- [x] إزالة اعتماد API Foundation على `supabase.auth` و`auth.getUser`.
+- [x] تنفيذ `createLocalSessionVerifier` عبر `public.sessions` ثم `public.users`.
+- [x] التحقق من `force_logout`, `disabled`, وقدم `last_seen` قبل إنشاء principal.
+- [x] دعم إرسال session ID المحلي من `ApiClient` كـ`Authorization: Bearer <session_id>`.
+- [x] إبقاء Customers وCouriers خلف الجلسة المحلية والصلاحيات المحلية.
+- [ ] استكمال endpoint `current-user` بعد اعتماد DTO الجلسة المحلية النهائي.

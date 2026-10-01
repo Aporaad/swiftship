@@ -39,7 +39,7 @@ const currentDirPath = currentFilePath
 
 // ── استيراد وحدات الخادم / Import server modules ─────────────────
 import { createApiErrorHandler, createApp } from './server/app';
-import { createSupabaseSessionVerifier } from './server/auth/server-auth';
+import { createLocalSessionVerifier } from './server/auth/server-auth';
 import { createDbClient, authenticateServerSession } from './server/current-db/client';
 import { startAccountReconciliationListener } from './server/jobs/account-reconciliation';
 import { registerAuthRoutes } from './server/routes/auth';
@@ -49,7 +49,6 @@ import { createCustomersGateway, registerCustomersRoutes } from './server/routes
 import { createCouriersGateway, registerCouriersRoutes } from './server/routes/couriers';
 import { registerBrowserProxyRoute } from './server/browser-proxy/route';
 import { attachViteDevMiddleware, attachProductionStaticFiles } from './server/dev-server';
-import { supabase } from './src/lib/supabase-adapter';
 
 async function startServer(): Promise<void> {
   // 1. إنشاء عميل قاعدة البيانات / Create database client
@@ -79,12 +78,12 @@ async function startServer(): Promise<void> {
   registerCustomersRoutes(
     app,
     createCustomersGateway(db),
-    createSupabaseSessionVerifier(supabase),
+    createLocalSessionVerifier(db),
   );
   registerCouriersRoutes(
     app,
     createCouriersGateway(db),
-    createSupabaseSessionVerifier(supabase),
+    createLocalSessionVerifier(db),
   );
   app.use('/api', createApiErrorHandler());
 

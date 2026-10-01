@@ -1,10 +1,17 @@
 import type { NextFunction, Request, Response } from 'express';
 import { describe, expect, it, vi } from 'vitest';
+
+const dbMocks = vi.hoisted(() => ({
+  doc: vi.fn((_: unknown, collection: string, id: string) => ({ collection, id })),
+  getDoc: vi.fn(),
+}));
+
+vi.mock('../current-db/client', () => dbMocks);
+
 import {
+  createLocalSessionVerifier,
   createServerPermissionMiddleware,
   createServerAuthMiddleware,
-  createSupabaseSessionVerifier,
-  createStaticTokenVerifier,
   parseBearerToken,
 } from './server-auth';
 
@@ -12,24 +19,24 @@ function response() {
   const value = {
     status: vi.fn(),
     json: vi.fn(),
-    locals: { requestId: 'req-auth-1', principal: undefined as { id: string; email?: string; roles: string[] } | undefined },
+    locals: { requestId: 'req-auth-1', principal: undefined as { id: string; roles: string[]; sessionId: string } | undefined },
   };
   value.status.mockReturnValue(value);
   value.json.mockReturnValue(value);
   return value;
 }
 
-describe('server-auth middleware', () => {
+describe('local server-auth middleware', () => {
   it.each([
-    ['Bearer abc-123', 'abc-123'],
-    ['bearer token', 'token'],
+    ['Bearer sess-user-1', 'sess-user-1'],
+    ['bearer local-session', 'local-session'],
     ['Basic token', null],
     [undefined, null],
-  ] as const)('parses bearer header %s', (header, expected) => {
+  ] as const)('parses local session header %s', (header, expected) => {
     expect(parseBearerToken(header)).toBe(expected);
   });
 
-  it('rejects requests when authentication is not configured', async () => {
+  it('rejects requests when the local database verifier is unavailable', async () => {
     const res = response();
     await createServerAuthMiddleware(null)(
       { header: () => undefined } as unknown as Request,
@@ -43,37 +50,27 @@ describe('server-auth middleware', () => {
     }));
   });
 
-  it('accepts a valid configured token and exposes a server principal', async () => {
-    const res = response();
-    const next = vi.fn();
-    const principal = { id: 'service-1', email: 'service@example.test', roles: ['customers:read'] };
-    const verify = createStaticTokenVerifier('secret-token', principal);
+  it('verifies the sessions and users documents locally', async () => {
+    dbMocks.getDoc
+      .mockResolvedValueOnce({
+        exists: () => true,
+        data: () => ({ user_id: 'user-1', last_seen: new Date().toISOString(), force_logout: false, role: 'Admin' }),
+      })
+      .mockResolvedValueOnce({
+        exists: () => true,
+        data: () => ({ id: 'user-1', email: 'admin@example.test', role: 'Admin', is_root: true, disabled: false }),
+      });
+    const verify = createLocalSessionVerifier({});
+    const principal = await verify?.('sess-user-1');
 
-    await createServerAuthMiddleware(verify)(
-      { header: () => 'Bearer secret-token' } as unknown as Request,
-      res as unknown as Response,
-      next as NextFunction,
-    );
-
-    expect(res.locals.principal).toEqual(principal);
-    expect(next).toHaveBeenCalledOnce();
-  });
-
-  it('verifies a Supabase access token and derives read permissions from admin metadata', async () => {
-    const verify = createSupabaseSessionVerifier({
-      auth: {
-        getUser: vi.fn().mockResolvedValue({
-          data: { user: { id: 'user-1', email: 'admin@example.test', user_metadata: { role: 'Admin' } } },
-          error: null,
-        }),
-      },
-    });
-
-    await expect(verify('supabase-access-token')).resolves.toEqual({
+    expect(principal).toEqual({
       id: 'user-1',
       email: 'admin@example.test',
       roles: ['Admin', 'customers:read', 'couriers:read'],
+      sessionId: 'sess-user-1',
     });
+    expect(dbMocks.doc).toHaveBeenNthCalledWith(1, {}, 'sessions', 'sess-user-1');
+    expect(dbMocks.doc).toHaveBeenNthCalledWith(2, {}, 'users', 'user-1');
   });
 
   it('denies a principal without the required permission', () => {

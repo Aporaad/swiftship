@@ -102,3 +102,7 @@ React / Electron / alx_web → HTTP API → Application Gateway → Supabase
 - إبقاء current-user مؤجلًا حتى لا يتم نقل legacy auth أو أي password field إلى API.
 
 **التحقق:** TypeScript ناجح و20 اختبارًا مستهدفًا ناجحة. لا SQL أو DB/RLS changes.
+
+
+## تصحيح مصدر المصادقة — 2026-10-01 20:56:00 +0000 — AI Model: Manus
+تم إلغاء الاعتماد السابق على Supabase Auth. verifier المرحلة 13 يعتمد حصريًا على `public.sessions` و`public.users` عبر adapter المحلي. يتم إرسال session ID المحلي من `sessionStorage` بواسطة ApiClient، والتحقق من force logout وdisabled وlast_seen قبل تفعيل Customers/Couriers.
