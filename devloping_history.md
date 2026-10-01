@@ -1960,3 +1960,9 @@
 - أُنشئ التقرير `docs/pre-api/phase8-db-readiness-2026-10-02.md` من `DATABASE_SCHEMA.md` وملفات migrations.
 - التقييم ثابت المصدر يثبت 51 جدولاً ومجالات JSONB ومفاتيح وعلاقات موثقة جزئياً، لكنه لا يثبت counts أو RLS أو grants الحية.
 - لم يتم تنفيذ SQL أو فتح اتصال قاعدة بيانات؛ لا إصلاحات بيانات في هذه المرحلة.
+
+## [2026-10-02 01:22:00 +0300] — توحيد حالات صفحات الإدارة — AI Model: Manus
+- تم نقل الحالات المحلية الأساسية للتحميل والإرسال والحفظ في `SourcesPage`, `EmployeesPage`, `UsersPage`, `NotificationsPage`, `CustomersPage`, `CouriersPage`, و`SettingsPage` إلى `AsyncState`.
+- بقيت حالات UI البحتة مثل فتح النوافذ والفلاتر كـ`useState` عمداً، ولم تُخلط مع async state.
+- تم الإبقاء على جسور setter توافقية مؤقتة لحماية سلوك الصفحات الحالي، تمهيداً لاستبدالها بـ`runQuery`/`runMutation` بالكامل.
+- التحقق: TypeScript ناجح، والاختبارات 67 ملفاً ناجحاً و237 اختباراً ناجحاً.

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { asyncState, type AsyncState } from '../../../shared/contracts/ui.contracts';
 import { collection, addDoc, doc, updateDoc, onSnapshot, deleteDoc, query, where, orderBy, getDocs } from '../../../lib/supabase-adapter';
 import { db } from '../../../lib/supabase-adapter';
 import { handlePostgreSQLError, OperationType } from '../../../lib/supabase-adapter';
@@ -41,17 +42,23 @@ export default function CustomersPage() {
   const { settings, t } = useSettings();
   const [customers, setCustomers] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [queryState, setQueryState] = useState<AsyncState<unknown[]>>(asyncState.loading());
+  const loading = queryState.status === 'loading';
+  const setLoading = (value: boolean) => setQueryState(value ? asyncState.loading() : asyncState.idle());
 
   // ── Live transaction-based balances (real-time from account_trans) ────
   const liveBalances = useAccountBalances();
   const [showModal, setShowModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [mutationState, setMutationState] = useState<AsyncState<void>>(asyncState.idle());
+  const submitting = mutationState.status === 'submitting';
+  const setSubmitting = (value: boolean) => setMutationState(value ? asyncState.submitting() : asyncState.idle());
   const [search, setSearch] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [customerOrders, setCustomerOrders] = useState<any[]>([]);
-  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersState, setOrdersState] = useState<AsyncState<unknown[]>>(asyncState.idle());
+  const ordersLoading = ordersState.status === 'loading';
+  const setOrdersLoading = (value: boolean) => setOrdersState(value ? asyncState.loading() : asyncState.idle());
   const isAr = settings.language === 'ar';
 
   const [detailTab, setDetailTab] = useState<'logistics' | 'financial'>('logistics');

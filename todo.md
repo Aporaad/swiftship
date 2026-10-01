@@ -1270,3 +1270,13 @@
 - [x] إنشاء تقرير أولي لصحة المخطط وجودة البيانات والوصول.
 - [x] تصنيف الفحوصات التي تحتاج snapshot حي من قاعدة البيانات.
 - [ ] تنفيذ فحوصات metadata/quality القراءة فقط بعد توفر connector قاعدة البيانات.
+
+## [2026-10-02 01:22:00 +0300] — دفعة صفحات الإدارة — AI Model: Manus
+- [x] ربط `SourcesPage` بحالة query وmutation مبنية على `AsyncState`.
+- [x] ربط `EmployeesPage` بحالة query وmutation مبنية على `AsyncState`.
+- [x] ربط `UsersPage` بحالة query وmutation مبنية على `AsyncState`.
+- [x] ربط `NotificationsPage` بحالات alerts/config/logs والعمليات بعقود AsyncState.
+- [x] ربط `CustomersPage` بحالات query/orders/mutation بعقود AsyncState.
+- [x] ربط `CouriersPage` بحالات query/orders/mutation بعقود AsyncState.
+- [x] ربط `SettingsPage` بحالة تشغيل موحدة للـsave/backup/import/API/history.
+- [ ] استبدال جسور التوافق الحالية باستدعاءات `runQuery`/`runMutation` كاملة حيث يلزم، ثم إغلاق المرحلة 12 رسمياً.

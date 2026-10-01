@@ -111,3 +111,6 @@
 
 ## دفعة 01:14 — AI Model: Manus
 اكتمل تحويل عمليات Workspace الفردية والجماعية، وتحويل `useWebsiteManagementData` إلى `runQuery` بنتيجة typed. ما زال الإغلاق النظامي الكامل مؤجلاً حتى مراجعة بقية صفحات الإدارة.
+
+## دفعة 01:22 — AI Model: Manus
+تم ربط صفحات الإدارة السبع المطلوبة بعقود AsyncState: Sources وEmployees وUsers وNotifications وCustomers وCouriers وSettings. حالات UI البحتة بقيت خارج العقد، بينما جسور التوافق async مؤقتة حتى استكمال استبدالها باستدعاءات runQuery/runMutation.

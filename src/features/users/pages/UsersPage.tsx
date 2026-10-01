@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { asyncState, type AsyncState } from '../../../shared/contracts/ui.contracts';
 import { collection, onSnapshot, doc, updateDoc, setDoc, deleteDoc, query, where, getDocs } from '../../../lib/supabase-adapter';
 import { db } from '../../../lib/supabase-adapter';
 import { handlePostgreSQLError, OperationType, auth } from '../../../lib/supabase-adapter';
@@ -71,7 +72,9 @@ export default function UsersPage() {
     return () => unsubRoles();
   }, [roleLoading]);
 
-  const [loading, setLoading] = useState(true);
+  const [queryState, setQueryState] = useState<AsyncState<unknown[]>>(asyncState.loading());
+  const loading = queryState.status === 'loading';
+  const setLoading = (value: boolean) => setQueryState(value ? asyncState.loading() : asyncState.idle());
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -98,8 +101,11 @@ export default function UsersPage() {
     role: 'Employee'
   });
 
-  const [addLoading, setAddLoading] = useState(false);
-  const [editLoading, setEditLoading] = useState(false);
+  const [mutationState, setMutationState] = useState<AsyncState<void>>(asyncState.idle());
+  const addLoading = mutationState.status === 'submitting';
+  const editLoading = mutationState.status === 'submitting';
+  const setAddLoading = (value: boolean) => setMutationState(value ? asyncState.submitting() : asyncState.idle());
+  const setEditLoading = setAddLoading;
   const addBlockRef = React.useRef(false);
   const editBlockRef = React.useRef(false);
 
@@ -109,7 +115,7 @@ export default function UsersPage() {
       const allUsers = snap.docs.map(d => toUser(d.id, d.data()));
       const staffOnly = allUsers.filter(u => u.role !== 'Courier' && u.roleId !== 'courier' && u.role !== 'courier');
       setUsers(staffOnly);
-      setLoading(false);
+      setQueryState(staffOnly.length ? asyncState.success(staffOnly) : asyncState.empty());
     }, (error) => {
       handlePostgreSQLError(error, OperationType.LIST, 'users');
     });

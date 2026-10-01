@@ -8,6 +8,7 @@ type EmployeeAccountTransaction = Record<string, unknown> & {
   amount?: unknown;
 };
 import React, { useState, useEffect } from 'react';
+import { asyncState, type AsyncState } from '../../../shared/contracts/ui.contracts';
 import { CurrencySelect } from '../../../components/common/CurrencySelect';
 import {
   collection,
@@ -65,7 +66,9 @@ export default function EmployeesPage() {
   const liveBalances = useAccountBalances();
 
   const [employees, setEmployees] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [queryState, setQueryState] = useState<AsyncState<unknown[]>>(asyncState.loading());
+  const loading = queryState.status === 'loading';
+  const setLoading = (value: boolean) => setQueryState(value ? asyncState.loading() : asyncState.idle());
   const [search, setSearch] = useState('');
   const [jobFilter, setJobFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -74,8 +77,11 @@ export default function EmployeesPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
-  const [addLoading, setAddLoading] = useState(false);
-  const [editLoading, setEditLoading] = useState(false);
+  const [mutationState, setMutationState] = useState<AsyncState<void>>(asyncState.idle());
+  const addLoading = mutationState.status === 'submitting';
+  const editLoading = mutationState.status === 'submitting';
+  const setAddLoading = (value: boolean) => setMutationState(value ? asyncState.submitting() : asyncState.idle());
+  const setEditLoading = setAddLoading;
 
   // Statement of Account Modal
   const [statementModal, setStatementModal] = useState<{
@@ -155,11 +161,11 @@ export default function EmployeesPage() {
       (snap) => {
         const list = snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() }));
         setEmployees(list);
-        setLoading(false);
+        setQueryState(list.length ? asyncState.success(list) : asyncState.empty());
       },
       (err) => {
         handleSupabaseError(err, OperationType.LIST, 'employees');
-        setLoading(false);
+        setQueryState(asyncState.error<unknown[]>(err, 'EMPLOYEES_LOAD_FAILED'));
       }
     );
     return () => unsub();

@@ -1,5 +1,6 @@
 type AdapterDocument = { id: string; data: () => Record<string, unknown> };
 import React, { useState, useEffect } from 'react';
+import { asyncState, type AsyncState } from '../../../shared/contracts/ui.contracts';
 import { collection, onSnapshot, doc, updateDoc, addDoc, setDoc, deleteDoc, query, where, orderBy, or } from '../../../lib/supabase-adapter';
 import { db, auth } from '../../../lib/supabase-adapter';
 import { handlePostgreSQLError, OperationType } from '../../../lib/supabase-adapter';
@@ -52,7 +53,9 @@ export default function CouriersPage() {
   const { rates: dbRates } = useExchangeRates();
   const [couriers, setCouriers] = useState<any[]>([]);
   const { role, hasPermission, profile, loading: roleLoading } = useRole();
-  const [loading, setLoading] = useState(true);
+  const [queryState, setQueryState] = useState<AsyncState<unknown[]>>(asyncState.loading());
+  const loading = queryState.status === 'loading';
+  const setLoading = (value: boolean) => setQueryState(value ? asyncState.loading() : asyncState.idle());
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
@@ -88,7 +91,9 @@ export default function CouriersPage() {
   const [selectedCourier, setSelectedCourier] = useState<any>(null);
   const [courierOrders, setCourierOrders] = useState<any[]>([]);
   const [courierExpenses, setCourierExpenses] = useState<any[]>([]);
-  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersState, setOrdersState] = useState<AsyncState<unknown[]>>(asyncState.idle());
+  const ordersLoading = ordersState.status === 'loading';
+  const setOrdersLoading = (value: boolean) => setOrdersState(value ? asyncState.loading() : asyncState.idle());
   const [detailsUnsubs, setDetailsUnsubs] = useState<(() => void)[]>([]);
 
   const [detailTab, setDetailTab] = useState<'logistics' | 'financial'>('logistics');
@@ -143,8 +148,11 @@ export default function CouriersPage() {
     courierType: 'local' as 'sourcing' | 'local'
   });
 
-  const [addLoading, setAddLoading] = useState(false);
-  const [editLoading, setEditLoading] = useState(false);
+  const [mutationState, setMutationState] = useState<AsyncState<void>>(asyncState.idle());
+  const addLoading = mutationState.status === 'submitting';
+  const editLoading = mutationState.status === 'submitting';
+  const setAddLoading = (value: boolean) => setMutationState(value ? asyncState.submitting() : asyncState.idle());
+  const setEditLoading = setAddLoading;
 
   // System User Provisioning State
   const [createSystemUser, setCreateSystemUser] = useState(false);

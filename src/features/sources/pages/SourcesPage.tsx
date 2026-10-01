@@ -1,5 +1,6 @@
 type AdapterDocument = { id: string; data: () => Record<string, unknown> };
 import React, { useState, useEffect } from 'react';
+import { asyncState, type AsyncState } from '../../../shared/contracts/ui.contracts';
 import { collection, onSnapshot, doc, updateDoc, deleteDoc, addDoc } from '../../../lib/supabase-adapter';
 import { db, handlePostgreSQLError, OperationType } from '../../../lib/supabase-adapter';
 import { Search, Edit2, X, Plus, Trash2, MapPin, ShieldAlert, RefreshCw, Crown, Globe, Truck, Phone, Landmark } from 'lucide-react';
@@ -26,7 +27,9 @@ export default function SourcesPage() {
   const canEditShipping = isAdmin || hasPermission('edit_shipping_companies');
   const canDeleteShipping = isAdmin || hasPermission('delete_shipping_companies');
   const [sources, setSources] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [queryState, setQueryState] = useState<AsyncState<unknown[]>>(asyncState.loading());
+  const loading = queryState.status === 'loading';
+  const setLoading = (value: boolean) => setQueryState(value ? asyncState.loading() : asyncState.idle());
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('newest');
   const isAr = settings.language === 'ar';
@@ -47,7 +50,11 @@ export default function SourcesPage() {
   });
   
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [sourceSubmitting, setSourceSubmitting] = useState(false);
+  const [mutationState, setMutationState] = useState<AsyncState<void>>(asyncState.idle());
+  const sourceSubmitting = mutationState.status === 'submitting';
+  const shippingSubmitting = mutationState.status === 'submitting';
+  const setSourceSubmitting = (value: boolean) => setMutationState(value ? asyncState.submitting() : asyncState.idle());
+  const setShippingSubmitting = setSourceSubmitting;
   const [selectedSource, setSelectedSource] = useState<any>(null);
   const [formData, setFormData] = useState({
     source_name: '',
@@ -63,7 +70,6 @@ export default function SourcesPage() {
   const [activeTab, setActiveTab] = useState<'sources' | 'shipping_companies'>('sources');
   const [shippingCompanies, setShippingCompanies] = useState<any[]>([]);
   const [isShippingModalOpen, setIsShippingModalOpen] = useState(false);
-  const [shippingSubmitting, setShippingSubmitting] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState<any>(null);
   const [shippingFormData, setShippingFormData] = useState({
     name: '',
@@ -95,8 +101,9 @@ export default function SourcesPage() {
   useEffect(() => {
     if (roleLoading) return;
     const unsub = onSnapshot(collection(db, 'sources'), (snap) => {
-      setSources(snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() })));
-      setLoading(false);
+      const rows = snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() }));
+      setSources(rows);
+      setQueryState(rows.length ? asyncState.success(rows) : asyncState.empty());
     }, (error) => {
       handlePostgreSQLError(error, OperationType.LIST, 'sources');
     });

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { asyncState, type AsyncState } from '../../../shared/contracts/ui.contracts';
 import { 
   Bell, Package, CheckCircle, AlertTriangle, Clock, X, Settings2, 
   Send, Database, Key, Phone, ShieldCheck, Layers, Play, Check, 
@@ -36,25 +37,35 @@ export default function NotificationsPage() {
   const { role, hasPermission, loading: roleLoading } = useRole();
   const canSendNotif = role === 'Admin' || hasPermission('send_notifications');
   const canManageWhatsApp = role === 'Admin' || hasPermission('view_edit_notification_settings');
-  const [loadingAlerts, setLoadingAlerts] = useState(true);
+  const [alertsState, setAlertsState] = useState<AsyncState<unknown[]>>(asyncState.loading());
+  const loadingAlerts = alertsState.status === 'loading';
+  const setLoadingAlerts = (value: boolean) => setAlertsState(value ? asyncState.loading() : asyncState.idle());
   
   // WhatsApp Settings state
   const [whatsappConfig, setWhatsappConfig] = useState<WhatsAppConfig>(defaultWhatsAppConfig);
-  const [loadingConfig, setLoadingConfig] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
+  const [configState, setConfigState] = useState<AsyncState<unknown>>(asyncState.loading());
+  const loadingConfig = configState.status === 'loading';
+  const setLoadingConfig = (value: boolean) => setConfigState(value ? asyncState.loading() : asyncState.idle());
+  const [mutationState, setMutationState] = useState<AsyncState<void>>(asyncState.idle());
+  const isSaving = mutationState.status === 'submitting';
+  const isTesting = mutationState.status === 'submitting';
+  const isTestingConnection = mutationState.status === 'submitting';
+  const setIsSaving = (value: boolean) => setMutationState(value ? asyncState.submitting() : asyncState.idle());
+  const setIsTesting = setIsSaving;
+  const setIsTestingConnection = setIsSaving;
   
   // WhatsApp Delivery Logs state
   const [logs, setLogs] = useState<DeliveryLog[]>([]);
-  const [loadingLogs, setLoadingLogs] = useState(true);
+  const [logsState, setLogsState] = useState<AsyncState<unknown[]>>(asyncState.loading());
+  const loadingLogs = logsState.status === 'loading';
+  const setLoadingLogs = (value: boolean) => setLogsState(value ? asyncState.loading() : asyncState.idle());
   
   // Test message tool states
   const [testPhone, setTestPhone] = useState('');
   const [testMessage, setTestMessage] = useState('');
-  const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<TestResult | null>(null);
 
   // Test connection states
-  const [isTestingConnection, setIsTestingConnection] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<{ success: boolean; message: string; isWarning?: boolean } | null>(null);
 
   // active text reference in template editor
