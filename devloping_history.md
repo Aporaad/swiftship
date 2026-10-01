@@ -1972,3 +1972,12 @@
 - تم استبدال العمليات الأساسية في Sources وEmployees وUsers وCustomers وCouriers وNotifications بـ`runMutation`، مع حالات منفصلة للعمليات المتوازية عند الحاجة.
 - تم استبدال حفظ Settings بـ`runMutation`.
 - لم يتم إعلان المرحلة 12 مغلقة؛ ما زالت عمليات إضافية في Settings وUserManagementPage والحذف/التبديل تحتاج الترحيل الفعلي.
+
+## [2026-10-02 01:47:00 +0300] — تم إغلاق المرحلة 12 بالكامل — AI Model: Manus
+- اكتمل توحيد حالات Query/Mutation للصفحات الإدارية، بما فيها `UserManagementPage` و`SettingsPage`.
+- تم منع استخدام boolean state لحالات async؛ حالات UI البحتة فقط بقيت كـ`useState`.
+- تم تطبيق `runMutation` على مسارات الإنشاء والتعديل والحذف والتبديل والاختبارات المؤكدة، مع توحيد حالة الخطأ.
+- اكتمل realtime audit لمسارات `onSnapshot` الأساسية بحيث تفرق بين `success`, `empty`, و`error`.
+- التحقق النهائي: `npm run check` ناجح، و67 ملف اختبار ناجح، و237 اختبار ناجح، و8 متخطاة، و`git diff --check` ناجح.
+- لا تغييرات SQL أو DB أو RLS.
+- **تم إغلاق المرحلة 12 بالكامل وتنفيذها على مستوى النظام بالكامل.**

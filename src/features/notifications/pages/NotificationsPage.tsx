@@ -103,10 +103,10 @@ export default function NotificationsPage() {
         return isAdmin; // unknown categories only for Admin
       });
       setNotifications(filtered);
-      setLoadingAlerts(false);
+      setAlertsState(filtered.length ? asyncState.success(filtered) : asyncState.empty());
     }, (error) => {
       console.error('Error fetching alerts:', error);
-      setLoadingAlerts(false);
+      setAlertsState(asyncState.error(error, 'NOTIFICATIONS_LOAD_FAILED'));
     });
     return unsub;
   }, [roleLoading, role, hasPermission, auth]);
@@ -117,13 +117,14 @@ export default function NotificationsPage() {
       try {
         const conf = await whatsappService.getConfig();
         setWhatsappConfig(conf);
+        setConfigState(asyncState.success(conf));
         
         // Auto initialize test message template
         setTestMessage(isAr ? 'رسالة تجريبية لتأكيد الاتصال ببوابة WhatsApp اللوجيستية للشركة 🚀' : 'Test message to confirm connection to company WhatsApp logistics gateway 🚀');
       } catch (err) {
         console.error('Error reading WhatsApp config:', err);
+        setConfigState(asyncState.error(err, 'WHATSAPP_CONFIG_LOAD_FAILED'));
       } finally {
-        setLoadingConfig(false);
       }
     }
     loadConfig();
@@ -133,14 +134,15 @@ export default function NotificationsPage() {
   useEffect(() => {
     const qLogs = query(collection(db, 'whatsapp_logs'), orderBy('createdAt', 'desc'), limit(150));
     const unsubLogs = onSnapshot(qLogs, (snap) => {
-      setLogs(snap.docs.map((d: SnapshotDocument): NotificationRecord => {
+      const rows = snap.docs.map((d: SnapshotDocument): NotificationRecord => {
         const data = asNotificationRecord(d.data());
         return { id: d.id, ...data, createdAt: safeToDate(data.createdAt) };
-      }));
-      setLoadingLogs(false);
+      });
+      setLogs(rows);
+      setLogsState(rows.length ? asyncState.success(rows) : asyncState.empty());
     }, (error) => {
       console.error('Error fetching logs:', error);
-      setLoadingLogs(false);
+      setLogsState(asyncState.error(error, 'WHATSAPP_LOGS_LOAD_FAILED'));
     });
     return unsubLogs;
   }, []);

@@ -348,8 +348,9 @@ export default function CouriersPage() {
     // 1. Subscribe to Couriers
     const qCouriers = query(collection(db, 'couriers'), orderBy('createdAt', 'desc'));
     const unsubCouriers = onSnapshot(qCouriers, (snap) => {
-      setCouriers(snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() })));
-      setLoading(false);
+      const rows = snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() }));
+      setCouriers(rows);
+      setQueryState(rows.length ? asyncState.success(rows) : asyncState.empty());
     }, (error) => {
       handlePostgreSQLError(error, OperationType.LIST, 'couriers');
     });
@@ -412,12 +413,13 @@ export default function CouriersPage() {
     );
 
     const unsubOrders = onSnapshot(qOrders, (snap) => {
-      setCourierOrders(snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() })));
-      setOrdersLoading(false);
+      const rows = snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() }));
+      setCourierOrders(rows);
+      setOrdersState(rows.length ? asyncState.success(rows) : asyncState.empty());
     }, (err) => {
       console.error("Error fetching courier orders:", err);
       setCourierOrders([]);
-      setOrdersLoading(false);
+      setOrdersState(asyncState.error(err, 'COURIER_ORDERS_LOAD_FAILED'));
     });
 
     setCourierExpenses([]);
@@ -480,20 +482,19 @@ export default function CouriersPage() {
       message: isAr ? `هل أنت متأكد من رغبتك في ${actionText} حساب المندوب ${courier.fullName}؟` : `Are you sure you want to ${actionText.toLowerCase()} courier ${courier.fullName}?`,
       type: 'warning',
       onConfirm: async () => {
-        try {
-          await updateDoc(doc(db, 'couriers', courier.id), {
-            disabled: !courier.disabled,
-            updatedAt: Date.now()
-          });
+        const result = await runMutation(async () => {
+          await updateDoc(doc(db, 'couriers', courier.id), { disabled: !courier.disabled, updatedAt: Date.now() });
           activityLogService.log('edit_courier', courier.fullName, { id: courier.id, disabled: !courier.disabled });
+        }, setEditMutationState);
+        if (result.status === 'success-after-mutation') {
           notificationService.notify({
             title: isAr ? 'تم تحديث الوضعية' : 'Status Toggle Successful',
             message: isAr ? `تم تعديل وضعية الحساب إلى: ${courier.disabled ? 'نشط' : 'معطل'}` : `Account is now: ${courier.disabled ? 'Active' : 'Disabled'}`,
             type: 'info',
             category: 'system'
           });
-        } catch (err) {
-          handlePostgreSQLError(err, OperationType.UPDATE, 'couriers');
+        } else if (result.status === 'error') {
+          handlePostgreSQLError(result.error, OperationType.UPDATE, 'couriers');
         }
       }
     });

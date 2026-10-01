@@ -227,18 +227,18 @@ export default function UsersPage() {
       message: isAr ? `هل أنت متأكد من ${action} حساب الموظف ${user.fullName}؟` : `Are you sure you want to deactivate ${user.fullName}?`,
       type: user.disabled ? 'info' : 'warning',
       onConfirm: async () => {
-        try {
-          await updateDoc(doc(db, 'users', user.id), {
-            disabled: !user.disabled,
-            updatedAt: Date.now()
-          });
+        const result = await runMutation(() => updateDoc(doc(db, 'users', user.id), {
+          disabled: !user.disabled,
+          updatedAt: Date.now()
+        }), setEditMutationState);
+        if (result.status === 'success-after-mutation') {
           notificationService.notify({
             title: isAr ? 'تم تحديث وضعية الحساب' : 'Security profile updated',
             message: isAr ? `وضع الحساب للموظف ${user.fullName} تم تعديله` : `Status applied to ${user.fullName}`,
             type: user.disabled ? 'success' : 'warning'
           });
-        } catch (err) {
-          handlePostgreSQLError(err, OperationType.UPDATE, 'users');
+        } else if (result.status === 'error') {
+          handlePostgreSQLError(result.error, OperationType.UPDATE, 'users');
         }
       }
     });

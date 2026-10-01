@@ -361,18 +361,18 @@ export default function EmployeesPage() {
       message: isAr ? `هل أنت متأكد من ${actionText} الموظف ${emp.fullName}؟` : `Are you sure you want to ${actionText.toLowerCase()} ${emp.fullName}?`,
       type: emp.disabled ? 'info' : 'warning',
       onConfirm: async () => {
-        try {
-          await updateDoc(doc(db, 'employees', emp.id), {
-            disabled: !emp.disabled,
-            updatedAt: Date.now()
-          });
+        const result = await runMutation(() => updateDoc(doc(db, 'employees', emp.id), {
+          disabled: !emp.disabled,
+          updatedAt: Date.now()
+        }), setEditMutationState);
+        if (result.status === 'success-after-mutation') {
           notificationService.notify({
             title: isAr ? 'تم تغيير الحالة' : 'Status Updated',
             message: `${emp.fullName} ${emp.disabled ? (isAr ? 'مُفعَّل الآن' : 'enabled') : (isAr ? 'مُعطَّل الآن' : 'disabled')}`,
             type: emp.disabled ? 'success' : 'warning'
           });
-        } catch (err: any) {
-          handleSupabaseError(err, OperationType.UPDATE, 'employees');
+        } else if (result.status === 'error') {
+          handleSupabaseError(result.error, OperationType.UPDATE, 'employees');
         }
       }
     });

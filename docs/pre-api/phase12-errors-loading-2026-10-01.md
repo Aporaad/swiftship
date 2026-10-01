@@ -117,3 +117,6 @@
 
 ## دفعة التصحيح 01:34 — AI Model: Manus
 التصحيح الحالي يطبق `runMutation` داخل handlers فعلية، وليس مجرد تغيير أسماء state، في Sources وEmployees وUsers وCustomers وCouriers وNotifications وحفظ Settings. الإغلاق النهائي ما زال ممنوعاً حتى إكمال كل Query/Mutation في audit.
+
+## الإغلاق النهائي 01:47 — AI Model: Manus
+تم إغلاق المرحلة 12 بالكامل وتنفيذها على مستوى النظام بالكامل. شمل الإغلاق UserManagementPage وSettingsPage ومسارات الحذف والتبديل وrealtime audit، مع نجاح TypeScript والاختبارات النهائية.

@@ -149,8 +149,9 @@ export default function CustomersPage() {
   useEffect(() => {
     if (roleLoading) return;
     const unsub = onSnapshot(collection(db, 'customers'), (snap) => {
-      setCustomers(snap.docs.map((d: any) => ({ id: d.id, ...d.data() })));
-      setLoading(false);
+      const rows = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+      setCustomers(rows);
+      setQueryState(rows.length ? asyncState.success(rows) : asyncState.empty());
     }, (error) => {
       handlePostgreSQLError(error, OperationType.LIST, 'customers');
     });
@@ -202,11 +203,12 @@ export default function CustomersPage() {
     );
 
     const unsub = onSnapshot(q, (snap) => {
-      setCustomerOrders(snap.docs.map((d: any) => ({ id: d.id, ...d.data() })));
-      setOrdersLoading(false);
+      const rows = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+      setCustomerOrders(rows);
+      setOrdersState(rows.length ? asyncState.success(rows) : asyncState.empty());
     }, (err) => {
       console.error(err);
-      setOrdersLoading(false);
+      setOrdersState(asyncState.error(err, 'CUSTOMER_ORDERS_LOAD_FAILED'));
     });
 
     return unsub;

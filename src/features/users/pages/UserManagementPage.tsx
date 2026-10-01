@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
 import {
   collection, onSnapshot, doc, updateDoc, setDoc, deleteDoc,
   query, orderBy, limit, getDocs, where,
@@ -429,7 +430,8 @@ export default function UserManagementPage() {
   const [couriersList, setCouriersList] = useState<EntityRecord[]>([]);
   const [roles, setRoles] = useState<RoleRecord[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityRecord[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [queryState, setQueryState] = useState<AsyncState<ManagedUser[]>>(asyncState.loading());
+  const loading = queryState.status === 'loading';
 
   // ── Live transaction-based balances (real-time from account_trans) ────
   const liveBalances = useAccountBalances();
@@ -446,9 +448,15 @@ export default function UserManagementPage() {
   const [isSessionModalOpen, setIsSessionModalOpen] = useState(false);
   const [sessionTargetUser, setSessionTargetUser] = useState<ManagedUser | null>(null);
   const [selectedUser, setSelectedUser] = useState<ManagedUser | null>(null);
-  const [addLoading, setAddLoading] = useState(false);
-  const [editLoading, setEditLoading] = useState(false);
-  const [savingRole, setSavingRole] = useState(false);
+  const [addState, setAddState] = useState<AsyncState<void>>(asyncState.idle());
+  const [editState, setEditState] = useState<AsyncState<void>>(asyncState.idle());
+  const [roleState, setRoleState] = useState<AsyncState<void>>(asyncState.idle());
+  const addLoading = addState.status === 'submitting';
+  const editLoading = editState.status === 'submitting';
+  const savingRole = roleState.status === 'submitting';
+  const setAddLoading = (value: boolean) => setAddState(value ? asyncState.submitting() : asyncState.idle());
+  const setEditLoading = (value: boolean) => setEditState(value ? asyncState.submitting() : asyncState.idle());
+  const setSavingRole = (value: boolean) => setRoleState(value ? asyncState.submitting() : asyncState.idle());
   const addBlockRef = React.useRef(false);
   const editBlockRef = React.useRef(false);
   const roleBlockRef = React.useRef(false);
@@ -468,7 +476,9 @@ export default function UserManagementPage() {
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [passwordTargetUser, setPasswordTargetUser] = useState<ManagedUser | null>(null);
   const [newPasswordValue, setNewPasswordValue] = useState('');
-  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [passwordState, setPasswordState] = useState<AsyncState<void>>(asyncState.idle());
+  const passwordLoading = passwordState.status === 'submitting';
+  const setPasswordLoading = (value: boolean) => setPasswordState(value ? asyncState.submitting() : asyncState.idle());
 
   // ── Forms ────────────────────────────────────────────────
   const [editFormData, setEditFormData] = useState({
@@ -611,8 +621,9 @@ export default function UserManagementPage() {
     if (roleLoading) return;
     const unsub = onSnapshot(collection(db, 'users'), (snap: SnapshotResult) => {
       const all = snap.docs.map(d => toUser(d.id, d.data()));
-      setUsers(all.filter(u => u.role !== 'Courier' && u.roleId !== 'courier' && u.role !== 'courier'));
-      setLoading(false);
+      const visibleUsers = all.filter(u => u.role !== 'Courier' && u.roleId !== 'courier' && u.role !== 'courier');
+      setUsers(visibleUsers);
+      setQueryState(visibleUsers.length ? asyncState.success(visibleUsers) : asyncState.empty());
     }, err => handleSupabaseError(err, OperationType.LIST, 'users'));
     return unsub;
   }, [roleLoading]);
@@ -722,9 +733,15 @@ export default function UserManagementPage() {
       title: `${action} — ${user.fullName}`,
       message: t(`هل أنت متأكد من ${action} حساب ${user.fullName}؟`, `Are you sure you want to ${action.toLowerCase()} ${user.fullName}?`),
       onConfirm: async () => {
-        await updateDoc(doc(db, 'users', user.id), { disabled: !user.disabled, updatedAt: Date.now() });
-        await activityLogService.log(user.disabled ? 'enable_user' : 'disable_user', user.fullName, { userId: user.id });
-        notificationService.notify({ title: t('تم', 'Done'), message: `${user.fullName} ${user.disabled ? t('مُفعَّل', 'enabled') : t('مُعطَّل', 'disabled')}`, type: user.disabled ? 'success' : 'warning', category: 'system' });
+        const result = await runMutation(async () => {
+          await updateDoc(doc(db, 'users', user.id), { disabled: !user.disabled, updatedAt: Date.now() });
+          await activityLogService.log(user.disabled ? 'enable_user' : 'disable_user', user.fullName, { userId: user.id });
+        }, setEditState);
+        if (result.status === 'success-after-mutation') {
+          notificationService.notify({ title: t('تم', 'Done'), message: `${user.fullName} ${user.disabled ? t('مُفعَّل', 'enabled') : t('مُعطَّل', 'disabled')}`, type: user.disabled ? 'success' : 'warning', category: 'system' });
+        } else if (result.status === 'error') {
+          handleSupabaseError(result.error, OperationType.UPDATE, 'users');
+        }
       }
     });
   };
