@@ -1865,3 +1865,16 @@
 ## [2026-10-01 19:57:00 +0000] — جرد Async ومسارات Orders المتبقية
 - أُعيد حصر `runQuery/runMutation` في Orders وFinance؛ `ReturnedProductsTab` هو المستهلك الموحد الحالي ضمن النطاق.
 - سُجلت مسارات ProductsManagement وProductPicker وItemCategories وOrderHistory وuseOrderData كمتبقيات legacy للمرحلة 12.
+
+## [2026-10-01 20:02:00 +0000] — توحيد Main Entry وaccount_trans في المكونات النشطة
+- تم تدقيق `src` و`server` واستبعاد المراجع الفعلية للجداول القديمة `journal_entries` و`account_transactions` من الكود النشط.
+- تم تحديث Order History إلى `mainEntryId` و`accountTransId` مع ربط `orders_history.main_entry_id` و`orders_history.account_trans_id`.
+- تم تحديث Finance selectors/actions/purge وواجهات العرض إلى `mainEntryId`/`mainEntryNumber`.
+- تم تحديث النصوص الإنجليزية الظاهرة في المكونات من Journal Entry إلى Main Entry.
+- لا توجد تغييرات SQL أو schema في هذه الدفعة؛ migrations التاريخية بقيت كما هي للتوثيق.
+- تحقق TypeScript و37 اختبارًا مستهدفًا بنجاح.
+
+## [2026-10-01 20:03:00 +0000] — تسمية ملف إجراءات Main Entry
+- تمت إعادة تسمية `financeAccountingJournalActions.ts` إلى `financeAccountingMainEntryActions.ts`.
+- تم تحديث factory والاستيراد في `FinanceAccounting.tsx` دون تغيير السلوك.
+- فحص TypeScript ناجح والمستودع مرفوع إلى `origin/main`.

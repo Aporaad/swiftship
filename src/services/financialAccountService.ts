@@ -216,7 +216,7 @@ class FinancialAccountService {
       isAutomatic: entry.isAutomatic,
       createdByUid: entry.createdByUid,
       paymentMethod: (entry as any).paymentMethod,
-      // تمرير postingStatus من القيد — forward postingStatus from journal entry for autoPost support
+      // تمرير postingStatus من القيد — forward postingStatus from main entry for autoPost support
       postingStatus: entry.postingStatus || 'posted',
     }, {
       id: debitAccount.id!, curNo: debitAccount.curNo, currency: debitAccount.currency,

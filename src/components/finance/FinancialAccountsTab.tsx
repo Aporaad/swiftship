@@ -74,7 +74,7 @@ export default function FinancialAccountsTab({
                   className="flex items-center gap-1.5 bg-[#d4af37]/15 hover:bg-[#d4af37]/25 border border-[#d4af37]/35 text-[#d4af37] px-4 py-2 rounded-xl text-xs font-black transition-all"
                 >
                   <PlusCircle className="w-4 h-4" />
-                  {isAr ? 'قيد تسوية جديد' : 'New Journal Entry'}
+                  {isAr ? 'قيد تسوية جديد' : 'New Main Entry'}
                 </button>
               </div>
             </div>

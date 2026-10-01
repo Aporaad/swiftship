@@ -11,8 +11,8 @@ export interface FinanceAccountRow {
 }
 
 export interface FinanceTransactionRow {
-  id?: string; entryId?: string; journalEntryId?: string; type?: string; refNumber?: FinanceScalar;
-  journalEntryNumber?: FinanceScalar; currencyOriginal?: string; currency?: string;
+  id?: string; entryId?: string; mainEntryId?: string; type?: string; refNumber?: FinanceScalar;
+  mainEntryNumber?: FinanceScalar; currencyOriginal?: string; currency?: string;
   createdAt?: string | number | Date; amount?: FinanceScalar; amountOriginal?: FinanceScalar;
   accountId?: string; accountCode?: string; entityType?: string; entityId?: string;
   entityName?: string; party?: string; description?: string; module?: string;
@@ -24,7 +24,7 @@ export interface FinanceCourierRow { id?: string; accountId?: string | null; cou
 export interface FinanceSettings { currency?: string; }
 interface LedgerGroup { debitLeg?: FinanceTransactionRow; creditLeg?: FinanceTransactionRow; legs: FinanceTransactionRow[]; }
 interface LedgerEntry {
-  id: string; groupKey: string; journalEntryId: string | null; refNumber: string; date: Date;
+  id: string; groupKey: string; mainEntryId: string | null; refNumber: string; date: Date;
   title: string; notes: string; party?: string; debitLeg?: FinanceTransactionRow; creditLeg?: FinanceTransactionRow;
   debitPartyName: string; creditPartyName: string; debitAccountId: string; creditAccountId: string;
   debitAccountCode: string; creditAccountCode: string; isDoubleEntry: boolean; type: 'Debit' | 'Credit' | 'Double';
@@ -110,7 +110,7 @@ export function useFinanceAccountingSelectors({
     accountTransactions
       .map((tx) => {
         const entry = entryById.get(tx.entryId || '');
-        return { ...tx, entry, journalEntryId: tx.entryId, refNumber: tx.refNumber || entry?.entryNumber, journalEntryNumber: entry?.entryNumber, currencyOriginal: tx.currencyOriginal || entry?.currencyOriginal };
+        return { ...tx, entry, mainEntryId: tx.entryId, refNumber: tx.refNumber || entry?.entryNumber, mainEntryNumber: entry?.entryNumber, currencyOriginal: tx.currencyOriginal || entry?.currencyOriginal };
       })
       .filter((tx) => tx.entry?.postingStatus === 'posted')
 
@@ -160,8 +160,8 @@ export function useFinanceAccountingSelectors({
       entries.push({
         id: sample.id || groupKey,
         groupKey,
-        journalEntryId: sample.journalEntryId || null,
-        refNumber: String(sample.refNumber ?? sample.journalEntryNumber ?? 'TX-REF'),
+        mainEntryId: sample.mainEntryId || null,
+        refNumber: String(sample.refNumber ?? sample.mainEntryNumber ?? 'TX-REF'),
         date,
         title: String(sample.description || (debitLeg && creditLeg ? `${debitLeg.entityName || ''} ➔ ${creditLeg.entityName || ''}` : (sample.party || sample.entityName || ''))),
         notes: sample.description || '',

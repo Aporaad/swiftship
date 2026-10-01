@@ -167,7 +167,7 @@ function _initSingleton() {
   let accountRegistry: Record<string, { currency: string; type: AccountType }> = {};
   let txDocs: any[] = [];
   // خريطة رؤوس القيود: entryId → بيانات القيد (posting_status)
-  // Map of journal entry headers: entryId → entry data (posting_status)
+  // Map of main entry headers: entryId → entry data (posting_status)
   let entryMap = new Map<string, any>();
   let initialLoaded = { settings: false, accounts: false, txs: false, entries: false };
 

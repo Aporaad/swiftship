@@ -45,7 +45,7 @@ import ManualJournalAdjustmentModal from './finance/ManualJournalAdjustmentModal
 import CustomerFifoPaymentModal from './finance/CustomerFifoPaymentModal';
 import { useFinanceAccountingData } from './financeAccounting/useFinanceAccountingData';
 import { useFinanceAccountingSelectors } from './financeAccounting/useFinanceAccountingSelectors';
-import { createFinanceAccountingJournalActions } from './financeAccounting/financeAccountingJournalActions';
+import { createFinanceAccountingMainEntryActions } from './financeAccounting/financeAccountingMainEntryActions';
 import { createFinanceAccountingCourierActions } from './financeAccounting/financeAccountingCourierActions';
 import { createFinanceAccountingLedgerActions } from './financeAccounting/financeAccountingLedgerActions';
 
@@ -122,7 +122,7 @@ export default function FinanceAccounting({
   const [empStmtStartDate, setEmpStmtStartDate] = useState('');
   const [empStmtEndDate, setEmpStmtEndDate] = useState('');
 
-  // Edit Journal Entry State
+  // Edit Main Entry State
   const [isEditJournalOpen, setIsEditJournalOpen] = useState(false);
   const [selectedEditEntry, setSelectedEditEntry] = useState<FinanceEntryState | null>(null);
   const [editJournalLoading, setEditJournalLoading] = useState(false);
@@ -384,7 +384,7 @@ export default function FinanceAccounting({
   }, [auditedCustomerId, customers, accountTransactions, orders, isAr]);
 
   // Domain actions live outside the page shell; behavior remains in their original handlers.
-  const { handleEditJournalSubmit, handleDeleteJournalSubmit, handleAddAdjustment, handleCustomerFIFOPayment } = createFinanceAccountingJournalActions({ adjustData, adjustLoading, adjustSalaryMonth, auditedCustomerId, collection, currentUser, customerLedgerDetails, db, dbRates, deletePin, doc, editJournalData, employees, entryToDelete, financialAccountService, getDocs, isAr, isSalaryPayment, notificationService, orders, payAmount, payLoading, payNotes, postingFinancialAccounts, query, selectedEditEntry, setAdjustData, setAdjustLoading, setDeleteLoading, setDeletePin, setDeletePinError, setEditJournalLoading, setEntryToDelete, setIsAdjustmentModalOpen, setIsDeletePinModalOpen, setIsEditJournalOpen, setIsPayModalOpen, setIsSalaryPayment, setPayAmount, setPayLoading, setPayNotes, setSelectedEditEntry, setSourceAccountId, setTargetAccountId, setTargetType, settings, sourceAccountId, targetAccountId, targetType, where, writeBatch });
+  const { handleEditJournalSubmit, handleDeleteJournalSubmit, handleAddAdjustment, handleCustomerFIFOPayment } = createFinanceAccountingMainEntryActions({ adjustData, adjustLoading, adjustSalaryMonth, auditedCustomerId, collection, currentUser, customerLedgerDetails, db, dbRates, deletePin, doc, editJournalData, employees, entryToDelete, financialAccountService, getDocs, isAr, isSalaryPayment, notificationService, orders, payAmount, payLoading, payNotes, postingFinancialAccounts, query, selectedEditEntry, setAdjustData, setAdjustLoading, setDeleteLoading, setDeletePin, setDeletePinError, setEditJournalLoading, setEntryToDelete, setIsAdjustmentModalOpen, setIsDeletePinModalOpen, setIsEditJournalOpen, setIsPayModalOpen, setIsSalaryPayment, setPayAmount, setPayLoading, setPayNotes, setSelectedEditEntry, setSourceAccountId, setTargetAccountId, setTargetType, settings, sourceAccountId, targetAccountId, targetType, where, writeBatch });
   const { handleFullCourierReconciliation, handleBulkRemitCourierCash, handleDirectSettleCustody } = createFinanceAccountingCourierActions({ courierAuditSheet, currentUser, db, dbRates, doc, financialAccountService, isAr, notificationService, setBulkReconciliationLoading, setCargoRemitLoading, settings, updateDoc, writeBatch });
   const { exportLedgerToCSV, triggerPrint } = createFinanceAccountingLedgerActions({ currentUser, filteredLedgerEntries, formatDate, formatDateTime, isAr });
 
@@ -669,7 +669,7 @@ return (
             <div className="p-4 border-b border-slate-850 flex justify-between items-center bg-[#07070a]/40 shrink-0">
               <h3 className="font-black text-white text-xs uppercase tracking-widest flex items-center gap-2">
                 <Edit2 className="w-4 h-4 text-[#d4af37]" />
-                {isAr ? 'تعديل كافة بيانات القيد المالي' : 'Full Journal Entry Editor'}
+                {isAr ? 'تعديل كافة بيانات القيد المالي' : 'Full Main Entry Editor'}
               </h3>
               <button
                 type="button"

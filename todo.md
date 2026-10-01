@@ -1158,3 +1158,11 @@
 - [x] التحقق عبر `npm run check -- --pretty false`.
 - [ ] `financeAccountingJournalActions.ts` لم يُستبدل بعقد غير متوافق؛ يحتاج adapter typed مستقل للـservice والـlegacy records.
 - [ ] `EditOrderModal` لم يُعدل في هذه الدفعة؛ سيُرحّل عبر adapter مستقل بعد تثبيت نموذج البيانات.
+
+## [2026-10-01 20:02:00 +0000] — تدقيق أسماء النموذج المحاسبي canonical
+- [x] التأكد من أن الاستعلامات النشطة تستخدم `main_entry` و`account_trans` فقط.
+- [x] استبدال حقول `journalEntryId`/`journalEntryNumber` النشطة بـ`mainEntryId`/`mainEntryNumber`.
+- [x] استبدال `accountTransactionId` النشط بـ`accountTransId` وربطه بعمود `account_trans_id`.
+- [x] تحديث مسميات الواجهات من Journal Entry إلى Main Entry.
+- [x] إبقاء migrations والسجلات التاريخية القديمة دون تعديل لأنها توثق مراحل ترحيل منفذة سابقًا.
+- [x] إعادة تسمية ملف إجراءات `financeAccountingJournalActions.ts` إلى `financeAccountingMainEntryActions.ts` وتحديث الاستيراد الوحيد.

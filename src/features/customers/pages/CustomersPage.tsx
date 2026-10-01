@@ -57,7 +57,7 @@ export default function CustomersPage() {
   const [detailTab, setDetailTab] = useState<'logistics' | 'financial'>('logistics');
   const [customerTransactions, setCustomerTransactions] = useState<any[]>([]);
   // خريطة رؤوس القيود: entryId → بيانات القيد (posting_status, entry_category)
-  // Journal entry headers map: entryId → entry data
+  // Main entry headers map: entryId → entry data
   const [customerMainEntriesMap, setCustomerMainEntriesMap] = useState<Map<string, any>>(new Map());
   const [finSearch, setFinSearch] = useState('');
   const [finModuleFilter, setFinModuleFilter] = useState<'all' | 'order' | 'expense' | 'payment' | 'custody'>('all');
@@ -403,7 +403,7 @@ export default function CustomersPage() {
         title: tx.description ? tx.description : (isAr ? (tx.type === 'Credit' ? 'إيداع نقدي للحساب' : 'سحب / تسوية من الحساب') : (tx.type === 'Credit' ? 'Account Deposit' : 'Account Withdrawal')),
         description: isAr
           ? `حركة حساب مركزية رقم القيد: ${tx.refNumber || tx.accountCode || 'Ledger-Tx'}`
-          : `System journal entry ref: ${tx.refNumber || tx.accountCode || 'Ledger-Tx'}`,
+          : `System main entry ref: ${tx.refNumber || tx.accountCode || 'Ledger-Tx'}`,
         ref: tx.refNumber || tx.accountCode || ''
       });
     });
@@ -989,7 +989,7 @@ export default function CustomersPage() {
                                       }`}>
                                       {item.module === 'order' ? (isAr ? 'قيمة مبيعات وتوصيل' : 'SalesCOD-Dr') :
                                         item.module === 'payment' ? (isAr ? 'تحصيل كاش مسدد' : 'COD Settled-Cr') :
-                                          (isAr ? 'إيداع/تعديل' : 'Journal Entry')}
+                                          (isAr ? 'إيداع/تعديل' : 'Main Entry')}
                                     </span>
                                   </td>
                                   <td className="p-3 font-bold text-white text-start">

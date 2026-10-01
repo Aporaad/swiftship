@@ -477,7 +477,7 @@ export function CourierDetailsModal({
                                       }`}>
                                       {item.module === 'order' ? (isAr ? 'تحصيل شحنة' : 'Shipment COD') :
                                         item.module === 'expense' ? (isAr ? 'عهد وسلف وأجور' : 'Disbursed') :
-                                          (isAr ? 'تسوية مركزية' : 'Journal Entry')}
+                                          (isAr ? 'تسوية مركزية' : 'Main Entry')}
                                     </span>
                                   </td>
                                   <td className="p-3 font-bold text-white text-start">

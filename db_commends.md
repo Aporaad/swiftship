@@ -690,3 +690,8 @@ select distinct k.key as data_key from public.cust_details d cross join lateral 
 ```sql
 -- لا يوجد SQL منفذ في دفعة عقود الإجراءات.
 ```
+
+## [2026-10-01 20:02:00 +0000] — AI Model: Manus
+```sql
+-- لا يوجد SQL منفذ؛ التغيير تدقيق وتوحيد أسماء في TypeScript/UI فقط.
+```

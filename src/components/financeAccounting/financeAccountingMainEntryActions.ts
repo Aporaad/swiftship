@@ -38,7 +38,7 @@ const getOrderTimestamp = (value: CustomerOrderRecord['createdAt']): number => {
 const errorMessage = (error: unknown, fallback: string): string =>
   error instanceof Error && error.message ? error.message : fallback;
 
-export function createFinanceAccountingJournalActions(dependencies: ActionDependencies) {
+export function createFinanceAccountingMainEntryActions(dependencies: ActionDependencies) {
   const { adjustData, adjustLoading, adjustSalaryMonth, auditedCustomerId, collection, currentUser, customerLedgerDetails, db, dbRates, deletePin, doc, editJournalData, employees, entryToDelete, financialAccountService, getDocs, isAr, isSalaryPayment, notificationService, orders, payAmount, payLoading, payNotes, postingFinancialAccounts, query, selectedEditEntry, setAdjustData, setAdjustLoading, setDeleteLoading, setDeletePin, setDeletePinError, setEditJournalLoading, setEntryToDelete, setIsAdjustmentModalOpen, setIsDeletePinModalOpen, setIsEditJournalOpen, setIsPayModalOpen, setIsSalaryPayment, setPayAmount, setPayLoading, setPayNotes, setSelectedEditEntry, setSourceAccountId, setTargetAccountId, setTargetType, settings, sourceAccountId, targetAccountId, targetType, where, writeBatch } = dependencies;
 
   const handleEditJournalSubmit = async (e: React.FormEvent) => {
@@ -122,8 +122,8 @@ export function createFinanceAccountingJournalActions(dependencies: ActionDepend
         }
 
         // Update master entry doc in main_entry if exists
-        if (selectedEditEntry.journalEntryId) {
-          const jvRef = doc(db, 'main_entry', selectedEditEntry.journalEntryId);
+        if (selectedEditEntry.mainEntryId) {
+          const jvRef = doc(db, 'main_entry', selectedEditEntry.mainEntryId);
           batch.update(jvRef, {
             amount: rawAmt,
             currency: editJournalData.currencyOriginal,
@@ -216,8 +216,8 @@ export function createFinanceAccountingJournalActions(dependencies: ActionDepend
       }
 
       // Delete master entry document from main_entry if present
-      if (entryToDelete.journalEntryId) {
-        batch.delete(doc(db, 'main_entry', entryToDelete.journalEntryId));
+      if (entryToDelete.mainEntryId) {
+        batch.delete(doc(db, 'main_entry', entryToDelete.mainEntryId));
       }
 
       await batch.commit();

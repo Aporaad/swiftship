@@ -14,8 +14,8 @@ export type OrderHistoryEvent = {
   orderId?: string;
   orderNumber?: string;
   shipmentId?: string;
-  journalEntryId?: string;
-  accountTransactionId?: string;
+  mainEntryId?: string;
+  accountTransId?: string;
   activityLogId?: string;
   eventType: string;
   eventCategory: string;
@@ -75,8 +75,8 @@ function readEvent(doc: OrderHistoryDocument): OrderHistoryEvent {
     orderId: readText(event.orderId ?? event.order_id),
     orderNumber: readText(event.orderNumber ?? event.order_number),
     shipmentId: readText(event.shipmentId ?? event.shipment_id),
-    journalEntryId: readText(event.journalEntryId ?? event.journal_entry_id),
-    accountTransactionId: readText(event.accountTransactionId ?? event.account_transaction_id),
+    mainEntryId: readText(event.mainEntryId ?? event.main_entry_id),
+    accountTransId: readText(event.accountTransId ?? event.account_trans_id),
     activityLogId: readText(event.activityLogId ?? event.activity_log_id),
     eventType: readText(event.eventType ?? event.event_type) ?? 'legacy.unknown',
     eventCategory: readText(event.eventCategory ?? event.event_category) ?? 'legacy',

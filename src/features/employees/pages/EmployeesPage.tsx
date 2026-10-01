@@ -1088,7 +1088,7 @@ export default function EmployeesPage() {
                           <td className="p-3 text-slate-400 text-[10px]">
                             {tx.createdAt ? new Date(tx.createdAt).toLocaleDateString() : '—'}
                           </td>
-                          <td className="p-3 font-bold text-amber-400">{tx.refNumber || tx.journalEntryNumber || '—'}</td>
+                          <td className="p-3 font-bold text-amber-400">{tx.refNumber || tx.mainEntryNumber || '—'}</td>
                           <td className="p-3 text-white font-sans font-medium">{tx.description || '—'}</td>
                           <td className="p-3 text-center font-bold text-emerald-400">
                             {tx.type === 'Debit' ? tx.amount?.toLocaleString() : '—'}

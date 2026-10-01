@@ -1057,7 +1057,7 @@ export default function ChartOfAccounts({
                         <td className="p-2 text-[10px] font-mono text-slate-500">
                           {tx.createdAt ? new Date(tx.createdAt).toLocaleDateString('ar-YE') : '—'}
                         </td>
-                        <td className="p-2 text-[9px] font-mono text-[#d4af37]">{tx.entryNumber || tx.entry_number || tx.refNumber || tx.journalEntryNumber || '—'}</td>
+                        <td className="p-2 text-[9px] font-mono text-[#d4af37]">{tx.entryNumber || tx.entry_number || tx.refNumber || tx.mainEntryNumber || '—'}</td>
                         <td className="p-2 text-[10px] text-slate-300 max-w-[200px] break-words">{tx.description || '—'}</td>
                         <td className="p-2">
                           <span className="text-[8px] bg-slate-900 text-slate-500 border border-slate-800 px-1.5 py-0.5 rounded uppercase font-black">{tx.module || tx.moduleId || '—'}</span>
