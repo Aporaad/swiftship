@@ -1,6 +1,6 @@
 type AdapterDocument = { id: string; data: () => Record<string, unknown> };
 import React, { useState, useEffect } from 'react';
-import { asyncState, type AsyncState } from '../../../shared/contracts/ui.contracts';
+import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
 import { collection, onSnapshot, doc, updateDoc, addDoc, setDoc, deleteDoc, query, where, orderBy, or } from '../../../lib/supabase-adapter';
 import { db, auth } from '../../../lib/supabase-adapter';
 import { handlePostgreSQLError, OperationType } from '../../../lib/supabase-adapter';
@@ -148,11 +148,10 @@ export default function CouriersPage() {
     courierType: 'local' as 'sourcing' | 'local'
   });
 
-  const [mutationState, setMutationState] = useState<AsyncState<void>>(asyncState.idle());
-  const addLoading = mutationState.status === 'submitting';
-  const editLoading = mutationState.status === 'submitting';
-  const setAddLoading = (value: boolean) => setMutationState(value ? asyncState.submitting() : asyncState.idle());
-  const setEditLoading = setAddLoading;
+  const [addMutationState, setAddMutationState] = useState<AsyncState<void>>(asyncState.idle());
+  const [editMutationState, setEditMutationState] = useState<AsyncState<void>>(asyncState.idle());
+  const addLoading = addMutationState.status === 'submitting';
+  const editLoading = editMutationState.status === 'submitting';
 
   // System User Provisioning State
   const [createSystemUser, setCreateSystemUser] = useState(false);
@@ -434,8 +433,7 @@ export default function CouriersPage() {
   const handleUpdateCourier = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCourier || editLoading) return;
-    setEditLoading(true);
-    try {
+    const result = await runMutation(async () => {
       const type = editFormData.courierType || 'local';
       const finCurrency = type === 'sourcing' ? 'SAR' : 'YER';
       await updateDoc(doc(db, 'couriers', selectedCourier.id), {
@@ -467,10 +465,10 @@ export default function CouriersPage() {
         category: 'system'
       });
       setIsEditModalOpen(false);
-    } catch (err) {
-      handlePostgreSQLError(err, OperationType.UPDATE, 'couriers');
-    } finally {
-      setEditLoading(false);
+    }, setEditMutationState);
+    if (result.status === 'error') {
+      console.error(result.error);
+      notificationService.notify({ title: isAr ? 'فشل العملية' : 'Operation Failed', message: result.error.message, type: 'error' });
     }
   };
 
@@ -524,8 +522,7 @@ export default function CouriersPage() {
       }
     }
 
-    setAddLoading(true);
-    try {
+    const result = await runMutation(async () => {
       // 1. Generate unique custom courier ID
       const courierCountSnap = couriers.length;
       const customId = `ALX-CR-${(courierCountSnap + 1).toString().padStart(3, '0')}`;
@@ -604,16 +601,10 @@ export default function CouriersPage() {
       setSystemUserFormData({ username: '', email: '', password: '', systemPin: '', role: 'Courier' });
       setIsAddModalOpen(false);
 
-    } catch (err: any) {
-      console.error(err);
-      notificationService.notify({
-        title: isAr ? 'خطأ في إنشاء المندوب' : 'Registration Failure',
-        message: err.message || 'Error configuring Courier record',
-        type: 'error',
-        category: 'system'
-      });
-    } finally {
-      setAddLoading(false);
+    }, setAddMutationState);
+    if (result.status === 'error') {
+      console.error(result.error);
+      notificationService.notify({ title: isAr ? 'فشل العملية' : 'Operation Failed', message: result.error.message, type: 'error' });
     }
   };
 

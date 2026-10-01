@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { asyncState, type AsyncState } from '../../../shared/contracts/ui.contracts';
+import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
 import { 
   Bell, Package, CheckCircle, AlertTriangle, Clock, X, Settings2, 
   Send, Database, Key, Phone, ShieldCheck, Layers, Play, Check, 
@@ -50,9 +50,7 @@ export default function NotificationsPage() {
   const isSaving = mutationState.status === 'submitting';
   const isTesting = mutationState.status === 'submitting';
   const isTestingConnection = mutationState.status === 'submitting';
-  const setIsSaving = (value: boolean) => setMutationState(value ? asyncState.submitting() : asyncState.idle());
-  const setIsTesting = setIsSaving;
-  const setIsTestingConnection = setIsSaving;
+
   
   // WhatsApp Delivery Logs state
   const [logs, setLogs] = useState<DeliveryLog[]>([]);
@@ -185,16 +183,14 @@ export default function NotificationsPage() {
       toast.error(isAr ? 'لا تملك صلاحية تعديل إعدادات WhatsApp' : 'No permission to edit WhatsApp settings');
       return;
     }
-    setIsSaving(true);
-    try {
+    const mutation = await runMutation(async () => {
       await whatsappService.saveConfig(whatsappConfig);
       activityLogService.log('save_whatsapp_settings', whatsappConfig.provider);
       toast.success(isAr ? 'تم حفظ إعدادات وقوالب WhatsApp بنجاح!' : 'WhatsApp config and templates saved successfully!');
-    } catch (err: unknown) {
-      console.error(err);
-      toast.error(errorMessage(err) || 'Failed to save configuration');
-    } finally {
-      setIsSaving(false);
+    }, setMutationState);
+    if (mutation.status === 'error') {
+      console.error(mutation.error);
+      toast.error(mutation.error.message);
     }
   };
 
@@ -208,9 +204,8 @@ export default function NotificationsPage() {
       toast.error(isAr ? 'الرجاء إدخال رقم الهاتف للتجربة' : 'Please input a test phone number');
       return;
     }
-    setIsTesting(true);
     setTestResult(null);
-    try {
+    const mutation = await runMutation(async () => {
       const result = await whatsappService.sendDirect(testPhone, testMessage, 'TEST-ID', 'direct-debugger');
       setTestResult(result);
       if (result.success) {
@@ -219,12 +214,10 @@ export default function NotificationsPage() {
       } else {
         toast.error(isAr ? `فشل الإرسال: ${result.errorMsg || ''}` : `Emit failed: ${result.errorMsg || ''}`);
       }
-    } catch (err: unknown) {
-      console.error(err);
-      setTestResult({ success: false, status: 'Failed', errorMsg: errorMessage(err) });
-      toast.error(errorMessage(err) || 'Diagnostic error');
-    } finally {
-      setIsTesting(false);
+    }, setMutationState);
+    if (mutation.status === 'error') {
+      console.error(mutation.error);
+      toast.error(mutation.error.message);
     }
   };
 
@@ -234,9 +227,8 @@ export default function NotificationsPage() {
       toast.error(isAr ? 'لا تملك صلاحية تعديل إعدادات WhatsApp' : 'No permission to edit WhatsApp settings');
       return;
     }
-    setIsTestingConnection(true);
     setConnectionStatus(null);
-    try {
+    const mutation = await runMutation(async () => {
       const res = await whatsappService.testConnection(whatsappConfig.provider, whatsappConfig.config);
       setConnectionStatus(res);
       if (res.success) {
@@ -248,12 +240,10 @@ export default function NotificationsPage() {
       } else {
         toast.error(isAr ? `فشل فحص الاتصال: ${res.message}` : `Connection check failed: ${res.message}`);
       }
-    } catch (err: unknown) {
-      console.error(err);
-      setConnectionStatus({ success: false, message: errorMessage(err) || 'Connection test error' });
-      toast.error(errorMessage(err) || 'Gateway connection failed');
-    } finally {
-      setIsTestingConnection(false);
+    }, setMutationState);
+    if (mutation.status === 'error') {
+      console.error(mutation.error);
+      toast.error(mutation.error.message);
     }
   };
 

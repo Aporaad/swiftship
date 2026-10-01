@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { asyncState, type AsyncState } from '../../../shared/contracts/ui.contracts';
+import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
 import { collection, doc, getDocs, setDoc, writeBatch, query, orderBy, deleteDoc, db, handleSupabaseError, OperationType } from '../../../lib/supabase-adapter';
 import {
   Save, Globe, Palette, Database, DollarSign, Building, X, Upload, CheckCircle,
@@ -39,15 +39,15 @@ const settingsErrorMessage = (error: unknown): string => error instanceof Error 
 // ─────────────────────────────────────
 export default function SettingsPage() {
   const { legacyAuth: auth } = useAuthSession();
+  const [saveState, setSaveState] = useState<AsyncState<void>>(asyncState.idle());
   const [operationState, setOperationState] = useState<AsyncState<void>>(asyncState.idle());
-  const saving = operationState.status === 'submitting';
+  const saving = saveState.status === 'submitting';
   const backupLoading = operationState.status === 'submitting';
   const importLoading = operationState.status === 'submitting';
   const apiLoading = operationState.status === 'submitting';
-  const setSaving = (value: boolean) => setOperationState(value ? asyncState.submitting() : asyncState.idle());
-  const setBackupLoading = setSaving;
-  const setImportLoading = setSaving;
-  const setApiLoading = setSaving;
+  const setBackupLoading = (value: boolean) => setOperationState(value ? asyncState.submitting() : asyncState.idle());
+  const setImportLoading = setBackupLoading;
+  const setApiLoading = setBackupLoading;
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<SettingsTab>('interface');
@@ -224,8 +224,7 @@ export default function SettingsPage() {
       return;
     }
 
-    setSaving(true);
-    try {
+    const result = await runMutation(async () => {
       const selectedCols = Object.entries(exportSelections).filter(([, v]) => v).map(([k]) => k);
       await updateSettings({ ...localSettings, backupCollections: selectedCols });
 
@@ -247,10 +246,9 @@ export default function SettingsPage() {
 
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
-    } catch (error) {
-      handleSupabaseError(error, OperationType.UPDATE, 'settings');
-    } finally {
-      setSaving(false);
+    }, setSaveState);
+    if (result.status === 'error') {
+      handleSupabaseError(result.error, OperationType.UPDATE, 'settings');
     }
   };
 

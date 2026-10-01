@@ -8,7 +8,7 @@ type EmployeeAccountTransaction = Record<string, unknown> & {
   amount?: unknown;
 };
 import React, { useState, useEffect } from 'react';
-import { asyncState, type AsyncState } from '../../../shared/contracts/ui.contracts';
+import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
 import { CurrencySelect } from '../../../components/common/CurrencySelect';
 import {
   collection,
@@ -77,11 +77,10 @@ export default function EmployeesPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
-  const [mutationState, setMutationState] = useState<AsyncState<void>>(asyncState.idle());
-  const addLoading = mutationState.status === 'submitting';
-  const editLoading = mutationState.status === 'submitting';
-  const setAddLoading = (value: boolean) => setMutationState(value ? asyncState.submitting() : asyncState.idle());
-  const setEditLoading = setAddLoading;
+  const [addMutationState, setAddMutationState] = useState<AsyncState<void>>(asyncState.idle());
+  const [editMutationState, setEditMutationState] = useState<AsyncState<void>>(asyncState.idle());
+  const addLoading = addMutationState.status === 'submitting';
+  const editLoading = editMutationState.status === 'submitting';
 
   // Statement of Account Modal
   const [statementModal, setStatementModal] = useState<{
@@ -211,8 +210,7 @@ export default function EmployeesPage() {
       }
     }
 
-    setAddLoading(true);
-    try {
+    const result = await runMutation(async () => {
       const newId = 'emp_' + Math.random().toString(36).substring(2, 11);
       const now = Date.now();
 
@@ -300,14 +298,9 @@ export default function EmployeesPage() {
         systemPin: '',
         role: 'Staff'
       });
-    } catch (err: any) {
-      notificationService.notify({
-        title: isAr ? 'خطأ في الإنشاء' : 'Creation Failed',
-        message: err.message,
-        type: 'error'
-      });
-    } finally {
-      setAddLoading(false);
+    }, setAddMutationState);
+    if (result.status === 'error') {
+      notificationService.notify({ title: isAr ? 'خطأ في الإنشاء' : 'Creation Failed', message: result.error.message, type: 'error' });
     }
   };
 
@@ -316,8 +309,7 @@ export default function EmployeesPage() {
     e.preventDefault();
     if (editLoading || !selectedEmployee) return;
 
-    setEditLoading(true);
-    try {
+    const result = await runMutation(async () => {
       const now = Date.now();
       await updateDoc(doc(db, 'employees', selectedEmployee.id), {
         fullName: editFormData.fullName.trim(),
@@ -354,14 +346,9 @@ export default function EmployeesPage() {
 
       setIsEditModalOpen(false);
       setSelectedEmployee(null);
-    } catch (err: any) {
-      notificationService.notify({
-        title: isAr ? 'خطأ في التعديل' : 'Update Failed',
-        message: err.message,
-        type: 'error'
-      });
-    } finally {
-      setEditLoading(false);
+    }, setEditMutationState);
+    if (result.status === 'error') {
+      notificationService.notify({ title: isAr ? 'خطأ في التعديل' : 'Update Failed', message: result.error.message, type: 'error' });
     }
   };
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { asyncState, type AsyncState } from '../../../shared/contracts/ui.contracts';
+import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
 import { collection, addDoc, doc, updateDoc, onSnapshot, deleteDoc, query, where, orderBy, getDocs } from '../../../lib/supabase-adapter';
 import { db } from '../../../lib/supabase-adapter';
 import { handlePostgreSQLError, OperationType } from '../../../lib/supabase-adapter';
@@ -52,7 +52,6 @@ export default function CustomersPage() {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [mutationState, setMutationState] = useState<AsyncState<void>>(asyncState.idle());
   const submitting = mutationState.status === 'submitting';
-  const setSubmitting = (value: boolean) => setMutationState(value ? asyncState.submitting() : asyncState.idle());
   const [search, setSearch] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [customerOrders, setCustomerOrders] = useState<any[]>([]);
@@ -216,8 +215,7 @@ export default function CustomersPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting) return;
-    setSubmitting(true);
-    try {
+    const result = await runMutation(async () => {
       if (selectedCustomer) {
         await updateDoc(doc(db, 'customers', selectedCustomer.id), {
           fullName: formData.fullName,
@@ -275,10 +273,10 @@ export default function CustomersPage() {
         });
       }
       setShowModal(false);
-    } catch (error) {
-      handlePostgreSQLError(error, OperationType.CREATE, 'customers');
-    } finally {
-      setSubmitting(false);
+    }, setMutationState);
+    if (result.status === 'error') {
+      console.error(result.error);
+      notificationService.notify({ title: isAr ? 'فشل الحفظ' : 'Save Failed', message: result.error.message, type: 'error' });
     }
   };
 

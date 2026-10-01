@@ -114,3 +114,6 @@
 
 ## دفعة 01:22 — AI Model: Manus
 تم ربط صفحات الإدارة السبع المطلوبة بعقود AsyncState: Sources وEmployees وUsers وNotifications وCustomers وCouriers وSettings. حالات UI البحتة بقيت خارج العقد، بينما جسور التوافق async مؤقتة حتى استكمال استبدالها باستدعاءات runQuery/runMutation.
+
+## دفعة التصحيح 01:34 — AI Model: Manus
+التصحيح الحالي يطبق `runMutation` داخل handlers فعلية، وليس مجرد تغيير أسماء state، في Sources وEmployees وUsers وCustomers وCouriers وNotifications وحفظ Settings. الإغلاق النهائي ما زال ممنوعاً حتى إكمال كل Query/Mutation في audit.

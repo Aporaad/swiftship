@@ -1280,3 +1280,10 @@
 - [x] ربط `CouriersPage` بحالات query/orders/mutation بعقود AsyncState.
 - [x] ربط `SettingsPage` بحالة تشغيل موحدة للـsave/backup/import/API/history.
 - [ ] استبدال جسور التوافق الحالية باستدعاءات `runQuery`/`runMutation` كاملة حيث يلزم، ثم إغلاق المرحلة 12 رسمياً.
+
+## [2026-10-02 01:34:00 +0300] — تصحيح منهجي للمرحلة 12 — AI Model: Manus
+- [x] إيقاف أي عمل على `alx_web` ضمن هذه الدفعة.
+- [x] استبدال عمليات Sources وEmployees وUsers وCustomers وCouriers وNotifications الأساسية بـ`runMutation` فعلي.
+- [x] استبدال حفظ Settings الأساسي بـ`runMutation` فعلي.
+- [ ] استكمال عمليات الحذف/التبديل/النسخ والاستعادة وبقية Settings وUserManagementPage بـ`runMutation`.
+- [ ] تشغيل الاختبارات النهائية ثم إعلان إغلاق المرحلة 12 فقط بعد اجتياز audit كامل لكل Query/Mutation.

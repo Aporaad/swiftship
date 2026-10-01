@@ -1,6 +1,6 @@
 type AdapterDocument = { id: string; data: () => Record<string, unknown> };
 import React, { useState, useEffect } from 'react';
-import { asyncState, type AsyncState } from '../../../shared/contracts/ui.contracts';
+import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
 import { collection, onSnapshot, doc, updateDoc, deleteDoc, addDoc } from '../../../lib/supabase-adapter';
 import { db, handlePostgreSQLError, OperationType } from '../../../lib/supabase-adapter';
 import { Search, Edit2, X, Plus, Trash2, MapPin, ShieldAlert, RefreshCw, Crown, Globe, Truck, Phone, Landmark } from 'lucide-react';
@@ -50,11 +50,10 @@ export default function SourcesPage() {
   });
   
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [mutationState, setMutationState] = useState<AsyncState<void>>(asyncState.idle());
-  const sourceSubmitting = mutationState.status === 'submitting';
-  const shippingSubmitting = mutationState.status === 'submitting';
-  const setSourceSubmitting = (value: boolean) => setMutationState(value ? asyncState.submitting() : asyncState.idle());
-  const setShippingSubmitting = setSourceSubmitting;
+  const [sourceMutationState, setSourceMutationState] = useState<AsyncState<void>>(asyncState.idle());
+  const [shippingMutationState, setShippingMutationState] = useState<AsyncState<void>>(asyncState.idle());
+  const sourceSubmitting = sourceMutationState.status === 'submitting';
+  const shippingSubmitting = shippingMutationState.status === 'submitting';
   const [selectedSource, setSelectedSource] = useState<any>(null);
   const [formData, setFormData] = useState({
     source_name: '',
@@ -150,48 +149,27 @@ export default function SourcesPage() {
   const handleShippingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (shippingSubmitting) return;
-    setShippingSubmitting(true);
-    try {
-      const payload = {
-        ...shippingFormData,
-        updatedAt: Date.now()
-      };
-
+    const result = await runMutation(async () => {
+      const payload = { ...shippingFormData, updatedAt: Date.now() };
       if (selectedCompany) {
         await updateDoc(doc(db, 'shipping_companies', selectedCompany.id), payload);
         await ensureFinancialAccount('shipping_company', selectedCompany.id, shippingFormData.name);
         activityLogService.log('edit_shipping_company', shippingFormData.name, { ...shippingFormData });
-        notificationService.notify({
-          title: isAr ? 'تعديل شركة الشحن' : 'Shipping Company Updated',
-          message: isAr ? `تم تحديث بيانات الشركة ${shippingFormData.name}` : `Shipping carrier ${shippingFormData.name} configuration updated`,
-          type: 'info'
-        });
+        notificationService.notify({ title: isAr ? 'تعديل شركة الشحن' : 'Shipping Company Updated', message: isAr ? `تم تحديث بيانات الشركة ${shippingFormData.name}` : `Shipping carrier ${shippingFormData.name} configuration updated`, type: 'info' });
       } else {
         const scId = 'SC-' + Math.random().toString(36).substring(2, 11);
         const account = await ensureFinancialAccount('shipping_company', scId, shippingFormData.name, false);
-        await addDoc(scId, collection(db, 'shipping_companies'), {
-          ...payload,
-          accountId: account.id,
-          createdAt: Date.now()
-        });
+        await addDoc(scId, collection(db, 'shipping_companies'), { ...payload, accountId: account.id, createdAt: Date.now() });
         activityLogService.log('add_shipping_company', shippingFormData.name, { ...shippingFormData });
-        notificationService.notify({
-          title: isAr ? 'إضافة شركة شحن جديدة' : 'Shipping Company Added',
-          message: isAr ? `تمت إضافة شركة الشحن ${shippingFormData.name} بنجاح` : `New shipping carrier ${shippingFormData.name} registered`,
-          type: 'success'
-        });
+        notificationService.notify({ title: isAr ? 'إضافة شركة شحن جديدة' : 'Shipping Company Added', message: isAr ? `تمت إضافة شركة الشحن ${shippingFormData.name} بنجاح` : `New shipping carrier ${shippingFormData.name} registered`, type: 'success' });
       }
+    }, setShippingMutationState);
+    if (result.status === 'success-after-mutation') {
       setIsShippingModalOpen(false);
       setSelectedCompany(null);
-    } catch (err) {
-      console.error(err);
-      notificationService.notify({
-        title: isAr ? 'خطأ في العملية' : 'Transaction Error',
-        message: isAr ? 'فشلت معالجة بيانات شركة الشحن' : 'Failed to save shipping carrier details',
-        type: 'error'
-      });
-    } finally {
-      setShippingSubmitting(false);
+    } else if (result.status === 'error') {
+      console.error(result.error);
+      notificationService.notify({ title: isAr ? 'خطأ في العملية' : 'Transaction Error', message: isAr ? 'فشلت معالجة بيانات شركة الشحن' : 'Failed to save shipping carrier details', type: 'error' });
     }
   };
 
@@ -202,16 +180,12 @@ export default function SourcesPage() {
       message: isAr ? `هل أنت متأكد من حذف شركة الشحن ${name}؟` : `Are you sure you want to delete shipping company ${name}?`,
       type: 'danger',
       onConfirm: async () => {
-        try {
+        const result = await runMutation(async () => {
           await deleteDoc(doc(db, 'shipping_companies', id));
           activityLogService.log('delete_shipping_company', name, { id });
-          notificationService.notify({
-            title: isAr ? 'تم حذف الشركة' : 'Carrier Terminated',
-            message: isAr ? 'تم الحذف من الفهارس بنجاح' : 'Shipping carrier deleted successfully from index',
-            type: 'warning'
-          });
-        } catch (err: any) {
-          console.error(err);
+        }, setShippingMutationState);
+        if (result.status === 'success-after-mutation') {
+          notificationService.notify({ title: isAr ? 'تم حذف الشركة' : 'Carrier Terminated', message: isAr ? 'تم الحذف من الفهارس بنجاح' : 'Shipping carrier deleted successfully from index', type: 'warning' });
         }
       }
     });
@@ -248,44 +222,26 @@ export default function SourcesPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (sourceSubmitting) return;
-    setSourceSubmitting(true);
-    try {
-      const payload = {
-        ...formData,
-        name: formData.source_name, // Dual sync for backward capability with Orders dropdown
-        source_name: formData.source_name
-      };
-
+    const result = await runMutation(async () => {
+      const payload = { ...formData, name: formData.source_name, source_name: formData.source_name };
       if (selectedSource) {
         await updateDoc(doc(db, 'sources', selectedSource.id), payload);
         await ensureFinancialAccount('source', selectedSource.id, formData.source_name);
         activityLogService.log('edit_source', formData.source_name, { ...formData });
-        notificationService.notify({
-          title: isAr ? 'تعديل مصدر الشراء' : 'Source Updated',
-          message: isAr ? `تم تحديث المصدر الكلي ${formData.source_name}` : `Order supply source ${formData.source_name} has been updated`,
-          type: 'info'
-        });
+        notificationService.notify({ title: isAr ? 'تعديل مصدر الشراء' : 'Source Updated', message: isAr ? `تم تحديث المصدر الكلي ${formData.source_name}` : `Order supply source ${formData.source_name} has been updated`, type: 'info' });
       } else {
         const srcId = 'SRC-' + Math.random().toString(36).substring(2, 11);
         const account = await ensureFinancialAccount('source', srcId, formData.source_name, false);
-        await addDoc(srcId, collection(db, 'sources'), {
-          ...payload,
-          accountId: account.id,
-          createdAt: Date.now()
-        });
+        await addDoc(srcId, collection(db, 'sources'), { ...payload, accountId: account.id, createdAt: Date.now() });
         activityLogService.log('add_source', formData.source_name, { ...formData });
-        notificationService.notify({
-          title: isAr ? 'إضافة مصدر شراء جديد' : 'Source Added',
-          message: isAr ? `تمت إضافة المصدر بنجاح برابط: ${formData.source_name}` : `New order supply source ${formData.source_name} recorded`,
-          type: 'success'
-        });
+        notificationService.notify({ title: isAr ? 'إضافة مصدر شراء جديد' : 'Source Added', message: isAr ? `تمت إضافة المصدر بنجاح برابط: ${formData.source_name}` : `New order supply source ${formData.source_name} recorded`, type: 'success' });
       }
+    }, setSourceMutationState);
+    if (result.status === 'success-after-mutation') {
       setIsModalOpen(false);
       setSelectedSource(null);
-    } catch (err) {
-      handlePostgreSQLError(err, selectedSource ? OperationType.UPDATE : OperationType.CREATE, 'sources');
-    } finally {
-      setSourceSubmitting(false);
+    } else if (result.status === 'error') {
+      handlePostgreSQLError(result.error, selectedSource ? OperationType.UPDATE : OperationType.CREATE, 'sources');
     }
   };
 
@@ -296,21 +252,14 @@ export default function SourcesPage() {
       message: isAr ? `هل أنت متأكد من فك وإلغاء المصدر ${name}؟ قد يؤثر ذلك على كشوفات حساب الطلبات القديمة.` : `Are you sure you want to delete order source ${name}? This could impact historic catalog listings.`,
       type: 'danger',
       onConfirm: async () => {
-        try {
+        const result = await runMutation(async () => {
           await deleteDoc(doc(db, 'sources', id));
           activityLogService.log('delete_source', name, { id });
-          notificationService.notify({
-            title: isAr ? 'تم إلغاء المصدر' : 'Source Terminated',
-            message: isAr ? 'تم الحذف من الفهارس بنجاح' : 'Order source deleted successfully from ERP indexes',
-            type: 'warning'
-          });
-        } catch (err: any) {
-          console.error(err);
-          notificationService.notify({
-            title: isAr ? 'خطأ في الحذف' : 'Delete Failure',
-            message: isAr ? `تعذر الكشط والحذف: ${err.message}` : `Could not delete source: ${err.message}`,
-            type: 'error'
-          });
+        }, setSourceMutationState);
+        if (result.status === 'success-after-mutation') {
+          notificationService.notify({ title: isAr ? 'تم إلغاء المصدر' : 'Source Terminated', message: isAr ? 'تم الحذف من الفهارس بنجاح' : 'Order source deleted successfully from ERP indexes', type: 'warning' });
+        } else if (result.status === 'error') {
+          notificationService.notify({ title: isAr ? 'خطأ في الحذف' : 'Delete Failure', message: result.error.message, type: 'error' });
         }
       }
     });
