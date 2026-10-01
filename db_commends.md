@@ -707,3 +707,9 @@ select distinct k.key as data_key from public.cust_details d cross join lateral 
 ```text
 لا يوجد أمر SQL في دفعة API Foundation؛ التغييرات تخص HTTP contracts وrequest ID وErrorEnvelope فقط.
 ```
+
+
+## [2026-10-01 20:31:00 +0000] — AI Model: Manus
+```text
+لا يوجد أمر SQL في دفعة server-auth وCustomers read-only.
+```

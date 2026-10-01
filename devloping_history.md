@@ -1901,3 +1901,11 @@
 - تم إبقاء `current-user`, `customers`, و`couriers` غير مفعلة حتى بناء server-auth middleware؛ هذا يمنع كشف بيانات الأعمال دون تفويض.
 - أضيفت اختبارات request ID وcontract، ونجح TypeScript و10 اختبارات مستهدفة.
 - لا تغييرات SQL أو DB أو RLS.
+
+## [2026-10-01 20:31:00 +0000] — server-auth وCustomers read-only — AI Model: Manus
+- أضيف `server/auth/server-auth.ts` بعقد `ServerPrincipal` و`TokenVerifier` ورفض حالات missing/invalid token بعقود ErrorEnvelope آمنة.
+- أضيف `createStaticTokenVerifier` كحل bootstrap اختياري يعتمد على `SWIFTSHIP_API_TOKEN`؛ عند غياب المتغير لا يتم فتح البيانات ويعاد `AUTH_NOT_CONFIGURED`.
+- أضيف `server/routes/customers.ts` مع `CustomerApiDto` محدود الحقول وGateway read-only وpagination/search.
+- تم تسجيل `GET /api/v1/customers` خلف middleware المصادقة وبلا أي mutation.
+- الاختبارات المستهدفة: 16 ناجحة، وTypeScript ناجح.
+- لا تغييرات SQL أو DB أو RLS.

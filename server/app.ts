@@ -2,9 +2,6 @@ import crypto from 'node:crypto';
 import express, { type Express, type RequestHandler } from 'express';
 import { errorDetailsFromUnknown } from '../src/shared/contracts/error.contracts';
 
-const DATABASE_UNAVAILABLE_MESSAGE =
-  'خدمات قاعدة البيانات غير مهيأة أو غير متصلة بالإنترنت حالياً. يرجى التأكد من تهيئة Supabase بشكل صحيح عبر متغيرات البيئة.';
-
 const API_CONTRACT_VERSION = '1.0';
 
 export interface ApiFoundationContract {
@@ -29,7 +26,7 @@ export function apiFoundationContract(): ApiFoundationContract {
       { method: 'GET', path: '/api/readiness', auth: 'public', mutation: false },
       { method: 'GET', path: '/api/v1/contract', auth: 'public', mutation: false },
       { method: 'GET', path: '/api/v1/auth/current-user', auth: 'not-enabled', mutation: false },
-      { method: 'GET', path: '/api/v1/customers', auth: 'not-enabled', mutation: false },
+      { method: 'GET', path: '/api/v1/customers', auth: 'server-auth-required', mutation: false },
       { method: 'GET', path: '/api/v1/couriers', auth: 'not-enabled', mutation: false },
     ],
   };
@@ -72,7 +69,14 @@ export function createApiAvailabilityMiddleware(
     }
 
     if (!isDatabaseReady()) {
-      return res.status(503).json({ error: DATABASE_UNAVAILABLE_MESSAGE });
+      return res.status(503).json({
+        success: false,
+        error: {
+          code: 'DATABASE_NOT_READY',
+          message: 'Database service is not ready.',
+          requestId: res.locals.requestId,
+        },
+      });
     }
 
     return next();

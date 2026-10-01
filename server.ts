@@ -39,11 +39,13 @@ const currentDirPath = currentFilePath
 
 // ── استيراد وحدات الخادم / Import server modules ─────────────────
 import { createApiErrorHandler, createApp } from './server/app';
+import { createStaticTokenVerifier } from './server/auth/server-auth';
 import { createDbClient, authenticateServerSession } from './server/current-db/client';
 import { startAccountReconciliationListener } from './server/jobs/account-reconciliation';
 import { registerAuthRoutes } from './server/routes/auth';
 import { registerWhatsAppRoutes } from './server/routes/whatsapp';
 import { registerTrackingRoutes } from './server/routes/tracking';
+import { createCustomersGateway, registerCustomersRoutes } from './server/routes/customers';
 import { registerBrowserProxyRoute } from './server/browser-proxy/route';
 import { attachViteDevMiddleware, attachProductionStaticFiles } from './server/dev-server';
 
@@ -72,6 +74,15 @@ async function startServer(): Promise<void> {
   registerAuthRoutes(app, db, auth);
   registerWhatsAppRoutes(app, db);
   registerTrackingRoutes(app, db);
+  registerCustomersRoutes(
+    app,
+    createCustomersGateway(db),
+    createStaticTokenVerifier(process.env.SWIFTSHIP_API_TOKEN, {
+      id: 'api-service',
+      email: null,
+      roles: ['customers:read'],
+    }),
+  );
   app.use('/api', createApiErrorHandler());
 
   // 6. مسار احتياطي لـ API / API fallback

@@ -1117,3 +1117,10 @@ https://manus.im/share/xR07Pp2KeqN68wwZBKQ6Ju
 ابدأ بتنفيذ بقية مهام المرحلة الثالثة عشر الخاصة ببناء الأساس وتوثيق نقاط الاتصال (API Foundation).
 ```
 **النطاق المنفذ:** عقود HTTP وrequest ID وErrorEnvelope و`/api/v1/contract` وتوثيق المسارات والبوابات الأمنية.
+
+
+## [2026-10-01 20:31:00 +0000] — AI Model: Manus
+```text
+ابدأ فوراً بتنفيذ بناء server-auth middleware قابل للاختبار وتنفيذ بقيه الخطوات  Customers.
+```
+**النطاق المنفذ:** server-auth middleware قابل للحقن والاختبار، وCustomers read-only route مع DTO وGateway typed.

@@ -94,3 +94,7 @@
 
 ## API Foundation checkpoint — 2026-10-01 20:23:00 +0000 — AI Model: Manus
 أصبح أساس HTTP موحدًا وقابلًا للاختبار: request ID، ErrorEnvelope، وعقد versioned عبر `/api/v1/contract`. المسارات الحساسة للبيانات غير مفعلة حتى بناء server-auth middleware قابل للاختبار. الوثيقة التفصيلية هي `docs/pre-api/api-foundation-contract-2026-10-01.md`.
+
+
+## Customers checkpoint — 2026-10-01 20:31:00 +0000 — AI Model: Manus
+تم تفعيل Customers read-only خلف server-auth قابل للاختبار. الـbootstrap الحالي يعتمد على `SWIFTSHIP_API_TOKEN` اختياريًا، والمسار لا يفتح عند غيابه. الخطوة التالية قبل الإنتاج هي استبدال static token بـverifier جلسة خادمي حقيقي، ثم تفعيل Couriers بنفس العقد.

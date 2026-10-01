@@ -11,6 +11,7 @@ function createResponse() {
   const response = {
     status: vi.fn(),
     json: vi.fn(),
+    locals: {},
   };
   response.status.mockReturnValue(response);
   response.json.mockReturnValue(response);
@@ -31,7 +32,12 @@ describe('API availability middleware', () => {
 
     expect(response.status).toHaveBeenCalledWith(503);
     expect(response.json).toHaveBeenCalledWith({
-      error: 'خدمات قاعدة البيانات غير مهيأة أو غير متصلة بالإنترنت حالياً. يرجى التأكد من تهيئة Supabase بشكل صحيح عبر متغيرات البيئة.',
+      success: false,
+      error: {
+        code: 'DATABASE_NOT_READY',
+        message: 'Database service is not ready.',
+        requestId: undefined,
+      },
     });
     expect(next).not.toHaveBeenCalled();
   });
@@ -89,7 +95,7 @@ describe('API availability middleware', () => {
     expect(apiFoundationContract().routes).toContainEqual({
       method: 'GET',
       path: '/api/v1/customers',
-      auth: 'not-enabled',
+      auth: 'server-auth-required',
       mutation: false,
     });
   });

@@ -75,3 +75,16 @@ Supabase adapter
 ## القرار التالي
 
 الخطوة التالية هي بناء server-auth middleware قابل للاختبار، ثم تفعيل قراءة Customers أو Couriers فقط بعد اعتماد DTO وpermission وaudit contract. لا يبدأ Orders أو Accounting API ولا أي mutation قبل هذه البوابة.
+
+
+## تحديث Customers — 2026-10-01 20:31:00 +0000 — AI Model: Manus
+أصبح `GET /api/v1/customers` مسارًا منفذًا read-only خلف `server-auth`:
+
+- يتطلب `Authorization: Bearer <token>`.
+- يستخدم verifier قابلًا للحقن والاختبار.
+- يستخدم `SWIFTSHIP_API_TOKEN` كـbootstrap اختياري؛ لا يفتح المسار عند غياب المتغير.
+- يعيد DTO آمنًا يحتوي `id`, `name`, `email`, `phone`, و`disabled` فقط.
+- يدعم `limit`, `offset`, و`search` مع حد أقصى 100 سجل لكل صفحة.
+- لا توجد mutations أو transaction أو retry تلقائي.
+
+المساران `current-user` و`couriers` ما زالا غير مفعّلين حتى اكتمال verifier خادمي حقيقي وصلاحياتهما.

@@ -78,3 +78,15 @@ React / Electron / alx_web → HTTP API → Application Gateway → Supabase
 - إبقاء current-user وCustomers وCouriers غير مفعلة حتى بناء server-auth middleware؛ لا يتم تجاوز بوابة التفويض.
 
 **التحقق:** TypeScript ناجح، و10 اختبارات مستهدفة ناجحة (8 app + 2 ApiClient). لم تُنفذ SQL ولم تتغير قاعدة البيانات أو RLS.
+
+
+## تنفيذ server-auth وCustomers — 2026-10-01 20:31:00 +0000 — AI Model: Manus
+تم تنفيذ middleware المصادقة القابل للاختبار، ثم تفعيل أول مسار بيانات read-only:
+
+- `GET /api/v1/customers` خلف Bearer authentication.
+- عقد principal وأدوار server-side قابلة للحقن.
+- DTO آمن وGateway typed مع pagination/search.
+- حالات `AUTH_REQUIRED`, `AUTH_INVALID`, و`AUTH_NOT_CONFIGURED` موحدة وآمنة.
+- `SWIFTSHIP_API_TOKEN` حل bootstrap مؤقت، وليس بديلًا عن verifier جلسة الإنتاج.
+
+**التحقق:** TypeScript ناجح و16 اختبارًا مستهدفًا ناجحة. لم تُنفذ SQL ولم تتغير DB/RLS.

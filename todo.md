@@ -1198,3 +1198,11 @@
 - [x] إضافة `ErrorEnvelope` handler عام بعد تسجيل routes في `server.ts`.
 - [x] توثيق route وDTO وpermission وaudit وretry وtransaction boundary.
 - [ ] بناء server-auth middleware قبل تفعيل Customers/Couriers/current-user.
+
+## [2026-10-01 20:31:00 +0000] — server-auth وCustomers read-only — AI Model: Manus
+- [x] إنشاء `server/auth/server-auth.ts` بعقد `ServerPrincipal` وBearer parser وTokenVerifier قابل للحقن والاختبار.
+- [x] إضافة تحقق token اختياري عبر `SWIFTSHIP_API_TOKEN` دون نسخ عيوب auth legacy.
+- [x] إنشاء `createCustomersGateway` typed مع DTO آمن وpagination وsearch محلي محدود.
+- [x] تسجيل `GET /api/v1/customers` خلف server-auth وبصلاحية `customers:read`.
+- [x] إضافة اختبارات auth وCustomers؛ 16 اختبارًا مستهدفًا ناجحة.
+- [ ] نقل verifier من static API token إلى مزود تحقق جلسة خادمي حقيقي قبل اعتماد الإنتاج.
