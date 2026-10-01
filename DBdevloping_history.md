@@ -1103,3 +1103,9 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 - لم يتم تنفيذ SQL أو DDL أو DML.
 - لم يتم فتح اتصال حي بقاعدة البيانات أو تغيير RLS/grants/policies.
 - تم تسجيل snapshot حي لـRLS/جودة البيانات كـbacklog منفصل يتطلب connector وبيئة معتمدة.
+
+## [2026-10-02 02:56:00 +0300] — إجراءات حماية بيانات المستخدم — AI Model: Manus
+- لم يتم تنفيذ SQL أو DDL أو DML.
+- تم تعديل طبقة التطبيق لتخزين `password_hash` المجزأ فقط لكلمات المرور الجديدة.
+- تم منع bootstrap من كتابة password/systemPin افتراضيين.
+- ترحيل السجلات القديمة من `public.users.password` إلى مخزن هوية آمن ما زال يتطلب migration معتمدة على قاعدة البيانات ولم يُنفذ دون اتصال حي.
