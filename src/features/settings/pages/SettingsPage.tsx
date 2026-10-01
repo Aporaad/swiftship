@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
 import { collection, doc, getDocs, setDoc, writeBatch, query, orderBy, deleteDoc, db, handleSupabaseError, OperationType } from '../../../lib/supabase-adapter';
 import {
   Save, Globe, Palette, Database, DollarSign, Building, X, Upload, CheckCircle,
@@ -38,18 +39,24 @@ const settingsErrorMessage = (error: unknown): string => error instanceof Error 
 // ─────────────────────────────────────
 export default function SettingsPage() {
   const { legacyAuth: auth } = useAuthSession();
-  const [saving, setSaving] = useState(false);
-  const [backupLoading, setBackupLoading] = useState(false);
-  const [importLoading, setImportLoading] = useState(false);
+  const [saveState, setSaveState] = useState<AsyncState<void>>(asyncState.idle());
+  const [operationState, setOperationState] = useState<AsyncState<void>>(asyncState.idle());
+  const saving = saveState.status === 'submitting';
+  const backupLoading = operationState.status === 'submitting';
+  const importLoading = operationState.status === 'submitting';
+  const apiLoading = operationState.status === 'submitting';
+  const setBackupLoading = (value: boolean) => setOperationState(value ? asyncState.submitting() : asyncState.idle());
+  const setImportLoading = setBackupLoading;
+  const setApiLoading = setBackupLoading;
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [apiLoading, setApiLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<SettingsTab>('interface');
   const [exportFormat, setExportFormat] = useState<SettingsExportFormat>('json');
 
   // Backup history state
   const [backupHistory, setBackupHistory] = useState<BackupRecord[]>([]);
-  const [backupHistoryLoading, setBackupHistoryLoading] = useState(false);
+  const backupHistoryLoading = operationState.status === 'loading';
+  const setBackupHistoryLoading = (value: boolean) => setOperationState(value ? asyncState.loading() : asyncState.idle());
   const [showBackupHistory, setShowBackupHistory] = useState(false);
   const [selectedRestoreId, setSelectedRestoreId] = useState<string | null>(null);
 
@@ -58,7 +65,8 @@ export default function SettingsPage() {
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const [historyCurrency, setHistoryCurrency] = useState<Currency | null>(null);
   const [historyEntries, setHistoryEntries] = useState<CurPriceEntry[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
+  const historyLoading = operationState.status === 'loading';
+  const setHistoryLoading = (value: boolean) => setOperationState(value ? asyncState.loading() : asyncState.idle());
 
   // Edit DB Currency Modal State
   const [editingDbCurrency, setEditingDbCurrency] = useState<Currency | null>(null);
@@ -216,8 +224,7 @@ export default function SettingsPage() {
       return;
     }
 
-    setSaving(true);
-    try {
+    const result = await runMutation(async () => {
       const selectedCols = Object.entries(exportSelections).filter(([, v]) => v).map(([k]) => k);
       await updateSettings({ ...localSettings, backupCollections: selectedCols });
 
@@ -239,10 +246,9 @@ export default function SettingsPage() {
 
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
-    } catch (error) {
-      handleSupabaseError(error, OperationType.UPDATE, 'settings');
-    } finally {
-      setSaving(false);
+    }, setSaveState);
+    if (result.status === 'error') {
+      handleSupabaseError(result.error, OperationType.UPDATE, 'settings');
     }
   };
 

@@ -31,6 +31,7 @@ import {
   FileSpreadsheet, Printer, TrendingUp, TrendingDown, Hash, RefreshCw,
 } from 'lucide-react';
 import { financialEntryService, type FinancialEntryCategory } from '../../services/financialEntryService';
+import { asyncState, runMutation, type AsyncState } from '../../shared/contracts/ui.contracts';
 
 import GeneralEntryForm from './forms/GeneralEntryForm';
 import CompoundEntryForm from './forms/CompoundEntryForm';
@@ -146,14 +147,26 @@ export default function EntryWorkspaceTab({
   const [editingEntry, setEditingEntry] = useState<any | null>(null);
   const [selectedVoucherSubKind, setSelectedVoucherSubKind] = useState<'cash' | 'bank' | 'multi'>('cash');
   const [selectedEntryIds, setSelectedEntryIds] = useState<string[]>([]);
-  const [busyId, setBusyId] = useState('');
-  const [isBatchProcessing, setIsBatchProcessing] = useState(false);
-  const [error, setError] = useState('');
+  const [mutationState, setMutationState] = useState<AsyncState<void>>(asyncState.idle());
+  const [activeMutationId, setActiveMutationId] = useState('');
+  const busyId = activeMutationId === 'batch' ? '' : activeMutationId;
+  const isBatchProcessing = activeMutationId === 'batch' && mutationState.status === 'submitting';
+  const error = mutationState.status === 'error' ? mutationState.error.message : '';
+  const setValidationError = (message: string) => setMutationState(asyncState.error<void>(new Error(message), 'FINANCE_WORKSPACE_VALIDATION_FAILED'));
+  const setError = (message: string) => message ? setValidationError(message) : setMutationState(asyncState.idle());
+  const setBusyId = (id: string) => {
+    setActiveMutationId(id);
+    setMutationState(id ? asyncState.submitting() : asyncState.idle());
+  };
 
   // حالة نوافذ التفاصيل والحذف — Details & Delete modal state
   const [detailsEntry, setDetailsEntry] = useState<FinanceEntryRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<FinanceEntryRow | null>(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
+  const deleteLoading = activeMutationId === 'delete' && mutationState.status === 'submitting';
+  const setDeleteLoading = (loading: boolean) => {
+    setActiveMutationId(loading ? 'delete' : '');
+    setMutationState(loading ? asyncState.submitting() : asyncState.idle());
+  };
 
   // ── إجراءات التحديد المتعدد ── Multi-select handlers
   const handleSelectAll = () => {
@@ -175,9 +188,8 @@ export default function EntryWorkspaceTab({
     if (selectedEntryIds.length === 0) return;
     if (!window.confirm(`هل أنت تأكد من رغبتك في حذف ${selectedEntryIds.length} قيد/سند بشكل نهائي مع كافة أطرافها وحركاتها التابعة؟`)) return;
 
-    try {
-      setIsBatchProcessing(true);
-      setError('');
+    setActiveMutationId('batch');
+    const result = await runMutation(async () => {
       for (const id of selectedEntryIds) {
         const target = baseEntries.find((e) => e.id === id);
         if (target?.postingStatus === 'posted') {
@@ -187,12 +199,9 @@ export default function EntryWorkspaceTab({
         }
       }
       setSelectedEntryIds([]);
-      onChanged();
-    } catch (cause: any) {
-      setError(cause?.message || 'تعذر إجراء الحذف الجماعي للقيود.');
-    } finally {
-      setIsBatchProcessing(false);
-    }
+    }, setMutationState);
+    setActiveMutationId('');
+    if (result.status === 'success-after-mutation') onChanged();
   };
 
   // ── ترحيل جماعي ── Bulk Post
@@ -200,9 +209,8 @@ export default function EntryWorkspaceTab({
     if (selectedEntryIds.length === 0 || !canPost) return;
     if (!window.confirm(`هل أنت تأكد من ترحيل ${selectedEntryIds.length} قيد/سند؟`)) return;
 
-    try {
-      setIsBatchProcessing(true);
-      setError('');
+    setActiveMutationId('batch');
+    const result = await runMutation(async () => {
       for (const id of selectedEntryIds) {
         const target = baseEntries.find((e) => e.id === id);
         if (target?.postingStatus === 'draft') {
@@ -210,12 +218,9 @@ export default function EntryWorkspaceTab({
         }
       }
       setSelectedEntryIds([]);
-      onChanged();
-    } catch (cause: any) {
-      setError(cause?.message || 'تعذر إجراء الترحيل الجماعي للقيود.');
-    } finally {
-      setIsBatchProcessing(false);
-    }
+    }, setMutationState);
+    setActiveMutationId('');
+    if (result.status === 'success-after-mutation') onChanged();
   };
 
   // حالة الفلاتر والبحث — Filters & Search state
@@ -370,7 +375,7 @@ export default function EntryWorkspaceTab({
         id: l.id, accountId: l.accountId, transType: l.transType,
         amountOriginal: String(l.amountOriginal), lineDescription: l.lineDescription || l.description || '',
       }));
-    if (draftLines.length < 2) { setError('لا يمكن تعديل قيد بلا ساقين محاسبيتين مكتملتين.'); return; }
+    if (draftLines.length < 2) { setValidationError('لا يمكن تعديل قيد بلا ساقين محاسبيتين مكتملتين.'); return; }
     setEditingEntry({
       id: entry.id, entryNumber: entry.entryNumber, moduleId: entry.moduleId,
       entryTypeId: entry.entryTypeId, currencyOriginalNo: entry.currencyOriginalNo,
@@ -392,41 +397,37 @@ export default function EntryWorkspaceTab({
   // ── ترحيل القيد ── Post Entry
   const postEntry = async (entryId: string) => {
     if (!canPost) return;
-    try { setBusyId(entryId); setError(''); await financialEntryService.post(entryId, createdByUid); onChanged(); }
-    catch (cause: any) { setError(cause?.message || 'تعذر اعتماد القيد.'); }
-    finally { setBusyId(''); }
+    setActiveMutationId(entryId);
+    const result = await runMutation(async () => { await financialEntryService.post(entryId, createdByUid); }, setMutationState);
+    setActiveMutationId('');
+    if (result.status === 'success-after-mutation') onChanged();
   };
 
   // ── إلغاء ترحيل طلب مرحّل ── Unpost Posted Order Entry
   const unpostOrderEntry = async (entry: FinanceEntryRow) => {
     if (!canUnpostOrder) return;
     if (!window.confirm(`هل أنت تأكد من إلغاء ترحيل الطلب ${entry.entryNumber} وتحويله إلى مسودة؟`)) return;
-    try {
-      setBusyId(entry.id);
-      setError('');
-      await financialEntryService.unpostOrder(entry.id, createdByUid);
-      onChanged();
-    } catch (cause: any) {
-      setError(cause?.message || 'تعذر إلغاء ترحيل الطلب.');
-    } finally {
-      setBusyId('');
-    }
+    setActiveMutationId(entry.id);
+    const result = await runMutation(async () => { await financialEntryService.unpostOrder(entry.id, createdByUid); }, setMutationState);
+    setActiveMutationId('');
+    if (result.status === 'success-after-mutation') onChanged();
   };
 
 
   // ── حذف القيد (مسودة أو مرحّل) ── Delete Entry
   const confirmDelete = async () => {
     if (!deleteTarget) return;
-    try {
-      setDeleteLoading(true); setError('');
+    setDeleteLoading(true);
+    const result = await runMutation(async () => {
       if (deleteTarget.postingStatus === 'posted') {
         await financialEntryService.deletePosted(deleteTarget.id, createdByUid);
       } else {
         await financialEntryService.deleteDraft(deleteTarget.id);
       }
-      onChanged();
-    } catch (cause: any) { setError(cause?.message || 'تعذر حذف القيد.'); }
-    finally { setDeleteLoading(false); setDeleteTarget(null); }
+    }, setMutationState);
+    setActiveMutationId('');
+    setDeleteTarget(null);
+    if (result.status === 'success-after-mutation') onChanged();
   };
 
   // ── إبطال أو عكس ── Void / Reverse
@@ -436,17 +437,17 @@ export default function EntryWorkspaceTab({
       reverse: `سيُنشأ قيد عكسي مرحّل للقيد ${entry.entryNumber}. هل تريد المتابعة؟`,
     };
     if (!window.confirm(prompts[action])) return;
-    try {
-      setBusyId(entry.id); setError('');
+    setActiveMutationId(entry.id);
+    const result = await runMutation(async () => {
       if (action === 'void') await financialEntryService.voidDraft(entry.id, createdByUid);
       if (action === 'reverse') {
         const num = window.prompt('رقم القيد العكسي', `REV-${entry.entryNumber}`)?.trim();
-        if (!num) return;
+        if (!num) throw new Error('REVERSE_NUMBER_REQUIRED');
         await financialEntryService.reverse(entry.id, num, createdByUid);
       }
-      onChanged();
-    } catch (cause: any) { setError(cause?.message || 'تعذر تنفيذ الإجراء.'); }
-    finally { setBusyId(''); }
+    }, setMutationState);
+    setActiveMutationId('');
+    if (result.status === 'success-after-mutation') onChanged();
   };
 
   // ── تجميع أسطر التفاصيل ── Build Details Lines

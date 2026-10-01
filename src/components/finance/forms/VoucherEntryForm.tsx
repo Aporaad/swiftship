@@ -20,6 +20,7 @@ import { supabase } from '../../../lib/supabase-adapter';
 import AccountPickerModal from '../AccountPickerModal';
 import FinancialCalculatorModal from '../FinancialCalculatorModal';
 import { amountInWords } from '../../../lib/numberToWords';
+import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
 
 
 export interface EditableVoucherDraft {
@@ -194,8 +195,10 @@ export default function VoucherEntryForm({
   const [accountRatesMap, setAccountRatesMap] = useState<Record<number, { price: string; id?: number; seq?: number }>>({});
 
   const [saveAsPosted, setSaveAsPosted] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const [mutationState, setMutationState] = useState<AsyncState<void>>(asyncState.idle());
+  const saving = mutationState.status === 'submitting';
+  const error = mutationState.status === 'error' ? mutationState.error.message : '';
+  const setValidationError = (message: string) => setMutationState(asyncState.error<void>(new Error(message), 'FINANCE_FORM_VALIDATION_FAILED'));
 
   useEffect(() => {
     if (!moduleId && initialModule?.id) setModuleId(initialModule.id);
@@ -381,21 +384,20 @@ export default function VoucherEntryForm({
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    if (!canCreate) return setError(`ليس لديك تصريح إنشاء سندات ${isReceipt ? 'القبض' : 'الصرف'}.`);
-    if (!description.trim()) return setError('يرجى إدخال بيان عام وشامل للسند.');
-    if (totalVoucherAmount <= 0) return setError('يرجى إدخال مبلغ موجب صحيح للسند.');
-    if (!otherPartyAccountId) return setError('يرجى تحديد حساب الطرف الآخر المستهدف.');
+    setMutationState(asyncState.idle());
+    if (!canCreate) return setValidationError(`ليس لديك تصريح إنشاء سندات ${isReceipt ? 'القبض' : 'الصرف'}.`);
+    if (!description.trim()) return setValidationError('يرجى إدخال بيان عام وشامل للسند.');
+    if (totalVoucherAmount <= 0) return setValidationError('يرجى إدخال مبلغ موجب صحيح للسند.');
+    if (!otherPartyAccountId) return setValidationError('يرجى تحديد حساب الطرف الآخر المستهدف.');
 
     if ((voucherSubKind === 'cash' || voucherSubKind === 'multi') && !cashAccountId) {
-      return setError('يرجى اختيار حساب الصندوق الصالح.');
+      return setValidationError('يرجى اختيار حساب الصندوق الصالح.');
     }
     if ((voucherSubKind === 'bank' || voucherSubKind === 'multi') && !bankAccountId) {
-      return setError('يرجى اختيار حساب البنك الصالح.');
+      return setValidationError('يرجى اختيار حساب البنك الصالح.');
     }
 
-    try {
-      setSaving(true);
+    const result = await runMutation(async () => {
 
       const payloadLines: FinancialEntryLineInput[] = unifiedLegsTable.map((leg) => {
         const otherName = unifiedLegsTable.find((l) => l.id !== leg.id)?.accountObj?.nameAr || description.trim();
@@ -462,12 +464,8 @@ export default function VoucherEntryForm({
         await financialEntryService.create(entryPayload);
       }
 
-      onSaved();
-    } catch (err: any) {
-      setError(err?.message || 'تعذر حفظ السند.');
-    } finally {
-      setSaving(false);
-    }
+    }, setMutationState);
+    if (result.status === 'success-after-mutation') onSaved();
   };
 
   const [isCalcOpen, setIsCalcOpen] = useState(false);

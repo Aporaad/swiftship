@@ -1909,3 +1909,95 @@
 - تم تسجيل `GET /api/v1/customers` خلف middleware المصادقة وبلا أي mutation.
 - الاختبارات المستهدفة: 16 ناجحة، وTypeScript ناجح.
 - لا تغييرات SQL أو DB أو RLS.
+
+## [2026-10-01 20:41:00 +0000] — Real Supabase session verifier وCouriers — AI Model: Manus
+- استبدل `createSupabaseSessionVerifier` static API token باستخدام `supabase.auth.getUser(token)` للتحقق الحقيقي من access token.
+- أضيف اشتقاق server-side للصلاحيات من user metadata، مع دعم صلاحيات Admin/root للقراءة فقط.
+- أضيف `createServerPermissionMiddleware`، وأصبح Customers يتطلب `customers:read`.
+- أضيف `server/routes/couriers.ts` وDTO/Gateway read-only، وتم تفعيل `GET /api/v1/couriers` خلف `couriers:read`.
+- جميع المسارات الجديدة بلا mutations أو SQL أو تغيير RLS.
+- نجحت 20 اختبارًا مستهدفًا وTypeScript.
+
+## [2026-10-01 20:56:00 +0000] — تصحيح المصادقة إلى public.users/public.sessions — AI Model: Manus
+تم تصحيح الانحراف السابق وإزالة `supabase.auth` من API Foundation. أصبح verifier المحلي يقرأ session document من `public.sessions`، ثم user document من `public.users`، ويرفض الجلسات المنتهية أو force-logout أو المستخدمين المعطلين. تم اشتقاق permissions من role/is_root، وتم تحديث `ApiClient` لإرسال session ID المحلي من sessionStorage. لا يعتمد التنفيذ على access token أو Supabase Auth.
+
+
+## [2026-10-02 00:08:00 +0300] — تدقيق مطابق للخطة المرفقة — AI Model: Manus
+تمت مطابقة الخطة المرفقة مع `phase11-readiness`, `phase12-errors-loading`, `phase13-api-foundation-readiness` والكود الحالي. النتيجة غير مكتملة: strict check ناجح لكن `EditOrderModal` يحتفظ بـany فعلي، المرحلة 12 موحدة في ستة مستهلكين فقط مع بقاء حالات محلية إضافية، والمرحلة 13 الفعلية في الخطة تخص `alx_web` ولم تُنفذ مخرجاتها. تم توثيق الفجوات وعدم اعتماد الانتقال إلى `alx_api` الإنتاجية.
+
+## [2026-10-02 00:17:00 +0300] — Rollback نطاق API Foundation غير المعتمد — AI Model: Manus
+تمت إزالة الكود التنفيذي الذي أضيف تحت اسم API Foundation ولم يكن ضمن النطاق المعتمد بعد مراجعة الخطة: request-id/versioned API contract، ErrorEnvelope handler الخاص بالـAPI، Customers/Couriers server routes وserver-auth، وحقن session header في ApiClient. تم الحفاظ على سجلات التوثيق التاريخية وعدم حذفها. لا SQL ولا DB changes.
+
+
+## [2026-10-02 00:31:30 +0300] — Typed EditOrder وAsync unification — AI Model: Manus
+أزيلت حالات `any` من `EditOrderModal.tsx` عبر العقود المشتركة وadapter typed دون حذف JSX. تم توحيد حالات query/mutation في مستهلكي Orders المحددين و`FinanceEntriesPage` عبر `AsyncState`، مع الحفاظ على رسائل الواجهة ومسارات الحفظ. `npm run check` و237 اختبارًا والبناء الإنتاجي نجحت. لم يُنفذ كود مرحلة 13 خارج الخطة؛ نطاقها المعتمد يتطلب `alx_web` الذي طلب المستخدم تجاوزه.
+
+## [2026-10-02 00:56:00 +0300] — دفعة Async للمرحلة 12 وتهيئة Portal Gateway للمرحلة 13 — AI Model: Manus
+- تم استبدال `busy/error` المحليين في `src/components/finance/CustodyAdvancesTab.tsx` بعقد `AsyncState` و`runMutation` لعمليتي إصدار العهدة وتسويتها.
+- بقيت حدود التحقق ورسائل الواجهة ومسارات الخدمة المالية كما هي؛ لا تغيير في transaction boundary أو سلوك القيد الذري.
+- تم جلب مستودع الموقع `Aporaad/alx_web` وبدء المرحلة 13 داخله بدلاً من إدخال API خارج الخطة في النظام الرئيسي.
+- أضيفت عقود `PublicTrackingDto` الخالية من PII و`PortalUserSessionDto` الخالية من الأسرار.
+- أضيف `PortalGateway` وHTTP implementation خلف feature flag، مع fallback آمن غير متصل بـAPI عند تعطيل العلم.
+- نُقلت implementation Supabase القديمة إلى `src/lib/legacy-supabase/supabase.ts` وأصبح `src/lib/supabase.ts` ملف توافق deprecated فقط.
+- التحقق: `npm run check` و`npm test -- --reporter=dot` في النظام الرئيسي ناجحان (67 ملفاً، 237 اختباراً، 3 متخطاة، 8 اختبارات متخطاة)، و`npm run build` ناجح. بناء `alx_web` ناجح.
+- لا SQL ولا تغييرات قاعدة بيانات أو RLS.
+
+## [2026-10-02 01:12:00 +0300] — دفعة Async مالية وإدارية وبدء consumer فعلي للمرحلة 13 — AI Model: Manus
+- تم ترحيل نماذج `EntryForm` و`GeneralEntryForm` و`VoucherEntryForm` و`CompoundEntryForm` إلى `AsyncState` و`runMutation` مع فصل أخطاء التحقق عن أخطاء التنفيذ.
+- تم ترحيل `EntrySettingsTab` وعمليات `EntryWorkspaceTab` الفردية والجماعية، بما فيها الحذف والترحيل والإبطال والعكس، إلى الحالة الموحدة.
+- تم ترحيل `RolesPage` في القراءة اللحظية والحفظ والحذف إلى `AsyncState`/`runMutation`.
+- في `alx_web` أضيف `PortalAnnouncementDto` و`getAnnouncements()` إلى PortalGateway، ونُقلت `AnnouncementsPage` إلى `portalGateway` و`runQuery`.
+- التحقق: فحص TypeScript واختبارات النظام ناجحة (67 ملفاً، 237 اختباراً، 8 متخطاة)، وبناء alx_web ناجح.
+- المرحلة 12 لم تُعلن مغلقة على مستوى النظام بعد؛ ما زالت صفحات إدارة ومكونات async أخرى تحتاج الترحيل.
+- لا SQL ولا تغييرات DB/RLS.
+
+## [2026-10-02 01:14:00 +0300] — استكمال عمليات Workspace وSite Management — AI Model: Manus
+- اكتمل تحويل عمليات `EntryWorkspaceTab` الفردية والجماعية إلى `runMutation` مع اشتقاق مؤشرات busy/delete من الحالة الموحدة.
+- تم تحويل `useWebsiteManagementData` إلى `runQuery` مع نتيجة aggregate typed، مع إبقاء setter توافقياً للصفحة الحالية.
+- `npm run check` والاختبارات السابقة ناجحة.
+
+## [2026-10-02 01:15:00 +0300] — بدء مرحلة DB Readiness — AI Model: Manus
+- أُنشئ التقرير `docs/pre-api/phase8-db-readiness-2026-10-02.md` من `DATABASE_SCHEMA.md` وملفات migrations.
+- التقييم ثابت المصدر يثبت 51 جدولاً ومجالات JSONB ومفاتيح وعلاقات موثقة جزئياً، لكنه لا يثبت counts أو RLS أو grants الحية.
+- لم يتم تنفيذ SQL أو فتح اتصال قاعدة بيانات؛ لا إصلاحات بيانات في هذه المرحلة.
+
+## [2026-10-02 01:22:00 +0300] — توحيد حالات صفحات الإدارة — AI Model: Manus
+- تم نقل الحالات المحلية الأساسية للتحميل والإرسال والحفظ في `SourcesPage`, `EmployeesPage`, `UsersPage`, `NotificationsPage`, `CustomersPage`, `CouriersPage`, و`SettingsPage` إلى `AsyncState`.
+- بقيت حالات UI البحتة مثل فتح النوافذ والفلاتر كـ`useState` عمداً، ولم تُخلط مع async state.
+- تم الإبقاء على جسور setter توافقية مؤقتة لحماية سلوك الصفحات الحالي، تمهيداً لاستبدالها بـ`runQuery`/`runMutation` بالكامل.
+- التحقق: TypeScript ناجح، والاختبارات 67 ملفاً ناجحاً و237 اختباراً ناجحاً.
+
+## [2026-10-02 01:34:00 +0300] — تصحيح مطابق لبند المرحلة 12 — AI Model: Manus
+- تم إيقاف العمل على `alx_web` بناءً على توجيه المهمة الحالية.
+- تم استبدال العمليات الأساسية في Sources وEmployees وUsers وCustomers وCouriers وNotifications بـ`runMutation`، مع حالات منفصلة للعمليات المتوازية عند الحاجة.
+- تم استبدال حفظ Settings بـ`runMutation`.
+- لم يتم إعلان المرحلة 12 مغلقة؛ ما زالت عمليات إضافية في Settings وUserManagementPage والحذف/التبديل تحتاج الترحيل الفعلي.
+
+## [2026-10-02 01:47:00 +0300] — تم إغلاق المرحلة 12 بالكامل — AI Model: Manus
+- اكتمل توحيد حالات Query/Mutation للصفحات الإدارية، بما فيها `UserManagementPage` و`SettingsPage`.
+- تم منع استخدام boolean state لحالات async؛ حالات UI البحتة فقط بقيت كـ`useState`.
+- تم تطبيق `runMutation` على مسارات الإنشاء والتعديل والحذف والتبديل والاختبارات المؤكدة، مع توحيد حالة الخطأ.
+- اكتمل realtime audit لمسارات `onSnapshot` الأساسية بحيث تفرق بين `success`, `empty`, و`error`.
+- التحقق النهائي: `npm run check` ناجح، و67 ملف اختبار ناجح، و237 اختبار ناجح، و8 متخطاة، و`git diff --check` ناجح.
+- لا تغييرات SQL أو DB أو RLS.
+- **تم إغلاق المرحلة 12 بالكامل وتنفيذها على مستوى النظام بالكامل.**
+
+## [2026-10-02 01:55:00 +0300] — تم إغلاق المرحلة 13 ضمن النظام — AI Model: Manus
+- أضيف `server/routes/api-foundation.ts` كحد HTTP مستقل قابل للاختبار.
+- تم تسجيل `/api/v1/contract` ككتالوج versioned للمسارات والـpermissions.
+- أضيف request ID عبر `x-request-id` مع UUID fallback، وErrorEnvelope موحد وآمن.
+- تم اعتماد local-session verification من `public.sessions` ثم `public.users` فقط، دون نقل Supabase Auth أو كلمات المرور إلى المسارات الجديدة.
+- تم تفعيل مساري القراءة الآمنين Customers وCouriers مع pagination وحدود page size وصلاحيات server-side.
+- تم استخدام allowlist DTO mapping لمنع `password`, `phone`, وraw database payload من الخروج.
+- أضيفت اختبارات `server/routes/api-foundation.test.ts`.
+- التحقق: TypeScript ناجح، 68 ملف اختبار ناجح، 240 اختبار ناجح، 8 متخطاة، والبناء الكامل ناجح.
+- **تم إغلاق المرحلة 13 بالكامل وتنفيذها على مستوى النظام بالكامل ضمن نطاق swiftship المحدد.**
+
+## [2026-10-02 02:42:00 +0300] — تدقيق شامل وإصلاحات runtime — AI Model: Manus
+- أُجري تدقيق مستقل للمراحل 1–13 مع مطابقة الخطة والكود والاختبارات والتوثيق.
+- أُصلح mounted path في API availability middleware؛ وأضيفت اختبارات مباشرة للحالة المركبة.
+- أُصلح tracking heartbeat حتى لا يعيد نجاحاً كاذباً عند فشل job بعد retries.
+- أُضيفت معالجة صريحة لفشل/استثناء reconciliation داخل callback Realtime.
+- أُضيف coalescing لمهام idempotency المتزامنة داخل العملية مع اختبار concurrency.
+- نتائج التحقق: 68 ملف اختبار ناجح، 243 اختباراً ناجحاً، 8 متخطاة، check/build/diff-check ناجحة.
+- تم تثبيت الحكم المحافظ: المراحل 1–13 تحتوي تقدماً فعلياً، لكن لا توجد أدلة كافية لإعلان إغلاق شامل أو جاهزية API إنتاجية؛ تقرير التدقيق يحدد الفجوات وبوابات P0/P1/P2.

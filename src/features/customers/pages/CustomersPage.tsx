@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
 import { collection, addDoc, doc, updateDoc, onSnapshot, deleteDoc, query, where, orderBy, getDocs } from '../../../lib/supabase-adapter';
 import { db } from '../../../lib/supabase-adapter';
 import { handlePostgreSQLError, OperationType } from '../../../lib/supabase-adapter';
@@ -41,17 +42,22 @@ export default function CustomersPage() {
   const { settings, t } = useSettings();
   const [customers, setCustomers] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [queryState, setQueryState] = useState<AsyncState<unknown[]>>(asyncState.loading());
+  const loading = queryState.status === 'loading';
+  const setLoading = (value: boolean) => setQueryState(value ? asyncState.loading() : asyncState.idle());
 
   // ── Live transaction-based balances (real-time from account_trans) ────
   const liveBalances = useAccountBalances();
   const [showModal, setShowModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [mutationState, setMutationState] = useState<AsyncState<void>>(asyncState.idle());
+  const submitting = mutationState.status === 'submitting';
   const [search, setSearch] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [customerOrders, setCustomerOrders] = useState<any[]>([]);
-  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersState, setOrdersState] = useState<AsyncState<unknown[]>>(asyncState.idle());
+  const ordersLoading = ordersState.status === 'loading';
+  const setOrdersLoading = (value: boolean) => setOrdersState(value ? asyncState.loading() : asyncState.idle());
   const isAr = settings.language === 'ar';
 
   const [detailTab, setDetailTab] = useState<'logistics' | 'financial'>('logistics');
@@ -143,8 +149,9 @@ export default function CustomersPage() {
   useEffect(() => {
     if (roleLoading) return;
     const unsub = onSnapshot(collection(db, 'customers'), (snap) => {
-      setCustomers(snap.docs.map((d: any) => ({ id: d.id, ...d.data() })));
-      setLoading(false);
+      const rows = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+      setCustomers(rows);
+      setQueryState(rows.length ? asyncState.success(rows) : asyncState.empty());
     }, (error) => {
       handlePostgreSQLError(error, OperationType.LIST, 'customers');
     });
@@ -196,11 +203,12 @@ export default function CustomersPage() {
     );
 
     const unsub = onSnapshot(q, (snap) => {
-      setCustomerOrders(snap.docs.map((d: any) => ({ id: d.id, ...d.data() })));
-      setOrdersLoading(false);
+      const rows = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+      setCustomerOrders(rows);
+      setOrdersState(rows.length ? asyncState.success(rows) : asyncState.empty());
     }, (err) => {
       console.error(err);
-      setOrdersLoading(false);
+      setOrdersState(asyncState.error(err, 'CUSTOMER_ORDERS_LOAD_FAILED'));
     });
 
     return unsub;
@@ -209,8 +217,7 @@ export default function CustomersPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting) return;
-    setSubmitting(true);
-    try {
+    const result = await runMutation(async () => {
       if (selectedCustomer) {
         await updateDoc(doc(db, 'customers', selectedCustomer.id), {
           fullName: formData.fullName,
@@ -268,10 +275,10 @@ export default function CustomersPage() {
         });
       }
       setShowModal(false);
-    } catch (error) {
-      handlePostgreSQLError(error, OperationType.CREATE, 'customers');
-    } finally {
-      setSubmitting(false);
+    }, setMutationState);
+    if (result.status === 'error') {
+      console.error(result.error);
+      notificationService.notify({ title: isAr ? 'فشل الحفظ' : 'Save Failed', message: result.error.message, type: 'error' });
     }
   };
 

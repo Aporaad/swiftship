@@ -1,5 +1,6 @@
 type AdapterDocument = { id: string; data: () => Record<string, unknown> };
 import React, { useState, useEffect } from 'react';
+import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
 import { collection, onSnapshot, doc, updateDoc, addDoc, setDoc, deleteDoc, query, where, orderBy, or } from '../../../lib/supabase-adapter';
 import { db, auth } from '../../../lib/supabase-adapter';
 import { handlePostgreSQLError, OperationType } from '../../../lib/supabase-adapter';
@@ -52,7 +53,9 @@ export default function CouriersPage() {
   const { rates: dbRates } = useExchangeRates();
   const [couriers, setCouriers] = useState<any[]>([]);
   const { role, hasPermission, profile, loading: roleLoading } = useRole();
-  const [loading, setLoading] = useState(true);
+  const [queryState, setQueryState] = useState<AsyncState<unknown[]>>(asyncState.loading());
+  const loading = queryState.status === 'loading';
+  const setLoading = (value: boolean) => setQueryState(value ? asyncState.loading() : asyncState.idle());
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
@@ -88,7 +91,9 @@ export default function CouriersPage() {
   const [selectedCourier, setSelectedCourier] = useState<any>(null);
   const [courierOrders, setCourierOrders] = useState<any[]>([]);
   const [courierExpenses, setCourierExpenses] = useState<any[]>([]);
-  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersState, setOrdersState] = useState<AsyncState<unknown[]>>(asyncState.idle());
+  const ordersLoading = ordersState.status === 'loading';
+  const setOrdersLoading = (value: boolean) => setOrdersState(value ? asyncState.loading() : asyncState.idle());
   const [detailsUnsubs, setDetailsUnsubs] = useState<(() => void)[]>([]);
 
   const [detailTab, setDetailTab] = useState<'logistics' | 'financial'>('logistics');
@@ -143,8 +148,10 @@ export default function CouriersPage() {
     courierType: 'local' as 'sourcing' | 'local'
   });
 
-  const [addLoading, setAddLoading] = useState(false);
-  const [editLoading, setEditLoading] = useState(false);
+  const [addMutationState, setAddMutationState] = useState<AsyncState<void>>(asyncState.idle());
+  const [editMutationState, setEditMutationState] = useState<AsyncState<void>>(asyncState.idle());
+  const addLoading = addMutationState.status === 'submitting';
+  const editLoading = editMutationState.status === 'submitting';
 
   // System User Provisioning State
   const [createSystemUser, setCreateSystemUser] = useState(false);
@@ -341,8 +348,9 @@ export default function CouriersPage() {
     // 1. Subscribe to Couriers
     const qCouriers = query(collection(db, 'couriers'), orderBy('createdAt', 'desc'));
     const unsubCouriers = onSnapshot(qCouriers, (snap) => {
-      setCouriers(snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() })));
-      setLoading(false);
+      const rows = snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() }));
+      setCouriers(rows);
+      setQueryState(rows.length ? asyncState.success(rows) : asyncState.empty());
     }, (error) => {
       handlePostgreSQLError(error, OperationType.LIST, 'couriers');
     });
@@ -405,12 +413,13 @@ export default function CouriersPage() {
     );
 
     const unsubOrders = onSnapshot(qOrders, (snap) => {
-      setCourierOrders(snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() })));
-      setOrdersLoading(false);
+      const rows = snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() }));
+      setCourierOrders(rows);
+      setOrdersState(rows.length ? asyncState.success(rows) : asyncState.empty());
     }, (err) => {
       console.error("Error fetching courier orders:", err);
       setCourierOrders([]);
-      setOrdersLoading(false);
+      setOrdersState(asyncState.error(err, 'COURIER_ORDERS_LOAD_FAILED'));
     });
 
     setCourierExpenses([]);
@@ -426,8 +435,7 @@ export default function CouriersPage() {
   const handleUpdateCourier = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCourier || editLoading) return;
-    setEditLoading(true);
-    try {
+    const result = await runMutation(async () => {
       const type = editFormData.courierType || 'local';
       const finCurrency = type === 'sourcing' ? 'SAR' : 'YER';
       await updateDoc(doc(db, 'couriers', selectedCourier.id), {
@@ -459,10 +467,10 @@ export default function CouriersPage() {
         category: 'system'
       });
       setIsEditModalOpen(false);
-    } catch (err) {
-      handlePostgreSQLError(err, OperationType.UPDATE, 'couriers');
-    } finally {
-      setEditLoading(false);
+    }, setEditMutationState);
+    if (result.status === 'error') {
+      console.error(result.error);
+      notificationService.notify({ title: isAr ? 'فشل العملية' : 'Operation Failed', message: result.error.message, type: 'error' });
     }
   };
 
@@ -474,20 +482,19 @@ export default function CouriersPage() {
       message: isAr ? `هل أنت متأكد من رغبتك في ${actionText} حساب المندوب ${courier.fullName}؟` : `Are you sure you want to ${actionText.toLowerCase()} courier ${courier.fullName}?`,
       type: 'warning',
       onConfirm: async () => {
-        try {
-          await updateDoc(doc(db, 'couriers', courier.id), {
-            disabled: !courier.disabled,
-            updatedAt: Date.now()
-          });
+        const result = await runMutation(async () => {
+          await updateDoc(doc(db, 'couriers', courier.id), { disabled: !courier.disabled, updatedAt: Date.now() });
           activityLogService.log('edit_courier', courier.fullName, { id: courier.id, disabled: !courier.disabled });
+        }, setEditMutationState);
+        if (result.status === 'success-after-mutation') {
           notificationService.notify({
             title: isAr ? 'تم تحديث الوضعية' : 'Status Toggle Successful',
             message: isAr ? `تم تعديل وضعية الحساب إلى: ${courier.disabled ? 'نشط' : 'معطل'}` : `Account is now: ${courier.disabled ? 'Active' : 'Disabled'}`,
             type: 'info',
             category: 'system'
           });
-        } catch (err) {
-          handlePostgreSQLError(err, OperationType.UPDATE, 'couriers');
+        } else if (result.status === 'error') {
+          handlePostgreSQLError(result.error, OperationType.UPDATE, 'couriers');
         }
       }
     });
@@ -516,8 +523,7 @@ export default function CouriersPage() {
       }
     }
 
-    setAddLoading(true);
-    try {
+    const result = await runMutation(async () => {
       // 1. Generate unique custom courier ID
       const courierCountSnap = couriers.length;
       const customId = `ALX-CR-${(courierCountSnap + 1).toString().padStart(3, '0')}`;
@@ -596,16 +602,10 @@ export default function CouriersPage() {
       setSystemUserFormData({ username: '', email: '', password: '', systemPin: '', role: 'Courier' });
       setIsAddModalOpen(false);
 
-    } catch (err: any) {
-      console.error(err);
-      notificationService.notify({
-        title: isAr ? 'خطأ في إنشاء المندوب' : 'Registration Failure',
-        message: err.message || 'Error configuring Courier record',
-        type: 'error',
-        category: 'system'
-      });
-    } finally {
-      setAddLoading(false);
+    }, setAddMutationState);
+    if (result.status === 'error') {
+      console.error(result.error);
+      notificationService.notify({ title: isAr ? 'فشل العملية' : 'Operation Failed', message: result.error.message, type: 'error' });
     }
   };
 

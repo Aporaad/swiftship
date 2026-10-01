@@ -19,24 +19,116 @@ import EditOrderStep3 from '../../features/orders/components/edit-order-modal/Ed
 import EditOrderStep4 from '../../features/orders/components/edit-order-modal/EditOrderStep4';
 import EditOrderStep5 from '../../features/orders/components/edit-order-modal/EditOrderStep5';
 import { adaptEditOrderSnapshot } from './editOrderModal.adapter';
+import type { OrderFormData, ItemRow, ShippingRow } from '../../features/orders/types';
+import type { ItemCategory } from '../../services/itemCategoryService';
+import type { Settings } from '../../context/SettingsContext';
+import type { Currency } from '../../services/currencyService';
+import type { FinanceCurrency } from '../../shared/contracts/finance.contracts';
+
+type UnknownRecord = Record<string, unknown>;
+type SourceOption = { id: string; name?: string | null; source_name?: string | null; type?: string | null };
+type SelectOption = { id: string; nameAr?: string | null; nameEn?: string | null; price?: number | string | null; duration?: number | string | null };
+type ShippingCompanyOption = { id: string; name: string };
+type CurrencyOption = Currency & { price?: number | string | null; rate?: number | string | null };
+type AccountOption = { id: string; name?: string | null; account_name?: string | null; accNameAr?: string | null; accSubId?: string | null; code?: string | null };
+type ItemCategoryOption = Partial<ItemCategory> & SelectOption;
+type ModalSettings = Partial<Settings>;
+type EditableItemRow = ItemRow & {
+  id?: string;
+  items_id?: string;
+  product_name?: string;
+  product_name_ar?: string;
+  product_name_en?: string;
+  product_url?: string;
+  product_price?: number;
+  packaging_option_id?: string;
+  is_insured?: boolean;
+  insurance_fee?: number;
+  items_status?: string;
+  itemsStatus?: string;
+  created_at?: string;
+  tracking_number?: string;
+};
+type EditableShippingRow = ShippingRow & {
+  shipping_status?: string;
+  shipment_status?: string;
+  tracking_number?: string;
+  shipping_category_id?: string;
+  content_category_id?: string;
+  content_category_name?: string;
+  createdAt?: number;
+};
 
 interface EditOrderModalProps {
   isOpen: boolean;
   onClose: () => void;
   orderToEdit: unknown;
-  customers: any[];
-  employees: any[];
-  sources: any[];
-  couriers: any[];
-  shippingCompanies: any[];
-  activeCurrencies: any[];
-  financialAccounts?: any[];
-  packagingOptions?: any[];
-  shippingCategoryOptions?: any[];
-  itemCategories?: any[];
-  settings: any;
+  customers: readonly unknown[];
+  employees: readonly unknown[];
+  sources: SourceOption[];
+  couriers: readonly unknown[];
+  shippingCompanies: ShippingCompanyOption[];
+  activeCurrencies: CurrencyOption[];
+  financialAccounts?: AccountOption[];
+  packagingOptions?: SelectOption[];
+  shippingCategoryOptions?: SelectOption[];
+  itemCategories?: ItemCategoryOption[];
+  settings: ModalSettings;
   isAr: boolean;
 }
+
+const asRecord = (value: unknown): UnknownRecord =>
+  typeof value === 'object' && value !== null && !Array.isArray(value) ? value as UnknownRecord : {};
+const textValue = (value: unknown, fallback = ''): string =>
+  typeof value === 'string' ? value : typeof value === 'number' && Number.isFinite(value) ? String(value) : fallback;
+const numericValue = (value: unknown, fallback = 0): number => {
+  const parsed = typeof value === 'number' ? Number.parseFloat(String(value)) : typeof value === 'string' ? Number.parseFloat(value) : NaN;
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+const itemRowFromUnknown = (value: unknown): EditableItemRow => {
+  // Data from the adapter is deliberately narrowed at this boundary; unknown legacy fields are retained by the spread.
+  const row = asRecord(value);
+  return {
+    ...row,
+    productName: textValue(row.productName ?? row.product_name ?? row.name),
+    productUrl: textValue(row.productUrl ?? row.product_url),
+    quantity: numericValue(row.quantity, 1),
+    productPrice: numericValue(row.productPrice ?? row.product_price ?? row.price ?? row.unitPrice),
+    weight: numericValue(row.weight),
+    cbm: numericValue(row.cbm),
+    length: numericValue(row.length),
+    width: numericValue(row.width),
+    height: numericValue(row.height),
+    trackingNumber: textValue(row.trackingNumber ?? row.tracking_number),
+    isInsured: Boolean(row.isInsured ?? row.is_insured),
+    insuranceFee: numericValue(row.insuranceFee ?? row.insurance_fee),
+  };
+};
+const shippingRowFromUnknown = (value: unknown): EditableShippingRow => {
+  // Adapter rows may use either camelCase or legacy snake_case keys; normalize them without an unsafe cast.
+  const row = asRecord(value);
+  return {
+    ...row,
+    id: textValue(row.id),
+    shippingType: textValue(row.shippingType, 'بري'),
+    shippingCompany: textValue(row.shippingCompany, 'Aramex'),
+    shippingSource: textValue(row.shippingSource),
+    shippingDestination: textValue(row.shippingDestination),
+    shippingDate: textValue(row.shippingDate),
+    shippingDuration: textValue(row.shippingDuration),
+    expectedArrival: textValue(row.expectedArrival),
+    shippingCost: numericValue(row.shippingCost),
+    packagingFees: numericValue(row.packagingFees),
+    contentCategoryId: textValue(row.contentCategoryId ?? row.content_category_id),
+    contentCategoryName: textValue(row.contentCategoryName ?? row.content_category_name),
+    cartonCount: numericValue(row.cartonCount),
+    customsFee: numericValue(row.customsFee),
+    taxFee: numericValue(row.taxFee),
+    otherCategoryFee: numericValue(row.otherCategoryFee),
+    categoryFeesTotal: numericValue(row.categoryFeesTotal),
+    categoryFeeCurrency: textValue(row.categoryFeeCurrency, 'SAR'),
+  };
+};
 
 const STEPS = [
   { id: 1, titleAr: 'العميل والمصدر', titleEn: 'Customer & Source', icon: User },
@@ -72,24 +164,24 @@ export default function EditOrderModal({
 
   // Filter available cash box and bank accounts from financialAccounts
   const cashAccountsList = (financialAccounts || []).filter(
-    (a: any) => a.accSubId === '111' || (a.id && String(a.id).startsWith('111'))
+    (a) => a.accSubId === '111' || (a.id && String(a.id).startsWith('111'))
   );
   const bankAccountsList = (financialAccounts || []).filter(
-    (a: any) => a.accSubId === '112' || (a.id && String(a.id).startsWith('112'))
+    (a) => a.accSubId === '112' || (a.id && String(a.id).startsWith('112'))
   );
 
   const getCurrencyRate = (code: string) => {
     if (code === 'YER') return 1;
     const found = activeCurrencies?.find((c) => c.code === code);
-    if (found && found.currentPrice && found.currentPrice > 0) return found.currentPrice;
-    if (found && (found as any).price && (found as any).price > 0) return (found as any).price;
+    if (found && numericValue(found.currentPrice) > 0) return numericValue(found.currentPrice);
+    if (found && numericValue(found.price) > 0) return numericValue(found.price);
     if (code === 'SAR') return 140;
     if (code === 'USD') return 535;
     return 1;
   };
 
   // Form State
-  const [formData, setFormData] = useState<any>({
+  const [formData, setFormData] = useState<OrderFormData>({
     customerId: '',
     customerName: '',
     customerPhone: '',
@@ -106,6 +198,8 @@ export default function EditOrderModal({
     externalOrderNumber: '',
     trackingNumber: '',
     shippingCompany: 'Aramex',
+    addShippingEnabled: false,
+    shippingCourierFeeRate: 0,
     shippingCourierId: '',
     deliveryCourierId: '',
     deliveryCourierFee: 4000,
@@ -122,10 +216,12 @@ export default function EditOrderModal({
     amountPaid: 0,
     paymentMethod: 'Cash',
     notes: '',
+    deductSourcingCostFromCourier: false,
+    sourcing_cost: '',
   });
 
-  const [items, setItems] = useState<any[]>([]);
-  const [shippings, setShippings] = useState<any[]>([]);
+  const [items, setItems] = useState<EditableItemRow[]>([]);
+  const [shippings, setShippings] = useState<EditableShippingRow[]>([]);
 
   // Load existing order data on mount/open
   useEffect(() => {
@@ -151,6 +247,8 @@ export default function EditOrderModal({
         externalOrderNumber: normalizedOrder.externalOrderNumber || '',
         trackingNumber: normalizedOrder.trackingNumber || '',
         shippingCompany: normalizedOrder.shippingCompany || 'Aramex',
+        addShippingEnabled: false,
+        shippingCourierFeeRate: 0,
         shippingCourierId: normalizedOrder.shippingCourierId || '',
         deliveryCourierId: normalizedOrder.deliveryCourierId || '',
         deliveryCourierFee: normalizedOrder.deliveryCourierFee ?? 4000,
@@ -172,21 +270,19 @@ export default function EditOrderModal({
         cashAmount: normalizedOrder.cashAmount || normalizedOrder.cash_amount || 0,
         bankAmount: normalizedOrder.bankAmount || normalizedOrder.bank_amount || 0,
         notes: normalizedOrder.notes || '',
+        deductSourcingCostFromCourier: false,
+        sourcing_cost: '',
       });
 
       setItems(
         normalizedOrder.items && normalizedOrder.items.length > 0
-          ? JSON.parse(JSON.stringify(normalizedOrder.items)).map((i: any) => ({
-            ...i,
-            isInsured: Boolean(i.isInsured || i.is_insured),
-            insuranceFee: i.insuranceFee || i.insurance_fee || 0,
-          }))
-          : [{ productName: '', productUrl: '', quantity: 1, productPrice: 0, weight: 0, cbm: 0, isInsured: false, insuranceFee: 0 }]
+          ? normalizedOrder.items.map(itemRowFromUnknown)
+          : [{ productName: '', productUrl: '', quantity: 1, productPrice: 0, weight: 0, cbm: 0, length: 0, width: 0, height: 0, trackingNumber: '', isInsured: false, insuranceFee: 0 }]
       );
 
       setShippings(
         normalizedOrder.shippingDetails && normalizedOrder.shippingDetails.length > 0
-          ? JSON.parse(JSON.stringify(normalizedOrder.shippingDetails))
+          ? normalizedOrder.shippingDetails.map(shippingRowFromUnknown)
           : []
       );
     }
@@ -197,7 +293,7 @@ export default function EditOrderModal({
   const orderParties = buildOrderParties(customers, employees, couriers);
   const selectedOrderParty = findOrderParty(formData, customers, employees, couriers);
   const setIsStaffOrder = (value: boolean) => {
-    setFormData((prev: any) => ({
+    setFormData((prev) => ({
       ...prev,
       customerId: '', customerName: '', customerPhone: '', customerAddress: '',
       orderPartyId: '', employeeId: '', courierId: '', orderPartyAccountId: '',
@@ -205,7 +301,7 @@ export default function EditOrderModal({
     }));
   };
   const clearOrderParty = () => {
-    setFormData((prev: any) => ({
+    setFormData((prev) => ({
       ...prev, customerId: '', customerName: '', customerPhone: '', customerAddress: '',
       orderPartyId: '', employeeId: '', courierId: '', orderPartyAccountId: '',
     }));
@@ -216,7 +312,7 @@ export default function EditOrderModal({
       ? null
       : await financialAccountService.createAccountForEntity(entityType, party.id, party.name, settings?.currency || 'YER');
     const resolved = account ? { ...party, accountId: account.id } : party;
-    setFormData((prev: any) => ({ ...prev, ...toOrderPartyPayload(resolved) }));
+    setFormData((prev) => ({ ...prev, ...toOrderPartyPayload(resolved) }));
   };
 
   // Item handlers
@@ -231,6 +327,10 @@ export default function EditOrderModal({
         productPrice: 0,
         weight: 0,
         cbm: 0,
+        length: 0,
+        width: 0,
+        height: 0,
+        trackingNumber: '',
         isInsured: false,
         insuranceFee: defaultInsuranceFee,
       },
@@ -250,25 +350,29 @@ export default function EditOrderModal({
     setItems((prev) => [
       ...prev,
       {
-        productName: selectedProd.name,
+        productName: selectedProd.name ?? '',
         productUrl: selectedProd.image_url || '',
         quantity: 1,
         productPrice: selectedProd.price || 0,
         weight: 0,
         cbm: 0,
+        length: 0,
+        width: 0,
+        height: 0,
+        trackingNumber: '',
         isInsured: false,
         insuranceFee: rowInsuranceFee,
       },
     ]);
   };
 
-  const updateItemRow = (idx: number, field: string, val: any) => {
+  const updateItemRow = (idx: number, field: keyof ItemRow | 'itemCategoryName' | 'packagingOptionName', val: ItemRow[keyof ItemRow] | string | null | undefined) => {
     setItems((prev) => {
       const updated = [...prev];
       const nextItem = { ...updated[idx], [field]: val };
 
-      const price = parseFloat(nextItem.productPrice || 0);
-      const qty = parseFloat(nextItem.quantity || 1);
+      const price = numericValue(nextItem.productPrice);
+      const qty = numericValue(nextItem.quantity, 1);
       const defaultInsuranceFee = settings?.defaultProductInsuranceFee || 0;
       const defaultInsuranceType = settings?.defaultProductInsuranceType || 'fixed';
 
@@ -320,14 +424,14 @@ export default function EditOrderModal({
     ]);
   };
 
-  const updateShippingRow = (idx: number, field: string, val: any) => {
+  const updateShippingRow = (idx: number, field: keyof ShippingRow, val?: unknown) => {
     setShippings((prev) => {
       const updated = [...prev];
       const nextShipping = { ...updated[idx], [field]: val };
 
       if (field === 'contentCategoryId' || field === 'cartonCount') {
         const categoryId = field === 'contentCategoryId' ? val : nextShipping.contentCategoryId;
-        const category = itemCategories.find((entry: any) => entry.id === categoryId);
+        const category = itemCategories.find((entry) => entry.id === categoryId);
         const fees = calculateShipmentCategoryFees(category, nextShipping.cartonCount);
         Object.assign(nextShipping, {
           contentCategoryId: category?.id || '',
@@ -352,35 +456,35 @@ export default function EditOrderModal({
 
   // Calculations
   const productsSum = items.reduce(
-    (sum, i) => sum + (parseFloat(i.quantity || 0) * parseFloat(i.productPrice || 0)),
+    (sum, i) => sum + (numericValue(i.quantity) * numericValue(i.productPrice)),
     0
   );
   const itemsPackagingSum = items.reduce(
-    (sum, i) => sum + ((parseFloat(i.packagingOptionPrice as any) || 0) * (parseFloat(i.quantity as any) || 1)),
+    (sum, i) => sum + (numericValue(i.packagingOptionPrice) * numericValue(i.quantity, 1)),
     0
   );
   const itemsInsuranceSum = items.reduce(
-    (sum, i) => sum + (i.isInsured ? (parseFloat(i.insuranceFee as any) || 0) : 0),
+    (sum, i) => sum + (i.isInsured ? numericValue(i.insuranceFee) : 0),
     0
   );
   const shippingsCategorySum = shippings.reduce(
-    (sum, s) => sum + (parseFloat(s.shippingCategoryPrice as any) || 0),
+    (sum, s) => sum + numericValue(s.shippingCategoryPrice),
     0
   );
   const shippingsCostSum = shippings.reduce(
-    (sum, s) => sum + parseFloat(s.shippingCost || 0) + parseFloat(s.packagingFees || 0) + (parseFloat(s.shippingCategoryPrice as any) || 0),
+    (sum, s) => sum + numericValue(s.shippingCost) + numericValue(s.packagingFees) + numericValue(s.shippingCategoryPrice),
     0
   );
   const orderCurrency = formData.orderCurrency || settings?.defaultOrderCurrency || settings?.currency || 'SAR';
   const paymentCurrency = formData.currency || orderCurrency;
-  const currencyRates = activeCurrencies.reduce((rates: Record<string, number>, currency: any) => {
-    const value = Number(currency.currentPrice ?? currency.price ?? currency.rate);
+  const currencyRates = activeCurrencies.reduce((rates: Record<string, number>, currency) => {
+    const value = numericValue(currency.currentPrice ?? currency.price ?? currency.rate);
     if (currency.code && Number.isFinite(value) && value > 0) rates[currency.code] = value;
     return rates;
   }, {});
   const currencyTotals = calculateOrderPaymentTotals({
-    orderSubtotal: productsSum + itemsPackagingSum + itemsInsuranceSum + shippingsCostSum + parseFloat(formData.packagingFee || 0),
-    deliveryFeeOriginal: parseFloat(formData.deliveryCourierFee) || 0,
+    orderSubtotal: productsSum + itemsPackagingSum + itemsInsuranceSum + shippingsCostSum + numericValue(formData.packagingFee || 0),
+    deliveryFeeOriginal: numericValue(formData.deliveryCourierFee) || 0,
     deliveryFeeCurrency: formData.deliveryCourierFeeCurrency || settings?.currency || 'YER',
     orderCurrency,
     paymentCurrency,
@@ -388,8 +492,13 @@ export default function EditOrderModal({
   });
   const totalOrderSAR = currencyTotals.totalOrderCurrency;
   const totalOrderYER = currencyTotals.totalPaymentCurrency;
-  const valPaid = parseFloat(formData.amountPaid) || 0;
+  const valPaid = numericValue(formData.amountPaid) || 0;
   const remainingYER = totalOrderYER - valPaid;
+  const calculatorCurrencies: FinanceCurrency[] = activeCurrencies.map((currency) => ({
+    id: currency.cur_id,
+    code: currency.code,
+    isDefault: currency.is_default,
+  }));
 
   // Step Validation Logic
   const validateStep = (step: number): boolean => {
@@ -484,7 +593,7 @@ export default function EditOrderModal({
         // بيانات مالية وحسابية - تُخزَّن في data
         externalOrderNumber: formData.externalOrderNumber,
         shippingCompany: formData.shippingCompany,
-        deliveryCourierFee: parseFloat(formData.deliveryCourierFee) || 0,
+        deliveryCourierFee: numericValue(formData.deliveryCourierFee) || 0,
         deliveryCourierFeeCurrency: formData.deliveryCourierFeeCurrency || settings?.currency || 'YER',
         deliveryCourierFeeOrderCurrency: currencyTotals.deliveryFeeOrderCurrency,
         currency: orderCurrency,
@@ -495,10 +604,10 @@ export default function EditOrderModal({
         exchangeRateUSD: formData.exchangeRateUSD,
         bankCommissionRate: formData.bankCommissionRate,
         companyProfitRate: formData.companyProfitRate,
-        packagingFee: parseFloat(formData.packagingFee) || 0,
+        packagingFee: numericValue(formData.packagingFee) || 0,
         productInsuranceFee: itemsInsuranceSum,
         product_insurance_fee: itemsInsuranceSum,
-        sheinRedPrice: parseFloat(formData.sheinRedPrice) || 0,
+        sheinRedPrice: numericValue(formData.sheinRedPrice) || 0,
         productsSum,
         totalCostSAR: totalOrderSAR,
         totalCostYER: totalOrderYER,
@@ -509,8 +618,8 @@ export default function EditOrderModal({
         cashAccountId: formData.cashAccountId || null,
         bankAccountId: formData.bankAccountId || null,
         bankReference: formData.bankReference || '',
-        cashAmount: parseFloat(formData.cashAmount) || 0,
-        bankAmount: parseFloat(formData.bankAmount) || 0,
+        cashAmount: numericValue(formData.cashAmount) || 0,
+        bankAmount: numericValue(formData.bankAmount) || 0,
       };
 
 
@@ -525,12 +634,12 @@ export default function EditOrderModal({
       // Save master products in 'products' table (if new) and line items in 'order_items' table
       if (items && items.length > 0) {
         for (const item of items) {
-          const qty = parseFloat(item.quantity || 1);
-          const unitPrice = parseFloat(item.productPrice || item.price || item.unitPrice || 0);
-          const weight = parseFloat(item.weight || 0);
-          const cbm = parseFloat(item.cbm || 0);
+          const qty = numericValue(item.quantity || 1);
+          const unitPrice = numericValue(item.productPrice || item.price || item.unitPrice || 0);
+          const weight = numericValue(item.weight || 0);
+          const cbm = numericValue(item.cbm || 0);
           const isInsured = Boolean(item.isInsured || item.is_insured);
-          const insuranceFee = isInsured ? (parseFloat(item.insuranceFee || item.insurance_fee) || 0) : 0;
+          const insuranceFee = isInsured ? (numericValue(item.insuranceFee || item.insurance_fee) || 0) : 0;
 
           // 1) التأكد من وجود المنتج الرئيسي أو إنشائه
           let masterProductId = item.product_id || item.productId || null;
@@ -545,9 +654,9 @@ export default function EditOrderModal({
               item_category_id: item.itemCategoryId || item.item_category_id || null,
               is_allowed: true,
               cbm: cbm,
-              width: parseFloat(item.width || 0),
-              height: parseFloat(item.height || 0),
-              length: parseFloat(item.length || 0),
+              width: numericValue(item.width || 0),
+              height: numericValue(item.height || 0),
+              length: numericValue(item.length || 0),
               weight: weight,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
@@ -572,7 +681,7 @@ export default function EditOrderModal({
             total__weight: weight * qty,
             total_cbm: cbm * qty,
             packaging_option_id: item.packagingOptionId || item.packaging_option_id || null,
-            packaging_option_price: parseFloat(item.packagingOptionPrice || 0),
+            packaging_option_price: numericValue(item.packagingOptionPrice || 0),
             is_insured: isInsured,
             insurance_fee: insuranceFee,
             items_status: item.items_status || item.itemsStatus || 'قيد الطلب',
@@ -605,17 +714,17 @@ export default function EditOrderModal({
             courierId: formData.deliveryCourierId || formData.shippingCourierId || null,
             shipment_status: ship.shipmentStatus || ship.shipment_status || 'طلب معلق',
             shipmentStatus: ship.shipmentStatus || ship.shipment_status || 'طلب معلق',
-            shipping_cost: parseFloat(ship.shippingCost || 0),
-            shippingCost: parseFloat(ship.shippingCost || 0),
-            weight: parseFloat(ship.weight || 0),
+            shipping_cost: numericValue(ship.shippingCost || 0),
+            shippingCost: numericValue(ship.shippingCost || 0),
+            weight: numericValue(ship.weight || 0),
             shipping_category_id: ship.shippingCategoryId || ship.shipping_category_id || null,
             content_category_id: ship.contentCategoryId || ship.content_category_id || null,
             content_category_name: ship.contentCategoryName || ship.content_category_name || '',
-            carton_count: parseFloat(ship.cartonCount || 0),
-            customs_fee: parseFloat(ship.customsFee || 0),
-            tax_fee: parseFloat(ship.taxFee || 0),
-            other_category_fee: parseFloat(ship.otherCategoryFee || 0),
-            category_fees_total: parseFloat(ship.categoryFeesTotal || 0),
+            carton_count: numericValue(ship.cartonCount || 0),
+            customs_fee: numericValue(ship.customsFee || 0),
+            tax_fee: numericValue(ship.taxFee || 0),
+            other_category_fee: numericValue(ship.otherCategoryFee || 0),
+            category_fees_total: numericValue(ship.categoryFeesTotal || 0),
             category_fee_currency: ship.categoryFeeCurrency || '',
             createdAt: ship.createdAt || Date.now()
           };
@@ -641,11 +750,15 @@ export default function EditOrderModal({
       });
 
       onClose();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
+      const boundaryMessage = asRecord(err).message;
+      const errorMessage = err instanceof Error
+        ? err.message
+        : typeof boundaryMessage === 'string' ? boundaryMessage : 'Could not update order';
       notificationService.notify({
         title: isAr ? 'خطأ في الحفظ' : 'Save Error',
-        message: err.message || 'Could not update order',
+        message: errorMessage,
         type: 'error',
         category: 'order',
       });
@@ -893,7 +1006,7 @@ export default function EditOrderModal({
       <FinancialCalculatorModal
         isOpen={isCalcOpen}
         onClose={() => setIsCalcOpen(false)}
-        currencies={activeCurrencies}
+        currencies={calculatorCurrencies}
       />
 
       {/* Product Catalog Picker Modal */}

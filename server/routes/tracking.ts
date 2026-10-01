@@ -78,7 +78,14 @@ export function registerTrackingRoutes(app: Express, db: any): void {
       return res.status(403).json({ error: 'cron-only' });
     }
     try {
-      await syncActiveOrders(db);
+      const result = await syncActiveOrders(db);
+      if (!result.success) {
+        return res.status(502).json({
+          error: result.error?.code ?? 'TRACKING_SYNC_FAILED',
+          message: 'Tracking synchronisation failed.',
+          attempts: result.attempts,
+        });
+      }
       return res.json({ ok: true });
     } catch (error: any) {
       return res.status(500).json({

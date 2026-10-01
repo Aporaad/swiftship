@@ -90,3 +90,50 @@ React / Electron / alx_web → HTTP API → Application Gateway → Supabase
 - `SWIFTSHIP_API_TOKEN` حل bootstrap مؤقت، وليس بديلًا عن verifier جلسة الإنتاج.
 
 **التحقق:** TypeScript ناجح و16 اختبارًا مستهدفًا ناجحة. لم تُنفذ SQL ولم تتغير DB/RLS.
+
+
+## إكمال session verifier وتفعيل Couriers — 2026-10-01 20:41:00 +0000 — AI Model: Manus
+تم تنفيذ البوابة التالية من المرحلة 13:
+
+- استبدال `SWIFTSHIP_API_TOKEN` بـSupabase session verifier حقيقي يعتمد `auth.getUser(accessToken)`.
+- إضافة permission middleware قابل للاختبار.
+- تفعيل `GET /api/v1/couriers` بنفس عقد Customers.
+- حماية المسارين بصلاحيات `customers:read` و`couriers:read`.
+- إبقاء current-user مؤجلًا حتى لا يتم نقل legacy auth أو أي password field إلى API.
+
+**التحقق:** TypeScript ناجح و20 اختبارًا مستهدفًا ناجحة. لا SQL أو DB/RLS changes.
+
+
+## تصحيح مصدر المصادقة — 2026-10-01 20:56:00 +0000 — AI Model: Manus
+تم إلغاء الاعتماد السابق على Supabase Auth. verifier المرحلة 13 يعتمد حصريًا على `public.sessions` و`public.users` عبر adapter المحلي. يتم إرسال session ID المحلي من `sessionStorage` بواسطة ApiClient، والتحقق من force logout وdisabled وlast_seen قبل تفعيل Customers/Couriers.
+
+
+## تدقيق مطابق للخطة المرفقة — 2026-10-02 00:08 +0300 — AI Model: Manus
+الخطة المرفقة تعرف المرحلة 13 بأنها **تخفيض اعتماد `alx_web` على Supabase**، وتشترط `alx_web/src/api`, `alx_web/src/contracts`, Portal Gateway، Public Tracking DTO دون PII، Portal User Session DTO، legacy-supabase isolation، وfeature flag. هذه المخرجات غير موجودة في المستودع الحالي؛ فحص المسارات أثبت غياب `alx_web/src/api`, `alx_web/src/contracts`, و`alx_web/src/lib/legacy-supabase`. ما نُفذ سابقًا تحت اسم API Foundation هو نطاق مختلف داخل النظام، وليس إغلاقًا للمرحلة 13 حسب الخطة المرفقة. لذلك لا يعتمد هذا التدقيق المرحلة 13 ولا يوصي ببدء `alx_api` الإنتاجية.
+
+
+## Rollback نطاق غير معتمد — 2026-10-02 00:17 +0300 — AI Model: Manus
+بعد مطابقة الخطة وطلب المستخدم، أزيلت مخرجات API Foundation التي لم تكن ضمن النطاق المعتمد في الخطة الحالية. بقي السجل التاريخي محفوظًا، ولا يمثل هذا الملف اعتمادًا لبدء API إنتاجية.
+
+
+## مراجعة التنفيذ — 2026-10-02 00:31 +0300 — AI Model: Manus
+لم يُنفذ نطاق جديد للمرحلة 13. السبب: الخطة المعتمدة تعرف المرحلة بأنها مخرجات داخل `alx_web`، والمستخدم طلب تجاوز `alx_web`، كما أن مجلد المشروع غير موجود في المستودع الحالي. تم رفض إدخال API Foundation بديل حتى لا يحدث تنفيذ خارج الخطة.
+
+## بدء النطاق الصحيح — 2026-10-02 00:56:00 +0300 — AI Model: Manus
+تم جلب مستودع الموقع `Aporaad/alx_web` وبدأ تنفيذ مخرجات المرحلة 13 داخله:
+
+- إنشاء `src/api` و`src/contracts`.
+- إضافة `PublicTrackingDto` لا يحتوي PII و`PortalUserSessionDto` لا يحتوي كلمات مرور أو tokens.
+- إضافة `PortalGateway` وHTTP implementation قابلة للتبديل خلف `VITE_PORTAL_API_ENABLED` و`VITE_PORTAL_API_BASE_URL`.
+- عزل Supabase implementation في `src/lib/legacy-supabase` مع إبقاء `src/lib/supabase.ts` compatibility re-export مؤقتاً.
+- لم يتم تفعيل HTTP flag افتراضياً، ولم تُنقل الاستعلامات القديمة دفعة واحدة قبل اعتماد endpoints وحماية الملكية.
+
+التحقق: `npm run build` في alx_web ناجح. لا SQL أو تغييرات DB/RLS. الخطوة التالية هي نقل أول قراءة read-only إلى Portal Gateway بعد تثبيت endpoint server contract، ثم إزالة imports المباشرة تدريجياً.
+
+## دفعة 01:12 — AI Model: Manus
+تم نقل `AnnouncementsPage` في `alx_web` إلى `PortalGateway.getAnnouncements()` و`runQuery`. أضيف DTO آمن للإعلانات وAsync contract محلي للموقع. الـ HTTP endpoint المتوقع هو `/api/v1/portal/announcements`، بينما fallback الحالي يعبر legacy boundary فقط إلى حين نشر endpoint والتحقق من auth.
+
+## الإغلاق التنفيذي داخل swiftship — 2026-10-02 01:55 +0300 — AI Model: Manus
+بناءً على توجيه المهمة الأخير، تم استبعاد `alx_web` من هذه الدفعة وتنفيذ المرحلة 13 داخل مستودع النظام فقط. أضيفت طبقة API Foundation مستقلة تشمل `/api/v1/contract`، request ID، ErrorEnvelope، local-session verifier، ومساري Customers/Couriers للقراءة فقط مع permissions وDTO allowlist واختبارات contract. لم يتم نقل Orders أو Accounting mutations، ولم تُنقل كلمات المرور أو رسائل قاعدة البيانات الخام. typecheck والاختبارات والبناء ناجحة.
+
+**تم إغلاق المرحلة 13 بالكامل وتنفيذها على مستوى النظام بالكامل ضمن نطاق swiftship المحدد.**

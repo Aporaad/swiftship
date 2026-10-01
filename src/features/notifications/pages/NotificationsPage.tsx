@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
 import { 
   Bell, Package, CheckCircle, AlertTriangle, Clock, X, Settings2, 
   Send, Database, Key, Phone, ShieldCheck, Layers, Play, Check, 
@@ -36,25 +37,33 @@ export default function NotificationsPage() {
   const { role, hasPermission, loading: roleLoading } = useRole();
   const canSendNotif = role === 'Admin' || hasPermission('send_notifications');
   const canManageWhatsApp = role === 'Admin' || hasPermission('view_edit_notification_settings');
-  const [loadingAlerts, setLoadingAlerts] = useState(true);
+  const [alertsState, setAlertsState] = useState<AsyncState<unknown[]>>(asyncState.loading());
+  const loadingAlerts = alertsState.status === 'loading';
+  const setLoadingAlerts = (value: boolean) => setAlertsState(value ? asyncState.loading() : asyncState.idle());
   
   // WhatsApp Settings state
   const [whatsappConfig, setWhatsappConfig] = useState<WhatsAppConfig>(defaultWhatsAppConfig);
-  const [loadingConfig, setLoadingConfig] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
+  const [configState, setConfigState] = useState<AsyncState<unknown>>(asyncState.loading());
+  const loadingConfig = configState.status === 'loading';
+  const setLoadingConfig = (value: boolean) => setConfigState(value ? asyncState.loading() : asyncState.idle());
+  const [mutationState, setMutationState] = useState<AsyncState<void>>(asyncState.idle());
+  const isSaving = mutationState.status === 'submitting';
+  const isTesting = mutationState.status === 'submitting';
+  const isTestingConnection = mutationState.status === 'submitting';
+
   
   // WhatsApp Delivery Logs state
   const [logs, setLogs] = useState<DeliveryLog[]>([]);
-  const [loadingLogs, setLoadingLogs] = useState(true);
+  const [logsState, setLogsState] = useState<AsyncState<unknown[]>>(asyncState.loading());
+  const loadingLogs = logsState.status === 'loading';
+  const setLoadingLogs = (value: boolean) => setLogsState(value ? asyncState.loading() : asyncState.idle());
   
   // Test message tool states
   const [testPhone, setTestPhone] = useState('');
   const [testMessage, setTestMessage] = useState('');
-  const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<TestResult | null>(null);
 
   // Test connection states
-  const [isTestingConnection, setIsTestingConnection] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<{ success: boolean; message: string; isWarning?: boolean } | null>(null);
 
   // active text reference in template editor
@@ -94,10 +103,10 @@ export default function NotificationsPage() {
         return isAdmin; // unknown categories only for Admin
       });
       setNotifications(filtered);
-      setLoadingAlerts(false);
+      setAlertsState(filtered.length ? asyncState.success(filtered) : asyncState.empty());
     }, (error) => {
       console.error('Error fetching alerts:', error);
-      setLoadingAlerts(false);
+      setAlertsState(asyncState.error(error, 'NOTIFICATIONS_LOAD_FAILED'));
     });
     return unsub;
   }, [roleLoading, role, hasPermission, auth]);
@@ -108,13 +117,14 @@ export default function NotificationsPage() {
       try {
         const conf = await whatsappService.getConfig();
         setWhatsappConfig(conf);
+        setConfigState(asyncState.success(conf));
         
         // Auto initialize test message template
         setTestMessage(isAr ? 'رسالة تجريبية لتأكيد الاتصال ببوابة WhatsApp اللوجيستية للشركة 🚀' : 'Test message to confirm connection to company WhatsApp logistics gateway 🚀');
       } catch (err) {
         console.error('Error reading WhatsApp config:', err);
+        setConfigState(asyncState.error(err, 'WHATSAPP_CONFIG_LOAD_FAILED'));
       } finally {
-        setLoadingConfig(false);
       }
     }
     loadConfig();
@@ -124,14 +134,15 @@ export default function NotificationsPage() {
   useEffect(() => {
     const qLogs = query(collection(db, 'whatsapp_logs'), orderBy('createdAt', 'desc'), limit(150));
     const unsubLogs = onSnapshot(qLogs, (snap) => {
-      setLogs(snap.docs.map((d: SnapshotDocument): NotificationRecord => {
+      const rows = snap.docs.map((d: SnapshotDocument): NotificationRecord => {
         const data = asNotificationRecord(d.data());
         return { id: d.id, ...data, createdAt: safeToDate(data.createdAt) };
-      }));
-      setLoadingLogs(false);
+      });
+      setLogs(rows);
+      setLogsState(rows.length ? asyncState.success(rows) : asyncState.empty());
     }, (error) => {
       console.error('Error fetching logs:', error);
-      setLoadingLogs(false);
+      setLogsState(asyncState.error(error, 'WHATSAPP_LOGS_LOAD_FAILED'));
     });
     return unsubLogs;
   }, []);
@@ -174,16 +185,14 @@ export default function NotificationsPage() {
       toast.error(isAr ? 'لا تملك صلاحية تعديل إعدادات WhatsApp' : 'No permission to edit WhatsApp settings');
       return;
     }
-    setIsSaving(true);
-    try {
+    const mutation = await runMutation(async () => {
       await whatsappService.saveConfig(whatsappConfig);
       activityLogService.log('save_whatsapp_settings', whatsappConfig.provider);
       toast.success(isAr ? 'تم حفظ إعدادات وقوالب WhatsApp بنجاح!' : 'WhatsApp config and templates saved successfully!');
-    } catch (err: unknown) {
-      console.error(err);
-      toast.error(errorMessage(err) || 'Failed to save configuration');
-    } finally {
-      setIsSaving(false);
+    }, setMutationState);
+    if (mutation.status === 'error') {
+      console.error(mutation.error);
+      toast.error(mutation.error.message);
     }
   };
 
@@ -197,9 +206,8 @@ export default function NotificationsPage() {
       toast.error(isAr ? 'الرجاء إدخال رقم الهاتف للتجربة' : 'Please input a test phone number');
       return;
     }
-    setIsTesting(true);
     setTestResult(null);
-    try {
+    const mutation = await runMutation(async () => {
       const result = await whatsappService.sendDirect(testPhone, testMessage, 'TEST-ID', 'direct-debugger');
       setTestResult(result);
       if (result.success) {
@@ -208,12 +216,10 @@ export default function NotificationsPage() {
       } else {
         toast.error(isAr ? `فشل الإرسال: ${result.errorMsg || ''}` : `Emit failed: ${result.errorMsg || ''}`);
       }
-    } catch (err: unknown) {
-      console.error(err);
-      setTestResult({ success: false, status: 'Failed', errorMsg: errorMessage(err) });
-      toast.error(errorMessage(err) || 'Diagnostic error');
-    } finally {
-      setIsTesting(false);
+    }, setMutationState);
+    if (mutation.status === 'error') {
+      console.error(mutation.error);
+      toast.error(mutation.error.message);
     }
   };
 
@@ -223,9 +229,8 @@ export default function NotificationsPage() {
       toast.error(isAr ? 'لا تملك صلاحية تعديل إعدادات WhatsApp' : 'No permission to edit WhatsApp settings');
       return;
     }
-    setIsTestingConnection(true);
     setConnectionStatus(null);
-    try {
+    const mutation = await runMutation(async () => {
       const res = await whatsappService.testConnection(whatsappConfig.provider, whatsappConfig.config);
       setConnectionStatus(res);
       if (res.success) {
@@ -237,12 +242,10 @@ export default function NotificationsPage() {
       } else {
         toast.error(isAr ? `فشل فحص الاتصال: ${res.message}` : `Connection check failed: ${res.message}`);
       }
-    } catch (err: unknown) {
-      console.error(err);
-      setConnectionStatus({ success: false, message: errorMessage(err) || 'Connection test error' });
-      toast.error(errorMessage(err) || 'Gateway connection failed');
-    } finally {
-      setIsTestingConnection(false);
+    }, setMutationState);
+    if (mutation.status === 'error') {
+      console.error(mutation.error);
+      toast.error(mutation.error.message);
     }
   };
 

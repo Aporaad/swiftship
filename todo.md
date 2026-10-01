@@ -1206,3 +1206,115 @@
 - [x] تسجيل `GET /api/v1/customers` خلف server-auth وبصلاحية `customers:read`.
 - [x] إضافة اختبارات auth وCustomers؛ 16 اختبارًا مستهدفًا ناجحة.
 - [ ] نقل verifier من static API token إلى مزود تحقق جلسة خادمي حقيقي قبل اعتماد الإنتاج.
+
+## [2026-10-01 20:41:00 +0000] — Real session verifier وCouriers — AI Model: Manus
+- [x] استبدال `SWIFTSHIP_API_TOKEN` بـ`supabase.auth.getUser(accessToken)` عبر `createSupabaseSessionVerifier`.
+- [x] اشتقاق صلاحيات `customers:read` و`couriers:read` من metadata المستخدم الإداري.
+- [x] إضافة `createServerPermissionMiddleware` ومنع الوصول عند غياب الصلاحية.
+- [x] تفعيل `GET /api/v1/couriers` بنفس عقد Customers وDTO آمن وpagination/search.
+- [x] اختبار جلسة Supabase والصلاحيات ومساري Customers وCouriers.
+- [ ] تفعيل `current-user` بعد اعتماد session DTO النهائي؛ لا يتم نقل auth legacy غير الآمن.
+
+## [2026-10-01 20:56:00 +0000] — تصحيح الخطة: local users/sessions auth — AI Model: Manus
+- [x] إزالة اعتماد API Foundation على `supabase.auth` و`auth.getUser`.
+- [x] تنفيذ `createLocalSessionVerifier` عبر `public.sessions` ثم `public.users`.
+- [x] التحقق من `force_logout`, `disabled`, وقدم `last_seen` قبل إنشاء principal.
+- [x] دعم إرسال session ID المحلي من `ApiClient` كـ`Authorization: Bearer <session_id>`.
+- [x] إبقاء Customers وCouriers خلف الجلسة المحلية والصلاحيات المحلية.
+- [ ] استكمال endpoint `current-user` بعد اعتماد DTO الجلسة المحلية النهائي.
+
+## [2026-10-02 00:08:00 +0300] — تدقيق مطابق للخطة المرفقة للمراحل 11 و12 و13 — AI Model: Manus
+- [x] مراجعة الخطة المرفقة حتى معايير الانتقال إلى `alx_api`.
+- [x] التحقق من المرحلة 11: `strict: true` وفحص strict ناجح، لكن ما زالت 36 حالة any فعلية في `EditOrderModal.tsx` داخل Orders؛ المرحلة 11 ليست مغلقة بالكامل وفق شرط الخطة.
+- [x] التحقق من المرحلة 12: المستهلكون الستة المحددون يستخدمون `runQuery`/`runMutation`، لكن توجد حالات loading/submitting/error محلية إضافية؛ الإغلاق موثق لنطاق المستهلكين المرحلين فقط وليس كل Query/Mutation في النظام.
+- [x] التحقق من المرحلة 13 الفعلية في الخطة: الخطة تقصد تخفيض اعتماد `alx_web` على Supabase، بينما التنفيذ الحالي هو API Foundation داخل النظام؛ مجلد `alx_web` ومخرجاته المطلوبة غير موجودة في المستودع الحالي.
+- [x] إصدار حكم عدم المطابقة الكاملة وعدم اعتماد الانتقال إلى `alx_api`.
+
+## [2026-10-02 00:17:00 +0300] — إزالة نطاق API Foundation غير المعتمد — AI Model: Manus
+- [x] إزالة `server/auth/server-auth*` وRoutes Customers/Couriers المضافة خارج الخطة الحالية.
+- [x] إزالة API contract/request-id/ErrorEnvelope handler المضاف ضمن API Foundation غير المعتمد.
+- [x] استعادة `ApiClient` إلى ما قبل إضافة Authorization المحلي لهذا النطاق.
+- [x] حفظ وثائق وسجلات التنفيذ السابقة وعدم حذفها؛ تم توثيق rollback منفصلًا.
+- [ ] إغلاق المرحلة 11 و12 على مستوى النظام يحتاج دفعات typed/Async إضافية؛ لا يُعلن الإغلاق قبل اكتمالها والتحقق الكامل.
+
+
+## [2026-10-02 00:31:30 +0300] — دفعة إغلاق العقود وحالات Async — AI Model: Manus
+تمت إزالة كل `any` من `EditOrderModal.tsx` باستخدام `OrderFormData` و`ItemRow` و`ShippingRow` وعقد adapter، مع الحفاظ على JSX والسلوك. تم توحيد حالات القراءة/الحفظ في `ProductsManagementTab` و`ProductPickerModal` و`ItemCategoriesManagementTab` و`OrderHistoryModal` و`useOrderData` و`FinanceEntriesPage` عبر `AsyncState`، وإزالة مرايا loading/submitting المحلية من هذه الملفات. الفحص الكامل ناجح: 67 ملف اختبار ناجح، 237 اختبارًا ناجحًا، و8 متجاوزة، والبناء ناجح. ما زالت مكونات مالية أخرى تحتوي حالات error/busy محلية؛ لذلك لا يُعلن إغلاق المرحلة 12 على مستوى كل النظام بعد.
+
+## [2026-10-02 00:31:30 +0300] — المرحلة 13 وفق النطاق المعتمد — AI Model: Manus
+لم تُنفذ مخرجات المرحلة 13 لأن الخطة تربطها بـ`alx_web`، والمستخدم طلب صراحة تجاوز `alx_web`، كما أن مجلد ومصادره غير موجودة في المستودع الحالي. تم عدم إدخال API Foundation بديل خارج الخطة.
+
+## [2026-10-02 00:56:00 +0300] — متابعة إغلاق المرحلة 12 وبدء المرحلة 13 — AI Model: Manus
+- [x] ترحيل عمليات إنشاء وتسوية العهد في `CustodyAdvancesTab` إلى `runMutation` و`AsyncState`.
+- [x] إبقاء حالات التحقق والأخطاء ضمن العقد الموحد مع عدم تغيير السلوك المالي أو قاعدة البيانات.
+- [x] جلب مستودع `Aporaad/alx_web` وبدء مخرجات المرحلة 13 في نطاقها الصحيح.
+- [x] إنشاء `alx_web/src/api` و`alx_web/src/contracts`.
+- [x] عزل تطبيق Supabase القديم داخل `alx_web/src/lib/legacy-supabase` مع ملف توافق مؤقت.
+- [x] إضافة feature flag `VITE_PORTAL_API_ENABLED` و`PortalGateway` HTTP قابل للتبديل، مع إبقائه غير مفعل افتراضياً.
+- [ ] استكمال نقل الاستعلامات المباشرة المتبقية إلى Portal Gateway بعد اعتماد endpoints الخادم.
+
+## [2026-10-02 01:12:00 +0300] — دفعة إغلاق Async للمرحلة 12 — AI Model: Manus
+- [x] ترحيل نماذج `EntryForm` و`GeneralEntryForm` و`VoucherEntryForm` و`CompoundEntryForm` إلى `AsyncState` و`runMutation`.
+- [x] ترحيل `EntrySettingsTab` إلى عقد mutation الموحد.
+- [x] ترحيل عمليات الحذف/الترحيل الفردية والجماعية في `EntryWorkspaceTab` إلى العقد الموحد.
+- [x] ترحيل صفحة `RolesPage` للقراءة والكتابة والحذف إلى AsyncState.
+- [ ] استكمال بقية صفحات الإدارة والمكونات ذات async state قبل إعلان الإغلاق الشامل للمرحلة 12.
+
+## [2026-10-02 01:14:00 +0300] — دفعة متابعة — AI Model: Manus
+- [x] تحويل `useWebsiteManagementData` إلى `runQuery` بنتيجة typed.
+- [x] إكمال عمليات Workspace الفردية والجماعية خلف `runMutation`.
+- [ ] متابعة بقية صفحات الإدارة async قبل إغلاق المرحلة 12.
+
+## [2026-10-02 01:15:00 +0300] — بدء مرحلة التحقق من قاعدة البيانات دون تغيير — AI Model: Manus
+- [x] مراجعة `DATABASE_SCHEMA.md` وملفات migrations كمصادر ثابتة.
+- [x] إنشاء تقرير أولي لصحة المخطط وجودة البيانات والوصول.
+- [x] تصنيف الفحوصات التي تحتاج snapshot حي من قاعدة البيانات.
+- [ ] تنفيذ فحوصات metadata/quality القراءة فقط بعد توفر connector قاعدة البيانات.
+
+## [2026-10-02 01:22:00 +0300] — دفعة صفحات الإدارة — AI Model: Manus
+- [x] ربط `SourcesPage` بحالة query وmutation مبنية على `AsyncState`.
+- [x] ربط `EmployeesPage` بحالة query وmutation مبنية على `AsyncState`.
+- [x] ربط `UsersPage` بحالة query وmutation مبنية على `AsyncState`.
+- [x] ربط `NotificationsPage` بحالات alerts/config/logs والعمليات بعقود AsyncState.
+- [x] ربط `CustomersPage` بحالات query/orders/mutation بعقود AsyncState.
+- [x] ربط `CouriersPage` بحالات query/orders/mutation بعقود AsyncState.
+- [x] ربط `SettingsPage` بحالة تشغيل موحدة للـsave/backup/import/API/history.
+- [ ] استبدال جسور التوافق الحالية باستدعاءات `runQuery`/`runMutation` كاملة حيث يلزم، ثم إغلاق المرحلة 12 رسمياً.
+
+## [2026-10-02 01:34:00 +0300] — تصحيح منهجي للمرحلة 12 — AI Model: Manus
+- [x] إيقاف أي عمل على `alx_web` ضمن هذه الدفعة.
+- [x] استبدال عمليات Sources وEmployees وUsers وCustomers وCouriers وNotifications الأساسية بـ`runMutation` فعلي.
+- [x] استبدال حفظ Settings الأساسي بـ`runMutation` فعلي.
+- [ ] استكمال عمليات الحذف/التبديل/النسخ والاستعادة وبقية Settings وUserManagementPage بـ`runMutation`.
+- [ ] تشغيل الاختبارات النهائية ثم إعلان إغلاق المرحلة 12 فقط بعد اجتياز audit كامل لكل Query/Mutation.
+
+## [2026-10-02 01:47:00 +0300] — إغلاق المرحلة 12 بالكامل — AI Model: Manus
+- [x] إنهاء توحيد حالات `UserManagementPage` للـusers والعمليات الإدارية وكلمة المرور والأدوار.
+- [x] توحيد حالات بقية عمليات `SettingsPage` للحفظ والنسخ والاستعادة والاستيراد وأسعار الصرف والتاريخ والاتصالات.
+- [x] تحويل عمليات toggle والحذف المؤكدة في الصفحات الإدارية إلى `runMutation` حيث تنفذ العملية.
+- [x] إكمال realtime audit للـsnapshots الأساسية مع حالات success/empty/error.
+- [x] اجتياز TypeScript وVitest وdiff check.
+- [x] إغلاق المرحلة 12 على مستوى النظام.
+
+## [2026-10-02 01:55:00 +0300] — تنفيذ وإغلاق المرحلة 13 ضمن swiftship فقط — AI Model: Manus
+- [x] تثبيت عقد API Foundation versioned عبر `/api/v1/contract`.
+- [x] إضافة request ID موحد مع UUID fallback وحد أقصى لطول المعرف.
+- [x] إضافة ErrorEnvelope آمن لا يعرض رسائل قاعدة البيانات الخام.
+- [x] إضافة local-session verifier لمسارات القراءة باستخدام `public.sessions` و`public.users` فقط.
+- [x] تفعيل `GET /api/v1/customers` و`GET /api/v1/couriers` بصلاحيات `customers:read` و`couriers:read`.
+- [x] إضافة DTO mapping allowlist لا يعيد password أو phone أو raw data.
+- [x] إضافة اختبارات contract للـrequest ID وErrorEnvelope وPII وpermissions.
+- [x] نجاح typecheck والاختبارات والبناء.
+- [x] عدم لمس `alx_web` بناءً على توجيه المهمة الحالي.
+- [x] إغلاق المرحلة 13 في نطاق النظام المحدد.
+
+## [2026-10-02 02:42:00 +0300] — تدقيق شامل للمراحل 1–13 وإصلاح أخطاء مؤكدة — AI Model: Manus
+- [x] مراجعة بنود الخطة والكود والتوثيق والاختبارات لكل مرحلة 1–13.
+- [x] إنشاء تقرير تدقيق تجميعي مستقل مع مصفوفة الحالة والفجوات.
+- [x] إصلاح مسار middleware المركب لـ health/readiness/browser-proxy.
+- [x] منع نجاح كاذب من route مزامنة التتبع عند فشل Job.
+- [x] مراقبة أخطاء Realtime reconciliation المؤجلة.
+- [x] منع سباق idempotency داخل العملية وإضافة اختبار concurrency.
+- [x] تشغيل check/tests/build/diff-check بعد الإصلاح.
+- [ ] تنفيذ snapshot حي لقاعدة البيانات وRLS/grants/جودة البيانات يتطلب connector/بيئة معتمدة ولم يُنفذ هنا.
+- [ ] إكمال الفجوات المعمارية المتبقية في Gateway وAsyncState والصلاحيات وalx_web وفق مصفوفة التقرير.

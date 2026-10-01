@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
 import { collection, onSnapshot, doc, updateDoc, setDoc, deleteDoc, query, where, getDocs } from '../../../lib/supabase-adapter';
 import { db } from '../../../lib/supabase-adapter';
 import { handlePostgreSQLError, OperationType, auth } from '../../../lib/supabase-adapter';
@@ -71,7 +72,9 @@ export default function UsersPage() {
     return () => unsubRoles();
   }, [roleLoading]);
 
-  const [loading, setLoading] = useState(true);
+  const [queryState, setQueryState] = useState<AsyncState<unknown[]>>(asyncState.loading());
+  const loading = queryState.status === 'loading';
+  const setLoading = (value: boolean) => setQueryState(value ? asyncState.loading() : asyncState.idle());
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -98,8 +101,10 @@ export default function UsersPage() {
     role: 'Employee'
   });
 
-  const [addLoading, setAddLoading] = useState(false);
-  const [editLoading, setEditLoading] = useState(false);
+  const [addMutationState, setAddMutationState] = useState<AsyncState<void>>(asyncState.idle());
+  const [editMutationState, setEditMutationState] = useState<AsyncState<void>>(asyncState.idle());
+  const addLoading = addMutationState.status === 'submitting';
+  const editLoading = editMutationState.status === 'submitting';
   const addBlockRef = React.useRef(false);
   const editBlockRef = React.useRef(false);
 
@@ -109,7 +114,7 @@ export default function UsersPage() {
       const allUsers = snap.docs.map(d => toUser(d.id, d.data()));
       const staffOnly = allUsers.filter(u => u.role !== 'Courier' && u.roleId !== 'courier' && u.role !== 'courier');
       setUsers(staffOnly);
-      setLoading(false);
+      setQueryState(staffOnly.length ? asyncState.success(staffOnly) : asyncState.empty());
     }, (error) => {
       handlePostgreSQLError(error, OperationType.LIST, 'users');
     });
@@ -161,14 +166,12 @@ export default function UsersPage() {
     if (!selectedUser) return;
 
     editBlockRef.current = true;
-    setEditLoading(true);
 
     // Check if username is taken if changed
     if (editFormData.username && editFormData.username !== selectedUser.username) {
       const q = query(collection(db, 'users'), where('username', '==', editFormData.username));
       const snap = await getDocs(q);
       if (!snap.empty && snap.docs[0].id !== selectedUser.id) {
-        setEditLoading(false);
         editBlockRef.current = false;
         return notificationService.notify({
           title: isAr ? 'خطأ بالتحقق' : 'Unique ID Conflict',
@@ -183,7 +186,7 @@ export default function UsersPage() {
     const finalRole = isRoot ? 'Admin' : editFormData.role;
     const finalDisabled = isRoot ? false : editFormData.disabled;
 
-    try {
+    const result = await runMutation(async () => {
       await updateDoc(doc(db, 'users', selectedUser.id), {
         fullName: editFormData.fullName,
         username: editFormData.username,
@@ -200,16 +203,11 @@ export default function UsersPage() {
 
       setIsEditModalOpen(false);
       setSelectedUser(null);
-    } catch (err: unknown) {
-      notificationService.notify({
-        title: isAr ? 'فشل التحديث' : 'Operation Aborted',
-        message: errorMessage(err),
-        type: 'error'
-      });
-    } finally {
-      setEditLoading(false);
-      editBlockRef.current = false;
+    }, setEditMutationState);
+    if (result.status === 'error') {
+      notificationService.notify({ title: isAr ? 'فشل التحديث' : 'Operation Aborted', message: errorMessage(result.error), type: 'error' });
     }
+    editBlockRef.current = false;
   };
 
   const handleToggleStatus = async (user: UserRecord) => {
@@ -229,18 +227,18 @@ export default function UsersPage() {
       message: isAr ? `هل أنت متأكد من ${action} حساب الموظف ${user.fullName}؟` : `Are you sure you want to deactivate ${user.fullName}?`,
       type: user.disabled ? 'info' : 'warning',
       onConfirm: async () => {
-        try {
-          await updateDoc(doc(db, 'users', user.id), {
-            disabled: !user.disabled,
-            updatedAt: Date.now()
-          });
+        const result = await runMutation(() => updateDoc(doc(db, 'users', user.id), {
+          disabled: !user.disabled,
+          updatedAt: Date.now()
+        }), setEditMutationState);
+        if (result.status === 'success-after-mutation') {
           notificationService.notify({
             title: isAr ? 'تم تحديث وضعية الحساب' : 'Security profile updated',
             message: isAr ? `وضع الحساب للموظف ${user.fullName} تم تعديله` : `Status applied to ${user.fullName}`,
             type: user.disabled ? 'success' : 'warning'
           });
-        } catch (err) {
-          handlePostgreSQLError(err, OperationType.UPDATE, 'users');
+        } else if (result.status === 'error') {
+          handlePostgreSQLError(result.error, OperationType.UPDATE, 'users');
         }
       }
     });
@@ -267,9 +265,8 @@ export default function UsersPage() {
     e.preventDefault();
     if (addLoading || addBlockRef.current) return;
     addBlockRef.current = true;
-    setAddLoading(true);
     let secondaryApp: ReturnType<typeof initializeApp> | undefined;
-    try {
+    const result = await runMutation(async () => {
       // Check if email or username already exists in PostgreSQL
       const emailQuery = query(collection(db, 'users'), where('email', '==', addFormData.email.toLowerCase()));
       const emailSnap = await getDocs(emailQuery);
@@ -317,27 +314,14 @@ export default function UsersPage() {
 
       setIsAddModalOpen(false);
       setAddFormData({ fullName: '', username: '', email: '', password: '', systemPin: '', role: 'Employee' });
-    } catch (err: unknown) {
-      console.error("Error adding user:", err);
-      const authError = asRecord(err);
-      let message = errorMessage(err);
-      if (authError.code === 'auth/email-already-in-use') {
-        message = isAr ? 'هذا البريد مسجل مسبقاً بحيازة نظام الحسابات' : 'This email is already registered in the auth system';
-      } else if (authError.code === 'auth/weak-password') {
-        message = isAr ? 'كلمة المرور ضعيفة جداً' : 'Auth profile requires at least 6 characters strength';
-      }
-      notificationService.notify({
-        title: isAr ? 'خطأ في الربط والإنشاء' : 'Provisioning Failure',
-        message,
-        type: 'error'
-      });
-    } finally {
-      setAddLoading(false);
-      addBlockRef.current = false;
-      if (secondaryApp) {
-        await deleteApp(secondaryApp);
-      }
+    }, setAddMutationState);
+    if (result.status === 'error') {
+      const authError = asRecord(result.error);
+      let message = result.error.message;
+      if (authError.code === 'auth/email-already-in-use') message = isAr ? 'هذا البريد مسجل مسبقاً بحيازة نظام الحسابات' : 'This email is already registered in the auth system';
+      notificationService.notify({ title: isAr ? 'خطأ في الربط والإنشاء' : 'Provisioning Failure', message, type: 'error' });
     }
+    addBlockRef.current = false;
   };
 
   const getRoleBadge = (role: string) => {

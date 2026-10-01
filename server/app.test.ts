@@ -1,17 +1,11 @@
 import type { NextFunction, Request, Response } from 'express';
 import { describe, expect, it, vi } from 'vitest';
-import {
-  apiFoundationContract,
-  createApiAvailabilityMiddleware,
-  createRequestIdMiddleware,
-  readinessResponse,
-} from './app';
+import { createApiAvailabilityMiddleware, readinessResponse } from './app';
 
 function createResponse() {
   const response = {
     status: vi.fn(),
     json: vi.fn(),
-    locals: {},
   };
   response.status.mockReturnValue(response);
   response.json.mockReturnValue(response);
@@ -32,12 +26,7 @@ describe('API availability middleware', () => {
 
     expect(response.status).toHaveBeenCalledWith(503);
     expect(response.json).toHaveBeenCalledWith({
-      success: false,
-      error: {
-        code: 'DATABASE_NOT_READY',
-        message: 'Database service is not ready.',
-        requestId: undefined,
-      },
+      error: 'خدمات قاعدة البيانات غير مهيأة أو غير متصلة بالإنترنت حالياً. يرجى التأكد من تهيئة Supabase بشكل صحيح عبر متغيرات البيئة.',
     });
     expect(next).not.toHaveBeenCalled();
   });
@@ -51,6 +40,24 @@ describe('API availability middleware', () => {
 
       middleware(
         { path } as Request,
+        response as unknown as Response,
+        next as NextFunction,
+      );
+
+      expect(next).toHaveBeenCalledOnce();
+      expect(response.status).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['/health', '/browser-proxy'])(
+    'keeps mounted %s available when database services are unavailable',
+    (path) => {
+      const middleware = createApiAvailabilityMiddleware(() => false);
+      const response = createResponse();
+      const next = vi.fn();
+
+      middleware(
+        { baseUrl: '/api', path } as Request,
         response as unknown as Response,
         next as NextFunction,
       );
@@ -84,38 +91,5 @@ describe('API availability middleware', () => {
       checks: { database: databaseReady },
     });
     expect(httpStatus).toBe(databaseReady ? 200 : 503);
-  });
-
-  it('describes the versioned API foundation without enabling unsafe data routes', () => {
-    expect(apiFoundationContract()).toMatchObject({
-      version: '1.0',
-      requestIdHeader: 'x-request-id',
-      errorEnvelope: 'ErrorEnvelope',
-    });
-    expect(apiFoundationContract().routes).toContainEqual({
-      method: 'GET',
-      path: '/api/v1/customers',
-      auth: 'server-auth-required',
-      mutation: false,
-    });
-  });
-
-  it('preserves a valid request ID and generates one when absent', () => {
-    const middleware = createRequestIdMiddleware();
-    const response: { setHeader: ReturnType<typeof vi.fn>; locals: { requestId?: string } } = {
-      setHeader: vi.fn(),
-      locals: {},
-    };
-    const next = vi.fn();
-
-    middleware(
-      { header: () => 'client-request-42' } as unknown as Request,
-      response as unknown as Response,
-      next,
-    );
-
-    expect(response.setHeader).toHaveBeenCalledWith('x-request-id', 'client-request-42');
-    expect(response.locals.requestId).toBe('client-request-42');
-    expect(next).toHaveBeenCalledOnce();
   });
 });

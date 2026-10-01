@@ -88,3 +88,31 @@ Supabase adapter
 - لا توجد mutations أو transaction أو retry تلقائي.
 
 المساران `current-user` و`couriers` ما زالا غير مفعّلين حتى اكتمال verifier خادمي حقيقي وصلاحياتهما.
+
+
+## تحديث session verifier وCouriers — 2026-10-01 20:41:00 +0000 — AI Model: Manus
+تم استبدال bootstrap static token بالتحقق الحقيقي من جلسة Supabase:
+
+- `createSupabaseSessionVerifier` يستدعي `supabase.auth.getUser(accessToken)`.
+- لا يتم قبول token محلي أو secret مشترك كبديل عن جلسة Supabase.
+- `createServerPermissionMiddleware` يفرض صلاحيات `customers:read` و`couriers:read` بعد نجاح التحقق.
+- تم تفعيل `GET /api/v1/couriers` بنفس عقد Customers: Bearer session، DTO آمن، pagination/search، وread-only.
+- صلاحيات Admin/root تستخرج من metadata ولا تمنح أي mutation.
+
+أصبح Customers وCouriers مفعّلين، بينما `current-user` ما زال مؤجلًا حتى تثبيت DTO جلسة API مستقل لا يعيد legacy password fields.
+
+
+## تصحيح مصدر المصادقة — 2026-10-01 20:56:00 +0000 — AI Model: Manus
+**تصحيح إلزامي:** لا يعتمد API Foundation على `supabase.auth` ولا على access tokens الصادرة منه. المصدر المعتمد هو نظام المصادقة المحلي:
+
+1. يستخرج الخادم `session_id` من `Authorization: Bearer <session_id>` أو `x-session-id`.
+2. يقرأ `public.sessions` ويتحقق من وجود الجلسة وعدم `force_logout` وحداثة `last_seen`.
+3. يقرأ `public.users` عبر `user_id` ويتحقق من عدم تعطيل المستخدم.
+4. يبني `ServerPrincipal` محليًا ويشتق `customers:read` و`couriers:read` من role/is_root.
+5. يستخدم `ApiClient` session ID الموجود في sessionStorage، وليس Supabase Auth token.
+
+أي ذكر سابق لـ`supabase.auth.getUser` في هذه الوثيقة يُعد ملغى بهذا التصحيح.
+
+
+## قرار rollback — 2026-10-02 00:16 +0300 — AI Model: Manus
+تمت إزالة routes وmiddleware وrequest-id contract وApiClient session-header التي أضيفت ضمن نطاق API Foundation غير المعتمد في الخطة الحالية. تم الحفاظ على كامل السجل السابق؛ هذا الإدخال يوثق القرار فقط.

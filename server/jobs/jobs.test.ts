@@ -57,6 +57,27 @@ describe('Phase 8 — Background Jobs & JobRunner Framework', () => {
     expect(callCount).toBe(1); // Not called again!
   });
 
+  it('should coalesce concurrent executions that share an idempotency key', async () => {
+    let callCount = 0;
+    const testJob: BackgroundJobDefinition<{ val: number }, number> = {
+      name: 'concurrent_idempotency_test',
+      preconditions: async () => ({ valid: true }),
+      execute: async (input) => {
+        callCount++;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return input.val * 3;
+      },
+    };
+    const key = `concurrent_key_${Date.now()}_${Math.random()}`;
+    const [first, second] = await Promise.all([
+      runBackgroundJob(testJob, { val: 4 }, { ...dummyContext, idempotencyKey: key }),
+      runBackgroundJob(testJob, { val: 4 }, { ...dummyContext, idempotencyKey: key }),
+    ]);
+    expect(first.data).toBe(12);
+    expect(second.data).toBe(12);
+    expect(callCount).toBe(1);
+  });
+
   it('should retry execution upon failure up to maxRetries', async () => {
     let attempts = 0;
     const testJob: BackgroundJobDefinition<{}, string> = {

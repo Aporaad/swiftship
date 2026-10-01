@@ -8,6 +8,7 @@ type EmployeeAccountTransaction = Record<string, unknown> & {
   amount?: unknown;
 };
 import React, { useState, useEffect } from 'react';
+import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
 import { CurrencySelect } from '../../../components/common/CurrencySelect';
 import {
   collection,
@@ -65,7 +66,9 @@ export default function EmployeesPage() {
   const liveBalances = useAccountBalances();
 
   const [employees, setEmployees] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [queryState, setQueryState] = useState<AsyncState<unknown[]>>(asyncState.loading());
+  const loading = queryState.status === 'loading';
+  const setLoading = (value: boolean) => setQueryState(value ? asyncState.loading() : asyncState.idle());
   const [search, setSearch] = useState('');
   const [jobFilter, setJobFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -74,8 +77,10 @@ export default function EmployeesPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
-  const [addLoading, setAddLoading] = useState(false);
-  const [editLoading, setEditLoading] = useState(false);
+  const [addMutationState, setAddMutationState] = useState<AsyncState<void>>(asyncState.idle());
+  const [editMutationState, setEditMutationState] = useState<AsyncState<void>>(asyncState.idle());
+  const addLoading = addMutationState.status === 'submitting';
+  const editLoading = editMutationState.status === 'submitting';
 
   // Statement of Account Modal
   const [statementModal, setStatementModal] = useState<{
@@ -155,11 +160,11 @@ export default function EmployeesPage() {
       (snap) => {
         const list = snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() }));
         setEmployees(list);
-        setLoading(false);
+        setQueryState(list.length ? asyncState.success(list) : asyncState.empty());
       },
       (err) => {
         handleSupabaseError(err, OperationType.LIST, 'employees');
-        setLoading(false);
+        setQueryState(asyncState.error<unknown[]>(err, 'EMPLOYEES_LOAD_FAILED'));
       }
     );
     return () => unsub();
@@ -205,8 +210,7 @@ export default function EmployeesPage() {
       }
     }
 
-    setAddLoading(true);
-    try {
+    const result = await runMutation(async () => {
       const newId = 'emp_' + Math.random().toString(36).substring(2, 11);
       const now = Date.now();
 
@@ -294,14 +298,9 @@ export default function EmployeesPage() {
         systemPin: '',
         role: 'Staff'
       });
-    } catch (err: any) {
-      notificationService.notify({
-        title: isAr ? 'خطأ في الإنشاء' : 'Creation Failed',
-        message: err.message,
-        type: 'error'
-      });
-    } finally {
-      setAddLoading(false);
+    }, setAddMutationState);
+    if (result.status === 'error') {
+      notificationService.notify({ title: isAr ? 'خطأ في الإنشاء' : 'Creation Failed', message: result.error.message, type: 'error' });
     }
   };
 
@@ -310,8 +309,7 @@ export default function EmployeesPage() {
     e.preventDefault();
     if (editLoading || !selectedEmployee) return;
 
-    setEditLoading(true);
-    try {
+    const result = await runMutation(async () => {
       const now = Date.now();
       await updateDoc(doc(db, 'employees', selectedEmployee.id), {
         fullName: editFormData.fullName.trim(),
@@ -348,14 +346,9 @@ export default function EmployeesPage() {
 
       setIsEditModalOpen(false);
       setSelectedEmployee(null);
-    } catch (err: any) {
-      notificationService.notify({
-        title: isAr ? 'خطأ في التعديل' : 'Update Failed',
-        message: err.message,
-        type: 'error'
-      });
-    } finally {
-      setEditLoading(false);
+    }, setEditMutationState);
+    if (result.status === 'error') {
+      notificationService.notify({ title: isAr ? 'خطأ في التعديل' : 'Update Failed', message: result.error.message, type: 'error' });
     }
   };
 
@@ -368,18 +361,18 @@ export default function EmployeesPage() {
       message: isAr ? `هل أنت متأكد من ${actionText} الموظف ${emp.fullName}؟` : `Are you sure you want to ${actionText.toLowerCase()} ${emp.fullName}?`,
       type: emp.disabled ? 'info' : 'warning',
       onConfirm: async () => {
-        try {
-          await updateDoc(doc(db, 'employees', emp.id), {
-            disabled: !emp.disabled,
-            updatedAt: Date.now()
-          });
+        const result = await runMutation(() => updateDoc(doc(db, 'employees', emp.id), {
+          disabled: !emp.disabled,
+          updatedAt: Date.now()
+        }), setEditMutationState);
+        if (result.status === 'success-after-mutation') {
           notificationService.notify({
             title: isAr ? 'تم تغيير الحالة' : 'Status Updated',
             message: `${emp.fullName} ${emp.disabled ? (isAr ? 'مُفعَّل الآن' : 'enabled') : (isAr ? 'مُعطَّل الآن' : 'disabled')}`,
             type: emp.disabled ? 'success' : 'warning'
           });
-        } catch (err: any) {
-          handleSupabaseError(err, OperationType.UPDATE, 'employees');
+        } else if (result.status === 'error') {
+          handleSupabaseError(result.error, OperationType.UPDATE, 'employees');
         }
       }
     });

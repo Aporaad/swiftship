@@ -20,6 +20,7 @@ import { supabase } from '../../../lib/supabase-adapter';
 import AccountPickerModal from '../AccountPickerModal';
 import FinancialCalculatorModal from '../FinancialCalculatorModal';
 import { amountInWords } from '../../../lib/numberToWords';
+import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
 
 
 export type GeneralFormLine = {
@@ -148,8 +149,10 @@ export default function GeneralEntryForm({
   const [entryPriceRef, setEntryPriceRef] = useState<{ id: number; seq: number } | null>(null);
 
   const [saveAsPosted, setSaveAsPosted] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const [mutationState, setMutationState] = useState<AsyncState<void>>(asyncState.idle());
+  const saving = mutationState.status === 'submitting';
+  const error = mutationState.status === 'error' ? mutationState.error.message : '';
+  const setValidationError = (message: string) => setMutationState(asyncState.error<void>(new Error(message), 'FINANCE_FORM_VALIDATION_FAILED'));
 
   const [lines, setLines] = useState<GeneralFormLine[]>(() => {
     if (editingEntry?.lines?.length) {
@@ -248,26 +251,25 @@ export default function GeneralEntryForm({
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    if (!canCreate) return setError('ليس لديك تصريح إنشاء القيود.');
+    setMutationState(asyncState.idle());
+    if (!canCreate) return setValidationError('ليس لديك تصريح إنشاء القيود.');
     if (!selectedEntryCurrency || !entryTypeId || !moduleId || !description.trim()) {
-      return setError('أكمل بيانات القيد العامة والفئة والنوع والعملة والبيان.');
+      return setValidationError('أكمل بيانات القيد العامة والفئة والنوع والعملة والبيان.');
     }
     if (numericMainAmount <= 0) {
-      return setError('يرجى إدخال مبلغ موجب صحيح للقيد.');
+      return setValidationError('يرجى إدخال مبلغ موجب صحيح للقيد.');
     }
 
     const lineDebit = lines.find((l) => l.transType === 'Debit');
     const lineCredit = lines.find((l) => l.transType === 'Credit');
     if (!lineDebit?.accountId || !lineCredit?.accountId) {
-      return setError('يرجى تحديد حساب مالي صالح لكل من طرف المدين وطرف الدائن.');
+      return setValidationError('يرجى تحديد حساب مالي صالح لكل من طرف المدين وطرف الدائن.');
     }
 
     const accDebit = accounts.find((a) => a.id === lineDebit.accountId);
     const accCredit = accounts.find((a) => a.id === lineCredit.accountId);
 
-    try {
-      setSaving(true);
+    const result = await runMutation(async () => {
 
       const payloadLines: FinancialEntryLineInput[] = lines.map((line) => {
         const acc = accounts.find((a) => a.id === line.accountId)!;
@@ -320,12 +322,8 @@ export default function GeneralEntryForm({
         await financialEntryService.create(entryPayload);
       }
 
-      onSaved();
-    } catch (err: any) {
-      setError(err?.message || 'تعذر حفظ القيد.');
-    } finally {
-      setSaving(false);
-    }
+    }, setMutationState);
+    if (result.status === 'success-after-mutation') onSaved();
   };
 
   const [isCalcOpen, setIsCalcOpen] = useState(false);

@@ -1052,3 +1052,54 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 
 ## [2026-10-01 20:31:00 +0000] — server-auth وCustomers — AI Model: Manus
 لم تُنفذ أوامر SQL، ولم تتغير الجداول أو الأعمدة أو RLS أو migrations. التغييرات تخص middleware وHTTP read-only gateway فقط.
+
+
+## [2026-10-01 20:41:00 +0000] — Real session verifier وCouriers — AI Model: Manus
+لم تُنفذ أوامر SQL، ولم تتغير الجداول أو الأعمدة أو RLS أو migrations. التغيير اقتصر على التحقق من الجلسة، permission middleware، ومسارات GET read-only.
+
+
+## [2026-10-01 20:56:00 +0000] — تصحيح local auth — AI Model: Manus
+لم تُنفذ SQL ولم تتغير قاعدة البيانات. تم استخدام الجداول الحالية `public.sessions` و`public.users` للقراءة والتحقق فقط عبر adapter الموجود.
+
+
+## [2026-10-02 00:08:00 +0300] — تدقيق الخطة — AI Model: Manus
+لم تُنفذ أوامر SQL ولم تتغير قاعدة البيانات أو RLS أو migrations؛ هذه الدفعة تدقيق قراءة للكود والخطة والتوثيق فقط.
+
+
+## [2026-10-02 00:17:00 +0300] — Rollback API Foundation — AI Model: Manus
+لم تُنفذ أوامر SQL ولم تتغير الجداول أو الأعمدة أو RLS أو migrations؛ العملية rollback للكود فقط.
+
+
+## [2026-10-02 00:31:30 +0300] — AI Model: Manus
+لم تُنفذ أوامر SQL، ولم تتغير الجداول أو الأعمدة أو RLS أو migrations. التغييرات تخص TypeScript وUI Async contracts فقط.
+
+## [2026-10-02 00:56:00 +0300] — توثيق قاعدة البيانات للدفعة الحالية — AI Model: Manus
+- لم تُنفذ أي أوامر SQL.
+- لم تتغير الجداول أو الأعمدة أو العلاقات أو RLS أو migrations.
+- `CustodyAdvancesTab` استمر باستخدام الخدمة المالية الحالية وحدودها الذرية دون تعديل قاعدة البيانات.
+- عقود `PublicTrackingDto` و`PortalUserSessionDto` في alx_web تعريفات TypeScript فقط ولا تنفذ وصولاً مباشراً لقاعدة البيانات.
+
+## [2026-10-02 01:12:00 +0300] — دفعة Async المالية والإدارية — AI Model: Manus
+- لم تُنفذ أوامر SQL.
+- لم تتغير الجداول أو الأعمدة أو العلاقات أو RLS أو migrations.
+- جميع التغييرات الحالية تخص عقود TypeScript وحالة واجهة المستخدم وPortal Gateway.
+
+## [2026-10-02 01:15:00 +0300] — مرحلة DB Readiness قراءة فقط — AI Model: Manus
+- لم تُنفذ أي أوامر SQL.
+- تم تحليل `DATABASE_SCHEMA.md` وملفات `supabase/migrations` محلياً فقط.
+- تم تصنيف فحوصات counts وRLS وgrants وforeign-key violations كفحوصات معلقة تحتاج connector قراءة حي.
+
+## [2026-10-02 01:47:00 +0300] — إغلاق المرحلة 12 — AI Model: Manus
+- لم يتم تنفيذ SQL.
+- لا تغييرات على schema أو migrations أو RLS أو grants.
+- التغيير يخص عقود AsyncState وحالة واجهة المستخدم فقط.
+
+## [2026-10-02 01:55:00 +0300] — المرحلة 13 API Foundation — AI Model: Manus
+- لم يتم تنفيذ SQL أو migration أو DDL/DML.
+- مسارات Customers/Couriers تقرأ عبر adapter الحالي فقط.
+- لا تغييرات في schema أو RLS أو grants.
+
+## [2026-10-02 02:42:00 +0300] — مراجعة قواعد البيانات ضمن التدقيق الشامل — AI Model: Manus
+- لم يتم تنفيذ SQL أو DDL أو DML.
+- لم يتم فتح اتصال حي بقاعدة البيانات أو تغيير RLS/grants/policies.
+- تم تسجيل snapshot حي لـRLS/جودة البيانات كـbacklog منفصل يتطلب connector وبيئة معتمدة.

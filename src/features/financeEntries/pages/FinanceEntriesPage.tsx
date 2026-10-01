@@ -12,6 +12,7 @@ import CustodyAdvancesTab, { type CustodyAdvanceRow } from '../../../components/
 import EntrySettingsTab from '../../../components/finance/EntrySettingsTab';
 import type { FinanceAccount, FinanceCurrency, FinanceEntryType, FinanceModule } from '../../../shared/contracts/finance.contracts';
 import type { FinanceEntryRow, FinancePaymentDetailRow } from '../../../components/finance/EntryWorkspaceTab';
+import { asyncState, type AsyncState } from '../../../shared/contracts/ui.contracts';
 
 type TabId = 'general' | 'compound' | 'temporary' | 'movement' | 'receipt' | 'payment' | 'custody' | 'settings';
 
@@ -22,8 +23,9 @@ export default function FinanceEntriesPage() {
   const { role, profile, hasPermission, loading: roleLoading } = useRole();
   const isAdmin = role === 'Admin';
   const [activeTab, setActiveTab] = useState<TabId>('general');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [dataQuery, setDataQuery] = useState<AsyncState<null>>({ status: 'loading' });
+  const loading = dataQuery.status === 'loading';
+  const error = dataQuery.status === 'error' ? dataQuery.error.message : '';
   const [accounts, setAccounts] = useState<FinanceAccount[]>([]);
   const [currencies, setCurrencies] = useState<FinanceCurrency[]>([]);
   const [modules, setModules] = useState<FinanceModule[]>([]);
@@ -36,8 +38,7 @@ export default function FinanceEntriesPage() {
 
   const refresh = useCallback(async () => {
     try {
-      setLoading(true);
-      setError('');
+      setDataQuery(asyncState.loading());
       const [currencyResult, accountResult, moduleResult, typeResult, entryResult, transResult, paymentDetailResult, custodyResult, usersResult] = await Promise.all([
         (supabase as any).from('currency').select('cur_id, code, is_default, is_active').eq('is_active', true).order('cur_id'),
         (supabase as any).from('accounts').select('account_id, acc_name_ar, acc_name_en, cur_no, is_active, acc_sub_id, entity_id, entity_type').order('account_id'),
@@ -109,10 +110,9 @@ export default function FinanceEntriesPage() {
         recipientAccountId: item.recipient_account_id, amountOriginal: Number(item.amount_original), amountOutstanding: Number(item.amount_outstanding),
         currencyOriginalNo: Number(item.currency_original_no), status: item.status, issuedAt: item.issued_at,
       })));
-    } catch (cause: any) {
-      setError(cause?.message || 'تعذر تحميل بيانات القيود الجديدة.');
-    } finally {
-      setLoading(false);
+      setDataQuery(asyncState.success(null));
+    } catch (cause: unknown) {
+      setDataQuery(asyncState.error<null>(cause, 'FINANCE_ENTRIES_LOAD_FAILED'));
     }
   }, []);
 

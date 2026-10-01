@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Edit3, Plus, Save, Trash2, X } from 'lucide-react';
 import { financialEntrySettingsService } from '../../services/financialEntrySettingsService';
 import type { FinanceEntryType, FinanceModule } from '../../shared/contracts/finance.contracts';
+import { asyncState, runMutation, type AsyncState } from '../../shared/contracts/ui.contracts';
 
 interface Props {
   modules: FinanceModule[];
@@ -25,8 +26,10 @@ type Editor = {
 
 export default function EntrySettingsTab({ modules, entryTypes, canView, canCreate, canEdit, canDelete, onChanged }: Props) {
   const [editor, setEditor] = useState<Editor>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [mutationState, setMutationState] = useState<AsyncState<void>>(asyncState.idle());
+  const busy = mutationState.status === 'submitting';
+  const error = mutationState.status === 'error' ? mutationState.error.message : '';
+  const setValidationError = (message: string) => setMutationState(asyncState.error<void>(new Error(message), 'ENTRY_SETTINGS_VALIDATION_FAILED'));
   const startModule = (module?: FinanceModule) => setEditor({
     kind: 'module', id: module?.id || `module_${crypto.randomUUID().replaceAll('-', '').slice(0, 12)}`,
     code: module?.code || '', nameAr: module?.nameAr || '', moduleId: '', active: module?.isActive ?? true, exists: Boolean(module),
@@ -39,36 +42,29 @@ export default function EntrySettingsTab({ modules, entryTypes, canView, canCrea
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!editor || !editor.code.trim() || !editor.nameAr.trim() || (editor.kind === 'type' && !editor.moduleId)) {
-      setError('أكمل الرمز والاسم والفئة المرتبطة للنوع.');
+      setValidationError('أكمل الرمز والاسم والفئة المرتبطة للنوع.');
       return;
     }
     if ((editor.exists && !canEdit) || (!editor.exists && !canCreate)) {
-      setError('لا تملك الصلاحية اللازمة لحفظ إعدادات القيود.');
+      setValidationError('لا تملك الصلاحية اللازمة لحفظ إعدادات القيود.');
       return;
     }
-    try {
-      setBusy(true); setError('');
+    setMutationState(asyncState.idle());
+    const result = await runMutation(async () => {
       await financialEntrySettingsService.manage(editor.exists ? 'update' : 'create', editor.kind, editor.id, {
         code: editor.code.trim(), nameAr: editor.nameAr.trim(), nameEn: editor.nameAr.trim(),
         moduleId: editor.kind === 'type' ? editor.moduleId : undefined, isActive: editor.active,
       });
-      setEditor(null);
-      onChanged();
-    } catch (cause: any) {
-      setError(cause?.message || 'تعذر حفظ إعداد القيد؛ تحقق من صلاحيات الجلسة أو تفرد الرمز.');
-    } finally { setBusy(false); }
+    }, setMutationState);
+    if (result.status === 'success-after-mutation') { setEditor(null); onChanged(); }
   };
 
   const remove = async (kind: 'module' | 'type', id: string, name: string) => {
-    if (!canDelete) return setError('لا تملك تصريح حذف إعدادات القيود.');
+    if (!canDelete) return setValidationError('لا تملك تصريح حذف إعدادات القيود.');
     if (!window.confirm(`سيُحذف ${kind === 'module' ? 'فئة' : 'نوع'} القيد «${name}». لا تحذف إلا سجلًا غير مستخدم. هل تريد المتابعة؟`)) return;
-    try {
-      setBusy(true); setError('');
-      await financialEntrySettingsService.manage('delete', kind, id);
-      onChanged();
-    } catch (cause: any) {
-      setError(cause?.message || 'تعذر حذف الإعداد؛ قد يكون مستخدمًا في قيود قائمة أو لا تملك الصلاحية.');
-    } finally { setBusy(false); }
+    setMutationState(asyncState.idle());
+    const result = await runMutation(() => financialEntrySettingsService.manage('delete', kind, id), setMutationState);
+    if (result.status === 'success-after-mutation') onChanged();
   };
 
   if (!canView) return <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-8 text-center text-sm font-bold text-slate-400">لا تملك صلاحية استعراض إعدادات القيود.</div>;

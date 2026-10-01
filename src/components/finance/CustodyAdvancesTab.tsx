@@ -3,6 +3,7 @@ import { CurrencySelect } from '../common/CurrencySelect';
 import { CheckCircle2, Plus, WalletCards } from 'lucide-react';
 import { financialEntryService, type FinancialPaymentMethod } from '../../services/financialEntryService';
 import type { FinanceAccount, FinanceCurrency } from '../../shared/contracts/finance.contracts';
+import { asyncState, runMutation, type AsyncState } from '../../shared/contracts/ui.contracts';
 
 export interface CustodyAdvanceRow {
   id: string; custodyNumber: string; recipientId: string; recipientName: string; recipientType: string; recipientAccountId?: string;
@@ -33,8 +34,10 @@ export default function CustodyAdvancesTab({ items, accounts, currencies, canVie
   const [paymentMethod, setPaymentMethod] = useState<FinancialPaymentMethod>('cash');
   const [dueAt, setDueAt] = useState('');
   const [note, setNote] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [mutationState, setMutationState] = useState<AsyncState<void>>(asyncState.idle());
+  const busy = mutationState.status === 'submitting';
+  const error = mutationState.status === 'error' ? mutationState.error.message : '';
+  const setValidationError = (message: string) => setMutationState(asyncState.error<void>(new Error(message), 'CUSTODY_VALIDATION_FAILED'));
   const currencyById = useMemo(() => new Map(currencies.map((currency) => [currency.id, currency.code])), [currencies]);
   const selectedRecipientAccount = accounts.find((account) => account.id === recipientAccountId);
   const recipientAccounts = useMemo(() => accounts.filter((account) => account.isPosting && account.isActive && account.entityId && account.entityType === accountEntityTypeFor(recipientType)), [accounts, recipientType]);
@@ -51,20 +54,19 @@ export default function CustodyAdvancesTab({ items, accounts, currencies, canVie
     if (account) setCurrencyNo(account.curNo);
   };
   const createAdvance = async (event: React.FormEvent) => {
-    event.preventDefault(); setError('');
+    event.preventDefault(); setMutationState(asyncState.idle());
     const parsedAmount = Number(amount || 0);
     const recipient = accounts.find((account) => account.id === recipientAccountId);
     const funding = accounts.find((account) => account.id === fundingAccountId);
-    if (!canCreate) return setError('ليس لديك تصريح إنشاء العهد والسلف.');
+    if (!canCreate) return setValidationError('ليس لديك تصريح إنشاء العهد والسلف.');
     if (!recipient || !funding || !number.trim() || !recipientEntityId || !resolvedRecipientName || !currencyNo || parsedAmount <= 0) {
-      return setError('أكمل رقم العهدة والطرف الحقيقي وحسابه وحساب التمويل والمبلغ والعملة.');
+      return setValidationError('أكمل رقم العهدة والطرف الحقيقي وحسابه وحساب التمويل والمبلغ والعملة.');
     }
     if (recipientType !== 'other' && (recipient.entityType !== accountEntityTypeFor(recipientType) || recipient.entityId !== recipientEntityId)) {
-      return setError('الحساب المختار لا يرتبط بنوع وكيان المستلم المحددين.');
+      return setValidationError('الحساب المختار لا يرتبط بنوع وكيان المستلم المحددين.');
     }
-    if (recipient.curNo !== currencyNo || funding.curNo !== currencyNo) return setError('في هذا النموذج يجب أن تطابق عملة حسابي العهدة عملتها؛ استخدم سند صرافة مستقلًا للتحويل.');
-    try {
-      setBusy(true);
+    if (recipient.curNo !== currencyNo || funding.curNo !== currencyNo) return setValidationError('في هذا النموذج يجب أن تطابق عملة حسابي العهدة عملتها؛ استخدم سند صرافة مستقلًا للتحويل.');
+    const result = await runMutation(async () => {
       await financialEntryService.createCustodyAdvance({
         custodyNumber: number, recipientType, recipientId: recipientEntityId, recipientName: resolvedRecipientName, recipientAccountId: recipient.id,
         amountOriginal: parsedAmount, currencyOriginalNo: currencyNo, note, createdByUid,
@@ -77,21 +79,20 @@ export default function CustodyAdvancesTab({ items, accounts, currencies, canVie
         ],
         paymentDetails: [{ paymentMethod: paymentMethod as Exclude<FinancialPaymentMethod, 'mixed'>, accountId: funding.id, amountOriginal: parsedAmount, dueAt }],
       });
-      resetCreate(); onChanged();
-    } catch (cause: any) { setError(cause?.message || 'تعذر إنشاء العهدة.'); } finally { setBusy(false); }
+    }, setMutationState);
+    if (result.status === 'success-after-mutation') { resetCreate(); onChanged(); }
   };
 
   const settleAdvance = async (event: React.FormEvent) => {
-    event.preventDefault(); setError('');
+    event.preventDefault(); setMutationState(asyncState.idle());
     const parsedAmount = Number(amount || 0);
     const receiving = accounts.find((account) => account.id === fundingAccountId);
     const recipient = selected?.recipientAccountId ? accounts.find((account) => account.id === selected.recipientAccountId) : undefined;
-    if (!selected || !recipient || !receiving || parsedAmount <= 0) return setError('اختر العهدة وحساب استلام التسوية وأدخل مبلغًا صالحًا.');
-    if (!canSettle) return setError('ليس لديك تصريح تسوية العهد والسلف.');
-    if (parsedAmount > selected.amountOutstanding) return setError('مبلغ التسوية أكبر من المتبقي من العهدة.');
-    if (recipient.curNo !== selected.currencyOriginalNo || receiving.curNo !== selected.currencyOriginalNo) return setError('يجب أن تطابق حسابات التسوية عملة العهدة؛ لا يُنشأ تحويل ضمن تسوية العهدة.');
-    try {
-      setBusy(true);
+    if (!selected || !recipient || !receiving || parsedAmount <= 0) return setValidationError('اختر العهدة وحساب استلام التسوية وأدخل مبلغًا صالحًا.');
+    if (!canSettle) return setValidationError('ليس لديك تصريح تسوية العهد والسلف.');
+    if (parsedAmount > selected.amountOutstanding) return setValidationError('مبلغ التسوية أكبر من المتبقي من العهدة.');
+    if (recipient.curNo !== selected.currencyOriginalNo || receiving.curNo !== selected.currencyOriginalNo) return setValidationError('يجب أن تطابق حسابات التسوية عملة العهدة؛ لا يُنشأ تحويل ضمن تسوية العهدة.');
+    const result = await runMutation(async () => {
       await financialEntryService.settleCustodyAdvance(selected.id, {
         entryNumber: `SET-${selected.custodyNumber}-${Date.now().toString().slice(-5)}`, moduleId: 'module_custody', entryTypeId: 'type_custody_settlement', entryCategory: 'General', postingStatus: 'posted',
         description: `تسوية عهدة ${selected.custodyNumber}`, notes: note, paymentMethod, createdByUid,
@@ -101,8 +102,8 @@ export default function CustodyAdvancesTab({ items, accounts, currencies, canVie
         ],
         paymentDetails: [{ paymentMethod: paymentMethod as Exclude<FinancialPaymentMethod, 'mixed'>, accountId: receiving.id, amountOriginal: parsedAmount, dueAt }],
       }, createdByUid);
-      setMode('none'); setSelected(null); setAmount(''); setNote(''); onChanged();
-    } catch (cause: any) { setError(cause?.message || 'تعذر تسوية العهدة.'); } finally { setBusy(false); }
+    }, setMutationState);
+    if (result.status === 'success-after-mutation') { setMode('none'); setSelected(null); setAmount(''); setNote(''); onChanged(); }
   };
 
   const openSettle = (item: CustodyAdvanceRow) => { setSelected(item); setCurrencyNo(item.currencyOriginalNo); setAmount(''); setFundingAccountId(''); setNote(''); setDueAt(''); setMode('settle'); };

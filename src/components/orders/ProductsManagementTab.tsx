@@ -20,7 +20,7 @@ import { useRole } from '../../hooks/useRole';
 import { createReturnedProductFromOrderItem } from '../../services/returnedProductService';
 import ReturnedProductsTab from './ReturnedProductsTab';
 import type { ReturnedCustomerRecord, ReturnedOrderItemRecord, ReturnedOrderRecord } from '../../features/orders/pages/subcomponents/returned-products/types';
-import { runMutation, runQuery, type AsyncState } from '../../shared/contracts/ui.contracts';
+import { asyncState, runMutation, runQuery, type AsyncState } from '../../shared/contracts/ui.contracts';
 
 // ────────────────────── Types ──────────────────────
 
@@ -313,7 +313,6 @@ export default function ProductsManagementTab({
   // ──────────── Master Products State ────────────
   const [products, setProducts] = useState<MasterProduct[]>([]);
   const [orderItemCounts, setOrderItemCounts] = useState<Record<string, number>>({});
-  const [loadingProducts, setLoadingProducts] = useState(true);
   const [productsQuery, setProductsQuery] = useState<AsyncState<MasterProduct[]>>({ status: 'loading' });
   const [productSearch, setProductSearch] = useState('');
   const [productCategoryFilter, setProductCategoryFilter] = useState('all');
@@ -323,13 +322,14 @@ export default function ProductsManagementTab({
   const [deletingProduct, setDeletingProduct] = useState<MasterProduct | null>(null);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [productForm, setProductForm] = useState<ProductForm>(emptyProductForm());
-  const [submittingProduct, setSubmittingProduct] = useState(false);
   const [productMutation, setProductMutation] = useState<AsyncState<boolean>>({ status: 'idle' });
+  const loadingProducts = productsQuery.status === 'loading';
+  const submittingProduct = productMutation.status === 'submitting';
 
   // ──────────── Order Items (Movements) State ────────────
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
-  const [loadingItems, setLoadingItems] = useState(true);
   const [itemsQuery, setItemsQuery] = useState<AsyncState<OrderItem[]>>({ status: 'loading' });
+  const loadingItems = itemsQuery.status === 'loading';
   const [itemSearch, setItemSearch] = useState('');
   const [itemStatusFilter, setItemStatusFilter] = useState('all');
   const [returningItem, setReturningItem] = useState<OrderItem | null>(null);
@@ -345,9 +345,8 @@ export default function ProductsManagementTab({
       void runQuery(async () => nextProducts, (state) => {
         setProductsQuery(state);
         if (state.status === 'success') setProducts(state.data);
-        setLoadingProducts(state.status === 'loading');
       });
-    }, () => setLoadingProducts(false));
+    }, (error) => setProductsQuery(asyncState.error<MasterProduct[]>(error, 'PRODUCTS_LOAD_FAILED')));
     return () => unsub?.();
   }, []);
 
@@ -359,7 +358,6 @@ export default function ProductsManagementTab({
       void runQuery(async () => items, (state) => {
         setItemsQuery(state);
         if (state.status === 'success') setOrderItems(state.data);
-        setLoadingItems(state.status === 'loading');
       });
 
       // احتساب عدد الطلبات لكل منتج رئيسي
@@ -371,7 +369,7 @@ export default function ProductsManagementTab({
         }
       });
       setOrderItemCounts(counts);
-    }, () => setLoadingItems(false));
+    }, (error) => setItemsQuery(asyncState.error<OrderItem[]>(error, 'ORDER_ITEMS_LOAD_FAILED')));
     return () => unsub?.();
   }, []);
 
@@ -438,7 +436,6 @@ export default function ProductsManagementTab({
       toast.error(isAr ? 'اسم المنتج العربي مطلوب' : 'Arabic product name is required');
       return;
     }
-    setSubmittingProduct(true);
     const result = await runMutation(async () => {
       const payload = {
         product_name_ar:  productForm.product_name_ar.trim(),
@@ -471,7 +468,6 @@ export default function ProductsManagementTab({
     } else if (result.status === 'error') {
       toast.error(result.error.message || (isAr ? 'تعذر حفظ المنتج' : 'Could not save product'));
     }
-    setSubmittingProduct(false);
   };
 
   const deleteProduct = async (p: MasterProduct) => {

@@ -88,3 +88,35 @@
 5. `useOrderData` — `runQuery` لنتائج orders ضمن الاشتراك الحي.
 
 **التحقق:** TypeScript ناجح، 67 ملف اختبار ناجح، 235 اختبارًا ناجحًا و8 متخطاة، والبناء ناجح. لا SQL أو تغييرات DB/RLS.
+
+
+## تدقيق مطابق للخطة المرفقة — 2026-10-02 00:08 +0300 — AI Model: Manus
+المستهلكون المرحلون في نطاق Orders يستخدمون `runQuery`/`runMutation`: `ProductsManagementTab`, `ProductPickerModal`, `ItemCategoriesManagementTab`, `OrderHistoryModal`, `useOrderData`, و`ReturnedProductsTab`. لكن الفحص أظهر 62 علامة لحالات loading/submitting/error محلية في نطاق Orders/Features، منها `loadingProducts`, `submittingProduct`, `loadingItems`, و`loading`/`error` في `OrderHistoryModal`. النتيجة: **المرحلة 12 مغلقة فقط لنطاق المستهلكين الستة الموثق، وليست مطابقة لإغلاق كل Query/Mutation في النظام** كما ينص معيار الخطة.
+
+
+## حالة الإغلاق بعد rollback — 2026-10-02 00:17 +0300 — AI Model: Manus
+المستهلكون الستة المحددون مرحلون، لكن النطاق الكامل للنظام ما زال يحتوي حالات loading/error/submitting محلية ومستهلكين خارج العقد الموحد. لا يتم اعتماد إغلاق المرحلة 12 على مستوى كل المكونات قبل ترحيل هذه الحالات والتحقق من السلوك.
+
+
+## دفعة Async إضافية — 2026-10-02 00:31 +0300 — AI Model: Manus
+تم توحيد loading/error/submitting في `ProductsManagementTab` و`ProductPickerModal` و`ItemCategoriesManagementTab` و`OrderHistoryModal` و`useOrderData` و`FinanceEntriesPage` عبر `AsyncState`. الاختبارات الكاملة نجحت: 67 ملفًا و237 اختبارًا. ما زالت مكونات مالية أخرى تحتوي حالات error/busy محلية، ولذلك لم يُعلن إغلاق المرحلة 12 على مستوى كل نطاق النظام.
+
+## متابعة تنفيذ — 2026-10-02 00:56:00 +0300 — AI Model: Manus
+تم ترحيل عمليتي إصدار وتسوية العهد في `src/components/finance/CustodyAdvancesTab.tsx` إلى `AsyncState` و`runMutation`. أصبحت حالة `submitting` ومعلومات الخطأ ناتجة عن العقد المشترك، مع إبقاء أخطاء التحقق ضمن نفس العقد. لم يُعلن الإغلاق الشامل للمرحلة 12 بعد لأن بقية المكونات المالية ما زالت تحتاج جرداً وترحيلاً تدريجياً.
+
+التحقق: `npm run check` ناجح، و`npm test -- --reporter=dot` ناجح (237 اختباراً ناجحاً و8 متخطاة)، والبناء ناجح. لا SQL أو DB/RLS changes.
+
+## دفعة 01:12 — AI Model: Manus
+تم ترحيل نماذج المالية الأساسية وعمليات مساحة القيود وصفحة الأدوار إلى `AsyncState` و`runMutation`. التحقق البرمجي ناجح. ما زال الإغلاق الشامل مؤجلاً عمداً حتى استكمال صفحات الإدارة والمكونات المتبقية.
+
+## دفعة 01:14 — AI Model: Manus
+اكتمل تحويل عمليات Workspace الفردية والجماعية، وتحويل `useWebsiteManagementData` إلى `runQuery` بنتيجة typed. ما زال الإغلاق النظامي الكامل مؤجلاً حتى مراجعة بقية صفحات الإدارة.
+
+## دفعة 01:22 — AI Model: Manus
+تم ربط صفحات الإدارة السبع المطلوبة بعقود AsyncState: Sources وEmployees وUsers وNotifications وCustomers وCouriers وSettings. حالات UI البحتة بقيت خارج العقد، بينما جسور التوافق async مؤقتة حتى استكمال استبدالها باستدعاءات runQuery/runMutation.
+
+## دفعة التصحيح 01:34 — AI Model: Manus
+التصحيح الحالي يطبق `runMutation` داخل handlers فعلية، وليس مجرد تغيير أسماء state، في Sources وEmployees وUsers وCustomers وCouriers وNotifications وحفظ Settings. الإغلاق النهائي ما زال ممنوعاً حتى إكمال كل Query/Mutation في audit.
+
+## الإغلاق النهائي 01:47 — AI Model: Manus
+تم إغلاق المرحلة 12 بالكامل وتنفيذها على مستوى النظام بالكامل. شمل الإغلاق UserManagementPage وSettingsPage ومسارات الحذف والتبديل وrealtime audit، مع نجاح TypeScript والاختبارات النهائية.

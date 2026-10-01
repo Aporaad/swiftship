@@ -713,3 +713,63 @@ select distinct k.key as data_key from public.cust_details d cross join lateral 
 ```text
 لا يوجد أمر SQL في دفعة server-auth وCustomers read-only.
 ```
+
+
+## [2026-10-01 20:41:00 +0000] — AI Model: Manus
+```text
+لا يوجد أمر SQL في دفعة استبدال verifier وتفعيل Couriers؛ جميع العمليات HTTP الحالية read-only.
+```
+
+
+## [2026-10-01 20:56:00 +0000] — AI Model: Manus
+```text
+لا يوجد أمر SQL؛ verifier يعتمد على قراءة public.sessions وpublic.users فقط.
+```
+
+
+## [2026-10-02 00:08:00 +0300] — AI Model: Manus
+```text
+لا يوجد أمر SQL؛ تم تنفيذ تدقيق للخطة والمراحل 11 و12 و13 فقط.
+```
+
+
+## [2026-10-02 00:17:00 +0300] — AI Model: Manus
+```text
+لا يوجد أمر SQL؛ تم rollback لكود API Foundation غير المعتمد فقط.
+```
+
+
+## [2026-10-02 00:31:30 +0300] — AI Model: Manus
+```text
+لا يوجد أمر SQL؛ الدفعة تخص typed contracts وتوحيد حالات loading/error/submitting فقط.
+```
+
+## [2026-10-02 00:56:00 +0300] — AI Model: Manus
+```text
+لا يوجد أمر SQL في هذه الدفعة؛ تم تنفيذ تغييرات TypeScript وPortal Gateway فقط دون اتصال كتابة بقاعدة البيانات.
+```
+
+## [2026-10-02 01:12:00 +0300] — AI Model: Manus
+```text
+لا يوجد أمر SQL في هذه الدفعة؛ تم ترحيل حالات Async وPortal Gateway فقط.
+```
+
+## [2026-10-02 01:15:00 +0300] — AI Model: Manus
+```text
+لا يوجد أمر SQL في هذه الدفعة؛ تم إنشاء تقرير قراءة ثابت المصدر فقط، ومنع أي اتصال أو تغيير بقاعدة البيانات.
+```
+
+## [2026-10-02 01:47:00 +0300] — AI Model: Manus
+```text
+لا يوجد أمر SQL؛ إغلاق المرحلة 12 تم على مستوى TypeScript/UI/realtime state فقط.
+```
+
+## [2026-10-02 01:55:00 +0300] — AI Model: Manus
+```text
+لا يوجد أمر SQL؛ تنفيذ المرحلة 13 اقتصر على HTTP contracts وserver-side permissions وDTO mapping والاختبارات.
+```
+
+## [2026-10-02 02:42:00 +0300] — AI Model: Manus
+```text
+لا يوجد أمر SQL؛ التدقيق والإصلاحات الحالية اقتصرت على الكود والاختبارات، دون اتصال أو تغيير في قاعدة البيانات.
+```

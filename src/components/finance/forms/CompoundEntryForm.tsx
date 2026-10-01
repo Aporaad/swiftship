@@ -20,6 +20,7 @@ import { supabase } from '../../../lib/supabase-adapter';
 import AccountPickerModal from '../AccountPickerModal';
 import FinancialCalculatorModal from '../FinancialCalculatorModal';
 import { amountInWords } from '../../../lib/numberToWords';
+import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
 
 
 export type CompoundFormLine = {
@@ -141,8 +142,10 @@ export default function CompoundEntryForm({
   const [notes, setNotes] = useState(() => editingEntry?.notes || '');
 
   const [saveAsPosted, setSaveAsPosted] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const [mutationState, setMutationState] = useState<AsyncState<void>>(asyncState.idle());
+  const saving = mutationState.status === 'submitting';
+  const error = mutationState.status === 'error' ? mutationState.error.message : '';
+  const setValidationError = (message: string) => setMutationState(asyncState.error<void>(new Error(message), 'FINANCE_FORM_VALIDATION_FAILED'));
 
   const [lines, setLines] = useState<CompoundFormLine[]>(() => {
     if (editingEntry?.lines?.length) {
@@ -216,7 +219,7 @@ export default function CompoundEntryForm({
 
   const removeLine = (index: number) => {
     if (lines.length <= 3) {
-      setError('القيد المركب يلزم أن يحتوي على 3 أسطر على الأقل.');
+      setValidationError('القيد المركب يلزم أن يحتوي على 3 أسطر على الأقل.');
       return;
     }
     setLines((prev) => prev.filter((_, i) => i !== index));
@@ -261,20 +264,19 @@ export default function CompoundEntryForm({
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    if (!canCreate) return setError('ليس لديك تصريح إنشاء القيود المركبة.');
+    setMutationState(asyncState.idle());
+    if (!canCreate) return setValidationError('ليس لديك تصريح إنشاء القيود المركبة.');
     if (!selectedCurrency || !entryTypeId || !moduleId || !description.trim()) {
-      return setError('أكمل رقم القيد والفئة والنوع والبيان العام.');
+      return setValidationError('أكمل رقم القيد والفئة والنوع والبيان العام.');
     }
     if (!isBalanced) {
-      return setError(`القيد غير متوازن: مجموع المدين بعملة النظام (${debitSystemTotal.toLocaleString()}) لا يساوي الدائن (${creditSystemTotal.toLocaleString()}). الفرق: ${diffSystem.toLocaleString()}`);
+      return setValidationError(`القيد غير متوازن: مجموع المدين بعملة النظام (${debitSystemTotal.toLocaleString()}) لا يساوي الدائن (${creditSystemTotal.toLocaleString()}). الفرق: ${diffSystem.toLocaleString()}`);
     }
     if (calculatedLines.some((l) => !l.accountId || l.amtAccount <= 0)) {
-      return setError('تأكد من اختيار الحساب المالي وإدخال مبلغ موجب لكل أسطر القيد المركب.');
+      return setValidationError('تأكد من اختيار الحساب المالي وإدخال مبلغ موجب لكل أسطر القيد المركب.');
     }
 
-    try {
-      setSaving(true);
+    const result = await runMutation(async () => {
 
       const systemCurId = systemCurrency?.id || 1;
       const systemCurCode = systemCurrency?.code || 'YER';
@@ -328,12 +330,8 @@ export default function CompoundEntryForm({
         await financialEntryService.create(entryPayload);
       }
 
-      onSaved();
-    } catch (err: any) {
-      setError(err?.message || 'تعذر حفظ القيد المركب.');
-    } finally {
-      setSaving(false);
-    }
+    }, setMutationState);
+    if (result.status === 'success-after-mutation') onSaved();
   };
 
   const [isCalcOpen, setIsCalcOpen] = useState(false);
