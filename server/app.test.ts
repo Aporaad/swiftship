@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 import { describe, expect, it, vi } from 'vitest';
-import { createApiAvailabilityMiddleware, readinessResponse } from './app';
+import { createApiAvailabilityMiddleware, createApiCorsMiddleware, readinessResponse } from './app';
 
 function createResponse() {
   const response = {
@@ -91,5 +91,62 @@ describe('API availability middleware', () => {
       checks: { database: databaseReady },
     });
     expect(httpStatus).toBe(databaseReady ? 200 : 503);
+  });
+});
+
+describe('API CORS allowlist', () => {
+  function corsResponse() {
+    const response = {
+      setHeader: vi.fn(),
+      status: vi.fn(),
+      json: vi.fn(),
+      end: vi.fn(),
+    };
+    response.status.mockReturnValue(response);
+    response.json.mockReturnValue(response);
+    response.end.mockReturnValue(response);
+    return response;
+  }
+
+  it('allows and reflects a configured origin with credentials', () => {
+    const response = corsResponse();
+    const next = vi.fn();
+    createApiCorsMiddleware(new Set(['https://portal.example.test']))(
+      { header: () => 'https://portal.example.test', method: 'GET' } as unknown as Request,
+      response as unknown as Response,
+      next as NextFunction,
+    );
+
+    expect(response.setHeader).toHaveBeenCalledWith('Access-Control-Allow-Origin', 'https://portal.example.test');
+    expect(response.setHeader).toHaveBeenCalledWith('Access-Control-Allow-Credentials', 'true');
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  it('rejects an origin that is not on the allowlist', () => {
+    const response = corsResponse();
+    const next = vi.fn();
+    createApiCorsMiddleware(new Set(['https://portal.example.test']))(
+      { header: () => 'https://attacker.example', method: 'GET' } as unknown as Request,
+      response as unknown as Response,
+      next as NextFunction,
+    );
+
+    expect(response.status).toHaveBeenCalledWith(403);
+    expect(response.json).toHaveBeenCalledWith({ error: 'CORS_ORIGIN_DENIED' });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('answers preflight requests for approved origins', () => {
+    const response = corsResponse();
+    const next = vi.fn();
+    createApiCorsMiddleware(new Set(['https://portal.example.test']))(
+      { header: () => 'https://portal.example.test', method: 'OPTIONS' } as unknown as Request,
+      response as unknown as Response,
+      next as NextFunction,
+    );
+
+    expect(response.status).toHaveBeenCalledWith(204);
+    expect(response.end).toHaveBeenCalledOnce();
+    expect(next).not.toHaveBeenCalled();
   });
 });

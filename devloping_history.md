@@ -2119,3 +2119,8 @@
 تم التحقق من تثبيت نظيف وفحوص النسخة المحلية: `npm ci --no-audit --no-fund` و`npm run check` و`npm test -- --reporter=dot` و`npm run build` نجحت؛ 73 ملف اختبار ناجحاً و3 متخطاة، 260 اختباراً ناجحاً و8 متخطاة. بقيت تحذيرات بناء حجم الحزمة و`import.meta` بصيغة CJS وتداخل استيرادات Legacy.
 
 يوجد API Foundation للقراءة فقط في خادم SwiftShip، لكن `alx_api` المستقلة لم تُنشأ بعد؛ مجلدها يحوي وثيقة الخطة فقط. ظهرت 91 ملفات تستخدم legacy-adapter و34 مطابقة `any` في الحدود المفحوصة، وبقيت بوابات Portal/staging/AsyncState وجودة البيانات. لم تتوفر قراءة حية لقاعدة البيانات في هذه الجلسة لكون موصل Supabase غير مفعّل. لم يُعدل كود التطبيق أو قاعدة البيانات، ولم ينفذ SQL أو Migration.
+
+## [2026-10-04T02:00:08+03:00] — Scaffold مستقل وPortal HTTP محدود — AI Model: Manus
+تم إنشاء أساس `alx_api` مستقلاً: إعداد Express 5/TypeScript strict، health/readiness، Request ID، logging redaction، Helmet وCORS allowlist وrate limiting، response envelopes، Drizzle/PostgreSQL pool factory غير مستدعى، OpenAPI، Jest/Supertest وGitHub CI. لا اتصال أو migration لقاعدة البيانات، وreadiness يتعمد إرجاع not-ready.
+أضيفت إلى SwiftShip مسارات Portal GET للإعلانات والتتبع العام مع DTOs محدودة وtests تمنع PII، وأضيفت CORS allowlist واختبارات لها. Portal client أصبح يتحقق runtime من envelopes/DTOs ويحتفظ بـfeature flag غير مفعل افتراضياً.
+التحقق: SwiftShip typecheck ناجح، 74 ملفات اختبار ناجحة و3 متخطاة، 267 اختباراً ناجحاً و8 متخطاة، build ناجح؛ Portal check و5 Gateway tests وboundary audit وbuild ناجحة؛ alx_api check و6 tests وbuild ناجحة. لم تنفذ SQL أو تغييرات قاعدة بيانات. بقيت فجوات موثقة بالتفصيل في `docs/pre-api/repair-execution-and-api-scaffold-2026-10-04.md`: legacy-adapter، تدقيق any/AsyncState، معظم Portal/Auth، وعدم اكتمال خدمة API.

@@ -30,10 +30,30 @@ export function readinessResponse(isDatabaseReady: boolean): {
   };
 }
 
+export function createApiCorsMiddleware(allowedOrigins: ReadonlySet<string>): RequestHandler {
+  return (request, response, next) => {
+    const origin = request.header('origin');
+    if (!origin) return next();
+    if (!allowedOrigins.has(origin)) {
+      return response.status(403).json({ error: 'CORS_ORIGIN_DENIED' });
+    }
+
+    response.setHeader('Access-Control-Allow-Origin', origin);
+    response.setHeader('Access-Control-Allow-Credentials', 'true');
+    response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Request-Id, Idempotency-Key');
+    response.setHeader('Vary', 'Origin');
+    if (request.method === 'OPTIONS') return response.status(204).end();
+    return next();
+  };
+}
+
 export function createApp(isDatabaseReady: () => boolean): Express {
   const app = express();
 
   app.use(express.json());
+  const corsOrigins = new Set((process.env.CORS_ORIGINS ?? '').split(',').map((origin) => origin.trim()).filter(Boolean));
+  app.use('/api', createApiCorsMiddleware(corsOrigins));
   app.use('/api/*', createApiAvailabilityMiddleware(isDatabaseReady));
   app.get('/api/health', (_req, res) => {
     res.status(200).json({ status: 'ok', project: 'supabase-backend' });

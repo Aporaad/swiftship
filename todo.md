@@ -1475,3 +1475,14 @@
 - [ ] إعادة فحص Supabase الحي بعد تمكين الموصل؛ أرقام Snapshot الحالية من تقرير 2026-10-03 تاريخية وغير محدثة.
 - [ ] معالجة/اعتماد Blockers البيانات والـownership، وإغلاق تدقيق Portal HTTP و`any` وAsyncState قبل إعلان الجاهزية الإنتاجية.
 - [ ] إغلاق قرارات المرحلة 0 ثم إنشاء Scaffold مستقل لـ`alx_api` في بيئة تطوير/اختبار، دون ربطه مباشرة بالإنتاج.
+
+## [2026-10-04T02:00:08+03:00] — تنفيذ Portal HTTP وبدء alx_api — AI Model: Manus
+- [x] إضافة Scaffold مستقل أولي داخل `alx_api` مع Express 5 وTypeScript strict وZod config وPino وHelmet وCORS allowlist وRate Limit وRequest ID وPostgreSQL/Drizzle factory غير موصول وHealth/OpenAPI وCI.
+- [x] إضافة GET `/api/v1/portal/announcements` وGET `/api/v1/portal/tracking/:trackingToken` في خادم SwiftShip مع DTOs عامة محدودة واختبارات تمنع تسرب PII.
+- [x] إضافة runtime validation إلى عميل Portal HTTP وfeature flag غير مفعل افتراضياً، وتفعيل CORS allowlist صريحة لمسارات API.
+- [x] نجاح check/test/build: SwiftShip 267 اختباراً ناجحاً و8 متخطاة؛ Portal 5 اختبارات ناجحة وbuild/boundary audit ناجحان؛ alx_api 6 اختبارات ناجحة وbuild ناجح.
+- [ ] لم يكتمل cutover عن `legacy-adapter` (91 ملفاً لا تزال تشير إليه)، ولا تدقيق `any` في Auth/Orders/Accounting (64 مطابقة مرصودة)، ولا حسم كل Query/Mutation لـAsyncState.
+- [ ] نقل بقية Portal وPortalAuthContext إلى HTTP لم يكتمل؛ مسارا القراءة العامة فقط نُقلا، وبقيت 28 إشارة Supabase/legacy ضمن Portal.
+- [ ] alx_api scaffold غير متصل بقاعدة البيانات ولا يضم Auth/RBAC أو business endpoints؛ readiness يبقى 503 عمداً.
+- [ ] لا SQL أو تغييرات قاعدة بيانات/RLS/Grants حسب تأكيد المستخدم. لم يعلن اكتمال خطة الإصلاح أو الجاهزية الإنتاجية.
+- التقرير التفصيلي: `docs/pre-api/repair-execution-and-api-scaffold-2026-10-04.md`.
