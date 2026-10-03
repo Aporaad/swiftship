@@ -2058,6 +2058,12 @@
 - تم تحديث المحولات في `src/data/dtos/mappers/feature.mappers.ts` بدعم `mapPortalUserRowToDto` للحقول المستخرجة (`type`, `phone`, `notes`, `profileImageUrl`, `commercialRegisterUrl`, `identityDocUrl`, `onboardingCompleted`) وتصحيح استخراج `accountId`.
 - تم توثيق السجلات الإلزامية بالنظام في `user_commends.md` و `todo.md` و `devloping_history.md`.
 
+## [2026-10-03 03:11:44 +0300] — مراجعة وتدقيق وإغلاق الفجوات للمراحل 1 إلى 13 — AI Model: Gemini 3.6 Flash
+- إنجاز مراجعة تفصيلية شاملة لكافة بنود الخطة من المرحلة الأولى حتى الثالثة عشرة مع مراعاة التجاوز المعتمد لسياسات DB RLS و Policies.
+- كشف وسد فجوة النطاق في المرحلة 3 (إضافة `BrowserGateway` ونطاق `'browser'` إلى `src/data/contracts/gatewayRegistry.ts` وتحديث `gatewayRegistry.test.ts` ليعتمد 17 نطاق بوابة).
+- التأكد والتحقق من سلامة البناء وتدقيق الأنواع بـ TypeScript عبر `npm run check` (0 errors).
+- تشغيل واجتياز كافة اختبارات الوحدات لـ Vitest بـ 257 اختباراً بنسبة 100%.
+
 
 
 

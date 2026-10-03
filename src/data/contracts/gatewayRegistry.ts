@@ -7,6 +7,7 @@
 
 import type { AccountingGateway } from './accounting.gateway';
 import type { AuthGateway } from './auth.gateway';
+import type { BrowserGateway } from './browser.gateway';
 import type { CouriersGateway } from './couriers.gateway';
 import type { CustomersGateway } from './customers.gateway';
 import type { EmployeesGateway } from './employees.gateway';
@@ -25,6 +26,7 @@ import type { UsersGateway } from './users.gateway';
 export interface GatewayRegistryContract {
   readonly accounting: AccountingGateway;
   readonly auth: AuthGateway;
+  readonly browser: BrowserGateway;
   readonly couriers: CouriersGateway;
   readonly customers: CustomersGateway;
   readonly employees: EmployeesGateway;
@@ -44,6 +46,7 @@ export interface GatewayRegistryContract {
 export const REGISTERED_GATEWAY_DOMAINS = [
   'accounting',
   'auth',
+  'browser',
   'couriers',
   'customers',
   'employees',

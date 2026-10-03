@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { REGISTERED_GATEWAY_DOMAINS } from './gatewayRegistry';
 
 describe('Phase 3 — Gateway Registry Contract Validation', () => {
-  it('registers all 16 core feature gateway domains', () => {
-    expect(REGISTERED_GATEWAY_DOMAINS.length).toBe(16);
+  it('registers all 17 core feature gateway domains including browser', () => {
+    expect(REGISTERED_GATEWAY_DOMAINS.length).toBe(17);
     expect(REGISTERED_GATEWAY_DOMAINS).toContain('orders');
     expect(REGISTERED_GATEWAY_DOMAINS).toContain('customers');
     expect(REGISTERED_GATEWAY_DOMAINS).toContain('couriers');
@@ -14,5 +14,6 @@ describe('Phase 3 — Gateway Registry Contract Validation', () => {
     expect(REGISTERED_GATEWAY_DOMAINS).toContain('roles');
     expect(REGISTERED_GATEWAY_DOMAINS).toContain('users');
     expect(REGISTERED_GATEWAY_DOMAINS).toContain('auth');
+    expect(REGISTERED_GATEWAY_DOMAINS).toContain('browser');
   });
 });
