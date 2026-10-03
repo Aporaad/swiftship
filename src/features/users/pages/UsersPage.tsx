@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
-import { collection, onSnapshot, doc, updateDoc, setDoc, deleteDoc, query, where, getDocs } from '../../../lib/supabase-adapter';
-import { db } from '../../../lib/supabase-adapter';
-import { handlePostgreSQLError, OperationType, auth } from '../../../lib/supabase-adapter';
+import { collection, onSnapshot, doc, updateDoc, setDoc, deleteDoc, query, where, getDocs } from '../../../data/legacy/legacy-adapter';
+import { db } from '../../../data/legacy/legacy-adapter';
+import { handlePostgreSQLError, OperationType, auth } from '../../../data/legacy/legacy-adapter';
 import { Search, Edit2, X, Plus, UserX, UserCheck, Trash2, Users as UsersIcon, Shield, Lock, Eye, EyeOff, Crown, ShieldAlert, Coins } from 'lucide-react';
 import { useRole } from '../../../hooks/useRole';
 import { useSettings } from '../../../context/SettingsContext';
@@ -11,8 +11,8 @@ import ConfirmModal from '../../../components/ConfirmModal';
 import ConfirmDeletePinModal from '../../../components/ConfirmDeletePinModal';
 import { financialAccountService } from '../../../services/financialAccountService';
 import { activityLogService } from '../../../services/activityLogService';
-import { initializeApp, deleteApp } from '../../../lib/supabase-adapter';
-import { getAuth, createUserWithEmailAndPassword } from '../../../lib/supabase-adapter';
+import { initializeApp, deleteApp } from '../../../data/legacy/legacy-adapter';
+import { getAuth, createUserWithEmailAndPassword } from '../../../data/legacy/legacy-adapter';
 
 type DataRecord = Record<string, unknown>;
 type SnapshotDoc = { id: string; data: () => DataRecord };

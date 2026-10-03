@@ -1,5 +1,5 @@
-import { collection, addDoc } from '../lib/supabase-adapter';
-import { db } from '../lib/supabase-adapter';
+import { collection, addDoc } from '../data/legacy/legacy-adapter';
+import { db } from '../data/legacy/legacy-adapter';
 import { currentSupabaseAuthGateway } from '../data/current-supabase/gateways/auth.gateway';
 
 export type ActivityCategory = 'USERS' | 'ROLES' | 'ORDERS' | 'FINANCE' | 'CUSTOMERS' | 'SYSTEM' | 'COURIERS' | 'SOURCES';

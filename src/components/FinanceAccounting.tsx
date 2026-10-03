@@ -18,9 +18,9 @@ import {
   DollarSign, Activity, FileSpreadsheet, PlusCircle, Scale, Receipt, Sparkles, TrendingUp, RefreshCw, X,
   FolderTree, Wrench, Users, Coins, UserCheck, Eye, ChevronDown, ChevronUp, Edit2, Lock, Trash2, ArrowRightLeft
 } from 'lucide-react';
-import { db } from '../lib/supabase-adapter';
+import { db } from '../data/legacy/legacy-adapter';
 import { useAuthSession } from '../features/auth/AuthSessionProvider';
-import { collection, doc, updateDoc, writeBatch, deleteDoc, query, orderBy, increment, getDocs, where } from '../lib/supabase-adapter';
+import { collection, doc, updateDoc, writeBatch, deleteDoc, query, orderBy, increment, getDocs, where } from '../data/legacy/legacy-adapter';
 import { notificationService } from '../services/notificationService';
 import AccountingHierarchyManagement from './AccountingHierarchyManagement';
 import AssetsPortfolio from './AssetsPortfolio';

@@ -1,4 +1,4 @@
-import { collection, db, doc, getDoc, getDocs } from '../lib/supabase-adapter';
+import { collection, db, doc, getDoc, getDocs } from '../data/legacy/legacy-adapter';
 
 export type LedgerEntityType =
   | 'customer'

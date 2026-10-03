@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { collection, db, onSnapshot } from '../lib/supabase-adapter';
+import { collection, db, onSnapshot } from '../data/legacy/legacy-adapter';
 
 export interface AutoVoucherRule {
   id: string;

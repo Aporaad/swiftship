@@ -1,9 +1,9 @@
 type AdapterDocument = { id: string; data: () => Record<string, unknown> };
 import React, { useState, useEffect } from 'react';
 import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
-import { collection, onSnapshot, doc, updateDoc, addDoc, setDoc, deleteDoc, query, where, orderBy, or } from '../../../lib/supabase-adapter';
-import { db, auth } from '../../../lib/supabase-adapter';
-import { handlePostgreSQLError, OperationType } from '../../../lib/supabase-adapter';
+import { collection, onSnapshot, doc, updateDoc, addDoc, setDoc, deleteDoc, query, where, orderBy, or } from '../../../data/legacy/legacy-adapter';
+import { db, auth } from '../../../data/legacy/legacy-adapter';
+import { handlePostgreSQLError, OperationType } from '../../../data/legacy/legacy-adapter';
 import {
   Search,
   Edit2,

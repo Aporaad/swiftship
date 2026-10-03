@@ -25,7 +25,7 @@ import {
   type FinancialPaymentDetailInput,
   type FinancialPaymentMethod,
 } from '../../services/financialEntryService';
-import { supabase } from '../../lib/supabase-adapter';
+import { supabase } from '../../data/legacy/legacy-adapter';
 import { asyncState, runMutation, type AsyncState } from '../../shared/contracts/ui.contracts';
 import AccountPickerModal from './AccountPickerModal';
 

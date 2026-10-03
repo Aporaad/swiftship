@@ -18,7 +18,7 @@ import {
   getDocs,
   getDoc,
   db
-} from '../lib/supabase-adapter';
+} from '../data/legacy/legacy-adapter';
 import { notificationService } from './notificationService';
 import { activityLogService } from './activityLogService';
 

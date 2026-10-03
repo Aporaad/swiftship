@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ getDocs: vi.fn() }));
 
-vi.mock('../lib/supabase', () => ({
+vi.mock('../data/legacy/legacy-adapter', () => ({
   db: {},
   collection: vi.fn(() => ({ path: 'orders_history' })),
   getDocs: mocks.getDocs,

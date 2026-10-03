@@ -1,5 +1,5 @@
 import type { Dispatch, FormEvent, SetStateAction } from "react";
-import { handleSupabaseError, OperationType } from "../../../lib/supabase";
+import { handleSupabaseError, OperationType } from "../../../data/legacy/legacy-adapter";
 import { activityLogService } from "../../../services/activityLogService";
 import { financialAccountService } from "../../../services/financialAccountService";
 import { notificationService } from "../../../services/notificationService";

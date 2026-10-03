@@ -1,5 +1,5 @@
-import { doc, getDoc, setDoc, collection, addDoc } from '../lib/supabase-adapter';
-import { db } from '../lib/supabase-adapter';
+import { doc, getDoc, setDoc, collection, addDoc } from '../data/legacy/legacy-adapter';
+import { db } from '../data/legacy/legacy-adapter';
 
 export interface WhatsAppConfig {
   enabled: boolean;

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { SELECT_FIELDS } from '../data/contracts/select-fields';
 import { Briefcase, X, Check, ShieldAlert, RefreshCw, User, Phone, Mail, MapPin, Award, Clock, FileText, Trash2, UserCheck, AlertCircle } from 'lucide-react';
-import { supabase, doc, setDoc, db } from '../lib/supabase-adapter';
+import { supabase, doc, setDoc, db } from '../data/legacy/legacy-adapter';
 import { financialAccountService } from '../services/financialAccountService';
 
 function extractRows(data: any[]): any[] {

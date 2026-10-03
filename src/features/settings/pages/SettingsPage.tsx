@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
-import { collection, doc, getDocs, setDoc, writeBatch, query, orderBy, deleteDoc, db, handleSupabaseError, OperationType } from '../../../lib/supabase-adapter';
+import { collection, doc, getDocs, setDoc, writeBatch, query, orderBy, deleteDoc, db, handleSupabaseError, OperationType } from '../../../data/legacy/legacy-adapter';
 import {
   Save, Globe, Palette, Database, DollarSign, Building, X, Upload, CheckCircle,
   ShieldAlert, RefreshCw, Archive, Settings2, Shield, FileText, Image, Type,

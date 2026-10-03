@@ -26,8 +26,8 @@ import {
   Database,
   Info
 } from 'lucide-react';
-import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, arrayUnion } from '../../../lib/supabase-adapter';
-import { db } from '../../../lib/supabase-adapter';
+import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, arrayUnion } from '../../../data/legacy/legacy-adapter';
+import { db } from '../../../data/legacy/legacy-adapter';
 import { useSettings } from '../../../context/SettingsContext';
 import { useOrderStatuses } from '../../../hooks/useOrderStatuses';
 import { Link, useNavigate } from 'react-router-dom';

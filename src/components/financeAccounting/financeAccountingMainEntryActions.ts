@@ -1,5 +1,5 @@
 import type * as React from 'react';
-import { collection, db, doc, getDocs, query, where, writeBatch } from '../../lib/supabase-adapter';
+import { collection, db, doc, getDocs, query, where, writeBatch } from '../../data/legacy/legacy-adapter';
 import { financialAccountService } from '../../services/financialAccountService';
 import { notificationService } from '../../services/notificationService';
 import type { AccountEntityType } from '../../services/financialAccountTypes';

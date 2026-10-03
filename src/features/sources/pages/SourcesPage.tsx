@@ -1,8 +1,8 @@
 type AdapterDocument = { id: string; data: () => Record<string, unknown> };
 import React, { useState, useEffect } from 'react';
 import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
-import { collection, onSnapshot, doc, updateDoc, deleteDoc, addDoc } from '../../../lib/supabase-adapter';
-import { db, handlePostgreSQLError, OperationType } from '../../../lib/supabase-adapter';
+import { collection, onSnapshot, doc, updateDoc, deleteDoc, addDoc } from '../../../data/legacy/legacy-adapter';
+import { db, handlePostgreSQLError, OperationType } from '../../../data/legacy/legacy-adapter';
 import { Search, Edit2, X, Plus, Trash2, MapPin, ShieldAlert, RefreshCw, Crown, Globe, Truck, Phone, Landmark } from 'lucide-react';
 import { useRole } from '../../../hooks/useRole';
 import { useSettings } from '../../../context/SettingsContext';

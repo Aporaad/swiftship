@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 const rpc = vi.hoisted(() => vi.fn());
-vi.mock('../lib/supabase-adapter', () => ({ supabase: { rpc } }));
+vi.mock('../data/legacy/legacy-adapter', () => ({ supabase: { rpc } }));
 
 import { financialEntrySettingsService } from './financialEntrySettingsService';
 

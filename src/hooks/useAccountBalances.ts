@@ -24,9 +24,9 @@
  */
 
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot } from '../lib/supabase-adapter';
-import { db } from '../lib/supabase-adapter';
-import { supabase } from '../lib/supabase-adapter';
+import { collection, onSnapshot } from '../data/legacy/legacy-adapter';
+import { db } from '../data/legacy/legacy-adapter';
+import { supabase } from '../data/legacy/legacy-adapter';
 import { DEFAULT_RATES, ExchangeRates, currencyService } from '../services/currencyService';
 
 export type AccountType = 'Asset' | 'Liability' | 'Equity' | 'Revenue' | 'Expense';

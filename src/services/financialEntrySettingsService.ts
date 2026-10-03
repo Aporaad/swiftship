@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase-adapter';
+import { supabase } from '../data/legacy/legacy-adapter';
 
 export type FinancialEntrySettingKind = 'module' | 'type';
 export type FinancialEntrySettingAction = 'create' | 'update' | 'delete';

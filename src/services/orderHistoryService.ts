@@ -1,5 +1,5 @@
-import { collection, getDocs, limit, orderBy, query, where } from '../lib/supabase';
-import { db } from '../lib/supabase';
+import { collection, getDocs, limit, orderBy, query, where } from '../data/legacy/legacy-adapter';
+import { db } from '../data/legacy/legacy-adapter';
 
 export type OrderHistoryContext = {
   orderId?: string;

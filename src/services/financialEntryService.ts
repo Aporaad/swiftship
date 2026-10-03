@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase-adapter';
+import { supabase } from '../data/legacy/legacy-adapter';
 import type { PaymentStatus, PostingStatus } from '../shared/contracts/value-primitives';
 
 export type FinancialPaymentMethod = 'cash' | 'bank' | 'mixed' | 'deferred';

@@ -1,7 +1,7 @@
 type AdapterDocument = { id: string; data: () => Record<string, unknown> };
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, orderBy } from '../lib/supabase-adapter';
-import { db } from '../lib/supabase-adapter';
+import { collection, onSnapshot, query, orderBy } from '../data/legacy/legacy-adapter';
+import { db } from '../data/legacy/legacy-adapter';
 import { 
   Search, 
   FileText, 

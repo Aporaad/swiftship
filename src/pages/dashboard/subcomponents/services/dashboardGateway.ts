@@ -1,6 +1,6 @@
 type AdapterDocument = { id: string; data: () => Record<string, unknown> };
-import { collection, onSnapshot, query, orderBy, limit } from '../../../../lib/supabase-adapter';
-import { db, safeToDate } from '../../../../lib/supabase-adapter';
+import { collection, onSnapshot, query, orderBy, limit } from '../../../../data/legacy/legacy-adapter';
+import { db, safeToDate } from '../../../../data/legacy/legacy-adapter';
 
 type DashboardGatewayHandlers = {
   setCustomersCount: (count: number) => void;

@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase } from '../data/legacy/legacy-adapter';
 import { autoEntryService } from './autoEntryService';
 
 /**

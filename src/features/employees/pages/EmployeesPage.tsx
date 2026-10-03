@@ -23,7 +23,7 @@ import {
   db,
   handleSupabaseError,
   OperationType
-} from '../../../lib/supabase-adapter';
+} from '../../../data/legacy/legacy-adapter';
 import {
   Search,
   Edit2,

@@ -16,7 +16,7 @@ import {
   type FinancialEntryLineInput,
   type FinancialPaymentDetailInput,
 } from '../../../services/financialEntryService';
-import { supabase } from '../../../lib/supabase-adapter';
+import { supabase } from '../../../data/legacy/legacy-adapter';
 import AccountPickerModal from '../AccountPickerModal';
 import FinancialCalculatorModal from '../FinancialCalculatorModal';
 import { amountInWords } from '../../../lib/numberToWords';

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { handleSupabaseError, OperationType } from '../../../lib/supabase';
+import { handleSupabaseError, OperationType } from '../../../data/legacy/legacy-adapter';
 import { runQuery, type AsyncState } from '../../../shared/contracts/ui.contracts';
 import type {
   CouriersViewModel,

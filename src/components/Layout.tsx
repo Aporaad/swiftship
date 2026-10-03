@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { SELECT_FIELDS } from '../data/contracts/select-fields';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
-import { collection, query, where, onSnapshot, getDocs, writeBatch, doc, setDoc } from '../lib/supabase-adapter';
-import { db } from '../lib/supabase-adapter';
-import { clearAllLocalData } from '../lib/supabase-adapter';
+import { collection, query, where, onSnapshot, getDocs, writeBatch, doc, setDoc } from '../data/legacy/legacy-adapter';
+import { db } from '../data/legacy/legacy-adapter';
+import { clearAllLocalData } from '../data/legacy/legacy-adapter';
 import { formatDate, formatDateTime, formatTime, now } from '../lib/dateUtils';
 import {
   LayoutDashboard,
@@ -66,7 +66,7 @@ import PendingPortalApprovalsModal from './PendingPortalApprovalsModal';
 import JobApplicationsModal from './JobApplicationsModal';
 import { activityLogService } from '../services/activityLogService';
 import { notificationService } from '../services/notificationService';
-import { supabase } from '../lib/supabase-adapter';
+import { supabase } from '../data/legacy/legacy-adapter';
 import Header from './layout/Header';
 import Sidebar from './layout/Sidebar';
 import { MobileNavigation, NavigationCustomizer } from './layout/Navigation';
@@ -382,7 +382,7 @@ export default function Layout() {
     try {
       const activeSessId = sessionId || sessionStorage.getItem('swiftship_session_id');
       if (activeSessId && activeSessId !== 'sess-loading' && activeSessId !== 'sess-loggedout') {
-        const { deleteDoc, doc } = await import('../lib/supabase-adapter');
+        const { deleteDoc, doc } = await import('../data/legacy/legacy-adapter');
         await deleteDoc(doc(db, 'sessions', activeSessId));
       }
 

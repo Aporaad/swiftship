@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   collection, onSnapshot, query, orderBy, getDocs, doc, setDoc, getDoc, where, addDoc, deleteDoc
-} from '../../../lib/supabase-adapter';
-import { db } from '../../../lib/supabase-adapter';
+} from '../../../data/legacy/legacy-adapter';
+import { db } from '../../../data/legacy/legacy-adapter';
 import { useSettings } from '../../../context/SettingsContext';
 import { useRole } from '../../../hooks/useRole';
 import {

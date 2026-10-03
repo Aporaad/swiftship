@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { doc, onSnapshot, updateDoc, setDoc, deleteDoc } from '../lib/supabase-adapter';
-import { db } from '../lib/supabase-adapter';
-import { clearAllLocalData } from '../lib/supabase-adapter';
+import { doc, onSnapshot, updateDoc, setDoc, deleteDoc } from '../data/legacy/legacy-adapter';
+import { db } from '../data/legacy/legacy-adapter';
+import { clearAllLocalData } from '../data/legacy/legacy-adapter';
 import { DEFAULT_ROLE_PERMISSIONS } from '../lib/permissions';
 import { useSettings } from '../context/SettingsContext';
 import { useAuthSession } from '../features/auth/AuthSessionProvider';
@@ -368,7 +368,7 @@ export function useRole(enableHeartbeat: boolean = false) {
           setPermissions(['*']);
 
           // Auto-create the user document if it's missing (one-time check)
-          import('../lib/supabase-adapter').then(({ setDoc, doc }) => {
+          import('../data/legacy/legacy-adapter').then(({ setDoc, doc }) => {
             setDoc(doc(db, 'users', user.id), {
               email: user.email,
               username: user.email?.split('@')[0] || 'admin',
@@ -381,7 +381,7 @@ export function useRole(enableHeartbeat: boolean = false) {
           });
         } else {
           // If not super admin, check if there's a legacy invitation for this email
-          import('../lib/supabase-adapter').then(({ query, collection, where, getDocs, doc, setDoc }) => {
+          import('../data/legacy/legacy-adapter').then(({ query, collection, where, getDocs, doc, setDoc }) => {
             const q = query(collection(db, 'users'), where('email', '==', user.email));
             getDocs(q).then((snap) => {
               if (!snap.empty) {

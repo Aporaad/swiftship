@@ -5,8 +5,8 @@ import {
   Send, Database, Key, Phone, ShieldCheck, Layers, Play, Check, 
   FileText, Info, ExternalLink, Lock, Settings, HelpCircle, Activity, Sparkles, RefreshCw
 } from 'lucide-react';
-import { collection, onSnapshot, query, orderBy, limit, writeBatch, doc } from '../../../lib/supabase-adapter';
-import { db, safeToDate } from '../../../lib/supabase-adapter';
+import { collection, onSnapshot, query, orderBy, limit, writeBatch, doc } from '../../../data/legacy/legacy-adapter';
+import { db, safeToDate } from '../../../data/legacy/legacy-adapter';
 import { formatDistanceToNow } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { useRole } from '../../../hooks/useRole';

@@ -1,5 +1,5 @@
-import { collection, onSnapshot, orderBy, query } from '../../lib/supabase-adapter';
-import { db } from '../../lib/supabase-adapter';
+import { collection, onSnapshot, orderBy, query } from '../../data/legacy/legacy-adapter';
+import { db } from '../../data/legacy/legacy-adapter';
 
 type SnapshotRow = { id: string; data: () => Record<string, unknown> };
 type Snapshot = { docs: SnapshotRow[] };

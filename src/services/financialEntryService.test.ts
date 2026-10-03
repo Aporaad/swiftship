@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 const rpc = vi.hoisted(() => vi.fn());
 
-vi.mock('../lib/supabase-adapter', () => ({
+vi.mock('../data/legacy/legacy-adapter', () => ({
   supabase: { rpc },
 }));
 
@@ -62,7 +62,7 @@ describe('financialEntryService', () => {
   });
 
   it('يحول تلقائياً بين عملتين غير افتراضيتين بناءً على أسعار صرف العملتين مقابل العملة الافتراضية', async () => {
-    const originalFrom = (await import('../lib/supabase-adapter')).supabase.from;
+    const originalFrom = (await import('../data/legacy/legacy-adapter')).supabase.from;
     const from = vi.fn((table: string) => ({
       select: () => ({
         eq: (_field: string, val: unknown) => {
@@ -90,7 +90,7 @@ describe('financialEntryService', () => {
         },
       }),
     }));
-    (await import('../lib/supabase-adapter')).supabase.from = from as any;
+    (await import('../data/legacy/legacy-adapter')).supabase.from = from as any;
     rpc.mockResolvedValueOnce({ data: { id: 'entry-fx-1' }, error: null });
 
     try {
@@ -119,7 +119,7 @@ describe('financialEntryService', () => {
         }),
       }));
     } finally {
-      (await import('../lib/supabase-adapter')).supabase.from = originalFrom;
+      (await import('../data/legacy/legacy-adapter')).supabase.from = originalFrom;
     }
   });
 

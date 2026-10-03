@@ -2,7 +2,7 @@ import React, { useRef, useEffect } from 'react';
 import { X, Truck, Printer } from 'lucide-react';
 import QRCode from 'qrcode';
 import CopyToClipboard from '../CopyToClipboard';
-import { safeToDate } from '../../lib/supabase';
+import { safeToDate } from '../../data/legacy/legacy-adapter';
 import { generateOrderInvoicePDF } from '../../reports/OrderInvoicePrint';
 import type { Settings } from '../../context/SettingsContext';
 import type { OrderRecord } from '../../features/orders/types';

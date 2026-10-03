@@ -9,7 +9,7 @@ import {
   signInWithPassword as verifyLegacyCredentials,
   signOut as legacySignOut,
   type User as LegacyAuthUser,
-} from '../../../lib/supabase-adapter';
+} from '../../legacy/legacy-adapter';
 import {
   mapLegacyAuthUserToDto,
   mapLegacyAuthUserToSessionState,

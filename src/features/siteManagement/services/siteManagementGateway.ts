@@ -1,4 +1,4 @@
-import { supabase } from '../../../lib/supabase-adapter';
+import { supabase } from '../../../data/legacy/legacy-adapter';
 
 /** Temporary feature gateway backed by the current compatibility adapter. */
 export function extractSiteManagementRows(data: any[]): any[] {

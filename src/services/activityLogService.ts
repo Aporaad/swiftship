@@ -1,5 +1,5 @@
-import { collection, addDoc, serverTimestamp } from '../lib/supabase-adapter';
-import { db } from '../lib/supabase-adapter';
+import { collection, addDoc, serverTimestamp } from '../data/legacy/legacy-adapter';
+import { db } from '../data/legacy/legacy-adapter';
 import { currentSupabaseAuthGateway } from '../data/current-supabase/gateways/auth.gateway';
 
 export type ActivityAction =
@@ -90,7 +90,7 @@ class ActivityLogService {
       const user = session.user;
 
       // Get user profile from PostgreSQL to get name/role
-      const { doc, getDoc } = await import('../lib/supabase-adapter');
+      const { doc, getDoc } = await import('../data/legacy/legacy-adapter');
       const userDoc = await getDoc(doc(db, 'users', user.id));
       const userData = userDoc.exists() ? userDoc.data() : {};
 

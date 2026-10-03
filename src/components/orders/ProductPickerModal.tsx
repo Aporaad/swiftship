@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Boxes, ExternalLink, Search, X, CheckCircle2 } from 'lucide-react';
-import { collection, db, onSnapshot } from '../../lib/supabase';
+import { collection, db, onSnapshot } from '../../data/legacy/legacy-adapter';
 import { asyncState, runQuery, type AsyncState } from '../../shared/contracts/ui.contracts';
 import { Product } from '../../services/productService';
 

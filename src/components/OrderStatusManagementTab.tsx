@@ -4,8 +4,8 @@ import {
   Activity, ToggleLeft, ToggleRight, Settings, Info, AlertCircle, Save, X, Sparkles,
   ArrowRightLeft, FileText, Check, Filter, Search
 } from 'lucide-react';
-import { db } from '../lib/supabase';
-import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, getDocs } from '../lib/supabase';
+import { db } from '../data/legacy/legacy-adapter';
+import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, getDocs } from '../data/legacy/legacy-adapter';
 import { useOrderStatuses, OrderStatusItem, DEFAULT_ORDER_STATUSES } from '../hooks/useOrderStatuses';
 import { autoEntryService, AutoEntryRule, DEFAULT_AUTO_ENTRIES } from '../services/autoEntryService';
 import { AUTO_ENTRY_AMOUNT_SOURCE_OPTIONS, type AutoEntryAmountSource, getRuleAmountSources } from '../services/autoEntryRules';

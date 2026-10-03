@@ -7,8 +7,8 @@ import {
 } from 'lucide-react';
 import { format, startOfDay, endOfDay, subDays, isWithinInterval } from 'date-fns';
 import ConfirmModal from './ConfirmModal';
-import { db } from '../lib/supabase-adapter';
-import { collection, addDoc, doc, deleteDoc, updateDoc, onSnapshot, query, where, getDocs, orderBy } from '../lib/supabase-adapter';
+import { db } from '../data/legacy/legacy-adapter';
+import { collection, addDoc, doc, deleteDoc, updateDoc, onSnapshot, query, where, getDocs, orderBy } from '../data/legacy/legacy-adapter';
 import { notificationService } from '../services/notificationService';
 import { useAccountBalances, computeAccountBalance, guessAccountTypeFromCode, AccountType } from '../hooks/useAccountBalances';
 import { financialAccountService } from '../services/financialAccountService';

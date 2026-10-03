@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => {
   return { setDoc, update, from };
 });
 
-vi.mock('../lib/supabase', () => ({
+vi.mock('../data/legacy/legacy-adapter', () => ({
   collection: vi.fn(),
   getDocs: vi.fn(),
   setDoc: mocks.setDoc,

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { db } from '../lib/supabase-adapter';
-import { onSnapshot, doc, setDoc } from '../lib/supabase-adapter';
+import { db } from '../data/legacy/legacy-adapter';
+import { onSnapshot, doc, setDoc } from '../data/legacy/legacy-adapter';
 
 export interface ExpenseCategory {
   id: string;

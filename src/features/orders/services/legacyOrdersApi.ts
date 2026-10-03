@@ -13,7 +13,7 @@ import {
   setDoc,
   updateDoc,
   where,
-} from "../../../lib/supabase";
+} from "../../../data/legacy/legacy-adapter";
 import {
   ORDER_COLLECTIONS,
   ORDER_DOCUMENTS,

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BookOpen, CreditCard, FileClock, Landmark, ListTree, ReceiptText, Settings2, ShieldAlert, Wallet } from 'lucide-react';
 import { useRole } from '../../../hooks/useRole';
-import { supabase } from '../../../lib/supabase-adapter';
+import { supabase } from '../../../data/legacy/legacy-adapter';
 import GeneralEntriesTab from '../../../components/finance/GeneralEntriesTab';
 import CompoundEntriesTab from '../../../components/finance/CompoundEntriesTab';
 import TemporaryEntriesTab from '../../../components/finance/TemporaryEntriesTab';

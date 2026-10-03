@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { db } from "../lib/supabase-adapter";
+import { db } from "../data/legacy/legacy-adapter";
 import { useAuthSession } from "../features/auth/AuthSessionProvider";
 import { useNavigate } from "react-router-dom";
 import {
@@ -14,7 +14,7 @@ import {
   MessageCircle,
   Phone,
 } from "lucide-react";
-import { collection, doc, getDocs, getDoc, query, setDoc, where } from "../lib/supabase-adapter";
+import { collection, doc, getDocs, getDoc, query, setDoc, where } from "../data/legacy/legacy-adapter";
 import { useSettings } from "../context/SettingsContext";
 import { activityLogService } from "../services/activityLogService";
 

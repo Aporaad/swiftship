@@ -28,9 +28,9 @@ import {
   increment,
   getDoc,
   writeBatch,
-} from "../lib/supabase-adapter";
+} from "../data/legacy/legacy-adapter";
 import { currencyService } from "./currencyService";
-import { db, supabase } from "../lib/supabase-adapter";
+import { db, supabase } from "../data/legacy/legacy-adapter";
 import { currentSupabaseAuthGateway } from '../data/current-supabase/gateways/auth.gateway';
 import { activityLogService } from "./activityLogService";
 import { accountingHierarchyService, hierarchyCodeRules, naturalBalanceDelta } from "./accountingHierarchyService";

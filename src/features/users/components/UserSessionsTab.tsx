@@ -1,6 +1,6 @@
 import React from 'react';
 import { Crown, Zap, MonitorCheck, Users as UsersIcon, UserX, Timer, Info } from 'lucide-react';
-import { db, updateDoc, doc } from '../../../lib/supabase';
+import { db, updateDoc, doc } from '../../../data/legacy/legacy-adapter';
 import { notificationService } from '../../../services/notificationService';
 import { activityLogService } from '../../../services/activityLogService';
 

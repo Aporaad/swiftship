@@ -1,4 +1,4 @@
-import { addDoc, collection, db, deleteDoc, doc, onSnapshot, updateDoc } from '../../../../../lib/supabase';
+import { addDoc, collection, db, deleteDoc, doc, onSnapshot, updateDoc } from '../../../../../data/legacy/legacy-adapter';
 import type { ReturnedProduct } from '../../../../../services/returnedProductService';
 
 type SnapshotDocument = { id: string; data: () => Record<string, unknown> };

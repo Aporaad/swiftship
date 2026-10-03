@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot, getDocs, setDoc, doc, deleteDoc, updateDoc, db } from '../lib/supabase';
+import { collection, onSnapshot, getDocs, setDoc, doc, deleteDoc, updateDoc, db } from '../data/legacy/legacy-adapter';
 import { notificationService } from '../services/notificationService';
 
 export type OrderOptionType = 'packaging' | 'shipping_category';

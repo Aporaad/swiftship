@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
-import { collection, addDoc, doc, updateDoc, onSnapshot, deleteDoc, query, where, orderBy, getDocs } from '../../../lib/supabase-adapter';
-import { db } from '../../../lib/supabase-adapter';
-import { handlePostgreSQLError, OperationType } from '../../../lib/supabase-adapter';
+import { collection, addDoc, doc, updateDoc, onSnapshot, deleteDoc, query, where, orderBy, getDocs } from '../../../data/legacy/legacy-adapter';
+import { db } from '../../../data/legacy/legacy-adapter';
+import { handlePostgreSQLError, OperationType } from '../../../data/legacy/legacy-adapter';
 import {
   Plus,
   Search,
