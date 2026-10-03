@@ -8,6 +8,8 @@ export interface SourcesDatabaseRow {
   account_id: string | null;
   name_ar: string | null;
   name_en: string | null;
+  /** مضاف في migration 20261002023000 */
+  is_active: boolean | null;
   created_at: string | null;
   updated_at: string | null;
   created_by: string | null;
@@ -22,6 +24,32 @@ export interface ShippingCompanyDatabaseRow {
   account_id: string | null;
   name_ar: string | null;
   name_en: string | null;
+  // ========= الحقول المضافة في migration 20261002023000 =========
+  /** عنوان الشركة */
+  address: string | null;
+  /** هل نشطة */
+  is_active: boolean | null;
+  /** رمز الشركة */
+  code: string | null;
+  /** رقم الدولة */
+  country_id: string | null;
+  /** رقم الهاتف */
+  phone: string | null;
+  /** البريد الإلكتروني */
+  email: string | null;
+  /** رابط API التتبع */
+  api_url: string | null;
+  /** قالب رابط التتبع */
+  tracking_url_template: string | null;
+  /** هل مُفعل API */
+  api_enabled: boolean | null;
+  /** مرجع بيانات اعتماد API (ليس البيانات نفسها) */
+  api_credentials_reference: string | null;
+  /** هل يدعم التتبع */
+  supports_tracking: boolean | null;
+  /** هل يدعم Webhook */
+  supports_webhook: boolean | null;
+  // ===========================================================================
   created_at: string | null;
   updated_at: string | null;
   created_by: string | null;
@@ -53,6 +81,8 @@ export interface SourcesApiDto {
   accountId: string | null;
   nameAr: string | null;
   nameEn: string | null;
+  /** مضاف في migration 20261002023000 */
+  isActive: boolean | null;
   createdAt: IsoUtcString | null;
   updatedAt: IsoUtcString | null;
   createdBy: string | null;
@@ -67,6 +97,18 @@ export interface ShippingCompanyApiDto {
   accountId: string | null;
   nameAr: string | null;
   nameEn: string | null;
+  // ========= الحقول المضافة في migration 20261002023000 =========
+  /** عنوان الشركة */
+  address: string | null;
+  /** هل نشطة */
+  isActive: boolean | null;
+  /** رمز الشركة */
+  code: string | null;
+  /** هل يدعم التتبع */
+  supportsTracking: boolean | null;
+  /** هل يدعم Webhook */
+  supportsWebhook: boolean | null;
+  // ===========================================================================
   createdAt: IsoUtcString | null;
   updatedAt: IsoUtcString | null;
 }

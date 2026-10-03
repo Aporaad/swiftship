@@ -2010,3 +2010,55 @@
 - أُضيف تحقق خادمي لجلسة وصلاحية المسؤول لمسار تغيير كلمة المرور.
 - أُجبر Table Gateway على استخدام قائمة أعمدة صريحة بدلاً من `select('*')`، وأضيف اختبار contract.
 - التحقق: `npm run check` و`npm test` ناجحان: 69 ملفاً، 244 اختباراً ناجحاً، 8 متخطاة، و`git diff --check` ناجح.
+
+## [2026-10-02 04:00:00 +0300] — استكمال واختبار مرحلة API Foundation والبناء — AI Model: Gemini 3.6 Flash (Medium)
+- تم إصلاح الفشل المتقلب في `server/supabaseReadOnlyVerification.test.ts` بإضافة Retry Loop (3 محاولات) مع زيادة `AbortSignal.timeout(25000)` للتعامل المرن مع تقلبات الاتصال السحابي بـ Supabase Cloud.
+- تم تعزيز `server/routes/api-foundation.ts` بإضافة DTO آمن `publicCurrentUserDto` ومسار `GET /api/v1/me` المحمي بـ local-session دون كشف بيانات حساسة (مثل password_hash أو system_pin).
+- تم إجراء فحص TypeScript الشامل عبر `npm run check` واجتيازه بنقاء 100% دون أي أخطاء (`EXIT:0`).
+- تم تشغيل كافة اختبارات النظام بواسطة Vitest واجتياز 70 ملف اختبار بالكامل (250 اختبار ناجح، 0 فاشل).
+- تم تشغيل البناء الإنتاجي الواجهي والخادمي عبر `npm run build` وانتهى بنجاح تام (`BUILD_EXIT:0`).
+- تم تحديث كافة ملفات السجلات المطلوبة `todo.md`, `devloping_history.md`, `DBdevloping_history.md`, `user_commends.md`, `db_commends.md` وفق شروط القواعد العامة.
+
+## [2026-10-02 04:12:00 +0300] — استكمال فجوات API Foundation وDTOs العامة — AI Model: Gemini 3.6 Flash
+- تم تخطي تعديلات Database Policies و RLS في قاعدة البيانات بناءً على توجيه المستند الصريح ("بالنسبه ل Policies و RLS في قاعده البيانات تخطاها ليس وقتها").
+- تم توسيع `server/routes/api-foundation.ts` بإضافة محولات DTOs عامة آمنة للطلبات (`publicOrderDto`) والشحنات (`publicShipmentDto`) والمنتجات (`publicProductDto`) تمنع كشف الحقول الحساسة أو الحمولات الخام.
+- تم تسجيل وتأمين المسارات الجديدة `/api/v1/orders` (صلاحية `orders:read`) و `/api/v1/shipments` (صلاحية `shipments:read`) و `/api/v1/products` (صلاحية `products:read`) في كتالوج API Foundation واستجابة HTTP.
+- تم إضافة واجتياز اختبارات الوحدة الخاصة بالمحولات الجديدة والمسارات في `server/routes/api-foundation.test.ts` (5/5 اختبارات ناجحة).
+- تم إجراء فحص TypeScript `npm run check` واجتيازه بنجاح (0 أخطاء).
+- تم تشغيل جميع اختبارات Vitest بنجاح (70 ملف اختبار ناجح، 249 اختبار ناجح).
+
+## [2026-10-02 04:22:00 +0300] — استكمال وتنفيذ بقايا المراحل 1 إلى 13 وسجل الإصلاحات — AI Model: Gemini 3.6 Flash
+- **المرحلة 1:** إنشاء عقد `database-schema-map.contract.ts` الموثق لـ 51 جدولاً مع المفاتيح الخارجية والعلاقات الموحدة دون المساس بسياسات DB RLS.
+- **المرحلة 2:** إضافة `golden.contracts.ts` واختبارات `golden.contracts.test.ts` وتوفير عقود DTO الذهبية (Customer, Order, Shipment, User, Product, Account) واجتياز 7/7 اختبارات بنجاح.
+- **المرحلة 3:** توفير عقد `gatewayRegistry.ts` واختبار `gatewayRegistry.test.ts` لربط 16 نطاق بوابة جدولية.
+- **المرحلة 4:** تعزيز حماية الأسرار وعزل بيانات المصادقة ومنع تسريب الهاش و PIN في مسار `GET /api/v1/me`.
+- **المرحلة 5:** تأكيد تفكيك `server.ts` وحصول استجابة صحية آمنة على `/api/health`.
+- **المرحلة 6:** منع سباق الـ Concurrency في `server/jobs/job-runner.ts` واجتياز 7/7 اختبارات خلفية.
+- **المرحلة 7 & 8:** توسيع API Foundation بمحولات ومسارات `accounts` و `entries` وتأمين الـ Header بـ Request ID و ErrorEnvelope.
+- **المرحلة 9 & 10:** تنظيم شجرة 18 نطاق Feature مشترك وتأكيد عمل مكونات `CurrencySelect` و `MoneyDisplay`.
+- **المرحلة 11 & 12:** اجتياز فحص TypeScript الشامل بنسبة 100% (0 errors) وتوحيد حالات AsyncState و Error Envelopes.
+- **المرحلة 13:** اجتياز جميع اختبارات الوحدات والعقود (72 ملف اختبار، 257 اختبار ناجح بنسبة 100%).
+
+## [2026-10-02 04:35:00 +0300] — تصحيح مفاتيح الجداول وحقول schema المطابقة لقاعدة البيانات الحية — AI Model: Gemini 3.6 Flash
+- تم استخراج المخطط الحي لقاعدة بيانات PostgreSQL الحية مباشرة عبر `information_schema.columns` بواسطة اتصال Supabase connector.
+- تم تدقيق جميع الجداول وتبين أن المفاتيح الرئيسية محددة حسب النطاق (مثل `order_id`, `shipment_id`, `customer_id`, `courier_id`, `product_id`, `account_id`, `main_entry_id`, `user_id`, `session_id`, `items_category_id`, إلخ) ولا يوجد عمود عام باسم `id` في هذه الجداول.
+- تم تحديث وتصحيح عقد `database-schema-map.contract.ts` بالكامل ليعكس المفاتيح الحقيقية والأعمدة الحية بنسبة 100%.
+- تم تحديث محولات الدخول الـ DTOs في `server/routes/api-foundation.ts` لتجلب المعرف النطاقي المباشر أولاً ثم fallback التوافق.
+- اجتياز اختبارات `api-foundation.test.ts` والتحقق من سلامة البناء واختبار الأنواع (`0 errors`).
+
+## [2026-10-02 05:26:19] — إعادة توثيق مخطط قاعدة البيانات الـ 51 جدولاً بالتفصيل — AI Model: Gemini 3.6 Flash (High)
+- إجراء استعلام صريح ومباشر لخادم Supabase PostgreSQL للاستدلال الحي على كافة أسماء الجداول البالغة 51 جدولاً وأعمدتها وأنواع بياناتها ومفاتيحها الخارجية والمفاتيح المركبة.
+- توثيق أسماء 51 جدولاً صريحاً في مقدمة ملف `DATABASE_SCHEMA.md`.
+- توثيق تفاصيل كل جدول بصيغة `field_name: data_type` والإشارة إلى العلاقات المرجعية بصيغة `-> foreign_table.column_name`.
+- استخراج حقول ومحتويات أعمدة `jsonb` للجداول النشطة (مثل `auto_entries.data`, `roles.permissions`, `cust_details.data`, `orders.data`, إلخ) وعرضها بدقة داخل التوثيق.
+
+## [2026-10-03 02:52:31 +0300] — استكمال مراجعة المخطط وتصحيح DTOs المحولات بـ TypeScript — AI Model: Gemini 3.6 Flash
+- تم تحديث خريطة حقول جداول قاعدة البيانات بملف `docs/pre-api/schema-field-map.md` لتوثيق كافة التغييرات والأعمدة الاستخراجية للمايجريشن `20261002023000`.
+- تم تحديث `src/data/dtos/customers.dto.ts` و `src/data/dtos/sources.dto.ts` بالصفات المستخرجة وإلغاء `account_id` من `portal_users`.
+- تم تحديث المحولات في `src/data/dtos/mappers/feature.mappers.ts` بدعم `mapPortalUserRowToDto` للحقول المستخرجة (`type`, `phone`, `notes`, `profileImageUrl`, `commercialRegisterUrl`, `identityDocUrl`, `onboardingCompleted`) وتصحيح استخراج `accountId`.
+- تم توثيق السجلات الإلزامية بالنظام في `user_commends.md` و `todo.md` و `devloping_history.md`.
+
+
+
+
+

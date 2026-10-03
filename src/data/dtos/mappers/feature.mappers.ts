@@ -1,4 +1,4 @@
-﻿import {
+import {
   booleanOrDefault,
   amountOrNull,
   isJsonObject,
@@ -199,13 +199,18 @@ export function mapPortalUserRowToDto(row: PortalUserDatabaseRow): PortalUserApi
     approvalStatus: approvalStatusOrNull(row.approval_status),
     disabled: Boolean(row.disabled ?? row.is_disabled),
     linkedCustomerId: textOrNull(row.linked_customer_id),
-    accountId: textOrNull(row.account_id),
     fullName: textOrNull(row.full_name) ?? textOrNull(data.fullName),
     nameAr: textOrNull(row.name_ar),
     nameEn: textOrNull(row.name_en),
-    phone: textOrNull(data.phone),
+    phone: textOrNull(row.phone) ?? textOrNull(data.phone),
+    type: textOrNull(row.type),
+    notes: textOrNull(row.notes),
+    profileImageUrl: textOrNull(row.profile_image_url),
+    commercialRegisterUrl: textOrNull(row.commercial_register_url),
+    identityDocUrl: textOrNull(row.identity_doc_url),
+    onboardingCompleted: row.onboarding_completed ?? null,
     customerId: textOrNull(data.customerId) ?? textOrNull(row.linked_customer_id),
-    hasPassword: typeof data.password === 'string' && data.password.length > 0,
+    hasPassword: (typeof row.password === 'string' && row.password.length > 0) || (typeof data.password === 'string' && data.password.length > 0),
     createdAt: isoFromLegacy(row.created_at ?? data.createdAt),
     updatedAt: isoFromLegacy(row.updated_at ?? data.updatedAt),
   };
@@ -441,6 +446,8 @@ export function mapSourcesRowToDto(row: SourcesDatabaseRow): SourcesApiDto {
     accountId: textOrNull(row.account_id),
     nameAr: textOrNull(row.name_ar),
     nameEn: textOrNull(row.name_en),
+    // مضاف في migration 20261002023000
+    isActive: row.is_active ?? null,
     createdAt: isoOrNull(row.created_at),
     updatedAt: isoOrNull(row.updated_at),
     createdBy: textOrNull(row.created_by),
@@ -457,6 +464,12 @@ export function mapShippingCompanyRowToDto(row: ShippingCompanyDatabaseRow): Shi
     accountId: textOrNull(row.account_id),
     nameAr: textOrNull(row.name_ar),
     nameEn: textOrNull(row.name_en),
+    // الحقول المضافة في migration 20261002023000
+    address: textOrNull(row.address),
+    isActive: row.is_active ?? null,
+    code: textOrNull(row.code),
+    supportsTracking: row.supports_tracking ?? null,
+    supportsWebhook: row.supports_webhook ?? null,
     createdAt: isoOrNull(row.created_at),
     updatedAt: isoOrNull(row.updated_at),
   };
@@ -479,7 +492,14 @@ export function mapAssetRowToDto(row: AssetDatabaseRow): AssetApiDto {
   };
 }
 
+/**
+ * تحويل صف قاعدة البيانات إلى ShipmentsApiDto.
+ * يقرأ الحقول المستخرجة (canonical columns) أولاً من الأعمدة المباشرة،
+ * مع fallback على data JSONB للسجلات القديمة التي لم تُرحَّل بعد.
+ * Migration: 20261002023000_extract_columns_from_data_in_shipments_table
+ */
 export function mapShipmentsRowToDto(row: ShipmentDatabaseRow): ShipmentsApiDto {
+  // Fallback من data JSONB للتوافق مع السجلات القديمة فقط
   const data = safeRecord(row.data);
   return {
     shipmentId: row.shipment_id,
@@ -491,6 +511,8 @@ export function mapShipmentsRowToDto(row: ShipmentDatabaseRow): ShipmentsApiDto 
     shippingCost: numberOrNull(row.shipping_cost),
     weight: numberOrNull(row.weight),
     shippingCategoryId: textOrNull(row.shipping_category_id),
+    // اسم فئة الشحن من العمود المباشر (مستخرج من JSONB)
+    shippingCategoryName: textOrNull(row.shipping_category_name) ?? textOrNull(data.shippingCategoryName),
     contentCategoryId: textOrNull(row.content_category_id),
     contentCategoryName: textOrNull(row.content_category_name),
     cartonCount: numberOrNull(row.carton_count),
@@ -499,18 +521,31 @@ export function mapShipmentsRowToDto(row: ShipmentDatabaseRow): ShipmentsApiDto 
     otherCategoryFee: numberOrNull(row.other_category_fee),
     categoryFeesTotal: numberOrNull(row.category_fees_total),
     categoryFeeCurrency: textOrNull(row.category_fee_currency),
+    // ========= الحقول المستخرجة من data JSONB — أعمدة canonical مباشرة =========
+    // قراءة من العمود المباشر أولاً، ثم fallback على data JSONB للسجلات القديمة
+    shippingType: textOrNull(row.shipping_type) ?? textOrNull(data.shippingType),
+    shippingSource: textOrNull(row.shipping_source) ?? textOrNull(data.shippingSource),
+    shippingDestination: textOrNull(row.shipping_destination) ?? textOrNull(data.shippingDestination),
+    shippingDate: isoDateOrNull(row.shipping_date ?? data.shippingDate),
+    shippingDuration: numberOrNull(row.shipping_duration) ?? numberOrNull(data.shippingDuration as number | string | null),
+    expectedArrival: isoDateOrNull(row.expected_arrival ?? data.expectedArrival),
+    deliveryDate: isoDateOrNull(row.delivery_date ?? data.deliveryDate),
+    packagingFees: numberOrNull(row.packaging_fees) ?? numberOrNull(data.packagingFees as number | string | null),
+    shippingCategoryPrice: numberOrNull(row.shipping_category_price) ?? numberOrNull(data.shippingCategoryPrice as number | string | null),
+    // ============================================================================
+    // بيانات JSONB الإضافية للسجلات القديمة فقط — لا تُستخدم في الكود الجديد
     shipmentData: {
-      shippingType: textOrNull(data.shippingType),
-      shippingSource: textOrNull(data.shippingSource),
-      shippingDestination: textOrNull(data.shippingDestination),
-      packagingFees: numberOrNull(data.packagingFees as number | string | null),
-      shippingDate: isoDateOrNull(data.shippingDate),
+      shippingType: textOrNull(row.shipping_type) ?? textOrNull(data.shippingType),
+      shippingSource: textOrNull(row.shipping_source) ?? textOrNull(data.shippingSource),
+      shippingDestination: textOrNull(row.shipping_destination) ?? textOrNull(data.shippingDestination),
+      packagingFees: numberOrNull(row.packaging_fees) ?? numberOrNull(data.packagingFees as number | string | null),
+      shippingDate: isoDateOrNull(row.shipping_date ?? data.shippingDate),
       shippingDuration: textOrNull(data.shippingDuration),
-      expectedArrival: isoDateOrNull(data.expectedArrival),
-      deliveryDate: isoDateOrNull(data.deliveryDate),
+      expectedArrival: isoDateOrNull(row.expected_arrival ?? data.expectedArrival),
+      deliveryDate: isoDateOrNull(row.delivery_date ?? data.deliveryDate),
       notes: textOrNull(data.notes),
-      shippingCategoryName: textOrNull(data.shippingCategoryName),
-      shippingCategoryPrice: numberOrNull(data.shippingCategoryPrice as number | string | null),
+      shippingCategoryName: textOrNull(row.shipping_category_name) ?? textOrNull(data.shippingCategoryName),
+      shippingCategoryPrice: numberOrNull(row.shipping_category_price) ?? numberOrNull(data.shippingCategoryPrice as number | string | null),
     },
     createdAt: isoOrNull(row.created_at),
     updatedAt: isoOrNull(row.updated_at),
@@ -931,16 +966,16 @@ export function mapPortalTicketRowToDto(row: PortalTicketDatabaseRow): PortalTic
 }
 
 const SYSTEM_SETTING_KEYS = [
-  'language','theme','fontSize','systemName','systemLogo','orderPrefix','orderStartNumber',
-  'companyName','companyPhone','companyEmail','companyWebsite','companyAddress','taxId','invoiceLogo','invoiceNotes',
-  'currency','currencySymbol','exchangeRateUSD','exchangeRateSAR','autoUpdateExchangeRates','exchangeRatesApiUrl',
-  'lastExchangeRateUpdate','lastExchangeRateUpdateTime','lastExchangeRateUpdatedBy','customCurrencies',
-  'defaultPackagingFee','defaultBankCommissionRate','defaultCompanyProfitRate','defaultDeliveryFee','defaultCourierCommissionRate',
-  'defaultOrderCurrency','defaultProductInsuranceFee','defaultProductInsuranceType','defaultSheinDuration','defaultAppDuration',
-  'defaultFactoryDuration','defaultYemenDeliveryDuration','defaultShippingDuration','defaultProfitPerKg','cbmShippingRate',
-  'cbmShippingRateApiUrl','lastCbmRateUpdate','lastCbmRateUpdatedBy','protectSensitiveOrderDelete','userSessionTimeout',
-  'autoBackupEnabled','backupSchedule','backupRetentionDays','backupCollections','backupEncrypted','lastBackup',
-  'lastAutoBackupAt','backupCount','autoNotification','dashboardGridColumns','visibleMetrics',
+  'language', 'theme', 'fontSize', 'systemName', 'systemLogo', 'orderPrefix', 'orderStartNumber',
+  'companyName', 'companyPhone', 'companyEmail', 'companyWebsite', 'companyAddress', 'taxId', 'invoiceLogo', 'invoiceNotes',
+  'currency', 'currencySymbol', 'exchangeRateUSD', 'exchangeRateSAR', 'autoUpdateExchangeRates', 'exchangeRatesApiUrl',
+  'lastExchangeRateUpdate', 'lastExchangeRateUpdateTime', 'lastExchangeRateUpdatedBy', 'customCurrencies',
+  'defaultPackagingFee', 'defaultBankCommissionRate', 'defaultCompanyProfitRate', 'defaultDeliveryFee', 'defaultCourierCommissionRate',
+  'defaultOrderCurrency', 'defaultProductInsuranceFee', 'defaultProductInsuranceType', 'defaultSheinDuration', 'defaultAppDuration',
+  'defaultFactoryDuration', 'defaultYemenDeliveryDuration', 'defaultShippingDuration', 'defaultProfitPerKg', 'cbmShippingRate',
+  'cbmShippingRateApiUrl', 'lastCbmRateUpdate', 'lastCbmRateUpdatedBy', 'protectSensitiveOrderDelete', 'userSessionTimeout',
+  'autoBackupEnabled', 'backupSchedule', 'backupRetentionDays', 'backupCollections', 'backupEncrypted', 'lastBackup',
+  'lastAutoBackupAt', 'backupCount', 'autoNotification', 'dashboardGridColumns', 'visibleMetrics',
 ] as const satisfies readonly (keyof SystemSettingsData)[];
 
 function projectSettings(value: unknown): SystemSettingsData {

@@ -778,3 +778,90 @@ select distinct k.key as data_key from public.cust_details d cross join lateral 
 ```text
 لا يوجد أمر SQL؛ دفعة الأمن الحالية اقتصرت على طبقة التطبيق دون اتصال أو تغيير مباشر في قاعدة البيانات.
 ```
+
+## [2026-10-02 04:35:00 +0300] — AI Model: Gemini 3.6 Flash
+```sql
+-- استعلام قراءة وتدقيق الهيكل والمخطط الفعلي لجميع الجداول الحية عبر information_schema.columns
+SELECT table_name, column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_schema = 'public'
+ORDER BY table_name, ordinal_position;
+-- تم تنفيذه واستخراج المخطط الحي والكامل لجميع الجداول والتحقق من عدم وجود حقل id عام، واستخدام المفاتيح المخصصة للنطاقات.
+```
+
+## [2026-10-02 05:26:19] — AI Model: Gemini 3.6 Flash (High)
+```sql
+-- 1. استعلام قائمة جميع الجداول ومكونات حقولها في schema public:
+SELECT t.table_name, c.column_name, c.data_type, c.udt_name, c.ordinal_position
+FROM information_schema.tables t
+JOIN information_schema.columns c ON t.table_name = c.table_name AND t.table_schema = c.table_schema
+WHERE t.table_schema = 'public' AND t.table_type = 'BASE TABLE'
+ORDER BY t.table_name, c.ordinal_position;
+
+-- 2. استعلام العلاقات والمفاتيح الخارجية FK:
+SELECT
+    tc.table_name AS source_table,
+    kcu.column_name AS source_column,
+    ccu.table_name AS foreign_table,
+    ccu.column_name AS foreign_column
+FROM 
+    information_schema.table_constraints AS tc 
+    JOIN information_schema.key_column_usage AS kcu
+      ON tc.constraint_name = kcu.constraint_name
+      AND tc.table_schema = kcu.table_schema
+    JOIN information_schema.constraint_column_usage AS ccu
+      ON ccu.constraint_name = tc.constraint_name
+      AND ccu.table_schema = tc.table_schema
+WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema='public';
+
+-- 3. استعلام استخراج أسماء الحقول التي داخل أعمدة jsonb عبر جميع الجداول:
+SELECT 'auto_entries' as tbl, 'data' as col, ARRAY_AGG(DISTINCT k) as keys FROM (SELECT jsonb_object_keys(data) k FROM auto_entries WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'portal_users', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM portal_users WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'portal_tickets', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM portal_tickets WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'whatsapp_logs', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM whatsapp_logs WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'report_templates', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM report_templates WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'order_option', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM order_option WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'settings', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM settings WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'items_category', 'details', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(details) k FROM items_category WHERE details IS NOT NULL AND jsonb_typeof(details)='object') s
+UNION ALL
+SELECT 'announcements', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM announcements WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'orders_history', 'before_data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(before_data) k FROM orders_history WHERE before_data IS NOT NULL AND jsonb_typeof(before_data)='object') s
+UNION ALL
+SELECT 'orders_history', 'after_data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(after_data) k FROM orders_history WHERE after_data IS NOT NULL AND jsonb_typeof(after_data)='object') s
+UNION ALL
+SELECT 'orders_history', 'metadata', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(metadata) k FROM orders_history WHERE metadata IS NOT NULL AND jsonb_typeof(metadata)='object') s
+UNION ALL
+SELECT 'salary_history', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM salary_history WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'shipments', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM shipments WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'order_status', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM order_status WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'orders', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM orders WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'notifications', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM notifications WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'browser_pages', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM browser_pages WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'jobs_req', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM jobs_req WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'activity_logs', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM activity_logs WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'user_settings', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM user_settings WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s
+UNION ALL
+SELECT 'cust_details', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_keys(data) k FROM cust_details WHERE data IS NOT NULL AND jsonb_typeof(data)='object') s;
+```
+
+
+
+
+
+

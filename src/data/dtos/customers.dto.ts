@@ -47,10 +47,29 @@ export interface PortalUserDatabaseRow {
   disabled: boolean | null;
   is_disabled: boolean | null;
   linked_customer_id: string | null;
-  account_id: string | null;
+  // account_id: حُذف في migration 20261002023000 — لا يُستخدم بعد الآن
   full_name: string | null;
   name_ar: string | null;
   name_en: string | null;
+  // ========= الحقول المستخرجة من data JSONB (migration 20261002023000) =========
+  /** نوع المستخدم */
+  type: string | null;
+  /** رقم الهاتف */
+  phone: string | null;
+  /** ملاحظات */
+  notes: string | null;
+  /** رابط صورة الملف الشخصي */
+  profile_image_url: string | null;
+  /** رابط السجل التجاري */
+  commercial_register_url: string | null;
+  /** رابط وثيقة الهوية */
+  identity_doc_url: string | null;
+  /** هل اكتمل التأهيل */
+  onboarding_completed: boolean | null;
+  /** كلمة المرور — لا تُرسل أبداً إلى API — يجب ترحيلها إلى password_hash */
+  password: string | null;
+  // ===========================================================================
+  /** بيانات JSONB legacy — للسجلات القديمة فقط */
   data: PortalUserDatabaseData | null;
   created_at: string | null;
   updated_at: string | null;
@@ -66,11 +85,16 @@ export interface PortalUserApiDto {
   approvalStatus: ApprovalStatus | null;
   disabled: boolean;
   linkedCustomerId: string | null;
-  accountId: string | null;
   fullName: string | null;
   nameAr: string | null;
   nameEn: string | null;
   phone: string | null;
+  type: string | null;
+  notes: string | null;
+  profileImageUrl: string | null;
+  commercialRegisterUrl: string | null;
+  identityDocUrl: string | null;
+  onboardingCompleted: boolean | null;
   customerId: string | null;
   hasPassword: boolean;
   createdAt: IsoUtcString | null;
@@ -101,6 +125,19 @@ export interface CustomersDatabaseRow {
   name_ar: string | null;
   name_en: string | null;
   customer_level: string | null;
+  // ========= الحقول المستخرجة من data JSONB (migration 20261002023000) =========
+  /** مصدر الاكتساب */
+  acquisition_source: string | null;
+  /** الفئات المفضلة */
+  preferred_categories: string[] | null;
+  /** تفاصيل الجسم */
+  body_details: Record<string, unknown> | null;
+  /** موقع جغرافي */
+  location: Record<string, unknown> | null;
+  /** العنوان */
+  address: string | null;
+  // ===========================================================================
+  /** بيانات JSONB legacy — للسجلات القديمة فقط */
   data?: CustomerEntityData | null;
   created_at: string | null;
   updated_at: string | null;
@@ -115,8 +152,22 @@ export interface CustomerDetailsDatabaseRow {
   join_by: string | null;
   referrer_id: string | null;
   onboarding_completed: boolean;
+  // ========= الحقول المستخرجة من data JSONB (migration 20261002023000) =========
+  age: number | null;
+  city: string | null;
+  company_name: string | null;
+  country: string | null;
+  gender: string | null;
+  gps_location: string | null;
+  id_number: string | null;
+  max_debt: number | null;
+  notes: string | null;
+  privacy_policy_agreed: boolean | null;
+  privacy_policy_agreed_at: string | null;
+  // ===========================================================================
   created_at: string | null;
   updated_at: string | null;
+  /** بيانات JSONB legacy — للسجلات القديمة فقط */
   data: CustomerProfileData | null;
   created_by: string | null;
   updated_by: string | null;

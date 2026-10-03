@@ -5,17 +5,28 @@ const anonKey = process.env.SUPABASE_ANON_KEY;
 const canVerify = Boolean(baseUrl && anonKey && !baseUrl.includes('placeholder-project'));
 
 const get = async (path: string) => {
-  const response = await fetch(`${baseUrl}/rest/v1/${path}`, {
-    headers: {
-      apikey: anonKey || '',
-      Authorization: `Bearer ${anonKey || ''}`,
-      Accept: 'application/json',
-      Prefer: 'count=exact',
-    },
-    signal: AbortSignal.timeout(10000),
-  });
-  expect(response.ok).toBe(true);
-  return response;
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const response = await fetch(`${baseUrl}/rest/v1/${path}`, {
+        headers: {
+          apikey: anonKey || '',
+          Authorization: `Bearer ${anonKey || ''}`,
+          Accept: 'application/json',
+          Prefer: 'count=exact',
+        },
+        signal: AbortSignal.timeout(25000),
+      });
+      expect(response.ok).toBe(true);
+      return response;
+    } catch (err) {
+      lastError = err;
+      if (attempt < 3) {
+        await new Promise((r) => setTimeout(r, 1000 * attempt));
+      }
+    }
+  }
+  throw lastError;
 };
 
 describe.runIf(canVerify)('Supabase read-only verification', () => {
