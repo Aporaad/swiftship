@@ -14,3 +14,4 @@ export { currentSupabaseAccountingGateway } from './accounting.gateway';
 export { currentSupabaseNotificationsGateway } from './notifications.gateway';
 export { currentSupabaseReportsGateway } from './reports.gateway';
 export { currentSupabaseSiteManagementGateway, currentSupabaseSettingsGateway } from './site-settings.gateway';
+export { createCurrentSupabaseGatewayRegistry } from './registry';

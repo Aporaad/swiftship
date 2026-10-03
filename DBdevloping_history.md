@@ -1145,3 +1145,8 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 
 
 
+
+## [2026-10-03 03:44:30 +0300] — مراجعة DB للمراحل 1–13 — AI Model: Manus
+- لم يتم تنفيذ أي SQL أو DDL أو DML.
+- لم يتوفر connector حي لـSupabase؛ تم تسجيل RLS/grants/جودة البيانات كـblockers في تقرير المراجعة.
+- تغييرات الجولة اقتصرت على Registry وطبقة الموقع والعقود الآمنة، دون تغيير schema.
