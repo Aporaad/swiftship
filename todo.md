@@ -1431,3 +1431,16 @@
 - [x] تحديث تقرير المراجعة الشاملة بحالة البوابات الحالية والقيود الخارجية.
 - [ ] snapshot حي لـRLS/grants/جودة البيانات؛ موصل Supabase غير مفعّل بعد رفض التفعيل في الجلسة.
 - [ ] تحويل تنفيذ Portal legacy إلى HTTP endpoint خادمي والتحقق الحي من session/ownership على staging.
+
+
+## [2026-10-03 02:24:24 +0000] — دفعة API Foundation والجاهزية الإنتاجية — AI Model: Manus
+
+- [x] سحب آخر نسخة من `Aporaad/swiftship` من `origin/main` عند `fb5aaa9` ومراجعة سجل المهمة السابقة والخطة المرفقة.
+- [x] تصحيح session verifier لاستخدام `sessions.session_id` و`users.user_id`، ورفض `force_logout` والجلسات المنتهية.
+- [x] توحيد success response envelope وإضافة اختبار عقد مع request ID وmetadata.
+- [x] إضافة credentials وrequest ID وtimeout وretry للقراءات فقط إلى `ApiClient`.
+- [x] إنشاء مصفوفة الصلاحيات `docs/pre-api/api-permission-matrix.md` وتقرير المراجعة `docs/pre-api/production-api-readiness-review-2026-10-03.md`.
+- [x] تشغيل `npm ci --no-audit --no-fund` و`npm run check` و`npm test -- --reporter=dot` و`npm run build` بنجاح.
+- [x] توثيق عدم تنفيذ SQL/Migration وعدم فحص أو تعديل RLS/Grants.
+- [ ] توفير staging معزولة وتشغيل Data Quality Snapshot وSmoke/E2E قبل إعلان الجاهزية الإنتاجية الكاملة.
+- [ ] استكمال نقل كل المستهلكين إلى HTTP وإغلاق تدقيق AsyncState/any على كامل النطاق قبل Scaffold إنتاجي كامل لـ`alx_api`.

@@ -5,6 +5,10 @@ import type { GatewayQuery } from '../contracts/common.gateway';
 export interface ApiClientOptions {
   baseUrl: string;
   fetchImpl?: typeof fetch;
+  credentials?: RequestCredentials;
+  timeoutMs?: number;
+  requestIdFactory?: () => string;
+  maxReadRetries?: number;
 }
 
 export class ApiClientError extends ApplicationError {
@@ -27,7 +31,31 @@ export class ApiClient {
       if (value !== undefined) url.searchParams.set(key, String(value));
     }
 
-    const response = await this.fetchImpl(url, { headers: { Accept: 'application/json' } });
+    const maxRetries = Math.max(0, this.options.maxReadRetries ?? 1);
+    let response: Response | null = null;
+    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), this.options.timeoutMs ?? 10000);
+      try {
+        response = await this.fetchImpl(url, {
+          method: 'GET',
+          credentials: this.options.credentials ?? 'include',
+          headers: {
+            Accept: 'application/json',
+            'x-request-id': this.options.requestIdFactory?.() ?? crypto.randomUUID(),
+          },
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+        if (response.ok || response.status < 500 || attempt === maxRetries) break;
+      } catch {
+        clearTimeout(timeout);
+        if (attempt === maxRetries) {
+          throw new ApiClientError({ code: 'API_REQUEST_FAILED', message: 'API request failed.' });
+        }
+      }
+    }
+    if (response === null) throw new ApiClientError({ code: 'API_REQUEST_FAILED', message: 'API request failed.' });
     if (!response.ok) {
       let body: unknown = null;
       try {

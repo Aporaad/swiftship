@@ -2084,3 +2084,14 @@
 
 ## 2026-10-03 — عزل المحول الانتقالي خلف حد واحد
 أُنشئت نقطة توافق واحدة في `src/data/legacy/legacy-adapter.ts`، ونُقلت إليها استيرادات المحول القديم من صفحات ومكونات وخدمات النظام. أضيف `legacy-boundary.test.ts` الذي يفشل عند عودة استيراد مباشر من `src/lib/supabase` خارج الحد المسموح. لم يتغير سلوك العمليات أو مخطط قاعدة البيانات. اجتاز `npm run check` والاختبارات الكاملة: 73 ملفاً ناجحاً، 258 اختباراً ناجحاً، مع 3 ملفات و8 اختبارات متخطاة.
+
+
+## [2026-10-03 02:24:24 +0000] — إصلاح API Foundation وتثبيت حدود Auth/HTTP — AI Model: Manus
+
+تمت مراجعة آخر commit `fb5aaa9` وسجل المهمة السابقة. صُحح `server/routes/api-foundation.ts` ليتعامل مع مفاتيح قاعدة البيانات الفعلية `session_id` و`user_id`، ويرفض الجلسات ذات `force_logout` أو `expires_at` المنتهي. أضيف `SuccessEnvelope` موحد وجرى تحويل contract وقراءات Customers/Couriers/Orders/Shipments/Products/Accounts/Entries إلى envelope يحتوي `requestId`.
+
+تمت توسعة `src/data/http/api-client.ts` بإرسال credentials و`x-request-id`، timeout قابل للضبط، وretry محدود لطلبات GET فقط. أضيف اختبار عقد success envelope، وأنشئت مصفوفة الصلاحيات وتقرير الجاهزية في `docs/pre-api`.
+
+نتيجة التحقق: `npm ci --no-audit --no-fund` ناجح، `npm run check` ناجح، الاختبارات الكاملة 73 ملفاً ناجحاً و3 متخطاة، 259 اختباراً ناجحاً و8 متخطاة، و`npm run build` ناجح مع تحذيرات بنيوية غير حاجبة موجودة مسبقاً. لم يُنفذ SQL أو Migration، وبقيت RLS/Grants خارج النطاق.
+
+قرار الحالة: دفعة API Foundation المحلية ناجحة، لكن لا إعلان جاهزية إنتاجية كاملة قبل staging وData Quality Snapshot وSmoke/E2E وownership الحقيقي.

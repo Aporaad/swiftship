@@ -1437,3 +1437,14 @@ Create order
 [4]: https://www.postgresql.org/docs/current/transaction-iso.html "PostgreSQL Transaction Isolation Documentation"
 [5]: https://cheatsheetseries.owasp.org/cheatsheets/REST_Security_Cheat_Sheet.html "OWASP REST Security Cheat Sheet"
 [6]: https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html "OWASP Authorization Cheat Sheet"
+
+
+---
+
+## ملحق تنفيذ دفعة الجاهزية — 2026-10-03 02:24:24 +0000 — AI Model: Manus
+
+تم سحب آخر نسخة من `main` عند commit `fb5aaa9` ومراجعة سجل المهمة السابقة والخطة التنفيذية المرفقة. نُفذت دفعة النظام الأساسي التالية: تصحيح التحقق من الجلسة ليستخدم `sessions.session_id` و`users.user_id`، رفض الجلسات المنتهية وforce-logout، توحيد success envelope مع `requestId` لجميع مسارات API Foundation الحالية، وتوسعة HTTP client ليستخدم credentials وrequest-id وtimeout وretry للقراءات فقط. أضيفت مصفوفة الصلاحيات في `docs/pre-api/api-permission-matrix.md` وتقرير الجاهزية في `docs/pre-api/production-api-readiness-review-2026-10-03.md`.
+
+نتيجة التحقق: `npm ci` ناجح، `npm run check` ناجح، اختبارات النطاق 2 ملف/8 اختبارات ناجحة، الاختبارات الكاملة 73 ملفاً ناجحاً و3 متخطاة، 259 اختباراً ناجحاً و8 متخطاة، و`npm run build` ناجح. لم تُنفذ أي SQL أو Migration، ولم تُفحص أو تُعدل RLS/Grants، ولم يُنفذ `alx_web` بناءً على النطاق المستثنى.
+
+الحالة بعد الدفعة: **API Foundation للنظام الأساسي متقدم ومثبت محلياً، لكن الجاهزية الإنتاجية الكاملة غير معلنة** بسبب غياب staging معزولة وData Quality Snapshot وSmoke/E2E وownership على بيانات حقيقية، إضافة إلى بقاء بعض فجوات AsyncState/الأنواع ونقل المكونات إلى HTTP.

@@ -27,12 +27,28 @@ type ErrorEnvelope = {
     requestId: string;
   };
 };
+export type SuccessEnvelope<T> = {
+  success: true;
+  data: T;
+  meta?: Readonly<Record<string, unknown>>;
+  requestId: string;
+};
 
 const safeMessage = 'تعذر تنفيذ الطلب حالياً.';
 const asRecord = (value: unknown): JsonRecord => value !== null && typeof value === 'object' ? value as JsonRecord : {};
 const text = (value: unknown): string | null => typeof value === 'string' && value.trim() ? value.trim() : null;
 const bool = (value: unknown, fallback = false): boolean => typeof value === 'boolean' ? value : fallback;
 const numberValue = (value: unknown): number | null => typeof value === 'number' && Number.isFinite(value) ? value : null;
+function isExpired(value: unknown): boolean {
+  if (typeof value === 'number') return value <= Date.now();
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed <= Date.now();
+    const timestamp = Date.parse(value);
+    return Number.isFinite(timestamp) && timestamp <= Date.now();
+  }
+  return false;
+}
 
 export function requestIdFrom(req: Pick<Request, 'header'>): string {
   const supplied = req.header('x-request-id')?.trim();
@@ -41,6 +57,10 @@ export function requestIdFrom(req: Pick<Request, 'header'>): string {
 
 export function errorEnvelope(code: string, requestId: string, message = safeMessage, details: ReadonlyArray<unknown> = []): ErrorEnvelope {
   return { success: false, error: { code, message, details, requestId } };
+}
+
+export function successEnvelope<T>(data: T, requestId: string, meta?: Readonly<Record<string, unknown>>): SuccessEnvelope<T> {
+  return meta === undefined ? { success: true, data, requestId } : { success: true, data, meta, requestId };
 }
 
 export function publicCustomerDto(id: string, raw: unknown): JsonRecord {
@@ -182,13 +202,13 @@ function bearerToken(req: Request): string | null {
 async function resolvePrincipal(db: DbClient['db'], req: Request): Promise<Principal | null> {
   const sessionId = bearerToken(req);
   if (!sessionId) return null;
-  const sessions = await getDocs(query(collection(db, 'sessions'), where('id', '==', sessionId), limit(1)));
+  const sessions = await getDocs(query(collection(db, 'sessions'), where('session_id', '==', sessionId), limit(1)));
   if (sessions.empty) return null;
   const session = asRecord(sessions.docs[0].data());
-  if (bool(session.force_logout) || bool(session.forceLogout)) return null;
+  if (bool(session.force_logout) || bool(session.forceLogout) || isExpired(session.expires_at)) return null;
   const userId = text(session.user_id) ?? text(session.userId);
   if (!userId) return null;
-  const users = await getDocs(query(collection(db, 'users'), where('id', '==', userId), limit(1)));
+  const users = await getDocs(query(collection(db, 'users'), where('user_id', '==', userId), limit(1)));
   if (users.empty) return null;
   const user = asRecord(users.docs[0].data());
   if (bool(user.disabled)) return null;
@@ -231,8 +251,9 @@ export function registerApiFoundationRoutes(app: Express, db: DbClient['db'] | n
     next();
   });
 
-  app.get('/api/v1/contract', (_req, res) => {
-    res.json({ version: '1', routes: [
+  app.get('/api/v1/contract', (req, res) => {
+    const requestId = requestIdFrom(req);
+    res.json(successEnvelope({ version: '1', routes: [
       { method: 'GET', path: '/api/v1/contract', auth: 'public' },
       { method: 'GET', path: '/api/v1/me', auth: 'local-session', permission: 'none' },
       { method: 'GET', path: '/api/v1/customers', auth: 'local-session', permission: 'customers:read' },
@@ -242,7 +263,7 @@ export function registerApiFoundationRoutes(app: Express, db: DbClient['db'] | n
       { method: 'GET', path: '/api/v1/products', auth: 'local-session', permission: 'products:read' },
       { method: 'GET', path: '/api/v1/accounts', auth: 'local-session', permission: 'accounting:read' },
       { method: 'GET', path: '/api/v1/entries', auth: 'local-session', permission: 'finance:read' },
-    ] });
+    ] }, requestId));
   });
 
   if (!db) return;
@@ -254,7 +275,7 @@ export function registerApiFoundationRoutes(app: Express, db: DbClient['db'] | n
     const principal = res.locals.principal as Principal;
     // لا تُعاد الصلاحيات الداخلية في full — فقط role وemail وfullName
     // Don't return full internal permissions — only role, email, fullName
-    res.json({ success: true, data: publicCurrentUserDto(principal), requestId });
+    res.json(successEnvelope(publicCurrentUserDto(principal), requestId));
   });
 
   app.get('/api/v1/customers', requirePermission(db, 'customers:read'), async (req, res) => {
@@ -264,7 +285,7 @@ export function registerApiFoundationRoutes(app: Express, db: DbClient['db'] | n
       const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 25));
       const snapshot = await getDocs(query(collection(db, 'customers'), limit(page * pageSize)));
       const rows = snapshot.docs.slice((page - 1) * pageSize).map((item) => publicCustomerDto(item.id, item.data()));
-      res.json({ success: true, data: rows, meta: { page, pageSize, totalItems: snapshot.size, totalPages: Math.max(1, Math.ceil(snapshot.size / pageSize)) }, requestId });
+      res.json(successEnvelope(rows, requestId, { page, pageSize, totalItems: snapshot.size, totalPages: Math.max(1, Math.ceil(snapshot.size / pageSize)) }));
     } catch {
       res.status(500).json(errorEnvelope('CUSTOMERS_READ_FAILED', requestId));
     }
@@ -277,7 +298,7 @@ export function registerApiFoundationRoutes(app: Express, db: DbClient['db'] | n
       const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 25));
       const snapshot = await getDocs(query(collection(db, 'couriers'), limit(page * pageSize)));
       const rows = snapshot.docs.slice((page - 1) * pageSize).map((item) => publicCourierDto(item.id, item.data()));
-      res.json({ success: true, data: rows, meta: { page, pageSize, totalItems: snapshot.size, totalPages: Math.max(1, Math.ceil(snapshot.size / pageSize)) }, requestId });
+      res.json(successEnvelope(rows, requestId, { page, pageSize, totalItems: snapshot.size, totalPages: Math.max(1, Math.ceil(snapshot.size / pageSize)) }));
     } catch {
       res.status(500).json(errorEnvelope('COURIERS_READ_FAILED', requestId));
     }
@@ -290,7 +311,7 @@ export function registerApiFoundationRoutes(app: Express, db: DbClient['db'] | n
       const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 25));
       const snapshot = await getDocs(query(collection(db, 'orders'), limit(page * pageSize)));
       const rows = snapshot.docs.slice((page - 1) * pageSize).map((item) => publicOrderDto(item.id, item.data()));
-      res.json({ success: true, data: rows, meta: { page, pageSize, totalItems: snapshot.size, totalPages: Math.max(1, Math.ceil(snapshot.size / pageSize)) }, requestId });
+      res.json(successEnvelope(rows, requestId, { page, pageSize, totalItems: snapshot.size, totalPages: Math.max(1, Math.ceil(snapshot.size / pageSize)) }));
     } catch {
       res.status(500).json(errorEnvelope('ORDERS_READ_FAILED', requestId));
     }
@@ -303,7 +324,7 @@ export function registerApiFoundationRoutes(app: Express, db: DbClient['db'] | n
       const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 25));
       const snapshot = await getDocs(query(collection(db, 'shipments'), limit(page * pageSize)));
       const rows = snapshot.docs.slice((page - 1) * pageSize).map((item) => publicShipmentDto(item.id, item.data()));
-      res.json({ success: true, data: rows, meta: { page, pageSize, totalItems: snapshot.size, totalPages: Math.max(1, Math.ceil(snapshot.size / pageSize)) }, requestId });
+      res.json(successEnvelope(rows, requestId, { page, pageSize, totalItems: snapshot.size, totalPages: Math.max(1, Math.ceil(snapshot.size / pageSize)) }));
     } catch {
       res.status(500).json(errorEnvelope('SHIPMENTS_READ_FAILED', requestId));
     }
@@ -316,7 +337,7 @@ export function registerApiFoundationRoutes(app: Express, db: DbClient['db'] | n
       const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 25));
       const snapshot = await getDocs(query(collection(db, 'products'), limit(page * pageSize)));
       const rows = snapshot.docs.slice((page - 1) * pageSize).map((item) => publicProductDto(item.id, item.data()));
-      res.json({ success: true, data: rows, meta: { page, pageSize, totalItems: snapshot.size, totalPages: Math.max(1, Math.ceil(snapshot.size / pageSize)) }, requestId });
+      res.json(successEnvelope(rows, requestId, { page, pageSize, totalItems: snapshot.size, totalPages: Math.max(1, Math.ceil(snapshot.size / pageSize)) }));
     } catch {
       res.status(500).json(errorEnvelope('PRODUCTS_READ_FAILED', requestId));
     }
@@ -329,7 +350,7 @@ export function registerApiFoundationRoutes(app: Express, db: DbClient['db'] | n
       const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 25));
       const snapshot = await getDocs(query(collection(db, 'accounts'), limit(page * pageSize)));
       const rows = snapshot.docs.slice((page - 1) * pageSize).map((item) => publicAccountDto(item.id, item.data()));
-      res.json({ success: true, data: rows, meta: { page, pageSize, totalItems: snapshot.size, totalPages: Math.max(1, Math.ceil(snapshot.size / pageSize)) }, requestId });
+      res.json(successEnvelope(rows, requestId, { page, pageSize, totalItems: snapshot.size, totalPages: Math.max(1, Math.ceil(snapshot.size / pageSize)) }));
     } catch {
       res.status(500).json(errorEnvelope('ACCOUNTS_READ_FAILED', requestId));
     }
@@ -342,11 +363,9 @@ export function registerApiFoundationRoutes(app: Express, db: DbClient['db'] | n
       const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 25));
       const snapshot = await getDocs(query(collection(db, 'main_entry'), limit(page * pageSize)));
       const rows = snapshot.docs.slice((page - 1) * pageSize).map((item) => publicMainEntryDto(item.id, item.data()));
-      res.json({ success: true, data: rows, meta: { page, pageSize, totalItems: snapshot.size, totalPages: Math.max(1, Math.ceil(snapshot.size / pageSize)) }, requestId });
+      res.json(successEnvelope(rows, requestId, { page, pageSize, totalItems: snapshot.size, totalPages: Math.max(1, Math.ceil(snapshot.size / pageSize)) }));
     } catch {
       res.status(500).json(errorEnvelope('ENTRIES_READ_FAILED', requestId));
     }
   });
 }
-
-

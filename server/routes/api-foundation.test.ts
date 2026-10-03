@@ -12,6 +12,7 @@ import {
   publicProductDto,
   publicShipmentDto,
   requestIdFrom,
+  successEnvelope,
 } from './api-foundation';
 
 describe('Phase 13 — system API foundation contracts', () => {
@@ -29,6 +30,20 @@ describe('Phase 13 — system API foundation contracts', () => {
         details: [],
         requestId: 'req-contract-42',
       },
+    });
+  });
+
+  it('creates the mandatory success envelope with correlation id and metadata', () => {
+    expect(successEnvelope([{ orderId: 'order-1' }], 'req-1', { page: 1 })).toEqual({
+      success: true,
+      data: [{ orderId: 'order-1' }],
+      meta: { page: 1 },
+      requestId: 'req-1',
+    });
+    expect(successEnvelope({ version: '1' }, 'req-2')).toEqual({
+      success: true,
+      data: { version: '1' },
+      requestId: 'req-2',
     });
   });
 
@@ -133,4 +148,3 @@ describe('Phase 13 — system API foundation contracts', () => {
     expect(hasPermission({ role: 'Staff', permissions: new Set(['couriers:read']) }, 'customers:read')).toBe(false);
   });
 });
-

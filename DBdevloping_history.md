@@ -1150,3 +1150,12 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 - لم يتم تنفيذ أي SQL أو DDL أو DML.
 - لم يتوفر connector حي لـSupabase؛ تم تسجيل RLS/grants/جودة البيانات كـblockers في تقرير المراجعة.
 - تغييرات الجولة اقتصرت على Registry وطبقة الموقع والعقود الآمنة، دون تغيير schema.
+
+
+## [2026-10-03 02:24:24 +0000] — API Foundation بدون تغيير قاعدة البيانات — AI Model: Manus
+
+- لم تُنفذ أوامر SQL أو DDL أو DML.
+- لم تُنفذ أي Migration ولم تتغير الجداول أو الأعمدة أو العلاقات.
+- لم يتم فحص أو تعديل RLS أو Grants بناءً على النطاق المستثنى.
+- التغيير البرمجي صحح مطابقة مفاتيح الجلسة والمستخدم في طبقة التطبيق إلى `sessions.session_id` و`users.user_id`، دون لمس المخطط.
+- تبقى Data Quality Snapshot الحية وownership على بيانات staging معلقة إلى حين توفير بيئة قراءة معزولة.
