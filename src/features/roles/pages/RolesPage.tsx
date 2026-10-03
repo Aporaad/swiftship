@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, doc, updateDoc, addDoc, setDoc, deleteDoc, getDocs } from '../../../data/legacy/legacy-adapter';
-import { db, handlePostgreSQLError, OperationType } from '../../../data/legacy/legacy-adapter';
+import { collection, onSnapshot, doc, updateDoc, addDoc, setDoc, deleteDoc, getDocs } from '../../../data/legacy/legacy-compat.ts';
+import { db, handlePostgreSQLError, OperationType } from '../../../data/legacy/legacy-compat.ts';
 import { Search, Edit2, X, Plus, Trash2, Shield, CheckCircle2, RefreshCw } from 'lucide-react';
 import { useRole } from '../../../hooks/useRole';
 import { useSettings } from '../../../context/SettingsContext';

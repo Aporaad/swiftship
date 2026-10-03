@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { supabase, doc, setDoc, db } from '../../../data/legacy/legacy-adapter';
+import { supabase, doc, setDoc, db } from '../../../data/legacy/legacy-compat.ts';
 import { useSettings } from '../../../context/SettingsContext';
 import { financialAccountService } from '../../../services/financialAccountService';
 import toast from 'react-hot-toast';

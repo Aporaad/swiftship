@@ -3,7 +3,7 @@ import {
   X, Edit2, DollarSign, AlertCircle,
   User, ShoppingCart, Truck, CheckCircle2, ChevronRight, ChevronLeft
 } from 'lucide-react';
-import { doc, updateDoc, addDoc, collection, db } from '../../data/legacy/legacy-adapter';
+import { doc, updateDoc, addDoc, collection, db } from '../../data/legacy/legacy-compat.ts';
 import { notificationService } from '../../services/notificationService';
 import { activityLogService } from '../../services/activityLogService';
 import { calculateShipmentCategoryFees } from '../../services/itemCategoryService';

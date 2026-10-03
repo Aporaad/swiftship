@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { db } from '../data/legacy/legacy-adapter';
-import { onSnapshot, doc, setDoc } from '../data/legacy/legacy-adapter';
+import { db } from '../data/legacy/legacy-compat.ts';
+import { onSnapshot, doc, setDoc } from '../data/legacy/legacy-compat.ts';
 
 export interface ExpenseCategory {
   id: string;

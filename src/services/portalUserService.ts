@@ -18,7 +18,7 @@ import {
   getDocs,
   getDoc,
   db
-} from '../data/legacy/legacy-adapter';
+} from '../data/legacy/legacy-compat.ts';
 import { notificationService } from './notificationService';
 import { activityLogService } from './activityLogService';
 

@@ -28,9 +28,9 @@ import {
   increment,
   getDoc,
   writeBatch,
-} from "../data/legacy/legacy-adapter";
+} from "../data/legacy/legacy-compat.ts";
 import { currencyService } from "./currencyService";
-import { db, supabase } from "../data/legacy/legacy-adapter";
+import { db, supabase } from "../data/legacy/legacy-compat.ts";
 import { currentSupabaseAuthGateway } from '../data/current-supabase/gateways/auth.gateway';
 import { activityLogService } from "./activityLogService";
 import { accountingHierarchyService, hierarchyCodeRules, naturalBalanceDelta } from "./accountingHierarchyService";

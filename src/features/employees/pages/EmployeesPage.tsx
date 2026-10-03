@@ -23,7 +23,7 @@ import {
   db,
   handleSupabaseError,
   OperationType
-} from '../../../data/legacy/legacy-adapter';
+} from '../../../data/legacy/legacy-compat.ts';
 import {
   Search,
   Edit2,

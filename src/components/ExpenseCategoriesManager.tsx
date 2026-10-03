@@ -1,8 +1,8 @@
 type AdapterDocument = { id: string; data: () => Record<string, unknown> };
 import React, { useState, useEffect } from 'react';
 import { Settings, Plus, Edit2, Trash2, X, AlertTriangle } from 'lucide-react';
-import { db } from '../data/legacy/legacy-adapter';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, getDocs } from '../data/legacy/legacy-adapter';
+import { db } from '../data/legacy/legacy-compat.ts';
+import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, getDocs } from '../data/legacy/legacy-compat.ts';
 import { useExpenseCategories, ExpenseCategory } from '../hooks/useExpenseCategories';
 import { notificationService } from '../services/notificationService';
 

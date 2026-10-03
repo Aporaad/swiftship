@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { currencyService, type ExchangeRates } from '../../services/currencyService';
 import type { FinanceCurrency } from '../../shared/contracts/finance.contracts';
+import { asyncState, runQuery, type AsyncState } from '../../shared/contracts/ui.contracts';
 
 interface FinancialCalculatorModalProps {
   isOpen: boolean;
@@ -57,7 +58,8 @@ export default function FinancialCalculatorModal({
   const [fromCurrencyCode, setFromCurrencyCode] = useState<string>('USD');
   const [toCurrencyCode, setToCurrencyCode] = useState<string>('YER');
   const [exchangeRates, setExchangeRates] = useState<ExchangeRates>({});
-  const [loadingRates, setLoadingRates] = useState(false);
+  const [ratesQuery, setRatesQuery] = useState<AsyncState<ExchangeRates>>(asyncState.idle());
+  const loadingRates = ratesQuery.status === 'loading';
   const [copiedExchange, setCopiedExchange] = useState(false);
 
   // ─────────────────────────────────────────────────────────
@@ -67,22 +69,21 @@ export default function FinancialCalculatorModal({
     if (!isOpen) return;
     let mounted = true;
     const fetchRates = async () => {
-      setLoadingRates(true);
-      try {
-        const rates = await currencyService.getLatestExchangeRates();
-        if (mounted) {
-          setExchangeRates(rates);
-          // ضبط العملات الافتراضية إن وجدت
-          const codes = Object.keys(rates);
-          if (codes.length >= 2) {
-            if (!codes.includes(fromCurrencyCode)) setFromCurrencyCode(codes[0]);
-            if (!codes.includes(toCurrencyCode)) setToCurrencyCode(codes[1] || codes[0]);
-          }
+      const result = await runQuery(
+        () => currencyService.getLatestExchangeRates(),
+        (state) => { if (mounted) setRatesQuery(state); },
+        (rates) => Object.keys(rates).length === 0,
+      );
+      if (mounted && result.status === 'success') {
+        setExchangeRates(result.data);
+        // ضبط العملات الافتراضية إن وجدت
+        const codes = Object.keys(result.data);
+        if (codes.length >= 2) {
+          if (!codes.includes(fromCurrencyCode)) setFromCurrencyCode(codes[0]);
+          if (!codes.includes(toCurrencyCode)) setToCurrencyCode(codes[1] || codes[0]);
         }
-      } catch (err) {
-        console.error('Failed to load exchange rates in calculator:', err);
-      } finally {
-        if (mounted) setLoadingRates(false);
+      } else if (mounted && result.status === 'empty') {
+        setExchangeRates({});
       }
     };
     fetchRates();
@@ -594,6 +595,16 @@ export default function FinancialCalculatorModal({
             {loadingRates && (
               <div className="text-center text-xs font-bold text-slate-500">
                 جارٍ تحديث أسعار الصرف الرسمية من النظام...
+              </div>
+            )}
+            {ratesQuery.status === 'empty' && (
+              <div role="status" className="text-center text-xs font-bold text-amber-300">
+                لا توجد أسعار صرف متاحة حالياً.
+              </div>
+            )}
+            {ratesQuery.status === 'error' && (
+              <div role="alert" className="text-center text-xs font-bold text-rose-300">
+                تعذر تحميل أسعار الصرف: {ratesQuery.error.message}
               </div>
             )}
           </div>

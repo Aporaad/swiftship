@@ -1,4 +1,4 @@
-import { supabase } from '../data/legacy/legacy-adapter';
+import { supabase } from '../data/legacy/legacy-compat.ts';
 import { autoEntryService } from './autoEntryService';
 
 /**

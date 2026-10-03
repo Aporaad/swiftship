@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot, getDocs, setDoc, doc, db } from '../data/legacy/legacy-adapter';
+import { collection, onSnapshot, getDocs, setDoc, doc, db } from '../data/legacy/legacy-compat.ts';
 
 export interface OrderStatusItem {
   id: number;            // رقم المرحلة (1, 2, 3...)

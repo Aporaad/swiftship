@@ -1,9 +1,9 @@
 type AdapterDocument = { id: string; data: () => Record<string, unknown> };
 import React, { useState, useEffect } from 'react';
 import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
-import { collection, onSnapshot, doc, updateDoc, addDoc, setDoc, deleteDoc, query, where, orderBy, or } from '../../../data/legacy/legacy-adapter';
-import { db, auth } from '../../../data/legacy/legacy-adapter';
-import { handlePostgreSQLError, OperationType } from '../../../data/legacy/legacy-adapter';
+import { collection, onSnapshot, doc, updateDoc, addDoc, setDoc, deleteDoc, query, where, orderBy, or } from '../../../data/legacy/legacy-compat.ts';
+import { db, auth } from '../../../data/legacy/legacy-compat.ts';
+import { handlePostgreSQLError, OperationType } from '../../../data/legacy/legacy-compat.ts';
 import {
   Search,
   Edit2,

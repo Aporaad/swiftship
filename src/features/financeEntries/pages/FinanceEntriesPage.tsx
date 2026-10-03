@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BookOpen, CreditCard, FileClock, Landmark, ListTree, ReceiptText, Settings2, ShieldAlert, Wallet } from 'lucide-react';
 import { useRole } from '../../../hooks/useRole';
-import { supabase } from '../../../data/legacy/legacy-adapter';
+import { supabase } from '../../../data/legacy/legacy-compat.ts';
 import GeneralEntriesTab from '../../../components/finance/GeneralEntriesTab';
 import CompoundEntriesTab from '../../../components/finance/CompoundEntriesTab';
 import TemporaryEntriesTab from '../../../components/finance/TemporaryEntriesTab';
@@ -13,11 +13,32 @@ import EntrySettingsTab from '../../../components/finance/EntrySettingsTab';
 import type { FinanceAccount, FinanceCurrency, FinanceEntryType, FinanceModule } from '../../../shared/contracts/finance.contracts';
 import type { FinanceEntryRow, FinancePaymentDetailRow } from '../../../components/finance/EntryWorkspaceTab';
 import { asyncState, type AsyncState } from '../../../shared/contracts/ui.contracts';
+import { isRecord, readString, type UnknownRecord } from '../../../shared/contracts/unknown.contracts';
+
+type FinanceTable = 'currency' | 'accounts' | 'entry_module' | 'entry_type' | 'main_entry' | 'account_trans' | 'entry_payment_details' | 'custody_advances' | 'users';
+interface FinanceQueryResult { data: unknown[] | null; error: unknown | null }
+interface FinanceQuery extends PromiseLike<FinanceQueryResult> {
+  select(columns: string): FinanceQuery;
+  eq(column: string, value: unknown): FinanceQuery;
+  order(column: string, options?: { ascending?: boolean }): FinanceQuery;
+  limit(count: number): FinanceQuery;
+}
+interface FinanceSupabaseClient { from(table: FinanceTable): FinanceQuery }
+
+const financeClient = supabase as unknown as FinanceSupabaseClient;
+const rows = (value: unknown): UnknownRecord[] => Array.isArray(value) ? value.filter(isRecord) : [];
+const mapRows = <T,>(value: unknown, mapper: (row: UnknownRecord) => T | null): T[] =>
+  rows(value).map(mapper).filter((row): row is T => row !== null);
+const numberValue = (value: unknown): number => typeof value === 'number' ? value : Number(value ?? 0);
+const stringValue = (value: unknown): string => typeof value === 'string' ? value : '';
+const optionalString = (value: unknown): string | undefined => typeof value === 'string' && value.length > 0 ? value : undefined;
+const booleanValue = (value: unknown): boolean => value === true;
+const rowError = (value: unknown): string => isRecord(value) && typeof value.message === 'string' ? value.message : 'Database request failed';
 
 type TabId = 'general' | 'compound' | 'temporary' | 'movement' | 'receipt' | 'payment' | 'custody' | 'settings';
 
-const can = (isAdmin: boolean, hasPermission: (key: any) => boolean, precise: string, legacy: string) =>
-  isAdmin || hasPermission(precise as any) || hasPermission(legacy as any);
+const can = (isAdmin: boolean, hasPermission: (key: string) => boolean, precise: string, legacy: string) =>
+  isAdmin || hasPermission(precise) || hasPermission(legacy);
 
 export default function FinanceEntriesPage() {
   const { role, profile, hasPermission, loading: roleLoading } = useRole();
@@ -40,44 +61,51 @@ export default function FinanceEntriesPage() {
     try {
       setDataQuery(asyncState.loading());
       const [currencyResult, accountResult, moduleResult, typeResult, entryResult, transResult, paymentDetailResult, custodyResult, usersResult] = await Promise.all([
-        (supabase as any).from('currency').select('cur_id, code, is_default, is_active').eq('is_active', true).order('cur_id'),
-        (supabase as any).from('accounts').select('account_id, acc_name_ar, acc_name_en, cur_no, is_active, acc_sub_id, entity_id, entity_type').order('account_id'),
-        (supabase as any).from('entry_module').select('entry_module_id, code, name_ar, is_active').order('name_ar'),
-        (supabase as any).from('entry_type').select('entry_type_id, module_id, code, name_ar, is_active').order('name_ar'),
-        (supabase as any).from('main_entry').select('main_entry_id, entry_number, module_id, entry_type_id, entry_category, posting_status, description, payment_method, effective_at, created_at, updated_at, created_by_uid, updated_by_uid, order_id').order('effective_at', { ascending: false }).limit(500),
-        (supabase as any).from('account_trans').select('account_trans_id, main_entry_id, line_no, trans_type, account_id, account_cur_no, amount, amount_original, currency_original_no, payment_method, description, order_id, shipment_id, created_at').order('created_at', { ascending: false }).limit(1500),
-        (supabase as any).from('entry_payment_details').select('entry_payment_detail_id, main_entry_id, payment_method, account_id, amount_original, bank_reference, due_at, note').order('main_entry_id').order('allocation_no').limit(1500),
-        (supabase as any).from('custody_advances').select('custody_advance_id, custody_number, recipient_id, recipient_name, recipient_type, recipient_account_id, amount_original, amount_outstanding, currency_original_no, status, issued_at').order('issued_at', { ascending: false }).limit(500),
-        (supabase as any).from('users').select('user_id, username, full_name').limit(500),
+        financeClient.from('currency').select('cur_id, code, is_default, is_active').eq('is_active', true).order('cur_id'),
+        financeClient.from('accounts').select('account_id, acc_name_ar, acc_name_en, cur_no, is_active, acc_sub_id, entity_id, entity_type').order('account_id'),
+        financeClient.from('entry_module').select('entry_module_id, code, name_ar, is_active').order('name_ar'),
+        financeClient.from('entry_type').select('entry_type_id, module_id, code, name_ar, is_active').order('name_ar'),
+        financeClient.from('main_entry').select('main_entry_id, entry_number, module_id, entry_type_id, entry_category, posting_status, description, payment_method, effective_at, created_at, updated_at, created_by_uid, updated_by_uid, order_id').order('effective_at', { ascending: false }).limit(500),
+        financeClient.from('account_trans').select('account_trans_id, main_entry_id, line_no, trans_type, account_id, account_cur_no, amount, amount_original, currency_original_no, payment_method, description, order_id, shipment_id, created_at').order('created_at', { ascending: false }).limit(1500),
+        financeClient.from('entry_payment_details').select('entry_payment_detail_id, main_entry_id, payment_method, account_id, amount_original, bank_reference, due_at, note').order('main_entry_id').order('allocation_no').limit(1500),
+        financeClient.from('custody_advances').select('custody_advance_id, custody_number, recipient_id, recipient_name, recipient_type, recipient_account_id, amount_original, amount_outstanding, currency_original_no, status, issued_at').order('issued_at', { ascending: false }).limit(500),
+        financeClient.from('users').select('user_id, username, full_name').limit(500),
       ]);
-      const failure = [currencyResult, accountResult, moduleResult, typeResult, entryResult, transResult, paymentDetailResult, custodyResult].find((result: any) => result.error)?.error;
-      if (failure) throw new Error(failure.message || String(failure));
+      const failure = [currencyResult, accountResult, moduleResult, typeResult, entryResult, transResult, paymentDetailResult, custodyResult, usersResult].find((result) => result.error !== null)?.error;
+      if (failure) throw new Error(rowError(failure));
 
       const uMap = new Map<string, string>();
-      for (const u of usersResult.data || []) {
-        const uName = u.username || u.full_name || u.user_id;
-        uMap.set(u.user_id, uName);
+      for (const user of rows(usersResult.data)) {
+        const userId = readString(user.user_id);
+        if (!userId) continue;
+        uMap.set(userId, readString(user.username) || readString(user.full_name) || userId);
       }
       setUsersMap(uMap);
 
-      const loadedCurrencies = (currencyResult.data || []).map((item: any) => ({ id: Number(item.cur_id), code: item.code, isDefault: Boolean(item.is_default) }));
+      const loadedCurrencies = rows(currencyResult.data).map((item) => ({ id: numberValue(item.cur_id), code: stringValue(item.code), isDefault: booleanValue(item.is_default) }));
       const currencyCodeById = new Map(loadedCurrencies.map((item: { id: number; code: string }) => [item.id, item.code]));
       setCurrencies(loadedCurrencies);
-      setAccounts((accountResult.data || []).map((item: any) => ({
-        id: item.account_id, nameAr: item.acc_name_ar || item.acc_name_en || item.id, nameEn: item.acc_name_en,
-        curNo: Number(item.cur_no), currencyCode: currencyCodeById.get(Number(item.cur_no)) || '—',
-        isActive: Boolean(item.is_active), isPosting: Boolean(item.acc_sub_id), accSubId: item.acc_sub_id || undefined, entityId: item.entity_id || undefined,
-        entityType: item.entity_type || undefined, entityName: item.acc_name_ar || item.acc_name_en || item.account_id,
+      setAccounts(rows(accountResult.data).map((item) => ({
+        id: stringValue(item.account_id), nameAr: readString(item.acc_name_ar) || readString(item.acc_name_en) || stringValue(item.account_id), nameEn: optionalString(item.acc_name_en),
+        curNo: numberValue(item.cur_no), currencyCode: currencyCodeById.get(numberValue(item.cur_no)) || '—',
+        isActive: booleanValue(item.is_active), isPosting: Boolean(item.acc_sub_id), accSubId: optionalString(item.acc_sub_id), entityId: optionalString(item.entity_id),
+        entityType: optionalString(item.entity_type), entityName: readString(item.acc_name_ar) || readString(item.acc_name_en) || stringValue(item.account_id),
       })));
-      setModules((moduleResult.data || []).map((item: any) => ({ id: item.entry_module_id, code: item.code, nameAr: item.name_ar, isActive: Boolean(item.is_active) })));
-      setEntryTypes((typeResult.data || []).map((item: any) => ({ id: item.entry_type_id, moduleId: item.module_id, code: item.code, nameAr: item.name_ar, isActive: Boolean(item.is_active) })));
+      setModules(rows(moduleResult.data).map((item) => ({ id: stringValue(item.entry_module_id), code: stringValue(item.code), nameAr: stringValue(item.name_ar), isActive: booleanValue(item.is_active) })));
+      setEntryTypes(rows(typeResult.data).map((item) => ({ id: stringValue(item.entry_type_id), moduleId: stringValue(item.module_id), code: stringValue(item.code), nameAr: stringValue(item.name_ar), isActive: booleanValue(item.is_active) })));
 
-      const loadedTransactions = (transResult.data || []).map((item: any) => ({
-        id: item.account_trans_id, entryId: item.main_entry_id || item.entry_id, lineNo: Number(item.line_no), transType: item.trans_type,
-        accountId: item.account_id, accountCurNo: Number(item.account_cur_no), amount: Number(item.amount),
-        amountOriginal: Number(item.amount_original), currencyOriginalNo: Number(item.currency_original_no),
-        paymentMethod: item.payment_method, description: item.description, orderId: item.order_id, shipmentId: item.shipment_id, createdAt: item.created_at,
-      }));
+      const loadedTransactions = mapRows<FinanceAccountTransactionRow>(transResult.data, (item) => {
+        const id = readString(item.account_trans_id);
+        const entryId = readString(item.main_entry_id);
+        const accountId = readString(item.account_id);
+        if (!id || !entryId || !accountId) return null;
+        return {
+        id, entryId, lineNo: numberValue(item.line_no), transType: item.trans_type === 'Credit' ? 'Credit' : 'Debit',
+        accountId, accountCurNo: numberValue(item.account_cur_no), amount: numberValue(item.amount),
+        amountOriginal: numberValue(item.amount_original), currencyOriginalNo: numberValue(item.currency_original_no),
+        paymentMethod: optionalString(item.payment_method), description: readString(item.description) || '', orderId: optionalString(item.order_id), shipmentId: optionalString(item.shipment_id), createdAt: optionalString(item.created_at),
+        };
+      });
       setTransactions(loadedTransactions);
 
       // تجميع المبلغ الاصلي والعملة الأصلية للقيد من أسطر account_trans المرافقة
@@ -91,25 +119,42 @@ export default function FinanceEntriesPage() {
         }
       }
 
-      setEntries((entryResult.data || []).map((item: any) => {
-        const transInfo = transByEntryId.get(item.main_entry_id) || { amountOriginal: 0, currencyOriginalNo: 1 };
+      setEntries(mapRows<FinanceEntryRow>(entryResult.data, (item) => {
+        const entryId = readString(item.main_entry_id);
+        if (!entryId) return null;
+        const postingStatus = item.posting_status === 'posted' || item.posting_status === 'voided' ? item.posting_status : 'draft';
+        const transInfo = transByEntryId.get(entryId) || { amountOriginal: 0, currencyOriginalNo: 1 };
         return {
-          id: item.main_entry_id, entryNumber: item.entry_number, moduleId: item.module_id, entryTypeId: item.entry_type_id,
-          entryCategory: item.entry_category, postingStatus: item.posting_status, amountOriginal: transInfo.amountOriginal,
-          currencyOriginalNo: transInfo.currencyOriginalNo, description: item.description, paymentMethod: item.payment_method,
-          effectiveAt: item.effective_at, createdAt: item.created_at, updatedAt: item.updated_at,
-          createdByUid: item.created_by_uid, updatedByUid: item.updated_by_uid, orderId: item.order_id,
+          id: entryId, entryNumber: readString(item.entry_number) || entryId, moduleId: stringValue(item.module_id), entryTypeId: stringValue(item.entry_type_id),
+          entryCategory: stringValue(item.entry_category), postingStatus, amountOriginal: transInfo.amountOriginal,
+          currencyOriginalNo: transInfo.currencyOriginalNo, description: readString(item.description) || '', paymentMethod: optionalString(item.payment_method),
+          effectiveAt: optionalString(item.effective_at), createdAt: stringValue(item.created_at), updatedAt: optionalString(item.updated_at),
+          createdByUid: optionalString(item.created_by_uid), updatedByUid: optionalString(item.updated_by_uid), orderId: optionalString(item.order_id),
         };
       }));
-      setPaymentDetails((paymentDetailResult.data || []).map((item: any) => ({
-        id: item.entry_payment_detail_id, entryId: item.main_entry_id || item.entry_id, paymentMethod: item.payment_method, accountId: item.account_id,
-        amountOriginal: Number(item.amount_original), bankReference: item.bank_reference, dueAt: item.due_at, note: item.note,
-      })));
-      setCustodies((custodyResult.data || []).map((item: any) => ({
-        id: item.custody_advance_id, custodyNumber: item.custody_number, recipientId: item.recipient_id, recipientName: item.recipient_name, recipientType: item.recipient_type,
-        recipientAccountId: item.recipient_account_id, amountOriginal: Number(item.amount_original), amountOutstanding: Number(item.amount_outstanding),
-        currencyOriginalNo: Number(item.currency_original_no), status: item.status, issuedAt: item.issued_at,
-      })));
+      setPaymentDetails(mapRows<FinancePaymentDetailRow>(paymentDetailResult.data, (item) => {
+        const id = readString(item.entry_payment_detail_id);
+        const entryId = readString(item.main_entry_id);
+        const accountId = readString(item.account_id);
+        const method = item.payment_method;
+        if (!id || !entryId || !accountId || (method !== 'cash' && method !== 'bank' && method !== 'deferred')) return null;
+        return {
+        id, entryId, paymentMethod: method, accountId,
+        amountOriginal: numberValue(item.amount_original), bankReference: optionalString(item.bank_reference), dueAt: optionalString(item.due_at), note: optionalString(item.note),
+        };
+      }));
+      setCustodies(mapRows<CustodyAdvanceRow>(custodyResult.data, (item) => {
+        const id = readString(item.custody_advance_id);
+        const recipientId = readString(item.recipient_id);
+        const recipientName = readString(item.recipient_name);
+        const recipientType = readString(item.recipient_type);
+        if (!id || !recipientId || !recipientName || !recipientType) return null;
+        return {
+        id, custodyNumber: stringValue(item.custody_number), recipientId, recipientName, recipientType,
+        recipientAccountId: optionalString(item.recipient_account_id), amountOriginal: numberValue(item.amount_original), amountOutstanding: numberValue(item.amount_outstanding),
+        currencyOriginalNo: numberValue(item.currency_original_no), status: stringValue(item.status), issuedAt: stringValue(item.issued_at),
+        };
+      }));
       setDataQuery(asyncState.success(null));
     } catch (cause: unknown) {
       setDataQuery(asyncState.error<null>(cause, 'FINANCE_ENTRIES_LOAD_FAILED'));
@@ -129,7 +174,7 @@ export default function FinanceEntriesPage() {
     { id: 'settings' as const, label: 'إعدادات القيود', icon: Settings2, access: can(isAdmin, hasPermission, 'view_entry_settings', 'view_auto_entries') },
   ], [hasPermission, isAdmin]);
 
-  const createdByUid = (profile as any)?.id || (profile as any)?.uid || undefined;
+  const createdByUid = isRecord(profile) ? readString(profile.id) || readString(profile.uid) : undefined;
   const common = { entries, accounts, currencies, modules, entryTypes, transactions, paymentDetails, createdByUid, usersMap, onChanged: refresh };
 
   /**

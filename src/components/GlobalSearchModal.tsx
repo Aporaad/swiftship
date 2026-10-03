@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, doc, updateDoc, query, orderBy, limit } from '../data/legacy/legacy-adapter';
+import { collection, getDocs, doc, updateDoc, query, orderBy, limit } from '../data/legacy/legacy-compat.ts';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { db } from '../data/legacy/legacy-adapter';
+import { db } from '../data/legacy/legacy-compat.ts';
 import { useSettings } from '../context/SettingsContext';
 import { useOrderStatuses } from '../hooks/useOrderStatuses';
 import { whatsappService } from '../services/whatsappService';

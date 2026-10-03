@@ -16,7 +16,7 @@ import {
   type FinancialEntryInput,
   type FinancialEntryLineInput,
 } from '../../../services/financialEntryService';
-import { supabase } from '../../../data/legacy/legacy-adapter';
+import { supabase } from '../../../data/legacy/legacy-compat.ts';
 import AccountPickerModal from '../AccountPickerModal';
 import FinancialCalculatorModal from '../FinancialCalculatorModal';
 import { amountInWords } from '../../../lib/numberToWords';

@@ -3,7 +3,7 @@ import { Activity, AlertCircle, Boxes, CheckCircle2, Layers, MapPin, Package, Pl
 import Tracking from '../../../shipments/pages/TrackingPage';
 import { financialAccountService } from '../../../../services/financialAccountService';
 import { exportOrdersToPDF, exportOrdersToCSV, generateOrderInvoicePDF } from '../../../../reports';
-import { safeToDate } from '../../../../data/legacy/legacy-adapter';
+import { safeToDate } from '../../../../data/legacy/legacy-compat.ts';
 import OrderStatusManagementTab from '../../../../components/OrderStatusManagementTab';
 import OrderOptionsManagementTab from '../../../../components/orders/OrderOptionsManagementTab';
 import ItemCategoriesManagementTab from '../../../../components/orders/ItemCategoriesManagementTab';

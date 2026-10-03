@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   recalculateHierarchy: vi.fn(),
 }));
 
-vi.mock('../data/legacy/legacy-adapter', () => ({
+vi.mock('../data/legacy/legacy-compat.ts', () => ({
   collection: vi.fn((_: unknown, name: string) => ({ name })),
   getDocs: mocks.getDocs,
   setDoc: mocks.setDoc,

@@ -25,7 +25,7 @@ import {
   type FinancialPaymentDetailInput,
   type FinancialPaymentMethod,
 } from '../../services/financialEntryService';
-import { supabase } from '../../data/legacy/legacy-adapter';
+import { supabase } from '../../data/legacy/legacy-compat.ts';
 import { asyncState, runMutation, type AsyncState } from '../../shared/contracts/ui.contracts';
 import AccountPickerModal from './AccountPickerModal';
 

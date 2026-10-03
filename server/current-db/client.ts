@@ -28,11 +28,15 @@ import admin, {
   setDoc,
   createUserWithEmailAndPassword,
 } from '../../src/lib/supabase-adapter';
+import { readErrorCode, readErrorMessage } from '../../src/shared/contracts/unknown.contracts';
+
+export type DatabaseClient = ReturnType<typeof getPostgreSQL>;
+export type ServerAuthClient = ReturnType<typeof initializeAuth>;
 
 // ── نوع عميل قاعدة البيانات / Database client type ──────────────
 export interface DbClient {
-  db: ReturnType<typeof getPostgreSQL>;
-  auth: ReturnType<typeof initializeAuth>;
+  db: DatabaseClient | null;
+  auth: ServerAuthClient | null;
   ready: boolean;
 }
 
@@ -43,15 +47,15 @@ export interface DbClient {
  * @returns كائن يحتوي db و auth وعلامة ready
  */
 export async function createDbClient(): Promise<DbClient> {
-  let db: any = null;
-  let auth: any = null;
+  let db: DatabaseClient | null = null;
+  let auth: ServerAuthClient | null = null;
 
   // تهيئة Admin SDK المحاكي / Initialise emulated Admin SDK
   try {
     admin.initializeApp();
     console.log('[DB Client] Backend Adapter Admin SDK initialized successfully');
-  } catch (adminErr: any) {
-    console.error('[DB Client] Backend Adapter Admin SDK init failed:', adminErr.message);
+  } catch (adminErr: unknown) {
+    console.error('[DB Client] Backend Adapter Admin SDK init failed:', readErrorMessage(adminErr));
   }
 
   // تهيئة Client SDK / Initialise Client SDK
@@ -60,8 +64,8 @@ export async function createDbClient(): Promise<DbClient> {
     db = getPostgreSQL(supabaseApp);
     auth = initializeAuth(supabaseApp, { persistence: inMemoryPersistence });
     console.log('[DB Client] Backend Adapter Client SDK initialized successfully');
-  } catch (e: any) {
-    console.error('[DB Client] Backend Adapter Client SDK init failed:', e.message);
+  } catch (e: unknown) {
+    console.error('[DB Client] Backend Adapter Client SDK init failed:', readErrorMessage(e));
   }
 
   return { db, auth, ready: Boolean(db && auth) };
@@ -74,7 +78,7 @@ export async function createDbClient(): Promise<DbClient> {
  * ⚠️ تنبيه أمني: بيانات الاعتماد هذه موثقة كعيب حرج ويجب عدم نقلها إلى API الجديدة.
  * ⚠️ Security warning: These credentials are documented as a critical defect — MUST NOT be migrated to alx_api.
  */
-export async function authenticateServerSession(auth: any, db: any): Promise<void> {
+export async function authenticateServerSession(auth: ServerAuthClient | null, db: DatabaseClient | null): Promise<void> {
   if (!auth || !db) return;
 
   const systemEmail = process.env.SWIFTSHIP_SYSTEM_EMAIL?.trim();
@@ -87,10 +91,11 @@ export async function authenticateServerSession(auth: any, db: any): Promise<voi
   try {
     await signInWithEmailAndPassword(auth, systemEmail, systemPassword);
     console.log('[DB Client] Backend server authenticated as admin@swiftship.system');
-  } catch (authErr: any) {
-    console.warn('[DB Client] Standard authentication failed:', authErr.message);
+  } catch (authErr: unknown) {
+    console.warn('[DB Client] Standard authentication failed:', readErrorMessage(authErr));
 
-    if (authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/user-not-found') {
+    const code = readErrorCode(authErr);
+    if (code === 'auth/invalid-credential' || code === 'auth/user-not-found') {
       try {
         await createUserWithEmailAndPassword(auth, systemEmail, systemPassword);
         console.log('[DB Client] Registered admin@swiftship.system on-the-fly');
@@ -104,8 +109,8 @@ export async function authenticateServerSession(auth: any, db: any): Promise<voi
           disabled: false,
           createdAt: Date.now(),
         });
-      } catch (regErr: any) {
-        console.error('[DB Client] Failed to register administrative account:', regErr.message);
+      } catch (regErr: unknown) {
+        console.error('[DB Client] Failed to register administrative account:', readErrorMessage(regErr));
       }
     }
   }

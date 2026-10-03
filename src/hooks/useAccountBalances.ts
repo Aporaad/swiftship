@@ -24,10 +24,12 @@
  */
 
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot } from '../data/legacy/legacy-adapter';
-import { db } from '../data/legacy/legacy-adapter';
-import { supabase } from '../data/legacy/legacy-adapter';
-import { DEFAULT_RATES, ExchangeRates, currencyService } from '../services/currencyService';
+import { collection, onSnapshot } from '../data/legacy/legacy-compat.ts';
+import { db } from '../data/legacy/legacy-compat.ts';
+import { supabase } from '../data/legacy/legacy-compat.ts';
+import { currencyService } from '../services/currencyService';
+import { asyncState, type AsyncState } from '../shared/contracts/ui.contracts';
+import { isRecord, readString, toRecord, type UnknownRecord } from '../shared/contracts/unknown.contracts';
 
 export type AccountType = 'Asset' | 'Liability' | 'Equity' | 'Revenue' | 'Expense';
 
@@ -38,9 +40,41 @@ export interface AccountBalancesMap {
   byId: Record<string, number>;
   /** is the data still loading? */
   loading: boolean;
+  queryState: AsyncState<{ byCode: Record<string, number>; byId: Record<string, number> }>;
   /** last update timestamp */
   updatedAt: number;
 }
+
+interface SnapshotDocument {
+  id: string;
+  data(): unknown;
+}
+
+interface CollectionSnapshot {
+  docs: SnapshotDocument[];
+}
+
+interface RealtimeChannel {
+  on(event: string, filter: Record<string, string>, listener: () => void): RealtimeChannel;
+  subscribe(): unknown;
+}
+
+interface RealtimeClient {
+  channel(name: string): RealtimeChannel;
+}
+
+const realtimeClient = supabase as unknown as RealtimeClient;
+const numericValue = (value: unknown): number => {
+  const number = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(number) ? number : 0;
+};
+const readFirstString = (record: UnknownRecord, ...keys: string[]): string | undefined => {
+  for (const key of keys) {
+    const value = readString(record[key]);
+    if (value) return value;
+  }
+  return undefined;
+};
 
 /**
  * Universal Currency Converter (Client side helper)
@@ -123,8 +157,8 @@ export function guessAccountTypeFromCode(code: string): AccountType {
  * @param tx          - سطر الحركة من account_trans
  * @param entryMap    - خريطة رؤوس القيود من main_entry (id → data)
  */
-export function isTransactionPostable(tx: any, entryMap: Map<string, any>): boolean {
-  const entryId = tx.entryId || tx.entry_id;
+export function isTransactionPostable(tx: UnknownRecord, entryMap: Map<string, UnknownRecord>): boolean {
+  const entryId = readFirstString(tx, 'entryId', 'entry_id');
 
   // إذا لم يوجد entry_id: تُدرج الحركة (حركات تاريخية غير مرتبطة)
   // If no entry_id: include the transaction (legacy unlinked transactions)
@@ -138,7 +172,7 @@ export function isTransactionPostable(tx: any, entryMap: Map<string, any>): bool
 
   // التحقق من حالة الترحيل: يجب أن تكون 'posted' (استبعاد 'draft')
   // Check posting status: must be 'posted' (exclude 'draft')
-  const postingStatus = entry.postingStatus || entry.posting_status || '';
+  const postingStatus = readFirstString(entry, 'postingStatus', 'posting_status') ?? '';
   if (postingStatus !== 'posted') return false;
 
   return true;
@@ -150,6 +184,7 @@ let _singleton: AccountBalancesMap = {
   byCode: {},
   byId: {},
   loading: true,
+  queryState: asyncState.loading(),
   updatedAt: 0,
 };
 const _subscribers = new Set<() => void>();
@@ -165,11 +200,16 @@ function _initSingleton() {
 
   let exchangeRates: Record<string, number> = { YER: 1, SAR: 140, USD: 535 };
   let accountRegistry: Record<string, { currency: string; type: AccountType }> = {};
-  let txDocs: any[] = [];
+  let txDocs: UnknownRecord[] = [];
   // خريطة رؤوس القيود: entryId → بيانات القيد (posting_status)
   // Map of main entry headers: entryId → entry data (posting_status)
-  let entryMap = new Map<string, any>();
+  let entryMap = new Map<string, UnknownRecord>();
   let initialLoaded = { settings: false, accounts: false, txs: false, entries: false };
+  const sourceErrors: Partial<Record<keyof typeof initialLoaded, unknown>> = {};
+
+  const setSourceError = (source: keyof typeof initialLoaded, error?: unknown) => {
+    sourceErrors[source] = error;
+  };
 
   const checkAndCompute = () => {
     const debitByCode: Record<string, number> = {};
@@ -177,7 +217,7 @@ function _initSingleton() {
     const debitById: Record<string, number> = {};
     const creditById: Record<string, number> = {};
 
-    txDocs.forEach((tx: any) => {
+    txDocs.forEach((tx) => {
       // ──────────────────────────────────────────────────────────────────────
       // شرط أساسي: استبعاد الحركات التي لم يُرحَّل قيدها (posting_status !== 'posted')
       // Critical filter: exclude transactions from non-posted entries only
@@ -186,16 +226,16 @@ function _initSingleton() {
 
       // استخراج كود الحساب والمعرف والنوع من أسطر جدول account_trans الجديد
       // Extract account code, ID, and transaction type from account_trans table
-      const code: string = tx.accountCode || tx.account_code || '';
-      const id: string   = tx.accountId  || tx.account_id  || '';
-      const type: string = tx.transType  || tx.trans_type  || tx.type || '';
-      const txCurrency   = tx.currency   || 'YER';
+      const code = readFirstString(tx, 'accountCode', 'account_code') ?? '';
+      const id = readFirstString(tx, 'accountId', 'account_id') ?? '';
+      const type = readFirstString(tx, 'transType', 'trans_type', 'type') ?? '';
+      const txCurrency = readFirstString(tx, 'currency') ?? 'YER';
       const accountCurrency = accountRegistry[code]?.currency || accountRegistry[id]?.currency || 'YER';
 
-      let amt: number = parseFloat(tx.amount) || 0;
+      let amt = numericValue(tx.amount);
       if (txCurrency !== accountCurrency) {
-        const origAmt = parseFloat(tx.amountOriginal || tx.amount_original) || amt;
-        const origCurr = tx.currencyOriginal || tx.currency_original || txCurrency;
+        const origAmt = numericValue(tx.amountOriginal ?? tx.amount_original) || amt;
+        const origCurr = readFirstString(tx, 'currencyOriginal', 'currency_original') || txCurrency;
         amt = convertCurrency(origAmt, origCurr, accountCurrency, exchangeRates);
       }
 
@@ -223,10 +263,21 @@ function _initSingleton() {
       byId[id] = computeAccountBalance(debitById[id] || 0, creditById[id] || 0, type);
     });
 
+    const loading = !(initialLoaded.settings && initialLoaded.accounts && initialLoaded.txs && initialLoaded.entries);
+    const firstError = Object.values(sourceErrors).find((error) => error !== undefined);
+    const hasBalances = Object.keys(byCode).length > 0 || Object.keys(byId).length > 0;
+    const queryState = loading
+      ? asyncState.loading<{ byCode: Record<string, number>; byId: Record<string, number> }>()
+      : firstError !== undefined
+        ? asyncState.error<{ byCode: Record<string, number>; byId: Record<string, number> }>(firstError, 'ACCOUNT_BALANCES_LOAD_FAILED')
+        : hasBalances
+          ? asyncState.success({ byCode, byId })
+          : asyncState.empty<{ byCode: Record<string, number>; byId: Record<string, number> }>();
     _singleton = {
-      byCode,
-      byId,
-      loading: !(initialLoaded.settings && initialLoaded.accounts && initialLoaded.txs && initialLoaded.entries),
+      byCode: queryState.status === 'error' ? {} : byCode,
+      byId: queryState.status === 'error' ? {} : byId,
+      loading,
+      queryState,
       updatedAt: Date.now(),
     };
     _notifySubscribers();
@@ -237,7 +288,10 @@ function _initSingleton() {
     try {
       const latest = await currencyService.getLatestExchangeRates();
       exchangeRates = { ...latest };
-    } catch (_) {}
+      setSourceError('settings');
+    } catch (error: unknown) {
+      setSourceError('settings', error);
+    }
     initialLoaded.settings = true;
     checkAndCompute();
   };
@@ -245,7 +299,7 @@ function _initSingleton() {
 
   try {
     const balChanId = `balances_rates_sync_${Math.random().toString(36).substring(2, 8)}`;
-    (supabase as any)
+    realtimeClient
       .channel(balChanId)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'cur_price' }, () => {
         fetchRates();
@@ -256,57 +310,64 @@ function _initSingleton() {
   }
 
   // 2. Subscribe to accounts to build type & currency registry (single global listener)
-  onSnapshot(collection(db, 'accounts'), (snap: any) => {
+  onSnapshot(collection(db, 'accounts'), (snap: CollectionSnapshot) => {
     const reg: Record<string, { currency: string; type: AccountType }> = {};
-    snap.docs.forEach((d: any) => {
-      const acc = d.data();
-      const code = acc.accountCode || acc.code;
-      const id = d.id;
-      const currency = acc.currency || 'YER';
-      let typeStr = acc.type || guessAccountTypeFromCode(code);
-      if (typeStr === 'REV') typeStr = 'Revenue';
-      if (typeStr === 'EXP') typeStr = 'Expense';
-      if (typeStr === 'AST') typeStr = 'Asset';
-      const type = typeStr as AccountType;
+    snap.docs.forEach((document) => {
+      const account = toRecord(document.data());
+      const code = readFirstString(account, 'accountCode', 'code');
+      const id = document.id;
+      const currency = readFirstString(account, 'currency', 'currency_code') || 'YER';
+      let typeValue = readFirstString(account, 'type') || (code ? guessAccountTypeFromCode(code) : 'Asset');
+      if (typeValue === 'REV') typeValue = 'Revenue';
+      if (typeValue === 'EXP') typeValue = 'Expense';
+      if (typeValue === 'AST') typeValue = 'Asset';
+      const type: AccountType = typeValue === 'Asset' || typeValue === 'Liability' || typeValue === 'Equity' || typeValue === 'Revenue' || typeValue === 'Expense'
+        ? typeValue
+        : (code ? guessAccountTypeFromCode(code) : 'Asset');
       if (code) reg[code] = { currency, type };
       if (id)   reg[id]   = { currency, type };
     });
     accountRegistry = reg;
+    setSourceError('accounts');
     initialLoaded.accounts = true;
     checkAndCompute();
-  }, () => { initialLoaded.accounts = true; checkAndCompute(); });
+  }, (error: unknown) => { setSourceError('accounts', error); initialLoaded.accounts = true; checkAndCompute(); });
 
   // 3. الاستماع لجدول main_entry لبناء خريطة رؤوس القيود (مرحّل/مسودة)
   //    Subscribe to main_entry to build the posting-status map
-  onSnapshot(collection(db, 'main_entry'), (snap: any) => {
-    const newMap = new Map<string, any>();
-    snap.docs.forEach((d: any) => {
-      const data = d.data();
-      newMap.set(d.id, data);
-      if (data.id && data.id !== d.id) {
-        newMap.set(data.id, data);
+  onSnapshot(collection(db, 'main_entry'), (snap: CollectionSnapshot) => {
+    const newMap = new Map<string, UnknownRecord>();
+    snap.docs.forEach((document) => {
+      const data = toRecord(document.data());
+      newMap.set(document.id, data);
+      const alternateId = readString(data.id);
+      if (alternateId && alternateId !== document.id) {
+        newMap.set(alternateId, data);
       }
     });
     entryMap = newMap;
+    setSourceError('entries');
     initialLoaded.entries = true;
     checkAndCompute();
-  }, (err: any) => {
+  }, (err: unknown) => {
     console.warn('[useAccountBalances] main_entry subscription warning:', err);
+    setSourceError('entries', err);
     initialLoaded.entries = true;
     checkAndCompute();
   });
 
   // 4. Subscribe to transactions in account_trans (single global listener)
   // الاستماع المباشر للتغيرات في جدول أسطر الحسابات الجديد account_trans
-  onSnapshot(collection(db, 'account_trans'), (snap: any) => {
-    txDocs = snap.docs.map((d: any) => ({ _docId: d.id, ...d.data() }));
+  onSnapshot(collection(db, 'account_trans'), (snap: CollectionSnapshot) => {
+    txDocs = snap.docs.map((document) => ({ _docId: document.id, ...toRecord(document.data()) }));
+    setSourceError('txs');
     initialLoaded.txs = true;
     checkAndCompute();
-  }, (error: any) => {
+  }, (error: unknown) => {
     console.error('[useAccountBalances] Snapshot error:', error);
+    setSourceError('txs', error);
     initialLoaded.txs = true;
-    _singleton = { ..._singleton, loading: false };
-    _notifySubscribers();
+    checkAndCompute();
   });
 }
 

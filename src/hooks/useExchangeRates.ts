@@ -16,8 +16,9 @@
  */
 
 import { useState, useEffect } from 'react';
-import { supabase } from '../data/legacy/legacy-adapter';
+import { supabase } from '../data/legacy/legacy-compat.ts';
 import { currencyService, Currency, ExchangeRates, DEFAULT_RATES } from '../services/currencyService';
+import { asyncState, runQuery, type AsyncState } from '../shared/contracts/ui.contracts';
 
 // ── Singleton State ───────────────────────────────────────────────────────────
 
@@ -26,8 +27,27 @@ interface ExchangeRatesState {
   currencies: Currency[];
   activeCurrencies: Currency[];
   loading: boolean;
+  queryState: AsyncState<ExchangeRatesData>;
   updatedAt: number;
 }
+
+interface ExchangeRatesData {
+  rates: ExchangeRates;
+  currencies: Currency[];
+  activeCurrencies: Currency[];
+}
+
+interface RealtimeChannel {
+  on(event: 'postgres_changes', filter: { event: string; schema: string; table: string }, listener: () => void): RealtimeChannel;
+  subscribe(): RealtimeChannel;
+}
+
+interface RealtimeClient {
+  channel(name: string): RealtimeChannel;
+  removeChannel(channel: RealtimeChannel): Promise<unknown>;
+}
+
+const realtimeClient = supabase as unknown as RealtimeClient;
 
 let _state: ExchangeRatesState = {
   // الحالة الأولية: خريطة فارغة — ستُملأ من DB فور الاتصال
@@ -36,35 +56,36 @@ let _state: ExchangeRatesState = {
   currencies: [],
   activeCurrencies: [],
   loading: true,
+  queryState: asyncState.loading(),
   updatedAt: 0,
 };
 
 const _subscribers = new Set<() => void>();
 let _initialized = false;
-let _channelCurrency: any = null;
-let _channelCurPrice: any = null;
+let _channelCurrency: RealtimeChannel | null = null;
+let _channelCurPrice: RealtimeChannel | null = null;
 
 function _notify() {
   _subscribers.forEach(cb => cb());
 }
 
 async function _refresh() {
-  try {
-    const [rates, allCurrencies] = await Promise.all([
+  const result = await runQuery<ExchangeRatesData>(async () => {
+    const [rates, currencies] = await Promise.all([
       currencyService.getLatestExchangeRates(),
       currencyService.getAllCurrencies(false),
     ]);
+    return { rates, currencies, activeCurrencies: currencies.filter((currency) => currency.isActive) };
+  }, (queryState) => {
+    if (queryState.status === 'loading') _state = { ..._state, loading: true, queryState };
+  }, (data) => Object.keys(data.rates).length === 0 && data.currencies.length === 0);
 
-    _state = {
-      rates,
-      currencies: allCurrencies,
-      activeCurrencies: allCurrencies.filter(c => c.isActive),
-      loading: false,
-      updatedAt: Date.now(),
-    };
-  } catch (e) {
-    console.error('[useExchangeRates] refresh error:', e);
-    _state = { ..._state, loading: false, updatedAt: Date.now() };
+  if (result.status === 'success') {
+    _state = { ...result.data, loading: false, queryState: result, updatedAt: Date.now() };
+  } else if (result.status === 'empty') {
+    _state = { rates: {}, currencies: [], activeCurrencies: [], loading: false, queryState: result, updatedAt: Date.now() };
+  } else if (result.status === 'error') {
+    _state = { ..._state, loading: false, queryState: result, updatedAt: Date.now() };
   }
   _notify();
 }
@@ -78,18 +99,18 @@ function _initSingleton() {
 
   // Safely remove any existing channel instances (e.g. from HMR reloads)
   if (_channelCurrency) {
-    try { (supabase as any).removeChannel(_channelCurrency); } catch (_) { }
+    try { void realtimeClient.removeChannel(_channelCurrency); } catch (_) { }
     _channelCurrency = null;
   }
   if (_channelCurPrice) {
-    try { (supabase as any).removeChannel(_channelCurPrice); } catch (_) { }
+    try { void realtimeClient.removeChannel(_channelCurPrice); } catch (_) { }
     _channelCurPrice = null;
   }
 
   // Real-time: subscribe to currency table changes
   try {
     const currencyChannelId = `currency_realtime_${Math.random().toString(36).substring(2, 8)}`;
-    _channelCurrency = (supabase as any)
+    _channelCurrency = realtimeClient
       .channel(currencyChannelId)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'currency' }, () => {
         _refresh();
@@ -102,7 +123,7 @@ function _initSingleton() {
   // Real-time: subscribe to cur_price table changes
   try {
     const curPriceChannelId = `cur_price_realtime_${Math.random().toString(36).substring(2, 8)}`;
-    _channelCurPrice = (supabase as any)
+    _channelCurPrice = realtimeClient
       .channel(curPriceChannelId)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'cur_price' }, () => {
         _refresh();

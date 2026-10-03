@@ -2,7 +2,7 @@ import { SharedProps, ModalShell, inputClass, FormField, ModalActions } from './
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Globe, MapPin, Phone, Truck, User, X, ShieldCheck, Calendar, Key, Lock, CheckCircle2, Building2, Briefcase } from 'lucide-react';
-import { addDoc, collection, db, doc, setDoc, updateDoc } from '../../data/legacy/legacy-adapter';
+import { addDoc, collection, db, doc, setDoc, updateDoc } from '../../data/legacy/legacy-compat.ts';
 import { financialAccountService } from '../../services/financialAccountService';
 import { activityLogService } from '../../services/activityLogService';
 import { notificationService } from '../../services/notificationService';

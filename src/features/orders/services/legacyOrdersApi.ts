@@ -13,7 +13,7 @@ import {
   setDoc,
   updateDoc,
   where,
-} from "../../../data/legacy/legacy-adapter";
+} from "../../../data/legacy/legacy-compat.ts";
 import {
   ORDER_COLLECTIONS,
   ORDER_DOCUMENTS,

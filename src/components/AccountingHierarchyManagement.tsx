@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { CurrencySelect } from './common/CurrencySelect';
 import { CheckCircle2, ChevronDown, ChevronRight, CircleDollarSign, Download, Edit3, FileSpreadsheet, FileText, FolderPlus, Layers3, Loader2, Maximize2, Minimize2, Plus, Printer, Search, Settings2, Trash2, Upload, X } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
-import { addDoc, collection, db, deleteDoc, doc, getDocs, onSnapshot, orderBy, query, updateDoc, where } from '../data/legacy/legacy-adapter';
+import { addDoc, collection, db, deleteDoc, doc, getDocs, onSnapshot, orderBy, query, updateDoc, where } from '../data/legacy/legacy-compat.ts';
 import { accountingHierarchyService, hierarchyCodeRules, type HierarchyCodeKind } from '../services/accountingHierarchyService';
 import { useAccountBalances } from '../hooks/useAccountBalances';
 import { useExchangeRates } from '../hooks/useExchangeRates';

@@ -48,6 +48,7 @@ import { registerApiFoundationRoutes } from './server/routes/api-foundation';
 import { registerPortalRoutes } from './server/routes/portal';
 import { registerBrowserProxyRoute } from './server/browser-proxy/route';
 import { attachViteDevMiddleware, attachProductionStaticFiles } from './server/dev-server';
+import { readErrorMessage } from './src/shared/contracts/unknown.contracts';
 
 async function startServer(): Promise<void> {
   // 1. إنشاء عميل قاعدة البيانات / Create database client
@@ -64,16 +65,18 @@ async function startServer(): Promise<void> {
     try {
       startAccountReconciliationListener(db);
       console.log('[Server] Account reconciliation listener started');
-    } catch (triggerErr: any) {
-      console.error('[Server] Could not start Realtime listeners:', triggerErr.message);
+    } catch (triggerErr: unknown) {
+      console.error('[Server] Could not start Realtime listeners:', readErrorMessage(triggerErr));
     }
   }
 
   // 5. تسجيل مسارات API / Register API routes
   registerBrowserProxyRoute(app);
-  registerAuthRoutes(app, db, auth);
-  registerWhatsAppRoutes(app, db);
-  registerTrackingRoutes(app, db);
+  if (db && auth) registerAuthRoutes(app, db, auth);
+  if (db) {
+    registerWhatsAppRoutes(app, db);
+    registerTrackingRoutes(app, db);
+  }
   registerApiFoundationRoutes(app, db);
   registerPortalRoutes(app, db);
 

@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => {
   return { setDoc, update, from };
 });
 
-vi.mock('../data/legacy/legacy-adapter', () => ({
+vi.mock('../data/legacy/legacy-compat.ts', () => ({
   collection: vi.fn(),
   getDocs: vi.fn(),
   setDoc: mocks.setDoc,

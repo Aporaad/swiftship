@@ -1,5 +1,5 @@
-import { collection, addDoc } from '../data/legacy/legacy-adapter';
-import { db, handlePostgreSQLError, OperationType } from '../data/legacy/legacy-adapter';
+import { collection, addDoc } from '../data/legacy/legacy-compat.ts';
+import { db, handlePostgreSQLError, OperationType } from '../data/legacy/legacy-compat.ts';
 import { currentSupabaseAuthGateway } from '../data/current-supabase/gateways/auth.gateway';
 import toast from 'react-hot-toast';
 

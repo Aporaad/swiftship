@@ -1,4 +1,4 @@
-import { supabase, notifyOrderDeletionInCache, refetchCollection } from '../data/legacy/legacy-adapter';
+import { supabase, notifyOrderDeletionInCache, refetchCollection } from '../data/legacy/legacy-compat.ts';
 
 export interface OrderDeletionSummary {
   orderIds: string[];

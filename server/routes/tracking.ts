@@ -7,6 +7,9 @@
  */
 
 import type { Express } from 'express';
+import type { DatabaseClient } from '../current-db/client';
+import type { ExternalTrackingResult, TrackingApiConfig, TrackingHistoryEntry } from '../jobs/tracking-sync';
+import { isRecord, readErrorMessage, readString, toRecord, type UnknownRecord } from '../../src/shared/contracts/unknown.contracts';
 import { isAuthorizedHeartbeatRequest } from '../heartbeatAuth';
 import {
   fetchExternalTracking,
@@ -44,12 +47,43 @@ const DEFAULT_COORDINATES: [number, number] = [15.3694, 44.1910]; // صنعاء 
  * يُلحق إحداثيات الموقع بعناصر سجل التتبع.
  * Attaches location coordinates to tracking history entries.
  */
-function attachCoordinates(history: any[]): { augmented: any[]; lastCoords: [number, number] } {
+function readCoordinatePair(value: unknown): [number, number] | null {
+  if (!Array.isArray(value) || value.length !== 2) return null;
+  const [latitude, longitude] = value;
+  return typeof latitude === 'number' && Number.isFinite(latitude) && typeof longitude === 'number' && Number.isFinite(longitude)
+    ? [latitude, longitude]
+    : null;
+}
+
+function historyRows(value: unknown): UnknownRecord[] {
+  return Array.isArray(value) ? value.filter(isRecord) : [];
+}
+
+function trackingConfig(value: unknown): TrackingApiConfig {
+  const config = toRecord(value);
+  return {
+    enabled: config.enabled === true,
+    provider: readString(config.provider) ?? 'none',
+    apiKey: readString(config.apiKey),
+    defaultDestinationCountry: readString(config.defaultDestinationCountry),
+  };
+}
+
+interface TrackingResponse {
+  status: string;
+  currentLocation: string;
+  history: Array<TrackingHistoryEntry | UnknownRecord>;
+  isLiveApi: boolean;
+  docData?: UnknownRecord | null;
+  currentCoordinates?: [number, number];
+}
+
+function attachCoordinates(history: UnknownRecord[]): { augmented: UnknownRecord[]; lastCoords: [number, number] } {
   let lastCoords: [number, number] = DEFAULT_COORDINATES;
-  const augmented = history.map((h: any) => {
-    let coords = h.coordinates || null;
+  const augmented = history.map((entry) => {
+    let coords = readCoordinatePair(entry.coordinates);
     if (!coords) {
-      const locText = `${h.location || ''} ${h.status || ''} ${h.notes || ''}`.toLowerCase();
+      const locText = `${readString(entry.location) ?? ''} ${readString(entry.status) ?? ''} ${readString(entry.notes) ?? ''}`.toLowerCase();
       for (const key of Object.keys(LOCATION_COORDINATES)) {
         if (locText.includes(key.toLowerCase())) {
           coords = LOCATION_COORDINATES[key];
@@ -58,7 +92,7 @@ function attachCoordinates(history: any[]): { augmented: any[]; lastCoords: [num
       }
     }
     if (coords) lastCoords = coords;
-    return { ...h, coordinates: coords };
+    return { ...entry, coordinates: coords };
   });
   return { augmented, lastCoords };
 }
@@ -70,7 +104,7 @@ function attachCoordinates(history: any[]): { augmented: any[]; lastCoords: [num
  * @param app - تطبيق Express / Express application
  * @param db - عميل قاعدة البيانات / Database client
  */
-export function registerTrackingRoutes(app: Express, db: any): void {
+export function registerTrackingRoutes(app: Express, db: DatabaseClient): void {
   // ── مزامنة الطلبات النشطة (Heartbeat Job) ─────────────────────
   // Heartbeat-triggered route: called every 6 hours by the managed cron job
   app.post('/api/scheduled/sync-active-orders', async (req, res) => {
@@ -87,9 +121,9 @@ export function registerTrackingRoutes(app: Express, db: any): void {
         });
       }
       return res.json({ ok: true });
-    } catch (error: any) {
+    } catch (error: unknown) {
       return res.status(500).json({
-        error: error?.message ?? 'Tracking synchronisation failed',
+        error: readErrorMessage(error, 'Tracking synchronisation failed'),
         timestamp: new Date().toISOString(),
       });
     }
@@ -105,10 +139,10 @@ export function registerTrackingRoutes(app: Express, db: any): void {
       const trackingNumber = trackingId.toUpperCase();
 
       // 1. البحث عن بيانات داخلية / Fetch internal document
-      let internalDocData: any = null;
+      let internalDocData: UnknownRecord | null = null;
       const publicRef = await getDoc(doc(db, 'public_tracking', trackingNumber));
       if (publicRef.exists()) {
-        internalDocData = publicRef.data();
+        internalDocData = toRecord(publicRef.data());
       } else {
         const ordersSnap = await getDocs(
           query(
@@ -117,28 +151,26 @@ export function registerTrackingRoutes(app: Express, db: any): void {
             limit(1),
           ),
         );
-        if (!ordersSnap.empty) internalDocData = ordersSnap.docs[0].data();
+        if (!ordersSnap.empty) internalDocData = toRecord(ordersSnap.docs[0].data());
       }
 
       // 2. جلب بيانات خارجية / Fetch external data
       const configSnap = await getDoc(doc(db, 'settings', 'logistics_api'));
-      const apiConfig = configSnap.exists()
-        ? configSnap.data() as any
-        : { enabled: false, provider: 'none' };
+      const apiConfig = trackingConfig(configSnap.exists() ? configSnap.data() : null);
 
       const externalResult = await fetchExternalTracking(trackingNumber, apiConfig);
 
       // 3. دمج البيانات / Synthesise internal + external
-      let trackingData: any = null;
+      let trackingData: TrackingResponse | null = null;
         if (internalDocData) {
         const statusToUse = normalizeTrackingStatus(
-          externalResult?.status ?? internalDocData?.status ?? internalDocData?.orderStatus,
+          externalResult?.status ?? readString(internalDocData.status) ?? readString(internalDocData.orderStatus),
         );
-        const historyToUse = externalResult?.history || internalDocData?.history || [];
+        const historyToUse = externalResult?.history ?? historyRows(internalDocData.history);
 
         trackingData = {
           status: statusToUse,
-          currentLocation: externalResult?.location || internalDocData?.locationYemen || internalDocData?.location || 'مستودع الفرز والتبريد',
+          currentLocation: externalResult?.location || readString(internalDocData.locationYemen) || readString(internalDocData.location) || 'مستودع الفرز والتبريد',
           history: historyToUse,
           isLiveApi: !!externalResult,
           docData: internalDocData || null,
@@ -147,8 +179,8 @@ export function registerTrackingRoutes(app: Express, db: any): void {
         // مزامنة تلقائية للبيانات الخارجية / Auto-sync external updates back to DB
         if (externalResult && internalDocData) {
           try {
-            const historyChanged = externalResult.history.length > (internalDocData.history?.length || 0);
-            const statusChanged = statusToUse !== (internalDocData.status || internalDocData.orderStatus);
+            const historyChanged = externalResult.history.length > historyRows(internalDocData.history).length;
+            const statusChanged = statusToUse !== (readString(internalDocData.status) || readString(internalDocData.orderStatus));
 
             if (historyChanged || statusChanged) {
               const updatePayload: Record<string, unknown> = {
@@ -191,8 +223,8 @@ export function registerTrackingRoutes(app: Express, db: any): void {
       }
 
       // إلحاق الإحداثيات بسجل التتبع / Attach coordinates to history
-      if (trackingData.history?.length > 0) {
-        const { augmented, lastCoords } = attachCoordinates(trackingData.history);
+      if (trackingData.history.length > 0) {
+        const { augmented, lastCoords } = attachCoordinates(historyRows(trackingData.history));
         trackingData.history = augmented;
         trackingData.currentCoordinates = lastCoords;
       } else {
@@ -200,8 +232,8 @@ export function registerTrackingRoutes(app: Express, db: any): void {
       }
 
       return res.json({ success: true, tracking: trackingData });
-    } catch (e: any) {
-      console.error('[TrackingRoutes] Tracking Read Error:', e.message);
+    } catch (e: unknown) {
+      console.error('[TrackingRoutes] Tracking Read Error:', readErrorMessage(e));
       return res.status(500).json({ error: 'Failed to fetch live logistics payload.' });
     }
   });
@@ -215,12 +247,13 @@ export function registerTrackingRoutes(app: Express, db: any): void {
     // معالجة غير متزامنة لتجنب المهلة / Process asynchronously to avoid timeout
     (async () => {
       try {
-        const payload = req.body;
-        if (!payload?.msg?.tracking_number) return;
-
-        const trackingNumber = payload.msg.tracking_number;
-        const newTag = payload.msg.tag;
-        const locationStr = payload.msg.checkpoint?.location || 'Unknown Checkpoint';
+        const payload = toRecord(req.body);
+        const message = toRecord(payload.msg);
+        const checkpoint = toRecord(message.checkpoint);
+        const trackingNumber = readString(message.tracking_number);
+        if (!trackingNumber) return;
+        const newTag = readString(message.tag) ?? '';
+        const locationStr = readString(checkpoint.location) || 'Unknown Checkpoint';
 
         const ordersSnap = await getDocs(
           query(collection(db, 'orders'), where('trackingNumber', '==', trackingNumber), limit(1)),
@@ -228,7 +261,7 @@ export function registerTrackingRoutes(app: Express, db: any): void {
         if (ordersSnap.empty) return;
 
         const orderDoc = ordersSnap.docs[0];
-        const orderData = orderDoc.data();
+        const orderData = toRecord(orderDoc.data());
 
         // ترجمة حالة التتبع الواردة / Translate incoming tracking tag
         const webhookStatusMap: Record<string, string> = {
@@ -244,11 +277,11 @@ export function registerTrackingRoutes(app: Express, db: any): void {
           status: newStatus,
           location: locationStr,
           timestamp: Date.now(),
-          notes: payload.msg.checkpoint?.message || 'Automatic third-party checkpoint update',
+          notes: readString(checkpoint.message) || 'Automatic third-party checkpoint update',
           createdBy: 'API_WEBHOOK',
         };
 
-        const updatedHistory = [...(orderData.history || []), newHistoryEntry];
+        const updatedHistory = [...historyRows(orderData.history), newHistoryEntry];
 
         await updateDoc(doc(db, 'orders', orderDoc.id), {
           orderStatus: newStatus,
@@ -268,8 +301,8 @@ export function registerTrackingRoutes(app: Express, db: any): void {
           });
         }
         console.log(`[TrackingRoutes] Webhook: ${trackingNumber} advanced to ${newStatus}`);
-      } catch (err: any) {
-        console.error('[TrackingRoutes] Webhook processing failed:', err.message);
+      } catch (err: unknown) {
+        console.error('[TrackingRoutes] Webhook processing failed:', readErrorMessage(err));
       }
     })();
   });
@@ -293,21 +326,22 @@ export function registerTrackingRoutes(app: Express, db: any): void {
             apiKey,
           }),
         });
-        const json = await response.json() as any;
+        const json = toRecord(await response.json());
         if (response.ok && !json.error) {
           return res.json({ success: true, message: 'ParcelsApp v3 authenticated successfully!' });
         }
-        throw new Error(json.error || 'ParcelsApp authentication failed');
+        throw new Error(readString(json.error) || 'ParcelsApp authentication failed');
 
       } else if (provider === 'aftership') {
         const response = await fetch('https://api.aftership.com/v4/couriers', {
           headers: { 'aftership-api-key': apiKey, 'Content-Type': 'application/json' },
         });
-        const json = await response.json() as any;
-        if (response.ok && json.meta?.code === 200) {
+        const json = toRecord(await response.json());
+        const metadata = toRecord(json.meta);
+        if (response.ok && metadata.code === 200) {
           return res.json({ success: true, message: 'AfterShip API key is valid!' });
         }
-        throw new Error(json.meta?.message || 'AfterShip authentication failed');
+        throw new Error(readString(metadata.message) || 'AfterShip authentication failed');
 
       } else if (provider === 'sandbox') {
         return res.json({ success: true, message: 'Sandbox mode is virtualised and always ready.' });
@@ -315,8 +349,8 @@ export function registerTrackingRoutes(app: Express, db: any): void {
       } else {
         return res.status(400).json({ error: 'Provider test not yet implemented' });
       }
-    } catch (e: any) {
-      return res.status(500).json({ error: e.message });
+    } catch (e: unknown) {
+      return res.status(500).json({ error: readErrorMessage(e) });
     }
   });
 }

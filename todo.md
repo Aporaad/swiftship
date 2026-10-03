@@ -1486,3 +1486,15 @@
 - [ ] alx_api scaffold غير متصل بقاعدة البيانات ولا يضم Auth/RBAC أو business endpoints؛ readiness يبقى 503 عمداً.
 - [ ] لا SQL أو تغييرات قاعدة بيانات/RLS/Grants حسب تأكيد المستخدم. لم يعلن اكتمال خطة الإصلاح أو الجاهزية الإنتاجية.
 - التقرير التفصيلي: `docs/pre-api/repair-execution-and-api-scaffold-2026-10-04.md`.
+
+
+## [2026-10-04T02:28:06+03:00] — إزالة shim القديم ومتابعة any/AsyncState وتحقق alx_api — AI Model: Manus
+- [x] إزالة `src/data/legacy/legacy-adapter.ts` ونقل imports إلى حدّ مركزي صريح `src/data/legacy/legacy-compat.ts` (138 موضعاً عبر 88 ملفاً)؛ أضيف اختبار يمنع رجوع shim المحذوف.
+- [x] تنظيف `any` في نطاقات `src/features/auth`, `src/features/orders`, `src/features/accounting`, `src/features/financeEntries`, `server/routes`, `server/current-db` و`useRole` إلى صفر بحسب TypeScript AST.
+- [x] توحيد Query أسعار الصرف والأرصدة الحية وحاسبة الصرف عبر `AsyncState` مع اختبارات معادلات وترحيل الأرصدة.
+- [x] التحقق: SwiftShip 270 اختباراً ناجحاً و8 متخطاة؛ `alx_api` ستة اختبارات ناجحة؛ Portal خمسة اختبارات ناجحة، boundary audit والبناء ناجحة.
+- [ ] لا تزال 912 استخدامات `any` صريحة في 113 ملفاً على مستوى `src/` و`server/`؛ لا تُعلن المرحلة 11 مغلقة.
+- [ ] لا يزال 91 مستهلكاً يستخدم `legacy-compat` كجسر انتقالي؛ يلزم نقلهم إلى Feature Gateways وعدم الاكتفاء بإعادة تسمية الشيم.
+- [ ] Portal HTTP cutover جزئي؛ الجلسة والعمليات المحمية لم تُنقل، و`alx_api` لا يزال Scaffold بلا Auth/RBAC أو business routes.
+- [ ] RLS/Grants وبيئة اختبار منفصلة مستثناة بأمر المستخدم؛ لم يُنفذ SQL أو أي كتابة على قاعدة البيانات.
+- التفاصيل: `docs/pre-api/repair-followup-2026-10-04.md`.

@@ -17,6 +17,8 @@
 
 import type { Express } from 'express';
 import bcrypt from 'bcryptjs';
+import type { DatabaseClient, ServerAuthClient } from '../current-db/client';
+import { readErrorCode, readErrorMessage, readString, toRecord, type UnknownRecord } from '../../src/shared/contracts/unknown.contracts';
 import {
   admin,
   doc,
@@ -40,7 +42,7 @@ const ROOT_EMAILS = (process.env.SWIFTSHIP_ROOT_EMAILS ?? '')
   .filter(Boolean);
 const SYSTEM_ADMIN_EMAIL = (process.env.SWIFTSHIP_SYSTEM_EMAIL ?? '').trim().toLowerCase();
 
-async function hasPasswordResetAuthority(req: { header(name: string): string | undefined }, db: any): Promise<boolean> {
+async function hasPasswordResetAuthority(req: { header(name: string): string | undefined }, db: DatabaseClient): Promise<boolean> {
   const authorization = req.header('authorization');
   if (!authorization?.startsWith('Bearer ')) return false;
   const sessionId = authorization.slice(7).trim();
@@ -68,11 +70,13 @@ async function hasPasswordResetAuthority(req: { header(name: string): string | u
  * @param db - عميل قاعدة البيانات / Database client
  * @param auth - عميل المصادقة / Auth client
  */
-export function registerAuthRoutes(app: Express, db: any, auth: any): void {
+export function registerAuthRoutes(app: Express, db: DatabaseClient, auth: ServerAuthClient): void {
   // ── تغيير كلمة المرور الإدارية ──────────────────────────────────
   // Direct administrative password update bypassing disabled Identity Toolkit API
   app.post('/api/auth/admin-change-password', async (req, res) => {
-    const { uid, newPassword } = req.body;
+    const input = toRecord(req.body);
+    const uid = readString(input.uid);
+    const newPassword = readString(input.newPassword);
     if (!uid || !newPassword) {
       return res.status(400).json({ error: 'User ID and password are required' });
     }
@@ -94,16 +98,19 @@ export function registerAuthRoutes(app: Express, db: any, auth: any): void {
       await updateDoc(userRef, { password_hash: passwordHash, password: null });
       console.log(`[Auth] Changed password in PostgreSQL for user ${uid}`);
       return res.json({ success: true });
-    } catch (err: any) {
-      console.error('[Auth] Failed to change user password:', err);
-      return res.status(500).json({ error: err.message || 'Failed to change password' });
+    } catch (err: unknown) {
+      const message = readErrorMessage(err, 'Failed to change password');
+      console.error('[Auth] Failed to change user password:', message);
+      return res.status(500).json({ error: message });
     }
   });
 
   // ── التحقق من تسجيل الدخول ──────────────────────────────────────
   // Dual-logic login validation (custom PostgreSQL passwords + Supabase Auth)
   app.post('/api/auth/verify-login', async (req, res) => {
-    const { identifier, password } = req.body;
+    const input = toRecord(req.body);
+    const identifier = readString(input.identifier);
+    const password = readString(input.password);
     if (!identifier || !password) {
       return res.status(400).json({ error: 'Identifier and password are required' });
     }
@@ -116,7 +123,7 @@ export function registerAuthRoutes(app: Express, db: any, auth: any): void {
         email = SYSTEM_ADMIN_EMAIL;
       }
 
-      let userDoc: any = null;
+      let userDoc: UnknownRecord | null = null;
       let userDocId = '';
 
       // البحث عن المستخدم بالبريد الإلكتروني أو اسم المستخدم
@@ -126,7 +133,7 @@ export function registerAuthRoutes(app: Express, db: any, auth: any): void {
           query(collection(db, 'users'), where('email', '==', email), limit(1)),
         );
         if (!snap.empty) {
-          userDoc = snap.docs[0].data();
+          userDoc = toRecord(snap.docs[0].data());
           userDocId = snap.docs[0].id;
         }
       } else {
@@ -134,9 +141,9 @@ export function registerAuthRoutes(app: Express, db: any, auth: any): void {
           query(collection(db, 'users'), where('username', '==', identifier), limit(1)),
         );
         if (!snap.empty) {
-          userDoc = snap.docs[0].data();
+          userDoc = toRecord(snap.docs[0].data());
           userDocId = snap.docs[0].id;
-          email = userDoc.email;
+          email = readString(userDoc.email) ?? '';
         }
       }
 
@@ -154,8 +161,9 @@ export function registerAuthRoutes(app: Express, db: any, auth: any): void {
             try {
               const authUser = await admin.auth().getUserByEmail(email);
               uid = authUser.uid;
-            } catch (authErr: any) {
-              if (authErr.code === 'auth/user-not-found' || authErr.code === 'user-not-found') {
+            } catch (authErr: unknown) {
+              const code = readErrorCode(authErr);
+              if (code === 'auth/user-not-found' || code === 'user-not-found') {
                 const userRecord = await admin.auth().createUser({
                   email,
                   emailVerified: true,
@@ -180,8 +188,8 @@ export function registerAuthRoutes(app: Express, db: any, auth: any): void {
             }, { merge: true });
             createdSuccessfully = true;
           }
-        } catch (adminErr: any) {
-          console.warn('[Auth] Admin SDK failed, trying Client SDK fallback:', adminErr.message);
+        } catch (adminErr: unknown) {
+          console.warn('[Auth] Admin SDK failed, trying Client SDK fallback:', readErrorMessage(adminErr));
         }
 
         // الرجوع إلى Client SDK إذا فشل Admin SDK
@@ -191,17 +199,18 @@ export function registerAuthRoutes(app: Express, db: any, auth: any): void {
             try {
               const userCred = await signInWithEmailAndPassword(auth, email, password);
               uid = userCred.user.uid;
-            } catch (signInErr: any) {
+            } catch (signInErr: unknown) {
+              const code = readErrorCode(signInErr);
               if (
-                signInErr.code === 'auth/user-not-found' ||
-                signInErr.code === 'auth/invalid-credential' ||
-                signInErr.code === 'auth/user-disabled'
+                code === 'auth/user-not-found' ||
+                code === 'auth/invalid-credential' ||
+                code === 'auth/user-disabled'
               ) {
                 try {
                   const userCred = await createUserWithEmailAndPassword(auth, email, password);
                   uid = userCred.user.uid;
-                } catch (createErr: any) {
-                  if (createErr.code !== 'auth/email-already-in-use') {
+                } catch (createErr: unknown) {
+                  if (readErrorCode(createErr) !== 'auth/email-already-in-use') {
                     throw createErr;
                   }
                 }
@@ -224,8 +233,8 @@ export function registerAuthRoutes(app: Express, db: any, auth: any): void {
               }, { merge: true });
               createdSuccessfully = true;
             }
-          } catch (clientErr: any) {
-            console.error('[Auth] Client SDK root creation fallback failed:', clientErr.message);
+          } catch (clientErr: unknown) {
+            console.error('[Auth] Client SDK root creation fallback failed:', readErrorMessage(clientErr));
           }
         }
 
@@ -247,15 +256,17 @@ export function registerAuthRoutes(app: Express, db: any, auth: any): void {
         return res.status(404).json({ error: 'User not found' });
       }
 
-      if (userDoc.disabled) {
+      if (userDoc.disabled === true) {
         return res.status(403).json({ error: 'This account is currently disabled.' });
       }
 
-      if (typeof userDoc.password_hash === 'string' && userDoc.password_hash.length > 0) {
-        if (!(await bcrypt.compare(password, userDoc.password_hash))) {
+      const passwordHash = readString(userDoc.password_hash);
+      const legacyPassword = readString(userDoc.password);
+      if (passwordHash) {
+        if (!(await bcrypt.compare(password, passwordHash))) {
           return res.status(401).json({ error: 'Invalid login credentials' });
         }
-      } else if (typeof userDoc.password === 'string' && userDoc.password.length > 0) {
+      } else if (legacyPassword) {
         return res.status(409).json({ error: 'Password migration required' });
       }
 
@@ -263,17 +274,18 @@ export function registerAuthRoutes(app: Express, db: any, auth: any): void {
       let customToken = '';
       try {
         customToken = await admin.auth().createCustomToken(userDocId);
-      } catch (tokenErr: any) {
-        console.warn('[Auth] Could not generate customToken:', tokenErr.message);
+      } catch (tokenErr: unknown) {
+        console.warn('[Auth] Could not generate customToken:', readErrorMessage(tokenErr));
       }
 
       if (customToken) {
         return res.json({ success: true, customToken, email });
       }
-      return res.json({ success: true, useClientAuth: true, email, isLegacyNoPasswordDoc: !userDoc.password_hash });
-    } catch (err: any) {
-      console.error('[Auth] Verify login backend error:', err);
-      return res.status(500).json({ error: err.message || 'Verification failed' });
+      return res.json({ success: true, useClientAuth: true, email, isLegacyNoPasswordDoc: !readString(userDoc.password_hash) });
+    } catch (err: unknown) {
+      const message = readErrorMessage(err, 'Verification failed');
+      console.error('[Auth] Verify login backend error:', message);
+      return res.status(500).json({ error: message });
     }
   });
 }

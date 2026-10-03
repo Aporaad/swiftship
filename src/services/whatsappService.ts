@@ -1,5 +1,5 @@
-import { doc, getDoc, setDoc, collection, addDoc } from '../data/legacy/legacy-adapter';
-import { db } from '../data/legacy/legacy-adapter';
+import { doc, getDoc, setDoc, collection, addDoc } from '../data/legacy/legacy-compat.ts';
+import { db } from '../data/legacy/legacy-compat.ts';
 
 export interface WhatsAppConfig {
   enabled: boolean;

@@ -1,4 +1,4 @@
-import { collection, db, doc, getDocs, query, where, writeBatch } from '../data/legacy/legacy-adapter';
+import { collection, db, doc, getDocs, query, where, writeBatch } from '../data/legacy/legacy-compat.ts';
 
 export async function purgeEntityAndFinancialFootprint(service: any, entityType: 'customer' | 'courier' | 'user' | 'employee', entityId: string): Promise<void> {
     try {

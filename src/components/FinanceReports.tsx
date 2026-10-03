@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { collection, onSnapshot, query, orderBy } from '../data/legacy/legacy-adapter';
-import { db } from '../data/legacy/legacy-adapter';
+import { collection, onSnapshot, query, orderBy } from '../data/legacy/legacy-compat.ts';
+import { db } from '../data/legacy/legacy-compat.ts';
 
 /**
  * Compatibility report surface for callers outside the unified FinanceEntries page.

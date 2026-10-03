@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { collection, db, onSnapshot } from '../data/legacy/legacy-adapter';
+import { collection, db, onSnapshot } from '../data/legacy/legacy-compat.ts';
 
 export interface AutoVoucherRule {
   id: string;

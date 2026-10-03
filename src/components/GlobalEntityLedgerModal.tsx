@@ -1,7 +1,7 @@
 type AdapterDocument = { id: string; data: () => Record<string, unknown> };
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, doc } from '../data/legacy/legacy-adapter';
-import { db } from '../data/legacy/legacy-adapter';
+import { collection, query, where, onSnapshot, doc } from '../data/legacy/legacy-compat.ts';
+import { db } from '../data/legacy/legacy-compat.ts';
 import { useSettings } from '../context/SettingsContext';
 import { 
   X, 

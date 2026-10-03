@@ -1,6 +1,6 @@
 import React from 'react';
 import { Truck, X, Plus } from 'lucide-react';
-import { doc, setDoc, deleteDoc, updateDoc, db } from '../../data/legacy/legacy-adapter';
+import { doc, setDoc, deleteDoc, updateDoc, db } from '../../data/legacy/legacy-compat.ts';
 import { notificationService } from '../../services/notificationService';
 import { activityLogService } from '../../services/activityLogService';
 import ConfirmModal from '../ConfirmModal';

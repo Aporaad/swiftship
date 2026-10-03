@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ConfirmModal from '../ConfirmModal';
-import { addDoc, collection, db, deleteDoc, doc, onSnapshot, updateDoc } from '../../data/legacy/legacy-adapter';
+import { addDoc, collection, db, deleteDoc, doc, onSnapshot, updateDoc } from '../../data/legacy/legacy-compat.ts';
 import { useAuthSession } from '../../features/auth/AuthSessionProvider';
 import { useItemCategories } from '../../hooks/useItemCategories';
 import { useExchangeRates } from '../../hooks/useExchangeRates';

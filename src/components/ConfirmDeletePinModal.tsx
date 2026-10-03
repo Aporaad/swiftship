@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { X, ShieldAlert, KeyRound } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { collection, getDocs, query } from '../data/legacy/legacy-adapter';
-import { db } from '../data/legacy/legacy-adapter';
+import { collection, getDocs, query } from '../data/legacy/legacy-compat.ts';
+import { db } from '../data/legacy/legacy-compat.ts';
 
 interface ConfirmDeletePinModalProps {
   isOpen: boolean;

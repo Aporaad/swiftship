@@ -1,4 +1,4 @@
-import { collection, db, doc, getDocs, setDoc, updateDoc } from '../data/legacy/legacy-adapter';
+import { collection, db, doc, getDocs, setDoc, updateDoc } from '../data/legacy/legacy-compat.ts';
 import { activityLogService } from './activityLogService';
 import { accountingHierarchyService, hierarchyCodeRules } from './accountingHierarchyService';
 import { LEGACY_ACCOUNT_PREFIXES } from './financialAccountTypes';

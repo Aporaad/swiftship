@@ -1,10 +1,42 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { doc, onSnapshot, updateDoc, setDoc, deleteDoc } from '../data/legacy/legacy-adapter';
-import { db } from '../data/legacy/legacy-adapter';
-import { clearAllLocalData } from '../data/legacy/legacy-adapter';
+import { doc, onSnapshot, updateDoc, setDoc, deleteDoc } from '../data/legacy/legacy-compat.ts';
+import { db } from '../data/legacy/legacy-compat.ts';
+import { clearAllLocalData } from '../data/legacy/legacy-compat.ts';
 import { DEFAULT_ROLE_PERMISSIONS } from '../lib/permissions';
 import { useSettings } from '../context/SettingsContext';
 import { useAuthSession } from '../features/auth/AuthSessionProvider';
+import { readString, toRecord } from '../shared/contracts/unknown.contracts';
+
+export interface RoleProfile {
+  id: string;
+  uid: string;
+  email: string;
+  fullName: string;
+  displayName?: string;
+  username: string;
+  role: string;
+  disabled: boolean;
+  isRoot?: boolean;
+  roleId?: string;
+  systemPin?: string;
+}
+
+function mapRoleProfile(value: unknown, fallbackUid: string, fallbackEmail?: string | null): RoleProfile {
+  const profile = toRecord(value);
+  return {
+    id: readString(profile.id) ?? readString(profile.user_id) ?? fallbackUid,
+    uid: readString(profile.uid) ?? fallbackUid,
+    email: readString(profile.email) ?? fallbackEmail ?? '',
+    fullName: readString(profile.fullName) ?? readString(profile.full_name) ?? readString(profile.username) ?? '',
+    displayName: readString(profile.displayName),
+    username: readString(profile.username) ?? (readString(profile.email) ?? fallbackEmail ?? '').split('@')[0] ?? '',
+    role: readString(profile.role) ?? '',
+    disabled: profile.disabled === true,
+    isRoot: profile.isRoot === true,
+    roleId: readString(profile.roleId),
+    systemPin: readString(profile.systemPin) ?? readString(profile.system_pin),
+  };
+}
 
 const getDeviceAndBrowser = () => {
   if (typeof window === 'undefined') return 'Unknown';
@@ -36,7 +68,7 @@ export function useRole(enableHeartbeat: boolean = false) {
   const [role, setRole] = useState<string | null>(null);
   const [permissions, setPermissions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState<any>(null);
+  const [profile, setProfile] = useState<RoleProfile | null>(null);
   const [sessionId, setSessionId] = useState<string>('sess-loading');
 
   // جلب إعدادات مهلة خمول المستخدم بالدقائق من Context تلقائياً بدلاً من القيمة الثابتة
@@ -204,7 +236,7 @@ export function useRole(enableHeartbeat: boolean = false) {
     const handleBeforeUnload = () => {
       const targetSessId = sessionIdRef.current;
       if (targetSessId && targetSessId !== 'sess-loading' && targetSessId !== 'sess-loggedout') {
-        const env = (import.meta as any).env || {};
+        const env = import.meta.env || {};
         const supabaseUrl = env.VITE_SUPABASE_URL || 'https://ejrojwbbflzchasvgexr.supabase.co';
         const supabaseKey = env.VITE_SUPABASE_ANON_KEY || '';
 
@@ -288,7 +320,8 @@ export function useRole(enableHeartbeat: boolean = false) {
 
     const unsub = onSnapshot(doc(db, 'users', user.id), (userDoc) => {
       if (userDoc.exists()) {
-        const userData = userDoc.data();
+        const userData = toRecord(userDoc.data());
+        const userRole = readString(userData.role);
 
         // ── FORCE LOGOUT: admin requested remote session termination ──
         if (userData.forceLogout === true || userData.force_logout === true) {
@@ -308,7 +341,7 @@ export function useRole(enableHeartbeat: boolean = false) {
         }
 
         // ── COURIERS: completely isolated from the staff system ──
-        if (userData.role === 'Courier' || userData.roleId === 'courier' || userData.role === 'courier') {
+        if (userRole === 'Courier' || userData.roleId === 'courier' || userRole === 'courier') {
           setRole(null);
           setPermissions([]);
           setProfile(null);
@@ -317,8 +350,8 @@ export function useRole(enableHeartbeat: boolean = false) {
           return;
         }
 
-        setRole(userData.role);
-        setProfile(userData);
+        setRole(userRole ?? null);
+        setProfile(mapRoleProfile(userData, user.id, user.email));
 
         const ROOT_EMAILS = [
           'alsrhyarslan5@gmail.com',
@@ -338,17 +371,21 @@ export function useRole(enableHeartbeat: boolean = false) {
         }
 
         // Fetch permissions for this role
-        if (userData.role === 'Admin' || ROOT_EMAILS.includes(lowerEmail) || userData.isRoot) {
+        if (userRole === 'Admin' || ROOT_EMAILS.includes(lowerEmail) || userData.isRoot === true) {
           // Admins or SuperAdmin always have all permissions
           setPermissions(['*']);
           setLoading(false);
-        } else if (userData.role) {
-          unsubRole = onSnapshot(doc(db, 'roles', userData.role), (roleDoc) => {
+        } else if (userRole) {
+          unsubRole = onSnapshot(doc(db, 'roles', userRole), (roleDoc) => {
             if (roleDoc.exists()) {
-              setPermissions(roleDoc.data().permissions || []);
+              const roleData = toRecord(roleDoc.data());
+              const rolePermissions = Array.isArray(roleData.permissions)
+                ? roleData.permissions.filter((permission): permission is string => typeof permission === 'string')
+                : [];
+              setPermissions(rolePermissions);
             } else {
               // Default fallback permissions if role doc doesn't exist yet
-              setPermissions(DEFAULT_ROLE_PERMISSIONS[userData.role] || []);
+              setPermissions(DEFAULT_ROLE_PERMISSIONS[userRole] || []);
             }
             setLoading(false);
           }, (err) => {
@@ -368,7 +405,7 @@ export function useRole(enableHeartbeat: boolean = false) {
           setPermissions(['*']);
 
           // Auto-create the user document if it's missing (one-time check)
-          import('../data/legacy/legacy-adapter').then(({ setDoc, doc }) => {
+          import('../data/legacy/legacy-compat.ts').then(({ setDoc, doc }) => {
             setDoc(doc(db, 'users', user.id), {
               email: user.email,
               username: user.email?.split('@')[0] || 'admin',
@@ -381,7 +418,7 @@ export function useRole(enableHeartbeat: boolean = false) {
           });
         } else {
           // If not super admin, check if there's a legacy invitation for this email
-          import('../data/legacy/legacy-adapter').then(({ query, collection, where, getDocs, doc, setDoc }) => {
+          import('../data/legacy/legacy-compat.ts').then(({ query, collection, where, getDocs, doc, setDoc }) => {
             const q = query(collection(db, 'users'), where('email', '==', user.email));
             getDocs(q).then((snap) => {
               if (!snap.empty) {

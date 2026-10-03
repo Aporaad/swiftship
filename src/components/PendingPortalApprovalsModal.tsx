@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { SELECT_FIELDS } from '../data/contracts/select-fields';
 import { X, Check, ShieldAlert, UserCheck, RefreshCw } from 'lucide-react';
-import { supabase, doc, updateDoc, setDoc, db } from '../data/legacy/legacy-adapter';
+import { supabase, doc, updateDoc, setDoc, db } from '../data/legacy/legacy-compat.ts';
 import { financialAccountService } from '../services/financialAccountService';
 
 function extractRows(data: any[]): any[] {

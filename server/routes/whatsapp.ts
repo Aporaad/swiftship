@@ -7,6 +7,8 @@
  */
 
 import type { Express } from 'express';
+import type { DatabaseClient } from '../current-db/client';
+import { readErrorMessage, readString, toRecord } from '../../src/shared/contracts/unknown.contracts';
 import { addDoc, collection, doc, getDoc } from '../current-db/client';
 
 /**
@@ -16,11 +18,15 @@ import { addDoc, collection, doc, getDoc } from '../current-db/client';
  * @param app - تطبيق Express / Express application
  * @param db - عميل قاعدة البيانات / Database client
  */
-export function registerWhatsAppRoutes(app: Express, db: any): void {
+export function registerWhatsAppRoutes(app: Express, db: DatabaseClient): void {
   // ── إرسال إشعار WhatsApp ─────────────────────────────────────
   // Secure WhatsApp notification sender proxy
   app.post('/api/notifications/send-whatsapp', async (req, res) => {
-    const { phone, message, orderId, eventType } = req.body;
+    const input = toRecord(req.body);
+    const phone = readString(input.phone);
+    const message = readString(input.message);
+    const orderId = readString(input.orderId);
+    const eventType = readString(input.eventType);
     if (!phone || !message) {
       return res.status(400).json({ error: 'Phone and message are required' });
     }
@@ -29,7 +35,7 @@ export function registerWhatsAppRoutes(app: Express, db: any): void {
       // جلب إعدادات WhatsApp من قاعدة البيانات / Fetch WhatsApp settings from DB
       const settingsRef = doc(db, 'settings', 'whatsapp');
       const configSnap = await getDoc(settingsRef);
-      const whatsappConfig = configSnap.exists() ? configSnap.data() : null;
+      const whatsappConfig = configSnap.exists() ? toRecord(configSnap.data()) : null;
 
       if (!whatsappConfig?.enabled) {
         await addDoc(null, collection(db, 'whatsapp_logs'), {
@@ -42,14 +48,16 @@ export function registerWhatsAppRoutes(app: Express, db: any): void {
         return res.json({ success: true, status: 'Skipped', message: 'WhatsApp is disabled' });
       }
 
-      const { provider, config } = whatsappConfig;
+      const provider = readString(whatsappConfig.provider) ?? '';
+      const config = toRecord(whatsappConfig.config);
       let status = 'Success';
       let errorMsg = '';
       let externalResponse = '';
 
       // ── UltraMsg ────────────────────────────────────────────────
       if (provider === 'ultramsg') {
-        const { instanceId, token } = config || {};
+        const instanceId = readString(config.instanceId);
+        const token = readString(config.token);
         if (!instanceId || !token) {
           throw new Error('UltraMsg Instance ID and Token are required.');
         }
@@ -64,16 +72,18 @@ export function registerWhatsAppRoutes(app: Express, db: any): void {
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: params,
         });
-        const apiJson = await apiRes.json() as any;
+        const apiJson = toRecord(await apiRes.json());
         externalResponse = JSON.stringify(apiJson);
         if (!apiRes.ok || apiJson.error || apiJson.success === false) {
           status = 'Failed';
-          errorMsg = apiJson.error || apiJson.message || 'UltraMsg API responded with error';
+          errorMsg = readString(apiJson.error) || readString(apiJson.message) || 'UltraMsg API responded with error';
         }
 
       // ── Twilio ──────────────────────────────────────────────────
       } else if (provider === 'twilio') {
-        const { accountSid, token, sender } = config || {};
+        const accountSid = readString(config.accountSid);
+        const token = readString(config.token);
+        const sender = readString(config.sender);
         if (!accountSid || !token || !sender) {
           throw new Error('Twilio Account SID, Token and Sender are required.');
         }
@@ -89,16 +99,19 @@ export function registerWhatsAppRoutes(app: Express, db: any): void {
           headers: { 'Authorization': authHeader, 'Content-Type': 'application/x-www-form-urlencoded' },
           body: params,
         });
-        const apiJson = await apiRes.json() as any;
+        const apiJson = toRecord(await apiRes.json());
         externalResponse = JSON.stringify(apiJson);
         if (!apiRes.ok || apiJson.code || apiJson.status === 'failed') {
           status = 'Failed';
-          errorMsg = apiJson.message || 'Twilio Error';
+          errorMsg = readString(apiJson.message) || 'Twilio Error';
         }
 
       // ── Custom Provider ─────────────────────────────────────────
       } else if (provider === 'custom') {
-        const { customUrl, customMethod, customHeaders, customBody } = config || {};
+        const customUrl = readString(config.customUrl);
+        const customMethod = readString(config.customMethod);
+        const customHeaders = readString(config.customHeaders);
+        const customBody = readString(config.customBody);
         if (!customUrl) throw new Error('Custom Destination URL is required.');
 
         const finalUrl = customUrl
@@ -147,27 +160,29 @@ export function registerWhatsAppRoutes(app: Express, db: any): void {
       });
 
       return res.json({ success: status !== 'Failed' && status !== 'Skipped', status, errorMsg });
-    } catch (e: any) {
-      console.error('[WhatsApp] Dispatch error:', e.message);
+    } catch (e: unknown) {
+      console.error('[WhatsApp] Dispatch error:', readErrorMessage(e));
       try {
         await addDoc(null, collection(db, 'whatsapp_logs'), {
           phone, message, orderId: orderId || null,
           eventType: eventType || 'manual',
           status: 'Failed',
-          errorMsg: e.message,
+          errorMsg: readErrorMessage(e),
           createdAt: Date.now(),
         });
       } catch (logErr) {
         console.error('[WhatsApp] Failed to write error log:', logErr);
       }
-      return res.status(500).json({ error: e.message });
+      return res.status(500).json({ error: readErrorMessage(e) });
     }
   });
 
   // ── اختبار اتصال WhatsApp ────────────────────────────────────
   // Secure WhatsApp credentials test-connection endpoint
   app.post('/api/notifications/test-connection', async (req, res) => {
-    const { provider, config } = req.body;
+    const input = toRecord(req.body);
+    const provider = readString(input.provider);
+    const config = toRecord(input.config);
     if (!provider) {
       return res.status(400).json({ error: 'Provider is required' });
     }
@@ -175,16 +190,17 @@ export function registerWhatsAppRoutes(app: Express, db: any): void {
     try {
       // ── UltraMsg ──────────────────────────────────────────────
       if (provider === 'ultramsg') {
-        const { instanceId, token } = config || {};
+        const instanceId = readString(config.instanceId);
+        const token = readString(config.token);
         if (!instanceId || !token) {
           throw new Error('UltraMsg Instance ID and Token are required.');
         }
         const url = `https://api.ultramsg.com/${instanceId}/instance/status?token=${token}`;
         const apiRes = await fetch(url);
         if (!apiRes.ok) throw new Error(`UltraMsg returned HTTP error status ${apiRes.status}`);
-        const apiJson = await apiRes.json() as any;
+        const apiJson = toRecord(await apiRes.json());
         if (apiJson.error || apiJson.success === false) {
-          throw new Error(apiJson.error || apiJson.message || 'Invalid UltraMsg Instance ID or Token');
+          throw new Error(readString(apiJson.error) || readString(apiJson.message) || 'Invalid UltraMsg Instance ID or Token');
         }
         return res.json({
           success: true,
@@ -194,25 +210,29 @@ export function registerWhatsAppRoutes(app: Express, db: any): void {
 
       // ── Twilio ────────────────────────────────────────────────
       } else if (provider === 'twilio') {
-        const { accountSid, token } = config || {};
+        const accountSid = readString(config.accountSid);
+        const token = readString(config.token);
         if (!accountSid || !token) throw new Error('Twilio Account SID and Token are required.');
         const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}.json`;
         const authHeader = 'Basic ' + Buffer.from(`${accountSid}:${token}`).toString('base64');
         const apiRes = await fetch(url, { method: 'GET', headers: { 'Authorization': authHeader } });
         if (!apiRes.ok) {
-          const apiJson = await apiRes.json() as any;
-          throw new Error(apiJson.message || `Twilio authentication failed with HTTP ${apiRes.status}`);
+          const apiJson = toRecord(await apiRes.json());
+          throw new Error(readString(apiJson.message) || `Twilio authentication failed with HTTP ${apiRes.status}`);
         }
-        const apiJson = await apiRes.json() as any;
+        const apiJson = toRecord(await apiRes.json());
         return res.json({
           success: true,
-          message: `Twilio connection verified! Account: "${apiJson.friendly_name}" status: ${apiJson.status}.`,
+          message: `Twilio connection verified! Account: "${readString(apiJson.friendly_name) ?? ''}" status: ${readString(apiJson.status) ?? ''}.`,
           details: { status: apiJson.status, type: apiJson.type },
         });
 
       // ── Custom ────────────────────────────────────────────────
       } else if (provider === 'custom') {
-        const { customUrl, customMethod, customHeaders, customBody } = config || {};
+        const customUrl = readString(config.customUrl);
+        const customMethod = readString(config.customMethod);
+        const customHeaders = readString(config.customHeaders);
+        const customBody = readString(config.customBody);
         if (!customUrl) throw new Error('Custom Destination URL is required.');
 
         let finalUrl = customUrl
@@ -254,17 +274,17 @@ export function registerWhatsAppRoutes(app: Express, db: any): void {
               : `Custom host replied with HTTP ${apiRes.status} — network reachable.`,
             isWarning: !apiRes.ok,
           });
-        } catch (fetchErr: any) {
+        } catch (fetchErr: unknown) {
           clearTimeout(timeoutId);
-          throw new Error(`Hostname connection or timeout error: ${fetchErr.message}`);
+          throw new Error(`Hostname connection or timeout error: ${readErrorMessage(fetchErr)}`);
         }
 
       } else {
         throw new Error('Unsupported provider.');
       }
-    } catch (e: any) {
-      console.error('[WhatsApp] Test Connection Error:', e.message);
-      return res.status(500).json({ error: e.message });
+    } catch (e: unknown) {
+      console.error('[WhatsApp] Test Connection Error:', readErrorMessage(e));
+      return res.status(500).json({ error: readErrorMessage(e) });
     }
   });
 }

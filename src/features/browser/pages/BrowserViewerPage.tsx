@@ -32,7 +32,7 @@ import {
   Server,
   Monitor
 } from 'lucide-react';
-import { supabase, collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, addDoc, db } from '../../../data/legacy/legacy-adapter';
+import { supabase, collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, addDoc, db } from '../../../data/legacy/legacy-compat.ts';
 import { useSettings } from '../../../context/SettingsContext';
 import toast from 'react-hot-toast';
 

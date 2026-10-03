@@ -1,4 +1,4 @@
-import { collection, db, doc, getDoc, getDocs, query, supabase, where } from '../data/legacy/legacy-adapter';
+import { collection, db, doc, getDoc, getDocs, query, supabase, where } from '../data/legacy/legacy-compat.ts';
 import { currentSupabaseAuthGateway } from '../data/current-supabase/gateways/auth.gateway';
 import type { AutomaticVoucherEntities } from './financialAccountTypes';
 

@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const sourceRoot = resolve(process.cwd(), 'src');
-const allowedBoundary = resolve(sourceRoot, 'data/legacy/legacy-adapter.ts');
+const allowedBoundary = resolve(sourceRoot, 'data/legacy/legacy-compat.ts');
+const boundaryTest = resolve(sourceRoot, 'data/contracts/legacy-boundary.test.ts');
 
 function collectSourceFiles(directory: string): string[] {
   const { readdirSync, statSync } = require('node:fs') as typeof import('node:fs');
@@ -21,5 +22,13 @@ describe('legacy adapter boundary', () => {
       .filter((file) => /(?:from|export \*)\s+['\"][^'\"]*lib\/supabase(?:-adapter)?['\"]/.test(readFileSync(file, 'utf8')));
 
     expect(violations).toEqual([]);
+  });
+
+  it('removes imports of the deleted legacy-adapter shim', () => {
+    const legacyReferences = collectSourceFiles(sourceRoot)
+      .filter((file) => file !== allowedBoundary && file !== boundaryTest)
+      .filter((file) => /legacy-adapter/.test(readFileSync(file, 'utf8')));
+
+    expect(legacyReferences).toEqual([]);
   });
 });

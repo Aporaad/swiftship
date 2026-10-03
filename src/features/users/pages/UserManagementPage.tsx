@@ -7,7 +7,7 @@ import {
   db, handleSupabaseError, OperationType,
   initializeApp, deleteApp,
   getAuth, createUserWithEmailAndPassword
-} from '../../../data/legacy/legacy-adapter';
+} from '../../../data/legacy/legacy-compat.ts';
 import {
   Search, Edit2, X, Plus, UserX, UserCheck, Trash2, Users as UsersIcon,
   Shield, Eye, EyeOff, Crown, ShieldAlert, Activity, Clock,
@@ -793,7 +793,7 @@ export default function UserManagementPage() {
       }
       if (passwordTargetUser.email?.toLowerCase() === 'admin@swiftship.system' || passwordTargetUser.email?.toLowerCase() === 'admin') {
         try {
-          const { simpleHashPassword, encryptDataLocal } = await import('../../../data/legacy/legacy-adapter');
+          const { simpleHashPassword, encryptDataLocal } = await import('../../../data/legacy/legacy-compat.ts');
           const hashVal = simpleHashPassword(newPasswordValue);
           const adminProfile = {
             uid: passwordTargetUser.id,

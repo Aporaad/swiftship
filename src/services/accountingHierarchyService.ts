@@ -1,4 +1,4 @@
-import { collection, db, doc, getDoc, getDocs } from '../data/legacy/legacy-adapter';
+import { collection, db, doc, getDoc, getDocs } from '../data/legacy/legacy-compat.ts';
 
 export type LedgerEntityType =
   | 'customer'

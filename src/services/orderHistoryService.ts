@@ -1,5 +1,5 @@
-import { collection, getDocs, limit, orderBy, query, where } from '../data/legacy/legacy-adapter';
-import { db } from '../data/legacy/legacy-adapter';
+import { collection, getDocs, limit, orderBy, query, where } from '../data/legacy/legacy-compat.ts';
+import { db } from '../data/legacy/legacy-compat.ts';
 
 export type OrderHistoryContext = {
   orderId?: string;

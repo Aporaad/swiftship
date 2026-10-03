@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { doc, onSnapshot, setDoc, collection, getDocs, query, orderBy, limit, onAuthStateChanged, auth, db } from '../data/legacy/legacy-adapter';
-import { supabase } from '../data/legacy/legacy-adapter';
+import { doc, onSnapshot, setDoc, collection, getDocs, query, orderBy, limit, onAuthStateChanged, auth, db } from '../data/legacy/legacy-compat.ts';
+import { supabase } from '../data/legacy/legacy-compat.ts';
 import { currencyService } from '../services/currencyService';
 import { translations, Language, TranslationKey } from '../translations';
 

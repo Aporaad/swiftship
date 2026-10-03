@@ -9,7 +9,7 @@ import {
   signInWithPassword as verifyLegacyCredentials,
   signOut as legacySignOut,
   type User as LegacyAuthUser,
-} from '../../legacy/legacy-adapter';
+} from '../../legacy/legacy-compat';
 import {
   mapLegacyAuthUserToDto,
   mapLegacyAuthUserToSessionState,

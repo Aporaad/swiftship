@@ -2124,3 +2124,14 @@
 تم إنشاء أساس `alx_api` مستقلاً: إعداد Express 5/TypeScript strict، health/readiness، Request ID، logging redaction، Helmet وCORS allowlist وrate limiting، response envelopes، Drizzle/PostgreSQL pool factory غير مستدعى، OpenAPI، Jest/Supertest وGitHub CI. لا اتصال أو migration لقاعدة البيانات، وreadiness يتعمد إرجاع not-ready.
 أضيفت إلى SwiftShip مسارات Portal GET للإعلانات والتتبع العام مع DTOs محدودة وtests تمنع PII، وأضيفت CORS allowlist واختبارات لها. Portal client أصبح يتحقق runtime من envelopes/DTOs ويحتفظ بـfeature flag غير مفعل افتراضياً.
 التحقق: SwiftShip typecheck ناجح، 74 ملفات اختبار ناجحة و3 متخطاة، 267 اختباراً ناجحاً و8 متخطاة، build ناجح؛ Portal check و5 Gateway tests وboundary audit وbuild ناجحة؛ alx_api check و6 tests وbuild ناجحة. لم تنفذ SQL أو تغييرات قاعدة بيانات. بقيت فجوات موثقة بالتفصيل في `docs/pre-api/repair-execution-and-api-scaffold-2026-10-04.md`: legacy-adapter، تدقيق any/AsyncState، معظم Portal/Auth، وعدم اكتمال خدمة API.
+
+
+## [2026-10-04T02:28:06+03:00] — متابعة إصلاح ما قبل API — AI Model: Manus
+- حُذف ملف `src/data/legacy/legacy-adapter.ts` بعد إعادة توجيه 138 import وdynamic import وtest mock عبر 88 ملفاً إلى `src/data/legacy/legacy-compat.ts`؛ هذا حد توافق انتقالي صريح وما زال استهلاك المستهلكين له مفتوحاً حتى استبداله ببوابات المجال.
+- حُدث `legacy-boundary.test.ts` لمنع عودة اسم/مسار shim المحذوف.
+- استُبدل `useRole` profile any بعقد `RoleProfile` وتضييق بيانات المستخدم والصلاحيات.
+- حُدثت `useAccountBalances` و`useExchangeRates` و`FinancialCalculatorModal` لإظهار AsyncState/query error/empty؛ أضيفت اختبارات `useAccountBalances.test.ts`، وحُدث اختبار contract المالي ليتحقق من الـtyped DTO mapper.
+- أضيف تصريح Vite client القياسي `src/vite-env.d.ts` وحُفظت أدوات `UnknownRecord` في العقود المشتركة.
+- التحقق النهائي ناجح: SwiftShip `check`, 75 test files passed / 3 skipped, 270 tests passed / 8 skipped, وبناء الواجهة والخادم ناجح. Scaffold `alx_api`: check/build و6 tests ناجحة؛ Portal: check/build و5 tests وboundary audit ناجحة.
+- لم تُنفذ أوامر SQL ولم تتغير قاعدة البيانات. لا إعلان إغلاق للخطة: 912 any صريحة على مستوى المصدر و91 مستهلكاً ما زالوا على `legacy-compat`، وPortal HTTP cutover جزئي.
+- التقرير: `docs/pre-api/repair-followup-2026-10-04.md`.

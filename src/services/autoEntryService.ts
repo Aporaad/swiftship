@@ -1,5 +1,5 @@
 import useExchangeRates from '../hooks/useExchangeRates';
-import { collection, getDocs, setDoc, doc, updateDoc, deleteDoc, db, supabase } from '../data/legacy/legacy-adapter';
+import { collection, getDocs, setDoc, doc, updateDoc, deleteDoc, db, supabase } from '../data/legacy/legacy-compat.ts';
 import { financialAccountService } from './financialAccountService';
 import { financialEntryService } from './financialEntryService';
 import {

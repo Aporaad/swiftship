@@ -1,5 +1,5 @@
-import { collection, onSnapshot, orderBy, query } from '../../data/legacy/legacy-adapter';
-import { db } from '../../data/legacy/legacy-adapter';
+import { collection, onSnapshot, orderBy, query } from '../../data/legacy/legacy-compat.ts';
+import { db } from '../../data/legacy/legacy-compat.ts';
 
 type SnapshotRow = { id: string; data: () => Record<string, unknown> };
 type Snapshot = { docs: SnapshotRow[] };

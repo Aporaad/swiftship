@@ -1,6 +1,6 @@
 type AdapterDocument = { id: string; data: () => Record<string, unknown> };
-import { collection, onSnapshot, query, orderBy, limit } from '../../../../data/legacy/legacy-adapter';
-import { db, safeToDate } from '../../../../data/legacy/legacy-adapter';
+import { collection, onSnapshot, query, orderBy, limit } from '../../../../data/legacy/legacy-compat.ts';
+import { db, safeToDate } from '../../../../data/legacy/legacy-compat.ts';
 
 type DashboardGatewayHandlers = {
   setCustomersCount: (count: number) => void;

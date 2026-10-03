@@ -5,7 +5,7 @@
  */
 
 import { SELECT_FIELDS } from '../data/contracts/select-fields';
-import { supabase } from '../data/legacy/legacy-adapter';
+import { supabase } from '../data/legacy/legacy-compat.ts';
 
 // ────────────────────────────── Types ──────────────────────────────
 

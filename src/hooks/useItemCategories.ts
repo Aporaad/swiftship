@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { collection, db, deleteDoc, doc, getDocs, onSnapshot, query, setDoc, updateDoc, where } from '../data/legacy/legacy-adapter';
+import { collection, db, deleteDoc, doc, getDocs, onSnapshot, query, setDoc, updateDoc, where } from '../data/legacy/legacy-compat.ts';
 import { DEFAULT_ITEM_CATEGORIES, ItemCategory } from '../services/itemCategoryService';
 
 const normalize = (id: string, raw: any): ItemCategory => ({

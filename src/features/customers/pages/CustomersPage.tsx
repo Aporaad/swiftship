@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
-import { collection, addDoc, doc, updateDoc, onSnapshot, deleteDoc, query, where, orderBy, getDocs } from '../../../data/legacy/legacy-adapter';
-import { db } from '../../../data/legacy/legacy-adapter';
-import { handlePostgreSQLError, OperationType } from '../../../data/legacy/legacy-adapter';
+import { collection, addDoc, doc, updateDoc, onSnapshot, deleteDoc, query, where, orderBy, getDocs } from '../../../data/legacy/legacy-compat.ts';
+import { db } from '../../../data/legacy/legacy-compat.ts';
+import { handlePostgreSQLError, OperationType } from '../../../data/legacy/legacy-compat.ts';
 import {
   Plus,
   Search,

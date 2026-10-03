@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   collection, onSnapshot, query, orderBy, getDocs, doc, setDoc, getDoc, where, addDoc, deleteDoc
-} from '../../../data/legacy/legacy-adapter';
-import { db } from '../../../data/legacy/legacy-adapter';
+} from '../../../data/legacy/legacy-compat.ts';
+import { db } from '../../../data/legacy/legacy-compat.ts';
 import { useSettings } from '../../../context/SettingsContext';
 import { useRole } from '../../../hooks/useRole';
 import {
