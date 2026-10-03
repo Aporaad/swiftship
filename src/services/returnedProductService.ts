@@ -7,6 +7,7 @@
  * Returned Products: Track products returned by customers with reason, status, and financial refund details
  */
 
+import { SELECT_FIELDS } from '../data/contracts/select-fields';
 import { supabase, db, collection, addDoc } from '../lib/supabase-adapter';
 
 // ────────────────────────── Types ──────────────────────────
@@ -107,7 +108,7 @@ export async function fetchReturnedProducts(
 ): Promise<ReturnedProduct[]> {
   let query = supabase
     .from('returned_products')
-    .select('*')
+    .select(SELECT_FIELDS.returnedProduct)
     .order('created_at', { ascending: false });
 
   // تطبيق الفلاتر - Apply filters

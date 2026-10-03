@@ -4,6 +4,7 @@
  * Service for managing master products catalog and order line items
  */
 
+import { SELECT_FIELDS } from '../data/contracts/select-fields';
 import { supabase } from '../lib/supabase-adapter';
 
 // ────────────────────────────── Types ──────────────────────────────
@@ -91,7 +92,7 @@ export const ITEM_STATUS_LIST: ItemStatus[] = [
 export async function fetchProducts(): Promise<Product[]> {
   const { data, error } = await supabase
     .from('products')
-    .select('*')
+    .select(SELECT_FIELDS.product)
     .order('created_at', { ascending: false });
 
   if (error) throw new Error(error.message);
@@ -105,7 +106,7 @@ export async function fetchProducts(): Promise<Product[]> {
 export async function fetchAllowedProducts(): Promise<Product[]> {
   const { data, error } = await supabase
     .from('products')
-    .select('*')
+    .select(SELECT_FIELDS.product)
     .eq('is_allowed', true)
     .order('product_name_ar', { ascending: true });
 
@@ -201,7 +202,7 @@ export async function getProductOrderCount(productId: string): Promise<number> {
 export async function fetchProductMovements(productId: string): Promise<OrderItem[]> {
   const { data, error } = await supabase
     .from('order_items')
-    .select('*')
+    .select(SELECT_FIELDS.orderItem)
     .eq('product_id', productId)
     .order('created_at', { ascending: false });
 
@@ -222,7 +223,7 @@ export async function fetchOrderItems(filters?: {
 }): Promise<OrderItem[]> {
   let query = supabase
     .from('order_items')
-    .select('*')
+    .select(SELECT_FIELDS.orderItem)
     .order('created_at', { ascending: false });
 
   if (filters?.orderId) {
@@ -327,7 +328,7 @@ export async function returnOrderItem(
   // Fetch the item first to verify insurance
   const { data: existing, error: fetchError } = await supabase
     .from('order_items')
-    .select('*')
+    .select(SELECT_FIELDS.orderItem)
     .eq('items_id', itemsId)
     .single();
 

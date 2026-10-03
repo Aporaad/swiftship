@@ -1413,3 +1413,9 @@
 - [ ] إكمال AsyncState لكل Query/Mutation على مستوى النظام.
 - [ ] تفعيل connector قاعدة البيانات والتحقق من RLS/grants/جودة البيانات.
 - [ ] لا تعلن جاهزية API قبل اجتياز البوابات الثماني في التقرير الشامل.
+
+- [x] المرحلة 11 — إنشاء إسقاطات قراءة صريحة مركزية `src/data/contracts/select-fields.ts` لجداول العملات والطلبات والمنتجات والمرتجعات وطلبات التوظيف ومستخدمي البوابة.
+- [x] المرحلة 12 — إزالة `select('*')` من الخدمات والمكونات المرحّلة: JobApplicationsModal وLayout وPendingPortalApprovalsModal وcurrencyService وportalUserService وproductService وreturnedProductService.
+- [x] المرحلة 12 — إضافة اختبار عقد للإسقاطات يمنع wildcard ويتحقق من اكتمال قائمة الحقول المركزية.
+- [x] التحقق بعد هذه الدفعة: `npm run check` ناجح، و72 ملف اختبار ناجحاً و3 متخطاة، و257 اختباراً ناجحاً و8 متخطاة، و`npm run build` ناجح.
+- [ ] متابعة ترحيل بقية مستهلكي المحول القديم إلى Gateway مستقل لكل Feature؛ لم يُعلن إغلاق هذه الفجوة الكاملة بعد.

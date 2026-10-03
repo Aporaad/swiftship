@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { SELECT_FIELDS } from '../data/contracts/select-fields';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { collection, query, where, onSnapshot, getDocs, writeBatch, doc, setDoc } from '../lib/supabase-adapter';
 import { db } from '../lib/supabase-adapter';
@@ -263,7 +264,7 @@ export default function Layout() {
   useEffect(() => {
     const fetchPendingPortal = async () => {
       try {
-        const { data } = await supabase.from('portal_users').select('*');
+        const { data } = await supabase.from('portal_users').select(SELECT_FIELDS.portalUser);
         const rows = (data || []).map((row: any) => {
           const payload = typeof row.data === 'string' ? JSON.parse(row.data) : (row.data || {});
           return { id: row.id, ...payload };
@@ -271,7 +272,7 @@ export default function Layout() {
         const pending = rows.filter((u: any) => u.approvalStatus === 'pending_approval' || u.approval_status === 'pending_approval');
         setPendingPortalCount(pending.length);
 
-        const { data: jData } = await supabase.from('jobs_req').select('*');
+        const { data: jData } = await supabase.from('jobs_req').select(SELECT_FIELDS.jobRequest);
         const jRows = (jData || []).map((row: any) => {
           const payload = typeof row.data === 'string' ? JSON.parse(row.data) : (row.data || {});
           return { id: row.id, ...payload };

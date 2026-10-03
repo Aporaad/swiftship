@@ -6,6 +6,7 @@
  * وتجنب التكرار (DRY) والأمان العالي.
  */
 
+import { SELECT_FIELDS } from '../data/contracts/select-fields';
 import {
   supabase,
   collection,
@@ -72,9 +73,9 @@ export class PortalUserService {
   async getPortalUsers(): Promise<PortalUserResult[]> {
     try {
       const [pRes, dRes, cRes] = await Promise.all([
-        supabase.from('portal_users').select('*'),
-        supabase.from('cust_details').select('*'),
-        supabase.from('customers').select('*')
+        supabase.from('portal_users').select(SELECT_FIELDS.portalUser),
+        supabase.from('cust_details').select('cust_detail_id,user_uid,customer_id,data,created_at,updated_at'),
+        supabase.from('customers').select('customer_id,customer_name,phone,email,data,created_at,updated_at')
       ]);
 
       const portalList = ((pRes.data || []) as PortalDbRow[]).map((row: PortalDbRow): Omit<PortalUserResult, 'customerDetails' | 'customerEntity'> & { customerId?: string } => {
@@ -227,7 +228,7 @@ export class PortalUserService {
       const now = new Date().toISOString();
 
       // Fetch existing row first
-      const { data: existingData } = await supabase.from('portal_users').select('*').eq('portal_user_id', puserId).single();
+      const { data: existingData } = await supabase.from('portal_users').select(SELECT_FIELDS.portalUser).eq('portal_user_id', puserId).single();
       const prevData = existingData?.data ? (typeof existingData.data === 'string' ? JSON.parse(existingData.data) : existingData.data) : {};
 
       const updatedPayload = {

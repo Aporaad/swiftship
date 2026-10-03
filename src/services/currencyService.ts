@@ -20,6 +20,7 @@
  */
 
 import { supabase } from '../lib/supabase-adapter';
+import { SELECT_FIELDS } from '../data/contracts/select-fields';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -128,7 +129,7 @@ class CurrencyService {
    * Only active currencies are returned when `onlyActive = true` (default).
    */
   async getAllCurrencies(onlyActive = false): Promise<Currency[]> {
-    let q = (supabase as any).from('currency').select('*').order('cur_id');
+    let q = (supabase as any).from('currency').select(SELECT_FIELDS.currency).order('cur_id');
     // استخدام snake_case للفلترة كما هو في قاعدة البيانات
     // Use snake_case filter as per actual DB schema
     if (onlyActive) q = q.eq('is_active', true);
@@ -142,7 +143,7 @@ class CurrencyService {
     // Enrich each currency with its latest price from cur_price
     const { data: prices } = await (supabase as any)
       .from('cur_price')
-      .select('*')
+      .select(SELECT_FIELDS.currencyRate)
       .order('seq', { ascending: false });
 
     const latestByCode: Record<number, CurPriceEntry> = {};
@@ -174,7 +175,7 @@ class CurrencyService {
     try {
       const { data, error } = await (supabase as any)
         .from('currency')
-        .select('*')
+        .select(SELECT_FIELDS.currency)
         // استخدام اسم العمود الصحيح في DB
         // Use the correct snake_case column name
         .eq('is_default', true)
@@ -318,7 +319,7 @@ class CurrencyService {
   async getRateHistory(curNo: number): Promise<CurPriceEntry[]> {
     const { data, error } = await (supabase as any)
       .from('cur_price')
-      .select('*')
+      .select(SELECT_FIELDS.currencyRate)
       .eq('cur_no', curNo)
       .order('seq', { ascending: true });
 

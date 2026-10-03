@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { SELECT_FIELDS } from '../data/contracts/select-fields';
 import { Briefcase, X, Check, ShieldAlert, RefreshCw, User, Phone, Mail, MapPin, Award, Clock, FileText, Trash2, UserCheck, AlertCircle } from 'lucide-react';
 import { supabase, doc, setDoc, db } from '../lib/supabase-adapter';
 import { financialAccountService } from '../services/financialAccountService';
@@ -33,7 +34,7 @@ export default function JobApplicationsModal({ isOpen, onClose }: { isOpen: bool
   const loadApplications = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.from('jobs_req').select('*');
+      const { data, error } = await supabase.from('jobs_req').select(SELECT_FIELDS.jobRequest);
       if (error) {
         console.warn('[JobApplicationsModal] Fetch error:', error.message);
         setApplications([]);

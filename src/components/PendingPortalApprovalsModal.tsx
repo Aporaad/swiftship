@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { SELECT_FIELDS } from '../data/contracts/select-fields';
 import { X, Check, ShieldAlert, UserCheck, RefreshCw } from 'lucide-react';
 import { supabase, doc, updateDoc, setDoc, db } from '../lib/supabase-adapter';
 import { financialAccountService } from '../services/financialAccountService';
@@ -30,7 +31,7 @@ export default function PendingPortalApprovalsModal({ isOpen, onClose }: { isOpe
   const loadPending = async () => {
     setLoading(true);
     try {
-      const { data } = await supabase.from('portal_users').select('*');
+      const { data } = await supabase.from('portal_users').select(SELECT_FIELDS.portalUser);
       const allUsers = extractRows(data || []);
       const pending = allUsers.filter((u: any) => u.approvalStatus === 'pending_approval' || u.approval_status === 'pending_approval');
       setPendingUsers(pending);
