@@ -1159,3 +1159,10 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 - لم يتم فحص أو تعديل RLS أو Grants بناءً على النطاق المستثنى.
 - التغيير البرمجي صحح مطابقة مفاتيح الجلسة والمستخدم في طبقة التطبيق إلى `sessions.session_id` و`users.user_id`، دون لمس المخطط.
 - تبقى Data Quality Snapshot الحية وownership على بيانات staging معلقة إلى حين توفير بيئة قراءة معزولة.
+
+
+## [2026-10-03 02:58:01 +0000] — Data Quality Snapshot حي بدون تعديل — AI Model: Manus
+
+تم الاتصال بالمشروع `ejrojwbbflzchasvgexr` عبر Supabase MCP وتنفيذ قراءات SELECT فقط. لم تُنفذ DDL أو DML أو Migration، ولم يتم تعديل RLS أو Grants.
+
+نتائج البيانات الحية: FK الأساسية المفحوصة بلا orphan rows، لكن `public.users` يحتوي 11 قيمة password و9 قيم system_pin، و`main_entry` يحتوي 5 قيود غير متوازنة حسب تجميع account_trans، و`accounts` يحتوي رصيدين سالبين وحساباً بلا اسم، و2 sessions بلا expires_at. كما أن RLS معطل على 50 جدولاً وفق advisory المخطط؛ بقي ذلك خارج النطاق ولم تتم معالجته.

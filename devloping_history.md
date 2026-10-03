@@ -2095,3 +2095,19 @@
 نتيجة التحقق: `npm ci --no-audit --no-fund` ناجح، `npm run check` ناجح، الاختبارات الكاملة 73 ملفاً ناجحاً و3 متخطاة، 259 اختباراً ناجحاً و8 متخطاة، و`npm run build` ناجح مع تحذيرات بنيوية غير حاجبة موجودة مسبقاً. لم يُنفذ SQL أو Migration، وبقيت RLS/Grants خارج النطاق.
 
 قرار الحالة: دفعة API Foundation المحلية ناجحة، لكن لا إعلان جاهزية إنتاجية كاملة قبل staging وData Quality Snapshot وSmoke/E2E وownership الحقيقي.
+
+
+## [2026-10-03 02:58:01 +0000] — Ownership enforcement وData Quality Snapshot حي — AI Model: Manus
+
+تمت إضافة `ownsResource` إلى API Foundation وربطها بـ`users.linked_type` و`users.linked_entity`. Admin يملك نطاق المؤسسة، بينما Customer/Courier/Employee لا يرى إلا السجلات المرتبطة بالكيان الخاص به، والمستخدم غير المرتبط يُرفض كمالك. أضيف اختبار owner/non-owner/Admin، ونجح `npm run check` واختبار API المستهدف: 7 اختبارات ناجحة.
+
+تم تنفيذ snapshot حي على قاعدة المشروع الأصلي عبر Supabase MCP. سلامة FK والـduplicate order numbers الأساسية سليمة، لكن التقرير أثبت blockers: 11 password، 9 system_pin، 5 قيود غير متوازنة، جلستان بلا expires_at، وفشل ownership تاريخي لطلبات وقيود مالية. لم تُنفذ أي تعديلات قاعدة بيانات.
+
+لم يكتمل نقل كل مستهلكي `alx_web` إلى HTTP؛ ما زالت صفحات Portal متعددة تعتمد على `legacy-portal`. لذلك تم تحديث القرار إلى عدم إعلان الجاهزية الإنتاجية الكاملة حتى تعالج هذه البنود.
+
+
+## [2026-10-03 02:59:21 +0000] — التحقق النهائي وعدم إعلان جاهزية غير مثبتة — AI Model: Manus
+
+نجح اختبار النظام الكامل: 73 ملفاً ناجحاً و3 متخطاة، 260 اختباراً ناجحاً و8 متخطاة. نجح `alx_web` في clean install وboundary audit وproduction build. رغم ذلك، التدقيق الفعلي أثبت بقاء 89 استيراد legacy في SwiftShip، و34 `any` في الحدود المطلوبة، و26 ملف AsyncState، كما أن صفحات Portal ما زالت تحتوي استيرادات `legacy-portal` خلف boundary متوافق.
+
+تم تثبيت هذه النتائج في تقرير الجاهزية، ولذلك لم يتم إعلان الجاهزية الإنتاجية الكاملة.

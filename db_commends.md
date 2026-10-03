@@ -875,3 +875,69 @@ SELECT 'cust_details', 'data', ARRAY_AGG(DISTINCT k) FROM (SELECT jsonb_object_k
 ## [2026-10-03 02:24:24 +0000] — AI Model: Manus
 
 لم يُنفذ أي أمر SQL في هذه الدفعة. لم يتم استدعاء Supabase MCP، ولم تُنفذ DDL أو DML أو Migration. تم الاكتفاء بتعديل TypeScript وعقود API واختبارات محلية، مع إبقاء RLS وGrants خارج النطاق.
+
+
+## [2026-10-03 02:58:01 +0000] — أوامر القراءة الحية لـData Quality وOwnership — AI Model: Manus
+
+تم تنفيذ أوامر SQL التالية عبر Supabase MCP على المشروع `ejrojwbbflzchasvgexr`، وكلها SELECT قراءة فقط وبها LIMIT صريح:
+
+```sql
+WITH metrics AS (
+  SELECT 'orders_total' AS metric, count(*)::bigint AS value FROM public.orders
+  UNION ALL SELECT 'orders_missing_customer', count(*)::bigint FROM public.orders o WHERE o.customer_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.customers c WHERE c.customer_id = o.customer_id)
+  UNION ALL SELECT 'orders_duplicate_order_number', count(*)::bigint FROM (SELECT order_number FROM public.orders WHERE order_number IS NOT NULL GROUP BY order_number HAVING count(*) > 1) d
+  UNION ALL SELECT 'order_items_missing_order', count(*)::bigint FROM public.order_items oi WHERE oi.order_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.orders o WHERE o.order_id = oi.order_id)
+  UNION ALL SELECT 'shipments_missing_order', count(*)::bigint FROM public.shipments s WHERE s.order_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.orders o WHERE o.order_id = s.order_id)
+  UNION ALL SELECT 'accounts_missing_currency', count(*)::bigint FROM public.accounts a WHERE a.cur_no IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.currency c WHERE c.cur_id = a.cur_no)
+  UNION ALL SELECT 'users_total', count(*)::bigint FROM public.users
+  UNION ALL SELECT 'users_disabled', count(*)::bigint FROM public.users WHERE disabled IS TRUE
+  UNION ALL SELECT 'sessions_total', count(*)::bigint FROM public.sessions
+  UNION ALL SELECT 'sessions_missing_user', count(*)::bigint FROM public.sessions s WHERE s.user_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.users u WHERE u.user_id = s.user_id)
+  UNION ALL SELECT 'sessions_force_logout', count(*)::bigint FROM public.sessions WHERE force_logout IS TRUE
+  UNION ALL SELECT 'portal_users_missing_customer', count(*)::bigint FROM public.portal_users p WHERE p.linked_customer_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.customers c WHERE c.customer_id = p.linked_customer_id)
+  UNION ALL SELECT 'main_entry_missing_order', count(*)::bigint FROM public.main_entry m WHERE m.order_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.orders o WHERE o.order_id = m.order_id)
+  UNION ALL SELECT 'account_trans_missing_entry', count(*)::bigint FROM public.account_trans t WHERE t.main_entry_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.main_entry m WHERE m.main_entry_id = t.main_entry_id)
+)
+SELECT metric, value FROM metrics ORDER BY metric LIMIT 100;
+```
+
+```sql
+WITH checks AS (
+  SELECT 'session_to_user' AS check_name, count(*)::bigint AS total, count(u.user_id)::bigint AS owned FROM public.sessions s LEFT JOIN public.users u ON u.user_id = s.user_id
+  UNION ALL SELECT 'orders_created_by_user', count(*)::bigint, count(u.user_id)::bigint FROM public.orders o LEFT JOIN public.users u ON u.user_id = o.created_by
+  UNION ALL SELECT 'orders_updated_by_user', count(*)::bigint, count(u.user_id)::bigint FROM public.orders o LEFT JOIN public.users u ON u.user_id = o.updated_by
+  UNION ALL SELECT 'main_entries_created_by_user', count(*)::bigint, count(u.user_id)::bigint FROM public.main_entry m LEFT JOIN public.users u ON u.user_id = m.created_by_uid
+  UNION ALL SELECT 'account_trans_created_by_user', count(*)::bigint, count(u.user_id)::bigint FROM public.account_trans t LEFT JOIN public.users u ON u.user_id = t.created_by_uid
+  UNION ALL SELECT 'activity_logs_user', count(*)::bigint, count(u.user_id)::bigint FROM public.activity_logs a LEFT JOIN public.users u ON u.user_id = a.user_id
+)
+SELECT check_name, total, owned, (total - owned)::bigint AS unowned FROM checks ORDER BY check_name LIMIT 100;
+```
+
+```sql
+WITH metrics AS (
+  SELECT 'orders_null_order_number' AS metric, count(*)::bigint AS value FROM public.orders WHERE order_number IS NULL OR btrim(order_number) = ''
+  UNION ALL SELECT 'orders_null_status', count(*)::bigint FROM public.orders WHERE order_status_id IS NULL OR btrim(order_status_id) = ''
+  UNION ALL SELECT 'orders_invalid_created_at', count(*)::bigint FROM public.orders WHERE created_at IS NULL
+  UNION ALL SELECT 'orders_invalid_currency_ref', count(*)::bigint FROM public.orders o WHERE o.order_currency IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.currency c WHERE c.cur_id = o.order_currency)
+  UNION ALL SELECT 'accounts_negative_balance', count(*)::bigint FROM public.accounts WHERE balance < 0
+  UNION ALL SELECT 'accounts_missing_name', count(*)::bigint FROM public.accounts WHERE acc_name_ar IS NULL AND acc_name_en IS NULL
+  UNION ALL SELECT 'main_entries_unbalanced', count(*)::bigint FROM (SELECT m.main_entry_id FROM public.main_entry m LEFT JOIN public.account_trans t ON t.main_entry_id = m.main_entry_id GROUP BY m.main_entry_id HAVING coalesce(sum(CASE WHEN t.trans_type = 'Debit' THEN t.amount ELSE 0 END),0) <> coalesce(sum(CASE WHEN t.trans_type = 'Credit' THEN t.amount ELSE 0 END),0)) x
+  UNION ALL SELECT 'users_with_password_column_value', count(*)::bigint FROM public.users WHERE password IS NOT NULL AND btrim(password) <> ''
+  UNION ALL SELECT 'portal_users_with_password_column_value', count(*)::bigint FROM public.portal_users WHERE password IS NOT NULL AND btrim(password) <> ''
+  UNION ALL SELECT 'users_with_system_pin', count(*)::bigint FROM public.users WHERE system_pin IS NOT NULL AND btrim(system_pin) <> ''
+  UNION ALL SELECT 'sessions_expired', count(*)::bigint FROM public.sessions WHERE expires_at IS NOT NULL AND expires_at <= now()
+  UNION ALL SELECT 'sessions_missing_expires_at', count(*)::bigint FROM public.sessions WHERE expires_at IS NULL
+)
+SELECT metric, value FROM metrics ORDER BY metric LIMIT 100;
+```
+
+```sql
+WITH entry_totals AS (
+  SELECT m.main_entry_id, m.entry_number, count(t.account_trans_id)::bigint AS line_count,
+    coalesce(sum(CASE WHEN lower(t.trans_type) IN ('debit','مدين') THEN t.amount ELSE 0 END),0)::numeric AS debit_total,
+    coalesce(sum(CASE WHEN lower(t.trans_type) IN ('credit','دائن') THEN t.amount ELSE 0 END),0)::numeric AS credit_total
+  FROM public.main_entry m LEFT JOIN public.account_trans t ON t.main_entry_id = m.main_entry_id
+  GROUP BY m.main_entry_id, m.entry_number
+)
+SELECT main_entry_id, entry_number, line_count, debit_total, credit_total, (debit_total-credit_total)::numeric AS difference FROM entry_totals WHERE debit_total <> credit_total ORDER BY entry_number LIMIT 20;
+```

@@ -1448,3 +1448,14 @@ Create order
 نتيجة التحقق: `npm ci` ناجح، `npm run check` ناجح، اختبارات النطاق 2 ملف/8 اختبارات ناجحة، الاختبارات الكاملة 73 ملفاً ناجحاً و3 متخطاة، 259 اختباراً ناجحاً و8 متخطاة، و`npm run build` ناجح. لم تُنفذ أي SQL أو Migration، ولم تُفحص أو تُعدل RLS/Grants، ولم يُنفذ `alx_web` بناءً على النطاق المستثنى.
 
 الحالة بعد الدفعة: **API Foundation للنظام الأساسي متقدم ومثبت محلياً، لكن الجاهزية الإنتاجية الكاملة غير معلنة** بسبب غياب staging معزولة وData Quality Snapshot وSmoke/E2E وownership على بيانات حقيقية، إضافة إلى بقاء بعض فجوات AsyncState/الأنواع ونقل المكونات إلى HTTP.
+
+
+---
+
+## ملحق قرار التنفيذ على المشروع الأصلي — 2026-10-03T02:59:21Z — AI Model: Manus
+
+بناءً على طلب المستخدم تم تجاوز شرط staging وتنفيذ Data Quality Snapshot واختبار ownership مباشرة على مشروع Supabase الأصلي `ejrojwbbflzchasvgexr`. تمت القراءة عبر Supabase MCP فقط دون DDL/DML أو Migration أو تعديل RLS/Grants.
+
+تم إغلاق التحقق البرمجي المحلي بنجاح: `npm run check` واختبارات النظام (73 ملفاً ناجحاً، 260 اختباراً ناجحاً، 3 ملفات و8 اختبارات متخطاة)، كما نجح `alx_web` في clean install وboundary audit وbuild. أضيف ownership enforcement لمسارات API Foundation مع اختبارات owner/non-owner/Admin.
+
+لكن الخطة **لم تصل إلى إعلان الجاهزية الإنتاجية**: snapshot الحي كشف 11 password و9 system_pin في `public.users`، و5 قيود مالية غير متوازنة، وجلستين بلا `expires_at`، وفشل ownership تاريخي لطلبات وسجلات مالية. كما أن نقل جميع مستهلكي Portal إلى HTTP لم يكتمل؛ ما زالت استيرادات `legacy-portal` موجودة، وفي SwiftShip يوجد 89 legacy imports و34 `any` في الحدود المطلوبة و26 ملفاً يستخدم AsyncState. لذلك تم تسجيل القرار الصريح بعدم إعلان الجاهزية، مع حفظ التقرير في `docs/pre-api/data-quality-snapshot-2026-10-03.md` و`docs/pre-api/production-api-readiness-review-2026-10-03.md`.

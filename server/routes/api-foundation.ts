@@ -13,6 +13,8 @@ type JsonRecord = Record<string, unknown>;
 type Principal = {
   userId: string;
   role: string;
+  linkedType: string | null;
+  linkedEntity: string | null;
   email: string | null;
   fullName: string | null;
   permissions: ReadonlySet<string>;
@@ -192,6 +194,29 @@ export function hasPermission(principal: Pick<Principal, 'role' | 'permissions'>
   return principal.permissions.has(permission);
 }
 
+export type OwnedResource = 'customer' | 'courier' | 'order' | 'shipment' | 'account' | 'entry';
+
+export function ownsResource(
+  principal: Pick<Principal, 'role' | 'linkedType' | 'linkedEntity'>,
+  resource: OwnedResource,
+  raw: unknown,
+): boolean {
+  if (principal.role.toLowerCase() === 'admin') return true;
+  if (!principal.linkedType || !principal.linkedEntity) return false;
+  const row = asRecord(raw);
+  const linkedType = principal.linkedType.toLowerCase();
+  const linkedEntity = principal.linkedEntity;
+  const candidates: Record<OwnedResource, unknown> = {
+    customer: row.customer_id,
+    courier: row.courier_id,
+    order: linkedType === 'customer' ? row.customer_id : linkedType === 'courier' ? row.courier_id : linkedType === 'employee' ? row.employee_id : row.order_id,
+    shipment: linkedType === 'courier' ? row.courier_id : row.shipment_id,
+    account: row.account_id,
+    entry: linkedType === 'customer' || linkedType === 'courier' || linkedType === 'employee' ? row.entity_id : row.main_entry_id,
+  };
+  return candidates[resource] === linkedEntity;
+}
+
 function bearerToken(req: Request): string | null {
   const value = req.header('authorization');
   if (!value?.startsWith('Bearer ')) return null;
@@ -216,6 +241,8 @@ async function resolvePrincipal(db: DbClient['db'], req: Request): Promise<Princ
   return {
     userId,
     role: text(user.role) ?? text(session.role) ?? 'Staff',
+    linkedType: text(user.linked_type),
+    linkedEntity: text(user.linked_entity),
     email: text(user.email),
     fullName: text(user.fullName) ?? text(user.full_name),
     permissions: new Set(permissionValues),
@@ -284,7 +311,7 @@ export function registerApiFoundationRoutes(app: Express, db: DbClient['db'] | n
       const page = Math.max(1, Number(req.query.page) || 1);
       const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 25));
       const snapshot = await getDocs(query(collection(db, 'customers'), limit(page * pageSize)));
-      const rows = snapshot.docs.slice((page - 1) * pageSize).map((item) => publicCustomerDto(item.id, item.data()));
+      const rows = snapshot.docs.filter((item) => ownsResource(res.locals.principal as Principal, 'customer', item.data())).slice((page - 1) * pageSize).map((item) => publicCustomerDto(item.id, item.data()));
       res.json(successEnvelope(rows, requestId, { page, pageSize, totalItems: snapshot.size, totalPages: Math.max(1, Math.ceil(snapshot.size / pageSize)) }));
     } catch {
       res.status(500).json(errorEnvelope('CUSTOMERS_READ_FAILED', requestId));
@@ -297,7 +324,7 @@ export function registerApiFoundationRoutes(app: Express, db: DbClient['db'] | n
       const page = Math.max(1, Number(req.query.page) || 1);
       const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 25));
       const snapshot = await getDocs(query(collection(db, 'couriers'), limit(page * pageSize)));
-      const rows = snapshot.docs.slice((page - 1) * pageSize).map((item) => publicCourierDto(item.id, item.data()));
+      const rows = snapshot.docs.filter((item) => ownsResource(res.locals.principal as Principal, 'courier', item.data())).slice((page - 1) * pageSize).map((item) => publicCourierDto(item.id, item.data()));
       res.json(successEnvelope(rows, requestId, { page, pageSize, totalItems: snapshot.size, totalPages: Math.max(1, Math.ceil(snapshot.size / pageSize)) }));
     } catch {
       res.status(500).json(errorEnvelope('COURIERS_READ_FAILED', requestId));
@@ -310,7 +337,7 @@ export function registerApiFoundationRoutes(app: Express, db: DbClient['db'] | n
       const page = Math.max(1, Number(req.query.page) || 1);
       const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 25));
       const snapshot = await getDocs(query(collection(db, 'orders'), limit(page * pageSize)));
-      const rows = snapshot.docs.slice((page - 1) * pageSize).map((item) => publicOrderDto(item.id, item.data()));
+      const rows = snapshot.docs.filter((item) => ownsResource(res.locals.principal as Principal, 'order', item.data())).slice((page - 1) * pageSize).map((item) => publicOrderDto(item.id, item.data()));
       res.json(successEnvelope(rows, requestId, { page, pageSize, totalItems: snapshot.size, totalPages: Math.max(1, Math.ceil(snapshot.size / pageSize)) }));
     } catch {
       res.status(500).json(errorEnvelope('ORDERS_READ_FAILED', requestId));
@@ -323,7 +350,7 @@ export function registerApiFoundationRoutes(app: Express, db: DbClient['db'] | n
       const page = Math.max(1, Number(req.query.page) || 1);
       const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 25));
       const snapshot = await getDocs(query(collection(db, 'shipments'), limit(page * pageSize)));
-      const rows = snapshot.docs.slice((page - 1) * pageSize).map((item) => publicShipmentDto(item.id, item.data()));
+      const rows = snapshot.docs.filter((item) => ownsResource(res.locals.principal as Principal, 'shipment', item.data())).slice((page - 1) * pageSize).map((item) => publicShipmentDto(item.id, item.data()));
       res.json(successEnvelope(rows, requestId, { page, pageSize, totalItems: snapshot.size, totalPages: Math.max(1, Math.ceil(snapshot.size / pageSize)) }));
     } catch {
       res.status(500).json(errorEnvelope('SHIPMENTS_READ_FAILED', requestId));
@@ -349,7 +376,7 @@ export function registerApiFoundationRoutes(app: Express, db: DbClient['db'] | n
       const page = Math.max(1, Number(req.query.page) || 1);
       const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 25));
       const snapshot = await getDocs(query(collection(db, 'accounts'), limit(page * pageSize)));
-      const rows = snapshot.docs.slice((page - 1) * pageSize).map((item) => publicAccountDto(item.id, item.data()));
+      const rows = snapshot.docs.filter((item) => ownsResource(res.locals.principal as Principal, 'account', item.data())).slice((page - 1) * pageSize).map((item) => publicAccountDto(item.id, item.data()));
       res.json(successEnvelope(rows, requestId, { page, pageSize, totalItems: snapshot.size, totalPages: Math.max(1, Math.ceil(snapshot.size / pageSize)) }));
     } catch {
       res.status(500).json(errorEnvelope('ACCOUNTS_READ_FAILED', requestId));
@@ -362,7 +389,7 @@ export function registerApiFoundationRoutes(app: Express, db: DbClient['db'] | n
       const page = Math.max(1, Number(req.query.page) || 1);
       const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 25));
       const snapshot = await getDocs(query(collection(db, 'main_entry'), limit(page * pageSize)));
-      const rows = snapshot.docs.slice((page - 1) * pageSize).map((item) => publicMainEntryDto(item.id, item.data()));
+      const rows = snapshot.docs.filter((item) => ownsResource(res.locals.principal as Principal, 'entry', item.data())).slice((page - 1) * pageSize).map((item) => publicMainEntryDto(item.id, item.data()));
       res.json(successEnvelope(rows, requestId, { page, pageSize, totalItems: snapshot.size, totalPages: Math.max(1, Math.ceil(snapshot.size / pageSize)) }));
     } catch {
       res.status(500).json(errorEnvelope('ENTRIES_READ_FAILED', requestId));

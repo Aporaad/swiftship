@@ -12,6 +12,7 @@ import {
   publicProductDto,
   publicShipmentDto,
   requestIdFrom,
+  ownsResource,
   successEnvelope,
 } from './api-foundation';
 
@@ -146,5 +147,13 @@ describe('Phase 13 — system API foundation contracts', () => {
 
     // Staff بدون الصلاحية المطلوبة / Staff without required permission
     expect(hasPermission({ role: 'Staff', permissions: new Set(['couriers:read']) }, 'customers:read')).toBe(false);
+  });
+
+  it('enforces linked ownership while allowing administrators to inspect the organization', () => {
+    const customerOwner = { role: 'Staff', linkedType: 'customer', linkedEntity: 'customer-1' };
+    expect(ownsResource(customerOwner, 'order', { customer_id: 'customer-1' })).toBe(true);
+    expect(ownsResource(customerOwner, 'order', { customer_id: 'customer-2' })).toBe(false);
+    expect(ownsResource({ role: 'Staff', linkedType: null, linkedEntity: null }, 'order', { customer_id: 'customer-1' })).toBe(false);
+    expect(ownsResource({ role: 'Admin', linkedType: null, linkedEntity: null }, 'order', { customer_id: 'customer-2' })).toBe(true);
   });
 });
