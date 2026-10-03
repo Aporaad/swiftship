@@ -1498,3 +1498,16 @@
 - [ ] Portal HTTP cutover جزئي؛ الجلسة والعمليات المحمية لم تُنقل، و`alx_api` لا يزال Scaffold بلا Auth/RBAC أو business routes.
 - [ ] RLS/Grants وبيئة اختبار منفصلة مستثناة بأمر المستخدم؛ لم يُنفذ SQL أو أي كتابة على قاعدة البيانات.
 - التفاصيل: `docs/pre-api/repair-followup-2026-10-04.md`.
+
+
+## [2026-10-04T02:47:21+03:00] — Auth Gateway وبدء Auth API — AI Model: Manus
+- [x] نقل تدفق شاشة Login إلى `AuthGateway` وخدمة `staff-login.service.ts` مع ملف حساب typed لا يكشف قيمة PIN للواجهة وإزالة imports direct من `legacy-compat` و`any` من `Login.tsx`.
+- [x] إنشاء عقود HTTP لـlogin/refresh/logout في alx_api مع Zod وAuthUseCases port وrate limit مستقل؛ افتراضياً ترجع المسارات 503 حتى توصيل use cases.
+- [x] إضافة Argon2id hashing/verifying مع salt عشوائي وإعدادات resource bounds من env، واختبارات HTTP وUnit.
+- [x] تحقق ناجح: SwiftShip 274 tests pass / 8 skipped، 76 files pass / 3 skipped، check/build pass؛ alx_api 17 tests pass، check/build pass.
+- [ ] إزالة بقية `legacy-compat`: ما زالت 91 ملفاً تحتوي مطابقة للاسم؛ ترحيل Login فقط لا يغلق المرحلة، كما أن تنفيذ AuthGateway ما زال يعتمد على adapter داخلياً.
+- [ ] التنظيف الشامل لـ`any`: 907 مطابقة AST صريحة في كامل `src + server`؛ النطاقات الحرجة المحددة بالمسارات أصبحت صفر.
+- [ ] لا توجد Auth use cases أو DB repository فعلي؛ login/refresh/logout ترجع 503 حتى ربط مخطط PostgreSQL المعتمد.
+- [ ] مصدر كلمة المرور الحالي في adapter يستخدم مقارنة مباشرة مع `public.users.password`؛ يلزم اعتماد migration/reset/hash وsessions/refresh/lockout، ولم ينفذ SQL أو تغيير DB حسب توجيه المستخدم.
+- [ ] لم تكتمل بقية بوابة Portal HTTP ولم تُعلن خطة الإصلاح مكتملة أو API production-ready.
+- التقرير: `docs/pre-api/repair-followup-2026-10-04-0247.md`.

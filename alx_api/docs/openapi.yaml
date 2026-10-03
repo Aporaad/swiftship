@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: ALX API
   version: 0.1.0
-  description: Initial infrastructure scaffold. Business routes and authentication are not enabled.
+  description: Infrastructure scaffold with versioned auth request boundaries. Auth use cases are intentionally unconfigured until the PostgreSQL credential/session contract is approved.
 servers:
   - url: http://127.0.0.1:3001
 paths:
@@ -30,8 +30,70 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+  /api/v1/auth/login:
+    post:
+      operationId: postAuthLogin
+      summary: Authenticate a user (use case not yet configured)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginInput'
+      responses:
+        '200':
+          description: Credentials accepted; returns the token pair.
+        '400':
+          description: Invalid request shape.
+        '429':
+          description: Authentication rate limit exceeded.
+        '503':
+          description: Auth repository and use cases are not yet configured.
+  /api/v1/auth/refresh:
+    post:
+      operationId: postAuthRefresh
+      summary: Rotate a refresh token (use case not yet configured)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshInput'
+      responses:
+        '200': { description: Rotated token pair. }
+        '400': { description: Invalid request shape. }
+        '429': { description: Authentication rate limit exceeded. }
+        '503': { description: Auth repository and use cases are not yet configured. }
+  /api/v1/auth/logout:
+    post:
+      operationId: postAuthLogout
+      summary: Revoke a refresh token (use case not yet configured)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshInput'
+      responses:
+        '200': { description: Refresh token revoked. }
+        '400': { description: Invalid request shape. }
+        '429': { description: Authentication rate limit exceeded. }
+        '503': { description: Auth repository and use cases are not yet configured. }
 components:
   schemas:
+    LoginInput:
+      type: object
+      additionalProperties: false
+      required: [identifier, password]
+      properties:
+        identifier: { type: string, minLength: 1, maxLength: 254 }
+        password: { type: string, minLength: 1, maxLength: 1024, format: password }
+    RefreshInput:
+      type: object
+      additionalProperties: false
+      required: [refreshToken]
+      properties:
+        refreshToken: { type: string, minLength: 32, maxLength: 512 }
     SuccessEnvelope:
       type: object
       required: [success, data, requestId]

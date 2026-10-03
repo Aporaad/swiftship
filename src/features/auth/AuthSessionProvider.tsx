@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type { CurrentUserDto, SessionState } from '../../data/dtos/auth.dto';
+import type { AuthLoginProfileDto, CurrentUserDto, SessionState } from '../../data/dtos/auth.dto';
 import type { AuthGateway } from '../../data/contracts/auth.gateway';
 import { currentSupabaseAuthGateway } from '../../data/current-supabase/gateways/auth.gateway';
 
@@ -17,6 +17,10 @@ export interface AuthSessionContextValue {
   /** Temporary shape adapter for legacy UI; null unless the gateway reports an authenticated session. */
   legacyAuth: { currentUser: (CurrentUserDto & { uid: string }) | null };
   authenticate(identifier: string, password: string): Promise<CurrentUserDto>;
+  findEmailByUsername(username: string): Promise<string | null>;
+  getLoginProfile(userId: string): Promise<AuthLoginProfileDto | null>;
+  ensureInitialRootProfile(userId: string): Promise<AuthLoginProfileDto | null>;
+  verifySystemPin(userId: string, pin: string): Promise<boolean>;
   completeSignIn(userId: string): void;
   cancelPendingSignIn(): void;
   refresh(): Promise<void>;
@@ -64,6 +68,26 @@ export function AuthSessionProvider({
     [gateway],
   );
 
+  const findEmailByUsername = useCallback(
+    (username: string) => gateway.findEmailByUsername(username),
+    [gateway],
+  );
+
+  const getLoginProfile = useCallback(
+    (userId: string) => gateway.getLoginProfile(userId),
+    [gateway],
+  );
+
+  const ensureInitialRootProfile = useCallback(
+    (userId: string) => gateway.ensureInitialRootProfile(userId),
+    [gateway],
+  );
+
+  const verifySystemPin = useCallback(
+    (userId: string, pin: string) => gateway.verifySystemPin(userId, pin),
+    [gateway],
+  );
+
   const completeSignIn = useCallback(
     (userId: string) => gateway.completeSignIn(userId),
     [gateway],
@@ -94,8 +118,8 @@ export function AuthSessionProvider({
     [user],
   );
   const value = useMemo(
-    () => ({ state, user, legacyAuth, authenticate, completeSignIn, cancelPendingSignIn, refresh, signOut }),
-    [state, user, legacyAuth, authenticate, completeSignIn, cancelPendingSignIn, refresh, signOut],
+    () => ({ state, user, legacyAuth, authenticate, findEmailByUsername, getLoginProfile, ensureInitialRootProfile, verifySystemPin, completeSignIn, cancelPendingSignIn, refresh, signOut }),
+    [state, user, legacyAuth, authenticate, findEmailByUsername, getLoginProfile, ensureInitialRootProfile, verifySystemPin, completeSignIn, cancelPendingSignIn, refresh, signOut],
   );
 
   return <AuthSessionContext.Provider value={value}>{children}</AuthSessionContext.Provider>;

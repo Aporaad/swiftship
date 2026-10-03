@@ -2135,3 +2135,12 @@
 - التحقق النهائي ناجح: SwiftShip `check`, 75 test files passed / 3 skipped, 270 tests passed / 8 skipped, وبناء الواجهة والخادم ناجح. Scaffold `alx_api`: check/build و6 tests ناجحة؛ Portal: check/build و5 tests وboundary audit ناجحة.
 - لم تُنفذ أوامر SQL ولم تتغير قاعدة البيانات. لا إعلان إغلاق للخطة: 912 any صريحة على مستوى المصدر و91 مستهلكاً ما زالوا على `legacy-compat`، وPortal HTTP cutover جزئي.
 - التقرير: `docs/pre-api/repair-followup-2026-10-04.md`.
+
+
+## [2026-10-04T02:47:21+03:00] — فصل Login وبدء Auth API — AI Model: Manus
+- `src/pages/Login.tsx`: أزيلت استيرادات `legacy-compat` وعمليات القراءة/الكتابة من مكون UI؛ أصبح التدفق يستعمل AuthSessionContext و`staff-login.service.ts`، وأزيلت أنواع `any` من الصفحة.
+- `src/data/contracts/auth.gateway.ts`, `src/data/dtos/auth.dto.ts`, `src/data/current-supabase/gateways/auth.gateway.ts`, `src/features/auth/AuthSessionProvider.tsx`: إضافة Login Profile DTO آمن وعمليات username/profile/initial-root/PIN داخل AuthGateway. بقي adapter داخلياً في التنفيذ الحالي، ولم يحصل ترحيل schema.
+- إضافة `src/features/auth/services/staff-login.service.ts` واختباراته: إدارة username normalization، تعطيل المستخدم، استثناء courier، وإكمال sign-in بعد PIN.
+- `alx_api`: إضافة Argon2id module/schema/routes وAuthUseCases port وAuth rate limit وENV parameters وOpenAPI واختبارات. لا use cases أو DB repository متصلين، فتظل المسارات 503.
+- التحقق: SwiftShip `npm run check`, الاختبارات (274 ناجح، 8 متخطاة) و`npm run build` ناجحة؛ alx_api check وbuild و17 اختباراً ناجحة. ظهرت تحذيرات build عن bundle size و`import.meta` مع CJS.
+- لا SQL أو DB/RLS/Grants تغيّرت. المرجع التفصيلي: `docs/pre-api/repair-followup-2026-10-04-0247.md`.

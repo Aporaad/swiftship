@@ -7,6 +7,7 @@ import pinoHttp from 'pino-http';
 import type { ApiEnvironment } from './config/env';
 import { sendFailure, sendSuccess } from './core/http/response';
 import { requestIdMiddleware } from './middleware/request-id';
+import { registerAuthRoutes, type AuthUseCases } from './modules/auth/auth.routes';
 
 export interface ApiReadiness {
   database: boolean;
@@ -16,6 +17,7 @@ export interface AppOptions {
   environment: ApiEnvironment;
   readiness?: () => ApiReadiness;
   logger?: Logger;
+  auth?: AuthUseCases;
 }
 
 export function createApiApp(options: AppOptions): Express {
@@ -74,6 +76,8 @@ export function createApiApp(options: AppOptions): Express {
     }
     return sendSuccess(response, { status: 'ready', checks }, String(response.locals.requestId));
   });
+
+  registerAuthRoutes(app, environment, options.auth);
 
   app.use('/api/v1', (_request, response) => {
     sendFailure(response, 404, 'ROUTE_NOT_FOUND', 'المسار المطلوب غير موجود.', String(response.locals.requestId));

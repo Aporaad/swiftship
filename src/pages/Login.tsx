@@ -1,6 +1,7 @@
 import React, { useState } from "react";
-import { db } from "../data/legacy/legacy-compat.ts";
 import { useAuthSession } from "../features/auth/AuthSessionProvider";
+import type { AuthLoginProfileDto } from "../data/dtos/auth.dto";
+import { beginStaffLogin, StaffLoginError, verifyStaffLoginPin } from "../features/auth/services/staff-login.service";
 import { useNavigate } from "react-router-dom";
 import {
   Lock,
@@ -14,10 +15,19 @@ import {
   MessageCircle,
   Phone,
 } from "lucide-react";
-import { collection, doc, getDocs, getDoc, query, setDoc, where } from "../data/legacy/legacy-compat.ts";
 import { useSettings } from "../context/SettingsContext";
 import { activityLogService } from "../services/activityLogService";
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function readErrorField(error: unknown, field: "code" | "message"): string | null {
+  if (error instanceof Error && field === "message") return error.message;
+  if (!isRecord(error)) return null;
+  const value = error[field];
+  return typeof value === "string" ? value : null;
+}
 
 export default function Login() {
   const [identifier, setIdentifier] = useState("");
@@ -26,13 +36,31 @@ export default function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [pinRequired, setPinRequired] = useState(false);
-  const [tempUser, setTempUser] = useState<any>(null);
+  const [tempUser, setTempUser] = useState<AuthLoginProfileDto | null>(null);
   const [pendingUserId, setPendingUserId] = useState<string | null>(null);
   const [pin, setPin] = useState("");
   const navigate = useNavigate();
   const { settings, t } = useSettings();
   const isAr = settings.language === "ar";
-  const { authenticate, completeSignIn, cancelPendingSignIn } = useAuthSession();
+  const authSession = useAuthSession();
+  const {
+    authenticate,
+    completeSignIn,
+    cancelPendingSignIn,
+    ensureInitialRootProfile,
+    findEmailByUsername,
+    getLoginProfile,
+    verifySystemPin,
+  } = authSession;
+  const loginGateway = {
+    authenticate,
+    cancelPendingSignIn,
+    completeSignIn,
+    ensureInitialRootProfile,
+    findEmailByUsername,
+    getLoginProfile,
+    verifySystemPin,
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,89 +70,54 @@ export default function Login() {
       setLoading(true);
       setError("");
 
-      let email = identifier.trim().toLowerCase();
-      if (!email.includes("@") && email !== "admin") {
-        const usernameSnap = await getDocs(query(collection(db, "users"), where("username", "==", email),));
-        const usernameProfile = usernameSnap.docs[0]?.data() as any;
-        if (!usernameProfile?.email) throw new Error(isAr ? "اسم المستخدم غير موجود" : "Username was not found");
-        email = usernameProfile.email;
-      }
-
-      const result = await authenticate(email, password);
-      if (!result.id) throw new Error(isAr ? "تعذر التحقق من بيانات الدخول" : "Credentials could not be verified");
-
-      const userDocRef = doc(db, "users", result.id);
-      const userSnap = await getDoc(userDocRef);
-      let userData: any = userSnap.exists() ? userSnap.data() : null;
-      const rootEmails = [
-        "alsrhyarslan5@gmail.com",
-        "arslan.alshamari@gmail.com",
-        "engaporaad1@gmail.com",
-        "admin@swiftship.system",
-        "apo.1.read@gmail.com",
-      ];
-
-      if (!userData && rootEmails.includes((result.email || email).toLowerCase())) {
-        userData = {
-          email: result.email || email,
-          username: (result.email || email).split("@")[0],
-          fullName: "System Root Administrator",
-          role: "Admin",
-          isRoot: true,
-          disabled: false,
-          createdAt: Date.now(),
-        };
-        await setDoc(userDocRef, userData);
-      }
-
-      if (userData?.disabled) {
-        cancelPendingSignIn();
-        throw new Error(isAr ? "هذا الحساب معطل حالياً." : "This account is currently disabled.");
-      }
-
-      if (userData && ["Courier", "courier"].includes(userData.role) || userData?.roleId === "courier") {
-        cancelPendingSignIn();
-        throw new Error(isAr ? "حساب المندوب الخارجي لا يملك صلاحية دخول النظام." : "Courier accounts cannot access the staff system.");
-      }
-
-      if (userData?.systemPin) {
+      const result = await beginStaffLogin(identifier, password, loginGateway);
+      if (result.requiresSystemPin && result.profile) {
         setPinRequired(true);
-        setTempUser({ ...userData, email: userData.email || result.email });
-        setPendingUserId(result.id);
+        setTempUser(result.profile);
+        setPendingUserId(result.user.id);
         return;
       }
 
-      completeSignIn(result.id);
-      await activityLogService.log("login", userData?.fullName || result.email || "Unknown", {
-        email: result.email,
+      await activityLogService.log("login", result.profile?.displayName || result.user.email || "Unknown", {
+        email: result.user.email,
         loginAt: new Date().toISOString(),
       });
       navigate("/");
-    } catch (err: any) {
+    } catch (err: unknown) {
       cancelPendingSignIn();
       console.error("[Login] Supabase authentication failed:", err);
-      const code = String(err?.code || "");
+      if (err instanceof StaffLoginError) {
+        const message = {
+          USERNAME_NOT_FOUND: isAr ? "اسم المستخدم غير موجود" : "Username was not found",
+          CREDENTIALS_UNVERIFIED: isAr ? "تعذر التحقق من بيانات الدخول" : "Credentials could not be verified",
+          ACCOUNT_DISABLED: isAr ? "هذا الحساب معطل حالياً." : "This account is currently disabled.",
+          COURIER_NOT_ALLOWED: isAr ? "حساب المندوب الخارجي لا يملك صلاحية دخول النظام." : "Courier accounts cannot access the staff system.",
+        }[err.code];
+        setError(message);
+        return;
+      }
+      const code = readErrorField(err, "code") || "";
       setError(code.includes("invalid") || code.includes("credentials")
         ? (isAr ? "بيانات الدخول غير صحيحة" : "Invalid login credentials")
-        : (err?.message || (isAr ? "تعذر تسجيل الدخول" : "Unable to sign in")));
+        : (readErrorField(err, "message") || (isAr ? "تعذر تسجيل الدخول" : "Unable to sign in")));
     } finally {
       setLoading(false);
     }
   };
 
   const verifyPin = async () => {
-    if (pin !== tempUser?.systemPin) {
-      setError(isAr ? "رمز الدخول غير صحيح" : "Invalid Access PIN");
-      return;
-    }
     if (!pendingUserId) {
       cancelPendingSignIn();
       setError(isAr ? "تعذر استكمال جلسة الدخول" : "Unable to complete sign-in");
       return;
     }
     try {
-      completeSignIn(pendingUserId);
-      await activityLogService.log("login", tempUser?.fullName || tempUser?.email || "Unknown", {
+      const isPinValid = await verifyStaffLoginPin(pendingUserId, pin, loginGateway);
+      if (!isPinValid) {
+        setError(isAr ? "رمز الدخول غير صحيح" : "Invalid Access PIN");
+        return;
+      }
+      await activityLogService.log("login", tempUser?.displayName || tempUser?.email || "Unknown", {
         email: tempUser?.email,
         loginAt: new Date().toISOString(),
       });
@@ -133,8 +126,8 @@ export default function Login() {
       setTempUser(null);
       setPendingUserId(null);
       navigate("/");
-    } catch (err: any) {
-      setError(err?.message || (isAr ? "تعذر استكمال تسجيل الدخول" : "Unable to complete sign-in"));
+    } catch (err: unknown) {
+      setError(readErrorField(err, "message") || (isAr ? "تعذر استكمال تسجيل الدخول" : "Unable to complete sign-in"));
     }
   };
 

@@ -52,6 +52,18 @@ export interface CurrentUserDto {
   isRoot: boolean;
 }
 
+export interface AuthLoginProfileDto {
+  id: string;
+  email: string | null;
+  username: string | null;
+  displayName: string | null;
+  role: string | null;
+  roleId: string | null;
+  isRoot: boolean;
+  disabled: boolean;
+  requiresSystemPin: boolean;
+}
+
 export type SessionState =
   | { status: 'loading' }
   | { status: 'authenticated'; user: CurrentUserDto }

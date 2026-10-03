@@ -5,7 +5,7 @@
 ## الحالة وحدود هذا الـScaffold
 
 - هذا **بدء تأسيسي فقط** وليس API أعمال مكتملة ولا جاهزة للإنتاج.
-- لا Auth أو JWT أو RBAC أو business endpoints حتى الآن.
+- بدأت وحدة مصادقة تأسيسية مستقلة: Zod request schemas، وArgon2id hash/verify، ومسارات versioned لـlogin/refresh/logout مع حد محاولات منفصل. المسارات ترجع `503 AUTH_NOT_CONFIGURED` حتى حقن use cases؛ لا Repository أو جلسات/JWT/RBAC موصولة بعد.
 - لا يوجد اتصال بقاعدة SwiftShip أو أي `DATABASE_URL` مضمّن، ولا migrations ولا استعلامات DB.
 - readiness يبقى `503` عمداً حتى توصيل واعتماد الاعتماديات ونشر إعدادها.
 - قرارات Auth/Token/CORS/أدوار الإنتاج تُحسم قبل تنفيذ Auth النهائي.
