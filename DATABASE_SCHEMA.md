@@ -2,269 +2,449 @@
 
 ## قائمة الجداول المتاحة (51 جدولاً)
 
-1. `accounts`
-2. `audit_logs`
-3. `auto_entries`
-4. `auto_entries_data`
-5. `banner`
-6. `branches`
-7. `city`
-8. `company_detail`
-9. `cost_center`
-10. `country`
-11. `courier`
-12. `courier_area`
-13. `cust_details`
-14. `cust_order_status`
-15. `debtor_limits`
-16. `delivery_run_sheets`
-17. `delivery_types`
-18. `driver_wallets`
-19. `drivers`
-20. `email_logs`
-21. `financial_periods`
-22. `journal_entries`
-23. `journal_entry_details`
-24. `item_types`
-25. `items_category`
-26. `order_address`
-27. `order_attachments`
-28. `order_option`
-29. `order_status`
-30. `order_status_history`
-31. `orders`
-32. `package_types`
-33. `payment_types`
-34. `reasons`
-35. `role_permissions`
-36. `roles`
-37. `sales_representatives`
-38. `settlements`
-39. `shipment_financials`
-40. `shipment_financials_detail`
-41. `status`
-42. `store_settlements`
-43. `stores`
-44. `sub_city`
-45. `system_settings`
-46. `ticket_messages`
-47. `tickets`
-48. `user_addresses`
-49. `user_roles`
-50. `user_sessions`
-51. `users`
+1. `acc_main`
+2. `acc_sub`
+3. `acc_sub_group`
+4. `account`
+5. `account_id_migration_map`
+6. `account_trans`
+7. `accounts`
+8. `activity_logs`
+9. `announcements`
+10. `assets`
+11. `auto_entries`
+12. `browser_pages`
+13. `couriers`
+14. `cur_price`
+15. `currency`
+16. `cust_details`
+17. `custody_advances`
+18. `customers`
+19. `default_accounts`
+20. `employees`
+21. `entry_module`
+22. `entry_payment_details`
+23. `entry_type`
+24. `financial_legacy_migration_map`
+25. `financial_migration_exceptions`
+26. `items_category`
+27. `jobs_req`
+28. `main_entry`
+29. `notifications`
+30. `order_items`
+31. `order_option`
+32. `order_status`
+33. `orders`
+34. `orders_history`
+35. `portal_tickets`
+36. `portal_user_migration_map`
+37. `portal_users`
+38. `products`
+39. `report_settings`
+40. `report_templates`
+41. `returned_products`
+42. `roles`
+43. `salary_history`
+44. `sessions`
+45. `settings`
+46. `shipments`
+47. `shipping_companies`
+48. `sources`
+49. `user_settings`
+50. `users`
+51. `whatsapp_logs`
 
 ---
 
 ## تفاصيل الجداول والحقول والعلاقات
 
-### 1. `accounts`
+### 1. `account`
+```text
+account {
+  account_id: text
+  account_code: text
+  acc_name_ar: text
+  acc_name_en: text
+  balance: numeric
+  cur_no: integer -> currency.cur_id
+  is_active: boolean
+  created_at: timestamp with time zone
+  updated_at: timestamp with time zone
+  account_type: text
+  created_by: text
+  updated_by: text
+}
+```
+
+### 2. `acc_main`
+```text
+acc_main {
+  acc_main_id: text
+  account_id: text
+  account_code: text
+  acc_name_ar: text
+  acc_name_en: text
+  balance: numeric
+  cur_no: integer -> currency.cur_id
+  is_active: boolean
+  created_at: timestamp with time zone
+  updated_at: timestamp with time zone
+  created_by: text
+  updated_by: text
+}
+```
+
+### 3. `acc_sub`
+```text
+acc_sub {
+  acc_sub_id: text
+  acc_main_id: text
+  account_code: text
+  acc_name_ar: text
+  acc_name_en: text
+  balance: numeric
+  cur_no: integer -> currency.cur_id
+  is_active: boolean
+  created_at: timestamp with time zone
+  updated_at: timestamp with time zone
+  allows_direct_accounts: boolean
+  created_by: text
+  updated_by: text
+}
+```
+
+### 4. `acc_sub_group`
+```text
+acc_sub_group {
+  acc_sub_group_id: text
+  acc_sub_id: text
+  account_code: text
+  acc_name_ar: text
+  acc_name_en: text
+  balance: numeric
+  cur_no: integer -> currency.cur_id
+  is_active: boolean
+  created_at: timestamp with time zone
+  updated_at: timestamp with time zone
+  entity_type: text
+  allows_direct_accounts: boolean
+  created_by: text
+  updated_by: text
+}
+```
+
+
+### 5. `accounts`
 ```text
 accounts {
-  id: uuid
+  account_id: text
+  account_code: text
+  currency: text
+  entity_id: text
+  type: text
+  acc_sub_id: text
+  group_id: text
+  entity_type: text
+  account_seq: integer
+  acc_name_ar: text
+  acc_name_en: text
+  limited_balance: numeric
+  cur_no: integer -> currency.cur_id
+  is_active: boolean
+  created_at: timestamp with time zone
+  updated_at: timestamp with time zone
+  last_recalculated_at: timestamp with time zone
+  balance: numeric
+  account_number: text
+  account_prefix: text
+  entity_name: text
+  debit_total: numeric
+  credit_total: numeric
+  parent_code: text
+  notes: text
+  monthly_salary: numeric
+  created_by: text
+  updated_by: text
+}
+```
+
+### 10. `assets`
+```text
+assets {
+  asset_id: text
+  created_at: timestamp with time zone
+  asset_code: text
+  account_id: text -> accounts.account_id
+  status: text
+  currency: text
+  is_active: boolean
+  type: text
   account_code: text
   name_ar: text
   name_en: text
-  account_type: text
-  parent_id: uuid -> accounts.id
+  updated_at: timestamp with time zone
+  created_by: text
+  updated_by: text
+}
+```
+
+### 19. `default_accounts`
+```text
+default_accounts {
+  default_account_id: text
+  default_key: text
+  account_id: text -> accounts.account_id
+  acc_name_ar: text
+  acc_name_en: text
+  cur_no: integer -> currency.cur_id
   is_active: boolean
-  currency: text
-  balance: numeric
   created_at: timestamp with time zone
   updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
+  created_by: text
+  updated_by: text
 }
 ```
 
-### 2. `audit_logs`
+### 6. `account_trans`
 ```text
-audit_logs {
-  id: uuid
-  user_id: uuid -> users.id
-  action: text
-  entity: text
+account_trans {
+  account_trans_id: text
+  main_entry_id: text
+  line_no: integer
+  trans_type: text
+  account_id: text -> accounts.account_id
+  account_cur_no: integer -> currency.cur_id
+  amount: numeric
+  amount_original: numeric
+  currency_original_no: integer -> currency.cur_id
+  currency_price_id: integer -> cur_price.cur_price_id
+  currency_price_seq: integer -> cur_price.seq
+  entity_type: text
   entity_id: text
-  old_data: jsonb
-  new_data: jsonb
-  ip_address: text
+  payment_method: text
+  order_id: text -> orders.order_id
+  shipment_id: text -> shipments.shipment_id
+  custody_id: text
+  auto_rule_id: text
+  automation_key: text
+  description: text
+  note: text
   created_at: timestamp with time zone
+  updated_at: timestamp with time zone
+  created_by_uid: text -> users.user_id
+  updated_by_uid: text -> users.user_id
+  conversion_rate: numeric
+  amount_original_text: text
+  account_currency_price_id: integer
+  account_currency_price_seq: integer
+  amount_text: text
+  created_by: text
+  updated_by: text
 }
 ```
 
-### 3. `auto_entries`
+
+### 11. `auto_entries`
 ```text
 auto_entries {
-  id: bigint
+  auto_entry_id: text
+  status_id: integer
   name_ar: text
   name_en: text
-  data: jsonb {
-    id: number
-    name_ar: string
-    currencyId: number
-    amount_source: string
-    descriptionTempAr: string
-    isActive: boolean
-    autoPost: boolean
-  }
-  status_id: bigint -> status.id
-  created_at: timestamp with time zone
-  updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
-}
-```
-
-### 4. `auto_entries_data`
-```text
-auto_entries_data {
-  id: bigint
-  auto_entry_id: bigint -> auto_entries.id
-  account_id: uuid -> accounts.id
-  entry_type: text
-  percentage: numeric
-  fixed_amount: numeric
-  created_at: timestamp with time zone
-  updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
-}
-```
-
-### 5. `banner`
-```text
-banner {
-  id: bigint
-  title: text
-  image_url: text
-  link_url: text
   is_active: boolean
-  display_order: integer
+  amount_source: text
+  auto_post boolean
+  credit_account text
+  debit_account text
+  description_temp_ar text
+  description_temp_en text
+  status_name_ar text
   created_at: timestamp with time zone
   updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
+  amount_sources: jsonb
+  amount_strategy: text
+  currency: text
+  skip_when_zero: boolean
+  cur_no: integer -> currency.cur_id
+  created_by: text
+  updated_by: text
 }
 ```
 
-### 6. `branches`
+
+### 14. `cur_price`
 ```text
-branches {
-  id: bigint
-  name_ar: text
-  name_en: text
-  code: text
-  city_id: bigint -> city.id
-  address: text
-  phone: text
+cur_price {
+  cur_price_id: integer
+  cur_no: integer -> currency.cur_id
+  price: numeric
+  day_date: timestamp with time zone
+  seq: integer
+  updated_by: text
+  created_at: timestamp with time zone
+  updated_at: timestamp with time zone
+  created_by: text
+}
+```
+
+### 15. `currency`
+```text
+currency {
+  cur_id: integer
+  code: character varying
+  main_name_ar: text
+  sub_name_ar: text
+  main_name_en: text
+  sub_name_en: text
+  is_default: boolean
+  created_at: timestamp with time zone
   is_active: boolean
-  created_at: timestamp with time zone
+  symbol: character varying
+  flag: character varying
   updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
+  created_by: text
+  updated_by: text
 }
 ```
 
-### 7. `city`
-```text
-city {
-  id: bigint
-  country_id: bigint -> country.id
-  name_ar: text
-  name_en: text
-  code: text
-  is_active: boolean
-  created_at: timestamp with time zone
-  updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
-}
-```
 
-### 8. `company_detail`
+### 21. `entry_module`
 ```text
-company_detail {
-  id: bigint
-  company_name_ar: text
-  company_name_en: text
-  tax_number: text
-  commercial_register: text
-  phone: text
-  email: text
-  address: text
-  logo_url: text
-  created_at: timestamp with time zone
-  updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
-}
-```
-
-### 9. `cost_center`
-```text
-cost_center {
-  id: uuid
+entry_module {
+  entry_module_id: text
   code: text
   name_ar: text
   name_en: text
-  parent_id: uuid -> cost_center.id
+  note: text
   is_active: boolean
   created_at: timestamp with time zone
   updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
+  created_by_uid: text -> users.user_id
+  updated_by_uid: text -> users.user_id
+  created_by: text
+  updated_by: text
 }
 ```
 
-### 10. `country`
+### 22. `entry_payment_details`
 ```text
-country {
-  id: bigint
+entry_payment_details {
+  entry_payment_detail_id: text
+  main_entry_id: text
+  allocation_no: integer
+  payment_method: text
+  account_id: text -> accounts.account_id
+  amount_original: numeric
+  currency_original_no: integer -> currency.cur_id
+  bank_reference: text
+  due_at: timestamp with time zone
+  note: text
+  created_at: timestamp with time zone
+  updated_at: timestamp with time zone
+  created_by: text -> users.user_id
+  updated_by: text -> users.user_id
+}
+```
+
+### 23. `entry_type`
+```text
+entry_type {
+  entry_type_id: text
+  code: text
+  module_id: text
   name_ar: text
   name_en: text
-  code: text
-  phone_code: text
+  note: text
   is_active: boolean
   created_at: timestamp with time zone
   updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
+  created_by: text -> users.user_id
+  updated_by: text -> users.user_id
 }
 ```
 
-### 11. `courier`
+
+### 28. `main_entry`
 ```text
-courier {
-  id: bigint
+main_entry {
+  main_entry_id: text
+  entry_number: text
+  module_id: text
+  entry_type_id: text
+  entry_category: text
+  posting_status: text
+  description: text
+  note: text
+  payment_method: text
+  auto_rule_id: text
+  automation_key: text
+  order_id: text -> orders.order_id
+  shipment_id: text -> shipments.shipment_id
+  custody_id: text  
+  effective_at: timestamp with time zone
+  posted_at: timestamp with time zone
+  posted_by_uid: text -> users.user_id
+  voided_at: timestamp with time zone
+  voided_by_uid: text -> users.user_id
+  created_at: timestamp with time zone
+  updated_at: timestamp with time zone
+  created_by: text -> users.user_id
+  updated_by: text -> users.user_id
+}
+```
+
+### 17. `custody_advances`
+```text
+custody_advances {
+  custody_advance_id: text
+  custody_number: text
+  recipient_type: text
+  recipient_id: text
+  recipient_name: text
+  recipient_account_id: text -> accounts.account_id
+  amount_original: numeric
+  currency_original_no: integer -> currency.cur_id
+  currency_price_id: integer -> cur_price.cur_price_id
+  currency_price_seq: integer -> cur_price.seq
+  amount_settled: numeric
+  amount_outstanding: numeric
+  status: text
+  issued_entry_id: text
+  settlement_entry_id: text
+  note: text
+  issued_at: timestamp with time zone
+  issued_by_uid: text -> users.user_id
+  settled_at: timestamp with time zone
+  settled_by_uid: text -> users.user_id
+  created_at: timestamp with time zone
+  updated_at: timestamp with time zone
+  created_by_uid: text -> users.user_id
+  updated_by_uid: text -> users.user_id
+  created_by: text
+  updated_by: text
+}
+```
+
+### 18. `customers`
+```text
+customers {
+  customer_id: text
+  account_id: text -> accounts.account_id
+  is_active: boolean
+  join_by: text
+  referrer_id: text
+  full_name: text
   name_ar: text
   name_en: text
-  code: text
-  phone: text
-  email: text
-  is_active: boolean
+  customer_level: text
   created_at: timestamp with time zone
   updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
+  created_by: text
+  updated_by: text
 }
 ```
 
-### 12. `courier_area`
-```text
-courier_area {
-  id: bigint
-  courier_id: bigint -> courier.id
-  city_id: bigint -> city.id
-  sub_city_id: bigint -> sub_city.id
-  delivery_fee: numeric
-  created_at: timestamp with time zone
-  updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
-}
-```
-
-### 13. `cust_details`
+### 16. `cust_details`
 ```text
 cust_details {
   cust_detail_id: text
@@ -273,615 +453,950 @@ cust_details {
   join_by: text
   referrer_id: text
   onboarding_completed: boolean
+  age: int
+  body_details: text
+  city: text
+  company_name: text
+  country: text
+  gender: text
+  gps_location: text
+  id_number: text
+  max_debt: numeric
+  notes: text
+  privacy_policy_agreed: boolean
+  privacy_policy_agreed_at: timestamp with time zone  
+  acquisition_source text;
+  preferred_categories jsonb;
+  body_details jsonb;
+  location jsonb;
+  address text;
   created_at: timestamp with time zone
   updated_at: timestamp with time zone
-  data: jsonb
   created_by: text
   updated_by: text
 }
 ```
 
-### 14. `cust_order_status`
-```text
-cust_order_status {
-  id: bigint
-  order_id: bigint -> orders.id
-  status_id: bigint -> status.id
-  notes: text
-  created_at: timestamp with time zone
-  updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
-}
-```
 
-### 15. `debtor_limits`
+### 13. `couriers`
 ```text
-debtor_limits {
-  id: uuid
-  customer_id: uuid -> users.id
-  credit_limit: numeric
-  current_balance: numeric
-  is_exceeded: boolean
-  created_at: timestamp with time zone
-  updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
-}
-```
-
-### 16. `delivery_run_sheets`
-```text
-delivery_run_sheets {
-  id: bigint
-  sheet_number: text
-  driver_id: uuid -> drivers.id
-  status_id: bigint -> status.id
-  total_orders: integer
-  delivered_orders: integer
-  failed_orders: integer
-  created_at: timestamp with time zone
-  updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
-}
-```
-
-### 17. `delivery_types`
-```text
-delivery_types {
-  id: bigint
+couriers {
+  courier_id: text
+  account_id: text -> accounts.account_id
+  currency: text
+  is_active: boolean
+  full_name: text
   name_ar: text
   name_en: text
-  code: text
-  is_active: boolean
+  courier_type: text
+  courier_level: text
+  commission_rate: numeric
   created_at: timestamp with time zone
   updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
+  created_by: text
+  updated_by: text
 }
 ```
 
-### 18. `driver_wallets`
+### 20. `employees`
 ```text
-driver_wallets {
-  id: uuid
-  driver_id: uuid -> drivers.id
-  balance: numeric
-  total_collected: numeric
-  total_settled: numeric
-  last_settlement_at: timestamp with time zone
+employees {
+  employee_id: text
+  account_id: text -> accounts.account_id
+  monthly_salary: numeric
+  currency: text
   created_at: timestamp with time zone
-  updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
-}
-```
-
-### 19. `drivers`
-```text
-drivers {
-  id: uuid
-  user_id: uuid -> users.id
-  vehicle_type: text
-  vehicle_plate: text
-  license_number: text
-  is_available: boolean
-  current_lat: numeric
-  current_lng: numeric
-  created_at: timestamp with time zone
-  updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
-}
-```
-
-### 20. `email_logs`
-```text
-email_logs {
-  id: uuid
-  recipient_email: text
-  subject: text
-  body: text
-  status: text
-  error_message: text
-  sent_at: timestamp with time zone
-  created_at: timestamp with time zone
-}
-```
-
-### 21. `financial_periods`
-```text
-financial_periods {
-  id: uuid
-  period_name: text
-  start_date: date
-  end_date: date
-  is_closed: boolean
-  closed_at: timestamp with time zone
-  closed_by: uuid -> users.id
-  created_at: timestamp with time zone
-  updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
-}
-```
-
-### 22. `journal_entries`
-```text
-journal_entries {
-  id: uuid
-  entry_number: text
-  entry_date: date
-  financial_period_id: uuid -> financial_periods.id
-  description: text
-  is_posted: boolean
-  posted_at: timestamp with time zone
-  posted_by: uuid -> users.id
-  created_at: timestamp with time zone
-  updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
-}
-```
-
-### 23. `journal_entry_details`
-```text
-journal_entry_details {
-  id: uuid
-  journal_entry_id: uuid -> journal_entries.id
-  account_id: uuid -> accounts.id
-  cost_center_id: uuid -> cost_center.id
-  debit: numeric
-  credit: numeric
-  description: text
-  created_at: timestamp with time zone
-  updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
-}
-```
-
-### 24. `item_types`
-```text
-item_types {
-  id: bigint
+  created_by: text
+  full_name: text
   name_ar: text
   name_en: text
-  code: text
-  is_active: boolean
-  created_at: timestamp with time zone
+  job_type: text
+  commission_rate: numeric
   updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
+  updated_by: text
 }
 ```
 
-### 25. `items_category`
+### 8. `activity_logs`
 ```text
-items_category {
-  id: bigint
-  name_ar: text
-  name_en: text
-  code: text
-  is_active: boolean
+activity_logs {
+  activity_log_id: text
+  data: jsonb {
+    details
+  }
+  user_id: text -> users.user_id
+  action: text
+  category: text
+  target: text
+  type: text
+  details: text
   created_at: timestamp with time zone
   updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
+  created_by: text
+  updated_by: text
 }
 ```
 
-### 26. `order_address`
+### 29. `notifications`
 ```text
-order_address {
-  id: bigint
-  order_id: bigint -> orders.id
-  address_type: text
-  city_id: bigint -> city.id
-  sub_city_id: bigint -> sub_city.id
-  street_address: text
-  building_number: text
-  postal_code: text
-  lat: numeric
-  lng: numeric
-  contact_name: text
-  contact_phone: text
+notifications {
+  notification_id: text
+  associated_user_ids: jsonb;
+  category: text;
+  creator_id: text;
+  creator_name: text;
+  is_public: boolean;
+  message: text;
+  is_read: boolean;
+  title: text;
+  type: text; 
   created_at: timestamp with time zone
   updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
+  created_by: text
+  updated_by: text
 }
 ```
 
-### 27. `order_attachments`
+### 30. `order_items`
 ```text
-order_attachments {
-  id: bigint
-  order_id: bigint -> orders.id
-  file_name: text
-  file_url: text
-  file_type: text
-  file_size: integer
+order_items {
+  order_item_id: text                            -- PK
+  order_id: text -> orders.order_id             -- FK للطلب
+  product_id: text -> products.product_id       -- FK للمنتج
+  shipment_id: text -> shipments.shipment_id    -- FK للشحنة (مضاف migration 20261002023000)
+  product_price: numeric
+  product_url: text
+  tracking_number: text
+  produc_source_id: text
+  produc_source_url: text
+  product_color: text                            -- (كان product_cooler — أعيدت التسمية في migration)
+  nota: text
+  product_name: text                             -- (مضاف migration 20261002023000)
+  sku: text                                      -- (مضاف migration 20261002023000)
+  internal_note: text                            -- (مضاف migration 20261002023000)
+  customer_note: text                            -- (مضاف migration 20261002023000)
+  quantity: integer
+  total_price: numeric
+  total__weight: numeric
+  unit__weight: numeric                          -- (مضاف migration 20261002023000)
+  total_cbm: numeric
+  unit_cbm: numeric                              -- (مضاف migration 20261002023000)
+  total_packaging_price: numeric                 -- (مضاف migration 20261002023000)
+  packaging_option_id: text
+  packaging_option_price: numeric
+  is_insured: boolean
+  insurance_fee: numeric
+  items_status: text
   created_at: timestamp with time zone
+  created_by: text
   updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
+  updated_by: text
 }
 ```
 
-### 28. `order_option`
+### 31. `order_option`
 ```text
 order_option {
-  id: bigint
+  option_id: text
+  code: text
   name_ar: text
   name_en: text
-  code: text
-  fee: numeric
-  is_active: boolean
+  price: numeric
+  type: text
+  is_active: boolean  
+  details: text
+  duration: integer    
   created_at: timestamp with time zone
   updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
+  created_by: text
+  updated_by: text
 }
 ```
 
-### 29. `order_status`
+### 32. `order_status`
 ```text
 order_status {
-  id: bigint
+  order_status_id: text
+  code: text
   name_ar: text
   name_en: text
-  code: text
   color: text
-  is_active: boolean
+  description: text
+  is_first: boolean
+  is_last: boolean
+  sort_order: integer
   created_at: timestamp with time zone
   updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
+  created_by: text
+  updated_by: text
 }
 ```
 
-### 30. `order_status_history`
-```text
-order_status_history {
-  id: bigint
-  order_id: bigint -> orders.id
-  status_id: bigint -> order_status.id
-  changed_by: uuid -> users.id
-  notes: text
-  created_at: timestamp with time zone
-}
-```
-
-### 31. `orders`
+### 33. `orders`
 ```text
 orders {
-  id: bigint
+  order_id: text
+  order_number: text
   tracking_number: text
-  customer_id: uuid -> users.id
-  store_id: bigint -> stores.id
-  branch_id: bigint -> branches.id
-  driver_id: uuid -> drivers.id
-  delivery_type_id: bigint -> delivery_types.id
-  package_type_id: bigint -> package_types.id
-  payment_type_id: bigint -> payment_types.id
-  status_id: bigint -> order_status.id
-  cod_amount: numeric
-  delivery_fee: numeric
-  total_amount: numeric
+  customer_id: text -> customers.customer_id
+  courier_id: text -> couriers.courier_id
+  delivery_courier_id: text -> couriers.courier_id
+  shipping_courier_id: text -> couriers.courier_id
+  employee_id: text -> employees.employee_id
+  order_party_id: text
+  order_party_type: text
+  is_staff_order: boolean
+  order_party_account_id: text -> accounts.account_id
+  order_source_id: text
+  order_source_type: text
+  order_status_id: text
+  order_status1: text
+  external_order_number: text
+  currency:integer -> currency.cur_id
+  order_currency: integer -> currency.cur_id
+  order_currency_price: integer -> cur_price.cur_price_id
+
+  data: jsonb {
+    addShippingEnabled
+    bankCommissionEnabled
+    bankCommissionRate
+    bankCommissionType
+    
+    cbmShippingRateValue
+    companyProfitRate
+    couponEnabled
+    couponRate
+    couponValue
+
+    shippingCompany
+    cartShareCode
+
+    paidCurrency
+
+    deductSourcingCostFromCourier
+    deliveryCourierFee
+    deliveryCourierFeeCurrency
+    deliveryCourierFeeOrderCurrency
+    deliveryStatus
+    directApprove
+
+    firedTriggers
+    homeDeliveryEnabled
+    internalNotes
+    locationYemen
+    payLater
+    paymentMethod
+    paymentStatus
+
+    amountPaid
+    amountRemaining
+    packagingFee
+    packagingFeeEnabled
+    packagingFeeRate    
+    totalCostSAR
+    totalCostYER
+    profitCompanySAR
+    profitPerKgRate
+    profitSaudiSAR
+    sheinRedPrice
+
+    shippingCostSAR
+    shippingCourierFeeRate
+    viaShippingAgent
+
+    sourcing_cost
+    sourcingCostAmount
+
+    product_insurance_fee
+    productInsuranceFee
+    productsSum
+    totalCBM
+    totalWeight   
+  }
+  created_at: timestamp with time zone
+  created_by: text
+  updated_at: timestamp with time zone
+  updated_by: text
+  created_by_name: text
+}
+```
+
+
+### 34. `products`
+```text
+products {
+  product_id: text
+  product_name_ar: text
+  product_name_en: text
+  product_url: text
+  product_price_currency: integer -> currency.cur_id
+  unit_price: numeric
+  item_category_id: text
+  cbm: numeric
+  width: numeric
+  height: numeric
+  length: numeric
   weight: numeric
-  pieces_count: integer
+  created_at: timestamp with time zone
+  created_by: text
+  updated_at: timestamp with time zone
+  updated_by: text
+}
+```
+
+### 35. `returned_products`
+```text
+returned_products {
+  return_id: text
+  order_id: text
+  order_item_id: text
+  product_id: text -> products.product_id
+  customer_id: text
+  customer_name: text
+  product_name: text
+  product_url: text
+  quantity: integer
+  return_reason: text
+  return_type: text
+  return_status: text
+  return_condition: text
+  refund_amount: numeric
+  refund_currency: text
+  is_insured: boolean
+  insurance_refund: numeric
   notes: text
-  delivery_run_sheet_id: bigint -> delivery_run_sheets.id
+  returned_at: timestamp with time zone
+  processed_by: text
+  processed_at: timestamp with time zone
   created_at: timestamp with time zone
+  created_by: text
   updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
+  updated_by: text
 }
 ```
 
-### 32. `package_types`
+### 36. `items_category`
 ```text
-package_types {
-  id: bigint
+items_category {
+  category_id: text
+  category_name_ar: text
+  category_name_en: text
+  details: jsonb {
+    group
+    hazardReview
+    highValueReview
+  }
+  is_allowed: boolean
+  carton_customs_fee: numeric
+  carton_tax_fee: numeric
+  created_at: timestamp with time zone
+  updated_at: timestamp with time zone
+  created_by: text
+  updated_by: text
+}
+```
+
+### 38. `orders_history`
+```text
+orders_history {
+  orders_history_id: text
+  order_id: text -> orders.order_id
+  order_number: text
+  shipment_id: text -> shipments.shipment_id
+  main_entry_id: text
+  account_transaction_count: text
+  activity_log_id: text
+  event_type: text
+  event_category: text
+  operation: text
+  entity_type: text
+  actor_id: text
+  actor_name: text
+  actor_role: text
+  source: text
+  summary: text
+  before_data: jsonb {
+    action
+    carton_count
+    category
+    category_fee_currency
+    category_fees_total
+    content_category_id
+    content_category_name
+    courier_id
+    created_at
+    created_by
+    created_by_name
+    customer_id
+    customs_fee
+    data
+    delivery_courier_id
+    employee_id
+    id
+    is_staff_order
+    order_id
+    order_number
+    order_party_account_id
+    order_party_id
+    order_party_type
+    order_source_id
+    order_source_type
+    order_status_id
+    order_status1
+    other_category_fee
+    shipment_id
+    shipment_status
+    shipping_category_id
+    shipping_company_id
+    shipping_cost
+    shipping_courier_id
+    target
+    tax_fee
+    tracking_number
+    type
+    updated_at
+    updated_by
+    user_id
+    weight
+  }
+  after_data: jsonb {
+    action
+    amountOriginal
+    carton_count
+    category
+    category_fee_currency
+    category_fees_total
+    content_category_id
+    content_category_name
+    courier_id
+    created_at
+    created_by
+    created_by_name
+    createdAt
+    currencyOriginalNo
+    customer_id
+    customs_fee
+    data
+    delivery_courier_id
+    description
+    effectiveAt
+    employee_id
+    entryCategory
+    entryNumber
+    id
+    is_staff_order
+    order_id
+    order_number
+    order_party_account_id
+    order_party_id
+    order_party_type
+    order_source_id
+    order_source_type
+    order_status_id
+    order_status1
+    other_category_fee
+    paymentMethod
+    postingStatus
+    shipment_id
+    shipment_status
+    shipping_category_id
+    shipping_company_id
+    shipping_cost
+    shipping_courier_id
+    target
+    tax_fee
+    tracking_number
+    type
+    updated_at
+    updated_by
+    user_id
+    weight
+  }
+  metadata: jsonb {
+    accountTransCount
+    activityAction
+    activityDetails
+    activityTarget
+    changedFields
+    changes
+    deletedOrderId
+    mainEntryId
+    orderId
+    orderReference
+    shipmentId
+    trigger
+  }
+  occurred_at: timestamp with time zone
+  created_at: timestamp with time zone
+  updated_at: timestamp with time zone
+  created_by: text
+  updated_by: text
+}
+```
+
+
+### 39. `shipments`
+```text
+shipments {
+  shipment_id: text                              -- PK
+  order_id: text -> orders.order_id              -- FK للطلب
+  tracking_number: text
+  shipping_company_id: text
+  courier_id: text
+  shipment_status: text
+  shipping_cost: numeric
+  weight: numeric
+  shipping_category_id: text
+  shipping_category_name: text
+  content_category_id: text
+  carton_count: integer
+  customs_fee: numeric
+  tax_fee: numeric
+  category_fees_total: numeric
+  category_fee_currency: text
+  other_category_fee: numeric
+  shipping_type: text                            -- نوع الشحن (جوي/بحري/بري)
+  shipping_source: text                          -- مصدر الشحن
+  shipping_destination: text                     -- وجهة الشحن
+  shipping_date: timestamp with time zone        -- تاريخ الشحن
+  shipping_duration: numeric                     -- مدة الشحن بالأيام
+  expected_arrival: timestamp with time zone     -- تاريخ الوصول المتوقع
+  delivery_date: timestamp with time zone        -- تاريخ التسليم الفعلي
+  packaging_fees: numeric                        -- رسوم التغليف
+  shipping_category_price: numeric               -- سعر فئة الشحن
+  -- ===========================================================================
+  created_at: timestamp with time zone
+  created_by: text
+  updated_at: timestamp with time zone
+  updated_by: text
+  created_by_name: text
+}
+```
+
+### 41. `shipping_companies`
+```text
+shipping_companies {
+  shipping_company_id: text
+  account_id: text -> accounts.account_id
   name_ar: text
   name_en: text
+  name: text
+  address: text
+  shipping_company_url: text
+  tracking_id_prefix: text
+  is_active: boolean
   code: text
-  max_weight: numeric
-  is_active: boolean
+  country_id: text
+  phone: text
+  email: text
+  api_url: text
+  tracking_url_template: text
+  api_enabled: boolean
+  api_credentials_reference: text
+  supports_tracking: boolean
+  supports_webhook: boolean
   created_at: timestamp with time zone
   updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
+  created_by: text
+  updated_by: text
 }
 ```
 
-### 33. `payment_types`
+### 42. `sources`
 ```text
-payment_types {
-  id: bigint
+sources {
+  source_id: text
+  account_id: text -> accounts.account_id
+  name_ar: text
+  name_en: text  
+  name: text
+  source_url: text
+  type: text  
+  is_active: boolean
+  created_at: timestamp with time zone
+  updated_at: timestamp with time zone
+  created_by: text
+  updated_by: text
+}
+```
+
+### 43. `portal_tickets`
+```text
+portal_tickets {
+  portal_ticket_id: text
+  user_uid: text -> portal_users.portal_user_id
+  message: text
+  replies: jsonb
+  status: text
+  subject: text
+  type: text  
+  created_at: timestamp with time zone
+  updated_at: timestamp with time zone
+  created_by: text
+  updated_by: text
+}
+```
+
+### 44. `portal_users`
+```text
+portal_users {
+  portal_user_id: text                           -- PK
+  type: text                                     -- (مضاف migration 20261002023000)
+  phone: text                                    -- (مضاف migration 20261002023000)
+  notes: text                                    -- (مضاف migration 20261002023000)
+  profile_image_url: text                        -- (مضاف migration 20261002023000)
+  commercial_register_url: text                  -- (مضاف migration 20261002023000)
+  identity_doc_url: text                         -- (مضاف migration 20261002023000)
+  portal_role: text
+  username: text
+  email: text
+  disabled: boolean
+  approval_status: text
+  join_by: text
+  referrer_id: text
+  full_name: text
   name_ar: text
   name_en: text
-  code: text
-  is_active: boolean
+  is_disabled: boolean
+  onboarding_completed: boolean                  -- (مضاف migration 20261002023000)
+  password: text                                 -- (مضاف migration 20261002023000) ⚠️ يجب ترحيله لـ password_hash
+  linked_customer_id: text -> customers.customer_id
   created_at: timestamp with time zone
   updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
+  created_by: text
+  updated_by: text
 }
 ```
 
-### 34. `reasons`
+### 45. `report_settings`
 ```text
-reasons {
-  id: bigint
-  name_ar: text
-  name_en: text
-  reason_type: text
-  is_active: boolean
+report_settings {
+  report_setting_id: text
+  default_currency: text
+  exchange_rates: jsonb
+  alternative_currency: text
+  report_title: text
+  show_logo: boolean
+  show_header: boolean
+  show_footer: boolean
   created_at: timestamp with time zone
   updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
+  created_by: text
+  updated_by: text
 }
 ```
 
-### 35. `role_permissions`
+### 46. `report_templates`
 ```text
-role_permissions {
-  id: bigint
-  role_id: uuid -> roles.id
-  permission_code: text
+report_templates {
+  report_template_id: text
+  active_report boolean
+  filters jsonb
+  name_ar text
+  name_en text
+  search_term text
+  selected_company_id text
+  selected_courier_id text
+  selected_customer_id text
+  selected_expense_category text
+  selected_user_id text
+  sort_by text
+  sort_order text
   created_at: timestamp with time zone
+  updated_at: timestamp with time zone
+  created_by: text
+  updated_by: text
 }
 ```
 
-### 36. `roles`
+
+### 47. `roles`
 ```text
 roles {
-  id: uuid
+  role_id: text
   title: text
   code: text
   description: text
   is_default: boolean
-  permissions: jsonb {
-    modules: array
-    actions: array
+  permissions: jsonb
+  created_at: timestamp with time zone
+  updated_at: timestamp with time zone
+  created_by: text
+  updated_by: text
+}
+```
+
+### 48. `salary_history`
+```text
+salary_history {
+  salary_history_id: text
+  user_id: text -> users.user_id
+  account_id: text -> accounts.account_id
+  cur_no: integer -> currency.cur_id
+  transactions_id: text -> transactions.transaction_id
+  amount: numeric
+  month: text
+  employee_id: text
+  notes: text
+  paid_at: timestamp with time zone
+  status: text
+  voucher_code: text
+  created_at: timestamp with time zone
+  updated_at: timestamp with time zone
+  created_by: text
+  updated_by: text
+}
+```
+
+### 49. `sessions`
+```text
+sessions {
+  session_id: text
+  user_id: text -> users.user_id
+  device_info: text
+  last_seen: timestamp with time zone
+  force_logout: boolean
+  device_info: text
+  role: text
+  full_name: text
+  email: text
+  ip_address: text
+  user_agent: text
+  login_at: timestamp with time zone
+  expires_at: timestamp with time zone
+  created_at: timestamp with time zone
+  updated_at: timestamp with time zone
+  created_by: text
+  updated_by: text
+}
+```
+
+### 50. `settings`
+```text
+settings {
+  setting_id: text
+  category: text
+  data: jsonb {
+    apiKey
+    autoBackupEnabled
+    autoUpdateExchangeRates
+    backupCollections
+    backupCount
+    backupEncrypted
+    backupRetentionDays
+    backupSchedule
+    cbmShippingRateApiUrl
+    companyAddress
+    companyEmail
+    companyName
+    companyPhone
+    companyWebsite
+    config
+    currency
+    currencySymbol
+    customCurrencies
+    data
+    defaultAppDuration
+    defaultBankCommissionRate
+    defaultCbmShippingRate
+    defaultCompanyProfitRate
+    defaultCourierCommissionRate
+    defaultDeliveryFee
+    defaultDestinationCountry
+    defaultFactoryDuration
+    defaultOrderCurrency
+    defaultPackagingFee
+    defaultProductInsuranceFee
+    defaultProductInsuranceType
+    defaultProfitPerKg
+    defaultSheinDuration
+    defaultShippingDuration
+    defaultYemenDeliveryDuration
+    enabled
+    exchangeRatesApiUrl
+    exchangeRateSAR
+    exchangeRateUSD
+    fontFamily
+    fontSize
+    footerTextAr
+    footerTextEn
+    gridColumns
+    headerTitleAr
+    headerTitleEn
+    invoiceLogo
+    invoiceNotes
+    language
+    lastAutoBackupAt
+    lastBackup
+    lastCbmRateUpdate
+    lastCbmRateUpdatedBy
+    lastExchangeRateUpdate
+    lastExchangeRateUpdatedBy
+    lastExchangeRateUpdateTime
+    logoUrl
+    margins
+    orderPrefix
+    orders_cost
+    orderStartNumber
+    packaging
+    paperSize
+    primaryColor
+    protectSensitiveOrderDelete
+    provider
+    setting_id
+    showBarcode
+    showDateTime
+    showLogo
+    showSignatures
+    showTaxId
+    signature1Ar
+    signature1En
+    signature2Ar
+    signature2En
+    signature3Ar
+    signature3En
+    subtitleAr
+    subtitleEn
+    systemLogo
+    systemName
+    tableStyle
+    taxId
+    taxNumber
+    templates
+    theme
+    triggers
+    user_setting_id
+    userid
+    userSessionTimeout
+    visibleMetrics
   }
   created_at: timestamp with time zone
   updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
+  created_by: text
+  updated_by: text
 }
 ```
 
-### 37. `sales_representatives`
+
+### 51. `user_settings`
 ```text
-sales_representatives {
-  id: uuid
-  user_id: uuid -> users.id
-  commission_rate: numeric
-  is_active: boolean
+user_settings {
+  user_setting_id: text
+  user_id: text -> users.user_id    
+  dashboard_grid_columns: numeric
+  font_size: text
+  language: text
+  theme: text
+  visible_metrics: jsonb
   created_at: timestamp with time zone
   updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
+  created_by: text
+  updated_by: text
 }
 ```
 
-### 38. `settlements`
-```text
-settlements {
-  id: uuid
-  settlement_number: text
-  entity_type: text
-  entity_id: uuid
-  total_amount: numeric
-  settlement_date: date
-  status: text
-  created_at: timestamp with time zone
-  updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
-}
-```
-
-### 39. `shipment_financials`
-```text
-shipment_financials {
-  id: bigint
-  order_id: bigint -> orders.id
-  cod_amount: numeric
-  shipping_fee: numeric
-  net_amount: numeric
-  is_settled: boolean
-  created_at: timestamp with time zone
-  updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
-}
-```
-
-### 40. `shipment_financials_detail`
-```text
-shipment_financials_detail {
-  id: bigint
-  shipment_financial_id: bigint -> shipment_financials.id
-  fee_type: text
-  amount: numeric
-  created_at: timestamp with time zone
-  updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
-}
-```
-
-### 41. `status`
-```text
-status {
-  id: bigint
-  name_ar: text
-  name_en: text
-  code: text
-  category: text
-  is_active: boolean
-  created_at: timestamp with time zone
-  updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
-}
-```
-
-### 42. `store_settlements`
-```text
-store_settlements {
-  id: uuid
-  settlement_id: uuid -> settlements.id
-  store_id: bigint -> stores.id
-  total_orders: integer
-  total_cod: numeric
-  total_fees: numeric
-  net_payable: numeric
-  created_at: timestamp with time zone
-  updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
-}
-```
-
-### 43. `stores`
-```text
-stores {
-  id: bigint
-  customer_id: uuid -> users.id
-  name_ar: text
-  name_en: text
-  phone: text
-  address: text
-  city_id: bigint -> city.id
-  is_active: boolean
-  created_at: timestamp with time zone
-  updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
-}
-```
-
-### 44. `sub_city`
-```text
-sub_city {
-  id: bigint
-  city_id: bigint -> city.id
-  name_ar: text
-  name_en: text
-  code: text
-  is_active: boolean
-  created_at: timestamp with time zone
-  updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
-}
-```
-
-### 45. `system_settings`
-```text
-system_settings {
-  id: bigint
-  setting_key: text
-  setting_value: text
-  description: text
-  created_at: timestamp with time zone
-  updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
-}
-```
-
-### 46. `ticket_messages`
-```text
-ticket_messages {
-  id: bigint
-  ticket_id: bigint -> tickets.id
-  sender_id: uuid -> users.id
-  message: text
-  attachment_url: text
-  created_at: timestamp with time zone
-}
-```
-
-### 47. `tickets`
-```text
-tickets {
-  id: bigint
-  ticket_number: text
-  user_id: uuid -> users.id
-  order_id: bigint -> orders.id
-  subject: text
-  status: text
-  priority: text
-  created_at: timestamp with time zone
-  updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
-}
-```
-
-### 48. `user_addresses`
-```text
-user_addresses {
-  id: bigint
-  user_id: uuid -> users.id
-  title: text
-  city_id: bigint -> city.id
-  sub_city_id: bigint -> sub_city.id
-  street_address: text
-  building_number: text
-  postal_code: text
-  is_default: boolean
-  created_at: timestamp with time zone
-  updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
-}
-```
-
-### 49. `user_roles`
-```text
-user_roles {
-  id: bigint
-  user_id: uuid -> users.id
-  role_id: uuid -> roles.id
-  created_at: timestamp with time zone
-}
-```
-
-### 50. `user_sessions`
-```text
-user_sessions {
-  id: uuid
-  user_id: uuid -> users.id
-  token: text
-  ip_address: text
-  user_agent: text
-  expires_at: timestamp with time zone
-  created_at: timestamp with time zone
-}
-```
-
-### 51. `users`
+### 50. `users`
 ```text
 users {
-  id: uuid
+  user_id: text
+  username: text
+  role: text -> roles.role_id
   email: text
+  disabled: boolean
+  linked_type: text
+  linked_entity: text
   full_name: text
+  password: text
+  system_pin: text
+  is_root: boolean
   phone: text
-  user_type: text
-  is_active: boolean
-  avatar_url: text
+  address: text
   created_at: timestamp with time zone
   updated_at: timestamp with time zone
-  created_by: uuid -> users.id
-  updated_by: uuid -> users.id
+  last_seen: timestamp with time zone
+  last_seen_at: text
+  created_by: text
+  updated_by: text
+}
+```
+
+### 51. `whatsapp_logs`
+```text
+whatsapp_logs {
+  whatsapp_log_id: text
+  error_msg: text
+  event_type: text
+  external_response: jsonb
+  message: text
+  message_type: text    
+  phone: text
+  status: text
+  created_at: timestamp with time zone
+  updated_at: timestamp with time zone
+  created_by: text
+  updated_by: text
+}
+```
+
+### 26. `jobs_req`
+```text
+jobs_req {
+  job_req_id: text
+  address: text
+  city: text   
+  email: text 
+  experience_years: integer 
+  full_name: text
+  id_number: text
+  job_position: text   
+  notes: text  
+  phone: text  
+  qualification: text   
+  ref_code: text 
+  status: text 
+  created_at: timestamp with time zone
+  updated_at: timestamp with time zone
+  created_by: text -> users.user_id
+  updated_by: text -> users.user_id
+}
+```
+
+### 9. `announcements`
+```text
+announcements {
+  announcement_id: text
+  data: jsonb {
+    content
+    target_audience    
+  }
+  created_at: timestamp with time zone
+  title: text
+  is_active: boolean
+  priority: text
+  created_by: text -> users.user_id
+  updated_at: timestamp with time zone
+  updated_by: text
+}
+```
+
+### 12. `browser_pages`
+```text
+browser_pages {
+  browser_page_id: text
+  auto_login: boolean
+  username: text    
+  password: text    
+  category: text
+  is_pinned: boolean
+  name_ar: text
+  name_en: text
+  sort_order: integer
+  tab_color: text
+  url: text
+  view_mode: text
+  created_at: timestamp with time zone
+  updated_at: timestamp with time zone
+  created_by: text
+  updated_by: text
 }
 ```
