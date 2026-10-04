@@ -1688,3 +1688,12 @@
 
 ## [2026-10-04T09:03:17+03:00] — تحقق CI لخطة cutover
 - [x] GitHub Actions run `37181620392` على commit `8e51d41` نجح: check/lint/format/tests/test:db/build.
+
+## [2026-10-04 23:35:06 +0000] — استكمال المرحلة 7 من خطة alx_api — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- [x] إضافة إنشاء الطلبات مع البنود والشحنة الاختيارية وسجل التاريخ ضمن Transaction واحدة.
+- [x] إضافة Idempotency-Key دائم عبر migration محلية لمخزن `alx_api_private.operation_idempotency`.
+- [x] إضافة انتقال حالة الطلب الأحادي الاتجاه مع رفض regression وتسجيل `orders_history`.
+- [x] إضافة تحديث الشحنات وإنشاء/تحديث المنتجات بصلاحيات RBAC.
+- [x] إضافة تحقق Zod واختبارات HTTP وOpenAPI لمسارات الكتابة.
+- [x] اجتياز check وlint و66 اختباراً وbuild؛ لم تُطبق migration على قاعدة الإنتاج.
+- [ ] مراجعة واعتماد migration 0009 ثم تطبيقها على قاعدة مشتركة بعد تصريح منفصل والتحقق من grants/runtime.

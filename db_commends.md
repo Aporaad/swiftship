@@ -2092,3 +2092,8 @@ ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 COMMIT;
 ```
+
+## [2026-10-04 23:35:06 +0000] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- لم يُنفذ أي أمر SQL أو DDL أو DML على قاعدة Supabase/الإنتاج خلال هذه المهمة.
+- أضيف فقط ملف SQL مصدر للمراجعة: `alx_api/src/db/migrations/0009_operations_idempotency.sql`، وكان معداً لـharness PostgreSQL المحلي فقط؛ لم يتوفر PostgreSQL المحلي أثناء هذه الجلسة فلم يُشغّل.
+- لا توجد قيم أسرار أو بيانات مستخدمين حقيقيين في هذا الإدراج.

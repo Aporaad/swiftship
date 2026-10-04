@@ -1,5 +1,15 @@
-import type { Pool } from 'pg';
-import type { OperationsRepository, PageQuery, PageResult } from './operations.contracts';
+import type { Pool, PoolClient } from 'pg';
+import type {
+  CreateOrderInput,
+  CreateProductInput,
+  OperationsRepository,
+  PageQuery,
+  PageResult,
+  UpdateOrderStatusInput,
+  UpdateProductInput,
+  UpdateShipmentInput,
+} from './operations.contracts';
+
 async function page(
   pool: Pool,
   table: string,
@@ -9,11 +19,8 @@ async function page(
   searchColumns: string[],
 ): Promise<PageResult<Record<string, unknown>>> {
   const values: unknown[] = [];
-  let where = '';
-  if (input.search) {
-    values.push(`%${input.search}%`);
-    where = `WHERE (${searchColumns.map((column) => `${column} ILIKE $1`).join(' OR ')})`;
-  }
+  const where = input.search ? `WHERE (${searchColumns.map((column) => `${column} ILIKE $1`).join(' OR ')})` : '';
+  if (input.search) values.push(`%${input.search}%`);
   values.push(input.limit, input.offset);
   const result = await pool.query<Record<string, unknown>>(
     `SELECT ${columns}, count(*) OVER()::text AS _total FROM public.${table} ${where} ORDER BY ${order} LIMIT $${values.length - 1} OFFSET $${values.length}`,
@@ -21,6 +28,63 @@ async function page(
   );
   return { items: result.rows.map(({ _total, ...row }) => row), total: Number(result.rows[0]?._total ?? 0) };
 }
+
+function statusRank(status: string): number {
+  const normalized = status.trim().toLowerCase();
+  const ranks: Record<string, number> = {
+    pending: 0,
+    new: 0,
+    created: 0,
+    'قيد الطلب': 0,
+    confirmed: 1,
+    processing: 1,
+    'قيد التجهيز': 1,
+    shipped: 2,
+    in_transit: 2,
+    'تم الشحن': 2,
+    delivered: 3,
+    completed: 3,
+    'تم التسليم': 3,
+    cancelled: 4,
+    canceled: 4,
+    ملغي: 4,
+  };
+  return ranks[normalized] ?? -1;
+}
+
+async function writeHistory(
+  client: PoolClient,
+  input: {
+    orderId: string;
+    orderNumber: string;
+    actorId: string;
+    eventType: string;
+    operation: string;
+    beforeData?: unknown;
+    afterData?: unknown;
+    shipmentId?: string;
+    summary: string;
+  },
+): Promise<void> {
+  await client.query(
+    `INSERT INTO public.orders_history
+      (orders_history_id, order_id, order_number, shipment_id, event_type, event_category, operation, entity_type, actor_id, source, summary, before_data, after_data, metadata, occurred_at, created_by, updated_by)
+     VALUES ($1, $2, $3, $4, $5, 'api', $6, 'order', $7, 'alx_api', $8, $9::jsonb, $10::jsonb, '{}'::jsonb, NOW(), $7, $7)`,
+    [
+      `hist_${crypto.randomUUID()}`,
+      input.orderId,
+      input.orderNumber,
+      input.shipmentId ?? null,
+      input.eventType,
+      input.operation,
+      input.actorId,
+      input.summary,
+      JSON.stringify(input.beforeData ?? null),
+      JSON.stringify(input.afterData ?? null),
+    ],
+  );
+}
+
 export function createOperationsRepository(pool: Pool): OperationsRepository {
   return {
     listOrders: (input) =>
@@ -34,7 +98,7 @@ export function createOperationsRepository(pool: Pool): OperationsRepository {
       ),
     async getOrder(orderId) {
       const result = await pool.query(
-        `SELECT order_id AS "orderId", order_number AS "orderNumber", tracking_number AS "trackingNumber", customer_id AS "customerId", order_status_id AS "orderStatusId", order_status1 AS "orderStatus", order_party_id AS "orderPartyId", order_party_type AS "orderPartyType", delivery_courier_id AS "deliveryCourierId", shipping_courier_id AS "shippingCourierId", currency, order_currency AS "orderCurrency", order_currency_price AS "orderCurrencyPrice", external_order_number AS "externalOrderNumber", data, created_at AS "createdAt", updated_at AS "updatedAt" FROM public.orders WHERE order_id = $1 LIMIT 1`,
+        'SELECT order_id AS "orderId", order_number AS "orderNumber", tracking_number AS "trackingNumber", customer_id AS "customerId", order_status_id AS "orderStatusId", order_status1 AS "orderStatus", order_party_id AS "orderPartyId", order_party_type AS "orderPartyType", delivery_courier_id AS "deliveryCourierId", shipping_courier_id AS "shippingCourierId", currency, order_currency AS "orderCurrency", order_currency_price AS "orderCurrencyPrice", external_order_number AS "externalOrderNumber", data, created_at AS "createdAt", updated_at AS "updatedAt" FROM public.orders WHERE order_id = $1 LIMIT 1',
         [orderId],
       );
       if (!result.rows[0]) return null;
@@ -91,6 +155,216 @@ export function createOperationsRepository(pool: Pool): OperationsRepository {
       const result = await pool.query(
         'SELECT product_id AS "productId", product_name_ar AS "productNameAr", product_name_en AS "productNameEn", product_url AS "productUrl", product_price_currency AS "productPriceCurrency", unit_price AS "unitPrice", item_category_id AS "itemCategoryId", cbm, width, height, length, weight, created_at AS "createdAt", updated_at AS "updatedAt" FROM public.products WHERE product_id = $1 LIMIT 1',
         [productId],
+      );
+      return result.rows[0] ?? null;
+    },
+    async createOrder(input: CreateOrderInput) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const idem = await client.query(
+          'SELECT response_data FROM alx_api_private.operation_idempotency WHERE idempotency_key = $1 FOR UPDATE',
+          [input.idempotencyKey],
+        );
+        if (idem.rows[0]) {
+          await client.query('COMMIT');
+          return idem.rows[0].response_data as Record<string, unknown>;
+        }
+        const orderId = input.orderNumber;
+        const inserted = await client.query(
+          `INSERT INTO public.orders (order_id, order_number, customer_id, tracking_number, order_status_id, order_status1, currency, order_currency, order_currency_price, external_order_number, created_by, updated_by, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11, NOW(), NOW()) RETURNING order_id AS "orderId", order_number AS "orderNumber", order_status1 AS "orderStatus", created_at AS "createdAt"`,
+          [
+            orderId,
+            input.orderNumber,
+            input.customerId ?? null,
+            input.trackingNumber ?? null,
+            input.orderStatusId ?? null,
+            input.status ?? 'pending',
+            input.currency ?? null,
+            input.orderCurrency ?? null,
+            input.orderCurrencyPrice ?? null,
+            input.externalOrderNumber ?? null,
+            input.actorId,
+          ],
+        );
+        for (const item of input.items) {
+          const productId = item.productId ?? `prod_${crypto.randomUUID()}`;
+          if (!item.productId)
+            await client.query(
+              'INSERT INTO public.products (product_id, product_name_ar, product_name_en, product_url, unit_price, cbm, weight, created_by, updated_by, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, NOW(), NOW())',
+              [
+                productId,
+                item.productNameAr ?? item.productName ?? 'منتج',
+                item.productNameEn ?? item.productName ?? 'Product',
+                item.productUrl ?? null,
+                item.unitPrice,
+                item.cbm ?? 0,
+                item.weight ?? 0,
+                input.actorId,
+              ],
+            );
+          await client.query(
+            'INSERT INTO public.order_items (order_item_id, order_id, product_id, product_price, product_url, nota, quantity, total_price, total__weight, total_cbm, items_status, created_by, updated_by, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12, NOW(), NOW())',
+            [
+              `item_${crypto.randomUUID()}`,
+              orderId,
+              productId,
+              item.unitPrice,
+              item.productUrl ?? null,
+              item.notes ?? null,
+              item.quantity,
+              item.unitPrice * item.quantity,
+              (item.weight ?? 0) * item.quantity,
+              (item.cbm ?? 0) * item.quantity,
+              'pending',
+              input.actorId,
+            ],
+          );
+        }
+        let shipment: Record<string, unknown> | undefined;
+        if (input.shipment) {
+          const s = input.shipment;
+          const result = await client.query(
+            'INSERT INTO public.shipments (shipment_id, order_id, tracking_number, shipping_company_id, courier_id, shipment_status, shipping_cost, weight, shipping_type, shipping_source, shipping_destination, carton_count, created_by, updated_by, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13, NOW(), NOW()) RETURNING shipment_id AS "shipmentId", order_id AS "orderId", shipment_status AS "shipmentStatus"',
+            [
+              `sh_${crypto.randomUUID()}`,
+              orderId,
+              s.trackingNumber ?? input.trackingNumber ?? orderId,
+              s.shippingCompanyId ?? null,
+              s.courierId ?? null,
+              s.shipmentStatus ?? 'pending',
+              s.shippingCost ?? 0,
+              s.weight ?? 0,
+              s.shippingType ?? null,
+              s.shippingSource ?? null,
+              s.shippingDestination ?? null,
+              s.cartonCount ?? 0,
+              input.actorId,
+            ],
+          );
+          shipment = result.rows[0];
+        }
+        const historyInput = {
+          orderId,
+          orderNumber: input.orderNumber,
+          actorId: input.actorId,
+          eventType: 'order.created',
+          operation: 'create',
+          afterData: { status: input.status ?? 'pending', items: input.items.length },
+          summary: 'تم إنشاء الطلب.',
+        };
+        if (shipment?.shipmentId)
+          await writeHistory(client, { ...historyInput, shipmentId: String(shipment.shipmentId) });
+        else await writeHistory(client, historyInput);
+        const response = { ...inserted.rows[0], itemCount: input.items.length, shipment };
+        await client.query(
+          'INSERT INTO alx_api_private.operation_idempotency (idempotency_key, operation, response_data) VALUES ($1, $2, $3::jsonb)',
+          [input.idempotencyKey, 'order.create', JSON.stringify(response)],
+        );
+        await client.query('COMMIT');
+        return response;
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+    async updateOrderStatus(input: UpdateOrderStatusInput) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const current = await client.query(
+          'SELECT order_id AS "orderId", order_number AS "orderNumber", order_status1 AS "status" FROM public.orders WHERE order_id = $1 FOR UPDATE',
+          [input.orderId],
+        );
+        if (!current.rows[0]) {
+          await client.query('ROLLBACK');
+          return { notFound: true };
+        }
+        const previous = String(current.rows[0].status ?? 'pending');
+        if (statusRank(input.status) < statusRank(previous)) throw new Error('ORDER_STATUS_REGRESSION');
+        const updated = await client.query(
+          'UPDATE public.orders SET order_status1 = $1, updated_by = $2, updated_at = NOW() WHERE order_id = $3 RETURNING order_id AS "orderId", order_number AS "orderNumber", order_status1 AS "status", updated_at AS "updatedAt"',
+          [input.status, input.actorId, input.orderId],
+        );
+        await writeHistory(client, {
+          orderId: input.orderId,
+          orderNumber: String(current.rows[0].orderNumber),
+          actorId: input.actorId,
+          eventType: 'order.status_changed',
+          operation: 'update',
+          beforeData: { status: previous },
+          afterData: { status: input.status, note: input.note ?? null },
+          summary: 'تم تغيير حالة الطلب.',
+        });
+        await client.query('COMMIT');
+        return updated.rows[0];
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+    async createProduct(input: CreateProductInput) {
+      const result = await pool.query(
+        'INSERT INTO public.products (product_id, product_name_ar, product_name_en, product_url, product_price_currency, unit_price, item_category_id, cbm, width, height, length, weight, created_by, updated_by, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13, NOW(), NOW()) RETURNING product_id AS "productId", product_name_ar AS "productNameAr", product_name_en AS "productNameEn", unit_price AS "unitPrice", updated_at AS "updatedAt"',
+        [
+          input.productId,
+          input.productNameAr ?? null,
+          input.productNameEn ?? null,
+          input.productUrl ?? null,
+          input.productPriceCurrency ?? null,
+          input.unitPrice ?? 0,
+          input.itemCategoryId ?? null,
+          input.cbm ?? 0,
+          input.width ?? 0,
+          input.height ?? 0,
+          input.length ?? 0,
+          input.weight ?? 0,
+          input.actorId,
+        ],
+      );
+      return result.rows[0];
+    },
+    async updateProduct(input: UpdateProductInput) {
+      const result = await pool.query(
+        'UPDATE public.products SET product_name_ar = COALESCE($1, product_name_ar), product_name_en = COALESCE($2, product_name_en), product_url = COALESCE($3, product_url), unit_price = COALESCE($4, unit_price), item_category_id = COALESCE($5, item_category_id), cbm = COALESCE($6, cbm), width = COALESCE($7, width), height = COALESCE($8, height), length = COALESCE($9, length), weight = COALESCE($10, weight), updated_by = $11, updated_at = NOW() WHERE product_id = $12 RETURNING product_id AS "productId", product_name_ar AS "productNameAr", product_name_en AS "productNameEn", unit_price AS "unitPrice", updated_at AS "updatedAt"',
+        [
+          input.productNameAr,
+          input.productNameEn,
+          input.productUrl,
+          input.unitPrice,
+          input.itemCategoryId,
+          input.cbm,
+          input.width,
+          input.height,
+          input.length,
+          input.weight,
+          input.actorId,
+          input.productId,
+        ],
+      );
+      return result.rows[0] ?? null;
+    },
+    async updateShipment(input: UpdateShipmentInput) {
+      const result = await pool.query(
+        'UPDATE public.shipments SET shipment_status = COALESCE($1, shipment_status), courier_id = COALESCE($2, courier_id), tracking_number = COALESCE($3, tracking_number), shipping_cost = COALESCE($4, shipping_cost), weight = COALESCE($5, weight), shipping_type = COALESCE($6, shipping_type), shipping_source = COALESCE($7, shipping_source), shipping_destination = COALESCE($8, shipping_destination), carton_count = COALESCE($9, carton_count), updated_by = $10, updated_at = NOW() WHERE shipment_id = $11 RETURNING shipment_id AS "shipmentId", order_id AS "orderId", tracking_number AS "trackingNumber", shipment_status AS "shipmentStatus", courier_id AS "courierId", updated_at AS "updatedAt"',
+        [
+          input.shipmentStatus,
+          input.courierId,
+          input.trackingNumber,
+          input.shippingCost,
+          input.weight,
+          input.shippingType,
+          input.shippingSource,
+          input.shippingDestination,
+          input.cartonCount,
+          input.actorId,
+          input.shipmentId,
+        ],
       );
       return result.rows[0] ?? null;
     },

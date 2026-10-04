@@ -108,6 +108,7 @@ async function run(): Promise<void> {
     await pool.query(await readMigration('0004_legacy_password_upgrade.sql'));
     await pool.query(await readMigration('0005_auth_core_passwords_and_events.sql'));
     await pool.query(await readMigration('0006_rbac_foundation.sql'));
+    await pool.query(await readMigration('0009_operations_idempotency.sql'));
 
     const securedTables = await pool.query(`
       SELECT relation.relname AS table_name,
@@ -120,7 +121,7 @@ async function run(): Promise<void> {
       ORDER BY relation.relname
       LIMIT 10;
     `);
-    assert.equal(securedTables.rowCount, 10, 'expected six Auth and four normalized RBAC tables');
+    assert.equal(securedTables.rowCount, 11, 'expected six Auth, four normalized RBAC, and one operations table');
     assert.ok(securedTables.rows.every((table) => table.rls_enabled && table.rls_forced));
 
     const grants = await pool.query(`

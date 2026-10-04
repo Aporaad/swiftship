@@ -108,4 +108,12 @@
 
 القراءة تستخدم أعمدة صريحة من المخطط الحالي، ولا تعتمد على `SELECT *` في Orders أو Shipments أو Products الأساسية. تفاصيل Order تجمع `order_items` و`shipments`، وTracking يعيد `orders_history` المرتبط بـ`shipment_id`. أضيفت اختبارات HTTP للصلاحيات والاستجابات والمسارات، وأضيفت مسارات OpenAPI.
 
-هذه الدفعة لا تفعل عمليات الكتابة بعد. المرحلة التالية المطلوبة هي تنفيذ `POST /orders` بحد idempotency وTransaction تشمل Order/Items/Shipment/History، ثم `PATCH /orders/:id/status` بانتقالات monotonic متوافقة مع `orderLifecycleService`، ثم عمليات كتابة الشحنات والمنتجات مع سجل التدقيق.
+اكتملت عمليات الكتابة الأساسية للمرحلة 7 في هذه الدفعة. المتبقي هو مراجعة migration 0009 وتطبيقها على بيئة مشتركة بعد اعتماد منفصل، ثم استكمال courier assignment المتخصص وcontract-drift tests.
+
+## استكمال المرحلة 7 — عمليات الكتابة — 2026-10-04 23:35:06 +0000
+
+- أضيف `POST /api/v1/orders` مع `Idempotency-Key` ومخزن durable مقترح داخل `alx_api_private.operation_idempotency`، ويكتب Order/Items/Shipment/History داخل Transaction واحدة.
+- أضيف `PATCH /api/v1/orders/:id/status` مع `SELECT ... FOR UPDATE` ورفض regression، وتسجيل الحالة السابقة والجديدة في `orders_history`.
+- أضيف `PATCH /api/v1/shipments/:id` و`POST/PATCH /api/v1/products` خلف الصلاحيات المناسبة، مع Zod validation وOpenAPI.
+- التحقق: `npm run check`, `npm run lint`, `npm test -- --runInBand` (69 tests / 13 suites), `npm run build` ناجحة.
+- migration 0009 مصدرية فقط ولم تُطبق على قاعدة الإنتاج؛ تحتاج مراجعة واعتماداً منفصلاً قبل التطبيق.

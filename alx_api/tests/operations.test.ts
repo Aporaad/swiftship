@@ -26,6 +26,11 @@ const repository: OperationsRepository = {
   listTracking: jest.fn().mockResolvedValue([{ eventType: 'shipment.status_changed' }]),
   listProducts: jest.fn().mockResolvedValue({ items: [{ productId: 'p1' }], total: 1 }),
   getProduct: jest.fn().mockResolvedValue({ productId: 'p1' }),
+  createOrder: jest.fn(),
+  updateOrderStatus: jest.fn(),
+  createProduct: jest.fn(),
+  updateProduct: jest.fn(),
+  updateShipment: jest.fn(),
 };
 describe('Orders, Shipments/Tracking and Products HTTP boundaries', () => {
   it('denies Orders without view_orders', async () => {
@@ -56,5 +61,43 @@ describe('Orders, Shipments/Tracking and Products HTTP boundaries', () => {
       .set('Authorization', 'Bearer token');
     expect(response.status).toBe(200);
     expect(response.body.data[0].productId).toBe('p1');
+  });
+
+  it('requires an Idempotency-Key when creating an order', async () => {
+    const response = await request(createApiApp({ environment, auth: auth(['add_orders']), operations: repository }))
+      .post('/api/v1/orders')
+      .send({ orderNumber: 'o2', items: [] })
+      .set('Authorization', 'Bearer token');
+    expect(response.status).toBe(400);
+    expect(repository.createOrder).not.toHaveBeenCalled();
+  });
+
+  it('accepts a validated order write and status transition', async () => {
+    (repository.createOrder as jest.Mock).mockResolvedValueOnce({ orderId: 'o2' });
+    (repository.updateOrderStatus as jest.Mock).mockResolvedValueOnce({ orderId: 'o2', status: 'confirmed' });
+    const app = createApiApp({
+      environment,
+      auth: auth(['add_orders', 'update_order_status']),
+      operations: repository,
+    });
+    const created = await request(app)
+      .post('/api/v1/orders')
+      .set('Authorization', 'Bearer token')
+      .set('Idempotency-Key', 'order-create-o2')
+      .send({ orderNumber: 'o2', items: [{ quantity: 1, unitPrice: 10 }] });
+    expect(created.status).toBe(200);
+    const changed = await request(app)
+      .patch('/api/v1/orders/o2/status')
+      .set('Authorization', 'Bearer token')
+      .send({ status: 'confirmed' });
+    expect(changed.status).toBe(200);
+  });
+
+  it('enforces product write permissions', async () => {
+    const response = await request(createApiApp({ environment, auth: auth(['view_products']), operations: repository }))
+      .post('/api/v1/products')
+      .set('Authorization', 'Bearer token')
+      .send({ productId: 'p2', unitPrice: 5 });
+    expect(response.status).toBe(403);
   });
 });

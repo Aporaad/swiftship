@@ -1241,3 +1241,8 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 
 ## [2026-10-04T08:57:40+03:00] — تغييرات قاعدة Swiftship الحية — AI Model: Manus (exact model identifier not exposed in this runtime)
 المشروع النشط `ejrojwbbflzchasvgexr`. طُبقت migrations `alx_api_auth_core_password_events_0005_20261004` (version `20261004055451`) و`alx_api_rbac_foundation_0006_20261004` (version `20261004055501`). ثم زُرعت أربعة أدوار و152 permission و188 role_permissions: Admin=152، Employee=18، Accountant=16، Courier=2. تحقق FORCE RLS ومنح runtime SELECT ودوال 0005؛ anon/authenticated لا يملكان EXECUTE. user_roles=0 وuser_credentials=0. لم تتغير كلمات مرور postgres/المالك/runtime، ولم تُستخدم PIN أو كلمات مرور legacy. لا bulk migration. كل SQL المطبق واستعلامات الفحص محفوظة في `db_commends.md`.
+
+## [2026-10-04 23:35:06 +0000] — إعداد migration Idempotency للمرحلة 7 — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- أضيفت migration مصدرية غير مطبقة `alx_api/src/db/migrations/0009_operations_idempotency.sql` لإنشاء `alx_api_private.operation_idempotency` مع PK وقيود طول المفتاح وJSON object وRLS/Force RLS وgrants محدودة لدور `alx_api_runtime`.
+- أضيفت migration إلى harness اختبار PostgreSQL المحلي، لكن لم يتوفر PostgreSQL المحلي في هذه الجلسة، لذلك لم تُنفذ DDL/DML أو SQL على Supabase/قاعدة الإنتاج في هذه المهمة.
+- يلزم اعتماد منفصل قبل التطبيق الحي، ثم التحقق من وجود الدور والمنح وسلامة rollback.

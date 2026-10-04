@@ -548,6 +548,94 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+  /api/v1/orders:
+    post:
+      operationId: createOrder
+      summary: Create an order atomically with items, optional shipment, and history
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 8, maxLength: 200 }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CreateOrderInput' } } }
+      responses:
+        '200':
+          {
+            description: Order created or idempotent replay,
+            content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } },
+          }
+        '400':
+          {
+            description: Invalid input or missing idempotency key,
+            content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } },
+          }
+  /api/v1/orders/{id}/status:
+    patch:
+      operationId: updateOrderStatus
+      summary: Move an order status forward and append order history
+      security: [{ BearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/UpdateOrderStatusInput' } } }
+      responses:
+        '200':
+          {
+            description: Status updated,
+            content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } },
+          }
+        '409':
+          {
+            description: Status regression rejected,
+            content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } },
+          }
+  /api/v1/shipments/{id}:
+    patch:
+      operationId: updateShipment
+      summary: Update shipment operational fields
+      security: [{ BearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ShipmentInput' } } }
+      responses:
+        '200':
+          {
+            description: Shipment updated,
+            content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } },
+          }
+  /api/v1/products:
+    post:
+      operationId: createProduct
+      summary: Create a catalog product
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ProductInput' } } }
+      responses:
+        '200':
+          {
+            description: Product created,
+            content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } },
+          }
+  /api/v1/products/{id}:
+    patch:
+      operationId: updateProduct
+      summary: Update a catalog product
+      security: [{ BearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ProductInput' } } }
+      responses:
+        '200':
+          {
+            description: Product updated,
+            content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } },
+          }
 components:
   securitySchemes:
     BearerAuth:
@@ -555,6 +643,53 @@ components:
       scheme: bearer
       bearerFormat: JWT
   schemas:
+    CreateOrderInput:
+      type: object
+      required: [orderNumber, items]
+      properties:
+        orderNumber: { type: string, minLength: 1, maxLength: 128 }
+        customerId: { type: string }
+        status: { type: string }
+        trackingNumber: { type: string }
+        items: { type: array, maxItems: 1000, items: { $ref: '#/components/schemas/OrderItemInput' } }
+        shipment: { $ref: '#/components/schemas/ShipmentInput' }
+    OrderItemInput:
+      type: object
+      required: [quantity, unitPrice]
+      properties:
+        productId: { type: string }
+        productName: { type: string }
+        quantity: { type: integer, minimum: 1 }
+        unitPrice: { type: number, minimum: 0 }
+        weight: { type: number, minimum: 0 }
+        cbm: { type: number, minimum: 0 }
+    ShipmentInput:
+      type: object
+      properties:
+        trackingNumber: { type: string }
+        shippingCompanyId: { type: string }
+        courierId: { type: string }
+        shipmentStatus: { type: string }
+        shippingCost: { type: number, minimum: 0 }
+        weight: { type: number, minimum: 0 }
+        cartonCount: { type: integer, minimum: 0 }
+    UpdateOrderStatusInput:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, minLength: 1, maxLength: 80 }
+        note: { type: string, maxLength: 500 }
+    ProductInput:
+      type: object
+      required: [productId]
+      properties:
+        productId: { type: string, minLength: 1, maxLength: 128 }
+        productNameAr: { type: string }
+        productNameEn: { type: string }
+        productUrl: { type: string, format: uri }
+        unitPrice: { type: number, minimum: 0 }
+        itemCategoryId: { type: string }
+        weight: { type: number, minimum: 0 }
     LoginInput:
       type: object
       additionalProperties: false

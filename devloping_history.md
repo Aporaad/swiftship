@@ -2257,3 +2257,10 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 
 ## [2026-10-04T09:03:17+03:00] — نجاح CI — AI Model: Manus (exact model identifier not exposed in this runtime)
 نجح GitHub Actions run `37181620392` على commit `8e51d41ba5a578b4adb7abbf84143f9d62035296` (check, lint, format, tests، PostgreSQL test:db، build). لا توجد تغييرات عميل، ولا عمليات DB جديدة ضمن هذا التحقق.
+
+## [2026-10-04 23:35:06 +0000] — تنفيذ كتابة المرحلة 7 في alx_api — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- استُكملت وحدة Operations من القراءة إلى الكتابة مع فصل Route/Validation عن Repository/Transaction.
+- أضيف `POST /api/v1/orders` بمدخلات Zod، `Idempotency-Key`، إنشاء البنود/المنتج الجديد عند الحاجة، الشحنة الاختيارية، وسجل `orders_history` في معاملة واحدة.
+- أضيف `PATCH /api/v1/orders/:id/status` مع قفل الصف ورفض الانتقال العكسي، وأضيفت مسارات تحديث الشحنات وإنشاء/تحديث المنتجات خلف RBAC.
+- أضيفت migration المصدرية `alx_api/src/db/migrations/0009_operations_idempotency.sql` واختبار إدراجها ضمن harness المحلي، دون تطبيق على Supabase/قاعدة الإنتاج.
+- حدّثت OpenAPI والاختبارات؛ التحقق النهائي: TypeScript check، ESLint، 69 اختباراً/13 suite، وproduction build ناجحة.
