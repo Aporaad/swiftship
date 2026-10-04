@@ -2182,3 +2182,7 @@
 - النظام الأساسي: `npm run check` ناجح؛ 76 test files ناجحة، 3 متخطاة، 274 اختباراً ناجحاً و8 متخطاة؛ build ناجح مع تحذير bundle 3.55 MB وتحذيرات `import.meta` في CJS.
 - جرد حالي أظهر 91 ملفاً يستورد legacy-compat/legacy-adapter؛ AST للنطاقات Auth/Orders/Accounting/FinanceEntries/server routes/current-db أظهر صفر `any` type. مستودع Portal على `main@23cf870` فيه 4 ملفات ذات مراجع Supabase مباشرة؛ لم يتغير في هذه المهمة.
 - لا تغييرات DB ولا SQL في هذه المهمة؛ الأسرار المنشورة ومخاطر TLS وترحيل credentials موثقة كحواجز P0.
+
+
+## [2026-10-04T04:56:05+03:00] — حفظ ورفع تقرير حالة API — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+حُفظ التقرير وتصحيح OpenAPI وسجلات append-only في commit `48adc3884e54db66548c1aa006f48d8df7a8f1cb`، ورُفع إلى `Aporaad/swiftship/main`. تطابق HEAD المحلي والبعيد، وكانت شجرة العمل نظيفة بعد الرفع. لم تُنفذ أي عملية قاعدة بيانات.

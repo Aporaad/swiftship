@@ -1556,3 +1556,8 @@
 - [x] التحقق: alx_api check/test/build ناجح؛ 10 suites و44 اختباراً. النظام الرئيسي check ناجح، 76 test files و274 اختباراً ناجحاً/8 متخطاة، build ناجح مع تحذيرات bundle وimport.meta.
 - [x] لا SQL ولا تغيير DB في مهمة التقرير؛ الخطوات المتبقية موثقة حسب الأولوية، بما فيها احتواء الأسرار المنشورة وترحيل credentials وRBAC والوحدات ونقل العملاء.
 - [ ] Commit/push التقرير وOpenAPI والسجلات append-only.
+
+
+## [2026-10-04T04:56:05+03:00] — نشر تقرير حالة API — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- [x] Commit التقرير وتصحيح OpenAPI والسجلات: `48adc3884e54db66548c1aa006f48d8df7a8f1cb` (`docs(api): report implementation status and roadmap`).
+- [x] Push إلى `Aporaad/swiftship/main` ناجح؛ تطابق `LOCAL_HEAD` و`REMOTE_HEAD`، وشجرة العمل نظيفة وقت التحقق.
