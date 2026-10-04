@@ -4,6 +4,7 @@ import { parseEnvironment } from './config/env';
 import { isDatabaseReady } from './db/health';
 import { createDatabaseConnection } from './db/pool';
 import { createAuthUseCases } from './modules/auth/auth.factory';
+import { createCustomersRepository } from './modules/customers/customers.repository';
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? 'info' });
 
@@ -26,6 +27,7 @@ function startServer(): void {
     environment,
     readiness: async () => ({ database: await isDatabaseReady(database?.pool) }),
     logger,
+    ...(database ? { customers: createCustomersRepository(database.pool) } : {}),
   };
   const app = auth ? createApiApp({ ...appOptions, auth }) : createApiApp(appOptions);
   const server = app.listen(environment.port, environment.host, () => {

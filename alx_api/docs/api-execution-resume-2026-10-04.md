@@ -75,3 +75,21 @@
 3. جهّز DB اختبار غير إنتاجية ومراجعة migrations `0005/0006` قبل أي تطبيق مشترك.
 4. اختبر cutover لعميل Swiftship، ثم تُفعّل password-change/reset والانتقال التدريجي للمستخدمين الحقيقيين وفق سياسة Argon2id، من دون PIN أو bulk extraction.
 5. بعدها تابع وحدات الخطة بالترتيب، لا تتجاوز RBAC والعقود قبل Customers/Orders/Finance.
+
+
+## استئناف 2026-10-05 بعد فقدان الالتزام السابق
+
+- تم التحقق من أن فرع `main` عاد إلى `ca27735663cdef281c198b6e874a4dc712c0fb41`، وأن الالتزام `8d1fd503` غير موجود في الفرع.
+- استُعيدت إلى المستودع Migration `0007_portal_rbac_foundation.sql` وSeed `portal_rbac_seed_2026-10-04.sql` اللذان كانا مطبقين على القاعدة الحية لكن غير محفوظين في Git.
+- تحقق حي من Supabase: `portal_roles=4`، `portal_permissions=21`، `portal_role_permissions=26`، `portal_user_roles=5`؛ التوزيع `customer=3` و`client=2`. كما أن جدول `expenses` غير موجود فعلاً.
+- تحقق حي من مستخدمي النظام: 3 Admin root، و3 Courier، و2 Employee، و1 Customer؛ وتعيينات النظام الحالية: admin=3، courier=3، employee=2.
+- أضيفت Migration `0008_customers_read_boundary.sql` لإنشاء View خاصة غير حساسة ومنح القراءة فقط إلى `alx_api_runtime`، وطُبقت بنجاح على قاعدة SwiftShip الحية.
+- أضيفت Customers read API: `GET /api/v1/customers` و`GET /api/v1/customers/:customerId` خلف Auth وصلاحية `view_customers`، مع pagination/search/filter وparameterized SQL واختبارات HTTP.
+- لا توجد قناة reset مفعّلة؛ يظل تغيير كلمة المرور والاستعادة معطلاً حتى قرار المستخدم، وفق التوجيه المعتمد.
+
+### نتيجة التحقق الحالية
+
+- `npm run check`: نجاح.
+- `npm run lint`: نجاح.
+- `npm run format:check`: نجاح.
+- `npm test -- --runInBand`: **62 اختباراً ناجحاً، 12 suite**.

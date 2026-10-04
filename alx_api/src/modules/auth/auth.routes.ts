@@ -22,7 +22,7 @@ function handleAuthError(error: unknown, response: Response, requestId: string, 
   next(error);
 }
 
-function requireAuthenticatedUser(useCases?: AuthUseCases): RequestHandler {
+export function requireAuthenticatedUser(useCases?: AuthUseCases): RequestHandler {
   return async (request, response, next) => {
     const requestId = String(response.locals.requestId);
     if (!useCases) {

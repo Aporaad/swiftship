@@ -9,6 +9,8 @@ import { sendFailure, sendSuccess } from './core/http/response';
 import { requestIdMiddleware } from './middleware/request-id';
 import { registerAuthRoutes } from './modules/auth/auth.routes';
 import type { AuthUseCases } from './modules/auth/auth.contracts';
+import { registerCustomersRoutes } from './modules/customers/customers.routes';
+import type { CustomerRepository } from './modules/customers/customers.contracts';
 
 export interface ApiReadiness {
   database: boolean;
@@ -19,6 +21,7 @@ export interface AppOptions {
   readiness?: () => ApiReadiness | Promise<ApiReadiness>;
   logger?: Logger;
   auth?: AuthUseCases;
+  customers?: CustomerRepository;
 }
 
 export function createApiApp(options: AppOptions): Express {
@@ -93,6 +96,7 @@ export function createApiApp(options: AppOptions): Express {
   });
 
   registerAuthRoutes(app, environment, options.auth);
+  if (options.customers) registerCustomersRoutes(app, environment, options.auth, options.customers);
 
   app.use('/api/v1', (_request, response) => {
     sendFailure(response, 404, 'ROUTE_NOT_FOUND', 'المسار المطلوب غير موجود.', String(response.locals.requestId));

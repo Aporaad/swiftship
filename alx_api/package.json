@@ -12,7 +12,7 @@
     "start": "node --env-file-if-exists=.env dist/server.js",
     "check": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",
-    "format:check": "prettier --check scripts/test-db.ts scripts/setup-local-env.ts src/config/env.ts src/db/health.ts src/db/schema.ts src/modules/auth/auth.contracts.ts src/modules/auth/auth.factory.ts src/modules/auth/auth.routes.ts src/modules/auth/auth.schemas.ts src/modules/auth/auth.use-cases.ts src/modules/auth/drizzle-auth.repository.ts src/core/auth/require-permission.ts tests/app.test.ts tests/app-auth.test.ts tests/unit/auth/auth.use-cases.test.ts tests/unit/auth/require-permission.test.ts tests/unit/config/env.test.ts tests/unit/db/health.test.ts docs/openapi.yaml docs/local-auth-development.md package.json eslint.config.mjs prettier.config.mjs",
+    "format:check": "prettier --check scripts/test-db.ts scripts/setup-local-env.ts src/config/env.ts src/db/health.ts src/db/schema.ts src/modules/auth/auth.contracts.ts src/modules/auth/auth.factory.ts src/modules/auth/auth.routes.ts src/modules/auth/auth.schemas.ts src/modules/auth/auth.use-cases.ts src/modules/auth/drizzle-auth.repository.ts src/modules/customers/*.ts src/core/auth/require-permission.ts tests/app.test.ts tests/app-auth.test.ts tests/customers.test.ts tests/unit/auth/auth.use-cases.test.ts tests/unit/auth/require-permission.test.ts tests/unit/config/env.test.ts tests/unit/db/health.test.ts tests/unit/db/schema.test.ts docs/openapi.yaml docs/local-auth-development.md package.json eslint.config.mjs prettier.config.mjs",
     "test": "jest --runInBand",
     "test:db": "tsx scripts/test-db.ts",
     "test:watch": "jest --watch"

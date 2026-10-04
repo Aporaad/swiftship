@@ -26,7 +26,14 @@ describe('ALX API database schema', () => {
     expect(getTableName(apiRefreshTokens)).toBe('api_refresh_tokens');
     expect(getTableName(apiPasswordResetTokens)).toBe('password_reset_tokens');
     expect(getTableName(apiAuthEvents)).toBe('auth_events');
-    for (const table of [apiUserCredentials, apiUserSecurity, apiSessions, apiRefreshTokens, apiPasswordResetTokens, apiAuthEvents]) {
+    for (const table of [
+      apiUserCredentials,
+      apiUserSecurity,
+      apiSessions,
+      apiRefreshTokens,
+      apiPasswordResetTokens,
+      apiAuthEvents,
+    ]) {
       expect(getTableConfig(table).schema).toBe('alx_api_private');
     }
   });
