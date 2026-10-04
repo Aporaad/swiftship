@@ -116,13 +116,18 @@ export function verifyAccessToken(
     throw new InvalidAccessTokenError();
   }
 
+  const signature = Buffer.from(encodedSignature, 'base64url');
+  if (signature.length !== 64 || signature.toString('base64url') !== encodedSignature) {
+    throw new InvalidAccessTokenError();
+  }
+
   let validSignature: boolean;
   try {
     validSignature = verifyBytes(
       null,
       Buffer.from(`${encodedHeader}.${encodedClaims}`, 'utf8'),
       publicKey,
-      Buffer.from(encodedSignature, 'base64url'),
+      signature,
     );
   } catch {
     throw new InvalidAccessTokenError();

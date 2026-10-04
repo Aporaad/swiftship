@@ -64,3 +64,8 @@
 - [RLS disabled in public schema](https://supabase.com/docs/guides/database/database-linter?lint=0013_rls_disabled_in_public)
 - [Public executable SECURITY DEFINER functions](https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable)
 - [Mutable function search_path](https://supabase.com/docs/guides/database/database-linter?lint=0011_function_search_path_mutable)
+
+
+## متابعة بعد أول تشغيل للـCI — 2026-10-04 06:39 (+03:00)
+
+كشف GitHub Actions اختلافاً عن اختبار بيئة التطوير في اختبار تعديل توقيع JWT: فكّ Node.js لقيمة base64url كان يقبل ترميزين نهائيين مختلفين ينتجان البايتات نفسها. تم تشديد `verifyAccessToken` ليفرض طول Ed25519 الصحيح (64 بايت) وإعادة الترميز المطابقة قبل التحقق من التوقيع، وبالتالي يرفض التمثيل غير القياسي fail-closed. بعد الإصلاح نجحت محلياً `check`, `lint`, 10 suites/44 tests, `build`, و`git diff --check`. نتيجة CI للـcommit الذي يحتوي الإصلاح تُتحقق بعد رفعه.

@@ -2196,3 +2196,9 @@
 - فحوص التحقق النهائية ناجحة: `npm run check`, `npm run lint`, 10 suites/44 tests, `npm run build`, فحص Prettier للتهيئتين، و`git diff --check`.
 - فحص قاعدة البيانات كان عبر metadata/advisors للقراءة فقط. لا SQL/DDL/DML ولا تعديل للـRLS/Grants أو البيانات.
 - التقرير الحالي: `alx_api/docs/api-execution-resume-2026-10-04.md`. حالة الخطة ما زالت غير مكتملة وغير جاهزة للإنتاج بسبب حواجز الأسرار وTLS والاعتمادات وقرارات Auth/RBAC واختبارات DB.
+
+
+## [2026-10-04T06:39:53+03:00] — تشديد التحقق من ترميز توقيع JWT بعد CI — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- فشل اختبار GitHub CI الذي يغيّر آخر رمز في توقيع JWT؛ تبيّن أن فك Node.js لـbase64url يقبل صيغاً غير معيارية للبايتات الأخيرة فتُفك إلى التوقيع نفسه.
+- عُدّل `verifyAccessToken` ليتحقق من طول Ed25519 (64 بايت) ومن تطابق إعادة الترميز canonical قبل التحقق بالمفتاح العام؛ الانحراف يرفض كـ`InvalidAccessTokenError`.
+- نجحت محلياً `npm run check`, `npm run lint`, 10 suites/44 tests, `npm run build`, و`git diff --check`. يلزم تثبيت نتيجة CI بعد رفع هذا التصحيح.
