@@ -2237,3 +2237,7 @@
 
 ## [2026-10-04T08:39:29+03:00] — نشر Auth Core المحلي والتحقق الأخضر — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
 Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ونجح GitHub Actions run `37180466957` متضمناً 59 اختباراً وPostgreSQL integration وbuild. تطابق remote/local HEAD، بقي API على loopback ready=200، ولم تحدث DB writes بعيدة أو تغييرات على كلمات المرور المعتمدة.
+
+
+## [2026-10-04T08:44:49+03:00] — إعداد مصفوفة RBAC للمراجعة دون seed — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+قورنت `RolesPage` و`DEFAULT_ROLE_PERMISSIONS` وقاموس `PermissionKey` ومحرر المستخدم آلياً؛ وثيقة المراجعة تحتوي الاتحاد لكل دور، 152 صلاحية Admin صريحة مرشحة بدلاً من wildcard، الفروق الدقيقة (Employee 18→24، Accountant 16→57، Courier 2→3) وفجوة الـ24 صلاحية المخفية. طوبقت IDs القائمة على المصادر دون missing/extra. لم تُزرع roles/permissions ولم يُنفذ أي SQL أو DB تعديل؛ ينتظر اعتماد المستخدم.

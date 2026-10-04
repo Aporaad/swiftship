@@ -1656,3 +1656,10 @@
 - [x] CI run `37180466957` نجح: check، lint، format، 59 unit tests، PostgreSQL integration، وbuild.
 - [x] API المحلي ما زال جاهزاً HTTP 200 على `127.0.0.1:3001`؛ `.env` بصلاحية `0600`.
 - [x] لم تُنفّذ DB operations خارج localhost في هذه الجولة؛ لا تغييرات على `postgres` أو المالك أو سر التطوير الحالي.
+
+
+## [2026-10-04T08:44:49+03:00] — مسودة RBAC للعرض قبل seed
+- [x] دمج source grants اتحادياً كمسودة من `RolesPage` و`DEFAULT_ROLE_PERMISSIONS` ثم مطابقة آلية للعدد والمفاتيح.
+- [x] الأعداد: Admin wildcard يُعرض كمرشح 152 كوداً صريحاً؛ Employee 24، Accountant 57 (41 إضافة فوق RolesPage)، Courier 3. كما توجد 24 صلاحية في القاموس غير ظاهرة بمحرر المستخدم.
+- [x] حفظ المستند `alx_api/docs/rbac-permission-matrix-review-2026-10-04.md`؛ التقرير يبين المخاطر والفروق ومصادر كل قيمة.
+- [ ] انتظار مراجعة المستخدم وتعديل/اعتماد matrix المرجعية. لا seed ولا تطبيق `0005/0006` على قاعدة مشتركة قبل المراجعة والموافقة المنفصلة.
