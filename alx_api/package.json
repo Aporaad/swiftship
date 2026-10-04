@@ -10,7 +10,9 @@
     "start": "node --env-file-if-exists=.env dist/server.js",
     "check": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",
+    "format:check": "prettier --check scripts/test-db.ts package.json eslint.config.mjs prettier.config.mjs",
     "test": "jest --runInBand",
+    "test:db": "tsx scripts/test-db.ts",
     "test:watch": "jest --watch"
   },
   "engines": {

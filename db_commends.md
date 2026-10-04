@@ -1153,3 +1153,157 @@ SELECT 1 FROM alx_api_private.user_credentials LIMIT 0;
 
 ## [2026-10-04T06:36:25+03:00] — لا أوامر SQL منفذة — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
 لم يُنفذ SQL أو DDL أو DML في هذه الجولة. اقتصر فحص قاعدة البيانات على أدوات Supabase metadata/advisors للقراءة فقط؛ لا توجد أوامر SQL لإدراجها.
+
+
+## [2026-10-04T06:48:26+03:00] — metadata لجدول handoff مؤقت، قراءة فقط — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT has_schema_privilege('alx_api_runtime', 'alx_api_private', 'USAGE') AS runtime_private_schema_usage,
+       to_regclass('alx_api_private._api_secret_rotation_handoff') IS NOT NULL AS handoff_table_exists,
+       to_regprocedure('gen_random_uuid()') IS NOT NULL AS secure_uuid_available
+LIMIT 1;
+```
+
+## [2026-10-04T06:49:09+03:00] — إنشاء قناة handoff RLS مؤقتة — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+CREATE TABLE alx_api_private._api_secret_rotation_handoff (
+  handoff_id text PRIMARY KEY,
+  secret_value text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE alx_api_private._api_secret_rotation_handoff ENABLE ROW LEVEL SECURITY;
+ALTER TABLE alx_api_private._api_secret_rotation_handoff FORCE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE alx_api_private._api_secret_rotation_handoff FROM PUBLIC, anon, authenticated, service_role;
+GRANT SELECT ON TABLE alx_api_private._api_secret_rotation_handoff TO alx_api_runtime;
+CREATE POLICY api_runtime_secret_handoff_select
+  ON alx_api_private._api_secret_rotation_handoff
+  FOR SELECT TO alx_api_runtime USING (true);
+```
+أُنشئ الجدول داخل migration خاص مؤقتاً، ثم حُذف في 06:50:13 بعد rollback للمحاولة الأولى. لم يُترك في المخطط.
+
+## [2026-10-04T06:49:30+03:00] — تدوير محاولة أولى لدور runtime ثم rollback — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+-- إنشاء سر عشوائي DB-side وإسناده حصراً إلى alx_api_runtime، دون إرجاع قيمته من أداة migration:
+ALTER ROLE alx_api_runtime WITH PASSWORD '[REDACTED — لا تُسجل أي قيمة سر]';
+-- تخزين السر مؤقتاً في صف handoff المقيد لقناة runtime المحلية:
+INSERT INTO alx_api_private._api_secret_rotation_handoff (handoff_id, secret_value)
+VALUES ('rotated', '[REDACTED — لا تُسجل أي قيمة سر]');
+```
+فشل اختبار المصادقة على Supavisor transaction pool بسبب 28P01/تأخر ذاكرة بيانات pooler؛ رُجعت كلمة مرور هذا الدور إلى السابقة دون مساس بـ`postgres`/المالك. التراجع المؤقت:
+```sql
+ALTER ROLE alx_api_runtime WITH PASSWORD '[REDACTED — القيمة السابقة غير مسجلة]';
+DROP TABLE alx_api_private._api_secret_rotation_handoff;
+```
+لا يحتوي السجل على أي كلمة مرور فعلية.
+
+## [2026-10-04T06:52:43+03:00] — إعداد handoff جديد للمحاولة المحدودة — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+أُعيد تنفيذ SQL إنشاء الجدول/RLS/GRANT/POLICY أعلاه لمحاولة واحدة إضافية مع listener محلي؛ لم يُعرض أو يُسجل secret value.
+
+## [2026-10-04T06:52:55+03:00] — إعادة تدوير كلمة دور API مرة واحدة — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+ALTER ROLE alx_api_runtime WITH PASSWORD '[REDACTED — قيمة عشوائية DB-side لم تُسجل]';
+INSERT INTO alx_api_private._api_secret_rotation_handoff (handoff_id, secret_value)
+VALUES ('rotated', '[REDACTED — لا تُسجل أي قيمة سر]');
+```
+استُخدم الانتظار/التحقق على Supavisor session وtransaction؛ نُقلت القيمة الحالية إلى `.env` المحلي المقيّد فقط بعد نجاح التحقق، ولم يُجر تدوير آخر بعدها. الاستعلام الداخلي الذي أعاد القيمة من handoff كان:
+```sql
+SELECT secret_value
+FROM alx_api_private._api_secret_rotation_handoff
+WHERE handoff_id = 'rotated'
+LIMIT 1;
+```
+النتيجة السرية لم تُنسخ إلى هذا الملف.
+
+## [2026-10-04T06:57:42+03:00] — حذف handoff والتحقق من الإزالة — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+DROP TABLE alx_api_private._api_secret_rotation_handoff;
+SELECT to_regclass('alx_api_private._api_secret_rotation_handoff') IS NULL AS handoff_removed LIMIT 1;
+```
+أكّد فحص metadata أن الجدول لم يعد موجوداً. فُحصت المصادقة بعد المزامنة باستعلامات `SELECT current_user ... LIMIT 1` فقط على Supavisor session/transaction؛ كلمة المرور لم تظهر في SQL log. كلمة مرور postgres/مالك قاعدة البيانات لم تتغير.
+
+## [2026-10-04T07:01:41+03:00] — تصنيف aggregate للحقول الوصفية فقط — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT count(*) AS total_users,
+       count(*) FILTER (WHERE password IS NULL OR btrim(password) = '') AS missing_or_blank,
+       count(*) FILTER (WHERE left(password, 10) = '$argon2id$') AS argon2id_prefix,
+       count(*) FILTER (WHERE left(password, 4) IN ('$2a$', '$2b$', '$2x$', '$2y$')) AS bcrypt_prefix,
+       count(*) FILTER (WHERE password LIKE 'pbkdf2:%' OR password LIKE 'scrypt:%' OR password LIKE '$pbkdf2-%') AS other_common_kdf_prefix,
+       count(*) FILTER (WHERE password IS NOT NULL AND btrim(password) <> '' AND left(password, 10) <> '$argon2id$' AND left(password, 4) NOT IN ('$2a$', '$2b$', '$2x$', '$2y$') AND password NOT LIKE 'pbkdf2:%' AND password NOT LIKE 'scrypt:%' AND password NOT LIKE '$pbkdf2-%') AS unclassified_nonempty
+FROM public.users
+LIMIT 1;
+```
+النتيجة aggregate: total=11، blank=0، البادئات المفحوصة=0، unclassified_nonempty=11. لم تُرجع أي قيم أو hashes أو IDs.
+
+## [2026-10-04T07:01:54+03:00] — فئات طول واسعة دون قيم — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT count(*) FILTER (WHERE left(password, 3) IN ('$1$', '$5$', '$6$')) AS unix_crypt_prefix,
+       count(*) FILTER (WHERE left(password, 3) = '$P$') AS phpass_prefix,
+       count(*) FILTER (WHERE password ~ '^[[:xdigit:]]{32}$') AS hex32,
+       count(*) FILTER (WHERE password ~ '^[[:xdigit:]]{40}$') AS hex40,
+       count(*) FILTER (WHERE password ~ '^[[:xdigit:]]{64}$') AS hex64,
+       count(*) FILTER (WHERE password ~ '^[[:xdigit:]]{128}$') AS hex128,
+       count(*) FILTER (WHERE password IS NOT NULL AND btrim(password) <> '' AND char_length(password) < 20) AS length_lt_20,
+       count(*) FILTER (WHERE char_length(password) BETWEEN 20 AND 39) AS length_20_39,
+       count(*) FILTER (WHERE char_length(password) BETWEEN 40 AND 79) AS length_40_79,
+       count(*) FILTER (WHERE char_length(password) BETWEEN 80 AND 127) AS length_80_127,
+       count(*) FILTER (WHERE char_length(password) >= 128) AS length_gte_128
+FROM public.users
+LIMIT 1;
+```
+النتيجة: أطوال 5 أقل من 20 و6 بين 20–39؛ الأطوال وحدها لا تثبت نوع القيمة.
+
+## [2026-10-04T07:12:05+03:00] — استعلام metadata فشل قبل وجود 0004 — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT rolname, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolbypassrls, rolinherit,
+       has_schema_privilege('alx_api_runtime', 'alx_api_private', 'USAGE') AS private_schema_usage,
+       has_table_privilege('alx_api_runtime', 'alx_api_private.user_credentials', 'SELECT') AS credentials_select,
+       has_function_privilege('alx_api_runtime', 'alx_api_private.verify_legacy_password(text,text)', 'EXECUTE') AS legacy_verify_function
+FROM pg_catalog.pg_roles
+WHERE rolname = 'alx_api_runtime'
+LIMIT 1;
+```
+فشل لأن الدالة لم تكن موجودة آنذاك؛ استعلام قراءة فقط ولم يحدث تعديل.
+
+## [2026-10-04T07:12:14+03:00] — خصائص الدور قبل نشر الدوال — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT rolname, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolbypassrls, rolinherit,
+       has_schema_privilege('alx_api_runtime', 'alx_api_private', 'USAGE') AS private_schema_usage,
+       has_table_privilege('alx_api_runtime', 'alx_api_private.user_credentials', 'SELECT') AS credentials_select
+FROM pg_catalog.pg_roles
+WHERE rolname = 'alx_api_runtime'
+LIMIT 1;
+```
+النتيجة: LOGIN=true؛ superuser/createdb/createrole/bypassrls=false؛ schema usage وcredential SELECT=true.
+
+## [2026-10-04T07:12:30+03:00] — تطبيق migration `alx_api_legacy_password_upgrade_0004_20261004` — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+طُبق SQL المصدر كاملاً كما هو في [0004_legacy_password_upgrade.sql](alx_api/src/db/migrations/0004_legacy_password_upgrade.sql). أنشأ الدالتين، عيّن owner=`postgres`، وسحب EXECUTE من PUBLIC/anon/authenticated/service_role ثم منحه لـ`alx_api_runtime`. النص الكامل محفوظ بالملف versioned؛ لم يتضمن التطبيق أي password value ولم يعدّل/يحذف صفاً من `public.users`.
+
+## [2026-10-04T07:12:42+03:00] — تحقق metadata بعد التطبيق — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT routine.proname, routine.pronargs, routine.prosecdef AS security_definer,
+       pg_catalog.pg_get_userbyid(routine.proowner) AS owner_name,
+       routine.proconfig AS function_settings,
+       has_function_privilege('alx_api_runtime', routine.oid, 'EXECUTE') AS runtime_can_execute,
+       has_function_privilege('anon', routine.oid, 'EXECUTE') AS anon_can_execute,
+       has_function_privilege('authenticated', routine.oid, 'EXECUTE') AS authenticated_can_execute,
+       (SELECT count(*) FROM alx_api_private.user_credentials) AS migrated_credential_rows
+FROM pg_catalog.pg_proc AS routine
+INNER JOIN pg_catalog.pg_namespace AS namespace ON namespace.oid = routine.pronamespace
+WHERE namespace.nspname = 'alx_api_private'
+  AND routine.proname IN ('verify_legacy_password', 'migrate_legacy_password')
+ORDER BY routine.proname
+LIMIT 2;
+```
+النتيجة: الدالتان SECURITY DEFINER، owner=`postgres`، `search_path=pg_catalog`؛ التنفيذ runtime=true وanon/authenticated=false؛ `migrated_credential_rows=0`.
+
+## [2026-10-04T07:05:57+03:00] — PostgreSQL 16 محلي، test database فقط — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+أُنشئت محلياً role اختبار `ubuntu` وقاعدة `alx_api_test` على cluster محلي، لا Supabase. SQL الاختبار وتفاصيله في [test-db.ts](alx_api/scripts/test-db.ts)؛ طبّق الملفات `0002_auth_private_storage.sql`, `0003_auth_rls_runtime_access.sql`, `0004_legacy_password_upgrade.sql` كما هي. شمل `DROP SCHEMA IF EXISTS alx_api_private CASCADE`, `DROP TABLE IF EXISTS public.users CASCADE`, إنشاء fixture فارغ، ثم `SET ROLE alx_api_runtime` وفحص RLS/grants/readiness وتجربة Auth بصف synthetic وحيد، وكلمة اختبار غير حقيقية و`system_pin=NULL`. لم يسجل الاختبار bind values.
+
+
+## [تسجيل 2026-10-04T07:16:37+03:00؛ تنفيذ 07:04:24+03:00] — تهيئة PostgreSQL المحلي للاختبارات فقط — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+الأوامر المنفذة بواسطة `createuser` و`createdb` تعادل SQL التالي في cluster الاختبار المحلي فقط:
+```sql
+CREATE ROLE ubuntu WITH LOGIN SUPERUSER;
+CREATE DATABASE alx_api_test WITH OWNER = ubuntu;
+SELECT current_database() AS database, current_user AS role LIMIT 1;
+```
+لا تنطبق هذه الأوامر على Supabase أو أي قاعدة إنتاج. ملف الاختبار لا يسمح الاتصال إلا بـlocalhost/socket وقاعدة اسمها `alx_api_test`.

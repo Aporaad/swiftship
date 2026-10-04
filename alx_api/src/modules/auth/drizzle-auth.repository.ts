@@ -51,6 +51,26 @@ export class DrizzleAuthRepository implements AuthRepository {
     return { passwordHash: credential.passwordHash, passwordAlgorithm: 'argon2id' };
   }
 
+  async verifyLegacyPassword(userId: string, password: string): Promise<boolean> {
+    const [result] = await this.db
+      .select({ valid: sql<boolean>`alx_api_private.verify_legacy_password(${userId}, ${password})` })
+      .from(apiLoginUsers)
+      .where(eq(apiLoginUsers.userId, userId))
+      .limit(1);
+    return result?.valid === true;
+  }
+
+  async migrateLegacyPassword(input: { userId: string; password: string; passwordHash: string }): Promise<boolean> {
+    const [result] = await this.db
+      .select({
+        migrated: sql<boolean>`alx_api_private.migrate_legacy_password(${input.userId}, ${input.password}, ${input.passwordHash})`,
+      })
+      .from(apiLoginUsers)
+      .where(eq(apiLoginUsers.userId, input.userId))
+      .limit(1);
+    return result?.migrated === true;
+  }
+
   async getLockedUntil(userId: string): Promise<Date | null> {
     const [security] = await this.db
       .select({ lockedUntil: apiUserSecurity.lockedUntil })

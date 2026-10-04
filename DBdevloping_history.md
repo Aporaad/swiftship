@@ -1203,3 +1203,25 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 - فُحص مشروع Supabase `ejrojwbbflzchasvgexr` عبر أدوات metadata للقراءة فقط: سجل الهجرات يتضمن `alx_api_auth_foundation_0002` و`alx_api_auth_rls_runtime_0003`، وجداول `alx_api_private` الستة موجودة وRLS مفعّل عليها وmetadata تشير إلى صفر صفوف.
 - اطُّلع على Security Advisor؛ أبرزت النتيجة 50 جدولاً في `public` بلا RLS، و44 دالة `SECURITY DEFINER` متاحة لـ`anon`، وتحذيرات أخرى. لم تُنفذ معالجة لأنها تتطلب تدقيق أثر على النظام الحالي.
 - لم تُنفذ أي SQL أو DDL أو DML أو Migration، ولم تُقرأ بيانات مستخدمين أو كلمات مرور أو PIN أو hashes، ولم يتغير أي جدول أو policy أو grant.
+
+
+## [2026-10-04T06:58:32+03:00] — تدوير كلمة مرور دور API فقط وإزالة handoff المؤقت — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- نُفّذت أوامر migrations مسماة على مشروع Supabase `ejrojwbbflzchasvgexr` لإنشاء جدول مؤقت `alx_api_private._api_secret_rotation_handoff` مع RLS وسياسة وصول لدور `alx_api_runtime` وحده، ثم تدوير كلمة مرور ذلك الدور بقيمة مولّدة عشوائياً في PostgreSQL عبر `ALTER ROLE`، وأخيراً إزالة جدول handoff.
+- أخفقت أول محاولة دخول فورية إلى Supavisor بسبب كاش بيانات الاعتماد؛ أعيدت كلمة مرور `alx_api_runtime` السابقة عبر قيمة handoff المحمية، وحُذف الجدول. في المحاولة التالية أُبقيت قيمة الدور الحالية ولم تُدوّر مجدداً بعد مزامنتها؛ فحوص session وtransaction نجحت بعد انقضاء الكاش، كما نجح اتصال runtime بعد الحذف النهائي.
+- التحقق الختامي يؤكد `to_regclass(...) IS NULL` للجدول المؤقت. لا تغييرات على جداول أعمال أو صفوفها أو سياساتها الدائمة، ولا على دور/كلمة مرور `postgres` أو مالك قاعدة البيانات. كلمة المرور الفعلية لا تُدرج في التاريخ أو السجل؛ `.env` المحلي فقط تحدّث بصلاحية `0600` وخارج Git.
+- اعتماد سياسة كلمات المرور: لا استخدام PIN ككلمة مرور؛ ترحيل تدريجي بالتحقق من الاعتماد القديم عند أول نجاح ثم Argon2id؛ من لا يملك اعتماداً صالحاً يحتاج مسار إعادة تعيين/دعوة. لا نقل بيانات اعتماد المستخدمين أو PIN تم في هذه الجولة.
+
+
+## [2026-10-04T06:58:32+03:00] — إغلاق مهمة handoff وتوثيق القرار
+التغيير الوحيد الدائم على قاعدة البيانات في هذه العملية هو كلمة مرور دور `alx_api_runtime`؛ ثبتت القيمة الحالية بناءً على موافقة المستخدم ولا تُدوّر حتى اكتمال التطوير. لم تُمس كلمة مرور `postgres`/المالك. حُذف handoff المؤقت وتأكد غيابه، والتحقق النهائي للاتصال نجح. لا يوجد نقل لبيانات `public.users.password` أو `system_pin` ولا أي تعديل لكلمات مرور المستخدمين. نصوص SQL بأسماء migrations وبدون قيم الأسرار محفوظة في `db_commends.md`.
+
+
+## [2026-10-04T07:12:50+03:00] — تدقيق aggregate لكلمات المرور وتطبيق 0004 — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+في Supabase أُجري استعلامان تجميعيان فقط على `public.users.password`: الإجمالي 11، غير فارغ 11، بادئات Argon2id/bcrypt/KDF الشائعة 0؛ وفي قياس الأطوال المجمعة: 5 أقل من 20 و6 بين 20–39. لم يتم إرجاع أو قراءة أي قيمة أو hash أو PIN أو user id. مراجعة المصدر القديم تبين مقارنة حرفية `row.password !== pass`، وهو دليل سلوكي على تعامل التطبيق معها ككلمة مرور مباشرة؛ لم ننقل أي صف. بقي عدد صفوف `user_credentials` صفراً.
+طُبقت migration الإضافية `alx_api_legacy_password_upgrade_0004_20261004` في `ejrojwbbflzchasvgexr`. أنشأت `verify_legacy_password(text,text)` و`migrate_legacy_password(text,text,text)` كـSECURITY DEFINER، owner=`postgres`، `search_path=pg_catalog`، سُحب التنفيذ من PUBLIC/anon/authenticated/service_role ومُنح فقط لـ`alx_api_runtime`. لا تغير الدالتان المصدر القديم؛ التحقق يعيد boolean فقط والإدراج يضيف hash Argon2id إلى المخزن الخاص بعد قفل/إعادة تحقق.
+أُعيد فحص الدور: LOGIN=true؛ superuser/createdb/createrole/bypassrls=false. بعد migration أكد query metadata ملكية postgres وإعدادات search_path، execute=true للـruntime=false للـanon/authenticated، وعدد credentials=0. فشل استعلام metadata واحد سابق للتطبيق لأنّه أشار إلى دالة لم تُنشأ بعد؛ كان استعلام قراءة ولم يغير قاعدة البيانات.
+على قاعدة اختبار PostgreSQL 16 المحلية `alx_api_test` طبقت أداة `alx_api/scripts/test-db.ts` migrations 0002–0004 مع مستخدم اصطناعي غير حقيقي. اجتازت فحوص forced RLS/grants/readiness، رفض كلمة خاطئة، وحفظ Argon2id لأول password صحيح؛ لا اتصال بقاعدة Supabase أثناء هذه الاختبارات. تفاصيل الاستعلامات والدوال محفوظة في `db_commends.md`، ونص migration المصدر في `alx_api/src/db/migrations/0004_legacy_password_upgrade.sql`.
+
+
+## [2026-10-04T06:58:32+03:00] — قصر تدوير/مزامنة السر على دور API — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+بناءً على تصحيح وموافقة المستخدم، الدور المقصود هو `alx_api_runtime` وحده. عُكست محاولة أولى لم تعتمدها pooler ثم أُجريت مزامنة ناجحة لكلمة هذا الدور إلى `.env` المحلي فقط. لم تتغير كلمة `postgres` أو مالك قاعدة البيانات، ولم تُحدّث قيم `public.users.password` أو PIN. أزيل جدول handoff المؤقت، وأُكد اتصال الدور بعد الإزالة. قيمة كلمة المرور لم تسجل في هذا الملف أو Git.

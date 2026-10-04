@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { AuthTokenPairDto, AuthUseCases } from './auth.contracts';
-import { verifyPassword } from './password-hasher';
+import { hashPassword, verifyPassword } from './password-hasher';
 
 export interface AuthUser {
   userId: string;
@@ -29,6 +29,8 @@ export interface RefreshTokenRecord {
 export interface AuthRepository {
   findUsersByIdentifier(identifier: string): Promise<readonly AuthUser[]>;
   findCredential(userId: string): Promise<PasswordCredential | null>;
+  verifyLegacyPassword(userId: string, password: string): Promise<boolean>;
+  migrateLegacyPassword(input: { userId: string; password: string; passwordHash: string }): Promise<boolean>;
   getLockedUntil(userId: string): Promise<Date | null>;
   recordFailedLogin(userId: string, occurredAt: Date): Promise<void>;
   clearFailedLogins(userId: string, occurredAt: Date): Promise<void>;
@@ -90,6 +92,7 @@ export class AuthService implements AuthUseCases {
     private readonly options: AuthServiceOptions,
     private readonly passwordVerifier: (password: string, hash: string) => Promise<boolean> = verifyPassword,
     private readonly now: () => Date = () => new Date(),
+    private readonly passwordHasher: (password: string) => Promise<string> = hashPassword,
   ) {}
 
   async login(input: { identifier: string; password: string }): Promise<AuthTokenPairDto> {
@@ -99,18 +102,49 @@ export class AuthService implements AuthUseCases {
     const now = this.now();
     const credential = user ? await this.repository.findCredential(user.userId) : null;
     const lockedUntil = user ? await this.repository.getLockedUntil(user.userId) : null;
-    const hashToVerify = credential?.passwordAlgorithm === 'argon2id'
-      ? credential.passwordHash
-      : this.options.dummyPasswordHash;
-
-    let passwordMatches: boolean;
-    try {
-      passwordMatches = await this.passwordVerifier(input.password, hashToVerify);
-    } catch {
-      passwordMatches = false;
-    }
     const isLocked = lockedUntil !== null && lockedUntil.getTime() > now.getTime();
-    if (!user || user.disabled || !credential || credential.passwordAlgorithm !== 'argon2id' || !passwordMatches || isLocked) {
+    let passwordMatches = false;
+
+    if (credential?.passwordAlgorithm === 'argon2id') {
+      try {
+        passwordMatches = await this.passwordVerifier(input.password, credential.passwordHash);
+      } catch {
+        passwordMatches = false;
+      }
+    } else {
+      try {
+        await this.passwordVerifier(input.password, this.options.dummyPasswordHash);
+      } catch {
+        // Keep the same generic authentication response for malformed credentials.
+      }
+
+      if (user && !user.disabled && !isLocked) {
+        const legacyPasswordMatches = await this.repository.verifyLegacyPassword(user.userId, input.password);
+        if (legacyPasswordMatches) {
+          const passwordHash = await this.passwordHasher(input.password);
+          const migrated = await this.repository.migrateLegacyPassword({
+            userId: user.userId,
+            password: input.password,
+            passwordHash,
+          });
+
+          if (migrated) {
+            passwordMatches = true;
+          } else {
+            const concurrentCredential = await this.repository.findCredential(user.userId);
+            if (concurrentCredential?.passwordAlgorithm === 'argon2id') {
+              try {
+                passwordMatches = await this.passwordVerifier(input.password, concurrentCredential.passwordHash);
+              } catch {
+                passwordMatches = false;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (!user || user.disabled || !passwordMatches || isLocked) {
       if (user && !user.disabled && !isLocked) await this.repository.recordFailedLogin(user.userId, now);
       throw INVALID_CREDENTIALS();
     }

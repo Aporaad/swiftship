@@ -6,6 +6,8 @@ function makeDependencies() {
   const repository: jest.Mocked<AuthRepository> = {
     findUsersByIdentifier: jest.fn().mockResolvedValue([{ userId: 'u-1', role: 'employee', disabled: false }]),
     findCredential: jest.fn().mockResolvedValue({ passwordHash: 'argon-hash', passwordAlgorithm: 'argon2id' }),
+    verifyLegacyPassword: jest.fn().mockResolvedValue(false),
+    migrateLegacyPassword: jest.fn().mockResolvedValue(false),
     getLockedUntil: jest.fn().mockResolvedValue(null),
     recordFailedLogin: jest.fn().mockResolvedValue(undefined),
     clearFailedLogins: jest.fn().mockResolvedValue(undefined),
@@ -76,6 +78,57 @@ describe('AuthService', () => {
     const { repository, service } = makeDependencies();
     repository.findCredential.mockResolvedValue(null);
     await expect(service.login({ identifier: 'employee', password: 'secret' })).rejects.toMatchObject({ statusCode: 401 });
+  });
+
+  it('upgrades a correctly verified legacy password to Argon2id before creating a session', async () => {
+    const { repository, issuer } = makeDependencies();
+    repository.findCredential.mockResolvedValue(null);
+    repository.verifyLegacyPassword.mockResolvedValue(true);
+    repository.migrateLegacyPassword.mockResolvedValue(true);
+    const passwordHasher = jest.fn().mockResolvedValue('$argon2id$test-hash');
+    const service = new AuthService(
+      repository,
+      issuer,
+      { accessTokenTtlSeconds: 900, refreshTokenTtlSeconds: 2_592_000, dummyPasswordHash: '$argon2id$dummy-hash' },
+      jest.fn().mockResolvedValue(true),
+      () => now,
+      passwordHasher,
+    );
+
+    await service.login({ identifier: 'employee', password: 'legacy-password' });
+
+    expect(repository.verifyLegacyPassword).toHaveBeenCalledWith('u-1', 'legacy-password');
+    expect(passwordHasher).toHaveBeenCalledWith('legacy-password');
+    expect(repository.migrateLegacyPassword).toHaveBeenCalledWith({
+      userId: 'u-1',
+      password: 'legacy-password',
+      passwordHash: '$argon2id$test-hash',
+    });
+    expect(repository.createSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not migrate a rejected legacy password or offer PIN as a fallback', async () => {
+    const { repository, issuer } = makeDependencies();
+    repository.findCredential.mockResolvedValue(null);
+    repository.verifyLegacyPassword.mockResolvedValue(false);
+    const passwordHasher = jest.fn();
+    const service = new AuthService(
+      repository,
+      issuer,
+      { accessTokenTtlSeconds: 900, refreshTokenTtlSeconds: 2_592_000, dummyPasswordHash: '$argon2id$dummy-hash' },
+      jest.fn().mockResolvedValue(true),
+      () => now,
+      passwordHasher,
+    );
+
+    await expect(service.login({ identifier: 'employee', password: 'wrong-password' })).rejects.toMatchObject({
+      statusCode: 401,
+      code: 'AUTH_INVALID_CREDENTIALS',
+    });
+
+    expect(repository.migrateLegacyPassword).not.toHaveBeenCalled();
+    expect(passwordHasher).not.toHaveBeenCalled();
+    expect(repository.createSession).not.toHaveBeenCalled();
   });
 
   it('records a failed login and returns a generic authentication error', async () => {

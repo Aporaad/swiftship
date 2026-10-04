@@ -2206,3 +2206,11 @@
 
 ## [2026-10-04T06:43:33+03:00] — نجاح CI بعد تشديد JWT — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
 نجح GitHub Actions run `37174726453` على commit `f2c28185448b9a4e8b07cab60ed93004c9755732`: `npm ci`, typecheck، ESLint، الاختبارات، وproduction build. تطابقت نتيجة CI مع الفحوص المحلية (10 suites/44 tests).
+
+
+## [2026-10-04T06:58:32+03:00] — تثبيت كلمة دور API واعتماد سياسة Argon2id — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+بعد توضيح المستخدم، اقتصر الإجراء على مزامنة كلمة المرور الحالية لدور `alx_api_runtime` إلى `.env` المحلي المقيّد؛ لم تتغير كلمة `postgres`/مالك القاعدة، ولم تُجر أي إعادة تدوير بعد ذلك. تحقق الاتصال على session وtransaction، حُذف handoff المؤقت، وبقي `.env` خارج Git. اعتمد المستخدم ترقية كلمة المرور القديمة عند أول دخول صحيح إلى Argon2id، دون PIN؛ الحساب الذي لا يملك كلمة قديمة صالحة يحتاج reset/invite موثوق.
+
+## [2026-10-04T07:12:50+03:00] — ترقية password تدريجية واختبار DB محلي — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+أضيفت migration 0004 بدالتين مقيدتين داخل `alx_api_private`: التحقق من كلمة المرور القديمة داخل PostgreSQL دون إرجاعها للدور runtime، ثم إدخال hash Argon2id بعد إعادة التحقق وقفل صف المصدر. لم يتغير `public.users.password` أو PIN؛ لا صلاحية مباشرة على `public.users`، والتنفيذ لـ`alx_api_runtime` فقط. وسّع `AuthService`/Drizzle repository الترحيل عند أول دخول صحيح، مع re-check عند سباق الدخول وgeneric failure لكلمة خاطئة. أصبح readiness يرفض الجاهزية حتى تتاح الدالتان.
+أضيف اختبار TypeScript محلي fail-closed لقاعدة `alx_api_test` يطبق migrations ويفحص forced RLS/grants ثم يجرب السلوك بصف اصطناعي. أضيف PostgreSQL 16 service وفحوص lint/format/DB إلى CI. اجتازت الفحوص المحلية: check/lint/format، 10 suites و46 tests، DB test وbuild. طُبقت migration 0004 على Supabase؛ صفوف الاعتمادات الحقيقية بقيت صفراً.
