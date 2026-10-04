@@ -2169,3 +2169,7 @@
 - تحقق ناجح: `npm run check`, 10 suites / 44 tests, `npm run build`; اختبار مباشر: `/api/v1/health/live`=200، `/ready`=200، login اصطناعي غير موجود=401، Ed25519 issuer/verifier صحيح.
 - اتصال التطوير TLS مشفر لكن CA غير متحقق منها؛ لا production حتى تنزيل CA الرسمي وتفعيل verify-full. كلمة مرور postgres المقدمة مؤقتاً استُخدمت للتهيئة فقط ويوصى بتدويرها.
 - أكد المستخدم بعد تحذير صريح رغبته بإضافة `.env` إلى repository `Aporaad/swiftship` العام. هذا نشر متعمد لأسرار runtime/private signing key، وسيُسجل في commit/push اللاحق بناءً على موافقته الصريحة.
+
+
+## [2026-10-04T04:42:25+03:00] — Commit/push والتحقق — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+أنشئ commit `60890d0ed6cb65c9ea0f2b05e1c6c573352cff77` برسالة `feat(api): secure and wire versioned auth foundation` ورُفع إلى `Aporaad/swiftship:main`. تساوى remote HEAD مع local HEAD، وأكد GitHub وجود `alx_api/.env` دون استرجاع محتواه. شمل commit الملف بناءً على تأكيد المستخدم الواعي بعد الإيضاح أن المستودع عام وأن الملف يحوي بيانات اتصال runtime ومفتاح توقيع؛ هذه الأسرار تعتبر مكشوفة ويجب تدويرها فوراً. كان worktree نظيفاً بعد التحقق.
