@@ -2253,3 +2253,7 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 
 ## [2026-10-04T09:01:57+03:00] — جرد clients وخطة القطع — AI Model: Manus (exact model identifier not exposed in this runtime)
 فُحص Aporaad/swiftship وAporaad/alx_web؛ ظهر 38 و9 ملفات تستخدم Supabase مباشرة. أُنشئ `alx_api/docs/client-cutover-plan-2026-10-04.md`. لم يتغير أي client، لأن API لا يحتوي بعد Customers/Orders/Finance ولأن Portal Auth منفصل عن `public.users`.
+
+
+## [2026-10-04T09:03:17+03:00] — نجاح CI — AI Model: Manus (exact model identifier not exposed in this runtime)
+نجح GitHub Actions run `37181620392` على commit `8e51d41ba5a578b4adb7abbf84143f9d62035296` (check, lint, format, tests، PostgreSQL test:db، build). لا توجد تغييرات عميل، ولا عمليات DB جديدة ضمن هذا التحقق.

@@ -1684,3 +1684,7 @@
 - [x] فُحصت نقاط الاتصال المباشر: 38 ملفاً في Swiftship و9 في alx_web؛ كُتبت خطة نقل مرحلية بلا تعديل clients.
 - [ ] تنفيذ Customers API ثم pilot client؛ لا يبدأ قطع Supabase قبل استكمال endpoint/ownership tests وربط user_roles.
 - [ ] تخطيط Portal Authentication منفصل عن Auth النظام.
+
+
+## [2026-10-04T09:03:17+03:00] — تحقق CI لخطة cutover
+- [x] GitHub Actions run `37181620392` على commit `8e51d41` نجح: check/lint/format/tests/test:db/build.
