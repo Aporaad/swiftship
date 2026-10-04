@@ -1582,3 +1582,7 @@
 - [x] فرض توقيع Ed25519 بطول 64 بايت وترميز base64url canonical قبل التحقق، مع الرفض الآمن للتمثيل غير القياسي.
 - [x] إعادة `check`, `lint`, الاختبارات (10 suites/44 tests)، `build`، وفحص المسافات محلياً بنجاح.
 - [ ] التحقق من نتيجة GitHub Actions للـcommit الإصلاحي بعد رفعه.
+
+
+## [2026-10-04T06:43:33+03:00] — نتيجة CI النهائية
+- [x] نجح GitHub Actions run `37174726453` للـcommit `f2c28185448b9a4e8b07cab60ed93004c9755732`: `npm ci`, typecheck, lint, tests، وbuild.

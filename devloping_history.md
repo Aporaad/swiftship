@@ -2202,3 +2202,7 @@
 - فشل اختبار GitHub CI الذي يغيّر آخر رمز في توقيع JWT؛ تبيّن أن فك Node.js لـbase64url يقبل صيغاً غير معيارية للبايتات الأخيرة فتُفك إلى التوقيع نفسه.
 - عُدّل `verifyAccessToken` ليتحقق من طول Ed25519 (64 بايت) ومن تطابق إعادة الترميز canonical قبل التحقق بالمفتاح العام؛ الانحراف يرفض كـ`InvalidAccessTokenError`.
 - نجحت محلياً `npm run check`, `npm run lint`, 10 suites/44 tests, `npm run build`, و`git diff --check`. يلزم تثبيت نتيجة CI بعد رفع هذا التصحيح.
+
+
+## [2026-10-04T06:43:33+03:00] — نجاح CI بعد تشديد JWT — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+نجح GitHub Actions run `37174726453` على commit `f2c28185448b9a4e8b07cab60ed93004c9755732`: `npm ci`, typecheck، ESLint، الاختبارات، وproduction build. تطابقت نتيجة CI مع الفحوص المحلية (10 suites/44 tests).
