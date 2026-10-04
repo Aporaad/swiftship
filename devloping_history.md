@@ -2186,3 +2186,13 @@
 
 ## [2026-10-04T04:56:05+03:00] — حفظ ورفع تقرير حالة API — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
 حُفظ التقرير وتصحيح OpenAPI وسجلات append-only في commit `48adc3884e54db66548c1aa006f48d8df7a8f1cb`، ورُفع إلى `Aporaad/swiftship/main`. تطابق HEAD المحلي والبعيد، وكانت شجرة العمل نظيفة بعد الرفع. لم تُنفذ أي عملية قاعدة بيانات.
+
+
+## [2026-10-04T06:36:25+03:00] — استئناف `alx_api` وإكمال lint للتأسيس — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- جرى تحميل ومطابقة أحدث `main` مع `origin/main` عند `57e8b4456f2d817f4cdd489b3905c27576aea3d1`، وقراءة خطة API وسجل الجلسة السابقة.
+- أضيفت إعدادات ESLint flat config وPrettier إلى `alx_api`، وسكربت `npm run lint`، وخطوة lint إلى GitHub Actions.
+- أصلحت ملاحظات lint في callback الخاص بـExpress، ومساري تحقق التوقيع/كلمة المرور، وربط fixture في الاختبار، مع الحفاظ على السلوك fail-closed.
+- أزيل `alx_api/.env` من Git index الحالي وأكدت قاعدة `.gitignore` استبعاده؛ بقي الملف المحلي كما هو ولم تُقرأ قيمه. لم تُنظف commits السابقة ولم تُدوّر الأسرار.
+- فحوص التحقق النهائية ناجحة: `npm run check`, `npm run lint`, 10 suites/44 tests, `npm run build`, فحص Prettier للتهيئتين، و`git diff --check`.
+- فحص قاعدة البيانات كان عبر metadata/advisors للقراءة فقط. لا SQL/DDL/DML ولا تعديل للـRLS/Grants أو البيانات.
+- التقرير الحالي: `alx_api/docs/api-execution-resume-2026-10-04.md`. حالة الخطة ما زالت غير مكتملة وغير جاهزة للإنتاج بسبب حواجز الأسرار وTLS والاعتمادات وقرارات Auth/RBAC واختبارات DB.

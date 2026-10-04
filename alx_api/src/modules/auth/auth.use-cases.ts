@@ -103,7 +103,7 @@ export class AuthService implements AuthUseCases {
       ? credential.passwordHash
       : this.options.dummyPasswordHash;
 
-    let passwordMatches = false;
+    let passwordMatches: boolean;
     try {
       passwordMatches = await this.passwordVerifier(input.password, hashToVerify);
     } catch {

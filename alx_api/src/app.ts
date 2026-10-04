@@ -61,7 +61,7 @@ export function createApiApp(options: AppOptions): Express {
     limit: environment.rateLimitMax,
     standardHeaders: 'draft-8',
     legacyHeaders: false,
-    handler(request, response) {
+    handler(_request, response) {
       sendFailure(response, 429, 'RATE_LIMITED', 'تم تجاوز حد الطلبات المسموح.', String(response.locals.requestId));
     },
   }));

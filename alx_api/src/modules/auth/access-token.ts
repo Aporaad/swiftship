@@ -116,7 +116,7 @@ export function verifyAccessToken(
     throw new InvalidAccessTokenError();
   }
 
-  let validSignature = false;
+  let validSignature: boolean;
   try {
     validSignature = verifyBytes(
       null,
@@ -125,7 +125,7 @@ export function verifyAccessToken(
       Buffer.from(encodedSignature, 'base64url'),
     );
   } catch {
-    validSignature = false;
+    throw new InvalidAccessTokenError();
   }
   if (!validSignature) throw new InvalidAccessTokenError();
 

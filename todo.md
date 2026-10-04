@@ -1561,3 +1561,17 @@
 ## [2026-10-04T04:56:05+03:00] — نشر تقرير حالة API — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
 - [x] Commit التقرير وتصحيح OpenAPI والسجلات: `48adc3884e54db66548c1aa006f48d8df7a8f1cb` (`docs(api): report implementation status and roadmap`).
 - [x] Push إلى `Aporaad/swiftship/main` ناجح؛ تطابق `LOCAL_HEAD` و`REMOTE_HEAD`، وشجرة العمل نظيفة وقت التحقق.
+
+
+## [2026-10-04 06:36:25 +03:00] — استئناف تنفيذ `alx_api`
+- [x] تحميل أحدث `main` من `Aporaad/swiftship` ومطابقته مع `origin/main` عند `57e8b4456f2d817f4cdd489b3905c27576aea3d1`، ومراجعة سجل الجلسة السابقة وخطة إنشاء API.
+- [x] إعادة فحص API: `npm run check` و`npm run lint` و44 اختباراً عبر 10 suites و`npm run build` وPrettier config و`git diff --check` ناجحة.
+- [x] استكمال lint لمرحلة Scaffold عبر ESLint/Prettier وCI، وتصحيح مخالفات lint المكتشفة دون تغيير سلوك المصادقة.
+- [x] إزالة `alx_api/.env` من Git index الحالي مع إبقائه محلياً؛ بقيت القيم في تاريخ Git السابق ولم يتم تدويرها.
+- [x] قراءة metadata فقط لمخطط Auth وتقرير المراجعة الأمنية؛ لا SQL أو تغيير قاعدة بيانات.
+- [ ] تدوير أسرار دور runtime ومفتاح JWT وأي اعتماد مالك سبق انكشافه بعد موافقة المستخدم وتحديد إجراء التطبيق.
+- [ ] اعتماد/تنفيذ خطة تنظيف تاريخ Git العام وإعادة كتابته بعد تنسيق الـclones وموافقة منفصلة على force-push.
+- [ ] تجهيز PostgreSQL اختبارية منفصلة، وCA موثوقة، واعتماد استراتيجية نقل الاعتمادات القديمة والنسخ الاحتياطي قبل تفعيل تسجيل الدخول الحقيقي.
+- [ ] حسم قناة password reset، قائمة الأدوار والصلاحيات، CORS، الاحتفاظ بالتدقيق، وفصل local/test/staging/production لاستكمال المرحلة 0.
+- [ ] استكمال Auth Core، ثم RBAC واختباراته، ثم وحدات Customers وOrders/Shipments وبقية المراحل حسب ترتيب الخطة.
+- [ ] معالجة تحذيرات Advisor في `public` بعد تدقيق أثرها واختبار الصلاحيات في بيئة معزولة؛ لم تُعدّل في هذه الجولة.

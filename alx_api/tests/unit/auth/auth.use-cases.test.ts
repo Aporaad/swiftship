@@ -79,7 +79,7 @@ describe('AuthService', () => {
   });
 
   it('records a failed login and returns a generic authentication error', async () => {
-    const { repository, service } = makeDependencies();
+    const { repository } = makeDependencies();
     const verifier = jest.fn().mockResolvedValue(false);
     const serviceWithFailure = new AuthService(
       repository,

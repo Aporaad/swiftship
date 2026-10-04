@@ -1197,3 +1197,9 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 - أُعد التقرير `alx_api/docs/api-creation-status-report-2026-10-04.md` بالاستناد إلى وثائق migration 0002/0003 ولقطات metadata الموثقة سابقاً.
 - لم يُنفذ SQL أو DDL/DML، ولم تُجر قراءة جديدة أو تعديل لقاعدة البيانات في مهمة التقرير.
 - سُجلت حالة RLS/Grants القائمة في التقرير؛ لم يحدث أي تغيير DB جديد.
+
+
+## [2026-10-04T06:36:25+03:00] — تحقق metadata لمخطط Auth دون كتابة — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- فُحص مشروع Supabase `ejrojwbbflzchasvgexr` عبر أدوات metadata للقراءة فقط: سجل الهجرات يتضمن `alx_api_auth_foundation_0002` و`alx_api_auth_rls_runtime_0003`، وجداول `alx_api_private` الستة موجودة وRLS مفعّل عليها وmetadata تشير إلى صفر صفوف.
+- اطُّلع على Security Advisor؛ أبرزت النتيجة 50 جدولاً في `public` بلا RLS، و44 دالة `SECURITY DEFINER` متاحة لـ`anon`، وتحذيرات أخرى. لم تُنفذ معالجة لأنها تتطلب تدقيق أثر على النظام الحالي.
+- لم تُنفذ أي SQL أو DDL أو DML أو Migration، ولم تُقرأ بيانات مستخدمين أو كلمات مرور أو PIN أو hashes، ولم يتغير أي جدول أو policy أو grant.
