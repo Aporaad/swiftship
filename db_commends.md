@@ -1307,3 +1307,17 @@ CREATE DATABASE alx_api_test WITH OWNER = ubuntu;
 SELECT current_database() AS database, current_user AS role LIMIT 1;
 ```
 لا تنطبق هذه الأوامر على Supabase أو أي قاعدة إنتاج. ملف الاختبار لا يسمح الاتصال إلا بـlocalhost/socket وقاعدة اسمها `alx_api_test`.
+
+
+## [2026-10-04T07:58:28+03:00] — تصحيح توثيق handoff بناءً على قراءة helper المحلي — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+تنبيه تدقيقي: القسمان السابقان عند 06:49:09 و06:52:43 اللذان سطّرا DDL لجدول handoff كانا إعادة بناء غير حرفية من ملخص الأداة، وفيهما خطأ باسم العمود (`handoff_id` بدلاً من `id`) وذُكر `created_at` دون تحقق. لا تعتبر نصوص CREATE/POLICY هناك تفريغاً حرفياً للـDDL المنفذ. مصدر أداة listener المحلية يؤكد اسم الجدول وعموديه `id`, `secret_value`، لكنه لا يحتوي نص migration الإنشائي نفسه؛ لذا لا أستطيع ادعاء نص DDL حرفي من سجل MCP المتاح. الأداة المؤكدة `rotate_swiftship_api_secrets.cjs` نفذت الاستعلامات التالية (bind `$1` لقيمة السر لم تُسجل):
+```sql
+SELECT current_user AS role LIMIT 1;
+INSERT INTO alx_api_private._api_secret_rotation_handoff (id, secret_value) VALUES ('previous', $1);
+SELECT secret_value FROM alx_api_private._api_secret_rotation_handoff WHERE id = 'rotated' LIMIT 1;
+```
+وتؤكد أداة الاسترداد `finish_swiftship_api_rotation.cjs` استخدام:
+```sql
+SELECT secret_value FROM alx_api_private._api_secret_rotation_handoff WHERE id = 'rotated' LIMIT 1;
+```
+وبعد المزامنة أداة `sync_swiftship_runtime_password.cjs` نفذت `SELECT current_user AS role LIMIT 1` على session وtransaction فقط. استعلام إزالة الجدول النهائي كان `DROP TABLE alx_api_private._api_secret_rotation_handoff;`، وفحص الوجود استعمل `to_regclass(...) IS NULL`. ظل أي secret parameter/result محذوفاً من السجل.
