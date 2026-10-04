@@ -76,7 +76,6 @@
 4. اختبر cutover لعميل Swiftship، ثم تُفعّل password-change/reset والانتقال التدريجي للمستخدمين الحقيقيين وفق سياسة Argon2id، من دون PIN أو bulk extraction.
 5. بعدها تابع وحدات الخطة بالترتيب، لا تتجاوز RBAC والعقود قبل Customers/Orders/Finance.
 
-
 ## استئناف 2026-10-05 بعد فقدان الالتزام السابق
 
 - تم التحقق من أن فرع `main` عاد إلى `ca27735663cdef281c198b6e874a4dc712c0fb41`، وأن الالتزام `8d1fd503` غير موجود في الفرع.
@@ -93,3 +92,20 @@
 - `npm run lint`: نجاح.
 - `npm run format:check`: نجاح.
 - `npm test -- --runInBand`: **62 اختباراً ناجحاً، 12 suite**.
+
+## بدء المرحلة 7 — Orders وShipments/Tracking وProducts
+
+تمت مراجعة توافق الطبقة الجديدة مع النظام الحالي قبل التنفيذ. النظام القديم يستخدم `orders.order_status_id` و`orders.order_status1`، ويعتمد على `orders_history` لتسجيل انتقالات الحالة؛ كما يستخدم `shipments` و`order_items` وحقول الشحن snake_case بعد إعادة تسمية المفاتيح. لم يوجد جدول `shipment_events` في مخطط قاعدة SwiftShip الحية، لذلك يعتمد Tracking API في هذه الدفعة على الأحداث المرتبطة بالشحنة داخل `orders_history` بدلاً من اختراع جدول غير موجود.
+
+أضيفت مسارات القراءة التالية، وكلها خلف Auth وRBAC:
+
+| النطاق    | المسارات                                                                         | الصلاحية        |
+| --------- | -------------------------------------------------------------------------------- | --------------- |
+| Orders    | `GET /api/v1/orders`, `GET /api/v1/orders/:id`, `GET /api/v1/orders/:id/history` | `view_orders`   |
+| Shipments | `GET /api/v1/shipments`, `GET /api/v1/shipments/:id`                             | `track_order`   |
+| Tracking  | `GET /api/v1/shipments/:id/tracking`                                             | `track_order`   |
+| Products  | `GET /api/v1/products`, `GET /api/v1/products/:id`                               | `view_products` |
+
+القراءة تستخدم أعمدة صريحة من المخطط الحالي، ولا تعتمد على `SELECT *` في Orders أو Shipments أو Products الأساسية. تفاصيل Order تجمع `order_items` و`shipments`، وTracking يعيد `orders_history` المرتبط بـ`shipment_id`. أضيفت اختبارات HTTP للصلاحيات والاستجابات والمسارات، وأضيفت مسارات OpenAPI.
+
+هذه الدفعة لا تفعل عمليات الكتابة بعد. المرحلة التالية المطلوبة هي تنفيذ `POST /orders` بحد idempotency وTransaction تشمل Order/Items/Shipment/History، ثم `PATCH /orders/:id/status` بانتقالات monotonic متوافقة مع `orderLifecycleService`، ثم عمليات كتابة الشحنات والمنتجات مع سجل التدقيق.
