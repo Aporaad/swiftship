@@ -1237,3 +1237,7 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 - أثناء الاختبار أظهر probe `SELECT 1 FROM alx_api_private.auth_events LIMIT 0` خطأ `42501` متوقعاً؛ لأن صلاحية الأحداث INSERT فقط. أزيل probe SELECT من readiness وأُبقيت صلاحية INSERT-only؛ اختبار event insertion الفعلي نجح.
 - SQL المطبق محلياً بالكامل محفوظ نصياً في [`0005_auth_core_passwords_and_events.sql`](alx_api/src/db/migrations/0005_auth_core_passwords_and_events.sql) و[`0006_rbac_foundation.sql`](alx_api/src/db/migrations/0006_rbac_foundation.sql)، وتُقرأه suite من [`scripts/test-db.ts`](alx_api/scripts/test-db.ts). لا تُطبّق هاتان الهجرتان على Supabase/shared DB بعد.
 - لم يحصل أي اتصال/تغيير Supabase في هذه الجولة. لا تغييرات بيانات مستخدم حقيقي، ولا نقل PIN أو كلمات مرور حقيقية.
+
+
+## [2026-10-04T08:57:40+03:00] — تغييرات قاعدة Swiftship الحية — AI Model: Manus (exact model identifier not exposed in this runtime)
+المشروع النشط `ejrojwbbflzchasvgexr`. طُبقت migrations `alx_api_auth_core_password_events_0005_20261004` (version `20261004055451`) و`alx_api_rbac_foundation_0006_20261004` (version `20261004055501`). ثم زُرعت أربعة أدوار و152 permission و188 role_permissions: Admin=152، Employee=18، Accountant=16، Courier=2. تحقق FORCE RLS ومنح runtime SELECT ودوال 0005؛ anon/authenticated لا يملكان EXECUTE. user_roles=0 وuser_credentials=0. لم تتغير كلمات مرور postgres/المالك/runtime، ولم تُستخدم PIN أو كلمات مرور legacy. لا bulk migration. كل SQL المطبق واستعلامات الفحص محفوظة في `db_commends.md`.

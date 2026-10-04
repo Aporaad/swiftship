@@ -1669,3 +1669,12 @@
 - [x] نُشرت وثيقة المراجعة فقط في commit `9610e8730670d511ecfeb9da782b6fc79025fafc`؛ لا seed ولا تغييرات DB.
 - [x] GitHub Actions run `37180802101` اكتمل بنجاح؛ main نظيف بعد الدفع.
 - [ ] انتظار ملاحظات المستخدم على صلاحيات Admin/Accountant والـ24 كوداً الغائبة قبل أي اعتماد أو seed.
+
+
+## [2026-10-04T08:57:40+03:00] — Auth Core/RBAC على Supabase والنشر
+- [x] طُبقت migrations 0005 و0006 على قاعدة Swiftship الحية بعد موافقة المستخدم؛ سجل الهجرات موثق.
+- [x] زُرعت 152 صلاحية صريحة: Admin=152، Employee=18، Accountant=16، Courier=2 (تقاطع محافظ)، بإجمالي 188 grant.
+- [x] تحقق ما بعد التطبيق: FORCE RLS ودور runtime، لا صلاحيات anon/authenticated لدوال 0005، و0 credentials مرحّلة.
+- [ ] لم تُربط الحسابات الحالية بـuser_roles (0)؛ يلزم اعتماد ربط المستخدمين بحسب دورهم legacy.
+- [ ] نشر API الإنتاج ينتظر اختيار/ربط وجهة استضافة؛ WebDev غير مربوط ولا manifest/Dockerfile موجود.
+- [ ] اختيار مزود reset، cutover عملاء Web/Electron، ثم تنفيذ مراحل Customers/Orders/Finance حسب الخطة.

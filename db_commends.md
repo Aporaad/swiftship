@@ -1354,3 +1354,741 @@ LIMIT 1;
 النتيجة: `1` لحساب الاختبار الاصطناعي فقط. لم تُقرأ قيمة hash/password/PIN.
 
 **نطاق suite المكتوب:** كل أوامر SQL ذات placeholders والمعاملات/الاختبارات الموجودة في [`alx_api/scripts/test-db.ts`](alx_api/scripts/test-db.ts) وملفات migrations أعلاه هي النصوص الحرفية التي نُفذت محلياً، بما فيها: reset المخطط المعزول، إنشاء المستخدم الاصطناعي، دور/permission fixture، `SET ROLE`, probes, login migration, session/refresh transactions, password functions, RBAC grants، ثم fixture cleanup بعد `RESET ROLE`. لم تُنفذ أوامر SQL خارج هذه الملفات سوى الاستعلام التشخيصي واستعلام العدّ أعلاه.
+
+
+# أوامر Supabase الحية — تنفيذ 2026-10-04 — AI Model: Manus (exact model identifier not exposed in this runtime)
+
+المشروع: `ejrojwbbflzchasvgexr`. استُخدمت أداة Supabase MCP. لم تُقرأ أسرار أو قيم password/PIN.
+
+## [2026-10-04T08:52:50+03:00] كشف سجل migrations
+```sql
+SELECT to_regclass('supabase_migrations.schema_migrations') AS migration_registry LIMIT 1;
+```
+
+## [2026-10-04T08:52:51+03:00] فحص وجود جداول Auth/RBAC
+```sql
+SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema = 'alx_api_private' AND table_name = ANY (ARRAY['auth_events','password_reset_tokens','user_credentials','user_security','api_sessions','api_refresh_tokens','roles','permissions','user_roles','role_permissions']) ORDER BY table_name LIMIT 20;
+```
+
+## [2026-10-04T08:52:53+03:00] فحص خصائص الأدوار دون كلمات مرور
+```sql
+SELECT rolname, rolsuper, rolcreatedb, rolcanlogin FROM pg_roles WHERE rolname IN ('alx_api_runtime','postgres') ORDER BY rolname LIMIT 5;
+```
+
+## [2026-10-04T08:52:55+03:00] فحص أعمدة users المطلوبة للمصادقة
+```sql
+SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name IN ('user_id','disabled') ORDER BY column_name LIMIT 5;
+```
+
+## [2026-10-04T08:53:12+03:00] فحص أعمدة سجل migrations
+```sql
+SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = 'supabase_migrations' AND table_name = 'schema_migrations' ORDER BY ordinal_position LIMIT 10;
+```
+
+## [2026-10-04T08:53:13+03:00] قراءة آخر migrations المسجلة
+```sql
+SELECT version, name FROM supabase_migrations.schema_migrations ORDER BY version DESC LIMIT 20;
+```
+
+## [2026-10-04T08:53:15+03:00] فحص وجود دوال password قبل 0005
+```sql
+SELECT p.proname, pg_get_function_identity_arguments(p.oid) AS args FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'alx_api_private' AND p.proname = ANY (ARRAY['update_password_hash','create_password_reset_token','complete_password_reset','revoke_password_reset_token']) ORDER BY p.proname LIMIT 10;
+```
+
+## [2026-10-04T08:56:33+03:00] عدّ grants لكل دور بعد seed
+```sql
+SELECT r.code, count(rp.permission_id)::int AS permission_count FROM alx_api_private.roles AS r LEFT JOIN alx_api_private.role_permissions AS rp ON rp.role_id = r.role_id GROUP BY r.code ORDER BY r.code LIMIT 10;
+```
+
+## [2026-10-04T08:56:34+03:00] عدّ كتالوج الصلاحيات
+```sql
+SELECT count(*)::int AS permission_count FROM alx_api_private.permissions LIMIT 1;
+```
+
+## [2026-10-04T08:56:36+03:00] تأكيد migrations 0005/0006
+```sql
+SELECT version, name FROM supabase_migrations.schema_migrations WHERE name = ANY (ARRAY['alx_api_auth_core_password_events_0005_20261004','alx_api_rbac_foundation_0006_20261004']) ORDER BY version LIMIT 5;
+```
+
+## [2026-10-04T08:56:40+03:00] فحص أسماء أعمدة users فقط
+```sql
+SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' ORDER BY ordinal_position LIMIT 40;
+```
+
+## [2026-10-04T08:56:49+03:00] عدّ الأدوار legacy دون بيانات تعريفية
+```sql
+SELECT lower(coalesce(role, '')) AS legacy_role, is_root, disabled, count(*)::int AS user_count FROM public.users GROUP BY lower(coalesce(role, '')), is_root, disabled ORDER BY legacy_role, is_root, disabled LIMIT 20;
+```
+
+## [2026-10-04T08:57:33+03:00] تحقق user_roles/grants/RLS/runtime
+```sql
+SELECT (SELECT count(*) FROM alx_api_private.user_roles) AS user_role_assignments, (SELECT count(*) FROM alx_api_private.role_permissions) AS role_permission_assignments, (SELECT relforcerowsecurity FROM pg_class WHERE oid = 'alx_api_private.roles'::regclass) AS roles_force_rls, has_table_privilege('alx_api_runtime', 'alx_api_private.roles', 'SELECT') AS runtime_can_select_roles LIMIT 1;
+```
+
+## [2026-10-04T08:57:35+03:00] تحقق عدم ترحيل credentials
+```sql
+SELECT count(*)::int AS credential_rows FROM alx_api_private.user_credentials LIMIT 1;
+```
+
+## [2026-10-04T08:57:38+03:00] تحقق صلاحيات تنفيذ دوال 0005
+```sql
+SELECT p.proname, p.prosecdef, has_function_privilege('alx_api_runtime', p.oid, 'EXECUTE') AS runtime_can_execute, has_function_privilege('anon', p.oid, 'EXECUTE') AS anon_can_execute, has_function_privilege('authenticated', p.oid, 'EXECUTE') AS authenticated_can_execute FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'alx_api_private' AND p.proname = ANY (ARRAY['update_password_hash','create_password_reset_token','complete_password_reset','revoke_password_reset_token']) ORDER BY p.proname LIMIT 10;
+```
+
+## [2026-10-04T08:54:51+03:00] تطبيق Auth Core migration 0005
+المصدر: `alx_api/src/db/migrations/0005_auth_core_passwords_and_events.sql` — النص التالي هو SQL المرسل إلى Supabase MCP.
+```sql
+-- Auth Core additions. Apply only after reviewing scope and testing on an isolated PostgreSQL database.
+-- The runtime never selects reset tokens or writes password hashes directly.
+
+REVOKE ALL ON alx_api_private.auth_events FROM PUBLIC, anon, authenticated, service_role;
+CREATE POLICY api_runtime_auth_events_insert
+  ON alx_api_private.auth_events
+  FOR INSERT TO alx_api_runtime
+  WITH CHECK (true);
+GRANT INSERT ON alx_api_private.auth_events TO alx_api_runtime;
+
+CREATE FUNCTION alx_api_private.update_password_hash(
+  p_user_id text,
+  p_password_hash text,
+  p_changed_at timestamptz
+)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog
+AS $update_password$
+DECLARE
+  user_is_active boolean;
+BEGIN
+  IF p_user_id IS NULL OR p_password_hash IS NULL
+     OR p_password_hash NOT LIKE '$argon2id$v=19$%' OR p_changed_at IS NULL THEN
+    RETURN false;
+  END IF;
+
+  SELECT NOT source.disabled
+    INTO user_is_active
+  FROM public.users AS source
+  WHERE source.user_id = p_user_id
+  LIMIT 1
+  FOR UPDATE;
+
+  IF NOT coalesce(user_is_active, false) THEN
+    RETURN false;
+  END IF;
+
+  INSERT INTO alx_api_private.user_credentials (user_id, password_hash, password_algorithm, password_version, updated_at)
+  VALUES (p_user_id, p_password_hash, 'argon2id', 1, p_changed_at)
+  ON CONFLICT (user_id) DO UPDATE
+    SET password_hash = EXCLUDED.password_hash,
+        password_algorithm = 'argon2id',
+        password_version = alx_api_private.user_credentials.password_version + 1,
+        updated_at = EXCLUDED.updated_at;
+
+  INSERT INTO alx_api_private.user_security (user_id, failed_login_attempts, locked_until, last_password_change_at, updated_at)
+  VALUES (p_user_id, 0, NULL, p_changed_at, p_changed_at)
+  ON CONFLICT (user_id) DO UPDATE
+    SET failed_login_attempts = 0,
+        locked_until = NULL,
+        last_password_change_at = EXCLUDED.last_password_change_at,
+        updated_at = EXCLUDED.updated_at;
+
+  UPDATE alx_api_private.api_sessions
+    SET revoked_at = p_changed_at, revoke_reason = 'password_change'
+    WHERE user_id = p_user_id AND revoked_at IS NULL;
+  UPDATE alx_api_private.api_refresh_tokens
+    SET revoked_at = p_changed_at
+    WHERE user_id = p_user_id AND revoked_at IS NULL;
+
+  INSERT INTO alx_api_private.auth_events (user_id, event_type, success, metadata, created_at)
+  VALUES (p_user_id, 'password.changed', true, '{}'::jsonb, p_changed_at);
+  RETURN true;
+END;
+$update_password$;
+
+CREATE FUNCTION alx_api_private.create_password_reset_token(
+  p_user_id text,
+  p_token_hash text,
+  p_created_at timestamptz,
+  p_expires_at timestamptz
+)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog
+AS $create_reset$
+DECLARE
+  user_is_active boolean;
+BEGIN
+  IF p_user_id IS NULL OR p_token_hash IS NULL
+     OR p_token_hash !~ '^[a-f0-9]{64}$'
+     OR p_created_at IS NULL OR p_expires_at <= p_created_at THEN
+    RETURN false;
+  END IF;
+
+  SELECT NOT source.disabled
+    INTO user_is_active
+  FROM public.users AS source
+  WHERE source.user_id = p_user_id
+  LIMIT 1;
+  IF NOT coalesce(user_is_active, false) THEN
+    RETURN false;
+  END IF;
+
+  UPDATE alx_api_private.password_reset_tokens
+    SET used_at = p_created_at
+    WHERE user_id = p_user_id AND used_at IS NULL;
+
+  INSERT INTO alx_api_private.password_reset_tokens (user_id, token_hash, created_at, expires_at)
+  VALUES (p_user_id, p_token_hash, p_created_at, p_expires_at);
+  RETURN true;
+END;
+$create_reset$;
+
+CREATE FUNCTION alx_api_private.complete_password_reset(
+  p_token_hash text,
+  p_password_hash text,
+  p_completed_at timestamptz
+)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog
+AS $complete_reset$
+DECLARE
+  reset_user_id text;
+  user_is_active boolean;
+BEGIN
+  IF p_token_hash IS NULL OR p_password_hash IS NULL
+     OR p_password_hash NOT LIKE '$argon2id$v=19$%'
+     OR p_completed_at IS NULL THEN
+    RETURN false;
+  END IF;
+
+  SELECT reset.user_id
+    INTO reset_user_id
+  FROM alx_api_private.password_reset_tokens AS reset
+  WHERE reset.token_hash = p_token_hash
+    AND reset.used_at IS NULL
+    AND reset.expires_at > p_completed_at
+  LIMIT 1
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RETURN false;
+  END IF;
+
+  SELECT NOT source.disabled
+    INTO user_is_active
+  FROM public.users AS source
+  WHERE source.user_id = reset_user_id
+  LIMIT 1
+  FOR UPDATE;
+  IF NOT coalesce(user_is_active, false) THEN
+    RETURN false;
+  END IF;
+
+  INSERT INTO alx_api_private.user_credentials (user_id, password_hash, password_algorithm, password_version, updated_at)
+  VALUES (reset_user_id, p_password_hash, 'argon2id', 1, p_completed_at)
+  ON CONFLICT (user_id) DO UPDATE
+    SET password_hash = EXCLUDED.password_hash,
+        password_algorithm = 'argon2id',
+        password_version = alx_api_private.user_credentials.password_version + 1,
+        updated_at = EXCLUDED.updated_at;
+
+  UPDATE alx_api_private.password_reset_tokens
+    SET used_at = p_completed_at
+    WHERE token_hash = p_token_hash;
+  UPDATE alx_api_private.user_security
+    SET failed_login_attempts = 0, locked_until = NULL,
+        last_password_change_at = p_completed_at, updated_at = p_completed_at
+    WHERE user_id = reset_user_id;
+  UPDATE alx_api_private.api_sessions
+    SET revoked_at = p_completed_at, revoke_reason = 'password_reset'
+    WHERE user_id = reset_user_id AND revoked_at IS NULL;
+  UPDATE alx_api_private.api_refresh_tokens
+    SET revoked_at = p_completed_at
+    WHERE user_id = reset_user_id AND revoked_at IS NULL;
+
+  INSERT INTO alx_api_private.auth_events (user_id, event_type, success, metadata, created_at)
+  VALUES (reset_user_id, 'password.reset.completed', true, '{}'::jsonb, p_completed_at);
+  RETURN true;
+END;
+$complete_reset$;
+
+CREATE FUNCTION alx_api_private.revoke_password_reset_token(
+  p_token_hash text,
+  p_revoked_at timestamptz
+)
+RETURNS void
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = pg_catalog
+AS $revoke_reset$
+  UPDATE alx_api_private.password_reset_tokens
+    SET used_at = p_revoked_at
+    WHERE token_hash = p_token_hash AND used_at IS NULL;
+$revoke_reset$;
+
+ALTER FUNCTION alx_api_private.update_password_hash(text, text, timestamptz) OWNER TO postgres;
+ALTER FUNCTION alx_api_private.create_password_reset_token(text, text, timestamptz, timestamptz) OWNER TO postgres;
+ALTER FUNCTION alx_api_private.complete_password_reset(text, text, timestamptz) OWNER TO postgres;
+ALTER FUNCTION alx_api_private.revoke_password_reset_token(text, timestamptz) OWNER TO postgres;
+
+REVOKE ALL ON FUNCTION alx_api_private.update_password_hash(text, text, timestamptz) FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION alx_api_private.create_password_reset_token(text, text, timestamptz, timestamptz) FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION alx_api_private.complete_password_reset(text, text, timestamptz) FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION alx_api_private.revoke_password_reset_token(text, timestamptz) FROM PUBLIC, anon, authenticated, service_role;
+
+GRANT EXECUTE ON FUNCTION alx_api_private.update_password_hash(text, text, timestamptz) TO alx_api_runtime;
+GRANT EXECUTE ON FUNCTION alx_api_private.create_password_reset_token(text, text, timestamptz, timestamptz) TO alx_api_runtime;
+GRANT EXECUTE ON FUNCTION alx_api_private.complete_password_reset(text, text, timestamptz) TO alx_api_runtime;
+GRANT EXECUTE ON FUNCTION alx_api_private.revoke_password_reset_token(text, timestamptz) TO alx_api_runtime;
+```
+
+## [2026-10-04T08:55:01+03:00] تطبيق RBAC foundation migration 0006
+المصدر: `alx_api/src/db/migrations/0006_rbac_foundation.sql` — النص التالي هو SQL المرسل إلى Supabase MCP.
+```sql
+-- Normalized RBAC foundation. No system roles or permission matrix are seeded here.
+-- Authorization is deny-by-default until reviewed role/permission assignments are created.
+
+CREATE TABLE alx_api_private.roles (
+  role_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  code text NOT NULL UNIQUE,
+  name text NOT NULL,
+  description text,
+  is_system_role boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT api_roles_code_check CHECK (code ~ '^[a-z][a-z0-9_-]{1,63}$')
+);
+
+CREATE TABLE alx_api_private.permissions (
+  permission_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  code text NOT NULL UNIQUE,
+  resource text NOT NULL,
+  action text NOT NULL,
+  description text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT api_permissions_code_check CHECK (code ~ '^[a-z][a-z0-9_.:-]{1,127}$'),
+  CONSTRAINT api_permissions_resource_check CHECK (resource ~ '^[a-z][a-z0-9_-]{1,63}$'),
+  CONSTRAINT api_permissions_action_check CHECK (action ~ '^[a-z][a-z0-9_-]{1,63}$'),
+  CONSTRAINT api_permissions_resource_action_unique UNIQUE (resource, action)
+);
+
+CREATE TABLE alx_api_private.user_roles (
+  user_id text NOT NULL REFERENCES public.users(user_id) ON DELETE CASCADE,
+  role_id uuid NOT NULL REFERENCES alx_api_private.roles(role_id) ON DELETE RESTRICT,
+  assigned_by text REFERENCES public.users(user_id) ON DELETE SET NULL,
+  assigned_at timestamptz NOT NULL DEFAULT now(),
+  expires_at timestamptz,
+  PRIMARY KEY (user_id, role_id),
+  CONSTRAINT api_user_roles_expiry_check CHECK (expires_at IS NULL OR expires_at > assigned_at)
+);
+CREATE INDEX api_user_roles_active_idx ON alx_api_private.user_roles(user_id, expires_at);
+
+CREATE TABLE alx_api_private.role_permissions (
+  role_id uuid NOT NULL REFERENCES alx_api_private.roles(role_id) ON DELETE CASCADE,
+  permission_id uuid NOT NULL REFERENCES alx_api_private.permissions(permission_id) ON DELETE CASCADE,
+  assigned_by text REFERENCES public.users(user_id) ON DELETE SET NULL,
+  assigned_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (role_id, permission_id)
+);
+
+ALTER TABLE alx_api_private.roles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE alx_api_private.roles FORCE ROW LEVEL SECURITY;
+ALTER TABLE alx_api_private.permissions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE alx_api_private.permissions FORCE ROW LEVEL SECURITY;
+ALTER TABLE alx_api_private.user_roles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE alx_api_private.user_roles FORCE ROW LEVEL SECURITY;
+ALTER TABLE alx_api_private.role_permissions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE alx_api_private.role_permissions FORCE ROW LEVEL SECURITY;
+
+CREATE POLICY api_runtime_roles_select ON alx_api_private.roles
+  FOR SELECT TO alx_api_runtime USING (true);
+CREATE POLICY api_runtime_permissions_select ON alx_api_private.permissions
+  FOR SELECT TO alx_api_runtime USING (true);
+CREATE POLICY api_runtime_user_roles_select ON alx_api_private.user_roles
+  FOR SELECT TO alx_api_runtime USING (true);
+CREATE POLICY api_runtime_role_permissions_select ON alx_api_private.role_permissions
+  FOR SELECT TO alx_api_runtime USING (true);
+
+REVOKE ALL ON alx_api_private.roles, alx_api_private.permissions, alx_api_private.user_roles, alx_api_private.role_permissions
+  FROM PUBLIC, anon, authenticated, service_role;
+GRANT SELECT ON alx_api_private.roles, alx_api_private.permissions, alx_api_private.user_roles, alx_api_private.role_permissions
+  TO alx_api_runtime;
+
+-- Intentionally no role, permission, or assignment seed: the frontend currently defines conflicting
+-- default Employee/Accountant permission sets; decide and reconcile that matrix before production cutover.
+```
+
+## [2026-10-04T08:56:13+03:00] تنفيذ seed RBAC الموافق عليه
+المصدر: `alx_api/src/db/seeds/rbac_seed_2026-10-04.sql` — النص التالي هو SQL المرسل إلى Supabase MCP.
+```sql
+-- Approved 2026-10-04: Admin receives all 152 explicit catalog permissions.
+-- Non-admin roles use the least-privilege intersection of both legacy defaults.
+-- No wildcard; no user_roles assignments are created by this seed.
+BEGIN;
+
+INSERT INTO alx_api_private.roles (code, name, description, is_system_role)
+VALUES
+  ('admin', 'مدير النظام', 'Initial system role seed 2026-10-04', true),
+  ('employee', 'موظف', 'Initial system role seed 2026-10-04', true),
+  ('accountant', 'محاسب', 'Initial system role seed 2026-10-04', true),
+  ('courier', 'مندوب', 'Initial system role seed 2026-10-04', true);
+
+INSERT INTO alx_api_private.permissions (code, resource, action, description)
+VALUES
+  ('add_auto_entries', 'auto_entries', 'add', 'Swiftship permission: add_auto_entries'),
+  ('add_couriers', 'couriers', 'add', 'Swiftship permission: add_couriers'),
+  ('add_customers', 'customers', 'add', 'Swiftship permission: add_customers'),
+  ('add_employees', 'employees', 'add', 'Swiftship permission: add_employees'),
+  ('add_expenses', 'expenses', 'add', 'Swiftship permission: add_expenses'),
+  ('add_finance', 'finance', 'add', 'Swiftship permission: add_finance'),
+  ('add_order_statuses', 'order_statuses', 'add', 'Swiftship permission: add_order_statuses'),
+  ('add_orders', 'orders', 'add', 'Swiftship permission: add_orders'),
+  ('add_products', 'products', 'add', 'Swiftship permission: add_products'),
+  ('add_roles', 'roles', 'add', 'Swiftship permission: add_roles'),
+  ('add_shipping_companies', 'shipping_companies', 'add', 'Swiftship permission: add_shipping_companies'),
+  ('add_sources', 'sources', 'add', 'Swiftship permission: add_sources'),
+  ('add_users', 'users', 'add', 'Swiftship permission: add_users'),
+  ('create_compound_entries', 'compound_entries', 'create', 'Swiftship permission: create_compound_entries'),
+  ('create_custody_advances', 'custody_advances', 'create', 'Swiftship permission: create_custody_advances'),
+  ('create_entry_settings', 'entry_settings', 'create', 'Swiftship permission: create_entry_settings'),
+  ('create_general_entries', 'general_entries', 'create', 'Swiftship permission: create_general_entries'),
+  ('create_payment_vouchers', 'payment_vouchers', 'create', 'Swiftship permission: create_payment_vouchers'),
+  ('create_receipt_vouchers', 'receipt_vouchers', 'create', 'Swiftship permission: create_receipt_vouchers'),
+  ('create_temporary_entries', 'temporary_entries', 'create', 'Swiftship permission: create_temporary_entries'),
+  ('delete_auto_entries', 'auto_entries', 'delete', 'Swiftship permission: delete_auto_entries'),
+  ('delete_compound_entries', 'compound_entries', 'delete', 'Swiftship permission: delete_compound_entries'),
+  ('delete_couriers', 'couriers', 'delete', 'Swiftship permission: delete_couriers'),
+  ('delete_custody_advances', 'custody_advances', 'delete', 'Swiftship permission: delete_custody_advances'),
+  ('delete_customers', 'customers', 'delete', 'Swiftship permission: delete_customers'),
+  ('delete_employees', 'employees', 'delete', 'Swiftship permission: delete_employees'),
+  ('delete_entry_settings', 'entry_settings', 'delete', 'Swiftship permission: delete_entry_settings'),
+  ('delete_expenses', 'expenses', 'delete', 'Swiftship permission: delete_expenses'),
+  ('delete_general_entries', 'general_entries', 'delete', 'Swiftship permission: delete_general_entries'),
+  ('delete_order_statuses', 'order_statuses', 'delete', 'Swiftship permission: delete_order_statuses'),
+  ('delete_orders', 'orders', 'delete', 'Swiftship permission: delete_orders'),
+  ('delete_paid_orders', 'paid_orders', 'delete', 'Swiftship permission: delete_paid_orders'),
+  ('delete_payment_vouchers', 'payment_vouchers', 'delete', 'Swiftship permission: delete_payment_vouchers'),
+  ('delete_posted_compound_entries', 'posted_compound_entries', 'delete', 'Swiftship permission: delete_posted_compound_entries'),
+  ('delete_posted_general_entries', 'posted_general_entries', 'delete', 'Swiftship permission: delete_posted_general_entries'),
+  ('delete_posted_payment_vouchers', 'posted_payment_vouchers', 'delete', 'Swiftship permission: delete_posted_payment_vouchers'),
+  ('delete_posted_receipt_vouchers', 'posted_receipt_vouchers', 'delete', 'Swiftship permission: delete_posted_receipt_vouchers'),
+  ('delete_posted_temporary_entries', 'posted_temporary_entries', 'delete', 'Swiftship permission: delete_posted_temporary_entries'),
+  ('delete_products', 'products', 'delete', 'Swiftship permission: delete_products'),
+  ('delete_receipt_vouchers', 'receipt_vouchers', 'delete', 'Swiftship permission: delete_receipt_vouchers'),
+  ('delete_roles', 'roles', 'delete', 'Swiftship permission: delete_roles'),
+  ('delete_shipping_companies', 'shipping_companies', 'delete', 'Swiftship permission: delete_shipping_companies'),
+  ('delete_sources', 'sources', 'delete', 'Swiftship permission: delete_sources'),
+  ('delete_temporary_entries', 'temporary_entries', 'delete', 'Swiftship permission: delete_temporary_entries'),
+  ('delete_users', 'users', 'delete', 'Swiftship permission: delete_users'),
+  ('disable_accounts', 'accounts', 'disable', 'Swiftship permission: disable_accounts'),
+  ('edit_auto_entries', 'auto_entries', 'edit', 'Swiftship permission: edit_auto_entries'),
+  ('edit_cbm_shipping_rate', 'cbm_shipping_rate', 'edit', 'Swiftship permission: edit_cbm_shipping_rate'),
+  ('edit_company_info', 'company_info', 'edit', 'Swiftship permission: edit_company_info'),
+  ('edit_compound_entries', 'compound_entries', 'edit', 'Swiftship permission: edit_compound_entries'),
+  ('edit_couriers', 'couriers', 'edit', 'Swiftship permission: edit_couriers'),
+  ('edit_custody_advances', 'custody_advances', 'edit', 'Swiftship permission: edit_custody_advances'),
+  ('edit_customers', 'customers', 'edit', 'Swiftship permission: edit_customers'),
+  ('edit_delivered_orders', 'delivered_orders', 'edit', 'Swiftship permission: edit_delivered_orders'),
+  ('edit_employees', 'employees', 'edit', 'Swiftship permission: edit_employees'),
+  ('edit_entry_settings', 'entry_settings', 'edit', 'Swiftship permission: edit_entry_settings'),
+  ('edit_exchange_rates', 'exchange_rates', 'edit', 'Swiftship permission: edit_exchange_rates'),
+  ('edit_expenses', 'expenses', 'edit', 'Swiftship permission: edit_expenses'),
+  ('edit_finance', 'finance', 'edit', 'Swiftship permission: edit_finance'),
+  ('edit_general_entries', 'general_entries', 'edit', 'Swiftship permission: edit_general_entries'),
+  ('edit_general_settings', 'general_settings', 'edit', 'Swiftship permission: edit_general_settings'),
+  ('edit_interface_settings', 'interface_settings', 'edit', 'Swiftship permission: edit_interface_settings'),
+  ('edit_order_defaults', 'order_defaults', 'edit', 'Swiftship permission: edit_order_defaults'),
+  ('edit_order_defaults_creation', 'order_defaults_creation', 'edit', 'Swiftship permission: edit_order_defaults_creation'),
+  ('edit_order_items', 'order_items', 'edit', 'Swiftship permission: edit_order_items'),
+  ('edit_order_statuses', 'order_statuses', 'edit', 'Swiftship permission: edit_order_statuses'),
+  ('edit_orders', 'orders', 'edit', 'Swiftship permission: edit_orders'),
+  ('edit_payment_vouchers', 'payment_vouchers', 'edit', 'Swiftship permission: edit_payment_vouchers'),
+  ('edit_posted_compound_entries', 'posted_compound_entries', 'edit', 'Swiftship permission: edit_posted_compound_entries'),
+  ('edit_posted_general_entries', 'posted_general_entries', 'edit', 'Swiftship permission: edit_posted_general_entries'),
+  ('edit_posted_payment_vouchers', 'posted_payment_vouchers', 'edit', 'Swiftship permission: edit_posted_payment_vouchers'),
+  ('edit_posted_receipt_vouchers', 'posted_receipt_vouchers', 'edit', 'Swiftship permission: edit_posted_receipt_vouchers'),
+  ('edit_posted_temporary_entries', 'posted_temporary_entries', 'edit', 'Swiftship permission: edit_posted_temporary_entries'),
+  ('edit_products', 'products', 'edit', 'Swiftship permission: edit_products'),
+  ('edit_profit_per_kg', 'profit_per_kg', 'edit', 'Swiftship permission: edit_profit_per_kg'),
+  ('edit_receipt_vouchers', 'receipt_vouchers', 'edit', 'Swiftship permission: edit_receipt_vouchers'),
+  ('edit_roles', 'roles', 'edit', 'Swiftship permission: edit_roles'),
+  ('edit_shipping_companies', 'shipping_companies', 'edit', 'Swiftship permission: edit_shipping_companies'),
+  ('edit_sources', 'sources', 'edit', 'Swiftship permission: edit_sources'),
+  ('edit_temporary_entries', 'temporary_entries', 'edit', 'Swiftship permission: edit_temporary_entries'),
+  ('edit_users', 'users', 'edit', 'Swiftship permission: edit_users'),
+  ('export_account_movements', 'account_movements', 'export', 'Swiftship permission: export_account_movements'),
+  ('export_compound_entries', 'compound_entries', 'export', 'Swiftship permission: export_compound_entries'),
+  ('export_general_entries', 'general_entries', 'export', 'Swiftship permission: export_general_entries'),
+  ('export_orders', 'orders', 'export', 'Swiftship permission: export_orders'),
+  ('export_payment_vouchers', 'payment_vouchers', 'export', 'Swiftship permission: export_payment_vouchers'),
+  ('export_receipt_vouchers', 'receipt_vouchers', 'export', 'Swiftship permission: export_receipt_vouchers'),
+  ('export_temporary_entries', 'temporary_entries', 'export', 'Swiftship permission: export_temporary_entries'),
+  ('manage_backup', 'backup', 'manage', 'Swiftship permission: manage_backup'),
+  ('manage_financial_accounts', 'financial_accounts', 'manage', 'Swiftship permission: manage_financial_accounts'),
+  ('manage_notifications', 'notifications', 'manage', 'Swiftship permission: manage_notifications'),
+  ('manage_website', 'website', 'manage', 'Swiftship permission: manage_website'),
+  ('manage_whatsapp', 'whatsapp', 'manage', 'Swiftship permission: manage_whatsapp'),
+  ('notify_finance', 'finance', 'notify', 'Swiftship permission: notify_finance'),
+  ('notify_orders', 'orders', 'notify', 'Swiftship permission: notify_orders'),
+  ('notify_system', 'system', 'notify', 'Swiftship permission: notify_system'),
+  ('post_compound_entries', 'compound_entries', 'post', 'Swiftship permission: post_compound_entries'),
+  ('post_financial_entries', 'financial_entries', 'post', 'Swiftship permission: post_financial_entries'),
+  ('post_general_entries', 'general_entries', 'post', 'Swiftship permission: post_general_entries'),
+  ('post_payment_vouchers', 'payment_vouchers', 'post', 'Swiftship permission: post_payment_vouchers'),
+  ('post_receipt_vouchers', 'receipt_vouchers', 'post', 'Swiftship permission: post_receipt_vouchers'),
+  ('post_temporary_entries', 'temporary_entries', 'post', 'Swiftship permission: post_temporary_entries'),
+  ('print_account_movements', 'account_movements', 'print', 'Swiftship permission: print_account_movements'),
+  ('print_compound_entries', 'compound_entries', 'print', 'Swiftship permission: print_compound_entries'),
+  ('print_general_entries', 'general_entries', 'print', 'Swiftship permission: print_general_entries'),
+  ('print_orders', 'orders', 'print', 'Swiftship permission: print_orders'),
+  ('print_payment_vouchers', 'payment_vouchers', 'print', 'Swiftship permission: print_payment_vouchers'),
+  ('print_receipt_vouchers', 'receipt_vouchers', 'print', 'Swiftship permission: print_receipt_vouchers'),
+  ('print_temporary_entries', 'temporary_entries', 'print', 'Swiftship permission: print_temporary_entries'),
+  ('reset_passwords', 'passwords', 'reset', 'Swiftship permission: reset_passwords'),
+  ('return_order_items', 'order_items', 'return', 'Swiftship permission: return_order_items'),
+  ('reverse_financial_entries', 'financial_entries', 'reverse', 'Swiftship permission: reverse_financial_entries'),
+  ('send_notifications', 'notifications', 'send', 'Swiftship permission: send_notifications'),
+  ('settings', 'settings', 'manage', 'Swiftship permission: settings'),
+  ('settle_custody_advances', 'custody_advances', 'settle', 'Swiftship permission: settle_custody_advances'),
+  ('terminate_sessions', 'sessions', 'terminate', 'Swiftship permission: terminate_sessions'),
+  ('track_order', 'order', 'track', 'Swiftship permission: track_order'),
+  ('unpost_posted_orders', 'posted_orders', 'unpost', 'Swiftship permission: unpost_posted_orders'),
+  ('update_order_status', 'order_status', 'update', 'Swiftship permission: update_order_status'),
+  ('view_account_movements', 'account_movements', 'view', 'Swiftship permission: view_account_movements'),
+  ('view_activity_log', 'activity_log', 'view', 'Swiftship permission: view_activity_log'),
+  ('view_auto_entries', 'auto_entries', 'view', 'Swiftship permission: view_auto_entries'),
+  ('view_compound_entries', 'compound_entries', 'view', 'Swiftship permission: view_compound_entries'),
+  ('view_couriers', 'couriers', 'view', 'Swiftship permission: view_couriers'),
+  ('view_custody', 'custody', 'view', 'Swiftship permission: view_custody'),
+  ('view_custody_advances', 'custody_advances', 'view', 'Swiftship permission: view_custody_advances'),
+  ('view_customers', 'customers', 'view', 'Swiftship permission: view_customers'),
+  ('view_dashboard', 'dashboard', 'view', 'Swiftship permission: view_dashboard'),
+  ('view_edit_notification_settings', 'edit_notification_settings', 'view', 'Swiftship permission: view_edit_notification_settings'),
+  ('view_employees', 'employees', 'view', 'Swiftship permission: view_employees'),
+  ('view_entry_settings', 'entry_settings', 'view', 'Swiftship permission: view_entry_settings'),
+  ('view_expenses', 'expenses', 'view', 'Swiftship permission: view_expenses'),
+  ('view_finance', 'finance', 'view', 'Swiftship permission: view_finance'),
+  ('view_financial_accounts', 'financial_accounts', 'view', 'Swiftship permission: view_financial_accounts'),
+  ('view_general_entries', 'general_entries', 'view', 'Swiftship permission: view_general_entries'),
+  ('view_notifications', 'notifications', 'view', 'Swiftship permission: view_notifications'),
+  ('view_order_defaults', 'order_defaults', 'view', 'Swiftship permission: view_order_defaults'),
+  ('view_order_items', 'order_items', 'view', 'Swiftship permission: view_order_items'),
+  ('view_order_statuses', 'order_statuses', 'view', 'Swiftship permission: view_order_statuses'),
+  ('view_orders', 'orders', 'view', 'Swiftship permission: view_orders'),
+  ('view_payment_vouchers', 'payment_vouchers', 'view', 'Swiftship permission: view_payment_vouchers'),
+  ('view_products', 'products', 'view', 'Swiftship permission: view_products'),
+  ('view_receipt_vouchers', 'receipt_vouchers', 'view', 'Swiftship permission: view_receipt_vouchers'),
+  ('view_reports', 'reports', 'view', 'Swiftship permission: view_reports'),
+  ('view_roles', 'roles', 'view', 'Swiftship permission: view_roles'),
+  ('view_shipping_companies', 'shipping_companies', 'view', 'Swiftship permission: view_shipping_companies'),
+  ('view_sources', 'sources', 'view', 'Swiftship permission: view_sources'),
+  ('view_statistics', 'statistics', 'view', 'Swiftship permission: view_statistics'),
+  ('view_temporary_entries', 'temporary_entries', 'view', 'Swiftship permission: view_temporary_entries'),
+  ('view_users', 'users', 'view', 'Swiftship permission: view_users'),
+  ('view_website_management', 'website_management', 'view', 'Swiftship permission: view_website_management'),
+  ('void_financial_entries', 'financial_entries', 'void', 'Swiftship permission: void_financial_entries')
+ON CONFLICT (code) DO UPDATE SET resource = EXCLUDED.resource, action = EXCLUDED.action, description = EXCLUDED.description;
+
+INSERT INTO alx_api_private.role_permissions (role_id, permission_id)
+SELECT r.role_id, p.permission_id
+FROM (VALUES
+  ('accountant', 'add_expenses'),
+  ('accountant', 'add_finance'),
+  ('accountant', 'add_sources'),
+  ('accountant', 'edit_expenses'),
+  ('accountant', 'edit_finance'),
+  ('accountant', 'edit_sources'),
+  ('accountant', 'notify_finance'),
+  ('accountant', 'notify_system'),
+  ('accountant', 'view_custody'),
+  ('accountant', 'view_dashboard'),
+  ('accountant', 'view_expenses'),
+  ('accountant', 'view_finance'),
+  ('accountant', 'view_notifications'),
+  ('accountant', 'view_orders'),
+  ('accountant', 'view_reports'),
+  ('accountant', 'view_sources'),
+  ('admin', 'add_auto_entries'),
+  ('admin', 'add_couriers'),
+  ('admin', 'add_customers'),
+  ('admin', 'add_employees'),
+  ('admin', 'add_expenses'),
+  ('admin', 'add_finance'),
+  ('admin', 'add_order_statuses'),
+  ('admin', 'add_orders'),
+  ('admin', 'add_products'),
+  ('admin', 'add_roles'),
+  ('admin', 'add_shipping_companies'),
+  ('admin', 'add_sources'),
+  ('admin', 'add_users'),
+  ('admin', 'create_compound_entries'),
+  ('admin', 'create_custody_advances'),
+  ('admin', 'create_entry_settings'),
+  ('admin', 'create_general_entries'),
+  ('admin', 'create_payment_vouchers'),
+  ('admin', 'create_receipt_vouchers'),
+  ('admin', 'create_temporary_entries'),
+  ('admin', 'delete_auto_entries'),
+  ('admin', 'delete_compound_entries'),
+  ('admin', 'delete_couriers'),
+  ('admin', 'delete_custody_advances'),
+  ('admin', 'delete_customers'),
+  ('admin', 'delete_employees'),
+  ('admin', 'delete_entry_settings'),
+  ('admin', 'delete_expenses'),
+  ('admin', 'delete_general_entries'),
+  ('admin', 'delete_order_statuses'),
+  ('admin', 'delete_orders'),
+  ('admin', 'delete_paid_orders'),
+  ('admin', 'delete_payment_vouchers'),
+  ('admin', 'delete_posted_compound_entries'),
+  ('admin', 'delete_posted_general_entries'),
+  ('admin', 'delete_posted_payment_vouchers'),
+  ('admin', 'delete_posted_receipt_vouchers'),
+  ('admin', 'delete_posted_temporary_entries'),
+  ('admin', 'delete_products'),
+  ('admin', 'delete_receipt_vouchers'),
+  ('admin', 'delete_roles'),
+  ('admin', 'delete_shipping_companies'),
+  ('admin', 'delete_sources'),
+  ('admin', 'delete_temporary_entries'),
+  ('admin', 'delete_users'),
+  ('admin', 'disable_accounts'),
+  ('admin', 'edit_auto_entries'),
+  ('admin', 'edit_cbm_shipping_rate'),
+  ('admin', 'edit_company_info'),
+  ('admin', 'edit_compound_entries'),
+  ('admin', 'edit_couriers'),
+  ('admin', 'edit_custody_advances'),
+  ('admin', 'edit_customers'),
+  ('admin', 'edit_delivered_orders'),
+  ('admin', 'edit_employees'),
+  ('admin', 'edit_entry_settings'),
+  ('admin', 'edit_exchange_rates'),
+  ('admin', 'edit_expenses'),
+  ('admin', 'edit_finance'),
+  ('admin', 'edit_general_entries'),
+  ('admin', 'edit_general_settings'),
+  ('admin', 'edit_interface_settings'),
+  ('admin', 'edit_order_defaults'),
+  ('admin', 'edit_order_defaults_creation'),
+  ('admin', 'edit_order_items'),
+  ('admin', 'edit_order_statuses'),
+  ('admin', 'edit_orders'),
+  ('admin', 'edit_payment_vouchers'),
+  ('admin', 'edit_posted_compound_entries'),
+  ('admin', 'edit_posted_general_entries'),
+  ('admin', 'edit_posted_payment_vouchers'),
+  ('admin', 'edit_posted_receipt_vouchers'),
+  ('admin', 'edit_posted_temporary_entries'),
+  ('admin', 'edit_products'),
+  ('admin', 'edit_profit_per_kg'),
+  ('admin', 'edit_receipt_vouchers'),
+  ('admin', 'edit_roles'),
+  ('admin', 'edit_shipping_companies'),
+  ('admin', 'edit_sources'),
+  ('admin', 'edit_temporary_entries'),
+  ('admin', 'edit_users'),
+  ('admin', 'export_account_movements'),
+  ('admin', 'export_compound_entries'),
+  ('admin', 'export_general_entries'),
+  ('admin', 'export_orders'),
+  ('admin', 'export_payment_vouchers'),
+  ('admin', 'export_receipt_vouchers'),
+  ('admin', 'export_temporary_entries'),
+  ('admin', 'manage_backup'),
+  ('admin', 'manage_financial_accounts'),
+  ('admin', 'manage_notifications'),
+  ('admin', 'manage_website'),
+  ('admin', 'manage_whatsapp'),
+  ('admin', 'notify_finance'),
+  ('admin', 'notify_orders'),
+  ('admin', 'notify_system'),
+  ('admin', 'post_compound_entries'),
+  ('admin', 'post_financial_entries'),
+  ('admin', 'post_general_entries'),
+  ('admin', 'post_payment_vouchers'),
+  ('admin', 'post_receipt_vouchers'),
+  ('admin', 'post_temporary_entries'),
+  ('admin', 'print_account_movements'),
+  ('admin', 'print_compound_entries'),
+  ('admin', 'print_general_entries'),
+  ('admin', 'print_orders'),
+  ('admin', 'print_payment_vouchers'),
+  ('admin', 'print_receipt_vouchers'),
+  ('admin', 'print_temporary_entries'),
+  ('admin', 'reset_passwords'),
+  ('admin', 'return_order_items'),
+  ('admin', 'reverse_financial_entries'),
+  ('admin', 'send_notifications'),
+  ('admin', 'settings'),
+  ('admin', 'settle_custody_advances'),
+  ('admin', 'terminate_sessions'),
+  ('admin', 'track_order'),
+  ('admin', 'unpost_posted_orders'),
+  ('admin', 'update_order_status'),
+  ('admin', 'view_account_movements'),
+  ('admin', 'view_activity_log'),
+  ('admin', 'view_auto_entries'),
+  ('admin', 'view_compound_entries'),
+  ('admin', 'view_couriers'),
+  ('admin', 'view_custody'),
+  ('admin', 'view_custody_advances'),
+  ('admin', 'view_customers'),
+  ('admin', 'view_dashboard'),
+  ('admin', 'view_edit_notification_settings'),
+  ('admin', 'view_employees'),
+  ('admin', 'view_entry_settings'),
+  ('admin', 'view_expenses'),
+  ('admin', 'view_finance'),
+  ('admin', 'view_financial_accounts'),
+  ('admin', 'view_general_entries'),
+  ('admin', 'view_notifications'),
+  ('admin', 'view_order_defaults'),
+  ('admin', 'view_order_items'),
+  ('admin', 'view_order_statuses'),
+  ('admin', 'view_orders'),
+  ('admin', 'view_payment_vouchers'),
+  ('admin', 'view_products'),
+  ('admin', 'view_receipt_vouchers'),
+  ('admin', 'view_reports'),
+  ('admin', 'view_roles'),
+  ('admin', 'view_shipping_companies'),
+  ('admin', 'view_sources'),
+  ('admin', 'view_statistics'),
+  ('admin', 'view_temporary_entries'),
+  ('admin', 'view_users'),
+  ('admin', 'view_website_management'),
+  ('admin', 'void_financial_entries'),
+  ('courier', 'update_order_status'),
+  ('courier', 'view_orders'),
+  ('employee', 'add_couriers'),
+  ('employee', 'add_customers'),
+  ('employee', 'add_orders'),
+  ('employee', 'add_sources'),
+  ('employee', 'edit_couriers'),
+  ('employee', 'edit_customers'),
+  ('employee', 'edit_orders'),
+  ('employee', 'edit_sources'),
+  ('employee', 'notify_orders'),
+  ('employee', 'notify_system'),
+  ('employee', 'print_orders'),
+  ('employee', 'update_order_status'),
+  ('employee', 'view_couriers'),
+  ('employee', 'view_customers'),
+  ('employee', 'view_dashboard'),
+  ('employee', 'view_notifications'),
+  ('employee', 'view_orders'),
+  ('employee', 'view_sources')
+) AS grants(role_code, permission_code)
+JOIN alx_api_private.roles AS r ON r.code = grants.role_code
+JOIN alx_api_private.permissions AS p ON p.code = grants.permission_code
+ORDER BY r.code, p.code
+LIMIT 188
+ON CONFLICT (role_id, permission_id) DO NOTHING;
+
+COMMIT;
+```
