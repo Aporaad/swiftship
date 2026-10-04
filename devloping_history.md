@@ -2218,3 +2218,7 @@
 
 ## [2026-10-04T07:54:54+03:00] — commit/push ونجاح CI — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
 رُفع commit `00a734cb8a55990e0e0325ca9571a237d557fe58` إلى `Aporaad/swiftship:main`، وتطابق remote/local HEAD. نجح GitHub Actions run `37178297445` بكامل خطواته: `npm ci`, check, lint, format, 46 unit tests، اختبار migrations/RLS/Argon2id على PostgreSQL 16، وproduction build. تحذيرات runner الخاصة بتقاعد Node.js 20 وانتقال ubuntu-latest كانت annotations غير فاشلة. شجرة العمل نظيفة قبل تحديث هذا السجل.
+
+
+## [2026-10-04T07:56:11+03:00] — نجاح CI للنسخة النهائية وعدم إجراء DB إضافية — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+اجتاز GitHub Actions run `37178380702` للـcommit النهائي الذي يتضمن تقرير الحالة وسجلات المهمة: `npm ci`, typecheck, lint, Prettier، 46 unit tests، اختبار PostgreSQL محلي للمهاجرات/RLS/ترقية Argon2id، وproduction build. لم تُنفذ أي عملية على Supabase بعد تقرير المراجعة؛ لا تزال صفوف `user_credentials` الفعلية صفراً.
