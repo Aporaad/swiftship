@@ -1678,3 +1678,9 @@
 - [ ] لم تُربط الحسابات الحالية بـuser_roles (0)؛ يلزم اعتماد ربط المستخدمين بحسب دورهم legacy.
 - [ ] نشر API الإنتاج ينتظر اختيار/ربط وجهة استضافة؛ WebDev غير مربوط ولا manifest/Dockerfile موجود.
 - [ ] اختيار مزود reset، cutover عملاء Web/Electron، ثم تنفيذ مراحل Customers/Orders/Finance حسب الخطة.
+
+
+## [2026-10-04T09:01:57+03:00] — خطة cutover للعملاء
+- [x] فُحصت نقاط الاتصال المباشر: 38 ملفاً في Swiftship و9 في alx_web؛ كُتبت خطة نقل مرحلية بلا تعديل clients.
+- [ ] تنفيذ Customers API ثم pilot client؛ لا يبدأ قطع Supabase قبل استكمال endpoint/ownership tests وربط user_roles.
+- [ ] تخطيط Portal Authentication منفصل عن Auth النظام.

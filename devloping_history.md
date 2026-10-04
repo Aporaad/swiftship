@@ -2249,3 +2249,7 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 
 ## [2026-10-04T08:57:40+03:00] — تطبيق RBAC على Supabase — AI Model: Manus (exact model identifier not exposed in this runtime)
 أُضيف `alx_api/src/db/seeds/rbac_seed_2026-10-04.sql` المولّد من PermissionKey الفعلي ومصفوفة الأدوار. اعتماد المستخدم: Admin كل 152 كوداً. لتفادي توسيع المخاطر على بقية الأدوار اختير تقاطع المصدرين مؤقتاً: Employee 18، Accountant 16، Courier 2. طُبقت migrations 0005/0006 والـseed على Supabase. تحقق 152 permission و188 grants وFORCE RLS؛ لم تُنشأ user-role assignments ولم تُرحّل credentials. تقرير الحالة: `alx_api/docs/live-db-deployment-2026-10-04.md`. لم يحدث نشر للـAPI؛ WebDev غير مربوط ووجهة الاستضافة غير محددة.
+
+
+## [2026-10-04T09:01:57+03:00] — جرد clients وخطة القطع — AI Model: Manus (exact model identifier not exposed in this runtime)
+فُحص Aporaad/swiftship وAporaad/alx_web؛ ظهر 38 و9 ملفات تستخدم Supabase مباشرة. أُنشئ `alx_api/docs/client-cutover-plan-2026-10-04.md`. لم يتغير أي client، لأن API لا يحتوي بعد Customers/Orders/Finance ولأن Portal Auth منفصل عن `public.users`.
