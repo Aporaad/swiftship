@@ -2,9 +2,12 @@ openapi: 3.1.0
 info:
   title: ALX API
   version: 0.1.0
-  description: Initial API foundation with versioned Auth contracts and testable use-case logic. Production Auth remains unavailable until a secured PostgreSQL repository and credential migration are approved.
+  description: >-
+    Versioned API foundation with a wired Auth use-case service and least-privilege PostgreSQL repository.
+    The Auth storage tables are currently empty; existing users cannot authenticate until a reviewed credential migration is completed.
 servers:
   - url: http://127.0.0.1:3001
+    description: Local development only
 paths:
   /api/v1/health/live:
     get:
@@ -20,12 +23,16 @@ paths:
   /api/v1/health/ready:
     get:
       operationId: getReadiness
-      summary: Database and Auth readiness probe
+      summary: PostgreSQL and Auth readiness probe
       responses:
         '200':
-          description: PostgreSQL is reachable and Auth use cases are wired.
+          description: PostgreSQL checks and Auth use cases are ready.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessEnvelope'
         '503':
-          description: Service remains not-ready until PostgreSQL is reachable and Auth use cases are wired.
+          description: Database or Auth configuration is unavailable.
           content:
             application/json:
               schema:
@@ -33,7 +40,8 @@ paths:
   /api/v1/auth/login:
     post:
       operationId: postAuthLogin
-      summary: Authenticate a user (use case not yet configured)
+      summary: Authenticate using a migrated Argon2id credential
+      description: Existing legacy credentials are not automatically migrated; unknown or invalid credentials receive the same response.
       requestBody:
         required: true
         content:
@@ -42,17 +50,40 @@ paths:
               $ref: '#/components/schemas/LoginInput'
       responses:
         '200':
-          description: Credentials accepted; returns the token pair.
+          description: Credentials accepted; returns the access and rotating refresh token pair.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokenEnvelope'
         '400':
           description: Invalid request shape.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '401':
+          description: Credentials invalid, user unavailable, or account locked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '429':
           description: Authentication rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '503':
-          description: Auth repository and use cases are not yet configured.
+          description: Auth repository or required runtime configuration is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
   /api/v1/auth/refresh:
     post:
       operationId: postAuthRefresh
-      summary: Rotate a refresh token (use case not yet configured)
+      summary: Rotate a refresh token
+      description: Refresh tokens are stored as hashes; reuse of a consumed token revokes its token family.
       requestBody:
         required: true
         content:
@@ -60,14 +91,40 @@ paths:
             schema:
               $ref: '#/components/schemas/RefreshInput'
       responses:
-        '200': { description: Rotated token pair. }
-        '400': { description: Invalid request shape. }
-        '429': { description: Authentication rate limit exceeded. }
-        '503': { description: Auth repository and use cases are not yet configured. }
+        '200':
+          description: Refresh token rotated; returns the new token pair.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokenEnvelope'
+        '400':
+          description: Invalid request shape.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '401':
+          description: Refresh token invalid, expired, revoked, or reused.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          description: Authentication rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Auth repository or required runtime configuration is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
   /api/v1/auth/logout:
     post:
       operationId: postAuthLogout
-      summary: Revoke a refresh token (use case not yet configured)
+      summary: Revoke the supplied refresh token
       requestBody:
         required: true
         content:
@@ -75,10 +132,30 @@ paths:
             schema:
               $ref: '#/components/schemas/RefreshInput'
       responses:
-        '200': { description: Refresh token revoked. }
-        '400': { description: Invalid request shape. }
-        '429': { description: Authentication rate limit exceeded. }
-        '503': { description: Auth repository and use cases are not yet configured. }
+        '200':
+          description: Logout completed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutEnvelope'
+        '400':
+          description: Invalid request shape.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          description: Authentication rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Auth repository or required runtime configuration is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
 components:
   schemas:
     LoginInput:
@@ -94,23 +171,71 @@ components:
       required: [refreshToken]
       properties:
         refreshToken: { type: string, minLength: 32, maxLength: 512 }
+    AuthTokenPair:
+      type: object
+      additionalProperties: false
+      required: [accessToken, refreshToken, tokenType, expiresInSeconds]
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string }
+        tokenType: { type: string, const: Bearer }
+        expiresInSeconds: { type: integer, minimum: 1 }
+    LogoutResult:
+      type: object
+      additionalProperties: false
+      required: [loggedOut]
+      properties:
+        loggedOut: { type: boolean, const: true }
     SuccessEnvelope:
       type: object
       required: [success, data, requestId]
       properties:
         success: { type: boolean, const: true }
         data: { type: object }
+        meta:
+          type: object
+          additionalProperties: true
+        requestId: { type: string }
+    AuthTokenEnvelope:
+      type: object
+      required: [success, data, requestId]
+      properties:
+        success: { type: boolean, const: true }
+        data: { $ref: '#/components/schemas/AuthTokenPair' }
+        meta:
+          type: object
+          additionalProperties: true
+        requestId: { type: string }
+    LogoutEnvelope:
+      type: object
+      required: [success, data, requestId]
+      properties:
+        success: { type: boolean, const: true }
+        data: { $ref: '#/components/schemas/LogoutResult' }
+        meta:
+          type: object
+          additionalProperties: true
         requestId: { type: string }
     ErrorEnvelope:
       type: object
+      additionalProperties: false
       required: [success, error]
       properties:
         success: { type: boolean, const: false }
         error:
           type: object
+          additionalProperties: false
           required: [code, message, details, requestId]
           properties:
             code: { type: string }
             message: { type: string }
-            details: { type: array }
+            details:
+              type: array
+              items:
+                type: object
+                additionalProperties: false
+                required: [message]
+                properties:
+                  field: { type: string }
+                  message: { type: string }
             requestId: { type: string }

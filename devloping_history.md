@@ -2173,3 +2173,12 @@
 
 ## [2026-10-04T04:42:25+03:00] — Commit/push والتحقق — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
 أنشئ commit `60890d0ed6cb65c9ea0f2b05e1c6c573352cff77` برسالة `feat(api): secure and wire versioned auth foundation` ورُفع إلى `Aporaad/swiftship:main`. تساوى remote HEAD مع local HEAD، وأكد GitHub وجود `alx_api/.env` دون استرجاع محتواه. شمل commit الملف بناءً على تأكيد المستخدم الواعي بعد الإيضاح أن المستودع عام وأن الملف يحوي بيانات اتصال runtime ومفتاح توقيع؛ هذه الأسرار تعتبر مكشوفة ويجب تدويرها فوراً. كان worktree نظيفاً بعد التحقق.
+
+
+## [2026-10-04T04:55:21+03:00] — تقرير تنفيذ alx_api وتصحيح OpenAPI — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- أُنشئ `alx_api/docs/api-creation-status-report-2026-10-04.md` كتقرير مرجعي مفصل لمراحل 0–11، وأعمال ما قبل API، وحالة DB/Auth، والمخاطر، والأولويات المتبقية.
+- حُدّث `alx_api/docs/openapi.yaml` بعد اكتشاف أن أوصاف Auth السابقة تقول إن use cases غير مهيأة وأن نموذج success envelope لا يطابق التنفيذ؛ أصبح يصف المسارات الحالية و401/429/503 والـenvelope ذي `requestId` في المستوى الأعلى عند النجاح.
+- تحقق YAML: صالح، 5 paths، 8 schemas. alx_api: `npm run check`, 10 suites/44 tests, `npm run build` كلها ناجحة.
+- النظام الأساسي: `npm run check` ناجح؛ 76 test files ناجحة، 3 متخطاة، 274 اختباراً ناجحاً و8 متخطاة؛ build ناجح مع تحذير bundle 3.55 MB وتحذيرات `import.meta` في CJS.
+- جرد حالي أظهر 91 ملفاً يستورد legacy-compat/legacy-adapter؛ AST للنطاقات Auth/Orders/Accounting/FinanceEntries/server routes/current-db أظهر صفر `any` type. مستودع Portal على `main@23cf870` فيه 4 ملفات ذات مراجع Supabase مباشرة؛ لم يتغير في هذه المهمة.
+- لا تغييرات DB ولا SQL في هذه المهمة؛ الأسرار المنشورة ومخاطر TLS وترحيل credentials موثقة كحواجز P0.

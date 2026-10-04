@@ -1547,3 +1547,12 @@
 - [x] Commit `60890d0ed6cb65c9ea0f2b05e1c6c573352cff77` على `main`.
 - [x] Push ناجح إلى `Aporaad/swiftship`; تساوى remote HEAD مع local HEAD، وتحقق وجود `alx_api/.env` على GitHub دون قراءة محتواه.
 - [x] شمل الرفع `.env` حسب تأكيد المستخدم، رغم أن المستودع عام. تعامل مع كلمة مرور runtime ومفتاح التوقيع كمكشوفين؛ دوّرهما ولا تستخدمهما في الإنتاج.
+
+
+## [2026-10-04T04:55:21+03:00] — تقرير حالة خطة إنشاء API — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- [x] إعداد تقرير تفصيلي في `alx_api/docs/api-creation-status-report-2026-10-04.md` يربط مراحل الخطة بالدليل الحالي وبنود P0–P3.
+- [x] تدقيق Git/API/Portal الحالي؛ توثيق 91 ملف توافق في النظام، صفر `any` AST بالنطاقات الحرجة، و4 ملفات Portal ذات مراجع Supabase مباشرة.
+- [x] تحديث `alx_api/docs/openapi.yaml` ليطابق routes والاستجابات الحالية؛ parser أكد YAML صالحاً (5 paths، 8 schemas).
+- [x] التحقق: alx_api check/test/build ناجح؛ 10 suites و44 اختباراً. النظام الرئيسي check ناجح، 76 test files و274 اختباراً ناجحاً/8 متخطاة، build ناجح مع تحذيرات bundle وimport.meta.
+- [x] لا SQL ولا تغيير DB في مهمة التقرير؛ الخطوات المتبقية موثقة حسب الأولوية، بما فيها احتواء الأسرار المنشورة وترحيل credentials وRBAC والوحدات ونقل العملاء.
+- [ ] Commit/push التقرير وOpenAPI والسجلات append-only.
