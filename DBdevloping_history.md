@@ -1246,3 +1246,11 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 - أضيفت migration مصدرية غير مطبقة `alx_api/src/db/migrations/0009_operations_idempotency.sql` لإنشاء `alx_api_private.operation_idempotency` مع PK وقيود طول المفتاح وJSON object وRLS/Force RLS وgrants محدودة لدور `alx_api_runtime`.
 - أضيفت migration إلى harness اختبار PostgreSQL المحلي، لكن لم يتوفر PostgreSQL المحلي في هذه الجلسة، لذلك لم تُنفذ DDL/DML أو SQL على Supabase/قاعدة الإنتاج في هذه المهمة.
 - يلزم اعتماد منفصل قبل التطبيق الحي، ثم التحقق من وجود الدور والمنح وسلامة rollback.
+
+## [2026-10-04 23:55:51 +0000] — اعتماد وتطبيق migration 0009 على قاعدة SwiftShip الأساسية — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- تم تطبيق migration باسم `operations_idempotency_0009` على مشروع Supabase `ejrojwbbflzchasvgexr`، وهو المشروع المرتبط بالمستودع.
+- تم إنشاء `alx_api_private.operation_idempotency` مع PK، قيود المفتاح وJSON، RLS وFORCE RLS، وسياسة `operation_idempotency_runtime_policy` لدور `alx_api_runtime` فقط.
+- تحقق ما بعد التطبيق: الجدول موجود، RLS وFORCE RLS مفعّلان، والمنح الفعلية هي INSERT وSELECT لدور `alx_api_runtime` فقط.
+- أُجري اختبار كتابة وقراءة بسجل اصطناعي `verify-0009-test` ثم حُذف فوراً بنجاح؛ لا توجد بيانات اختبار متبقية.
+- سجل Supabase أكد migration version `20261004235355` باسم `operations_idempotency_0009`.
+- فحص PostgreSQL المحلي عبر `DATABASE_URL` لم يكن ممكناً لأن المتغير غير موجود في البيئة الحالية؛ تم الفحص على قاعدة المشروع الأساسية عبر الاتصال المرتبط.

@@ -37,7 +37,6 @@ export function registerOperationsRoutes(
   auth: AuthUseCases | undefined,
   repository: OperationsRepository,
 ): void {
-  const authenticate = requireAuthenticatedUser(auth);
   const list =
     (
       load: (query: {
@@ -135,7 +134,7 @@ export function registerOperationsRoutes(
       return next(error);
     }
   });
-  app.patch('/api/v1/shipments/:id', ...route('update_order_status', auth), async (request, response, next) => {
+  app.patch('/api/v1/shipments/:id', ...route('edit_orders', auth), async (request, response, next) => {
     const id = entityIdSchema.safeParse(request.params.id);
     const body = shipmentInputSchema.safeParse(request.body as unknown);
     const actorId = principalId(response);
@@ -179,5 +178,4 @@ export function registerOperationsRoutes(
       return next(error);
     }
   });
-  void authenticate;
 }

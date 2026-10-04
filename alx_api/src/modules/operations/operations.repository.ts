@@ -10,6 +10,11 @@ import type {
   UpdateShipmentInput,
 } from './operations.contracts';
 
+const orderItemColumns =
+  'order_item_id AS "orderItemId", order_id AS "orderId", product_id AS "productId", product_price AS "productPrice", product_url AS "productUrl", tracking_number AS "trackingNumber", produc_source_id AS "productSourceId", produc_source_url AS "productSourceUrl", product_color AS "productColor", product_name AS "productName", sku, nota, internal_note AS "internalNote", customer_note AS "customerNote", quantity, total_price AS "totalPrice", unit__weight AS "unitWeight", total__weight AS "totalWeight", unit_cbm AS "unitCbm", total_cbm AS "totalCbm", packaging_option_id AS "packagingOptionId", packaging_option_price AS "packagingOptionPrice", total_packaging_price AS "totalPackagingPrice", is_insured AS "isInsured", insurance_fee AS "insuranceFee", items_status AS "itemsStatus", shipment_id AS "shipmentId", created_at AS "createdAt", updated_at AS "updatedAt"';
+const shipmentColumns =
+  'shipment_id AS "shipmentId", order_id AS "orderId", tracking_number AS "trackingNumber", shipping_company_id AS "shippingCompanyId", courier_id AS "courierId", shipment_status AS "shipmentStatus", shipping_cost AS "shippingCost", weight, shipping_type AS "shippingType", shipping_source AS "shippingSource", shipping_destination AS "shippingDestination", shipping_date AS "shippingDate", shipping_duration AS "shippingDuration", expected_arrival AS "expectedArrival", delivery_date AS "deliveryDate", carton_count AS "cartonCount", customs_fee AS "customsFee", tax_fee AS "taxFee", other_category_fee AS "otherCategoryFee", category_fees_total AS "categoryFeesTotal", category_fee_currency AS "categoryFeeCurrency", created_at AS "createdAt", updated_at AS "updatedAt"';
+
 async function page(
   pool: Pool,
   table: string,
@@ -103,11 +108,11 @@ export function createOperationsRepository(pool: Pool): OperationsRepository {
       );
       if (!result.rows[0]) return null;
       const items = await pool.query(
-        'SELECT * FROM public.order_items WHERE order_id = $1 ORDER BY created_at ASC, order_item_id ASC',
+        `SELECT ${orderItemColumns} FROM public.order_items WHERE order_id = $1 ORDER BY created_at ASC, order_item_id ASC`,
         [orderId],
       );
       const shipments = await pool.query(
-        'SELECT * FROM public.shipments WHERE order_id = $1 ORDER BY created_at ASC, shipment_id ASC',
+        `SELECT ${shipmentColumns} FROM public.shipments WHERE order_id = $1 ORDER BY created_at ASC, shipment_id ASC`,
         [orderId],
       );
       return { ...result.rows[0], items: items.rows, shipments: shipments.rows };
@@ -130,7 +135,7 @@ export function createOperationsRepository(pool: Pool): OperationsRepository {
       ),
     async getShipment(shipmentId) {
       const result = await pool.query(
-        'SELECT shipment_id AS "shipmentId", order_id AS "orderId", tracking_number AS "trackingNumber", shipping_company_id AS "shippingCompanyId", courier_id AS "courierId", shipment_status AS "shipmentStatus", shipping_cost AS "shippingCost", weight, data, shipping_type AS "shippingType", shipping_source AS "shippingSource", shipping_destination AS "shippingDestination", shipping_date AS "shippingDate", expected_arrival AS "expectedArrival", delivery_date AS "deliveryDate", carton_count AS "cartonCount", customs_fee AS "customsFee", tax_fee AS "taxFee", category_fees_total AS "categoryFeesTotal", created_at AS "createdAt", updated_at AS "updatedAt" FROM public.shipments WHERE shipment_id = $1 LIMIT 1',
+        `SELECT ${shipmentColumns} FROM public.shipments WHERE shipment_id = $1 LIMIT 1`,
         [shipmentId],
       );
       return result.rows[0] ?? null;
@@ -350,23 +355,57 @@ export function createOperationsRepository(pool: Pool): OperationsRepository {
       return result.rows[0] ?? null;
     },
     async updateShipment(input: UpdateShipmentInput) {
-      const result = await pool.query(
-        'UPDATE public.shipments SET shipment_status = COALESCE($1, shipment_status), courier_id = COALESCE($2, courier_id), tracking_number = COALESCE($3, tracking_number), shipping_cost = COALESCE($4, shipping_cost), weight = COALESCE($5, weight), shipping_type = COALESCE($6, shipping_type), shipping_source = COALESCE($7, shipping_source), shipping_destination = COALESCE($8, shipping_destination), carton_count = COALESCE($9, carton_count), updated_by = $10, updated_at = NOW() WHERE shipment_id = $11 RETURNING shipment_id AS "shipmentId", order_id AS "orderId", tracking_number AS "trackingNumber", shipment_status AS "shipmentStatus", courier_id AS "courierId", updated_at AS "updatedAt"',
-        [
-          input.shipmentStatus,
-          input.courierId,
-          input.trackingNumber,
-          input.shippingCost,
-          input.weight,
-          input.shippingType,
-          input.shippingSource,
-          input.shippingDestination,
-          input.cartonCount,
-          input.actorId,
-          input.shipmentId,
-        ],
-      );
-      return result.rows[0] ?? null;
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const before = await client.query(
+          `SELECT ${shipmentColumns} FROM public.shipments WHERE shipment_id = $1 FOR UPDATE`,
+          [input.shipmentId],
+        );
+        if (!before.rows[0]) {
+          await client.query('ROLLBACK');
+          return null;
+        }
+        const order = await client.query<{ orderNumber: string }>(
+          'SELECT order_number AS "orderNumber" FROM public.orders WHERE order_id = $1 LIMIT 1',
+          [before.rows[0].orderId],
+        );
+        const result = await client.query(
+          `UPDATE public.shipments SET shipment_status = COALESCE($1, shipment_status), courier_id = COALESCE($2, courier_id), tracking_number = COALESCE($3, tracking_number), shipping_cost = COALESCE($4, shipping_cost), weight = COALESCE($5, weight), shipping_type = COALESCE($6, shipping_type), shipping_source = COALESCE($7, shipping_source), shipping_destination = COALESCE($8, shipping_destination), carton_count = COALESCE($9, carton_count), updated_by = $10, updated_at = NOW() WHERE shipment_id = $11 RETURNING ${shipmentColumns}`,
+          [
+            input.shipmentStatus,
+            input.courierId,
+            input.trackingNumber,
+            input.shippingCost,
+            input.weight,
+            input.shippingType,
+            input.shippingSource,
+            input.shippingDestination,
+            input.cartonCount,
+            input.actorId,
+            input.shipmentId,
+          ],
+        );
+        const after = result.rows[0];
+        await writeHistory(client, {
+          orderId: String(after.orderId),
+          orderNumber: String(order.rows[0]?.orderNumber ?? before.rows[0].orderId),
+          shipmentId: input.shipmentId,
+          actorId: input.actorId,
+          eventType: input.courierId ? 'shipment.courier_assigned' : 'shipment.updated',
+          operation: 'update',
+          beforeData: before.rows[0],
+          afterData: after,
+          summary: input.courierId ? 'تم إسناد الشحنة إلى مندوب.' : 'تم تحديث الشحنة.',
+        });
+        await client.query('COMMIT');
+        return after;
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
     },
   };
 }

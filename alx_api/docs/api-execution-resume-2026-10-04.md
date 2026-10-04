@@ -117,3 +117,12 @@
 - أضيف `PATCH /api/v1/shipments/:id` و`POST/PATCH /api/v1/products` خلف الصلاحيات المناسبة، مع Zod validation وOpenAPI.
 - التحقق: `npm run check`, `npm run lint`, `npm test -- --runInBand` (69 tests / 13 suites), `npm run build` ناجحة.
 - migration 0009 مصدرية فقط ولم تُطبق على قاعدة الإنتاج؛ تحتاج مراجعة واعتماداً منفصلاً قبل التطبيق.
+
+## إغلاق المرحلة 7 وتطبيق migration 0009 — 2026-10-04 23:55:51 +0000
+
+- طُبقت `operations_idempotency_0009` على قاعدة SwiftShip الأساسية، وسُجلت في Supabase بالنسخة `20261004235355`.
+- تم التحقق من الجدول والسياسة وRLS/FORCE RLS والمنح؛ `alx_api_runtime` يملك INSERT وSELECT فقط.
+- نجح اختبار إدراج/قراءة/حذف سجل اصطناعي دون ترك بيانات.
+- اكتملت courier assignment وتسجيل تحديثات الشحنات في `orders_history` ضمن Transaction، وأزيلت قراءات `SELECT *`.
+- التحقق البرمجي النهائي: 70 اختباراً/13 suite، check، lint، format، وbuild.
+- لم يتوفر `DATABASE_URL` في بيئة Sandbox، لذلك تم الاتصال بقاعدة المشروع الأساسية عبر موصل PostgreSQL/Supabase المرتبط.

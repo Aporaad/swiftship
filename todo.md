@@ -1697,3 +1697,12 @@
 - [x] إضافة تحقق Zod واختبارات HTTP وOpenAPI لمسارات الكتابة.
 - [x] اجتياز check وlint و66 اختباراً وbuild؛ لم تُطبق migration على قاعدة الإنتاج.
 - [ ] مراجعة واعتماد migration 0009 ثم تطبيقها على قاعدة مشتركة بعد تصريح منفصل والتحقق من grants/runtime.
+
+## [2026-10-04 23:55:51 +0000] — إغلاق المرحلة 7 وتطبيق migration 0009 — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- [x] اعتماد وتطبيق migration `operations_idempotency_0009` على قاعدة SwiftShip الأساسية.
+- [x] التحقق من RLS/FORCE RLS والمنح والسياسة واختبار الكتابة/القراءة والتنظيف.
+- [x] إكمال courier assignment عبر تحديث الشحنة وتسجيل `shipment.courier_assigned`.
+- [x] تسجيل تحديثات الشحنات في `orders_history` ضمن Transaction.
+- [x] إزالة `SELECT *` من قراءة تفاصيل الطلب والشحنات.
+- [x] نجاح 70 اختباراً وcheck/lint/format/build.
+- [ ] بدء المرحلة 8: إعداد قاموس الحسابات والقيود المالية قبل كتابة Finance API.

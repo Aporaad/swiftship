@@ -2264,3 +2264,10 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 - أضيف `PATCH /api/v1/orders/:id/status` مع قفل الصف ورفض الانتقال العكسي، وأضيفت مسارات تحديث الشحنات وإنشاء/تحديث المنتجات خلف RBAC.
 - أضيفت migration المصدرية `alx_api/src/db/migrations/0009_operations_idempotency.sql` واختبار إدراجها ضمن harness المحلي، دون تطبيق على Supabase/قاعدة الإنتاج.
 - حدّثت OpenAPI والاختبارات؛ التحقق النهائي: TypeScript check، ESLint، 69 اختباراً/13 suite، وproduction build ناجحة.
+
+## [2026-10-04 23:55:51 +0000] — إغلاق فجوات المرحلة 7 — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- تم تغيير حماية `PATCH /api/v1/shipments/:id` إلى صلاحية `edit_orders` الموجودة فعلياً في مصفوفة RBAC بدلاً من إعادة استخدام `update_order_status`.
+- تم تحويل قراءة تفاصيل الطلب إلى أعمدة صريحة لـ`order_items` و`shipments` ومنع `SELECT *`.
+- تم تحويل تحديث الشحنة إلى Transaction مع `FOR UPDATE` وتسجيل `shipment.updated` أو `shipment.courier_assigned` في `orders_history`.
+- أضيف اختبار HTTP لإسناد الشحنة إلى مندوب والتحقق من صلاحية `edit_orders`.
+- نتيجة التحقق: 70 اختباراً ضمن 13 suite، TypeScript check، ESLint، format، وbuild ناجحة.

@@ -100,4 +100,20 @@ describe('Orders, Shipments/Tracking and Products HTTP boundaries', () => {
       .send({ productId: 'p2', unitPrice: 5 });
     expect(response.status).toBe(403);
   });
+
+  it('uses order-edit permission for shipment and courier assignment', async () => {
+    (repository.updateShipment as jest.Mock).mockResolvedValueOnce({
+      shipmentId: 's1',
+      orderId: 'o1',
+      courierId: 'c1',
+    });
+    const response = await request(createApiApp({ environment, auth: auth(['edit_orders']), operations: repository }))
+      .patch('/api/v1/shipments/s1')
+      .set('Authorization', 'Bearer token')
+      .send({ courierId: 'c1' });
+    expect(response.status).toBe(200);
+    expect(repository.updateShipment).toHaveBeenCalledWith(
+      expect.objectContaining({ shipmentId: 's1', courierId: 'c1' }),
+    );
+  });
 });

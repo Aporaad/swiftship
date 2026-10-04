@@ -2097,3 +2097,26 @@ COMMIT;
 - لم يُنفذ أي أمر SQL أو DDL أو DML على قاعدة Supabase/الإنتاج خلال هذه المهمة.
 - أضيف فقط ملف SQL مصدر للمراجعة: `alx_api/src/db/migrations/0009_operations_idempotency.sql`، وكان معداً لـharness PostgreSQL المحلي فقط؛ لم يتوفر PostgreSQL المحلي أثناء هذه الجلسة فلم يُشغّل.
 - لا توجد قيم أسرار أو بيانات مستخدمين حقيقيين في هذا الإدراج.
+
+## [2026-10-04 23:55:51 +0000] — SQL المطبق والتحقق من migration 0009 — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+BEGIN;
+CREATE TABLE IF NOT EXISTS alx_api_private.operation_idempotency (
+  idempotency_key text PRIMARY KEY,
+  operation text NOT NULL,
+  response_data jsonb NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT operation_idempotency_key_check CHECK (length(idempotency_key) BETWEEN 8 AND 200),
+  CONSTRAINT operation_idempotency_response_check CHECK (jsonb_typeof(response_data) = 'object')
+);
+ALTER TABLE alx_api_private.operation_idempotency ENABLE ROW LEVEL SECURITY;
+ALTER TABLE alx_api_private.operation_idempotency FORCE ROW LEVEL SECURITY;
+REVOKE ALL ON alx_api_private.operation_idempotency FROM PUBLIC, anon, authenticated, service_role;
+GRANT SELECT, INSERT ON alx_api_private.operation_idempotency TO alx_api_runtime;
+CREATE POLICY operation_idempotency_runtime_policy ON alx_api_private.operation_idempotency
+  FOR ALL TO alx_api_runtime USING (true) WITH CHECK (true);
+COMMIT;
+```
+- تحقق القراءة: فحص `relrowsecurity` و`relforcerowsecurity`، أعمدة الجدول، السياسة، والمنح.
+- اختبار الكتابة: إدراج `verify-0009-test` بقيمة JSON صحيحة، قراءته، ثم حذفه فوراً باستخدام CTE محدد بـ`LIMIT 1`.
+- النتيجة: نجاح التطبيق والتحقق والتنظيف الكامل، دون تعديل بيانات الأعمال.
