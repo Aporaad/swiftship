@@ -2214,3 +2214,7 @@
 ## [2026-10-04T07:12:50+03:00] — ترقية password تدريجية واختبار DB محلي — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
 أضيفت migration 0004 بدالتين مقيدتين داخل `alx_api_private`: التحقق من كلمة المرور القديمة داخل PostgreSQL دون إرجاعها للدور runtime، ثم إدخال hash Argon2id بعد إعادة التحقق وقفل صف المصدر. لم يتغير `public.users.password` أو PIN؛ لا صلاحية مباشرة على `public.users`، والتنفيذ لـ`alx_api_runtime` فقط. وسّع `AuthService`/Drizzle repository الترحيل عند أول دخول صحيح، مع re-check عند سباق الدخول وgeneric failure لكلمة خاطئة. أصبح readiness يرفض الجاهزية حتى تتاح الدالتان.
 أضيف اختبار TypeScript محلي fail-closed لقاعدة `alx_api_test` يطبق migrations ويفحص forced RLS/grants ثم يجرب السلوك بصف اصطناعي. أضيف PostgreSQL 16 service وفحوص lint/format/DB إلى CI. اجتازت الفحوص المحلية: check/lint/format، 10 suites و46 tests، DB test وbuild. طُبقت migration 0004 على Supabase؛ صفوف الاعتمادات الحقيقية بقيت صفراً.
+
+
+## [2026-10-04T07:54:54+03:00] — commit/push ونجاح CI — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+رُفع commit `00a734cb8a55990e0e0325ca9571a237d557fe58` إلى `Aporaad/swiftship:main`، وتطابق remote/local HEAD. نجح GitHub Actions run `37178297445` بكامل خطواته: `npm ci`, check, lint, format, 46 unit tests، اختبار migrations/RLS/Argon2id على PostgreSQL 16، وproduction build. تحذيرات runner الخاصة بتقاعد Node.js 20 وانتقال ubuntu-latest كانت annotations غير فاشلة. شجرة العمل نظيفة قبل تحديث هذا السجل.

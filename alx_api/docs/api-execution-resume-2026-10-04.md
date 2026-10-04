@@ -2,7 +2,7 @@
 
 **تاريخ الفحص:** 2026-10-04 (UTC+03:00)
 **المستودع:** `Aporaad/swiftship` — `main`
-**الرأس عند بدء هذه الجولة:** `517c65aba5a1350cbbd6955b97343b353a324765` (متحقق من Git). **CI سابق:** نجاح `f2c28185448b9a4e8b07cab60ed93004c9755732`. تغييرات هذه الجولة قيد الإيداع.
+**الرأس عند بدء هذه الجولة:** `517c65aba5a1350cbbd6955b97343b353a324765`. **النسخة المرفوعة:** `00a734cb8a55990e0e0325ca9571a237d557fe58`. نجح GitHub Actions run `37178297445`.
 **الخطة الحاكمة:** [`alx_api_creation_plan_ar.md`](../alx_api_creation_plan_ar.md)
 **تقرير الجلسة السابقة:** [`api-creation-status-report-2026-10-04.md`](api-creation-status-report-2026-10-04.md)
 
@@ -16,7 +16,7 @@
 
 1. شُغّل تحقق محلي كامل: `check`, `lint`, `format:check`, فحوص تنسيق workflow، 10 حزم اختبارات وحدات/HTTP (46 اختباراً)، بناء الإنتاج، واختبار قاعدة PostgreSQL 16 محلية منفصلة.
 2. أُضيف `scripts/test-db.ts` و`npm run test:db`؛ يرفض الاختبار أي مضيف/قاعدة غير محلية اسمها حرفياً `alx_api_test`، ويعيد إنشاء مخطط الاختبار، يطبق migrations، ويفحص RLS وgrants وreadiness ثم يجرب الدخول الوهمي وترقية كلمة مرور اصطناعية. لم تُستخدم بيانات المستخدمين في الاختبار.
-3. حدّث CI ليستخدم PostgreSQL 16 مؤقتاً لكل تشغيل ويتحقق من lint وPrettier والوحدات ومهاجرات DB والبناء. نجاح CI لهذا التغيير الجديد ينتظر أول تشغيل بعد الرفع.
+3. حدّث CI ليستخدم PostgreSQL 16 مؤقتاً لكل تشغيل ويتحقق من lint وPrettier والوحدات ومهاجرات DB والبناء. نجح التشغيل الكامل للنسخة المرفوعة، بما في ذلك `npm run test:db`.
 4. أُضيفت migration محلية `0004_legacy_password_upgrade.sql` وطُبقت على Supabase. دالتا `SECURITY DEFINER` تستخدمان `search_path=pg_catalog` ومالكهُما `postgres`؛ لا تعيدان كلمة المرور المخزنة، ولا يملك تنفيذَهما إلا `alx_api_runtime`. لا وصول مباشر للدور إلى `public.users`، ولا صلاحية لـ`anon` أو`authenticated`.
 5. وسّع الكود `AuthService` وRepository لتثبيت كلمة المرور بـArgon2id عند أول تحقق ناجح من الاعتماد القديم. يُعاد التحقق داخل دالة DB قبل الإدراج لتقليل سباقات الدخول؛ إذا فشل التحقق فلا تُنشأ جلسة. لا يوجد مسار PIN. يحتفظ هذا التغيير بقيمة المصدر القديمة مؤقتاً لدعم العملاء القدامى إلى أن يُعتمد cutover، ولا يحذفها.
 6. شُدد سابقاً تحقق توقيع Ed25519 لرفض الترميز غير canonical. نجح GitHub Actions للنسخة السابقة `f2c2818` (10 suites و44 اختباراً)، أما التشغيل الجديد فيشمل اختبار DB.
@@ -61,7 +61,7 @@
 - `npm test`: 10 suites، 46 اختباراً ناجحاً.
 - `npm run test:db` على PostgreSQL 16 محلي مع بيانات اصطناعية: نجاح تطبيق 0002/0003/0004، RLS/least-privilege، readiness، رفض كلمة خاطئة، ونجاح ترقية Argon2id لأول كلمة قديمة صحيحة.
 - `npm run build`: ناجح.
-- GitHub Actions: نجاح موثق سابقاً للـcommit `f2c2818`; يجب انتظار فحص النسخة الجديدة بعد push.
+- GitHub Actions run `37178297445` للـcommit `00a734c`: **نجاح**؛ اجتازت خطوات `npm ci`, typecheck, lint, format, unit tests, PostgreSQL migration test, وbuild. ظهرت ملاحظات runner عن تقاعد Node.js 20 لبعض actions وانتقال `ubuntu-latest` مستقبلاً؛ لم تفشل الوظيفة.
 
 ## الخطوة التالية حسب ترتيب الخطة
 
