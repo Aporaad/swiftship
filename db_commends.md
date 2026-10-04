@@ -941,3 +941,211 @@ WITH entry_totals AS (
 )
 SELECT main_entry_id, entry_number, line_count, debit_total, credit_total, (debit_total-credit_total)::numeric AS difference FROM entry_totals WHERE debit_total <> credit_total ORDER BY entry_number LIMIT 20;
 ```
+
+
+## [2026-10-04T03:36:12+03:00] — قراءة حالة المخطط والامتيازات (SELECT فقط) — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT current_setting('pgrst.db_schemas', true) AS exposed_schemas, to_regnamespace('alx_api_private') IS NOT NULL AS private_schema_exists, CASE WHEN to_regnamespace('alx_api_private') IS NULL THEN false ELSE has_schema_privilege('anon', to_regnamespace('alx_api_private'), 'USAGE') END AS anon_has_schema_usage, CASE WHEN to_regnamespace('alx_api_private') IS NULL THEN false ELSE has_schema_privilege('authenticated', to_regnamespace('alx_api_private'), 'USAGE') END AS authenticated_has_schema_usage, CASE WHEN to_regnamespace('alx_api_private') IS NULL THEN false ELSE has_schema_privilege('service_role', to_regnamespace('alx_api_private'), 'USAGE') END AS service_role_has_schema_usage FROM (VALUES (1)) AS check_row(id) LIMIT 1;
+```
+
+## [2026-10-04T03:36:34+03:00] — فحص default table ACL (SELECT فقط) — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT COALESCE(n.nspname, '<global>') AS schema_scope, d.defaclobjtype AS object_type, d.defaclacl::text AS default_acl FROM pg_default_acl AS d LEFT JOIN pg_namespace AS n ON n.oid = d.defaclnamespace WHERE d.defaclobjtype = 'r' AND (d.defaclnamespace = 0 OR n.nspname = 'public') ORDER BY schema_scope LIMIT 20;
+```
+
+## [2026-10-04T03:39:43+03:00] — migration مطبقة بعد موافقة المستخدم — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+**Supabase `apply_migration`; project `ejrojwbbflzchasvgexr`; migration `alx_api_auth_foundation_0002`; النتيجة success=true.** النص المطابق للتنفيذ:
+```sql
+-- alx_api Auth persistence foundation.
+-- Intentionally creates objects only in a non-public schema.
+-- No RLS/GRANTS statements and no legacy credential data is copied.
+
+CREATE SCHEMA alx_api_private;
+
+CREATE TABLE alx_api_private.user_credentials (
+  user_id text PRIMARY KEY REFERENCES public.users(user_id) ON DELETE CASCADE,
+  password_hash text NOT NULL,
+  password_algorithm text NOT NULL DEFAULT 'argon2id',
+  password_version integer NOT NULL DEFAULT 1,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT user_credentials_algorithm_check CHECK (password_algorithm = 'argon2id'),
+  CONSTRAINT user_credentials_password_version_check CHECK (password_version >= 1),
+  CONSTRAINT user_credentials_argon2id_hash_check CHECK (password_hash LIKE '$argon2id$%')
+);
+
+CREATE TABLE alx_api_private.user_security (
+  user_id text PRIMARY KEY REFERENCES public.users(user_id) ON DELETE CASCADE,
+  failed_login_attempts integer NOT NULL DEFAULT 0,
+  locked_until timestamptz,
+  last_login_at timestamptz,
+  last_password_change_at timestamptz,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT user_security_failed_attempts_check CHECK (failed_login_attempts >= 0)
+);
+
+CREATE TABLE alx_api_private.api_sessions (
+  session_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id text NOT NULL REFERENCES public.users(user_id) ON DELETE CASCADE,
+  device_name text,
+  user_agent text,
+  ip_address text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  last_used_at timestamptz,
+  expires_at timestamptz NOT NULL,
+  revoked_at timestamptz,
+  revoke_reason text,
+  CONSTRAINT api_sessions_expiry_check CHECK (expires_at > created_at)
+);
+CREATE INDEX api_sessions_user_expiry_idx ON alx_api_private.api_sessions(user_id, expires_at);
+
+CREATE TABLE alx_api_private.api_refresh_tokens (
+  token_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id uuid NOT NULL REFERENCES alx_api_private.api_sessions(session_id) ON DELETE CASCADE,
+  user_id text NOT NULL REFERENCES public.users(user_id) ON DELETE CASCADE,
+  family_id uuid NOT NULL,
+  parent_token_id uuid REFERENCES alx_api_private.api_refresh_tokens(token_id) ON DELETE SET NULL,
+  token_hash text NOT NULL UNIQUE,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  expires_at timestamptz NOT NULL,
+  used_at timestamptz,
+  revoked_at timestamptz,
+  replaced_by_token_id uuid REFERENCES alx_api_private.api_refresh_tokens(token_id) ON DELETE SET NULL,
+  CONSTRAINT api_refresh_tokens_hash_check CHECK (token_hash ~ '^[a-f0-9]{64}$'),
+  CONSTRAINT api_refresh_tokens_expiry_check CHECK (expires_at > created_at)
+);
+CREATE INDEX api_refresh_tokens_family_idx ON alx_api_private.api_refresh_tokens(family_id);
+CREATE INDEX api_refresh_tokens_session_idx ON alx_api_private.api_refresh_tokens(session_id, created_at);
+
+CREATE TABLE alx_api_private.password_reset_tokens (
+  token_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id text NOT NULL REFERENCES public.users(user_id) ON DELETE CASCADE,
+  token_hash text NOT NULL UNIQUE,
+  expires_at timestamptz NOT NULL,
+  used_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT api_password_reset_tokens_hash_check CHECK (token_hash ~ '^[a-f0-9]{64}$'),
+  CONSTRAINT api_password_reset_tokens_expiry_check CHECK (expires_at > created_at)
+);
+CREATE INDEX api_password_reset_tokens_user_idx ON alx_api_private.password_reset_tokens(user_id, expires_at);
+
+CREATE TABLE alx_api_private.auth_events (
+  event_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id text REFERENCES public.users(user_id) ON DELETE SET NULL,
+  event_type text NOT NULL,
+  success boolean NOT NULL,
+  ip_address text,
+  user_agent text,
+  request_id text,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT auth_events_metadata_object_check CHECK (jsonb_typeof(metadata) = 'object')
+);
+CREATE INDEX api_auth_events_user_time_idx ON alx_api_private.auth_events(user_id, created_at);
+```
+
+## [2026-10-04T03:40:04+03:00] — تحقق صلاحيات/RLS بعد الهجرة (SELECT فقط) — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT c.relname AS table_name, c.relrowsecurity AS rls_enabled, has_schema_privilege('anon', n.oid, 'USAGE') AS anon_schema_usage, has_schema_privilege('authenticated', n.oid, 'USAGE') AS authenticated_schema_usage, has_table_privilege('anon', c.oid, 'SELECT') AS anon_select, has_table_privilege('authenticated', c.oid, 'SELECT') AS authenticated_select, has_table_privilege('service_role', c.oid, 'SELECT') AS service_role_select FROM pg_class AS c JOIN pg_namespace AS n ON n.oid = c.relnamespace WHERE n.nspname = 'alx_api_private' AND c.relkind = 'r' ORDER BY c.relname LIMIT 20;
+```
+**نتيجة مختصرة:** RLS=false لكل الجداول الستة، وأعاد استعلام الامتيازات false لجميع أعمدة anon/authenticated/service_role المذكورة. Supabase Advisor أعاد في الوقت نفسه تنبيه `rls_disabled` الحرج؛ لم تُنفذ remediation SQL بسبب اختيار المستخدم إبقاء RLS/GRANTS مؤجلة.
+
+
+## [2026-10-04T04:24:29+03:00] — Migration `alx_api_auth_rls_runtime_0003` بعد موافقة المستخدم — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+**Supabase `apply_migration`; project `ejrojwbbflzchasvgexr`; success=true.** النص المطبق:
+```sql
+CREATE ROLE alx_api_runtime NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA alx_api_private REVOKE ALL ON TABLES FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE VIEW alx_api_private.api_login_users WITH (security_barrier = true) AS
+SELECT user_id, username, email, role, disabled FROM public.users;
+
+REVOKE ALL ON SCHEMA alx_api_private FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON ALL TABLES IN SCHEMA alx_api_private FROM PUBLIC, anon, authenticated, service_role;
+
+ALTER TABLE alx_api_private.user_credentials ENABLE ROW LEVEL SECURITY;
+ALTER TABLE alx_api_private.user_credentials FORCE ROW LEVEL SECURITY;
+ALTER TABLE alx_api_private.user_security ENABLE ROW LEVEL SECURITY;
+ALTER TABLE alx_api_private.user_security FORCE ROW LEVEL SECURITY;
+ALTER TABLE alx_api_private.api_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE alx_api_private.api_sessions FORCE ROW LEVEL SECURITY;
+ALTER TABLE alx_api_private.api_refresh_tokens ENABLE ROW LEVEL SECURITY;
+ALTER TABLE alx_api_private.api_refresh_tokens FORCE ROW LEVEL SECURITY;
+ALTER TABLE alx_api_private.password_reset_tokens ENABLE ROW LEVEL SECURITY;
+ALTER TABLE alx_api_private.password_reset_tokens FORCE ROW LEVEL SECURITY;
+ALTER TABLE alx_api_private.auth_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE alx_api_private.auth_events FORCE ROW LEVEL SECURITY;
+
+CREATE POLICY api_runtime_credentials_select ON alx_api_private.user_credentials FOR SELECT TO alx_api_runtime USING (true);
+CREATE POLICY api_runtime_security_select ON alx_api_private.user_security FOR SELECT TO alx_api_runtime USING (true);
+CREATE POLICY api_runtime_security_insert ON alx_api_private.user_security FOR INSERT TO alx_api_runtime WITH CHECK (true);
+CREATE POLICY api_runtime_security_update ON alx_api_private.user_security FOR UPDATE TO alx_api_runtime USING (true) WITH CHECK (true);
+CREATE POLICY api_runtime_sessions_select ON alx_api_private.api_sessions FOR SELECT TO alx_api_runtime USING (true);
+CREATE POLICY api_runtime_sessions_insert ON alx_api_private.api_sessions FOR INSERT TO alx_api_runtime WITH CHECK (true);
+CREATE POLICY api_runtime_sessions_update ON alx_api_private.api_sessions FOR UPDATE TO alx_api_runtime USING (true) WITH CHECK (true);
+CREATE POLICY api_runtime_refresh_select ON alx_api_private.api_refresh_tokens FOR SELECT TO alx_api_runtime USING (true);
+CREATE POLICY api_runtime_refresh_insert ON alx_api_private.api_refresh_tokens FOR INSERT TO alx_api_runtime WITH CHECK (true);
+CREATE POLICY api_runtime_refresh_update ON alx_api_private.api_refresh_tokens FOR UPDATE TO alx_api_runtime USING (true) WITH CHECK (true);
+
+GRANT USAGE ON SCHEMA alx_api_private TO alx_api_runtime;
+GRANT SELECT ON alx_api_private.api_login_users, alx_api_private.user_credentials TO alx_api_runtime;
+GRANT SELECT, INSERT, UPDATE ON alx_api_private.user_security, alx_api_private.api_sessions, alx_api_private.api_refresh_tokens TO alx_api_runtime;
+```
+
+## [2026-10-04T04:24:44+03:00] — فحوص metadata بعد migration (قراءة فقط) — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT rolname, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolbypassrls FROM pg_roles WHERE rolname = 'alx_api_runtime' LIMIT 1;
+
+SELECT c.relname AS relation_name, c.relkind AS relation_kind, has_schema_privilege('anon', n.oid, 'USAGE') AS anon_schema_usage, has_schema_privilege('authenticated', n.oid, 'USAGE') AS authenticated_schema_usage, has_table_privilege('anon', c.oid, 'SELECT') AS anon_select, has_table_privilege('authenticated', c.oid, 'SELECT') AS authenticated_select, has_table_privilege('service_role', c.oid, 'SELECT') AS service_role_select, has_table_privilege('alx_api_runtime', c.oid, 'SELECT') AS runtime_select, has_table_privilege('alx_api_runtime', c.oid, 'INSERT') AS runtime_insert, has_table_privilege('alx_api_runtime', c.oid, 'UPDATE') AS runtime_update, has_table_privilege('alx_api_runtime', c.oid, 'DELETE') AS runtime_delete FROM pg_class AS c JOIN pg_namespace AS n ON n.oid = c.relnamespace WHERE n.nspname = 'alx_api_private' AND c.relkind IN ('r','v') ORDER BY c.relname LIMIT 20;
+
+SELECT schemaname, tablename, policyname, roles, cmd, qual, with_check FROM pg_policies WHERE schemaname = 'alx_api_private' ORDER BY tablename, policyname LIMIT 30;
+
+SELECT viewname, definition FROM pg_views WHERE schemaname = 'alx_api_private' AND viewname = 'api_login_users' LIMIT 1;
+
+SELECT n.nspname, COALESCE(n.nspacl::text, '<default>') AS schema_acl, has_schema_privilege('anon', n.oid, 'USAGE') AS anon_usage, has_schema_privilege('authenticated', n.oid, 'USAGE') AS authenticated_usage, has_schema_privilege('service_role', n.oid, 'USAGE') AS service_role_usage, has_schema_privilege('alx_api_runtime', n.oid, 'USAGE') AS runtime_usage FROM pg_namespace AS n WHERE n.nspname = 'alx_api_private' LIMIT 1;
+```
+**النتيجة:** RLS=true للجداول الستة، ACL أدوار العملاء false؛ دور runtime فقط لديه schema usage والعمليات المقررة، مع عدم وجود صلاحية على reset/events/direct public.users.
+
+## [2026-10-04T04:27:22+03:00] — فشل TLS strict ونجاح تحقق pooler — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+الاتصال الأول بـ`ssl.rejectUnauthorized=true` توقف قبل تنفيذ SQL بسبب `SELF_SIGNED_CERT_IN_CHAIN`. فحص شهادة pooler أظهر SAN `*.pooler.supabase.com` وissuer `Supabase Intermediate 2021 CA`. لم تُجرَ أي كتابة أثناء هذا الفشل.
+
+استعلام الاتصال read-only عبر TLS:
+```sql
+SELECT current_user AS role, current_database() AS database_name, current_setting('server_version') AS server_version FROM (VALUES (1)) AS check_row(id) LIMIT 1;
+```
+ثم اتصال runtime سيُثبت لاحقاً TLS encryption مع CA-unverified لأغراض التطوير؛ production يتطلب شهادة CA الرسمية وverify-full.
+
+## [2026-10-04T04:30:37+03:00] — تفعيل كلمة مرور دور runtime محلية — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+محاولة SQL الأولى فشلت قبل أي تغيير بالخطأ `42P18` لأن parameter type غير محدد:
+```sql
+SELECT format('ALTER ROLE alx_api_runtime WITH LOGIN PASSWORD %L CONNECTION LIMIT 10', $1) AS statement;
+```
+الاستعلام المصحح الذي أنتج DDL:
+```sql
+SELECT format('ALTER ROLE alx_api_runtime WITH LOGIN PASSWORD %L CONNECTION LIMIT 10', $1::text) AS statement LIMIT 1;
+```
+ثم نُفذ النص الناتج مع كلمة مرور عشوائية 48-byte base64url **[REDACTED — لا تُسجل قيمة السر]**:
+```sql
+ALTER ROLE alx_api_runtime WITH LOGIN PASSWORD '[REDACTED]' CONNECTION LIMIT 10;
+```
+
+التحقق عبر shared transaction pooler:
+```sql
+SELECT rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolbypassrls FROM pg_roles WHERE rolname = current_user LIMIT 1;
+SELECT 1 FROM alx_api_private.api_sessions LIMIT 0;
+SELECT 1 FROM alx_api_private.api_login_users LIMIT 0;
+SELECT 1 FROM alx_api_private.user_credentials LIMIT 0;
+SELECT has_table_privilege(current_user, 'alx_api_private.password_reset_tokens', 'SELECT') AS reset_select, has_table_privilege(current_user, 'alx_api_private.auth_events', 'INSERT') AS events_insert, has_table_privilege(current_user, 'public.users', 'SELECT') AS direct_users_select FROM (VALUES (1)) AS check_row(id) LIMIT 1;
+```
+
+## [2026-10-04T04:31:25+03:00] — فحوص readiness الحية عبر alx_api — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT 1 FROM alx_api_private.api_sessions LIMIT 0;
+SELECT 1 FROM alx_api_private.api_login_users LIMIT 0;
+SELECT 1 FROM alx_api_private.user_credentials LIMIT 0;
+```
+لا تعيد هذه الاستعلامات أي صفوف/PII؛ نجحت مع دور runtime. لم تُقرأ أو تُكتب بيانات credentials.
+
+
+## تصحيح توقيت migration 0003 — [2026-10-04T04:41:20+03:00] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+استدعاء `supabase/apply_migration` وقراءات التحقق التابعة بعد موافقة المستخدم عند `04:24:10+03:00` مسجلة في سجل الأدوات عند `04:29:10+03:00`. عنوان قسم migration أعلاه الذي يظهر `04:24:29` كان تقريبياً؛ اعتمد `04:29:10+03:00` كتوقيت التنفيذ.

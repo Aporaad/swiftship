@@ -5,6 +5,8 @@ const environmentSchema = z.object({
   HOST: z.string().min(1).default('127.0.0.1'),
   PORT: z.coerce.number().int().min(1).max(65_535).default(3001),
   DATABASE_URL: z.string().url().optional().or(z.literal('')),
+  DATABASE_SSL_MODE: z.enum(['require', 'verify-full']).default('require'),
+  DATABASE_SSL_CA_PEM: z.string().max(16_384).optional().or(z.literal('')),
   CORS_ORIGINS: z.string().default('http://localhost:5174,http://localhost:5173'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   JSON_BODY_LIMIT: z.string().min(1).default('1mb'),
@@ -14,6 +16,20 @@ const environmentSchema = z.object({
   ARGON2_MEMORY_KIB: z.coerce.number().int().min(8_192).max(262_144).default(65_536),
   ARGON2_TIME_COST: z.coerce.number().int().min(1).max(10).default(3),
   ARGON2_PARALLELISM: z.coerce.number().int().min(1).max(8).default(1),
+  JWT_PRIVATE_KEY_PEM: z.string().max(16_384).optional().or(z.literal('')),
+  JWT_PUBLIC_KEY_PEM: z.string().max(16_384).optional().or(z.literal('')),
+  AUTH_DUMMY_PASSWORD_HASH: z.string().max(1_024).optional().or(z.literal('')),
+  JWT_ISSUER: z.string().trim().min(1).max(200).default('swiftship-api'),
+  JWT_AUDIENCE: z.string().trim().min(1).max(200).default('swiftship-client'),
+  ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().min(300).max(900).default(600),
+  REFRESH_TOKEN_TTL_SECONDS: z.coerce.number().int().min(600).max(7_776_000).default(2_592_000),
+}).superRefine((environment, context) => {
+  if (environment.DATABASE_SSL_MODE === 'verify-full' && !environment.DATABASE_SSL_CA_PEM) {
+    context.addIssue({ code: 'custom', path: ['DATABASE_SSL_CA_PEM'], message: 'A trusted database CA certificate is required for verify-full.' });
+  }
+  if (environment.NODE_ENV === 'production' && environment.DATABASE_SSL_MODE !== 'verify-full') {
+    context.addIssue({ code: 'custom', path: ['DATABASE_SSL_MODE'], message: 'Production requires database TLS verify-full.' });
+  }
 });
 
 export interface ApiEnvironment {
@@ -21,6 +37,8 @@ export interface ApiEnvironment {
   host: string;
   port: number;
   databaseUrl: string | undefined;
+  databaseSslMode: 'require' | 'verify-full';
+  databaseSslCaPem: string | undefined;
   corsOrigins: ReadonlySet<string>;
   logLevel: 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace' | 'silent';
   jsonBodyLimit: string;
@@ -30,6 +48,13 @@ export interface ApiEnvironment {
   argon2MemoryKiB: number;
   argon2TimeCost: number;
   argon2Parallelism: number;
+  jwtPrivateKeyPem: string | undefined;
+  jwtPublicKeyPem: string | undefined;
+  authDummyPasswordHash: string | undefined;
+  jwtIssuer: string;
+  jwtAudience: string;
+  accessTokenTtlSeconds: number;
+  refreshTokenTtlSeconds: number;
 }
 
 export function parseEnvironment(source: NodeJS.ProcessEnv = process.env): ApiEnvironment {
@@ -41,6 +66,10 @@ export function parseEnvironment(source: NodeJS.ProcessEnv = process.env): ApiEn
     host: parsed.HOST,
     port: parsed.PORT,
     databaseUrl: parsed.DATABASE_URL || undefined,
+    databaseSslMode: parsed.DATABASE_SSL_MODE,
+    databaseSslCaPem: parsed.DATABASE_SSL_CA_PEM
+      ? parsed.DATABASE_SSL_CA_PEM.replace(/\\n/g, '\n')
+      : undefined,
     corsOrigins: new Set(origins),
     logLevel: parsed.LOG_LEVEL,
     jsonBodyLimit: parsed.JSON_BODY_LIMIT,
@@ -50,5 +79,12 @@ export function parseEnvironment(source: NodeJS.ProcessEnv = process.env): ApiEn
     argon2MemoryKiB: parsed.ARGON2_MEMORY_KIB,
     argon2TimeCost: parsed.ARGON2_TIME_COST,
     argon2Parallelism: parsed.ARGON2_PARALLELISM,
+    jwtPrivateKeyPem: parsed.JWT_PRIVATE_KEY_PEM || undefined,
+    jwtPublicKeyPem: parsed.JWT_PUBLIC_KEY_PEM || undefined,
+    authDummyPasswordHash: parsed.AUTH_DUMMY_PASSWORD_HASH || undefined,
+    jwtIssuer: parsed.JWT_ISSUER,
+    jwtAudience: parsed.JWT_AUDIENCE,
+    accessTokenTtlSeconds: parsed.ACCESS_TOKEN_TTL_SECONDS,
+    refreshTokenTtlSeconds: parsed.REFRESH_TOKEN_TTL_SECONDS,
   };
 }

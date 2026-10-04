@@ -2144,3 +2144,28 @@
 - `alx_api`: إضافة Argon2id module/schema/routes وAuthUseCases port وAuth rate limit وENV parameters وOpenAPI واختبارات. لا use cases أو DB repository متصلين، فتظل المسارات 503.
 - التحقق: SwiftShip `npm run check`, الاختبارات (274 ناجح، 8 متخطاة) و`npm run build` ناجحة؛ alx_api check وbuild و17 اختباراً ناجحة. ظهرت تحذيرات build عن bundle size و`import.meta` مع CJS.
 - لا SQL أو DB/RLS/Grants تغيّرت. المرجع التفصيلي: `docs/pre-api/repair-followup-2026-10-04-0247.md`.
+
+
+## [2026-10-04T03:48:08+03:00] — Auth Drizzle repository وتأسيس الجداول — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- أضيف `DrizzleAuthRepository` بمعاملات لتسجيل الفشل، إنشاء الجلسة، تدوير refresh token بإقفال الصف، الإبطال عند replay/logout، وقراءة بيانات المستخدم دون إرجاع hash؛ وأضيفت `createAuthUseCases` كـcomposition root لا يُستدعى قبل بوابة التخزين.
+- شُدد فحص refresh في Auth ليشمل عمر/revocation الجلسة وإبطال العائلة عند إعادة الاستخدام أو خسارة سباق rotation.
+- وُحد Drizzle schema مع migration وقيود Argon2id/hash/expiry والعلاقات الذاتية؛ حفظت migration في `alx_api/src/db/migrations/0002_auth_private_storage.sql`.
+- أضيف توثيق قرار الأمان والترحيل وحدث README. Auth ما زال غير موصول في `server.ts`، ولا secrets أو DB URL مضمنة.
+- طبقت migration المعتمدة `alx_api_auth_foundation_0002` على مشروع Supabase؛ أنشأت ستة جداول فارغة فقط. لا بيانات credentials نُقلت، ولا RLS/GRANTS أو الجداول العامة تغيرت.
+- فحوص `alx_api`: `npm run check` ناجح؛ 10 suites / 43 tests ناجحة؛ `npm run build` ناجح قبل مواءمة قيود schema النهائية؛ يلزم إعادة التحقق بعد تحديث الاختبارات/الوثائق.
+- عائق أمني: Advisor يبلّغ RLS disabled كخطر حرج رغم أن استعلام الامتيازات أعاد عدم وجود schema USAGE/table SELECT لأدوار anon/authenticated/service_role. أبقى المستخدم RLS/GRANTS مؤجلة؛ لا تشغيل Auth ولا DB إضافية.
+- لم يُنفذ commit أو push؛ آخر طلب متابعة حدده محلياً فقط.
+
+
+## [2026-10-04T03:50:01+03:00] — تحقق محلي ختامي لـalx_api — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+`npm run check`, `npm test -- --runInBand`, و`npm run build` ناجحة بعد مواءمة Drizzle schema: 10 suites و43 tests ناجحة. فحص `git diff --check` ناجح، ومسح `alx_api/src/modules/auth` و`alx_api/src/db/schema.ts` لم يجد استخداماً صريحاً لـ`any`. لم يُضبط `DATABASE_URL` في بيئة العملية أو `alx_api/.env`; لذلك لا يمكن تشغيل health readiness أو اختبار repository ضد PostgreSQL محلياً، ولا تُفعّل Auth في `server.ts`. استمر العمل على الملفات المحلية فقط؛ لا commit/push.
+
+
+## [2026-10-04T04:38:37+03:00] — RLS/Grants، runtime Auth، وHTTP smoke — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- طبقت migration `alx_api_auth_rls_runtime_0003` المعتمدة على `alx_api_private`: role `alx_api_runtime` محدود، default ACL revoke، view ضيقة `api_login_users`، FORCE RLS للجداول الستة، وسياسات/grants لأقل العمليات. لا تعديل على جداول أو صلاحيات schema `public`.
+- فحص metadata وcatalog: الجداول الستة فارغة وRLS مفعّل؛ `anon/authenticated/service_role` بلا USAGE/SELECT، والدور runtime بلا bypass/superuser/createdb/createrole، مع صلاحيات Auth المحددة فقط. `password_reset_tokens` و`auth_events` و`public.users` مباشرة محجوبة.
+- حُوّل DrizzleAuthRepository إلى view الآمنة، ووُصل Auth factory في server عند وجود DB/JWT/dummy hash؛ health readiness يفحص session table والـview وcredentials table. دعم Node 22 لملف .env اختياري، وSSL production صار require `verify-full` وCA.
+- أنشئ .env محلي mode 0600 يتضمن URL الدور المقيد ومفتاح Ed25519 وdummy Argon2id hash. لم تُقرأ/تُرحل قيم `public.users.password/system_pin`؛ الجداول ما زالت فارغة. smoke لاسم اصطناعي أعاد 401 عاماً كما ينبغي، وليس مصادقة فعلية لمستخدم موجود.
+- تحقق ناجح: `npm run check`, 10 suites / 44 tests, `npm run build`; اختبار مباشر: `/api/v1/health/live`=200، `/ready`=200، login اصطناعي غير موجود=401، Ed25519 issuer/verifier صحيح.
+- اتصال التطوير TLS مشفر لكن CA غير متحقق منها؛ لا production حتى تنزيل CA الرسمي وتفعيل verify-full. كلمة مرور postgres المقدمة مؤقتاً استُخدمت للتهيئة فقط ويوصى بتدويرها.
+- أكد المستخدم بعد تحذير صريح رغبته بإضافة `.env` إلى repository `Aporaad/swiftship` العام. هذا نشر متعمد لأسرار runtime/private signing key، وسيُسجل في commit/push اللاحق بناءً على موافقته الصريحة.

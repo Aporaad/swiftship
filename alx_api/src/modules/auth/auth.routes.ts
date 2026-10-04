@@ -1,25 +1,21 @@
 import { rateLimit } from 'express-rate-limit';
-import type { Express } from 'express';
+import type { Express, NextFunction, Response } from 'express';
 import type { ApiEnvironment } from '../../config/env';
 import { sendFailure, sendSuccess } from '../../core/http/response';
+import type { AuthUseCases } from './auth.contracts';
 import {
   loginInputSchema,
   logoutInputSchema,
   refreshInputSchema,
 } from './auth.schemas';
+import { AuthServiceError } from './auth.use-cases';
 
-export interface AuthTokenPairDto {
-  accessToken: string;
-  refreshToken: string;
-  tokenType: 'Bearer';
-  expiresInSeconds: number;
-}
-
-/** Application port; production implementation must be backed by the approved PostgreSQL schema. */
-export interface AuthUseCases {
-  login(input: { identifier: string; password: string }): Promise<AuthTokenPairDto>;
-  refresh(input: { refreshToken: string }): Promise<AuthTokenPairDto>;
-  logout(input: { refreshToken: string }): Promise<void>;
+function handleAuthError(error: unknown, response: Response, requestId: string, next: NextFunction): void {
+  if (error instanceof AuthServiceError) {
+    sendFailure(response, error.statusCode, error.code, error.safeMessage, requestId);
+    return;
+  }
+  next(error);
 }
 
 export function registerAuthRoutes(
@@ -57,7 +53,7 @@ export function registerAuthRoutes(
       const result = await useCases.login(input.data);
       return sendSuccess(response, result, requestId);
     } catch (error) {
-      next(error);
+      handleAuthError(error, response, requestId, next);
     }
   });
 
@@ -75,7 +71,7 @@ export function registerAuthRoutes(
       const result = await useCases.refresh(input.data);
       return sendSuccess(response, result, requestId);
     } catch (error) {
-      next(error);
+      handleAuthError(error, response, requestId, next);
     }
   });
 
@@ -93,7 +89,7 @@ export function registerAuthRoutes(
       await useCases.logout(input.data);
       return sendSuccess(response, { loggedOut: true }, requestId);
     } catch (error) {
-      next(error);
+      handleAuthError(error, response, requestId, next);
     }
   });
 }

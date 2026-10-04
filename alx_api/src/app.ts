@@ -7,7 +7,8 @@ import pinoHttp from 'pino-http';
 import type { ApiEnvironment } from './config/env';
 import { sendFailure, sendSuccess } from './core/http/response';
 import { requestIdMiddleware } from './middleware/request-id';
-import { registerAuthRoutes, type AuthUseCases } from './modules/auth/auth.routes';
+import { registerAuthRoutes } from './modules/auth/auth.routes';
+import type { AuthUseCases } from './modules/auth/auth.contracts';
 
 export interface ApiReadiness {
   database: boolean;
@@ -15,7 +16,7 @@ export interface ApiReadiness {
 
 export interface AppOptions {
   environment: ApiEnvironment;
-  readiness?: () => ApiReadiness;
+  readiness?: () => ApiReadiness | Promise<ApiReadiness>;
   logger?: Logger;
   auth?: AuthUseCases;
 }
@@ -69,9 +70,10 @@ export function createApiApp(options: AppOptions): Express {
     sendSuccess(response, { status: 'alive' }, String(response.locals.requestId));
   });
 
-  app.get('/api/v1/health/ready', (_request, response) => {
-    const checks = readiness();
-    if (!checks.database) {
+  app.get('/api/v1/health/ready', async (_request, response) => {
+    const databaseChecks = await readiness();
+    const checks = { database: databaseChecks.database, auth: Boolean(options.auth) };
+    if (!checks.database || !checks.auth) {
       return sendFailure(response, 503, 'SERVICE_NOT_READY', 'الخدمة غير جاهزة بعد.', String(response.locals.requestId));
     }
     return sendSuccess(response, { status: 'ready', checks }, String(response.locals.requestId));

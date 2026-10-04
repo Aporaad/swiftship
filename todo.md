@@ -1511,3 +1511,33 @@
 - [ ] مصدر كلمة المرور الحالي في adapter يستخدم مقارنة مباشرة مع `public.users.password`؛ يلزم اعتماد migration/reset/hash وsessions/refresh/lockout، ولم ينفذ SQL أو تغيير DB حسب توجيه المستخدم.
 - [ ] لم تكتمل بقية بوابة Portal HTTP ولم تُعلن خطة الإصلاح مكتملة أو API production-ready.
 - التقرير: `docs/pre-api/repair-followup-2026-10-04-0247.md`.
+
+
+## [2026-10-04T03:48:08+03:00] — Auth Repository ومخطط الجداول — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- [x] إنشاء DrizzleAuthRepository typed وخدمة composition factory؛ إضافة refresh replay detection وإبطال عائلة التوكن واختبارات تغطي انتهاء session وسباق rotation.
+- [x] إضافة `alx_api/src/db/migrations/0002_auth_private_storage.sql` ومواءمة Drizzle schema مع user_credentials, user_security, api_sessions, api_refresh_tokens, password_reset_tokens, auth_events.
+- [x] بعد اعتماد المستخدم للنص حرفياً، تطبيق `alx_api_auth_foundation_0002` على Supabase؛ تأكد وجود 6 جداول فارغة وتسجيل migration. لم تُهاجر بيانات من `public.users.password` أو `system_pin`.
+- [x] تسجيل نصوص SQL والنتائج الزمنية في `db_commends.md`؛ توثيق التنفيذ في `DBdevloping_history.md` و`devloping_history.md` وقرار المستخدم في `user_commends.md`.
+- [ ] RLS/GRANTS مؤجلة بقرار المستخدم. الاستعلام اللاحق أعاد false لامتيازات anon/authenticated/service_role على المخطط/SELECT، لكن Supabase Advisor أبلغ RLS-disabled critical على الستة؛ لا تفعيل Auth ولا أي runtime اعتماداً على هذا الفحص وحده.
+- [ ] لا يوجد `DATABASE_URL`/تشغيل Auth موصول في الخادم؛ المسارات تبقى `503 AUTH_NOT_CONFIGURED`. يلزم حسم أمني مستقل، تهيئة اتصال runtime وصلاحياته، واختبار repository على PostgreSQL معتمد قبل التفعيل.
+- [ ] لا commit/push في هذه الجولة؛ المستخدم طلب متابعة محلية فقط.
+
+
+## [2026-10-04T03:50:01+03:00] — تحقق نهائي وحالة الجاهزية — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- [x] `alx_api`: TypeScript check، 10 suites / 43 tests، build؛ `git diff --check` نظيف.
+- [x] فحص `any` الصريح في وحدات Auth وDrizzle الجديدة = صفر.
+- [ ] `DATABASE_URL` غير مضبوط في العملية أو `alx_api/.env`؛ readiness الفعلي واختبار repository مع DB غير قابلين للتنفيذ محلياً في هذه الجلسة.
+- [ ] لا تشغيل Auth حتى معالجة تنبيه Advisor حول RLS المعطل أو اعتماد مسار حماية بديل ومراجع، مع احترام توجيه المستخدم بإبقاء RLS/GRANTS مؤجلة.
+- [ ] لا commit أو push؛ آخر توجيه هو المتابعة محلياً فقط.
+
+
+## [2026-10-04T04:38:37+03:00] — Auth security, repository wiring, HTTP smoke — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+> هذا الإدخال يحدّث البنود المفتوحة المؤرخة 03:48–03:50 أعلاه؛ لا تُحذف السجلات السابقة.
+- [x] تطبيق migration `alx_api_auth_rls_runtime_0003`: RLS + FORCE على الجداول الستة، revoke من `PUBLIC/anon/authenticated/service_role`, دور runtime محدود وسياسات حسب العمليات المطلوبة.
+- [x] إنشاء `api_login_users` view بأعمدة آمنة محددة؛ Auth Repository لم يعد يقرأ `public.users` مباشرة.
+- [x] تفعيل `alx_api_runtime` login بكلمة مرور عشوائية محلية، تأكيد صلاحياته المحدودة عبر transaction pooler، وإنشاء `.env` محلي mode 0600.
+- [x] توصيل `AuthService` في `server.ts` عند توافر config، تحميل `.env` عبر Node 22، ورفع readiness ليتحقق من جداول Auth/الـview.
+- [x] التحقق: TypeScript check + 10 suites/44 tests + build؛ HTTP smoke: liveness 200، readiness 200، unknown synthetic login 401 برسالة عامة؛ اختبار JWT Ed25519 pair ناجح.
+- [ ] لم تنقل أي كلمة مرور أو PIN. `user_credentials` فارغ؛ يلزم اعتماد/تنفيذ credential migration منفصلة قبل قبول تسجيل دخول حقيقي.
+- [ ] TLS التطوير مشفر لكن CA غير متحقق منها؛ production يتطلب `DATABASE_SSL_MODE=verify-full` وشهادة CA الرسمية.
+- [ ] المستخدم أكد نشر `.env` إلى المستودع العام بعد تحذير صريح؛ يجب تنفيذ commit/push للملفات المحددة ثم التحقق من الحالة النهائية.

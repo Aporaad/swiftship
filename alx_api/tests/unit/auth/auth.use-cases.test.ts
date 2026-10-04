@@ -1,0 +1,153 @@
+import { AuthService, type AuthRepository, type AccessTokenIssuer } from '../../../src/modules/auth/auth.use-cases';
+
+const now = new Date('2026-10-04T00:00:00.000Z');
+
+function makeDependencies() {
+  const repository: jest.Mocked<AuthRepository> = {
+    findUsersByIdentifier: jest.fn().mockResolvedValue([{ userId: 'u-1', role: 'employee', disabled: false }]),
+    findCredential: jest.fn().mockResolvedValue({ passwordHash: 'argon-hash', passwordAlgorithm: 'argon2id' }),
+    getLockedUntil: jest.fn().mockResolvedValue(null),
+    recordFailedLogin: jest.fn().mockResolvedValue(undefined),
+    clearFailedLogins: jest.fn().mockResolvedValue(undefined),
+    createSession: jest.fn().mockResolvedValue(undefined),
+    findRefreshToken: jest.fn().mockResolvedValue({
+      userId: 'u-1', role: 'employee', disabled: false, sessionId: 'session-1', familyId: 'family-1',
+      expiresAt: new Date('2026-10-05T00:00:00Z'), sessionExpiresAt: new Date('2026-11-03T00:00:00Z'), sessionRevokedAt: null,
+      usedAt: null, revokedAt: null,
+    }),
+    rotateRefreshToken: jest.fn().mockResolvedValue(true),
+    revokeRefreshToken: jest.fn().mockResolvedValue(undefined),
+    revokeRefreshTokenFamily: jest.fn().mockResolvedValue(undefined),
+  };
+  const issuer: jest.Mocked<AccessTokenIssuer> = { issue: jest.fn().mockResolvedValue('signed-access-token') };
+  const service = new AuthService(
+    repository,
+    issuer,
+    { accessTokenTtlSeconds: 900, refreshTokenTtlSeconds: 2_592_000, dummyPasswordHash: 'dummy-argon2id-hash' },
+    jest.fn().mockResolvedValue(true),
+    () => now,
+  );
+  return { repository, issuer, service };
+}
+
+describe('AuthService', () => {
+  it('normalizes the identifier and persists only a hash of a fresh refresh token', async () => {
+    const { repository, issuer, service } = makeDependencies();
+    const result = await service.login({ identifier: '  Employee@Example.test ', password: 'secret' });
+
+    expect(repository.findUsersByIdentifier).toHaveBeenCalledWith('employee@example.test');
+    expect(result).toMatchObject({ accessToken: 'signed-access-token', tokenType: 'Bearer', expiresInSeconds: 900 });
+    expect(result.refreshToken).not.toBe('signed-access-token');
+    const session = repository.createSession.mock.calls[0]?.[0];
+    expect(session?.refreshTokenHash).not.toBe(result.refreshToken);
+    expect(session?.refreshTokenHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(issuer.issue).toHaveBeenCalledWith(expect.objectContaining({ subject: 'u-1', role: 'employee', sessionId: expect.any(String) }));
+  });
+
+  it('rejects duplicate identifiers without selecting an arbitrary account', async () => {
+    const { repository, service } = makeDependencies();
+    repository.findUsersByIdentifier.mockResolvedValue([
+      { userId: 'u-1', role: 'employee', disabled: false },
+      { userId: 'u-2', role: 'employee', disabled: false },
+    ]);
+    await expect(service.login({ identifier: 'duplicate', password: 'secret' })).rejects.toMatchObject({
+      statusCode: 401, code: 'AUTH_INVALID_CREDENTIALS',
+    });
+    expect(repository.findCredential).not.toHaveBeenCalled();
+  });
+
+  it('does not authenticate a disabled account and still performs password verification', async () => {
+    const { repository, issuer } = makeDependencies();
+    const verifier = jest.fn().mockResolvedValue(true);
+    const service = new AuthService(
+      repository,
+      issuer,
+      { accessTokenTtlSeconds: 900, refreshTokenTtlSeconds: 2_592_000, dummyPasswordHash: '$argon2id$dummy-hash' },
+      verifier,
+      () => now,
+    );
+    repository.findUsersByIdentifier.mockResolvedValue([{ userId: 'u-1', role: 'employee', disabled: true }]);
+    await expect(service.login({ identifier: 'employee', password: 'secret' })).rejects.toMatchObject({ statusCode: 401 });
+    expect(verifier).toHaveBeenCalled();
+    expect(repository.createSession).not.toHaveBeenCalled();
+  });
+
+  it('returns the same generic failure when a credential is not migrated', async () => {
+    const { repository, service } = makeDependencies();
+    repository.findCredential.mockResolvedValue(null);
+    await expect(service.login({ identifier: 'employee', password: 'secret' })).rejects.toMatchObject({ statusCode: 401 });
+  });
+
+  it('records a failed login and returns a generic authentication error', async () => {
+    const { repository, service } = makeDependencies();
+    const verifier = jest.fn().mockResolvedValue(false);
+    const serviceWithFailure = new AuthService(
+      repository,
+      { issue: jest.fn().mockResolvedValue('unused') },
+      { accessTokenTtlSeconds: 900, refreshTokenTtlSeconds: 2_592_000, dummyPasswordHash: '$argon2id$dummy-hash' },
+      verifier,
+      () => now,
+    );
+    await expect(serviceWithFailure.login({ identifier: 'employee', password: 'wrong' })).rejects.toMatchObject({ statusCode: 401 });
+    expect(repository.recordFailedLogin).toHaveBeenCalledWith('u-1', now);
+  });
+
+  it('rotates a valid refresh token and never returns its stored hash', async () => {
+    const { repository, service } = makeDependencies();
+    const result = await service.refresh({ refreshToken: 'a'.repeat(48) });
+    expect(repository.rotateRefreshToken).toHaveBeenCalledWith(expect.objectContaining({
+      oldTokenHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      newTokenHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+    }));
+    expect(result.refreshToken).not.toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it('rejects a refresh token when its session has expired', async () => {
+    const { repository, service } = makeDependencies();
+    repository.findRefreshToken.mockResolvedValue({
+      userId: 'u-1', role: 'employee', disabled: false, sessionId: 'session-1', familyId: 'family-1',
+      expiresAt: new Date('2026-10-05T00:00:00Z'), sessionExpiresAt: new Date('2026-10-03T00:00:00Z'), sessionRevokedAt: null,
+      usedAt: null, revokedAt: null,
+    });
+    await expect(service.refresh({ refreshToken: 'a'.repeat(48) })).rejects.toMatchObject({ statusCode: 401 });
+    expect(repository.rotateRefreshToken).not.toHaveBeenCalled();
+  });
+
+  it('revokes the family when rotation loses an atomic race', async () => {
+    const { repository, service } = makeDependencies();
+    repository.rotateRefreshToken.mockResolvedValue(false);
+    await expect(service.refresh({ refreshToken: 'a'.repeat(48) })).rejects.toMatchObject({ statusCode: 401 });
+    expect(repository.revokeRefreshTokenFamily).toHaveBeenCalledWith(expect.stringMatching(/^[a-f0-9]{64}$/), now);
+  });
+
+  it('rejects reused or expired refresh tokens', async () => {
+    const { repository, service } = makeDependencies();
+    repository.findRefreshToken.mockResolvedValue({
+      userId: 'u-1', role: 'employee', disabled: false, sessionId: 'session-1', familyId: 'family-1',
+      expiresAt: new Date('2026-10-03T00:00:00Z'), sessionExpiresAt: new Date('2026-11-03T00:00:00Z'), sessionRevokedAt: null,
+      usedAt: null, revokedAt: null,
+    });
+    await expect(service.refresh({ refreshToken: 'a'.repeat(48) })).rejects.toMatchObject({ statusCode: 401 });
+    expect(repository.rotateRefreshToken).not.toHaveBeenCalled();
+  });
+
+  it('revokes the whole refresh-token family when a consumed token is reused', async () => {
+    const { repository, service } = makeDependencies();
+    repository.findRefreshToken.mockResolvedValue({
+      userId: 'u-1', role: 'employee', disabled: false, sessionId: 'session-1', familyId: 'family-1',
+      expiresAt: new Date('2026-10-05T00:00:00Z'), sessionExpiresAt: new Date('2026-11-03T00:00:00Z'), sessionRevokedAt: null,
+      usedAt: new Date('2026-10-03T23:59:00Z'), revokedAt: null,
+    });
+    await expect(service.refresh({ refreshToken: 'a'.repeat(48) })).rejects.toMatchObject({ statusCode: 401 });
+    expect(repository.revokeRefreshTokenFamily).toHaveBeenCalledWith(expect.stringMatching(/^[a-f0-9]{64}$/), now);
+    expect(repository.rotateRefreshToken).not.toHaveBeenCalled();
+  });
+
+  it('revokes a refresh token using its hash only', async () => {
+    const { repository, service } = makeDependencies();
+    const token = 'b'.repeat(48);
+    await service.logout({ refreshToken: token });
+    expect(repository.revokeRefreshToken).toHaveBeenCalledWith(expect.stringMatching(/^[a-f0-9]{64}$/), now);
+    expect(repository.revokeRefreshToken.mock.calls[0]?.[0]).not.toBe(token);
+  });
+});

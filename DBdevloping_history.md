@@ -1166,3 +1166,28 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 تم الاتصال بالمشروع `ejrojwbbflzchasvgexr` عبر Supabase MCP وتنفيذ قراءات SELECT فقط. لم تُنفذ DDL أو DML أو Migration، ولم يتم تعديل RLS أو Grants.
 
 نتائج البيانات الحية: FK الأساسية المفحوصة بلا orphan rows، لكن `public.users` يحتوي 11 قيمة password و9 قيم system_pin، و`main_entry` يحتوي 5 قيود غير متوازنة حسب تجميع account_trans، و`accounts` يحتوي رصيدين سالبين وحساباً بلا اسم، و2 sessions بلا expires_at. كما أن RLS معطل على 50 جدولاً وفق advisory المخطط؛ بقي ذلك خارج النطاق ولم تتم معالجته.
+
+
+## [2026-10-04T03:39:43+03:00] — إنشاء مخزن Auth الخاص — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- بعد موافقة المستخدم على DDL حرفياً، نُفذت migration `alx_api_auth_foundation_0002` على المشروع `ejrojwbbflzchasvgexr`.
+- أُنشئ schema `alx_api_private` والجداول الستة: `user_credentials`, `user_security`, `api_sessions`, `api_refresh_tokens`, `password_reset_tokens`, `auth_events`، مع PK/FK وقيود hashes/expiry وفهارس محددة في `alx_api/src/db/migrations/0002_auth_private_storage.sql`.
+- فحص metadata أكد الجداول الستة، صفر صفوف، وارتباطات `public.users(user_id)` المطلوبة. أدرجت migration في سجل Supabase.
+- لم تُقرأ أو تنقل قيم `public.users.password` أو `system_pin`، ولم تُكتب بيانات أو تتغير جداول عامة.
+- **RLS وGRANTS لم تتغير** حسب اختيار المستخدم. رغم أن استعلام metadata للامتيازات أعاد false لـanon/authenticated/service_role على schema USAGE/table SELECT، أظهر Supabase Advisor تنبيهاً حرجاً بسبب RLS المعطل. التعارض مسجل كمانع؛ لا تُفعّل Auth ولا تعرض المخطط حتى مراجعته.
+- تمت قراءتا metadata SQL قبل التغيير وقراءة تحقق بعده؛ النصوص الفعلية محفوظة في `db_commends.md`. بعد هذا الاختيار لا تنفيذ DB إضافي.
+
+
+## [2026-10-04T04:24:29+03:00] — تأمين مخطط Auth — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- بعد اعتماد المستخدم الصريح للنص، طُبقت `alx_api_auth_rls_runtime_0003` على المشروع `ejrojwbbflzchasvgexr`.
+- migration مفعّلة ومُجبرة RLS للجداول الستة، وأنشأت `api_login_users` view محدودة؛ سحبت ACL من `PUBLIC/anon/authenticated/service_role`، وأنشأت الدور `alx_api_runtime` بخصائص غير مميزة وسياسات/grants للعمليات اللازمة فقط. لم يتغير أي جدول أو RLS/Grants في `public`.
+- أظهرت metadata كل الجداول الستة صفر صفوف وRLS=true. Catalog أكد عدم وصول أدوار العملاء، والدور runtime وحده لديه schema USAGE. `password_reset_tokens/auth_events` بلا أي grant/policy، و`public.users` المباشر بلا SELECT.
+
+## [2026-10-04T04:30:37+03:00] — تهيئة runtime login والتحقق من صلاحيات الاتصال — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- فُعّل LOGIN لدور `alx_api_runtime` بكلمة مرور عشوائية طويلة؛ القيمة لا تسجل هنا. أنشئ ملف `alx_api/.env` محلياً mode 0600، يحتوي على DATABASE_URL بالدور المقيد ومفاتيح محلية وdummy hash. لم تحفظ DIRECT_URL أو كلمة مرور postgres في المستودع.
+- اختبار اتصال pooler runtime أكد role attributes اللازمة وصلاحيات SELECT/INSERT/UPDATE المحددة، ورفض direct SELECT من `public.users` ورفض reset/events. استعلامات `LIMIT 0` لم تجلب صفوفاً.
+- اتصال TLS كان مشفراً لكن لم يتحقق من CA؛ production يمنع هذا الوضع حتى تزويد CA الرسمية واستخدام verify-full.
+- لا نقل/قراءة لكلمات مرور أو PIN. لا بيانات في الجداول الجديدة.
+
+
+## تصحيح وقت التنفيذ — [2026-10-04T04:41:20+03:00] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+وقت موافقة المستخدم على migration 0003 هو `04:24:10+03:00`، بينما سجل التنفيذ بعد ضغط السياق يؤرخ استدعاء تطبيق migration والتحققات التابعة له عند `04:29:10+03:00`. عنوان الإدخال السابق `04:24:29` كان تقدير وقت الموافقة وليس وقت التنفيذ؛ هذا التصحيح هو المرجع الزمني المعتمد.

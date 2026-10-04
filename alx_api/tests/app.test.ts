@@ -1,6 +1,7 @@
 import request from 'supertest';
 import { createApiApp } from '../src/app';
 import { parseEnvironment } from '../src/config/env';
+import type { AuthUseCases } from '../src/modules/auth/auth.contracts';
 
 const environment = parseEnvironment({
   NODE_ENV: 'test',
@@ -11,8 +12,12 @@ const environment = parseEnvironment({
   RATE_LIMIT_MAX: '100',
 });
 
-function createApp(databaseReady = false) {
-  return createApiApp({ environment, readiness: () => ({ database: databaseReady }) });
+function createApp(databaseReady = false, authReady = false) {
+  const auth: AuthUseCases | undefined = authReady
+    ? { login: jest.fn(), refresh: jest.fn(), logout: jest.fn() }
+    : undefined;
+  const options = { environment, readiness: () => ({ database: databaseReady }) };
+  return auth ? createApiApp({ ...options, auth }) : createApiApp(options);
 }
 
 describe('ALX API scaffold HTTP boundary', () => {
@@ -35,7 +40,7 @@ describe('ALX API scaffold HTTP boundary', () => {
     expect(response.headers['x-request-id']).toMatch(/^[0-9a-f-]{36}$/i);
   });
 
-  it('does not report readiness until the database dependency is explicitly available', async () => {
+  it('does not report readiness until database and Auth use cases are explicitly available', async () => {
     const response = await request(createApp()).get('/api/v1/health/ready');
 
     expect(response.status).toBe(503);
@@ -44,11 +49,19 @@ describe('ALX API scaffold HTTP boundary', () => {
     expect(response.body.error.requestId).toBe(response.headers['x-request-id']);
   });
 
-  it('reports readiness only when its injected dependency check passes', async () => {
+  it('remains not-ready when the database responds but Auth is not wired', async () => {
     const response = await request(createApp(true)).get('/api/v1/health/ready');
+
+    expect(response.status).toBe(503);
+    expect(response.body.data).toBeUndefined();
+  });
+
+  it('reports readiness only when database and Auth dependencies pass', async () => {
+    const response = await request(createApp(true, true)).get('/api/v1/health/ready');
 
     expect(response.status).toBe(200);
     expect(response.body.data.checks.database).toBe(true);
+    expect(response.body.data.checks.auth).toBe(true);
   });
 
   it('rejects an unapproved browser origin without exposing internals', async () => {

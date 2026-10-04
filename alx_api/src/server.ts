@@ -1,26 +1,56 @@
 import pino from 'pino';
 import { createApiApp } from './app';
 import { parseEnvironment } from './config/env';
+import { isDatabaseReady } from './db/health';
+import { createDatabaseConnection } from './db/pool';
+import { createAuthUseCases } from './modules/auth/auth.factory';
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? 'info' });
 
 function startServer(): void {
   const environment = parseEnvironment();
-  if (environment.databaseUrl) {
-    logger.warn('DATABASE_URL is set, but the database adapter is not wired in this scaffold; readiness remains disabled.');
-  }
-
-  const app = createApiApp({ environment, readiness: () => ({ database: false }), logger });
+  const database = environment.databaseUrl
+    ? createDatabaseConnection({
+      connectionString: environment.databaseUrl,
+      nodeEnv: environment.nodeEnv,
+      sslMode: environment.databaseSslMode,
+      ...(environment.databaseSslCaPem ? { sslCaPem: environment.databaseSslCaPem } : {}),
+    })
+    : undefined;
+  const auth = database && environment.jwtPrivateKeyPem && environment.authDummyPasswordHash
+    ? createAuthUseCases(database, environment)
+    : undefined;
+  const appOptions = {
+    environment,
+    readiness: async () => ({ database: await isDatabaseReady(database?.pool) }),
+    logger,
+  };
+  const app = auth ? createApiApp({ ...appOptions, auth }) : createApiApp(appOptions);
   const server = app.listen(environment.port, environment.host, () => {
-    logger.info({ host: environment.host, port: environment.port }, 'alx_api scaffold listening');
+    logger.info(
+      {
+        host: environment.host,
+        port: environment.port,
+        databaseConfigured: Boolean(database),
+        authConfigured: Boolean(auth),
+      },
+      'alx_api listening',
+    );
   });
 
   const shutdown = (signal: NodeJS.Signals): void => {
-    logger.info({ signal }, 'alx_api scaffold shutting down');
+    logger.info({ signal }, 'alx_api shutting down');
     server.close((error) => {
       if (error) {
         logger.error({ name: error.name }, 'HTTP server failed to close cleanly');
         process.exitCode = 1;
+      }
+      if (database) {
+        void database.pool.end().catch((closeError: unknown) => {
+          const summary = closeError instanceof Error ? { name: closeError.name } : { name: 'UnknownError' };
+          logger.error(summary, 'PostgreSQL pool failed to close cleanly');
+          process.exitCode = 1;
+        });
       }
     });
   };

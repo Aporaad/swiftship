@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: ALX API
   version: 0.1.0
-  description: Infrastructure scaffold with versioned auth request boundaries. Auth use cases are intentionally unconfigured until the PostgreSQL credential/session contract is approved.
+  description: Initial API foundation with versioned Auth contracts and testable use-case logic. Production Auth remains unavailable until a secured PostgreSQL repository and credential migration are approved.
 servers:
   - url: http://127.0.0.1:3001
 paths:
@@ -20,12 +20,12 @@ paths:
   /api/v1/health/ready:
     get:
       operationId: getReadiness
-      summary: Dependency readiness probe
+      summary: Database and Auth readiness probe
       responses:
         '200':
-          description: Dependencies are ready.
+          description: PostgreSQL is reachable and Auth use cases are wired.
         '503':
-          description: Service is intentionally not ready until PostgreSQL and deployment configuration are added.
+          description: Service remains not-ready until PostgreSQL is reachable and Auth use cases are wired.
           content:
             application/json:
               schema:

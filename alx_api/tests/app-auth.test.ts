@@ -1,7 +1,8 @@
 import request from 'supertest';
 import { createApiApp } from '../src/app';
 import { parseEnvironment } from '../src/config/env';
-import type { AuthTokenPairDto, AuthUseCases } from '../src/modules/auth/auth.routes';
+import type { AuthTokenPairDto, AuthUseCases } from '../src/modules/auth/auth.contracts';
+import { AuthServiceError } from '../src/modules/auth/auth.use-cases';
 
 const environment = parseEnvironment({
   NODE_ENV: 'test',
@@ -70,6 +71,18 @@ describe('versioned auth HTTP boundary', () => {
     expect(logout.status).toBe(200);
     expect(logout.body.data.loggedOut).toBe(true);
     expect(auth.logout).toHaveBeenCalledWith({ refreshToken: tokenPair.refreshToken });
+  });
+
+  it('maps safe use-case failures to the common HTTP envelope', async () => {
+    const auth = createAuthUseCases();
+    auth.login.mockRejectedValue(new AuthServiceError(401, 'AUTH_INVALID_CREDENTIALS', 'بيانات المصادقة غير صحيحة.'));
+    const response = await request(createApiApp({ environment, auth }))
+      .post('/api/v1/auth/login')
+      .send({ identifier: 'user@example.test', password: 'wrong' });
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe('AUTH_INVALID_CREDENTIALS');
+    expect(JSON.stringify(response.body)).not.toContain('wrong');
   });
 
   it('applies the dedicated authentication rate limit', async () => {
