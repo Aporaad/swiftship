@@ -2233,3 +2233,7 @@
 - أصبح OpenAPI يغطي Auth routes، ووثقت خطوات التشغيل وحدود reset/cutover وRBAC.
 - النتيجة: 59 unit/route tests في 11 suites، DB integration migrations 0002–0006/transactions/Auth/RBAC ناجحة، build ناجح؛ HTTP service يعمل على `127.0.0.1:3001`، login legacy اصطناعي هاجر إلى Argon2id، login بPIN رفض، refresh/logout/authorization اجتازت.
 - لم يُنفّذ أي SQL على Supabase في هذه الجولة. `0005/0006` محلية فقط. لم تُنقل بيانات مستخدمين حقيقيين. بقيت defaults RBAC وقناة reset والـcutover مفاتيح قرار للإكمال.
+
+
+## [2026-10-04T08:39:29+03:00] — نشر Auth Core المحلي والتحقق الأخضر — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ونجح GitHub Actions run `37180466957` متضمناً 59 اختباراً وPostgreSQL integration وbuild. تطابق remote/local HEAD، بقي API على loopback ready=200، ولم تحدث DB writes بعيدة أو تغييرات على كلمات المرور المعتمدة.

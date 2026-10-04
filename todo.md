@@ -1649,3 +1649,10 @@
 - [ ] لا يزال provider فعلي لتسليم reset token غير مهيأ؛ المسار يرجع 503 بأمان حتى ربطه.
 - [ ] RBAC لا يملك roles/permissions seeded. أوقف seed النهائي حتى توحيد اختلاف مصفوفة الصلاحيات الافتراضية بين شاشة Roles وإدارة المستخدمين.
 - [ ] الخطوة التالية: اعتماد matrix وprovider/cutover، ثم مراجعة منفصلة قبل نقل 0005/0006 لأي DB مشتركة. لا نقل جماعي/لا PIN.
+
+
+## [2026-10-04T08:39:29+03:00] — نجاح CI والتحقق النهائي
+- [x] commit `a2d725b5a061bcf79b3626c756f63feedd847aec` دُفع إلى `Aporaad/swiftship:main`؛ local/remote HEAD متطابقان والـworktree نظيف وقت الفحص.
+- [x] CI run `37180466957` نجح: check، lint، format، 59 unit tests، PostgreSQL integration، وbuild.
+- [x] API المحلي ما زال جاهزاً HTTP 200 على `127.0.0.1:3001`؛ `.env` بصلاحية `0600`.
+- [x] لم تُنفّذ DB operations خارج localhost في هذه الجولة؛ لا تغييرات على `postgres` أو المالك أو سر التطوير الحالي.
