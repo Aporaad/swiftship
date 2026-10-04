@@ -3,8 +3,9 @@ info:
   title: ALX API
   version: 0.1.0
   description: >-
-    Versioned API foundation with a wired Auth use-case service and least-privilege PostgreSQL repository.
-    The Auth storage tables are currently empty; existing users cannot authenticate until a reviewed credential migration is completed.
+    Auth Core with local PostgreSQL integration coverage and least-privilege repositories.
+    Legacy credentials are verified inside a restricted database function and upgraded to Argon2id on first successful login when enabled.
+    Real production-user credentials have not been bulk-migrated; production password changes remain disabled until client cutover and delivery configuration.
 servers:
   - url: http://127.0.0.1:3001
     description: Local development only
@@ -40,8 +41,8 @@ paths:
   /api/v1/auth/login:
     post:
       operationId: postAuthLogin
-      summary: Authenticate using a migrated Argon2id credential
-      description: Existing legacy credentials are not automatically migrated; unknown or invalid credentials receive the same response.
+      summary: Authenticate with Argon2id or perform a first-login legacy upgrade
+      description: When legacy authentication is enabled, a valid legacy password is upgraded to Argon2id at first successful login; PIN is never accepted as a password.
       requestBody:
         required: true
         content:
@@ -156,7 +157,219 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+  /api/v1/auth/me:
+    get:
+      operationId: getAuthMe
+      summary: Return the current authenticated user
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Current user identity, returned without secrets.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessEnvelope'
+        '401':
+          description: Missing, invalid, expired, or revoked access token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /api/v1/auth/sessions:
+    get:
+      operationId: getAuthSessions
+      summary: List active sessions for the current user
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Active sessions only; token values are never returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessEnvelope'
+        '401':
+          description: Missing, invalid, expired, or revoked access token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /api/v1/auth/sessions/{sessionId}:
+    delete:
+      operationId: deleteAuthSession
+      summary: Revoke an owned session
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Session revoked if it belongs to the current user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessEnvelope'
+        '401':
+          description: Missing or invalid access token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /api/v1/auth/logout-all:
+    post:
+      operationId: postAuthLogoutAll
+      summary: Revoke all active sessions for the current user
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: All active sessions and refresh tokens revoked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessEnvelope'
+        '401':
+          description: Missing or invalid access token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /api/v1/auth/permissions:
+    get:
+      operationId: getAuthPermissions
+      summary: Return effective explicit permission codes for the current user
+      description: No wildcard grants are recognized; no assignments means an empty permission set.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Effective permissions.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessEnvelope'
+        '401':
+          description: Missing or invalid access token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /api/v1/auth/password:
+    patch:
+      operationId: patchAuthPassword
+      summary: Change password after legacy-client cutover
+      description: Disabled while legacy password authentication remains enabled. A successful change stores Argon2id and invalidates sessions.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordInput'
+      responses:
+        '200':
+          description: Password changed and sessions revoked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessEnvelope'
+        '400':
+          description: Invalid password input.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '401':
+          description: Current password invalid or user unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Legacy clients are not cut over.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /api/v1/auth/password/reset:
+    post:
+      operationId: postAuthPasswordReset
+      summary: Request a one-time password-reset link
+      description: Requires an explicitly configured reset-delivery provider and completed legacy-client cutover. Responses do not disclose account existence.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequestInput'
+      responses:
+        '200':
+          description: Generic response independent of account existence.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessEnvelope'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Cutover or reset-delivery provider unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /api/v1/auth/password/reset/complete:
+    post:
+      operationId: postAuthPasswordResetComplete
+      summary: Complete a one-time password reset
+      description: Reset tokens are stored hashed, expire, and can be used only once.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetCompleteInput'
+      responses:
+        '200':
+          description: Password changed and sessions revoked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessEnvelope'
+        '400':
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '401':
+          description: Token invalid, expired, or already used.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Cutover requirements are not met.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
 components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
   schemas:
     LoginInput:
       type: object
@@ -186,6 +399,26 @@ components:
       required: [loggedOut]
       properties:
         loggedOut: { type: boolean, const: true }
+    ChangePasswordInput:
+      type: object
+      additionalProperties: false
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword: { type: string, minLength: 1, maxLength: 1024, format: password }
+        newPassword: { type: string, minLength: 12, maxLength: 128, format: password }
+    PasswordResetRequestInput:
+      type: object
+      additionalProperties: false
+      required: [identifier]
+      properties:
+        identifier: { type: string, minLength: 1, maxLength: 254 }
+    PasswordResetCompleteInput:
+      type: object
+      additionalProperties: false
+      required: [token, newPassword]
+      properties:
+        token: { type: string, minLength: 32, maxLength: 256, format: password }
+        newPassword: { type: string, minLength: 12, maxLength: 128, format: password }
     SuccessEnvelope:
       type: object
       required: [success, data, requestId]

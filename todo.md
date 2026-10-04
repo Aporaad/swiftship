@@ -1625,3 +1625,27 @@
 ## [2026-10-04T07:56:11+03:00] — نجاح CI للنسخة النهائية على main
 - [x] اكتمل GitHub Actions run `37178380702` للـcommit `0d7cee82091adc96e0bef7d04f532675b4596be9` بنجاح؛ اجتازت خطوات `npm ci`, check, lint, Prettier، اختبارات الوحدات وDB، وbuild.
 - [x] لم تُنفّذ DB operations إضافية بعد مراجعة المستخدم؛ `user_credentials` ما زال 0 صفوف فعلية منقولة. الخطوة المقررة هي اختبار/تفعيل API ثم ترحيل Argon2id تدريجياً عند أول دخول صحيح، بلا PIN.
+
+
+## [2026-10-04T08:05:45+03:00] — خطة تنفيذ Auth Core وRBAC محلياً
+1. [ ] استكمال مراجعة الشروط والعقود الحالية؛ لا كتابة إلى Supabase ولا قراءة كلمات مرور المستخدمين.
+2. [ ] تجهيز PostgreSQL محلي منفصل باسم `alx_api_dev` بإعدادات مستقلة عن `.env` المرتبط بالمشروع البعيد.
+3. [ ] إضافة اختبارات Repository/transactions لإنشاء الجلسة وتدوير refresh وإعادة الاستخدام والإبطال والقفل.
+4. [ ] تنفيذ اختبار HTTP على API محلي للـhealth/login والترقية الأولى إلى Argon2id وrefresh/logout.
+5. [ ] إكمال ما تسمح به بوابة المرحلة 3: تحقق access bearer والجلسات وإبطالها، وتدفقات تغيير/إعادة ضبط كلمة المرور وأحداث Auth مع عدم تسجيل الأسرار.
+6. [ ] بناء أساس RBAC deny-by-default واختبارات permission matrix باستخدام مفردات المشروع؛ لا اعتماد/نشر seed نهائي قبل حسم اختلاف صلاحيات الأدوار الافتراضية بين صفحات النظام.
+7. [ ] تحديث OpenAPI والسجلات والوثائق، تشغيل كل الفحوص، ثم commit/push والتحقق من CI.
+
+**حدود التنفيذ:** PostgreSQL localhost وبيانات اصطناعية فقط؛ لا عمليات Supabase؛ لا PIN؛ لا تغيير سر `alx_api_runtime` المؤقت خلال التطوير؛ لا منح wildcard أو role افتراضي غير مصرح.
+
+
+## [2026-10-04T08:33:53+03:00] — تشغيل API محلياً وإكمال اختبارات Auth/RBAC
+- [x] اجتياز `npm run check`, `npm run lint`, `npm run format:check`, 59 اختباراً/11 suite، `npm run test:db` على PostgreSQL محلي، و`npm run build`.
+- [x] إعداد `.env.development.local` محلياً بصلاحية 0600 ومفاتيح Ed25519 تجريبية؛ بقي مستبعداً من Git. تشغيل API على `127.0.0.1:3001` فقط دون تحميل `.env` البعيد.
+- [x] HTTP smoke: health live/ready 200؛ رفض PIN ككلمة مرور 401؛ نجاح أول دخول legacy 200 وترقيته؛ `/me` والصلاحيات 200؛ refresh 200؛ logout 200؛ access بعد logout 401.
+- [x] اختبار إنشاء/تدوير/إعادة استخدام/revoke للجلسات، التزامن والrollback، lockout، أحداث Auth، تغيير/استعادة كلمة المرور المشروطين بـcutover، one-time reset، وRBAC deny-by-default على بيانات اصطناعية.
+- [x] تحقق aggregate محلي فقط: credential Argon2id واحد للحساب الاصطناعي بعد HTTP login؛ لا بيانات مستخدم حقيقي انتقلت.
+- [x] إنشاء Auth Core migration 0005 وRBAC foundation 0006 محلياً واختبارهما فقط؛ **لم تُطبّقا على Supabase في هذه الجولة**.
+- [ ] لا يزال provider فعلي لتسليم reset token غير مهيأ؛ المسار يرجع 503 بأمان حتى ربطه.
+- [ ] RBAC لا يملك roles/permissions seeded. أوقف seed النهائي حتى توحيد اختلاف مصفوفة الصلاحيات الافتراضية بين شاشة Roles وإدارة المستخدمين.
+- [ ] الخطوة التالية: اعتماد matrix وprovider/cutover، ثم مراجعة منفصلة قبل نقل 0005/0006 لأي DB مشتركة. لا نقل جماعي/لا PIN.

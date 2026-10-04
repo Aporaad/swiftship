@@ -14,7 +14,19 @@ const environment = parseEnvironment({
 
 function createApp(databaseReady = false, authReady = false) {
   const auth: AuthUseCases | undefined = authReady
-    ? { login: jest.fn(), refresh: jest.fn(), logout: jest.fn() }
+    ? {
+        login: jest.fn(),
+        refresh: jest.fn(),
+        logout: jest.fn(),
+        authenticateAccessToken: jest.fn(),
+        listSessions: jest.fn(),
+        revokeSession: jest.fn(),
+        logoutAll: jest.fn(),
+        changePassword: jest.fn(),
+        requestPasswordReset: jest.fn(),
+        completePasswordReset: jest.fn(),
+        listPermissions: jest.fn(),
+      }
     : undefined;
   const options = { environment, readiness: () => ({ database: databaseReady }) };
   return auth ? createApiApp({ ...options, auth }) : createApiApp(options);

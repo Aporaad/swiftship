@@ -11,15 +11,17 @@ function startServer(): void {
   const environment = parseEnvironment();
   const database = environment.databaseUrl
     ? createDatabaseConnection({
-      connectionString: environment.databaseUrl,
-      nodeEnv: environment.nodeEnv,
-      sslMode: environment.databaseSslMode,
-      ...(environment.databaseSslCaPem ? { sslCaPem: environment.databaseSslCaPem } : {}),
-    })
+        connectionString: environment.databaseUrl,
+        nodeEnv: environment.nodeEnv,
+        sslMode: environment.databaseSslMode,
+        ...(environment.databaseRuntimeRole ? { runtimeRole: environment.databaseRuntimeRole } : {}),
+        ...(environment.databaseSslCaPem ? { sslCaPem: environment.databaseSslCaPem } : {}),
+      })
     : undefined;
-  const auth = database && environment.jwtPrivateKeyPem && environment.authDummyPasswordHash
-    ? createAuthUseCases(database, environment)
-    : undefined;
+  const auth =
+    database && environment.jwtPrivateKeyPem && environment.authDummyPasswordHash
+      ? createAuthUseCases(database, environment)
+      : undefined;
   const appOptions = {
     environment,
     readiness: async () => ({ database: await isDatabaseReady(database?.pool) }),
@@ -62,7 +64,8 @@ function startServer(): void {
 try {
   startServer();
 } catch (error) {
-  const summary = error instanceof Error ? { name: error.name, message: error.message } : { message: 'Unknown startup error' };
+  const summary =
+    error instanceof Error ? { name: error.name, message: error.message } : { message: 'Unknown startup error' };
   logger.fatal(summary, 'alx_api startup failed');
   process.exitCode = 1;
 }

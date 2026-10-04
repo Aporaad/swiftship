@@ -1321,3 +1321,36 @@ SELECT secret_value FROM alx_api_private._api_secret_rotation_handoff WHERE id =
 SELECT secret_value FROM alx_api_private._api_secret_rotation_handoff WHERE id = 'rotated' LIMIT 1;
 ```
 وبعد المزامنة أداة `sync_swiftship_runtime_password.cjs` نفذت `SELECT current_user AS role LIMIT 1` على session وtransaction فقط. استعلام إزالة الجدول النهائي كان `DROP TABLE alx_api_private._api_secret_rotation_handoff;`، وفحص الوجود استعمل `to_regclass(...) IS NULL`. ظل أي secret parameter/result محذوفاً من السجل.
+
+
+## [2026-10-04T08:25:57+03:00–08:33:53+03:00] — اختبار Auth Core/RBAC على PostgreSQL المحلي فقط — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+
+**قاعدة التنفيذ:** `alx_api_test` على PostgreSQL المحلي (`/var/run/postgresql`). لم يُستخدم Supabase في هذه الفترة. أعادت `scripts/test-db.ts` إنشاء schema وبيانات اصطناعية فقط ثم نفذت migrations `0002_auth_private_storage.sql`, `0003_auth_rls_runtime_access.sql`, `0004_legacy_password_upgrade.sql`, `0005_auth_core_passwords_and_events.sql`, `0006_rbac_foundation.sql`. نص SQL للـ0005/0006 مثبت في ملفي migration المشار إليهما في سجل DB development؛ التنفيذ في test runner:
+```ts
+await pool.query(await readMigration('0002_auth_private_storage.sql'));
+await pool.query(await readMigration('0003_auth_rls_runtime_access.sql'));
+await pool.query(await readMigration('0004_legacy_password_upgrade.sql'));
+await pool.query(await readMigration('0005_auth_core_passwords_and_events.sql'));
+await pool.query(await readMigration('0006_rbac_foundation.sql'));
+```
+**أمر تشغيل suite كما نُفذ:**
+```bash
+TEST_DATABASE_URL='postgresql://ubuntu@localhost/alx_api_test?host=/var/run/postgresql' npm run test:db
+```
+نجح الاختبار النهائي بعد تصحيح health probe وRESET ROLE للـfixture cleanup. أثناء التشخيص نُفذ هذا الاستعلام كـ`alx_api_runtime`:
+```sql
+SELECT 1 FROM alx_api_private.auth_events LIMIT 0;
+```
+النتيجة `42501 permission denied` متوقعة وسياسة INSERT-only مقصودة؛ أُزيل الاستعلام من readiness، ولم تُمنح صلاحية SELECT. أثبتت suite إدخال الحدث من مسار Auth دون توسيع الصلاحية.
+
+**فحص metadata النهائي بعد HTTP login محلي:**
+```sql
+SELECT count(*)::integer AS synthetic_argon2id_credentials
+FROM alx_api_private.user_credentials
+WHERE user_id = 'test-legacy-user'
+  AND password_algorithm = 'argon2id'
+LIMIT 1;
+```
+النتيجة: `1` لحساب الاختبار الاصطناعي فقط. لم تُقرأ قيمة hash/password/PIN.
+
+**نطاق suite المكتوب:** كل أوامر SQL ذات placeholders والمعاملات/الاختبارات الموجودة في [`alx_api/scripts/test-db.ts`](alx_api/scripts/test-db.ts) وملفات migrations أعلاه هي النصوص الحرفية التي نُفذت محلياً، بما فيها: reset المخطط المعزول، إنشاء المستخدم الاصطناعي، دور/permission fixture، `SET ROLE`, probes, login migration, session/refresh transactions, password functions, RBAC grants، ثم fixture cleanup بعد `RESET ROLE`. لم تُنفذ أوامر SQL خارج هذه الملفات سوى الاستعلام التشخيصي واستعلام العدّ أعلاه.

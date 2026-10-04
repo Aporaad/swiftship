@@ -2222,3 +2222,14 @@
 
 ## [2026-10-04T07:56:11+03:00] — نجاح CI للنسخة النهائية وعدم إجراء DB إضافية — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
 اجتاز GitHub Actions run `37178380702` للـcommit النهائي الذي يتضمن تقرير الحالة وسجلات المهمة: `npm ci`, typecheck, lint, Prettier، 46 unit tests، اختبار PostgreSQL محلي للمهاجرات/RLS/ترقية Argon2id، وproduction build. لم تُنفذ أي عملية على Supabase بعد تقرير المراجعة؛ لا تزال صفوف `user_credentials` الفعلية صفراً.
+
+
+## [2026-10-04T08:33:53+03:00] — تشغيل محلي وإكمال Auth Core/RBAC — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- أضيفت جلسات موثقة بـEd25519 من قاعدة البيانات، قائمة جلسات آمنة، revoke للجلسة المملوكة وlogout-all؛ لا يُعتمد على role claim قديم في JWT.
+- أضيفت عمليات تغيير كلمة المرور وإعادة تعيين one-time مع Argon2id وتخزين reset hash وإبطال الجلسات؛ محمية خلف cutover صريح، وprovider تسليم reset اختياري غير مهيأ حالياً.
+- عُزلت SQL repository operations للـAuth events/permissions، وأصلح ترتيب refresh-token insertion داخل transaction، ومنعت كتابة تفاصيل أخطاء PostgreSQL/SQL إلى سجل HTTP.
+- أضيفت normalized roles/permissions/user_roles/role_permissions بلا seed، وسيط `requirePermission` يرفض افتراضياً ولا يسمح بـwildcard، مع اختبارات خاصة به.
+- أضيفت migrations `0005` و`0006`، integration harness محدود بـ`alx_api_test`، وتهيئة محلية ترفض أي database غير loopback/test. `.env.development.local` 0600 ومجهز بمفاتيح test لا تُعرض ولا تُتبع.
+- أصبح OpenAPI يغطي Auth routes، ووثقت خطوات التشغيل وحدود reset/cutover وRBAC.
+- النتيجة: 59 unit/route tests في 11 suites، DB integration migrations 0002–0006/transactions/Auth/RBAC ناجحة، build ناجح؛ HTTP service يعمل على `127.0.0.1:3001`، login legacy اصطناعي هاجر إلى Argon2id، login بPIN رفض، refresh/logout/authorization اجتازت.
+- لم يُنفّذ أي SQL على Supabase في هذه الجولة. `0005/0006` محلية فقط. لم تُنقل بيانات مستخدمين حقيقيين. بقيت defaults RBAC وقناة reset والـcutover مفاتيح قرار للإكمال.

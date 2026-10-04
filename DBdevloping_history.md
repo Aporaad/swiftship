@@ -1229,3 +1229,11 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 
 ## [2026-10-04T07:58:28+03:00] — دقة سجل handoff — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
 بمراجعة helper المحلي تبيّن أن عمود handoff المستخدم هو `id` لا `handoff_id`، ولم يثبت وجود `created_at`؛ أُضيف تصحيح صريح إلى `db_commends.md`. SQL الخاص بـCREATE/POLICY نُفذ عبر migration مؤقتة ولكن لم يُحفظ نصها الحرفي في سجل أداة الإخراج المتاح؛ لذلك لا يُدّعى أن إعادة البناء السابقة حرفية. أوامر القراءة/الإدراج/الإزالة المؤكدة مسجلة دون أي قيم أسرار.
+
+
+## [2026-10-04T08:33:53+03:00] — PostgreSQL محلي: Auth Core + RBAC — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- شُغّل `alx_api/scripts/test-db.ts` على `alx_api_test` المحلي فقط؛ أعاد إنشاء schema test وأطبق SQL migrations `0002`–`0006`، ثم اختبر RLS/grants، migration verification، password upgrade، transactions/refresh/session revocation، events، cutover/password-reset، وRBAC.
+- اختبارات HTTP تستخدم `supertest`; اختبار smoke إضافي مرّ عبر خادم `127.0.0.1:3001`، وحوّل حساباً اصطناعياً واحداً إلى Argon2id. Query aggregate أكد وجود row واحد لهذا synthetic user فقط؛ لا يُقرأ hash ولا كلمة مرور.
+- أثناء الاختبار أظهر probe `SELECT 1 FROM alx_api_private.auth_events LIMIT 0` خطأ `42501` متوقعاً؛ لأن صلاحية الأحداث INSERT فقط. أزيل probe SELECT من readiness وأُبقيت صلاحية INSERT-only؛ اختبار event insertion الفعلي نجح.
+- SQL المطبق محلياً بالكامل محفوظ نصياً في [`0005_auth_core_passwords_and_events.sql`](alx_api/src/db/migrations/0005_auth_core_passwords_and_events.sql) و[`0006_rbac_foundation.sql`](alx_api/src/db/migrations/0006_rbac_foundation.sql)، وتُقرأه suite من [`scripts/test-db.ts`](alx_api/scripts/test-db.ts). لا تُطبّق هاتان الهجرتان على Supabase/shared DB بعد.
+- لم يحصل أي اتصال/تغيير Supabase في هذه الجولة. لا تغييرات بيانات مستخدم حقيقي، ولا نقل PIN أو كلمات مرور حقيقية.

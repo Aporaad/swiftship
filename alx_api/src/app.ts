@@ -30,41 +30,48 @@ export function createApiApp(options: AppOptions): Express {
   app.disable('x-powered-by');
   app.set('trust proxy', environment.nodeEnv === 'production' ? 1 : false);
   app.use(requestIdMiddleware);
-  app.use(pinoHttp({
-    logger,
-    genReqId(_request, response) {
-      return String(response.locals.requestId);
-    },
-    redact: ['req.headers.authorization', 'req.headers.cookie'],
-    serializers: {
-      req(request) {
-        return { id: request.id, method: request.method, url: request.url };
+  app.use(
+    pinoHttp({
+      logger,
+      genReqId(_request, response) {
+        return String(response.locals.requestId);
       },
-    },
-  }));
+      redact: ['req.headers.authorization', 'req.headers.cookie'],
+      serializers: {
+        req(request) {
+          return { id: request.id, method: request.method, url: request.url };
+        },
+      },
+    }),
+  );
   app.use(helmet());
-  app.use(cors({
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id', 'Idempotency-Key'],
-    origin(origin, callback) {
-      if (origin === undefined || environment.corsOrigins.has(origin)) {
-        callback(null, true);
-        return;
-      }
-      callback(new Error('CORS_ORIGIN_DENIED'));
-    },
-  }));
+  app.use(
+    cors({
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id', 'Idempotency-Key'],
+      origin(origin, callback) {
+        if (origin === undefined || environment.corsOrigins.has(origin)) {
+          callback(null, true);
+          return;
+        }
+        callback(new Error('CORS_ORIGIN_DENIED'));
+      },
+    }),
+  );
   app.use(express.json({ limit: environment.jsonBodyLimit, strict: true }));
-  app.use('/api/v1', rateLimit({
-    windowMs: environment.rateLimitWindowMs,
-    limit: environment.rateLimitMax,
-    standardHeaders: 'draft-8',
-    legacyHeaders: false,
-    handler(_request, response) {
-      sendFailure(response, 429, 'RATE_LIMITED', 'تم تجاوز حد الطلبات المسموح.', String(response.locals.requestId));
-    },
-  }));
+  app.use(
+    '/api/v1',
+    rateLimit({
+      windowMs: environment.rateLimitWindowMs,
+      limit: environment.rateLimitMax,
+      standardHeaders: 'draft-8',
+      legacyHeaders: false,
+      handler(_request, response) {
+        sendFailure(response, 429, 'RATE_LIMITED', 'تم تجاوز حد الطلبات المسموح.', String(response.locals.requestId));
+      },
+    }),
+  );
 
   app.get('/api/v1/health/live', (_request, response) => {
     sendSuccess(response, { status: 'alive' }, String(response.locals.requestId));
@@ -74,7 +81,13 @@ export function createApiApp(options: AppOptions): Express {
     const databaseChecks = await readiness();
     const checks = { database: databaseChecks.database, auth: Boolean(options.auth) };
     if (!checks.database || !checks.auth) {
-      return sendFailure(response, 503, 'SERVICE_NOT_READY', 'الخدمة غير جاهزة بعد.', String(response.locals.requestId));
+      return sendFailure(
+        response,
+        503,
+        'SERVICE_NOT_READY',
+        'الخدمة غير جاهزة بعد.',
+        String(response.locals.requestId),
+      );
     }
     return sendSuccess(response, { status: 'ready', checks }, String(response.locals.requestId));
   });
@@ -93,7 +106,8 @@ export function createApiApp(options: AppOptions): Express {
     if (error instanceof SyntaxError && 'body' in error) {
       return sendFailure(response, 400, 'INVALID_JSON', 'تعذر تحليل جسم الطلب.', requestId);
     }
-    request.log?.error({ err: error, requestId }, 'Unhandled HTTP error');
+    const errorName = error instanceof Error ? error.name : 'UnknownError';
+    request.log?.error({ errorName, requestId }, 'Unhandled HTTP error');
     return sendFailure(response, 500, 'INTERNAL_ERROR', 'حدث خطأ داخلي.', requestId);
   };
   app.use(errorHandler);
