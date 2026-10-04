@@ -2241,3 +2241,7 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 
 ## [2026-10-04T08:44:49+03:00] — إعداد مصفوفة RBAC للمراجعة دون seed — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
 قورنت `RolesPage` و`DEFAULT_ROLE_PERMISSIONS` وقاموس `PermissionKey` ومحرر المستخدم آلياً؛ وثيقة المراجعة تحتوي الاتحاد لكل دور، 152 صلاحية Admin صريحة مرشحة بدلاً من wildcard، الفروق الدقيقة (Employee 18→24، Accountant 16→57، Courier 2→3) وفجوة الـ24 صلاحية المخفية. طوبقت IDs القائمة على المصادر دون missing/extra. لم تُزرع roles/permissions ولم يُنفذ أي SQL أو DB تعديل؛ ينتظر اعتماد المستخدم.
+
+
+## [2026-10-04T08:46:32+03:00] — نشر matrix review ونجاح CI — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+رُفعت مسودة RBAC للمراجعة فقط في commit `9610e8730670d511ecfeb9da782b6fc79025fafc`؛ GitHub Actions run `37180802101` نجح. لم تُزرع الأدوار/الصلاحيات ولم تُنفذ أي عملية قاعدة بيانات.
