@@ -2411,6 +2411,25 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 - `src/features/auth/AuthSessionProvider.tsx`: إضافة كاشف التكوين واختيار alxApiAuthGateway.
 
 #### الملفات المعدلة:
+-  lx_api/src/modules/users/users.contracts.ts — إضافة deleteUser
+-  lx_api/src/modules/users/users.repository.ts — تطبيق deleteUser
+-  lx_api/src/modules/users/users.routes.ts — إضافة DELETE endpoint
+-  lx_api/tests/users.test.ts — تحديث mock وإضافة tests
+
+## [2026-10-05T20:38:49+03:00] — استكمال تنفيذ المرحلة التاسعة والتحقق الشامل من alx_api — AI Model: Gemini 3.6 Flash (Medium)
+- [x] مراجعة وتأكيد تفعيل وحدتي الإشعارات (Notifications Repository/Routes) والبوابة العامة (Portal Repository/Routes) وتوليدهما في `createApiApp` داخل `src/app.ts` و `src/server.ts`.
+- [x] فحص ملفات Migration لقواعد البيانات وتأكيد وجود `0010_notifications_outbox.sql` و `0011_portal_announcements.sql`.
+- [x] تحديث واختبار ملف `tests/security.test.ts` لضبط معايير التحقق من اسم المستخدم ومحاكاة المستودع المالي لـ RBAC.
+- [x] اجتياز جميع اختبارات الـ API عبر Jest: 18 Test Suites / 120 الاختبارات بنسبة نجاح 100%.
+- [x] اجتياز جميع فحوصات الأنواع TypeScript `tsc --noEmit` للنظام الرئيسي ومحرك الـ API بدون أية أخطاء.
+
+#### الملفات المعدلة:
+- `alx_api/tests/security.test.ts`: إصلاح واختبار معايير التحقق وسيناريوهات RBAC الأمنية.
+- `alx_api/src/app.ts`: تأكيد تسجيل `notifications` و `portal` routes.
+- `alx_api/src/server.ts`: تأكيد إنشائهما وتمريرهما في تطبيق Express.
+
+
+#### الملفات المعدلة:
 - lx_api/src/modules/users/users.contracts.ts — إضافة deleteUser
 - lx_api/src/modules/users/users.repository.ts — تطبيق deleteUser
 - lx_api/src/modules/users/users.routes.ts — إضافة DELETE endpoint

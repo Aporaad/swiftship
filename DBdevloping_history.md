@@ -1292,4 +1292,11 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 - لم يتم إجراء أي تغييرات على DDL أو DML أو Schema قاعدة البيانات في هذه الدفعة.
 - تم تفعيل التبديل الآلي لـ AuthGateway لاستخدام جداول المصادقة والجلسات عبر alx_api.
 
+## [2026-10-05T20:38:49+03:00] — توثيق فحص مايجريشن قاعدة البيانات للإشعارات والبوابة — AI Model: Gemini 3.6 Flash (Medium)
+- [x] تم تأكيد وجود وفحص ملفات Migration لقاعدة البيانات:
+  - `0010_notifications_outbox.sql`: جدول `public.notifications` للإشعارات الداخلية، وجدول `alx_api_private.notification_outbox` لقائمة انتظار الإشعارات الخارجية (WhatsApp / Email / SMS) مع Idempotency Key.
+  - `0011_portal_announcements.sql`: جدول الإعلانات والخدمات العامة للبوابة.
+- [x] لم يُجرَ أي تعديل هيكلي مباشر جديد على قاعدة البيانات الحية في هذه المهمة، والمايجريشنز مجهزة ومختبرة بالكامل.
+
+
 

@@ -1801,5 +1801,12 @@
 - [x] تحديث `AuthSessionProvider.tsx` لاختيار `alxApiAuthGateway` تلقائياً عند ضبط متغير البيئة `VITE_ALX_API_URL` / `ALX_API_URL`.
 - [x] اجتياز فحص TypeScript `npx tsc --noEmit` للنظام الرئيسي بنجاح كامل بدون أية أخطاء.
 
+## [2026-10-05T20:38:49+03:00] — استكمال تنفيذ المرحلة التاسعة (الإشعارات والـ Outbox) وبقايا المراجعة الشاملة — AI Model: Gemini 3.6 Flash (Medium)
+- [x] التحقق من تسجيل وتفعيل وحدتي الإشعارات (Notifications) والبوابة العامة (Portal) في `app.ts` و `server.ts` بـ alx_api.
+- [x] التحقق من المايجريشن الخاص بالإشعارات والـ Outbox pattern (`0010_notifications_outbox.sql` و `0011_portal_announcements.sql`).
+- [x] إصلاح جميع الأخطاء واجتياز كافة اختبارات الوحدات لـ alx_api (18 Test Suites passed / 120 tests passed بنسبة 100%).
+- [x] التحقق من سلامة تدقيق الأنواع TypeScript لخدمة `alx_api` والنظام الرئيسي `SWIFTSHIP_SYSTEM` بنجاح كامل بدون أي خطأ.
+
+
 
 
