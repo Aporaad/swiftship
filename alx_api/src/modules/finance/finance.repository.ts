@@ -53,6 +53,17 @@ export function createFinanceRepository(pool: Pool): FinanceRepository {
       );
       return { items: rows.rows, total: Number(count.rows[0]?.total ?? 0) };
     },
+    async listAllAccountMovements(input) {
+      const [limit, offset] = page(input);
+      const count = await pool.query<{ total: string }>(
+        "SELECT count(*)::text AS total FROM public.account_trans at JOIN public.main_entry me ON me.main_entry_id = at.main_entry_id WHERE me.posting_status = 'posted'",
+      );
+      const rows = await pool.query(
+        `SELECT ${movementColumns} FROM public.account_trans at JOIN public.main_entry me ON me.main_entry_id = at.main_entry_id WHERE me.posting_status = 'posted' ORDER BY at.created_at DESC, at.main_entry_id DESC, at.line_no DESC LIMIT $1 OFFSET $2`,
+        [limit, offset],
+      );
+      return { items: rows.rows, total: Number(count.rows[0]?.total ?? 0) };
+    },
     async listEntryModules() {
       const result = await pool.query(
         'SELECT entry_module_id AS "moduleId", code, name_ar AS "nameAr", name_en AS "nameEn", note, is_active AS "isActive" FROM public.entry_module WHERE is_active IS TRUE ORDER BY code, entry_module_id',

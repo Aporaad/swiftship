@@ -1,6 +1,9 @@
-import { ApplicationError, errorDetailsFromUnknown } from '../../shared/contracts/error.contracts';
-import type { ErrorDetails } from '../../shared/contracts/error.contracts';
-import type { GatewayQuery } from '../contracts/common.gateway';
+import {
+  ApplicationError,
+  errorDetailsFromUnknown,
+} from "../../shared/contracts/error.contracts";
+import type { ErrorDetails } from "../../shared/contracts/error.contracts";
+import type { GatewayQuery } from "../contracts/common.gateway";
 
 export interface ApiClientOptions {
   baseUrl: string;
@@ -9,12 +12,13 @@ export interface ApiClientOptions {
   timeoutMs?: number;
   requestIdFactory?: () => string;
   maxReadRetries?: number;
+  accessTokenFactory?: () => string | null | undefined;
 }
 
 export class ApiClientError extends ApplicationError {
   constructor(details: ErrorDetails) {
     super(details);
-    this.name = 'ApiClientError';
+    this.name = "ApiClientError";
   }
 }
 
@@ -35,27 +39,41 @@ export class ApiClient {
     let response: Response | null = null;
     for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), this.options.timeoutMs ?? 10000);
+      const timeout = setTimeout(
+        () => controller.abort(),
+        this.options.timeoutMs ?? 10000
+      );
       try {
+        const accessToken = this.options.accessTokenFactory?.();
         response = await this.fetchImpl(url, {
-          method: 'GET',
-          credentials: this.options.credentials ?? 'include',
+          method: "GET",
+          credentials: this.options.credentials ?? "include",
           headers: {
-            Accept: 'application/json',
-            'x-request-id': this.options.requestIdFactory?.() ?? crypto.randomUUID(),
+            Accept: "application/json",
+            "x-request-id":
+              this.options.requestIdFactory?.() ?? crypto.randomUUID(),
+            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
           },
           signal: controller.signal,
         });
         clearTimeout(timeout);
-        if (response.ok || response.status < 500 || attempt === maxRetries) break;
+        if (response.ok || response.status < 500 || attempt === maxRetries)
+          break;
       } catch {
         clearTimeout(timeout);
         if (attempt === maxRetries) {
-          throw new ApiClientError({ code: 'API_REQUEST_FAILED', message: 'API request failed.' });
+          throw new ApiClientError({
+            code: "API_REQUEST_FAILED",
+            message: "API request failed.",
+          });
         }
       }
     }
-    if (response === null) throw new ApiClientError({ code: 'API_REQUEST_FAILED', message: 'API request failed.' });
+    if (response === null)
+      throw new ApiClientError({
+        code: "API_REQUEST_FAILED",
+        message: "API request failed.",
+      });
     if (!response.ok) {
       let body: unknown = null;
       try {
@@ -64,15 +82,19 @@ export class ApiClient {
         // Non-JSON error responses use the same safe fallback contract.
       }
 
-      const fallbackCode = 'API_REQUEST_FAILED';
+      const fallbackCode = "API_REQUEST_FAILED";
       const normalized = errorDetailsFromUnknown(body, fallbackCode);
-      const requestId = normalized.requestId ?? response.headers.get('x-request-id') ?? undefined;
+      const requestId =
+        normalized.requestId ??
+        response.headers.get("x-request-id") ??
+        undefined;
       throw new ApiClientError({
         ...normalized,
         code: normalized.code || fallbackCode,
-        message: normalized.code === fallbackCode
-          ? `API request failed with status ${response.status}.`
-          : normalized.message,
+        message:
+          normalized.code === fallbackCode
+            ? `API request failed with status ${response.status}.`
+            : normalized.message,
         ...(requestId ? { requestId } : {}),
       });
     }

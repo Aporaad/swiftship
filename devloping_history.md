@@ -2282,3 +2282,15 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 - أضيفت حماية الصلاحيات: `view_financial_accounts`, `view_account_movements`, `add_finance`, `post_financial_entries`, `reverse_financial_entries`, `void_financial_entries`, وصلاحيات auto entries.
 - تم توصيل Finance module في `app.ts` و`server.ts` وتحديث OpenAPI.
 - لم تُنفذ أي كتابة أو migration على قاعدة البيانات خلال هذه المرحلة؛ تم استخدام المخطط والـRPCs الموجودة مسبقاً.
+
+## [2026-10-05 00:24:16 +0000] — مراجعة خارطة الطريق وبدء نقل Finance UI إلى API — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- تمت مراجعة `system_pre_api_restructure_plan_ar.md` و`alx_api/alx_api_creation_plan_ar.md` و`alx_api/docs/client-cutover-plan-2026-10-04.md` ومقارنة المراحل بملفات المستودع الفعلية.
+- أضيف تقرير خارطة الطريق: `alx_api/docs/swiftship-api-roadmap-review-2026-10-05_ar.md`.
+- أضيف دليل تشغيل واختبار PostgreSQL الفعلي: `alx_api/docs/postgresql-api-integration-runbook_ar.md`.
+- أضيف endpoint `GET /api/v1/finance/account-movements` لقراءة جميع الحركات المرحّلة مع pagination حتى يتمكن دفتر الأستاذ من استخدام API.
+- أضيف دعم `accessTokenFactory` اختياري إلى `src/data/http/api-client.ts`.
+- أضيف `FinanceApiDataGateway` مع feature flag `VITE_FINANCE_API_READS` وfallback تلقائي إلى Legacy Gateway.
+- تم نقل القراءة التدريجية للحسابات والقيود والحركات والعهد وقواعد القيود التلقائية إلى Gateway HTTP عند تفعيل العلم، مع إبقاء الكتابات والمجالات غير الجاهزة على المصدر القديم.
+- أضيف اختبار Authorization لعميل HTTP.
+- نتائج التحقق: TypeScript check وlint ناجحان، Vitest: 275 اختباراً ناجحاً و8 متجاوزة، build ناجح مع تحذيرات bundle/import.meta القديمة غير مانعة.
+- تم تثبيت تبعيات النظام من lockfile، ولم يتم تعديل `tsconfig` بصورة دائمة.

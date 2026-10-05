@@ -1260,3 +1260,9 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 - تم التحقق من وجود RPCs الحالية: `create_financial_entry_v2`، `post_financial_entry`، `reverse_financial_entry`، `void_financial_entry_draft`، و`recalculate_accounting_hierarchy`.
 - النتائج الحالية: `accounts=77`، `main_entry=19`، `account_trans=39`، `auto_entries=10`، `custody_advances=0`.
 - لم تُطبق migration أو DDL أو DML خلال هذه المرحلة؛ Finance API يعتمد على المخطط والـRPCs المعتمدة الموجودة مسبقاً.
+
+## [2026-10-05 00:24:16 +0000] — دعم قراءة Finance UI من API دون تغيير المخطط — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- لم يتم تنفيذ migration أو DDL أو DML جديد على PostgreSQL.
+- أضيف في API استعلام قراءة فقط لحركات `account_trans` المرتبطة بـ`main_entry` ذي الحالة `posted` مع `LIMIT/OFFSET`.
+- تم إبقاء حماية القيود المالية والكتابات داخل RPCs الموجودة مسبقاً.
+- اختبار التكامل الفعلي ينتظر تنفيذ المستخدم وفق `postgresql-api-integration-runbook_ar.md`.

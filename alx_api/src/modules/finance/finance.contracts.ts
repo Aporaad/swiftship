@@ -16,6 +16,7 @@ export interface FinanceRepository {
   listAccounts(input: PageQuery): Promise<PageResult<Record<string, unknown>>>;
   getAccount(accountId: string): Promise<Record<string, unknown> | null>;
   listAccountMovements(accountId: string, input: PageQuery): Promise<PageResult<Record<string, unknown>>>;
+  listAllAccountMovements(input: PageQuery): Promise<PageResult<Record<string, unknown>>>;
   listEntryModules(): Promise<readonly Record<string, unknown>[]>;
   listEntryTypes(moduleId?: string): Promise<readonly Record<string, unknown>[]>;
   listEntries(input: PageQuery): Promise<PageResult<Record<string, unknown>>>;

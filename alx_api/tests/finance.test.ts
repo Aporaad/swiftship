@@ -22,6 +22,7 @@ const repository: FinanceRepository = {
   listAccounts: jest.fn().mockResolvedValue({ items: [{ accountId: 'a1', accountCode: '1110' }], total: 1 }),
   getAccount: jest.fn().mockResolvedValue({ accountId: 'a1' }),
   listAccountMovements: jest.fn().mockResolvedValue({ items: [], total: 0 }),
+  listAllAccountMovements: jest.fn().mockResolvedValue({ items: [], total: 0 }),
   listEntryModules: jest.fn().mockResolvedValue([{ moduleId: 'module_accounting' }]),
   listEntryTypes: jest.fn().mockResolvedValue([{ entryTypeId: 'type_adjustment' }]),
   listEntries: jest.fn().mockResolvedValue({ items: [], total: 0 }),

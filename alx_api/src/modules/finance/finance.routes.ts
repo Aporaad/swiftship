@@ -97,6 +97,7 @@ export function registerFinanceRoutes(
       }
     },
   );
+  app.get('/api/v1/finance/account-movements', ...route('view_account_movements', auth), pageHandler(repository.listAllAccountMovements));
   app.get('/api/v1/finance/entry-modules', ...route('view_entry_settings', auth), async (_request, response, next) => {
     try {
       return sendSuccess(response, await repository.listEntryModules(), requestId(response));
