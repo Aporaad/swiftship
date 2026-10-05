@@ -64,12 +64,17 @@ async function fetchRows<T extends Record<string, unknown>>(
     limit: 100,
     offset: 0,
   });
-  return normalizeRows(collectionName, response.data.items ?? []) as T[];
+  const rows = Array.isArray(response.data)
+    ? response.data
+    : (response.data.items ?? []);
+  return normalizeRows(collectionName, rows) as T[];
 }
 
 export const financeApiDataGateway = {
   isEnabled,
-  subscribeCollection<T extends Record<string, unknown> = Record<string, unknown>>(
+  subscribeCollection<
+    T extends Record<string, unknown> = Record<string, unknown>,
+  >(
     collectionName: string,
     onData: (rows: T[]) => void,
     onError: (error: unknown) => void
@@ -98,7 +103,9 @@ export const financeApiDataGateway = {
     };
   },
 
-  subscribeOrderedCollection<T extends Record<string, unknown> = Record<string, unknown>>(
+  subscribeOrderedCollection<
+    T extends Record<string, unknown> = Record<string, unknown>,
+  >(
     collectionName: string,
     _field: string,
     onData: (rows: T[]) => void,

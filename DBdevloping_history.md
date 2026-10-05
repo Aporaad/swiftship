@@ -1271,3 +1271,8 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 - لم يتم تنفيذ migration أو DDL أو DML جديد على قاعدة البيانات.
 - تم استخدام endpoints/RPCs المالية الموجودة مسبقاً؛ التحقق والتوازن والصلاحيات يبقى داخل API وقاعدة البيانات.
 - تم منع العميل من إرسال هوية المنفذ؛ API يستخرج `createdByUid` من Access Token الموثق.
+
+## [2026-10-05 01:07:02 +0000] — Reports API read cutover دون تغيير قاعدة البيانات — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- لم يتم تنفيذ migration أو DDL أو DML جديد.
+- تستخدم Reports endpoints القراءة الموجودة للطلبات والعملاء والحسابات والقيود والحركات.
+- بقيت مصادر البيانات التي لا تملك API contract مستقلاً على Legacy ولم يتم تغيير مخططها.

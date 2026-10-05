@@ -29,6 +29,7 @@ import { ReportPrintPreviewModal } from '../components/ReportPrintPreviewModal';
 import MultiAccountSelector from '../components/MultiAccountSelector';
 import ReportsContextFilters from '../components/ReportsContextFilters';
 import { DEFAULT_PRINT_SETTINGS, REPORT_TYPES, type PrintTemplateSettings, type ReportFilter } from '../types/reports.types';
+import { reportsApiDataGateway } from '../services/reportsApiDataGateway';
 
 export default function ReportsPage() {
   const { settings } = useSettings();
@@ -400,6 +401,23 @@ export default function ReportsPage() {
       unsubReportTemplates();
     };
   }, [roleLoading]);
+
+  // تدريجياً: يقرأ نطاق Reports الأساسي من API عند تفعيل العلم، مع بقاء
+  // collections غير المدعومة حالياً على Legacy Gateway حتى لا تنكسر التقارير.
+  useEffect(() => {
+    return reportsApiDataGateway.subscribeCoreData({
+      onData: (state) => {
+        setOrders(state.orders);
+        setCustomers(state.customers);
+        setAccounts(state.accounts);
+        setAccountTransactions(state.accountTransactions);
+        setAllAccountTransactions(state.accountTransactions);
+        setAllTimeTransactions(state.accountTransactions);
+        setMainEntriesMap(new Map(state.mainEntries.map((entry) => [entry.id, entry])));
+      },
+      onError: (error) => console.error('Reports API read failed; retaining Legacy data:', error),
+    });
+  }, []);
 
   // Fetch detailed account transactions when account ID is selected or packaging/orders_cost/shipping_companies report is active
   useEffect(() => {

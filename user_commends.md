@@ -1556,3 +1556,15 @@ AUTH_DUMMY_PASSWORD_HASH="""
 
 ثانيا يالله ابدأ بتنفيذ نقل Finance UI للكتابة باستخدام العقود الجديدة endpoints إنشاء القيد، الترحيل، العكس، والإبطال.
 ```
+
+## [2026-10-05 01:07:02 +0000] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```text
+اولا ياحيوان اعطني  شرح كيف استخرج قيمه معلومات المتغيرات التاليه من داخل ويندوز  """
+DATABASE_RUNTIME_ROLE=
+JWT_PRIVATE_KEY_PEM=
+JWT_PUBLIC_KEY_PEM=
+AUTH_DUMMY_PASSWORD_HASH="""
+
+ثانيا اكمل نقل ماتبقى من واجهات  Finance UI
+وابدأ في تنفيذ المرحلة التالية الخاصة بنقل واجهات Reports أو Dashboard للاستخدام عبر الـ API.
+```
