@@ -30,6 +30,7 @@ export interface PageResult<T> {
 }
 
 export interface CreateCourierInput {
+  courierId?: string | undefined;
   fullName: string;
   nameAr?: string | undefined;
   nameEn?: string | undefined;
@@ -57,6 +58,7 @@ export interface UpdateCourierInput {
 }
 
 export interface CreateEmployeeInput {
+  employeeId?: string | undefined;
   fullName: string;
   nameAr?: string | undefined;
   nameEn?: string | undefined;

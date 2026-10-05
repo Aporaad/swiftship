@@ -408,7 +408,7 @@ export function createOperationsRepository(pool: Pool): OperationsRepository {
       }
     },
     async createCourier(input) {
-      const courierId = `cour_${crypto.randomUUID()}`;
+      const courierId = input.courierId ?? `cour_${crypto.randomUUID()}`;
       const result = await pool.query(
         `INSERT INTO public.couriers (courier_id, account_id, currency, is_active, full_name, name_ar, name_en, courier_type, courier_level, commission_rate, created_at, updated_at, created_by, updated_by)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW(), $11, $11)
@@ -466,7 +466,7 @@ export function createOperationsRepository(pool: Pool): OperationsRepository {
       return (result.rowCount ?? 0) > 0;
     },
     async createEmployee(input) {
-      const employeeId = `emp_${crypto.randomUUID()}`;
+      const employeeId = input.employeeId ?? `emp_${crypto.randomUUID()}`;
       const result = await pool.query(
         `INSERT INTO public.employees (employee_id, account_id, monthly_salary, currency, full_name, name_ar, name_en, job_type, commission_rate, created_at, updated_at, created_by, updated_by)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW(), $10, $10)
@@ -522,4 +522,3 @@ export function createOperationsRepository(pool: Pool): OperationsRepository {
     },
   };
 }
-

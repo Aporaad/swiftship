@@ -2434,3 +2434,21 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 - lx_api/src/modules/users/users.repository.ts — تطبيق deleteUser
 - lx_api/src/modules/users/users.routes.ts — إضافة DELETE endpoint
 - lx_api/tests/users.test.ts — تحديث mock وإضافة tests
+
+## [2026-10-05T21:25:45+03:00] — الدفعة الأولى من Client Cutover للموظفين والمندوبين — AI Model: Manus
+### التغييرات
+- إضافة علم البيئة `VITE_STAFF_API_WRITES` وقيمته الافتراضية `false` لضمان عدم تغيير سلوك الإنتاج تلقائياً.
+- توسيع `src/data/http/api-client.ts` بدوال `patch` و`delete` مع نفس عقد الأخطاء والمهلة والـrequest-id والتوكن المستخدم في `post`.
+- إضافة عمليات الكتابة typed إلى `src/features/staff/services/staffApiDataGateway.ts` للموظفين والمندوبين.
+- ربط إنشاء وتعديل الموظفين والمندوبين، وتفعيل/تعطيل المندوب، بالبوابة الجديدة عند تفعيل العلم؛ يبقى المسار القديم fallback عند تعطيله.
+- تحديث `alx_api` لقبول معرّفات انتقالية صريحة، مع استخراج معرّف المسار بشكل آمن من جسم طلبات التعديل.
+### التحقق
+- `alx_api`: `npm run check` ناجح.
+- `alx_api`: `npm run build` ناجح.
+- lint للملفات المعدلة في وحدة العمليات ناجح.
+- `git diff --check` ناجح.
+- اختبار Jest الكامل أعاد `Segmentation fault` أثناء تشغيل `tests/security.test.ts` بعد محاولتين؛ لم يُسجل كفشل منطقي للكود.
+- فحص النظام الرئيسي تعذر بسبب اعتماديات الجذر غير المثبتة ووجود إعداد TypeScript قديم؛ لم تُعدّل اعتماديات الجذر خارج نطاق المرحلة.
+### حدود الدفعة
+- لم تُنقل عمليات حذف الكيانات بعد، لأن endpoint الحذف الحالي لا ينفذ تنظيف الحساب المالي وسجل التدقيق كعملية ذرية.
+- لم يُنفذ SQL أو migration على قاعدة البيانات الحية.

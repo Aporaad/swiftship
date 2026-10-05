@@ -202,7 +202,18 @@ export function registerOperationsRoutes(
     if (!id.success || !body.success || !actorId)
       return sendFailure(response, 400, 'INVALID_COURIER_INPUT', 'بيانات المندوب غير صالحة.', requestId(response));
     try {
-      const result = await repository.updateCourier({ courierId: id.data, ...body.data, actorId });
+      const courierChanges = {
+        fullName: body.data.fullName,
+        nameAr: body.data.nameAr,
+        nameEn: body.data.nameEn,
+        courierType: body.data.courierType,
+        courierLevel: body.data.courierLevel,
+        commissionRate: body.data.commissionRate,
+        currency: body.data.currency,
+        isActive: body.data.isActive,
+        accountId: body.data.accountId,
+      };
+      const result = await repository.updateCourier({ courierId: id.data, ...courierChanges, actorId });
       return result
         ? sendSuccess(response, result, requestId(response))
         : sendFailure(response, 404, 'ENTITY_NOT_FOUND', 'المندوب غير موجود.', requestId(response));
@@ -243,7 +254,17 @@ export function registerOperationsRoutes(
     if (!id.success || !body.success || !actorId)
       return sendFailure(response, 400, 'INVALID_EMPLOYEE_INPUT', 'بيانات الموظف غير صالحة.', requestId(response));
     try {
-      const result = await repository.updateEmployee({ employeeId: id.data, ...body.data, actorId });
+      const employeeChanges = {
+        fullName: body.data.fullName,
+        nameAr: body.data.nameAr,
+        nameEn: body.data.nameEn,
+        jobType: body.data.jobType,
+        monthlySalary: body.data.monthlySalary,
+        commissionRate: body.data.commissionRate,
+        currency: body.data.currency,
+        accountId: body.data.accountId,
+      };
+      const result = await repository.updateEmployee({ employeeId: id.data, ...employeeChanges, actorId });
       return result
         ? sendSuccess(response, result, requestId(response))
         : sendFailure(response, 404, 'ENTITY_NOT_FOUND', 'الموظف غير موجود.', requestId(response));
@@ -265,4 +286,3 @@ export function registerOperationsRoutes(
     }
   });
 }
-

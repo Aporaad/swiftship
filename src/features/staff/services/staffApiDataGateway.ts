@@ -2,6 +2,28 @@ import { ApiClient } from "../../../data/http/api-client";
 
 type ApiEnvelope<T> = { success: true; data: T };
 type Row = Record<string, unknown> & { id: string };
+type CourierWriteInput = {
+  courierId?: string;
+  fullName: string;
+  nameAr?: string;
+  nameEn?: string;
+  courierType?: string;
+  commissionRate?: number;
+  currency?: string;
+  isActive?: boolean;
+  accountId?: string;
+};
+type EmployeeWriteInput = {
+  employeeId?: string;
+  fullName: string;
+  nameAr?: string;
+  nameEn?: string;
+  jobType?: string;
+  monthlySalary?: number;
+  commissionRate?: number;
+  currency?: string;
+  accountId?: string;
+};
 
 type StaffState = {
   couriers: Row[];
@@ -39,6 +61,29 @@ const normalize = (row: Row, key: string): Row => ({
 
 export const staffApiDataGateway = {
   isEnabled: () => import.meta.env.VITE_STAFF_API_READS === "true",
+  isWriteEnabled: () => import.meta.env.VITE_STAFF_API_WRITES === "true",
+  async createCourier(input: CourierWriteInput): Promise<Row> {
+    const response = await client.post<ApiEnvelope<Row>>('/api/v1/operations/couriers', input);
+    return response.data;
+  },
+  async updateCourier(courierId: string, input: Partial<CourierWriteInput>): Promise<Row> {
+    const response = await client.patch<ApiEnvelope<Row>>(`/api/v1/operations/couriers/${courierId}`, input);
+    return response.data;
+  },
+  async deleteCourier(courierId: string): Promise<void> {
+    await client.delete<ApiEnvelope<{ deleted: boolean }>>(`/api/v1/operations/couriers/${courierId}`);
+  },
+  async createEmployee(input: EmployeeWriteInput): Promise<Row> {
+    const response = await client.post<ApiEnvelope<Row>>('/api/v1/operations/employees', input);
+    return response.data;
+  },
+  async updateEmployee(employeeId: string, input: Partial<EmployeeWriteInput>): Promise<Row> {
+    const response = await client.patch<ApiEnvelope<Row>>(`/api/v1/operations/employees/${employeeId}`, input);
+    return response.data;
+  },
+  async deleteEmployee(employeeId: string): Promise<void> {
+    await client.delete<ApiEnvelope<{ deleted: boolean }>>(`/api/v1/operations/employees/${employeeId}`);
+  },
   subscribe(handlers: StaffHandlers): () => void {
     let disposed = false;
     const refresh = async () => {

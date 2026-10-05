@@ -242,7 +242,17 @@ export default function EmployeesPage() {
         createdBy: auth.currentUser?.displayName || 'Admin'
       };
 
-      await setDoc(doc(db, 'employees', newId), empData);
+      if (staffApiDataGateway.isWriteEnabled()) {
+        await staffApiDataGateway.createEmployee({
+          employeeId: newId,
+          fullName: empData.fullName,
+          nameAr: empData.fullName,
+          jobType: empData.jobsType,
+          monthlySalary: empData.monthlySalary,
+          commissionRate: empData.commissionRate,
+          currency: empData.currency,
+        });
+      } else await setDoc(doc(db, 'employees', newId), empData);
 
       // Automatically provision financial account (2130-xxxx) for employee payroll ledger
       try {
@@ -324,7 +334,16 @@ export default function EmployeesPage() {
 
     const result = await runMutation(async () => {
       const now = Date.now();
-      await updateDoc(doc(db, 'employees', selectedEmployee.id), {
+      if (staffApiDataGateway.isWriteEnabled()) {
+        await staffApiDataGateway.updateEmployee(selectedEmployee.id, {
+          fullName: editFormData.fullName.trim(),
+          nameAr: editFormData.fullName.trim(),
+          jobType: editFormData.jobsType,
+          monthlySalary: Number(editFormData.monthlySalary) || 0,
+          currency: editFormData.currency,
+          commissionRate: Number(editFormData.commissionRate) || 0,
+        });
+      } else await updateDoc(doc(db, 'employees', selectedEmployee.id), {
         fullName: editFormData.fullName.trim(),
         phone: editFormData.phone.trim(),
         email: editFormData.email.trim(),

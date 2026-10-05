@@ -454,7 +454,15 @@ export default function CouriersPage() {
     const result = await runMutation(async () => {
       const type = editFormData.courierType || 'local';
       const finCurrency = type === 'sourcing' ? 'SAR' : 'YER';
-      await updateDoc(doc(db, 'couriers', selectedCourier.id), {
+      if (staffApiDataGateway.isWriteEnabled()) {
+        await staffApiDataGateway.updateCourier(selectedCourier.id, {
+          fullName: editFormData.fullName.trim(),
+          courierType: type,
+          commissionRate: Number(editFormData.commissionRate) || 0,
+          currency: finCurrency,
+          isActive: !editFormData.disabled,
+        });
+      } else await updateDoc(doc(db, 'couriers', selectedCourier.id), {
         fullName: editFormData.fullName,
         phone: editFormData.phone,
         email: editFormData.email,
@@ -499,7 +507,11 @@ export default function CouriersPage() {
       type: 'warning',
       onConfirm: async () => {
         const result = await runMutation(async () => {
-          await updateDoc(doc(db, 'couriers', courier.id), { disabled: !courier.disabled, updatedAt: Date.now() });
+          if (staffApiDataGateway.isWriteEnabled()) {
+            await staffApiDataGateway.updateCourier(courier.id, { isActive: courier.disabled });
+          } else {
+            await updateDoc(doc(db, 'couriers', courier.id), { disabled: !courier.disabled, updatedAt: Date.now() });
+          }
           activityLogService.log('edit_courier', courier.fullName, { id: courier.id, disabled: !courier.disabled });
         }, setEditMutationState);
         if (result.status === 'success-after-mutation') {
@@ -548,29 +560,40 @@ export default function CouriersPage() {
       const { accountCode, code, accountId } =
         await financialAccountService.getNextAccountIdentifiers('courier');
       const newId = 'cour_' + accountCode;
-      // 2. Save directly to Couriers portfolio as a plain record with auto-ID
-      const newCourierRef = doc(collection(db, 'couriers'), newId);
       const type = addFormData.courierType === 'sourcing' ? 'sourcing' : 'local';
       const finCurrency = type === 'sourcing' ? 'SAR' : 'YER';
-      await setDoc(newCourierRef, {
-        fullName: addFormData.fullName,
-        phone: addFormData.phone,
-        email: emailValue,
-        address: addFormData.address,
-        gpsLocation: addFormData.gpsLocation,
-        disabled: false,
-        courierCustomId: customId,
-        commissionRate: addFormData.commissionRate,
-        notes: addFormData.notes,
-        courierType: type,
-        createdAt: Date.now()
-      });
+      if (staffApiDataGateway.isWriteEnabled()) {
+        await staffApiDataGateway.createCourier({
+          courierId: newId,
+          fullName: addFormData.fullName.trim(),
+          nameAr: addFormData.fullName.trim(),
+          courierType: type,
+          commissionRate: Number(addFormData.commissionRate) || 0,
+          currency: finCurrency,
+          isActive: true,
+          accountId,
+        });
+      } else {
+        await setDoc(doc(collection(db, 'couriers'), newId), {
+          fullName: addFormData.fullName,
+          phone: addFormData.phone,
+          email: emailValue,
+          address: addFormData.address,
+          gpsLocation: addFormData.gpsLocation,
+          disabled: false,
+          courierCustomId: customId,
+          commissionRate: addFormData.commissionRate,
+          notes: addFormData.notes,
+          courierType: type,
+          createdAt: Date.now()
+        });
+      }
 
       // 3. Auto-create financial account (2120-xxxx)
       try {
         await financialAccountService.createAccountForEntity(
           'courier',
-          newCourierRef.id,
+          newId,
           addFormData.fullName,
           type === 'sourcing' ? (settings.defaultOrderCurrency ?? settings.currency ?? 'YER') : (settings.currency ?? 'YER')
         );
