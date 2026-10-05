@@ -4,6 +4,7 @@ import { requirePermission } from '../../core/auth/require-permission';
 import { sendFailure, sendSuccess } from '../../core/http/response';
 import type { AuthUseCases } from '../auth/auth.contracts';
 import { requireAuthenticatedUser } from '../auth/auth.routes';
+import { AuthServiceError } from '../auth/auth.use-cases';
 import { entityIdSchema, pageQuerySchema } from '../operations/operations.schemas';
 import type { UsersRepository } from './users.contracts';
 import { createUserSchema, provisionUserSchema, setUserRolesSchema, updateUserSchema } from './users.schemas';
@@ -66,6 +67,9 @@ export function registerUsersRoutes(
     } catch (error) {
       if (created?.userId) {
         await repository.updateUser({ userId: String(created.userId), disabled: true, actorId }).catch(() => undefined);
+      }
+      if (error instanceof AuthServiceError) {
+        return sendFailure(response, error.statusCode, error.code, error.safeMessage, requestId(response));
       }
       return next(error);
     }
