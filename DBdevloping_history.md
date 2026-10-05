@@ -1329,3 +1329,8 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 - أُضيف الملف `alx_api/src/db/migrations/0011_roles_api_runtime_write.sql` لمنح `alx_api_runtime` أقل صلاحيات الكتابة اللازمة لـ roles وuser_roles وrole_permissions مع RLS policies.
 - طُبق migration باسم `roles_api_runtime_write_0011` على مشروع Supabase المرتبط `ejrojwbbflzchasvgexr` بنجاح.
 - لم تُنشأ أدوار أو صلاحيات جديدة ولم تُعدل بيانات المستخدمين؛ التغيير اقتصر على grants وpolicies.
+
+## [2026-10-05T22:32:05+03:00] — AI Model: Manus
+- أُضيفت الدالة الأمنية `alx_api_private.admin_update_password_hash(text,text,timestamptz,text)` لتحديث credential وإبطال الجلسات والـrefresh tokens وتسجيل actor داخل معاملة PostgreSQL واحدة.
+- مُنحت صلاحية التنفيذ فقط للدور `alx_api_runtime`، مع منع الأدوار العامة من تنفيذ الدالة.
+- تم تطبيق migration على قاعدة Supabase المرتبطة بنجاح؛ لم تُنفذ أي قراءة بيانات حساسة أو كلمات مرور.

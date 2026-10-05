@@ -421,6 +421,17 @@ export class DrizzleAuthRepository implements AuthRepository {
     return result?.changed === true;
   }
 
+  async adminResetPassword(input: { userId: string; passwordHash: string; changedAt: Date; actorUserId: string }): Promise<boolean> {
+    const [result] = await this.db
+      .select({
+        changed: sql<boolean>`alx_api_private.admin_update_password_hash(${input.userId}, ${input.passwordHash}, ${input.changedAt}, ${input.actorUserId})`,
+      })
+      .from(apiLoginUsers)
+      .where(eq(apiLoginUsers.userId, input.userId))
+      .limit(1);
+    return result?.changed === true;
+  }
+
   async createPasswordResetToken(input: {
     userId: string;
     tokenHash: string;

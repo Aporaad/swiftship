@@ -2229,3 +2229,9 @@ GRANT SELECT, INSERT, DELETE ON alx_api_private.role_permissions TO alx_api_runt
 ```
 - نُفذ عبر Supabase MCP على المشروع المرتبط بنجاح.
 - لم تُنفذ أي أوامر DML لإنشاء أدوار أو ربط صلاحيات.
+
+## [2026-10-05T22:32:05+03:00] — AI Model: Manus
+- نُفذ أمر migration عبر Supabase MCP على المشروع المرتبط.
+- الاسم: `admin_password_reset`.
+- الدالة: `alx_api_private.admin_update_password_hash(text,text,timestamptz,text)` لتحديث Argon2id، إبطال الجلسات، تسجيل actor، ومنح التنفيذ لـ `alx_api_runtime` فقط.
+- النتيجة: `success: true`.

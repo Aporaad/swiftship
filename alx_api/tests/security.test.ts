@@ -49,7 +49,8 @@ function createDenyAllAuth(): jest.Mocked<AuthUseCases> {
     revokeSession: jest.fn().mockResolvedValue(undefined),
     logoutAll: jest.fn().mockResolvedValue(undefined),
     changePassword: jest.fn().mockResolvedValue(undefined),
-    requestPasswordReset: jest.fn().mockResolvedValue({ message: 'ok' }),
+    adminResetPassword: jest.fn(),
+  requestPasswordReset: jest.fn().mockResolvedValue({ message: 'ok' }),
     completePasswordReset: jest.fn().mockResolvedValue(undefined),
     listPermissions: jest.fn().mockResolvedValue([]),
   };

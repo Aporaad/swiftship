@@ -2483,3 +2483,10 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 ## [2026-10-05T22:22:05+03:00] — AI Model: Manus
 - صُحح مسار provisioning ليحوّل `AuthServiceError` إلى استجابة API آمنة (`503` مع code/message المسموحين) بدل `500` عام، مع استمرار تعطيل profile إذا فشل تسليم الدعوة.
 - نجح TypeScript check وbuild وESLint قبل الرفع.
+
+## [2026-10-05T22:32:05+03:00] — AI Model: Manus
+- استُبدل endpoint legacy `/api/auth/admin-change-password` في لوحة إدارة المستخدمين بالمسار المحمي `POST /api/v1/users/:id/password`.
+- أُضيفت صلاحية مستقلة `reset_passwords` مع تحقق Zod لكلمة مرور لا تقل عن 12 حرفًا.
+- تُهش كلمة المرور بـ Argon2id داخل API ولا تُحفظ في الواجهة أو Local Storage، مع إبطال جلسات المستخدم وتسجيل هوية المنفذ.
+- أُضيفت migration `0012_admin_password_reset.sql` وطُبقت بنجاح على مشروع Supabase المرتبط.
+- أُضيفت اختبارات حدود الصلاحيات؛ فحوص TypeScript وbuild وlint نجحت، بينما تعذر تشغيل Jest بسبب Segmentation fault في بيئة الاختبار.

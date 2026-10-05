@@ -15,6 +15,7 @@ const auth = (permissions: string[]): jest.Mocked<AuthUseCases> => ({
   revokeSession: jest.fn(),
   logoutAll: jest.fn(),
   changePassword: jest.fn(),
+  adminResetPassword: jest.fn(),
   requestPasswordReset: jest.fn(),
   completePasswordReset: jest.fn(),
   listPermissions: jest.fn().mockResolvedValue(permissions),
@@ -63,6 +64,30 @@ describe('Users HTTP API Boundaries', () => {
       .send({ roles: ['admin', 'finance'] });
     expect(response.status).toBe(200);
     expect(repository.setUserRoles).toHaveBeenCalledWith('u1', ['admin', 'finance'], 'u1');
+  });
+
+  it('denies admin password reset without reset_passwords permission', async () => {
+    const authUseCases = auth([]);
+    const response = await request(createApiApp({ environment, auth: authUseCases, users: repository }))
+      .post('/api/v1/users/u2/password')
+      .set('Authorization', 'Bearer token')
+      .send({ newPassword: 'CorrectHorseBatteryStaple!' });
+    expect(response.status).toBe(403);
+    expect(authUseCases.adminResetPassword).not.toHaveBeenCalled();
+  });
+
+  it('allows admin password reset with reset_passwords permission', async () => {
+    const authUseCases = auth(['reset_passwords']);
+    const response = await request(createApiApp({ environment, auth: authUseCases, users: repository }))
+      .post('/api/v1/users/u2/password')
+      .set('Authorization', 'Bearer token')
+      .send({ newPassword: 'CorrectHorseBatteryStaple!' });
+    expect(response.status).toBe(200);
+    expect(authUseCases.adminResetPassword).toHaveBeenCalledWith({
+      targetUserId: 'u2',
+      newPassword: 'CorrectHorseBatteryStaple!',
+      actorUserId: 'u1',
+    });
   });
 
   it('disables user (soft delete) with delete_users permission', async () => {

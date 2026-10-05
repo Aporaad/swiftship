@@ -1864,3 +1864,10 @@
 
 ## [2026-10-05T22:22:05+03:00] — AI Model: Manus
 - [منجز] تصحيح استجابة فشل PasswordResetDelivery في provisioning وإظهار حالة الخدمة غير المهيأة دون كشف تفاصيل حساسة.
+
+## [2026-10-05T22:32:05+03:00] — AI Model: Manus
+- [منجز] نقل تعيين وإعادة تعيين كلمات مرور موظفي النظام إلى API داخلي بصلاحية `reset_passwords`.
+- [منجز] منع مرور كلمة المرور إلى Legacy أو Local Storage، وتطبيق Argon2id وإبطال الجلسات ذريًا.
+- [منجز] تطبيق migration واختبارات الصلاحيات وفحوص TypeScript/build/lint.
+- [متابعة] إعادة تشغيل Jest في بيئة مستقرة؛ الانهيار الحالي Segmentation fault بيئي وليس فشل Assertion ظاهر.
+- [متبقي حسب الخطة] استكمال نقل Portal وNotifications وبقية وحدات Finance/Reporting ثم إغلاق Legacy cutover واختبارات التشغيل النهائية.

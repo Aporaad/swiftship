@@ -9,6 +9,7 @@ const auth = (permissions: string[]): jest.Mocked<AuthUseCases> => ({
   login: jest.fn(), refresh: jest.fn(), logout: jest.fn(),
   authenticateAccessToken: jest.fn().mockResolvedValue({ userId: 'u1', sessionId: 's1', role: 'admin' }),
   listSessions: jest.fn(), revokeSession: jest.fn(), logoutAll: jest.fn(), changePassword: jest.fn(),
+  adminResetPassword: jest.fn(),
   requestPasswordReset: jest.fn(), completePasswordReset: jest.fn(), listPermissions: jest.fn().mockResolvedValue(permissions),
 });
 const role = { roleId: 'role-1', code: 'warehouse', name: 'Warehouse', description: null, isSystemRole: false, permissions: ['view_orders'], createdAt: new Date(), updatedAt: new Date() };

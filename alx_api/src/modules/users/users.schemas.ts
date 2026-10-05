@@ -26,3 +26,7 @@ export const provisionUserSchema = createUserSchema.extend({
   email: z.string().trim().email(),
   roleCodes: z.array(z.string().trim().min(1).max(64)).max(20).optional(),
 }).strict();
+
+export const adminResetPasswordSchema = z.object({
+  newPassword: z.string().min(12).max(128),
+}).strict();

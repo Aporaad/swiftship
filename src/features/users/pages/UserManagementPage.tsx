@@ -3,7 +3,6 @@ import { asyncState, runMutation, type AsyncState } from '../../../shared/contra
 import {
   collection, onSnapshot, doc, updateDoc, setDoc, deleteDoc,
   query, orderBy, limit, getDocs, where,
-  sendPasswordResetEmail,
   db, handleSupabaseError, OperationType,
   initializeApp, deleteApp,
   getAuth, createUserWithEmailAndPassword
@@ -32,6 +31,7 @@ import { EditUserModal } from '../components/EditUserModal';
 import { RoleFormModal } from '../components/RoleFormModal';
 import { SessionActionModal } from './tabs/SessionActionModal';
 import { UserManagementTabContent } from './tabs/UserManagementTabContent';
+import { usersApiDataGateway } from '../services/usersApiDataGateway';
 
 // ══════════════════════════════════════════════════════════════
 // PERMISSIONS — FULL SYSTEM COVERAGE
@@ -767,50 +767,18 @@ export default function UserManagementPage() {
   const handleAdminChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!passwordTargetUser || !newPasswordValue) return;
-    if (newPasswordValue.length < 6) {
+    if (newPasswordValue.length < 12) {
       return notificationService.notify({
         title: t('خطأ', 'Error'),
-        message: t('يجب أن تكون كلمة المرور 6 أحرف على الأقل', 'Password must be at least 6 characters'),
+        message: t('يجب أن تكون كلمة المرور 12 حرفاً على الأقل', 'Password must be at least 12 characters'),
         type: 'error',
         category: 'system'
       });
     }
     setPasswordLoading(true);
     try {
-      const response = await fetch('/api/auth/admin-change-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          uid: passwordTargetUser.id,
-          newPassword: newPasswordValue
-        })
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to update password');
-      }
-      if (passwordTargetUser.email?.toLowerCase() === 'admin@swiftship.system' || passwordTargetUser.email?.toLowerCase() === 'admin') {
-        try {
-          const { simpleHashPassword, encryptDataLocal } = await import('../../../data/legacy/legacy-compat.ts');
-          const hashVal = simpleHashPassword(newPasswordValue);
-          const adminProfile = {
-            uid: passwordTargetUser.id,
-            email: 'admin@swiftship.system',
-            fullName: passwordTargetUser.fullName || 'Emergency Master Admin',
-            role: 'Admin',
-            isRoot: true,
-            disabled: false,
-            createdAt: Date.now()
-          };
-          localStorage.setItem('swiftship_emergency_admin_hash', hashVal);
-          localStorage.setItem('swiftship_emergency_admin_profile', encryptDataLocal(JSON.stringify(adminProfile), newPasswordValue));
-          localStorage.setItem('swiftship_emergency_admin_pwd', newPasswordValue);
-        } catch (lsErr) {
-          console.warn('[UserManagement] Local storage credentials sync failed:', lsErr);
-        }
-      }
+      if (!usersApiDataGateway.isWriteEnabled()) throw new Error('Users API password reset is not enabled.');
+      await usersApiDataGateway.adminResetPassword(passwordTargetUser.id, newPasswordValue);
       await activityLogService.log('reset_password', passwordTargetUser.fullName, { email: passwordTargetUser.email, directChange: true });
       notificationService.notify({
         title: t('تم تغيير كلمة المرور', 'Password Changed'),

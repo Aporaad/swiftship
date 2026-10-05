@@ -97,3 +97,28 @@
 
 ## [2026-10-05T22:22:05+03:00] — Provisioning Error Hardening
 - أصبحت أخطاء `AuthServiceError` في provisioning تُعاد كـ HTTP status آمن (مثل 503) بدل تحويلها إلى 500، مع عدم إرجاع password أو PIN أو reset token.
+
+## [2026-10-05T22:32:05+03:00] — مراجعة شاملة وتصحيح Admin Password Reset
+
+### القرار الأمني المعتمد
+- **لوحة الإدارة:** تعيين وإعادة تعيين كلمة مرور المستخدمين يتم فقط عبر `POST /api/v1/users/:id/password` وبصلاحية `reset_passwords` أو دور Admin.
+- **الموقع/Portal:** يبقى تدفق تغيير كلمة المرور الذاتي للمستخدم منفصلًا عن تدفق الإدارة، ولا تُخزن كلمة المرور في الواجهة.
+- **الخادم:** Argon2id، عدم إعادة كلمة المرور في الاستجابة، إبطال الجلسات والـrefresh tokens، وتدقيق actor داخل PostgreSQL.
+
+### المنفذ
+- إضافة `adminResetPassword` إلى AuthUseCases وAuthRepository وDrizzle repository.
+- إضافة schema صارم بطول 12–128 حرفًا ومسار Users API محمي.
+- تحويل `UserManagementPage` و`usersApiDataGateway` من endpoint legacy إلى API الداخلي وإزالة مزامنة كلمة المرور إلى Local Storage.
+- إنشاء وتطبيق migration `0012_admin_password_reset.sql` بنجاح على Supabase.
+- إضافة اختبارات السماح والمنع حسب الصلاحية.
+
+### التحقق
+- `npm run check` و`npm run build` و`eslint` للملفات المعدلة: ناجحة.
+- Jest: تعذر الإكمال بسبب `Segmentation fault` في بيئة التنفيذ دون ظهور فشل Assertion.
+
+### المراحل المتبقية
+1. تثبيت تشغيل Jest في بيئة مستقرة وإضافة اختبار تكاملي فعلي لتدفق admin reset.
+2. استكمال Portal API للطلبات والتتبع والملف الشخصي والتذاكر والإعلانات، مع إبقاء self-service password flow منفصلًا.
+3. استكمال Notifications/Outbox وربط الإشعارات بالأحداث الذرية.
+4. إغلاق فجوات Finance وReporting وبقية العمليات التي ما زالت تعتمد على Legacy.
+5. تفعيل أعلام القراءة والكتابة تدريجيًا ثم إغلاق Legacy cutover واختبارات الإطلاق.

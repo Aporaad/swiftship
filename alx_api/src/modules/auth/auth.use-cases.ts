@@ -71,6 +71,7 @@ export interface AuthRepository {
     occurredAt: Date;
   }): Promise<void>;
   updatePasswordHash(input: { userId: string; passwordHash: string; changedAt: Date }): Promise<boolean>;
+  adminResetPassword(input: { userId: string; passwordHash: string; changedAt: Date; actorUserId: string }): Promise<boolean>;
   createPasswordResetToken(input: {
     userId: string;
     tokenHash: string;
@@ -314,6 +315,16 @@ export class AuthService implements AuthUseCases {
       changedAt: this.now(),
     });
     if (!changed) throw INVALID_CREDENTIALS();
+  }
+
+  async adminResetPassword(input: { targetUserId: string; newPassword: string; actorUserId: string }): Promise<void> {
+    const changed = await this.repository.adminResetPassword({
+      userId: input.targetUserId,
+      passwordHash: await this.passwordHasher(input.newPassword),
+      changedAt: this.now(),
+      actorUserId: input.actorUserId,
+    });
+    if (!changed) throw new AuthServiceError(404, 'USER_NOT_FOUND', 'المستخدم غير موجود أو غير متاح.');
   }
 
   async requestPasswordReset(input: { identifier: string }): Promise<{ message: string }> {

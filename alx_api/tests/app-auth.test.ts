@@ -39,7 +39,8 @@ function createAuthUseCases(): jest.Mocked<AuthUseCases> {
     revokeSession: jest.fn().mockResolvedValue(undefined),
     logoutAll: jest.fn().mockResolvedValue(undefined),
     changePassword: jest.fn().mockResolvedValue(undefined),
-    requestPasswordReset: jest
+    adminResetPassword: jest.fn(),
+  requestPasswordReset: jest
       .fn()
       .mockResolvedValue({ message: 'إذا كان الحساب موجوداً، فسيصل رابط إعادة التعيين إلى وسيلة التواصل المسجلة.' }),
     completePasswordReset: jest.fn().mockResolvedValue(undefined),

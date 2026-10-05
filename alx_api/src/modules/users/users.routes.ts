@@ -7,7 +7,7 @@ import { requireAuthenticatedUser } from '../auth/auth.routes';
 import { AuthServiceError } from '../auth/auth.use-cases';
 import { entityIdSchema, pageQuerySchema } from '../operations/operations.schemas';
 import type { UsersRepository } from './users.contracts';
-import { createUserSchema, provisionUserSchema, setUserRolesSchema, updateUserSchema } from './users.schemas';
+import { adminResetPasswordSchema, createUserSchema, provisionUserSchema, setUserRolesSchema, updateUserSchema } from './users.schemas';
 
 function requestId(response: Response): string {
   return String(response.locals.requestId ?? '');
@@ -71,6 +71,20 @@ export function registerUsersRoutes(
       if (error instanceof AuthServiceError) {
         return sendFailure(response, error.statusCode, error.code, error.safeMessage, requestId(response));
       }
+      return next(error);
+    }
+  });
+
+  app.post('/api/v1/users/:id/password', ...route('reset_passwords', auth), async (request: Request, response: Response, next: NextFunction) => {
+    const id = entityIdSchema.safeParse(request.params.id);
+    const body = adminResetPasswordSchema.safeParse(request.body as unknown);
+    const actorId = principalId(response);
+    if (!id.success || !body.success || !auth || !actorId)
+      return sendFailure(response, 400, 'INVALID_PASSWORD_INPUT', 'بيانات كلمة المرور غير صالحة.', requestId(response));
+    try {
+      await auth.adminResetPassword({ targetUserId: id.data, newPassword: body.data.newPassword, actorUserId: actorId });
+      return sendSuccess(response, { changed: true, sessionsRevoked: true }, requestId(response));
+    } catch (error) {
       return next(error);
     }
   });

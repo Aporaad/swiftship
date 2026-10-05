@@ -32,6 +32,7 @@ export interface AuthUseCases {
   revokeSession(input: { userId: string; sessionId: string }): Promise<void>;
   logoutAll(input: { userId: string }): Promise<void>;
   changePassword(input: { userId: string; currentPassword: string; newPassword: string }): Promise<void>;
+  adminResetPassword(input: { targetUserId: string; newPassword: string; actorUserId: string }): Promise<void>;
   requestPasswordReset(input: { identifier: string }): Promise<{ message: string }>;
   completePasswordReset(input: { token: string; newPassword: string }): Promise<void>;
   listPermissions(input: { userId: string }): Promise<readonly string[]>;

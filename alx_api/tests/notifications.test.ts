@@ -32,7 +32,8 @@ function createAuthWithPermissions(permissions: string[]): jest.Mocked<AuthUseCa
     revokeSession: jest.fn(),
     logoutAll: jest.fn(),
     changePassword: jest.fn(),
-    requestPasswordReset: jest.fn(),
+    adminResetPassword: jest.fn(),
+  requestPasswordReset: jest.fn(),
     completePasswordReset: jest.fn(),
     listPermissions: jest.fn().mockResolvedValue(permissions),
   };

@@ -40,6 +40,7 @@ function makeDependencies() {
     revokeAllSessions: jest.fn().mockResolvedValue(undefined),
     recordAuthEvent: jest.fn().mockResolvedValue(undefined),
     updatePasswordHash: jest.fn().mockResolvedValue(true),
+    adminResetPassword: jest.fn().mockResolvedValue(true),
     createPasswordResetToken: jest.fn().mockResolvedValue(true),
     completePasswordReset: jest.fn().mockResolvedValue(true),
     revokePasswordResetToken: jest.fn().mockResolvedValue(undefined),

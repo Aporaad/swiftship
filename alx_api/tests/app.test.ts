@@ -23,7 +23,8 @@ function createApp(databaseReady = false, authReady = false) {
         revokeSession: jest.fn(),
         logoutAll: jest.fn(),
         changePassword: jest.fn(),
-        requestPasswordReset: jest.fn(),
+        adminResetPassword: jest.fn(),
+  requestPasswordReset: jest.fn(),
         completePasswordReset: jest.fn(),
         listPermissions: jest.fn(),
       }

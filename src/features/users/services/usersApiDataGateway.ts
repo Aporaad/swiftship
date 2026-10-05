@@ -31,6 +31,12 @@ export const usersApiDataGateway = {
   async disableUser(userId: string): Promise<void> {
     await client.delete<ApiEnvelope<{ disabled: boolean; userId: string }>>(`/api/v1/users/${encodeURIComponent(userId)}`);
   },
+  async adminResetPassword(userId: string, newPassword: string): Promise<void> {
+    await client.post<ApiEnvelope<{ changed: boolean; sessionsRevoked: boolean }>>(
+      `/api/v1/users/${encodeURIComponent(userId)}/password`,
+      { newPassword },
+    );
+  },
   subscribe(handlers: UsersHandlers): () => void {
     let disposed = false;
     const refresh = async () => {

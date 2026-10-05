@@ -14,6 +14,7 @@ const auth = (): jest.Mocked<AuthUseCases> => ({
   revokeSession: jest.fn(),
   logoutAll: jest.fn(),
   changePassword: jest.fn(),
+  adminResetPassword: jest.fn(),
   requestPasswordReset: jest.fn(),
   completePasswordReset: jest.fn(),
   listPermissions: jest.fn().mockResolvedValue(['view_customers']),
