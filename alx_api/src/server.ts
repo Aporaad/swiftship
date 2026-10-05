@@ -9,6 +9,7 @@ import { createOperationsRepository } from './modules/operations/operations.repo
 import { createFinanceRepository } from './modules/finance/finance.repository';
 import { createReportingRepository } from './modules/reporting/reporting.repository';
 import { createUsersRepository } from './modules/users/users.repository';
+import { createRolesRepository } from './modules/roles/roles.repository';
 import { createNotificationsRepository } from './modules/notifications/notifications.repository';
 import { createPortalRepository } from './modules/portal/portal.repository';
 
@@ -38,6 +39,7 @@ function startServer(): void {
     ...(database ? { finance: createFinanceRepository(database.pool) } : {}),
     ...(database ? { reporting: createReportingRepository(database.pool) } : {}),
     ...(database ? { users: createUsersRepository(database.pool) } : {}),
+    ...(database ? { roles: createRolesRepository(database.pool) } : {}),
     // إشعارات وبوابة الموقع — Notifications & Portal repositories
     ...(database ? { notifications: createNotificationsRepository(database.pool) } : {}),
     ...(database ? { portal: createPortalRepository(database.pool) } : {}),

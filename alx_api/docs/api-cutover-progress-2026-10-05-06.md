@@ -85,3 +85,12 @@
 - بقي إنشاء حساب Auth/provisioning وتعديل PIN على Legacy لحين وجود عقد API آمن لا يمرر كلمات المرور أو الأسرار الحساسة عبر هذا المسار.
 - التحقق: `npm run check` و`npm run build` في `alx_api` نجحا. اختبارات Jest (`tests/users.test.ts` و`tests/security.test.ts`، ثم Users منفردًا) انتهت بـ `Segmentation fault` من بيئة Jest قبل إخراج نتائج الاختبارات؛ لم تُخف هذه النتيجة.
 - لا يوجد تنفيذ SQL مباشر أو تغيير حي في قاعدة البيانات.
+
+## [2026-10-05T22:21:20+03:00] — Roles API + Secure User Provisioning
+- أُضيفت وحدة Roles API مع عقود منفصلة وZod validation وrepository PostgreSQL ومعاملات ذرية لـ role_permissions.
+- المسارات المحمية: `GET /roles`, `GET /roles/permissions`, `POST /roles`, `PATCH /roles/:id`, `DELETE /roles/:id` باستخدام `view_roles`, `add_roles`, `edit_roles`, `delete_roles`.
+- رُبطت RolesPage ببوابة HTTP خلف `VITE_ROLES_API_READS` و`VITE_ROLES_API_WRITES` مع fallback Legacy قابل للتراجع.
+- أُضيف `POST /api/v1/users/provision`: يقبل بيانات الملف فقط، ويرفض password/PIN بسبب strict schema. ينشئ الحساب ثم يرسل reset invitation أحادي الاستخدام عبر `PasswordResetDelivery`; لا يعيد الرمز أو كلمة المرور إلى الواجهة. عند فشل التسليم يُعطّل الحساب المنشأ.
+- تطبيق provisioning يتطلب تشغيل `AUTH_PASSWORD_CHANGES_ENABLED=true` مع `LEGACY_PASSWORD_AUTH_ENABLED=false` وتوصيل PasswordResetDelivery فعلي؛ بدون ذلك يرفض API العملية بأمان ولا يضع credential مؤقتًا.
+- طُبقت migration `roles_api_runtime_write_0011` لمنح أقل صلاحيات Runtime اللازمة للكتابة مع RLS policies.
+- التحقق: TypeScript check وbuild وESLint للوحدات المعدلة نجحت. اختبار Jest `tests/roles.test.ts` اصطدم بـ `Segmentation fault` من بيئة Jest قبل إظهار النتائج، كما حدث في جولات سابقة.

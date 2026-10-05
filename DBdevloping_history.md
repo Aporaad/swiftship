@@ -1324,3 +1324,8 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 - لم تُنفذ أي أوامر SQL مباشرة أو migration على قاعدة البيانات خلال هذه المرحلة.
 - تعتمد Users API على الجداول والمخطط الموجودين مسبقًا (`public.users` وRBAC)، وتستخدم UPDATE لتعطيل الحساب عبر التطبيق عند تفعيل العلم.
 - الحذف الناعم يحافظ على السجل والقيود المالية؛ لا يوجد purge مالي عند استخدام مسار API.
+
+## [2026-10-05T22:20:45+03:00] — AI Model: Manus
+- أُضيف الملف `alx_api/src/db/migrations/0011_roles_api_runtime_write.sql` لمنح `alx_api_runtime` أقل صلاحيات الكتابة اللازمة لـ roles وuser_roles وrole_permissions مع RLS policies.
+- طُبق migration باسم `roles_api_runtime_write_0011` على مشروع Supabase المرتبط `ejrojwbbflzchasvgexr` بنجاح.
+- لم تُنشأ أدوار أو صلاحيات جديدة ولم تُعدل بيانات المستخدمين؛ التغيير اقتصر على grants وpolicies.

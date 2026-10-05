@@ -20,3 +20,9 @@ export const updateUserSchema = createUserSchema.partial();
 export const setUserRolesSchema = z.object({
   roles: z.array(z.string().trim().min(1).max(64)).max(50),
 });
+
+/** Provisioning accepts profile data only; credentials are created through reset delivery. */
+export const provisionUserSchema = createUserSchema.extend({
+  email: z.string().trim().email(),
+  roleCodes: z.array(z.string().trim().min(1).max(64)).max(20).optional(),
+}).strict();

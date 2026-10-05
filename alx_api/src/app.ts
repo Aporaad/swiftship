@@ -19,6 +19,8 @@ import { registerReportingRoutes } from './modules/reporting/reporting.routes';
 import type { ReportingRepository } from './modules/reporting/reporting.contracts';
 import { registerUsersRoutes } from './modules/users/users.routes';
 import type { UsersRepository } from './modules/users/users.contracts';
+import { registerRolesRoutes } from './modules/roles/roles.routes';
+import type { RolesRepository } from './modules/roles/roles.contracts';
 import { registerNotificationsRoutes } from './modules/notifications/notifications.routes';
 import type { NotificationsRepository } from './modules/notifications/notifications.contracts';
 import { registerPortalRoutes } from './modules/portal/portal.routes';
@@ -38,6 +40,7 @@ export interface AppOptions {
   finance?: FinanceRepository;
   reporting?: ReportingRepository;
   users?: UsersRepository;
+  roles?: RolesRepository;
   notifications?: NotificationsRepository;
   portal?: PortalRepository;
 }
@@ -119,6 +122,7 @@ export function createApiApp(options: AppOptions): Express {
   if (options.finance) registerFinanceRoutes(app, environment, options.auth, options.finance);
   if (options.reporting) registerReportingRoutes(app, environment, options.auth, options.reporting);
   if (options.users) registerUsersRoutes(app, environment, options.auth, options.users);
+  if (options.roles) registerRolesRoutes(app, environment, options.auth, options.roles);
   // تفعيل وحدة الإشعارات — Activate notifications module
   if (options.notifications) registerNotificationsRoutes(app, environment, options.auth, options.notifications);
   // تفعيل وحدة البوابة العامة — Activate public portal module

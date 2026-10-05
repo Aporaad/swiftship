@@ -6,7 +6,7 @@ import type { AuthUseCases } from '../auth/auth.contracts';
 import { requireAuthenticatedUser } from '../auth/auth.routes';
 import { entityIdSchema, pageQuerySchema } from '../operations/operations.schemas';
 import type { UsersRepository } from './users.contracts';
-import { createUserSchema, setUserRolesSchema, updateUserSchema } from './users.schemas';
+import { createUserSchema, provisionUserSchema, setUserRolesSchema, updateUserSchema } from './users.schemas';
 
 function requestId(response: Response): string {
   return String(response.locals.requestId ?? '');
@@ -50,6 +50,27 @@ export function registerUsersRoutes(
     }
   });
 
+  /** Creates a profile only; the password is established by a one-time reset link. */
+  app.post('/api/v1/users/provision', ...route('add_users', auth), async (request: Request, response: Response, next: NextFunction) => {
+    const body = provisionUserSchema.safeParse(request.body as unknown);
+    const actorId = principalId(response);
+    if (!body.success || !auth)
+      return sendFailure(response, 400, 'INVALID_PROVISIONING_INPUT', 'بيانات إنشاء المستخدم الآمن غير صالحة.', requestId(response));
+    const { roleCodes, ...profile } = body.data;
+    let created: Record<string, unknown> | undefined;
+    try {
+      created = await repository.createUser({ ...profile, disabled: false, actorId });
+      if (roleCodes) await repository.setUserRoles(String(created.userId), roleCodes, actorId);
+      await auth.requestPasswordReset({ identifier: profile.email });
+      return sendSuccess(response, { user: created, invitationDispatched: true }, requestId(response));
+    } catch (error) {
+      if (created?.userId) {
+        await repository.updateUser({ userId: String(created.userId), disabled: true, actorId }).catch(() => undefined);
+      }
+      return next(error);
+    }
+  });
+
   app.post('/api/v1/users', ...route('add_users', auth), async (request: Request, response: Response, next: NextFunction) => {
     const body = createUserSchema.safeParse(request.body as unknown);
     const actorId = principalId(response);
@@ -69,8 +90,7 @@ export function registerUsersRoutes(
     if (!id.success || !body.success)
       return sendFailure(response, 400, 'INVALID_USER_INPUT', 'بيانات المستخدم غير صالحة.', requestId(response));
     try {
-      const { userId: _ignore, ...updateFields } = body.data;
-      const result = await repository.updateUser({ userId: id.data, ...updateFields, actorId });
+      const result = await repository.updateUser({ ...body.data, userId: id.data, ...(actorId ? { actorId } : {}) });
       return result
         ? sendSuccess(response, result, requestId(response))
         : sendFailure(response, 404, 'ENTITY_NOT_FOUND', 'المستخدم غير موجود.', requestId(response));

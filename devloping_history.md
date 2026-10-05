@@ -2471,3 +2471,11 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 - نُقلت قراءة قائمة المستخدمين، وتعديل البيانات غير الحساسة، وتعطيل/إعادة تفعيل المستخدم، والحذف الناعم إلى Users API خلف `VITE_USERS_API_READS` و`VITE_USERS_API_WRITES`.
 - بقي إنشاء حسابات Auth وحقول PIN الحساسة على Legacy عمدًا إلى حين توفير provisioning آمن في API.
 - حُفظت حماية root users، ومنع حذف الذات، وعدم حذف السجلات المالية عند استخدام الحذف الناعم في API.
+
+## [2026-10-05T22:20:45+03:00] — AI Model: Manus
+- أُنشئت وحدة Roles API بفصل كامل بين Routes وRepository وZod schemas.
+- أضيفت endpoints: `GET /roles`, `GET /roles/permissions`, `POST /roles`, `PATCH /roles/:id`, `DELETE /roles/:id`.
+- أضيفت معاملات ذرية لتحديث role_permissions مع رفض الصلاحيات غير المعروفة، وحماية system roles وعدم حذف الدور المرتبط بمستخدمين.
+- رُبطت RolesPage ببوابة API خلف `VITE_ROLES_API_READS` و`VITE_ROLES_API_WRITES` مع fallback Legacy.
+- أضيف مسار `POST /api/v1/users/provision` لا يستقبل password أو PIN؛ ينشئ profile ثم يطلق password-reset invitation أحادي الاستخدام عبر `PasswordResetDelivery`، ويعطل الحساب إذا فشل التسليم.
+- أضيفت اختبارات حدود Roles والصلاحيات.

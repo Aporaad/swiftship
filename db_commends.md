@@ -2217,3 +2217,15 @@ LIMIT 180;
 ## [2026-10-05T22:07:50+03:00] — AI Model: Manus
 - لم يُنفذ أي أمر SQL مباشر في قاعدة البيانات.
 - لم تُطبق migrations أو seeds؛ تم تعديل كود TypeScript فقط لاستدعاء Users API الموجود.
+
+## [2026-10-05T22:20:45+03:00] — AI Model: Manus
+Migration name: `roles_api_runtime_write_0011`
+```sql
+GRANT SELECT, INSERT, UPDATE, DELETE ON alx_api_private.roles TO alx_api_runtime;
+GRANT SELECT ON alx_api_private.permissions TO alx_api_runtime;
+GRANT SELECT, INSERT, DELETE ON alx_api_private.user_roles TO alx_api_runtime;
+GRANT SELECT, INSERT, DELETE ON alx_api_private.role_permissions TO alx_api_runtime;
+-- ثم إنشاء RLS policies api_runtime_*_insert/update/delete للأدوار والربط.
+```
+- نُفذ عبر Supabase MCP على المشروع المرتبط بنجاح.
+- لم تُنفذ أي أوامر DML لإنشاء أدوار أو ربط صلاحيات.

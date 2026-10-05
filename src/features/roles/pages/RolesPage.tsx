@@ -8,6 +8,7 @@ import { notificationService } from '../../../services/notificationService';
 import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
 
 import { ALL_PERMISSIONS, PERMISSION_CATEGORIES } from '../../../lib/permissions';
+import { rolesApiDataGateway } from '../services/rolesApiDataGateway';
 
 const AVAILABLE_PERMISSIONS = (t: any, lang: string) =>
   ALL_PERMISSIONS.map(p => ({
@@ -40,6 +41,22 @@ export default function RolesPage() {
 
   useEffect(() => {
     if (roleLoading) return;
+    if (rolesApiDataGateway.isReadEnabled()) {
+      let disposed = false;
+      const load = async () => {
+        try {
+          const fetchedRoles = await rolesApiDataGateway.list();
+          if (disposed) return;
+          setRoles(fetchedRoles);
+          setQueryState(fetchedRoles.length > 0 ? asyncState.success(fetchedRoles) : asyncState.empty());
+        } catch (error) {
+          if (!disposed) setQueryState(asyncState.error<any[]>(error, 'ROLES_API_LOAD_FAILED'));
+        }
+      };
+      void load();
+      const interval = window.setInterval(() => void load(), 30_000);
+      return () => { disposed = true; window.clearInterval(interval); };
+    }
     const unsub = onSnapshot(collection(db, 'roles'), (snap: any) => {
       const fetchedRoles = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
       setRoles(fetchedRoles);
@@ -53,7 +70,7 @@ export default function RolesPage() {
 
   // Auto-initialize default roles (runs separately to avoid remote snapshot loop)
   useEffect(() => {
-    if (roleLoading) return;
+    if (roleLoading || rolesApiDataGateway.isReadEnabled()) return;
     const initRoles = async () => {
       try {
         const snap = await getDocs(collection(db, 'roles'));
@@ -128,11 +145,15 @@ export default function RolesPage() {
     }
     
     saveBlockRef.current = true;
-    const result = await runMutation(() => setDoc(doc(db, 'roles', formData.id), {
-        title: formData.title,
-        permissions: formData.permissions,
-        updatedAt: Date.now()
-      }), setMutationState);
+    const result = await runMutation(() => rolesApiDataGateway.isWriteEnabled()
+      ? (selectedRole
+        ? rolesApiDataGateway.update(selectedRole.id, { name: formData.title, permissionCodes: formData.permissions }).then(() => undefined)
+        : rolesApiDataGateway.create({ code: formData.id.toLowerCase(), name: formData.title, permissionCodes: formData.permissions }).then(() => undefined))
+      : setDoc(doc(db, 'roles', formData.id), {
+          title: formData.title,
+          permissions: formData.permissions,
+          updatedAt: Date.now()
+        }), setMutationState);
     if (result.status === 'success-after-mutation') {
       notificationService.notify({
         title: settings.language === 'ar' ? 'تم الحفظ' : 'Saved Successfully',
@@ -152,7 +173,9 @@ export default function RolesPage() {
       return alert(settings.language === 'ar' ? 'لا يمكن حذف دور مدير النظام مطلقا' : 'Cannot delete Admin role');
     }
     if (!window.confirm(settings.language === 'ar' ? `هل أنت متأكد من حذف دور ${id}؟` : `Are you sure you want to delete role ${id}?`)) return;
-    const result = await runMutation(() => deleteDoc(doc(db, 'roles', id)), setMutationState);
+    const result = await runMutation(() => rolesApiDataGateway.isWriteEnabled()
+      ? rolesApiDataGateway.remove(id)
+      : deleteDoc(doc(db, 'roles', id)), setMutationState);
     if (result.status === 'error') {
       const err = result.error;
       handlePostgreSQLError(err, OperationType.DELETE, 'roles');
