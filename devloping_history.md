@@ -2459,3 +2459,6 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 - تُحافظ الصفحة على مزامنة الحسابات المالية المحلية وبيانات الطلبات مؤقتًا حتى تكتمل Finance/Orders API، مع منع خلط مصدر العملاء بين API وLegacy داخل نفس الاشتراك.
 - تم التحقق من `alx_api` عبر `npm run check` و`npm run build` وlint لوحدة العملاء.
 - اختبار Jest المنفصل لـ`tests/customers.test.ts` تعرّض لـ`Segmentation fault`، واختبار ApiClient لم يُشغّل لأن `vitest` غير مثبت في اعتماديات الجذر وطلب `npx` تثبيته تفاعليًا؛ أُلغي التثبيت ولم تُضف اعتماديات.
+
+## [2026-10-05T21:44:00+03:00] — Customer API writes — AI Model: Manus
+تم توسيع وحدة Customers لتشمل `POST /api/v1/customers` و`PATCH /api/v1/customers/:customerId` و`DELETE /api/v1/customers/:customerId`. يعتمد الإنشاء والتعديل والأرشفة على مستودع PostgreSQL ينفذ `BEGIN` ثم عملية الكيان وسجل `activity_logs` ثم `COMMIT`، مع `ROLLBACK` عند أي خطأ. الحذف أرشفة ناعمة ولا يحذف الحساب المالي أو الحركات. أضيفت صلاحيات RBAC المستقلة `add_customers` و`edit_customers` و`delete_customers`، واختبارات HTTP للمنع والسماح وتمرير `userId` للـ audit. فحص TypeScript والبناء وlint لوحدة Customers ناجحة؛ اختبار Jest يتوقف بــ `Segmentation fault` في بيئة الجلسة.

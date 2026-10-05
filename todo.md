@@ -1829,3 +1829,13 @@
 - [x] إبقاء Legacy fallback عندما يكون العلم معطلاً.
 - [ ] توسيع Customer API بعقد كتابة ذري يشمل الحساب المالي وسجل التدقيق قبل نقل create/update/delete.
 - [ ] إضافة smoke test موثق لقراءة العملاء بحساب API وصلاحية `view_customers`.
+
+## [2026-10-05T21:44:00+03:00] — Customer API للكتابة والمعاملات الذرية — AI Model: Manus
+- [x] إضافة عقود إنشاء/تعديل/أرشفة العملاء.
+- [x] إضافة Zod validation للمدخلات ومنع body فارغ في PATCH.
+- [x] تنفيذ `POST/PATCH/DELETE /api/v1/customers` بصلاحيات `add_customers`, `edit_customers`, `delete_customers`.
+- [x] تنفيذ `BEGIN/COMMIT/ROLLBACK` لكل كتابة مع سجل `activity_logs` داخل نفس المعاملة.
+- [x] جعل DELETE أرشفة ناعمة `is_active=false` للحفاظ على السجل المالي.
+- [x] إضافة اختبارات HTTP للصلاحيات وتمرير هوية المنفذ.
+- [ ] إضافة smoke test متصل بقاعدة اختبار والتحقق من rollback فعلي.
+- [ ] استكمال نقل واجهة العملاء بعد توحيد حقول الهاتف والبريد وProvisioning الحساب المالي.

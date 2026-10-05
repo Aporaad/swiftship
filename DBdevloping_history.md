@@ -1311,3 +1311,8 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 - لم يتم تنفيذ SQL أو DDL أو DML على قاعدة البيانات الحية.
 - استُخدمت حدود القراءة الحالية `alx_api_private.customers_read` وendpoint `GET /api/v1/customers` كما هي.
 - لم تتم إضافة migration؛ نقل الكتابات مؤجل حتى تصميم عملية ذرية تربط العميل بالحساب المالي وسجل التدقيق.
+
+## [2026-10-05T21:44:00+03:00] — معاملات Customer API — AI Model: Manus
+- لم يتم تنفيذ SQL حي أو DDL/DML على قاعدة البيانات.
+- أضيفت في كود المستودع استعلامات معاملات Customer API: `BEGIN`, `INSERT/UPDATE public.customers`, `INSERT public.activity_logs`, `COMMIT`, و`ROLLBACK` عند الفشل.
+- لا توجد Migration جديدة؛ يعتمد التنفيذ على الأعمدة الموجودة وسجل التدقيق الحالي.

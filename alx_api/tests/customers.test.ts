@@ -18,6 +18,15 @@ const auth = (): jest.Mocked<AuthUseCases> => ({
   completePasswordReset: jest.fn(),
   listPermissions: jest.fn().mockResolvedValue(['view_customers']),
 });
+const adminAuth = (): jest.Mocked<AuthUseCases> => ({
+  ...auth(),
+  listPermissions: jest.fn().mockResolvedValue([
+    'view_customers',
+    'add_customers',
+    'edit_customers',
+    'delete_customers',
+  ]),
+});
 const repository: CustomerRepository = {
   list: jest.fn().mockResolvedValue({
     items: [
@@ -43,6 +52,9 @@ const repository: CustomerRepository = {
     total: 1,
   }),
   findById: jest.fn().mockResolvedValue(null),
+  create: jest.fn().mockResolvedValue(null),
+  update: jest.fn().mockResolvedValue(null),
+  archive: jest.fn().mockResolvedValue(null),
 };
 
 describe('Customers HTTP boundary', () => {
@@ -66,5 +78,33 @@ describe('Customers HTTP boundary', () => {
       .set('Authorization', 'Bearer valid-token');
     expect(response.status).toBe(404);
     expect(response.body.error.code).toBe('CUSTOMER_NOT_FOUND');
+  });
+
+  it('rejects customer creation without add_customers permission', async () => {
+    const response = await request(createApiApp({ environment, auth: auth(), customers: repository }))
+      .post('/api/v1/customers')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ fullName: 'Forbidden' });
+    expect(response.status).toBe(403);
+    expect(repository.create).not.toHaveBeenCalled();
+  });
+
+  it('allows customer creation with add_customers permission and forwards actor identity', async () => {
+    const created = { customerId: 'c2' } as never;
+    (repository.create as jest.Mock).mockResolvedValueOnce(created);
+    const response = await request(createApiApp({ environment, auth: adminAuth(), customers: repository }))
+      .post('/api/v1/customers')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ customerId: 'c2', fullName: 'Allowed' });
+    expect(response.status).toBe(200);
+    expect(repository.create).toHaveBeenCalledWith({ customerId: 'c2', fullName: 'Allowed' }, 'u1');
+  });
+
+  it('rejects archive without delete_customers permission', async () => {
+    const response = await request(createApiApp({ environment, auth: auth(), customers: repository }))
+      .delete('/api/v1/customers/c1')
+      .set('Authorization', 'Bearer valid-token');
+    expect(response.status).toBe(403);
+    expect(repository.archive).not.toHaveBeenCalled();
   });
 });

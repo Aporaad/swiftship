@@ -333,6 +333,9 @@ describe('Security: Deny by Default (RBAC)', () => {
       customers: {
         list: jest.fn().mockResolvedValue({ items: [], total: 0 }),
         findById: jest.fn().mockResolvedValue(null),
+        create: jest.fn(),
+        update: jest.fn(),
+        archive: jest.fn(),
       },
     });
 
