@@ -158,6 +158,7 @@ export interface OrderApiDto {
 
 export interface OrderCreateInput {
   orderNumber: string;
+  status?: string | null;
   trackingNumber?: string | null;
   customerId?: string | null;
   orderStatusId?: string | null;

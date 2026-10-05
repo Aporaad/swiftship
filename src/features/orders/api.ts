@@ -58,6 +58,11 @@ export interface OrdersFeatureCollections {
 
 /** Low-level data ports only; payment, status, accounting and cascade orchestration live in feature workflows. */
 export interface OrdersFeatureCommands {
+  createOrderAggregate?(input: {
+    order: OrderCreateInput;
+    items: readonly OrdersWritePayload[];
+    shipments: readonly OrdersWritePayload[];
+  }): Promise<Record<string, unknown>>;
   createOrderRecord(id: string, payload: OrdersWritePayload): Promise<{ id: string }>;
   updateOrderRecord(id: string, changes: OrdersWritePayload): Promise<void>;
   createOrderItem(id: string, payload: OrdersWritePayload): Promise<{ id: string }>;

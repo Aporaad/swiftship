@@ -102,7 +102,7 @@ export class ApiClient {
     return response.json() as Promise<T>;
   }
 
-  async post<T>(path: string, body: unknown): Promise<T> {
+  async post<T>(path: string, body: unknown, extraHeaders: Record<string, string> = {}): Promise<T> {
     const url = new URL(path, this.options.baseUrl);
     const controller = new AbortController();
     const timeout = setTimeout(
@@ -119,6 +119,7 @@ export class ApiClient {
           "Content-Type": "application/json",
           "x-request-id":
             this.options.requestIdFactory?.() ?? crypto.randomUUID(),
+          ...extraHeaders,
           ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
         body: JSON.stringify(body),

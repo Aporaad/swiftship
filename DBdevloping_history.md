@@ -1316,3 +1316,6 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 - لم يتم تنفيذ SQL حي أو DDL/DML على قاعدة البيانات.
 - أضيفت في كود المستودع استعلامات معاملات Customer API: `BEGIN`, `INSERT/UPDATE public.customers`, `INSERT public.activity_logs`, `COMMIT`, و`ROLLBACK` عند الفشل.
 - لا توجد Migration جديدة؛ يعتمد التنفيذ على الأعمدة الموجودة وسجل التدقيق الحالي.
+
+## [2026-10-05T22:03:10+03:00] — Orders aggregate وShipments API — AI Model: Manus
+لم يتم تنفيذ SQL حي أو migration على قاعدة البيانات. تم تعديل كود API فقط ليكتب الأعمدة الرئيسية للطلب مرة واحدة (`order_source_id`, `order_party_id`, `delivery_courier_id`, `shipping_courier_id`, `employee_id`, `courier_id`, `order_party_account_id`) ويضع supplemental payload غير الرئيسي داخل `orders.data`. أضيفت معاملات إنشاء الشحنات وسجل `orders_history`، ودعم عدة شحنات داخل معاملة إنشاء الطلب. يلزم smoke test متصل بقاعدة اختبار للتحقق من توافق جميع الأعمدة مع البيئة الفعلية.

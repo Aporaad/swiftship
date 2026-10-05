@@ -2,8 +2,10 @@ import { useCallback } from 'react';
 import type { OrdersFeatureApi, OrdersWritePayload } from '../api';
 import { legacyOrdersApi } from '../services/legacyOrdersApi';
 import type { OrderFeatureRecord } from '../types';
+import type { OrderCreateInput } from '../../../data/dtos/orders.dto';
 
 export interface OrderMutations {
+  createOrderAggregate?(input: { order: OrderCreateInput; items: readonly OrdersWritePayload[]; shipments: readonly OrdersWritePayload[] }): Promise<Record<string, unknown>>;
   createOrderRecord(id: string, payload: OrdersWritePayload): Promise<{ id: string }>;
   updateOrderRecord(id: string, changes: OrdersWritePayload): Promise<void>;
   createCustomerRecord(id: string, payload: OrdersWritePayload): Promise<{ id: string }>;
@@ -24,6 +26,13 @@ export interface OrderMutations {
  * Orchestration stays with the existing handlers until each workflow has parity tests.
  */
 export function useOrderMutations(api: OrdersFeatureApi = legacyOrdersApi): OrderMutations {
+  const createOrderAggregate = useCallback(
+    (input: { order: OrderCreateInput; items: readonly OrdersWritePayload[]; shipments: readonly OrdersWritePayload[] }) =>
+      api.commands.createOrderAggregate
+        ? api.commands.createOrderAggregate(input)
+        : Promise.reject(new Error('ORDER_AGGREGATE_UNAVAILABLE')),
+    [api],
+  );
   const createOrderRecord = useCallback(
     (id: string, payload: OrdersWritePayload) => api.commands.createOrderRecord(id, payload),
     [api],
@@ -80,6 +89,7 @@ export function useOrderMutations(api: OrdersFeatureApi = legacyOrdersApi): Orde
   );
 
   return {
+    ...(api.commands.createOrderAggregate ? { createOrderAggregate } : {}),
     createOrderRecord,
     updateOrderRecord,
     createCustomerRecord,

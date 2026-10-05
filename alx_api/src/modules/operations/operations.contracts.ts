@@ -12,6 +12,7 @@ export interface OperationsRepository {
   createProduct(input: CreateProductInput): Promise<Record<string, unknown>>;
   updateProduct(input: UpdateProductInput): Promise<Record<string, unknown> | null>;
   updateShipment(input: UpdateShipmentInput): Promise<Record<string, unknown> | null>;
+  createShipment(input: CreateShipmentInput): Promise<Record<string, unknown>>;
   createCourier(input: CreateCourierInput): Promise<Record<string, unknown>>;
   updateCourier(input: UpdateCourierInput): Promise<Record<string, unknown> | null>;
   deleteCourier(courierId: string): Promise<boolean>;
@@ -93,8 +94,22 @@ export interface CreateOrderInput {
   orderCurrency?: string | undefined;
   orderCurrencyPrice?: number | undefined;
   externalOrderNumber?: string | undefined;
+  orderSourceId?: string | undefined;
+  orderSourceType?: string | undefined;
+  deliveryCourierId?: string | undefined;
+  shippingCourierId?: string | undefined;
+  orderPartyId?: string | undefined;
+  orderPartyType?: string | undefined;
+  isStaffOrder?: boolean | undefined;
+  employeeId?: string | undefined;
+  courierId?: string | undefined;
+  orderPartyAccountId?: string | undefined;
+  paymentStatus?: string | undefined;
+  notes?: string | undefined;
+  orderData?: Record<string, unknown> | undefined;
   items: readonly OrderItemInput[];
   shipment?: ShipmentInput | undefined;
+  shipments?: readonly ShipmentInput[] | undefined;
   actorId: string;
   idempotencyKey: string;
 }
@@ -111,6 +126,8 @@ export interface OrderItemInput {
   notes?: string | undefined;
 }
 export interface ShipmentInput {
+  shipmentId?: string | undefined;
+  orderId?: string | undefined;
   trackingNumber?: string | undefined;
   shippingCompanyId?: string | undefined;
   courierId?: string | undefined;
@@ -121,6 +138,10 @@ export interface ShipmentInput {
   shippingSource?: string | undefined;
   shippingDestination?: string | undefined;
   cartonCount?: number | undefined;
+}
+export interface CreateShipmentInput extends ShipmentInput {
+  shipmentId: string;
+  actorId: string;
 }
 export interface UpdateOrderStatusInput {
   orderId: string;

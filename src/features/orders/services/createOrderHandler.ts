@@ -66,6 +66,7 @@ function readRelatedRecord(value: unknown): RelatedRecord | undefined {
 
 type CreateOrderMutationSet = Pick<
   OrderMutations,
+  | "createOrderAggregate"
   | "createOrderRecord"
   | "createProductRecord"
   | "createOrderItem"
@@ -146,6 +147,7 @@ export function createOrderHandler(
     setIsAddModalOpen,
   } = dependencies;
   const {
+    createOrderAggregate,
     createOrderRecord,
     createProductRecord,
     createOrderItem,
@@ -384,8 +386,86 @@ export function createOrderHandler(
         product_insurance_fee: currentCalcs.itemsInsuranceSum,
         createdAt: Date.now(),
       };
-      //حفظ الطلب في جدول الطلب
-      await createOrderRecord(payload.orderNumber, payload);
+      const shippingsToSave = (shippings || []).filter(
+        s => s && (s.shippingCompany || s.trackingNumber || s.shippingCost),
+      );
+      if (createOrderAggregate) {
+        const orderData: Record<string, unknown> = { ...payload };
+        delete orderData.orderNumber;
+        delete orderData.trackingNumber;
+        delete orderData.customerId;
+        delete orderData.orderStatusId;
+        delete orderData.order_status_id;
+        delete orderData.orderStatus;
+        delete orderData.status;
+        delete orderData.currency;
+        delete orderData.orderCurrency;
+        delete orderData.orderCurrencyPrice;
+        delete orderData.orderSourceId;
+        delete orderData.orderSourceType;
+        delete orderData.deliveryCourierId;
+        delete orderData.delivery_courier_id;
+        delete orderData.shippingCourierId;
+        delete orderData.shipping_courier_id;
+        delete orderData.orderPartyId;
+        delete orderData.orderPartyType;
+        delete orderData.isStaffOrder;
+        delete orderData.employeeId;
+        delete orderData.courierId;
+        delete orderData.orderPartyAccountId;
+        delete orderData.createdByName;
+        delete orderData.updatedBy;
+        delete orderData.externalOrderNumber;
+        delete orderData.createdAt;
+        await createOrderAggregate({
+          order: {
+            orderNumber: payload.orderNumber,
+            status: payload.orderStatus,
+            trackingNumber: payload.trackingNumber,
+            customerId: payload.customerId,
+            orderStatusId: payload.orderStatusId,
+            orderPartyId: payload.orderPartyId,
+            orderPartyType: payload.orderPartyType as "customer" | "employee" | "courier",
+            isStaffOrder: payload.isStaffOrder,
+            employeeId: payload.employeeId,
+            courierId: payload.courierId,
+            deliveryCourierId: payload.deliveryCourierId,
+            shippingCourierId: payload.shippingCourierId,
+            orderSourceId: payload.orderSourceId,
+            orderSourceType: payload.orderSourceType,
+            currency: payload.currency,
+            paymentStatus: payload.paymentStatus,
+            notes: payload.notes,
+            orderData,
+          },
+          items: items.map(item => ({
+            productId: item.product_id || item.productId,
+            productName: item.productName || item.name,
+            productNameAr: item.productName || item.name,
+            productNameEn: item.productNameEn || item.productName || item.name,
+            productUrl: item.productUrl || undefined,
+            quantity: toNumber(item.quantity || 1),
+            unitPrice: toNumber(item.productPrice || item.price || item.unitPrice || 0),
+            weight: toNumber(item.weight || 0),
+            cbm: toNumber(item.cbm || 0),
+            notes: item.notes || item.description,
+          })),
+          shipments: shippingsToSave.map(ship => ({
+            trackingNumber: ship.trackingNumber || payload.trackingNumber || payload.orderNumber,
+            shippingCompanyId: ship.shippingCompany || payload.shippingCompany || undefined,
+            courierId: formData.deliveryCourierId || formData.shippingCourierId || undefined,
+            shipmentStatus: ship.shipmentStatus || "طلب معلق",
+            shippingCost: toNumber(ship.shippingCost || 0),
+            weight: toNumber(ship.weight || 0),
+            shippingType: ship.shippingType,
+            shippingSource: ship.shippingSource,
+            shippingDestination: ship.shippingDestination,
+            cartonCount: toNumber(ship.cartonCount || 0),
+          })),
+        });
+      } else {
+        // Legacy fallback remains available until the API smoke test is accepted.
+        await createOrderRecord(payload.orderNumber, payload);
 
       // ─── حفظ المنتجات الرئيسية في products ثم بنود الطلب في order_items ───
       // Save master products in 'products' table (only if brand new item with no product_id),
@@ -549,6 +629,8 @@ export function createOrderHandler(
           categoryFeeCurrency: ship.categoryFeeCurrency || "",
           createdAt: Date.now(),
         });
+      }
+
       }
 
       // Ensure system accounts exist

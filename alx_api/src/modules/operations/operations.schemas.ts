@@ -21,6 +21,8 @@ export const orderItemInputSchema = z.object({
   notes: optionalText,
 });
 export const shipmentInputSchema = z.object({
+  shipmentId: entityIdSchema.optional(),
+  orderId: entityIdSchema.optional(),
   trackingNumber: optionalText,
   shippingCompanyId: optionalText,
   courierId: optionalText,
@@ -42,8 +44,22 @@ export const createOrderInputSchema = z.object({
   orderCurrency: optionalText,
   orderCurrencyPrice: money.optional(),
   externalOrderNumber: optionalText,
+  orderSourceId: optionalText,
+  orderSourceType: optionalText,
+  deliveryCourierId: optionalText,
+  shippingCourierId: optionalText,
+  orderPartyId: optionalText,
+  orderPartyType: z.enum(['customer', 'employee', 'courier']).optional(),
+  isStaffOrder: z.boolean().optional(),
+  employeeId: optionalText,
+  courierId: optionalText,
+  orderPartyAccountId: optionalText,
+  paymentStatus: optionalText,
+  notes: optionalText,
+  orderData: z.record(z.string(), z.unknown()).optional(),
   items: z.array(orderItemInputSchema).max(1000).default([]),
   shipment: shipmentInputSchema.optional(),
+  shipments: z.array(shipmentInputSchema).max(1000).optional(),
 });
 export const updateOrderStatusInputSchema = z.object({
   status: z.string().trim().min(1).max(80),

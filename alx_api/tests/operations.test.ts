@@ -31,6 +31,7 @@ const repository: OperationsRepository = {
   createProduct: jest.fn(),
   updateProduct: jest.fn(),
   updateShipment: jest.fn(),
+  createShipment: jest.fn(),
   createCourier: jest.fn(),
   updateCourier: jest.fn(),
   deleteCourier: jest.fn(),

@@ -177,8 +177,8 @@ export function createOperationsRepository(pool: Pool): OperationsRepository {
         }
         const orderId = input.orderNumber;
         const inserted = await client.query(
-          `INSERT INTO public.orders (order_id, order_number, customer_id, tracking_number, order_status_id, order_status1, currency, order_currency, order_currency_price, external_order_number, created_by, updated_by, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11, NOW(), NOW()) RETURNING order_id AS "orderId", order_number AS "orderNumber", order_status1 AS "orderStatus", created_at AS "createdAt"`,
+          `INSERT INTO public.orders (order_id, order_number, customer_id, tracking_number, order_status_id, order_status1, currency, order_currency, order_currency_price, external_order_number, order_source_id, order_source_type, delivery_courier_id, shipping_courier_id, order_party_id, order_party_type, is_staff_order, employee_id, courier_id, order_party_account_id, data, created_by, updated_by, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21::jsonb, $22, $22, NOW(), NOW()) RETURNING order_id AS "orderId", order_number AS "orderNumber", order_status1 AS "orderStatus", created_at AS "createdAt"`,
           [
             orderId,
             input.orderNumber,
@@ -190,6 +190,17 @@ export function createOperationsRepository(pool: Pool): OperationsRepository {
             input.orderCurrency ?? null,
             input.orderCurrencyPrice ?? null,
             input.externalOrderNumber ?? null,
+            input.orderSourceId ?? null,
+            input.orderSourceType ?? null,
+            input.deliveryCourierId ?? null,
+            input.shippingCourierId ?? null,
+            input.orderPartyId ?? null,
+            input.orderPartyType ?? 'customer',
+            input.isStaffOrder ?? false,
+            input.employeeId ?? null,
+            input.courierId ?? null,
+            input.orderPartyAccountId ?? null,
+            JSON.stringify(input.orderData ?? {}),
             input.actorId,
           ],
         );
@@ -227,9 +238,9 @@ export function createOperationsRepository(pool: Pool): OperationsRepository {
             ],
           );
         }
-        let shipment: Record<string, unknown> | undefined;
-        if (input.shipment) {
-          const s = input.shipment;
+        const shipmentInputs = input.shipments ?? (input.shipment ? [input.shipment] : []);
+        const shipments: Record<string, unknown>[] = [];
+        for (const s of shipmentInputs) {
           const result = await client.query(
             'INSERT INTO public.shipments (shipment_id, order_id, tracking_number, shipping_company_id, courier_id, shipment_status, shipping_cost, weight, shipping_type, shipping_source, shipping_destination, carton_count, created_by, updated_by, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13, NOW(), NOW()) RETURNING shipment_id AS "shipmentId", order_id AS "orderId", shipment_status AS "shipmentStatus"',
             [
@@ -248,7 +259,7 @@ export function createOperationsRepository(pool: Pool): OperationsRepository {
               input.actorId,
             ],
           );
-          shipment = result.rows[0];
+          if (result.rows[0]) shipments.push(result.rows[0]);
         }
         const historyInput = {
           orderId,
@@ -259,10 +270,11 @@ export function createOperationsRepository(pool: Pool): OperationsRepository {
           afterData: { status: input.status ?? 'pending', items: input.items.length },
           summary: 'تم إنشاء الطلب.',
         };
-        if (shipment?.shipmentId)
-          await writeHistory(client, { ...historyInput, shipmentId: String(shipment.shipmentId) });
-        else await writeHistory(client, historyInput);
-        const response = { ...inserted.rows[0], itemCount: input.items.length, shipment };
+        if (shipments.length > 0) {
+          for (const shipment of shipments)
+            await writeHistory(client, { ...historyInput, shipmentId: String(shipment.shipmentId) });
+        } else await writeHistory(client, historyInput);
+        const response = { ...inserted.rows[0], itemCount: input.items.length, shipments };
         await client.query(
           'INSERT INTO alx_api_private.operation_idempotency (idempotency_key, operation, response_data) VALUES ($1, $2, $3::jsonb)',
           [input.idempotencyKey, 'order.create', JSON.stringify(response)],
@@ -397,6 +409,50 @@ export function createOperationsRepository(pool: Pool): OperationsRepository {
           beforeData: before.rows[0],
           afterData: after,
           summary: input.courierId ? 'تم إسناد الشحنة إلى مندوب.' : 'تم تحديث الشحنة.',
+        });
+        await client.query('COMMIT');
+        return after;
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+    async createShipment(input) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const result = await client.query(
+          `INSERT INTO public.shipments (shipment_id, order_id, tracking_number, shipping_company_id, courier_id, shipment_status, shipping_cost, weight, shipping_type, shipping_source, shipping_destination, carton_count, created_by, updated_by, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13, NOW(), NOW()) RETURNING ${shipmentColumns}`,
+          [
+            input.shipmentId,
+            input.orderId ?? null,
+            input.trackingNumber ?? input.shipmentId,
+            input.shippingCompanyId ?? null,
+            input.courierId ?? null,
+            input.shipmentStatus ?? 'pending',
+            input.shippingCost ?? 0,
+            input.weight ?? 0,
+            input.shippingType ?? null,
+            input.shippingSource ?? null,
+            input.shippingDestination ?? null,
+            input.cartonCount ?? 0,
+            input.actorId,
+          ],
+        );
+        const after = result.rows[0];
+        if (!after) throw new Error('SHIPMENT_CREATE_RETURNED_NO_ROW');
+        await writeHistory(client, {
+          orderId: String(input.orderId ?? ''),
+          orderNumber: String(input.orderId ?? ''),
+          shipmentId: input.shipmentId,
+          actorId: input.actorId,
+          eventType: 'shipment.created',
+          operation: 'create',
+          afterData: after,
+          summary: 'تم إنشاء الشحنة.',
         });
         await client.query('COMMIT');
         return after;

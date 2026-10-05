@@ -138,6 +138,18 @@ export function registerOperationsRoutes(
       return next(error);
     }
   });
+  app.post('/api/v1/shipments', ...route('edit_orders', auth), async (request, response, next) => {
+    const body = shipmentInputSchema.safeParse(request.body as unknown);
+    const actorId = principalId(response);
+    if (!body.success || !actorId)
+      return sendFailure(response, 400, 'INVALID_SHIPMENT_INPUT', 'بيانات الشحنة غير صالحة.', requestId(response));
+    try {
+      const shipmentId = body.data.shipmentId ?? `sh_${crypto.randomUUID()}`;
+      return sendSuccess(response, await repository.createShipment({ ...body.data, shipmentId, actorId }), requestId(response));
+    } catch (error) {
+      return next(error);
+    }
+  });
   app.patch('/api/v1/shipments/:id', ...route('edit_orders', auth), async (request, response, next) => {
     const id = entityIdSchema.safeParse(request.params.id);
     const body = shipmentInputSchema.safeParse(request.body as unknown);
@@ -145,7 +157,7 @@ export function registerOperationsRoutes(
     if (!id.success || !body.success || !actorId)
       return sendFailure(response, 400, 'INVALID_SHIPMENT_INPUT', 'بيانات الشحنة غير صالحة.', requestId(response));
     try {
-      const result = await repository.updateShipment({ shipmentId: id.data, ...body.data, actorId });
+      const result = await repository.updateShipment({ ...body.data, shipmentId: id.data, actorId });
       return result
         ? sendSuccess(response, result, requestId(response))
         : sendFailure(response, 404, 'ENTITY_NOT_FOUND', 'الشحنة غير موجودة.', requestId(response));

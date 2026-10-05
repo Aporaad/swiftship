@@ -71,3 +71,9 @@
 التحقق البرمجي (`npm run check`, `npm run build`, وlint لوحدة Customers) ناجح. اختبار Jest يعاني من `Segmentation fault` في بيئة الجلسة، ولم يتم تنفيذ SQL حي.
 
 بعد ذلك تمت مراجعة المرحلة التالية: Orders/Shipments API موجودة بالفعل مع إنشاء طلب ذري، سجل تاريخ، ومفتاح `Idempotency-Key`، ولذلك ستكون الخطوة التالية نقل عميل الطلبات إلى هذه المسارات بعد مواءمة payload والحقول المالية، دون تفعيل العلم قبل smoke test.
+
+## [2026-10-05T22:03:10+03:00] — نقل Orders/Shipments/Products
+
+تم إنشاء `ordersApiDataGateway` خلف `VITE_ORDERS_API_READS` و`VITE_ORDERS_API_WRITES`. عند تفعيل الكتابة، يرسل handler الطلب aggregate واحدًا إلى Orders API مع `Idempotency-Key`، ويضم جميع عناصر الطلب والشحنات في معاملة واحدة. جرى حذف الأعمدة الرئيسية المكررة من `orderData` قبل الإرسال، بينما تبقى الحقول الحسابية غير الرئيسية داخل JSONB.
+
+تمت إضافة `POST /api/v1/shipments` للإنشاء المنفرد، وتوجيه إنشاء/تعديل الشحنات والمنتجات إلى API عند تفعيل العلم. أعلام البيئة ما زالت `false` افتراضيًا. فحوصات `npm run check` و`npm run build` وlint لملفات Operations API ناجحة. لم يتم تنفيذ SQL حي، ولم يُنفذ smoke test متصل بقاعدة اختبار بعد.
