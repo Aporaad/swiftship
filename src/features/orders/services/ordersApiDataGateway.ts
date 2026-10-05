@@ -74,8 +74,8 @@ function canonicalProduct(payload: OrdersWritePayload, id: string): Record<strin
 export const ordersApiDataGateway: OrdersFeatureApi = {
   collections: {
     ...legacyOrdersApi.collections,
-    orders: apiCollection('/api/v1/orders', 'orderId') as OrdersFeatureApi['collections']['orders'],
-    shipments: apiCollection('/api/v1/shipments', 'shipmentId') as OrdersFeatureApi['collections']['shipments'],
+    orders: apiCollection('/api/v1/orders', 'orderId') as unknown as OrdersFeatureApi['collections']['orders'],
+    shipments: apiCollection('/api/v1/shipments', 'shipmentId') as unknown as OrdersFeatureApi['collections']['shipments'],
     products: {
       ...apiCollection('/api/v1/products', 'productId'),
       ...(isOrdersApiWriteEnabled() ? {

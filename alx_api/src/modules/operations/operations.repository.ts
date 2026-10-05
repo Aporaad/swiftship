@@ -518,8 +518,54 @@ export function createOperationsRepository(pool: Pool): OperationsRepository {
       return result.rows[0] ?? null;
     },
     async deleteCourier(courierId) {
-      const result = await pool.query('DELETE FROM public.couriers WHERE courier_id = $1', [courierId]);
-      return (result.rowCount ?? 0) > 0;
+      // الحذف الناعم الذري للمندوب — Atomic soft-delete for courier
+      // يُعطِّل المندوب ويُسجِّل حدث الحذف في activity_logs داخل معاملة واحدة
+      // Deactivates the courier and records the deletion event in activity_logs within a single transaction
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const existing = await client.query<Record<string, unknown>>(
+          `SELECT courier_id AS "courierId", full_name AS "fullName", is_active AS "isActive"
+           FROM public.couriers
+           WHERE courier_id = $1
+           FOR UPDATE`,
+          [courierId],
+        );
+        if (!existing.rows[0]) {
+          await client.query('ROLLBACK');
+          return false;
+        }
+        // Soft-delete: تعطيل المندوب بدلاً من حذفه فعلياً لحماية الربط المالي
+        // Soft-delete: deactivate instead of physical delete to protect financial links
+        await client.query(
+          `UPDATE public.couriers
+           SET is_active = false,
+               updated_at = NOW()
+           WHERE courier_id = $1`,
+          [courierId],
+        );
+        // تسجيل حدث الحذف في سجل النشاط — Record deletion event in activity log
+        await client.query(
+          `INSERT INTO public.activity_logs
+             (activity_log_id, entity_type, entity_id, action, actor_id, summary, before_data, after_data, created_at)
+           VALUES ($1, 'courier', $2, 'delete', 'system', $3, $4::jsonb, $5::jsonb, NOW())
+           ON CONFLICT DO NOTHING`,
+          [
+            `act_${crypto.randomUUID()}`,
+            courierId,
+            'تم تعطيل المندوب (حذف ناعم) عبر API.',
+            JSON.stringify({ courierId, fullName: existing.rows[0]['fullName'], isActive: existing.rows[0]['isActive'] }),
+            JSON.stringify({ isActive: false, deletedAt: new Date().toISOString() }),
+          ],
+        );
+        await client.query('COMMIT');
+        return true;
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
     },
     async createEmployee(input) {
       const employeeId = input.employeeId ?? `emp_${crypto.randomUUID()}`;
@@ -573,8 +619,54 @@ export function createOperationsRepository(pool: Pool): OperationsRepository {
       return result.rows[0] ?? null;
     },
     async deleteEmployee(employeeId) {
-      const result = await pool.query('DELETE FROM public.employees WHERE employee_id = $1', [employeeId]);
-      return (result.rowCount ?? 0) > 0;
+      // الحذف الناعم الذري للموظف — Atomic soft-delete for employee
+      // يُبطل الراتب ويُسجِّل حدث الحذف في activity_logs داخل معاملة واحدة
+      // Zeroes the salary and records the deletion event in activity_logs within a single transaction
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const existing = await client.query<Record<string, unknown>>(
+          `SELECT employee_id AS "employeeId", full_name AS "fullName", account_id AS "accountId"
+           FROM public.employees
+           WHERE employee_id = $1
+           FOR UPDATE`,
+          [employeeId],
+        );
+        if (!existing.rows[0]) {
+          await client.query('ROLLBACK');
+          return false;
+        }
+        // Soft-delete: تعطيل الموظف بتصفير الراتب وتعليم وقت الحذف
+        // Soft-delete: disable employee by zeroing salary and marking deletion time
+        await client.query(
+          `UPDATE public.employees
+           SET monthly_salary = 0,
+               updated_at = NOW()
+           WHERE employee_id = $1`,
+          [employeeId],
+        );
+        // تسجيل حدث الحذف في سجل النشاط — Record deletion event in activity log
+        await client.query(
+          `INSERT INTO public.activity_logs
+             (activity_log_id, entity_type, entity_id, action, actor_id, summary, before_data, after_data, created_at)
+           VALUES ($1, 'employee', $2, 'delete', 'system', $3, $4::jsonb, $5::jsonb, NOW())
+           ON CONFLICT DO NOTHING`,
+          [
+            `act_${crypto.randomUUID()}`,
+            employeeId,
+            'تم تعطيل الموظف (حذف ناعم) عبر API.',
+            JSON.stringify({ employeeId, fullName: existing.rows[0]['fullName'], accountId: existing.rows[0]['accountId'] }),
+            JSON.stringify({ monthlySalary: 0, deletedAt: new Date().toISOString() }),
+          ],
+        );
+        await client.query('COMMIT');
+        return true;
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
     },
   };
 }

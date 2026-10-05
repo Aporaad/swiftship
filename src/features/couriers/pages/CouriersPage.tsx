@@ -1233,11 +1233,18 @@ export default function CouriersPage() {
           : `Are you sure you want to permanently delete courier ${deletePinConfig.entityName}? This will purge their financial account, journal transactions, and associated expenses from the database.`}
         isAr={isAr}
         onConfirm={async () => {
-          await financialAccountService.purgeEntityAndFinancialFootprint('courier', deletePinConfig.entityId);
+          // ربط حذف المندوب بـAPI عند تفعيل علم الكتابة — Route delete through API when write flag is enabled
+          // يستخدم soft-delete ذري عبر API أو purge مباشر عبر Legacy حسب العلم
+          // Uses atomic soft-delete via API or direct purge via Legacy based on feature flag
+          if (staffApiDataGateway.isWriteEnabled()) {
+            await staffApiDataGateway.deleteCourier(deletePinConfig.entityId);
+          } else {
+            await financialAccountService.purgeEntityAndFinancialFootprint('courier', deletePinConfig.entityId);
+          }
           await activityLogService.log('delete_courier', deletePinConfig.entityName, { id: deletePinConfig.entityId });
           notificationService.notify({
-            title: isAr ? 'تم الحذف' : 'Courier Deleted',
-            message: isAr ? `تم حذف المندوب ${deletePinConfig.entityName} وسجلاته المالية بنجاح` : `Courier ${deletePinConfig.entityName} deleted successfully`,
+            title: isAr ? 'تم تعطيل المندوب' : 'Courier Deactivated',
+            message: isAr ? `تم تعطيل المندوب ${deletePinConfig.entityName} وإيقاف حسابه` : `Courier ${deletePinConfig.entityName} has been deactivated`,
             type: 'warning'
           });
         }}

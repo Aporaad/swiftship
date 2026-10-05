@@ -8,6 +8,7 @@ describe('RoleApplicationService', () => {
       listRoles: vi.fn(),
       getRole: vi.fn(),
       saveRole,
+      deleteRole: vi.fn(),
     });
 
     await service.save({

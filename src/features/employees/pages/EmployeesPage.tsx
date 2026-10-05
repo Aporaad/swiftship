@@ -1159,11 +1159,18 @@ export default function EmployeesPage() {
           : `Permanently delete employee ${deletePinConfig.entityName} and linked financial records?`}
         isAr={isAr}
         onConfirm={async () => {
-          await financialAccountService.purgeEntityAndFinancialFootprint('employee', deletePinConfig.entityId);
+          // ربط حذف الموظف بـAPI عند تفعيل علم الكتابة — Route delete through API when write flag is enabled
+          // يستخدم soft-delete ذري عبر API أو purge مباشر عبر Legacy حسب العلم
+          // Uses atomic soft-delete via API or direct purge via Legacy based on feature flag
+          if (staffApiDataGateway.isWriteEnabled()) {
+            await staffApiDataGateway.deleteEmployee(deletePinConfig.entityId);
+          } else {
+            await financialAccountService.purgeEntityAndFinancialFootprint('employee', deletePinConfig.entityId);
+          }
           await activityLogService.log('delete_user', deletePinConfig.entityName, { employeeId: deletePinConfig.entityId });
           notificationService.notify({
-            title: isAr ? 'تم الحذف' : 'Employee Purged',
-            message: isAr ? `تم حذف الموظف ${deletePinConfig.entityName} وسجله بنجاح` : `Deleted ${deletePinConfig.entityName}`,
+            title: isAr ? 'تم تعطيل الموظف' : 'Employee Deactivated',
+            message: isAr ? `تم تعطيل الموظف ${deletePinConfig.entityName} وإيقاف حسابه` : `Employee ${deletePinConfig.entityName} has been deactivated`,
             type: 'warning'
           });
         }}

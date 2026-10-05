@@ -435,7 +435,7 @@ export function createOrderHandler(
             orderSourceType: payload.orderSourceType,
             currency: payload.currency,
             paymentStatus: payload.paymentStatus,
-            notes: payload.notes,
+            notes: (formData as unknown as Record<string, unknown>).notes ? String((formData as unknown as Record<string, unknown>).notes) : undefined,
             orderData,
           },
           items: items.map(item => ({

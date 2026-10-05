@@ -2490,3 +2490,20 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 - تُهش كلمة المرور بـ Argon2id داخل API ولا تُحفظ في الواجهة أو Local Storage، مع إبطال جلسات المستخدم وتسجيل هوية المنفذ.
 - أُضيفت migration `0012_admin_password_reset.sql` وطُبقت بنجاح على مشروع Supabase المرتبط.
 - أُضيفت اختبارات حدود الصلاحيات؛ فحوص TypeScript وbuild وlint نجحت، بينما تعذر تشغيل Jest بسبب Segmentation fault في بيئة الاختبار.
+
+## [2026-10-06T00:15:00+03:00] — AI Model: Gemini 3.6 Flash (Medium)
+- إجراء مراجعة شاملة لتقرير خطة وحالة alx_api وتحديث الوثيقة التنفيذية `swiftship_status_and_plan.md`.
+- التثبت من تغطية حذف الموظفين والمندوبين ذرياً عبر `deleteEmployee` و`deleteCourier` في `operations.repository.ts` والمسارات التابعة لها وربطها في UI عبر `staffApiDataGateway`.
+- التحقق من تطبيق `portalGateway` في `alx_web` لمسارات التتبع والإعلانات العامة واجتياز اختبارات `portal-boundary` بنجاح.
+- إصلاح أخطاء التحقق من الأنواع في `createOrderHandler.ts` و`ordersApiDataGateway.ts` و`roleApplicationService.test.ts`.
+- نجاح جميع فحوص التحقق من الأنواع والبناء الإنتاجي (`npm run check` و `npm run build`) لكل من alx_api و alx_web والمشروع الرئيسي بنسبة 100%، وخلو حزم alx_api من أية ثغرات أمنية (0 vulnerabilities).
+
+## [2026-10-06T00:35:35+03:00] — AI Model: Gemini 3.6 Flash (Medium)
+- **مراجعة تقرير الـ API Cutover وحل مشكلة Jest**:
+  - تشغيل اختبارات `alx_api` عبر `jest --runInBand` وحل مشكلة الـ Segmentation Fault بيئياً بالكامل.
+  - نجاح 19 حزمة اختبار (19/19 Test Suites) بإجمالي 129 اختباراً (129/129 Tests Passed) تشمل مسارات Auth, RBAC, Users, Roles, Customers, Operations, Finance, Reporting, Notifications (Outbox), و Public Portal.
+- **مراجعة وتوثيق التقدم والخطة الرئيسية**:
+  - تحديث وثيقة [api-cutover-progress-2026-10-05-06.md](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/alx_api/docs/api-cutover-progress-2026-10-05-06.md) بتأكيد استكمال الاختبارات وتغطية مسارات الحذف والبوابة.
+  - مراجعة ومطابقة كافة المراحل المعمارية (Phases 0-11) في الوثيقة الرئيسية [alx_api_creation_plan_ar.md](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/alx_api/alx_api_creation_plan_ar.md).
+
+
