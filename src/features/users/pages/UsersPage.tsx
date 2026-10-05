@@ -13,6 +13,7 @@ import { financialAccountService } from '../../../services/financialAccountServi
 import { activityLogService } from '../../../services/activityLogService';
 import { initializeApp, deleteApp } from '../../../data/legacy/legacy-compat.ts';
 import { getAuth, createUserWithEmailAndPassword } from '../../../data/legacy/legacy-compat.ts';
+import { usersApiDataGateway } from '../services/usersApiDataGateway';
 
 type DataRecord = Record<string, unknown>;
 type SnapshotDoc = { id: string; data: () => DataRecord };
@@ -27,6 +28,14 @@ const toRole = (id: string, raw: DataRecord): RoleRecord => ({ ...raw, id, title
 const toOrder = (id: string, raw: DataRecord): OrderRecord => ({ ...raw, id, orderPartyType: typeof raw.orderPartyType === 'string' ? raw.orderPartyType : undefined, isStaffOrder: raw.isStaffOrder === true, employeeId: typeof raw.employeeId === 'string' ? raw.employeeId : undefined, orderPartyId: typeof raw.orderPartyId === 'string' ? raw.orderPartyId : undefined, customerId: typeof raw.customerId === 'string' ? raw.customerId : undefined, amountPaid: typeof raw.amountPaid === 'string' || typeof raw.amountPaid === 'number' ? raw.amountPaid : undefined, amountRemaining: typeof raw.amountRemaining === 'string' || typeof raw.amountRemaining === 'number' ? raw.amountRemaining : undefined, totalCostYER: typeof raw.totalCostYER === 'string' || typeof raw.totalCostYER === 'number' ? raw.totalCostYER : undefined, totalCostSAR: typeof raw.totalCostSAR === 'string' || typeof raw.totalCostSAR === 'number' ? raw.totalCostSAR : undefined });
 const numericValue = (value: string | number | undefined): number => typeof value === 'number' ? value : Number.parseFloat(value || '0') || 0;
 const errorMessage = (error: unknown): string => error instanceof Error ? error.message : asString(asRecord(error).message, 'Operation failed');
+const fromApiUser = (raw: DataRecord): UserRecord => {
+  const id = asString(raw.userId);
+  return toUser(id, {
+    ...raw,
+    role: asString(raw.role, 'Employee'),
+    createdAt: raw.createdAt ? Date.parse(String(raw.createdAt)) : undefined,
+  });
+};
 
 export default function UsersPage() {
   const { settings, t } = useSettings();
@@ -110,6 +119,20 @@ export default function UsersPage() {
 
   useEffect(() => {
     if (roleLoading) return;
+    if (usersApiDataGateway.isReadEnabled()) {
+      const unsubscribe = usersApiDataGateway.subscribe({
+        onData: ({ users: apiUsers }) => {
+          const staffOnly = apiUsers.map(raw => fromApiUser(raw)).filter(u => u.role !== 'Courier' && u.roleId !== 'courier' && u.role !== 'courier');
+          setUsers(staffOnly);
+          setQueryState(staffOnly.length ? asyncState.success(staffOnly) : asyncState.empty());
+        },
+        onError: error => {
+          setQueryState(asyncState.error<UserRecord[]>(error, 'USERS_API_LOAD_FAILED'));
+          notificationService.notify({ title: isAr ? 'فشل تحميل المستخدمين' : 'Users API unavailable', message: errorMessage(error), type: 'error' });
+        },
+      });
+      return unsubscribe;
+    }
     const unsub = onSnapshot(collection(db, 'users'), (snap: SnapshotResult) => {
       const allUsers = snap.docs.map(d => toUser(d.id, d.data()));
       const staffOnly = allUsers.filter(u => u.role !== 'Courier' && u.roleId !== 'courier' && u.role !== 'courier');
@@ -187,14 +210,24 @@ export default function UsersPage() {
     const finalDisabled = isRoot ? false : editFormData.disabled;
 
     const result = await runMutation(async () => {
-      await updateDoc(doc(db, 'users', selectedUser.id), {
-        fullName: editFormData.fullName,
-        username: editFormData.username,
-        role: finalRole,
-        disabled: finalDisabled,
-        systemPin: editFormData.systemPin,
-        updatedAt: Date.now()
-      });
+      const apiWrite = usersApiDataGateway.isWriteEnabled() && editFormData.systemPin === (selectedUser.systemPin || '');
+      if (apiWrite) {
+        await usersApiDataGateway.updateUser(selectedUser.id, {
+          fullName: editFormData.fullName,
+          username: editFormData.username,
+          role: finalRole,
+          disabled: finalDisabled,
+        });
+      } else {
+        await updateDoc(doc(db, 'users', selectedUser.id), {
+          fullName: editFormData.fullName,
+          username: editFormData.username,
+          role: finalRole,
+          disabled: finalDisabled,
+          systemPin: editFormData.systemPin,
+          updatedAt: Date.now()
+        });
+      }
       notificationService.notify({
         title: isAr ? 'تم حفظ التعديلات' : 'Staff Dossier Synchronized',
         message: isAr ? `تم تحديث ملف ${editFormData.fullName} بنجاح` : `Updated ${editFormData.fullName}'s profile`,
@@ -227,10 +260,14 @@ export default function UsersPage() {
       message: isAr ? `هل أنت متأكد من ${action} حساب الموظف ${user.fullName}؟` : `Are you sure you want to deactivate ${user.fullName}?`,
       type: user.disabled ? 'info' : 'warning',
       onConfirm: async () => {
-        const result = await runMutation(() => updateDoc(doc(db, 'users', user.id), {
-          disabled: !user.disabled,
-          updatedAt: Date.now()
-        }), setEditMutationState);
+        const result = await runMutation(() => usersApiDataGateway.isWriteEnabled()
+          ? (user.disabled
+            ? usersApiDataGateway.updateUser(user.id, { disabled: false }).then(() => undefined)
+            : usersApiDataGateway.disableUser(user.id))
+          : updateDoc(doc(db, 'users', user.id), {
+            disabled: !user.disabled,
+            updatedAt: Date.now()
+          }), setEditMutationState);
         if (result.status === 'success-after-mutation') {
           notificationService.notify({
             title: isAr ? 'تم تحديث وضعية الحساب' : 'Security profile updated',
@@ -765,14 +802,18 @@ export default function UsersPage() {
       <ConfirmDeletePinModal
         isOpen={deletePinConfig.isOpen}
         onClose={() => setDeletePinConfig({ ...deletePinConfig, isOpen: false })}
-        title={isAr ? 'حذف حساب الموظف نهائياً' : 'Delete Employee Account Permanently'}
+        title={usersApiDataGateway.isWriteEnabled() ? (isAr ? 'تعطيل حساب الموظف' : 'Disable Employee Account') : (isAr ? 'حذف حساب الموظف نهائياً' : 'Delete Employee Account Permanently')}
         message={isAr
-          ? `هل أنت متأكد من رغبتك في حذف الموظف ${deletePinConfig.entityName}؟ هذا الإجراء سيقوم بحذف حسابه المالي وكافة قيوده ومصروفاته المرتبطة نهائياً.`
-          : `Are you sure you want to permanently delete user ${deletePinConfig.entityName}? This will purge their financial account, journal transactions, and associated expenses from the database.`}
+          ? (usersApiDataGateway.isWriteEnabled() ? `هل أنت متأكد من تعطيل حساب الموظف ${deletePinConfig.entityName}؟ سيبقى السجل محفوظاً دون حذف القيود المالية.` : `هل أنت متأكد من رغبتك في حذف الموظف ${deletePinConfig.entityName}؟ هذا الإجراء سيقوم بحذف حسابه المالي وكافة قيوده ومصروفاته المرتبطة نهائياً.`)
+          : (usersApiDataGateway.isWriteEnabled() ? `Are you sure you want to disable ${deletePinConfig.entityName}? The user record and financial history will be preserved.` : `Are you sure you want to permanently delete user ${deletePinConfig.entityName}? This will purge their financial account, journal transactions, and associated expenses from the database.`)}
         isAr={isAr}
         onConfirm={async () => {
-          await financialAccountService.purgeEntityAndFinancialFootprint('user', deletePinConfig.entityId);
-          await activityLogService.log('delete_user', deletePinConfig.entityName, { userId: deletePinConfig.entityId });
+          if (usersApiDataGateway.isWriteEnabled()) {
+            await usersApiDataGateway.disableUser(deletePinConfig.entityId);
+          } else {
+            await financialAccountService.purgeEntityAndFinancialFootprint('user', deletePinConfig.entityId);
+            await activityLogService.log('delete_user', deletePinConfig.entityName, { userId: deletePinConfig.entityId });
+          }
           notificationService.notify({
             title: isAr ? 'تم الحذف' : 'User Deleted',
             message: isAr ? `تم حذف الموظف ${deletePinConfig.entityName} وسجلاته المالية بنجاح` : `User ${deletePinConfig.entityName} deleted successfully`,

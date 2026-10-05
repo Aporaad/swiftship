@@ -2465,3 +2465,9 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 
 ## [2026-10-05T22:03:10+03:00] — Orders/Shipments/Products client cutover — AI Model: Manus
 أضيفت `ordersApiDataGateway` لقراءة الطلبات والشحنات والمنتجات عبر HTTP API مع fallback Legacy عند تعطيل الأعلام. أصبح إنشاء الطلب يرسل aggregate واحدًا إلى `POST /api/v1/orders` مع مفتاح `Idempotency-Key`، ويضم عناصر الطلب وجميع الشحنات داخل المعاملة. تمت إزالة الحقول الرئيسية المكررة بصيغ snake_case/camelCase من `orderData`، مع حفظها مرة واحدة في أعمدة PostgreSQL الرئيسية وحفظ الحقول الحسابية غير الرئيسية داخل JSONB. أضيف دعم إنشاء الشحنة المنفردة `POST /api/v1/shipments` وتوجيه upsert الشحنات إلى POST/PATCH حسب وجود السجل، كما أضيفت مواءمة إنشاء وتعديل المنتجات إلى العقد canonical. بقيت الأعلام افتراضيًا معطلة لحين smoke test حي.
+
+## [2026-10-05T22:07:50+03:00] — AI Model: Manus
+- أُنشئت `src/features/users/services/usersApiDataGateway.ts` لفصل Business Logic الخاص بطلبات Users عن UI.
+- نُقلت قراءة قائمة المستخدمين، وتعديل البيانات غير الحساسة، وتعطيل/إعادة تفعيل المستخدم، والحذف الناعم إلى Users API خلف `VITE_USERS_API_READS` و`VITE_USERS_API_WRITES`.
+- بقي إنشاء حسابات Auth وحقول PIN الحساسة على Legacy عمدًا إلى حين توفير provisioning آمن في API.
+- حُفظت حماية root users، ومنع حذف الذات، وعدم حذف السجلات المالية عند استخدام الحذف الناعم في API.

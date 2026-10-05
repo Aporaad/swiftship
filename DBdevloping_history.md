@@ -1319,3 +1319,8 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 
 ## [2026-10-05T22:03:10+03:00] — Orders aggregate وShipments API — AI Model: Manus
 لم يتم تنفيذ SQL حي أو migration على قاعدة البيانات. تم تعديل كود API فقط ليكتب الأعمدة الرئيسية للطلب مرة واحدة (`order_source_id`, `order_party_id`, `delivery_courier_id`, `shipping_courier_id`, `employee_id`, `courier_id`, `order_party_account_id`) ويضع supplemental payload غير الرئيسي داخل `orders.data`. أضيفت معاملات إنشاء الشحنات وسجل `orders_history`، ودعم عدة شحنات داخل معاملة إنشاء الطلب. يلزم smoke test متصل بقاعدة اختبار للتحقق من توافق جميع الأعمدة مع البيئة الفعلية.
+
+## [2026-10-05T22:07:50+03:00] — AI Model: Manus
+- لم تُنفذ أي أوامر SQL مباشرة أو migration على قاعدة البيانات خلال هذه المرحلة.
+- تعتمد Users API على الجداول والمخطط الموجودين مسبقًا (`public.users` وRBAC)، وتستخدم UPDATE لتعطيل الحساب عبر التطبيق عند تفعيل العلم.
+- الحذف الناعم يحافظ على السجل والقيود المالية؛ لا يوجد purge مالي عند استخدام مسار API.

@@ -77,3 +77,11 @@
 تم إنشاء `ordersApiDataGateway` خلف `VITE_ORDERS_API_READS` و`VITE_ORDERS_API_WRITES`. عند تفعيل الكتابة، يرسل handler الطلب aggregate واحدًا إلى Orders API مع `Idempotency-Key`، ويضم جميع عناصر الطلب والشحنات في معاملة واحدة. جرى حذف الأعمدة الرئيسية المكررة من `orderData` قبل الإرسال، بينما تبقى الحقول الحسابية غير الرئيسية داخل JSONB.
 
 تمت إضافة `POST /api/v1/shipments` للإنشاء المنفرد، وتوجيه إنشاء/تعديل الشحنات والمنتجات إلى API عند تفعيل العلم. أعلام البيئة ما زالت `false` افتراضيًا. فحوصات `npm run check` و`npm run build` وlint لملفات Operations API ناجحة. لم يتم تنفيذ SQL حي، ولم يُنفذ smoke test متصل بقاعدة اختبار بعد.
+
+## [2026-10-05T22:08:45+03:00] — Users API Client Cutover
+- أُضيفت بوابة `src/features/users/services/usersApiDataGateway.ts` مع أعلام `VITE_USERS_API_READS` و`VITE_USERS_API_WRITES`.
+- عند تفعيل القراءة: تُجلب قائمة مستخدمي لوحة التحكم من `GET /api/v1/users` مع تحديث دوري، مع إبقاء roles وorder statistics على مصادرها الحالية.
+- عند تفعيل الكتابة: يُستخدم `PATCH /api/v1/users/:id` لتعديل الحقول غير الحساسة، و`DELETE /api/v1/users/:id` للحذف الناعم؛ إعادة التفعيل تستخدم PATCH.
+- بقي إنشاء حساب Auth/provisioning وتعديل PIN على Legacy لحين وجود عقد API آمن لا يمرر كلمات المرور أو الأسرار الحساسة عبر هذا المسار.
+- التحقق: `npm run check` و`npm run build` في `alx_api` نجحا. اختبارات Jest (`tests/users.test.ts` و`tests/security.test.ts`، ثم Users منفردًا) انتهت بـ `Segmentation fault` من بيئة Jest قبل إخراج نتائج الاختبارات؛ لم تُخف هذه النتيجة.
+- لا يوجد تنفيذ SQL مباشر أو تغيير حي في قاعدة البيانات.

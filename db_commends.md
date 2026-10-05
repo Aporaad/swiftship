@@ -2213,3 +2213,7 @@ LIMIT 180;
 ## [2026-10-05T22:03:10+03:00] — AI Model: Manus
 - لم يتم تشغيل أي أمر SQL على قاعدة البيانات الحية.
 - أضيفت داخل كود API استعلامات معاملات `orders`, `order_items`, `shipments`, و`orders_history` مع `BEGIN/COMMIT/ROLLBACK`، إضافة إلى إدراج الأعمدة الرئيسية مرة واحدة وJSONB supplemental payload.
+
+## [2026-10-05T22:07:50+03:00] — AI Model: Manus
+- لم يُنفذ أي أمر SQL مباشر في قاعدة البيانات.
+- لم تُطبق migrations أو seeds؛ تم تعديل كود TypeScript فقط لاستدعاء Users API الموجود.
