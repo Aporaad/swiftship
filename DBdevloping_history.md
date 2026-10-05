@@ -1266,3 +1266,8 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 - أضيف في API استعلام قراءة فقط لحركات `account_trans` المرتبطة بـ`main_entry` ذي الحالة `posted` مع `LIMIT/OFFSET`.
 - تم إبقاء حماية القيود المالية والكتابات داخل RPCs الموجودة مسبقاً.
 - اختبار التكامل الفعلي ينتظر تنفيذ المستخدم وفق `postgresql-api-integration-runbook_ar.md`.
+
+## [2026-10-05 00:54:25 +0000] — استخدام عقود Finance الكتابية الحالية دون تغيير المخطط — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- لم يتم تنفيذ migration أو DDL أو DML جديد على قاعدة البيانات.
+- تم استخدام endpoints/RPCs المالية الموجودة مسبقاً؛ التحقق والتوازن والصلاحيات يبقى داخل API وقاعدة البيانات.
+- تم منع العميل من إرسال هوية المنفذ؛ API يستخرج `createdByUid` من Access Token الموثق.

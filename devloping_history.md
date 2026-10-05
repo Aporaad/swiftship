@@ -2294,3 +2294,16 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 - أضيف اختبار Authorization لعميل HTTP.
 - نتائج التحقق: TypeScript check وlint ناجحان، Vitest: 275 اختباراً ناجحاً و8 متجاوزة، build ناجح مع تحذيرات bundle/import.meta القديمة غير مانعة.
 - تم تثبيت تبعيات النظام من lockfile، ولم يتم تعديل `tsconfig` بصورة دائمة.
+
+## [2026-10-05 00:54:25 +0000] — نقل Finance UI للكتابة إلى العقود الجديدة — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- أضيف `FinanceApiWriteGateway` لعزل Business Logic عن UI وتنفيذ الكتابة عبر `ApiClient`.
+- تم دعم العمليات التالية خلف `VITE_FINANCE_API_WRITES=true`:
+  - `POST /api/v1/finance/entries`
+  - `POST /api/v1/finance/entries/:id/post`
+  - `POST /api/v1/finance/entries/:id/reverse`
+  - `POST /api/v1/finance/entries/:id/void`
+- تم ربط `financialEntryService` بالـGateway مع إبقاء RPC القديم fallback افتراضياً عند تعطيل العلم.
+- تم إضافة `ApiClient.post` مع JSON headers وBearer token ومعالجة أخطاء موحدة.
+- تم تحويل أرقام أسطر القيد من تمثيل Legacy النصي إلى أرقام مطلوبة في Finance API، ومنع إرسال `createdByUid` من العميل لأن API يستخرجه من Access Token.
+- لا يتم نقل حذف القيود أو تعديل القيود المرحّلة؛ المسار المعتمد هو العكس والإبطال حسب العقد الجديد.
+- نتائج التحقق: TypeScript check وlint ناجحان، Vitest: 276 اختباراً ناجحاً و8 متجاوزة، build ناجح مع تحذيرات موجودة مسبقاً غير مانعة.

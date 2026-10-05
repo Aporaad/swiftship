@@ -101,4 +101,57 @@ export class ApiClient {
 
     return response.json() as Promise<T>;
   }
+
+  async post<T>(path: string, body: unknown): Promise<T> {
+    const url = new URL(path, this.options.baseUrl);
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      this.options.timeoutMs ?? 10000
+    );
+    try {
+      const accessToken = this.options.accessTokenFactory?.();
+      const response = await this.fetchImpl(url, {
+        method: "POST",
+        credentials: this.options.credentials ?? "include",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          "x-request-id":
+            this.options.requestIdFactory?.() ?? crypto.randomUUID(),
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      if (!response.ok) {
+        let responseBody: unknown = null;
+        try {
+          responseBody = await response.json();
+        } catch {
+          // Keep the safe API error contract for non-JSON responses.
+        }
+        const normalized = errorDetailsFromUnknown(
+          responseBody,
+          "API_REQUEST_FAILED"
+        );
+        throw new ApiClientError({
+          ...normalized,
+          code: normalized.code || "API_REQUEST_FAILED",
+          message:
+            normalized.message ||
+            `API request failed with status ${response.status}.`,
+        });
+      }
+      return response.json() as Promise<T>;
+    } catch (error) {
+      clearTimeout(timeout);
+      if (error instanceof ApiClientError) throw error;
+      throw new ApiClientError({
+        code: "API_REQUEST_FAILED",
+        message: "API request failed.",
+      });
+    }
+  }
 }

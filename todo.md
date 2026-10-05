@@ -1728,3 +1728,14 @@
 - [x] تشغيل اختبارات النظام المحلي والبناء بنجاح.
 - [ ] تنفيذ نقل Finance UI للكتابة بعد نجاح اختبار PostgreSQL الفعلي.
 - [ ] نقل Auth/Users ثم Customers وOrders وShipments حسب ترتيب cutover.
+
+## [2026-10-05 00:54:25 +0000] — Finance UI Write Cutover — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- [x] إضافة FinanceApiWriteGateway.
+- [x] نقل إنشاء القيد إلى `POST /api/v1/finance/entries`.
+- [x] نقل ترحيل القيد إلى `POST /api/v1/finance/entries/:id/post`.
+- [x] نقل العكس إلى `POST /api/v1/finance/entries/:id/reverse`.
+- [x] نقل إبطال المسودة إلى `POST /api/v1/finance/entries/:id/void`.
+- [x] إبقاء RPC Legacy كـfallback عند تعطيل `VITE_FINANCE_API_WRITES`.
+- [x] اجتياز check وlint و276 اختباراً وbuild.
+- [ ] تفعيل العلم في staging فقط بعد نجاح اختبار PostgreSQL بالمستخدم الموثق.
+- [ ] نقل عمليات تعديل/حذف المسودات والعهد والمصروفات بعد اعتماد عقودها المنفصلة.

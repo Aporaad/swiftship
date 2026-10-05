@@ -70,4 +70,38 @@ describe("ApiClient", () => {
       })
     );
   });
+
+  it("posts JSON with the bearer token and returns the API envelope", async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ success: true, data: { id: "entry-1" } }),
+          { status: 200 }
+        )
+      );
+    const client = new ApiClient({
+      baseUrl: "https://api.example.test",
+      fetchImpl,
+      accessTokenFactory: () => "token-1",
+    });
+
+    await expect(
+      client.post("/api/v1/finance/entries", { description: "test" })
+    ).resolves.toMatchObject({
+      success: true,
+      data: { id: "entry-1" },
+    });
+    expect(fetchImpl).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ description: "test" }),
+        headers: expect.objectContaining({
+          "Content-Type": "application/json",
+          Authorization: "Bearer token-1",
+        }),
+      })
+    );
+  });
 });

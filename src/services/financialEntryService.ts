@@ -1,5 +1,6 @@
 import { supabase } from '../data/legacy/legacy-compat.ts';
 import type { PaymentStatus, PostingStatus } from '../shared/contracts/value-primitives';
+import { financeApiWriteGateway } from '../components/financeAccounting/FinanceApiWriteGateway';
 
 export type FinancialPaymentMethod = 'cash' | 'bank' | 'mixed' | 'deferred';
 export type FinancialEntryCategory = 'General' | 'Compound' | 'Temp' | 'Reversing';
@@ -488,6 +489,9 @@ class FinancialEntryService {
 
   async create(entry: FinancialEntryInput): Promise<FinancialEntryWriteResult> {
     const payload = buildFinancialEntryPayload(entry);
+    if (financeApiWriteGateway.isEnabled()) {
+      return (await financeApiWriteGateway.createEntry(payload)) as unknown as FinancialEntryWriteResult;
+    }
     const { data, error } = await (supabase as any).rpc('secure_create_financial_entry', { p_entry: payload });
     if (error) throw new Error(`[FinancialEntryService] تعذر إنشاء القيد: ${error.message || error}`);
     if (!data?.id) throw new Error('[FinancialEntryService] لم يُرجع الإجراء الذري معرف القيد المنشأ.');
@@ -552,6 +556,9 @@ class FinancialEntryService {
 
   async voidDraft(entryId: string, voidedByUid?: string): Promise<{ id: string; postingStatus: 'voided' }> {
     if (!entryId?.trim()) throw new Error('معرف مسودة القيد مطلوب.');
+    if (financeApiWriteGateway.isEnabled()) {
+      return (await financeApiWriteGateway.voidDraft(entryId)) as { id: string; postingStatus: 'voided' };
+    }
     const { data, error } = await (supabase as any).rpc('secure_void_financial_entry_draft', { p_entry_id: entryId });
     if (error) throw new Error(`[FinancialEntryService] تعذر إبطال مسودة القيد: ${error.message || error}`);
     return data;
@@ -559,6 +566,9 @@ class FinancialEntryService {
 
   async reverse(entryId: string, entryNumber: string, createdByUid?: string, notes = ''): Promise<FinancialEntryWriteResult & { reversesEntryId: string }> {
     if (!entryId?.trim() || !entryNumber?.trim()) throw new Error('معرف القيد ورقم القيد العكسي مطلوبان.');
+    if (financeApiWriteGateway.isEnabled()) {
+      return (await financeApiWriteGateway.reverseEntry(entryId, notes.trim() || `عكس القيد ${entryNumber.trim()}`)) as unknown as FinancialEntryWriteResult & { reversesEntryId: string };
+    }
     const { data, error } = await (supabase as any).rpc('secure_reverse_financial_entry', {
       p_entry_id: entryId, p_reversal: { entryNumber: entryNumber.trim(), notes },
     });
@@ -568,6 +578,9 @@ class FinancialEntryService {
 
   async post(entryId: string, postedByUid?: string): Promise<{ id: string; postingStatus: 'posted' }> {
     if (!entryId?.trim()) throw new Error('معرف القيد مطلوب للترحيل.');
+    if (financeApiWriteGateway.isEnabled()) {
+      return (await financeApiWriteGateway.postEntry(entryId)) as { id: string; postingStatus: 'posted' };
+    }
     const { data, error } = await (supabase as any).rpc('secure_post_financial_entry', { p_entry_id: entryId });
     if (error) throw new Error(`[FinancialEntryService] تعذر ترحيل القيد: ${error.message || error}`);
     return data as { id: string; postingStatus: 'posted' };
