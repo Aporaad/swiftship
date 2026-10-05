@@ -2120,3 +2120,30 @@ COMMIT;
 - تحقق القراءة: فحص `relrowsecurity` و`relforcerowsecurity`، أعمدة الجدول، السياسة، والمنح.
 - اختبار الكتابة: إدراج `verify-0009-test` بقيمة JSON صحيحة، قراءته، ثم حذفه فوراً باستخدام CTE محدد بـ`LIMIT 1`.
 - النتيجة: نجاح التطبيق والتحقق والتنظيف الكامل، دون تعديل بيانات الأعمال.
+
+## [2026-10-05 00:09:07 +0000] — أوامر SQL للقراءة والتحقق في المرحلة 8 — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT table_name, column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name IN ('accounts','account_trans','main_entry','entry_module','entry_type','auto_entries','custody_advances','default_accounts','currency','cur_price','entry_payment_details')
+ORDER BY table_name, ordinal_position
+LIMIT 400;
+
+SELECT routine_name, routine_type
+FROM information_schema.routines
+WHERE routine_schema = 'public'
+  AND routine_name IN ('create_financial_entry_v2','post_financial_entry','reverse_financial_entry','void_financial_entry_draft','recalculate_accounting_hierarchy')
+ORDER BY routine_name
+LIMIT 20;
+
+SELECT table_name, row_count FROM (VALUES
+  ('accounts',(SELECT count(*)::bigint FROM public.accounts)),
+  ('main_entry',(SELECT count(*)::bigint FROM public.main_entry)),
+  ('account_trans',(SELECT count(*)::bigint FROM public.account_trans)),
+  ('auto_entries',(SELECT count(*)::bigint FROM public.auto_entries)),
+  ('custody_advances',(SELECT count(*)::bigint FROM public.custody_advances))
+) AS counts(table_name,row_count)
+ORDER BY table_name LIMIT 10;
+```
+- النتيجة: أوامر قراءة فقط ناجحة؛ لا توجد أوامر INSERT/UPDATE/DELETE أو migration جديدة في هذه المرحلة.

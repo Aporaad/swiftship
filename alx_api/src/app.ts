@@ -13,6 +13,8 @@ import { registerCustomersRoutes } from './modules/customers/customers.routes';
 import type { CustomerRepository } from './modules/customers/customers.contracts';
 import { registerOperationsRoutes } from './modules/operations/operations.routes';
 import type { OperationsRepository } from './modules/operations/operations.contracts';
+import { registerFinanceRoutes } from './modules/finance/finance.routes';
+import type { FinanceRepository } from './modules/finance/finance.contracts';
 
 export interface ApiReadiness {
   database: boolean;
@@ -25,6 +27,7 @@ export interface AppOptions {
   auth?: AuthUseCases;
   customers?: CustomerRepository;
   operations?: OperationsRepository;
+  finance?: FinanceRepository;
 }
 
 export function createApiApp(options: AppOptions): Express {
@@ -101,6 +104,7 @@ export function createApiApp(options: AppOptions): Express {
   registerAuthRoutes(app, environment, options.auth);
   if (options.customers) registerCustomersRoutes(app, environment, options.auth, options.customers);
   if (options.operations) registerOperationsRoutes(app, environment, options.auth, options.operations);
+  if (options.finance) registerFinanceRoutes(app, environment, options.auth, options.finance);
 
   app.use('/api/v1', (_request, response) => {
     sendFailure(response, 404, 'ROUTE_NOT_FOUND', 'المسار المطلوب غير موجود.', String(response.locals.requestId));

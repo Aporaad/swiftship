@@ -2271,3 +2271,14 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 - تم تحويل تحديث الشحنة إلى Transaction مع `FOR UPDATE` وتسجيل `shipment.updated` أو `shipment.courier_assigned` في `orders_history`.
 - أضيف اختبار HTTP لإسناد الشحنة إلى مندوب والتحقق من صلاحية `edit_orders`.
 - نتيجة التحقق: 70 اختباراً ضمن 13 suite، TypeScript check، ESLint، format، وbuild ناجحة.
+
+## [2026-10-05 00:09:07 +0000] — بدء وتنفيذ المرحلة 8 Finance API — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- أُنشئت وحدة `alx_api/src/modules/finance` مع فصل العقود والتحقق والـRepository والمسارات.
+- أضيف قاموس الحسابات وحركات الحسابات، مع أعمدة صريحة وقراءة الحركات المرحّلة فقط.
+- أضيف قاموس `entry_module` و`entry_type`، وقراءة القيود مع أسطرها وتفاصيل الدفع.
+- أضيف إنشاء القيد المتوازن والتحقق من توازن المدين والدائن قبل استدعاء RPC الذري `create_financial_entry_v2`.
+- أضيفت مسارات الترحيل والعكس والإبطال عبر إجراءات قاعدة البيانات الذرية، مع منع حذف القيد المرحّل مباشرة.
+- أضيفت قراءة العهد والسلف وقواعد القيود التلقائية، مع إنشاء/تعديل/حذف قواعد الأتمتة بأعمدة صريحة ودون استخدام `data`.
+- أضيفت حماية الصلاحيات: `view_financial_accounts`, `view_account_movements`, `add_finance`, `post_financial_entries`, `reverse_financial_entries`, `void_financial_entries`, وصلاحيات auto entries.
+- تم توصيل Finance module في `app.ts` و`server.ts` وتحديث OpenAPI.
+- لم تُنفذ أي كتابة أو migration على قاعدة البيانات خلال هذه المرحلة؛ تم استخدام المخطط والـRPCs الموجودة مسبقاً.

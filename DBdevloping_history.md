@@ -1254,3 +1254,9 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 - أُجري اختبار كتابة وقراءة بسجل اصطناعي `verify-0009-test` ثم حُذف فوراً بنجاح؛ لا توجد بيانات اختبار متبقية.
 - سجل Supabase أكد migration version `20261004235355` باسم `operations_idempotency_0009`.
 - فحص PostgreSQL المحلي عبر `DATABASE_URL` لم يكن ممكناً لأن المتغير غير موجود في البيئة الحالية؛ تم الفحص على قاعدة المشروع الأساسية عبر الاتصال المرتبط.
+
+## [2026-10-05 00:09:07 +0000] — تدقيق مخطط المالية للمرحلة 8 — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- تم فحص مخطط الجداول المالية الأساسية في قاعدة SwiftShip: `accounts`، `account_trans`، `main_entry`، `entry_module`، `entry_type`، `auto_entries`، `custody_advances`، `currency`، `cur_price`، و`entry_payment_details`.
+- تم التحقق من وجود RPCs الحالية: `create_financial_entry_v2`، `post_financial_entry`، `reverse_financial_entry`، `void_financial_entry_draft`، و`recalculate_accounting_hierarchy`.
+- النتائج الحالية: `accounts=77`، `main_entry=19`، `account_trans=39`، `auto_entries=10`، `custody_advances=0`.
+- لم تُطبق migration أو DDL أو DML خلال هذه المرحلة؛ Finance API يعتمد على المخطط والـRPCs المعتمدة الموجودة مسبقاً.
