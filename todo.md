@@ -1758,3 +1758,13 @@
 - [x] نجاح check وlint و276 اختباراً وbuild للنظام المحلي، وcheck/lint و74 اختباراً وbuild لـ alx_api.
 - [ ] اختبار التشغيل الفعلي بحساب API موثق مع DATABASE_URL والتحقق من صلاحيات `view_*` في بيئة staging.
 - [ ] نقل عمليات الكتابة لواجهات الكيانات الأربع بعد اعتماد contracts الكتابة واختبار PostgreSQL الفعلي.
+
+## [2026-10-05 02:22:30 +0000] — نقل واجهات المندوبين والموظفين والمحاسبة — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- [x] مراجعة خطة SwiftShip وخطة إنشاء API وخطة client cutover وتحديد المراحل المتبقية.
+- [x] إضافة Reporting contract ومسار قراءة الموظفين.
+- [x] إنشاء `staffApiDataGateway` لقراءة المندوبين والموظفين والطلبات والحسابات.
+- [x] تفعيل قراءة Couriers وEmployees وAccounting عبر `VITE_STAFF_API_READS` مع fallback Legacy.
+- [x] اجتياز فحوص alx_api: 74 اختباراً ناجحاً وcheck/lint/build، وفحوص النظام المحلي: 276 اختباراً ناجحاً وbuild.
+- [ ] إضافة endpoints الكتابة للمندوبين والموظفين وربط الحساب المالي مع audit وRBAC.
+- [ ] نقل تفاصيل وكشوف حركات المندوبين والموظفين من Legacy إلى API.
+- [ ] نقل واجهات Users/Roles ثم Notifications/Integrations، وبعدها تنفيذ hardening والإطلاق.

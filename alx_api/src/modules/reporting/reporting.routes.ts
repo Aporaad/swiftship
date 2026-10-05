@@ -10,6 +10,7 @@ import { pageQuerySchema } from '../operations/operations.schemas';
 const resources: Record<string, { resource: ReportingResource; permission: string }> = {
   expenses: { resource: 'expenses', permission: 'view_expenses' },
   couriers: { resource: 'couriers', permission: 'view_couriers' },
+  employees: { resource: 'employees', permission: 'view_employees' },
   sources: { resource: 'sources', permission: 'view_sources' },
   'shipping-companies': { resource: 'shippingCompanies', permission: 'view_shipping_companies' },
   users: { resource: 'users', permission: 'view_users' },

@@ -2325,3 +2325,10 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 - أضيف `dashboardApiGateway.ts` وتفعيل القراءة التدريجية خلف `VITE_DASHBOARD_API_READS=true` مع إبقاء fallback القديم عند تعطيل العلم.
 - أضيفت قراءة المصروفات إلى Dashboard API لعرض العدد الحقيقي بدلاً من القيمة الثابتة.
 - نتائج التحقق: النظام المحلي 276 اختباراً ناجحاً وbuild ناجح؛ alx_api عدد 74 اختباراً ناجحاً وcheck/lint/build ناجحة.
+
+## [2026-10-05 02:22:30 +0000] — بدء نقل Couriers وEmployees وAccounting إلى API — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- أضيف مورد `employees` إلى Reporting API مع أعمدة canonical من PostgreSQL وصلاحية `view_employees`.
+- أضيفت `staffApiDataGateway` كطبقة HTTP مشتركة تفصل Business/Data access عن UI، وتقرأ المندوبين والموظفين والطلبات والحسابات.
+- تم تفعيل القراءة التدريجية في صفحات المندوبين والموظفين والمحاسبة خلف `VITE_STAFF_API_READS` مع fallback Legacy قابل للتراجع.
+- لم تُنقل mutations الكتابة في هذه الدفعة؛ ستتبعها endpoints typed للإنشاء والتعديل والتعطيل والحذف بعد استكمال عقود المعاملات والتدقيق.
+- نتائج التحقق: alx_api عدد 74 اختباراً ناجحاً مع check/lint/build، والنظام المحلي 276 اختباراً ناجحاً وbuild ناجح.

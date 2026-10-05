@@ -53,6 +53,7 @@ import { financialAccountService } from '../../../services/financialAccountServi
 import { activityLogService } from '../../../services/activityLogService';
 import { useAccountBalances } from '../../../hooks/useAccountBalances';
 import { useExchangeRates } from '../../../hooks/useExchangeRates';
+import { staffApiDataGateway } from '../../staff/services/staffApiDataGateway';
 
 export default function EmployeesPage() {
   const { legacyAuth: auth } = useAuthSession();
@@ -155,6 +156,18 @@ export default function EmployeesPage() {
   // Subscribe to employees
   useEffect(() => {
     if (roleLoading) return;
+    if (staffApiDataGateway.isEnabled()) {
+      return staffApiDataGateway.subscribe({
+        onData: (state) => {
+          setEmployees(state.employees);
+          setQueryState(state.employees.length ? asyncState.success(state.employees) : asyncState.empty());
+        },
+        onError: (error) => {
+          console.error('Error loading employees from API:', error);
+          setQueryState(asyncState.error<unknown[]>(error, 'EMPLOYEES_API_LOAD_FAILED'));
+        },
+      });
+    }
     const unsub = onSnapshot(
       collection(db, 'employees'),
       (snap) => {

@@ -20,6 +20,15 @@ const definitions: Record<ReportingResource, ResourceDefinition> = {
       'courier_id AS "courierId", full_name AS "fullName", name_ar AS "nameAr", name_en AS "nameEn", account_id AS "accountId", currency, is_active AS "isActive", courier_type AS "type", courier_level AS "level", commission_rate AS "commissionRate", created_at AS "createdAt", updated_at AS "updatedAt", created_by AS "createdBy", updated_by AS "updatedBy"',
     map: (row) => ({ ...row, id: String(row.courierId) }),
   },
+  employees: {
+    from: 'public.employees',
+    idColumn: 'employee_id',
+    orderBy: 'created_at DESC NULLS LAST, employee_id ASC',
+    searchColumns: ['full_name', 'name_ar', 'name_en', 'job_type'],
+    columns:
+      'employee_id AS "employeeId", full_name AS "fullName", name_ar AS "nameAr", name_en AS "nameEn", job_type AS "jobType", account_id AS "accountId", monthly_salary AS "monthlySalary", currency, commission_rate AS "commissionRate", created_at AS "createdAt", updated_at AS "updatedAt", created_by AS "createdBy", updated_by AS "updatedBy"',
+    map: (row) => ({ ...row, id: String(row.employeeId) }),
+  },
   sources: {
     from: 'public.sources',
     idColumn: 'source_id',

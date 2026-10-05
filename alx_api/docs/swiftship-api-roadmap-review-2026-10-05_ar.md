@@ -123,3 +123,26 @@ VITE_API_BASE_URL=http://127.0.0.1:3001
 - لا يتم إعطاء التطبيق اتصال `postgres` أو `service_role`.
 - لا يتم حذف القيود المالية؛ العكس هو مسار التصحيح.
 - لا يتم وضع Access Token أو Refresh Token في Git أو داخل ملفات المشروع.
+
+## 6. تحديث التنفيذ بتاريخ 2026-10-05 02:22 UTC
+
+بدأت دفعة نقل واجهات المندوبين والموظفين والمحاسبة إلى HTTP API بطريقة قراءة تدريجية قابلة للتراجع:
+
+- أضيف مورد `employees` إلى Reporting API مع صلاحية `view_employees`.
+- أضيفت بوابة `staffApiDataGateway` لقراءة المندوبين والموظفين والطلبات والحسابات من API.
+- أصبحت صفحات Couriers وEmployees وAccounting تستخدم البوابة عند تفعيل `VITE_STAFF_API_READS=true`، مع إبقاء Legacy fallback عند تعطيل العلم.
+- أضيف Feature Flag التالي إلى `.env.example`:
+
+```env
+VITE_STAFF_API_READS=true
+```
+
+هذه الدفعة تنقل القراءة فقط. لم يتم تفعيل الكتابة عبر API للمندوبين والموظفين بعد، لأن ذلك يحتاج endpoints typed للإنشاء والتعديل والتعطيل والحذف، مع معاملات ربط الحساب المالي واختبارات صلاحيات قبل إزالة Legacy mutations.
+
+## 7. الترتيب التالي بعد هذه الدفعة
+
+1. إضافة عقود الكتابة للمندوبين والموظفين والحسابات المالية مع validation وaudit.
+2. نقل تفاصيل المندوب والموظف وكشوف الحركات إلى API.
+3. نقل mutations الإنشاء والتعديل والتعطيل والحذف خلف flags منفصلة.
+4. إجراء smoke test بحساب API موثق ثم إزالة fallback لكل شاشة على حدة.
+5. الانتقال إلى Users/Roles ثم Notifications/Integrations ثم hardening والإطلاق.

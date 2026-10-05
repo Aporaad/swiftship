@@ -6,6 +6,7 @@ import { useRole } from '../../../hooks/useRole';
 import { ShieldAlert, BookOpen } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import FinanceAccounting from '../../../components/FinanceAccounting';
+import { staffApiDataGateway } from '../../staff/services/staffApiDataGateway';
 
 type AccountingRow = Record<string, unknown> & { id: string };
 type AccountingDocument = { id: string; data: () => Record<string, unknown> };
@@ -26,6 +27,16 @@ export default function AccountingPage() {
 
   useEffect(() => {
     if (roleLoading || !canViewFinance) return;
+
+    if (staffApiDataGateway.isEnabled()) {
+      return staffApiDataGateway.subscribe({
+        onData: (state) => {
+          setCouriers(state.couriers);
+          setOrders(state.orders);
+        },
+        onError: (error) => console.error('Error loading accounting context from API:', error),
+      });
+    }
 
     // Fetch couriers
     const unsubCouriers = onSnapshot(collection(db, 'couriers'), (snap) => {

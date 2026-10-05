@@ -47,6 +47,7 @@ import type { CourierEditFormValues, CourierFormValues, CourierSystemUserFormVal
 import { AddCourierModal } from '../components/AddCourierModal';
 import { EditCourierModal } from '../components/EditCourierModal';
 import { CourierDetailsModal } from '../components/CourierDetailsModal';
+import { staffApiDataGateway } from '../../staff/services/staffApiDataGateway';
 
 export default function CouriersPage() {
   const { settings, t } = useSettings();
@@ -344,6 +345,21 @@ export default function CouriersPage() {
 
   useEffect(() => {
     if (roleLoading) return;
+
+    if (staffApiDataGateway.isEnabled()) {
+      return staffApiDataGateway.subscribe({
+        onData: (state) => {
+          setCouriers(state.couriers);
+          setAllOrders(state.orders);
+          setAccounts(state.accounts);
+          setQueryState(state.couriers.length ? asyncState.success(state.couriers) : asyncState.empty());
+        },
+        onError: (error) => {
+          console.error('Error loading courier data from API:', error);
+          setQueryState(asyncState.error<unknown[]>(error, 'COURIERS_API_LOAD_FAILED'));
+        },
+      });
+    }
 
     // 1. Subscribe to Couriers
     const qCouriers = query(collection(db, 'couriers'), orderBy('createdAt', 'desc'));

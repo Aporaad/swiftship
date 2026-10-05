@@ -1,5 +1,12 @@
 export type ReportingResource =
-  'expenses' | 'couriers' | 'sources' | 'shippingCompanies' | 'users' | 'activityLogs' | 'reportTemplates';
+  | 'expenses'
+  | 'couriers'
+  | 'employees'
+  | 'sources'
+  | 'shippingCompanies'
+  | 'users'
+  | 'activityLogs'
+  | 'reportTemplates';
 
 export interface ReportingQuery {
   limit: number;
