@@ -36,6 +36,7 @@ import { useAccountBalances } from '../../../hooks/useAccountBalances';
 import ConfirmModal from '../../../components/ConfirmModal';
 import ConfirmDeletePinModal from '../../../components/ConfirmDeletePinModal';
 import { CustomerCreateModal } from '../../../components/entities/EntityCreateModals';
+import { customersApiDataGateway } from '../services/customersApiDataGateway';
 
 export default function CustomersPage() {
   const { role, hasPermission, loading: roleLoading } = useRole();
@@ -148,6 +149,27 @@ export default function CustomersPage() {
 
   useEffect(() => {
     if (roleLoading) return;
+    if (customersApiDataGateway.isEnabled()) {
+      const unsubscribeCustomers = customersApiDataGateway.subscribe({
+        onData: (rows) => {
+          setCustomers(rows);
+          setQueryState(rows.length ? asyncState.success(rows) : asyncState.empty());
+        },
+        onError: (error) => {
+          console.error('[Customers] API read failed:', error);
+          setQueryState(asyncState.error<unknown[]>(error, 'CUSTOMERS_API_LOAD_FAILED'));
+        },
+      });
+      const unsubscribeAccounts = onSnapshot(collection(db, 'accounts'), (snap) => {
+        setAccounts(snap.docs.map((d: any) => ({ id: d.id, ...d.data() })));
+      }, (error) => {
+        console.warn('Could not load financial accounts in Customers page', error);
+      });
+      return () => {
+        unsubscribeCustomers();
+        unsubscribeAccounts();
+      };
+    }
     const unsub = onSnapshot(collection(db, 'customers'), (snap) => {
       const rows = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
       setCustomers(rows);

@@ -38,3 +38,28 @@
 ## قرار التشغيل
 
 لا يتم تفعيل `VITE_STAFF_API_WRITES` في الإنتاج قبل اكتمال حذف آمن، Users API، smoke test حي، ومراجعة صلاحيات `add/edit/delete_couriers` و`add/edit/delete_employees`.
+
+## [2026-10-05T21:36:10+03:00] — الدفعة الثانية: قراءة العملاء
+
+بدأت المرحلة التالية من Client Cutover بنقل قراءة العملاء فقط عبر `GET /api/v1/customers` خلف العلم `VITE_CUSTOMERS_API_READS=false`.
+
+### المنفذ
+
+- إنشاء `customersApiDataGateway` مستقل عن واجهة المستخدم.
+- استخدام `ApiClient` المشترك والتوكن الموجود في `sessionStorage`.
+- ربط `CustomersPage` بالبوابة عند تفعيل العلم.
+- إبقاء قراءة الحسابات المالية وطلبات العميل في Legacy مؤقتًا حتى اكتمال Finance/Orders API.
+- إبقاء fallback القديم عند تعطيل العلم.
+
+### التحقق والقيود
+
+- `alx_api`: `npm run check` ناجح.
+- `alx_api`: `npm run build` ناجح.
+- lint لوحدة Customers ناجح.
+- اختبار `tests/customers.test.ts` أعاد `Segmentation fault` من Jest.
+- اختبار ApiClient لم يُنفذ لأن `vitest` غير مثبت في اعتماديات الجذر؛ أُلغي طلب تثبيت تفاعلي ولم تُضف اعتماديات.
+- لم يتم تنفيذ SQL أو migration أو تعديل بيانات حية.
+
+### الخطوة التالية المعتمدة
+
+توسيع Customer API بعقود كتابة ذرية تشمل إنشاء/تعديل العميل وربطه بالحساب المالي وسجل التدقيق، ثم إضافة اختبارات صلاحيات وsmoke test قبل تفعيل أي علم كتابة.

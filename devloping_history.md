@@ -2452,3 +2452,10 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 ### حدود الدفعة
 - لم تُنقل عمليات حذف الكيانات بعد، لأن endpoint الحذف الحالي لا ينفذ تنظيف الحساب المالي وسجل التدقيق كعملية ذرية.
 - لم يُنفذ SQL أو migration على قاعدة البيانات الحية.
+
+## [2026-10-05T21:36:10+03:00] — بدء نقل قراءة العملاء إلى alx_api — AI Model: Manus
+- أُنشئت `src/features/customers/services/customersApiDataGateway.ts` كطبقة HTTP مستقلة عن UI، وتستخدم `ApiClient` المشترك والتوكن الموجود في `sessionStorage`.
+- أُضيف العلم `VITE_CUSTOMERS_API_READS` بقيمة افتراضية `false`، وربطت `CustomersPage` بالبوابة عند تفعيله فقط.
+- تُحافظ الصفحة على مزامنة الحسابات المالية المحلية وبيانات الطلبات مؤقتًا حتى تكتمل Finance/Orders API، مع منع خلط مصدر العملاء بين API وLegacy داخل نفس الاشتراك.
+- تم التحقق من `alx_api` عبر `npm run check` و`npm run build` وlint لوحدة العملاء.
+- اختبار Jest المنفصل لـ`tests/customers.test.ts` تعرّض لـ`Segmentation fault`، واختبار ApiClient لم يُشغّل لأن `vitest` غير مثبت في اعتماديات الجذر وطلب `npx` تثبيته تفاعليًا؛ أُلغي التثبيت ولم تُضف اعتماديات.

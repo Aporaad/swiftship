@@ -1821,3 +1821,11 @@
 - [ ] نقل إنشاء/تعديل المستخدم المرتبط بالموظف أو المندوب إلى Users API قبل تفعيل الكتابات في بيئة الإنتاج.
 - [ ] تنفيذ smoke test فعلي بحساب API موثق في بيئة اختبار وفق `postgresql-api-integration-runbook_ar.md`.
 - [ ] إكمال نقل Customers ثم Orders/Shipments حسب ترتيب خطة Client Cutover.
+
+## [2026-10-05T21:36:10+03:00] — المرحلة التالية: نقل قراءة العملاء إلى API — AI Model: Manus
+- [x] إنشاء `customersApiDataGateway` لقراءة العملاء من `/api/v1/customers` مع polling قابل للإيقاف.
+- [x] إضافة `VITE_CUSTOMERS_API_READS=false` كعلم مستقل قابل للتراجع.
+- [x] ربط `CustomersPage` ببوابة API للقراءة مع إبقاء الحسابات المالية وبيانات الطلبات في مسارها الحالي مؤقتًا.
+- [x] إبقاء Legacy fallback عندما يكون العلم معطلاً.
+- [ ] توسيع Customer API بعقد كتابة ذري يشمل الحساب المالي وسجل التدقيق قبل نقل create/update/delete.
+- [ ] إضافة smoke test موثق لقراءة العملاء بحساب API وصلاحية `view_customers`.
