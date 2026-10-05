@@ -10,6 +10,14 @@ import {
 import type { AuthLoginProfileDto, CurrentUserDto, SessionState } from '../../data/dtos/auth.dto';
 import type { AuthGateway } from '../../data/contracts/auth.gateway';
 import { currentSupabaseAuthGateway } from '../../data/current-supabase/gateways/auth.gateway';
+import { alxApiAuthGateway } from '../../data/http/alx-api-auth.gateway';
+
+const isAlxApiConfigured = Boolean(
+  (typeof window !== 'undefined' && (import.meta as any).env?.VITE_ALX_API_URL) ||
+    (typeof process !== 'undefined' && process.env['ALX_API_URL']),
+);
+
+const defaultGateway = isAlxApiConfigured ? alxApiAuthGateway : currentSupabaseAuthGateway;
 
 export interface AuthSessionContextValue {
   state: SessionState;
@@ -36,7 +44,7 @@ interface AuthSessionProviderProps {
 
 export function AuthSessionProvider({
   children,
-  gateway = currentSupabaseAuthGateway,
+  gateway = defaultGateway,
 }: AuthSessionProviderProps) {
   const [state, setState] = useState<SessionState>({ status: 'loading' });
 

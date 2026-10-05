@@ -6,11 +6,15 @@ import type { AuthUseCases } from '../auth/auth.contracts';
 import { requireAuthenticatedUser } from '../auth/auth.routes';
 import type { OperationsRepository } from './operations.contracts';
 import {
+  createCourierSchema,
+  createEmployeeSchema,
   createOrderInputSchema,
   entityIdSchema,
   pageQuerySchema,
   productInputSchema,
   shipmentInputSchema,
+  updateCourierSchema,
+  updateEmployeeSchema,
   updateOrderStatusInputSchema,
 } from './operations.schemas';
 
@@ -178,4 +182,87 @@ export function registerOperationsRoutes(
       return next(error);
     }
   });
+
+  // --- Couriers CRUD ---
+  app.post('/api/v1/operations/couriers', ...route('add_couriers', auth), async (request, response, next) => {
+    const body = createCourierSchema.safeParse(request.body as unknown);
+    const actorId = principalId(response);
+    if (!body.success || !actorId)
+      return sendFailure(response, 400, 'INVALID_COURIER_INPUT', 'بيانات المندوب غير صالحة.', requestId(response));
+    try {
+      return sendSuccess(response, await repository.createCourier({ ...body.data, actorId }), requestId(response));
+    } catch (error) {
+      return next(error);
+    }
+  });
+  app.patch('/api/v1/operations/couriers/:id', ...route('edit_couriers', auth), async (request, response, next) => {
+    const id = entityIdSchema.safeParse(request.params.id);
+    const body = updateCourierSchema.safeParse(request.body as unknown);
+    const actorId = principalId(response);
+    if (!id.success || !body.success || !actorId)
+      return sendFailure(response, 400, 'INVALID_COURIER_INPUT', 'بيانات المندوب غير صالحة.', requestId(response));
+    try {
+      const result = await repository.updateCourier({ courierId: id.data, ...body.data, actorId });
+      return result
+        ? sendSuccess(response, result, requestId(response))
+        : sendFailure(response, 404, 'ENTITY_NOT_FOUND', 'المندوب غير موجود.', requestId(response));
+    } catch (error) {
+      return next(error);
+    }
+  });
+  app.delete('/api/v1/operations/couriers/:id', ...route('delete_couriers', auth), async (request, response, next) => {
+    const id = entityIdSchema.safeParse(request.params.id);
+    if (!id.success)
+      return sendFailure(response, 400, 'INVALID_ENTITY_ID', 'المعرف غير صالح.', requestId(response));
+    try {
+      const deleted = await repository.deleteCourier(id.data);
+      return deleted
+        ? sendSuccess(response, { deleted: true }, requestId(response))
+        : sendFailure(response, 404, 'ENTITY_NOT_FOUND', 'المندوب غير موجود.', requestId(response));
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  // --- Employees CRUD ---
+  app.post('/api/v1/operations/employees', ...route('add_employees', auth), async (request, response, next) => {
+    const body = createEmployeeSchema.safeParse(request.body as unknown);
+    const actorId = principalId(response);
+    if (!body.success || !actorId)
+      return sendFailure(response, 400, 'INVALID_EMPLOYEE_INPUT', 'بيانات الموظف غير صالحة.', requestId(response));
+    try {
+      return sendSuccess(response, await repository.createEmployee({ ...body.data, actorId }), requestId(response));
+    } catch (error) {
+      return next(error);
+    }
+  });
+  app.patch('/api/v1/operations/employees/:id', ...route('edit_employees', auth), async (request, response, next) => {
+    const id = entityIdSchema.safeParse(request.params.id);
+    const body = updateEmployeeSchema.safeParse(request.body as unknown);
+    const actorId = principalId(response);
+    if (!id.success || !body.success || !actorId)
+      return sendFailure(response, 400, 'INVALID_EMPLOYEE_INPUT', 'بيانات الموظف غير صالحة.', requestId(response));
+    try {
+      const result = await repository.updateEmployee({ employeeId: id.data, ...body.data, actorId });
+      return result
+        ? sendSuccess(response, result, requestId(response))
+        : sendFailure(response, 404, 'ENTITY_NOT_FOUND', 'الموظف غير موجود.', requestId(response));
+    } catch (error) {
+      return next(error);
+    }
+  });
+  app.delete('/api/v1/operations/employees/:id', ...route('delete_employees', auth), async (request, response, next) => {
+    const id = entityIdSchema.safeParse(request.params.id);
+    if (!id.success)
+      return sendFailure(response, 400, 'INVALID_ENTITY_ID', 'المعرف غير صالح.', requestId(response));
+    try {
+      const deleted = await repository.deleteEmployee(id.data);
+      return deleted
+        ? sendSuccess(response, { deleted: true }, requestId(response))
+        : sendFailure(response, 404, 'ENTITY_NOT_FOUND', 'الموظف غير موجود.', requestId(response));
+    } catch (error) {
+      return next(error);
+    }
+  });
 }
+

@@ -407,5 +407,119 @@ export function createOperationsRepository(pool: Pool): OperationsRepository {
         client.release();
       }
     },
+    async createCourier(input) {
+      const courierId = `cour_${crypto.randomUUID()}`;
+      const result = await pool.query(
+        `INSERT INTO public.couriers (courier_id, account_id, currency, is_active, full_name, name_ar, name_en, courier_type, courier_level, commission_rate, created_at, updated_at, created_by, updated_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW(), $11, $11)
+         RETURNING courier_id AS "courierId", account_id AS "accountId", currency, is_active AS "isActive", full_name AS "fullName", name_ar AS "nameAr", name_en AS "nameEn", courier_type AS "courierType", courier_level AS "courierLevel", commission_rate AS "commissionRate", created_at AS "createdAt", updated_at AS "updatedAt"`,
+        [
+          courierId,
+          input.accountId ?? null,
+          input.currency ?? 'YER',
+          input.isActive ?? true,
+          input.fullName,
+          input.nameAr ?? input.fullName,
+          input.nameEn ?? input.fullName,
+          input.courierType ?? null,
+          input.courierLevel ?? null,
+          input.commissionRate ?? 0,
+          input.actorId,
+        ],
+      );
+      return result.rows[0];
+    },
+    async updateCourier(input) {
+      const result = await pool.query(
+        `UPDATE public.couriers SET
+           full_name = COALESCE($1, full_name),
+           name_ar = COALESCE($2, name_ar),
+           name_en = COALESCE($3, name_en),
+           courier_type = COALESCE($4, courier_type),
+           courier_level = COALESCE($5, courier_level),
+           commission_rate = COALESCE($6, commission_rate),
+           currency = COALESCE($7, currency),
+           is_active = COALESCE($8, is_active),
+           account_id = COALESCE($9, account_id),
+           updated_by = $10,
+           updated_at = NOW()
+         WHERE courier_id = $11
+         RETURNING courier_id AS "courierId", account_id AS "accountId", currency, is_active AS "isActive", full_name AS "fullName", name_ar AS "nameAr", name_en AS "nameEn", courier_type AS "courierType", courier_level AS "courierLevel", commission_rate AS "commissionRate", created_at AS "createdAt", updated_at AS "updatedAt"`,
+        [
+          input.fullName,
+          input.nameAr,
+          input.nameEn,
+          input.courierType,
+          input.courierLevel,
+          input.commissionRate,
+          input.currency,
+          input.isActive,
+          input.accountId,
+          input.actorId,
+          input.courierId,
+        ],
+      );
+      return result.rows[0] ?? null;
+    },
+    async deleteCourier(courierId) {
+      const result = await pool.query('DELETE FROM public.couriers WHERE courier_id = $1', [courierId]);
+      return (result.rowCount ?? 0) > 0;
+    },
+    async createEmployee(input) {
+      const employeeId = `emp_${crypto.randomUUID()}`;
+      const result = await pool.query(
+        `INSERT INTO public.employees (employee_id, account_id, monthly_salary, currency, full_name, name_ar, name_en, job_type, commission_rate, created_at, updated_at, created_by, updated_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW(), $10, $10)
+         RETURNING employee_id AS "employeeId", account_id AS "accountId", monthly_salary AS "monthlySalary", currency, full_name AS "fullName", name_ar AS "nameAr", name_en AS "nameEn", job_type AS "jobType", commission_rate AS "commissionRate", created_at AS "createdAt", updated_at AS "updatedAt"`,
+        [
+          employeeId,
+          input.accountId ?? null,
+          input.monthlySalary ?? 0,
+          input.currency ?? 'YER',
+          input.fullName,
+          input.nameAr ?? input.fullName,
+          input.nameEn ?? input.fullName,
+          input.jobType ?? null,
+          input.commissionRate ?? 0,
+          input.actorId,
+        ],
+      );
+      return result.rows[0];
+    },
+    async updateEmployee(input) {
+      const result = await pool.query(
+        `UPDATE public.employees SET
+           full_name = COALESCE($1, full_name),
+           name_ar = COALESCE($2, name_ar),
+           name_en = COALESCE($3, name_en),
+           job_type = COALESCE($4, job_type),
+           monthly_salary = COALESCE($5, monthly_salary),
+           commission_rate = COALESCE($6, commission_rate),
+           currency = COALESCE($7, currency),
+           account_id = COALESCE($8, account_id),
+           updated_by = $9,
+           updated_at = NOW()
+         WHERE employee_id = $10
+         RETURNING employee_id AS "employeeId", account_id AS "accountId", monthly_salary AS "monthlySalary", currency, full_name AS "fullName", name_ar AS "nameAr", name_en AS "nameEn", job_type AS "jobType", commission_rate AS "commissionRate", created_at AS "createdAt", updated_at AS "updatedAt"`,
+        [
+          input.fullName,
+          input.nameAr,
+          input.nameEn,
+          input.jobType,
+          input.monthlySalary,
+          input.commissionRate,
+          input.currency,
+          input.accountId,
+          input.actorId,
+          input.employeeId,
+        ],
+      );
+      return result.rows[0] ?? null;
+    },
+    async deleteEmployee(employeeId) {
+      const result = await pool.query('DELETE FROM public.employees WHERE employee_id = $1', [employeeId]);
+      return (result.rowCount ?? 0) > 0;
+    },
   };
 }
+

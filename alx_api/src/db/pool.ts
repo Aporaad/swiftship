@@ -38,7 +38,7 @@ export function createDatabaseConnection(options: DatabasePoolOptions): Database
           : { rejectUnauthorized: false },
     ...(options.runtimeRole ? { options: '-c role=alx_api_runtime' } : {}),
     max: options.maxConnections ?? 10,
-    connectionTimeoutMillis: options.connectionTimeoutMs ?? 5_000,
+    connectionTimeoutMillis: options.connectionTimeoutMs ?? 15_000,
     idleTimeoutMillis: options.idleTimeoutMs ?? 30_000,
   };
   const pool = new Pool(config);

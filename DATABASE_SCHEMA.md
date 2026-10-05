@@ -563,25 +563,25 @@ order_items {
   order_item_id: text                            -- PK
   order_id: text -> orders.order_id             -- FK للطلب
   product_id: text -> products.product_id       -- FK للمنتج
-  shipment_id: text -> shipments.shipment_id    -- FK للشحنة (مضاف migration 20261002023000)
+  shipment_id: text -> shipments.shipment_id    -- FK للشحنة 
   product_price: numeric
   product_url: text
   tracking_number: text
   produc_source_id: text
   produc_source_url: text
-  product_color: text                            -- (كان product_cooler — أعيدت التسمية في migration)
+  product_color: text                            
   nota: text
-  product_name: text                             -- (مضاف migration 20261002023000)
-  sku: text                                      -- (مضاف migration 20261002023000)
-  internal_note: text                            -- (مضاف migration 20261002023000)
-  customer_note: text                            -- (مضاف migration 20261002023000)
+  product_name: text                             
+  sku: text                                      
+  internal_note: text                            
+  customer_note: text                            
   quantity: integer
   total_price: numeric
   total__weight: numeric
-  unit__weight: numeric                          -- (مضاف migration 20261002023000)
+  unit__weight: numeric                          
   total_cbm: numeric
-  unit_cbm: numeric                              -- (مضاف migration 20261002023000)
-  total_packaging_price: numeric                 -- (مضاف migration 20261002023000)
+  unit_cbm: numeric                              
+  total_packaging_price: numeric                 
   packaging_option_id: text
   packaging_option_price: numeric
   is_insured: boolean

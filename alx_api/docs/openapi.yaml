@@ -784,19 +784,105 @@ paths:
               content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } },
             },
         }
-  /api/v1/finance/custody-advances:
-    get:
-      operationId: listCustodyAdvances
-      summary: List custody advances
+  /api/v1/operations/couriers:
+    post:
+      operationId: createCourier
+      summary: Create a courier
       security: [{ BearerAuth: [] }]
       responses:
-        {
-          '200':
-            {
-              description: Custody advances returned,
-              content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } },
-            },
-        }
+        '200':
+          content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } }
+  /api/v1/operations/couriers/{id}:
+    patch:
+      operationId: updateCourier
+      summary: Update a courier
+      security: [{ BearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200':
+          content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } }
+    delete:
+      operationId: deleteCourier
+      summary: Delete a courier
+      security: [{ BearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200':
+          content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } }
+  /api/v1/operations/employees:
+    post:
+      operationId: createEmployee
+      summary: Create an employee
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } }
+  /api/v1/operations/employees/{id}:
+    patch:
+      operationId: updateEmployee
+      summary: Update an employee
+      security: [{ BearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200':
+          content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } }
+    delete:
+      operationId: deleteEmployee
+      summary: Delete an employee
+      security: [{ BearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200':
+          content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } }
+  /api/v1/users:
+    get:
+      operationId: listUsers
+      summary: List system users
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } }
+    post:
+      operationId: createUser
+      summary: Create a system user
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } }
+  /api/v1/users/{id}:
+    get:
+      operationId: getUser
+      summary: Get user details
+      security: [{ BearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200':
+          content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } }
+    patch:
+      operationId: updateUser
+      summary: Update user details or disable status
+      security: [{ BearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200':
+          content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } }
+  /api/v1/users/{id}/roles:
+    get:
+      operationId: getUserRoles
+      summary: Get user assigned roles
+      security: [{ BearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200':
+          content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } }
+    post:
+      operationId: setUserRoles
+      summary: Assign or update user roles
+      security: [{ BearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200':
+          content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } }
 components:
   securitySchemes:
     BearerAuth:

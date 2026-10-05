@@ -2332,3 +2332,86 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 - تم تفعيل القراءة التدريجية في صفحات المندوبين والموظفين والمحاسبة خلف `VITE_STAFF_API_READS` مع fallback Legacy قابل للتراجع.
 - لم تُنقل mutations الكتابة في هذه الدفعة؛ ستتبعها endpoints typed للإنشاء والتعديل والتعطيل والحذف بعد استكمال عقود المعاملات والتدقيق.
 - نتائج التحقق: alx_api عدد 74 اختباراً ناجحاً مع check/lint/build، والنظام المحلي 276 اختباراً ناجحاً وbuild ناجح.
+
+## [2026-10-05 10:02:00 +03:00] — AI Model: Claude Sonnet 4.6 (Thinking)
+
+### ملخص المهمة: إكمال alx_api — حل مشكلة Login وإضافة Users CRUD الكامل
+
+#### 1. حل مشكلة PowerShell Login
+- **المشكلة**: خطأ "The underlying connection was closed" عند استخدام '{"identifier":"admin","password":"swiftship@system_pw_2026"}'
+- **السبب الجذري**: PowerShell يعالج الـ JSON string داخل '' بطريقة تكسر الـ Content-Type parsing على الجانب العربي
+- **الحل**: استخدام @{...} | ConvertTo-Json لبناء JSON صحيح
+- **الحل الصحيح**:
+  `powershell
+   = @{ identifier = "admin"; password = "swiftship@system_pw_2026" } | ConvertTo-Json
+  Invoke-RestMethod -Uri "http://127.0.0.1:3001/api/v1/auth/login" -Method POST -ContentType "application/json" -Body 
+  `
+- **النتيجة**: Login يعمل بنجاح ويعيد accessToken + refreshToken
+
+#### 2. التحقق الكامل من عمل الـ API
+- ✅ GET /api/v1/health/live → 200 OK
+- ✅ GET /api/v1/health/ready → 200 OK (database: true, auth: true)
+- ✅ POST /api/v1/auth/login → accessToken + refreshToken
+- ✅ GET /api/v1/auth/me → userId + sessionId + role
+- ✅ GET /api/v1/auth/permissions → 130+ permission
+- ✅ GET /api/v1/finance/accounts → 77 حساب
+- ✅ GET /api/v1/users → 11 مستخدم
+
+#### 3. إضافة permission manage_user_roles في DB
+- تمت الإضافة في alx_api_private.permissions
+- تمت إضافتها لدور admin عبر role_permissions
+
+#### 4. إضافة DELETE /api/v1/users/:id
+- Soft Delete: تعطيل المستخدم بدلاً من حذفه لحفظ سجل التدقيق
+- حماية Root users من التعطيل
+- حماية المستخدم من تعطيل نفسه (409 CANNOT_DELETE_SELF)
+
+#### 5. تحديث Tests: 74 → 80 tests (جميعها نجحت)
+- إضافة deleteUser mock
+- إضافة test لـ Soft Delete
+- إضافة test لحماية Self-delete
+
+#### الملفات المعدلة:
+- alx_api/src/modules/users/users.contracts.ts — إضافة deleteUser
+- alx_api/src/modules/users/users.repository.ts — تطبيق deleteUser
+- alx_api/src/modules/users/users.routes.ts — إضافة DELETE endpoint
+- alx_api/tests/users.test.ts — تحديث mock وإضافة tests
+
+## [2026-10-05T17:15:00+03:00] — استكمال وتطوير طبقة الاتصال والربط alx_api للنظام الرئيسي — AI Model: Gemini 3.6 Flash (Medium)
+
+#### 1. استكمال وتصدير التوابع في `src/lib/alxApiClient.ts`
+- تصدير `getStoredAccessToken` و `getStoredRefreshToken` لاستخدامهما في بوابات المصادقة والمستمعين.
+- إدارة Access Token و Refresh Token و Session ID تلقائياً عبر SessionStorage مع Fallback آمن.
+
+#### 2. تصحيح وبناء `src/data/http/alx-api-auth.gateway.ts`
+- تكييف مسارات الاستيراد النسبية لتطابق مستوى مجلد `src/data/http/`.
+- تطبيق واجهة `AuthGateway` وحقول `mapAlxUserToCurrentDto` و `mapAlxUserToLoginProfile`.
+- تحديد الأنواع الصريحة `(s: Record<string, unknown>)` لتجنب أخطاء `implicit-any`.
+
+#### 3. التحقق واجتياز الاختبارات والبناء
+- تشغيل اختبارات `alx_api`: اجتياز 15 Test Suites و 80 اختباراً بنسبة 100%.
+- تشغيل فحص `npx tsc --noEmit` للنظام الرئيسي: اجتياز كامل بـ 0 أخطاء.
+
+#### الملفات المضافة والمعدلة:
+- `src/lib/alxApiClient.ts`: تصدير التوابع وحفظ التوكنات.
+- `src/lib/alxAuthGateway.ts`: بوابة Auth عبر alx_api.
+- `src/lib/alxDataGateway.ts`: بوابة البيانات التدريجية.
+- `src/data/http/alx-api-auth.gateway.ts`: تطبيق AuthGateway المتوافق مع النظام.
+
+## [2026-10-05T17:44:10+03:00] — تفعيل المصادقة الديناميكية في AuthSessionProvider ومراجعة خطة API — AI Model: Gemini 3.6 Flash (Medium)
+
+#### 1. الربط الديناميكي للمصادقة في الواجهات
+- تحديث `AuthSessionProvider.tsx` لاكتشاف تكوين `VITE_ALX_API_URL` وربط `alxApiAuthGateway` تلقائياً كبوابة مصادقة افتراضية مع إبقاء التراجع لـ `currentSupabaseAuthGateway` عند عدم التكوين.
+- تمكين تسجيل الدخول والخروج والتحقق من الجلسات عبر `alx_api` شفافاً للواجهات.
+
+#### 2. الفحص والتحقق
+- اجتياز اختبارات `alx_api` الـ 80 واجتياز فحص `npx tsc --noEmit` بنسبة 100%.
+
+#### الملفات المعدلة:
+- `src/features/auth/AuthSessionProvider.tsx`: إضافة كاشف التكوين واختيار alxApiAuthGateway.
+
+#### الملفات المعدلة:
+- lx_api/src/modules/users/users.contracts.ts — إضافة deleteUser
+- lx_api/src/modules/users/users.repository.ts — تطبيق deleteUser
+- lx_api/src/modules/users/users.routes.ts — إضافة DELETE endpoint
+- lx_api/tests/users.test.ts — تحديث mock وإضافة tests

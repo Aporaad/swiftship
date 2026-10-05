@@ -17,6 +17,12 @@ import { registerFinanceRoutes } from './modules/finance/finance.routes';
 import type { FinanceRepository } from './modules/finance/finance.contracts';
 import { registerReportingRoutes } from './modules/reporting/reporting.routes';
 import type { ReportingRepository } from './modules/reporting/reporting.contracts';
+import { registerUsersRoutes } from './modules/users/users.routes';
+import type { UsersRepository } from './modules/users/users.contracts';
+import { registerNotificationsRoutes } from './modules/notifications/notifications.routes';
+import type { NotificationsRepository } from './modules/notifications/notifications.contracts';
+import { registerPortalRoutes } from './modules/portal/portal.routes';
+import type { PortalRepository } from './modules/portal/portal.contracts';
 
 export interface ApiReadiness {
   database: boolean;
@@ -31,6 +37,9 @@ export interface AppOptions {
   operations?: OperationsRepository;
   finance?: FinanceRepository;
   reporting?: ReportingRepository;
+  users?: UsersRepository;
+  notifications?: NotificationsRepository;
+  portal?: PortalRepository;
 }
 
 export function createApiApp(options: AppOptions): Express {
@@ -109,6 +118,11 @@ export function createApiApp(options: AppOptions): Express {
   if (options.operations) registerOperationsRoutes(app, environment, options.auth, options.operations);
   if (options.finance) registerFinanceRoutes(app, environment, options.auth, options.finance);
   if (options.reporting) registerReportingRoutes(app, environment, options.auth, options.reporting);
+  if (options.users) registerUsersRoutes(app, environment, options.auth, options.users);
+  // تفعيل وحدة الإشعارات — Activate notifications module
+  if (options.notifications) registerNotificationsRoutes(app, environment, options.auth, options.notifications);
+  // تفعيل وحدة البوابة العامة — Activate public portal module
+  if (options.portal) registerPortalRoutes(app, environment, options.portal);
 
   app.use('/api/v1', (_request, response) => {
     sendFailure(response, 404, 'ROUTE_NOT_FOUND', 'المسار المطلوب غير موجود.', String(response.locals.requestId));
@@ -123,7 +137,12 @@ export function createApiApp(options: AppOptions): Express {
       return sendFailure(response, 400, 'INVALID_JSON', 'تعذر تحليل جسم الطلب.', requestId);
     }
     const errorName = error instanceof Error ? error.name : 'UnknownError';
-    request.log?.error({ errorName, requestId }, 'Unhandled HTTP error');
+    // تسجيل تفاصيل الخطأ في التطوير لأغراض التشخيص - لا تُضمَّن في إجابة العميل
+    // Log full error details in dev only - never returned to client
+    const devDetail = environment.nodeEnv !== 'production' && error instanceof Error
+      ? { errorName, errorMessage: error.message, requestId }
+      : { errorName, requestId };
+    request.log?.error(devDetail, 'Unhandled HTTP error');
     return sendFailure(response, 500, 'INTERNAL_ERROR', 'حدث خطأ داخلي.', requestId);
   };
   app.use(errorHandler);

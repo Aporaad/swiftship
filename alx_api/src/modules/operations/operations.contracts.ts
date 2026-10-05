@@ -12,6 +12,12 @@ export interface OperationsRepository {
   createProduct(input: CreateProductInput): Promise<Record<string, unknown>>;
   updateProduct(input: UpdateProductInput): Promise<Record<string, unknown> | null>;
   updateShipment(input: UpdateShipmentInput): Promise<Record<string, unknown> | null>;
+  createCourier(input: CreateCourierInput): Promise<Record<string, unknown>>;
+  updateCourier(input: UpdateCourierInput): Promise<Record<string, unknown> | null>;
+  deleteCourier(courierId: string): Promise<boolean>;
+  createEmployee(input: CreateEmployeeInput): Promise<Record<string, unknown>>;
+  updateEmployee(input: UpdateEmployeeInput): Promise<Record<string, unknown> | null>;
+  deleteEmployee(employeeId: string): Promise<boolean>;
 }
 export interface PageQuery {
   limit: number;
@@ -21,6 +27,58 @@ export interface PageQuery {
 export interface PageResult<T> {
   items: readonly T[];
   total: number;
+}
+
+export interface CreateCourierInput {
+  fullName: string;
+  nameAr?: string | undefined;
+  nameEn?: string | undefined;
+  courierType?: string | undefined;
+  courierLevel?: string | undefined;
+  commissionRate?: number | undefined;
+  currency?: string | undefined;
+  isActive?: boolean | undefined;
+  accountId?: string | undefined;
+  actorId: string;
+}
+
+export interface UpdateCourierInput {
+  courierId: string;
+  fullName?: string | undefined;
+  nameAr?: string | undefined;
+  nameEn?: string | undefined;
+  courierType?: string | undefined;
+  courierLevel?: string | undefined;
+  commissionRate?: number | undefined;
+  currency?: string | undefined;
+  isActive?: boolean | undefined;
+  accountId?: string | undefined;
+  actorId: string;
+}
+
+export interface CreateEmployeeInput {
+  fullName: string;
+  nameAr?: string | undefined;
+  nameEn?: string | undefined;
+  jobType?: string | undefined;
+  monthlySalary?: number | undefined;
+  commissionRate?: number | undefined;
+  currency?: string | undefined;
+  accountId?: string | undefined;
+  actorId: string;
+}
+
+export interface UpdateEmployeeInput {
+  employeeId: string;
+  fullName?: string | undefined;
+  nameAr?: string | undefined;
+  nameEn?: string | undefined;
+  jobType?: string | undefined;
+  monthlySalary?: number | undefined;
+  commissionRate?: number | undefined;
+  currency?: string | undefined;
+  accountId?: string | undefined;
+  actorId: string;
 }
 
 export interface CreateOrderInput {

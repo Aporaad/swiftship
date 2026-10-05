@@ -31,6 +31,12 @@ const repository: OperationsRepository = {
   createProduct: jest.fn(),
   updateProduct: jest.fn(),
   updateShipment: jest.fn(),
+  createCourier: jest.fn(),
+  updateCourier: jest.fn(),
+  deleteCourier: jest.fn(),
+  createEmployee: jest.fn(),
+  updateEmployee: jest.fn(),
+  deleteEmployee: jest.fn(),
 };
 describe('Orders, Shipments/Tracking and Products HTTP boundaries', () => {
   it('denies Orders without view_orders', async () => {

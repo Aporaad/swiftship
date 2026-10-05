@@ -64,3 +64,29 @@ export const productInputSchema = z.object({
   weight: money.optional(),
 });
 export const updateShipmentInputSchema = shipmentInputSchema.extend({});
+
+export const createCourierSchema = z.object({
+  fullName: z.string().trim().min(1).max(255),
+  nameAr: optionalText,
+  nameEn: optionalText,
+  courierType: optionalText,
+  courierLevel: optionalText,
+  commissionRate: money.optional(),
+  currency: optionalText,
+  isActive: z.boolean().optional(),
+  accountId: optionalText,
+});
+export const updateCourierSchema = createCourierSchema.partial();
+
+export const createEmployeeSchema = z.object({
+  fullName: z.string().trim().min(1).max(255),
+  nameAr: optionalText,
+  nameEn: optionalText,
+  jobType: optionalText,
+  monthlySalary: money.optional(),
+  commissionRate: money.optional(),
+  currency: optionalText,
+  accountId: optionalText,
+});
+export const updateEmployeeSchema = createEmployeeSchema.partial();
+

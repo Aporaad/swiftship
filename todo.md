@@ -1768,3 +1768,38 @@
 - [ ] إضافة endpoints الكتابة للمندوبين والموظفين وربط الحساب المالي مع audit وRBAC.
 - [ ] نقل تفاصيل وكشوف حركات المندوبين والموظفين من Legacy إلى API.
 - [ ] نقل واجهات Users/Roles ثم Notifications/Integrations، وبعدها تنفيذ hardening والإطلاق.
+
+## [2026-10-05T09:33:53+03:00] — حل مشكلة Auth Login وإنشاء عقود وإندبوينت المندوبين والموظفين والمستخدمين وإدارة الأدوار — AI Model: Gemini 3.6 Flash
+- [x] تشخيص خطأ `$body = '{"identifier":"admin","password":"swiftship@system_pw_2026"}'` في `Invoke-WebRequest`: تم اكتشاف وجود علامتي اقتباس مزدوجتين إضافيتين `""` في نهاية مفاتيح `JWT_PUBLIC_KEY_PEM` و `JWT_PRIVATE_KEY_PEM` في ملف `.env` مما كان يسبب فشل معالجة المفتاح Ed25519، وتحديث مهلة اتصال قاعدة البيانات `connectionTimeoutMillis` إلى 15,000ms لضمان الاستقرار مع Supabase pooler البعيد.
+- [x] اختبار عملية التسجيل والدخول الفعلي (Real Auth Login) بنجاح كامل وحصول العميل على التوكن المعتمد `accessToken` و `refreshToken` بنجاح واستجابة 200 OK.
+- [x] إنشاء واجهات وإندبوينت الكتابة للمندوبين (Couriers) في وحدة العمليات: `POST /api/v1/operations/couriers` و `PATCH /api/v1/operations/couriers/:id` و `DELETE /api/v1/operations/couriers/:id`.
+- [x] إنشاء واجهات وإندبوينت الكتابة للموظفين (Employees) في وحدة العمليات: `POST /api/v1/operations/employees` و `PATCH /api/v1/operations/employees/:id` و `DELETE /api/v1/operations/employees/:id`.
+- [x] إنشاء وحدة إدارة المستخدمين والأدوار بالكامل (`src/modules/users/`):
+  - `GET /api/v1/users`: قائمة المستخدمين مع التصفح والبحث.
+  - `GET /api/v1/users/:id`: تفاصيل المستخدم.
+  - `POST /api/v1/users`: إضافة مستخدم جديد.
+  - `PATCH /api/v1/users/:id`: تعديل بيانات المستخدم أو تعطيل/تفعيل الحساب.
+  - `GET /api/v1/users/:id/roles`: عرض الأدوار المسندة للمستخدم.
+  - `POST /api/v1/users/:id/roles`: تعديل وإسناد الأدوار للمستخدم بحسب RBAC.
+- [x] كتابة مجموعة اختبارات وحدة متكاملة لـ Users HTTP API (`tests/users.test.ts`).
+- [x] تحديث توثيق العقود الشامل `docs/openapi.yaml` بجميع المسارات الجديدة وإجراءات OpenAPI 3.1.
+- [x] اجتياز جميع الفحوصات بنجاح كامل: `npm run check` (TypeScript 0 errors)، و `npm test` (15 test suites passed / 78 tests passed).
+
+
+## [2026-10-05T17:15:00+03:00] — استكمال إنشاء بوابة المصادقة وتكامل alx_api مع النظام الرئيسي — AI Model: Gemini 3.6 Flash (Medium)
+- [x] إنشاء واستكمال ملفات الربط والـ Gateways للعميل في النظام الرئيسي:
+  - `src/lib/alxApiClient.ts`: عميل HTTP موحد مع Token Management وتصدير التوابع `getStoredAccessToken` و `getStoredRefreshToken`.
+  - `src/lib/alxAuthGateway.ts`: بوابة المصادقة alx_api مع دعم Argon2id وتخزين التوكنات وتوفير fallback.
+  - `src/lib/alxDataGateway.ts`: بوابة البيانات الموحدة للترحيل التدريجي.
+  - `src/data/http/alx-api-auth.gateway.ts`: تطبيق AuthGateway المتوافق تماماً مع عقود النظام الأصلي.
+- [x] تصحيح مسارات الاستيراد النسبية والأنواع الصريحة للمعاملات لضمان التوافق مع TypeScript.
+- [x] اجتياز جميع اختبارات alx_api بنجاح كامل: 15 Test Suites passed (80/80 tests passed).
+- [x] اجتياز فحص الأنواع الصارم `npx tsc --noEmit` بنجاح كامل في SWIFTSHIP_SYSTEM بدون أي خطأ.
+
+## [2026-10-05T17:44:10+03:00] — ربط بوابة المصادقة alxApiAuthGateway بالـ UI وتدقيق حالة الخطة الشاملة — AI Model: Gemini 3.6 Flash (Medium)
+- [x] إجراء مراجعة شاملة لتقرير حالة خطة إنشاء الـ API ومطابقتها مع المخرجات البرمجية الحالية في `alx_api` و `SWIFTSHIP_SYSTEM` و `alx_web`.
+- [x] تحديث `AuthSessionProvider.tsx` لاختيار `alxApiAuthGateway` تلقائياً عند ضبط متغير البيئة `VITE_ALX_API_URL` / `ALX_API_URL`.
+- [x] اجتياز فحص TypeScript `npx tsc --noEmit` للنظام الرئيسي بنجاح كامل بدون أية أخطاء.
+
+
+

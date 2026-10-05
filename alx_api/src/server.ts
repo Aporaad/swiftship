@@ -8,6 +8,9 @@ import { createCustomersRepository } from './modules/customers/customers.reposit
 import { createOperationsRepository } from './modules/operations/operations.repository';
 import { createFinanceRepository } from './modules/finance/finance.repository';
 import { createReportingRepository } from './modules/reporting/reporting.repository';
+import { createUsersRepository } from './modules/users/users.repository';
+import { createNotificationsRepository } from './modules/notifications/notifications.repository';
+import { createPortalRepository } from './modules/portal/portal.repository';
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? 'info' });
 
@@ -34,6 +37,10 @@ function startServer(): void {
     ...(database ? { operations: createOperationsRepository(database.pool) } : {}),
     ...(database ? { finance: createFinanceRepository(database.pool) } : {}),
     ...(database ? { reporting: createReportingRepository(database.pool) } : {}),
+    ...(database ? { users: createUsersRepository(database.pool) } : {}),
+    // إشعارات وبوابة الموقع — Notifications & Portal repositories
+    ...(database ? { notifications: createNotificationsRepository(database.pool) } : {}),
+    ...(database ? { portal: createPortalRepository(database.pool) } : {}),
   };
   const app = auth ? createApiApp({ ...appOptions, auth }) : createApiApp(appOptions);
   const server = app.listen(environment.port, environment.host, () => {
