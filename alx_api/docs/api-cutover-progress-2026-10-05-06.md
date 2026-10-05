@@ -94,3 +94,6 @@
 - تطبيق provisioning يتطلب تشغيل `AUTH_PASSWORD_CHANGES_ENABLED=true` مع `LEGACY_PASSWORD_AUTH_ENABLED=false` وتوصيل PasswordResetDelivery فعلي؛ بدون ذلك يرفض API العملية بأمان ولا يضع credential مؤقتًا.
 - طُبقت migration `roles_api_runtime_write_0011` لمنح أقل صلاحيات Runtime اللازمة للكتابة مع RLS policies.
 - التحقق: TypeScript check وbuild وESLint للوحدات المعدلة نجحت. اختبار Jest `tests/roles.test.ts` اصطدم بـ `Segmentation fault` من بيئة Jest قبل إظهار النتائج، كما حدث في جولات سابقة.
+
+## [2026-10-05T22:22:05+03:00] — Provisioning Error Hardening
+- أصبحت أخطاء `AuthServiceError` في provisioning تُعاد كـ HTTP status آمن (مثل 503) بدل تحويلها إلى 500، مع عدم إرجاع password أو PIN أو reset token.

@@ -2479,3 +2479,7 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 - رُبطت RolesPage ببوابة API خلف `VITE_ROLES_API_READS` و`VITE_ROLES_API_WRITES` مع fallback Legacy.
 - أضيف مسار `POST /api/v1/users/provision` لا يستقبل password أو PIN؛ ينشئ profile ثم يطلق password-reset invitation أحادي الاستخدام عبر `PasswordResetDelivery`، ويعطل الحساب إذا فشل التسليم.
 - أضيفت اختبارات حدود Roles والصلاحيات.
+
+## [2026-10-05T22:22:05+03:00] — AI Model: Manus
+- صُحح مسار provisioning ليحوّل `AuthServiceError` إلى استجابة API آمنة (`503` مع code/message المسموحين) بدل `500` عام، مع استمرار تعطيل profile إذا فشل تسليم الدعوة.
+- نجح TypeScript check وbuild وESLint قبل الرفع.
