@@ -1276,3 +1276,9 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 - لم يتم تنفيذ migration أو DDL أو DML جديد.
 - تستخدم Reports endpoints القراءة الموجودة للطلبات والعملاء والحسابات والقيود والحركات.
 - بقيت مصادر البيانات التي لا تملك API contract مستقلاً على Legacy ولم يتم تغيير مخططها.
+
+## [2026-10-05 01:53:21 +0000] — فحص مخطط قاعدة البيانات لعقود Reports وDashboard — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- تم تنفيذ استعلامات قراءة فقط على `information_schema.columns` في مشروع SwiftShip لتثبيت أعمدة `couriers`, `sources`, `shipping_companies`, `users`, `activity_logs`, `report_templates`, `account_trans`, `main_entry`, و`accounts`.
+- ثبت أن `public.expenses` غير موجودة في المخطط الحالي بعد migration الحذف؛ لذلك لم تتم إضافة جدول بديل ولم يتم تنفيذ DDL.
+- تم بناء عقد المصروفات كتقرير مشتق من القيود المرحّلة، مع استبعاد كلمات المرور وبيانات الأسرار من عقد المستخدمين.
+- لم يتم تعديل أي سجل أو تطبيق migration في قاعدة البيانات خلال هذه المرحلة.

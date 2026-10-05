@@ -1749,3 +1749,12 @@
 - [ ] إضافة endpoints مستقلة لتقارير المصروفات والمندوبين والمصادر وشركات الشحن.
 - [ ] إزالة Legacy imports من ReportsPage بعد اكتمال تغطية API والاختبار المقارن.
 - [ ] بدء نقل Dashboard بعد تثبيت Reports cutover.
+
+## [2026-10-05 01:53:21 +0000] — اكتمال عقود Reports ونقل Dashboard — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- [x] إضافة API contracts للمصروفات والمندوبين والمصادر وشركات الشحن.
+- [x] إضافة عقود مساندة للمستخدمين وسجل النشاط وقوالب التقارير اللازمة لإزالة Legacy من Reports.
+- [x] إزالة Legacy imports وقراءات Legacy من ReportsPage؛ تم إبقاء تفضيلات العرض المحلية في localStorage فقط.
+- [x] إضافة `dashboardApiGateway` وتفعيل `VITE_DASHBOARD_API_READS=true` في `.env.example`.
+- [x] نجاح check وlint و276 اختباراً وbuild للنظام المحلي، وcheck/lint و74 اختباراً وbuild لـ alx_api.
+- [ ] اختبار التشغيل الفعلي بحساب API موثق مع DATABASE_URL والتحقق من صلاحيات `view_*` في بيئة staging.
+- [ ] نقل عمليات الكتابة لواجهات الكيانات الأربع بعد اعتماد contracts الكتابة واختبار PostgreSQL الفعلي.

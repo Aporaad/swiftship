@@ -2316,3 +2316,12 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 - أضيف fallback عملي: فشل API لا يمنع Reports من الاحتفاظ ببيانات Legacy الحالية، ويُسجل الخطأ فقط.
 - تم تصحيح Finance read gateway ليتعامل مع `data` كمصفوفة وفق response contract الحالي، وليس `data.items` فقط.
 - نتائج التحقق: TypeScript وlint ناجحان، الاختبارات المستهدفة 13/13 ناجحة، وbuild ناجح مع تحذيرات bundle موجودة مسبقاً غير مانعة.
+
+## [2026-10-05 01:53:21 +0000] — استكمال Reporting API ونقل Reports وDashboard — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- أضيفت وحدة `alx_api/src/modules/reporting` بعقود وRepository ومسارات مستقلة للمصروفات والمندوبين والمصادر وشركات الشحن.
+- أضيفت عقود قراءة المستخدمين وسجل النشاط وقوالب التقارير اللازمة لإزالة مصدر Legacy من Reports UI.
+- لأن جدول `public.expenses` غير موجود في قاعدة SwiftShip الحالية، أصبح `/api/v1/reporting/expenses` إسقاطاً read-only من `main_entry + account_trans + accounts` للقيود المالية، بدون إعادة إنشاء جدول محذوف.
+- أزيلت جميع استيرادات وقراءات Legacy من `ReportsPage.tsx`؛ بيانات الأعمال تأتي من API، وإعدادات العرض والقوالب المحلية تستخدم `localStorage`.
+- أضيف `dashboardApiGateway.ts` وتفعيل القراءة التدريجية خلف `VITE_DASHBOARD_API_READS=true` مع إبقاء fallback القديم عند تعطيل العلم.
+- أضيفت قراءة المصروفات إلى Dashboard API لعرض العدد الحقيقي بدلاً من القيمة الثابتة.
+- نتائج التحقق: النظام المحلي 276 اختباراً ناجحاً وbuild ناجح؛ alx_api عدد 74 اختباراً ناجحاً وcheck/lint/build ناجحة.

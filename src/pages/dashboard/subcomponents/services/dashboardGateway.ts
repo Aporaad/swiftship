@@ -1,65 +1,107 @@
 type AdapterDocument = { id: string; data: () => Record<string, unknown> };
-import { collection, onSnapshot, query, orderBy, limit } from '../../../../data/legacy/legacy-compat.ts';
-import { db, safeToDate } from '../../../../data/legacy/legacy-compat.ts';
+import {
+  collection,
+  onSnapshot,
+  query,
+  orderBy,
+  limit,
+} from "../../../../data/legacy/legacy-compat.ts";
+import { db, safeToDate } from "../../../../data/legacy/legacy-compat.ts";
+import { subscribeDashboardApiData } from "./dashboardApiGateway";
 
 type DashboardGatewayHandlers = {
   setCustomersCount: (count: number) => void;
-  setCouriers: (couriers: Array<Record<string, unknown> & { id: string }>) => void;
+  setCouriers: (
+    couriers: Array<Record<string, unknown> & { id: string }>
+  ) => void;
   setCouriersCount: (count: number) => void;
   setOrders: (orders: Array<Record<string, unknown> & { id: string }>) => void;
   setRealLogs: (logs: Array<Record<string, unknown> & { id: string }>) => void;
-  setFinancialAccounts: (accounts: Array<Record<string, unknown> & { id: string }>) => void;
+  setFinancialAccounts: (
+    accounts: Array<Record<string, unknown> & { id: string }>
+  ) => void;
+  setExpensesCount: (count: number) => void;
   setLoading: (loading: boolean) => void;
 };
 
-export function subscribeDashboardData(handlers: DashboardGatewayHandlers): () => void {
-  const unsubCustomers = onSnapshot(collection(db, 'customers'), (snap) => {
+export function subscribeDashboardData(
+  handlers: DashboardGatewayHandlers
+): () => void {
+  if (import.meta.env.VITE_DASHBOARD_API_READS === "true") {
+    return subscribeDashboardApiData(handlers);
+  }
+  const unsubCustomers = onSnapshot(collection(db, "customers"), snap => {
     handlers.setCustomersCount(snap.docs.length);
   });
 
-  const unsubCouriers = onSnapshot(collection(db, 'couriers'), (snap) => {
+  const unsubCouriers = onSnapshot(collection(db, "couriers"), snap => {
     handlers.setCouriersCount(snap.docs.length);
-    const list = snap.docs.map((doc: AdapterDocument) => ({ id: doc.id, ...doc.data() }));
+    const list = snap.docs.map((doc: AdapterDocument) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
     handlers.setCouriers(list);
   });
 
-  const qOrders = query(collection(db, 'orders'), orderBy('createdAt', 'desc'), limit(150));
-  const unsubOrders = onSnapshot(qOrders, (snap) => {
-    const allOrders = snap.docs.map((doc: AdapterDocument) => {
-      const d = doc.data();
-      return {
-        id: doc.id,
-        ...d,
-        createdAt: safeToDate(d.createdAt),
-      };
-    });
-    handlers.setOrders(allOrders);
-    handlers.setLoading(false);
-  }, (err) => {
-    console.error(err);
-    handlers.setLoading(false);
-  });
+  const qOrders = query(
+    collection(db, "orders"),
+    orderBy("createdAt", "desc"),
+    limit(150)
+  );
+  const unsubOrders = onSnapshot(
+    qOrders,
+    snap => {
+      const allOrders = snap.docs.map((doc: AdapterDocument) => {
+        const d = doc.data();
+        return {
+          id: doc.id,
+          ...d,
+          createdAt: safeToDate(d.createdAt),
+        };
+      });
+      handlers.setOrders(allOrders);
+      handlers.setLoading(false);
+    },
+    err => {
+      console.error(err);
+      handlers.setLoading(false);
+    }
+  );
 
-  const qLogs = query(collection(db, 'activity_logs'), orderBy('timestamp', 'desc'), limit(5));
-  const unsubLogs = onSnapshot(qLogs, (snap) => {
-    const logs = snap.docs.map((doc: AdapterDocument) => {
-      const d = doc.data();
-      return {
-        id: doc.id,
-        ...d,
-        createdAt: safeToDate(d.timestamp),
-      };
-    });
-    handlers.setRealLogs(logs);
-  }, (err) => {
-    console.warn('Activity logs subscript error (expected first run):', err);
-  });
+  const qLogs = query(
+    collection(db, "activity_logs"),
+    orderBy("timestamp", "desc"),
+    limit(5)
+  );
+  const unsubLogs = onSnapshot(
+    qLogs,
+    snap => {
+      const logs = snap.docs.map((doc: AdapterDocument) => {
+        const d = doc.data();
+        return {
+          id: doc.id,
+          ...d,
+          createdAt: safeToDate(d.timestamp),
+        };
+      });
+      handlers.setRealLogs(logs);
+    },
+    err => {
+      console.warn("Activity logs subscript error (expected first run):", err);
+    }
+  );
 
-  const unsubAccounts = onSnapshot(collection(db, 'accounts'), (snap) => {
-    handlers.setFinancialAccounts(snap.docs.map((doc: AdapterDocument) => ({ id: doc.id, ...doc.data() })));
-  }, (err) => {
-    console.warn('Accounts subscript error:', err);
-  });
+  const unsubAccounts = onSnapshot(
+    collection(db, "accounts"),
+    snap => {
+      handlers.setFinancialAccounts(
+        snap.docs.map((doc: AdapterDocument) => ({ id: doc.id, ...doc.data() }))
+      );
+    },
+    err => {
+      console.warn("Accounts subscript error:", err);
+    }
+  );
 
   return () => {
     unsubCustomers();

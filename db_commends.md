@@ -2159,3 +2159,24 @@ ORDER BY table_name LIMIT 10;
 ## [2026-10-05 01:07:02 +0000] — أوامر قاعدة البيانات الخاصة ببدء Reports API — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
 - لم يُنفذ أي SQL جديد على قاعدة البيانات.
 - لم تُطبق migrations؛ القراءة تمر عبر endpoints API القائمة فقط.
+
+## [2026-10-05 01:53:21 +0000] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- تم تنفيذ استعلام SQL قراءة فقط على قاعدة SwiftShip الأساسية:
+```sql
+SELECT table_name, column_name, data_type
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name IN ('expenses','couriers','sources','shipping_companies','users','activity_logs','report_templates')
+ORDER BY table_name, ordinal_position
+LIMIT 200;
+```
+- تم تنفيذ استعلام SQL قراءة فقط ثانٍ:
+```sql
+SELECT table_name, column_name, data_type
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name IN ('account_trans','main_entry','accounts')
+ORDER BY table_name, ordinal_position
+LIMIT 180;
+```
+- لا توجد أوامر DML/DDL أو تغييرات بيانات منفذة في هذه المرحلة.

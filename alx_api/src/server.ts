@@ -7,6 +7,7 @@ import { createAuthUseCases } from './modules/auth/auth.factory';
 import { createCustomersRepository } from './modules/customers/customers.repository';
 import { createOperationsRepository } from './modules/operations/operations.repository';
 import { createFinanceRepository } from './modules/finance/finance.repository';
+import { createReportingRepository } from './modules/reporting/reporting.repository';
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? 'info' });
 
@@ -32,6 +33,7 @@ function startServer(): void {
     ...(database ? { customers: createCustomersRepository(database.pool) } : {}),
     ...(database ? { operations: createOperationsRepository(database.pool) } : {}),
     ...(database ? { finance: createFinanceRepository(database.pool) } : {}),
+    ...(database ? { reporting: createReportingRepository(database.pool) } : {}),
   };
   const app = auth ? createApiApp({ ...appOptions, auth }) : createApiApp(appOptions);
   const server = app.listen(environment.port, environment.host, () => {
