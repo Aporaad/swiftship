@@ -1925,3 +1925,11 @@
 - [ ] تنفيذ PostgreSQL smoke test بحساب API runtime وربط `alx_web` بـ Portal Auth.
 - [ ] نقل Portal profile/tickets/orders ثم إغلاق Legacy boundary تدريجياً.
 - [ ] معالجة ثغرات dependency audit، ثم backup/restore وload/security tests وproduction monitoring.
+
+## [2026-10-06 01:12:40 +0000] — نقل Portal Auth للواجهة — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- [x] استنساخ `Aporaad/alx_web` وتثبيت رابط submodule الرسمي.
+- [x] نقل login وrefresh وlogout وme وتغيير كلمة المرور إلى `alx_api` خلف `VITE_PORTAL_AUTH_API_ENABLED`.
+- [x] إضافة اختبارات Portal Auth Gateway وتشغيل boundary audit.
+- [x] رفع `alx_web` commit `9049714`.
+- [ ] نقل Portal registration وprofile/entity writes بعد توفير عقود الكتابة في alx_api.
+- [ ] تطبيق migration 0013 واختبار PostgreSQL الفعلي بحساب API runtime.

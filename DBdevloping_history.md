@@ -1354,3 +1354,7 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 - لم يتم تنفيذ SQL أو DDL أو DML جديد في هذه الدفعة.
 - migration `0013_portal_auth_private_storage.sql` موجودة في المستودع ولم تُطبق على قاعدة البيانات؛ يلزم تطبيقها بعد backup واختبار RLS/grants بحساب `alx_api_runtime`.
 - تم تثبيت أن تشغيل مفاتيح JWT يجب أن يكون من متغيرات البيئة، وأزيلت ملفات PEM من Git الحالي؛ يلزم تدوير المفاتيح التي ظهرت في التاريخ السابق قبل الإنتاج.
+
+## [2026-10-06 01:12:40 +0000] — تكامل Portal Auth دون تعديل قاعدة البيانات — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- لم يتم تطبيق migration أو تنفيذ SQL جديد.
+- تم ربط `alx_web` بعقود Portal Auth API فقط، مع إبقاء التسجيل وكتابات الكيانات خارج النقل حتى تكتمل عقودها.

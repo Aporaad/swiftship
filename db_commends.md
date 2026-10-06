@@ -2251,3 +2251,6 @@ GRANT SELECT, INSERT, DELETE ON alx_api_private.role_permissions TO alx_api_runt
 ## [2026-10-06 00:58:30 +0000] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
 - لم يتم تنفيذ أي SQL أو DDL أو DML أو migration على قاعدة البيانات في هذه الدفعة.
 - تمت مراجعة ملفات migrations والتقارير فقط، مع توثيق أن migration `0013_portal_auth_private_storage.sql` ما زالت تنتظر تطبيقاً منفصلاً بعد backup واختبار PostgreSQL.
+
+## [2026-10-06 01:12:40 +0000] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- لم يتم تنفيذ أي SQL أو DDL أو DML في هذه الدفعة؛ تم تعديل تكامل الواجهة فقط.

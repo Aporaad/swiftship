@@ -2538,3 +2538,10 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 - تم إعداد تقرير عربي محدث لخطة التنفيذ والمراحل المتبقية في `alx_api/docs/api-review-2026-10-06_ar.md`.
 - نتائج التحقق: alx_api نجح في 20 Test Suites و133 Tests، والنظام المحلي نجح في 276 Tests مع check/lint/build.
 - ما زالت ثغرات root dependency audit بحاجة إلى معالجة مراجعة، ولم يتم تشغيل `npm audit fix` تلقائياً.
+
+## [2026-10-06 01:12:40 +0000] — نقل Portal Auth إلى alx_api — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- تم استنساخ مستودع `Aporaad/alx_web` بعد تأكيد المستخدم، وتثبيت رابط submodule الرسمي في `.gitmodules`.
+- تم إنشاء `src/api/portalAuthGateway.ts` في `alx_web` لعمليات login وrefresh وlogout وme وتغيير كلمة المرور، مع تخزين session tokens في `sessionStorage` فقط.
+- تم توصيل `PortalAuthContext` بالبوابة الجديدة خلف `VITE_PORTAL_AUTH_API_ENABLED`، مع إبقاء التسجيل وتحديث بيانات الكيانات على Legacy مؤقتاً لأن عقود Portal write المقابلة لم تكتمل في `alx_api`.
+- تم إضافة اختبارات Gateway؛ نجحت اختبارات alx_web وعددها 7 اختبارات، ونجح TypeScript وPortal boundary audit.
+- تم رفع commit `9049714 feat(auth): route portal auth through alx api` إلى مستودع `Aporaad/alx_web`.
