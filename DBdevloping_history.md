@@ -1339,3 +1339,8 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 - لم تُنفذ أي أوامر SQL أو migrations أو تغييرات على قاعدة البيانات في هذه المرحلة.
 - أُنشئت خطة rollback واستعادة تشترط backup واختبار PostgreSQL مستقل قبل أي migration إنتاجية.
 - بقيت نتائج migrations السابقة كما هي دون تعديل.
+
+## [2026-10-06T03:06:30+03:00] — AI Model: Manus
+- أُنشئ ملف migration جديد `0013_portal_auth_private_storage.sql` لإنشاء `portal_credentials` و`portal_sessions` و`portal_refresh_tokens` و`portal_auth_events` داخل `alx_api_private`.
+- يفرض التصميم Argon2id فقط، وRLS وgrants للدور `alx_api_runtime`، ولا يمنح الواجهة أو الأدوار العامة صلاحية الوصول.
+- لم تُطبق migration على قاعدة البيانات بعد؛ سيجري تطبيقها فقط بعد اكتمال Repository والمسارات واختبار PostgreSQL، منعًا لإنشاء schema غير مستخدم في الإنتاج.

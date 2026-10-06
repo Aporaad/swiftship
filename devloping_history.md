@@ -2514,3 +2514,11 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 - بدأت مرحلة Hardening التنفيذية بإضافة نموذج تهديد، خطة migration/rollback، دليل حوادث وتشغيل، وتقرير Dependency Audit.
 - أظهر الفحص أن SwiftShip root يحتوي على 14 ثغرة npm، منها 7 عالية، بينما أظهر `alx_web` صفر ثغرات في الفحص الإنتاجي؛ لم يُنفذ `npm audit fix` تلقائيًا لتجنب تغيير غير مراجع.
 - فحوص TypeScript وbuild لـ `alx_api` نجحت، بينما توقف Jest العام مجددًا بـ `Segmentation fault` في `tests/security.test.ts` ضمن جلسة التنفيذ الحالية.
+
+## [2026-10-06T03:06:30+03:00] — AI Model: Manus
+- بدأ تنفيذ المرحلة المتبقية الخاصة بـ Portal Auth.
+- أُضيفت عقود `PortalAuthRepository` وDTOs مستقلة عن system Auth، مع أنواع Portal role وحالة الاعتماد.
+- أُضيفت مخططات Zod strict لتسجيل الدخول وتدوير refresh token وتغيير كلمة المرور، مع رفض الحقول السرية الإضافية ومنع إعادة استخدام كلمة المرور الحالية.
+- أُضيف اختبار تعاقدي يغطي payloads ووجود مخازن credentials/sessions/refresh/events في private schema.
+- نجح `npm run check` و`npm run build` وESLint واختبار Portal Auth التعاقدي (4/4).
+- هذه بداية تأسيسية فقط؛ لم تُربط المسارات أو واجهة الموقع بعد حتى يكتمل Repository وتدوير الجلسات بشكل فعلي وآمن.

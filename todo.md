@@ -1900,3 +1900,9 @@
 - [منجز] إرجاع كائن `user` كاملاً في استجابة `POST /api/v1/auth/login` بـ `alx_api` مع توفير fallback ديناميكي في `AlxApiAuthGateway` يجلب بيانات الملف الشخصي عبر `alxGetCurrentUser()`.
 - [منجز] فحص واجتياز جميع اختبارات المصادقة وجميع موديولات الـ API بنسبة 100% (19/19 Test Suites و 129/129 Tests Passed).
 
+
+## [2026-10-06T03:06:30+03:00] — AI Model: Manus
+- [منجز] تأسيس عقود Portal Auth ومخططات التحقق الصارمة والاختبارات التعاقدية.
+- [منجز] إعداد migration خاصة ببيانات credentials والجلسات وrefresh rotation والأحداث داخل private schema، دون تطبيقها.
+- [متبقي في المرحلة الحالية] تنفيذ PortalAuthRepository الفعلي، login/refresh/logout، والتحقق من ownership وحالة اعتماد الحساب.
+- [متبقي في المرحلة الحالية] ربط PortalAuth routes وواجهة alx_web مع access/refresh tokens آمنة.

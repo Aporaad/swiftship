@@ -167,3 +167,7 @@
 3. نقل بقية كتابات وقراءات النظام المحلي خلف Gateways.
 4. معالجة dependency vulnerabilities ثم تنفيذ PostgreSQL smoke وbackup/restore drill.
 5. إغلاق Legacy cutover فقط بعد اجتياز boundary audit وrollback والمراقبة.
+
+## [2026-10-06T03:06:30+03:00] — بدء Portal Auth API
+
+بدأ تنفيذ Portal Auth كمسار مستقل عن system Auth. أُضيفت العقود والمخططات واختبار تعاقدي وmigration خاصة بالتخزين الخاص، مع عدم تطبيق migration قبل اكتمال repository والمسارات واختبار PostgreSQL. نجحت فحوص TypeScript وbuild وESLint واختبارات Portal Auth التعاقدية (4/4). ما زال login/refresh/logout وتغيير كلمة المرور وربط واجهة alx_web متبقيًا ضمن المرحلة نفسها.

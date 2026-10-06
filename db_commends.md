@@ -2239,3 +2239,7 @@ GRANT SELECT, INSERT, DELETE ON alx_api_private.role_permissions TO alx_api_runt
 ## [2026-10-06T02:20:40+03:00] — AI Model: Manus
 - لم يُنفذ أي أمر SQL أو migration أو DML في هذه المرحلة.
 - تم الاكتفاء بمراجعة ملفات migrations والخطة، مع إنشاء وثيقة rollback دون تطبيقها على قاعدة البيانات.
+
+## [2026-10-06T03:06:30+03:00] — AI Model: Manus
+- لم يُنفذ أي أمر SQL عبر Supabase أو قاعدة البيانات في هذه المرحلة.
+- تمت إضافة SQL migration إلى المستودع فقط: `alx_api/src/db/migrations/0013_portal_auth_private_storage.sql`.

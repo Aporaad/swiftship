@@ -5,6 +5,9 @@
  * Defines Public Tracking & Announcements DTOs and repository contract.
  */
 
+export type PortalRole = 'customer' | 'courier' | 'supplier';
+export type ApprovalStatus = 'approved' | 'pending_approval' | 'rejected';
+
 export interface PublicTrackingEvent {
   status: string;
   occurredAt: number | null;
