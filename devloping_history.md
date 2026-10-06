@@ -2529,3 +2529,12 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 - أُضيفت المسارات: `POST /api/v1/portal/auth/login`, `POST /refresh`, `POST /logout`, `GET /me`, و`PATCH /password` مع strict validation وBearer authentication.
 - رُبطت الوحدة في `app.ts` و`server.ts` باستخدام نفس Ed25519 issuer مع claims مستقلة لمعرف مستخدم البوابة.
 - نجح TypeScript check وbuild وESLint. اختبار Jest المشترك توقف بـ Segmentation fault في `tests/portal.test.ts` ضمن بيئة الجلسة، لذلك لا يُعتبر ذلك فشلًا وظيفيًا للمسارات الجديدة.
+
+## [2026-10-06 00:58:30 +0000] — تحديث المستودع ومراجعة الخطة وHardening — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- تم تحميل آخر نسخة من `Aporaad/swiftship` إلى commit `a0f674c` مع مراجعة الجلسة السابقة المرفقة.
+- تم تثبيت الحالة الفعلية: Portal Auth مبني برمجياً لكنه ينتظر تطبيق migration والـsmoke test وربط `alx_web`، بينما Client Cutover ما زال تدريجياً وLegacy لم يُغلق.
+- تم إصلاح lint في `portal.schemas.ts` وإزالة `any` من `security.test.ts` باستخدام `FinanceRepository`.
+- تم إخراج مفاتيح JWT من Git وإضافة قواعد تجاهل `.secrets` و`.pem`؛ التشغيل يعتمد على متغيرات البيئة. يلزم تدوير المفاتيح التي ظهرت في تاريخ Git قبل الإنتاج.
+- تم إعداد تقرير عربي محدث لخطة التنفيذ والمراحل المتبقية في `alx_api/docs/api-review-2026-10-06_ar.md`.
+- نتائج التحقق: alx_api نجح في 20 Test Suites و133 Tests، والنظام المحلي نجح في 276 Tests مع check/lint/build.
+- ما زالت ثغرات root dependency audit بحاجة إلى معالجة مراجعة، ولم يتم تشغيل `npm audit fix` تلقائياً.

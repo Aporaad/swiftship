@@ -1913,3 +1913,15 @@
 - [منجز] ربط Portal Auth في composition root مع Ed25519 access token issuer.
 - [متبقي] تطبيق migration 0013 على قاعدة اختبار/الإنتاج بعد موافقة التشغيل وتشغيل PostgreSQL smoke test.
 - [متبقي] تحديث `alx_web` لإزالة Supabase Auth من PortalAuthContext وربطه بالمسارات الجديدة بعد اجتياز smoke test.
+
+## [2026-10-06 00:58:30 +0000] — مراجعة آخر نسخة وبدء Hardening — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- [x] تحميل آخر نسخة من GitHub ومراجعة الجلسة السابقة والتقارير التنفيذية.
+- [x] إصلاح lint في Portal schema واختبار Finance الأمني.
+- [x] إزالة مفاتيح JWT المتتبعة من Git وإضافة قواعد تجاهل الأسرار.
+- [x] اجتياز alx_api: 20 Test Suites / 133 Tests، واجتياز النظام المحلي: 276 Tests مع check/lint/build.
+- [x] إنشاء تقرير الحالة المحدث في `alx_api/docs/api-review-2026-10-06_ar.md`.
+- [ ] تدوير مفاتيح JWT التي ظهرت في تاريخ Git قبل استخدام بيئة الإنتاج.
+- [ ] تطبيق migration Portal Auth 0013 على قاعدة اختبار بعد backup والتحقق من RLS/grants.
+- [ ] تنفيذ PostgreSQL smoke test بحساب API runtime وربط `alx_web` بـ Portal Auth.
+- [ ] نقل Portal profile/tickets/orders ثم إغلاق Legacy boundary تدريجياً.
+- [ ] معالجة ثغرات dependency audit، ثم backup/restore وload/security tests وproduction monitoring.

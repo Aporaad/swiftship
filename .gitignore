@@ -19,6 +19,10 @@ build/
 .env.test.local
 .env.production.local
 
+# Runtime secrets and signing keys
+**/.secrets/
+*.pem
+
 # IDE and editor files
 .vscode/
 .idea/

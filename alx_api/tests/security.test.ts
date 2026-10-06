@@ -17,6 +17,7 @@ import { createApiApp } from '../src/app';
 import { parseEnvironment } from '../src/config/env';
 import type { AuthUseCases } from '../src/modules/auth/auth.contracts';
 import { AuthServiceError } from '../src/modules/auth/auth.use-cases';
+import type { FinanceRepository } from '../src/modules/finance/finance.contracts';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // إعداد البيئة التجريبية
@@ -360,7 +361,7 @@ describe('Security: Deny by Default (RBAC)', () => {
       listCustodyAdvances: jest.fn().mockResolvedValue([]),
       listAutoPostingRules: jest.fn().mockResolvedValue([]),
     };
-    const app = createApiApp({ environment, auth, finance: mockFinanceRepo as any });
+    const app = createApiApp({ environment, auth, finance: mockFinanceRepo as unknown as FinanceRepository });
 
     const response = await request(app)
       .get('/api/v1/finance/accounts')
