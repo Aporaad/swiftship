@@ -14,6 +14,8 @@ import { createNotificationsRepository } from './modules/notifications/notificat
 import { createPortalRepository } from './modules/portal/portal.repository';
 import { createPortalAuthRepository } from './modules/portal/portal-auth.repository';
 import { PortalAuthService } from './modules/portal/portal-auth.service';
+import { createPortalOwnedRepository } from './modules/portal/portal-owned.repository';
+import { PortalOwnedService } from './modules/portal/portal-owned.service';
 import { Ed25519AccessTokenIssuer } from './modules/auth/access-token';
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? 'info' });
@@ -50,6 +52,9 @@ function startServer(): void {
           },
         )
       : undefined;
+  const portalOwned = database && portalAuth
+    ? new PortalOwnedService(portalAuth, createPortalOwnedRepository(database.pool))
+    : undefined;
   const appOptions = {
     environment,
     readiness: async () => ({ database: await isDatabaseReady(database?.pool) }),
@@ -64,6 +69,7 @@ function startServer(): void {
     ...(database ? { notifications: createNotificationsRepository(database.pool) } : {}),
     ...(database ? { portal: createPortalRepository(database.pool) } : {}),
     ...(portalAuth ? { portalAuth } : {}),
+    ...(portalOwned ? { portalOwned } : {}),
   };
   const app = createApiApp({ ...appOptions, ...(auth ? { auth } : {}) });
   const server = app.listen(environment.port, environment.host, () => {

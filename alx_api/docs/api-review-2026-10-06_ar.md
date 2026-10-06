@@ -73,3 +73,22 @@ SwiftShip / alx_web -> Feature Gateways -> alx_api -> PostgreSQL
 - تحديث Portal profile في API لا يثبت بعد مزامنة كل الحقول مع كيان العميل/المندوب/المصدر، لذا لا يُفعّل `VITE_PORTAL_PROFILE_API_ENABLED` قبل استكمالها واختبارها.
 - لم يُجر smoke/integration test بحساب `alx_api_runtime` على PostgreSQL اختبارية معزولة. لا تستخدم قاعدة الإنتاج لإنشاء حسابات اختبارية؛ جهز staging مستقل، ثم اختبر صلاحيات grants/RLS، التسجيل والاعتماد، login/refresh/replay/logout، profile وتزامن الكيانات.
 - تبقى ملكية الموارد وتذاكر الدعم وطلبات العملاء ومراحل نقل الموقع ثم Hardening/الإطلاق حسب ترتيب المرحلة 10 و11 في الخطة.
+
+
+## متابعة استكمال Portal وخطة المرحلة 10 — [2026-10-07T00:28:30+03:00]
+
+### ما اكتمل في الشيفرة واختُبر محلياً
+
+- التسجيل ينشئ في معاملة واحدة حساباً مالياً من مجموعة الحسابات المعتمدة، ثم كيان العميل/المندوب/المورد، ثم هوية Portal واعتمادها وروابط الملكية. اختبار HTTP محلي غطى الأنواع الثلاثة؛ واختير username افتراضي حتمي مع suffix لمنع تصادم الأسماء.
+- نقل Portal profile/customer details والتذاكر وطلبات العميل إلى API؛ الوصول للموارد مشتق من access token، والطلب يستخدم idempotency، ولا يقبل مبلغاً مدفوعاً أو معرف ملكية من العميل.
+- تُحسب قيم الطلب في alx_api من `settings.general` ومن نوع المصدر النشط المحفوظ في PostgreSQL. لم يعد عقد Zod/OpenAPI/Gateway يقبل totals/rates من المتصفح؛ اختبار التكامل يثبت رفض total مزور.
+- لا توجد استدعاءات Supabase Auth مباشرة في `PortalAuthContext`؛ عُزل مسار التوافق في `legacyPortalAuth` مع اختبارات. هذا لا يعني إيقاف Supabase Auth لكل المستخدمين.
+- أحدث الفحوص: alx_api `check/build/lint`، Jest **23 suites / 143 tests**، واختبار PostgreSQL/HTTP محلي نجح (customer/courier/supplier، حسابات/روابط، الملف الخاص، Auth، tickets/orders ownership، pricing، RLS). alx_web `check/build`، Vitest **13 tests**، و`audit:portal-boundary` كلها ناجحة. OpenAPI صالح: **49 paths / 31 schema refs**.
+
+### قواعد وموانع التشغيل
+
+- لم تُطبق migrations `0014_portal_registration_details.sql` و`0015_portal_owned_resource_indexes.sql` و`0016_cust_details_rls.sql` على Supabase؛ اختبرت فقط على PostgreSQL محلي معزول. لا تفعّل feature flags ولا تنشر هذا المسار قبل تطبيقها واختبارها في staging بواسطة `alx_api_runtime`.
+- هناك **8** سجلات Portal قائمة و**0** API password credentials في المخزن الخاص (counts فقط بلا PII). يجب توفير enrollment/reset آمن للمستخدمين القدامى؛ لذلك يبقى `legacyPortalAuth` ضرورياً لتجنب قفل الحسابات.
+- `CustomerLedgerPage` ما زالت تقرأ قيوداً مالية وتكتب voucher legs مباشرة من المتصفح، وتضع الحالة `Approved`. لا يُنقل هذا التدفق ككتابة مالية فورية دون قرار عمل واعتماد آلية إثبات/مراجعة/تسوية. الشحنات ومهام المندوب وبقية CRUD صفحات الموقع ما زالت ضمن المرحلة 10.
+- جميع أعلام API في alx_web تبقى غير مفعلة افتراضياً، ولم يحدث deploy أو تغيير إنتاج. المرحلة 10 لم تكتمل معيارياً بعد؛ وبعدها تبقى عناصر المرحلة 11 (dependency/threat/load/security audit، backup/restore، rollback، runbook، monitoring وصلاحيات).
+- فُحصت settings العامة وصلاحية SELECT قراءة فقط. لم ينفذ هذا التحديث DDL/DML على Supabase، ولم ينشئ مستخدماً أو طلباً أو قيداً مالياً إنتاجياً.

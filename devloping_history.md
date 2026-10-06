@@ -2563,3 +2563,14 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 - تمت مزامنة `alx_api/package-lock.json` مع `package.json` بعد اكتشاف عدم اتساق كان يمنع `npm ci`؛ نجح التثبيت بعد إعادة المحاولة.
 - التحقق النهائي: alx_api `check` و`build` و`lint` ناجحة، Jest **22 suites / 139 tests passed**. alx_web: `check` و`build` وVitest **7 tests passed** و`audit:portal-boundary` ناجح. أُزيلت آثار البناء المولدة من submodule وأعيدت شجرة عمله نظيفة.
 - لم تُفعّل أعلام Portal registration/profile؛ التسجيل عبر API لا يزال يحتاج إنشاء وربط كيان العميل/المندوب/المصدر والحساب المالي، كما لم يتوفر smoke test مستقل لقاعدة PostgreSQL.
+
+
+## [2026-10-07T00:28:30+03:00] — استكمال نقل Portal إلى alx_api — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+
+- استُكمل transactional provisioning للتسجيل: يختار API مجموعة الحساب المناسبة (customer/courier/source)، ينشئ الحساب المالي ثم كيان الدور وهوية Portal والاعتماد، ويربط معرفات الملكية من جهة الخادم. أُصلح توليد username الافتراضي بإضافة suffix hash ثابت لتفادي تصادم الأسماء الأولى المتكررة.
+- نُقلت حقول التسجيل الحساسة إلى مخزن خاص عبر migration `0014_portal_registration_details.sql`، وفهارس الطلبات/التذاكر والملكية إلى `0015_portal_owned_resource_indexes.sql`، وRLS على `cust_details` إلى `0016_cust_details_rls.sql`. ملفات migrations موجودة بالمستودع ولم تُطبق على Supabase المتصل.
+- أُكملت مسارات Portal-owned للملف/تفاصيل العميل والتذاكر وطلبات العميل، مع استنتاج الملكية من access token، وidempotency للطلبات، وعدم قبول مبلغ مدفوع أو معرّفات ملكية يرسلها العميل.
+- نُقلت حسابات order pricing إلى وحدة أعمال خادمية `portal-order-pricing.ts`؛ تقرأ API إعدادات `settings.general` وتستند إلى نوع المصدر النشط المستعلم عنه من قاعدة البيانات، وتحسب التكلفة والوزن والحجم. أزيلت rates/totals من Zod/OpenAPI/Gateway inputs، وتمنع API قيم pricing المحسوبة بالمتصفح.
+- رُبطت `alx_web` بمسارات التسجيل/profile/customer-details/tickets/orders خلف أعلام منفصلة، وأُخرجت استدعاءات Supabase Auth المباشرة من `PortalAuthContext` إلى `legacyPortalAuth` مع اختبارات adapter؛ لا يزال مسار التوافق مطلوباً للحسابات القديمة.
+- التحقق النهائي: alx_api `check/build/lint` ناجح، **23 suites / 143 tests passed**؛ سكربت `test:portal-db` نجح على قاعدة محلية معزولة واختبر التسجيل للأدوار الثلاثة والحسابات والملكية وRLS وpricing ورفض totals المزورة. alx_web `check/build` ناجح، **13 Vitest tests passed**، و`audit:portal-boundary` ناجح؛ OpenAPI صالح (49 paths، 31 schema refs).
+- لم يُنشر API ولم تُفعّل الأعلام ولم تُكتب إلى قاعدة Supabase. ما زالت `CustomerLedgerPage` تحتوي flow كتابة مالية مباشرة بحالة Approved، كما أن شحنات/مهام المندوب وبقية ترحيل الموقع وHardening تحتاج مراحل مستقلة ومراجعة؛ لا يُعاد توجيه المدفوعات حتى اعتماد آلية إثبات/مراجعة.

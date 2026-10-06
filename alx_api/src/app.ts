@@ -27,6 +27,8 @@ import { registerPortalRoutes } from './modules/portal/portal.routes';
 import type { PortalRepository } from './modules/portal/portal.contracts';
 import { registerPortalAuthRoutes } from './modules/portal/portal-auth.routes';
 import type { PortalAuthService } from './modules/portal/portal-auth.service';
+import { registerPortalOwnedRoutes } from './modules/portal/portal-owned.routes';
+import type { PortalOwnedService } from './modules/portal/portal-owned.service';
 
 export interface ApiReadiness {
   database: boolean;
@@ -46,6 +48,7 @@ export interface AppOptions {
   notifications?: NotificationsRepository;
   portal?: PortalRepository;
   portalAuth?: PortalAuthService;
+  portalOwned?: PortalOwnedService;
 }
 
 export function createApiApp(options: AppOptions): Express {
@@ -131,6 +134,7 @@ export function createApiApp(options: AppOptions): Express {
   // تفعيل وحدة البوابة العامة — Activate public portal module
   if (options.portal) registerPortalRoutes(app, environment, options.portal);
   if (options.portalAuth) registerPortalAuthRoutes(app, environment, options.portalAuth);
+  if (options.portalAuth && options.portalOwned) registerPortalOwnedRoutes(app, options.portalAuth, options.portalOwned);
 
   app.use('/api/v1', (_request, response) => {
     sendFailure(response, 404, 'ROUTE_NOT_FOUND', 'المسار المطلوب غير موجود.', String(response.locals.requestId));

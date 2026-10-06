@@ -23,6 +23,16 @@ export interface PortalAuthProfileDto {
   role: PortalRole;
   approvalStatus: ApprovalStatus;
   onboardingCompleted: boolean;
+  address?: string;
+  linkedAccId?: string;
+  linkedCustomerId?: string;
+  linkedCourierId?: string;
+  linkedSourceId?: string;
+  financialAccountId?: string;
+  financialAccountCode?: string;
+  financialCurrency?: string;
+  joinBy?: string;
+  referrerId?: string;
 }
 
 export interface PortalRegisterResultDto {
@@ -67,13 +77,19 @@ export interface PortalAuthRepository {
     onboardingCompleted: boolean;
     passwordHash: string;
     createdAt: Date;
+    address?: string;
+    joinBy?: string;
+    referrerId?: string;
+    companyName?: string;
+    commercialRegister?: string;
+    courierType?: 'local' | 'sourcing';
+    identityDocNote?: string;
   }): Promise<PortalAuthIdentity>;
   updatePortalProfile(input: {
     portalUserId: string;
-    username?: string;
-    email?: string;
     fullName?: string;
     phone?: string;
+    address?: string;
     updatedAt: Date;
   }): Promise<PortalAuthIdentity>;
   recordEvent(input: { portalUserId: string | null; eventType: string; success: boolean; occurredAt: Date }): Promise<void>;
@@ -89,6 +105,16 @@ export interface PortalAuthIdentity {
   approvalStatus: ApprovalStatus;
   onboardingCompleted: boolean;
   disabled: boolean;
+  address?: string;
+  linkedAccId?: string;
+  linkedCustomerId?: string;
+  linkedCourierId?: string;
+  linkedSourceId?: string;
+  financialAccountId?: string;
+  financialAccountCode?: string;
+  financialCurrency?: string;
+  joinBy?: string;
+  referrerId?: string;
 }
 
 export interface PortalAuthCredential {

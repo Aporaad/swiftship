@@ -92,17 +92,17 @@ describe('PortalAuthService', () => {
     });
 
     expect(result.profile).toMatchObject({
-      username: 'sara',
       email: 'sara@example.test',
       fullName: 'Sara Ali',
       phone: '700000000',
       approvalStatus: 'approved',
     });
+    expect(result.profile.username).toMatch(/^sara_[a-f0-9]{8}$/);
     expect(result.pendingApproval).toBe(false);
     expect(result.tokens).toMatchObject({ tokenType: 'Bearer', expiresInSeconds: 600 });
     expect(repository.createPortalUser).toHaveBeenCalledWith(expect.objectContaining({
       email: 'sara@example.test',
-      username: 'sara',
+      username: result.profile.username,
       approvalStatus: 'approved',
       createdAt: now,
     }));
@@ -126,6 +126,21 @@ describe('PortalAuthService', () => {
     expect(repository.createSession).not.toHaveBeenCalled();
   });
 
+  it('derives distinct default usernames for different accounts sharing the same given name', async () => {
+    const { service, repository } = createService();
+    const first = await service.register({
+      fullName: 'Alex Customer', phone: '700000010', email: 'alex.one@example.test',
+      password: 'a-strong-password-123', role: 'customer',
+    });
+    const second = await service.register({
+      fullName: 'Alex Supplier', phone: '700000011', email: 'alex.two@example.test',
+      password: 'a-strong-password-123', role: 'customer',
+    });
+
+    expect(first.profile.username).not.toBe(second.profile.username);
+    expect(repository.createPortalUser).toHaveBeenCalledTimes(2);
+  });
+
   it('rejects a duplicate email before creating an account', async () => {
     const repository = createRepository();
     repository.findIdentityByIdentifier.mockResolvedValueOnce(customer);
@@ -139,6 +154,24 @@ describe('PortalAuthService', () => {
       role: 'customer',
     })).rejects.toMatchObject({ statusCode: 409, code: 'PORTAL_ACCOUNT_EXISTS' });
     expect(repository.createPortalUser).not.toHaveBeenCalled();
+  });
+
+  it('updates supported profile fields through the repository without accepting an unverified email change', async () => {
+    const repository = createRepository();
+    repository.updatePortalProfile.mockResolvedValue({ ...customer, fullName: 'Updated Name', address: 'Updated address' });
+    const { service } = createService(repository);
+
+    await expect(service.updateProfile({
+      portalUserId: customer.portalUserId,
+      fullName: 'Updated Name',
+      address: 'Updated address',
+    })).resolves.toMatchObject({ fullName: 'Updated Name', address: 'Updated address' });
+    expect(repository.updatePortalProfile).toHaveBeenCalledWith({
+      portalUserId: customer.portalUserId,
+      fullName: 'Updated Name',
+      address: 'Updated address',
+      updatedAt: now,
+    });
   });
 
   it('revokes the whole refresh-token family and records an event when an old token is reused', async () => {

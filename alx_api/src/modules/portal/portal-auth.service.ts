@@ -5,6 +5,7 @@ import type { AccessTokenIssuer } from '../auth/auth.use-cases';
 import type {
   PortalAuthPrincipalDto,
   PortalAuthProfileDto,
+  PortalAuthIdentity,
   PortalAuthRepository,
   PortalAuthTokenPairDto,
   PortalRegisterResultDto,
@@ -28,14 +29,12 @@ const invalidCredentials = () => new PortalAuthServiceError(
 
 const hashRefreshToken = (token: string) => createHash('sha256').update(token).digest('hex');
 
-const deriveUsername = (email: string, fullName: string, provided?: string): string => {
+const deriveUsername = (email: string, provided?: string): string => {
   if (provided) return provided.trim().toLowerCase();
 
-  const name = fullName.trim().split(/\s+/)[0]?.toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]/gi, '');
-  if (name && name.length >= 3) return name;
-
-  const localPart = email.split('@')[0] ?? 'portaluser';
-  return localPart.toLowerCase().replace(/[^a-z0-9]/g, '') || 'portaluser';
+  const localPart = (email.split('@')[0] ?? 'portaluser').toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]/gi, '') || 'portaluser';
+  const uniqueSuffix = createHash('sha256').update(email).digest('hex').slice(0, 8);
+  return `${localPart.slice(0, 69)}_${uniqueSuffix}`;
 };
 
 export interface PortalAuthServiceOptions {
@@ -94,9 +93,16 @@ export class PortalAuthService {
     password: string;
     role: 'customer' | 'courier' | 'supplier';
     username?: string;
+    address?: string;
+    joinBy?: string;
+    referrerId?: string;
+    companyName?: string;
+    commercialRegister?: string;
+    courierType?: 'local' | 'sourcing';
+    identityDocNote?: string;
   }): Promise<PortalRegisterResultDto> {
     const email = input.email.trim().toLowerCase();
-    const username = deriveUsername(email, input.fullName, input.username);
+    const username = deriveUsername(email, input.username);
     const emailExists = await this.repository.findIdentityByIdentifier(email);
     const usernameExists = await this.repository.findIdentityByIdentifier(username);
     if (emailExists || usernameExists) {
@@ -110,18 +116,33 @@ export class PortalAuthService {
       timeCost: this.options.argon2TimeCost,
       parallelism: this.options.argon2Parallelism,
     });
-    const identity = await this.repository.createPortalUser({
-      portalUserId: randomUUID(),
-      username,
-      email,
-      fullName: input.fullName.trim(),
-      phone: input.phone.trim(),
-      role: input.role,
-      approvalStatus,
-      onboardingCompleted: input.role !== 'customer',
-      passwordHash,
-      createdAt,
-    });
+    let identity: PortalAuthIdentity;
+    try {
+      identity = await this.repository.createPortalUser({
+        portalUserId: randomUUID(),
+        username,
+        email,
+        fullName: input.fullName.trim(),
+        phone: input.phone.trim(),
+        role: input.role,
+        approvalStatus,
+        onboardingCompleted: input.role !== 'customer',
+        passwordHash,
+        createdAt,
+        ...(input.address !== undefined ? { address: input.address.trim() } : {}),
+        ...(input.joinBy !== undefined ? { joinBy: input.joinBy.trim() } : {}),
+        ...(input.referrerId !== undefined ? { referrerId: input.referrerId.trim() } : {}),
+        ...(input.companyName !== undefined ? { companyName: input.companyName.trim() } : {}),
+        ...(input.commercialRegister !== undefined ? { commercialRegister: input.commercialRegister.trim() } : {}),
+        ...(input.courierType !== undefined ? { courierType: input.courierType } : {}),
+        ...(input.identityDocNote !== undefined ? { identityDocNote: input.identityDocNote.trim() } : {}),
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'PORTAL_ACCOUNT_EXISTS') {
+        throw new PortalAuthServiceError(409, 'PORTAL_ACCOUNT_EXISTS', 'يوجد حساب Portal بهذه البيانات مسبقاً.');
+      }
+      throw error;
+    }
 
     return {
       profile: this.toProfile(identity),
@@ -225,18 +246,10 @@ export class PortalAuthService {
     portalUserId: string;
     fullName?: string;
     phone?: string;
-    email?: string;
+    address?: string;
   }): Promise<PortalAuthProfileDto> {
-    if (input.email) {
-      const existing = await this.repository.findIdentityByIdentifier(input.email.trim().toLowerCase());
-      if (existing && existing.portalUserId !== input.portalUserId) {
-        throw new PortalAuthServiceError(409, 'PORTAL_EMAIL_EXISTS', 'البريد الإلكتروني مستخدم مسبقاً.');
-      }
-    }
-
     return this.toProfile(await this.repository.updatePortalProfile({
       ...input,
-      ...(input.email ? { email: input.email.trim().toLowerCase() } : {}),
       updatedAt: this.now(),
     }));
   }
@@ -263,16 +276,7 @@ export class PortalAuthService {
     });
   }
 
-  private toProfile(identity: {
-    portalUserId: string;
-    username: string;
-    email: string;
-    fullName: string;
-    phone: string;
-    role: PortalAuthProfileDto['role'];
-    approvalStatus: PortalAuthProfileDto['approvalStatus'];
-    onboardingCompleted: boolean;
-  }): PortalAuthProfileDto {
+  private toProfile(identity: PortalAuthIdentity): PortalAuthProfileDto {
     return {
       portalUserId: identity.portalUserId,
       username: identity.username,
@@ -282,6 +286,16 @@ export class PortalAuthService {
       role: identity.role,
       approvalStatus: identity.approvalStatus,
       onboardingCompleted: identity.onboardingCompleted,
+      ...(identity.address ? { address: identity.address } : {}),
+      ...(identity.linkedAccId ? { linkedAccId: identity.linkedAccId } : {}),
+      ...(identity.linkedCustomerId ? { linkedCustomerId: identity.linkedCustomerId } : {}),
+      ...(identity.linkedCourierId ? { linkedCourierId: identity.linkedCourierId } : {}),
+      ...(identity.linkedSourceId ? { linkedSourceId: identity.linkedSourceId } : {}),
+      ...(identity.financialAccountId ? { financialAccountId: identity.financialAccountId } : {}),
+      ...(identity.financialAccountCode ? { financialAccountCode: identity.financialAccountCode } : {}),
+      ...(identity.financialCurrency ? { financialCurrency: identity.financialCurrency } : {}),
+      ...(identity.joinBy ? { joinBy: identity.joinBy } : {}),
+      ...(identity.referrerId ? { referrerId: identity.referrerId } : {}),
     };
   }
 

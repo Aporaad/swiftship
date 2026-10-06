@@ -1751,3 +1751,18 @@ Now continue the task based on the inherited context and files. Re-read all rele
 مستودع المشروع وقاعده البيانات تم توصيلهم بالجلسه
 [مرفق: alx_api_creation_plan_ar.md]
 ```
+
+
+## [2026-10-06T23:34:42+03:00] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```text
+قم باستكمال المراحل المتبقيه
+ ربط التسجيل بكيانات العميل والمندوب والمورد والحساب المالي في alx_api.
+ربط alx_web بمسارات Portal Auth وإزالة Supabase Auth من PortalAuthContext بعد نجاح الاختبار.
+إكمال نقل Portal profile والتذاكر وطلبات العملاء وملكية الموارد.
+وغيرها
+```
+
+## [2026-10-07T00:20:01+03:00] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```text
+ماذا تعمل الى اين وصلت
+```

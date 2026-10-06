@@ -1948,3 +1948,15 @@
 - [ ] اختبار PostgreSQL فعلي بحساب `alx_api_runtime` على بيئة اختبار معزولة؛ لم يُجرَ على قاعدة الإنتاج.
 - [ ] استكمال إنشاء وربط customer/courier/supplier والكيان والحساب المالي قبل تفعيل أعلام التسجيل أو الملف الشخصي في alx_web.
 - [ ] استكمال مراحل نقل الموقع التالية (ملكية الموارد/التذاكر/طلبات العملاء) ثم Hardening والإطلاق حسب ترتيب الخطة.
+
+
+## [2026-10-07T00:28:30+03:00] — استكمال Portal API والمرحلة 10 — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- [x] ربط تسجيل العميل/المندوب/المورد بكياناتهم وحساباتهم المالية داخل transaction؛ واختبار المسارات الفعلية على PostgreSQL محلي معزول.
+- [x] إزالة استدعاءات Supabase Auth المباشرة من `PortalAuthContext` وعزل توافق الحسابات القديمة في `legacyPortalAuth`.
+- [x] نقل profile/customer details والتذاكر وطلبات العميل وملكية الموارد إلى API؛ إضافة RLS/migrations المطلوبة كمصدر فقط.
+- [x] نقل حساب إجماليات طلب العميل إلى API من إعدادات `settings.general` ومصدر الطلب المعتمد؛ رفض totals المرسلة من المتصفح.
+- [x] اجتياز alx_api: check/build/lint، **23 suite / 143 test**، وPostgreSQL/HTTP integration. اجتياز alx_web: check/build، **13 test** و`audit:portal-boundary`.
+- [ ] تطبيق migrations `0014–0016` واختبار runtime على staging مستقل؛ لم تُطبق على Supabase المرتبط.
+- [ ] ترحيل/استعادة الحسابات القديمة إلى Portal API: `portal_credentials` فيها 0 اعتماد حالياً، لذا يبقى `legacyPortalAuth` ضرورياً لتجنب قفل المستخدمين.
+- [ ] نقل ledger/payment flows، الشحنات ومهام المندوب وغيرها؛ `CustomerLedgerPage` ما زالت تكتب قيوداً بحالة Approved من المتصفح، فلا تُفعّل بوابة المال قبل اعتماد سير التحقق.
+- [ ] إبقاء Feature Flags معطلة حتى نجاح staging والمراجعة؛ ثم إكمال Hardening/التحميل/النسخ والاسترجاع/rollback/monitoring وفق المرحلة 11.

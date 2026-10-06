@@ -2273,3 +2273,242 @@ WHERE schema_name = 'alx_api_private'
 LIMIT 10;
 ```
 - استعلام catalog للقراءة فقط؛ أعاد schema `alx_api_private`. لم ينفذ DDL أو DML.
+
+
+## [2026-10-06T22:54:15+03:00] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+select schema_name from information_schema.schemata where schema_name in ('public','alx_api_private','auth') order by schema_name limit 10;
+```
+- استعلام SELECT للقراءة فقط؛ أُعيد استخراجه حرفياً من سجل MCP بعد أن لم يُحفظ نصه في الإضافة السابقة.
+
+## [2026-10-06T23:36:07+03:00] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT table_name, column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name = ANY (ARRAY[
+    'portal_users', 'customers', 'couriers', 'sources', 'accounts',
+    'cust_details', 'portal_tickets', 'orders', 'order_items', 'employees'
+  ]::text[])
+ORDER BY table_name, ordinal_position
+LIMIT 300;
+```
+
+## [2026-10-06T23:37:01+03:00] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT account_id, account_code, account_prefix, account_number, account_seq, type, acc_name_ar, acc_sub_id, group_id, cur_no, is_active
+FROM public.accounts
+WHERE account_prefix IN ('1130', '2120', '2110')
+   OR account_code IN ('1130', '2120', '2110')
+   OR account_code LIKE '1130-%'
+   OR account_code LIKE '2120-%'
+   OR account_code LIKE '2110-%'
+ORDER BY account_code, account_id
+LIMIT 100;
+```
+
+## [2026-10-06T23:37:08+03:00] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT table_name, column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name = ANY (ARRAY['acc_main', 'acc_sub', 'acc_sub_group', 'default_accounts', 'currency']::text[])
+ORDER BY table_name, ordinal_position
+LIMIT 150;
+```
+
+## [2026-10-06T23:37:29+03:00] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT acc_sub_group_id, acc_sub_id, account_code, acc_name_ar, entity_type, allows_direct_accounts, is_active
+FROM public.acc_sub_group
+WHERE entity_type IS NOT NULL
+ORDER BY entity_type, account_code
+LIMIT 100;
+```
+
+## [2026-10-06T23:38:03+03:00] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT table_name, column_name, is_nullable, column_default
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name = ANY (ARRAY['portal_users', 'customers', 'couriers', 'sources', 'accounts', 'cust_details', 'portal_tickets']::text[])
+  AND (is_nullable = 'NO' OR column_default IS NOT NULL)
+ORDER BY table_name, ordinal_position
+LIMIT 150;
+```
+
+## [2026-10-06T23:39:08+03:00] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT cur_id, code, is_default, is_active
+FROM public.currency
+WHERE is_active IS TRUE AND is_default IS TRUE
+ORDER BY cur_id
+LIMIT 10;
+```
+
+## [2026-10-06T23:39:25+03:00] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT tablename, indexname, indexdef
+FROM pg_catalog.pg_indexes
+WHERE schemaname = 'public'
+  AND tablename = ANY (ARRAY['portal_users', 'customers', 'couriers', 'sources', 'accounts', 'cust_details', 'portal_tickets', 'orders']::text[])
+ORDER BY tablename, indexname
+LIMIT 120;
+```
+
+## [2026-10-06T23:39:40+03:00] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT count(*)::integer AS portal_user_count,
+       count(*) FILTER (WHERE email IS NOT NULL)::integer AS column_email_count,
+       count(*) FILTER (WHERE NULLIF(data ->> 'email', '') IS NOT NULL)::integer AS json_email_count,
+       count(*) FILTER (WHERE username IS NOT NULL)::integer AS column_username_count,
+       count(*) FILTER (WHERE NULLIF(data ->> 'username', '') IS NOT NULL)::integer AS json_username_count,
+       count(*) FILTER (WHERE phone IS NOT NULL)::integer AS column_phone_count,
+       count(*) FILTER (WHERE NULLIF(data ->> 'phone', '') IS NOT NULL)::integer AS json_phone_count,
+       count(*) FILTER (WHERE NULLIF(data ->> 'linkedCourierId', '') IS NOT NULL)::integer AS json_courier_link_count,
+       count(*) FILTER (WHERE NULLIF(data ->> 'linkedSourceId', '') IS NOT NULL)::integer AS json_source_link_count
+FROM public.portal_users
+LIMIT 1;
+```
+
+## [2026-10-06T23:39:51+03:00] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT count(*)::integer AS portal_api_credentials_count
+FROM alx_api_private.portal_credentials
+LIMIT 1;
+```
+
+## [2026-10-06T23:40:35+03:00] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT tc.table_name, kcu.column_name, ccu.table_name AS referenced_table, ccu.column_name AS referenced_column
+FROM information_schema.table_constraints tc
+JOIN information_schema.key_column_usage kcu
+  ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
+JOIN information_schema.constraint_column_usage ccu
+  ON ccu.constraint_name = tc.constraint_name AND ccu.table_schema = tc.table_schema
+WHERE tc.constraint_type = 'FOREIGN KEY'
+  AND tc.table_schema = 'public'
+  AND tc.table_name = ANY (ARRAY['portal_users', 'customers', 'couriers', 'sources', 'accounts', 'cust_details', 'portal_tickets', 'orders']::text[])
+ORDER BY tc.table_name, kcu.ordinal_position
+LIMIT 120;
+```
+
+## [2026-10-06T23:43:14+03:00] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT tablename, policyname, permissive, roles, cmd, qual, with_check
+FROM pg_catalog.pg_policies
+WHERE schemaname = 'public'
+  AND tablename = ANY (ARRAY['portal_users', 'customers', 'couriers', 'sources', 'cust_details', 'portal_tickets']::text[])
+ORDER BY tablename, policyname
+LIMIT 100;
+```
+
+## [2026-10-06T23:43:25+03:00] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT rolname, rolsuper, rolbypassrls,
+       has_table_privilege(rolname, 'public.portal_users', 'SELECT') AS can_select_portal_users,
+       has_table_privilege(rolname, 'public.portal_users', 'INSERT') AS can_insert_portal_users,
+       has_table_privilege(rolname, 'public.customers', 'INSERT') AS can_insert_customers,
+       has_table_privilege(rolname, 'public.accounts', 'INSERT') AS can_insert_accounts
+FROM pg_catalog.pg_roles
+WHERE rolname IN ('alx_api_runtime', 'service_role')
+ORDER BY rolname
+LIMIT 10;
+```
+
+## [2026-10-06T23:43:44+03:00] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT t.tablename, c.relrowsecurity AS rls_enabled, c.relforcerowsecurity AS force_rls,
+       bool_or(r.rolname = ANY(p.roles)) FILTER (WHERE p.policyname IS NOT NULL) AS has_policy_for_runtime
+FROM pg_catalog.pg_tables t
+JOIN pg_catalog.pg_class c ON c.relname = t.tablename
+JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace AND n.nspname = t.schemaname
+CROSS JOIN LATERAL (SELECT rolname FROM pg_catalog.pg_roles WHERE rolname = 'alx_api_runtime') r
+LEFT JOIN pg_catalog.pg_policies p ON p.schemaname = t.schemaname AND p.tablename = t.tablename
+WHERE t.schemaname = 'public'
+  AND t.tablename = ANY (ARRAY['acc_sub_group','currency','accounts','customers','couriers','sources','portal_users','cust_details','portal_tickets','orders','order_items','shipments','products','orders_history','employees','portal_auth_tokens']::text[])
+GROUP BY t.tablename, c.relrowsecurity, c.relforcerowsecurity
+ORDER BY t.tablename
+LIMIT 80;
+```
+
+## [2026-10-06T23:44:05+03:00] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT table_name, column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name = ANY (ARRAY['portal_users','customers','couriers','sources','accounts','acc_sub_group','currency','cust_details']::text[])
+ORDER BY table_name, ordinal_position
+LIMIT 160;
+```
+
+## [2026-10-06T23:53:42+03:00] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT table_name, privilege_type FROM information_schema.role_table_grants WHERE grantee = 'alx_api_runtime' AND table_schema = 'public' AND table_name IN ('portal_users', 'portal_tickets', 'customers', 'couriers', 'sources', 'orders', 'cust_details') ORDER BY table_name, privilege_type LIMIT 100;
+```
+
+## [2026-10-06T23:55:56+03:00] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT table_name, column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = 'public' AND table_name IN ('orders', 'order_items', 'portal_tickets', 'cust_details') ORDER BY table_name, ordinal_position LIMIT 120;
+```
+
+## [2026-10-06T23:56:19+03:00] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT tablename, indexname, indexdef FROM pg_indexes WHERE schemaname = 'public' AND tablename IN ('orders', 'portal_tickets', 'cust_details') ORDER BY tablename, indexname LIMIT 100;
+```
+
+## [2026-10-06T23:59:08+03:00] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'sources' ORDER BY ordinal_position LIMIT 80;
+```
+
+## [2026-10-07T00:07:21+03:00] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT grantee, privilege_type, is_grantable FROM information_schema.role_table_grants WHERE table_schema = 'public' AND table_name = 'cust_details' AND grantee IN ('alx_api_runtime', 'anon', 'authenticated', 'PUBLIC') ORDER BY grantee, privilege_type LIMIT 30;
+```
+
+## [2026-10-07T00:07:30+03:00] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT schemaname, tablename, policyname, roles, cmd, qual, with_check FROM pg_policies WHERE schemaname = 'public' AND tablename = 'cust_details' ORDER BY policyname LIMIT 50;
+```
+
+## [2026-10-07T00:15:01+03:00] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT table_name, privilege_type, column_name FROM information_schema.column_privileges WHERE table_schema = 'public' AND grantee = 'alx_api_runtime' AND table_name IN ('sources', 'customers', 'couriers', 'portal_users', 'cust_details') AND privilege_type IN ('UPDATE', 'SELECT') ORDER BY table_name, privilege_type, column_name LIMIT 80;
+```
+
+## [2026-10-07T00:15:19+03:00] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'cust_details' ORDER BY ordinal_position LIMIT 60;
+```
+
+## [2026-10-07T00:15:32+03:00] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT table_name, privilege_type FROM information_schema.role_table_grants WHERE table_schema = 'public' AND grantee = 'alx_api_runtime' AND table_name IN ('sources', 'customers', 'couriers', 'portal_users', 'cust_details') ORDER BY table_name, privilege_type LIMIT 50;
+```
+
+## [2026-10-07T00:19:52+03:00] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'settings' ORDER BY ordinal_position LIMIT 50;
+```
+
+## [2026-10-07T00:20:24+03:00] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT setting_id, data->>'exchangeRateSAR' AS exchange_rate_sar, data->>'exchangeRateYER' AS exchange_rate_yer, data->>'defaultDeliveryFee' AS default_delivery_fee, data->>'defaultDeliveryRate' AS default_delivery_rate, data->>'defaultCompanyProfitRate' AS default_company_profit_rate, data->>'defaultPackagingFee' AS default_packaging_fee FROM public.settings WHERE setting_id = 'general' LIMIT 1;
+```
+
+## [2026-10-07T00:20:26+03:00] — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT privilege_type FROM information_schema.role_table_grants WHERE table_schema = 'public' AND table_name = 'settings' AND grantee = 'alx_api_runtime' AND privilege_type = 'SELECT' LIMIT 5;
+```
+
+## [2026-10-07T00:25:56+03:00] — اختبار قاعدة محلية اصطناعية فقط — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+```text
+cd /home/ubuntu/work/swiftship-latest/alx_api && TEST_PORTAL_DATABASE_URL='postgresql://ubuntu@localhost/alx_api_portal_test?host=/var/run/postgresql' npm run test:portal-db
+```
+- شغّل السكربت `alx_api/scripts/test-portal-registration-db.ts` على PostgreSQL محلي معزول فقط؛ نفذت الـfixtures وmigrations المحلية `0014–0016` من ملفات المستودع. لم تتصل العملية بقاعدة Supabase ولم تنفذ عليها DDL/DML. SQL fixture ومصدر migrations محفوظان في المسارات المذكورة.
+
+
+## [2026-10-07T00:30:41+03:00] — توضيح نطاق SQL للاختبار المحلي — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- تصحيحاً لملاحظة الاختبار أعلاه: `scripts/test-portal-registration-db.ts` يطبق محلياً migrations `0009_operations_idempotency.sql` و`0013_portal_auth_private_storage.sql` إضافةً إلى `0014_portal_registration_details.sql` و`0015_portal_owned_resource_indexes.sql` و`0016_cust_details_rls.sql`، ثم ينفذ SQL fixtures المحلية.
+- التنفيذ محصور بقاعدة sandbox الاصطناعية `alx_api_portal_test`. الكود التنفيذي الكامل في ملفات migration المذكورة والـSQL fixtures داخل `alx_api/scripts/test-portal-registration-db.ts`؛ لم يُرسل هذا SQL إلى Supabase.

@@ -1368,3 +1368,16 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 - أكد سجل Supabase أن migration `0013_portal_auth_private_storage` ونسخة التصحيح المرافقة مطبقتان، وأن جداول التخزين الخاص موجودة وRLS مفعّل.
 - لم تُنفذ أي DDL أو DML أو migration جديدة في هذه المهمة. اقتصر اتصال قاعدة البيانات على فحص catalog واستعراض migrations والجداول.
 - تغييرات SQL الموجودة في `portal-auth.repository.ts` تغيرات كود لم تُشغّل على قاعدة الإنتاج؛ يلزم تشغيل smoke/integration test على قاعدة اختبار منفصلة وبحساب runtime قبل تفعيل مسارات الكتابة.
+
+
+## [2026-10-07T00:28:30+03:00] — Portal provisioning/resources/pricing — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+
+- اقتصرت أوامر Supabase المباشرة على استعلامات SELECT لـcatalog/grants وقراءة إعدادات التسعير العامة؛ لم تُنفذ DDL أو DML ولم تُطبق migration على قاعدة Supabase المرتبطة.
+- تأكد امتلاك `alx_api_runtime` صلاحية SELECT على `public.settings`، وقرئت مفاتيح pricing العامة المطلوبة فقط من `settings.general`.
+- migrations `0014_portal_registration_details.sql` و`0015_portal_owned_resource_indexes.sql` و`0016_cust_details_rls.sql` هي تغييرات مصدرية فقط ولم تُطبق على Supabase. يجب مراجعتها وتطبيقها على staging بعد backup/validation.
+- اختبار `npm run test:portal-db` نفّذ fixtures وmigrations محلياً في قاعدة PostgreSQL منفصلة باسم `alx_api_portal_test`؛ لا يستخدم Supabase ولا يحوي بيانات مستخدمين حقيقية. تتضمن SQL التجريبية في `alx_api/scripts/test-portal-registration-db.ts`، أما نصوص migrations فتوجد بالمسارات أعلاه.
+- لم يُنشأ أي طلب أو حساب مالي اختباري في قاعدة الإنتاج؛ إجماليات الحساب المالي في اختبار التكامل تخص fixtures اصطناعية داخل PostgreSQL المحلي فقط.
+
+
+### تصحيح توثيق نطاق test harness — [2026-10-07T00:30:41+03:00]
+بعد مراجعة `scripts/test-portal-registration-db.ts` تبيّن أن قاعدة الاختبار المحلية تشغّل أيضاً `0009_operations_idempotency.sql` و`0013_portal_auth_private_storage.sql` قبل migrations `0014–0016`. هذا تصحيح لسجل النطاق السابق؛ جميعها محلية حصراً ولا تغير قاعدة Supabase.
