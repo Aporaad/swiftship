@@ -3,6 +3,15 @@ export interface AuthTokenPairDto {
   refreshToken: string;
   tokenType: 'Bearer';
   expiresInSeconds: number;
+  user?: {
+    userId: string;
+    username: string;
+    email: string | null;
+    fullName: string | null;
+    role: string | null;
+    isRoot: boolean;
+    disabled: boolean;
+  };
 }
 
 export interface AuthPrincipalDto {

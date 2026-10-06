@@ -195,7 +195,20 @@ export class AuthService implements AuthUseCases {
     }
 
     await this.repository.clearFailedLogins(user.userId, now);
-    return this.createTokenPair(user, now, randomUUID());
+    const tokenPair = await this.createTokenPair(user, now, randomUUID());
+    const fallbackName = (user.email && user.email.includes('@')) ? user.email.split('@')[0]! : user.userId;
+    return {
+      ...tokenPair,
+      user: {
+        userId: user.userId,
+        username: fallbackName,
+        email: user.email ?? null,
+        fullName: fallbackName,
+        role: user.role,
+        isRoot: user.userId === 'usr_root',
+        disabled: user.disabled,
+      },
+    };
   }
 
   async refresh(input: { refreshToken: string }): Promise<AuthTokenPairDto> {

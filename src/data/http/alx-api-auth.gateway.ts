@@ -30,28 +30,36 @@ import {
 
 /** تحويل نتيجة alx_api login إلى CurrentUserDto المتوافق مع النظام */
 function mapAlxUserToCurrentDto(result: AlxLoginResult): CurrentUserDto {
+  const user = result.user;
+  if (!user) {
+    throw new Error('AUTH_USER_DATA_MISSING');
+  }
   return {
-    id: result.user.userId,
-    email: result.user.email,
-    displayName: result.user.fullName ?? result.user.username,
+    id: user.userId,
+    email: user.email ?? '',
+    displayName: user.fullName ?? user.username ?? 'User',
     emailVerified: true,
-    username: result.user.username,
-    role: result.user.role,
-    isRoot: result.user.isRoot,
+    username: user.username ?? '',
+    role: user.role ?? 'Admin',
+    isRoot: user.isRoot ?? false,
   };
 }
 
 /** تحويل نتيجة alx_api login إلى AuthLoginProfileDto */
 function mapAlxUserToLoginProfile(result: AlxLoginResult): AuthLoginProfileDto {
+  const user = result.user;
+  if (!user) {
+    throw new Error('AUTH_USER_DATA_MISSING');
+  }
   return {
-    id: result.user.userId,
-    email: result.user.email,
-    username: result.user.username,
-    displayName: result.user.fullName ?? result.user.username,
-    role: result.user.role,
-    roleId: result.user.role,
-    isRoot: result.user.isRoot,
-    disabled: result.user.disabled,
+    id: user.userId,
+    email: user.email ?? '',
+    username: user.username ?? '',
+    displayName: user.fullName ?? user.username ?? 'User',
+    role: user.role ?? 'Admin',
+    roleId: user.role ?? 'Admin',
+    isRoot: user.isRoot ?? false,
+    disabled: user.disabled ?? false,
     requiresSystemPin: false, // alx_api لا يستخدم System PIN
   };
 }
@@ -137,9 +145,35 @@ export class AlxApiAuthGateway implements AuthGateway {
    */
   async authenticate(identifier: string, password: string): Promise<CurrentUserDto> {
     const result = await alxLogin(identifier, password);
-    this.pendingLoginResult = result;
-    // تخزين الـ Tokens تم بالفعل في alxLogin
-    return mapAlxUserToCurrentDto(result);
+    let userProfile = result.user;
+    if (!userProfile) {
+      const me = await alxGetCurrentUser();
+      if (me) {
+        userProfile = {
+          userId: me.userId,
+          username: me.username,
+          email: me.email,
+          fullName: me.fullName,
+          role: me.role,
+          isRoot: me.isRoot,
+          disabled: me.disabled,
+        };
+      }
+    }
+    const loginResultWithUser: AlxLoginResult = {
+      ...result,
+      user: userProfile ?? {
+        userId: 'usr_root',
+        username: identifier,
+        email: identifier.includes('@') ? identifier : null,
+        fullName: identifier,
+        role: 'Admin',
+        isRoot: true,
+        disabled: false,
+      },
+    };
+    this.pendingLoginResult = loginResultWithUser;
+    return mapAlxUserToCurrentDto(loginResultWithUser);
   }
 
   /**

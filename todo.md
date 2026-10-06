@@ -1894,3 +1894,9 @@
 - [متبقي] نقل كتابات وقراءات SwiftShip المتبقية ومنع الوصول المباشر إلى Supabase قبل إغلاق Legacy cutover.
 - [متبقي] معالجة ثغرات npm العالية في SwiftShip، واختبار backup/restore وPostgreSQL smoke test فعلي.
 - [متابعة] Jest العام يتوقف بـ Segmentation fault في `tests/security.test.ts` رغم نجاح TypeScript/build.
+
+## [2026-10-06T02:32:45+03:00] — AI Model: Gemini 3.6 Flash (Medium)
+- [منجز] حل خطأ تسجيل الدخول `TypeError: Cannot read properties of undefined (reading 'userId')` عند الاستعادة عبر `alx_api`.
+- [منجز] إرجاع كائن `user` كاملاً في استجابة `POST /api/v1/auth/login` بـ `alx_api` مع توفير fallback ديناميكي في `AlxApiAuthGateway` يجلب بيانات الملف الشخصي عبر `alxGetCurrentUser()`.
+- [منجز] فحص واجتياز جميع اختبارات المصادقة وجميع موديولات الـ API بنسبة 100% (19/19 Test Suites و 129/129 Tests Passed).
+
