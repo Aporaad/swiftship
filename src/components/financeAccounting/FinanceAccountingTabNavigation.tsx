@@ -1,5 +1,5 @@
 import React from 'react';
-import { FolderTree, Scale, Truck, User, Users, Wallet, Wrench } from 'lucide-react';
+import { FolderTree, Scale, Truck, User, Users, Wallet, Wrench, ReceiptText } from 'lucide-react';
 import type { FinanceAccountingTabNavigationProps } from './FinanceAccountingTypes';
 
 export default function FinanceAccountingTabNavigation({ accountingTab, isAr, onTabChange }: FinanceAccountingTabNavigationProps) {
@@ -13,6 +13,10 @@ export default function FinanceAccountingTabNavigation({ accountingTab, isAr, on
       <button onClick={() => onTabChange('general_ledger')} className={tabClass('general_ledger')}>
         <Scale className="w-3.5 h-3.5 animate-pulse" />
         {isAr ? '⚖️ الدفتر اليومي والمقاصة' : 'Daily Double-Entry Ledger'}
+      </button>
+      <button onClick={() => onTabChange('portal_payment_review')} className={tabClass('portal_payment_review')}>
+        <ReceiptText className="w-3.5 h-3.5 text-[#d4af37]" />
+        {isAr ? 'طلبات سداد البوابة' : 'Portal Payment Review'}
       </button>
       <button onClick={() => onTabChange('courier_audit')} className={tabClass('courier_audit')}>
         <Truck className="w-3.5 h-3.5" />

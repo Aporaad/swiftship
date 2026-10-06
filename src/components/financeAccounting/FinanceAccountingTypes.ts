@@ -28,6 +28,7 @@ export interface FinanceAccountingProps {
 
 export type AccountingTab =
   | 'general_ledger'
+  | 'portal_payment_review'
   | 'courier_audit'
   | 'customer_audit'
   | 'salary_history'

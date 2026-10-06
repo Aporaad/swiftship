@@ -6,6 +6,7 @@ import type {
   PortalOrderDto,
   PortalOrderPricingSettings,
   PortalOwnedRepository,
+  PortalLedgerEntryDto,
   PortalPaymentRequestDto,
   PortalPaymentReviewQueueItem,
   PortalTicketDto,
@@ -388,6 +389,44 @@ export function createPortalOwnedRepository(pool: Pool): PortalOwnedRepository {
         [input.portalUserId, input.limit, input.offset],
       );
       return result.rows.map(toPaymentRequest);
+    },
+
+    async listCustomerLedger(input) {
+      const result = await pool.query<Record<string, unknown>>(
+        `SELECT at.account_trans_id AS "transactionId",
+                at.main_entry_id AS "entryId",
+                me.entry_number AS "entryNumber",
+                at.trans_type AS "transType",
+                at.account_id AS "accountId",
+                at.amount,
+                at.amount_original AS "amountOriginal",
+                at.currency_original_no AS "currencyOriginalNo",
+                at.payment_method AS "paymentMethod",
+                COALESCE(at.description, me.description) AS description,
+                at.note,
+                at.created_at AS "createdAt"
+           FROM public.account_trans at
+           JOIN public.main_entry me ON me.main_entry_id = at.main_entry_id
+          WHERE at.account_id = $1
+            AND me.posting_status = 'posted'
+          ORDER BY at.created_at DESC, at.main_entry_id DESC, at.line_no DESC
+          LIMIT $2 OFFSET $3`,
+        [input.financialAccountId, input.limit, input.offset],
+      );
+      return result.rows.map((row): PortalLedgerEntryDto => ({
+        transactionId: String(row.transactionId),
+        entryId: String(row.entryId),
+        entryNumber: String(row.entryNumber ?? row.entryId),
+        transType: String(row.transType ?? ''),
+        accountId: String(row.accountId),
+        amount: Number(row.amount ?? 0),
+        amountOriginal: Number(row.amountOriginal ?? row.amount ?? 0),
+        currencyOriginalNo: Number(row.currencyOriginalNo ?? 0),
+        ...(typeof row.paymentMethod === 'string' && row.paymentMethod ? { paymentMethod: row.paymentMethod } : {}),
+        ...(typeof row.description === 'string' && row.description ? { description: row.description } : {}),
+        ...(typeof row.note === 'string' && row.note ? { note: row.note } : {}),
+        createdAt: timestamp(row.createdAt),
+      }));
     },
 
     async listPaymentRequestsForReview(input) {

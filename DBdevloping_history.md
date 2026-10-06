@@ -1388,3 +1388,14 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 - شُغّل `TEST_PORTAL_DATABASE_URL='postgresql://ubuntu@localhost/alx_api_portal_test?host=/var/run/postgresql' npm run test:portal-db`. نفّذ test harness migrations `0009` و`0013–0017` وfixtures محلية في قاعدة `alx_api_portal_test` فقط. تفاصيل SQL/DDL الخاصة بالـharness محفوظة في `alx_api/scripts/test-portal-registration-db.ts`، ونص migration الكامل محفوظ في ملف `0017`؛ لم يُنفذ أي SQL على Supabase.
 - تحقق الاختبار من تفعيل RLS وFORCE RLS، صلاحيات SELECT لدور `alx_api_runtime` وحرمان `anon` و`authenticated` و`service_role`، ومن عدم وجود قيود/حركات عند تقديم الطلب. أُنشئ القيد التجريبي التالي محلياً للتحقق من التسوية: `INSERT INTO public.main_entry (main_entry_id, posting_status) VALUES ('synthetic-payment-draft', 'draft')`; ثم `INSERT INTO public.account_trans (account_trans_id, main_entry_id, account_id, trans_type, amount_original, currency_original_no) VALUES ('synthetic-payment-draft-line', 'synthetic-payment-draft', $1, 'Credit', 250, 1)`؛ وبعد رفض حالة draft، حُولت fixture محلياً إلى `posted` لاختبار المطابقة. كل القيم والحسابات اصطناعية، ولا توجد كتابة مالية حقيقية.
 - لم تُطبق `0017` ولا أي migration حديثة على قاعدة Supabase، ولم تُنشأ سجلات أو قيود مالية في الإنتاج.
+
+
+## [2026-10-07 02:30 +03:00] — تطبيق migrations الخاصة ببوابة API
+**النموذج المنفذ:** Manus
+**المشروع:** Supabase `ejrojwbbflzchasvgexr`
+
+- تم تطبيق `portal_registration_details_0014` لإنشاء `alx_api_private.portal_registration_details` مع RLS وصلاحيات `alx_api_runtime` فقط.
+- تم تطبيق `portal_owned_resource_indexes_0015` لإضافة فهارس قراءة `portal_tickets`, `cust_details`, `orders`.
+- تم تطبيق `cust_details_rls_0016` لتفعيل RLS وفرض ملكية `cust_details` للمستخدم مع صلاحية runtime.
+- تم تطبيق `portal_payment_requests_0017` لإنشاء `alx_api_private.portal_payment_requests` مع حالات pending/rejected/settled، منع التكرار، ربط القيد المرحّل، وRLS runtime.
+- تم التحقق عبر `list_migrations` من تسجيل الإصدارات الأربعة في قاعدة البيانات.

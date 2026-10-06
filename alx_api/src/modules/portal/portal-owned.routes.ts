@@ -179,6 +179,20 @@ export function registerPortalOwnedRoutes(
     }
   });
 
+  app.get('/api/v1/portal/ledger', authenticate, async (request, response, next) => {
+    const parsedQuery = pageQuerySchema.safeParse(request.query);
+    const authenticated = principal(response);
+    if (!parsedQuery.success || !authenticated) {
+      return sendFailure(response, 400, 'INVALID_PORTAL_LEDGER_QUERY', 'معاملات التصفح غير صالحة.', String(response.locals.requestId));
+    }
+    try {
+      const entries = await service.listCustomerLedger({ portalUserId: authenticated.portalUserId, ...parsedQuery.data });
+      return sendSuccess(response, entries, String(response.locals.requestId));
+    } catch (error) {
+      return handle(error, response, next);
+    }
+  });
+
   app.post('/api/v1/portal/payment-requests', authenticate, async (request, response, next) => {
     const parsedBody = portalPaymentRequestCreateSchema.safeParse(request.body as unknown);
     const authenticated = principal(response);

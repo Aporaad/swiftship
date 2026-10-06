@@ -47,6 +47,21 @@ export interface PortalPaymentReviewQueueItem extends PortalPaymentRequestDto {
   financialAccountId: string;
 }
 
+export interface PortalLedgerEntryDto {
+  transactionId: string;
+  entryId: string;
+  entryNumber: string;
+  transType: string;
+  accountId: string;
+  amount: number;
+  amountOriginal: number;
+  currencyOriginalNo: number;
+  paymentMethod?: string;
+  description?: string;
+  note?: string;
+  createdAt: number;
+}
+
 export interface PortalCustomerDetailsDto {
   id: string;
   userUid: string;
@@ -129,6 +144,7 @@ export interface PortalOwnedRepository {
   createCustomerOrder(input: CreatePortalOrderRecord): Promise<PortalOrderDto>;
   getCustomerOrderPricingSettings(): Promise<PortalOrderPricingSettings>;
   listPaymentRequests(input: { portalUserId: string; limit: number; offset: number }): Promise<readonly PortalPaymentRequestDto[]>;
+  listCustomerLedger(input: { financialAccountId: string; limit: number; offset: number }): Promise<readonly PortalLedgerEntryDto[]>;
   listPaymentRequestsForReview(input: { limit: number; offset: number }): Promise<readonly PortalPaymentReviewQueueItem[]>;
   createPaymentRequest(input: {
     paymentRequestId: string;

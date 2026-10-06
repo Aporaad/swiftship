@@ -43,6 +43,7 @@ import LedgerEntryPreview from './finance/LedgerEntryPreview';
 import SalaryVoucherModal from './finance/SalaryVoucherModal';
 import ManualJournalAdjustmentModal from './finance/ManualJournalAdjustmentModal';
 import CustomerFifoPaymentModal from './finance/CustomerFifoPaymentModal';
+import PortalPaymentReviewTab from './finance/PortalPaymentReviewTab';
 import { useFinanceAccountingData } from './financeAccounting/useFinanceAccountingData';
 import { useFinanceAccountingSelectors } from './financeAccounting/useFinanceAccountingSelectors';
 import { createFinanceAccountingMainEntryActions } from './financeAccounting/financeAccountingMainEntryActions';
@@ -512,6 +513,9 @@ return (
           setDeletePinError={setDeletePinError}
           setIsDeletePinModalOpen={setIsDeletePinModalOpen}
         />
+      )}
+      {accountingTab === 'portal_payment_review' && (
+        <PortalPaymentReviewTab isAr={isAr} canReview={role === 'Admin' || hasPermission('view_finance')} />
       )}
       {/* RENDER TAB 2: INDIVIDUAL COURIER CUSTODY & DELIVERIES AUDIT */}
       {accountingTab === 'courier_audit' && (

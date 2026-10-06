@@ -2577,3 +2577,19 @@ GRANT SELECT, INSERT, UPDATE ON TABLE alx_api_private.portal_payment_requests TO
 GRANT USAGE ON SCHEMA alx_api_private TO alx_api_runtime;
 ```
 - fixture SQL الإضافي الذي شُغل في قاعدة الاختبار: إنشاء `main_entry` و`account_trans` محلياً، إدراج fixture draft/credit بـ250 YER، ثم `UPDATE public.main_entry SET posting_status = 'posted' WHERE main_entry_id = 'synthetic-payment-draft'` بعد التأكد من رفض draft. لا ينتج عن إرسال طلب السداد أي قيد فعلي.
+
+
+## [2026-10-07 02:30 +03:00] — AI Model: Manus
+```sql
+-- تم تنفيذ DDL عبر Supabase apply_migration على المشروع ejrojwbbflzchasvgexr بالترتيب:
+-- 0014 portal_registration_details_0014
+-- 0015 portal_owned_resource_indexes_0015
+-- 0016 cust_details_rls_0016
+-- 0017 portal_payment_requests_0017
+-- تمت مطابقة نص SQL مع الملفات:
+-- alx_api/src/db/migrations/0014_portal_registration_details.sql
+-- alx_api/src/db/migrations/0015_portal_owned_resource_indexes.sql
+-- alx_api/src/db/migrations/0016_cust_details_rls.sql
+-- alx_api/src/db/migrations/0017_portal_payment_requests.sql
+-- النتيجة: success=true لكل migration، ثم تحقق list_migrations من تسجيل الإصدارات.
+```

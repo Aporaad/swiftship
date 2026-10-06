@@ -266,6 +266,23 @@ export class PortalOwnedService {
     return this.repository.listPaymentRequests({ ...input, portalUserId: profile.portalUserId });
   }
 
+  async listCustomerLedger(input: {
+    portalUserId: string;
+    limit: number;
+    offset: number;
+  }) {
+    const profile = await this.auth.profile(input.portalUserId);
+    if (profile.role !== 'customer') {
+      throw new PortalOwnedServiceError(403, 'PORTAL_CUSTOMER_ROLE_REQUIRED', 'هذه الخدمة متاحة لحساب العميل فقط.');
+    }
+    const financialAccountId = requireEntityLink(
+      profile.financialAccountId,
+      'PORTAL_FINANCIAL_ACCOUNT_LINK_MISSING',
+      'لم يكتمل ربط الحساب المالي للعميل بعد.',
+    );
+    return this.repository.listCustomerLedger({ financialAccountId, limit: input.limit, offset: input.offset });
+  }
+
   async createPaymentRequest(input: {
     portalUserId: string;
     idempotencyKey: string;

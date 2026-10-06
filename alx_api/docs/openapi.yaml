@@ -426,6 +426,20 @@ paths:
         '401': { description: Authentication required, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
         '403': { description: Customer role and approval required, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
         '409': { description: Customer entity/account not linked or idempotency conflict, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+  /api/v1/portal/ledger:
+    get:
+      operationId: getPortalCustomerLedger
+      summary: List posted ledger movements owned by the authenticated customer
+      description: The API resolves the customer's financial account from the authenticated portal profile; client-supplied account identifiers are never accepted.
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        '200': { description: Posted ledger movements for the authenticated customer, content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } } }
+        '401': { description: Portal authentication required, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+        '403': { description: Customer role required, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+        '409': { description: Financial account link missing, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
   /api/v1/portal/payment-requests:
     get:
       operationId: getPortalPaymentRequests

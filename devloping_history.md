@@ -2583,3 +2583,21 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 - وُثقت المسارات في `alx_api/docs/openapi.yaml`، وأضيف اختبار للـGateway واختبار PostgreSQL/HTTP يشمل العزل بين العملاء، idempotency، رفض الحقول المزورة، الصلاحيات، عدم إنشاء القيود تلقائياً، مطابقة القيد المنشور، ومنع إعادة استخدامه.
 - التحقق: API `check` و`build` وESLint ناجحة؛ **23 suite / 143 test** ناجحة؛ `test:portal-db` ناجح على قاعدة محلية معزولة؛ OpenAPI YAML صالح. alx_web `check` و`build` و`audit:portal-boundary` ناجحة و**14 اختباراً** ناجحاً. فشل `format:check` موجود على baseline لملفي OpenAPI وtest harness قبل هذه المهمة، كما أبلغت ملفات أساس أخرى عن التنبيه نفسه؛ لم أعد تنسيق ملفات كاملة خارج نطاق التغيير.
 - لم تُطبق migration على Supabase، ولم تُفعّل الأعلام أو يُنشر تغيير. طلبات السداد تتطلب تفعيل بوابة API واعتماد حساب/هوية العميل؛ صفحات الدفتر ما زالت تقرأ القيود القديمة مباشرة، ولا توجد بعد واجهة موظف لمراجعة الطلبات.
+
+
+## [2026-10-07 02:30 +03:00] — تنفيذ مسار دفتر العميل ومراجعة طلبات السداد
+**النموذج المنفذ:** Manus
+
+### ما تم تنفيذه
+1. إضافة عقد `PortalLedgerEntryDto` وmethod `listCustomerLedger` في API وGateway.
+2. إضافة endpoint محمي `GET /api/v1/portal/ledger`؛ يشتق `financialAccountId` من ملف العميل الموثق ولا يقبل معرف حساب من المتصفح.
+3. تقييد القراءة على القيود `posted` مع pagination وترتيب زمني.
+4. ربط `CustomerLedgerPage` بالـ API خلف `VITE_PORTAL_LEDGER_API_ENABLED` مع fallback قابل للتراجع.
+5. إنشاء `PortalPaymentReviewTab` داخل مركز المحاسبة لعرض الطلبات المعلقة وتسويتها بعد إدخال معرف قيد مرحّل أو رفضها بسبب موثق.
+6. تحديث OpenAPI وتعريفات التبويب وملف البيئة المثال.
+
+### التحقق
+- `alx_api`: check + build + 23 suites / 143 tests ناجحة.
+- `alx_web`: check + build + 3 files / 14 tests ناجحة.
+- النظام الجذري: `npm run check` ناجح.
+- تم تنظيف مخرجات build المؤقتة قبل الرفع.
