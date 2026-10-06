@@ -134,7 +134,9 @@ export function createApiApp(options: AppOptions): Express {
   // تفعيل وحدة البوابة العامة — Activate public portal module
   if (options.portal) registerPortalRoutes(app, environment, options.portal);
   if (options.portalAuth) registerPortalAuthRoutes(app, environment, options.portalAuth);
-  if (options.portalAuth && options.portalOwned) registerPortalOwnedRoutes(app, options.portalAuth, options.portalOwned);
+  if (options.portalAuth && options.portalOwned) {
+    registerPortalOwnedRoutes(app, options.portalAuth, options.portalOwned, options.auth);
+  }
 
   app.use('/api/v1', (_request, response) => {
     sendFailure(response, 404, 'ROUTE_NOT_FOUND', 'المسار المطلوب غير موجود.', String(response.locals.requestId));

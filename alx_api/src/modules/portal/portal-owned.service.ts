@@ -1,16 +1,20 @@
-import { randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { PortalAuthService } from './portal-auth.service';
 import { calculatePortalOrderPricing } from './portal-order-pricing';
 import type {
   PortalOwnedRepository,
   PortalCustomerDetailsDto,
   PortalOrderDto,
+  PortalPaymentMethod,
+  PortalPaymentRequestDto,
+  PortalPaymentReviewQueueItem,
   PortalTicketDto,
   CreatePortalOrderItemRecord,
 } from './portal-owned.contracts';
 import type {
   PortalCustomerDetailsUpdateInput,
   PortalOrderCreateInput,
+  PortalPaymentRequestCreateInput,
   PortalTicketCreateInput,
 } from './portal-owned.schemas';
 
@@ -248,5 +252,116 @@ export class PortalOwnedService {
       idempotencyKey: `portal-order:${profile.portalUserId}:${idempotencyKey}`,
       createdAt,
     });
+  }
+
+  async listPaymentRequests(input: {
+    portalUserId: string;
+    limit: number;
+    offset: number;
+  }): Promise<readonly PortalPaymentRequestDto[]> {
+    const profile = await this.auth.profile(input.portalUserId);
+    if (profile.role !== 'customer') {
+      throw new PortalOwnedServiceError(403, 'PORTAL_CUSTOMER_ROLE_REQUIRED', 'هذه الخدمة متاحة لحساب العميل فقط.');
+    }
+    return this.repository.listPaymentRequests({ ...input, portalUserId: profile.portalUserId });
+  }
+
+  async createPaymentRequest(input: {
+    portalUserId: string;
+    idempotencyKey: string;
+    request: PortalPaymentRequestCreateInput;
+  }): Promise<PortalPaymentRequestDto> {
+    const profile = await this.auth.profile(input.portalUserId);
+    if (profile.role !== 'customer') {
+      throw new PortalOwnedServiceError(403, 'PORTAL_CUSTOMER_ROLE_REQUIRED', 'هذه الخدمة متاحة لحساب العميل فقط.');
+    }
+    if (profile.approvalStatus !== 'approved') {
+      throw new PortalOwnedServiceError(403, 'PORTAL_CUSTOMER_NOT_APPROVED', 'يجب اعتماد الحساب قبل إرسال طلب السداد.');
+    }
+    requireEntityLink(profile.linkedCustomerId, 'PORTAL_CUSTOMER_LINK_MISSING', 'لم يكتمل ربط حساب العميل بعد.');
+    requireEntityLink(profile.financialAccountId, 'PORTAL_FINANCIAL_ACCOUNT_LINK_MISSING', 'لم يكتمل ربط الحساب المالي للعميل بعد.');
+
+    const idempotencyKey = input.idempotencyKey.trim();
+    if (idempotencyKey.length < 8 || idempotencyKey.length > 128) {
+      throw new PortalOwnedServiceError(400, 'INVALID_IDEMPOTENCY_KEY', 'مفتاح الطلب غير صالح.');
+    }
+    const paymentMethod: PortalPaymentMethod = input.request.paymentMethod;
+    const canonicalRequest = JSON.stringify({
+      amount: input.request.amount.toFixed(4),
+      currency: input.request.currency,
+      paymentMethod,
+      reference: input.request.reference ?? '',
+      notes: input.request.notes ?? '',
+    });
+    const requestHash = createHash('sha256').update(canonicalRequest).digest('hex');
+    try {
+      return await this.repository.createPaymentRequest({
+        paymentRequestId: randomUUID(),
+        portalUserId: profile.portalUserId,
+        amount: input.request.amount,
+        currency: input.request.currency,
+        paymentMethod,
+        ...(input.request.reference ? { reference: input.request.reference } : {}),
+        ...(input.request.notes ? { notes: input.request.notes } : {}),
+        idempotencyKey,
+        requestHash,
+        createdAt: this.now(),
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'IDEMPOTENCY_KEY_CONFLICT') {
+        throw new PortalOwnedServiceError(409, error.message, 'تم استخدام مفتاح الطلب لبيانات سداد مختلفة.');
+      }
+      throw error;
+    }
+  }
+
+  async listPaymentRequestsForReview(input: {
+    limit: number;
+    offset: number;
+  }): Promise<readonly PortalPaymentReviewQueueItem[]> {
+    return this.repository.listPaymentRequestsForReview(input);
+  }
+
+  async settlePaymentRequest(input: {
+    paymentRequestId: string;
+    financeEntryId: string;
+    reviewerId: string;
+  }): Promise<PortalPaymentRequestDto> {
+    try {
+      return await this.repository.settlePaymentRequest({ ...input, reviewedAt: this.now() });
+    } catch (error) {
+      if (error instanceof Error) {
+        const messages: Record<string, { status: number; message: string }> = {
+          PORTAL_PAYMENT_REQUEST_NOT_FOUND: { status: 404, message: 'طلب السداد غير موجود.' },
+          PORTAL_PAYMENT_REQUEST_NOT_PENDING: { status: 409, message: 'تمت مراجعة طلب السداد مسبقاً.' },
+          PORTAL_PAYMENT_ACCOUNT_NOT_CONFIGURED: { status: 409, message: 'تعذر تحديد حساب العميل أو العملة.' },
+          PORTAL_PAYMENT_FINANCE_ENTRY_ALREADY_LINKED: { status: 409, message: 'تم ربط القيد المالي بطلب سداد آخر.' },
+          PORTAL_PAYMENT_FINANCE_ENTRY_MISMATCH: { status: 409, message: 'القيد المالي غير منشور أو لا يطابق مبلغ وعميل الطلب.' },
+        };
+        const mapped = messages[error.message];
+        if (mapped) throw new PortalOwnedServiceError(mapped.status, error.message, mapped.message);
+      }
+      throw error;
+    }
+  }
+
+  async rejectPaymentRequest(input: {
+    paymentRequestId: string;
+    reviewerId: string;
+    reviewNote: string;
+  }): Promise<PortalPaymentRequestDto> {
+    try {
+      return await this.repository.rejectPaymentRequest({ ...input, reviewedAt: this.now() });
+    } catch (error) {
+      if (error instanceof Error) {
+        const messages: Record<string, { status: number; message: string }> = {
+          PORTAL_PAYMENT_REQUEST_NOT_FOUND: { status: 404, message: 'طلب السداد غير موجود.' },
+          PORTAL_PAYMENT_REQUEST_NOT_PENDING: { status: 409, message: 'تمت مراجعة طلب السداد مسبقاً.' },
+        };
+        const mapped = messages[error.message];
+        if (mapped) throw new PortalOwnedServiceError(mapped.status, error.message, mapped.message);
+      }
+      throw error;
+    }
   }
 }

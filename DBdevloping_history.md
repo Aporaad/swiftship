@@ -1381,3 +1381,10 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 
 ### تصحيح توثيق نطاق test harness — [2026-10-07T00:30:41+03:00]
 بعد مراجعة `scripts/test-portal-registration-db.ts` تبيّن أن قاعدة الاختبار المحلية تشغّل أيضاً `0009_operations_idempotency.sql` و`0013_portal_auth_private_storage.sql` قبل migrations `0014–0016`. هذا تصحيح لسجل النطاق السابق؛ جميعها محلية حصراً ولا تغير قاعدة Supabase.
+
+
+### طلبات السداد والتحقق المحاسبي — [2026-10-07T00:45:55+03:00]
+- أضيف migration مصدرية `alx_api/src/db/migrations/0017_portal_payment_requests.sql`: جدول `alx_api_private.portal_payment_requests` مع قيود الحالة/المبلغ/العملة/البصمة، فهارس idempotency والملكية، فهرس فريد جزئي لقيد التسوية، `FORCE ROW LEVEL SECURITY`، ورفض صلاحيات Browser roles و`service_role` مع منح runtime المصرح فقط.
+- شُغّل `TEST_PORTAL_DATABASE_URL='postgresql://ubuntu@localhost/alx_api_portal_test?host=/var/run/postgresql' npm run test:portal-db`. نفّذ test harness migrations `0009` و`0013–0017` وfixtures محلية في قاعدة `alx_api_portal_test` فقط. تفاصيل SQL/DDL الخاصة بالـharness محفوظة في `alx_api/scripts/test-portal-registration-db.ts`، ونص migration الكامل محفوظ في ملف `0017`؛ لم يُنفذ أي SQL على Supabase.
+- تحقق الاختبار من تفعيل RLS وFORCE RLS، صلاحيات SELECT لدور `alx_api_runtime` وحرمان `anon` و`authenticated` و`service_role`، ومن عدم وجود قيود/حركات عند تقديم الطلب. أُنشئ القيد التجريبي التالي محلياً للتحقق من التسوية: `INSERT INTO public.main_entry (main_entry_id, posting_status) VALUES ('synthetic-payment-draft', 'draft')`; ثم `INSERT INTO public.account_trans (account_trans_id, main_entry_id, account_id, trans_type, amount_original, currency_original_no) VALUES ('synthetic-payment-draft-line', 'synthetic-payment-draft', $1, 'Credit', 250, 1)`؛ وبعد رفض حالة draft، حُولت fixture محلياً إلى `posted` لاختبار المطابقة. كل القيم والحسابات اصطناعية، ولا توجد كتابة مالية حقيقية.
+- لم تُطبق `0017` ولا أي migration حديثة على قاعدة Supabase، ولم تُنشأ سجلات أو قيود مالية في الإنتاج.

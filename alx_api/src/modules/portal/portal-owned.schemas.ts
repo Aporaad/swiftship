@@ -81,6 +81,23 @@ export const portalOrderCreateSchema = z.object({
   path: ['items'],
 });
 
+export const portalPaymentRequestCreateSchema = z.object({
+  amount: z.number().finite().min(0.01).max(100_000_000).multipleOf(0.01),
+  currency: z.enum(['YER', 'USD', 'SAR']),
+  paymentMethod: z.enum(['cash', 'transfer', 'wallet', 'check']),
+  reference: z.string().trim().max(160).optional(),
+  notes: z.string().trim().max(2_000).optional(),
+}).strict();
+
+export const portalPaymentRequestIdSchema = z.string().uuid();
+export const portalPaymentRequestSettleSchema = z.object({
+  financeEntryId: z.string().trim().min(1).max(200),
+}).strict();
+export const portalPaymentRequestRejectSchema = z.object({
+  reviewNote: z.string().trim().min(5).max(1_000),
+}).strict();
+
 export type PortalTicketCreateInput = z.infer<typeof portalTicketCreateSchema>;
 export type PortalOrderCreateInput = z.infer<typeof portalOrderCreateSchema>;
+export type PortalPaymentRequestCreateInput = z.infer<typeof portalPaymentRequestCreateSchema>;
 export type PortalCustomerDetailsUpdateInput = z.infer<typeof portalCustomerDetailsUpdateSchema>;

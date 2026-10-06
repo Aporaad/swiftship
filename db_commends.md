@@ -2512,3 +2512,68 @@ cd /home/ubuntu/work/swiftship-latest/alx_api && TEST_PORTAL_DATABASE_URL='postg
 ## [2026-10-07T00:30:41+03:00] — توضيح نطاق SQL للاختبار المحلي — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
 - تصحيحاً لملاحظة الاختبار أعلاه: `scripts/test-portal-registration-db.ts` يطبق محلياً migrations `0009_operations_idempotency.sql` و`0013_portal_auth_private_storage.sql` إضافةً إلى `0014_portal_registration_details.sql` و`0015_portal_owned_resource_indexes.sql` و`0016_cust_details_rls.sql`، ثم ينفذ SQL fixtures المحلية.
 - التنفيذ محصور بقاعدة sandbox الاصطناعية `alx_api_portal_test`. الكود التنفيذي الكامل في ملفات migration المذكورة والـSQL fixtures داخل `alx_api/scripts/test-portal-registration-db.ts`؛ لم يُرسل هذا SQL إلى Supabase.
+
+
+## [2026-10-07T00:45:55+03:00] — Portal payment requests — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
+- الأمر المنفذ على PostgreSQL المحلي المعزول:
+```sh
+TEST_PORTAL_DATABASE_URL='postgresql://ubuntu@localhost/alx_api_portal_test?host=/var/run/postgresql' npm run test:portal-db
+```
+- أعاد test harness إنشاء fixtures محلية وطبق migrations `0009_operations_idempotency.sql` و`0013_portal_auth_private_storage.sql` و`0014_portal_registration_details.sql` و`0015_portal_owned_resource_indexes.sql` و`0016_cust_details_rls.sql` و`0017_portal_payment_requests.sql`. مصدر كل SQL تنفيذي في `alx_api/scripts/test-portal-registration-db.ts`، والنص الكامل للـDDL في ملفات migrations المذكورة. جميعها محلية فقط، لا Supabase.
+- هذا نص migration `0017_portal_payment_requests.sql` المطبق محلياً:
+```sql
+-- Customer portal payment requests are evidence for staff review only.
+-- Creating a request never posts a journal entry or changes any account balance.
+CREATE TABLE IF NOT EXISTS alx_api_private.portal_payment_requests (
+  payment_request_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  portal_user_id text NOT NULL REFERENCES public.portal_users (portal_user_id) ON DELETE CASCADE,
+  amount numeric(20, 4) NOT NULL CHECK (amount > 0),
+  currency text NOT NULL CHECK (currency IN ('YER', 'USD', 'SAR')),
+  payment_method text NOT NULL CHECK (payment_method IN ('cash', 'transfer', 'wallet', 'check')),
+  reference text,
+  notes text,
+  status text NOT NULL DEFAULT 'pending_verification'
+    CHECK (status IN ('pending_verification', 'settled', 'rejected')),
+  idempotency_key text NOT NULL,
+  request_hash text NOT NULL CHECK (request_hash ~ '^[a-f0-9]{64}$'),
+  finance_entry_id text,
+  review_note text,
+  reviewed_by text,
+  reviewed_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT portal_payment_request_review_check CHECK (
+    (status = 'pending_verification' AND reviewed_at IS NULL AND reviewed_by IS NULL AND finance_entry_id IS NULL)
+    OR (status = 'rejected' AND reviewed_at IS NOT NULL AND reviewed_by IS NOT NULL AND review_note IS NOT NULL AND finance_entry_id IS NULL)
+    OR (status = 'settled' AND reviewed_at IS NOT NULL AND reviewed_by IS NOT NULL AND finance_entry_id IS NOT NULL)
+  )
+);
+CREATE UNIQUE INDEX IF NOT EXISTS portal_payment_request_idempotency_uidx
+  ON alx_api_private.portal_payment_requests (portal_user_id, idempotency_key);
+CREATE UNIQUE INDEX IF NOT EXISTS portal_payment_request_finance_entry_uidx
+  ON alx_api_private.portal_payment_requests (finance_entry_id)
+  WHERE finance_entry_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS portal_payment_requests_user_created_idx
+  ON alx_api_private.portal_payment_requests (portal_user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS portal_payment_requests_pending_created_idx
+  ON alx_api_private.portal_payment_requests (created_at DESC)
+  WHERE status = 'pending_verification';
+COMMENT ON TABLE alx_api_private.portal_payment_requests IS
+  'Portal payment claims awaiting staff verification; never a ledger posting by itself.';
+REVOKE ALL ON TABLE alx_api_private.portal_payment_requests
+  FROM PUBLIC, anon, authenticated, service_role;
+ALTER TABLE alx_api_private.portal_payment_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE alx_api_private.portal_payment_requests FORCE ROW LEVEL SECURITY;
+CREATE POLICY portal_payment_requests_runtime_select
+  ON alx_api_private.portal_payment_requests
+  FOR SELECT TO alx_api_runtime USING (true);
+CREATE POLICY portal_payment_requests_runtime_insert
+  ON alx_api_private.portal_payment_requests
+  FOR INSERT TO alx_api_runtime WITH CHECK (true);
+CREATE POLICY portal_payment_requests_runtime_update
+  ON alx_api_private.portal_payment_requests
+  FOR UPDATE TO alx_api_runtime USING (true) WITH CHECK (true);
+GRANT SELECT, INSERT, UPDATE ON TABLE alx_api_private.portal_payment_requests TO alx_api_runtime;
+GRANT USAGE ON SCHEMA alx_api_private TO alx_api_runtime;
+```
+- fixture SQL الإضافي الذي شُغل في قاعدة الاختبار: إنشاء `main_entry` و`account_trans` محلياً، إدراج fixture draft/credit بـ250 YER، ثم `UPDATE public.main_entry SET posting_status = 'posted' WHERE main_entry_id = 'synthetic-payment-draft'` بعد التأكد من رفض draft. لا ينتج عن إرسال طلب السداد أي قيد فعلي.

@@ -7,6 +7,7 @@ import request from 'supertest';
 import { createApiApp } from '../src/app';
 import { parseEnvironment } from '../src/config/env';
 import { Ed25519AccessTokenIssuer } from '../src/modules/auth/access-token';
+import type { AuthUseCases } from '../src/modules/auth/auth.contracts';
 import { createPortalAuthRepository } from '../src/modules/portal/portal-auth.repository';
 import { PortalAuthService } from '../src/modules/portal/portal-auth.service';
 import { createPortalOwnedRepository } from '../src/modules/portal/portal-owned.repository';
@@ -49,7 +50,7 @@ async function resetLocalDatabase(): Promise<void> {
   `);
   await pool.query('DROP SCHEMA IF EXISTS alx_api_private CASCADE');
   await pool.query(`DROP TABLE IF EXISTS
-    public.portal_users, public.cust_details, public.customers, public.couriers,
+    public.account_trans, public.main_entry, public.portal_users, public.cust_details, public.customers, public.couriers,
     public.portal_tickets, public.orders_history, public.order_items, public.orders,
     public.sources, public.accounts, public.acc_sub_group, public.currency, public.settings CASCADE`);
   await pool.query(`
@@ -137,6 +138,14 @@ async function resetLocalDatabase(): Promise<void> {
       status text NOT NULL DEFAULT 'open', user_uid text, updated_at timestamptz,
       created_by text, updated_by text, message text, replies jsonb, subject text
     );
+    CREATE TABLE public.main_entry (
+      main_entry_id text PRIMARY KEY, posting_status text NOT NULL
+    );
+    CREATE TABLE public.account_trans (
+      account_trans_id text PRIMARY KEY, main_entry_id text NOT NULL REFERENCES public.main_entry(main_entry_id),
+      account_id text NOT NULL, trans_type text NOT NULL,
+      amount_original numeric NOT NULL, currency_original_no integer NOT NULL
+    );
     INSERT INTO public.currency (cur_id, code, is_default, is_active) VALUES (1, 'YER', true, true);
     INSERT INTO public.settings (setting_id, data) VALUES (
       'general', '{"exchangeRateSAR":139,"defaultDeliveryFee":4000,"defaultCompanyProfitRate":12,"defaultPackagingFee":3}'::jsonb
@@ -151,14 +160,34 @@ async function resetLocalDatabase(): Promise<void> {
   await pool.query(await readMigration('0009_operations_idempotency.sql'));
   await pool.query(await readMigration('0015_portal_owned_resource_indexes.sql'));
   await pool.query(await readMigration('0016_cust_details_rls.sql'));
+  await pool.query(await readMigration('0017_portal_payment_requests.sql'));
   await pool.query(`
     GRANT SELECT ON public.acc_sub_group, public.currency, public.settings TO alx_api_runtime;
+    GRANT SELECT ON public.main_entry, public.account_trans TO alx_api_runtime;
     GRANT SELECT, INSERT ON public.accounts, public.customers, public.couriers, public.sources,
       public.portal_users TO alx_api_runtime;
     GRANT UPDATE ON public.portal_users, public.customers, public.couriers, public.sources TO alx_api_runtime;
     GRANT SELECT, INSERT, UPDATE ON public.orders, public.order_items, public.orders_history,
       public.portal_tickets TO alx_api_runtime;
   `);
+  const paymentRequestSecurity = await pool.query(
+    `SELECT c.relrowsecurity AS rls_enabled, c.relforcerowsecurity AS force_rls,
+            has_table_privilege('alx_api_runtime', 'alx_api_private.portal_payment_requests', 'SELECT') AS runtime_can_read,
+            has_table_privilege('anon', 'alx_api_private.portal_payment_requests', 'SELECT') AS anon_can_read,
+            has_table_privilege('authenticated', 'alx_api_private.portal_payment_requests', 'SELECT') AS authenticated_can_read,
+            has_table_privilege('service_role', 'alx_api_private.portal_payment_requests', 'SELECT') AS service_role_can_read
+       FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'alx_api_private' AND c.relname = 'portal_payment_requests'
+      LIMIT 1`,
+  );
+  assert.deepEqual(paymentRequestSecurity.rows[0], {
+    rls_enabled: true,
+    force_rls: true,
+    runtime_can_read: true,
+    anon_can_read: false,
+    authenticated_can_read: false,
+    service_role_can_read: false,
+  });
   const legacyOwnerUid = '00000000-0000-0000-0000-000000000001';
   await pool.query('GRANT USAGE ON SCHEMA auth TO authenticated');
   await pool.query('GRANT EXECUTE ON FUNCTION auth.uid() TO authenticated');
@@ -340,11 +369,21 @@ async function run(): Promise<void> {
       argon2Parallelism: 1,
     });
     const portalOwned = new PortalOwnedService(service, createPortalOwnedRepository(pool));
+    const systemAuth = {
+      async authenticateAccessToken({ accessToken }: { accessToken: string }) {
+        if (!accessToken.startsWith('staff-test-')) throw new Error('INVALID_TOKEN');
+        return { userId: accessToken === 'staff-test-view-only' ? 'finance-viewer' : 'finance-reviewer', sessionId: 'staff-test-session', role: 'staff' };
+      },
+      async listPermissions({ userId }: { userId: string }) {
+        return userId === 'finance-viewer' ? ['view_finance'] : ['view_finance', 'post_financial_entries'];
+      },
+    } as unknown as AuthUseCases;
     const app = createApiApp({
       environment: parseEnvironment({
         NODE_ENV: 'test', HOST: '127.0.0.1', PORT: '3001',
         CORS_ORIGINS: 'https://portal.example.test', RATE_LIMIT_WINDOW_MS: '60000', RATE_LIMIT_MAX: '100',
       }),
+      auth: systemAuth,
       portalAuth: service,
       portalOwned,
     });
@@ -527,12 +566,143 @@ async function run(): Promise<void> {
     assert.equal(customerOrdersResponse.body.data.length, 1);
     assert.equal(customerOrdersResponse.body.data[0]?.customerNote, 'Synthetic note');
 
+    const paymentRequestPayload = {
+      amount: 250,
+      currency: 'YER',
+      paymentMethod: 'transfer',
+      reference: 'SYNTHETIC-TRANSFER-01',
+      notes: 'Synthetic proof pending review',
+    };
+    const createPaymentRequest = () => request(app)
+      .post('/api/v1/portal/payment-requests')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('Idempotency-Key', 'portal-payment-http-test-001')
+      .send(paymentRequestPayload);
+    const paymentRequestResponse = await createPaymentRequest();
+    assert.equal(paymentRequestResponse.status, 201, JSON.stringify(paymentRequestResponse.body));
+    assert.equal(paymentRequestResponse.body.data.status, 'pending_verification');
+    assert.equal(paymentRequestResponse.body.data.financeEntryId, undefined);
+    const paymentRequestId = String(paymentRequestResponse.body.data.id);
+    const replayedPaymentRequest = await createPaymentRequest();
+    assert.equal(replayedPaymentRequest.status, 201, JSON.stringify(replayedPaymentRequest.body));
+    assert.equal(replayedPaymentRequest.body.data.id, paymentRequestId, 'payment request idempotency must not duplicate claims');
+    const paymentRequestConflict = await request(app)
+      .post('/api/v1/portal/payment-requests')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('Idempotency-Key', 'portal-payment-http-test-001')
+      .send({ ...paymentRequestPayload, amount: 300 });
+    assert.equal(paymentRequestConflict.status, 409, 'idempotency key must reject a different payload');
+    const forgedPaymentRequest = await request(app)
+      .post('/api/v1/portal/payment-requests')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('Idempotency-Key', 'portal-payment-forged-test-01')
+      .send({ ...paymentRequestPayload, financialAccountId: 'another-customer-account' });
+    assert.equal(forgedPaymentRequest.status, 400, 'financial ownership identifiers are not accepted from customers');
+    const paymentRequestsBeforeSettlement = await request(app)
+      .get('/api/v1/portal/payment-requests')
+      .set('Authorization', `Bearer ${accessToken}`);
+    assert.equal(paymentRequestsBeforeSettlement.status, 200);
+    assert.equal(paymentRequestsBeforeSettlement.body.data.length, 1);
+    assert.equal(paymentRequestsBeforeSettlement.body.data[0]?.status, 'pending_verification');
+    const ledgerRowsBeforeSettlement = await pool.query(
+      'SELECT (SELECT count(*)::integer FROM public.main_entry) AS entries, (SELECT count(*)::integer FROM public.account_trans) AS movements LIMIT 1',
+    );
+    assert.deepEqual(ledgerRowsBeforeSettlement.rows[0], { entries: 0, movements: 0 }, 'submitting a request never posts or changes the ledger');
+
+    const reviewWithoutAuth = await request(app).get('/api/v1/finance/portal-payment-requests');
+    assert.equal(reviewWithoutAuth.status, 401);
+    const reviewQueue = await request(app)
+      .get('/api/v1/finance/portal-payment-requests')
+      .set('Authorization', 'Bearer staff-test-reviewer');
+    assert.equal(reviewQueue.status, 200, JSON.stringify(reviewQueue.body));
+    assert.equal(reviewQueue.body.data.length, 1);
+    const financeAccountResult = await pool.query<{ accountId: string }>(
+      `SELECT data ->> 'financialAccountId' AS "accountId"
+         FROM public.portal_users WHERE portal_user_id = $1 LIMIT 1`,
+      [portalUserId],
+    );
+    const customerFinanceAccountId = String(financeAccountResult.rows[0]?.accountId ?? '');
+    assert.ok(customerFinanceAccountId, 'API registration must link the customer financial account');
+    const settlementUrl = `/api/v1/finance/portal-payment-requests/${paymentRequestId}/settle`;
+    const forbiddenSettlement = await request(app)
+      .post(settlementUrl)
+      .set('Authorization', 'Bearer staff-test-view-only')
+      .send({ financeEntryId: 'test-entry' });
+    assert.equal(forbiddenSettlement.status, 403, 'finance posting permission is required for settlement');
+    await pool.query('RESET ROLE');
+    await pool.query("INSERT INTO public.main_entry (main_entry_id, posting_status) VALUES ('synthetic-payment-draft', 'draft')");
+    await pool.query(
+      `INSERT INTO public.account_trans (account_trans_id, main_entry_id, account_id, trans_type, amount_original, currency_original_no)
+       VALUES ('synthetic-payment-draft-line', 'synthetic-payment-draft', $1, 'Credit', 250, 1)`,
+      [customerFinanceAccountId],
+    );
+    await pool.query('SET ROLE alx_api_runtime');
+    const draftSettlement = await request(app)
+      .post(settlementUrl)
+      .set('Authorization', 'Bearer staff-test-reviewer')
+      .send({ financeEntryId: 'synthetic-payment-draft' });
+    assert.equal(draftSettlement.status, 409, 'unposted financial entries cannot settle payment claims');
+    await pool.query('RESET ROLE');
+    await pool.query("UPDATE public.main_entry SET posting_status = 'posted' WHERE main_entry_id = 'synthetic-payment-draft'");
+    await pool.query('SET ROLE alx_api_runtime');
+    const settledPaymentRequest = await request(app)
+      .post(settlementUrl)
+      .set('Authorization', 'Bearer staff-test-reviewer')
+      .send({ financeEntryId: 'synthetic-payment-draft' });
+    assert.equal(settledPaymentRequest.status, 200, JSON.stringify(settledPaymentRequest.body));
+    assert.equal(settledPaymentRequest.body.data.status, 'settled');
+    assert.equal(settledPaymentRequest.body.data.financeEntryId, 'synthetic-payment-draft');
+    const secondClaimForSameEntry = await request(app)
+      .post('/api/v1/portal/payment-requests')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('Idempotency-Key', 'portal-payment-reuse-test-001')
+      .send({ amount: 250, currency: 'YER', paymentMethod: 'transfer' });
+    assert.equal(secondClaimForSameEntry.status, 201);
+    const reusedEntryResponse = await request(app)
+      .post(`/api/v1/finance/portal-payment-requests/${secondClaimForSameEntry.body.data.id}/settle`)
+      .set('Authorization', 'Bearer staff-test-reviewer')
+      .send({ financeEntryId: 'synthetic-payment-draft' });
+    assert.equal(reusedEntryResponse.status, 409, 'a posted finance entry cannot settle multiple customer claims');
+    const rejectSecondClaim = await request(app)
+      .post(`/api/v1/finance/portal-payment-requests/${secondClaimForSameEntry.body.data.id}/reject`)
+      .set('Authorization', 'Bearer staff-test-reviewer')
+      .send({ reviewNote: 'Duplicate posted entry was already linked' });
+    assert.equal(rejectSecondClaim.status, 200);
+
     const secondRegistrationResponse = await request(app).post('/api/v1/portal/auth/register').send({
       fullName: 'Second Synthetic Customer', phone: '700000006', email: 'http-customer-2@test.example',
       password: 'Strong-Local-Pass-123', portalRole: 'customer',
     });
     assert.equal(secondRegistrationResponse.status, 200, JSON.stringify(secondRegistrationResponse.body));
     const secondAccessToken = String(secondRegistrationResponse.body.data.tokens.accessToken);
+    const secondPaymentRequestResponse = await request(app)
+      .post('/api/v1/portal/payment-requests')
+      .set('Authorization', `Bearer ${secondAccessToken}`)
+      .set('Idempotency-Key', 'portal-payment-second-user-001')
+      .send({ amount: 50, currency: 'USD', paymentMethod: 'wallet' });
+    assert.equal(secondPaymentRequestResponse.status, 201, JSON.stringify(secondPaymentRequestResponse.body));
+    const secondPaymentRequestId = String(secondPaymentRequestResponse.body.data.id);
+    const secondPaymentRequests = await request(app)
+      .get('/api/v1/portal/payment-requests')
+      .set('Authorization', `Bearer ${secondAccessToken}`);
+    assert.equal(secondPaymentRequests.status, 200);
+    assert.equal(secondPaymentRequests.body.data.length, 1, 'the second customer only sees their own payment request');
+    const firstPaymentRequestsAfterSecondClaim = await request(app)
+      .get('/api/v1/portal/payment-requests')
+      .set('Authorization', `Bearer ${accessToken}`);
+    assert.equal(firstPaymentRequestsAfterSecondClaim.body.data.length, 2);
+    assert.equal(
+      firstPaymentRequestsAfterSecondClaim.body.data.some((item: { id: string }) => item.id === secondPaymentRequestId),
+      false,
+      'the first customer cannot see the second claim',
+    );
+    const rejectedPaymentRequest = await request(app)
+      .post(`/api/v1/finance/portal-payment-requests/${secondPaymentRequestId}/reject`)
+      .set('Authorization', 'Bearer staff-test-reviewer')
+      .send({ reviewNote: 'Synthetic rejection for integration test' });
+    assert.equal(rejectedPaymentRequest.status, 200, JSON.stringify(rejectedPaymentRequest.body));
+    assert.equal(rejectedPaymentRequest.body.data.status, 'rejected');
+    assert.equal(rejectedPaymentRequest.body.data.reviewNote, 'Synthetic rejection for integration test');
     const secondCustomerOrders = await request(app)
       .get('/api/v1/portal/orders')
       .set('Authorization', `Bearer ${secondAccessToken}`);
@@ -554,7 +724,7 @@ async function run(): Promise<void> {
     assert.equal(duplicateResponse.status, 409);
     assert.equal(duplicateResponse.body.error.code, 'PORTAL_ACCOUNT_EXISTS');
 
-    console.info('Portal PostgreSQL/HTTP integration passed: customer/courier/supplier registration, financial links, profile/private details, Auth endpoints, tickets/orders ownership, server pricing, forged-total rejection, duplicate atomicity, and RLS.');
+    console.info('Portal PostgreSQL/HTTP integration passed: customer/courier/supplier provisioning, private profiles, owned tickets/orders/payment requests, server pricing, idempotency, payment-request settlement/rejection permissions, posted-entry matching, no auto-ledger writes, and RLS.');
   } finally {
     await pool.end();
   }

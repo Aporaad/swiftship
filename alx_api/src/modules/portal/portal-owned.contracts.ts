@@ -25,6 +25,28 @@ export interface PortalOrderDto {
   [customerVisibleField: string]: unknown;
 }
 
+export type PortalPaymentRequestStatus = 'pending_verification' | 'settled' | 'rejected';
+export type PortalPaymentMethod = 'cash' | 'transfer' | 'wallet' | 'check';
+export interface PortalPaymentRequestDto {
+  id: string;
+  amount: number;
+  currency: 'YER' | 'USD' | 'SAR';
+  paymentMethod: PortalPaymentMethod;
+  reference?: string;
+  notes?: string;
+  status: PortalPaymentRequestStatus;
+  financeEntryId?: string;
+  reviewNote?: string;
+  createdAt: number;
+  reviewedAt?: number;
+}
+export interface PortalPaymentReviewQueueItem extends PortalPaymentRequestDto {
+  portalUserId: string;
+  customerName: string;
+  customerEmail: string;
+  financialAccountId: string;
+}
+
 export interface PortalCustomerDetailsDto {
   id: string;
   userUid: string;
@@ -106,6 +128,32 @@ export interface PortalOwnedRepository {
   listCustomerOrders(input: { customerId: string; limit: number; offset: number }): Promise<readonly PortalOrderDto[]>;
   createCustomerOrder(input: CreatePortalOrderRecord): Promise<PortalOrderDto>;
   getCustomerOrderPricingSettings(): Promise<PortalOrderPricingSettings>;
+  listPaymentRequests(input: { portalUserId: string; limit: number; offset: number }): Promise<readonly PortalPaymentRequestDto[]>;
+  listPaymentRequestsForReview(input: { limit: number; offset: number }): Promise<readonly PortalPaymentReviewQueueItem[]>;
+  createPaymentRequest(input: {
+    paymentRequestId: string;
+    portalUserId: string;
+    amount: number;
+    currency: 'YER' | 'USD' | 'SAR';
+    paymentMethod: PortalPaymentMethod;
+    reference?: string | undefined;
+    notes?: string | undefined;
+    idempotencyKey: string;
+    requestHash: string;
+    createdAt: Date;
+  }): Promise<PortalPaymentRequestDto>;
+  settlePaymentRequest(input: {
+    paymentRequestId: string;
+    financeEntryId: string;
+    reviewerId: string;
+    reviewedAt: Date;
+  }): Promise<PortalPaymentRequestDto>;
+  rejectPaymentRequest(input: {
+    paymentRequestId: string;
+    reviewerId: string;
+    reviewNote: string;
+    reviewedAt: Date;
+  }): Promise<PortalPaymentRequestDto>;
   findActiveOrderSource(sourceId: string): Promise<{ id: string; name: string; type: string } | null>;
   getCustomerDetails(portalUserId: string): Promise<PortalCustomerDetailsDto | null>;
   saveCustomerDetails(input: {

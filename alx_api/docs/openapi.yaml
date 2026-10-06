@@ -426,6 +426,78 @@ paths:
         '401': { description: Authentication required, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
         '403': { description: Customer role and approval required, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
         '409': { description: Customer entity/account not linked or idempotency conflict, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+  /api/v1/portal/payment-requests:
+    get:
+      operationId: getPortalPaymentRequests
+      summary: List payment requests owned by the authenticated customer
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        '200': { description: Requests owned by the authenticated customer, content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } } }
+        '401': { description: Portal authentication required, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+        '403': { description: Customer role required, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+    post:
+      operationId: postPortalPaymentRequest
+      summary: Submit a customer payment claim for staff verification
+      description: This only creates a pending verification request; it does not post accounting entries, update balances, accept client account IDs, or assert that funds were received.
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 8, maxLength: 128 } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/PortalPaymentRequestCreateInput' } } }
+      responses:
+        '201': { description: Payment claim queued for staff verification, content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } } }
+        '400': { description: Invalid request, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+        '401': { description: Portal authentication required, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+        '403': { description: Customer role and approval required, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+        '409': { description: Customer account missing or idempotency conflict, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+  /api/v1/finance/portal-payment-requests:
+    get:
+      operationId: getPortalPaymentReviewQueue
+      summary: List pending customer payment claims for finance staff
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        '200': { description: Pending payment claims, content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } } }
+        '401': { description: Staff authentication required, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+        '403': { description: Finance view permission required, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+  /api/v1/finance/portal-payment-requests/{id}/settle:
+    post:
+      operationId: settlePortalPaymentRequest
+      summary: Mark a payment claim settled only after a matching posted finance entry exists
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/PortalPaymentRequestSettleInput' } } }
+      responses:
+        '200': { description: Request linked to a matching posted entry, content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } } }
+        '400': { description: Invalid request, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+        '401': { description: Staff authentication required, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+        '403': { description: Financial posting permission required, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+        '409': { description: Finance entry missing, unposted, mismatched, already linked, or request already reviewed, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+  /api/v1/finance/portal-payment-requests/{id}/reject:
+    post:
+      operationId: rejectPortalPaymentRequest
+      summary: Reject a pending customer payment claim with a reason
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/PortalPaymentRequestRejectInput' } } }
+      responses:
+        '200': { description: Request rejected with an audit note, content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } } }
+        '400': { description: Invalid request or missing reason, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+        '401': { description: Staff authentication required, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+        '403': { description: Financial posting permission required, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+        '409': { description: Request already reviewed, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
   /api/v1/auth/login:
     post:
       operationId: postAuthLogin
@@ -1277,6 +1349,44 @@ components:
         adminResponse: { type: string }
         respondedAt: { type: integer }
         createdAt: { type: integer }
+    PortalPaymentRequestCreateInput:
+      type: object
+      additionalProperties: false
+      required: [amount, currency, paymentMethod]
+      properties:
+        amount: { type: number, exclusiveMinimum: 0, maximum: 100000000, multipleOf: 0.01 }
+        currency: { type: string, enum: [YER, USD, SAR] }
+        paymentMethod: { type: string, enum: [cash, transfer, wallet, check] }
+        reference: { type: string, maxLength: 160 }
+        notes: { type: string, maxLength: 2000 }
+    PortalPaymentRequestSettleInput:
+      type: object
+      additionalProperties: false
+      required: [financeEntryId]
+      properties:
+        financeEntryId: { type: string, minLength: 1, maxLength: 200 }
+    PortalPaymentRequestRejectInput:
+      type: object
+      additionalProperties: false
+      required: [reviewNote]
+      properties:
+        reviewNote: { type: string, minLength: 5, maxLength: 1000 }
+    PortalPaymentRequest:
+      type: object
+      additionalProperties: false
+      required: [id, amount, currency, paymentMethod, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        amount: { type: number, exclusiveMinimum: 0 }
+        currency: { type: string, enum: [YER, USD, SAR] }
+        paymentMethod: { type: string, enum: [cash, transfer, wallet, check] }
+        reference: { type: string }
+        notes: { type: string }
+        status: { type: string, enum: [pending_verification, settled, rejected] }
+        financeEntryId: { type: string }
+        reviewNote: { type: string }
+        createdAt: { type: integer }
+        reviewedAt: { type: integer }
     PortalOrderItemInput:
       type: object
       additionalProperties: false

@@ -6,6 +6,8 @@ import type {
   PortalOrderDto,
   PortalOrderPricingSettings,
   PortalOwnedRepository,
+  PortalPaymentRequestDto,
+  PortalPaymentReviewQueueItem,
   PortalTicketDto,
 } from './portal-owned.contracts';
 
@@ -152,6 +154,28 @@ function toCustomerDetails(row: Record<string, unknown>, fallbackCustomerId = ''
   if (Object.keys(bodyDetails).length > 0) output.bodyDetails = bodyDetails;
   const acquisitionSource = asRecord(data.acquisitionSource);
   if (Object.keys(acquisitionSource).length > 0) output.acquisitionSource = acquisitionSource;
+  return output;
+}
+
+function toPaymentRequest(row: Record<string, unknown>): PortalPaymentRequestDto {
+  const paymentMethod = row.paymentMethod;
+  const status = row.status;
+  const output: PortalPaymentRequestDto = {
+    id: String(row.id),
+    amount: Number(row.amount),
+    currency: row.currency === 'USD' || row.currency === 'SAR' ? row.currency : 'YER',
+    paymentMethod: paymentMethod === 'transfer' || paymentMethod === 'wallet' || paymentMethod === 'check'
+      ? paymentMethod
+      : 'cash',
+    status: status === 'settled' || status === 'rejected' ? status : 'pending_verification',
+    createdAt: timestamp(row.createdAt),
+  };
+  if (typeof row.reference === 'string' && row.reference.length > 0) output.reference = row.reference;
+  if (typeof row.notes === 'string' && row.notes.length > 0) output.notes = row.notes;
+  if (typeof row.financeEntryId === 'string' && row.financeEntryId.length > 0) output.financeEntryId = row.financeEntryId;
+  if (typeof row.reviewNote === 'string' && row.reviewNote.length > 0) output.reviewNote = row.reviewNote;
+  const reviewedAt = timestamp(row.reviewedAt);
+  if (reviewedAt > 0) output.reviewedAt = reviewedAt;
   return output;
 }
 
@@ -350,6 +374,168 @@ export function createPortalOwnedRepository(pool: Pool): PortalOwnedRepository {
         defaultCompanyProfitRate: numberOrDefault(data.defaultCompanyProfitRate, 12),
         defaultPackagingFeeSAR: numberOrDefault(data.defaultPackagingFee, 0, true),
       };
+    },
+
+    async listPaymentRequests(input) {
+      const result = await pool.query<Record<string, unknown>>(
+        `SELECT payment_request_id AS id, amount, currency, payment_method AS "paymentMethod",
+                reference, notes, status, finance_entry_id AS "financeEntryId", review_note AS "reviewNote",
+                created_at AS "createdAt", reviewed_at AS "reviewedAt"
+           FROM alx_api_private.portal_payment_requests
+          WHERE portal_user_id = $1
+          ORDER BY created_at DESC, payment_request_id DESC
+          LIMIT $2 OFFSET $3`,
+        [input.portalUserId, input.limit, input.offset],
+      );
+      return result.rows.map(toPaymentRequest);
+    },
+
+    async listPaymentRequestsForReview(input) {
+      const result = await pool.query<Record<string, unknown>>(
+        `SELECT r.payment_request_id AS id, r.portal_user_id AS "portalUserId", r.amount, r.currency,
+                r.payment_method AS "paymentMethod", r.reference, r.notes, r.status,
+                r.finance_entry_id AS "financeEntryId", r.review_note AS "reviewNote",
+                r.created_at AS "createdAt", r.reviewed_at AS "reviewedAt",
+                COALESCE(u.full_name, u.data ->> 'fullName', '') AS "customerName",
+                COALESCE(u.email, u.data ->> 'email', '') AS "customerEmail",
+                COALESCE(u.data ->> 'financialAccountId', '') AS "financialAccountId"
+           FROM alx_api_private.portal_payment_requests r
+           JOIN public.portal_users u ON u.portal_user_id = r.portal_user_id
+          WHERE r.status = 'pending_verification'
+          ORDER BY r.created_at ASC, r.payment_request_id ASC
+          LIMIT $1 OFFSET $2`,
+        [input.limit, input.offset],
+      );
+      return result.rows.map((row) => ({
+        ...toPaymentRequest(row),
+        portalUserId: String(row.portalUserId),
+        customerName: String(row.customerName ?? ''),
+        customerEmail: String(row.customerEmail ?? ''),
+        financialAccountId: String(row.financialAccountId ?? ''),
+      } satisfies PortalPaymentReviewQueueItem));
+    },
+
+    async createPaymentRequest(input) {
+      return withTransaction(pool, async (client) => {
+        const lockKey = `portal-payment:${input.portalUserId}:${input.idempotencyKey}`;
+        await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [lockKey]);
+        const existing = await client.query<Record<string, unknown>>(
+          `SELECT payment_request_id AS id, amount, currency, payment_method AS "paymentMethod",
+                  reference, notes, status, finance_entry_id AS "financeEntryId", review_note AS "reviewNote",
+                  created_at AS "createdAt", reviewed_at AS "reviewedAt", request_hash AS "requestHash"
+             FROM alx_api_private.portal_payment_requests
+            WHERE portal_user_id = $1 AND idempotency_key = $2
+            LIMIT 1`,
+          [input.portalUserId, input.idempotencyKey],
+        );
+        const previous = existing.rows[0];
+        if (previous) {
+          if (previous.requestHash !== input.requestHash) throw new Error('IDEMPOTENCY_KEY_CONFLICT');
+          return toPaymentRequest(previous);
+        }
+        const created = await client.query<Record<string, unknown>>(
+          `INSERT INTO alx_api_private.portal_payment_requests
+             (payment_request_id, portal_user_id, amount, currency, payment_method, reference, notes,
+              status, idempotency_key, request_hash, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), NULLIF($7, ''),
+                   'pending_verification', $8, $9, $10, $10)
+           RETURNING payment_request_id AS id, amount, currency, payment_method AS "paymentMethod",
+                     reference, notes, status, finance_entry_id AS "financeEntryId", review_note AS "reviewNote",
+                     created_at AS "createdAt", reviewed_at AS "reviewedAt"`,
+          [input.paymentRequestId, input.portalUserId, input.amount, input.currency, input.paymentMethod,
+            input.reference ?? '', input.notes ?? '', input.idempotencyKey, input.requestHash, input.createdAt],
+        );
+        return toPaymentRequest(created.rows[0] ?? {});
+      });
+    },
+
+    async settlePaymentRequest(input) {
+      try {
+        return await withTransaction(pool, async (client) => {
+          const selected = await client.query<Record<string, unknown>>(
+            `SELECT payment_request_id AS id, portal_user_id AS "portalUserId", amount, currency, status
+               FROM alx_api_private.portal_payment_requests
+              WHERE payment_request_id = $1
+              FOR UPDATE`,
+            [input.paymentRequestId],
+          );
+          const request = selected.rows[0];
+          if (!request) throw new Error('PORTAL_PAYMENT_REQUEST_NOT_FOUND');
+          if (request.status !== 'pending_verification') throw new Error('PORTAL_PAYMENT_REQUEST_NOT_PENDING');
+          const identity = await client.query<{ financialAccountId: string }>(
+            `SELECT COALESCE(data ->> 'financialAccountId', '') AS "financialAccountId"
+               FROM public.portal_users WHERE portal_user_id = $1 LIMIT 1`,
+            [request.portalUserId],
+          );
+          const financialAccountId = identity.rows[0]?.financialAccountId ?? '';
+          const currency = await client.query<{ currencyNo: number }>(
+            `SELECT cur_id AS "currencyNo" FROM public.currency
+              WHERE upper(code) = upper($1) AND is_active IS TRUE LIMIT 1`,
+            [request.currency],
+          );
+          if (!financialAccountId || !currency.rows[0]) throw new Error('PORTAL_PAYMENT_ACCOUNT_NOT_CONFIGURED');
+          const alreadyLinked = await client.query(
+            `SELECT payment_request_id FROM alx_api_private.portal_payment_requests
+              WHERE finance_entry_id = $1 LIMIT 1`,
+            [input.financeEntryId],
+          );
+          if (alreadyLinked.rows[0]) throw new Error('PORTAL_PAYMENT_FINANCE_ENTRY_ALREADY_LINKED');
+          const matchingEntry = await client.query(
+            `SELECT at.account_trans_id
+               FROM public.main_entry me
+               JOIN public.account_trans at ON at.main_entry_id = me.main_entry_id
+              WHERE me.main_entry_id = $1
+                AND me.posting_status = 'posted'
+                AND at.account_id = $2
+                AND at.trans_type = 'Credit'
+                AND at.amount_original = $3
+                AND at.currency_original_no = $4
+              LIMIT 1`,
+            [input.financeEntryId, financialAccountId, request.amount, currency.rows[0].currencyNo],
+          );
+          if (!matchingEntry.rows[0]) throw new Error('PORTAL_PAYMENT_FINANCE_ENTRY_MISMATCH');
+          const updated = await client.query<Record<string, unknown>>(
+            `UPDATE alx_api_private.portal_payment_requests
+                SET status = 'settled', finance_entry_id = $2, reviewed_by = $3,
+                    reviewed_at = $4, updated_at = $4
+              WHERE payment_request_id = $1
+              RETURNING payment_request_id AS id, amount, currency, payment_method AS "paymentMethod",
+                        reference, notes, status, finance_entry_id AS "financeEntryId", review_note AS "reviewNote",
+                        created_at AS "createdAt", reviewed_at AS "reviewedAt"`,
+            [input.paymentRequestId, input.financeEntryId, input.reviewerId, input.reviewedAt],
+          );
+          return toPaymentRequest(updated.rows[0] ?? {});
+        });
+      } catch (error) {
+        const databaseError = error !== null && typeof error === 'object'
+          ? error as { code?: unknown; constraint?: unknown }
+          : undefined;
+        if (databaseError?.code === '23505'
+          && databaseError.constraint === 'portal_payment_request_finance_entry_uidx') {
+          throw new Error('PORTAL_PAYMENT_FINANCE_ENTRY_ALREADY_LINKED', { cause: error });
+        }
+        throw error;
+      }
+    },
+
+    async rejectPaymentRequest(input) {
+      const result = await pool.query<Record<string, unknown>>(
+        `UPDATE alx_api_private.portal_payment_requests
+            SET status = 'rejected', review_note = $2, reviewed_by = $3,
+                reviewed_at = $4, updated_at = $4
+          WHERE payment_request_id = $1 AND status = 'pending_verification'
+          RETURNING payment_request_id AS id, amount, currency, payment_method AS "paymentMethod",
+                    reference, notes, status, finance_entry_id AS "financeEntryId", review_note AS "reviewNote",
+                    created_at AS "createdAt", reviewed_at AS "reviewedAt"`,
+        [input.paymentRequestId, input.reviewNote, input.reviewerId, input.reviewedAt],
+      );
+      if (result.rows[0]) return toPaymentRequest(result.rows[0]);
+      const exists = await pool.query(
+        'SELECT payment_request_id FROM alx_api_private.portal_payment_requests WHERE payment_request_id = $1 LIMIT 1',
+        [input.paymentRequestId],
+      );
+      if (!exists.rows[0]) throw new Error('PORTAL_PAYMENT_REQUEST_NOT_FOUND');
+      throw new Error('PORTAL_PAYMENT_REQUEST_NOT_PENDING');
     },
 
     async getCustomerDetails(portalUserId) {
