@@ -52,6 +52,7 @@ export interface PortalAuthRepository {
     newExpiresAt: Date;
   }): Promise<boolean>;
   revokeRefreshToken(tokenHash: string, revokedAt: Date): Promise<void>;
+  revokeRefreshTokenFamily(familyId: string, revokedAt: Date): Promise<void>;
   revokeSession(sessionId: string, reason: string, revokedAt: Date): Promise<void>;
   revokeAllSessions(portalUserId: string, reason: string, revokedAt: Date): Promise<void>;
   updatePassword(input: { portalUserId: string; passwordHash: string; changedAt: Date }): Promise<void>;

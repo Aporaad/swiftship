@@ -2260,3 +2260,16 @@ GRANT SELECT, INSERT, DELETE ON alx_api_private.role_permissions TO alx_api_runt
 -- لم يتم تنفيذ أي أمر SQL مباشر في هذه المهمة.
 -- لم تُجرَ تغييرات بيانات أو migrations جديدة؛ تم تعديل كود repository فقط.
 ```
+
+
+## [2026-10-06T22:54:18+03:00] — AI Model: Manus (GPT; المعرّف الدقيق غير معروض في runtime)
+- نُفذ استعلام قراءة فقط لعرض أسماء schemas من `information_schema.schemata` عبر Supabase MCP؛ أعاد `alx_api_private` و`auth` و`public`. نص الاستعلام الأصلي لم يُحفظ في ملف نتيجة MCP، لذلك لم أعد إنشاء نص غير مؤكد.
+
+## [2026-10-06T23:10:08+03:00] — AI Model: Manus (GPT; المعرّف الدقيق غير معروض في runtime)
+```sql
+SELECT schema_name
+FROM information_schema.schemata
+WHERE schema_name = 'alx_api_private'
+LIMIT 10;
+```
+- استعلام catalog للقراءة فقط؛ أعاد schema `alx_api_private`. لم ينفذ DDL أو DML.

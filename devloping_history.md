@@ -2552,3 +2552,14 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 - أضيفت المسارات `POST /api/v1/portal/auth/register` و`PATCH /api/v1/portal/auth/profile` مع مخططات Zod وتوثيق OpenAPI.
 - أضيفت دوال Gateway في `alx_web` وربطها بـ `PortalAuthContext` خلف `VITE_PORTAL_REGISTRATION_API_ENABLED` و`VITE_PORTAL_PROFILE_API_ENABLED` لضمان cutover تدريجي.
 - لم يتم تنفيذ SQL مباشر أو تعديل بيانات قاعدة البيانات في هذه المهمة؛ التغيير محصور في طبقة API والعميل.
+
+
+## [2026-10-06T23:10:08+03:00] — استكمال Portal Auth API — AI Model: Manus (GPT; المعرّف الدقيق غير معروض في runtime)
+- استؤنف العمل على أحدث نسخة من `Aporaad/swiftship` عند `fda074c`، مع submodule `alx_web` عند `0dab367`.
+- حُسنت خدمة Portal Auth: عند إعادة استخدام refresh token قديم تُبطل عائلة الرموز والجلسات التابعة وتُسجل `refresh.reuse_detected`؛ وlogout يبطل الجلسة كاملة.
+- أُصلح حد المعاملة في repository باستعمال `PoolClient` واحد لـ BEGIN/COMMIT/ROLLBACK، وتُشترط صلاحية الجلسة أثناء تدوير refresh token.
+- أضيفت اختبارات service/repository للتسجيل، انتظار الاعتماد، تكرار الحساب، replay، logout وحدود transaction.
+- اكتملت مسارات Portal Auth في OpenAPI، ودُمجت مفاتيح المسارات المكررة السابقة دون فقد العمليات. تحقق YAML: 46 مساراً و57 عملية، مع operationIds ومراجع schemas فريدة/صالحة.
+- تمت مزامنة `alx_api/package-lock.json` مع `package.json` بعد اكتشاف عدم اتساق كان يمنع `npm ci`؛ نجح التثبيت بعد إعادة المحاولة.
+- التحقق النهائي: alx_api `check` و`build` و`lint` ناجحة، Jest **22 suites / 139 tests passed**. alx_web: `check` و`build` وVitest **7 tests passed** و`audit:portal-boundary` ناجح. أُزيلت آثار البناء المولدة من submodule وأعيدت شجرة عمله نظيفة.
+- لم تُفعّل أعلام Portal registration/profile؛ التسجيل عبر API لا يزال يحتاج إنشاء وربط كيان العميل/المندوب/المصدر والحساب المالي، كما لم يتوفر smoke test مستقل لقاعدة PostgreSQL.

@@ -55,3 +55,21 @@ SwiftShip / alx_web -> Feature Gateways -> alx_api -> PostgreSQL
 - فشل سابق في فحص الواجهة كان بسبب تمرير `--runInBand` إلى Vitest، وليس بسبب الكود؛ تمت إعادة التشغيل بالأمر الصحيح.
 - `npm audit --omit=dev --audit-level=high`: **14 vulnerabilities**، منها **7 high**؛ لم يتم تشغيل `npm audit fix` تلقائياً لتجنب تغييرات غير مراجعة.
 - لم يتم تنفيذ SQL أو DDL أو DML جديد على قاعدة البيانات في هذه الدفعة.
+
+
+## تحديث متابعة التنفيذ — [2026-10-06T23:10:08+03:00]
+
+### الحالة المؤكدة
+
+- بدأ الاستئناف على `Aporaad/swiftship` عند `fda074c`، و`alx_web` عند `0dab367`.
+- migration `0013_portal_auth_private_storage` ونسخة التصحيح ظاهرتان في سجل قاعدة Supabase كمطبقتين؛ الجداول الخاصة موجودة وRLS مفعّل. لم ينفذ هذا التحديث أي كتابة جديدة إلى قاعدة البيانات.
+- حُسنت معاملات `PortalAuthRepository` لاستخدام اتصال PostgreSQL واحد للمعاملة، مع إبطال refresh-token family عند إعادة الاستخدام، وإبطال الجلسة عند logout.
+- أصبح عقد OpenAPI صالحاً للتحليل بعد دمج مفاتيح `orders` و`shipments` و`products` المتكررة؛ يتضمن الآن نقاط Portal Auth السبع (register/login/refresh/logout/me/profile/password). تحقق parser من **46 path** و**57 operation**، وكل `operationId` ومراجع schemas محلولة.
+- التحقق البرمجي: alx_api: `check` و`build` و`lint` ناجحة، **22 suites / 139 tests passed**. alx_web: `check` و`build` ناجحة، **7 tests passed**، وPortal boundary audit ناجح.
+
+### ما لم يُغلق بعد — لا تفعّل أعلام التسجيل/الملف الشخصي
+
+- مسار Portal registration في API ينشئ هوية Portal وبيانات اعتمادها فقط، ولا ينشئ بعد كيان العميل/المندوب/المصدر والحساب المالي كما يفعل المسار القديم في `PortalAuthContext`. لذلك يبقى `VITE_PORTAL_REGISTRATION_API_ENABLED` غير مفعّل حتى اكتمال provisioning وربطه بمعاملة domain.
+- تحديث Portal profile في API لا يثبت بعد مزامنة كل الحقول مع كيان العميل/المندوب/المصدر، لذا لا يُفعّل `VITE_PORTAL_PROFILE_API_ENABLED` قبل استكمالها واختبارها.
+- لم يُجر smoke/integration test بحساب `alx_api_runtime` على PostgreSQL اختبارية معزولة. لا تستخدم قاعدة الإنتاج لإنشاء حسابات اختبارية؛ جهز staging مستقل، ثم اختبر صلاحيات grants/RLS، التسجيل والاعتماد، login/refresh/replay/logout، profile وتزامن الكيانات.
+- تبقى ملكية الموارد وتذاكر الدعم وطلبات العملاء ومراحل نقل الموقع ثم Hardening/الإطلاق حسب ترتيب المرحلة 10 و11 في الخطة.

@@ -121,6 +121,21 @@ paths:
               content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } },
             },
         }
+    post:
+      operationId: createOrder
+      summary: Create an order atomically with items, optional shipment, and history
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 8, maxLength: 200 }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CreateOrderInput' } } }
+      responses:
+        '200': { description: Order created or idempotent replay, content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } } }
+        '400': { description: Invalid input or missing idempotency key, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
   /api/v1/orders/{id}:
     get:
       operationId: getOrder
@@ -181,6 +196,16 @@ paths:
               content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } },
             },
         }
+    patch:
+      operationId: updateShipment
+      summary: Update shipment operational fields
+      security: [{ BearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ShipmentInput' } } }
+      responses:
+        '200': { description: Shipment updated, content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } } }
   /api/v1/shipments/{id}/tracking:
     get:
       operationId: getShipmentTracking
@@ -208,6 +233,15 @@ paths:
               content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } },
             },
         }
+    post:
+      operationId: createProduct
+      summary: Create a catalog product
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ProductInput' } } }
+      responses:
+        '200': { description: Product created, content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } } }
   /api/v1/products/{id}:
     get:
       operationId: getProduct
@@ -222,6 +256,16 @@ paths:
               content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } },
             },
         }
+    patch:
+      operationId: updateProduct
+      summary: Update a catalog product
+      security: [{ BearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ProductInput' } } }
+      responses:
+        '200': { description: Product updated, content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } } }
   /api/v1/portal/auth/register:
     post:
       operationId: postPortalAuthRegister
@@ -232,9 +276,56 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/PortalRegisterInput' }
       responses:
-        '200': { description: Portal account created, content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } } }
+        '200': { description: Portal account created, content: { application/json: { schema: { $ref: '#/components/schemas/PortalRegistrationEnvelope' } } } }
         '400': { description: Invalid registration input, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
         '409': { description: Account already exists, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+  /api/v1/portal/auth/login:
+    post:
+      operationId: postPortalAuthLogin
+      summary: Authenticate an approved Portal user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PortalLoginInput' }
+      responses:
+        '200': { description: Credentials accepted, content: { application/json: { schema: { $ref: '#/components/schemas/AuthTokenEnvelope' } } } }
+        '400': { description: Invalid login input, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+        '401': { description: Credentials are invalid, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+        '403': { description: Portal account is pending approval, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+  /api/v1/portal/auth/refresh:
+    post:
+      operationId: postPortalAuthRefresh
+      summary: Rotate a Portal refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefreshInput' }
+      responses:
+        '200': { description: Rotated token pair, content: { application/json: { schema: { $ref: '#/components/schemas/AuthTokenEnvelope' } } } }
+        '400': { description: Invalid refresh request, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+        '401': { description: Refresh token is invalid, expired, revoked, or reused, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+  /api/v1/portal/auth/logout:
+    post:
+      operationId: postPortalAuthLogout
+      summary: Revoke the Portal refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefreshInput' }
+      responses:
+        '200': { description: Refresh token and its session revoked, content: { application/json: { schema: { $ref: '#/components/schemas/LogoutEnvelope' } } } }
+        '400': { description: Invalid logout request, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+  /api/v1/portal/auth/me:
+    get:
+      operationId: getPortalAuthProfile
+      summary: Get the authenticated Portal profile
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200': { description: Portal profile returned, content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } } }
+        '401': { description: Authentication required, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
   /api/v1/portal/auth/profile:
     patch:
       operationId: patchPortalAuthProfile
@@ -249,6 +340,20 @@ paths:
         '200': { description: Updated Portal profile, content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } } }
         '401': { description: Authentication required, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
         '409': { description: Email already exists, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+  /api/v1/portal/auth/password:
+    patch:
+      operationId: patchPortalAuthPassword
+      summary: Change the authenticated Portal user's password
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PortalChangePasswordInput' }
+      responses:
+        '200': { description: Password changed, content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } } }
+        '400': { description: Invalid password input, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+        '401': { description: Authentication required or current password is invalid, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
   /api/v1/auth/login:
     post:
       operationId: postAuthLogin
@@ -575,30 +680,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
-  /api/v1/orders:
-    post:
-      operationId: createOrder
-      summary: Create an order atomically with items, optional shipment, and history
-      security: [{ BearerAuth: [] }]
-      parameters:
-        - name: Idempotency-Key
-          in: header
-          required: true
-          schema: { type: string, minLength: 8, maxLength: 200 }
-      requestBody:
-        required: true
-        content: { application/json: { schema: { $ref: '#/components/schemas/CreateOrderInput' } } }
-      responses:
-        '200':
-          {
-            description: Order created or idempotent replay,
-            content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } },
-          }
-        '400':
-          {
-            description: Invalid input or missing idempotency key,
-            content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } },
-          }
   /api/v1/orders/{id}/status:
     patch:
       operationId: updateOrderStatus
@@ -618,50 +699,6 @@ paths:
           {
             description: Status regression rejected,
             content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } },
-          }
-  /api/v1/shipments/{id}:
-    patch:
-      operationId: updateShipment
-      summary: Update shipment operational fields
-      security: [{ BearerAuth: [] }]
-      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
-      requestBody:
-        required: true
-        content: { application/json: { schema: { $ref: '#/components/schemas/ShipmentInput' } } }
-      responses:
-        '200':
-          {
-            description: Shipment updated,
-            content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } },
-          }
-  /api/v1/products:
-    post:
-      operationId: createProduct
-      summary: Create a catalog product
-      security: [{ BearerAuth: [] }]
-      requestBody:
-        required: true
-        content: { application/json: { schema: { $ref: '#/components/schemas/ProductInput' } } }
-      responses:
-        '200':
-          {
-            description: Product created,
-            content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } },
-          }
-  /api/v1/products/{id}:
-    patch:
-      operationId: updateProduct
-      summary: Update a catalog product
-      security: [{ BearerAuth: [] }]
-      parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
-      requestBody:
-        required: true
-        content: { application/json: { schema: { $ref: '#/components/schemas/ProductInput' } } }
-      responses:
-        '200':
-          {
-            description: Product updated,
-            content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } },
           }
   /api/v1/finance/accounts:
     get:
@@ -1024,6 +1061,38 @@ components:
         password: { type: string, minLength: 12, maxLength: 128 }
         portalRole: { type: string, enum: [customer, courier, supplier] }
         username: { type: string, minLength: 3, maxLength: 80 }
+    PortalAuthProfile:
+      type: object
+      additionalProperties: false
+      required: [portalUserId, username, email, fullName, phone, role, approvalStatus, onboardingCompleted]
+      properties:
+        portalUserId: { type: string }
+        username: { type: string }
+        email: { type: string, format: email }
+        fullName: { type: string }
+        phone: { type: string }
+        role: { type: string, enum: [customer, courier, supplier] }
+        approvalStatus: { type: string, enum: [approved, pending_approval, rejected] }
+        onboardingCompleted: { type: boolean }
+    PortalRegistrationResult:
+      type: object
+      additionalProperties: false
+      required: [profile, pendingApproval, tokens]
+      properties:
+        profile: { $ref: '#/components/schemas/PortalAuthProfile' }
+        pendingApproval: { type: boolean }
+        tokens:
+          oneOf:
+            - { $ref: '#/components/schemas/AuthTokenPair' }
+            - { type: 'null' }
+    PortalRegistrationEnvelope:
+      type: object
+      required: [success, data, requestId]
+      properties:
+        success: { type: boolean, const: true }
+        data: { $ref: '#/components/schemas/PortalRegistrationResult' }
+        meta: { type: object, additionalProperties: true }
+        requestId: { type: string }
     PortalProfileUpdateInput:
       type: object
       minProperties: 1
@@ -1032,6 +1101,20 @@ components:
         fullName: { type: string, minLength: 2, maxLength: 160 }
         phone: { type: string, minLength: 3, maxLength: 40 }
         email: { type: string, format: email, maxLength: 254 }
+    PortalLoginInput:
+      type: object
+      additionalProperties: false
+      required: [identifier, password]
+      properties:
+        identifier: { type: string, minLength: 1, maxLength: 254 }
+        password: { type: string, minLength: 1, maxLength: 128, format: password }
+    PortalChangePasswordInput:
+      type: object
+      additionalProperties: false
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword: { type: string, minLength: 1, maxLength: 128, format: password }
+        newPassword: { type: string, minLength: 12, maxLength: 128, format: password }
     LoginInput:
       type: object
       additionalProperties: false

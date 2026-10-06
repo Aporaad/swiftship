@@ -1362,3 +1362,9 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 ## [2026-10-06 04:39:30 +03:00] — مراجعة نطاق قاعدة البيانات الخاصة بـ Portal Auth
 - لم تُنفذ أوامر SQL مباشرة في هذه المرحلة، ولم تُطبق migration جديدة؛ تم الاعتماد على جداول migration 0013 الموجودة مسبقاً.
 - منطق الكتابة الجديد يستخدم معاملات PostgreSQL ذرية عبر repository لإنشاء سجل `public.portal_users` وسجل credential الخاص في `alx_api_private` عند تشغيل المسار.
+
+
+## [2026-10-06T23:10:08+03:00] — تحقق قاعدة البيانات لـ Portal Auth — AI Model: Manus (GPT; المعرّف الدقيق غير معروض في runtime)
+- أكد سجل Supabase أن migration `0013_portal_auth_private_storage` ونسخة التصحيح المرافقة مطبقتان، وأن جداول التخزين الخاص موجودة وRLS مفعّل.
+- لم تُنفذ أي DDL أو DML أو migration جديدة في هذه المهمة. اقتصر اتصال قاعدة البيانات على فحص catalog واستعراض migrations والجداول.
+- تغييرات SQL الموجودة في `portal-auth.repository.ts` تغيرات كود لم تُشغّل على قاعدة الإنتاج؛ يلزم تشغيل smoke/integration test على قاعدة اختبار منفصلة وبحساب runtime قبل تفعيل مسارات الكتابة.
