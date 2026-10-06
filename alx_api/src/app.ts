@@ -25,6 +25,8 @@ import { registerNotificationsRoutes } from './modules/notifications/notificatio
 import type { NotificationsRepository } from './modules/notifications/notifications.contracts';
 import { registerPortalRoutes } from './modules/portal/portal.routes';
 import type { PortalRepository } from './modules/portal/portal.contracts';
+import { registerPortalAuthRoutes } from './modules/portal/portal-auth.routes';
+import type { PortalAuthService } from './modules/portal/portal-auth.service';
 
 export interface ApiReadiness {
   database: boolean;
@@ -43,6 +45,7 @@ export interface AppOptions {
   roles?: RolesRepository;
   notifications?: NotificationsRepository;
   portal?: PortalRepository;
+  portalAuth?: PortalAuthService;
 }
 
 export function createApiApp(options: AppOptions): Express {
@@ -127,6 +130,7 @@ export function createApiApp(options: AppOptions): Express {
   if (options.notifications) registerNotificationsRoutes(app, environment, options.auth, options.notifications);
   // تفعيل وحدة البوابة العامة — Activate public portal module
   if (options.portal) registerPortalRoutes(app, environment, options.portal);
+  if (options.portalAuth) registerPortalAuthRoutes(app, environment, options.portalAuth);
 
   app.use('/api/v1', (_request, response) => {
     sendFailure(response, 404, 'ROUTE_NOT_FOUND', 'المسار المطلوب غير موجود.', String(response.locals.requestId));

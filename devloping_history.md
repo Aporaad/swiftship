@@ -2522,3 +2522,10 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 - أُضيف اختبار تعاقدي يغطي payloads ووجود مخازن credentials/sessions/refresh/events في private schema.
 - نجح `npm run check` و`npm run build` وESLint واختبار Portal Auth التعاقدي (4/4).
 - هذه بداية تأسيسية فقط؛ لم تُربط المسارات أو واجهة الموقع بعد حتى يكتمل Repository وتدوير الجلسات بشكل فعلي وآمن.
+
+## [2026-10-06T03:27:00+03:00] — AI Model: Manus
+- نُفذ `PortalAuthRepository` باستعلامات PostgreSQL مستقلة عن system users، ويغطي identity lookup وcredentials وsessions وrefresh rotation وlogout وتغيير كلمة المرور وتدقيق الأحداث.
+- نُفذ `PortalAuthService` لإصدار access tokens قصيرة العمر، إنشاء refresh sessions، تدوير refresh tokens لمرة واحدة، إبطال الجلسات عند تغيير كلمة المرور، والتحقق من حالة الحساب والاعتماد.
+- أُضيفت المسارات: `POST /api/v1/portal/auth/login`, `POST /refresh`, `POST /logout`, `GET /me`, و`PATCH /password` مع strict validation وBearer authentication.
+- رُبطت الوحدة في `app.ts` و`server.ts` باستخدام نفس Ed25519 issuer مع claims مستقلة لمعرف مستخدم البوابة.
+- نجح TypeScript check وbuild وESLint. اختبار Jest المشترك توقف بـ Segmentation fault في `tests/portal.test.ts` ضمن بيئة الجلسة، لذلك لا يُعتبر ذلك فشلًا وظيفيًا للمسارات الجديدة.

@@ -2243,3 +2243,7 @@ GRANT SELECT, INSERT, DELETE ON alx_api_private.role_permissions TO alx_api_runt
 ## [2026-10-06T03:06:30+03:00] — AI Model: Manus
 - لم يُنفذ أي أمر SQL عبر Supabase أو قاعدة البيانات في هذه المرحلة.
 - تمت إضافة SQL migration إلى المستودع فقط: `alx_api/src/db/migrations/0013_portal_auth_private_storage.sql`.
+
+## [2026-10-06T03:27:00+03:00] — AI Model: Manus
+- لم يُنفذ SQL على قاعدة البيانات في هذه الخطوة.
+- تم تنفيذ استعلامات SQL داخل كود `portal-auth.repository.ts` فقط، وستُنفذ عند تشغيل الخدمة بعد تطبيق migration الموثقة.

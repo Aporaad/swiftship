@@ -1906,3 +1906,10 @@
 - [منجز] إعداد migration خاصة ببيانات credentials والجلسات وrefresh rotation والأحداث داخل private schema، دون تطبيقها.
 - [متبقي في المرحلة الحالية] تنفيذ PortalAuthRepository الفعلي، login/refresh/logout، والتحقق من ownership وحالة اعتماد الحساب.
 - [متبقي في المرحلة الحالية] ربط PortalAuth routes وواجهة alx_web مع access/refresh tokens آمنة.
+
+## [2026-10-06T03:27:00+03:00] — AI Model: Manus
+- [منجز] تنفيذ `PortalAuthRepository` مع identity lookup وcredentials وsessions وrefresh token rotation وaudit events.
+- [منجز] تنفيذ وربط مسارات Portal Auth الخمسة: login وrefresh وlogout وme وchange-password.
+- [منجز] ربط Portal Auth في composition root مع Ed25519 access token issuer.
+- [متبقي] تطبيق migration 0013 على قاعدة اختبار/الإنتاج بعد موافقة التشغيل وتشغيل PostgreSQL smoke test.
+- [متبقي] تحديث `alx_web` لإزالة Supabase Auth من PortalAuthContext وربطه بالمسارات الجديدة بعد اجتياز smoke test.

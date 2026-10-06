@@ -171,3 +171,7 @@
 ## [2026-10-06T03:06:30+03:00] — بدء Portal Auth API
 
 بدأ تنفيذ Portal Auth كمسار مستقل عن system Auth. أُضيفت العقود والمخططات واختبار تعاقدي وmigration خاصة بالتخزين الخاص، مع عدم تطبيق migration قبل اكتمال repository والمسارات واختبار PostgreSQL. نجحت فحوص TypeScript وbuild وESLint واختبارات Portal Auth التعاقدية (4/4). ما زال login/refresh/logout وتغيير كلمة المرور وربط واجهة alx_web متبقيًا ضمن المرحلة نفسها.
+
+## [2026-10-06T03:27:00+03:00] — PortalAuthRepository ومسارات المصادقة
+
+اكتمل تنفيذ Repository وخدمة ومسارات Portal Auth. المسارات الجديدة هي `login`, `refresh`, `logout`, `me`, و`password`. تم ربطها بالـcomposition root واستخدام access tokens موقعة بـEd25519، مع refresh rotation وإبطال الجلسات عند تغيير كلمة المرور. نجح TypeScript وbuild وESLint، بينما توقف تشغيل Jest المشترك بــ Segmentation fault في اختبار Portal العام. ما زال تطبيق migration 0013 واختبار PostgreSQL الفعلي وربط `alx_web` متبقيًا قبل تفعيل المسارات في بيئة تشغيل متصلة.

@@ -1344,3 +1344,8 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 - أُنشئ ملف migration جديد `0013_portal_auth_private_storage.sql` لإنشاء `portal_credentials` و`portal_sessions` و`portal_refresh_tokens` و`portal_auth_events` داخل `alx_api_private`.
 - يفرض التصميم Argon2id فقط، وRLS وgrants للدور `alx_api_runtime`، ولا يمنح الواجهة أو الأدوار العامة صلاحية الوصول.
 - لم تُطبق migration على قاعدة البيانات بعد؛ سيجري تطبيقها فقط بعد اكتمال Repository والمسارات واختبار PostgreSQL، منعًا لإنشاء schema غير مستخدم في الإنتاج.
+
+## [2026-10-06T03:27:00+03:00] — AI Model: Manus
+- اكتمل كود التعامل مع migration `0013_portal_auth_private_storage.sql` عبر Repository، لكن لم تُطبق migration على قاعدة البيانات بعد.
+- لا يجوز تشغيل مسارات Portal Auth في بيئة متصلة قبل تطبيق migration واختبار الجداول والـRLS بحساب runtime.
+- عمليات password change وrefresh rotation مصممة داخل معاملات PostgreSQL، مع إبطال الجلسات القديمة وتسجيل أحداث المصادقة.

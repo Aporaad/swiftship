@@ -12,6 +12,9 @@ import { createUsersRepository } from './modules/users/users.repository';
 import { createRolesRepository } from './modules/roles/roles.repository';
 import { createNotificationsRepository } from './modules/notifications/notifications.repository';
 import { createPortalRepository } from './modules/portal/portal.repository';
+import { createPortalAuthRepository } from './modules/portal/portal-auth.repository';
+import { PortalAuthService } from './modules/portal/portal-auth.service';
+import { Ed25519AccessTokenIssuer } from './modules/auth/access-token';
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? 'info' });
 
@@ -30,6 +33,23 @@ function startServer(): void {
     database && environment.jwtPrivateKeyPem && environment.authDummyPasswordHash
       ? createAuthUseCases(database, environment)
       : undefined;
+  const portalAuth =
+    database && environment.jwtPrivateKeyPem && environment.jwtPublicKeyPem
+      ? new PortalAuthService(
+          createPortalAuthRepository(database.pool),
+          new Ed25519AccessTokenIssuer(environment.jwtPrivateKeyPem, environment.jwtIssuer, environment.jwtAudience),
+          {
+            accessTokenTtlSeconds: environment.accessTokenTtlSeconds,
+            refreshTokenTtlSeconds: environment.refreshTokenTtlSeconds,
+            accessTokenPublicKeyPem: environment.jwtPublicKeyPem,
+            jwtIssuer: environment.jwtIssuer,
+            jwtAudience: environment.jwtAudience,
+            argon2MemoryKiB: environment.argon2MemoryKiB,
+            argon2TimeCost: environment.argon2TimeCost,
+            argon2Parallelism: environment.argon2Parallelism,
+          },
+        )
+      : undefined;
   const appOptions = {
     environment,
     readiness: async () => ({ database: await isDatabaseReady(database?.pool) }),
@@ -43,8 +63,9 @@ function startServer(): void {
     // إشعارات وبوابة الموقع — Notifications & Portal repositories
     ...(database ? { notifications: createNotificationsRepository(database.pool) } : {}),
     ...(database ? { portal: createPortalRepository(database.pool) } : {}),
+    ...(portalAuth ? { portalAuth } : {}),
   };
-  const app = auth ? createApiApp({ ...appOptions, auth }) : createApiApp(appOptions);
+  const app = createApiApp({ ...appOptions, ...(auth ? { auth } : {}) });
   const server = app.listen(environment.port, environment.host, () => {
     logger.info(
       {
