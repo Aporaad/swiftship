@@ -2545,3 +2545,10 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 - تم توصيل `PortalAuthContext` بالبوابة الجديدة خلف `VITE_PORTAL_AUTH_API_ENABLED`، مع إبقاء التسجيل وتحديث بيانات الكيانات على Legacy مؤقتاً لأن عقود Portal write المقابلة لم تكتمل في `alx_api`.
 - تم إضافة اختبارات Gateway؛ نجحت اختبارات alx_web وعددها 7 اختبارات، ونجح TypeScript وPortal boundary audit.
 - تم رفع commit `9049714 feat(auth): route portal auth through alx api` إلى مستودع `Aporaad/alx_web`.
+
+## [2026-10-06 04:39:30 +03:00] — استكمال Portal Auth API للتسجيل والملف الشخصي
+- أضيفت معاملات repository ذرية لإنشاء `portal_users` و`alx_api_private.portal_credentials` وتسجيل حدث التسجيل، مع تحديث بيانات الملف الشخصي.
+- أضيفت خدمة `PortalAuthService.register` باستخدام Argon2id، حالات اعتماد customer/courier/supplier، وإصدار جلسة للعميل المعتمد.
+- أضيفت المسارات `POST /api/v1/portal/auth/register` و`PATCH /api/v1/portal/auth/profile` مع مخططات Zod وتوثيق OpenAPI.
+- أضيفت دوال Gateway في `alx_web` وربطها بـ `PortalAuthContext` خلف `VITE_PORTAL_REGISTRATION_API_ENABLED` و`VITE_PORTAL_PROFILE_API_ENABLED` لضمان cutover تدريجي.
+- لم يتم تنفيذ SQL مباشر أو تعديل بيانات قاعدة البيانات في هذه المهمة؛ التغيير محصور في طبقة API والعميل.

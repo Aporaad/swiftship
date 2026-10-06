@@ -1358,3 +1358,7 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 ## [2026-10-06 01:12:40 +0000] — تكامل Portal Auth دون تعديل قاعدة البيانات — AI Model: Manus (المعرّف الدقيق غير معروض في runtime)
 - لم يتم تطبيق migration أو تنفيذ SQL جديد.
 - تم ربط `alx_web` بعقود Portal Auth API فقط، مع إبقاء التسجيل وكتابات الكيانات خارج النقل حتى تكتمل عقودها.
+
+## [2026-10-06 04:39:30 +03:00] — مراجعة نطاق قاعدة البيانات الخاصة بـ Portal Auth
+- لم تُنفذ أوامر SQL مباشرة في هذه المرحلة، ولم تُطبق migration جديدة؛ تم الاعتماد على جداول migration 0013 الموجودة مسبقاً.
+- منطق الكتابة الجديد يستخدم معاملات PostgreSQL ذرية عبر repository لإنشاء سجل `public.portal_users` وسجل credential الخاص في `alx_api_private` عند تشغيل المسار.

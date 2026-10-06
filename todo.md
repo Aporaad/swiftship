@@ -1933,3 +1933,7 @@
 - [x] رفع `alx_web` commit `9049714`.
 - [ ] نقل Portal registration وprofile/entity writes بعد توفير عقود الكتابة في alx_api.
 - [ ] تطبيق migration 0013 واختبار PostgreSQL الفعلي بحساب API runtime.
+
+- [x] [2026-10-06 04:39:30 +03:00] تنفيذ business logic لتسجيل Portal وتحديث الملف الشخصي عبر API خلف Feature Flags مستقلة.
+- [x] [2026-10-06 04:39:30 +03:00] إضافة مسارات التسجيل وتحديث الملف إلى OpenAPI، وربط Gateway وPortalAuthContext في alx_web.
+- [ ] [2026-10-06 04:39:30 +03:00] استكمال ربط التسجيل بكيانات العميل/المندوب/المصدر والحساب المالي قبل تفعيل أعلام التسجيل في الإنتاج.

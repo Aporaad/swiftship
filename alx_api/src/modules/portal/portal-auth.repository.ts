@@ -159,6 +159,54 @@ export function createPortalAuthRepository(pool: Pool): PortalAuthRepository {
         await pool.query('COMMIT');
       } catch (error) { await pool.query('ROLLBACK'); throw error; }
     },
+    async createPortalUser(input) {
+      await pool.query('BEGIN');
+      try {
+        await pool.query(
+          `INSERT INTO public.portal_users
+             (portal_user_id, type, phone, portal_role, username, email, disabled,
+              approval_status, full_name, onboarding_completed, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, false, $7, $8, $9, $10, $10)`,
+          [input.portalUserId, input.role, input.phone, input.role, input.username, input.email,
+            input.approvalStatus, input.fullName, input.onboardingCompleted, input.createdAt],
+        );
+        await pool.query(
+          `INSERT INTO alx_api_private.portal_credentials (portal_user_id, password_hash, updated_at)
+           VALUES ($1, $2, $3)`,
+          [input.portalUserId, input.passwordHash, input.createdAt],
+        );
+        await pool.query(
+          `INSERT INTO alx_api_private.portal_auth_events (portal_user_id, event_type, success, created_at)
+           VALUES ($1, 'registration.success', true, $2)`,
+          [input.portalUserId, input.createdAt],
+        );
+        await pool.query('COMMIT');
+        const created = await this.findIdentityById(input.portalUserId);
+        if (!created) throw new Error('PORTAL_USER_CREATE_FAILED');
+        return created;
+      } catch (error) {
+        await pool.query('ROLLBACK');
+        throw error;
+      }
+    },
+    async updatePortalProfile(input) {
+      const result = await pool.query<Record<string, unknown>>(
+        `UPDATE public.portal_users
+            SET username = COALESCE($2, username),
+                email = COALESCE($3, email),
+                full_name = COALESCE($4, full_name),
+                phone = COALESCE($5, phone),
+                updated_at = $6
+          WHERE portal_user_id = $1
+          RETURNING portal_user_id AS "portalUserId", username, email, full_name AS "fullName",
+                    phone, portal_role AS "portalRole", approval_status AS "approvalStatus",
+                    onboarding_completed AS "onboardingCompleted", disabled`,
+        [input.portalUserId, input.username ?? null, input.email ?? null, input.fullName ?? null, input.phone ?? null, input.updatedAt],
+      );
+      const row = result.rows[0];
+      if (!row) throw new Error('PORTAL_USER_NOT_FOUND');
+      return identity(row);
+    },
     async recordEvent(input) {
       await pool.query(`INSERT INTO alx_api_private.portal_auth_events (portal_user_id, event_type, success, created_at) VALUES ($1, $2, $3, $4)`, [input.portalUserId, input.eventType, input.success, input.occurredAt]);
     },

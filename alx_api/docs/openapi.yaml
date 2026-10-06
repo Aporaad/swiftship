@@ -222,6 +222,33 @@ paths:
               content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } },
             },
         }
+  /api/v1/portal/auth/register:
+    post:
+      operationId: postPortalAuthRegister
+      summary: Register a Portal user with an Argon2id credential
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PortalRegisterInput' }
+      responses:
+        '200': { description: Portal account created, content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } } }
+        '400': { description: Invalid registration input, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+        '409': { description: Account already exists, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+  /api/v1/portal/auth/profile:
+    patch:
+      operationId: patchPortalAuthProfile
+      summary: Update the authenticated Portal profile
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PortalProfileUpdateInput' }
+      responses:
+        '200': { description: Updated Portal profile, content: { application/json: { schema: { $ref: '#/components/schemas/SuccessEnvelope' } } } }
+        '401': { description: Authentication required, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
+        '409': { description: Email already exists, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } } }
   /api/v1/auth/login:
     post:
       operationId: postAuthLogin
@@ -986,6 +1013,25 @@ components:
         unitPrice: { type: number, minimum: 0 }
         itemCategoryId: { type: string }
         weight: { type: number, minimum: 0 }
+    PortalRegisterInput:
+      type: object
+      required: [fullName, phone, email, password, portalRole]
+      additionalProperties: false
+      properties:
+        fullName: { type: string, minLength: 2, maxLength: 160 }
+        phone: { type: string, minLength: 3, maxLength: 40 }
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 12, maxLength: 128 }
+        portalRole: { type: string, enum: [customer, courier, supplier] }
+        username: { type: string, minLength: 3, maxLength: 80 }
+    PortalProfileUpdateInput:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        fullName: { type: string, minLength: 2, maxLength: 160 }
+        phone: { type: string, minLength: 3, maxLength: 40 }
+        email: { type: string, format: email, maxLength: 254 }
     LoginInput:
       type: object
       additionalProperties: false
