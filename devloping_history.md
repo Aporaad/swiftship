@@ -1,4 +1,4 @@
-# سجل تطوير المشروع — devloping_history.md
+﻿# سجل تطوير المشروع — devloping_history.md
 # ملاحظه مهمه : يمنع منعا باتا حذف اي بيانات سابقه في هذا الملف ويتم فقط ادراج المهام الاخيره
 # سجل التطوير الشامل — SWIFTSHIP_SYSTEM
 
@@ -2632,3 +2632,25 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 - تم تحديث `portalAuthGateway` و`.env.example` وتحوّلت صفحات التذاكر ودفتر العميل وطلبات العميل ولوحة العميل إلى alx_api دون fallback صامت.
 - تحقق محلياً: `npm run check` و`npm test -- --run` في `alx_web` نجحا: 3 ملفات اختبار و14 اختباراً.
 - نتيجة التدقيق الشامل: ما زالت نقاط اعتماد مباشر/قديم في صفحات المندوب والمورد والبحث وطلبات الوظائف وملفات التوافق؛ لم تُعتبر المرحلة مكتملة.
+
+## [2026-10-07 06:23:00] — حل مشكلة عدم المزامنة مع المستودع البعيد (Diverged Branches)
+
+### المشكلة:
+- الفرع المحلي main والبعيد swiftship/main كانا في حالة **Diverged**:
+  - محلي: 2 commits جديدة (fix alx_api git, add alx_api repo)
+  - بعيد: 3 commits جديدة (docs, chore)
+- lx_api/ كانت مُدرجة خطأً في .gitignore السطر 1، مما منع git من تتبع submodule صحياً.
+- lx_web submodule كان في حالة غير مُهيأة (- prefix).
+
+### الحل المنفذ:
+1. **تشخيص المشكلة**: فحص git status, remote -v, log --graph, submodule status.
+2. **إصلاح .gitignore**: حذف lx_api/ من السطر الأول.
+3. **تنظيف الملفات**: إزالة package-lock copy.json وإضافة lx_api/.gitignore.
+4. **Commit المحلي**: ix: remove alx_api from gitignore and clean up alx_api files.
+5. **Merge البعيد**: git merge swiftship/main --strategy-option=theirs - نجح بدون تعارضات.
+6. **تهيئة Submodules**: git submodule update --init --recursive.
+7. **Push للبعيد**: رفع 4 commits بنجاح إلى swiftship/main.
+
+### النتيجة:
+- المستودع المحلي والبعيد متزامنان تماماً (325121e).
+- lx_web submodule مُهيأ ومتزامن.
