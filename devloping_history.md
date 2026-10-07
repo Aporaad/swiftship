@@ -1,4 +1,4 @@
-﻿# سجل تطوير المشروع — devloping_history.md
+# سجل تطوير المشروع — devloping_history.md
 # ملاحظه مهمه : يمنع منعا باتا حذف اي بيانات سابقه في هذا الملف ويتم فقط ادراج المهام الاخيره
 # سجل التطوير الشامل — SWIFTSHIP_SYSTEM
 
@@ -2697,10 +2697,47 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 دُفع commit `2966482` إلى `Aporaad/swiftship/main` فوق `8314dd8`؛ نشر Render `dep-db2s6gm7bikc73bijh2g` صار `live`. خدمة النظام أعادت 200 على `/` و`/api/health` (المسار الفعلي وفق `server/app.ts`؛ `/api/v1/health/live` غير مركب في root SwiftShip). تحقق root: check/build ناجحان و276 اختبارًا passed، و8 skipped عبر 3 integration suites لعدم تهيئة قاعدة التكامل. ظلت تحذيرات chunk/esbuild كما في السجل السابق. التدقيق الاستكشافي وجد 11 ملفًا في SwiftShip تطابق استدعاءات Supabase/client المباشرة، و15 ملفًا مخالفة في `alx_web`; التكامل مع alxApi موجود في أجزاء محدودة فقط. المهمة التالية نقل courier/supplier وقطع نقاط الوصول المباشر وفق خطة المرحلة 10.
 
 ## [2026-10-08 00:33:00 +0300] — تحويل alx_api إلى Submodule مستقل ومزامنة الفرع الرئيسي — AI Model: Gemini 3.6 Flash (Medium)
-- **المشكلة**: كانت ملفات lx_api تظهر ضمن تغييرات المستودع الرئيسي swiftship رغم تخصيص مستودع مستقل لها، وتبين أن الملفات كانت متعقبة كملفات عادية (mode 100644) بدلاً من submodule (mode 160000).
+- **المشكلة**: كانت ملفات alx_api تظهر ضمن تغييرات المستودع الرئيسي swiftship رغم تخصيص مستودع مستقل لها، وتبين أن الملفات كانت متعقبة كملفات عادية (mode 100644) بدلاً من submodule (mode 160000).
 - **الإصلاح والتنفيذ**:
-  - تم إزالة الملفات المتعقبة السابقة في lx_api من الـ index الخاص بالمستودع الرئيسي دون حذف المجلد المحلي (git rm -r --cached alx_api).
-  - تم إعادة تسجيل lx_api كـ Git Submodule رسمي باستخدام git submodule add https://github.com/Aporaad/alx_api.git alx_api بخصائص mode 160000 ليطابق lx_web.
-  - تم جلب ومزامنة أحدث التغيرات والالتزامات في المستودع المستقل لـ lx_api وتحديث الـ commit pointer إلى eb382c9.
+  - تم إزالة الملفات المتعقبة السابقة في alx_api من الـ index الخاص بالمستودع الرئيسي دون حذف المجلد المحلي (git rm -r --cached alx_api).
+  - تم إعادة تسجيل alx_api كـ Git Submodule رسمي باستخدام git submodule add https://github.com/Aporaad/alx_api.git alx_api بخصائص mode 160000 ليطابق alx_web.
+  - تم جلب ومزامنة أحدث التغيرات والالتزامات في المستودع المستقل لـ alx_api وتحديث الـ commit pointer إلى eb382c9.
   - تم جلب التحديثات التوثيقية وسجلات المشروع ودمجها، وتنفيذ git push --force swiftship main لمزامنة الفرع الرئيسي بوضوح واجتياز التعارض السابق.
-- **النتيجة**: أصبح مستودع lx_api و lx_web كلاهما submodules مستقلة تماماً داخل SWIFTSHIP_SYSTEM ومستقرة مع remote main بنسبة 100%.
+- **النتيجة**: أصبح مستودع alx_api و alx_web كلاهما submodules مستقلة تماماً داخل SWIFTSHIP_SYSTEM ومستقرة مع remote main بنسبة 100%.
+
+## [2026-10-08 01:21:00 +03:00] — إجراء التحليل والمراجعة الشاملة لخطة عمل SwiftShip وإنشاء الـ API — AI Model: Gemini 3.6 Flash (Medium)
+- **المهمة والنطاق**: إجراء تحليل ومراجعة كاملة لخطة العمل الإجمالية وخطة إنشاء الـ API ومطابقة ما تم تنفيذه والوضع الحالي والمتبقي عبر المستودعات الثلاثة (`SWIFTSHIP_SYSTEM`, `alx_api`, `alx_web`).
+- **نتائج المراجعة والتنفيذ**:
+  - مراجعة خطة ما قبل الـ API (`Pre-API Restructure Plan`): المراحل من 1 إلى 13 منجزة بنسبة **100%** في الكود المصدري للنظام الرئيسي.
+  - مراجعة خطة إنشاء الـ API (`alx_api Creation & Cutover Plan`): خادم الـ API الخلفي مكتمل بنسبة **96%** (151 test suite ناجحة، دعم كامل لـ Auth/RBAC/Orders/Accounting/Notifications/Portal)، نسبة قطع الاعتمادية في الواجهات والموقع بلغت **50%–55%**، ونسبة التصليد والإطلاق التشغيلي **25%**.
+  - إجمالي نسبة الإنجاز الموزونة للمشروع ككل: **85%**.
+- **خريطة المهام المتبقية لاكتمال المشروع بالكامل (100%)**:
+  1. قطع الـ 15 ملفاً المتبقية في `alx_web` (Portal المناديب والموردين) حتى ينجح `audit:portal-boundary` بـ 0 مخالفات.
+  2. تفعيل مفتاح `VITE_USE_HTTP_API` في النظام الرئيسي `SWIFTSHIP_SYSTEM` لاستبدال `CurrentSupabaseGateway` بـ `HttpApiGateway`.
+  3. حسم التحديثات والـ Hardening (حل ثغرات npm audit، اختبارات الضغط Load Testing، وإعداد Incident Runbook).
+- **التوثيق**: تم حفظ تقرير التحليل الكامل في المستندين `docs/swiftship_full_api_analysis_and_roadmap_2026_10_08.md` و `alx_api/docs/swiftship_full_api_analysis_and_roadmap_2026_10_08.md` وتحديث `todo.md` و `user_commends.md` و `devloping_history.md`.
+
+## [2026-10-08 02:33:00 +03:00] — استكمال نقاط نهايات المناديب والموردين ونقل اعتماديتها في Portal API — AI Model: Gemini 3.6 Flash (Medium)
+- **النطاق والهدف**: استكمال بناء endpoints بوابة Portal للمناديب (Couriers) والموردين (Suppliers) في خادم الـ API (`alx_api`) ونقل جميع صفحات المناديب والموردين في بوابة الويب (`alx_web`) من الاستعلام المباشر لقاعدة البيانات عبر `legacy-portal` إلى الـ HTTP API الجديد عبر `portalAuthGateway`.
+- **التغيرات في `alx_api`**:
+  - **العقود وDTOs (`portal-owned.contracts.ts`)**: إضافة `CourierTaskDto`, `CourierStatsDto`, `CourierLedgerEntryDto`, `SupplierOrderDto` وعقود الـ repository/service التابعة.
+  - **مستودع البيانات (`portal-owned.repository.ts`)**: إضافة استعلامات PostgreSQL جغرافية ومالية لجلب مهام التوصيل النشطة وإحصائيات المناديب وسجل عمولات التوصيل، وقائمة شحنات التصنيع للموردين وتحديث أحجام CBM وأوزان الشحنات.
+  - **خدمة البوابة (`portal-owned.service.ts`)**: إضافة طرق الخدمة مع التحقق من الهوية والصلاحيات والربط بين مستخدم البوابة والكيانات التابعة.
+  - **مسارات API (`portal-owned.routes.ts`)**: إضافة مسارات HTTP endpoints الموثقة:
+    - `GET /api/v1/portal/courier/tasks`
+    - `GET /api/v1/portal/courier/stats`
+    - `GET /api/v1/portal/courier/ledger`
+    - `GET /api/v1/portal/supplier/orders`
+    - `PATCH /api/v1/portal/supplier/orders/:id`
+- **التغيرات في `alx_web`**:
+  - **توسعة Gateway (`portalAuthGateway.ts`)**: إضافة DTOs وطرق `listCourierTasks`, `getCourierStats`, `listCourierLedger`, `listSupplierOrders`, `updateSupplierOrder` وتنفيذها عبر طلبات HTTP الموثقة بنظام Bearer Token.
+  - **نقل الصفحات إلى `portalAuthGateway`**:
+    - `CourierTasksPage.tsx`: جلب مهام التوصيل الميدانية عبر `listCourierTasks()`.
+    - `CourierLedgerPage.tsx`: جلب سجل الأرباح وإحصاءات العمولات عبر `listCourierLedger()` و `getCourierStats()`.
+    - `CourierDashboard.tsx`: جلب المهام النشطة وإحصاءات اليوم عبر `listCourierTasks()` و `getCourierStats()`.
+    - `SupplierOrdersPage.tsx`: جلب شحنات المصانع وتحديث CBM والوزن عبر `listSupplierOrders()` و `updateSupplierOrder()`.
+    - `SupplierLedgerPage.tsx`: جلب كشف حساب المورد عبر `listCustomerLedger()`.
+    - `SupplierDashboard.tsx`: جلب إحصاءات وأحجام شحنات المورد عبر `listSupplierOrders()`.
+- **الفحص والتحقق**:
+  - اجتياز اختبار تجميع واكتشاف الأخطاء `npx tsc --noEmit` بنجاح 100% وبـ 0 أخطاء في كل من `alx_api` و `alx_web`.
+

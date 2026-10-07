@@ -1,4 +1,4 @@
-﻿# قائمة المهام — todo.md
+# قائمة المهام — todo.md
 # قائمة المهام والتطوير — SWIFTSHIP_SYSTEM
 # Project TODO
 # ملاحظه مهمه : يمنع منعا باتا حذف اي بيانات سابقه في هذا الملف ويتم فقط ادراج المهام الاخيره
@@ -2074,3 +2074,21 @@
 - [x] إزالة تتبع ملفات lx_api العادية من الـ index وإضافتها كـ Git Submodule متكامل (mode 160000) يربط https://github.com/Aporaad/alx_api.git.
 - [x] مزامنة أحدث commit لـ lx_api (eb382c9) وتحديث .gitmodules.
 - [x] حسم التعارض والتفرع وتحديث مستندات المشروع، ورفع التغييرات بنجاح إلى المستودع البعيد swiftship/main.
+
+## [2026-10-08 01:21 +03:00] — تحليل ومراجعة شاملة لخطة العمل الإجمالية وخطة الـ API
+- [x] إجراء تحليل ومراجعة شاملة لخطة التهيئة المسبقة للنظام (`Pre-API Restructure Plan`: المراحل 1–13) ومطابقة نتائج التنفيذ.
+- [x] إجراء تحليل ومراجعة تفصيلية لخطة إنشاء الـ API ونقل الاعتمادية (`alx_api Creation & Cutover Plan`: المراحل 0–11) وتدقيق حالة المستودعات الثلاثة (`swiftship`, `alx_api`, `alx_web`).
+- [x] حساب نسب الإنجاز الدقيقة لكل مرحلة: بناء الـ API الخلفي (96%)، نقل الاعتمادية في الواجهات (50-55%)، التصليد والأمان والإطلاق (25%)، والنسبة الإجمالية الموزونة للمشروع (85%).
+- [x] تحديد وتدوين خريطة الطريق التفصيلية للمهام المتبقية لاكتمال نقل الاعتمادية بالكامل 100% (قطع الـ 15 ملفاً المتبقية في `alx_web` وتصفية `audit:portal-boundary`، تفعيل `VITE_USE_HTTP_API` في النظام، وتطبيق حزمة Hardening والاختبارات والأمان).
+- [x] حفظ التحليل المستند المكتمل في ملفين متاحين بالمشروع: `docs/swiftship_full_api_analysis_and_roadmap_2026_10_08.md` و `alx_api/docs/swiftship_full_api_analysis_and_roadmap_2026_10_08.md`.
+
+## [2026-10-08 02:33 +03:00] — استكمال نقاط النهاية ونقل الاعتمادية للمناديب والموردين في Portal API
+- [x] إضافة DTOs وعقود المناديب والموردين إلى `alx_api/src/modules/portal/portal-owned.contracts.ts`.
+- [x] إضافة وتنفيذ استعلامات PostgreSQL للمناديب والموردين في `alx_api/src/modules/portal/portal-owned.repository.ts`.
+- [x] إضافة خدمات المناديب والموردين مع التحقق من الهوية والصلاحيات في `alx_api/src/modules/portal/portal-owned.service.ts`.
+- [x] إضافة مسارات API الكاملة للمناديب والموردين (`/api/v1/portal/courier/*` و `/api/v1/portal/supplier/*`) في `alx_api/src/modules/portal/portal-owned.routes.ts`.
+- [x] توثيق وتطبيق الواجهة في بوابة البوابة `alx_web/src/api/portalAuthGateway.ts` وتوفير الاستدعاءات عبر HTTP API.
+- [x] نقل واجهات المناديب (`CourierTasksPage`, `CourierLedgerPage`, `CourierDashboard`) وواجهات الموردين (`SupplierOrdersPage`, `SupplierLedgerPage`, `SupplierDashboard`) لاستخدام `portalAuthGateway`.
+- [x] إجراء الفحص واختبار الأنواع البرمجية `npx tsc --noEmit` للمستودعين `alx_api` و `alx_web` بنجاح دون أي خطأ.
+
+
