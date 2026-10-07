@@ -2593,3 +2593,16 @@ GRANT USAGE ON SCHEMA alx_api_private TO alx_api_runtime;
 -- alx_api/src/db/migrations/0017_portal_payment_requests.sql
 -- النتيجة: success=true لكل migration، ثم تحقق list_migrations من تسجيل الإصدارات.
 ```
+
+
+## [2026-10-07 03:41 +03:00] — AI Model: Manus
+```sql
+-- لم يتم تنفيذ أي أمر SQL جديد في هذه المرحلة.
+-- تم الاكتفاء بقراءة مشروع Supabase والتحقق من حالته قبل إعداد خدمة Render.
+```
+
+
+## [2026-10-07 04:12 +03:00] — AI Model: Manus
+```sql
+-- لم يتم تنفيذ SQL جديد؛ التغيير كان في package.json وإعداد Render فقط.
+```

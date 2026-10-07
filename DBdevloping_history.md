@@ -1399,3 +1399,15 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 - تم تطبيق `cust_details_rls_0016` لتفعيل RLS وفرض ملكية `cust_details` للمستخدم مع صلاحية runtime.
 - تم تطبيق `portal_payment_requests_0017` لإنشاء `alx_api_private.portal_payment_requests` مع حالات pending/rejected/settled، منع التكرار، ربط القيد المرحّل، وRLS runtime.
 - تم التحقق عبر `list_migrations` من تسجيل الإصدارات الأربعة في قاعدة البيانات.
+
+
+## [2026-10-07 03:41 +03:00] — مراجعة قاعدة البيانات قبل تشغيل alx_api
+**النموذج المنفذ:** Manus
+
+تم التحقق من مشروع Supabase المرتبط وحالته `ACTIVE_HEALTHY` دون تنفيذ أي تغيير على المخطط أو البيانات. يلزم توفير/تأكيد بيانات اتصال runtime السرية قبل تشغيل API على Render.
+
+
+## [2026-10-07 04:12 +03:00] — تحديث تشغيل swiftship
+**النموذج المنفذ:** Manus
+
+لا توجد تغييرات على قاعدة البيانات في هذه الخطوة؛ تم إصلاح توافق أمر تشغيل الإنتاج فقط.
