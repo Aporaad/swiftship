@@ -1795,3 +1795,17 @@ Now continue the task based on the inherited context and files.
 ```text
 جاهز لقد غيرته الى npm run start:prod
 ```
+
+
+## [2026-10-07 04:21 +03:00] — AI Model: Manus
+```text
+جاهز لقد غيرت الى 
+Build Command: npm install; npm run build
+Start Command: npm run start:prod
+
+قم بفحص سجلات خدمة swiftship على Render بعد تعديل أوامر التشغيل والتاكد من استقرار الذاكرة وعدم حدوث OOM مجدداً.
+اختبار جميع مسارات الـ API في alx_api والتأكد من توافقها التام مع قاعدة بيانات Supabase وخدمة swiftship.
+قم بعمل فحص شامل لجميع متغيرات البيئة (Environment Variables) لكل من alx_api و alx_web و swiftship على Render للتأكد من خلوها من أي أخطاء.
+
+وبعدها اكمل تنفيذ خطه انشاء ال api
+```

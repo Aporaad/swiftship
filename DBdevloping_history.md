@@ -1411,3 +1411,9 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 **النموذج المنفذ:** Manus
 
 لا توجد تغييرات على قاعدة البيانات في هذه الخطوة؛ تم إصلاح توافق أمر تشغيل الإنتاج فقط.
+
+
+## [2026-10-07 04:28 +03:00] — تحقق الإنتاج
+**النموذج المنفذ:** Manus
+
+لم تُنفذ أي migrations أو تغييرات DDL/DML جديدة. تم التحقق من اتصال alx_api بقاعدة Supabase عبر health/ready، ومن توافق الحماية وCORS عبر HTTP فقط.

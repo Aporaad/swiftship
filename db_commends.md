@@ -2606,3 +2606,11 @@ GRANT USAGE ON SCHEMA alx_api_private TO alx_api_runtime;
 ```sql
 -- لم يتم تنفيذ SQL جديد؛ التغيير كان في package.json وإعداد Render فقط.
 ```
+
+
+## [2026-10-07 04:28 +03:00] — AI Model: Manus
+```sql
+-- لم يتم تنفيذ SQL جديد في هذه المرحلة.
+-- تم اختبار توافق قاعدة البيانات عبر GET /api/v1/health/ready
+-- الذي أكد database=true وauth=true، إضافة إلى فحص مسارات HTTP غير هدّام.
+```
