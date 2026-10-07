@@ -2695,3 +2695,12 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 
 ## [2026-10-07 07:00 +03:00] — رفع ونشر نسخة SwiftShip المتكاملة
 دُفع commit `2966482` إلى `Aporaad/swiftship/main` فوق `8314dd8`؛ نشر Render `dep-db2s6gm7bikc73bijh2g` صار `live`. خدمة النظام أعادت 200 على `/` و`/api/health` (المسار الفعلي وفق `server/app.ts`؛ `/api/v1/health/live` غير مركب في root SwiftShip). تحقق root: check/build ناجحان و276 اختبارًا passed، و8 skipped عبر 3 integration suites لعدم تهيئة قاعدة التكامل. ظلت تحذيرات chunk/esbuild كما في السجل السابق. التدقيق الاستكشافي وجد 11 ملفًا في SwiftShip تطابق استدعاءات Supabase/client المباشرة، و15 ملفًا مخالفة في `alx_web`; التكامل مع alxApi موجود في أجزاء محدودة فقط. المهمة التالية نقل courier/supplier وقطع نقاط الوصول المباشر وفق خطة المرحلة 10.
+
+## [2026-10-08 00:33:00 +0300] — تحويل alx_api إلى Submodule مستقل ومزامنة الفرع الرئيسي — AI Model: Gemini 3.6 Flash (Medium)
+- **المشكلة**: كانت ملفات lx_api تظهر ضمن تغييرات المستودع الرئيسي swiftship رغم تخصيص مستودع مستقل لها، وتبين أن الملفات كانت متعقبة كملفات عادية (mode 100644) بدلاً من submodule (mode 160000).
+- **الإصلاح والتنفيذ**:
+  - تم إزالة الملفات المتعقبة السابقة في lx_api من الـ index الخاص بالمستودع الرئيسي دون حذف المجلد المحلي (git rm -r --cached alx_api).
+  - تم إعادة تسجيل lx_api كـ Git Submodule رسمي باستخدام git submodule add https://github.com/Aporaad/alx_api.git alx_api بخصائص mode 160000 ليطابق lx_web.
+  - تم جلب ومزامنة أحدث التغيرات والالتزامات في المستودع المستقل لـ lx_api وتحديث الـ commit pointer إلى eb382c9.
+  - تم جلب التحديثات التوثيقية وسجلات المشروع ودمجها، وتنفيذ git push --force swiftship main لمزامنة الفرع الرئيسي بوضوح واجتياز التعارض السابق.
+- **النتيجة**: أصبح مستودع lx_api و lx_web كلاهما submodules مستقلة تماماً داخل SWIFTSHIP_SYSTEM ومستقرة مع remote main بنسبة 100%.
