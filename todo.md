@@ -2014,6 +2014,21 @@
 - تم توسيع فحص حدود البوابة؛ ما زالت صفحات المندوب والمورد والبحث وطلبات الوظائف وطبقة التوافق بحاجة إلى ترحيل.
 - المهام التالية حسب الخطة: إضافة عقود API لعمليات المندوب والمورد والبحث وطلبات الوظائف، ترحيل SwiftShip server/UI من Supabase إلى alx_api، ثم ضبط متغيرات Render وإجراء smoke/end-to-end نهائي بعد نشر commits الجديدة.
 
+## [2026-10-07 06:08 +03:00] — متابعة إنشاء alx_api
+- استئناف مراجعة نقطة توقف 05:08؛ آخر بند مفتوح هو عقود courier/supplier/search/job applications ثم نقل الواجهات تدريجيًا إلى API.
+- النسخة المستقلة alx_api تطابق تقريبًا نسخة SwiftShip المضمنة؛ migrations `0014–0017` مسجلة بالفعل فلا تعاد.
+- التحقق المحلي: alx_api (23 suites / 143 tests) وSwiftShip root اجتازا check/tests/build؛ alx_web اجتاز check و14 اختبارًا، لكن `audit:portal-boundary` فشل بسبب مراجع Supabase المتبقية في صفحات المندوب والمورد والبحث والوظائف وملفات التوافق.
+- الخطوة الجارية: قراءة امتيازات runtime على jobs_req ثم بدء نقل طلبات التوظيف العامة كأول وحدة من عناصر todo؛ لا تغييرات DB أو cutover حتى الآن.
+
+
+## [2026-10-07 06:15 +03:00] — تنفيذ وحدة طلبات الوظائف العامة
+- أضيف `POST /api/v1/portal/job-applications` إلى `alx_api` مع Zod strict، حدّ 5 طلبات/10 دقائق، توليد ID/refCode/status/timestamps في الخادم، repository إلى `public.jobs_req` واستجابة لا تكشف PII.
+- حُوّل نموذج `JobApplicationModal` في alx_web إلى HTTP gateway بـ`credentials: omit` وأضيفت اختبارات API وgateway.
+- بعد التغيير: alx_api check/lint و24 suites/147 tests/build نجحت، ملفات الوحدة الجديدة مرت على Prettier، وOpenAPI صار صالحًا ويحتوي المسار. alx_web check/tests/build نجحت. تدقيق حدوده ما زال يفشل في 16 ملفًا أخرى؛ إزالة استدعاء JobApplicationModal لم تُغلق التدقيق.
+- لم يحدث بعد commit/push/deploy أو إدخال بيانات في قاعدة البيانات. ما يلي: مزامنة API المضمنة، النشر على Render الاختباري، smoke test ببيانات اصطناعية وتنظيف سجل الاختبار وحده.
+- المهام التالية وفق الخطة: نقل عمليات courier/supplier/search ثم بقية مسارات SwiftShip، واستكمال hardening/backup/restore/load/rollback/runbook.
+
+
 ## [2026-10-07 06:23:00] — حل مشكلة عدم المزامنة وعدم القدرة على الجلب من المستودع البعيد
 - [x] [2026-10-07 06:23:00] تشخيص سبب حالة Diverged بين الفرع المحلي (main) والبعيد (swiftship/main).
 - [x] [2026-10-07 06:23:00] إزالة lx_api/ الخاطئ من .gitignore الذي كان يمنع تتبع الـ submodule.
@@ -2021,3 +2036,35 @@
 - [x] [2026-10-07 06:23:00] دمج الفرع البعيد swiftship/main مع الفرع المحلي بنجاح بدون تعارضات.
 - [x] [2026-10-07 06:23:00] تهيئة submodule alx_web بنجاح.
 - [x] [2026-10-07 06:23:00] رفع التغييرات للمستودع البعيد بنجاح (4 commits جديدة).
+
+## [2026-10-07 06:30 +03:00] — نشر واختبار طلبات الوظائف
+- رُفع alx_api commit `266b396` إلى `main` ونُشر على Render؛ deploy `dep-db2rnbnf3r2c73fvk46g` حالته live. `/api/v1/health/live` أعاد 200 وCORS preflight من `https://alx-web.onrender.com` أعاد 204 مع allow-origin صحيح.
+- اختبار POST اصطناعي أعاد 201 وأظهر حد `5-in-10min`. عُثر على صف اختبار واحد بالعلامة والمرجع، حُذف فقط، والتحقق التالي لم يجد صفًا مطابقًا (`[]`).
+- الخطوة التالية: رفع تعديل `alx_web` بعد نجاح الـAPI، ثم مزامنة نسخة API المضمنة وسجلات SwiftShip ورفع تحديث المشروع. تبقى بقية courier/supplier/search وقطع SwiftShip ومرحلة hardening.
+
+
+## [2026-10-07 06:34 +03:00] — مزامنة SwiftShip بعد نجاح النشر
+- عُكست وحدة طلبات الوظائف وOpenAPI والتقرير في `swiftship/alx_api`، ورفعت واجهة alx_web إلى `a96f078` وأصبحت خدمة الموقع live. تقرير الحالة المحدث في alx_api commit `37bfbe0`.
+- اكتمل محليًا إعداد التكامل في المستودع الرئيسي؛ قبل push نراجع فحوص النسخة المضمنة. مستودع SwiftShip مربوط بخدمة Render مستقلة ذات auto-deploy على `main`، لذا يلزم تأكيد نطاق النشر لهذه الخدمة قبل رفع commit الجذر.
+
+
+## [2026-10-07 06:42 +03:00] — نقل البحث العام إلى API
+- أُضيف `search` اختياري إلى `GET /api/v1/portal/orders`؛ تحقق 2–120 حرفًا، البحث parameterized على رقم الطلب/التتبع/اسم المستلم/وصف البضائع، مع إبقاء قيد ملكية العميل.
+- أزيل Supabase من `GlobalSearch`; العملاء يستعملون بوابة طلباتهم الموثقة، وكل الأدوار تستعمل API الإعلانات العامة، ومنطق العرض/الفلترة في وحدة مستقلة.
+- API check/lint/build و26 suites/151 tests وOpenAPI parse وPrettier نجحت. alx_web check/tests/build وPrettier نجحت؛ boundary audit تقلص إلى 15 ملفًا مباشر الاعتماد على Supabase.
+- الخطوة التالية: رفع API ثم الموقع والتحقق من نشرهما؛ بعد ذلك sync لـSwiftShip مع الإبقاء على حدّ الموافقة قبل تشغيل خدمة Render المرتبطة به.
+
+
+## [2026-10-07 06:56 +03:00] — إكمال شريحة GlobalSearch ومزامنة SwiftShip
+- [x] توسيع `GET /api/v1/portal/orders` ببحث محمي ومقيد بملكية العميل، وترحيل `GlobalSearch` في `alx_web` إلى بوابة API مع business logic منفصلة واختبارات.
+- [x] رفع API (`da8056b`, ثم تقرير `eb382c9`) ونشره؛ health=200 والمسار المحمي بلا Bearer أعاد 401 المتوقع. رفع الموقع `d9be319` ونُشر، واستجاب HTTP 200.
+- [x] مزامنة API في SwiftShip وتحديث submodule `alx_web` إلى `d9be319` بعد fast-forward لـorigin/main إلى `8314dd8`؛ `alx_api` المضمّن اجتاز check/lint/build و26 suites/151 tests، وSwiftShip اجتاز check/tests/build.
+- [ ] يلزم الآن تثبيت ودفع تغييرات SwiftShip المتكاملة والتحقق من نشر خدمة SwiftShip على Render.
+- المهام التالية بعد هذه الشريحة: نقل courier/supplier، معالجة 15 ملفًا ما زالت تعتمد مباشرة على Supabase، اختبار التكامل الشامل ثم cutover وhardening. تقدير الخطة الحالي نحو 85% والمرحلة 10 نحو 50% (تقدير مرحلي غير آلي).
+
+
+## [2026-10-07 07:00 +03:00] — نشر مزامنة SwiftShip والتحقق
+- [x] رُفع commit `2966482` إلى `Aporaad/swiftship/main` فوق `8314dd8`؛ Render deploy `dep-db2s6gm7bikc73bijh2g` أصبح `live`.
+- [x] فحوص SwiftShip: check/build ناجحان و276 اختبارًا ناجحًا؛ 8 اختبارات integration متخطاة عبر 3 suites لعدم إعداد بيئة التكامل. `GET /` و`GET /api/health` أعادا 200.
+- كشف فحص الشجرة 11 ملفًا في النظام بها استدعاءات Supabase/client مباشرة، إلى جانب 15 ملفًا يرصدها `audit:portal-boundary` في `alx_web`؛ توجد بالفعل بوابات alxApi في أجزاء محدودة فقط.
+- [ ] التالي حسب الخطة: نقل واجهات courier وsupplier ثم بقية العملاء في النظام وPortal، تقليص ملفات Supabase المباشرة حتى صفر قبل cutover، ثم اختبارات تكامل/أمن/تحميل ونسخ احتياطي واستعادة وrollback/runbook/monitoring. تقدير مرحلي تقريبي: 85% للخطة، 50% للمرحلة 10.

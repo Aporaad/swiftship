@@ -2633,6 +2633,21 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 - تحقق محلياً: `npm run check` و`npm test -- --run` في `alx_web` نجحا: 3 ملفات اختبار و14 اختباراً.
 - نتيجة التدقيق الشامل: ما زالت نقاط اعتماد مباشر/قديم في صفحات المندوب والمورد والبحث وطلبات الوظائف وملفات التوافق؛ لم تُعتبر المرحلة مكتملة.
 
+## [2026-10-07 06:08 +03:00] — مراجعة واستئناف الخطة
+- قورنت نسخ `swiftship/alx_api` و`Aporaad/alx_api`؛ لا فروق وظيفية ظاهرة عدا ملف نسخ احتياطي لقفل الحزم في المجلد المضمن.
+- حالة Render: alx_api متاح وhealth/ready سليم حسب الفحص السابق؛ رفض المسارات المحمية غير الموثقة بـ401 متوقع. لم يعتبر فحص GET لمسار POST دليلاً على غيابه.
+- التحقق المحلي للمستودع المستقل: `check`, `lint`, 23 suites/143 tests و`build` ناجحة. SwiftShip `check/tests/build` ناجحة مع تحذيرات bundle/import.meta. alx_web `check` و14 اختبارًا ناجحة، لكن تدقيق `audit:portal-boundary` يكشف بقايا Supabase في courier/supplier/search/job applications/compatibility؛ لم يُعلن إغلاق القطع.
+- تأكد وجود `public.jobs_req` وأعمدته؛ يجري فحص امتيازات runtime قبل بناء endpoint. لم تُقرأ أو تُعرض بيانات شخصية.
+
+
+## [2026-10-07 06:15 +03:00] — وحدة طلبات الوظائف
+- أضيفت طبقات contract/schema/service/repository/routes في `alx_api` وربطها بـExpress composition root والخادم. أضيفت تغطية unit/API والتحقق من strict fields ورفض metadata يتحكم فيها العميل، واستجابة المرجع فقط.
+- حُوّل `JobApplicationModal` من `insertDoc` إلى `submitJobApplication` HTTP gateway واستخدمت `unknown` في catch وضيّقت أنواع Select.
+- OpenAPI أصبح قابلًا للتحليل بواسطة `js-yaml`; route والschema موجودان. `npm run check`, `npm run lint`, 24 suites/147 tests, `npm run build` ناجحة؛ Prettier على جميع ملفات الوحدة والاختبار الجديدة ناجح.
+- ملاحظة: `npm run format:check` العام في alx_api يفشل على 10 ملفات موجودة (منها docs/openapi.yaml)؛ لم يُعمّم إعادة تنسيق على ملفات لا تتصل بهذه المهمة.
+- alx_web check/tests/build ناجحة، بينما `audit:portal-boundary` ما زال يعرض 16 ملفًا به اعتماد مباشر متبقٍ (بعد إزالة JobApplicationModal من القائمة). لا يعتبر cutover مكتملًا.
+
+
 ## [2026-10-07 06:23:00] — حل مشكلة عدم المزامنة مع المستودع البعيد (Diverged Branches)
 
 ### المشكلة:
@@ -2654,3 +2669,29 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 ### النتيجة:
 - المستودع المحلي والبعيد متزامنان تماماً (325121e).
 - lx_web submodule مُهيأ ومتزامن.
+
+## [2026-10-07 06:30 +03:00] — تحقق Render الحي
+- API commit `266b396` أصبح live على Render، build/deploy `dep-db2rnbnf3r2c73fvk46g`. Health `200`; preflight لمصدر الموقع `204` وأرجع `Access-Control-Allow-Origin: https://alx-web.onrender.com`.
+- أُرسل POST واحد بحمولة اختبار اصطناعية فقط؛ الاستجابة `201` مع rate-limit خاص `5-in-10min`. حُدد الصف بعلامة smoke + refCode/ID من SQL مسجل ثم حُذف، وأظهر فحص ما بعد الحذف عدم وجود الصف. لا يوجد تغيير DDL/migrations أو إعداد Render.
+- الخطوة التالية رفع alx_web بعد تأكد API، ثم تحديث Gitlink/نسخة API داخل SwiftShip.
+
+
+## [2026-10-07 06:34 +03:00] — ربط نسخة API والموقع
+- نسخة API المضمنة داخل SwiftShip حُدثت محليًا من المصدر المستقل، بما فيها المسار، اختباره، OpenAPI والتقرير النهائي.
+- alx_web commit `a96f078` أصبح live على Render؛ alx_api commit البرمجي `266b396` live، ثم رُفع تحديث التقرير `37bfbe0` إلى المستودع (نشر docs-only تالٍ جارٍ/مطلوب التحقق).
+- لا تزال نسخة SwiftShip على HEAD `8dc5bb4` في origin؛ ربط submodule إلى `a96f078` وتجهيز commit محلي لا يغير الخدمة بعد. `git push` سيشغّل auto-deploy لخدمة SwiftShip، لذلك أوقف النشر حتى حسم هذا الأثر منفصلًا.
+
+
+## [2026-10-07 06:42 +03:00] — ترحيل GlobalSearch
+- أضيف دعم البحث في GET orders API ضمن نطاق العميل الموثق، مع validation وحد length، parameterized search، وتغطية route/repository واختبارات OpenAPI.
+- أعيد بناء `GlobalSearch` ليستهلك بوابة auth لطلبات العميل وبوابة الإعلانات، ونُقل تطبيع/مطابقة النتائج إلى `src/lib/globalSearch.ts` مع Vitest tests، debounce وتنظيف stale requests.
+- التحقق: alx_api 26 suites/151 tests + check/lint/build + targeted Prettier + OpenAPI parse ناجحة؛ alx_web check/tests/build وPrettier ناجحة. `audit:portal-boundary` ما زال يفشل في 15 ملفًا، انخفض من 16.
+- هذه الشريحة لم تُرفع بعد حتى 06:42؛ نشر API ثم web هو التالي.
+
+
+## [2026-10-07 06:56 +03:00] — ترحيل GlobalSearch ومزامنة SwiftShip
+أضيف `search` parameterized إلى API لطلبات العميل فقط، مع route/repository tests وOpenAPI. نُقلت الواجهة إلى `portalAuthGateway`/`portalGateway`، وفُصلت مطابقة النتائج في `src/lib/globalSearch.ts`. رُفع API بالـcommit `da8056b` ثم التقرير `eb382c9`؛ Render يعرض `eb382c9` live. health أعاد 200 وGET البحث بلا Bearer أعاد 401. رُفع `alx_web` بالـcommit `d9be319` وأصبح live وHTTP 200. بعد دمج remote `8314dd8` وحفظ سجل التعارضات كاملًا، حُدثت نسخة API المضمنة وgitlink الموقع. فحوص النسخة المضمنة: check/lint/build و26 suites/151 tests وOpenAPI/Prettier نجحت؛ فحوص alx_web: check/build و20/20 tests نجحت. SwiftShip root: check/tests/build نجحت مع تحذيرات Vite لحجم chunk أكبر من 500KB وتحذير esbuild عن `import.meta` عند CJS؛ 3 مجموعات integration اختيرت skipped لعدم تهيئة بيئة التكامل. `audit:portal-boundary` ما زال يكشف 15 ملفًا. لا يزال commit/push الأب ونشر خدمة SwiftShip قيد الخطوة التالية.
+
+
+## [2026-10-07 07:00 +03:00] — رفع ونشر نسخة SwiftShip المتكاملة
+دُفع commit `2966482` إلى `Aporaad/swiftship/main` فوق `8314dd8`؛ نشر Render `dep-db2s6gm7bikc73bijh2g` صار `live`. خدمة النظام أعادت 200 على `/` و`/api/health` (المسار الفعلي وفق `server/app.ts`؛ `/api/v1/health/live` غير مركب في root SwiftShip). تحقق root: check/build ناجحان و276 اختبارًا passed، و8 skipped عبر 3 integration suites لعدم تهيئة قاعدة التكامل. ظلت تحذيرات chunk/esbuild كما في السجل السابق. التدقيق الاستكشافي وجد 11 ملفًا في SwiftShip تطابق استدعاءات Supabase/client المباشرة، و15 ملفًا مخالفة في `alx_web`; التكامل مع alxApi موجود في أجزاء محدودة فقط. المهمة التالية نقل courier/supplier وقطع نقاط الوصول المباشر وفق خطة المرحلة 10.

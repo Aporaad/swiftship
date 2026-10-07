@@ -2619,3 +2619,66 @@ GRANT USAGE ON SCHEMA alx_api_private TO alx_api_runtime;
 - لم يُنفذ أي أمر SQL جديد في هذه الجولة.
 - تم الفحص بصورة غير هدّامة عبر health/ready ومسارات alx_api المحمية على Render؛ لا توجد migration أو DDL أو DML جديدة.
 - لم تُطبع أو تُحفظ أي قيمة سرية من متغيرات اتصال قاعدة البيانات داخل المستودع.
+
+
+## [2026-10-07 06:08 +03:00] — AI Model: Manus (GPT-5)
+```sql
+SELECT has_table_privilege('alx_api_runtime', 'public.jobs_req', 'INSERT') AS can_insert,
+       has_table_privilege('alx_api_runtime', 'public.jobs_req', 'SELECT') AS can_select
+LIMIT 1;
+```
+- قراءة امتيازات فقط؛ لا يعدل بيانات أو مخططًا.
+
+
+## [2026-10-07 06:15 +03:00] — AI Model: Manus (GPT-5)
+```sql
+INSERT INTO public.jobs_req (
+  jobs_req_id, data, email, phone, status, category, ref_code, created_at, updated_at,
+  address, city, experience_years, full_name, id_number, job_position, notes, qualification
+) VALUES (
+  $1, $2::jsonb, $3, $4, $5, $6, $7, to_timestamp($8::double precision / 1000),
+  to_timestamp($9::double precision / 1000), $10, $11, $12, $13, $14, $15, $16, $17
+);
+```
+- هذا نص الاستعلام المعرّف في repository والمقصود اختباره عبر Render بمدخل اصطناعي فقط بعد النشر؛ لم يكن قد نُفذ عند تدوين السطر.
+
+
+## [2026-10-07 06:30 +03:00] — AI Model: Manus (GPT-5)
+```sql
+SELECT jobs_req_id, ref_code
+FROM public.jobs_req
+WHERE data->>'notes' = 'MANUS_RENDER_SMOKE_20261007'
+  AND email = 'swiftship-smoke-20261007@example.invalid'
+LIMIT 1;
+```
+- قراءة محدودة بمعرّف الاختبار الاصطناعي فقط لتحديد السجل الذي أنشأه POST الاختبار؛ لا تعيد أسماء أو هواتف أو عناوين.
+
+
+## [2026-10-07 06:30 +03:00] — AI Model: Manus (GPT-5)
+```sql
+WITH smoke_row AS (
+  SELECT jobs_req_id
+  FROM public.jobs_req
+  WHERE jobs_req_id = 'job_769e341e-deaf-4530-9740-418eddf34341'
+    AND ref_code = 'JOB-2026-769E341E'
+    AND data->>'notes' = 'MANUS_RENDER_SMOKE_20261007'
+  LIMIT 1
+)
+DELETE FROM public.jobs_req AS req
+USING smoke_row
+WHERE req.jobs_req_id = smoke_row.jobs_req_id
+RETURNING req.jobs_req_id, req.ref_code;
+```
+- يطابق المعرّف والمرجع وعلامة الاختبار الاصطناعي فقط، وCTE محدد بـLIMIT 1.
+
+
+## [2026-10-07 06:31 +03:00] — AI Model: Manus (GPT-5)
+```sql
+SELECT jobs_req_id
+FROM public.jobs_req
+WHERE jobs_req_id = 'job_769e341e-deaf-4530-9740-418eddf34341'
+  AND ref_code = 'JOB-2026-769E341E'
+  AND data->>'notes' = 'MANUS_RENDER_SMOKE_20261007'
+LIMIT 1;
+```
+- تحقق قراءة فقط بعد التنظيف؛ عدم رجوع صف يعني أن سجل الاختبار أزيل.
