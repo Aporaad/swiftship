@@ -1915,6 +1915,39 @@ Start Command: npm run start:prod
 ```
 - **تفاصيل المهمة**: استكمال كافة مراحل خطة القطع النهائي للنظام (`swiftship_cutover_plan.md`) بنسبة 100%، وتفعيل مفتاح `VITE_USE_HTTP_API=true` وتحديث `.env` و `.env.example` بكافة أعلام القراءة والكتابة، وإنشاء بوابات API Gateways للمندوبين والعملاء والمصادر وشركات الشحن، وتوجيه كافة الواجهات الأساسية للعمل عبر HTTP API، واجتياز فحوصات التجميع `npx tsc --noEmit` بنسبة 100% (0 أخطاء) واجتياز 151/151 اختباراً بـ `alx_api` و 20/20 اختاراً بـ `alx_web` و 276/276 اختاراً بـ `SWIFTSHIP_SYSTEM` بنسبة 100%.
 
+## [2026-10-08 04:01:27 +03:00] — AI Model: Gemini 3.6 Flash (Medium)
+```text
+تمام الان قم بعمل تحليل عميق ومفصل ومراجعه شامله لمشروع swiftship بالكامل فيما فيه النظام والموقع وال api وتحليل وحاله اكتمال ال api ونقل الاعتماديه عليه في النظام والموقع بشكل كامل والتخلص من اعتماديه supabase بشكل نهائي وقيم بفحص ماهي النواقص والفجوات المتبقيه لاكمال التنفيذ وتحقق الاعتماديه الكامله وفحص ماهي الكيانات التي مازالت تعتمد على supabase @[f:\system\swiftship-tracker\swiftshift2\SWIFTSHIP_SYSTEM\alx_api\alx_api_creation_plan_ar.md] @[f:\system\swiftship-tracker\swiftshift2\SWIFTSHIP_SYSTEM\system_pre_api_restructure_plan_ar.md] 
+@mcp:supabase:
+واحفظ التقرير في ملف
+```
+- **تفاصيل المهمة**: إجراء تحليل عميق ومفصل ومراجعة شاملة لجميع مستودعات ومكونات المشروع (`SWIFTSHIP_SYSTEM`, `alx_web`, `alx_api`)، وتقييم حالة اكتمال الـ API والقطع التام عن Supabase، والتحقق من عدم وجود أي استدعاءات حية لـ Supabase بـ `alx_web` (0 مخالفات)، وتأكيد الجاهزية بنسبة 100%، وتدوين كافة التفاصيل وجدول الكيانات والنواقص التشغيلية في تقرير مستندين مستقلين محفوظين في `docs/swiftship_deep_api_cutover_analysis_2026_10_08.md` و `alx_api/docs/swiftship_deep_api_cutover_analysis_2026_10_08.md`.
+
+## [2026-10-08 04:36:00 +03:00] — AI Model: Gemini 3.6 Flash (Medium)
+```text
+هناك مشكله في انشاء حساب للعميل في الموقع 
+يظهر خطاء """
+{
+  "success": false,
+  "error": {
+    "code": "INVALID_PORTAL_CUSTOMER_DETAILS",
+    "message": "بيانات ملف العميل غير صالحة.",
+    "details": [],
+    "requestId": "46fd4796-2c23-4504-b44f-e1eb6e1d0a43"
+  }
+}
+""""
+ويتم المحاوله والارسال مرات كثير بدون توقف
+... Rate limiting 429 & CORS policy errors on https://alx.luxe
+```
+- **تفاصيل المهمة**: تشخيص أسباب أخطاء إنشاء وحفظ بيانات ملف العميل في موقع البوابة (`alx_web`) وإصلاحها جذرية:
+  1. تحديث مخطط التحقق Zod في `alx_api` (`portalCustomerDetailsUpdateSchema`) بإضافة `privacyPolicyAgreedAt` لحل خطأ `INVALID_PORTAL_CUSTOMER_DETAILS` (400 Bad Request).
+  2. إضافة دومينات الموقع الحي (`https://alx.luxe`, `https://www.alx.luxe`) لنطاقات CORS المسموحة افتراضياً.
+  3. إصلاح الحلقة التكرارية المفرطة في `PortalAuthContext.tsx` عن طريق ضبط `useEffect` لتشغيل مرة واحدة فقط وحظر طلبات `getCustomerDetails` المكررة المسببة لـ `429 RATE_LIMITED`.
+  4. اجتياز كافة اختبارات وحدات النظام وموقع البوابة والـ API بنسبة 100%.
+
+
+
 
 
 

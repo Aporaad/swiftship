@@ -2793,6 +2793,33 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
      - تحديث وثيقة خطة القطع `swiftship_cutover_plan.md` وتوثيق إنجاز كافة المراحل بنسبة 100%.
      - التوثيق التام والتفصيلي في `todo.md` و `user_commends.md` و `devloping_history.md`.
 
+## [2026-10-08 04:01:00 +03:00] — تقرير التحليل العميق والمراجعة الشاملة لنقل الاعتمادية 100% للتخلص النهائي من Supabase — AI Model: Gemini 3.6 Flash (Medium)
+- **النطاق والهدف**: إجراء فحص وتدقيق وتوثيق مفصل ومستند لمستوى نقل الاعتمادية الكامل إلى الـ HTTP API وإلغاء أي اعتماد مباشر على Supabase عبر المشاريع الثلاثة (`SWIFTSHIP_SYSTEM`, `alx_web`, `alx_api`).
+- **أبرز نتائج التقرير**:
+  1. **تأكيد خلو `alx_web` من Supabase**: اجتياز تدقيق العزل `audit:portal-boundary` بـ 0 مخالفات، واجتياز 20/20 اختباراً بنسبة 100%.
+  2. **جاهزية واستقلالية خادم الـ API (`alx_api`)**: تغطية شاملة لكافة خدمات النظام (Auth, RBAC, Users, Couriers, Employees, Customers, Orders, Finance, Notifications, Portal) واجتياز 26 Test Suite / 151 Tests بنسبة 100%.
+  3. **تأكيد التشغيل الكامل في `SWIFTSHIP_SYSTEM`**: تفعيل `VITE_USE_HTTP_API=true` واجتياز 76 Test Suite / 276 Tests بنسبة 100% مع 0 أخطاء TypeScript.
+- **الملفات التوثيقية المنشأة والمحفوظة**:
+  - `docs/swiftship_deep_api_cutover_analysis_2026_10_08.md`
+  - `alx_api/docs/swiftship_deep_api_cutover_analysis_2026_10_08.md`
+
+## [2026-10-08 04:36:00 +03:00] — حل مشكلة حفظ بيانات العميل وتعديل Zod Schema وإصلاح الحلقة التكرارية للـ Auth Context — AI Model: Gemini 3.6 Flash (Medium)
+- **النطاق والهدف**: تشخيص وإصلاح الأخطاء المسببة لفشل `PUT /api/v1/portal/customer-details` وتكرار إرسال الطلبات في حلقة غير منتهية تعيد `429 RATE_LIMITED` وحظر CORS على نطاق `https://alx.luxe`.
+- **التغيرات والتحسينات المنجزة**:
+  1. **تحديث `alx_api`**:
+     - **إصلاح مخطط Zod (`portal-owned.schemas.ts`)**: إضافة `privacyPolicyAgreedAt: z.union([z.number(), z.string()]).optional()` إلى `portalCustomerDetailsUpdateSchema` لحل خطأ الـ `.strict()` الذي كان يرفض الطلب ويعيد `INVALID_PORTAL_CUSTOMER_DETAILS` (400 Bad Request).
+     - **تحسين إرجاع الأخطاء (`portal-owned.routes.ts` & `response.ts`)**: تحديث دالة `sendFailure` وتمرير `parsedBody.error.issues` ليظهر تفاصيل الحقل المسبب للخطأ بوضوح.
+     - **تحديث إعدادات CORS (`env.ts` & `.env.example`)**: إضافة `https://alx.luxe` و `https://www.alx.luxe` لقائمة `CORS_ORIGINS` الافتراضية لمنع حظر الطلبات من نطاق البوابة الحي.
+  2. **تحديث `alx_web`**:
+     - **إصلاح الحلقة التكرارية اللانهائية (`PortalAuthContext.tsx`)**: إعادة صياغة `useEffect` الخاص بتهيئة وتحديث الجلسة ليشتغل مرة واحدة فقط عند التحميل (`[]`) وتطبيق التحديثات التوابعية `setUser(prev => ...)` بدون الاعتماد المباشر على كائن `user` المسبب لإعادة التشغيل اللانهائي.
+     - **إلغاء `useEffect` المكرر لـ `loadCustomerDetails`**: منع التكرار العشوائي لطلب `getCustomerDetails` مع كل تغير حالة.
+- **نتائج الفحوصات والتكامل**:
+  - اجتياز `npx tsc --noEmit` في `alx_web` بـ 0 أخطاء و 20/20 اختبار ناجح في Vitest.
+  - اجتياز `npx tsc --noEmit` في `alx_api` بـ 0 أخطاء و 151/151 اختبار ناجح في Jest.
+  - اجتياز `npm run check` في `SWIFTSHIP_SYSTEM` بـ 0 أخطاء و 276/276 اختبار ناجح.
+
+
+
 
 
 

@@ -2118,6 +2118,25 @@
 - [x] تشغيل واجتياز كافة الاختبارات الشاملة (151/151 في `alx_api`, 20/20 في `alx_web`, 276/276 في `SWIFTSHIP_SYSTEM`) بنجاح كامل 100%.
 - [x] تحديث وثيقة خطة القطع `swiftship_cutover_plan.md` وتوثيق اكتمال كافة المراحل بنسبة 100%.
 
+## [2026-10-08 04:01 +03:00] — التقرير الشامل والتحليل العميق لاكتمال القطع عن Supabase ونقل الاعتمادية 100% — AI Model: Gemini 3.6 Flash
+- [x] إجراء تحليل وفحص ومراجعة عميقة لكافة كيانات ومكونات المشروع عبر المستودعات الثلاثة (`SWIFTSHIP_SYSTEM`, `alx_web`, `alx_api`).
+- [x] إثبات خلو موقع وبوابة `alx_web` بنسبة 100% من أي استدعاءات أو اعتماديات مباشرة لـ Supabase JS واجتياز أمر التدقيق `npm run audit:portal-boundary` بـ 0 مخالفات.
+- [x] تأكيد جاهزية خادم الـ API (`alx_api`) وإمكانية تنفيذ جميع العمليات والمحاكاة عبر 151/151 اختباراً بـ 0 أخطاء نوع.
+- [x] تأكيد تفعيل مفتاح `VITE_USE_HTTP_API=true` وتوجيه 100% من الشاشات الكبرى والكيانات الأساسية بالنظام عبر الـ HTTP API Gateways واجتياز 276/276 اختباراً بنسبة 100%.
+- [x] إعداد وحفظ تقرير التحليل العميق المكتمل في الملفين:
+  - `docs/swiftship_deep_api_cutover_analysis_2026_10_08.md`
+  - `alx_api/docs/swiftship_deep_api_cutover_analysis_2026_10_08.md`
+- [x] توثيق كافة التفاصيل والخطوات في سجلات التطوير وسجل الأوامر للمشروع وفق المعايير والقواعد النظامية المعتمدة.
+
+## [2026-10-08 04:36 +03:00] — حل مشكلة إنشاء/حفظ ملف العميل في الموقع وإيقاف تكرار الطلبات اللانهائي وتحديث CORS — AI Model: Gemini 3.6 Flash
+- [x] إصلاح `portalCustomerDetailsUpdateSchema` بـ `alx_api/src/modules/portal/portal-owned.schemas.ts` وإضافة حقل `privacyPolicyAgreedAt` الاختياري لحل خطأ `INVALID_PORTAL_CUSTOMER_DETAILS` (400 Bad Request).
+- [x] تمرير تفاصيل أخطاء التحقق من Zod عبر `sendFailure` في `portal-owned.routes.ts` لسهولة التشخيص المباشر.
+- [x] تزويد دومينات الموقع الحي (`https://alx.luxe`, `https://www.alx.luxe`) ضمن النطاقات المسموحة افتراضياً بـ `CORS_ORIGINS` في `alx_api/src/config/env.ts` و `.env.example`.
+- [x] إيقاف الحلقة التكرارية اللانهائية للطلبات المتكررة في `alx_web/src/context/PortalAuthContext.tsx` عن طريق جعل تأثير التهيئة يشتغل مرة واحدة فقط عند التحميل (`[]`) وإلغاء `useEffect` المكرر المسبب لـ `429 RATE_LIMITED`.
+- [x] اجتياز جميع الفحوص والاختبارات التلقائية (20/20 بـ `alx_web` و 151/151 بـ `alx_api` و 276/276 بـ `SWIFTSHIP_SYSTEM`) بنجاح 100%.
+
+
+
 
 
 
