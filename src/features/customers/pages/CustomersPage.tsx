@@ -240,61 +240,95 @@ export default function CustomersPage() {
     e.preventDefault();
     if (submitting) return;
     const result = await runMutation(async () => {
-      if (selectedCustomer) {
-        await updateDoc(doc(db, 'customers', selectedCustomer.id), {
-          fullName: formData.fullName,
-          phone: formData.phone,
-          email: formData.email,
-          gps_location: formData.gps_location,
-          address: formData.address,
-          notes: formData.notes,
-          updatedAt: Date.now()
-        });
-        // Update account name if it changed
-        if (formData.fullName !== selectedCustomer.fullName && selectedCustomer.financialAccountId) {
-          await financialAccountService.updateAccountEntityName(selectedCustomer.id, formData.fullName);
+      if (customersApiDataGateway.isWriteEnabled()) {
+        if (selectedCustomer) {
+          await customersApiDataGateway.updateCustomer(selectedCustomer.id, {
+            fullName: formData.fullName,
+            phone: formData.phone,
+            email: formData.email,
+            address: formData.address,
+            notes: formData.notes,
+          });
+          activityLogService.log('edit_customer', formData.fullName || selectedCustomer.id, { ...formData });
+          notificationService.notify({
+            title: isAr ? 'تحديث عميل' : 'Customer Updated',
+            message: isAr ? `تم تحديث بيانات العميل ${formData.fullName}` : `Customer ${formData.fullName} has been updated`,
+            type: 'info'
+          });
+        } else {
+          await customersApiDataGateway.createCustomer({
+            fullName: formData.fullName,
+            phone: formData.phone,
+            email: formData.email,
+            address: formData.address,
+            notes: formData.notes,
+          });
+          activityLogService.log('add_customer', formData.fullName, { ...formData });
+          notificationService.notify({
+            title: isAr ? 'إضافة عميل' : 'Customer Added',
+            message: isAr
+              ? `تمت إضافة العميل ${formData.fullName} عبر الـ API بنجاح`
+              : `Customer ${formData.fullName} added via API`,
+            type: 'success'
+          });
         }
-        activityLogService.log('edit_customer', formData.fullName || selectedCustomer.id, { ...formData });
-        notificationService.notify({
-          title: isAr ? 'تحديث عميل' : 'Customer Updated',
-          message: isAr ? `تم تحديث بيانات العميل ${formData.fullName}` : `Customer ${formData.fullName} has been updated`,
-          type: 'info'
-        });
       } else {
-        // Step 1: Create the customer document
-        const { accountCode, code, accountId } =
-          await financialAccountService.getNextAccountIdentifiers('customer');
-        const newId = 'cust_' + accountCode;
-        const newCustomerRef = await addDoc(newId, collection(db, 'customers'), {
-          fullName: formData.fullName,
-          phone: formData.phone,
-          email: formData.email,
-          gps_location: formData.gps_location,
-          address: formData.address,
-          notes: formData.notes,
-          createdAt: Date.now()
-        });
+        if (selectedCustomer) {
+          await updateDoc(doc(db, 'customers', selectedCustomer.id), {
+            fullName: formData.fullName,
+            phone: formData.phone,
+            email: formData.email,
+            gps_location: formData.gps_location,
+            address: formData.address,
+            notes: formData.notes,
+            updatedAt: Date.now()
+          });
+          // Update account name if it changed
+          if (formData.fullName !== selectedCustomer.fullName && selectedCustomer.financialAccountId) {
+            await financialAccountService.updateAccountEntityName(selectedCustomer.id, formData.fullName);
+          }
+          activityLogService.log('edit_customer', formData.fullName || selectedCustomer.id, { ...formData });
+          notificationService.notify({
+            title: isAr ? 'تحديث عميل' : 'Customer Updated',
+            message: isAr ? `تم تحديث بيانات العميل ${formData.fullName}` : `Customer ${formData.fullName} has been updated`,
+            type: 'info'
+          });
+        } else {
+          // Step 1: Create the customer document
+          const { accountCode, code, accountId } =
+            await financialAccountService.getNextAccountIdentifiers('customer');
+          const newId = 'cust_' + accountCode;
+          const newCustomerRef = await addDoc(newId, collection(db, 'customers'), {
+            fullName: formData.fullName,
+            phone: formData.phone,
+            email: formData.email,
+            gps_location: formData.gps_location,
+            address: formData.address,
+            notes: formData.notes,
+            createdAt: Date.now()
+          });
 
-        // Step 2: Auto-create financial account (1130-xxxx)
-        try {
-          await financialAccountService.createAccountForEntity(
-            'customer',
-            newCustomerRef.id,
-            formData.fullName,
-            settings.currency || 'SAR'
-          );
-        } catch (accErr) {
-          console.warn('[Customers] Could not create financial account:', accErr);
+          // Step 2: Auto-create financial account (1130-xxxx)
+          try {
+            await financialAccountService.createAccountForEntity(
+              'customer',
+              newCustomerRef.id,
+              formData.fullName,
+              settings.currency || 'SAR'
+            );
+          } catch (accErr) {
+            console.warn('[Customers] Could not create financial account:', accErr);
+          }
+
+          activityLogService.log('add_customer', formData.fullName, { ...formData });
+          notificationService.notify({
+            title: isAr ? 'إضافة عميل' : 'Customer Added',
+            message: isAr
+              ? `تمت إضافة العميل ${formData.fullName} وإنشاء حسابه المالي تلقائياً`
+              : `Customer ${formData.fullName} added with auto-generated financial account`,
+            type: 'success'
+          });
         }
-
-        activityLogService.log('add_customer', formData.fullName, { ...formData });
-        notificationService.notify({
-          title: isAr ? 'إضافة عميل' : 'Customer Added',
-          message: isAr
-            ? `تمت إضافة العميل ${formData.fullName} وإنشاء حسابه المالي تلقائياً`
-            : `Customer ${formData.fullName} added with auto-generated financial account`,
-          type: 'success'
-        });
       }
       setShowModal(false);
     }, setMutationState);

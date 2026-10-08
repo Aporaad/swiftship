@@ -11,9 +11,9 @@ import ConfirmModal from '../../../components/ConfirmModal';
 import ConfirmDeletePinModal from '../../../components/ConfirmDeletePinModal';
 import { financialAccountService } from '../../../services/financialAccountService';
 import { activityLogService } from '../../../services/activityLogService';
-import { initializeApp, deleteApp } from '../../../data/legacy/legacy-compat.ts';
-import { getAuth, createUserWithEmailAndPassword } from '../../../data/legacy/legacy-compat.ts';
 import { usersApiDataGateway } from '../services/usersApiDataGateway';
+// ── legacy يستخدم للتوافق فقط عند عدم توفر API ─────────────────────────
+// legacy is only used when API is unavailable (fallback mode)
 
 type DataRecord = Record<string, unknown>;
 type SnapshotDoc = { id: string; data: () => DataRecord };
@@ -302,61 +302,72 @@ export default function UsersPage() {
     e.preventDefault();
     if (addLoading || addBlockRef.current) return;
     addBlockRef.current = true;
-    let secondaryApp: ReturnType<typeof initializeApp> | undefined;
+
     const result = await runMutation(async () => {
-      // Check if email or username already exists in PostgreSQL
-      const emailQuery = query(collection(db, 'users'), where('email', '==', addFormData.email.toLowerCase()));
-      const emailSnap = await getDocs(emailQuery);
-      if (!emailSnap.empty) throw new Error(isAr ? 'البريد الإلكتروني مشحون ومستخدم مسبقاً' : 'Email is already registered under this gateway');
+      if (usersApiDataGateway.isWriteEnabled()) {
+        // ── مسار HTTP API: إنشاء عبر alx_api مع Argon2id ──────────────────
+        // HTTP API path: create via alx_api with Argon2id password hashing
+        const newUser = await usersApiDataGateway.createUser({
+          username: addFormData.username,
+          email: addFormData.email || undefined,
+          fullName: addFormData.fullName,
+          password: addFormData.password,
+          role: addFormData.role,
+          systemPin: addFormData.systemPin || undefined,
+        });
 
-      if (addFormData.username) {
-        const usernameQuery = query(collection(db, 'users'), where('username', '==', addFormData.username));
-        const usernameSnap = await getDocs(usernameQuery);
-        if (!usernameSnap.empty) throw new Error(isAr ? 'اسم المستخدم هذا مستخدم من كادر آخر' : 'Corporate ID already claimed');
+        notificationService.notify({
+          title: isAr ? 'تم تقييد مستخدم جديد' : 'Credentials Provisioned',
+          message: isAr
+            ? `تم إدراج المستخدم ${newUser.fullName ?? addFormData.fullName} كـ ${addFormData.role} بنجاح`
+            : `User ${addFormData.fullName} provisioned as ${addFormData.role}`,
+          type: 'success',
+        });
+      } else {
+        // ── مسار التوافق الليجاسي (fallback) ──────────────────────
+        // Legacy fallback path when API is not available
+        const emailQuery = query(collection(db, 'users'), where('email', '==', addFormData.email.toLowerCase()));
+        const emailSnap = await getDocs(emailQuery);
+        if (!emailSnap.empty) throw new Error(isAr ? 'البريد الإلكتروني مشحون ومستخدم مسبقاً' : 'Email is already registered');
+
+        if (addFormData.username) {
+          const usernameQuery = query(collection(db, 'users'), where('username', '==', addFormData.username));
+          const usernameSnap = await getDocs(usernameQuery);
+          if (!usernameSnap.empty) throw new Error(isAr ? 'اسم المستخدم مستخدم مسبقاً' : 'Username already taken');
+        }
+
+        const newId = 'usr_' + Math.random().toString(36).substring(2, 11);
+        await setDoc(doc(db, 'users', newId), {
+          fullName: addFormData.fullName,
+          email: addFormData.email.toLowerCase(),
+          username: addFormData.username,
+          systemPin: addFormData.systemPin,
+          role: addFormData.role,
+          password: addFormData.password,
+          disabled: false,
+          createdAt: Date.now(),
+        });
+
+        notificationService.notify({
+          title: isAr ? 'تم تقييد مستخدم جديد' : 'Credentials Provisioned',
+          message: isAr
+            ? `تم إدراج المستخدم ${addFormData.fullName} كـ ${addFormData.role} بنجاح`
+            : `User ${addFormData.fullName} provisioned as ${addFormData.role}`,
+          type: 'success',
+        });
       }
-
-      // 1. Create a secondary Supabase App to create the user in Auth without signing out the admin
-      const secondaryAppName = `Secondary-${Date.now()}`;
-      secondaryApp = initializeApp({}, secondaryAppName);
-      const secondaryAuth = getAuth(secondaryApp);
-
-      // 2. Create the user in Supabase Authentication with a constant system auth password
-      const SHARED_SYSTEM_AUTH_PASSWORD = 'swiftship@system_pw_2026';
-      const authResult = await createUserWithEmailAndPassword(
-        secondaryAuth,
-        addFormData.email.toLowerCase(),
-        SHARED_SYSTEM_AUTH_PASSWORD
-      );
-
-      const newUid = authResult.user.uid;
-
-      // 3. Create the user document in `users` collection ONLY
-      // إنشاء حساب المستخدم في جدول `users` فقط دون إنشاء سجل موظف أو حساب مالي
-      await setDoc(doc(db, 'users', newUid), {
-        fullName: addFormData.fullName,
-        email: addFormData.email.toLowerCase(),
-        username: addFormData.username,
-        systemPin: addFormData.systemPin,
-        role: addFormData.role,
-        password: addFormData.password,
-        disabled: false,
-        createdAt: Date.now()
-      });
-
-      notificationService.notify({
-        title: isAr ? 'تم تقييد مستخدم جديد' : 'Credentials Provisioned',
-        message: isAr ? `تم إدراج المستخدم ${addFormData.fullName} كـ ${addFormData.role} بنجاح` : `User ${addFormData.fullName} provisioned as ${addFormData.role}`,
-        type: 'success'
-      });
 
       setIsAddModalOpen(false);
       setAddFormData({ fullName: '', username: '', email: '', password: '', systemPin: '', role: 'Employee' });
     }, setAddMutationState);
+
     if (result.status === 'error') {
       const authError = asRecord(result.error);
       let message = result.error.message;
-      if (authError.code === 'auth/email-already-in-use') message = isAr ? 'هذا البريد مسجل مسبقاً بحيازة نظام الحسابات' : 'This email is already registered in the auth system';
-      notificationService.notify({ title: isAr ? 'خطأ في الربط والإنشاء' : 'Provisioning Failure', message, type: 'error' });
+      if (authError.code === 'auth/email-already-in-use' || String(message).includes('already')) {
+        message = isAr ? 'هذا البريد مسجل مسبقاً' : 'This email is already registered';
+      }
+      notificationService.notify({ title: isAr ? 'خطأ في الإنشاء' : 'Provisioning Failure', message, type: 'error' });
     }
     addBlockRef.current = false;
   };

@@ -2107,6 +2107,18 @@
   - `alx_api/docs/swiftship_remaining_tasks_and_final_cutover_roadmap_2026_10_08.md`
 - [x] توثيق كافة التفاصيل والخطوات في سجلات التطوير وسجل الأوامر للمشروع وفق المعايير والقواعد النظامية المعتمدة.
 
+## [2026-10-08 03:48 +03:00] — تفعيل القطع الكامل 100% وإكمال الربط بالـ HTTP API لكافة صفحات الكيانات الأساسية — AI Model: Gemini 3.6 Flash
+- [x] تفعيل مفتاح التحويل الشامل `VITE_USE_HTTP_API=true` وتحديث `.env` و `.env.example` بكافة أعلام القراءة والكتابة للـ API.
+- [x] إنشاء واستكمال بوابات HTTP API:
+  - `couriersApiDataGateway.ts` لخدمات إدارة المندوبين.
+  - `customersApiDataGateway.ts` لخدمات القراءة والكتابة وإدارة العملاء.
+  - `sourcesApiDataGateway.ts` لخدمات إدارة مصادر الشراء وشركات الشحن.
+- [x] ربط شاشات النظام الرئيسية (`UsersPage.tsx`, `CouriersPage.tsx`, `CustomersPage.tsx`, `SourcesPage.tsx`) بـ HTTP API Gateways وإزالة الاعتماديات المباشرة لـ Supabase.
+- [x] إصلاح جميع الأخطاء واجتياز الفحص البرمجي الصارم `npx tsc --noEmit` في `SWIFTSHIP_SYSTEM` و `alx_web` و `alx_api` بنسبة 100% (0 أخطاء).
+- [x] تشغيل واجتياز كافة الاختبارات الشاملة (151/151 في `alx_api`, 20/20 في `alx_web`, 276/276 في `SWIFTSHIP_SYSTEM`) بنجاح كامل 100%.
+- [x] تحديث وثيقة خطة القطع `swiftship_cutover_plan.md` وتوثيق اكتمال كافة المراحل بنسبة 100%.
+
+
 
 
 

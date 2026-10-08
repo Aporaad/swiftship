@@ -6,6 +6,12 @@ vi.mock('../data/legacy/legacy-compat.ts', () => ({
   supabase: { rpc },
 }));
 
+vi.mock('../components/financeAccounting/FinanceApiWriteGateway', () => ({
+  financeApiWriteGateway: {
+    isEnabled: () => false,
+  },
+}));
+
 import { buildFinancialEntryPayload, financialEntryService } from './financialEntryService';
 
 const baseEntry = {

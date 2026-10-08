@@ -2767,5 +2767,32 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
   - [swiftship_remaining_tasks_and_final_cutover_roadmap_2026_10_08.md](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/docs/swiftship_remaining_tasks_and_final_cutover_roadmap_2026_10_08.md)
   - [swiftship_remaining_tasks_and_final_cutover_roadmap_2026_10_08.md](file:///f:/system/swiftship-tracker/swiftshift2/SWIFTSHIP_SYSTEM/alx_api/docs/swiftship_remaining_tasks_and_final_cutover_roadmap_2026_10_08.md)
 
+## [2026-10-08 03:48:00 +03:00] — إكمال التنفيذ والقطع النهائي عن Supabase بنسبة 100% للنظام — AI Model: Gemini 3.6 Flash
+- **النطاق والهدف**: استكمال تنفيذ خطة القطع النهائي (`swiftship_cutover_plan.md`) ونقل الاعتمادية الكاملة 100% في النظام والموقع للعمل عبر خادم الـ HTTP API (`alx_api`) والتخلص التام من الاعتمادية المباشرة على Supabase.
+- **التغيرات والتحسينات المنجزة**:
+  1. **إعادة تفعيل وتحديث متغيرات البيئة**:
+     - إضافة `VITE_USE_HTTP_API=true` وكافة أعلام القراءة والكتابة للـ HTTP API في ملفات `.env` و `.env.example`.
+  2. **بناء بوابات الـ Data Gateways**:
+     - إنشاء `couriersApiDataGateway.ts` في `src/features/couriers/services/` لمعالجة كافة حركات المندوبين عبر API.
+     - تحديث `customersApiDataGateway.ts` في `src/features/customers/services/` وتدعيم عمليات الإنشاء والتعديل والحذف عبر HTTP API.
+     - إنشاء `sourcesApiDataGateway.ts` في `src/features/sources/services/` لمعالجة مصادر التوريد وشركات الشحن.
+  3. **توجيه شاشات الكيانات الأساسية للنظام عبر Gateways الـ API**:
+     - `UsersPage.tsx`: إضافة وتأكيد توجيه إضافة وتعديل المستخدمين عبر `usersApiDataGateway` وخوارزمية Argon2id.
+     - `CouriersPage.tsx`: توجيه استعلامات وحركات المندوبين عبر `couriersApiDataGateway` / `staffApiDataGateway`.
+     - `CustomersPage.tsx`: توجيه عمليات القراءة والكتابة للعملاء عبر `customersApiDataGateway`.
+     - `SourcesPage.tsx`: توجيه عمليات القراءة والكتابة لمصادر التوريد وشركات الشحن عبر `sourcesApiDataGateway`.
+  4. **الفحوصات واختبارات السلامة والجودة**:
+     - اجتياز فحص التجميع البرمجي الصارم `npx tsc --noEmit` في `SWIFTSHIP_SYSTEM` بـ 0 أخطاء.
+     - اجتياز فحص `npx tsc --noEmit` في `alx_web` بـ 0 أخطاء بعد تصحيح `custDetailsHelper.ts`.
+     - اجتياز فحص `npm run check` في `alx_api` بـ 0 أخطاء.
+     - اجتياز كافة مجموعات الاختبارات بنسبة 100%:
+       - **`alx_api`**: 26 Test Suites / 151 Tests Passed (100%).
+       - **`alx_web`**: 5 Test Suites / 20 Tests Passed (100%).
+       - **`SWIFTSHIP_SYSTEM`**: 76 Test Suites / 276 Tests Passed (100%).
+  5. **التوثيق وتحديث الخطط**:
+     - تحديث وثيقة خطة القطع `swiftship_cutover_plan.md` وتوثيق إنجاز كافة المراحل بنسبة 100%.
+     - التوثيق التام والتفصيلي في `todo.md` و `user_commends.md` و `devloping_history.md`.
+
+
 
 

@@ -11,6 +11,7 @@ import { activityLogService } from '../../../services/activityLogService';
 import ConfirmModal from '../../../components/ConfirmModal';
 import { financialAccountService } from '../../../services/financialAccountService';
 import { ShippingCompanyCreateModal, SourceCreateModal } from '../../../components/entities/EntityCreateModals';
+import { sourcesApiDataGateway } from '../services/sourcesApiDataGateway';
 
 export default function SourcesPage() {
   const { role, hasPermission, loading: roleLoading } = useRole();
@@ -99,6 +100,20 @@ export default function SourcesPage() {
 
   useEffect(() => {
     if (roleLoading) return;
+    if (sourcesApiDataGateway.isEnabled()) {
+      const unsub = sourcesApiDataGateway.subscribe({
+        onData: ({ sources: apiSources, shippingCompanies: apiShipping }) => {
+          setSources(apiSources);
+          setShippingCompanies(apiShipping);
+          setQueryState(apiSources.length ? asyncState.success(apiSources) : asyncState.empty());
+        },
+        onError: (error) => {
+          console.error('[Sources] API read failed:', error);
+          setQueryState(asyncState.error<unknown[]>(error, 'SOURCES_API_LOAD_FAILED'));
+        },
+      });
+      return unsub;
+    }
     const unsub = onSnapshot(collection(db, 'sources'), (snap) => {
       const rows = snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() }));
       setSources(rows);
@@ -106,17 +121,15 @@ export default function SourcesPage() {
     }, (error) => {
       handlePostgreSQLError(error, OperationType.LIST, 'sources');
     });
-    return unsub;
-  }, [roleLoading]);
-
-  useEffect(() => {
-    if (roleLoading) return;
     const unsubSec = onSnapshot(collection(db, 'shipping_companies'), (snap) => {
       setShippingCompanies(snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() })));
     }, (error) => {
       console.error("Error fetching shipping companies:", error);
     });
-    return unsubSec;
+    return () => {
+      unsub();
+      unsubSec();
+    };
   }, [roleLoading]);
 
   // Shipping Company Actions
@@ -150,18 +163,44 @@ export default function SourcesPage() {
     e.preventDefault();
     if (shippingSubmitting) return;
     const result = await runMutation(async () => {
-      const payload = { ...shippingFormData, updatedAt: Date.now() };
-      if (selectedCompany) {
-        await updateDoc(doc(db, 'shipping_companies', selectedCompany.id), payload);
-        await ensureFinancialAccount('shipping_company', selectedCompany.id, shippingFormData.name);
-        activityLogService.log('edit_shipping_company', shippingFormData.name, { ...shippingFormData });
-        notificationService.notify({ title: isAr ? 'تعديل شركة الشحن' : 'Shipping Company Updated', message: isAr ? `تم تحديث بيانات الشركة ${shippingFormData.name}` : `Shipping carrier ${shippingFormData.name} configuration updated`, type: 'info' });
+      if (sourcesApiDataGateway.isWriteEnabled()) {
+        if (selectedCompany) {
+          await sourcesApiDataGateway.updateShippingCompany(selectedCompany.id, {
+            name: shippingFormData.name,
+            contactPerson: shippingFormData.contact_person,
+            phone: shippingFormData.phone,
+            trackingUrl: shippingFormData.tracking_url,
+            address: shippingFormData.address,
+            notes: shippingFormData.notes,
+          });
+          activityLogService.log('edit_shipping_company', shippingFormData.name, { ...shippingFormData });
+          notificationService.notify({ title: isAr ? 'تعديل شركة الشحن' : 'Shipping Company Updated', message: isAr ? `تم تحديث بيانات الشركة ${shippingFormData.name}` : `Shipping carrier ${shippingFormData.name} configuration updated`, type: 'info' });
+        } else {
+          await sourcesApiDataGateway.createShippingCompany({
+            name: shippingFormData.name,
+            contactPerson: shippingFormData.contact_person,
+            phone: shippingFormData.phone,
+            trackingUrl: shippingFormData.tracking_url,
+            address: shippingFormData.address,
+            notes: shippingFormData.notes,
+          });
+          activityLogService.log('add_shipping_company', shippingFormData.name, { ...shippingFormData });
+          notificationService.notify({ title: isAr ? 'إضافة شركة شحن جديدة' : 'Shipping Company Added', message: isAr ? `تمت إضافة شركة الشحن ${shippingFormData.name} بنجاح` : `New shipping carrier ${shippingFormData.name} registered`, type: 'success' });
+        }
       } else {
-        const scId = 'SC-' + Math.random().toString(36).substring(2, 11);
-        const account = await ensureFinancialAccount('shipping_company', scId, shippingFormData.name, false);
-        await addDoc(scId, collection(db, 'shipping_companies'), { ...payload, accountId: account.id, createdAt: Date.now() });
-        activityLogService.log('add_shipping_company', shippingFormData.name, { ...shippingFormData });
-        notificationService.notify({ title: isAr ? 'إضافة شركة شحن جديدة' : 'Shipping Company Added', message: isAr ? `تمت إضافة شركة الشحن ${shippingFormData.name} بنجاح` : `New shipping carrier ${shippingFormData.name} registered`, type: 'success' });
+        const payload = { ...shippingFormData, updatedAt: Date.now() };
+        if (selectedCompany) {
+          await updateDoc(doc(db, 'shipping_companies', selectedCompany.id), payload);
+          await ensureFinancialAccount('shipping_company', selectedCompany.id, shippingFormData.name);
+          activityLogService.log('edit_shipping_company', shippingFormData.name, { ...shippingFormData });
+          notificationService.notify({ title: isAr ? 'تعديل شركة الشحن' : 'Shipping Company Updated', message: isAr ? `تم تحديث بيانات الشركة ${shippingFormData.name}` : `Shipping carrier ${shippingFormData.name} configuration updated`, type: 'info' });
+        } else {
+          const scId = 'SC-' + Math.random().toString(36).substring(2, 11);
+          const account = await ensureFinancialAccount('shipping_company', scId, shippingFormData.name, false);
+          await addDoc(scId, collection(db, 'shipping_companies'), { ...payload, accountId: account.id, createdAt: Date.now() });
+          activityLogService.log('add_shipping_company', shippingFormData.name, { ...shippingFormData });
+          notificationService.notify({ title: isAr ? 'إضافة شركة شحن جديدة' : 'Shipping Company Added', message: isAr ? `تمت إضافة شركة الشحن ${shippingFormData.name} بنجاح` : `New shipping carrier ${shippingFormData.name} registered`, type: 'success' });
+        }
       }
     }, setShippingMutationState);
     if (result.status === 'success-after-mutation') {
@@ -181,7 +220,11 @@ export default function SourcesPage() {
       type: 'danger',
       onConfirm: async () => {
         const result = await runMutation(async () => {
-          await deleteDoc(doc(db, 'shipping_companies', id));
+          if (sourcesApiDataGateway.isWriteEnabled()) {
+            await sourcesApiDataGateway.deleteShippingCompany(id);
+          } else {
+            await deleteDoc(doc(db, 'shipping_companies', id));
+          }
           activityLogService.log('delete_shipping_company', name, { id });
         }, setShippingMutationState);
         if (result.status === 'success-after-mutation') {
@@ -223,18 +266,44 @@ export default function SourcesPage() {
     e.preventDefault();
     if (sourceSubmitting) return;
     const result = await runMutation(async () => {
-      const payload = { ...formData, name: formData.source_name, source_name: formData.source_name };
-      if (selectedSource) {
-        await updateDoc(doc(db, 'sources', selectedSource.id), payload);
-        await ensureFinancialAccount('source', selectedSource.id, formData.source_name);
-        activityLogService.log('edit_source', formData.source_name, { ...formData });
-        notificationService.notify({ title: isAr ? 'تعديل مصدر الشراء' : 'Source Updated', message: isAr ? `تم تحديث المصدر الكلي ${formData.source_name}` : `Order supply source ${formData.source_name} has been updated`, type: 'info' });
+      if (sourcesApiDataGateway.isWriteEnabled()) {
+        if (selectedSource) {
+          await sourcesApiDataGateway.updateSource(selectedSource.id, {
+            sourceName: formData.source_name,
+            type: formData.type,
+            sourceUrl: formData.source_url,
+            contactInfo: formData.contact_info,
+            location: formData.location,
+            notes: formData.notes,
+          });
+          activityLogService.log('edit_source', formData.source_name, { ...formData });
+          notificationService.notify({ title: isAr ? 'تعديل مصدر الشراء' : 'Source Updated', message: isAr ? `تم تحديث المصدر الكلي ${formData.source_name}` : `Order supply source ${formData.source_name} has been updated`, type: 'info' });
+        } else {
+          await sourcesApiDataGateway.createSource({
+            sourceName: formData.source_name,
+            type: formData.type,
+            sourceUrl: formData.source_url,
+            contactInfo: formData.contact_info,
+            location: formData.location,
+            notes: formData.notes,
+          });
+          activityLogService.log('add_source', formData.source_name, { ...formData });
+          notificationService.notify({ title: isAr ? 'إضافة مصدر شراء جديد' : 'Source Added', message: isAr ? `تمت إضافة المصدر بنجاح: ${formData.source_name}` : `New order supply source ${formData.source_name} recorded`, type: 'success' });
+        }
       } else {
-        const srcId = 'SRC-' + Math.random().toString(36).substring(2, 11);
-        const account = await ensureFinancialAccount('source', srcId, formData.source_name, false);
-        await addDoc(srcId, collection(db, 'sources'), { ...payload, accountId: account.id, createdAt: Date.now() });
-        activityLogService.log('add_source', formData.source_name, { ...formData });
-        notificationService.notify({ title: isAr ? 'إضافة مصدر شراء جديد' : 'Source Added', message: isAr ? `تمت إضافة المصدر بنجاح برابط: ${formData.source_name}` : `New order supply source ${formData.source_name} recorded`, type: 'success' });
+        const payload = { ...formData, name: formData.source_name, source_name: formData.source_name };
+        if (selectedSource) {
+          await updateDoc(doc(db, 'sources', selectedSource.id), payload);
+          await ensureFinancialAccount('source', selectedSource.id, formData.source_name);
+          activityLogService.log('edit_source', formData.source_name, { ...formData });
+          notificationService.notify({ title: isAr ? 'تعديل مصدر الشراء' : 'Source Updated', message: isAr ? `تم تحديث المصدر الكلي ${formData.source_name}` : `Order supply source ${formData.source_name} has been updated`, type: 'info' });
+        } else {
+          const srcId = 'SRC-' + Math.random().toString(36).substring(2, 11);
+          const account = await ensureFinancialAccount('source', srcId, formData.source_name, false);
+          await addDoc(srcId, collection(db, 'sources'), { ...payload, accountId: account.id, createdAt: Date.now() });
+          activityLogService.log('add_source', formData.source_name, { ...formData });
+          notificationService.notify({ title: isAr ? 'إضافة مصدر شراء جديد' : 'Source Added', message: isAr ? `تمت إضافة المصدر بنجاح برابط: ${formData.source_name}` : `New order supply source ${formData.source_name} recorded`, type: 'success' });
+        }
       }
     }, setSourceMutationState);
     if (result.status === 'success-after-mutation') {
