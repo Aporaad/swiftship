@@ -338,7 +338,12 @@ export function useDashboardData({
         iconBg = "bg-slate-900/40 text-slate-400 border-slate-800/35";
       }
       const now = Date.now();
-      const diffMs = now - (log.createdAt ? log.createdAt.getTime() : now);
+      const logTime = log.createdAt
+        ? log.createdAt instanceof Date
+          ? log.createdAt.getTime()
+          : new Date(log.createdAt).getTime()
+        : now;
+      const diffMs = now - (isNaN(logTime) ? now : logTime);
       const mins = Math.floor(diffMs / 60000);
       let timeStr = "";
       if (mins < 1) timeStr = isAr ? "الآن" : "Just now";

@@ -1452,3 +1452,9 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 
 ## [2026-10-07 07:00 +03:00] — نشر التكامل دون تغييرات قاعدة بيانات إضافية
 اكتمل push ونشر SwiftShip commit `2966482`، ولم يتطلب ذلك تنفيذ SQL أو تعديل schema/permissions أو migration؛ بقيت قاعدة البيانات كما هي منذ اختبار الوظيفة الاصطناعي المنظف والموثق أعلاه.
+
+## [2026-10-08 23:50:00 +03:00] — توثيق عدم الحاجة لتغييرات DB عند إصلاح معالجة التواريخ في الواجهة — AI Model: Gemini 3.6 Flash (Medium) / Antigravity
+- لم تُنفذ أي أوامر DDL أو DML في قاعدة البيانات.
+- الإصلاح تم في طبقة العميل `useDashboardData.ts` بحماية استدعاء `.getTime()` على قيم التواريخ القادمة عبر الـ REST API.
+
+

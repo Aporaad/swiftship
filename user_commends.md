@@ -1971,6 +1971,46 @@ Failed to sync currencies from DB: TypeError: Sa.from(...).select(...).order is 
   3. جعل الكائن الوهمي Thenable (قابل لـ `await` / `.then()`) ويعيد `{ data: [], error: null, count: 0 }` أو `{ data: null, error: null }` تلقائياً لمنع الاستثناءات القاتلة وإظهار شاشة الدخول فوراً.
   4. اجتياز فحص `npx tsc --noEmit` بنجاح وإعادة بناء حزمة الإنتاج `npm run build`.
 
+## [2026-10-08 23:25:00 +03:00] — AI Model: Gemini 3.6 Flash (Medium) / Antigravity
+### نص أمر المهمة:
+```text
+اكمل تنفيذ المهام المتبقيه وفقا للتقرير والخطه @SWIFTSHIP_SYSTEM/docs/swiftship_deep_api_cutover_analysis_2026_10_08.md @SWIFTSHIP_SYSTEM/alx_api/alx_api_creation_plan_ar.md 
+اكمل حل المشاكل التالية بالنظام:
+- 400 Bad Request على /api/v1/orders, /api/v1/customers, /api/v1/reporting/*, /api/v1/finance/accounts عند إرسال search أو limit.
+- إضافة مزود إرسال الرسائل والتنبيهات (Notification & Email Provider Delivery Adapter).
+- إضافة نقطة مراقبة الأداء وتتبع المؤشرات الصحية Telemetry metrics في HTTP Health Check.
+```
+
+### التفاصيل والنتائج المنجزة:
+1. **معالجة فجوات الاستعلام 400 Bad Request**:
+   - إصلاح معالجة حقل `search` في كافة مخططات Zod (`operations.schemas.ts`, `customers.schemas.ts`, `finance.schemas.ts`) بحيث يتم تحويل السلاسل الفارغة `""` أو المسافات تلقائياً إلى `undefined` بدلاً من إطلاق خطأ `INVALID_PAGE_QUERY` أو `INVALID_REPORTING_QUERY`.
+2. **مزود إرسال الإشعارات والبريد الإلكتروني**:
+   - إنشاء `NotificationDeliveryProvider` يدعم وضع التطوير المحلي `logger` ومزودي الإنتاج `resend` و `sendgrid` عبر HTTP REST API endpoints.
+   - ربطه بـ `AuthService` لمعالجة طلبات إعادة تعيين كلمة المرور `password_reset_tokens` وإرسال روابط الاستعادة بأمان.
+3. **التصليد الأمني ومؤشرات الأداء (Telemetry Metrics)**:
+   - تحديث مسارات الفحص الصحي `/api/v1/health/live` و `/api/v1/health/ready` لإرجاع مؤشرات `uptimeSeconds` واستهلاك الذاكرة `rssMb` و `heapUsedMb` وتفاصيل حالة الاتصال.
+4. **نتائج الاختبارات والتحقق الشامل**:
+   - اجتياز جميع اختبارات `alx_api` بنسبة 100% (**27 Test Suites / 154 Tests Passed**).
+   - اجتياز فحص الأنواع TypeScript (`tsc --noEmit`) بنسبة 100% (**0 أخطاء** في جميع المستودعات).
+
+## [2026-10-08 23:50:00 +03:00] — AI Model: Gemini 3.6 Flash (Medium) / Antigravity
+### نص أمر المهمة:
+```text
+ايش عملت ليش توقفت الشاشه بعد تسجيل الدخول
+Uncaught TypeError: R.createdAt.getTime is not a function at useDashboardData.ts
+```
+
+### التفاصيل والنتائج المنجزة:
+1. **تشخيص سبب توقف الواجهة بعد تسجيل الدخول**:
+   - خطأ `TypeError: R.createdAt.getTime is not a function` يقع في خط السجلات الأخير بـ `useDashboardData.ts` (السطر 341)، حيث يفترض الكود أن `log.createdAt` هو كائن `Date` ويستدعي `.getTime()` مباشرة عليه، بينما البيانات القادمة عبر الـ REST API هي سلاسل نصية ISO String مثل `"2026-10-08T22:00:00.000Z"`.
+2. **التعديل والإصلاح الجذر**:
+   - تم تحصين تحويل التواريخ في `useDashboardData.ts` و `ReportsPage.tsx` بإنشاء كائن `Date` آمن من السلسلة النصية أو التاريخ قبل استدلال `.getTime()`.
+3. **إعادة البناء والتحقق**:
+   - اجتياز `npx tsc --noEmit` بنسبة 100% (0 أخطاء).
+   - إعادة بناء حزمة الإنتاج `npm run build` بنجاح كامل بـ 0 أخطاء.
+
+
+
 
 
 

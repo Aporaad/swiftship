@@ -280,9 +280,11 @@ export default function ReportsPage() {
     const start = startOfDay(new Date(filters.startDate));
     const end = endOfDay(new Date(filters.endDate));
     setAllAccountTransactions(
-      allTimeTransactions.filter((tx: any) =>
-        isWithinInterval(new Date(tx.createdAt), { start, end })
-      )
+      allTimeTransactions.filter((tx: any) => {
+        if (!tx?.createdAt) return false;
+        const d = tx.createdAt instanceof Date ? tx.createdAt : new Date(tx.createdAt);
+        return !isNaN(d.getTime()) && isWithinInterval(d, { start, end });
+      })
     );
   }, [allTimeTransactions, filters.startDate, filters.endDate]);
 
