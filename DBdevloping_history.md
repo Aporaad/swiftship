@@ -1468,3 +1468,8 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 - تمت مراجعة عقود ومسارات alx_api ومواضع استخدام settings/currency في SwiftShip دون تنفيذ SQL أو DDL أو DML.
 - تم تحديد الحاجة المستقبلية لوحدات API للإعدادات والعملات وأسعار الصرف، مع إبقاء أي تغيير قاعدة بيانات لمرحلة تنفيذ مستقلة بمهاجرات موثقة.
 
+## [2026-10-09 00:30 +03:00] تنفيذ المرحلة 0 دون تعديل قاعدة البيانات — Manus AI
+- تم إنشاء عقود ومصفوفة API على مستوى SwiftShip فقط.
+- لم يتم تنفيذ SQL أو DDL أو DML.
+- لم يتم إنشاء migration أو تغيير schema أو permissions.
+- وحدات Settings/Currencies المطلوبة ستُنفذ في مرحلة API مستقلة مع migration موثقة عند الحاجة.
