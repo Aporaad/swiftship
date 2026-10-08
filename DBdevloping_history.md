@@ -1473,3 +1473,7 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 - لم يتم تنفيذ SQL أو DDL أو DML.
 - لم يتم إنشاء migration أو تغيير schema أو permissions.
 - وحدات Settings/Currencies المطلوبة ستُنفذ في مرحلة API مستقلة مع migration موثقة عند الحاجة.
+
+## [2026-10-09 00:40 +03:00] تنفيذ بوابة الواجهة — Manus AI
+- لم يتم تنفيذ أي SQL أو DDL أو DML من مستودع SwiftShip.
+- migration وحدتي settings/currencies موجودة في مستودع alx_api فقط ولم تُطبق على قاعدة البيانات.
