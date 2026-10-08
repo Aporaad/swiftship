@@ -2091,4 +2091,22 @@
 - [x] نقل واجهات المناديب (`CourierTasksPage`, `CourierLedgerPage`, `CourierDashboard`) وواجهات الموردين (`SupplierOrdersPage`, `SupplierLedgerPage`, `SupplierDashboard`) لاستخدام `portalAuthGateway`.
 - [x] إجراء الفحص واختبار الأنواع البرمجية `npx tsc --noEmit` للمستودعين `alx_api` و `alx_web` بنجاح دون أي خطأ.
 
+## [2026-10-08 02:57 +03:00] — قطع الاعتمادية المباشرة بالكامل 100% واجتياز تدقيق الحدود والاختبارات الشاملة
+- [x] تطهير وإزالة كافة الاستدعاءات المباشرة لـ Supabase JS في الـ 15 ملفاً بـ `alx_web` (`ForgotPasswordPage`, `CustomerDashboard`, `MyOrdersPage`, `custDetailsHelper`, `legacy-supabase`, إلخ).
+- [x] استبدال `legacyPortalAuth` بـ `portalAuthCompatibility` وتعديل التثبيتات البرمجية ذات الصلة.
+- [x] اجتياز فحص حدود الـ API لـ `alx_web` بنجاح عبر `npm run audit:portal-boundary` بـ 0 مخالفات ("API-only boundary clean").
+- [x] اجتياز 20/20 اختباراً بـ `alx_web` بنسبة نجاح 100%.
+- [x] اجتياز 26 suite و 151 اختباراً بـ `alx_api` بنسبة نجاح 100%.
+- [x] اجتياز 76 suite و 276 اختبار وحدة بنواة النظام `SWIFTSHIP_SYSTEM` وتأكيد تجميع TypeScript `npm run check` بـ 0 أخطاء.
+
+## [2026-10-08 03:12 +03:00] — تقرير المهام المتبقية لاكتمال إنشاء الـ API ونقل الاعتمادية الكاملة 100%
+- [x] إجراء فحص وتقييم شامل لمستوى الإنجاز الحالي في المستودعات الثلاثة (`SWIFTSHIP_SYSTEM`, `alx_api`, `alx_web`).
+- [x] إعداد تقرير مفصل بالمهام المتبقية ونسب الإنجاز الدقيقة، وخريطة طريق واضحة لاكتمال المشروع والتصليد والقطع النهائي (Final Cutover Roadmap to 100%).
+- [x] حفظ التقرير الشامل في ملفين مستنديين متصلين بالمشروع:
+  - `docs/swiftship_remaining_tasks_and_final_cutover_roadmap_2026_10_08.md`
+  - `alx_api/docs/swiftship_remaining_tasks_and_final_cutover_roadmap_2026_10_08.md`
+- [x] توثيق كافة التفاصيل والخطوات في سجلات التطوير وسجل الأوامر للمشروع وفق المعايير والقواعد النظامية المعتمدة.
+
+
+
 
