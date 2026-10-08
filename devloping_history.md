@@ -2851,3 +2851,16 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 
 
 
+
+
+## [2026-10-08 22:50 +03:00] مراجعة API والتحول التشغيلي — Manus AI
+- تمت مزامنة المستودعات الثلاثة إلى الفروع الرئيسية ومراجعة commits الحالية.
+- تم تشغيل تحقق `swiftship`: TypeScript و76 ملف اختبار/276 اختبارًا ناجحًا والبناء ناجح، مع تسجيل تحذيرات legacy وchunk وحالة CommonJS/import.meta.
+- تم تشغيل تحقق `alx_web`: TypeScript و20 اختبارًا والبناء و`audit:portal-boundary` ناجحة.
+- تعطل تشغيل Jest في `alx_api` عند `tests/security.test.ts` بـ segmentation fault/exit 139 بعد نجاح TypeScript؛ لم تعتمد النتيجة كنجاح.
+- تم إنشاء التقرير التفصيلي: `docs/api-review-2026-10-08_ar.md`.
+- ثبت الفحص وجود 13 ملفًا في `swiftship` ما زالت تحتوي استدعاءات/استيرادات Supabase مباشرة أو اختبارات تكامل مرتبطة بها، لذلك لم يعلن API-only الكامل.
+- تم فحص health العام للـ API والموقع، وكانت `health/live` و`health/ready` والموقع العام بحالة HTTP 200.
+
+## [2026-10-08 22:51 +03:00] متابعة تحقق alx_api — Manus AI
+- إعادة اختبار Jest أظهرت segmentation fault/exit 139 في `tests/security.test.ts` منفردًا وفي اختبار وحدة مختلف مع `--maxWorkers=1`؛ لم يثبت نجاح اختبارات alx_api.

@@ -1452,3 +1452,11 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 
 ## [2026-10-07 07:00 +03:00] — نشر التكامل دون تغييرات قاعدة بيانات إضافية
 اكتمل push ونشر SwiftShip commit `2966482`، ولم يتطلب ذلك تنفيذ SQL أو تعديل schema/permissions أو migration؛ بقيت قاعدة البيانات كما هي منذ اختبار الوظيفة الاصطناعي المنظف والموثق أعلاه.
+
+
+## [2026-10-08 22:50 +03:00] مراجعة قاعدة البيانات المرتبطة — Manus AI
+- تم فحص مشروع Supabase `ejrojwbbflzchasvgexr` وظهر بحالة `ACTIVE_HEALTHY` على PostgreSQL 17.6.1.155.
+- تم فحص metadata للجداول والمهاجرات وظهر سجل المهاجرات حتى `portal_payment_requests_0017`.
+- تم فحص advisors: 49 جدولًا عامًا بدون RLS، و27 حالة policies مع RLS معطل، و44 دالة SECURITY DEFINER قابلة للتنفيذ من anon حسب advisor، و60 دالة ذات search_path قابل للتغيير.
+- تم تسجيل مؤشرات الأداء: 57 foreign key بلا index تغطية، و38 index غير مستخدمة، وindex مكرر واحد، وتحذير auth RLS initplan واحد.
+- لم يتم تنفيذ DDL أو DML أو SQL خام، ولم تتم قراءة بيانات شخصية.

@@ -2150,3 +2150,14 @@
 
 
 
+
+
+## [2026-10-08 22:50 +03:00] مراجعة حية شاملة لخطة إنشاء API والتحول الكامل
+- [x] مزامنة ومراجعة HEAD الحالي للمستودعات `swiftship` و`alx_web` و`alx_api`.
+- [x] فحص الاختبارات والبناء وحدود Supabase ونقاط الصحة المنشورة.
+- [x] فحص metadata وmigrations وSupabase advisors دون تنفيذ DDL/DML.
+- [x] إنشاء التقرير `docs/api-review-2026-10-08_ar.md`.
+- [ ] إصلاح segmentation fault في اختبارات `alx_api` وإعادة إثبات `check/test/build`.
+- [ ] إزالة أو حصر بقايا Supabase المباشرة في 13 ملفًا من `swiftship`.
+- [ ] توحيد feature flags وتنفيذ E2E مصادق عليه لكل نطاق قبل إعلان API-only.
+- [ ] إكمال hardening: load testing، monitoring، backup/restore، rollback، ومعالجة advisors الأمنية.
