@@ -2200,3 +2200,8 @@
 - [x] تشغيل المجموعة الكاملة: 78 ملف اختبار ناجح، 282 اختبارًا ناجحًا، و3 ملفات/8 اختبارات متجاوزة عمدًا.
 - [x] فحص TypeScript عبر `npm run check` دون أخطاء.
 - [ ] المرحلة التالية: تنفيذ Settings/Currencies API في `alx_api` فقط بعد اعتماد عقود المرحلة 0.
+
+## [2026-10-09 00:40 +03:00] تحديث واجهة Settings/Currencies
+- [x] إضافة HTTP gateway لمسارات settings وcurrencies الجديدة.
+- [ ] نقل `SettingsContext` من listeners/`setDoc` إلى gateway API.
+- [ ] نقل `currencyService` من Supabase إلى gateway API وإزالة fallback الصامت.

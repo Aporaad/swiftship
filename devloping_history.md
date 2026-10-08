@@ -2915,3 +2915,8 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 - تم تحديث `.env.example` بإعداد `VITE_API_MODE`.
 - التحقق: `npm run check` ناجح، والاختبارات الكاملة 78 ملفًا ناجحة و282 اختبارًا ناجحًا، مع 3 ملفات/8 اختبارات متجاوزة عمدًا لتكاملات خارجية.
 - لم يتم نقل أي feature أو تعديل سلوك Settings/Currency أو تنفيذ أي تغيير في قاعدة البيانات؛ المرحلة التالية هي إضافة عقود Settings/Currencies في alx_api.
+
+## [2026-10-09 00:40 +03:00] تنفيذ بوابة Settings/Currencies API — Manus AI
+- تمت إضافة `src/data/http/settings-currencies-api.gateway.ts` لاستهلاك مسارات API الجديدة.
+- البوابة تستخدم `ApiClient` وaccess token ولا تستورد Supabase.
+- لم يتم استبدال `SettingsContext` أو `currencyService` بعد؛ ذلك هو العمل التالي بعد اعتماد عقود API وتشغيل migration.
