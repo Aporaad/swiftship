@@ -181,8 +181,8 @@ export interface SettingsApiDto {
 export interface UserSettingsApiDto {
   userSettingId: string;
   userId: string | null;
-  settings: Partial<Pick<SystemSettingsData, 'language' | 'theme' | 'fontSize' | 'dashboardGridColumns' | 'visibleMetrics'>>;
-  createdAt: IsoUtcString;
+  settings: Partial<Pick<SystemSettingsData, 'language' | 'theme' | 'fontSize' | 'dashboardGridColumns' | 'visibleMetrics'>> & { sidebarCollapsed?: boolean; sidebarItems?: string[] };
+  createdAt: IsoUtcString | null;
   updatedAt: IsoUtcString | null;
 }
 export interface OrderStatusApiDto {

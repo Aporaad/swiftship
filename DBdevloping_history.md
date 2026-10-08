@@ -1477,3 +1477,7 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 ## [2026-10-09 00:40 +03:00] تنفيذ بوابة الواجهة — Manus AI
 - لم يتم تنفيذ أي SQL أو DDL أو DML من مستودع SwiftShip.
 - migration وحدتي settings/currencies موجودة في مستودع alx_api فقط ولم تُطبق على قاعدة البيانات.
+
+## [2026-10-09 01:08 +03:00] تصحيح نموذج البيانات — Manus AI
+- لم يتم تنفيذ SQL من مستودع الواجهة.
+- تم اعتماد `public.user_settings` كمصدر إعدادات المستخدم، والجداول العامة للعملات كموارد نظامية مشتركة.

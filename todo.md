@@ -2205,3 +2205,8 @@
 - [x] إضافة HTTP gateway لمسارات settings وcurrencies الجديدة.
 - [ ] نقل `SettingsContext` من listeners/`setDoc` إلى gateway API.
 - [ ] نقل `currencyService` من Supabase إلى gateway API وإزالة fallback الصامت.
+
+## [2026-10-09 01:08 +03:00] تصحيح المرحلة 1
+- [x] تصحيح عقد إعدادات المستخدم ليقتصر على UI/preferences.
+- [x] تثبيت العملات وأسعار الصرف كإعدادات نظام مشتركة.
+- [ ] نقل SettingsContext وcurrencyService بالكامل إلى API بعد مراجعة migration.
