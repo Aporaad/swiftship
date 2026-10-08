@@ -2864,3 +2864,12 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 
 ## [2026-10-08 22:51 +03:00] متابعة تحقق alx_api — Manus AI
 - إعادة اختبار Jest أظهرت segmentation fault/exit 139 في `tests/security.test.ts` منفردًا وفي اختبار وحدة مختلف مع `--maxWorkers=1`؛ لم يثبت نجاح اختبارات alx_api.
+
+## [2026-10-08 23:53 +03:00] التحليل العميق لخطة API-only — Manus AI
+- تم تحديث `alx_api` إلى HEAD `f20c771e7e19148c6299a4c0c5a2f79a073f7f9e9` بعد تغييرات notification provider وhealth telemetry وpagination.
+- تم جرد SwiftShip محليًا ووجد 109 ملفًا مرتبطًا بـ `legacy-compat` أو Supabase أو `createClient`، ما يوسع نطاق الفجوة عن الحصر السابق.
+- تبين أن `SettingsContext.tsx` يقرأ ويحفظ settings عبر legacy listeners و`setDoc`، ويستخدم Supabase realtime للعملات؛ كما لا توجد في alx_api routes مستقلة للإعدادات أو العملات وأسعار الصرف.
+- تم إنشاء تقرير التحليل الملفي وخطة القطع: `docs/swiftship_api_only_deep_analysis_2026-10-08_ar.md`.
+- لم يتم تعديل كود التطبيق أو قاعدة البيانات في هذه المرحلة؛ هذه مرحلة تحليل وخطة فقط.
+- تعذر التحليل الموازي بسبب حد الاعتمادات للجلسة، وتم الاعتماد على جرد وقراءة محلية مباشرة.
+- توضيح القياس: 109 ملفات في طبقة legacy/بوابات Supabase، و147 ملفًا إجمالًا تحمل ارتباطًا مباشرًا أو غير مباشرًا بالمسار القديم أو اختبارات/تعريفاته.

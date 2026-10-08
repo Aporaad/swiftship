@@ -1460,3 +1460,7 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 - تم فحص advisors: 49 جدولًا عامًا بدون RLS، و27 حالة policies مع RLS معطل، و44 دالة SECURITY DEFINER قابلة للتنفيذ من anon حسب advisor، و60 دالة ذات search_path قابل للتغيير.
 - تم تسجيل مؤشرات الأداء: 57 foreign key بلا index تغطية، و38 index غير مستخدمة، وindex مكرر واحد، وتحذير auth RLS initplan واحد.
 - لم يتم تنفيذ DDL أو DML أو SQL خام، ولم تتم قراءة بيانات شخصية.
+
+## [2026-10-08 23:53 +03:00] تحليل فجوات API دون تعديل قاعدة البيانات — Manus AI
+- تمت مراجعة عقود ومسارات alx_api ومواضع استخدام settings/currency في SwiftShip دون تنفيذ SQL أو DDL أو DML.
+- تم تحديد الحاجة المستقبلية لوحدات API للإعدادات والعملات وأسعار الصرف، مع إبقاء أي تغيير قاعدة بيانات لمرحلة تنفيذ مستقلة بمهاجرات موثقة.
