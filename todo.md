@@ -2169,3 +2169,24 @@
 
 
 
+
+
+## [2026-10-08 22:50 +03:00] مراجعة حية شاملة لخطة إنشاء API والتحول الكامل
+- [x] مزامنة ومراجعة HEAD الحالي للمستودعات `swiftship` و`alx_web` و`alx_api`.
+- [x] فحص الاختبارات والبناء وحدود Supabase ونقاط الصحة المنشورة.
+- [x] فحص metadata وmigrations وSupabase advisors دون تنفيذ DDL/DML.
+- [x] إنشاء التقرير `docs/api-review-2026-10-08_ar.md`.
+- [ ] إصلاح segmentation fault في اختبارات `alx_api` وإعادة إثبات `check/test/build`.
+- [ ] إزالة أو حصر بقايا Supabase المباشرة في 13 ملفًا من `swiftship`.
+- [ ] توحيد feature flags وتنفيذ E2E مصادق عليه لكل نطاق قبل إعلان API-only.
+- [ ] إكمال hardening: load testing، monitoring، backup/restore، rollback، ومعالجة advisors الأمنية.
+
+## [2026-10-08 23:53 +03:00] تحليل عميق وخطة API-only لنظام SwiftShip
+- [x] تحديث SwiftShip وalx_api إلى آخر HEAD؛ alx_api على `f20c771e7e19148c6299a4c0c5a2f79a073f7f9e9`.
+- [x] جرد ملفات `src` وتحليل 109 ملفًا مرتبطًا بـ legacy-compat أو Supabase.
+- [x] تحليل سبب تعطل جلب اسم النظام والشعار والعملات وتحديد غياب Settings/Currency API في alx_api.
+- [x] إنشاء التقرير `docs/swiftship_api_only_deep_analysis_2026-10-08_ar.md`.
+- [ ] تنفيذ المرحلة 0: API_MODE وcontract matrix وstatic boundary tests.
+- [ ] تنفيذ المرحلة 1: إنشاء وحدات ومسارات settings/currencies وباقي العقود الناقصة في alx_api.
+- [ ] نقل المجالات تدريجيًا وإزالة fallback ثم حذف طبقة Supabase بعد اجتياز اختبارات API-only.
+- [x] توثيق الفرق بين 109 ملفات legacy/Supabase مباشرة و147 ملفًا إجمالًا مرتبطًا بالمسار القديم أو اختباراته.
