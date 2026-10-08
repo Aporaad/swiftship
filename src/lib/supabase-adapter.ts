@@ -1,46 +1,70 @@
-import { createClient } from '@supabase/supabase-js';
-import { resolveSupabaseConfig } from './supabase-config';
+// ─── supabase-adapter.ts ────────────────────────────────────────────────────
+// ⚠️ تحذير: تم تعطيل الاتصال المباشر بـ Supabase بالكامل.
+// ⚠️ WARNING: All direct Supabase connections are DISABLED.
+// يجب استخدام alxDataGateway.ts أو alxAuthGateway.ts بدلاً من هذا الملف.
+// Use alxDataGateway.ts or alxAuthGateway.ts instead.
+// ────────────────────────────────────────────────────────────────────────────
+
 import { extractDirectColumns, getTablePrimaryKey, usesExplicitFinancialColumns } from './supabase-adapter-columns';
 import { cleanData, extractRowPayload, normalizePayload, sanitizeDataPayload } from './supabase-adapter-mappers';
 export { extractDirectColumns, getTablePrimaryKey, usesExplicitFinancialColumns } from './supabase-adapter-columns';
 export { extractRowPayload, normalizePayload, sanitizeDataPayload } from './supabase-adapter-mappers';
 
-// ── قراءة lazy للمتغيرات حتى تعمل بعد تحميل dotenv ────────────────────────
-// لا تُقرأ كثوابت عالمية عند تهيئة الموديول — استخدم دوال getter
-function getSupabaseConfig() {
-  const processEnv = typeof process !== 'undefined' ? process.env : {};
-  const viteEnv = ((import.meta as any).env ?? {}) as Record<string, string | undefined>;
-  return resolveSupabaseConfig(processEnv, viteEnv);
-}
+/**
+ * كائن وهمي (noop) يحاكي واجهة Supabase Client بدون أي اتصال حقيقي.
+ * A noop stub that mimics the Supabase Client interface without any real connection.
+ * يمنع أي اتصال بـ placeholder-project.supabase.co
+ */
+const noopSupabaseClient: any = new Proxy({}, {
+  get(_target, prop) {
+    // إرجاع دالة noop لأي خاصية مطلوبة
+    // Return noop function for any requested property
+    if (prop === 'from') {
+      return (_table: string) => ({
+        select: () => Promise.resolve({ data: [], error: null }),
+        insert: () => Promise.resolve({ data: null, error: null }),
+        update: () => ({
+          eq: () => Promise.resolve({ data: null, error: null })
+        }),
+        upsert: () => Promise.resolve({ data: null, error: null }),
+        delete: () => ({
+          eq: () => Promise.resolve({ data: null, error: null })
+        }),
+        eq: () => ({
+          limit: () => Promise.resolve({ data: [], error: null }),
+          select: () => Promise.resolve({ data: [], error: null }),
+        }),
+        ilike: () => ({
+          limit: () => Promise.resolve({ data: [], error: null }),
+        }),
+        limit: () => Promise.resolve({ data: [], error: null }),
+        single: () => Promise.resolve({ data: null, error: null }),
+      });
+    }
+    if (prop === 'auth') {
+      return {
+        updateUser: () => Promise.resolve({ error: new Error('[Supabase Adapter] DISABLED: Use ALX API instead.') }),
+        resetPasswordForEmail: () => Promise.resolve({ error: new Error('[Supabase Adapter] DISABLED: Use ALX API instead.') }),
+      };
+    }
+    if (prop === 'channel') {
+      return (_name: string) => ({
+        on: () => ({ subscribe: () => ({ unsubscribe: () => {} }) }),
+        subscribe: () => ({ unsubscribe: () => {} }),
+      });
+    }
+    // لأي خاصية أخرى أرجع دالة لا تفعل شيئاً
+    return () => Promise.resolve(null);
+  }
+});
 
-let actualSupabaseClient: any = null;
-
+/** الحصول على عميل Supabase - معطّل الآن ويعيد الكائن الوهمي فقط */
 function getSupabaseClient() {
-  if (!actualSupabaseClient) {
-    const { url: resolvedUrl, anonKey: resolvedKey } = getSupabaseConfig();
-
-    if (!resolvedUrl || resolvedUrl === "https://placeholder-project.supabase.co") {
-      console.warn('[Supabase Adapter] Warning: Supabase URL is missing or placeholder. Environment variables might not be loaded yet.');
-    }
-
-    actualSupabaseClient = createClient(
-      resolvedUrl || "https://placeholder-project.supabase.co",
-      resolvedKey || "placeholder-key"
-    );
-  }
-  return actualSupabaseClient;
+  return noopSupabaseClient;
 }
 
-export const supabase = new Proxy({}, {
-  get(target, prop, receiver) {
-    const client = getSupabaseClient();
-    const value = Reflect.get(client, prop);
-    if (typeof value === 'function') {
-      return value.bind(client);
-    }
-    return value;
-  }
-}) as any;
+/** كائن supabase المُصدَّر - يُعيد الكائن الوهمي دائماً لمنع أي اتصال خارجي */
+export const supabase = noopSupabaseClient;
 
 const isServer = typeof window === 'undefined';
 
@@ -260,85 +284,14 @@ async function ensureCache(table: string): Promise<any[]> {
     }
   }
 
-  // Pre-load products, order_items and shipments when fetching orders to ensure relational fields items and shippingDetails are populated
-  if (table === 'orders' && !isOfflineMode()) {
-    Promise.all([ensureCache('products'), ensureCache('order_items'), ensureCache('shipments')]).catch(() => { });
-  }
+  // ⚠️ تم تعطيل الجلب من الشبكة عبر Supabase - النظام يعتمد على ALX API الآن
+  // ⚠️ Network fetching via Supabase is DISABLED - System uses ALX API now
+  // لا تُحاول الاتصال بـ Supabase - استخدم alxDataGateway.ts بدلاً من ذلك
+  // Do NOT attempt Supabase connections - use alxDataGateway.ts instead
+  lastFetchTimestamps[table] = Date.now(); // منع أي محاولة إعادة جلب
 
-  // 2. Fetch from network ONLY if cache is stale or has never fetched
-  if (isStale && !isOfflineMode()) {
-    if (!activeFetches[table]) {
-      activeFetches[table] = (async () => {
-        try {
-          const { data, error } = await supabase.from(table).select('*');
-          // Always mark fetch timestamp to prevent infinite network retry loops on empty or 404 tables
-          lastFetchTimestamps[table] = Date.now();
-
-          if (error) {
-            console.warn(`[Supabase Adapter] Failed to load table ${table} from remote: ${error.message}. Falling back to offline/local cache.`);
-          } else {
-            collectionCaches[table] = (data || []).map((row: Record<string, unknown>) => extractRowPayload(table, row));
-
-            // Update local backup
-            try {
-              safeLocalStorage.setItem(`swiftship_table_backup_${table}`, JSON.stringify(collectionCaches[table]));
-            } catch (lsErr) {
-              console.warn(`[Supabase Adapter] Saving backup failed for ${table}:`, lsErr);
-            }
-
-            // Notify listeners that remote network data has loaded successfully
-            if (collectionListeners[table]) {
-              collectionListeners[table].forEach(cb => cb());
-            }
-          }
-        } catch (e: any) {
-          lastFetchTimestamps[table] = Date.now();
-          console.warn(`[Supabase Adapter] Network/Database exception reading table ${table}: ${e.message}`);
-        } finally {
-          activeFetches[table] = null;
-        }
-        return collectionCaches[table];
-      })();
-    }
-    await activeFetches[table];
-  }
-
-  // 3. Dynamic realtime subscription per collection using channels, only active when online and not subscribed yet
-  if (!collectionSubscribed[table] && !isOfflineMode()) {
-    collectionSubscribed[table] = true;
-    try {
-      supabase
-        .channel(`realtime:${table}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table }, (payload: any) => {
-          const cache = collectionCaches[table] || [];
-          const rowId = payload.new?.id || payload.old?.id;
-
-          if (payload.eventType === 'DELETE') {
-            collectionCaches[table] = cache.filter(item => item.id !== rowId);
-          } else if (payload.new) {
-            const newItem = extractRowPayload(table, payload.new);
-            const index = cache.findIndex(item => item.id === rowId);
-            if (index >= 0) {
-              cache[index] = newItem;
-            } else {
-              cache.push(newItem);
-            }
-          }
-          // Save updated live data to localStorage backup
-          try {
-            safeLocalStorage.setItem(`swiftship_table_backup_${table}`, JSON.stringify(collectionCaches[table]));
-          } catch (_) { }
-
-          if (collectionListeners[table]) {
-            collectionListeners[table].forEach(cb => cb());
-          }
-        })
-        .subscribe();
-    } catch (rtErr: any) {
-      console.warn(`[Supabase Adapter] Realtime channel setup failed for ${table}:`, rtErr.message);
-      collectionSubscribed[table] = false;
-    }
-  }
+  // تعطيل Realtime channels تماماً
+  // Realtime channels are fully disabled
 
   return collectionCaches[table] || [];
 }
@@ -505,48 +458,12 @@ export async function signInWithPassword(emailOrUsername: string, pass: string):
   const normalizedInput = emailOrUsername.trim().toLowerCase();
   const isEmail = normalizedInput.includes('@');
 
-  // الاستعلام من جدول public.users مباشرة بالبريد أو اسم المستخدم
-  // Query directly from public.users table by email or username
-  let query = supabase.from('users').select('*');
-  if (isEmail) {
-    query = query.eq('email', normalizedInput);
-  } else {
-    // البحث باسم المستخدم مع عدم حساسية الحروف
-    // Search by username (case-insensitive)
-    query = query.ilike('username', normalizedInput);
-  }
-  const { data: rows, error } = await query.limit(1);
-
-  if (error) {
-    console.error('[Auth] Error querying public.users:', error);
-    const err = new Error('حدث خطأ في الاتصال بقاعدة البيانات') as any;
-    err.code = 'auth/network-error';
-    throw err;
-  }
-
-  const row = rows?.[0];
-  if (!row) {
-    const err = new Error('المستخدم غير موجود') as any;
-    err.code = 'auth/user-not-found';
-    throw err;
-  }
-
-  // Verify credentials using the current legacy source; do not activate a session yet.
-  if (row.password !== pass) {
-    const err = new Error('بيانات الدخول غير صحيحة') as any;
-    err.code = 'auth/invalid-credential';
-    throw err;
-  }
-
-  // Return a safe user projection; Login completes sign-in after account/PIN checks.
-  const user = mapPublicUser(row);
-  if (!user) {
-    const err = new Error('فشل في تحليل بيانات المستخدم') as any;
-    err.code = 'auth/internal-error';
-    throw err;
-  }
-
-  return { user };
+  // ⚠️ تم تعطيل المصادقة عبر Supabase. يجب استخدام alxAuthGateway.ts
+  // ⚠️ Supabase authentication is DISABLED. Use alxAuthGateway.ts (alxLogin) instead.
+  console.error('[Auth] signInWithPassword via supabase-adapter is DISABLED. Use alxLogin from alxAuthGateway.ts instead.');
+  const err = new Error('يرجى استخدام نظام المصادقة الجديد (alxLogin)') as any;
+  err.code = 'auth/disabled';
+  throw err;
 }
 
 export function completeSignIn(user: User): void {
@@ -1175,14 +1092,16 @@ export async function signOut(...args: any[]) {
   setLoggedInUser(null);
 }
 
-export async function updatePassword(password: string) {
-  const { error } = await supabase.auth.updateUser({ password });
-  if (error) throw error;
+export async function updatePassword(_password: string) {
+  // ⚠️ معطّل - استخدم ALX API بدلاً من ذلك
+  // ⚠️ DISABLED - Use ALX API instead
+  console.warn('[Supabase Adapter] updatePassword is DISABLED. Use ALX API password change endpoint.');
 }
 
-export async function sendPasswordResetEmail(email: string) {
-  const { error } = await supabase.auth.resetPasswordForEmail(email);
-  if (error) throw error;
+export async function sendPasswordResetEmail(_email: string) {
+  // ⚠️ معطّل - استخدم ALX API بدلاً من ذلك
+  // ⚠️ DISABLED - Use ALX API instead
+  console.warn('[Supabase Adapter] sendPasswordResetEmail is DISABLED. Use ALX API password reset endpoint.');
 }
 
 // Date parsing helper

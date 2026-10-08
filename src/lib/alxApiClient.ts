@@ -19,6 +19,7 @@ const ALX_API_URL = (
 ) as string;
 
 const TOKEN_STORAGE_KEY = 'alx_access_token';
+const ALT_TOKEN_STORAGE_KEY = 'alx_api_access_token';
 const REFRESH_TOKEN_STORAGE_KEY = 'alx_refresh_token';
 const SESSION_ID_KEY = 'alx_session_id';
 
@@ -27,7 +28,7 @@ const SESSION_ID_KEY = 'alx_session_id';
 /** الحصول على Access Token المخزن */
 export function getStoredAccessToken(): string | null {
   try {
-    return sessionStorage.getItem(TOKEN_STORAGE_KEY);
+    return sessionStorage.getItem(TOKEN_STORAGE_KEY) || sessionStorage.getItem(ALT_TOKEN_STORAGE_KEY);
   } catch {
     return null;
   }
@@ -46,6 +47,7 @@ export function getStoredRefreshToken(): string | null {
 export function storeTokens(accessToken: string, refreshToken: string, sessionId?: string): void {
   try {
     sessionStorage.setItem(TOKEN_STORAGE_KEY, accessToken);
+    sessionStorage.setItem(ALT_TOKEN_STORAGE_KEY, accessToken);
     sessionStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, refreshToken);
     if (sessionId) sessionStorage.setItem(SESSION_ID_KEY, sessionId);
   } catch {
@@ -57,6 +59,7 @@ export function storeTokens(accessToken: string, refreshToken: string, sessionId
 export function clearTokens(): void {
   try {
     sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+    sessionStorage.removeItem(ALT_TOKEN_STORAGE_KEY);
     sessionStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
     sessionStorage.removeItem(SESSION_ID_KEY);
   } catch {

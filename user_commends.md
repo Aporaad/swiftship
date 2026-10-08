@@ -1946,6 +1946,20 @@ Start Command: npm run start:prod
   3. إصلاح الحلقة التكرارية المفرطة في `PortalAuthContext.tsx` عن طريق ضبط `useEffect` لتشغيل مرة واحدة فقط وحظر طلبات `getCustomerDetails` المكررة المسببة لـ `429 RATE_LIMITED`.
   4. اجتياز كافة اختبارات وحدات النظام وموقع البوابة والـ API بنسبة 100%.
 
+## [2026-10-08T03:02:00+03:00] — AI Model: Antigravity / Gemini 3.6 Flash
+```text
+اكمل حل مشكله مشكله اخظاء النظام 
+WebSocket connection to 'wss://placeholder-project.supabase.co/realtime/v1/websocket...' failed
+GET https://placeholder-project.supabase.co/rest/v1/... net::ERR_NAME_NOT_RESOLVED
+Dashboard API read failed for /api/v1/orders. ApiClientError: بيانات المصادقة غير صحيحة.
+```
+- **تفاصيل المهمة**: تشخيص أسباب أخطاء النظام الظاهرة في كونسول المتصفح وإصلاحها جذرية:
+  1. موائمة مفتاح تخزين توكن المصادقة (`alx_access_token` و `alx_api_access_token`) في `alxApiClient.ts` و 11 بوابة API Gateways بالنظام لمنع خطأ `401 Unauthorized`.
+  2. توحيد عنوان خادم الـ API عبر `VITE_ALX_API_URL || VITE_API_BASE_URL` بجميع بوابات البيانات.
+  3. حظر استدعاءات `fetch` المباشرة لـ Supabase REST في `useRole.ts` عند تفعيل HTTP API cutover لمنع أخطاء `placeholder-project.supabase.co`.
+  4. إيقاف وإعادة بناء حزمة الإنتاج `dist` والتأكد من اجتياز جميع الفحوصات والأنواع بنسبة 100%.
+
+
 
 
 

@@ -38,11 +38,11 @@ type StaffHandlers = {
 };
 
 const client = new ApiClient({
-  baseUrl: import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:3001",
+  baseUrl: import.meta.env.VITE_ALX_API_URL || import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:3001",
   accessTokenFactory: () =>
     typeof sessionStorage === "undefined"
       ? null
-      : sessionStorage.getItem("alx_api_access_token"),
+      : (sessionStorage.getItem("alx_access_token") || sessionStorage.getItem("alx_api_access_token")),
   maxReadRetries: 0,
 });
 

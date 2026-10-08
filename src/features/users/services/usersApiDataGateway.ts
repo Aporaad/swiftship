@@ -8,7 +8,7 @@ type UsersHandlers = { onData: (state: UsersState) => void; onError?: (error: un
 /** عميل HTTP مشترك لجميع عمليات المستخدمين */
 const client = new ApiClient({
   baseUrl: import.meta.env.VITE_ALX_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:3001',
-  accessTokenFactory: () => (typeof sessionStorage === 'undefined' ? null : sessionStorage.getItem('alx_api_access_token')),
+  accessTokenFactory: () => (typeof sessionStorage === 'undefined' ? null : (sessionStorage.getItem('alx_access_token') || sessionStorage.getItem('alx_api_access_token'))),
   maxReadRetries: 0,
 });
 

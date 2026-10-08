@@ -5,8 +5,8 @@ type ApiRole = { roleId: string; code: string; name: string; description?: strin
 type RoleView = { id: string; title: string; permissions: string[]; code?: string; description?: string | null; isDefault?: boolean };
 
 const client = new ApiClient({
-  baseUrl: import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:3001',
-  accessTokenFactory: () => (typeof sessionStorage === 'undefined' ? null : sessionStorage.getItem('alx_api_access_token')),
+  baseUrl: import.meta.env.VITE_ALX_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:3001',
+  accessTokenFactory: () => (typeof sessionStorage === 'undefined' ? null : (sessionStorage.getItem('alx_access_token') || sessionStorage.getItem('alx_api_access_token'))),
   maxReadRetries: 0,
 });
 const toView = (role: ApiRole): RoleView => ({

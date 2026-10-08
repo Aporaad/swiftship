@@ -237,8 +237,11 @@ export function useRole(enableHeartbeat: boolean = false) {
       const targetSessId = sessionIdRef.current;
       if (targetSessId && targetSessId !== 'sess-loading' && targetSessId !== 'sess-loggedout') {
         const env = import.meta.env || {};
-        const supabaseUrl = env.VITE_SUPABASE_URL || 'https://ejrojwbbflzchasvgexr.supabase.co';
+        const supabaseUrl = env.VITE_SUPABASE_URL;
         const supabaseKey = env.VITE_SUPABASE_ANON_KEY || '';
+
+        // إذا كان النظام يعمل عبر ALX API أو كانت Supabase معطلة، لا تُحاول الاتصال بـ Supabase REST
+        if (env.VITE_USE_HTTP_API === 'true' || !supabaseUrl) return;
 
         // إرسال طلب حذف الجلسة من DB عبر fetch مع keepalive
         try {

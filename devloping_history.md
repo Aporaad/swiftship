@@ -2818,6 +2818,21 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
   - اجتياز `npx tsc --noEmit` في `alx_api` بـ 0 أخطاء و 151/151 اختبار ناجح في Jest.
   - اجتياز `npm run check` في `SWIFTSHIP_SYSTEM` بـ 0 أخطاء و 276/276 اختبار ناجح.
 
+## [2026-10-08 05:15:00 +03:00] — حل مشكلة 401 Unauthorized وموائمة مفاتيح التوكن وحظر استدعاءات Supabase REST المباشرة — AI Model: Antigravity / Gemini 3.6 Flash (Medium)
+- **النطاق والهدف**: تشخيص أسباب أخطاء كونسول المتصفح وإصلاح مشكلة 401 Unauthorized الناتجة عن تعارض مفتاح تخزين توكن المصادقة وحظر طلبات Supabase REST المباشرة المسببة لخطأ `placeholder-project.supabase.co`.
+- **التغيرات والتحسينات المنجزة**:
+  1. **موائمة مفتاح التوكن (`alxApiClient.ts`)**:
+     - إتاحة قراءة التوكن من كلا المفتاحين (`alx_access_token` و `alx_api_access_token`) في `getStoredAccessToken()`.
+     - حفظ التوكن في كلا المفتاحين في `storeTokens()` ومسحهما في `clearTokens()`.
+  2. **تحديث بوابات API Gateways الـ 11 بالنظام**:
+     - تحديث `dashboardApiGateway.ts`, `usersApiDataGateway.ts`, `staffApiDataGateway.ts`, `sourcesApiDataGateway.ts`, `reportsApiDataGateway.ts`, `rolesApiDataGateway.ts`, `ordersApiDataGateway.ts`, `customersApiDataGateway.ts`, `couriersApiDataGateway.ts`, `FinanceApiDataGateway.ts`, `FinanceApiWriteGateway.ts` لتقرأ التوكن من كلا المفتاحين وتستخدم `VITE_ALX_API_URL || VITE_API_BASE_URL || 'http://127.0.0.1:3001'`.
+  3. **حظر استدعاءات Supabase المباشرة في `useRole.ts`**:
+     - إضافة حرس في `handleBeforeUnload` يمنع تنشيط طلبات `fetch` المباشرة لـ Supabase REST إذا كان `VITE_USE_HTTP_API=true` أو `VITE_SUPABASE_URL` غير معرف.
+  4. **إعادة بناء حزمة الإنتاج**:
+     - تشغيل `npx tsc --noEmit` واجتيازه بـ 0 أخطاء.
+     - تشغيل `npm run build` وبناء `dist` بنجاح كامل حيث انخفض حجم حزمة `supabase` المتبقية إلى 0.00 kB.
+
+
 
 
 

@@ -2128,12 +2128,13 @@
   - `alx_api/docs/swiftship_deep_api_cutover_analysis_2026_10_08.md`
 - [x] توثيق كافة التفاصيل والخطوات في سجلات التطوير وسجل الأوامر للمشروع وفق المعايير والقواعد النظامية المعتمدة.
 
-## [2026-10-08 04:36 +03:00] — حل مشكلة إنشاء/حفظ ملف العميل في الموقع وإيقاف تكرار الطلبات اللانهائي وتحديث CORS — AI Model: Gemini 3.6 Flash
-- [x] إصلاح `portalCustomerDetailsUpdateSchema` بـ `alx_api/src/modules/portal/portal-owned.schemas.ts` وإضافة حقل `privacyPolicyAgreedAt` الاختياري لحل خطأ `INVALID_PORTAL_CUSTOMER_DETAILS` (400 Bad Request).
-- [x] تمرير تفاصيل أخطاء التحقق من Zod عبر `sendFailure` في `portal-owned.routes.ts` لسهولة التشخيص المباشر.
-- [x] تزويد دومينات الموقع الحي (`https://alx.luxe`, `https://www.alx.luxe`) ضمن النطاقات المسموحة افتراضياً بـ `CORS_ORIGINS` في `alx_api/src/config/env.ts` و `.env.example`.
-- [x] إيقاف الحلقة التكرارية اللانهائية للطلبات المتكررة في `alx_web/src/context/PortalAuthContext.tsx` عن طريق جعل تأثير التهيئة يشتغل مرة واحدة فقط عند التحميل (`[]`) وإلغاء `useEffect` المكرر المسبب لـ `429 RATE_LIMITED`.
-- [x] اجتياز جميع الفحوص والاختبارات التلقائية (20/20 بـ `alx_web` و 151/151 بـ `alx_api` و 276/276 بـ `SWIFTSHIP_SYSTEM`) بنجاح 100%.
+## [2026-10-08 05:15 +03:00] — حل مشكلة 401 Unauthorized وموائمة مفاتيح التوكن ومنع استدعاءات Supabase REST المباشرة — AI Model: Antigravity / Gemini 3.6 Flash
+- [x] موائمة مفتاح تخزين وتمرير توكن المصادقة (`alx_access_token` و `alx_api_access_token`) بـ `alxApiClient.ts` وبوابات الـ API الـ 11 (`dashboardApiGateway.ts`, `usersApiDataGateway.ts`, `staffApiDataGateway.ts`, `sourcesApiDataGateway.ts`, `reportsApiDataGateway.ts`, `rolesApiDataGateway.ts`, `ordersApiDataGateway.ts`, `customersApiDataGateway.ts`, `couriersApiDataGateway.ts`, `FinanceApiDataGateway.ts`, `FinanceApiWriteGateway.ts`) لمنع خطأ `401 Unauthorized`.
+- [x] توحيد رابط خادم الـ API بجميع البوابات لاستخدام `VITE_ALX_API_URL || VITE_API_BASE_URL || 'http://127.0.0.1:3001'`.
+- [x] حظر استدعاءات `fetch` المباشرة لـ Supabase REST في `useRole.ts` عند تفعيل `VITE_USE_HTTP_API=true` لمنع محاولات الاتصال بـ `placeholder-project.supabase.co`.
+- [x] اجتياز فحص الأنواع `npx tsc --noEmit` بنسبة 100% (0 أخطاء) وإعادة بناء حزمة الإنتاج `npm run build` بنجاح.
+- [x] التوثيق الكامل والمحدث في ملفات `todo.md` و `devloping_history.md` و `user_commends.md`.
+
 
 
 
