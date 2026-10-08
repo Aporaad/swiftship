@@ -1959,6 +1959,19 @@ Dashboard API read failed for /api/v1/orders. ApiClientError: بيانات ال�
   3. حظر استدعاءات `fetch` المباشرة لـ Supabase REST في `useRole.ts` عند تفعيل HTTP API cutover لمنع أخطاء `placeholder-project.supabase.co`.
   4. إيقاف وإعادة بناء حزمة الإنتاج `dist` والتأكد من اجتياز جميع الفحوصات والأنواع بنسبة 100%.
 
+## [2026-10-08T22:00:00+03:00] — AI Model: Antigravity / Gemini 3.6 Flash
+```text
+ماذا عملت ياحيوان لما لاتظهر شاشه الدخول ابدا 
+Uncaught TypeError: Sa.channel(...).on(...).on is not a function
+Failed to sync currencies from DB: TypeError: Sa.from(...).select(...).order is not a function
+```
+- **تفاصيل المهمة**: تشخيص سبب تحطم واجهة React واختفاء شاشة الدخول كلياً وإصلاح الكائن الوهمي لـ Supabase:
+  1. إعادة بناء `noopSupabaseClient` في `src/lib/supabase-adapter.ts` باستخدِم دالة Proxy ديناميكية شجرية (`createSupabaseStub`).
+  2. دعم السلسلة غير المحدودة من استدعاءات الدوال مثل `supabase.channel(...).on(...).on(...)` و `supabase.from(...).select(...).order(...)`.
+  3. جعل الكائن الوهمي Thenable (قابل لـ `await` / `.then()`) ويعيد `{ data: [], error: null, count: 0 }` أو `{ data: null, error: null }` تلقائياً لمنع الاستثناءات القاتلة وإظهار شاشة الدخول فوراً.
+  4. اجتياز فحص `npx tsc --noEmit` بنجاح وإعادة بناء حزمة الإنتاج `npm run build`.
+
+
 
 
 

@@ -2832,6 +2832,19 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
      - تشغيل `npx tsc --noEmit` واجتيازه بـ 0 أخطاء.
      - تشغيل `npm run build` وبناء `dist` بنجاح كامل حيث انخفض حجم حزمة `supabase` المتبقية إلى 0.00 kB.
 
+## [2026-10-08 22:00:00 +03:00] — إصلاح تحطم شجرة مكونات React وإظهار شاشة الدخول عبر تحديث Proxy لـ Supabase — AI Model: Antigravity / Gemini 3.6 Flash (Medium)
+- **النطاق والهدف**: تشخيص سبب اختفاء شاشة الدخول وتحطم واجهة React كلياً بسبب استثناءات `TypeError: Sa.channel(...).on(...).on is not a function` و `TypeError: Sa.from(...).select(...).order is not a function`.
+- **التغيرات والتحسينات المنجزة**:
+  1. **إعادة بناء `noopSupabaseClient` (`src/lib/supabase-adapter.ts`)**:
+     - استبدال الكائن الثابت بدالة Proxy ديناميكية شجرية `createSupabaseStub()`.
+     - دعم التسلسل اللانهائي لأي مجموعة من استدعاءات الدوال مثل `.from().select().order().eq().limit()`.
+     - دعم تسلسل القنوات والاشتراكات اللانهائي مثل `.channel().on().on().subscribe()`.
+     - جعل الكائن Proxy Thenable (قابل للـ `await`) بحيث يرجع دائم استجابة وهمية آمنة `{ data: [], error: null, count: 0 }` دون إطلاق أي خطأ استثناء.
+  2. **نتائج البناء والتحقق**:
+     - اجتياز `npx tsc --noEmit` بنسبة 100% بدون أي خطأ.
+     - اجتياز بناء حزمة الإنتاج `npm run build` واستقرار البناء بالكامل.
+
+
 
 
 

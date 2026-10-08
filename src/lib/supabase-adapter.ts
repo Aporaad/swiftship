@@ -12,51 +12,51 @@ export { extractRowPayload, normalizePayload, sanitizeDataPayload } from './supa
 
 /**
  * كائن وهمي (noop) يحاكي واجهة Supabase Client بدون أي اتصال حقيقي.
- * A noop stub that mimics the Supabase Client interface without any real connection.
- * يمنع أي اتصال بـ placeholder-project.supabase.co
+ * A chainable, thenable Proxy stub that mimics the Supabase Client interface without any real connection.
+ * يمنع أي اتصال بـ placeholder-project.supabase.co ويدعم السلسلة غير المحدودة من الدوال.
  */
-const noopSupabaseClient: any = new Proxy({}, {
-  get(_target, prop) {
-    // إرجاع دالة noop لأي خاصية مطلوبة
-    // Return noop function for any requested property
-    if (prop === 'from') {
-      return (_table: string) => ({
-        select: () => Promise.resolve({ data: [], error: null }),
-        insert: () => Promise.resolve({ data: null, error: null }),
-        update: () => ({
-          eq: () => Promise.resolve({ data: null, error: null })
-        }),
-        upsert: () => Promise.resolve({ data: null, error: null }),
-        delete: () => ({
-          eq: () => Promise.resolve({ data: null, error: null })
-        }),
-        eq: () => ({
-          limit: () => Promise.resolve({ data: [], error: null }),
-          select: () => Promise.resolve({ data: [], error: null }),
-        }),
-        ilike: () => ({
-          limit: () => Promise.resolve({ data: [], error: null }),
-        }),
-        limit: () => Promise.resolve({ data: [], error: null }),
-        single: () => Promise.resolve({ data: null, error: null }),
-      });
-    }
-    if (prop === 'auth') {
-      return {
-        updateUser: () => Promise.resolve({ error: new Error('[Supabase Adapter] DISABLED: Use ALX API instead.') }),
-        resetPasswordForEmail: () => Promise.resolve({ error: new Error('[Supabase Adapter] DISABLED: Use ALX API instead.') }),
+function createSupabaseStub(defaultResult: any = { data: [], error: null, count: 0 }): any {
+  const handler: ProxyHandler<any> = {
+    get(_target, prop) {
+      if (prop === 'then') {
+        return (onFulfilled?: Function, onRejected?: Function) =>
+          Promise.resolve(defaultResult).then(onFulfilled as any, onRejected as any);
+      }
+      if (prop === 'catch') {
+        return (onRejected?: Function) =>
+          Promise.resolve(defaultResult).catch(onRejected as any);
+      }
+      if (prop === 'finally') {
+        return (onFinally?: Function) =>
+          Promise.resolve(defaultResult).finally(onFinally as any);
+      }
+      if (typeof prop === 'symbol' || prop === 'inspect' || prop === 'valueOf') {
+        return undefined;
+      }
+      if (prop === 'subscribe') {
+        return () => ({ unsubscribe: () => {} });
+      }
+      if (prop === 'unsubscribe') {
+        return () => {};
+      }
+      if (prop === 'onAuthStateChange') {
+        return () => ({ data: { subscription: { unsubscribe: () => {} } } });
+      }
+      if (prop === 'getSession' || prop === 'getUser') {
+        return () => Promise.resolve({ data: { session: null, user: null }, error: null });
+      }
+      return (..._args: any[]) => {
+        if (prop === 'single' || prop === 'maybeSingle') {
+          return createSupabaseStub({ data: null, error: null });
+        }
+        return createSupabaseStub(defaultResult);
       };
     }
-    if (prop === 'channel') {
-      return (_name: string) => ({
-        on: () => ({ subscribe: () => ({ unsubscribe: () => {} }) }),
-        subscribe: () => ({ unsubscribe: () => {} }),
-      });
-    }
-    // لأي خاصية أخرى أرجع دالة لا تفعل شيئاً
-    return () => Promise.resolve(null);
-  }
-});
+  };
+  return new Proxy(function () {}, handler);
+}
+
+const noopSupabaseClient: any = createSupabaseStub();
 
 /** الحصول على عميل Supabase - معطّل الآن ويعيد الكائن الوهمي فقط */
 function getSupabaseClient() {

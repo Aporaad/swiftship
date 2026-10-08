@@ -2135,6 +2135,14 @@
 - [x] اجتياز فحص الأنواع `npx tsc --noEmit` بنسبة 100% (0 أخطاء) وإعادة بناء حزمة الإنتاج `npm run build` بنجاح.
 - [x] التوثيق الكامل والمحدث في ملفات `todo.md` و `devloping_history.md` و `user_commends.md`.
 
+## [2026-10-08 22:00 +03:00] — إصلاح كائن Proxy الوهمي لـ Supabase لمنع تحطم واجهة React وإظهار شاشة الدخول — AI Model: Antigravity / Gemini 3.6 Flash
+- [x] إعادة كتابة `noopSupabaseClient` في `src/lib/supabase-adapter.ts` باستخدِم Proxy ديناميكي مكرر (`createSupabaseStub`).
+- [x] دعم السلسلة الديناميكية غير المحدودة لأي دالة (مثل `supabase.channel(...).on(...).on(...)` و `supabase.from(...).select(...).order(...)`).
+- [x] جعل الكائن الوهمي Thenable (قابل للانتظار بـ `await` / `.then()`) ويعيد استجابة وهمية آمنة `{ data: [], error: null, count: 0 }` بدون إطلاق أي `TypeError` في الواجهة.
+- [x] اجتياز فحص الأنواع `npx tsc --noEmit` بنسبة 100% (0 أخطاء) وإعادة بناء حزمة الإنتاج `npm run build` بنجاح كامل.
+- [x] التوثيق الكامل والمحدث بملفات `todo.md` و `devloping_history.md` و `user_commends.md`.
+
+
 
 
 
