@@ -1,6 +1,3 @@
-import { collection, addDoc } from '../data/legacy/legacy-compat.ts';
-import { db, handlePostgreSQLError, OperationType } from '../data/legacy/legacy-compat.ts';
-import { currentSupabaseAuthGateway } from '../data/current-supabase/gateways/auth.gateway';
 import toast from 'react-hot-toast';
 
 export type NotificationType = 'info' | 'success' | 'warning' | 'error';
@@ -44,55 +41,8 @@ export const notificationService = {
           console.warn('[notificationService] native notification failed:', nativeErr);
         }
       }
-
-      let inferredCategory = category || 'system';
-      if (!category) {
-        const lowerTitle = title.toLowerCase();
-        const lowerMessage = message.toLowerCase();
-
-        const financeKeywords = [
-          'مالي', 'سند', 'الخزينة', 'سداد', 'العهد', 'الدفعة', 'دفع', 'مصروف', 'المحاسبة', 'التصفية', 'التسوية',
-          'financial', 'payment', 'expenses', 'custody', 'voucher', 'reconciliation', 'settle', 'paid', 'collect'
-        ];
-
-        const orderKeywords = [
-          'طلب', 'شحن', 'مسار', 'تتبع', 'اللوجستية', 'فاتورة', 'طرد', 'المستودع', 'توصيل',
-          'order', 'shipping', 'track', 'logistic', 'invoice', 'parcel', 'warehouse', 'delivery'
-        ];
-
-        const isFinance = financeKeywords.some(kw => lowerTitle.includes(kw) || lowerMessage.includes(kw));
-        const isOrder = orderKeywords.some(kw => lowerTitle.includes(kw) || lowerMessage.includes(kw));
-
-        if (isFinance) {
-          inferredCategory = 'finance';
-        } else if (orderId || isOrder) {
-          inferredCategory = 'order';
-        }
-      }
-
-      // 3. Save to PostgreSQL only when AuthGateway reports an authenticated operator.
-      const session = await currentSupabaseAuthGateway.getCurrentSession();
-      if (session.status === 'authenticated') {
-        const currentUser = session.user;
-        const notifId = 'NOTIF-' + Math.random().toString(36).substring(2, 11);
-        await addDoc(notifId, collection(db, 'notifications'), {
-          title,
-          message,
-          type,
-          orderId: orderId || null,
-          userId: userId || 'global',
-          associatedUserIds: associatedUserIds || [],
-          isPublic,
-          read: false,
-          category: inferredCategory,
-          createdAt: Date.now(),
-          creatorId: currentUser.id || 'system',
-          creatorName: currentUser.displayName || 'System'
-        });
-      }
     } catch (error) {
       console.error('Failed to create notification:', error);
-      handlePostgreSQLError(error, OperationType.CREATE, 'notifications');
     }
   }
 };

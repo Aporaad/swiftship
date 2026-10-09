@@ -1,6 +1,4 @@
 import { useState, useEffect } from 'react';
-import { db } from '../data/legacy/legacy-compat.ts';
-import { onSnapshot, doc, setDoc } from '../data/legacy/legacy-compat.ts';
 
 export interface ExpenseCategory {
   id: string;
@@ -26,44 +24,11 @@ export const DEFAULT_EXPENSE_CATEGORIES: ExpenseCategory[] = [
   { id: 'other', labelAr: 'أخرى', labelEn: 'Other', icon: '📄', isSystem: true }
 ];
 
-let cachedCategories: ExpenseCategory[] | null = null;
-let subscribers: Set<() => void> = new Set();
-let isSubscribed = false;
-
-function notifySubscribers() {
-  subscribers.forEach(cb => cb());
-}
-
 export function useExpenseCategories() {
-  const [categories, setCategories] = useState<ExpenseCategory[]>(cachedCategories || DEFAULT_EXPENSE_CATEGORIES);
+  const [categories, setCategories] = useState<ExpenseCategory[]>(DEFAULT_EXPENSE_CATEGORIES);
 
   useEffect(() => {
-    const cb = () => setCategories(cachedCategories || DEFAULT_EXPENSE_CATEGORIES);
-    subscribers.add(cb);
-
-    if (!isSubscribed) {
-      isSubscribed = true;
-      const ref = doc(db, 'settings', 'expense_categories');
-      
-      onSnapshot(ref, async (snap) => {
-        if (!snap.exists()) {
-          // seed default
-          await setDoc(ref, { data: DEFAULT_EXPENSE_CATEGORIES });
-          cachedCategories = DEFAULT_EXPENSE_CATEGORIES;
-          notifySubscribers();
-        } else {
-          const docData = snap.data();
-          if (docData && docData.data && Array.isArray(docData.data)) {
-            cachedCategories = docData.data;
-            notifySubscribers();
-          }
-        }
-      });
-    }
-
-    return () => {
-      subscribers.delete(cb);
-    };
+    setCategories(DEFAULT_EXPENSE_CATEGORIES);
   }, []);
 
   return categories;

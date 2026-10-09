@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { collection, db, onSnapshot } from '../data/legacy/legacy-compat.ts';
 
 export interface AutoVoucherRule {
   id: string;
@@ -15,40 +14,13 @@ export interface AutoVoucherRule {
   requiredEntities?: string[];
 }
 
-let cachedRules: AutoVoucherRule[] | null = null;
-const subscribers = new Set<() => void>();
-let unsubscribeRules: (() => void) | null = null;
-
-function notifySubscribers() {
-  subscribers.forEach((callback) => callback());
-}
-
-/** المصدر الرسمي لقواعد القيود التلقائية هو auto_entries؛ لا تقرأ هذه الواجهة وثيقة settings التاريخية. */
 export function useAutoVoucherRules() {
-  const [rules, setRules] = useState<AutoVoucherRule[]>(cachedRules || []);
-  const [loading, setLoading] = useState<boolean>(!cachedRules);
+  const [rules, setRules] = useState<AutoVoucherRule[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
 
   useEffect(() => {
-    const handler = () => {
-      if (cachedRules) {
-        setRules(cachedRules);
-        setLoading(false);
-      }
-    };
-    subscribers.add(handler);
-    if (!unsubscribeRules) {
-      unsubscribeRules = onSnapshot(collection(db, 'auto_entries'), (snapshot: any) => {
-        cachedRules = snapshot.docs.map((entry: any) => ({ id: entry.id, ...entry.data() }));
-        notifySubscribers();
-      });
-    }
-    return () => {
-      subscribers.delete(handler);
-      if (subscribers.size === 0 && unsubscribeRules) {
-        unsubscribeRules();
-        unsubscribeRules = null;
-      }
-    };
+    setRules([]);
+    setLoading(false);
   }, []);
 
   return { rules, loading };

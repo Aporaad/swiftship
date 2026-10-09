@@ -1,45 +1,67 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { doc, onSnapshot, setDoc, collection, getDocs, query, orderBy, limit, onAuthStateChanged, auth, db } from '../data/legacy/legacy-compat.ts';
-import { supabase } from '../data/legacy/legacy-compat.ts';
-import { currencyService } from '../services/currencyService';
+/**
+ * SettingsContext.tsx
+ * ─────────────────────────────────────────────────────────────────────────────
+ * مزود إعدادات النظام — API-only
+ *
+ * هذا الملف يستهلك HTTP gateway فقط (settingsCurrenciesApiGateway).
+ * لا يوجد أي استدعاء مباشر لـ Supabase أو Firebase أو legacy-compat.
+ *
+ * المصادر:
+ *  - الإعدادات العامة: GET /api/v1/settings/general
+ *  - إعدادات المستخدم: GET /api/v1/settings/user
+ *  - العملات: GET /api/v1/currencies
+ *
+ * Settings Context Provider — API-only mode
+ * All reads/writes go through the HTTP gateway. No Supabase listeners.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { settingsCurrenciesApiGateway } from '../data/http/settings-currencies-api.gateway';
+import type { ApiCurrencyDto } from '../data/http/settings-currencies-api.gateway';
 import { translations, Language, TranslationKey } from '../translations';
 
+// ── تعريف نوع المستخدم الحالي (يُجلب من sessionStorage)
+// Current user type - fetched from sessionStorage
 type AuthUser = { uid: string };
 
-// Custom currency definition
+// ── تعريف العملة المخصصة المعروضة في الواجهة
+// Custom currency definition for UI display
 export interface CustomCurrency {
-  id: string;          // unique key e.g. 'EUR', 'TRY'
-  code: string;        // ISO code: EUR, TRY, GBP …
-  name: string;        // Arabic/English name: يورو
+  id: string;          // مفتاح فريد مثل 'EUR', 'TRY'
+  code: string;        // رمز ISO: EUR, TRY, GBP …
+  name: string;        // الاسم بالعربية أو الإنجليزية
   symbol: string;      // €, ₺, £ …
-  rateToYER: number;   // How many YER per 1 unit of this currency
-  flag?: string;       // emoji flag: 🇪🇺
-  isActive: boolean;   // show/hide in the system
+  rateToYER: number;   // كم ريال يمني = 1 وحدة من هذه العملة
+  flag?: string;       // رمز علم: 🇪🇺
+  isActive: boolean;   // هل العملة مفعلة في النظام
 }
 
+// ── واجهة الإعدادات الشاملة
+// Comprehensive settings interface
 export interface Settings {
-  // Interface Settings
+  // إعدادات الواجهة / Interface Settings
   language: Language;
   theme: 'light' | 'dark';
   fontSize: 'sm' | 'md' | 'lg' | 'xl';
 
-  // General System Settings
+  // إعدادات النظام العامة / General System Settings
   systemName: string;
-  systemLogo?: string; // Base64 encoded logo
+  systemLogo?: string;
   orderPrefix: string;
   orderStartNumber: number;
 
-  // Company Identity
+  // هوية الشركة / Company Identity
   companyName: string;
   companyPhone?: string;
   companyEmail?: string;
   companyWebsite?: string;
   companyAddress?: string;
   taxId: string;
-  invoiceLogo?: string; // Base64 encoded logo for invoices
-  invoiceNotes?: string; // Default notes for PDF invoices
+  invoiceLogo?: string;
+  invoiceNotes?: string;
 
-  // Currency & Exchange Rates
+  // العملة وأسعار الصرف / Currency & Exchange Rates
   currency: string;
   currencySymbol: string;
   exchangeRateUSD?: number;
@@ -49,55 +71,55 @@ export interface Settings {
   lastExchangeRateUpdate?: string;
   lastExchangeRateUpdateTime?: string;
   lastExchangeRateUpdatedBy?: string;
-  // Custom currencies list
   customCurrencies?: CustomCurrency[];
 
-  // Management - Order Defaults
+  // الإعدادات اللوجستية / Logistics Defaults
   defaultPackagingFee?: number;
   defaultBankCommissionRate?: number;
   defaultCompanyProfitRate?: number;
   defaultDeliveryFee?: number;
   defaultCourierCommissionRate?: number;
-  defaultOrderCurrency?: string;          // العملة الافتراضية المعتمدة لأسعار الطلبات (المنتجات، الشحن، التغليف، الأرباح)
-  defaultProductInsuranceFee?: number;   // رسوم تأمين المنتجات الافتراضية
-  defaultProductInsuranceType?: 'fixed' | 'percentage'; // نوع رسوم تأمين المنتجات الافتراضية (سعر ثابت / نسبة مئوية)
+  defaultOrderCurrency?: string;
+  defaultProductInsuranceFee?: number;
+  defaultProductInsuranceType?: 'fixed' | 'percentage';
 
-  // Default Shipping Durations
+  // مدد الشحن الافتراضية / Default Shipping Durations
   defaultSheinDuration?: number;
   defaultAppDuration?: number;
   defaultFactoryDuration?: number;
   defaultYemenDeliveryDuration?: number;
   defaultShippingDuration?: number;
 
-  // Factory / Manufacturer Order Defaults
-  defaultProfitPerKg?: number;          // نسبة الربح للكيلو (SAR/kg) للمصنع
-  defaultCbmShippingRate?: number;      // سعر شحن الـ CBM (SAR/m³) للمصنع
-  cbmShippingRateApiUrl?: string;       // رابط API لتحديث سعر CBM تلقائياً
-  lastCbmRateUpdate?: string;           // آخر تحديث لسعر CBM
-  lastCbmRateUpdatedBy?: string;        // من حدّث سعر CBM
+  // إعدادات المصنع / Factory Defaults
+  defaultProfitPerKg?: number;
+  defaultCbmShippingRate?: number;
+  cbmShippingRateApiUrl?: string;
+  lastCbmRateUpdate?: string;
+  lastCbmRateUpdatedBy?: string;
 
-  // Security & Protection
+  // الأمان / Security
   protectSensitiveOrderDelete?: boolean;
   userSessionTimeout?: number;
 
-  // Backup System
+  // النسخ الاحتياطي / Backup System
   autoBackupEnabled?: boolean;
   backupSchedule?: 'daily' | 'weekly' | 'monthly' | 'manual';
-  backupRetentionDays?: number;    // how many days to keep PostgreSQL auto backups
-  backupCollections?: string[];    // which collections to backup
-  backupEncrypted?: boolean;       // whether to encrypt the backup
+  backupRetentionDays?: number;
+  backupCollections?: string[];
+  backupEncrypted?: boolean;
   lastBackup?: string;
   lastAutoBackupAt?: number;
-  backupCount?: number;            // total backups taken so far
+  backupCount?: number;
 
-  // Notifications
+  // الإشعارات / Notifications
   autoNotification?: boolean;
 
-  // Dashboard Settings (User Specific)
+  // لوحة التحكم (خاصة بالمستخدم) / Dashboard Settings (User Specific)
   dashboardGridColumns?: number;
   visibleMetrics?: string[];
 }
 
+// ── نوع سياق الإعدادات / Settings context type
 interface SettingsContextType {
   settings: Settings;
   updateSettings: (newSettings: Partial<Settings>) => Promise<void>;
@@ -105,6 +127,7 @@ interface SettingsContextType {
   t: (key: TranslationKey) => string;
 }
 
+// ── الإعدادات الافتراضية للنظام / Default system settings
 const defaultSettings: Settings = {
   language: 'ar',
   theme: 'dark',
@@ -126,7 +149,7 @@ const defaultSettings: Settings = {
   exchangeRateUSD: 535,
   exchangeRateSAR: 140,
   autoUpdateExchangeRates: false,
-  exchangeRatesApiUrl: 'https://open.er-api.com/v6/latest/USD',
+  exchangeRatesApiUrl: '',
   lastExchangeRateUpdate: '',
   lastExchangeRateUpdateTime: '',
   lastExchangeRateUpdatedBy: '',
@@ -134,10 +157,6 @@ const defaultSettings: Settings = {
     { id: 'YER', code: 'YER', name: 'ريال يمني', symbol: 'ر.ي', flag: '🇾🇪', rateToYER: 1, isActive: true },
     { id: 'USD', code: 'USD', name: 'دولار أمريكي', symbol: '$', flag: '🇺🇸', rateToYER: 535, isActive: true },
     { id: 'SAR', code: 'SAR', name: 'ريال سعودي', symbol: 'ر.س', flag: '🇸🇦', rateToYER: 140, isActive: true },
-    { id: 'EUR', code: 'EUR', name: 'يورو', symbol: '€', flag: '🇪🇺', rateToYER: 580, isActive: true },
-    { id: 'AED', code: 'AED', name: 'درهم إماراتي', symbol: 'د.إ', flag: '🇦🇪', rateToYER: 145, isActive: true },
-    { id: 'TRY', code: 'TRY', name: 'ليرة تركية', symbol: '₺', flag: '🇹🇷', rateToYER: 16, isActive: false },
-    { id: 'GBP', code: 'GBP', name: 'جنيه إسترليني', symbol: '£', flag: '🇬🇧', rateToYER: 680, isActive: false },
   ],
   defaultPackagingFee: 0,
   defaultBankCommissionRate: 3,
@@ -167,17 +186,16 @@ const defaultSettings: Settings = {
   backupCount: 0,
 };
 
-
-const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
-
+// ── مفاتيح الإعدادات الخاصة بالمستخدم / User-specific setting keys
 const USER_SPECIFIC_KEYS: (keyof Settings)[] = [
   'language',
   'theme',
   'fontSize',
   'dashboardGridColumns',
-  'visibleMetrics'
+  'visibleMetrics',
 ];
 
+// ── خريطة حجم الخط / Font size mapping
 const FONT_SIZE_MAP: Record<string, string> = {
   sm: '13px',
   md: '14px',
@@ -185,34 +203,162 @@ const FONT_SIZE_MAP: Record<string, string> = {
   xl: '16px',
 };
 
+// ── تحويل DTO العملة من API إلى CustomCurrency / Map API currency DTO to CustomCurrency
+function mapApiCurrencyToCustomCurrency(c: ApiCurrencyDto): CustomCurrency {
+  return {
+    id: c.code,
+    code: c.code,
+    name: c.mainNameAr || c.mainNameEn || c.code,
+    symbol: c.symbol || c.code,
+    rateToYER: c.currentPrice ?? (c.isDefault ? 1 : 0),
+    flag: c.flag ?? undefined,
+    isActive: c.isActive,
+  };
+}
+
+// ── استخراج معرف المستخدم الحالي من sessionStorage / Extract current user ID from sessionStorage
+function getCurrentUserId(): string | null {
+  if (typeof sessionStorage === 'undefined') return null;
+  try {
+    // محاولة جلب userId من رمز الوصول المخزن
+    // Try to get userId from stored access token
+    const token = sessionStorage.getItem('alx_access_token') || sessionStorage.getItem('alx_api_access_token');
+    if (!token) return null;
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(atob(parts[1]));
+    return (payload?.sub as string) || (payload?.userId as string) || null;
+  } catch {
+    return null;
+  }
+}
+
+// ── إنشاء سياق الإعدادات / Create settings context
+const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
+
+// ── فترة إعادة التحميل الدوري بالمللي ثانية (5 دقائق)
+// Polling interval for settings refresh (5 minutes)
+const SETTINGS_POLL_INTERVAL_MS = 5 * 60 * 1000;
+
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [globalSettings, setGlobalSettings] = useState<Settings>(defaultSettings);
   const [userSettings, setUserSettings] = useState<Partial<Settings>>({});
   const [loading, setLoading] = useState(true);
-  const [userLoading, setUserLoading] = useState(false);
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const pollingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Combine global and user settings
-  const settings = { ...globalSettings, ...userSettings };
+  // دمج الإعدادات العامة مع إعدادات المستخدم / Merge global + user settings
+  const settings: Settings = { ...globalSettings, ...userSettings };
 
-  const t = (key: TranslationKey): string => {
+  // دالة الترجمة / Translation function
+  const t = useCallback((key: TranslationKey): string => {
     return translations[settings.language]?.[key] || key;
-  };
+  }, [settings.language]);
 
-  // Auth listener to trigger user settings fetch
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u: AuthUser | null) => {
-      setUser(u);
-      if (!u) {
-        setUserSettings({});
-        setUserLoading(false);
+  /**
+   * جلب الإعدادات العامة من API
+   * Fetch general settings from API
+   */
+  const fetchGlobalSettings = useCallback(async () => {
+    try {
+      const dto = await settingsCurrenciesApiGateway.getSettings('general');
+      if (dto?.settings) {
+        setGlobalSettings(prev => ({ ...prev, ...dto.settings }));
       }
-    });
-    return unsub;
+    } catch (err) {
+      console.warn('[SettingsContext] fetchGlobalSettings failed, keeping current settings:', err);
+    }
   }, []);
 
-  // Synchronize document direction, language, theme, and font-size whenever settings change
+  /**
+   * جلب العملات وأسعار الصرف من API
+   * Fetch currencies and exchange rates from API
+   */
+  const fetchCurrencies = useCallback(async () => {
+    try {
+      const currencies = await settingsCurrenciesApiGateway.listCurrencies(false);
+      if (currencies && currencies.length > 0) {
+        const mapped: CustomCurrency[] = currencies.map(mapApiCurrencyToCustomCurrency);
+
+        // استخراج أسعار الصرف للعملات الرئيسية
+        // Extract exchange rates for main currencies
+        const usdCurrency = currencies.find(c => c.code === 'USD');
+        const sarCurrency = currencies.find(c => c.code === 'SAR');
+
+        setGlobalSettings(prev => ({
+          ...prev,
+          customCurrencies: mapped,
+          exchangeRateUSD: usdCurrency?.currentPrice ?? prev.exchangeRateUSD,
+          exchangeRateSAR: sarCurrency?.currentPrice ?? prev.exchangeRateSAR,
+        }));
+      }
+    } catch (err) {
+      console.warn('[SettingsContext] fetchCurrencies failed, keeping current currencies:', err);
+    }
+  }, []);
+
+  /**
+   * جلب إعدادات المستخدم الحالي من API
+   * Fetch current user settings from API
+   */
+  const fetchUserSettings = useCallback(async () => {
+    const userId = getCurrentUserId();
+    if (!userId) return;
+    try {
+      const dto = await settingsCurrenciesApiGateway.getUserSettings();
+      if (dto?.settings) {
+        setUserSettings(dto.settings as Partial<Settings>);
+      }
+    } catch (err) {
+      console.warn('[SettingsContext] fetchUserSettings failed:', err);
+    }
+  }, []);
+
+  /**
+   * التحميل الأولي عند بدء التطبيق
+   * Initial load on app start
+   */
   useEffect(() => {
+    const timeout = setTimeout(() => {
+      // انتهاء المهلة: استخدام الإعدادات الافتراضية
+      // Timeout: use default settings
+      console.warn('[SettingsContext] Settings fetch timed out — using defaults');
+      setLoading(false);
+    }, 6000);
+
+    Promise.allSettled([
+      fetchGlobalSettings(),
+      fetchCurrencies(),
+      fetchUserSettings(),
+    ]).finally(() => {
+      clearTimeout(timeout);
+      setLoading(false);
+    });
+
+    return () => clearTimeout(timeout);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /**
+   * إعادة تحميل دورية للإعدادات والعملات (بدلاً من Supabase realtime)
+   * Periodic refresh for settings and currencies (replacing Supabase realtime)
+   */
+  useEffect(() => {
+    if (loading) return;
+    pollingTimerRef.current = setInterval(() => {
+      void fetchGlobalSettings();
+      void fetchCurrencies();
+    }, SETTINGS_POLL_INTERVAL_MS);
+
+    return () => {
+      if (pollingTimerRef.current) clearInterval(pollingTimerRef.current);
+    };
+  }, [loading, fetchGlobalSettings, fetchCurrencies]);
+
+  /**
+   * تأثيرات تغيير الإعدادات (اتجاه الصفحة، الثيم، حجم الخط، عنوان الصفحة)
+   * Side effects when settings change (RTL/LTR, theme, font size, page title)
+   */
+  useEffect(() => {
+    // اتجاه الصفحة واللغة / Page direction and language
     if (settings.language === 'ar') {
       document.documentElement.dir = 'rtl';
       document.documentElement.lang = 'ar';
@@ -221,6 +367,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       document.documentElement.lang = 'en';
     }
 
+    // الثيم / Theme
     if (settings.theme === 'dark') {
       document.documentElement.classList.add('dark');
       document.documentElement.classList.remove('light-mode');
@@ -229,173 +376,66 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       document.documentElement.classList.add('light-mode');
     }
 
-    // Apply font size
+    // حجم الخط / Font size
     const size = FONT_SIZE_MAP[settings.fontSize || 'md'] || '14px';
     document.documentElement.style.setProperty('--system-font-size', size);
     document.documentElement.style.fontSize = size;
 
-    // Apply document title
-    document.title = settings.systemName || settings.companyName || 'alx';
+    // عنوان الصفحة / Page title
+    document.title = settings.systemName || settings.companyName || 'SwiftShip';
   }, [settings.language, settings.theme, settings.fontSize, settings.systemName, settings.companyName]);
 
-  useEffect(() => {
-    // Timeout to prevent infinite loading if PostgreSQL is offline
-    const timeout = setTimeout(() => {
-      if (loading) {
-        console.warn('Settings fetch timed out - using defaults');
-        setLoading(false);
-      }
-    }, 5000);
-
-    const unsub = onSnapshot(doc(db, 'settings', 'general'), (snap) => {
-      if (snap.exists()) {
-        const data = snap.data() as Settings;
-        setGlobalSettings(prev => ({ ...prev, ...data }));
-      }
-      setLoading(false);
-      clearTimeout(timeout);
-    }, (error) => {
-      console.warn('Settings fetch warning (likely missing permissions):', error);
-      setLoading(false);
-      clearTimeout(timeout);
-    });
-
-    // Also sync exchange rates and active currencies from Supabase currency / cur_price tables
-    const syncDbCurrencies = async () => {
-      try {
-        const [rates, allCurrencies] = await Promise.all([
-          currencyService.getLatestExchangeRates(),
-          currencyService.getAllCurrencies(false)
-        ]);
-
-        const mappedCustomCurrencies: CustomCurrency[] = allCurrencies.map(c => ({
-          id: c.code,
-          code: c.code,
-          name: c.main_nameAR || c.main_name_ar,
-          symbol: c.symbol || c.code,
-          rateToYER: c.currentPrice || (c.code === 'YER' ? 1 : 0),
-          flag: c.flag,
-          isActive: c.isActive ?? c.is_active,
-        }));
-
-        setGlobalSettings(prev => ({
-          ...prev,
-          exchangeRateUSD: rates.USD || prev.exchangeRateUSD || 535,
-          exchangeRateSAR: rates.SAR || prev.exchangeRateSAR || 140,
-          customCurrencies: mappedCustomCurrencies.length > 0 ? mappedCustomCurrencies : prev.customCurrencies,
-        }));
-      } catch (err) {
-        console.warn('Failed to sync currencies from DB:', err);
-      }
-    };
-    syncDbCurrencies();
-
-    // Realtime channel for currency & cur_price
-    const channel = supabase
-      .channel('settings_context_currencies')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'currency' }, () => syncDbCurrencies())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'cur_price' }, () => syncDbCurrencies())
-      .subscribe();
-
-    return () => {
-      unsub();
-      clearTimeout(timeout);
-      if (channel) supabase.removeChannel(channel);
-    };
-  }, []);
-
-  // Effect to load user-specific settings
-  useEffect(() => {
-    if (!user) return;
-
-    setUserLoading(true);
-    const unsub = onSnapshot(doc(db, 'user_settings', user.uid), (snap) => {
-      if (snap.exists()) {
-        const data = snap.data() as Partial<Settings>;
-        setUserSettings(data);
-      }
-      setUserLoading(false);
-    }, (error) => {
-      console.warn('User settings fetch warning:', error);
-      setUserLoading(false);
-    });
-
-    return () => unsub();
-  }, [user]);
-
-  const updateSettings = async (newSettings: Partial<Settings>) => {
-    const userUpdates: Partial<Settings> = {};
+  /**
+   * تحديث الإعدادات وإرسالها إلى API
+   * Update settings and send to API
+   */
+  const updateSettings = useCallback(async (newSettings: Partial<Settings>): Promise<void> => {
+    const userUpdates: Record<string, unknown> = {};
     const globalUpdates: Partial<Settings> = {};
 
-    Object.keys(newSettings).forEach((key) => {
+    // فصل الإعدادات الخاصة بالمستخدم عن الإعدادات العامة
+    // Separate user-specific settings from global settings
+    Object.entries(newSettings).forEach(([key, value]) => {
       const k = key as keyof Settings;
       if (USER_SPECIFIC_KEYS.includes(k)) {
-        Object.assign(userUpdates, { [k]: newSettings[k] });
+        userUpdates[k] = value;
       } else {
-        Object.assign(globalUpdates, { [k]: newSettings[k] });
+        Object.assign(globalUpdates, { [k]: value });
       }
     });
 
-    // Save global updates if any
+    // حفظ الإعدادات العامة / Save global settings
     if (Object.keys(globalUpdates).length > 0) {
-      await setDoc(doc(db, 'settings', 'general'), globalUpdates, { merge: true });
-      setGlobalSettings(prev => ({ ...prev, ...globalUpdates }));
-    }
-
-    // Save user updates if any and logged in
-    if (Object.keys(userUpdates).length > 0) {
-      if (user) {
-        await setDoc(doc(db, 'user_settings', user.uid), userUpdates, { merge: true });
-        setUserSettings(prev => ({ ...prev, ...userUpdates }));
-      } else {
-        // Fallback to local state if not logged in (e.g. login screen language)
-        setUserSettings(prev => ({ ...prev, ...userUpdates }));
+      try {
+        await settingsCurrenciesApiGateway.updateSettings('general', globalUpdates as import('../data/dtos/settings.dto').SystemSettingsData);
+        setGlobalSettings(prev => ({ ...prev, ...globalUpdates }));
+      } catch (err) {
+        console.error('[SettingsContext] updateSettings (general) failed:', err);
+        throw err;
       }
     }
-  };
 
-  // Auto-update exchange rates on startup if enabled
-  useEffect(() => {
-    if (loading) return;
-    if (settings.autoUpdateExchangeRates && settings.exchangeRatesApiUrl) {
-      const fetchRatesOnStartup = async () => {
+    // حفظ إعدادات المستخدم / Save user settings
+    if (Object.keys(userUpdates).length > 0) {
+      const userId = getCurrentUserId();
+      if (userId) {
         try {
-          const res = await fetch(settings.exchangeRatesApiUrl!);
-          if (res.ok) {
-            const data = await res.json();
-            if (data && data.rates) {
-              const sarRate = data.rates.SAR || 3.75;
-              const yerRate = data.rates.YER;
-
-              let newUSD = settings.exchangeRateUSD || 535;
-              let newSAR = settings.exchangeRateSAR || 140;
-
-              if (yerRate && yerRate > 300) {
-                newUSD = Math.round(yerRate);
-                newSAR = parseFloat((yerRate / sarRate).toFixed(2));
-              } else {
-                newSAR = parseFloat((newUSD / sarRate).toFixed(2));
-              }
-
-              if (newUSD !== settings.exchangeRateUSD || newSAR !== settings.exchangeRateSAR) {
-                const now = new Date();
-                await setDoc(doc(db, 'settings', 'general'), {
-                  ...settings,
-                  exchangeRateUSD: newUSD,
-                  exchangeRateSAR: newSAR,
-                  lastExchangeRateUpdate: now.toLocaleDateString('ar-YE'),
-                  lastExchangeRateUpdateTime: now.toLocaleTimeString('ar-YE'),
-                });
-              }
-            }
-          }
+          await settingsCurrenciesApiGateway.updateUserSettings(
+            userUpdates as Parameters<typeof settingsCurrenciesApiGateway.updateUserSettings>[0]
+          );
+          setUserSettings(prev => ({ ...prev, ...userUpdates } as Partial<Settings>));
         } catch (err) {
-          console.warn('Failed to auto-update exchange rates on startup:', err);
+          console.warn('[SettingsContext] updateUserSettings failed — saving to local state only:', err);
+          // الحفظ المحلي كاحتياط / Local state fallback
+          setUserSettings(prev => ({ ...prev, ...userUpdates } as Partial<Settings>));
         }
-      };
-      fetchRatesOnStartup();
+      } else {
+        // المستخدم غير مسجل — الحفظ في الحالة المحلية فقط (صفحة تسجيل الدخول)
+        // User not logged in — local state only (login screen language)
+        setUserSettings(prev => ({ ...prev, ...userUpdates } as Partial<Settings>));
+      }
     }
-  }, [loading, settings.autoUpdateExchangeRates, settings.exchangeRatesApiUrl]);
+  }, []);
 
   return (
     <SettingsContext.Provider value={{ settings, updateSettings, loading, t }}>
@@ -404,6 +444,9 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * hook للوصول إلى إعدادات النظام / Hook to access system settings
+ */
 export function useSettings() {
   const context = useContext(SettingsContext);
   if (context === undefined) {

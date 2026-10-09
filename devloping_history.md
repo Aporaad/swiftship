@@ -2924,3 +2924,19 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 ## [2026-10-09 01:08 +03:00] تصحيح فصل الإعدادات — Manus AI
 - تم تثبيت أن gateway إعدادات المستخدم سيغطي إعدادات الواجهة والمظهر ولوحة التحكم والقائمة الجانبية فقط.
 - العملات وأسعار الصرف وإعدادات النظام ستبقى موارد مشتركة عبر API، وليست مرتبطة بمستخدم.
+
+## [2026-10-10 01:31:33 +03:00] — استكمال تطهير ونقل الاعتمادية عن legacy-compat — AI Model: Gemini 3.6 Flash (Medium) / Antigravity
+- **النطاق والهدف**: تطهير المكونات والخدمات والـ Hooks المتبقية في `src/` من الاستدعاءات والاستيرادات المباشرة لـ `legacy-compat.ts` استكمالاً لخطة النقل إلى الـ API بنسبة 100%.
+- **التغيرات والتحسينات المنجزة**:
+  1. **إصلاح وتحديث الـ Hooks**:
+     - `src/hooks/useOrderStatuses.ts`: إزالة استيراد `legacy-compat.ts` والاعتماد على `DEFAULT_ORDER_STATUSES` وواجهات موفر الحالات.
+     - `src/hooks/useItemCategories.ts`: إزالة استيراد `legacy-compat.ts` وتوفير إدارة حالات نظيفة محلياً وفي الـ API.
+     - `src/hooks/useExpenseCategories.ts`: إزالة استيراد `legacy-compat.ts` والاعتماد على `DEFAULT_EXPENSE_CATEGORIES`.
+     - `src/hooks/useAutoVoucherRules.ts`: إزالة استيراد `legacy-compat.ts` وتوفير موفر قواعد القيد التلقائي النظيف.
+  2. **تطهير الخدمات والصفحات**:
+     - `src/pages/SalaryHistory.tsx`: إزالة الاستيراد المباشر لـ `legacy-compat.ts`.
+     - `src/services/notificationService.ts`: إزالة استيرادات `legacy-compat.ts` وجعل خدمة الإشعارات تعمل بمرونة عالية عبر الـ Toast والـ Electron API.
+     - `src/services/activityService.ts` & `src/services/activityLogService.ts`: تطهير استيرادات `legacy-compat.ts` وتوفير واجهة تسجل الأنشطة دون كسر المسار الرئيسي.
+  3. **الفحوصات واجتياز الأنواع**:
+     - اجتياز فحص TypeScript الصارم `npx tsc --noEmit` بنسبة 100% (**0 أخطاء**).
+

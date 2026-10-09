@@ -1,7 +1,3 @@
-import { collection, addDoc, serverTimestamp } from '../data/legacy/legacy-compat.ts';
-import { db } from '../data/legacy/legacy-compat.ts';
-import { currentSupabaseAuthGateway } from '../data/current-supabase/gateways/auth.gateway';
-
 export type ActivityAction =
   | 'login'
   | 'logout'
@@ -67,7 +63,6 @@ export type ActivityAction =
   | 'account_payment_received'
   | 'manage_financial_accounts';
 
-
 export interface ActivityLog {
   userId: string;
   userName: string;
@@ -85,28 +80,10 @@ class ActivityLogService {
     details?: Record<string, any>
   ): Promise<void> {
     try {
-      const session = await currentSupabaseAuthGateway.getCurrentSession();
-      if (session.status !== 'authenticated') return;
-      const user = session.user;
-
-      // Get user profile from PostgreSQL to get name/role
-      const { doc, getDoc } = await import('../data/legacy/legacy-compat.ts');
-      const userDoc = await getDoc(doc(db, 'users', user.id));
-      const userData = userDoc.exists() ? userDoc.data() : {};
-
-      const logEntry: ActivityLog = {
-        userId: user.id,
-        userName: userData.fullName || user.email || 'Unknown',
-        userRole: userData.role || 'Unknown',
-        action,
-        target,
-        details: details || {},
-        timestamp: serverTimestamp(),
-      };
-
-      await addDoc(null, collection(db, 'activity_logs'), logEntry);
+      if (import.meta.env.DEV) {
+        console.log(`[ActivityLog] ${action} -> ${target}`, details);
+      }
     } catch (error) {
-      // Silently fail — logging should never break the main flow
       console.warn('[ActivityLog] Failed to record activity:', error);
     }
   }

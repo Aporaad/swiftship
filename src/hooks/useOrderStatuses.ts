@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot, getDocs, setDoc, doc, db } from '../data/legacy/legacy-compat.ts';
 
 export interface OrderStatusItem {
   id: number;            // رقم المرحلة (1, 2, 3...)
@@ -27,75 +26,14 @@ export const DEFAULT_ORDER_STATUSES: OrderStatusItem[] = [
   { id: 10, nameAr: 'ملغي', nameEn: 'Cancelled', isFirst: false, isLast: false, color: 'rose', code: 'cancelled', description: 'طلب ملغي' }
 ];
 
-type StatusDocument = { id: string; data: () => Record<string, unknown> };
-
-const readStatusValue = (data: Record<string, unknown>, key: string, legacyKey: string): unknown => data[key] ?? data[legacyKey];
-const readStatusText = (data: Record<string, unknown>, key: string, legacyKey: string): string => {
-  const value = readStatusValue(data, key, legacyKey);
-  return typeof value === 'string' ? value : value == null ? '' : String(value);
-};
-
 export function useOrderStatuses() {
-  const [statuses, setStatuses] = useState<OrderStatusItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [statuses, setStatuses] = useState<OrderStatusItem[]>(DEFAULT_ORDER_STATUSES);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // 1. Seed defaults if collection is empty
-    const seedStatuses = async () => {
-      try {
-        const snap = await getDocs(collection(db, 'order_status'));
-        if (snap.empty) {
-          for (const st of DEFAULT_ORDER_STATUSES) {
-            await setDoc(doc(db, 'order_status', String(st.id)), {
-              ...st,
-              sortOrder: st.id,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            });
-          }
-        }
-      } catch (err) {
-        console.error('[useOrderStatuses] Seeding exception:', err);
-      }
-    };
-
-    seedStatuses();
-
-    // 2. Real-time subscription to order_status table
-    const unsub = onSnapshot(collection(db, 'order_status'), (snap) => {
-      const list: OrderStatusItem[] = snap.docs.map((d: StatusDocument) => {
-        const data = d.data();
-        const numericId = typeof data.id === 'number' ? data.id : parseInt(d.id, 10) || 0;
-        return {
-          id: numericId,
-          nameAr: readStatusText(data, 'nameAr', 'name_ar'),
-          nameEn: readStatusText(data, 'nameEn', 'name_en'),
-          isFirst: Boolean(readStatusValue(data, 'isFirst', 'is_first')),
-          isLast: Boolean(readStatusValue(data, 'isLast', 'is_last')),
-          sortOrder: typeof data.sortOrder === 'number' ? data.sortOrder : numericId,
-          color: readStatusText(data, 'color', 'color') || 'blue',
-          code: readStatusText(data, 'code', 'code'),
-          description: readStatusText(data, 'description', 'description'),
-          createdAt: typeof (data.createdAt ?? data.created_at) === 'string' ? (data.createdAt ?? data.created_at) as string : undefined
-        };
-      });
-
-      // Sort by id ascending (stage number sequence)
-      list.sort((a, b) => a.id - b.id);
-
-      if (list.length > 0) {
-        setStatuses(list);
-      } else {
-        setStatuses(DEFAULT_ORDER_STATUSES);
-      }
-      setLoading(false);
-    }, (err) => {
-      console.warn('[useOrderStatuses] Realtime listener error, fallback to defaults:', err);
-      setStatuses(DEFAULT_ORDER_STATUSES);
-      setLoading(false);
-    });
-
-    return () => unsub();
+    // Order statuses are standard workflow stages provided by default.
+    setStatuses(DEFAULT_ORDER_STATUSES);
+    setLoading(false);
   }, []);
 
   // Helper functions

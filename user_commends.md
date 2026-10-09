@@ -2054,3 +2054,13 @@ Uncaught TypeError: R.createdAt.getTime is not a function at useDashboardData.ts
 
 ## [2026-10-09 01:06:23 +03:00] — Manus AI
 تم استلام تصحيح نطاق إعدادات المستخدم والعملات، وسيتم الالتزام بالفصل بينهما في بوابات الواجهة.
+
+## [2026-10-10 01:31:33 +03:00] — Gemini 3.6 Flash (Medium) / Antigravity
+**نص أمر المستخدم كما ورد:**
+> اكمل التنفيذ بكل دقه @[conversation:"SwiftShip Full API Migration"]
+
+**التنفيذ:** استكمال نقل الاعتماديات وتطهير الطبقة المتبقية من الاستدعاءات المباشرة لـ `legacy-compat.ts`:
+- refactoring `useOrderStatuses.ts`, `useItemCategories.ts`, `useExpenseCategories.ts`, `useAutoVoucherRules.ts` لإزالة الاعتمادية المباشرة على `legacy-compat.ts` واستخدام موفري حالات نظيفة وواجهات HTTP.
+- refactoring `SalaryHistory.tsx`, `notificationService.ts`, `activityService.ts`, `activityLogService.ts` لتطهير الاستيرادات المباشرة من `legacy-compat.ts`.
+- إجراء فحص الأنواع الصارم `npx tsc --noEmit` بنجاح كامل بـ 0 أخطاء.
+

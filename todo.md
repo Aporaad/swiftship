@@ -2209,4 +2209,19 @@
 ## [2026-10-09 01:08 +03:00] تصحيح المرحلة 1
 - [x] تصحيح عقد إعدادات المستخدم ليقتصر على UI/preferences.
 - [x] تثبيت العملات وأسعار الصرف كإعدادات نظام مشتركة.
-- [ ] نقل SettingsContext وcurrencyService بالكامل إلى API بعد مراجعة migration.
+- [x] نقل SettingsContext وcurrencyService بالكامل إلى API بعد مراجعة migration.
+
+## [2026-10-09 02:47:00 +03:00] إكمال نقل Settings/Currency إلى API-only — AI Model: Claude Sonnet 4.6 (Thinking)
+- [x] إعادة كتابة `SettingsContext.tsx` كاملاً: استبدال `onSnapshot/setDoc/supabase` بـ `settingsCurrenciesApiGateway`.
+- [x] إعادة كتابة `currencyService.ts` كاملاً: استبدال جميع استدعاءات Supabase بـ API HTTP.
+- [x] إعادة كتابة `useExchangeRates.ts`: إزالة Supabase realtime واستبداله بـ polling دوري (3 دقائق).
+- [x] اجتياز `npx tsc --noEmit` بنسبة 100% (0 أخطاء).
+- [x] اجتياز `npm run build` بنجاح كامل.
+- [ ] المرحلة التالية: نقل المجالات التشغيلية (orders/customers/users/roles) من legacy إلى API.
+
+## [2026-10-10 01:31:33 +03:00] استكمال تطهير الاعتماديات المباشرة عن legacy-compat — AI Model: Gemini 3.6 Flash (Medium) / Antigravity
+- [x] تطهير `useOrderStatuses.ts`, `useItemCategories.ts`, `useExpenseCategories.ts`, `useAutoVoucherRules.ts` وإزالة استيرادات `legacy-compat.ts`.
+- [x] تطهير `SalaryHistory.tsx`, `notificationService.ts`, `activityService.ts`, `activityLogService.ts` وإزالة استيرادات `legacy-compat.ts`.
+- [x] اجتياز فحص الأنواع الصارم `npx tsc --noEmit` بنسبة 100% (0 أخطاء).
+- [ ] المتابعة بحسب الخطة: استكمال نقل بقية المجالات التشغيلية للتأكد من خلو ملفات `src/` من استدعاءات `legacy-compat`.
+

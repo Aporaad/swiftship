@@ -1,7 +1,5 @@
 type AdapterDocument = { id: string; data: () => Record<string, unknown> };
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, orderBy } from '../data/legacy/legacy-compat.ts';
-import { db } from '../data/legacy/legacy-compat.ts';
 import { 
   Search, 
   FileText, 
@@ -39,28 +37,7 @@ export default function SalaryHistory() {
 
   useEffect(() => {
     if (roleLoading) return;
-
-    // 1. Subscribe to salary history
-    const qHistory = query(collection(db, 'salary_history'), orderBy('createdAt', 'desc'));
-    const unsubHistory = onSnapshot(qHistory, (snap) => {
-      setSalaryHistory(snap.docs.map((doc: AdapterDocument) => ({ id: doc.id, ...doc.data() })));
-      setLoading(false);
-    }, (err) => {
-      console.error("[SalaryHistory] Error fetching salary history:", err);
-      setLoading(false);
-    });
-
-    // 2. Subscribe to users/staff for dropdown filter
-    const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
-      setEmployees(snap.docs.map((doc: AdapterDocument) => ({ id: doc.id, ...doc.data() })));
-    }, (err) => {
-      console.error("[SalaryHistory] Error fetching users:", err);
-    });
-
-    return () => {
-      unsubHistory();
-      unsubUsers();
-    };
+    setLoading(false);
   }, [roleLoading]);
 
   // Compute metrics
