@@ -2264,3 +2264,10 @@
 ## [2026-10-11 02:00 +03:00] تصحيح عقد التكامل
 - [x] توحيد أسماء حقول payload بين `SourcesPage` و`alx_api`.
 - [x] إزالة الحقول غير المدعومة من طلبات الكتابة.
+
+## [2026-10-11 02:09 +03:00] استكمال P1 — Entity modals
+- [x] تحويل `CourierCreateModal` إلى `staffApiDataGateway` وإدارة مستخدم النظام عبر `usersApiDataGateway`.
+- [x] تحويل `EmployeeCreateModal` إلى `staffApiDataGateway` وإدارة مستخدم النظام عبر `usersApiDataGateway`.
+- [x] تحويل إنشاء Customer الأساسي إلى `customersApiDataGateway`.
+- [ ] نقل الحسابات المالية إلى API قبل إعادة accountId وpreview identifiers.
+- [ ] نقل `portalUserService` وتفاصيل العميل إلى عقد API إداري.

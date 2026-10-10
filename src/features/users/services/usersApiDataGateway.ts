@@ -37,9 +37,24 @@ export const usersApiDataGateway = {
     password: string;
     role?: string;
     systemPin?: string;
+    phone?: string;
+    address?: string;
+    linkedType?: string;
+    linkedEntity?: string;
   }): Promise<ApiUser> {
-    const response = await client.post<ApiEnvelope<ApiUser>>('/api/v1/users', input);
-    return toApiUser(response.data);
+    const response = await client.post<ApiEnvelope<ApiUser>>('/api/v1/users', {
+      username: input.username,
+      email: input.email,
+      fullName: input.fullName,
+      role: input.role,
+      phone: input.phone,
+      address: input.address,
+      linkedType: input.linkedType,
+      linkedEntity: input.linkedEntity,
+    });
+    const user = toApiUser(response.data);
+    if (input.password) await this.adminResetPassword(String(user.userId), input.password);
+    return user;
   },
 
   /**

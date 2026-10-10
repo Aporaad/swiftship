@@ -2,12 +2,10 @@ import { SharedProps, ModalShell, inputClass, FormField, ModalActions } from './
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Globe, MapPin, Phone, Truck, User, X, ShieldCheck, Calendar, Key, Lock, CheckCircle2, Building2, Briefcase } from 'lucide-react';
-import { addDoc, collection, db, doc, setDoc, updateDoc } from '../../data/legacy/legacy-compat.ts';
-import { financialAccountService } from '../../services/financialAccountService';
-import { activityLogService } from '../../services/activityLogService';
+import { staffApiDataGateway } from '../../features/staff/services/staffApiDataGateway';
+import { usersApiDataGateway } from '../../features/users/services/usersApiDataGateway';
 import { notificationService } from '../../services/notificationService';
 import LocationMapPickerModal from '../common/LocationMapPickerModal';
-import { portalUserService } from '../../services/portalUserService';
 import { validatePasswordFields } from '../../utils/passwordUtils';
 
 
@@ -81,9 +79,6 @@ export function CourierCreateModal({
         systemPin: '',
         role: 'Courier'
       });
-      financialAccountService.getNextAccountIdentifiers('courier').then(res => {
-        setPreviewId(`cour_${res.accountCode}`);
-      }).catch(() => { });
     }
   }, [isOpen]);
 
@@ -125,55 +120,30 @@ export function CourierCreateModal({
 
     setSubmitting(true);
     try {
-      const { accountCode } = await financialAccountService.getNextAccountIdentifiers('courier');
-      const newId = `cour_${accountCode}`;
-      const now = Date.now();
-
-      const courierData = {
+      const created = await staffApiDataGateway.createCourier({
         fullName: formData.fullName.trim(),
-        phone: formData.phone.trim(),
-        email: formData.email.trim(),
-        address: formData.address.trim(),
-        gpsLocation: formData.gpsLocation,
-        disabled: false,
-        commissionRate: Number(formData.commissionRate) || 0,
-        notes: formData.notes.trim(),
+        nameAr: formData.fullName.trim(),
+        nameEn: formData.fullName.trim(),
         courierType: formData.courierType,
-        createdAt: now
-      };
-
-      await setDoc(doc(db, 'couriers', newId), courierData);
-      const account = await financialAccountService.createAccountForEntity('courier', newId, formData.fullName.trim(), 'YER');
-
+        commissionRate: Number(formData.commissionRate) || 0,
+        currency: 'YER',
+        isActive: true,
+      });
       let systemUserId = '';
       if (createSystemUser) {
-        const userId = 'usr_' + Math.random().toString(36).substring(2, 11);
-        const userPayload = {
-          id: userId,
+        const user = await usersApiDataGateway.createUser({
           username: systemFormData.username.trim(),
           email: systemFormData.email.trim() || formData.email.trim() || `${systemFormData.username.trim()}@courier.local`,
           password: systemFormData.password,
-          systemPin: systemFormData.systemPin.trim(),
           fullName: formData.fullName.trim(),
           phone: formData.phone.trim(),
           role: 'Courier',
-          disabled: false,
           linkedType: 'courier',
-          linkedEntity: newId,
-          createdAt: now
-        };
-        await setDoc(doc(db, 'users', userId), userPayload);
-        systemUserId = userId;
+          linkedEntity: String(created.id),
+        });
+        systemUserId = String(user.userId ?? '');
       }
-
-      const createdCourier = {
-        id: newId,
-        ...courierData,
-        accountId: account.id,
-        systemUserId
-      };
-
-      activityLogService.log('add_courier', formData.fullName, { ...formData });
+      const createdCourier = { ...created, systemUserId };
       notificationService.notify({
         title: isAr ? 'إضافة مندوب' : 'Courier Added',
         message: isAr ? `تمت إضافة المندوب ${formData.fullName} بنجاح` : `Courier ${formData.fullName} added`,

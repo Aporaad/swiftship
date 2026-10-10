@@ -2,12 +2,10 @@ import { SharedProps, ModalShell, inputClass, FormField, ModalActions } from './
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Globe, MapPin, Phone, Truck, User, X, ShieldCheck, Calendar, Key, Lock, CheckCircle2, Building2, Briefcase } from 'lucide-react';
-import { addDoc, collection, db, doc, setDoc, updateDoc } from '../../data/legacy/legacy-compat.ts';
-import { financialAccountService } from '../../services/financialAccountService';
-import { activityLogService } from '../../services/activityLogService';
+import { staffApiDataGateway } from '../../features/staff/services/staffApiDataGateway';
+import { usersApiDataGateway } from '../../features/users/services/usersApiDataGateway';
 import { notificationService } from '../../services/notificationService';
 import LocationMapPickerModal from '../common/LocationMapPickerModal';
-import { portalUserService } from '../../services/portalUserService';
 import { validatePasswordFields } from '../../utils/passwordUtils';
 
 
@@ -85,9 +83,6 @@ export function EmployeeCreateModal({
         systemPin: '',
         role: 'Staff'
       });
-      financialAccountService.getNextAccountIdentifiers('employee').then(res => {
-        setPreviewId(`emp_${res.accountCode}`);
-      }).catch(() => { });
     }
   }, [isOpen, settings]);
 
@@ -129,66 +124,30 @@ export function EmployeeCreateModal({
 
     setSubmitting(true);
     try {
-      const { accountCode } = await financialAccountService.getNextAccountIdentifiers('employee');
-      const newId = `emp_${accountCode}`;
-      const now = Date.now();
-
-      const empData = {
+      const created = await staffApiDataGateway.createEmployee({
         fullName: formData.fullName.trim(),
-        phone: formData.phone.trim(),
-        email: formData.email.trim(),
-        address: formData.address.trim(),
-        city: formData.city.trim(),
-        country: formData.country.trim(),
-        gps_location: formData.gps_location,
-        jobsType: formData.jobsType,
+        nameAr: formData.fullName.trim(),
+        nameEn: formData.fullName.trim(),
+        jobType: formData.jobsType,
         monthlySalary: Number(formData.monthlySalary) || 0,
-        currency: formData.currency,
         commissionRate: Number(formData.commissionRate) || 0,
-        notes: formData.notes.trim(),
-        disabled: false,
-        createdAt: now
-      };
-
-      await setDoc(doc(db, 'employees', newId), empData);
-
-      const account = await financialAccountService.createAccountForEntity(
-        'employee',
-        newId,
-        formData.fullName.trim(),
-        formData.currency,
-        Number(formData.monthlySalary) || 0
-      );
-
+        currency: formData.currency,
+      });
       let systemUserId = '';
       if (createSystemUser) {
-        const userId = 'usr_' + Math.random().toString(36).substring(2, 11);
-        const userPayload = {
-          id: userId,
+        const user = await usersApiDataGateway.createUser({
           username: systemFormData.username.trim(),
           email: systemFormData.email.trim() || formData.email.trim() || `${systemFormData.username.trim()}@system.local`,
           password: systemFormData.password,
-          systemPin: systemFormData.systemPin.trim(),
           fullName: formData.fullName.trim(),
           phone: formData.phone.trim(),
           role: systemFormData.role || 'Staff',
-          disabled: false,
           linkedType: 'employee',
-          linkedEntity: newId,
-          createdAt: now
-        };
-        await setDoc(doc(db, 'users', userId), userPayload);
-        systemUserId = userId;
+          linkedEntity: String(created.id),
+        });
+        systemUserId = String(user.userId ?? '');
       }
-
-      const createdEmp = {
-        id: newId,
-        ...empData,
-        accountId: account.id,
-        systemUserId
-      };
-
-      activityLogService.log('add_employee', formData.fullName, { ...formData });
+      const createdEmp = { ...created, systemUserId };
       notificationService.notify({
         title: isAr ? 'إضافة موظف' : 'Employee Added',
         message: isAr ? `تمت إضافة الموظف ${formData.fullName} بنجاح` : `Employee ${formData.fullName} created`,

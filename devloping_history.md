@@ -2991,3 +2991,9 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 - تم توحيد payload الخاص بالمصادر وشركات الشحن في `SourcesPage` ونوافذ الإنشاء مع عقد alx_api.
 - أزيلت الحقول غير الموجودة في schema من طلبات الكتابة بدل إرسال بيانات غير مدعومة.
 - `npm run check` ناجح.
+
+## [2026-10-11 02:09 +03:00] — Manus AI — Entity modal migration
+- أزيلت الكتابة المباشرة القديمة من `CourierCreateModal` و`EmployeeCreateModal`، وأصبح الإنشاء عبر بوابات HTTP.
+- تمت إضافة إنشاء مستخدم النظام وتعيين كلمة المرور عبر users API بدل `setDoc`.
+- تم تحويل إنشاء العميل الأساسي إلى customers API، مع إبقاء portal details مؤقتًا حتى إضافة endpoint إداري مربوط بعميل قائم؛ لم يتم إخفاء هذا النقص عبر fallback صامت.
+- `npm run check` للواجهة ناجح.
