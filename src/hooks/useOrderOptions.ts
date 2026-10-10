@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot, getDocs, setDoc, doc, deleteDoc, updateDoc, db } from '../data/legacy/legacy-compat.ts';
 import { notificationService } from '../services/notificationService';
 
 export type OrderOptionType = 'packaging' | 'shipping_category';
@@ -123,63 +122,8 @@ const readOptionInteger = (value: unknown): number | undefined => {
 };
 
 export function useOrderOptions() {
-  const [options, setOptions] = useState<OrderOptionItem[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // 1. Seed defaults if collection is empty
-    const seedOptions = async () => {
-      try {
-        const snap = await getDocs(collection(db, 'order_option'));
-        if (snap.empty) {
-          for (const opt of DEFAULT_ORDER_OPTIONS) {
-            await setDoc(doc(db, 'order_option', opt.id), {
-              ...opt,
-              createdAt: Date.now(),
-              updatedAt: Date.now()
-            });
-          }
-        }
-      } catch (err) {
-        console.error('[useOrderOptions] Seeding exception:', err);
-      }
-    };
-
-    seedOptions();
-
-    // 2. Real-time listener for order_option collection
-    const unsub = onSnapshot(collection(db, 'order_option'), (snap) => {
-      const list: OrderOptionItem[] = snap.docs.map((d: OptionDocument) => {
-        const data = d.data();
-        return {
-          id: d.id,
-          type: (data.type === 'shipping_category' ? 'shipping_category' : 'packaging') as OrderOptionType,
-          nameAr: readOptionText(data, 'nameAr', 'name_ar'),
-          nameEn: readOptionText(data, 'nameEn', 'name_en'),
-          price: readOptionNumber(data.price) || 0,
-          details: readOptionText(data, 'details', 'description'),
-          duration: readOptionInteger(data.duration),
-          isActive: data.isActive !== undefined ? Boolean(data.isActive) : (data.is_active !== undefined ? Boolean(data.is_active) : true),
-          code: readOptionText(data, 'code'),
-          createdAt: readOptionNumber(data.createdAt),
-          updatedAt: readOptionNumber(data.updatedAt)
-        };
-      });
-
-      if (list.length > 0) {
-        setOptions(list);
-      } else {
-        setOptions(DEFAULT_ORDER_OPTIONS);
-      }
-      setLoading(false);
-    }, (err) => {
-      console.warn('[useOrderOptions] Realtime error, falling back to defaults:', err);
-      setOptions(DEFAULT_ORDER_OPTIONS);
-      setLoading(false);
-    });
-
-    return () => unsub();
-  }, []);
+  const [options, setOptions] = useState<OrderOptionItem[]>(DEFAULT_ORDER_OPTIONS);
+  const [loading, setLoading] = useState(false);
 
   // Filtered helpers
   const packagingOptions = options.filter(o => o.type === 'packaging');
@@ -199,56 +143,29 @@ export function useOrderOptions() {
     );
   };
 
-  // CRUD Helper Methods
+  // CRUD Helper Methods (Pure local state updates)
   const addOption = async (newOption: Omit<OrderOptionItem, 'id'>) => {
-    try {
-      const newId = 'opt_' + Math.random().toString(36).substring(2, 11);
-      const payload: OrderOptionItem = {
-        ...newOption,
-        id: newId,
-        createdAt: Date.now(),
-        updatedAt: Date.now()
-      };
-      await setDoc(doc(db, 'order_option', newId), payload);
-      return newId;
-    } catch (err) {
-      console.error('[useOrderOptions] addOption error:', err);
-      throw err;
-    }
+    const newId = 'opt_' + Math.random().toString(36).substring(2, 11);
+    const payload: OrderOptionItem = {
+      ...newOption,
+      id: newId,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    setOptions(prev => [...prev, payload]);
+    return newId;
   };
 
   const updateOption = async (id: string, updatedData: Partial<OrderOptionItem>) => {
-    try {
-      const payload = {
-        ...updatedData,
-        updatedAt: Date.now()
-      };
-      await updateDoc(doc(db, 'order_option', id), payload);
-    } catch (err) {
-      console.error('[useOrderOptions] updateOption error:', err);
-      throw err;
-    }
+    setOptions(prev => prev.map(opt => opt.id === id ? { ...opt, ...updatedData, updatedAt: Date.now() } : opt));
   };
 
   const deleteOption = async (id: string) => {
-    try {
-      await deleteDoc(doc(db, 'order_option', id));
-    } catch (err) {
-      console.error('[useOrderOptions] deleteOption error:', err);
-      throw err;
-    }
+    setOptions(prev => prev.filter(opt => opt.id !== id));
   };
 
   const toggleOptionStatus = async (id: string, currentStatus: boolean) => {
-    try {
-      await updateDoc(doc(db, 'order_option', id), {
-        isActive: !currentStatus,
-        updatedAt: Date.now()
-      });
-    } catch (err) {
-      console.error('[useOrderOptions] toggleOptionStatus error:', err);
-      throw err;
-    }
+    setOptions(prev => prev.map(opt => opt.id === id ? { ...opt, isActive: !currentStatus, updatedAt: Date.now() } : opt));
   };
 
   return {

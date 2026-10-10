@@ -1,5 +1,14 @@
-import { supabase } from '../data/legacy/legacy-compat.ts';
+import { ApiClient } from '../data/http/api-client';
 import { autoEntryService } from './autoEntryService';
+
+const apiClient = new ApiClient({
+  baseUrl: import.meta.env.VITE_ALX_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:3001',
+  accessTokenFactory: () =>
+    typeof sessionStorage === 'undefined'
+      ? null
+      : (sessionStorage.getItem('alx_access_token') || sessionStorage.getItem('alx_api_access_token')),
+  maxReadRetries: 0,
+});
 
 /**
  * نوع وسيلة الدفع في نموذج الطلب (مطابق لنموذج سند القبض):
@@ -199,20 +208,11 @@ export function validateOrderPaymentInput(
 /** التحقق من وجود قيد دفعة مقدمة سابق للطلب (لمنع التكرار عند التعديل) */
 export async function hasDownPaymentEntry(orderId: string): Promise<boolean> {
   try {
-    const result: unknown = await supabase
-      .from('main_entry')
-      .select('main_entry_id')
-      .eq('order_id', orderId)
-      .eq('auto_rule_id', 'order_down_payment')
-      .limit(1);
-    if (!isRecord(result)) return false;
-    const { data, error } = result;
-    if (error) {
-      const message = isRecord(error) && typeof error.message === 'string' ? error.message : 'Unknown query error';
-      console.warn('[orderPaymentDataService] hasDownPaymentEntry query failed:', message);
-      return false;
-    }
-    return Array.isArray(data) && data.length > 0;
+    const res = await apiClient.get<{ success: boolean; data: { items?: Array<{ auto_rule_id?: string; order_id?: string }> } }>(
+      `/api/v1/finance/entries?orderId=${encodeURIComponent(orderId)}&limit=10`
+    );
+    const items = res?.data?.items || (Array.isArray(res?.data) ? res.data : []);
+    return items.some((item: any) => item.auto_rule_id === 'order_down_payment' || item.autoRuleId === 'order_down_payment');
   } catch (err) {
     console.warn('[orderPaymentDataService] hasDownPaymentEntry error:', err);
     return false;

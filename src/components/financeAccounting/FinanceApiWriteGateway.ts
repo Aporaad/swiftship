@@ -86,7 +86,7 @@ function unwrap<T>(response: ApiEnvelope<T>): T {
 
 export const financeApiWriteGateway = {
   isEnabled(): boolean {
-    return import.meta.env.VITE_FINANCE_API_WRITES === "true";
+    return import.meta.env.VITE_FINANCE_API_WRITES === "true" || import.meta.env.VITE_USE_HTTP_API === "true";
   },
 
   async createEntry(payload: EntryPayload): Promise<EntryPayload> {

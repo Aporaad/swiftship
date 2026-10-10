@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { handleSupabaseError, OperationType } from '../../../data/legacy/legacy-compat.ts';
 import { runQuery, type AsyncState } from '../../../shared/contracts/ui.contracts';
 import type {
   CouriersViewModel,
@@ -222,7 +221,7 @@ export function useOrderData(
           if (state.status === 'success') setOrders(state.data);
         });
       },
-      (error) => handleSupabaseError(error, OperationType.LIST, 'orders'),
+      (error) => console.error('[useOrderData] Error listing orders:', error),
     );
 
     const unsubCustomers = api.collections.customers.subscribe(({ records }) => {
@@ -304,7 +303,7 @@ export function useOrderData(
           })),
         );
       },
-      (error) => handleSupabaseError(error, OperationType.LIST, 'products'),
+      (error) => console.error('[useOrderData] Error listing products:', error),
     );
 
     const unsubShipments = api.collections.shipments.subscribe(
@@ -314,7 +313,7 @@ export function useOrderData(
           return parsed ? [parsed] : [];
         }));
       },
-      (error) => handleSupabaseError(error, OperationType.LIST, 'shipments'),
+      (error) => console.error('[useOrderData] Error listing shipments:', error),
     );
 
     return () => {

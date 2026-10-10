@@ -2940,3 +2940,20 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
   3. **الفحوصات واجتياز الأنواع**:
      - اجتياز فحص TypeScript الصارم `npx tsc --noEmit` بنسبة 100% (**0 أخطاء**).
 
+---
+
+## [2026-10-10 01:54:46 +03:00] — استكمال نقل الخدمات والـ Hooks إلى API-only — AI Model: Gemini 3.6 Flash (Medium) / Antigravity
+
+### الإنجازات الرئيسية:
+1. **تطوير وطهير الـ Services والـ Hooks من legacy-compat**:
+   - `src/hooks/useOrderOptions.ts`: تحويل إدارة خيارات التغليف وفئات الشحن إلى إدارة حالة نقية.
+   - `src/services/whatsappService.ts`: نقل تكوينات واتساب وإرسال الرسائل إلى Local/API Storage وتطهير الاستيرادات.
+   - `src/services/orderDeletionService.ts`: تحويل عمليات الحذف الجماعي للطلبات إلى `ApiClient` (`POST /api/v1/orders/batch-delete`).
+   - `src/services/orderPaymentDataService.ts`: تحويل الاستعلام عن قيود الدفعة المقدمة إلى `ApiClient` (`GET /api/v1/finance/entries`).
+   - `src/services/productService.ts`: إعادة كتابة عمليات CRUD للمنتجات وبنود الطلبات كاملة لتعمل عبر `ApiClient` (`/api/v1/operations/products` و`/api/v1/operations/order-items`).
+   - `src/hooks/useAccountBalances.ts`: ربط جميع اشتراكات أسطر الحسابات والقيود المحاسبية بـ `financeApiDataGateway`.
+   - `src/hooks/useRole.ts`: تبسيط إدارة جلسات المستخدمين والصلاحيات وتنظيف التخزين المحلي بدون الاعتماد على Supabase direct.
+2. **التحقق التقني والفحص الصارم**:
+   - اجتياز التجميع والفحص لـ TypeScript عبر `npx tsc --noEmit` بـ **0 أخطاء**.
+
+

@@ -23,7 +23,7 @@ const apiCollectionPaths: Record<string, string> = {
 };
 
 function isEnabled(): boolean {
-  return import.meta.env.VITE_FINANCE_API_READS === "true";
+  return import.meta.env.VITE_FINANCE_API_READS === "true" || import.meta.env.VITE_USE_HTTP_API === "true";
 }
 
 function normalizeRows(

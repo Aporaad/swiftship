@@ -2064,3 +2064,19 @@ Uncaught TypeError: R.createdAt.getTime is not a function at useDashboardData.ts
 - refactoring `SalaryHistory.tsx`, `notificationService.ts`, `activityService.ts`, `activityLogService.ts` لتطهير الاستيرادات المباشرة من `legacy-compat.ts`.
 - إجراء فحص الأنواع الصارم `npx tsc --noEmit` بنجاح كامل بـ 0 أخطاء.
 
+## [2026-10-10 01:54:46 +03:00] — Gemini 3.6 Flash (Medium) / Antigravity
+**نص أمر المستخدم كما ورد:**
+> يالله انتقل للمرحله التالية بكل دقه واحتراف@[f:\system\swiftship-tracker\swiftshift2\SWIFTSHIP_SYSTEM\docs\swiftship_api_only_deep_analysis_2026-10-08_ar.md]
+
+**التنفيذ:**
+انتقال واحتراف كامل في تنفيذ مرحلة تطهير الخدمات والـ Hooks التشغيلية والمالية والمنتجات والجلسات من `legacy-compat.ts`:
+- `src/hooks/useOrderOptions.ts`: إدارة خيارات التغليف وفئات الشحن عبر حالة محددة ونظيفة.
+- `src/services/whatsappService.ts`: نقل تكوينات وإشعارات واتساب إلى Local/API Storage بدون Firestore direct.
+- `src/services/orderDeletionService.ts`: تنفيذ الحذف الجماعي للطلبات عبر `ApiClient` مع التوجيه والنقل المنظم.
+- `src/services/orderPaymentDataService.ts`: التحقق من قيود الدفعة المقدمة عبر `ApiClient` بدلاً من استعلامات Supabase المباشرة.
+- `src/services/productService.ts`: تحويل كل عمليات CRUD للمنتجات وبنود الطلبات لتعمل عبر `ApiClient`.
+- `src/hooks/useAccountBalances.ts`: ربط جميع الأرصدة والقيود المحاسبية بـ `financeApiDataGateway`.
+- `src/hooks/useRole.ts`: تنظيف جلسات المستخدمين والصلاحيات والـ Heartbeat بدون استيرادات `legacy-compat.ts`.
+- اجتياز التجميع والتحقق من الأنواع بـ `npx tsc --noEmit` بنسبة 100% (**0 أخطاء**).
+
+

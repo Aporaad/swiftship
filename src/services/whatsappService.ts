@@ -1,5 +1,4 @@
-import { doc, getDoc, setDoc, collection, addDoc } from '../data/legacy/legacy-compat.ts';
-import { db } from '../data/legacy/legacy-compat.ts';
+// WhatsApp Notification Service
 
 export interface WhatsAppConfig {
   enabled: boolean;
@@ -55,16 +54,18 @@ export const whatsappService = {
   // Fetch active settings
   async getConfig(): Promise<WhatsAppConfig> {
     try {
-      const snap = await getDoc(doc(db, 'settings', 'whatsapp'));
-      if (snap.exists()) {
-        const data = snap.data() as Partial<WhatsAppConfig>;
-        return {
-          enabled: data.enabled ?? defaultWhatsAppConfig.enabled,
-          provider: data.provider ?? defaultWhatsAppConfig.provider,
-          config: { ...defaultWhatsAppConfig.config, ...data.config },
-          triggers: { ...defaultWhatsAppConfig.triggers, ...data.triggers },
-          templates: { ...defaultWhatsAppConfig.templates, ...data.templates }
-        };
+      if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem('swiftship_whatsapp_config');
+        if (saved) {
+          const data = JSON.parse(saved) as Partial<WhatsAppConfig>;
+          return {
+            enabled: data.enabled ?? defaultWhatsAppConfig.enabled,
+            provider: data.provider ?? defaultWhatsAppConfig.provider,
+            config: { ...defaultWhatsAppConfig.config, ...data.config },
+            triggers: { ...defaultWhatsAppConfig.triggers, ...data.triggers },
+            templates: { ...defaultWhatsAppConfig.templates, ...data.templates }
+          };
+        }
       }
       return defaultWhatsAppConfig;
     } catch (e) {
@@ -75,7 +76,13 @@ export const whatsappService = {
 
   // Save config
   async saveConfig(newConfig: WhatsAppConfig): Promise<void> {
-    await setDoc(doc(db, 'settings', 'whatsapp'), newConfig);
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('swiftship_whatsapp_config', JSON.stringify(newConfig));
+      }
+    } catch (e) {
+      console.error('Error saving WhatsApp configuration:', e);
+    }
   },
 
   // Interpolate order fields into templates

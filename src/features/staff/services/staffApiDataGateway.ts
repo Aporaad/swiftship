@@ -60,8 +60,8 @@ const normalize = (row: Row, key: string): Row => ({
 });
 
 export const staffApiDataGateway = {
-  isEnabled: () => import.meta.env.VITE_STAFF_API_READS === "true",
-  isWriteEnabled: () => import.meta.env.VITE_STAFF_API_WRITES === "true",
+  isEnabled: () => import.meta.env.VITE_STAFF_API_READS === "true" || import.meta.env.VITE_USE_HTTP_API === "true",
+  isWriteEnabled: () => import.meta.env.VITE_STAFF_API_WRITES === "true" || import.meta.env.VITE_USE_HTTP_API === "true",
   async createCourier(input: CourierWriteInput): Promise<Row> {
     const response = await client.post<ApiEnvelope<Row>>('/api/v1/operations/couriers', input);
     return response.data;

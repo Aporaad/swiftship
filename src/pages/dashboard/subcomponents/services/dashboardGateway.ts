@@ -27,7 +27,7 @@ type DashboardGatewayHandlers = {
 export function subscribeDashboardData(
   handlers: DashboardGatewayHandlers
 ): () => void {
-  if (import.meta.env.VITE_DASHBOARD_API_READS === "true") {
+  if (import.meta.env.VITE_DASHBOARD_API_READS === "true" || import.meta.env.VITE_USE_HTTP_API === "true") {
     return subscribeDashboardApiData(handlers);
   }
   const unsubCustomers = onSnapshot(collection(db, "customers"), snap => {

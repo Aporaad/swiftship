@@ -2223,5 +2223,16 @@
 - [x] تطهير `useOrderStatuses.ts`, `useItemCategories.ts`, `useExpenseCategories.ts`, `useAutoVoucherRules.ts` وإزالة استيرادات `legacy-compat.ts`.
 - [x] تطهير `SalaryHistory.tsx`, `notificationService.ts`, `activityService.ts`, `activityLogService.ts` وإزالة استيرادات `legacy-compat.ts`.
 - [x] اجتياز فحص الأنواع الصارم `npx tsc --noEmit` بنسبة 100% (0 أخطاء).
-- [ ] المتابعة بحسب الخطة: استكمال نقل بقية المجالات التشغيلية للتأكد من خلو ملفات `src/` من استدعاءات `legacy-compat`.
+- [x] المتابعة بحسب الخطة: استكمال نقل بقية المجالات التشغيلية للتأكد من خلو ملفات `src/` من استدعاءات `legacy-compat`.
+
+## [2026-10-10 01:54:46 +03:00] — استكمال نقل الخدمات والـ Hooks إلى API-only وإزالة الاعتماديات على legacy-compat — AI Model: Gemini 3.6 Flash (Medium) / Antigravity
+- [x] إعادة هيكلة `useOrderOptions.ts` لإدارة خيارات الطلبات والشحن محلياً مع إزالة استيراد `legacy-compat.ts`.
+- [x] إعادة هيكلة `whatsappService.ts` لتوجيه الإعدادات والإشعارات عبر Local/API Storage وإزالة استيراد `legacy-compat.ts`.
+- [x] إعادة هيكلة `orderDeletionService.ts` لاستخدام `ApiClient` لحذف الطلبات وتحديث الواجهة دون الاعتماد على `legacy-compat.ts`.
+- [x] إعادة هيكلة `orderPaymentDataService.ts` للاستعلام عن قيود الدفعة المقدمة عبر `ApiClient` وإزالة استيراد `legacy-compat.ts`.
+- [x] إعادة هيكلة `productService.ts` بالكامل وتمرير جميع عمليات CRUD للمنتجات وبنود الطلبات عبر `ApiClient` وإزالة استيراد `legacy-compat.ts`.
+- [x] إعادة هيكلة `useAccountBalances.ts` لربط أرصدة الحسابات بـ `financeApiDataGateway` وإزالة استيراد `legacy-compat.ts`.
+- [x] إعادة هيكلة `useRole.ts` وتحديد الأدوار والصلاحيات ومسح البيانات المؤقتة دون استيراد `legacy-compat.ts`.
+- [x] اجتياز فحص الأنواع الصارم `npx tsc --noEmit` بنسبة 100% (0 أخطاء).
+
 

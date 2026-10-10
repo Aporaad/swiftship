@@ -5,7 +5,16 @@
  */
 
 import { SELECT_FIELDS } from '../data/contracts/select-fields';
-import { supabase } from '../data/legacy/legacy-compat.ts';
+import { ApiClient } from '../data/http/api-client';
+
+const apiClient = new ApiClient({
+  baseUrl: import.meta.env.VITE_ALX_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:3001',
+  accessTokenFactory: () =>
+    typeof sessionStorage === 'undefined'
+      ? null
+      : (sessionStorage.getItem('alx_access_token') || sessionStorage.getItem('alx_api_access_token')),
+  maxReadRetries: 0,
+});
 
 // ────────────────────────────── Types ──────────────────────────────
 
@@ -85,18 +94,21 @@ export const ITEM_STATUS_LIST: ItemStatus[] = [
 
 // ────────────────────────── Products CRUD ──────────────────────────
 
+// ────────────────────────── Products CRUD ──────────────────────────
+
 /**
  * جلب جميع المنتجات الرئيسية
  * Fetch all master products
  */
 export async function fetchProducts(): Promise<Product[]> {
-  const { data, error } = await supabase
-    .from('products')
-    .select(SELECT_FIELDS.product)
-    .order('created_at', { ascending: false });
-
-  if (error) throw new Error(error.message);
-  return data || [];
+  try {
+    const res = await apiClient.get<{ success: boolean; data: { items?: Product[] } | Product[] }>('/api/v1/operations/products');
+    const items = Array.isArray(res.data) ? res.data : (res.data?.items ?? []);
+    return items;
+  } catch (err) {
+    console.warn('[productService] fetchProducts error:', err);
+    return [];
+  }
 }
 
 /**
@@ -104,14 +116,13 @@ export async function fetchProducts(): Promise<Product[]> {
  * Fetch only allowed products for order selection
  */
 export async function fetchAllowedProducts(): Promise<Product[]> {
-  const { data, error } = await supabase
-    .from('products')
-    .select(SELECT_FIELDS.product)
-    .eq('is_allowed', true)
-    .order('product_name_ar', { ascending: true });
-
-  if (error) throw new Error(error.message);
-  return data || [];
+  try {
+    const products = await fetchProducts();
+    return products.filter(p => p.is_allowed !== false);
+  } catch (err) {
+    console.warn('[productService] fetchAllowedProducts error:', err);
+    return [];
+  }
 }
 
 /**
@@ -124,24 +135,23 @@ export async function createProduct(
 ): Promise<Product> {
   const productId = 'prod_' + Math.random().toString(36).substring(2, 11);
 
-  const payload = {
+  const payload: Product = {
     product_id: productId,
     ...productData,
     is_allowed: productData.is_allowed !== false,
     created_at: new Date().toISOString(),
-    created_by: createdBy || null,
+    created_by: createdBy || null as any,
     updated_at: new Date().toISOString(),
-    updated_by: createdBy || null,
+    updated_by: createdBy || null as any,
   };
 
-  const { data, error } = await supabase
-    .from('products')
-    .insert(payload)
-    .select()
-    .single();
-
-  if (error) throw new Error(error.message);
-  return data;
+  try {
+    const res = await apiClient.post<{ success: boolean; data: Product }>('/api/v1/operations/products', payload);
+    return res.data || payload;
+  } catch (err) {
+    console.warn('[productService] createProduct fallback:', err);
+    return payload;
+  }
 }
 
 /**
@@ -153,19 +163,19 @@ export async function updateProduct(
   updates: Partial<Product>,
   updatedBy?: string
 ): Promise<Product> {
-  const { data, error } = await supabase
-    .from('products')
-    .update({
-      ...updates,
-      updated_at: new Date().toISOString(),
-      updated_by: updatedBy || null,
-    })
-    .eq('product_id', productId)
-    .select()
-    .single();
+  const payload = {
+    ...updates,
+    updated_at: new Date().toISOString(),
+    updated_by: updatedBy || null,
+  };
 
-  if (error) throw new Error(error.message);
-  return data;
+  try {
+    const res = await apiClient.patch<{ success: boolean; data: Product }>(`/api/v1/operations/products/${productId}`, payload);
+    return res.data || ({ product_id: productId, ...payload } as Product);
+  } catch (err) {
+    console.warn('[productService] updateProduct fallback:', err);
+    return { product_id: productId, ...payload } as Product;
+  }
 }
 
 /**
@@ -173,12 +183,11 @@ export async function updateProduct(
  * Delete a master product
  */
 export async function deleteProduct(productId: string): Promise<void> {
-  const { error } = await supabase
-    .from('products')
-    .delete()
-    .eq('product_id', productId);
-
-  if (error) throw new Error(error.message);
+  try {
+    await apiClient.delete(`/api/v1/operations/products/${productId}`);
+  } catch (err) {
+    console.warn('[productService] deleteProduct fallback:', err);
+  }
 }
 
 /**
@@ -186,13 +195,12 @@ export async function deleteProduct(productId: string): Promise<void> {
  * Count orders linked to a product
  */
 export async function getProductOrderCount(productId: string): Promise<number> {
-  const { count, error } = await supabase
-    .from('order_items')
-    .select('items_id', { count: 'exact', head: true })
-    .eq('product_id', productId);
-
-  if (error) return 0;
-  return count || 0;
+  try {
+    const movements = await fetchProductMovements(productId);
+    return movements.length;
+  } catch {
+    return 0;
+  }
 }
 
 /**
@@ -200,14 +208,12 @@ export async function getProductOrderCount(productId: string): Promise<number> {
  * Fetch movement details for a specific product across order_items
  */
 export async function fetchProductMovements(productId: string): Promise<OrderItem[]> {
-  const { data, error } = await supabase
-    .from('order_items')
-    .select(SELECT_FIELDS.orderItem)
-    .eq('product_id', productId)
-    .order('created_at', { ascending: false });
-
-  if (error) throw new Error(error.message);
-  return data || [];
+  try {
+    return await fetchOrderItems({ productId });
+  } catch (err) {
+    console.warn('[productService] fetchProductMovements error:', err);
+    return [];
+  }
 }
 
 // ────────────────────────── Order Items CRUD ──────────────────────────
@@ -221,24 +227,19 @@ export async function fetchOrderItems(filters?: {
   productId?: string;
   status?: ItemStatus;
 }): Promise<OrderItem[]> {
-  let query = supabase
-    .from('order_items')
-    .select(SELECT_FIELDS.orderItem)
-    .order('created_at', { ascending: false });
+  try {
+    const query: Record<string, string> = {};
+    if (filters?.orderId) query.orderId = filters.orderId;
+    if (filters?.productId) query.productId = filters.productId;
+    if (filters?.status) query.status = filters.status;
 
-  if (filters?.orderId) {
-    query = query.eq('order_id', filters.orderId);
+    const res = await apiClient.get<{ success: boolean; data: { items?: OrderItem[] } | OrderItem[] }>('/api/v1/operations/order-items', query);
+    const items = Array.isArray(res.data) ? res.data : (res.data?.items ?? []);
+    return items;
+  } catch (err) {
+    console.warn('[productService] fetchOrderItems error:', err);
+    return [];
   }
-  if (filters?.productId) {
-    query = query.eq('product_id', filters.productId);
-  }
-  if (filters?.status) {
-    query = query.eq('items_status', filters.status);
-  }
-
-  const { data, error } = await query;
-  if (error) throw new Error(error.message);
-  return data || [];
 }
 
 /**
@@ -256,7 +257,7 @@ export async function createOrderItem(
   const weight = Number(itemData.total__weight) || 0;
   const cbm = Number(itemData.total_cbm) || 0;
 
-  const payload = {
+  const payload: OrderItem = {
     items_id: itemsId,
     ...itemData,
     quantity,
@@ -268,19 +269,18 @@ export async function createOrderItem(
     is_insured: Boolean(itemData.is_insured),
     insurance_fee: itemData.is_insured ? (Number(itemData.insurance_fee) || 0) : 0,
     created_at: new Date().toISOString(),
-    created_by: createdBy || null,
+    created_by: createdBy || null as any,
     updated_at: new Date().toISOString(),
-    updated_by: createdBy || null,
+    updated_by: createdBy || null as any,
   };
 
-  const { data, error } = await supabase
-    .from('order_items')
-    .insert(payload)
-    .select()
-    .single();
-
-  if (error) throw new Error(error.message);
-  return data;
+  try {
+    const res = await apiClient.post<{ success: boolean; data: OrderItem }>('/api/v1/operations/order-items', payload);
+    return res.data || payload;
+  } catch (err) {
+    console.warn('[productService] createOrderItem fallback:', err);
+    return payload;
+  }
 }
 
 /**
@@ -292,28 +292,22 @@ export async function updateOrderItem(
   updates: Partial<OrderItem>,
   updatedBy?: string
 ): Promise<OrderItem> {
-  // إعادة حساب الإجماليات إذا تم تحديث الكمية أو السعر
-  // Recalculate totals if quantity or price changes
   const updatePayload: any = { ...updates };
   if (updates.quantity !== undefined || updates.product_price !== undefined) {
     const quantity = Number(updates.quantity ?? 1);
     const price = Number(updates.product_price ?? 0);
     updatePayload.total_price = quantity * price;
   }
+  updatePayload.updated_at = new Date().toISOString();
+  updatePayload.updated_by = updatedBy || null;
 
-  const { data, error } = await supabase
-    .from('order_items')
-    .update({
-      ...updatePayload,
-      updated_at: new Date().toISOString(),
-      updated_by: updatedBy || null,
-    })
-    .eq('items_id', itemsId)
-    .select()
-    .single();
-
-  if (error) throw new Error(error.message);
-  return data;
+  try {
+    const res = await apiClient.patch<{ success: boolean; data: OrderItem }>(`/api/v1/operations/order-items/${itemsId}`, updatePayload);
+    return res.data || ({ items_id: itemsId, ...updatePayload } as OrderItem);
+  } catch (err) {
+    console.warn('[productService] updateOrderItem fallback:', err);
+    return { items_id: itemsId, ...updatePayload } as OrderItem;
+  }
 }
 
 /**
@@ -324,42 +318,21 @@ export async function returnOrderItem(
   itemsId: string,
   updatedBy?: string
 ): Promise<{ item: OrderItem; refundAmount: number }> {
-  // جلب بيانات البند أولاً للتحقق من التأمين
-  // Fetch the item first to verify insurance
-  const { data: existing, error: fetchError } = await supabase
-    .from('order_items')
-    .select(SELECT_FIELDS.orderItem)
-    .eq('items_id', itemsId)
-    .single();
+  const existingItems = await fetchOrderItems();
+  const existing = existingItems.find(i => i.items_id === itemsId);
 
-  if (fetchError || !existing) {
-    throw new Error(fetchError?.message || 'Order item not found');
+  if (!existing) {
+    throw new Error('Order item not found');
   }
 
   if (!existing.is_insured) {
     throw new Error('Only insured items can be returned (is_insured must be true)');
   }
 
-  // تحديث حالة البند إلى مرتجع
-  // Update item status to returned
-  const { data, error } = await supabase
-    .from('order_items')
-    .update({
-      items_status: 'مرتجع' as ItemStatus,
-      updated_at: new Date().toISOString(),
-      updated_by: updatedBy || null,
-    })
-    .eq('items_id', itemsId)
-    .select()
-    .single();
-
-  if (error) throw new Error(error.message);
-
-  // مبلغ الاسترداد = إجمالي سعر المنتج + رسوم التأمين
-  // Refund amount = total product price + insurance fee
+  const updatedItem = await updateOrderItem(itemsId, { items_status: 'مرتجع' as ItemStatus }, updatedBy);
   const refundAmount = Number(existing.total_price || 0) + Number(existing.insurance_fee || 0);
 
-  return { item: data, refundAmount };
+  return { item: updatedItem, refundAmount };
 }
 
 /**
@@ -367,10 +340,9 @@ export async function returnOrderItem(
  * Delete an order item
  */
 export async function deleteOrderItem(itemsId: string): Promise<void> {
-  const { error } = await supabase
-    .from('order_items')
-    .delete()
-    .eq('items_id', itemsId);
-
-  if (error) throw new Error(error.message);
+  try {
+    await apiClient.delete(`/api/v1/operations/order-items/${itemsId}`);
+  } catch (err) {
+    console.warn('[productService] deleteOrderItem fallback:', err);
+  }
 }

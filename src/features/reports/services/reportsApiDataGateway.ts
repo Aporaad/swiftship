@@ -30,7 +30,7 @@ const apiClient = new ApiClient({
 });
 
 function enabled(): boolean {
-  return import.meta.env.VITE_REPORTS_API_READS === "true";
+  return import.meta.env.VITE_REPORTS_API_READS === "true" || import.meta.env.VITE_USE_HTTP_API === "true";
 }
 
 async function readRows(path: string): Promise<ReportRow[]> {

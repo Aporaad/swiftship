@@ -24,9 +24,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot } from '../data/legacy/legacy-compat.ts';
-import { db } from '../data/legacy/legacy-compat.ts';
-import { supabase } from '../data/legacy/legacy-compat.ts';
+import { financeApiDataGateway } from '../components/financeAccounting/FinanceApiDataGateway';
 import { currencyService } from '../services/currencyService';
 import { asyncState, type AsyncState } from '../shared/contracts/ui.contracts';
 import { isRecord, readString, toRecord, type UnknownRecord } from '../shared/contracts/unknown.contracts';
@@ -54,16 +52,6 @@ interface CollectionSnapshot {
   docs: SnapshotDocument[];
 }
 
-interface RealtimeChannel {
-  on(event: string, filter: Record<string, string>, listener: () => void): RealtimeChannel;
-  subscribe(): unknown;
-}
-
-interface RealtimeClient {
-  channel(name: string): RealtimeChannel;
-}
-
-const realtimeClient = supabase as unknown as RealtimeClient;
 const numericValue = (value: unknown): number => {
   const number = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(number) ? number : 0;
@@ -297,25 +285,12 @@ function _initSingleton() {
   };
   fetchRates();
 
-  try {
-    const balChanId = `balances_rates_sync_${Math.random().toString(36).substring(2, 8)}`;
-    realtimeClient
-      .channel(balChanId)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'cur_price' }, () => {
-        fetchRates();
-      })
-      .subscribe();
-  } catch (err) {
-    console.warn('[useAccountBalances] balances_rates_sync channel warning:', err);
-  }
-
-  // 2. Subscribe to accounts to build type & currency registry (single global listener)
-  onSnapshot(collection(db, 'accounts'), (snap: CollectionSnapshot) => {
+  // 2. Subscribe to accounts to build type & currency registry
+  financeApiDataGateway.subscribeCollection('accounts', (rows: Record<string, unknown>[]) => {
     const reg: Record<string, { currency: string; type: AccountType }> = {};
-    snap.docs.forEach((document) => {
-      const account = toRecord(document.data());
+    rows.forEach((account) => {
       const code = readFirstString(account, 'accountCode', 'code');
-      const id = document.id;
+      const id = readFirstString(account, 'id', 'accountId') || code || '';
       const currency = readFirstString(account, 'currency', 'currency_code') || 'YER';
       let typeValue = readFirstString(account, 'type') || (code ? guessAccountTypeFromCode(code) : 'Asset');
       if (typeValue === 'REV') typeValue = 'Revenue';
@@ -333,17 +308,13 @@ function _initSingleton() {
     checkAndCompute();
   }, (error: unknown) => { setSourceError('accounts', error); initialLoaded.accounts = true; checkAndCompute(); });
 
-  // 3. الاستماع لجدول main_entry لبناء خريطة رؤوس القيود (مرحّل/مسودة)
-  //    Subscribe to main_entry to build the posting-status map
-  onSnapshot(collection(db, 'main_entry'), (snap: CollectionSnapshot) => {
+  // 3. Subscribe to main_entry to build posting-status map
+  financeApiDataGateway.subscribeCollection('main_entry', (rows: Record<string, unknown>[]) => {
     const newMap = new Map<string, UnknownRecord>();
-    snap.docs.forEach((document) => {
-      const data = toRecord(document.data());
-      newMap.set(document.id, data);
-      const alternateId = readString(data.id);
-      if (alternateId && alternateId !== document.id) {
-        newMap.set(alternateId, data);
-      }
+    rows.forEach((item) => {
+      const data = toRecord(item);
+      const id = readFirstString(data, 'id', 'entryId', 'mainEntryId') || '';
+      if (id) newMap.set(id, data);
     });
     entryMap = newMap;
     setSourceError('entries');
@@ -356,10 +327,9 @@ function _initSingleton() {
     checkAndCompute();
   });
 
-  // 4. Subscribe to transactions in account_trans (single global listener)
-  // الاستماع المباشر للتغيرات في جدول أسطر الحسابات الجديد account_trans
-  onSnapshot(collection(db, 'account_trans'), (snap: CollectionSnapshot) => {
-    txDocs = snap.docs.map((document) => ({ _docId: document.id, ...toRecord(document.data()) }));
+  // 4. Subscribe to transactions in account_trans
+  financeApiDataGateway.subscribeCollection('account_trans', (rows: Record<string, unknown>[]) => {
+    txDocs = rows.map((item) => ({ _docId: readFirstString(item, 'id', 'transactionId') || '', ...toRecord(item) }));
     setSourceError('txs');
     initialLoaded.txs = true;
     checkAndCompute();
