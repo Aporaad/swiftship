@@ -169,9 +169,8 @@ export default function SourcesPage() {
             name: shippingFormData.name,
             contactPerson: shippingFormData.contact_person,
             phone: shippingFormData.phone,
-            trackingUrl: shippingFormData.tracking_url,
+            trackingUrlTemplate: shippingFormData.tracking_url,
             address: shippingFormData.address,
-            notes: shippingFormData.notes,
           });
           activityLogService.log('edit_shipping_company', shippingFormData.name, { ...shippingFormData });
           notificationService.notify({ title: isAr ? 'تعديل شركة الشحن' : 'Shipping Company Updated', message: isAr ? `تم تحديث بيانات الشركة ${shippingFormData.name}` : `Shipping carrier ${shippingFormData.name} configuration updated`, type: 'info' });
@@ -180,9 +179,8 @@ export default function SourcesPage() {
             name: shippingFormData.name,
             contactPerson: shippingFormData.contact_person,
             phone: shippingFormData.phone,
-            trackingUrl: shippingFormData.tracking_url,
+            trackingUrlTemplate: shippingFormData.tracking_url,
             address: shippingFormData.address,
-            notes: shippingFormData.notes,
           });
           activityLogService.log('add_shipping_company', shippingFormData.name, { ...shippingFormData });
           notificationService.notify({ title: isAr ? 'إضافة شركة شحن جديدة' : 'Shipping Company Added', message: isAr ? `تمت إضافة شركة الشحن ${shippingFormData.name} بنجاح` : `New shipping carrier ${shippingFormData.name} registered`, type: 'success' });
@@ -269,23 +267,17 @@ export default function SourcesPage() {
       if (sourcesApiDataGateway.isWriteEnabled()) {
         if (selectedSource) {
           await sourcesApiDataGateway.updateSource(selectedSource.id, {
-            sourceName: formData.source_name,
+            name: formData.source_name,
             type: formData.type,
             sourceUrl: formData.source_url,
-            contactInfo: formData.contact_info,
-            location: formData.location,
-            notes: formData.notes,
           });
           activityLogService.log('edit_source', formData.source_name, { ...formData });
           notificationService.notify({ title: isAr ? 'تعديل مصدر الشراء' : 'Source Updated', message: isAr ? `تم تحديث المصدر الكلي ${formData.source_name}` : `Order supply source ${formData.source_name} has been updated`, type: 'info' });
         } else {
           await sourcesApiDataGateway.createSource({
-            sourceName: formData.source_name,
+            name: formData.source_name,
             type: formData.type,
             sourceUrl: formData.source_url,
-            contactInfo: formData.contact_info,
-            location: formData.location,
-            notes: formData.notes,
           });
           activityLogService.log('add_source', formData.source_name, { ...formData });
           notificationService.notify({ title: isAr ? 'إضافة مصدر شراء جديد' : 'Source Added', message: isAr ? `تمت إضافة المصدر بنجاح: ${formData.source_name}` : `New order supply source ${formData.source_name} recorded`, type: 'success' });

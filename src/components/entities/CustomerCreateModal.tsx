@@ -2,9 +2,7 @@ import { SharedProps, ModalShell, inputClass, FormField, ModalActions } from './
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Globe, MapPin, Phone, Truck, User, X, ShieldCheck, Calendar, Key, Lock, CheckCircle2, Building2, Briefcase } from 'lucide-react';
-import { addDoc, collection, db, doc, setDoc, updateDoc } from '../../data/legacy/legacy-compat.ts';
-import { financialAccountService } from '../../services/financialAccountService';
-import { activityLogService } from '../../services/activityLogService';
+import { customersApiDataGateway } from '../../features/customers/services/customersApiDataGateway';
 import { notificationService } from '../../services/notificationService';
 import LocationMapPickerModal from '../common/LocationMapPickerModal';
 import { portalUserService } from '../../services/portalUserService';
@@ -82,9 +80,6 @@ export function CustomerCreateModal({
         confirmPassword: '',
         portal_role: 'client'
       });
-      financialAccountService.getNextAccountIdentifiers('customer').then(res => {
-        setPreviewId(`cust_${res.accountCode}`);
-      }).catch(() => { });
     }
   }, [isOpen, initialName]);
 
@@ -126,22 +121,15 @@ export function CustomerCreateModal({
 
     setSubmitting(true);
     try {
-      const { accountCode } = await financialAccountService.getNextAccountIdentifiers('customer');
-      const id = `cust_${accountCode}`;
-
-      const customerPayload = {
+      const customer = await customersApiDataGateway.createCustomer({
         fullName: formData.fullName.trim(),
         phone: formData.phone.trim(),
-        email: formData.email.trim(),
-        address: formData.address.trim(),
-        gps_location: formData.gps_location,
-        notes: formData.notes.trim(),
-        createdAt: Date.now()
-      };
-
-      const reference = await addDoc(id, collection(db, 'customers'), customerPayload);
-      const account = await financialAccountService.createAccountForEntity('customer', reference.id, formData.fullName, settings.currency || 'SAR');
-
+        email: formData.email.trim() || undefined,
+        city: formData.city.trim() || undefined,
+        address: formData.address.trim() || undefined,
+        notes: formData.notes.trim() || undefined,
+        currency: settings.currency || 'SAR',
+      });
       let portalUserId = '';
       if (createPortalUser) {
         const portalRes = await portalUserService.createPortalUser(
@@ -151,11 +139,10 @@ export function CustomerCreateModal({
             password: portalFormData.password,
             portal_role: portalFormData.portal_role || 'client',
             approval_status: 'approved',
-            customerId: reference.id,
-            linkedCustomerId: reference.id,
-            accountId: account.id,
+            customerId: String(customer.id),
+            linkedCustomerId: String(customer.id),
             fullName: formData.fullName,
-            phone: formData.phone
+            phone: formData.phone,
           },
           {
             address: formData.address,
@@ -165,12 +152,12 @@ export function CustomerCreateModal({
             company_name: formData.company_name,
             id_number: formData.id_number,
             max_debt: Number(formData.max_debt) || 0,
-            notes: formData.notes
-          }
+            notes: formData.notes,
+          },
         );
         portalUserId = portalRes.id;
       } else {
-        await portalUserService.saveCustomerDetails(reference.id, '', {
+        await portalUserService.saveCustomerDetails(String(customer.id), '', {
           address: formData.address,
           gps_location: formData.gps_location,
           city: formData.city,
@@ -178,19 +165,10 @@ export function CustomerCreateModal({
           company_name: formData.company_name,
           id_number: formData.id_number,
           max_debt: Number(formData.max_debt) || 0,
-          notes: formData.notes
+          notes: formData.notes,
         });
       }
-
-      const customer = {
-        id: reference.id,
-        ...formData,
-        accountId: account.id,
-        portalUserId
-      };
-
-      activityLogService.log('add_customer', formData.fullName, { ...formData });
-
+      const createdCustomer = { ...customer, ...formData, portalUserId };
       notificationService.notify({
         title: isAr ? 'تم تسجيل العميل' : 'Customer Enrolled',
         message: isAr
@@ -199,7 +177,7 @@ export function CustomerCreateModal({
         type: 'success'
       });
 
-      onCreated(customer);
+      onCreated(createdCustomer);
       onClose();
     } catch (error: any) {
       console.error(error);

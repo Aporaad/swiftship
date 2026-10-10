@@ -5,21 +5,28 @@ type SourceRow = Record<string, unknown> & { id: string };
 type ShippingCompanyRow = Record<string, unknown> & { id: string };
 
 type SourceWriteInput = {
-  sourceName: string;
+  name: string;
   type?: string;
   sourceUrl?: string;
-  contactInfo?: string;
-  location?: string;
-  notes?: string;
+  nameAr?: string;
+  nameEn?: string;
+  isActive?: boolean;
+  accountId?: string;
 };
 
 type ShippingCompanyWriteInput = {
   name: string;
   contactPerson?: string;
   phone?: string;
-  trackingUrl?: string;
+  trackingUrlTemplate?: string;
   address?: string;
-  notes?: string;
+  code?: string;
+  countryId?: string;
+  email?: string;
+  apiUrl?: string;
+  apiEnabled?: boolean;
+  supportsTracking?: boolean;
+  supportsWebhook?: boolean;
 };
 
 type SourcesHandlers = {
