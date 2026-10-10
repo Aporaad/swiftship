@@ -20,7 +20,7 @@ import type {
   ShipmentsViewModel,
 } from '../../../data/dtos/shipments.dto';
 import type { OrdersFeatureApi } from '../api';
-import { legacyOrdersApi } from '../services/legacyOrdersApi';
+import { ordersApiDataGateway } from '../services/ordersApiDataGateway';
 import type { OrderRecord, ShipmentRecord } from '../types';
 
 type LegacyEntityFields = {
@@ -192,7 +192,7 @@ export interface OrderDataState {
  */
 export function useOrderData(
   enabled: boolean,
-  api: OrdersFeatureApi = legacyOrdersApi,
+  api: OrdersFeatureApi = ordersApiDataGateway,
 ): OrderDataState {
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [customers, setCustomers] = useState<CustomerRecord[]>([]);

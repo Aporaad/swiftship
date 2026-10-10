@@ -389,6 +389,7 @@ export function createOrderHandler(
       const shippingsToSave = (shippings || []).filter(
         s => s && (s.shippingCompany || s.trackingNumber || s.shippingCost),
       );
+      const orderCreatedThroughAggregate = Boolean(createOrderAggregate);
       if (createOrderAggregate) {
         const orderData: Record<string, unknown> = { ...payload };
         delete orderData.orderNumber;
@@ -470,7 +471,7 @@ export function createOrderHandler(
       // ─── حفظ المنتجات الرئيسية في products ثم بنود الطلب في order_items ───
       // Save master products in 'products' table (only if brand new item with no product_id),
       // then save each order line item in 'order_items' referencing the master product.
-      if (items && items.length > 0) {
+      if (!orderCreatedThroughAggregate && items && items.length > 0) {
         // إيجاد cur_id لعملة الطلب الافتراضية من جدول currency لاستخدامه في product_price_currency
         // Look up cur_id for the default order currency to use as product_price_currency FK
         const orderCurrencyRecord = activeCurrencies?.find(

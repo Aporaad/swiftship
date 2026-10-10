@@ -56,8 +56,7 @@ import { createOrderHandler } from '../services/createOrderHandler';
 import { createOrderEntityHandlers } from '../services/orderEntityHandlers';
 import { createSmartOrderCodeGenerator } from '../services/generateSmartOrderCode';
 import { createSaveShipmentHandler } from '../services/saveShipmentHandler';
-import { isOrdersApiReadEnabled, isOrdersApiWriteEnabled, ordersApiDataGateway } from '../services/ordersApiDataGateway';
-import { legacyOrdersApi } from '../services/legacyOrdersApi';
+import { ordersApiDataGateway } from '../services/ordersApiDataGateway';
 import { createCollectOrderPaymentHandler } from '../services/collectOrderPaymentHandler';
 import { createBatchUpdateOrderStatusHandler } from '../services/batchUpdateOrderStatusHandler';
 import { createUpdateOrderStatusHandler } from '../services/updateOrderStatusHandler';
@@ -134,7 +133,7 @@ export default function OrdersPage() { // دالة عرض الطلبات
     loading,
   } = useOrderData(
     !roleLoading,
-    isOrdersApiReadEnabled() || isOrdersApiWriteEnabled() ? ordersApiDataGateway : legacyOrdersApi,
+    ordersApiDataGateway,
   );
   const {
     formData, setFormData, items, setItems, shippings, setShippings, updateShippings, setUpdateShippings,
@@ -150,7 +149,7 @@ export default function OrdersPage() { // دالة عرض الطلبات
   } = useOrderFormState(orderCurrency, settings.currency || 'YER');
 
   const orderMutationActions = useOrderMutations(
-    isOrdersApiReadEnabled() || isOrdersApiWriteEnabled() ? ordersApiDataGateway : legacyOrdersApi,
+    ordersApiDataGateway,
   );
   const {
     createOrderRecord,

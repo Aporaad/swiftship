@@ -3,7 +3,6 @@ import { Activity, AlertCircle, Boxes, CheckCircle2, Layers, MapPin, Package, Pl
 import Tracking from '../../../shipments/pages/TrackingPage';
 import { financialAccountService } from '../../../../services/financialAccountService';
 import { exportOrdersToPDF, exportOrdersToCSV, generateOrderInvoicePDF } from '../../../../reports';
-import { safeToDate } from '../../../../lib/supabase-adapter';
 import OrderStatusManagementTab from '../../../../components/OrderStatusManagementTab';
 import OrderOptionsManagementTab from '../../../../components/orders/OrderOptionsManagementTab';
 import ItemCategoriesManagementTab from '../../../../components/orders/ItemCategoriesManagementTab';
@@ -16,6 +15,15 @@ import type { ExchangeRates } from '../../../../services/currencyService';
 import type { Settings } from '../../../../context/SettingsContext';
 
 type StatusRecord = { id: string | number; nameAr: string; nameEn: string; sortOrder?: number };
+function safeToDate(timestamp: unknown): Date | null {
+  if (!timestamp) return null;
+  if (timestamp instanceof Date) return timestamp;
+  if (typeof timestamp === 'number' || typeof timestamp === 'string') {
+    const date = new Date(timestamp);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  return null;
+}
 type CourierRecord = { id: string; fullName?: string };
 type ShippingCompanyRecord = { id: string; name: string };
 type SettingsRecord = Settings;

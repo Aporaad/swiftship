@@ -2957,3 +2957,13 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
    - اجتياز التجميع والفحص لـ TypeScript عبر `npx tsc --noEmit` بـ **0 أخطاء**.
 
 
+
+## [2026-10-10 06:52 +03:00] تنفيذ المرحلة 1 — Orders API-only
+- تم تحديث `ordersApiDataGateway.ts` ليعتمد على `ApiClient` وalx_api مباشرة دون استيراد أو تفويض إلى `legacyOrdersApi`.
+- تم ربط collections الخاصة بالطلبات، الشحنات، المنتجات، العملاء، الموظفين، المندوبين، المصادر، شركات الشحن، الحسابات، وقواعد القسائم بمسارات API.
+- تم توحيد التعامل مع العمليات غير المدعومة عبر خطأ صريح `ORDERS_API_OPERATION_UNSUPPORTED` لمنع fallback الصامت.
+- تم تحديث `useOrderData` و`useOrderMutations` و`OrdersPage` لاستخدام gateway API مباشرة.
+- تم تعديل `createOrderHandler` حتى لا يعيد إنشاء المنتجات و`order_items` بعد أن ينفذ alx_api aggregate العملية داخل معاملة واحدة.
+- تم إزالة استيراد `supabase-adapter` من `OrdersPageShell` وإضافة `safeToDate` محليًا.
+- أضيف `ordersApiDataGateway.test.ts` للتحقق من حدود API-only وعدم عودة legacy أو feature flags القديمة.
+- التحقق: TypeScript check وbuild واختبارات حدود المرحلة ناجحة. مجموعة الاختبارات الكاملة ما زالت تحتوي على اختبارات قديمة غير متوافقة مع تغييرات API الموجودة مسبقًا في فرعي الحسابات الافتراضية وحذف الطلبات.
