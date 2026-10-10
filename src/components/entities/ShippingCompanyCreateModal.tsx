@@ -2,9 +2,7 @@ import { SharedProps, ModalShell, inputClass, FormField, ModalActions } from './
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Globe, MapPin, Phone, Truck, User, X, ShieldCheck, Calendar, Key, Lock, CheckCircle2, Building2, Briefcase } from 'lucide-react';
-import { addDoc, collection, db, doc, setDoc, updateDoc } from '../../data/legacy/legacy-compat.ts';
-import { financialAccountService } from '../../services/financialAccountService';
-import { activityLogService } from '../../services/activityLogService';
+import { sourcesApiDataGateway } from '../../features/sources/services/sourcesApiDataGateway';
 import { notificationService } from '../../services/notificationService';
 import LocationMapPickerModal from '../common/LocationMapPickerModal';
 import { portalUserService } from '../../services/portalUserService';
@@ -29,14 +27,7 @@ export function ShippingCompanyCreateModal({ isOpen, onClose, isAr, settings, on
     if (submitting || !formData.name.trim()) return;
     setSubmitting(true);
     try {
-      const id = `SC-${Math.random().toString(36).substring(2, 11)}`;
-      const company = { id, ...formData, createdAt: Date.now() };
-      await addDoc(id, collection(db, 'shipping_companies'), company);
-      const account = await financialAccountService.createAccountForEntity('shipping_company', id, formData.name, settings.currency || settings.defaultOrderCurrency || 'YER', undefined, { accountPrefix: '2150', parentCode: '2150', accountType: 'Liability', notes: `حساب ذمم شركة شحن: ${formData.name}`, updateEntity: false });
-      const accountLink = { accountId: account.id };
-      await updateDoc(doc(db, 'shipping_companies', id), accountLink);
-      Object.assign(company, accountLink);
-      activityLogService.log('add_shipping_company', formData.name, { ...formData });
+      const company = await sourcesApiDataGateway.createShippingCompany({ name: formData.name.trim(), phone: formData.phone.trim() || undefined, trackingUrlTemplate: formData.tracking_url.trim() || undefined, address: formData.address.trim() || undefined });
       notificationService.notify({ title: isAr ? 'إضافة شركة شحن جديدة' : 'Shipping Company Added', message: isAr ? `تمت إضافة شركة الشحن ${formData.name} بنجاح` : `New shipping carrier ${formData.name} registered`, type: 'success' });
       onCreated(company);
       onClose();

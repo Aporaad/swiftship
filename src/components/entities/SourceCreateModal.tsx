@@ -2,9 +2,7 @@ import { SharedProps, ModalShell, inputClass, FormField, ModalActions } from './
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Globe, MapPin, Phone, Truck, User, X, ShieldCheck, Calendar, Key, Lock, CheckCircle2, Building2, Briefcase } from 'lucide-react';
-import { addDoc, collection, db, doc, setDoc, updateDoc } from '../../data/legacy/legacy-compat.ts';
-import { financialAccountService } from '../../services/financialAccountService';
-import { activityLogService } from '../../services/activityLogService';
+import { sourcesApiDataGateway } from '../../features/sources/services/sourcesApiDataGateway';
 import { notificationService } from '../../services/notificationService';
 import LocationMapPickerModal from '../common/LocationMapPickerModal';
 import { portalUserService } from '../../services/portalUserService';
@@ -29,14 +27,7 @@ export function SourceCreateModal({ isOpen, onClose, isAr, settings, onCreated }
     if (submitting || !formData.source_name.trim()) return;
     setSubmitting(true);
     try {
-      const id = `SRC-${Math.random().toString(36).substring(2, 11)}`;
-      const source = { id, ...formData, name: formData.source_name, createdAt: Date.now() };
-      await addDoc(id, collection(db, 'sources'), source);
-      const account = await financialAccountService.createAccountForEntity('source', id, formData.source_name, settings.currency || settings.defaultOrderCurrency || 'YER', undefined, { accountPrefix: '2140', parentCode: '2140', accountType: 'Liability', notes: `حساب ذمم مصدر طلبات: ${formData.source_name}`, updateEntity: false });
-      const accountLink = { accountId: account.id };
-      await updateDoc(doc(db, 'sources', id), accountLink);
-      Object.assign(source, accountLink);
-      activityLogService.log('add_source', formData.source_name, { ...formData });
+      const source = await sourcesApiDataGateway.createSource({ name: formData.source_name.trim(), type: formData.type, sourceUrl: formData.source_url.trim() || undefined });
       notificationService.notify({ title: isAr ? 'إضافة مصدر شراء جديد' : 'Source Added', message: isAr ? `تمت إضافة المصدر ${formData.source_name} بنجاح` : `New order supply source ${formData.source_name} recorded`, type: 'success' });
       onCreated(source);
       onClose();
