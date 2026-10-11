@@ -490,15 +490,15 @@ export default function Layout() {
     { id: 'orders', name: isAr ? 'الطلبات والشحنات' : 'Orders & Shipments', path: '/orders', icon: Package, permission: 'view_orders' },
     { id: 'customers', name: isAr ? 'العملاء' : 'Customers', path: '/customers', icon: Users, permission: 'view_customers' },
     { id: 'couriers', name: isAr ? 'المناديب' : 'Couriers', path: '/couriers', icon: Truck, permission: 'view_couriers' },
+    { id: 'employees', name: isAr ? 'الموظفين' : 'Employees', path: '/employees', icon: Briefcase, permission: 'view_employees' },
+    { id: 'sources', name: isAr ? 'المصادر' : 'Sources', path: '/sources', icon: MapPin, permission: 'view_sources' },
     { id: 'finance', name: isAr ? 'القيود والسندات' : 'Entries & Vouchers', path: '/finance', icon: Wallet, permission: 'view_general_entries' },
     { id: 'accounting', name: isAr ? 'المحاسبة' : 'Accounting', path: '/accounting', icon: BookOpen, permission: 'view_finance' },
-    { id: 'sources', name: isAr ? 'المصادر' : 'Sources', path: '/sources', icon: MapPin, permission: 'view_sources' },
     { id: 'browser', name: isAr ? 'متصفح المواقع' : 'Web Browser', path: '/browser', icon: Monitor, permission: 'view_browser' },
-    { id: 'reports', name: isAr ? 'التقارير' : 'Reports', path: '/reports', icon: FileText, permission: 'view_reports' },
-    { id: 'employees', name: isAr ? 'الموظفين' : 'Employees', path: '/employees', icon: Briefcase, permission: 'view_employees' },
     { id: 'users', name: isAr ? 'المستخدمون والأدوار' : 'Users & Roles', path: '/user-management', icon: UserCog, permission: 'view_users' },
     { id: 'website', name: isAr ? 'إدارة الموقع' : 'Website Management', path: '/website-management', icon: Globe, permission: 'view_website_management' },
     { id: 'notifications', name: isAr ? 'الإشعارات' : 'Notifications', path: '/notifications', icon: Bell, permission: 'view_notifications' },
+    { id: 'reports', name: isAr ? 'التقارير' : 'Reports', path: '/reports', icon: FileText, permission: 'view_reports' },
     { id: 'settings', name: isAr ? 'الإعدادات' : 'Settings', path: '/settings', icon: Settings, permission: 'settings' },
   ];
 
@@ -888,7 +888,7 @@ export default function Layout() {
                       </div>
                       <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
                         <Phone className="w-3.5 h-3.5 text-[#d4af37]" />
-                        <span dir="ltr">{settings.companyPhone || '+967 77X XXX XXX'}</span>
+                        <span dir="ltr">{settings.companyPhone || '+967 785 557 070'}</span>
                       </div>
                       <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
                         <Globe className="w-3.5 h-3.5 text-[#d4af37]" />
