@@ -1,6 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, doc, updateDoc, addDoc, setDoc, deleteDoc, getDocs } from '../../../data/legacy/legacy-compat.ts';
-import { db, handlePostgreSQLError, OperationType } from '../../../data/legacy/legacy-compat.ts';
 import { Search, Edit2, X, Plus, Trash2, Shield, CheckCircle2, RefreshCw } from 'lucide-react';
 import { useRole } from '../../../hooks/useRole';
 import { useSettings } from '../../../context/SettingsContext';
@@ -41,68 +39,24 @@ export default function RolesPage() {
 
   useEffect(() => {
     if (roleLoading) return;
-    if (rolesApiDataGateway.isReadEnabled()) {
-      let disposed = false;
-      const load = async () => {
-        try {
-          const fetchedRoles = await rolesApiDataGateway.list();
-          if (disposed) return;
-          setRoles(fetchedRoles);
-          setQueryState(fetchedRoles.length > 0 ? asyncState.success(fetchedRoles) : asyncState.empty());
-        } catch (error) {
-          if (!disposed) setQueryState(asyncState.error<any[]>(error, 'ROLES_API_LOAD_FAILED'));
-        }
-      };
-      void load();
-      const interval = window.setInterval(() => void load(), 30_000);
-      return () => { disposed = true; window.clearInterval(interval); };
-    }
-    const unsub = onSnapshot(collection(db, 'roles'), (snap: any) => {
-      const fetchedRoles = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
-      setRoles(fetchedRoles);
-      setQueryState(fetchedRoles.length > 0 ? asyncState.success(fetchedRoles) : asyncState.empty());
-    }, (error: any) => {
-      setQueryState(asyncState.error<any[]>(error, 'ROLES_LOAD_FAILED'));
-      handlePostgreSQLError(error, OperationType.LIST, 'roles');
-    });
-    return unsub;
-  }, [roleLoading]);
-
-  // Auto-initialize default roles (runs separately to avoid remote snapshot loop)
-  useEffect(() => {
-    if (roleLoading || rolesApiDataGateway.isReadEnabled()) return;
-    const initRoles = async () => {
+    let disposed = false;
+    const load = async () => {
       try {
-        const snap = await getDocs(collection(db, 'roles'));
-        const fetchedRoles = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
-        
-        const defaultRoles = [
-          { id: 'Admin', title: settings.language === 'ar' ? 'مدير النظام' : 'System Admin', permissions: ['*'] },
-          { id: 'Employee', title: settings.language === 'ar' ? 'موظف' : 'Employee', permissions: ['view_dashboard', 'view_orders', 'add_orders', 'edit_orders', 'update_order_status', 'print_orders', 'view_customers', 'add_customers', 'edit_customers', 'view_couriers', 'add_couriers', 'edit_couriers', 'view_sources', 'add_sources', 'edit_sources', 'view_notifications', 'notify_orders', 'notify_system'] },
-          { id: 'Courier', title: settings.language === 'ar' ? 'مندوب' : 'Courier', permissions: ['view_orders', 'update_order_status'] },
-          { id: 'Accountant', title: settings.language === 'ar' ? 'محاسب' : 'Accountant', permissions: ['view_dashboard', 'view_orders', 'view_finance', 'add_finance', 'edit_finance', 'view_expenses', 'add_expenses', 'edit_expenses', 'view_custody', 'view_reports', 'view_sources', 'add_sources', 'edit_sources', 'view_notifications', 'notify_finance', 'notify_system'] }
-        ];
-
-        for (const dr of defaultRoles) {
-          if (!fetchedRoles.find((r: any) => r.id === dr.id)) {
-            try {
-              await setDoc(doc(db, 'roles', dr.id), {
-                title: dr.title,
-                permissions: dr.permissions,
-                createdAt: Date.now(),
-                isDefault: true
-              }, { merge: true });
-            } catch (err) {
-              console.warn(`[Roles.tsx] Failed to auto-initialize role ${dr.id}:`, err);
-            }
-          }
+        if (!rolesApiDataGateway.isReadEnabled()) {
+          throw new Error('ROLES_API_REQUIRED');
         }
-      } catch (err) {
-        console.warn("[Roles.tsx] Failed to fetch roles for initialization:", err);
+        const fetchedRoles = await rolesApiDataGateway.list();
+        if (disposed) return;
+        setRoles(fetchedRoles);
+        setQueryState(fetchedRoles.length > 0 ? asyncState.success(fetchedRoles) : asyncState.empty());
+      } catch (error) {
+        if (!disposed) setQueryState(asyncState.error<any[]>(error, 'ROLES_API_LOAD_FAILED'));
       }
     };
-    initRoles();
-  }, [roleLoading, settings.language]);
+    void load();
+    const interval = window.setInterval(() => void load(), 30_000);
+    return () => { disposed = true; window.clearInterval(interval); };
+  }, [roleLoading]);
 
   const handleOpenAdd = () => {
     setSelectedRole(null);
@@ -145,15 +99,14 @@ export default function RolesPage() {
     }
     
     saveBlockRef.current = true;
-    const result = await runMutation(() => rolesApiDataGateway.isWriteEnabled()
-      ? (selectedRole
-        ? rolesApiDataGateway.update(selectedRole.id, { name: formData.title, permissionCodes: formData.permissions }).then(() => undefined)
-        : rolesApiDataGateway.create({ code: formData.id.toLowerCase(), name: formData.title, permissionCodes: formData.permissions }).then(() => undefined))
-      : setDoc(doc(db, 'roles', formData.id), {
-          title: formData.title,
-          permissions: formData.permissions,
-          updatedAt: Date.now()
-        }), setMutationState);
+    const result = await runMutation(async () => {
+      if (!rolesApiDataGateway.isWriteEnabled()) throw new Error('ROLES_API_REQUIRED');
+      if (selectedRole) {
+        await rolesApiDataGateway.update(selectedRole.id, { name: formData.title, permissionCodes: formData.permissions });
+      } else {
+        await rolesApiDataGateway.create({ code: formData.id.toLowerCase(), name: formData.title, permissionCodes: formData.permissions });
+      }
+    }, setMutationState);
     if (result.status === 'success-after-mutation') {
       notificationService.notify({
         title: settings.language === 'ar' ? 'تم الحفظ' : 'Saved Successfully',
@@ -162,8 +115,7 @@ export default function RolesPage() {
       });
       setIsModalOpen(false);
     } else if (result.status === 'error') {
-      const err = result.error;
-      handlePostgreSQLError(err, OperationType.UPDATE, 'roles');
+      notificationService.notify({ title: settings.language === 'ar' ? 'فشل حفظ الدور' : 'Role save failed', message: result.error.message, type: 'error' });
     }
     saveBlockRef.current = false;
   };
@@ -173,12 +125,12 @@ export default function RolesPage() {
       return alert(settings.language === 'ar' ? 'لا يمكن حذف دور مدير النظام مطلقا' : 'Cannot delete Admin role');
     }
     if (!window.confirm(settings.language === 'ar' ? `هل أنت متأكد من حذف دور ${id}؟` : `Are you sure you want to delete role ${id}?`)) return;
-    const result = await runMutation(() => rolesApiDataGateway.isWriteEnabled()
-      ? rolesApiDataGateway.remove(id)
-      : deleteDoc(doc(db, 'roles', id)), setMutationState);
+    const result = await runMutation(async () => {
+      if (!rolesApiDataGateway.isWriteEnabled()) throw new Error('ROLES_API_REQUIRED');
+      await rolesApiDataGateway.remove(id);
+    }, setMutationState);
     if (result.status === 'error') {
-      const err = result.error;
-      handlePostgreSQLError(err, OperationType.DELETE, 'roles');
+      notificationService.notify({ title: settings.language === 'ar' ? 'فشل حذف الدور' : 'Role deletion failed', message: result.error.message, type: 'error' });
     }
   };
 

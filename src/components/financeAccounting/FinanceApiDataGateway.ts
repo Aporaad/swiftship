@@ -1,5 +1,4 @@
 import { ApiClient } from "../../data/http/api-client";
-import { financeAccountingDataGateway as legacyGateway } from "./FinanceAccountingDataGateway";
 
 type ApiEnvelope<T> = { success: true; data: T; meta?: { total?: number } };
 type ApiPage<T> = { items: T[]; total?: number };
@@ -79,18 +78,21 @@ export const financeApiDataGateway = {
     onData: (rows: T[]) => void,
     onError: (error: unknown) => void
   ): Unsubscribe {
-    const fallback = () =>
-      legacyGateway.subscribeCollection(collectionName, onData, onError);
-    if (!isEnabled() || !apiCollectionPaths[collectionName]) return fallback();
+    if (!isEnabled()) {
+      void Promise.resolve().then(() => onError(new Error("FINANCE_API_REQUIRED")));
+      return () => undefined;
+    }
+    if (!apiCollectionPaths[collectionName]) {
+      void Promise.resolve().then(() => onError(new Error(`FINANCE_API_COLLECTION_UNSUPPORTED:${collectionName}`)));
+      return () => undefined;
+    }
 
     let disposed = false;
-    let fallbackUnsubscribe: Unsubscribe | null = null;
     const load = async () => {
       try {
         const rows = await fetchRows<T>(collectionName);
         if (!disposed) onData(rows);
       } catch (error) {
-        if (!disposed && !fallbackUnsubscribe) fallbackUnsubscribe = fallback();
         if (!disposed) onError(error);
       }
     };
@@ -99,7 +101,6 @@ export const financeApiDataGateway = {
     return () => {
       disposed = true;
       clearInterval(interval);
-      fallbackUnsubscribe?.();
     };
   },
 

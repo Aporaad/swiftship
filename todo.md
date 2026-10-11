@@ -2278,3 +2278,13 @@
 - [x] تحويل التعامل مع المنتجات وبنود الطلبات والشحنات لاستخدام `productService` و`ordersApiDataGateway`.
 - [x] إجراء التحقق من سلامة الأكواد والأنواع باستخدام `npx tsc --noEmit` وإجراء البناء الإنتاجي `npm run build` بنجاح دون أي خطأ.
 
+
+## [2026-10-11 04:34 +03:00] — Manus AI — استكمال P1/P2 API Migration
+- [x] تحويل `RolesPage.tsx` بالكامل إلى `rolesApiDataGateway` للقراءة والإنشاء والتعديل والحذف.
+- [x] إزالة fallback وimports المباشرة من `legacy-compat` في صفحة الأدوار.
+- [x] إزالة fallback الصامت من `FinanceApiDataGateway` وإرجاع أخطاء API صريحة.
+- [x] إضافة اختبار حدود يمنع عودة legacy أو fallback إلى المسارات المهاجرة.
+- [x] نجاح `npm run check` و`npm run build` واختبارات الحدود.
+- [ ] استكمال تحويل صفحات Couriers/Customers/Employees/Sources/Users/Settings إلى API-only.
+- [ ] نقل الخدمات المالية وPortal وقاعدة بيانات تفاصيل العملاء إلى عقود API مكتملة.
+- [ ] تشغيل اختبارات E2E ومعالجة انهيار Jest قبل إعلان API-only بنسبة 100%.

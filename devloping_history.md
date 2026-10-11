@@ -3010,3 +3010,11 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
    - فحص الأنواع الصارم عبر `npx tsc --noEmit` بنجاح (0 أخطاء).
    - إجراء البناء الإنتاجي `npm run build` لتأكيد تكامل الحزم والبناء بنجاح (Vite built in 35.72s).
 
+
+## [2026-10-11 04:34 +03:00] — Manus AI — استكمال API Migration
+- تم تحويل `src/features/roles/pages/RolesPage.tsx` إلى API-only باستخدام `rolesApiDataGateway` في القراءة الدورية وعمليات الإنشاء والتعديل والحذف.
+- أزيلت imports الخاصة بـ `legacy-compat` وعمليات `onSnapshot` وتهيئة الأدوار المباشرة من صفحة الأدوار؛ عند غياب API يتم إظهار خطأ `ROLES_API_REQUIRED` بدل fallback صامت.
+- تم تعديل `src/components/financeAccounting/FinanceApiDataGateway.ts` لمنع الرجوع إلى `FinanceAccountingDataGateway` عند فشل HTTP API، وإرجاع أخطاء صريحة مثل `FINANCE_API_REQUIRED` و`FINANCE_API_COLLECTION_UNSUPPORTED`.
+- أضيف اختبار حدود في `src/config/legacy-boundary.test.ts` يثبت خلو صفحة الأدوار من legacy ويمنع fallback المالي.
+- التحقق: `npm run check` ناجح، `npm run build` ناجح، اختبارات الحدود واختبار Orders: 6 اختبارات ناجحة، و`git diff --check` ناجح.
+- ما زالت تحذيرات البناء تشير إلى ملفات legacy أخرى خارج نطاق هذا الجزء ولم يتم اعتبار API-only مكتملة.

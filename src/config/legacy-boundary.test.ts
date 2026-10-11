@@ -31,6 +31,16 @@ function relative(file: string): string {
 }
 
 describe('Phase 0 — legacy/API-only boundary', () => {
+  it('keeps migrated roles and finance gateways API-only', () => {
+    const rolesPage = readFileSync(resolve(sourceRoot, 'features/roles/pages/RolesPage.tsx'), 'utf8');
+    const financeGateway = readFileSync(resolve(sourceRoot, 'components/financeAccounting/FinanceApiDataGateway.ts'), 'utf8');
+
+    expect(rolesPage).not.toContain('data/legacy/legacy-compat');
+    expect(rolesPage).not.toContain('onSnapshot(');
+    expect(financeGateway).not.toContain('FinanceAccountingDataGateway');
+    expect(financeGateway).not.toContain('fallback');
+  });
+
   it('does not allow new legacy or Supabase runtime references beyond the baseline', () => {
     const files = collectSourceFiles(sourceRoot);
     for (const category of ['legacyCompatImport', 'supabaseRuntimeReference', 'legacyListener'] as const) {
