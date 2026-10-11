@@ -2729,3 +2729,12 @@ LIMIT 1;
 ## [2026-10-11 05:26 +03:00] — AI Model: Manus AI
 - لم يتم تنفيذ أي SQL أو DDL أو DML أو migration.
 - تم إجراء جرد لعقود ومسارات قاعدة البيانات/API من ملفات المستودعات فقط.
+
+
+## [2026-10-11 23:27:09 +03:00] — AI Model: Manus AI (المعرّف التفصيلي للنموذج غير مكشوف لبيئة التنفيذ)
+**الغرض:** التحقق للقراءة فقط من توقيع الدالة الحالية قبل ربط endpoint حذف الطلبات؛ لم يُجر أي تعديل.
+**أمر SQL المنفذ كما هو:**
+```sql
+SELECT p.oid::regprocedure::text AS signature, pg_get_function_arguments(p.oid) AS arguments, p.prosecdef AS security_definer FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND p.proname = 'delete_orders_with_dependents' ORDER BY p.oid LIMIT 10;
+```
+**النتيجة:** `delete_orders_with_dependents(text[])`، المعامل `p_order_ids text[]`، و`security_definer = true`. الاستعلام قراءة فقط؛ لا DDL/DML أو تغيير بيانات.

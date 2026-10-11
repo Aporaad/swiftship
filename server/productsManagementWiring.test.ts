@@ -13,16 +13,27 @@ describe('products management tab wiring', () => {
     expect(ordersShell).toContain("ordersTab === 'products'");
   });
 
-  it('provides products CRUD, search, category filtering, and sorting through the products table', () => {
+  it('delegates product and order-item CRUD to the API-backed service', () => {
     const productsTab = projectFile('src/components/orders/ProductsManagementTab.tsx');
-    expect(productsTab).toContain("collection(db, 'products')");
-    expect(productsTab).toContain("addDoc(newId, collection(db, 'products')");
-    expect(productsTab).toContain("updateDoc(doc(db, 'products', editingProduct.product_id)");
-    expect(productsTab).toContain("deleteDoc(doc(db, 'products', p.product_id))");
+    const productService = projectFile('src/services/productService.ts');
+
+    expect(productsTab).toContain("from '../../services/productService'");
+    expect(productsTab).toContain('await fetchProducts()');
+    expect(productsTab).toContain('await fetchOrderItems()');
+    expect(productsTab).toContain('await serviceCreateProduct(');
+    expect(productsTab).toContain('await serviceUpdateProduct(');
+    expect(productsTab).toContain('await serviceDeleteProduct(');
+    expect(productsTab).toContain('await updateOrderItem(');
+    expect(productsTab).toContain('await serviceDeleteOrderItem(');
     expect(productsTab).toContain('productCategoryFilter');
     expect(productsTab).toContain('productSortBy');
     expect(productsTab).toContain('product_name_ar');
     expect(productsTab).toContain('item_category_id');
     expect(productsTab).toContain('tracking_number');
+
+    expect(productService).toContain("'/api/v1/operations/products'");
+    expect(productService).toContain("'/api/v1/operations/order-items'");
+    expect(productsTab).not.toContain('data/legacy/legacy-compat');
+    expect(productService).not.toContain('data/legacy/legacy-compat');
   });
 });

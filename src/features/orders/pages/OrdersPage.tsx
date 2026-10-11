@@ -754,8 +754,8 @@ export default function OrdersPage() { // دالة عرض الطلبات
       notificationService.notify({
         title: isAr ? 'تم حذف الطلبات' : 'Orders deleted',
         message: isAr
-          ? `تم حذف ${result.orders} طلبًا مع ${result.shipments} شحنة و${result.journalEntries} قيدًا مرتبطًا.`
-          : `${result.orders} orders, ${result.shipments} shipments, and ${result.journalEntries} linked entries were deleted.`,
+          ? `تم حذف ${result.orders} طلبًا مع ${result.shipments} شحنة و${result.mainEntries} قيدًا مرتبطًا.`
+          : `${result.orders} orders, ${result.shipments} shipments, and ${result.mainEntries} linked entries were deleted.`,
         type: 'warning',
         category: 'order'
       });

@@ -1508,3 +1508,9 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 ## [2026-10-11 05:26 +03:00] — Manus AI — جرد قاعدة البيانات وAPI
 - لم يتم تنفيذ أي SQL أو DDL أو DML أو migration.
 - الجرد أكد وجود عقود ومسارات backend في alx_api للإعدادات والعملات والكيانات والمستخدمين، مع فجوات في backup وبيانات التفاصيل والعمليات الذرية المالية وportal users/cust_details.
+
+
+## [2026-10-11 23:27:09 +03:00] — مراجعة DB الحية المرتبطة بمسار حذف الطلبات
+- نُفّذ استعلام SELECT للقراءة فقط لتأكيد توقيع `public.delete_orders_with_dependents` المنشور؛ النتيجة `delete_orders_with_dependents(text[])` و`SECURITY DEFINER`. تمت مواءمة استدعاء API مع المعامل الوحيد.
+- قائمة migrations عبر الموصل تنتهي بـ`20261006232928 portal_payment_requests_0017`. لم يُنفذ DDL أو DML أو migration، ولم تتغير البيانات أو RLS.
+- تنبيهات Supabase الحالية تشمل 49 جدولًا في `public` مع RLS معطل، و27 جدولًا لديها سياسات لكن RLS غير مفعّل، و44 دالة `SECURITY DEFINER` متاحة لـ`anon` بينها وظيفة حذف الطلبات؛ كما توجد تحذيرات `search_path` لدوال أخرى. لم تُجر تغييرات أمنية لأن ذلك يتطلب مرحلة مستقلة ومراجعة أثرها على الوصول الحالي.

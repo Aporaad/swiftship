@@ -29,7 +29,9 @@ describe('حذف الطلبات الذري', () => {
     const ordersPage = read('src/features/orders/pages/OrdersPage.tsx');
     const ordersDialogs = read('src/features/orders/pages/subcomponents/OrdersPageDialogs.tsx');
     const modal = read('src/components/orders/DeleteOrderModal.tsx');
-    expect(service).toContain("supabase.rpc('delete_orders_with_dependents'");
+    expect(service).toContain("'/api/v1/orders/batch-delete'");
+    expect(service).toContain('apiClient.post<ApiEnvelope<OrderDeletionSummary>>');
+    expect(service).not.toContain('Fallback deletion summary');
     expect(service).toContain('normalizeOrderIds');
     expect(service).toContain('activityLogsDeleted');
     expect(ordersPage).toContain('handleOpenBatchDelete');

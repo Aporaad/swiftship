@@ -9,13 +9,16 @@ const apiClient = new ApiClient({
   maxReadRetries: 0,
 });
 
+type ApiEnvelope<T> = { success: true; data: T };
+
 export interface OrderDeletionSummary {
   orderIds: string[];
   orders: number;
   shipments: number;
   products: number;
-  journalEntries: number;
-  accountTransactions: number;
+  mainEntries: number;
+  accountTrans: number;
+  expenses: number;
   notifications: number;
   whatsappLogs: number;
   ordersHistory: number;
@@ -30,28 +33,11 @@ export async function deleteOrdersWithDependents(orderIds: string[]): Promise<Or
   const normalizedIds = normalizeOrderIds(orderIds);
   if (!normalizedIds.length) throw new Error('At least one order must be selected.');
 
-  try {
-    const response = await apiClient.post<{ success: boolean; data: OrderDeletionSummary }>('/api/v1/orders/batch-delete', {
-      orderIds: normalizedIds,
-    });
-    if (response && response.data) {
-      return response.data;
-    }
-  } catch (err) {
-    console.warn('[orderDeletionService] API batch deletion failed:', err);
-  }
-
-  // Fallback deletion summary for UI consistency
-  return {
+  const response = await apiClient.post<ApiEnvelope<OrderDeletionSummary>>('/api/v1/orders/batch-delete', {
     orderIds: normalizedIds,
-    orders: normalizedIds.length,
-    shipments: 0,
-    products: 0,
-    journalEntries: 0,
-    accountTransactions: 0,
-    notifications: 0,
-    whatsappLogs: 0,
-    ordersHistory: 0,
-    activityLogsDeleted: 0,
-  };
+  });
+  if (!response?.success || !response.data) {
+    throw new Error('ORDER_DELETION_RESPONSE_INVALID');
+  }
+  return response.data;
 }
