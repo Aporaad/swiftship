@@ -2348,3 +2348,7 @@
 - [x] تحقق API readiness = 200، وصفحة SwiftShip = 200؛ `GET /api/v1/reporting/couriers` و`POST /api/v1/operations/couriers` بلا مصادقة يعيدان 401، دون كتابة سجلات اختبار.
 - [ ] التالي حسب الترتيب: API للحسابات المالية المرتبطة بـCourier ضمن Finance step 9، ثم بقية صفحات المرحلة 8 (Customers/Employees/Users/UserManagement/Settings) والحفاظ على الوظائف الحالية.
 - [ ] لا يُغلق ترحيل API الكامل قبل نقل Finance fallbacks/auto-voucher والعمليات المتبقية واجتياز suite الواجهة كاملة؛ يبقى فشل `defaultAccountsVoucherWiring.test.ts` معروفًا وغير معالج في هذه الدفعة.
+
+
+## [2026-10-12 00:29:00 +03:00] — تثبيت ترتيب الخطة
+**تصحيح ترتيب المتابعة:** وفق الخطة الأصلية، تُستكمل أولًا بقية صفحات المرحلة 8 (Customers ثم Employees ثم Users/UserManagement ثم Settings) مع إتمام واجهة Courier، وبعدها فقط تبدأ Finance في المرحلة 9. أي إشارة سابقة تجعل Finance قبل صفحات المرحلة 8 لا تعتمد؛ لم يبدأ تنفيذ Finance خارج الترتيب.
