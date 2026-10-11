@@ -3043,3 +3043,8 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 - تم دفع `Aporaad/alx_api@3e487e7` و`Aporaad/swiftship@3219307` إلى `main`؛ deployment API وواجهة SwiftShip على Render كلاهما `live`.
 - فحوص الإنتاج: `/api/v1/health/ready` = 200، طلب غير موثق لـ`POST /api/v1/orders/batch-delete` = 401 (لم ينفذ حذف)، وواجهة SwiftShip و`alx-web.onrender.com` = 200.
 - فحص import-only أكد اكتمال إزالة `legacy-compat` من مراحل Orders والـmodals حسب الخطة. بقيت صفحات الميزة المذكورة في todo بالإضافة إلى Finance gateway/actions. جرد Couriers أكد أن التطبيق ما زال يستخدم legacy في تفاصيل ledger والعمليات وبعض عمليات المندوب؛ يلزم إكمال عقود API أولًا وعدم قطع خصائص النموذج الحالية.
+
+
+## [2026-10-11 23:35:01 +03:00] — استكشاف عقد Couriers للخطوة التالية
+- أثبت فحص schema الحي أن حقول التواصل والموقع والملاحظات التي يستخدمها نموذج Courier لا توجد في جدول `couriers`، وأن API provisioning الحالي يستخدم دعوة reset بدل تمرير كلمة مرور. لم تُجر DDL أو كتابة بيانات.
+- لم يتم تغيير صفحة Courier في هذه المرحلة حتى لا تُسقط حقولًا أو تغيّر سلوك إنشاء الحسابات/المستخدمين دون قرار واضح. تُستأنف الخطوة بعد اعتماد migration الحقول وتدفق provisioning المناسب.

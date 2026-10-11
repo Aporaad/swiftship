@@ -45,3 +45,7 @@
 - الفحص الصحيح لاستيرادات `legacy-compat` يؤكد أن المرحلة الأولى والثانية مكتملتان في الملفات المدرجة بالخطة؛ `useOrderData` كان تطابقًا نصيًا زائفًا بسبب تعليق فقط.
 - المرحلة التالية حسب الخطة هي خطوة 8 في المرحلة الثالثة. صفحات Couriers/Customers/Employees/Users/UserManagement/Settings ما زالت تتضمن استيرادات مباشرة. قبل قطع Courier يجب توسيع API بأمان لحقول النموذج والإنشاء المالي/المستخدم، بينما provisioning الحالي لا يقبل كلمات المرور. بعد ذلك تزال Finance fallbacks في الخطوة 9.
 - الاختبارات الكاملة للواجهة ما زالت تعرض فشلًا واحدًا غير محلول في دعم auto-entry-rules؛ لا يعتبر ترحيل API مكتملًا قبل معالجة هذا العقد وتشغيل TypeScript والبناء والاختبارات كاملة.
+
+
+## فحص Couriers الفعلي — 2026-10-11 23:35:01 +03:00
+استعلام schema للقراءة فقط في Supabase أكد أن `public.couriers` يحوي: courier_id/account_id/currency/is_active/full_name/name_ar/name_en/courier_type/courier_level/commission_rate/timestamps/audit IDs فقط. الحقول التي يرسلها نموذج Courier حاليًا (phone/email/address/GPS/notes/custom ID) لا تملك أعمدة مباشرة، وAPI repository لا يحفظها. كذلك API provisioning مصمم عمدًا لإنشاء ملف مستخدم وإرسال دعوة reset دون استقبال كلمة مرور، خلاف النموذج الحالي الذي يطلبها. لا يجوز حذف/تجاهل هذه الوظائف أو إضافة DDL/تغيير تدفق كلمة المرور دون اعتماد اختيار المستخدم؛ هذه هي نقطة التوقف الحالية قبل تنفيذ Courier cutover.

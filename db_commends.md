@@ -2738,3 +2738,12 @@ LIMIT 1;
 SELECT p.oid::regprocedure::text AS signature, pg_get_function_arguments(p.oid) AS arguments, p.prosecdef AS security_definer FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND p.proname = 'delete_orders_with_dependents' ORDER BY p.oid LIMIT 10;
 ```
 **النتيجة:** `delete_orders_with_dependents(text[])`، المعامل `p_order_ids text[]`، و`security_definer = true`. الاستعلام قراءة فقط؛ لا DDL/DML أو تغيير بيانات.
+
+
+## [2026-10-11 23:35:01 +03:00] — AI Model: Manus AI (المعرّف التفصيلي للنموذج غير مكشوف لبيئة التنفيذ)
+**الغرض:** التحقق للقراءة فقط من أعمدة جدول `public.couriers` قبل استكمال صفحة المندوبين وAPI.
+**أمر SQL المنفذ كما هو:**
+```sql
+SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'couriers' ORDER BY ordinal_position LIMIT 100;
+```
+**النتيجة:** `courier_id`, `account_id`, `currency`, `is_active`, `full_name`, `name_ar`, `name_en`, `courier_type`, `courier_level`, `commission_rate`, `created_at`, `updated_at`, `created_by`, `updated_by`. لا توجد أعمدة مباشرة لرقم الهاتف أو البريد أو العنوان أو GPS أو الملاحظات أو `courier_custom_id`. الاستعلام للقراءة فقط؛ لا DDL/DML.
