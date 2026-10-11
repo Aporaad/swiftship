@@ -2310,3 +2310,14 @@
 - [ ] استكمال صفحات Couriers/Customers/Employees وUsers/Settings مع إضافة عقود backend للبيانات والعمليات الناقصة دون فقد الخصائص الحالية.
 - [ ] استكمال نقل Finance/auto-voucher وportal users إلى عقود API؛ ما زال اختبار `defaultAccountsVoucherWiring` يفشل لأن `useAutoVoucherRules` يعيد قائمة فارغة.
 - [ ] مراجعة معالجة تنبيهات Supabase الأمنية في مرحلة قاعدة بيانات مستقلة؛ لم تُغيّر RLS أو الصلاحيات في هذه الدفعة.
+
+
+## [2026-10-11 23:32:55 +03:00] — تحقق مراحل الخطة والنشر
+- [x] جرى فحص **الاستيرادات الفعلية** (وليس الكلمات داخل التعليقات): ملفات المرحلة الأولى الثلاثة وملفات مرحلة Entity Modals وOrders/Products/Shipment لا تستورد `legacy-compat`. تطابق `useOrderData.ts` مع API قائم؛ كان تنبيه الفحص السابق بسبب كلمة `legacy-compatible` في تعليق فقط، ولم يحتج تغييرًا.
+- [x] دفع `alx_api` commit `3e487e7` و`swiftship` commit `3219307` إلى `main`، وتأكد نشرهما على Render بحالة `live`.
+- [x] تحقق API readiness = HTTP 200، وطلب batch-delete بلا مصادقة = HTTP 401، وSwiftShip وalx_web = HTTP 200. المستودع `alx_web` لا يحتاج تغييرًا في هذه الدفعة.
+- [ ] المرحلة الثالثة — خطوة 8: إزالة استيرادات/عمليات legacy من صفحات `CouriersPage`, `CustomersPage`, `EmployeesPage`, `UsersPage`, `UserManagementPage`, `SettingsPage` مع الحفاظ على الخصائص والعمليات الحالية.
+- [ ] قبل قطع Couriers: استكمال عقد API لحقول الاتصال/العنوان/GPS والملاحظات، تكامل إنشاء الحساب المالي، وحل provisioning المستخدم بنمط آمن (واجهة API الحالية لا تقبل كلمة مرور في provisioning). لا تُخفى هذه الفجوات بتعطيل الحقول أو تحديث assertions.
+- [ ] المرحلة الثالثة — الخطوة 9: إزالة fallback من `FinanceApiDataGateway` وتطهير `financeAccountingMainEntryActions.ts` وفق تسلسل الخطة.
+- [ ] إصلاح دعم `auto-entry-rules` في API/Finance؛ الاختبار الكامل ما زال يفشل في `defaultAccountsVoucherWiring.test.ts` بسبب hook يعيد بيانات فارغة.
+- [ ] مراجعة 49 جدولًا بلا RLS و44 دالة `SECURITY DEFINER` متاحة لـ`anon` في مرحلة DB أمنية منفصلة قبل أي تعديل صلاحيات.

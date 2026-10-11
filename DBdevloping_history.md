@@ -1514,3 +1514,8 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 - نُفّذ استعلام SELECT للقراءة فقط لتأكيد توقيع `public.delete_orders_with_dependents` المنشور؛ النتيجة `delete_orders_with_dependents(text[])` و`SECURITY DEFINER`. تمت مواءمة استدعاء API مع المعامل الوحيد.
 - قائمة migrations عبر الموصل تنتهي بـ`20261006232928 portal_payment_requests_0017`. لم يُنفذ DDL أو DML أو migration، ولم تتغير البيانات أو RLS.
 - تنبيهات Supabase الحالية تشمل 49 جدولًا في `public` مع RLS معطل، و27 جدولًا لديها سياسات لكن RLS غير مفعّل، و44 دالة `SECURITY DEFINER` متاحة لـ`anon` بينها وظيفة حذف الطلبات؛ كما توجد تحذيرات `search_path` لدوال أخرى. لم تُجر تغييرات أمنية لأن ذلك يتطلب مرحلة مستقلة ومراجعة أثرها على الوصول الحالي.
+
+
+## [2026-10-11 23:32:55 +03:00] — التحقق بعد نشر API
+- بعد نشر `alx_api@3e487e7` اختُبر readiness فقط، دون استعلامات كتابة أو migration؛ لم يطرأ تغيير على بيانات Supabase أو المخطط أو RLS.
+- لا تزال التنبيهات الأمنية المدونة أعلاه قائمة وتحتاج بندًا أمنيًا منفصلًا؛ endpoint الجديد يرفض غير الموثقين بـ401 ويشترط `delete_orders` للمستخدم الموثق.
