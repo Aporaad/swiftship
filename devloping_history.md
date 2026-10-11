@@ -3087,3 +3087,10 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 - أضيف الأمر `findOrdersByCustomerId` إلى عقد Orders، وأضيفت query parameter باسم `customerId` إلى Operations API مع تمرير آمن ومحدد داخل SQL repository.
 - صُححت صفحة العملاء لاستخدام `limit/offset` الفعليين بدل `page/pageSize`.
 - التحقق: `swiftship npm run check` و`npm run build` ناجحان، و`alx_api npm run check` وESLint للملفات المعدلة ناجحان. اختبار Jest المستقل بدأ ثم انتهى بـ `Segmentation fault` البيئي المعروف ولم يُعتبر ناجحًا.
+
+## [2026-10-12 01:01 +03:00] — Portal Admin API — Manus AI
+- أضيفت `portalAdminApiDataGateway` لاستهلاك المسارات الإدارية الجديدة عبر `ApiClient`.
+- استُبدلت خدمة `portalUserService` القديمة التي كانت تعتمد على `legacy-compat` بخدمة API-only تحافظ على نفس عقد المستهلكين.
+- تم تحويل إنشاء وتحديث وحذف وتعطيل واعتماد مستخدمي البوابة وحفظ `cust_details` إلى API، مع إبقاء business logic خارج UI.
+- `npm run check` و`npm run build` في SwiftShip ناجحان.
+- ما زالت تحذيرات build العامة الخاصة ببقية أجزاء Supabase القديمة موجودة خارج نطاق Portal Admin، وسيتم إغلاقها في المراحل اللاحقة.

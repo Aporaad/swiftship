@@ -2360,3 +2360,9 @@
 - [x] إضافة جلب طلبات العميل عبر `findOrdersByCustomerId` بدل استعلام Orders القديم، وإضافة بحث رقم الطلب عبر Orders API.
 - [x] تحديث عقد استعلام Orders API لدعم `customerId` مع اختبار HTTP مستقل.
 - [ ] التالي حسب الخطة: استكمال عقد Portal customer details ثم تحويل صفحة Employees، وبعدها Users/UserManagement ثم Settings قبل Finance step 9.
+
+## [2026-10-12 01:01 +03:00] — Portal Admin API
+- [x] نقل `portalUserService` إلى API-only وإزالة Supabase المباشر من خدمة مستخدمي البوابة.
+- [x] إضافة بوابة Portal Admin للقائمة والإنشاء والتعديل والاعتماد والتعطيل والحذف وحفظ تفاصيل العميل.
+- [x] ربط `CustomerCreateModal` وتدفق اعتماد مستخدم البوابة بالـ API.
+- [ ] التالي حسب الخطة: تحويل Employees ثم Users/UserManagement ثم Settings قبل Finance step 9.

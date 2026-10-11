@@ -2174,3 +2174,9 @@ Uncaught TypeError: R.createdAt.getTime is not a function at useDashboardData.ts
 > أكمل تنفيذ مهام مرحلة P1 المتبقية، مع نقل تدفقات العملاء والاعتمادات القديمة إلى API، ثم استكمال الخطة بدقة.
 
 **التنفيذ:** تمت مزامنة المستودعات على `main`، ثم إغلاق دفعة Customers API-only وربطها بعقود Orders وFinance الجديدة.
+
+## [2026-10-12 01:01 +03:00] — AI Model: Manus AI
+**نص أمر المستخدم كما ورد:**
+> ابدأ فوراً بتنفيذ مهام المرحلة التالية: استكمال API لتفاصيل مستخدم البوابة المرتبط بالعميل، تحويل صفحة ومكونات Employees المتبقية، تحويل Users وUserManagement، تحويل Settings بالكامل إلى API بما في ذلك الإعدادات العامة والعملات والمظهر، وبعد إنهاء المرحلة السابقة الانتقال مباشرة إلى Finance step 9 وإزالة بقية Finance fallbacks.
+
+**التنفيذ الحالي:** إغلاق جزء Portal Admin API فقط حسب ترتيب الخطة، دون تجاوز إلى Employees أو Users أو Settings أو Finance.

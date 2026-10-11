@@ -104,15 +104,7 @@ export default function WebsiteManagementPage() {
   const handleUserApproval = async (userObj: any, status: 'approved' | 'rejected') => {
     setActionId(userObj.id);
     try {
-      const cleanPayload = {
-        ...userObj,
-        approvalStatus: status,
-        approval_status: status,
-        updatedAt: Date.now(),
-      };
-      delete cleanPayload.id;
-
-      await supabase.from('portal_users').update({ data: cleanPayload }).eq('portal_user_id', userObj.id);
+      await portalUserService.setPortalUserApproval(userObj.id, status);
 
       if (status === 'approved') {
         const entityId = userObj.linkedCustomerId || userObj.id;

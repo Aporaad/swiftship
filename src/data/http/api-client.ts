@@ -163,8 +163,11 @@ export class ApiClient {
   async delete<T>(path: string): Promise<T> {
     return this.requestWithBody<T>('DELETE', path);
   }
+  async requestWithBodyForGateway<T>(method: 'PUT' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<T> {
+    return this.requestWithBody<T>(method, path, body);
+  }
 
-  private async requestWithBody<T>(method: 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<T> {
+  private async requestWithBody<T>(method: 'PUT' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<T> {
     const url = new URL(path, this.options.baseUrl);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.options.timeoutMs ?? 10000);
