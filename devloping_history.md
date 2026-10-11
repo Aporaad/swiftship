@@ -3079,3 +3079,11 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 
 ## [2026-10-12 00:29:00 +03:00] — تثبيت تسلسل التنفيذ
 مراجعة الخطة الأصلية أكدت أن بقية صفحات المرحلة 8 تسبق Finance step 9. صُححت ملاحظة ترتيب المتابعة: التالي Customers ثم Employees ثم Users/UserManagement ثم Settings، ثم Finance؛ لا تُنفذ أعمال Finance قبل إنهاء نطاق المرحلة 8.
+
+
+## [2026-10-12 00:49 +03:00] — Customers API-only — Manus AI
+- حُوّلت `src/features/customers/pages/CustomersPage.tsx` من الوضع الهجين إلى API-only: لا imports من `legacy-compat` ولا fallback صامت عند فشل API.
+- استُخدمت `customersApiDataGateway` للقراءة والتعديل والحذف، و`financeApiDataGateway` للحسابات والحركات ورؤوس القيود، و`ordersApiDataGateway` لكشف طلبات العميل والبحث برقم الطلب.
+- أضيف الأمر `findOrdersByCustomerId` إلى عقد Orders، وأضيفت query parameter باسم `customerId` إلى Operations API مع تمرير آمن ومحدد داخل SQL repository.
+- صُححت صفحة العملاء لاستخدام `limit/offset` الفعليين بدل `page/pageSize`.
+- التحقق: `swiftship npm run check` و`npm run build` ناجحان، و`alx_api npm run check` وESLint للملفات المعدلة ناجحان. اختبار Jest المستقل بدأ ثم انتهى بـ `Segmentation fault` البيئي المعروف ولم يُعتبر ناجحًا.

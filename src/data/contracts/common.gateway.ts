@@ -6,6 +6,7 @@ export interface GatewayQuery {
   page?: number;
   pageSize?: number;
   search?: string;
+  customerId?: string;
 }
 
 export interface GatewayPage<T> {

@@ -2352,3 +2352,11 @@
 
 ## [2026-10-12 00:29:00 +03:00] — تثبيت ترتيب الخطة
 **تصحيح ترتيب المتابعة:** وفق الخطة الأصلية، تُستكمل أولًا بقية صفحات المرحلة 8 (Customers ثم Employees ثم Users/UserManagement ثم Settings) مع إتمام واجهة Courier، وبعدها فقط تبدأ Finance في المرحلة 9. أي إشارة سابقة تجعل Finance قبل صفحات المرحلة 8 لا تعتمد؛ لم يبدأ تنفيذ Finance خارج الترتيب.
+
+
+## [2026-10-12 00:49 +03:00] — استكمال مرحلة 8: Customers API-only
+- [x] إزالة fallback المباشر إلى `legacy-compat` من `CustomersPage` وربط قائمة العملاء والتعديل والحذف ببوابة Customers API فقط.
+- [x] ربط الحسابات والحركات المالية ورؤوس القيود في صفحة Customers ببوابة Finance API.
+- [x] إضافة جلب طلبات العميل عبر `findOrdersByCustomerId` بدل استعلام Orders القديم، وإضافة بحث رقم الطلب عبر Orders API.
+- [x] تحديث عقد استعلام Orders API لدعم `customerId` مع اختبار HTTP مستقل.
+- [ ] التالي حسب الخطة: استكمال عقد Portal customer details ثم تحويل صفحة Employees، وبعدها Users/UserManagement ثم Settings قبل Finance step 9.

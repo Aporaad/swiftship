@@ -167,5 +167,13 @@ export const ordersApiDataGateway: OrdersFeatureApi = {
       const response = await client.get<ApiEnvelope<ApiRow[] | { items?: ApiRow[] }>>('/api/v1/orders', { limit: 100, offset: 0, search: prefix });
       return extractRows(response.data).map((row) => normalize(row, 'orderId')) as unknown as OrderFeatureRecord[];
     },
+    async findOrdersByCustomerId(customerId) {
+      const response = await client.get<ApiEnvelope<ApiRow[] | { items?: ApiRow[] }>>('/api/v1/orders', {
+        limit: 1000,
+        offset: 0,
+        customerId,
+      });
+      return extractRows(response.data).map((row) => normalize(row, 'orderId')) as unknown as OrderFeatureRecord[];
+    },
   },
 };

@@ -72,6 +72,7 @@ export interface OrdersFeatureCommands {
   updateShipmentStatus(id: string, status: string, updatedAt?: number): Promise<void>;
   deleteShipment(id: string): Promise<void>;
   findOrdersByNumberPrefix(prefix: string): Promise<readonly OrderFeatureRecord[]>;
+  findOrdersByCustomerId(customerId: string): Promise<readonly OrderFeatureRecord[]>;
 }
 
 // Feature API boundary: orders; no SQL, Supabase, or Firebase imports.

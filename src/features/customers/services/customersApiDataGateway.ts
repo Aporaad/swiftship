@@ -31,7 +31,7 @@ export const customersApiDataGateway = {
   isWriteEnabled: () => import.meta.env.VITE_CUSTOMERS_API_WRITES === 'true' || import.meta.env.VITE_USE_HTTP_API === 'true',
 
   async getCustomers(): Promise<CustomerApiRow[]> {
-    const response = await client.get<ApiEnvelope<CustomerApiRow[]>>('/api/v1/customers', { page: 1, pageSize: 100 });
+    const response = await client.get<ApiEnvelope<CustomerApiRow[]>>('/api/v1/customers', { limit: 1000, offset: 0 });
     return (Array.isArray(response.data) ? response.data : []).map((row) => ({
       ...row,
       id: String(row.customerId ?? row.id ?? ''),

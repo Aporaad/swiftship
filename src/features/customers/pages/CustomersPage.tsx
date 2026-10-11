@@ -1,8 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
-import { collection, addDoc, doc, updateDoc, onSnapshot, deleteDoc, query, where, orderBy, getDocs } from '../../../data/legacy/legacy-compat.ts';
-import { db } from '../../../data/legacy/legacy-compat.ts';
-import { handlePostgreSQLError, OperationType } from '../../../data/legacy/legacy-compat.ts';
 import {
   Plus,
   Search,
@@ -30,13 +27,13 @@ import { printContent } from '../../../lib/printUtils';
 import { useRole } from '../../../hooks/useRole';
 import { useSettings } from '../../../context/SettingsContext';
 import { notificationService } from '../../../services/notificationService';
-import { activityLogService } from '../../../services/activityLogService';
-import { financialAccountService } from '../../../services/financialAccountService';
 import { useAccountBalances } from '../../../hooks/useAccountBalances';
 import ConfirmModal from '../../../components/ConfirmModal';
 import ConfirmDeletePinModal from '../../../components/ConfirmDeletePinModal';
 import { CustomerCreateModal } from '../../../components/entities/EntityCreateModals';
 import { customersApiDataGateway } from '../services/customersApiDataGateway';
+import { ordersApiDataGateway } from '../../orders/services/ordersApiDataGateway';
+import { financeApiDataGateway } from '../../../components/financeAccounting/FinanceApiDataGateway';
 
 export default function CustomersPage() {
   const { role, hasPermission, loading: roleLoading } = useRole();
@@ -72,33 +69,31 @@ export default function CustomersPage() {
   useEffect(() => {
     if (!selectedCustomer || !showDetailsModal) {
       setCustomerTransactions([]);
+      setCustomerMainEntriesMap(new Map());
       return;
     }
-
-    const qTx = query(
-      collection(db, 'account_trans'),
-      where('account_id', '==', selectedCustomer.account_id)
+    const accountId = String(selectedCustomer.accountId || selectedCustomer.account_id || selectedCustomer.financialAccountId || '');
+    if (!accountId) {
+      setCustomerTransactions([]);
+      setCustomerMainEntriesMap(new Map());
+      return;
+    }
+    const unsubscribeTransactions = financeApiDataGateway.subscribeAccountMovements(
+      accountId,
+      (rows) => setCustomerTransactions(rows),
+      (error) => console.error('[Customers] Finance API movements failed:', error),
     );
-    const unsubTx = onSnapshot(qTx, (snap) => {
-      const txs = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
-      setCustomerTransactions(txs);
-    }, (err) => {
-      console.error("Error fetching transactions for customer:", err);
-    });
-
-    // الاستماع لجدول main_entry لبناء خريطة حالة الترحيل للعميل
-    // Subscribe to main_entry to build posting-status map for customer
-    const unsubMainEntries = onSnapshot(collection(db, 'main_entry'), (snap) => {
-      const map = new Map<string, any>();
-      snap.docs.forEach((d: any) => { map.set(d.id, d.data()); });
-      setCustomerMainEntriesMap(map);
-    }, (err) => {
-      console.warn('[Customers] main_entry subscription warning:', err);
-    });
-
-    return () => { unsubTx(); unsubMainEntries(); };
+    const unsubscribeEntries = financeApiDataGateway.subscribeCollection(
+      'main_entry',
+      (rows) => {
+        const map = new Map<string, any>();
+        rows.forEach((row) => map.set(String(row.entryId || row.mainEntryId || row.id || ''), row));
+        setCustomerMainEntriesMap(map);
+      },
+      (error) => console.error('[Customers] Finance API entries failed:', error),
+    );
+    return () => { unsubscribeTransactions(); unsubscribeEntries(); };
   }, [selectedCustomer, showDetailsModal]);
-
   // Confirmation Modal State
   const [confirmConfig, setConfirmConfig] = useState<{
     isOpen: boolean;
@@ -127,70 +122,40 @@ export default function CustomersPage() {
   const [searchCustomerId, setSearchCustomerId] = useState<string | null>(null);
 
   useEffect(() => {
+    let disposed = false;
     if (!search || search.trim().length < 3) {
       setSearchCustomerId(null);
-      return;
+      return () => { disposed = true; };
     }
-    const q1 = query(
-      collection(db, 'orders'),
-      where('orderNumber', '==', search.trim().toUpperCase())
-    );
-    getDocs(q1).then((snap) => {
-      if (!snap.empty) {
-        setSearchCustomerId(snap.docs[0].data().customerId || null);
-      } else {
+    void ordersApiDataGateway.commands.findOrdersByNumberPrefix(search.trim().toUpperCase()).then((rows) => {
+      if (!disposed) setSearchCustomerId(String(rows[0]?.customerId || '') || null);
+    }).catch((error) => {
+      if (!disposed) {
+        console.error('[Customers] Order search API failed:', error);
         setSearchCustomerId(null);
       }
-    }).catch(err => {
-      console.error(err);
-      setSearchCustomerId(null);
     });
+    return () => { disposed = true; };
   }, [search]);
-
   useEffect(() => {
     if (roleLoading) return;
-    if (customersApiDataGateway.isEnabled()) {
-      const unsubscribeCustomers = customersApiDataGateway.subscribe({
-        onData: (rows) => {
-          setCustomers(rows);
-          setQueryState(rows.length ? asyncState.success(rows) : asyncState.empty());
-        },
-        onError: (error) => {
-          console.error('[Customers] API read failed:', error);
-          setQueryState(asyncState.error<unknown[]>(error, 'CUSTOMERS_API_LOAD_FAILED'));
-        },
-      });
-      const unsubscribeAccounts = onSnapshot(collection(db, 'accounts'), (snap) => {
-        setAccounts(snap.docs.map((d: any) => ({ id: d.id, ...d.data() })));
-      }, (error) => {
-        console.warn('Could not load financial accounts in Customers page', error);
-      });
-      return () => {
-        unsubscribeCustomers();
-        unsubscribeAccounts();
-      };
-    }
-    const unsub = onSnapshot(collection(db, 'customers'), (snap) => {
-      const rows = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
-      setCustomers(rows);
-      setQueryState(rows.length ? asyncState.success(rows) : asyncState.empty());
-    }, (error) => {
-      handlePostgreSQLError(error, OperationType.LIST, 'customers');
+    const unsubscribeCustomers = customersApiDataGateway.subscribe({
+      onData: (rows) => {
+        setCustomers(rows);
+        setQueryState(rows.length ? asyncState.success(rows) : asyncState.empty());
+      },
+      onError: (error) => {
+        console.error('[Customers] API read failed:', error);
+        setQueryState(asyncState.error<unknown[]>(error, 'CUSTOMERS_API_LOAD_FAILED'));
+      },
     });
-
-    // Subscribe to accounts collection to obtain real-time financial balances and currencies
-    const unsubAccounts = onSnapshot(collection(db, 'accounts'), (snap) => {
-      setAccounts(snap.docs.map((d: any) => ({ id: d.id, ...d.data() })));
-    }, (error) => {
-      console.warn("Could not load financial accounts in Customers page", error);
-    });
-
-    return () => {
-      unsub();
-      unsubAccounts();
-    };
+    const unsubscribeAccounts = financeApiDataGateway.subscribeCollection(
+      'accounts',
+      (rows) => setAccounts(rows),
+      (error) => console.error('[Customers] Finance accounts API failed:', error),
+    );
+    return () => { unsubscribeCustomers(); unsubscribeAccounts(); };
   }, [roleLoading]);
-
   const handleOpenAdd = () => {
     setSelectedCustomer(null);
     setFormData({ fullName: '', phone: '', email: '', gps_location: '', address: '', notes: '' });
@@ -217,119 +182,30 @@ export default function CustomersPage() {
     setFinModuleFilter('all');
     setShowDetailsModal(true);
     setOrdersLoading(true);
-
-    const q = query(
-      collection(db, 'orders'),
-      where('customerId', '==', customer.id),
-      orderBy('createdAt', 'desc')
-    );
-
-    const unsub = onSnapshot(q, (snap) => {
-      const rows = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
-      setCustomerOrders(rows);
-      setOrdersState(rows.length ? asyncState.success(rows) : asyncState.empty());
-    }, (err) => {
-      console.error(err);
-      setOrdersState(asyncState.error(err, 'CUSTOMER_ORDERS_LOAD_FAILED'));
-    });
-
-    return unsub;
+    void ordersApiDataGateway.commands.findOrdersByCustomerId(String(customer.id)).then((rows) => {
+      setCustomerOrders(rows as any[]);
+      setOrdersState(rows.length ? asyncState.success(rows as unknown[]) : asyncState.empty());
+    }).catch((error) => {
+      console.error('[Customers] Customer orders API failed:', error);
+      setOrdersState(asyncState.error<unknown[]>(error, 'CUSTOMER_ORDERS_LOAD_FAILED'));
+    }).finally(() => setOrdersLoading(false));
   };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (submitting) return;
+    if (submitting || !selectedCustomer) return;
     const result = await runMutation(async () => {
-      if (customersApiDataGateway.isWriteEnabled()) {
-        if (selectedCustomer) {
-          await customersApiDataGateway.updateCustomer(selectedCustomer.id, {
-            fullName: formData.fullName,
-            phone: formData.phone,
-            email: formData.email,
-            address: formData.address,
-            notes: formData.notes,
-          });
-          activityLogService.log('edit_customer', formData.fullName || selectedCustomer.id, { ...formData });
-          notificationService.notify({
-            title: isAr ? 'تحديث عميل' : 'Customer Updated',
-            message: isAr ? `تم تحديث بيانات العميل ${formData.fullName}` : `Customer ${formData.fullName} has been updated`,
-            type: 'info'
-          });
-        } else {
-          await customersApiDataGateway.createCustomer({
-            fullName: formData.fullName,
-            phone: formData.phone,
-            email: formData.email,
-            address: formData.address,
-            notes: formData.notes,
-          });
-          activityLogService.log('add_customer', formData.fullName, { ...formData });
-          notificationService.notify({
-            title: isAr ? 'إضافة عميل' : 'Customer Added',
-            message: isAr
-              ? `تمت إضافة العميل ${formData.fullName} عبر الـ API بنجاح`
-              : `Customer ${formData.fullName} added via API`,
-            type: 'success'
-          });
-        }
-      } else {
-        if (selectedCustomer) {
-          await updateDoc(doc(db, 'customers', selectedCustomer.id), {
-            fullName: formData.fullName,
-            phone: formData.phone,
-            email: formData.email,
-            gps_location: formData.gps_location,
-            address: formData.address,
-            notes: formData.notes,
-            updatedAt: Date.now()
-          });
-          // Update account name if it changed
-          if (formData.fullName !== selectedCustomer.fullName && selectedCustomer.financialAccountId) {
-            await financialAccountService.updateAccountEntityName(selectedCustomer.id, formData.fullName);
-          }
-          activityLogService.log('edit_customer', formData.fullName || selectedCustomer.id, { ...formData });
-          notificationService.notify({
-            title: isAr ? 'تحديث عميل' : 'Customer Updated',
-            message: isAr ? `تم تحديث بيانات العميل ${formData.fullName}` : `Customer ${formData.fullName} has been updated`,
-            type: 'info'
-          });
-        } else {
-          // Step 1: Create the customer document
-          const { accountCode, code, accountId } =
-            await financialAccountService.getNextAccountIdentifiers('customer');
-          const newId = 'cust_' + accountCode;
-          const newCustomerRef = await addDoc(newId, collection(db, 'customers'), {
-            fullName: formData.fullName,
-            phone: formData.phone,
-            email: formData.email,
-            gps_location: formData.gps_location,
-            address: formData.address,
-            notes: formData.notes,
-            createdAt: Date.now()
-          });
-
-          // Step 2: Auto-create financial account (1130-xxxx)
-          try {
-            await financialAccountService.createAccountForEntity(
-              'customer',
-              newCustomerRef.id,
-              formData.fullName,
-              settings.currency || 'SAR'
-            );
-          } catch (accErr) {
-            console.warn('[Customers] Could not create financial account:', accErr);
-          }
-
-          activityLogService.log('add_customer', formData.fullName, { ...formData });
-          notificationService.notify({
-            title: isAr ? 'إضافة عميل' : 'Customer Added',
-            message: isAr
-              ? `تمت إضافة العميل ${formData.fullName} وإنشاء حسابه المالي تلقائياً`
-              : `Customer ${formData.fullName} added with auto-generated financial account`,
-            type: 'success'
-          });
-        }
-      }
+      await customersApiDataGateway.updateCustomer(selectedCustomer.id, {
+        fullName: formData.fullName,
+        phone: formData.phone,
+        email: formData.email,
+        address: formData.address,
+        notes: formData.notes,
+      });
+      notificationService.notify({
+        title: isAr ? 'تحديث عميل' : 'Customer Updated',
+        message: isAr ? `تم تحديث بيانات العميل ${formData.fullName} عبر API` : `Customer ${formData.fullName} updated via API`,
+        type: 'info',
+      });
       setShowModal(false);
     }, setMutationState);
     if (result.status === 'error') {
@@ -337,7 +213,6 @@ export default function CustomersPage() {
       notificationService.notify({ title: isAr ? 'فشل الحفظ' : 'Save Failed', message: result.error.message, type: 'error' });
     }
   };
-
   const handleDeleteCustomer = async (id: string, name: string) => {
     setDeletePinConfig({
       isOpen: true,
@@ -1127,8 +1002,7 @@ export default function CustomersPage() {
           : `Are you sure you want to permanently delete customer ${deletePinConfig.entityName}? This will purge their financial account, journal transactions, and associated expenses from the database.`}
         isAr={isAr}
         onConfirm={async () => {
-          await financialAccountService.purgeEntityAndFinancialFootprint('customer', deletePinConfig.entityId);
-          await activityLogService.log('delete_customer', deletePinConfig.entityName, { id: deletePinConfig.entityId });
+          await customersApiDataGateway.deleteCustomer(deletePinConfig.entityId);
           notificationService.notify({
             title: isAr ? 'تم الحذف' : 'Customer Deleted',
             message: isAr ? `تم حذف العميل ${deletePinConfig.entityName} بنجاح` : `Customer ${deletePinConfig.entityName} deleted successfully`,
