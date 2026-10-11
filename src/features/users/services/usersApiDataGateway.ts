@@ -18,13 +18,13 @@ const toApiUser = (user: ApiUser): ApiUser => ({
 });
 
 const readUsers = async (): Promise<ApiUser[]> => {
-  const response = await client.get<ApiEnvelope<ApiUser[]>>('/api/v1/users', { limit: 100, offset: 0 });
+    const response = await client.get<ApiEnvelope<ApiUser[]>>('/api/v1/users', { page: 1, pageSize: 100 });
   return Array.isArray(response.data) ? response.data.map(toApiUser) : [];
 };
 
 export const usersApiDataGateway = {
-  isReadEnabled: () => import.meta.env.VITE_USERS_API_READS === 'true',
-  isWriteEnabled: () => import.meta.env.VITE_USERS_API_WRITES === 'true',
+  isReadEnabled: () => import.meta.env.VITE_USERS_API_READS === 'true' || import.meta.env.VITE_USE_HTTP_API === 'true',
+  isWriteEnabled: () => import.meta.env.VITE_USERS_API_WRITES === 'true' || import.meta.env.VITE_USE_HTTP_API === 'true',
 
   /**
    * إنشاء مستخدم جديد عبر alx_api.

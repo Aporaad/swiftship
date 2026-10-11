@@ -3,6 +3,8 @@ import type { ErrorDetails } from '../../shared/contracts/error.contracts';
 export interface GatewayQuery {
   limit?: number;
   offset?: number;
+  page?: number;
+  pageSize?: number;
   search?: string;
 }
 

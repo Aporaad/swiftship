@@ -41,34 +41,44 @@ const client = new ApiClient({
   maxReadRetries: 0,
 });
 
+const normalizeSource = (row: SourceRow): SourceRow => ({
+  ...row,
+  id: String(row.sourceId ?? row.id ?? ''),
+  source_name: row.source_name ?? row.name,
+  source_url: row.source_url ?? row.sourceUrl,
+  financialAccountCode: row.financialAccountCode ?? row.accountCode,
+});
+
+const normalizeShippingCompany = (row: ShippingCompanyRow): ShippingCompanyRow => ({
+  ...row,
+  id: String(row.companyId ?? row.shippingCompanyId ?? row.id ?? ''),
+  contact_person: row.contact_person ?? row.contactPerson,
+  tracking_url: row.tracking_url ?? row.trackingUrlTemplate ?? row.url,
+  financialAccountCode: row.financialAccountCode ?? row.accountCode,
+});
+
 export const sourcesApiDataGateway = {
   isEnabled: () => import.meta.env.VITE_SOURCES_API_READS === 'true' || import.meta.env.VITE_USE_HTTP_API === 'true',
   isWriteEnabled: () => import.meta.env.VITE_SOURCES_API_WRITES === 'true' || import.meta.env.VITE_USE_HTTP_API === 'true',
 
   async getSources(): Promise<SourceRow[]> {
-    const response = await client.get<ApiEnvelope<SourceRow[]>>('/api/v1/reporting/sources', { limit: 100, offset: 0 });
-    return (Array.isArray(response.data) ? response.data : []).map(r => ({
-      ...r,
-      id: String(r.sourceId ?? r.id ?? ''),
-    }));
+    const response = await client.get<ApiEnvelope<SourceRow[]>>('/api/v1/reporting/sources', { page: 1, pageSize: 100 });
+    return (Array.isArray(response.data) ? response.data : []).map(normalizeSource);
   },
 
   async getShippingCompanies(): Promise<ShippingCompanyRow[]> {
-    const response = await client.get<ApiEnvelope<ShippingCompanyRow[]>>('/api/v1/reporting/shipping-companies', { limit: 100, offset: 0 });
-    return (Array.isArray(response.data) ? response.data : []).map(r => ({
-      ...r,
-      id: String(r.companyId ?? r.id ?? ''),
-    }));
+    const response = await client.get<ApiEnvelope<ShippingCompanyRow[]>>('/api/v1/reporting/shipping-companies', { page: 1, pageSize: 100 });
+    return (Array.isArray(response.data) ? response.data : []).map(normalizeShippingCompany);
   },
 
   async createSource(input: SourceWriteInput): Promise<SourceRow> {
     const response = await client.post<ApiEnvelope<SourceRow>>('/api/v1/operations/sources', input);
-    return response.data;
+    return normalizeSource(response.data);
   },
 
   async updateSource(id: string, input: Partial<SourceWriteInput>): Promise<SourceRow> {
     const response = await client.patch<ApiEnvelope<SourceRow>>(`/api/v1/operations/sources/${encodeURIComponent(id)}`, input);
-    return response.data;
+    return normalizeSource(response.data);
   },
 
   async deleteSource(id: string): Promise<void> {
@@ -77,12 +87,12 @@ export const sourcesApiDataGateway = {
 
   async createShippingCompany(input: ShippingCompanyWriteInput): Promise<ShippingCompanyRow> {
     const response = await client.post<ApiEnvelope<ShippingCompanyRow>>('/api/v1/operations/shipping-companies', input);
-    return response.data;
+    return normalizeShippingCompany(response.data);
   },
 
   async updateShippingCompany(id: string, input: Partial<ShippingCompanyWriteInput>): Promise<ShippingCompanyRow> {
     const response = await client.patch<ApiEnvelope<ShippingCompanyRow>>(`/api/v1/operations/shipping-companies/${encodeURIComponent(id)}`, input);
-    return response.data;
+    return normalizeShippingCompany(response.data);
   },
 
   async deleteShippingCompany(id: string): Promise<void> {

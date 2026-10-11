@@ -1,8 +1,5 @@
-type AdapterDocument = { id: string; data: () => Record<string, unknown> };
 import React, { useState, useEffect } from 'react';
 import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
-import { collection, onSnapshot, doc, updateDoc, deleteDoc, addDoc } from '../../../data/legacy/legacy-compat.ts';
-import { db, handlePostgreSQLError, OperationType } from '../../../data/legacy/legacy-compat.ts';
 import { Search, Edit2, X, Plus, Trash2, MapPin, ShieldAlert, RefreshCw, Crown, Globe, Truck, Phone, Landmark } from 'lucide-react';
 import { useRole } from '../../../hooks/useRole';
 import { useSettings } from '../../../context/SettingsContext';
@@ -81,7 +78,6 @@ export default function SourcesPage() {
   });
 
   const financialCurrency = settings.currency || settings.defaultOrderCurrency || 'YER';
-
   const ensureFinancialAccount = async (
     entityType: 'source' | 'shipping_company',
     entityId: string,
@@ -100,36 +96,18 @@ export default function SourcesPage() {
 
   useEffect(() => {
     if (roleLoading) return;
-    if (sourcesApiDataGateway.isEnabled()) {
-      const unsub = sourcesApiDataGateway.subscribe({
-        onData: ({ sources: apiSources, shippingCompanies: apiShipping }) => {
-          setSources(apiSources);
-          setShippingCompanies(apiShipping);
-          setQueryState(apiSources.length ? asyncState.success(apiSources) : asyncState.empty());
-        },
-        onError: (error) => {
-          console.error('[Sources] API read failed:', error);
-          setQueryState(asyncState.error<unknown[]>(error, 'SOURCES_API_LOAD_FAILED'));
-        },
-      });
-      return unsub;
-    }
-    const unsub = onSnapshot(collection(db, 'sources'), (snap) => {
-      const rows = snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() }));
-      setSources(rows);
-      setQueryState(rows.length ? asyncState.success(rows) : asyncState.empty());
-    }, (error) => {
-      handlePostgreSQLError(error, OperationType.LIST, 'sources');
+    const unsub = sourcesApiDataGateway.subscribe({
+      onData: ({ sources: apiSources, shippingCompanies: apiShipping }) => {
+        setSources(apiSources);
+        setShippingCompanies(apiShipping);
+        setQueryState(apiSources.length ? asyncState.success(apiSources) : asyncState.empty());
+      },
+      onError: (error) => {
+        console.error('[Sources] API read failed:', error);
+        setQueryState(asyncState.error<unknown[]>(error, 'SOURCES_API_LOAD_FAILED'));
+      },
     });
-    const unsubSec = onSnapshot(collection(db, 'shipping_companies'), (snap) => {
-      setShippingCompanies(snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() })));
-    }, (error) => {
-      console.error("Error fetching shipping companies:", error);
-    });
-    return () => {
-      unsub();
-      unsubSec();
-    };
+    return unsub;
   }, [roleLoading]);
 
   // Shipping Company Actions
@@ -163,43 +141,27 @@ export default function SourcesPage() {
     e.preventDefault();
     if (shippingSubmitting) return;
     const result = await runMutation(async () => {
-      if (sourcesApiDataGateway.isWriteEnabled()) {
-        if (selectedCompany) {
-          await sourcesApiDataGateway.updateShippingCompany(selectedCompany.id, {
-            name: shippingFormData.name,
-            contactPerson: shippingFormData.contact_person,
-            phone: shippingFormData.phone,
-            trackingUrlTemplate: shippingFormData.tracking_url,
-            address: shippingFormData.address,
-          });
-          activityLogService.log('edit_shipping_company', shippingFormData.name, { ...shippingFormData });
-          notificationService.notify({ title: isAr ? 'تعديل شركة الشحن' : 'Shipping Company Updated', message: isAr ? `تم تحديث بيانات الشركة ${shippingFormData.name}` : `Shipping carrier ${shippingFormData.name} configuration updated`, type: 'info' });
-        } else {
-          await sourcesApiDataGateway.createShippingCompany({
-            name: shippingFormData.name,
-            contactPerson: shippingFormData.contact_person,
-            phone: shippingFormData.phone,
-            trackingUrlTemplate: shippingFormData.tracking_url,
-            address: shippingFormData.address,
-          });
-          activityLogService.log('add_shipping_company', shippingFormData.name, { ...shippingFormData });
-          notificationService.notify({ title: isAr ? 'إضافة شركة شحن جديدة' : 'Shipping Company Added', message: isAr ? `تمت إضافة شركة الشحن ${shippingFormData.name} بنجاح` : `New shipping carrier ${shippingFormData.name} registered`, type: 'success' });
-        }
+      if (selectedCompany) {
+        await sourcesApiDataGateway.updateShippingCompany(selectedCompany.id, {
+          name: shippingFormData.name,
+          contactPerson: shippingFormData.contact_person,
+          phone: shippingFormData.phone,
+          trackingUrlTemplate: shippingFormData.tracking_url,
+          address: shippingFormData.address,
+        });
+        await ensureFinancialAccount('shipping_company', selectedCompany.id, shippingFormData.name);
       } else {
-        const payload = { ...shippingFormData, updatedAt: Date.now() };
-        if (selectedCompany) {
-          await updateDoc(doc(db, 'shipping_companies', selectedCompany.id), payload);
-          await ensureFinancialAccount('shipping_company', selectedCompany.id, shippingFormData.name);
-          activityLogService.log('edit_shipping_company', shippingFormData.name, { ...shippingFormData });
-          notificationService.notify({ title: isAr ? 'تعديل شركة الشحن' : 'Shipping Company Updated', message: isAr ? `تم تحديث بيانات الشركة ${shippingFormData.name}` : `Shipping carrier ${shippingFormData.name} configuration updated`, type: 'info' });
-        } else {
-          const scId = 'SC-' + Math.random().toString(36).substring(2, 11);
-          const account = await ensureFinancialAccount('shipping_company', scId, shippingFormData.name, false);
-          await addDoc(scId, collection(db, 'shipping_companies'), { ...payload, accountId: account.id, createdAt: Date.now() });
-          activityLogService.log('add_shipping_company', shippingFormData.name, { ...shippingFormData });
-          notificationService.notify({ title: isAr ? 'إضافة شركة شحن جديدة' : 'Shipping Company Added', message: isAr ? `تمت إضافة شركة الشحن ${shippingFormData.name} بنجاح` : `New shipping carrier ${shippingFormData.name} registered`, type: 'success' });
-        }
+        const created = await sourcesApiDataGateway.createShippingCompany({
+          name: shippingFormData.name,
+          contactPerson: shippingFormData.contact_person,
+          phone: shippingFormData.phone,
+          trackingUrlTemplate: shippingFormData.tracking_url,
+          address: shippingFormData.address,
+        });
+        await ensureFinancialAccount('shipping_company', created.id, shippingFormData.name, false);
       }
+      activityLogService.log(selectedCompany ? 'edit_shipping_company' : 'add_shipping_company', shippingFormData.name, { ...shippingFormData });
+      notificationService.notify({ title: isAr ? 'تم الحفظ' : 'Saved', message: isAr ? `تم حفظ بيانات ${shippingFormData.name}` : `${shippingFormData.name} saved`, type: 'success' });
     }, setShippingMutationState);
     if (result.status === 'success-after-mutation') {
       setIsShippingModalOpen(false);
@@ -218,11 +180,7 @@ export default function SourcesPage() {
       type: 'danger',
       onConfirm: async () => {
         const result = await runMutation(async () => {
-          if (sourcesApiDataGateway.isWriteEnabled()) {
-            await sourcesApiDataGateway.deleteShippingCompany(id);
-          } else {
-            await deleteDoc(doc(db, 'shipping_companies', id));
-          }
+          await sourcesApiDataGateway.deleteShippingCompany(id);
           activityLogService.log('delete_shipping_company', name, { id });
         }, setShippingMutationState);
         if (result.status === 'success-after-mutation') {
@@ -264,45 +222,25 @@ export default function SourcesPage() {
     e.preventDefault();
     if (sourceSubmitting) return;
     const result = await runMutation(async () => {
-      if (sourcesApiDataGateway.isWriteEnabled()) {
-        if (selectedSource) {
-          await sourcesApiDataGateway.updateSource(selectedSource.id, {
-            name: formData.source_name,
-            type: formData.type,
-            sourceUrl: formData.source_url,
-          });
-          activityLogService.log('edit_source', formData.source_name, { ...formData });
-          notificationService.notify({ title: isAr ? 'تعديل مصدر الشراء' : 'Source Updated', message: isAr ? `تم تحديث المصدر الكلي ${formData.source_name}` : `Order supply source ${formData.source_name} has been updated`, type: 'info' });
-        } else {
-          await sourcesApiDataGateway.createSource({
-            name: formData.source_name,
-            type: formData.type,
-            sourceUrl: formData.source_url,
-          });
-          activityLogService.log('add_source', formData.source_name, { ...formData });
-          notificationService.notify({ title: isAr ? 'إضافة مصدر شراء جديد' : 'Source Added', message: isAr ? `تمت إضافة المصدر بنجاح: ${formData.source_name}` : `New order supply source ${formData.source_name} recorded`, type: 'success' });
-        }
+      if (selectedSource) {
+        await sourcesApiDataGateway.updateSource(selectedSource.id, {
+          name: formData.source_name,
+          type: formData.type,
+          sourceUrl: formData.source_url,
+        });
+        await ensureFinancialAccount('source', selectedSource.id, formData.source_name);
       } else {
-        const payload = { ...formData, name: formData.source_name, source_name: formData.source_name };
-        if (selectedSource) {
-          await updateDoc(doc(db, 'sources', selectedSource.id), payload);
-          await ensureFinancialAccount('source', selectedSource.id, formData.source_name);
-          activityLogService.log('edit_source', formData.source_name, { ...formData });
-          notificationService.notify({ title: isAr ? 'تعديل مصدر الشراء' : 'Source Updated', message: isAr ? `تم تحديث المصدر الكلي ${formData.source_name}` : `Order supply source ${formData.source_name} has been updated`, type: 'info' });
-        } else {
-          const srcId = 'SRC-' + Math.random().toString(36).substring(2, 11);
-          const account = await ensureFinancialAccount('source', srcId, formData.source_name, false);
-          await addDoc(srcId, collection(db, 'sources'), { ...payload, accountId: account.id, createdAt: Date.now() });
-          activityLogService.log('add_source', formData.source_name, { ...formData });
-          notificationService.notify({ title: isAr ? 'إضافة مصدر شراء جديد' : 'Source Added', message: isAr ? `تمت إضافة المصدر بنجاح برابط: ${formData.source_name}` : `New order supply source ${formData.source_name} recorded`, type: 'success' });
-        }
+        const created = await sourcesApiDataGateway.createSource({ name: formData.source_name, type: formData.type, sourceUrl: formData.source_url });
+        await ensureFinancialAccount('source', created.id, formData.source_name, false);
       }
+      activityLogService.log(selectedSource ? 'edit_source' : 'add_source', formData.source_name, { ...formData });
+      notificationService.notify({ title: isAr ? 'تم الحفظ' : 'Saved', message: isAr ? `تم حفظ ${formData.source_name}` : `${formData.source_name} saved`, type: 'success' });
     }, setSourceMutationState);
     if (result.status === 'success-after-mutation') {
       setIsModalOpen(false);
       setSelectedSource(null);
     } else if (result.status === 'error') {
-      handlePostgreSQLError(result.error, selectedSource ? OperationType.UPDATE : OperationType.CREATE, 'sources');
+      notificationService.notify({ title: isAr ? 'فشل الحفظ' : 'Save failed', message: result.error.message, type: 'error' });
     }
   };
 
@@ -314,7 +252,7 @@ export default function SourcesPage() {
       type: 'danger',
       onConfirm: async () => {
         const result = await runMutation(async () => {
-          await deleteDoc(doc(db, 'sources', id));
+          await sourcesApiDataGateway.deleteSource(id);
           activityLogService.log('delete_source', name, { id });
         }, setSourceMutationState);
         if (result.status === 'success-after-mutation') {

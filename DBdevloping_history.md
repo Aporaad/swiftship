@@ -1504,3 +1504,7 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 - لم يتم تنفيذ أي SQL أو DDL أو DML أو migration في هذه المهمة.
 - التغييرات اقتصرت على طبقة الواجهة واختبارات الحدود، مع استخدام عقود API الحالية وقاعدة البيانات القائمة.
 - لا توجد تغييرات schema أو بيانات تتطلب تطبيقًا أو rollback.
+
+## [2026-10-11 05:26 +03:00] — Manus AI — جرد قاعدة البيانات وAPI
+- لم يتم تنفيذ أي SQL أو DDL أو DML أو migration.
+- الجرد أكد وجود عقود ومسارات backend في alx_api للإعدادات والعملات والكيانات والمستخدمين، مع فجوات في backup وبيانات التفاصيل والعمليات الذرية المالية وportal users/cust_details.

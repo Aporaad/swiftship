@@ -48,8 +48,8 @@ const client = new ApiClient({
 
 const readRows = async (path: string): Promise<Row[]> => {
   const response = await client.get<ApiEnvelope<Row[]>>(path, {
-    limit: 100,
-    offset: 0,
+    page: 1,
+    pageSize: 100,
   });
   return Array.isArray(response.data) ? response.data : [];
 };

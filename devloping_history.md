@@ -3018,3 +3018,12 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 - أضيف اختبار حدود في `src/config/legacy-boundary.test.ts` يثبت خلو صفحة الأدوار من legacy ويمنع fallback المالي.
 - التحقق: `npm run check` ناجح، `npm run build` ناجح، اختبارات الحدود واختبار Orders: 6 اختبارات ناجحة، و`git diff --check` ناجح.
 - ما زالت تحذيرات البناء تشير إلى ملفات legacy أخرى خارج نطاق هذا الجزء ولم يتم اعتبار API-only مكتملة.
+
+## [2026-10-11 05:26 +03:00] — Manus AI — جرد وتنفيذ API Migration
+- تم تنفيذ جرد متوازٍ للنطاقات المتبقية وتوثيق النتائج في `docs/api-migration-audit-2026-10-11.md`.
+- تم تعديل `vitest.config.ts` لاستخدام `pool=forks` و`singleFork=true` لتقليل مخاطر انهيار العامل أثناء الاختبارات.
+- تم توسيع `GatewayQuery` لدعم `page` و`pageSize`، وتصحيح بوابات customers/couriers/staff/sources/users لتطابق pagination في alx_api.
+- تم توحيد تفعيل users API مع `VITE_USE_HTTP_API`.
+- تم تحويل `SourcesPage.tsx` إلى `sourcesApiDataGateway` في القراءة والإنشاء والتعديل والحذف، مع إزالة imports المباشرة من `legacy-compat` والحفاظ على `financialAccountService` لربط الحسابات.
+- أضيفت محولات DTO للمصادر وشركات الشحن لتحويل حقول API إلى حقول الواجهة.
+- الاختبارات المتبقية التي تفشل تخص wiring قديمًا يتوقع نصوص legacy بعد نقل المكونات إلى API، وسيتم تحديثها إلى عقود API في المرحلة التالية.

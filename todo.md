@@ -2288,3 +2288,13 @@
 - [ ] استكمال تحويل صفحات Couriers/Customers/Employees/Sources/Users/Settings إلى API-only.
 - [ ] نقل الخدمات المالية وPortal وقاعدة بيانات تفاصيل العملاء إلى عقود API مكتملة.
 - [ ] تشغيل اختبارات E2E ومعالجة انهيار Jest قبل إعلان API-only بنسبة 100%.
+
+## [2026-10-11 05:26 +03:00] — Manus AI — جرد وتنفيذ المرحلة التالية
+- [x] حفظ خلاصة جرد نطاقات API في `docs/api-migration-audit-2026-10-11.md`.
+- [x] تثبيت Vitest على single fork لمعالجة احتمالات Segmentation fault.
+- [x] تصحيح pagination في بوابات الكيانات إلى `page/pageSize`.
+- [x] تحويل `SourcesPage` إلى API-only للقراءة وCRUD مع إبقاء ربط الحساب المالي.
+- [ ] تحويل Couriers/Customers/Employees تدريجيًا بعد تغطية عقود التفاصيل المالية والملفات الشخصية.
+- [ ] تحويل Users/UserManagement مع عقود sessions/activity/roles والعمليات الحساسة.
+- [ ] تحويل Settings وbackup بعد تثبيت Backup API.
+- [ ] نقل finance actions وportalUserService/cust_details إلى بوابات API ذرية.

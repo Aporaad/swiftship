@@ -32,7 +32,7 @@ export const couriersApiDataGateway = {
   isWriteEnabled: () => import.meta.env.VITE_COURIERS_API_WRITES === 'true' || import.meta.env.VITE_USE_HTTP_API === 'true',
 
   async getCouriers(): Promise<CourierRow[]> {
-    const response = await client.get<ApiEnvelope<CourierRow[]>>('/api/v1/reporting/couriers', { limit: 100, offset: 0 });
+    const response = await client.get<ApiEnvelope<CourierRow[]>>('/api/v1/reporting/couriers', { page: 1, pageSize: 100 });
     return (Array.isArray(response.data) ? response.data : []).map(r => ({
       ...r,
       id: String(r.courierId ?? r.id ?? ''),
