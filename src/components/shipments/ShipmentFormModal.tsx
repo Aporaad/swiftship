@@ -1,6 +1,6 @@
 import React from 'react';
 import { Truck, X, Plus } from 'lucide-react';
-import { doc, setDoc, deleteDoc, updateDoc, db } from '../../data/legacy/legacy-compat.ts';
+import { ordersApiDataGateway } from '../../features/orders/services/ordersApiDataGateway';
 import { notificationService } from '../../services/notificationService';
 import { activityLogService } from '../../services/activityLogService';
 import ConfirmModal from '../ConfirmModal';
@@ -162,7 +162,7 @@ export default function ShipmentFormModal({
         updatedAt: Date.now()
       };
 
-      await setDoc(doc(db, 'shipments', shipId), payload);
+      await ordersApiDataGateway.commands.upsertShipment(shipId, payload as any);
 
       notificationService.notify({
         title: isAr ? 'تم الحفظ' : 'Saved',
@@ -189,7 +189,7 @@ export default function ShipmentFormModal({
     if (!shipmentToDelete) return;
     if (setIsSubmitting) setIsSubmitting(true);
     try {
-      await deleteDoc(doc(db, 'shipments', shipmentToDelete.id));
+      await ordersApiDataGateway.collections.shipments.delete(shipmentToDelete.id);
       notificationService.notify({
         title: isAr ? 'تم الحفظ' : 'Deleted',
         message: isAr ? 'تم حذف سجل الشحنة بنجاح' : 'Shipment record deleted',

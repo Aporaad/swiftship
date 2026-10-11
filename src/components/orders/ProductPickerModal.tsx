@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Boxes, ExternalLink, Search, X, CheckCircle2 } from 'lucide-react';
-import { collection, db, onSnapshot } from '../../data/legacy/legacy-compat.ts';
-import { asyncState, runQuery, type AsyncState } from '../../shared/contracts/ui.contracts';
-import { Product } from '../../services/productService';
+import { fetchProducts, Product } from '../../services/productService';
+import { asyncState, type AsyncState } from '../../shared/contracts/ui.contracts';
 
 /**
  * واجهة نموذج منتج مسجل في كتالوج النظام الرئيسي (products)
@@ -46,15 +45,6 @@ export interface SystemProductRecord extends Partial<Product> {
   insuranceFee?: number;
   createdAt?: number | string;
   updatedAt?: number | string;
-}
-
-interface ProductDocumentSnapshot {
-  id: string;
-  data: () => unknown;
-}
-
-interface ProductCollectionSnapshot {
-  docs: ProductDocumentSnapshot[];
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -104,62 +94,55 @@ export default function ProductPickerModal({
   const loading = productsQuery.status === 'loading';
   const [searchQuery, setSearchQuery] = useState('');
 
-  // جلب كافة المنتجات المسجلة في جدول المنتجات الرئيسي بصورة حية
-  // Real-time listener for products master collection in Supabase
+  // جلب كافة المنتجات المسجلة في جدول المنتجات الرئيسي عبر الخدمة
   useEffect(() => {
     if (!isOpen) return;
 
-    const unsubscribe = onSnapshot(
-      collection(db, 'products'),
-      (snapshot: ProductCollectionSnapshot) => {
-        const fetchedProducts: SystemProductRecord[] = snapshot.docs.map((entry) => {
-          const data = asRecord(entry.data());
-          const pId = readText(data, 'product_id') || entry.id;
-          const price = Number(data.unit_price ?? data.unitPrice ?? data.productPrice ?? data.product_price ?? 0);
-          const nameAr = readText(data, 'product_name_ar', 'productName', 'name') || 'منتج';
-          const nameEn = readText(data, 'product_name_en');
+    let active = true;
+    const load = async () => {
+      try {
+        const fetched = await fetchProducts();
+        if (!active) return;
 
+        const normalized: SystemProductRecord[] = fetched.map((p) => {
+          const price = Number(p.unit_price || 0);
+          const nameAr = p.product_name_ar || 'منتج';
           return {
-            ...data,
-            id: pId,
-            product_id: pId,
+            ...p,
+            id: p.product_id,
+            product_id: p.product_id,
             product_name_ar: nameAr,
-            product_name_en: nameEn,
+            product_name_en: p.product_name_en,
             productName: nameAr,
             name: nameAr,
             unit_price: price,
             unitPrice: price,
             productPrice: price,
-            product_url: readText(data, 'product_url', 'productUrl'),
-            productUrl: readText(data, 'product_url', 'productUrl'),
-            item_category_id: readText(data, 'item_category_id', 'itemCategoryId'),
-            itemCategoryId: readText(data, 'item_category_id', 'itemCategoryId'),
-            is_allowed: data.is_allowed !== false && data.isAllowed !== false,
-            isAllowed: data.is_allowed !== false && data.isAllowed !== false,
-            cbm: Number(data.cbm || 0),
-            width: Number(data.width || 0),
-            height: Number(data.height || 0),
-            length: Number(data.length || 0),
-            weight: Number(data.weight || 0),
-            sku: readText(data, 'sku'),
-            description: readText(data, 'description', 'notes'),
-            createdAt: readTimestamp(data, 'created_at', 'createdAt'),
-            updatedAt: readTimestamp(data, 'updated_at', 'updatedAt'),
+            product_url: p.product_url || '',
+            productUrl: p.product_url || '',
+            item_category_id: p.item_category_id,
+            itemCategoryId: p.item_category_id,
+            is_allowed: p.is_allowed !== false,
+            isAllowed: p.is_allowed !== false,
+            cbm: Number(p.cbm || 0),
+            width: Number(p.width || 0),
+            height: Number(p.height || 0),
+            length: Number(p.length || 0),
+            weight: Number(p.weight || 0),
           };
         });
 
-        void runQuery(async () => fetchedProducts, (state) => {
-          setProductsQuery(state);
-          setProducts(state.status === 'success' ? state.data : []);
-        });
-      },
-      (error: unknown) => {
+        setProductsQuery(asyncState.success(normalized));
+        setProducts(normalized);
+      } catch (error) {
+        if (!active) return;
         console.warn('[ProductPickerModal] Error fetching master products catalog:', error);
         setProductsQuery(asyncState.error<SystemProductRecord[]>(error, 'PRODUCT_QUERY_FAILED'));
       }
-    );
+    };
 
-    return () => unsubscribe?.();
+    void load();
+    return () => { active = false; };
   }, [isOpen]);
 
   // تصفية المنتجات بحسب السماحية (is_allowed = true) والبحث النصي في الاسم والرمز والفئة والوصف

@@ -2,8 +2,18 @@ import React, { useRef, useEffect } from 'react';
 import { X, Truck, Printer } from 'lucide-react';
 import QRCode from 'qrcode';
 import CopyToClipboard from '../CopyToClipboard';
-import { safeToDate } from '../../data/legacy/legacy-compat.ts';
 import { generateOrderInvoicePDF } from '../../reports/OrderInvoicePrint';
+
+function safeToDate(val: unknown): Date | null {
+  if (!val) return null;
+  if (val instanceof Date) return val;
+  if (typeof val === 'number') return new Date(val);
+  if (typeof val === 'string') {
+    const d = new Date(val);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+}
 import type { Settings } from '../../context/SettingsContext';
 import type { OrderRecord } from '../../features/orders/types';
 import type { OrderStatusItem } from '../../hooks/useOrderStatuses';

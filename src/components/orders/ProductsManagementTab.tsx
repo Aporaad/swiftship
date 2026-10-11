@@ -12,8 +12,17 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ConfirmModal from '../ConfirmModal';
-import { addDoc, collection, db, deleteDoc, doc, onSnapshot, updateDoc } from '../../data/legacy/legacy-compat.ts';
 import { useAuthSession } from '../../features/auth/AuthSessionProvider';
+import { ordersApiDataGateway } from '../../features/orders/services/ordersApiDataGateway';
+import {
+  fetchProducts,
+  fetchOrderItems,
+  createProduct as serviceCreateProduct,
+  updateProduct as serviceUpdateProduct,
+  deleteProduct as serviceDeleteProduct,
+  updateOrderItem,
+  deleteOrderItem as serviceDeleteOrderItem,
+} from '../../services/productService';
 import { useItemCategories } from '../../hooks/useItemCategories';
 import { useExchangeRates } from '../../hooks/useExchangeRates';
 import { useRole } from '../../hooks/useRole';
@@ -286,19 +295,25 @@ export default function ProductsManagementTab({
 
   useEffect(() => {
     if (!propOrders || propOrders.length === 0) {
-      const unsub = onSnapshot(collection(db, 'orders'), (snap: CollectionSnapshot) => {
-        setLocalOrders(snap.docs.map(toReturnedOrder));
-      });
-      return () => unsub?.();
+      const unsub = ordersApiDataGateway.collections.orders.subscribe(
+        (snap) => {
+          setLocalOrders(snap.records.map((r) => toReturnedOrder({ id: r.id, data: () => r })));
+        },
+        () => {}
+      );
+      return () => unsub();
     }
   }, [propOrders]);
 
   useEffect(() => {
     if (!propCustomers || propCustomers.length === 0) {
-      const unsub = onSnapshot(collection(db, 'customers'), (snap: CollectionSnapshot) => {
-        setLocalCustomers(snap.docs.map(toReturnedCustomer));
-      });
-      return () => unsub?.();
+      const unsub = ordersApiDataGateway.collections.customers.subscribe(
+        (snap) => {
+          setLocalCustomers(snap.records.map((r) => toReturnedCustomer({ id: r.id, data: () => r })));
+        },
+        () => {}
+      );
+      return () => unsub();
     }
   }, [propCustomers]);
 
@@ -337,40 +352,50 @@ export default function ProductsManagementTab({
   const [editingItem, setEditingItem] = useState<OrderItem | null>(null);
   const [itemStatusEdit, setItemStatusEdit] = useState('');
 
-  // ──────────── جلب المنتجات الرئيسية ────────────
-  // Fetch master products from 'products' table
+  // ──────────── جلب المنتجات الرئيسية عبر الخدمة ────────────
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'products'), (snap: CollectionSnapshot) => {
-      const nextProducts = snap.docs.map(toMasterProduct);
-      void runQuery(async () => nextProducts, (state) => {
-        setProductsQuery(state);
-        if (state.status === 'success') setProducts(state.data);
-      });
-    }, (error) => setProductsQuery(asyncState.error<MasterProduct[]>(error, 'PRODUCTS_LOAD_FAILED')));
-    return () => unsub?.();
+    let active = true;
+    const load = async () => {
+      try {
+        const data = await fetchProducts();
+        if (!active) return;
+        setProducts(data);
+        setProductsQuery(asyncState.success(data));
+      } catch (error) {
+        if (!active) return;
+        setProductsQuery(asyncState.error<MasterProduct[]>(error, 'PRODUCTS_LOAD_FAILED'));
+      }
+    };
+    void load();
+    const timer = setInterval(() => void load(), 30_000);
+    return () => { active = false; clearInterval(timer); };
   }, []);
 
-  // ──────────── جلب بنود الطلبات ────────────
-  // Fetch order items from 'order_items' table
+  // ──────────── جلب بنود الطلبات عبر الخدمة ────────────
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'order_items'), (snap: CollectionSnapshot) => {
-      const items = snap.docs.map(toOrderItem);
-      void runQuery(async () => items, (state) => {
-        setItemsQuery(state);
-        if (state.status === 'success') setOrderItems(state.data);
-      });
+    let active = true;
+    const load = async () => {
+      try {
+        const items = await fetchOrderItems();
+        if (!active) return;
+        setOrderItems(items);
+        setItemsQuery(asyncState.success(items));
 
-      // احتساب عدد الطلبات لكل منتج رئيسي
-      // Count order_items per master product
-      const counts: Record<string, number> = {};
-      items.forEach((it) => {
-        if (it.product_id) {
-          counts[it.product_id] = (counts[it.product_id] || 0) + 1;
-        }
-      });
-      setOrderItemCounts(counts);
-    }, (error) => setItemsQuery(asyncState.error<OrderItem[]>(error, 'ORDER_ITEMS_LOAD_FAILED')));
-    return () => unsub?.();
+        const counts: Record<string, number> = {};
+        items.forEach((it) => {
+          if (it.product_id) {
+            counts[it.product_id] = (counts[it.product_id] || 0) + 1;
+          }
+        });
+        setOrderItemCounts(counts);
+      } catch (error) {
+        if (!active) return;
+        setItemsQuery(asyncState.error<OrderItem[]>(error, 'ORDER_ITEMS_LOAD_FAILED'));
+      }
+    };
+    void load();
+    const timer = setInterval(() => void load(), 30_000);
+    return () => { active = false; clearInterval(timer); };
   }, []);
 
   // ──────────── فلترة المنتجات الرئيسية ────────────
@@ -453,12 +478,9 @@ export default function ProductsManagementTab({
       };
 
       if (editingProduct) {
-        await updateDoc(doc(db, 'products', editingProduct.product_id), payload);
+        await serviceUpdateProduct(editingProduct.product_id, payload as any);
       } else {
-        const newId = 'prod_' + Math.random().toString(36).substring(2, 11);
-        await addDoc(newId, collection(db, 'products'), {
-          product_id: newId, ...payload, created_at: new Date().toISOString(),
-        });
+        await serviceCreateProduct(payload as any);
       }
       return true;
     }, setProductMutation);
@@ -472,7 +494,7 @@ export default function ProductsManagementTab({
 
   const deleteProduct = async (p: MasterProduct) => {
     try {
-      await deleteDoc(doc(db, 'products', p.product_id));
+      await serviceDeleteProduct(p.product_id);
       toast.success(isAr ? 'تم حذف المنتج' : 'Product deleted');
       setDeletingProduct(null);
     } catch (err) {
@@ -505,9 +527,8 @@ export default function ProductsManagementTab({
       );
 
       // 4. تحديث حالة بند الطلب في جدول order_items إلى 'مرتجع'
-      await updateDoc(doc(db, 'order_items', item.items_id), {
-        items_status: 'مرتجع',
-        updated_at: new Date().toISOString(),
+      await updateOrderItem(item.items_id, {
+        items_status: 'مرتجع' as any,
       });
 
       toast.success(
@@ -525,9 +546,8 @@ export default function ProductsManagementTab({
   // ──────────── تحديث حالة بند الطلب ────────────
   const updateItemStatus = async (item: OrderItem, newStatus: string) => {
     try {
-      await updateDoc(doc(db, 'order_items', item.items_id), {
-        items_status: newStatus,
-        updated_at: new Date().toISOString(),
+      await updateOrderItem(item.items_id, {
+        items_status: newStatus as any,
       });
       toast.success(isAr ? 'تم تحديث الحالة' : 'Status updated');
       setEditingItem(null);
@@ -539,7 +559,7 @@ export default function ProductsManagementTab({
   // ──────────── حذف بند طلب ────────────
   const deleteItem = async (item: OrderItem) => {
     try {
-      await deleteDoc(doc(db, 'order_items', item.items_id));
+      await serviceDeleteOrderItem(item.items_id);
       toast.success(isAr ? 'تم حذف بند الطلب' : 'Order item deleted');
       setDeletingItem(null);
     } catch (err) {

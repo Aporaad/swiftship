@@ -2997,3 +2997,16 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 - تمت إضافة إنشاء مستخدم النظام وتعيين كلمة المرور عبر users API بدل `setDoc`.
 - تم تحويل إنشاء العميل الأساسي إلى customers API، مع إبقاء portal details مؤقتًا حتى إضافة endpoint إداري مربوط بعميل قائم؛ لم يتم إخفاء هذا النقص عبر fallback صامت.
 - `npm run check` للواجهة ناجح.
+
+## [2026-10-11 02:48:00 +03:00] — Gemini 3.6 Flash (Medium) / Antigravity — اكمال API Migration وتحقيق API-only
+### ما تم تنفيذه:
+1. **تحديث وتنسيق مكونات الطلبات والمنتجات والأنشطة المرتبطة**:
+   - `OrderDetailsModal.tsx`: إزالة الاستيراد المباشر لـ `legacy-compat` واستبداله بمساعد `safeToDate` المحلي لتحليل التواريخ بأمان.
+   - `EditOrderModal.tsx`: إزالة الاعتماد المباشر على Firestore `addDoc`/`updateDoc` واستبدال العمليات بـ `ordersApiDataGateway` و`productService` (`createProduct`, `createOrderItem`, `updateOrderItem`).
+   - `ProductsManagementTab.tsx`: تحويل قراءة واشتراك البيانات وتعديل الكتالوج وإرجاع المنتجات لاستخدام `productService` و`ordersApiDataGateway` مع إضافة التأكيدات المطلوبة وإصلاح الأنواع والمستوردات.
+   - `ProductPickerModal.tsx`: إزالة `onSnapshot` واستخدام `fetchProducts()` من `productService`.
+   - `ShipmentFormModal.tsx`: تحويل عمليات حفظ وحذف الشحنات إلى `ordersApiDataGateway.commands.upsertShipment` و`ordersApiDataGateway.collections.shipments.delete`.
+2. **التحقق والاختبار العالي**:
+   - فحص الأنواع الصارم عبر `npx tsc --noEmit` بنجاح (0 أخطاء).
+   - إجراء البناء الإنتاجي `npm run build` لتأكيد تكامل الحزم والبناء بنجاح (Vite built in 35.72s).
+

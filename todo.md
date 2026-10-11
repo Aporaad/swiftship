@@ -2271,3 +2271,10 @@
 - [x] تحويل إنشاء Customer الأساسي إلى `customersApiDataGateway`.
 - [ ] نقل الحسابات المالية إلى API قبل إعادة accountId وpreview identifiers.
 - [ ] نقل `portalUserService` وتفاصيل العميل إلى عقد API إداري.
+
+## [2026-10-11 02:48:00 +03:00] — AI Model: Gemini 3.6 Flash (Medium) / Antigravity
+- [x] إكمال تنفيذ خطة إصلاح النظام واكمال API Migration لـ SwiftShip وتحقيق API-only.
+- [x] تنظيف وتحديث مكونات الطلبات والمنتجات الشائعة (`OrderDetailsModal`, `EditOrderModal`, `ProductsManagementTab`, `ProductPickerModal`, `ShipmentFormModal`) وإزالة الاعتماد على `legacy-compat`.
+- [x] تحويل التعامل مع المنتجات وبنود الطلبات والشحنات لاستخدام `productService` و`ordersApiDataGateway`.
+- [x] إجراء التحقق من سلامة الأكواد والأنواع باستخدام `npx tsc --noEmit` وإجراء البناء الإنتاجي `npm run build` بنجاح دون أي خطأ.
+

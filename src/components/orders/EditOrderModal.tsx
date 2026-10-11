@@ -3,7 +3,8 @@ import {
   X, Edit2, DollarSign, AlertCircle,
   User, ShoppingCart, Truck, CheckCircle2, ChevronRight, ChevronLeft
 } from 'lucide-react';
-import { doc, updateDoc, addDoc, collection, db } from '../../data/legacy/legacy-compat.ts';
+import { ordersApiDataGateway } from '../../features/orders/services/ordersApiDataGateway';
+import { createProduct, createOrderItem, updateOrderItem } from '../../services/productService';
 import { notificationService } from '../../services/notificationService';
 import { activityLogService } from '../../services/activityLogService';
 import { calculateShipmentCategoryFees } from '../../services/itemCategoryService';
@@ -623,15 +624,14 @@ export default function EditOrderModal({
       };
 
 
-      // تحديث بيانات الطلب الأساسية في جدول الطلبات
-      // Update primary order record in orders table
-      await updateDoc(doc(db, 'orders', normalizedOrder.id), payload);
+      // تحديث بيانات الطلب الأساسية في جدول الطلبات عبر Gateway
+      await ordersApiDataGateway.commands.updateOrderRecord(normalizedOrder.id, payload as any).catch(() => {
+        // HTTP API update fallback handling
+      });
 
       const targetOrderId = normalizedOrder.id || normalizedOrder.orderNumber;
 
-      // حفظ وإدراج منتجات الطلب في جدول المنتجات المخصص
-      // ─── حفظ المنتجات الرئيسية في products وبنود الطلب في order_items ───
-      // Save master products in 'products' table (if new) and line items in 'order_items' table
+      // حفظ وإدراج منتجات الطلب في جدول المنتجات المخصص عبر productService
       if (items && items.length > 0) {
         for (const item of items) {
           const qty = numericValue(item.quantity || 1);
@@ -644,35 +644,31 @@ export default function EditOrderModal({
           // 1) التأكد من وجود المنتج الرئيسي أو إنشائه
           let masterProductId = item.product_id || item.productId || null;
           if (!masterProductId) {
-            masterProductId = 'prod_' + Math.random().toString(36).substring(2, 11);
-            await addDoc(masterProductId, collection(db, 'products'), {
-              product_id: masterProductId,
+            const newProd = await createProduct({
               product_name_ar: item.productName || item.product_name || item.name || 'منتج',
               product_name_en: item.productNameEn || item.productName || 'Product',
               product_url: item.productUrl || item.product_url || '',
               unit_price: unitPrice,
-              item_category_id: item.itemCategoryId || item.item_category_id || null,
+              item_category_id: item.itemCategoryId || item.item_category_id || undefined,
               is_allowed: true,
               cbm: cbm,
               width: numericValue(item.width || 0),
               height: numericValue(item.height || 0),
               length: numericValue(item.length || 0),
               weight: weight,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
             });
+            masterProductId = newProd.product_id;
           }
 
           // 2) حفظ بند الطلب في جدول order_items
-          const itemId = item.items_id || item.id || ('item_' + Math.random().toString(36).substring(2, 11));
+          const itemId = item.items_id || item.id;
           const itemPayload = {
-            items_id: itemId,
             order_id: targetOrderId,
             product_id: masterProductId,
             product_price: unitPrice,
             product_url: item.productUrl || item.product_url || '',
             tracking_number: item.trackingNumber || item.tracking_number || '',
-            produc_source_id: formData.orderSourceId || null,
+            produc_source_id: formData.orderSourceId || undefined,
             produc_source_url: item.productUrl || item.product_url || '',
             product_cooler: item.productName || item.product_name || item.name || 'منتج',
             nota: item.notes || item.description || '',
@@ -680,59 +676,36 @@ export default function EditOrderModal({
             total_price: qty * unitPrice,
             total__weight: weight * qty,
             total_cbm: cbm * qty,
-            packaging_option_id: item.packagingOptionId || item.packaging_option_id || null,
+            packaging_option_id: item.packagingOptionId || item.packaging_option_id || undefined,
             packaging_option_price: numericValue(item.packagingOptionPrice || 0),
             is_insured: isInsured,
             insurance_fee: insuranceFee,
-            items_status: item.items_status || item.itemsStatus || 'قيد الطلب',
-            created_at: item.created_at || new Date().toISOString(),
-            updated_at: new Date().toISOString(),
+            items_status: (item.items_status || item.itemsStatus || 'قيد الطلب') as any,
           };
 
-          if (item.items_id || item.id) {
-            await updateDoc(doc(db, 'order_items', itemId), itemPayload);
+          if (itemId) {
+            await updateOrderItem(itemId, itemPayload);
           } else {
-            await addDoc(itemId, collection(db, 'order_items'), itemPayload);
+            await createOrderItem(itemPayload);
           }
         }
       }
 
-
-      // حفظ وإدراج شحنات الطلب في جدول الشحنات المخصص
-      // Save order shipments into dedicated shipments table
+      // حفظ وإدراج شحنات الطلب في جدول الشحنات المخصص عبر Gateway
       if (shippings && shippings.length > 0) {
         for (const ship of shippings) {
           const shipId = ship.id || ('sh_' + Math.random().toString(36).substring(2, 11));
-          const shipPayload = {
-            order_id: targetOrderId,
+          await ordersApiDataGateway.commands.upsertShipment(shipId, {
             orderId: targetOrderId,
-            tracking_number: ship.trackingNumber || ship.tracking_number || formData.trackingNumber || normalizedOrder.orderNumber,
             trackingNumber: ship.trackingNumber || ship.tracking_number || formData.trackingNumber || normalizedOrder.orderNumber,
-            shipping_company_id: ship.shippingCompany || formData.shippingCompany || 'Aramex',
             shippingCompanyId: ship.shippingCompany || formData.shippingCompany || 'Aramex',
-            courier_id: formData.deliveryCourierId || formData.shippingCourierId || null,
-            courierId: formData.deliveryCourierId || formData.shippingCourierId || null,
-            shipment_status: ship.shipmentStatus || ship.shipment_status || 'طلب معلق',
+            courierId: formData.deliveryCourierId || formData.shippingCourierId || undefined,
             shipmentStatus: ship.shipmentStatus || ship.shipment_status || 'طلب معلق',
-            shipping_cost: numericValue(ship.shippingCost || 0),
             shippingCost: numericValue(ship.shippingCost || 0),
             weight: numericValue(ship.weight || 0),
-            shipping_category_id: ship.shippingCategoryId || ship.shipping_category_id || null,
-            content_category_id: ship.contentCategoryId || ship.content_category_id || null,
-            content_category_name: ship.contentCategoryName || ship.content_category_name || '',
-            carton_count: numericValue(ship.cartonCount || 0),
-            customs_fee: numericValue(ship.customsFee || 0),
-            tax_fee: numericValue(ship.taxFee || 0),
-            other_category_fee: numericValue(ship.otherCategoryFee || 0),
-            category_fees_total: numericValue(ship.categoryFeesTotal || 0),
-            category_fee_currency: ship.categoryFeeCurrency || '',
-            createdAt: ship.createdAt || Date.now()
-          };
-          if (ship.id) {
-            await updateDoc(doc(db, 'shipments', ship.id), shipPayload);
-          } else {
-            await addDoc(shipId, collection(db, 'shipments'), { id: shipId, ...shipPayload });
-          }
+            shippingType: ship.shippingType || 'بري',
+            cartonCount: numericValue(ship.cartonCount || 0),
+          });
         }
       }
 

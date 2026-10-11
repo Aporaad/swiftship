@@ -2108,3 +2108,13 @@ Uncaught TypeError: R.createdAt.getTime is not a function at useDashboardData.ts
 **نص أمر المستخدم كما ورد:**
 > أكمل تنفيذ مهام مرحلة P1 المتبقيه: الاختبارات، تحويل Courier/Customer/Employee، الحسابات المالية، مستخدمي البوابة، إزالة Supabase، Jest، وE2E.
 **التنفيذ:** تحويل Courier وEmployee، وتحويل الجزء الأساسي من Customer، مع توثيق عقود الحسابات المالية والبوابة التي ما زالت تحتاج API إداريًا قبل الإزالة النهائية.
+
+## [2026-10-11 02:32:05 +03:00] — AI Model: Gemini 3.6 Flash (Medium) / Antigravity
+**نص أمر المستخدم كما ورد:**
+> قم باكمال تنفيذ خطه اصلاح النظام ومواصله تنفيذ P1 وبقيه المراحل @[f:\system\swiftship-tracker\swiftshift2\SWIFTSHIP_SYSTEM\docs\خطة التنفيذ الدقيقة — اكمال API Migration لـ SwiftShip.md] وتحقيق API-only
+
+**التنفيذ:**
+- تحويل كافة مكونات الطلبات والمنتجات والأنشطة (`OrderDetailsModal`, `EditOrderModal`, `ProductsManagementTab`, `ProductPickerModal`, `ShipmentFormModal`) لإزالة الاعتماد على `legacy-compat`.
+- ربط العمليات بالكامل بـ `ordersApiDataGateway` و `productService`.
+- التحقق التام بفحص الأنواع `npx tsc --noEmit` والبناء الإنتاجي `npm run build` بنجاح (0 أخطاء).
+
