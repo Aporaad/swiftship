@@ -13,6 +13,9 @@ const apiClient = new ApiClient({
   maxReadRetries: 0,
 });
 
+const MOVEMENT_PAGE_SIZE = 1_000;
+const MAX_MOVEMENT_ROWS = 20_000;
+
 const apiCollectionPaths: Record<string, string> = {
   accounts: "/api/v1/finance/accounts",
   main_entry: "/api/v1/finance/entries",
@@ -47,6 +50,8 @@ function normalizeRows(
       id: row.transactionId ?? row.id,
       entryId: row.entryId ?? row.mainEntryId,
       type: row.transType ?? row.type,
+      module: row.module ?? row.entryCategory,
+      refNumber: row.refNumber ?? row.entryNumber,
     }));
   if (collectionName === "custody_advances")
     return rows.map(row => ({ ...row, id: row.custodyAdvanceId ?? row.id }));
@@ -113,5 +118,37 @@ export const financeApiDataGateway = {
     onError: (error: unknown) => void
   ): Unsubscribe {
     return this.subscribeCollection(collectionName, onData, onError);
+  },
+
+  subscribeAccountMovements(
+    accountId: string,
+    onData: (rows: Record<string, unknown>[]) => void,
+    onError: (error: unknown) => void,
+  ): Unsubscribe {
+    let disposed = false;
+    const load = async () => {
+      try {
+        const rows: Record<string, unknown>[] = [];
+        for (let offset = 0; offset < MAX_MOVEMENT_ROWS; offset += MOVEMENT_PAGE_SIZE) {
+          const response = await apiClient.get<ApiEnvelope<Record<string, unknown>[]>>(
+            `/api/v1/finance/accounts/${encodeURIComponent(accountId)}/movements`,
+            { limit: MOVEMENT_PAGE_SIZE, offset },
+          );
+          const page = Array.isArray(response.data) ? response.data : [];
+          rows.push(...page);
+          const total = Number(response.meta?.total ?? rows.length);
+          if (page.length < MOVEMENT_PAGE_SIZE || rows.length >= total) break;
+        }
+        if (!disposed) onData(normalizeRows("account_trans", rows));
+      } catch (error) {
+        if (!disposed) onError(error);
+      }
+    };
+    void load();
+    const interval = setInterval(() => void load(), 30_000);
+    return () => {
+      disposed = true;
+      clearInterval(interval);
+    };
   },
 };

@@ -53,3 +53,11 @@
 
 ## فجوة تدفق بيانات الاعتماد — 2026-10-11 23:36:20 +03:00
 بوابة auth الخاصة بـ`alx_api` تعلن صراحة عدم استخدام System PIN، وDTO المستخدم يستبعد `system_pin`، بينما نموذجا Courier وEmployees يجمعان PIN وكلمة مرور. API provisioning الحالي ينشئ الملف ويرسل reset invitation ولا يقبل كلمة المرور أو System PIN. لا يمكن نقل هذه النماذج حرفيًا دون اختيار بين اعتماد الدعوة/عدم استخدام PIN وبين إنشاء تدفق API جديد مُحكم لكلمة المرور وPIN. لا تغييرات نفذت بعد.
+
+
+## استئناف Courier — 2026-10-12 00:20 +03:00
+- استجابةً لتوجيه المستخدم، طُبقت migration `20261012000100_add_courier_profile_fields.sql` التي تضيف فقط الأعمدة `phone/email/address/gps_location/notes` كـ`text NULL`. استعلام `information_schema.columns` الحي أعاد الأعمدة الخمسة، ولم تتغير صفوف البيانات.
+- توسعت عمليات Courier في alx_api للحفظ والتحديث والتحقق والتوثيق، وأزيلت الاستدعاءات المباشرة من `CouriersPage` لعمليات البيانات. إنشاء المستخدم يستخدم مسار كلمة المرور الإداري المحمي بـ`reset_passwords`؛ لا يُستخدم System PIN.
+- `alx_api` check/build و30 suites/168 tests ناجحة؛ SwiftShip check/build واختبارات الربط المستهدفة ناجحة. المجموعة الكاملة للواجهة ما زالت تفشل في `defaultAccountsVoucherWiring.test.ts` لأن `useAutoVoucherRules` فارغ؛ لا يجوز إصلاحه بتحديث assertion فقط.
+- حدود Courier الحالية: `financialAccountService` ما زال legacy لإنشاء/تحديث/اكتشاف الحساب المرتبط؛ يجب نقل هذه العمليات في Finance step 9. لذلك لا تُعلن خطوة Courier كاملة حتى تُزال هذه الاعتمادية.
+- ترتيب النشر المقرر لهذه الدفعة: دفع alx_api ونشره والتحقق من صحته، ثم دفع SwiftShip بعد نجاح API. صفحات Customers/Employees/Users/UserManagement/Settings وبقية Finance لا تزال لاحقة حسب الخطة.

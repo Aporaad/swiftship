@@ -623,12 +623,14 @@ class FinancialAccountService {
   async updateAccountEntityName(
     entityId: string,
     newName: string,
+    currency?: string,
   ): Promise<void> {
     try {
       const account = await this.getAccountByEntityId(entityId);
       if (!account || !account.id) return;
       await updateDoc(doc(db, "accounts", account.id), {
         entityName: newName,
+        ...(currency ? { currency } : {}),
         updatedAt: Date.now(),
       });
     } catch (error) {

@@ -1,9 +1,5 @@
-type AdapterDocument = { id: string; data: () => Record<string, unknown> };
 import React, { useState, useEffect } from 'react';
 import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
-import { collection, onSnapshot, doc, updateDoc, addDoc, setDoc, deleteDoc, query, where, orderBy, or } from '../../../data/legacy/legacy-compat.ts';
-import { db, auth } from '../../../data/legacy/legacy-compat.ts';
-import { handlePostgreSQLError, OperationType } from '../../../data/legacy/legacy-compat.ts';
 import {
   Search,
   Edit2,
@@ -39,6 +35,7 @@ import { useSettings } from '../../../context/SettingsContext';
 import { notificationService } from '../../../services/notificationService';
 import { activityLogService } from '../../../services/activityLogService';
 import { financialAccountService } from '../../../services/financialAccountService';
+import { financeApiDataGateway } from '../../../components/financeAccounting/FinanceApiDataGateway';
 import { useAccountBalances } from '../../../hooks/useAccountBalances';
 import ConfirmModal from '../../../components/ConfirmModal';
 import ConfirmDeletePinModal from '../../../components/ConfirmDeletePinModal';
@@ -48,6 +45,7 @@ import { AddCourierModal } from '../components/AddCourierModal';
 import { EditCourierModal } from '../components/EditCourierModal';
 import { CourierDetailsModal } from '../components/CourierDetailsModal';
 import { staffApiDataGateway } from '../../staff/services/staffApiDataGateway';
+import { usersApiDataGateway } from '../../users/services/usersApiDataGateway';
 
 export default function CouriersPage() {
   const { settings, t } = useSettings();
@@ -95,36 +93,57 @@ export default function CouriersPage() {
   const [ordersState, setOrdersState] = useState<AsyncState<unknown[]>>(asyncState.idle());
   const ordersLoading = ordersState.status === 'loading';
   const setOrdersLoading = (value: boolean) => setOrdersState(value ? asyncState.loading() : asyncState.idle());
-  const [detailsUnsubs, setDetailsUnsubs] = useState<(() => void)[]>([]);
 
   const [detailTab, setDetailTab] = useState<'logistics' | 'financial'>('logistics');
   const [courierTransactions, setCourierTransactions] = useState<any[]>([]);
   const [finSearch, setFinSearch] = useState('');
   const [finModuleFilter, setFinModuleFilter] = useState<'all' | 'order' | 'expense' | 'payment' | 'custody'>('all');
 
-  useEffect(() => {
-    if (!selectedCourier || !isDetailsModalOpen) {
-      setCourierTransactions([]);
-      return;
-    }
-
-    const qTx = query(
-      collection(db, 'account_trans'),
-      where('entity_id', '==', selectedCourier.id)
-    );
-    const unsubTx = onSnapshot(qTx, (snap) => {
-      setCourierTransactions(snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() })));
-    }, (err) => {
-      console.error("Error fetching transactions for courier:", err);
-    });
-
-    return () => unsubTx();
-  }, [selectedCourier, isDetailsModalOpen]);
-
   // Global collections for smart calculations
   const [allOrders, setAllOrders] = useState<any[]>([]);
   const [allExpenses, setAllExpenses] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
+
+  const canViewOrders = role === 'Admin' || hasPermission('view_orders');
+  const canViewFinancialAccounts = role === 'Admin' || hasPermission('view_financial_accounts');
+  const canViewAccountMovements = role === 'Admin' || hasPermission('view_account_movements');
+
+  useEffect(() => {
+    if (!selectedCourier || !isDetailsModalOpen || !canViewAccountMovements) {
+      setCourierTransactions([]);
+      return;
+    }
+
+    const account = accounts.find((item) => String(item.entityId) === String(selectedCourier.id));
+    const accountId = String(selectedCourier.accountId || account?.id || '');
+    if (!accountId) {
+      setCourierTransactions([]);
+      return;
+    }
+
+    const accountCurrency = String(account?.currency || selectedCourier.financialCurrency || selectedCourier.currency || 'YER').toUpperCase();
+    return financeApiDataGateway.subscribeAccountMovements(accountId, (rows) => {
+      setCourierTransactions(rows.map((row) => {
+        const originalCurrencyNo = row.currencyOriginalNo;
+        const accountCurrencyNo = row.accountCurrencyNo;
+        const originalCurrency = originalCurrencyNo != null && accountCurrencyNo != null && String(originalCurrencyNo) === String(accountCurrencyNo)
+          ? accountCurrency
+          : (accountCurrency === 'SAR' ? 'YER' : 'SAR');
+        const transactionType = String(row.type || row.transType || 'Debit').toLowerCase();
+        return {
+          ...row,
+          id: String(row.transactionId || row.id || ''),
+          type: transactionType === 'credit' ? 'Credit' : 'Debit',
+          module: row.module || row.entryCategory || 'transaction',
+          refNumber: row.refNumber || row.entryNumber || '',
+          currencyOriginal: row.currencyOriginal || originalCurrency,
+        };
+      }));
+    }, (error) => {
+      console.error('Error loading courier account movements from API:', error);
+      setCourierTransactions([]);
+    });
+  }, [selectedCourier, isDetailsModalOpen, accounts, canViewAccountMovements]);
 
   const [editFormData, setEditFormData] = useState<CourierEditFormValues>({
     fullName: '',
@@ -160,7 +179,6 @@ export default function CouriersPage() {
     username: '',
     email: '',
     password: '',
-    systemPin: '',
     role: 'Courier'
   });
 
@@ -323,7 +341,7 @@ export default function CouriersPage() {
     });
 
     // Sort oldest to newest
-    const sorted = [...ledger].sort((a, b) => a.date - b.date);
+    const sorted = [...ledger].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     // Calculate running balance: Debits (+) increase outstanding custody, Credits (-) reduce outstanding custody.
     let runningAccountBal = 0;
@@ -345,52 +363,23 @@ export default function CouriersPage() {
 
   useEffect(() => {
     if (roleLoading) return;
-
-    if (staffApiDataGateway.isEnabled()) {
-      return staffApiDataGateway.subscribe({
-        onData: (state) => {
-          setCouriers(state.couriers);
-          setAllOrders(state.orders);
-          setAccounts(state.accounts);
-          setQueryState(state.couriers.length ? asyncState.success(state.couriers) : asyncState.empty());
-        },
-        onError: (error) => {
-          console.error('Error loading courier data from API:', error);
-          setQueryState(asyncState.error<unknown[]>(error, 'COURIERS_API_LOAD_FAILED'));
-        },
-      });
-    }
-
-    // 1. Subscribe to Couriers
-    const qCouriers = query(collection(db, 'couriers'), orderBy('createdAt', 'desc'));
-    const unsubCouriers = onSnapshot(qCouriers, (snap) => {
-      const rows = snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() }));
-      setCouriers(rows);
-      setQueryState(rows.length ? asyncState.success(rows) : asyncState.empty());
-    }, (error) => {
-      handlePostgreSQLError(error, OperationType.LIST, 'couriers');
+    return staffApiDataGateway.subscribe({
+      onData: (state) => {
+        setCouriers(state.couriers);
+        setAllOrders(state.orders);
+        setAccounts(state.accounts);
+        setQueryState(state.couriers.length ? asyncState.success(state.couriers) : asyncState.empty());
+      },
+      onError: (error) => {
+        console.error('Error loading courier data from API:', error);
+        setQueryState(asyncState.error<unknown[]>(error, 'COURIERS_API_LOAD_FAILED'));
+      },
+    }, {
+      includeEmployees: false,
+      includeOrders: canViewOrders,
+      includeAccounts: canViewFinancialAccounts,
     });
-
-    // 2. Subscribe to Orders (Smart Custody / Performance sync)
-    const unsubOrders = onSnapshot(collection(db, 'orders'), (snap) => {
-      setAllOrders(snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() })));
-    }, (error) => {
-      console.error("Error loading orders:", error);
-    });
-
-    // 3. Subscribe to Accounts
-    const unsubAccounts = onSnapshot(collection(db, 'accounts'), (snap) => {
-      setAccounts(snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() })));
-    }, (error) => {
-      console.error("Error loading accounts:", error);
-    });
-
-    return () => {
-      unsubCouriers();
-      unsubOrders();
-      unsubAccounts();
-    };
-  }, [roleLoading]);
+  }, [roleLoading, canViewOrders, canViewFinancialAccounts]);
 
   const handleOpenEdit = (courier: any) => {
     setSelectedCourier(courier);
@@ -415,37 +404,18 @@ export default function CouriersPage() {
     setFinModuleFilter('all');
     setIsDetailsModalOpen(true);
     setOrdersLoading(true);
-
-    // Clear previous unsubs if any
-    detailsUnsubs.forEach(u => u());
-
-    const qOrders = query(
-      collection(db, 'orders'),
-      or(
-        where('deliveryCourierId', '==', courier.id),
-        where('shippingCourierId', '==', courier.id)
-      ),
-      orderBy('createdAt', 'desc')
-    );
-
-    const unsubOrders = onSnapshot(qOrders, (snap) => {
-      const rows = snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() }));
-      setCourierOrders(rows);
-      setOrdersState(rows.length ? asyncState.success(rows) : asyncState.empty());
-    }, (err) => {
-      console.error("Error fetching courier orders:", err);
-      setCourierOrders([]);
-      setOrdersState(asyncState.error(err, 'COURIER_ORDERS_LOAD_FAILED'));
-    });
-
-    setCourierExpenses([]);
-    setDetailsUnsubs([unsubOrders]);
+    const rows = allOrders
+      .filter((order) => String(order.deliveryCourierId || '') === String(courier.id)
+        || String(order.shippingCourierId || '') === String(courier.id))
+      .sort((left, right) => new Date(String(right.createdAt || 0)).getTime() - new Date(String(left.createdAt || 0)).getTime());
+    setCourierOrders(rows);
+    setOrdersState(rows.length ? asyncState.success(rows) : asyncState.empty());
+    setCourierExpenses(allExpenses.filter((expense) => String(expense.recipientId || '') === String(courier.id)));
+    setOrdersLoading(false);
   };
 
   const handleCloseDetails = () => {
     setIsDetailsModalOpen(false);
-    detailsUnsubs.forEach(u => u());
-    setDetailsUnsubs([]);
   };
 
   const handleUpdateCourier = async (e: React.FormEvent) => {
@@ -454,34 +424,24 @@ export default function CouriersPage() {
     const result = await runMutation(async () => {
       const type = editFormData.courierType || 'local';
       const finCurrency = type === 'sourcing' ? 'SAR' : 'YER';
-      if (staffApiDataGateway.isWriteEnabled()) {
-        await staffApiDataGateway.updateCourier(selectedCourier.id, {
-          fullName: editFormData.fullName.trim(),
-          courierType: type,
-          commissionRate: Number(editFormData.commissionRate) || 0,
-          currency: finCurrency,
-          isActive: !editFormData.disabled,
-        });
-      } else await updateDoc(doc(db, 'couriers', selectedCourier.id), {
-        fullName: editFormData.fullName,
-        phone: editFormData.phone,
-        email: editFormData.email,
-        address: editFormData.address,
-        gpsLocation: editFormData.gpsLocation,
-        disabled: editFormData.disabled,
-        commissionRate: editFormData.commissionRate,
-        notes: editFormData.notes,
+      const updatedCourier = await staffApiDataGateway.updateCourier(selectedCourier.id, {
+        fullName: editFormData.fullName.trim(),
+        phone: editFormData.phone.trim(),
+        email: editFormData.email.trim(),
+        address: editFormData.address.trim(),
+        gpsLocation: editFormData.gpsLocation.trim(),
+        notes: editFormData.notes.trim(),
         courierType: type,
-        updatedAt: Date.now()
+        commissionRate: Number(editFormData.commissionRate) || 0,
+        currency: finCurrency,
+        isActive: !editFormData.disabled,
       });
+      setCouriers((current) => current.map((courier) => courier.id === selectedCourier.id ? updatedCourier : courier));
+      setSelectedCourier((current: any) => current?.id === selectedCourier.id ? updatedCourier : current);
       // Sync financial account name and currency if changed
-      const assocAccount = await financialAccountService.getAccountByEntityId(selectedCourier.id);
+      const assocAccount = await financialAccountService.getAccountByEntityId(selectedCourier.id, 'courier');
       if (assocAccount && assocAccount.id) {
-        await updateDoc(doc(db, 'accounts', assocAccount.id), {
-          entityName: editFormData.fullName,
-          currency: finCurrency,
-          updatedAt: Date.now()
-        });
+        await financialAccountService.updateAccountEntityName(selectedCourier.id, editFormData.fullName.trim(), finCurrency);
       }
       activityLogService.log('edit_courier', editFormData.fullName, { ...editFormData });
       notificationService.notify({
@@ -507,11 +467,8 @@ export default function CouriersPage() {
       type: 'warning',
       onConfirm: async () => {
         const result = await runMutation(async () => {
-          if (staffApiDataGateway.isWriteEnabled()) {
-            await staffApiDataGateway.updateCourier(courier.id, { isActive: courier.disabled });
-          } else {
-            await updateDoc(doc(db, 'couriers', courier.id), { disabled: !courier.disabled, updatedAt: Date.now() });
-          }
+          const updatedCourier = await staffApiDataGateway.updateCourier(courier.id, { isActive: courier.disabled });
+          setCouriers((current) => current.map((row) => row.id === courier.id ? updatedCourier : row));
           activityLogService.log('edit_courier', courier.fullName, { id: courier.id, disabled: !courier.disabled });
         }, setEditMutationState);
         if (result.status === 'success-after-mutation') {
@@ -522,7 +479,7 @@ export default function CouriersPage() {
             category: 'system'
           });
         } else if (result.status === 'error') {
-          handlePostgreSQLError(result.error, OperationType.UPDATE, 'couriers');
+          notificationService.notify({ title: isAr ? 'فشل العملية' : 'Operation Failed', message: result.error.message, type: 'error' });
         }
       }
     });
@@ -549,47 +506,57 @@ export default function CouriersPage() {
           category: 'system'
         });
       }
+      if (!hasPermission('add_users')) {
+        return notificationService.notify({
+          title: isAr ? 'صلاحية غير كافية' : 'Permission required',
+          message: isAr ? 'تحتاج إلى صلاحية add_users لإنشاء مستخدم النظام.' : 'The add_users permission is required to create a system user.',
+          type: 'error',
+          category: 'system',
+        });
+      }
+      if (!hasPermission('reset_passwords')) {
+        return notificationService.notify({
+          title: isAr ? 'صلاحية غير كافية' : 'Permission required',
+          message: isAr ? 'تحتاج إلى صلاحية reset_passwords لتعيين كلمة المرور.' : 'The reset_passwords permission is required to set the initial password.',
+          type: 'error',
+          category: 'system',
+        });
+      }
+      if (systemUserFormData.password.length < 12) {
+        return notificationService.notify({
+          title: isAr ? 'كلمة المرور قصيرة' : 'Password is too short',
+          message: isAr ? 'يجب ألا تقل كلمة المرور عن 12 حرفاً.' : 'The password must contain at least 12 characters.',
+          type: 'error',
+          category: 'system',
+        });
+      }
     }
 
     const result = await runMutation(async () => {
-      // 1. Generate unique custom courier ID
-      const courierCountSnap = couriers.length;
-      const customId = `ALX-CR-${(courierCountSnap + 1).toString().padStart(3, '0')}`;
-
-      const emailValue = addFormData.email || `${customId.toLowerCase()}@alx.delivery.net`;
-      const { accountCode, code, accountId } =
+      const { accountCode, accountId } =
         await financialAccountService.getNextAccountIdentifiers('courier');
       const newId = 'cour_' + accountCode;
       const type = addFormData.courierType === 'sourcing' ? 'sourcing' : 'local';
       const finCurrency = type === 'sourcing' ? 'SAR' : 'YER';
-      if (staffApiDataGateway.isWriteEnabled()) {
-        await staffApiDataGateway.createCourier({
-          courierId: newId,
-          fullName: addFormData.fullName.trim(),
-          nameAr: addFormData.fullName.trim(),
-          courierType: type,
-          commissionRate: Number(addFormData.commissionRate) || 0,
-          currency: finCurrency,
-          isActive: true,
-          accountId,
-        });
-      } else {
-        await setDoc(doc(collection(db, 'couriers'), newId), {
-          fullName: addFormData.fullName,
-          phone: addFormData.phone,
-          email: emailValue,
-          address: addFormData.address,
-          gpsLocation: addFormData.gpsLocation,
-          disabled: false,
-          courierCustomId: customId,
-          commissionRate: addFormData.commissionRate,
-          notes: addFormData.notes,
-          courierType: type,
-          createdAt: Date.now()
-        });
-      }
+      const courier = await staffApiDataGateway.createCourier({
+        courierId: newId,
+        fullName: addFormData.fullName.trim(),
+        nameAr: addFormData.fullName.trim(),
+        nameEn: addFormData.fullName.trim(),
+        phone: addFormData.phone.trim(),
+        email: addFormData.email.trim(),
+        address: addFormData.address.trim(),
+        gpsLocation: addFormData.gpsLocation.trim(),
+        notes: addFormData.notes.trim(),
+        courierType: type,
+        commissionRate: Number(addFormData.commissionRate) || 0,
+        currency: finCurrency,
+        isActive: true,
+        accountId,
+      });
+      setCouriers((current) => [courier, ...current]);
 
-      // 3. Auto-create financial account (2120-xxxx)
+      let financialAccountCreated = false;
       try {
         await financialAccountService.createAccountForEntity(
           'courier',
@@ -597,48 +564,53 @@ export default function CouriersPage() {
           addFormData.fullName,
           type === 'sourcing' ? (settings.defaultOrderCurrency ?? settings.currency ?? 'YER') : (settings.currency ?? 'YER')
         );
+        financialAccountCreated = true;
       } catch (accErr) {
         console.warn('[Couriers] Could not create financial account:', accErr);
       }
 
-      // Provision System User in `users` table if requested
+      let userCreationError: unknown;
       if (createSystemUser) {
         try {
-          const userId = 'usr_' + Math.random().toString(36).substring(2, 11);
-          const userPayload = {
-            id: userId,
+          await usersApiDataGateway.createUser({
             username: systemUserFormData.username.trim(),
-            email: systemUserFormData.email.trim() || emailValue,
+            email: systemUserFormData.email.trim() || addFormData.email.trim() || undefined,
             password: systemUserFormData.password,
-            systemPin: systemUserFormData.systemPin.trim(),
             fullName: addFormData.fullName.trim(),
             phone: addFormData.phone.trim(),
             role: systemUserFormData.role || 'Courier',
-            disabled: false,
             linkedType: 'courier',
             linkedEntity: newId,
-            createdAt: Date.now()
-          };
-          await setDoc(doc(db, 'users', userId), userPayload);
-        } catch (uErr: any) {
-          console.error('[Couriers] Error provisioning system user:', uErr);
+          });
+        } catch (error) {
+          userCreationError = error;
+          console.error('[Couriers] Error creating system user through API:', error);
         }
       }
 
-      activityLogService.log('add_courier', addFormData.fullName, { ...addFormData, courierCustomId: customId });
+      activityLogService.log('add_courier', addFormData.fullName, {
+        courierId: newId,
+        courierType: type,
+        financialAccountCreated,
+        systemUserCreated: createSystemUser && !userCreationError,
+      });
       notificationService.notify({
-        title: isAr ? 'تم تسجيل مندوب' : 'Courier Registered',
-        message: isAr
-          ? `تم تسجيل المندوب برمز: ${customId} ${createSystemUser ? 'وانشاء حساب مستخدم النظام وربطه به تلقائياً' : 'وانشاء حسابه المالي تلقائياً'}`
-          : `Courier ${addFormData.fullName} registered successfully`,
-        type: 'success',
+        title: userCreationError ? (isAr ? 'تم تسجيل المندوب مع تنبيه' : 'Courier registered with a warning') : (isAr ? 'تم تسجيل مندوب' : 'Courier Registered'),
+        message: userCreationError
+          ? (isAr
+            ? `تم حفظ المندوب بالمعرّف ${newId}، لكن تعذر إكمال حساب المستخدم. قد يكون ملف المستخدم أُنشئ دون كلمة مرور؛ تحقق من إدارة المستخدمين أولاً ثم استخدم إعادة التعيين بصلاحية reset_passwords. لا تعِد إنشاء المندوب.`
+            : `Courier ${newId} was saved, but system-user setup was incomplete. The user profile may exist without a password; check User Management first, then reset through reset_passwords. Do not recreate the courier.`)
+          : (isAr
+            ? `تم تسجيل المندوب بالمعرّف ${newId}${createSystemUser ? ' وربط مستخدم النظام مع تعيين كلمة المرور عبر صلاحية reset_passwords' : ''}${financialAccountCreated ? ' وإنشاء حسابه المالي' : ''}.`
+            : `Courier ${newId} registered${createSystemUser ? ' with its system user and password set through reset_passwords' : ''}${financialAccountCreated ? ' and financial account' : ''}.`),
+        type: userCreationError ? 'warning' : 'success',
         category: 'system'
       });
 
       // Reset form setup
       setCreateSystemUser(false);
       setAddFormData({ fullName: '', phone: '', email: '', address: '', gpsLocation: '', commissionRate: 0, notes: '', courierType: 'local' });
-      setSystemUserFormData({ username: '', email: '', password: '', systemPin: '', role: 'Courier' });
+      setSystemUserFormData({ username: '', email: '', password: '', role: 'Courier' });
       setIsAddModalOpen(false);
 
     }, setAddMutationState);
@@ -760,7 +732,7 @@ export default function CouriersPage() {
 
       // Agent custom ID
       doc.setFont('Helvetica', 'bold');
-      doc.text(courier.courierCustomId || `ALX-CR-${index + 1}`, 15, yIdx);
+      doc.text(String(courier.id || courier.courierId || ''), 15, yIdx);
       doc.setFont('Helvetica', 'normal');
 
       // Courier Name
@@ -822,7 +794,7 @@ export default function CouriersPage() {
 
     filteredCouriers.forEach(c => {
       const row = [
-        `"${c.courierCustomId || ''}"`,
+        `"${c.id || c.courierId || ''}"`,
         `"${(c.fullName || '').replace(/"/g, '""')}"`,
         `"${c.phone || ''}"`,
         `"${c.email || ''}"`,
@@ -848,7 +820,7 @@ export default function CouriersPage() {
   // Filter couriers
   const filteredCouriers = couriers
     .filter(c => {
-      const matchSearch = (c.fullName || '').toLowerCase().includes(search.toLowerCase()) || (c.phone || '').includes(search) || (c.courierCustomId || '').toLowerCase().includes(search.toLowerCase());
+      const matchSearch = (c.fullName || '').toLowerCase().includes(search.toLowerCase()) || (c.phone || '').includes(search) || String(c.id || c.courierId || '').toLowerCase().includes(search.toLowerCase());
       const matchStatus = statusFilter === 'all' || (statusFilter === 'active' && !c.disabled) || (statusFilter === 'disabled' && c.disabled);
       return matchSearch && matchStatus;
     })
@@ -1016,7 +988,7 @@ export default function CouriersPage() {
                     <td className="p-4 font-mono font-black text-slate-400">
                       <div className="flex flex-col gap-1 text-right">
                         <span className="bg-slate-900 border border-slate-800 text-[#d4af37] px-2.5 py-0.5 rounded-lg text-[10px] w-max mr-auto">
-                          {courier.courierCustomId || 'ALX-CR-XXX'}
+                          {courier.id || courier.courierId || '—'}
                         </span>
                         {(() => {
                           const account = accounts.find(a => a.id === courier.accountId || a.id === courier.financialAccountId || a.entityId === courier.id);
@@ -1227,24 +1199,20 @@ export default function CouriersPage() {
       <ConfirmDeletePinModal
         isOpen={deletePinConfig.isOpen}
         onClose={() => setDeletePinConfig({ ...deletePinConfig, isOpen: false })}
-        title={isAr ? 'حذف حساب المندوب نهائياً' : 'Delete Courier Permanently'}
+        title={isAr ? 'تعطيل حساب المندوب' : 'Deactivate Courier'}
         message={isAr
-          ? `هل أنت متأكد من رغبتك في حذف المندوب ${deletePinConfig.entityName}؟ هذا الإجراء سيقوم بحذف حسابه المالي وكافة قيوده ومصروفاته المفتوحة نهائياً من النظام.`
-          : `Are you sure you want to permanently delete courier ${deletePinConfig.entityName}? This will purge their financial account, journal transactions, and associated expenses from the database.`}
+          ? `هل أنت متأكد من تعطيل المندوب ${deletePinConfig.entityName}؟ سيبقى سجل المندوب وحسابه المالي وقيوده محفوظاً للتدقيق.`
+          : `Are you sure you want to deactivate courier ${deletePinConfig.entityName}? The courier and financial history will remain available for audit.`}
         isAr={isAr}
         onConfirm={async () => {
-          // ربط حذف المندوب بـAPI عند تفعيل علم الكتابة — Route delete through API when write flag is enabled
-          // يستخدم soft-delete ذري عبر API أو purge مباشر عبر Legacy حسب العلم
-          // Uses atomic soft-delete via API or direct purge via Legacy based on feature flag
-          if (staffApiDataGateway.isWriteEnabled()) {
-            await staffApiDataGateway.deleteCourier(deletePinConfig.entityId);
-          } else {
-            await financialAccountService.purgeEntityAndFinancialFootprint('courier', deletePinConfig.entityId);
-          }
+          await staffApiDataGateway.deleteCourier(deletePinConfig.entityId);
+          setCouriers((current) => current.map((courier) => courier.id === deletePinConfig.entityId
+            ? { ...courier, disabled: true, isActive: false }
+            : courier));
           await activityLogService.log('delete_courier', deletePinConfig.entityName, { id: deletePinConfig.entityId });
           notificationService.notify({
             title: isAr ? 'تم تعطيل المندوب' : 'Courier Deactivated',
-            message: isAr ? `تم تعطيل المندوب ${deletePinConfig.entityName} وإيقاف حسابه` : `Courier ${deletePinConfig.entityName} has been deactivated`,
+            message: isAr ? `تم تعطيل المندوب ${deletePinConfig.entityName} مع الحفاظ على بياناته المالية` : `Courier ${deletePinConfig.entityName} has been deactivated; financial history was preserved`,
             type: 'warning'
           });
         }}

@@ -3052,3 +3052,12 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 
 ## [2026-10-11 23:36:20 +03:00] — مراجعة توافق provisioning
 كشف البحث أن بوابة auth للـAPI لا تستخدم System PIN وأن DTO المستخدم يستبعد `system_pin` عمدًا، بينما Courier/Employees UI ما زالت تطلب PIN وكلمة مرور. لم يحدث تغيير كود أو DB في هذا الجزء؛ يلزم اعتماد السلوك المقصود قبل نقل الصفحات حتى لا تُحذف ميزة أو تُخزن بيانات اعتماد بشكل غير آمن.
+
+
+## [2026-10-12 00:20:05 +03:00] — تنفيذ Courier API وحقول الملف
+- أضيفت migration تقتصر على الحقول الخمسة التي اعتمدها المستخدم في `public.couriers`؛ استعلام schema الحي أكد تطبيقها، ولم تُكتب بيانات سجلات.
+- وسّع `alx_api` عقد/schema/routes/repository لإنشاء وتحديث هذه الحقول، وأظهرها reporting DTO وOpenAPI. توسعت اختبارات HTTP وrepository للتحقق من validation وترتيب معاملات SQL.
+- أزيلت استدعاءات legacy المباشرة من `CouriersPage`; جلب Couriers والطلبات عبر `staffApiDataGateway`، وحركات الحساب عبر Finance API، وإنشاء/تعديل/تعطيل Courier عبر Operations API. الحذف أصبح soft-disable ويحتفظ بالحساب المالي.
+- إزالة System PIN من نموذج Courier؛ إعداد كلمة المرور الأولية يستدعي reset API، والخادم يفرض `reset_passwords`. عند فشل الخطوة الجزئية توضّح الواجهة ضرورة التحقق من سجل المستخدم قبل إعادة المحاولة.
+- بقيت إدارة/إنشاء الحساب المالي لـCourier عبر `financialAccountService` legacy؛ لم نزعم اكتمال هذا الجزء، ويُستكمل ضمن Finance API في الخطوة 9 حسب ترتيب الخطة.
+- التحقق: `alx_api` check/build وجميع الاختبارات **30 suites / 168 tests ناجحة**. SwiftShip check/build واختبارات الربط الموجهة **5/5 ناجحة**؛ مجموعة SwiftShip الكاملة: **78 ملفًا ناجحًا، 3 متخطاة، وفشل واحد قائم** في `defaultAccountsVoucherWiring.test.ts` بسبب `useAutoVoucherRules` الذي يعيد قائمة فارغة (غير متعلق بتغيير Courier، ويحتاج استكمال Finance API). لم يتم دفع تغييرات هذه الدفعة بعد عند وقت هذا السجل.

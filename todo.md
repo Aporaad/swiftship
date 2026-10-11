@@ -2331,3 +2331,13 @@
 ## [2026-10-11 23:36:20 +03:00] — توضيح توافق بيانات مستخدم Courier
 - [x] فحص المصدر أكد أن `alx_api` لا يستخدم System PIN وأن DTO الآمن يستبعد `system_pin`، بينما نموذج Courier وEmployees الحاليين يجمعانه؛ إرساله إلى API الحالي لن يحافظ على هذه الوظيفة.
 - [ ] يتطلب إكمال provisioning قرارًا صريحًا: اعتماد تدفق الدعوة/تعيين كلمة المرور دون System PIN (وفق API الحالي)، أو تصميم دعم جديد آمن لـPIN وكلمة المرور في API. لا تخزن PIN أو كلمة مرور بنص صريح ولا تتجاهل الحقول بصمت.
+
+
+## [2026-10-12 00:20:05 +03:00] — استئناف الخطة بعد اعتماد الحقول وتدفق كلمة المرور
+- [x] أضيفت الأعمدة الخمسة المعتمدة فقط (`phone`, `email`, `address`, `gps_location`, `notes`) إلى `public.couriers` وتأكد وجودها حيًا كـ`text NULL`.
+- [x] أضيفت حقول Courier للـAPI operations/reporting/OpenAPI واختبارات create/update/validation.
+- [x] نقلت عمليات Courier الأساسية والقراءة من الصفحة إلى API gateways؛ أزيل System PIN، وتُستخدم إعادة التعيين المقيدة بصلاحية `reset_passwords`.
+- [ ] **باقي خطوة Couriers ضمن مرحلة 8:** إنشاء/تحديث/اكتشاف الحساب المالي ما زال يستخدم `financialAccountService` legacy؛ نقل كتابة الحساب المالي إلى Finance API ضمن الخطوة 9، ولا تعدّ هذه الجزئية مكتملة الآن.
+- [ ] إكمال صفحات Customers/Employees/Users/UserManagement/Settings حسب ترتيب الخطة.
+- [ ] الخطوة 9: إزالة Finance fallbacks و`financeAccountingMainEntryActions`، وإصلاح `useAutoVoucherRules` ودعم auto-entry API؛ اختبار `defaultAccountsVoucherWiring` ما زال فاشلًا (78 passed، 3 skipped، 1 failed في suite).
+- [ ] استكمال باقي خطوات الخطة ثم إجراء اختبار شامل ودفع/نشر هذه الدفعة بالتتابع: API أولًا ثم SwiftShip.

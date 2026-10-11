@@ -139,29 +139,19 @@ export function AddCourierModal({
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block text-[10px] font-black text-slate-400 mb-1">{isAr ? 'كلمة المرور *' : 'Password *'}</label>
                         <input
                           required={createSystemUser}
                           type="password"
+                          minLength={12}
                           placeholder="••••••••"
                           value={systemUserFormData.password}
                           onChange={(e) => setSystemUserFormData({ ...systemUserFormData, password: e.target.value })}
                           className="w-full bg-black border border-slate-800 rounded-xl p-2.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none"
                         />
-                      </div>
-
-                      <div>
-                        <label className="block text-[10px] font-black text-slate-400 mb-1">{isAr ? 'رمز PIN للنظام' : 'System PIN'}</label>
-                        <input
-                          type="text"
-                          maxLength={6}
-                          placeholder="1234"
-                          value={systemUserFormData.systemPin}
-                          onChange={(e) => setSystemUserFormData({ ...systemUserFormData, systemPin: e.target.value })}
-                          className="w-full bg-black border border-slate-800 rounded-xl p-2.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono tracking-widest text-center"
-                        />
+                        <p className="mt-1 text-[9px] text-slate-500">{isAr ? '12 حرفاً على الأقل؛ يعتمد تعيينها على صلاحية reset_passwords.' : 'At least 12 characters; setting it requires reset_passwords permission.'}</p>
                       </div>
 
                       <div>

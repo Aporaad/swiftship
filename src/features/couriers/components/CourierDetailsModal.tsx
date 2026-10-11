@@ -94,7 +94,7 @@ export function CourierDetailsModal({
                     <span className="w-1.5 h-1.5 bg-slate-805 rounded-full"></span>
                     <span className="text-[10px] font-mono" dir="ltr">{selectedCourier.phone}</span>
                     <span className="w-1.5 h-1.5 bg-slate-805 rounded-full"></span>
-                    <span className="text-[10px] bg-slate-900 border border-slate-800 text-[#d4af37] px-2 py-0.5 rounded-md font-mono">ID: {selectedCourier.courierCustomId}</span>
+                    <span className="text-[10px] bg-slate-900 border border-slate-800 text-[#d4af37] px-2 py-0.5 rounded-md font-mono">ID: {selectedCourier.id}</span>
                     <span className="text-[10px] bg-purple-950/20 border border-purple-950/50 text-purple-400 px-2 py-0.5 rounded-md">عمولة: {selectedCourier.commissionRate}%</span>
                   </div>
                   {selectedCourier.address && (

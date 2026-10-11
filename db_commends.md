@@ -2747,3 +2747,21 @@ SELECT p.oid::regprocedure::text AS signature, pg_get_function_arguments(p.oid) 
 SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'couriers' ORDER BY ordinal_position LIMIT 100;
 ```
 **النتيجة:** `courier_id`, `account_id`, `currency`, `is_active`, `full_name`, `name_ar`, `name_en`, `courier_type`, `courier_level`, `commission_rate`, `created_at`, `updated_at`, `created_by`, `updated_by`. لا توجد أعمدة مباشرة لرقم الهاتف أو البريد أو العنوان أو GPS أو الملاحظات أو `courier_custom_id`. الاستعلام للقراءة فقط؛ لا DDL/DML.
+
+
+## [2026-10-12 00:20:05 +03:00] — AI Model: Manus AI (المعرّف التفصيلي للنموذج غير مكشوف لبيئة التنفيذ)
+**DDL الذي طُبق عبر Supabase `apply_migration` خلال الجلسة (اسم الملف: `20261012000100_add_courier_profile_fields.sql`):**
+```sql
+-- Add the five profile fields explicitly approved for courier API migration.
+ALTER TABLE public.couriers
+  ADD COLUMN IF NOT EXISTS phone text,
+  ADD COLUMN IF NOT EXISTS email text,
+  ADD COLUMN IF NOT EXISTS address text,
+  ADD COLUMN IF NOT EXISTS gps_location text,
+  ADD COLUMN IF NOT EXISTS notes text;
+```
+**التحقق الحي بعد التطبيق — 2026-10-12 00:19:35 +03:00 (قراءة فقط):**
+```sql
+SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'couriers' ORDER BY ordinal_position LIMIT 100;
+```
+**النتيجة:** ظهرت الأعمدة الخمسة فقط كإضافات جديدة، جميعها `text` و`nullable`; بقيت بقية أعمدة `couriers` دون حذف أو إعادة تسمية. لم تُكتب أو تُحدّث صفوف بيانات.

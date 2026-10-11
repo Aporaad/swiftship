@@ -19,7 +19,6 @@ export interface CourierSystemUserFormValues {
   username: string;
   email: string;
   password: string;
-  systemPin: string;
   role: string;
 }
 
@@ -34,7 +33,6 @@ export interface CourierDetailsRecord {
   phone?: string | null;
   address?: string | null;
   gpsLocation?: string | null;
-  courierCustomId?: string | null;
   commissionRate?: number | null;
   notes?: string | null;
   accountId?: string | null;

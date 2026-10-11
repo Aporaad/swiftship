@@ -1524,3 +1524,9 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 ## [2026-10-11 23:35:01 +03:00] — فحص مخطط جدول couriers الحي
 - استعلام `information_schema.columns` للقراءة فقط أكد أن جدول `public.couriers` لا يحوي أعمدة phone/email/address/gps_location/notes/courier_custom_id؛ الموجود هو المعرف والحساب والعملة والحالة والأسماء ونوع/مستوى المندوب والعمولة والطوابع/الفاعل.
 - لا migration ولا تعديل بيانات نُفذ. يتطلب إكمال صفحة Couriers دون إسقاط الحقول قرارًا بشأن migration إضافية، كما يتطلب تدفق إنشاء المستخدم الاختيار بين دعوة reset الآمنة الحالية وبين المحافظة على إدخال كلمة المرور مع endpoint إداري محمي.
+
+
+## [2026-10-12 00:20:05 +03:00] — إضافة حقول ملف Courier المعتمدة
+- طُبقت migration `20261012000100_add_courier_profile_fields.sql` على مشروع Supabase بعد موافقة المستخدم، وتضيف **فقط** `phone`, `email`, `address`, `gps_location`, `notes` إلى `public.couriers` كأعمدة `text NULL` باستخدام `ADD COLUMN IF NOT EXISTS`.
+- تحقق schema حي للقراءة فقط عند 00:19:35 +03:00 أعاد الأعمدة الخمسة المضافة، مع بقاء جميع الأعمدة السابقة. لم تُحذف أو تُعدّل أي صفوف أو قيود أخرى.
+- نموذج بيانات الاعتماد في Courier لا يستخدم `System PIN`. تعيين كلمة المرور الأولية يمر عبر مسار `/api/v1/users/:id/password` المحمي بصلاحية `reset_passwords` فقط؛ لا توجد كتابة PIN إلى قاعدة البيانات.
