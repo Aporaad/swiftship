@@ -1,63 +1,7 @@
-# خلاصة جرد API Migration — 2026-10-11
-
-## النطاق
-تم جرد نطاقات `CouriersPage`, `CustomersPage`, `EmployeesPage`, `SourcesPage`, `UsersPage`, `UserManagementPage`, `SettingsPage`, الخدمات المالية، و`portalUserService/cust_details` قبل تنفيذ التحويلات.
-
-## النتائج
-
-| النطاق | الحالة | الخلاصة التنفيذية |
-|---|---|---|
-| Sources | قابل للتحويل تدريجيًا | توجد reporting وCRUD routes في `alx_api`; تم تحويل الصفحة في هذه الدفعة إلى `sourcesApiDataGateway` مع إبقاء ربط الحساب المالي عبر `financialAccountService` دون imports مباشرة من legacy. |
-| Couriers | جزئي | توجد CRUD/reporting routes، لكن تفاصيل الحساب، orders، account_trans، provisioning وحقول profile تحتاج عقودًا إضافية؛ لا يجوز حذف fallback الكامل قبل تغطيتها. |
-| Customers | جزئي | توجد routes CRUD في `alx_api`، لكن DTO الأساسي لا يغطي دفتر العميل، الحسابات، GPS، وside effects المالية. يلزم تحويل core CRUD ثم عقود statement/account. |
-| Employees | جزئي | توجد CRUD routes، لكن حقول profile، users provisioning، disabled، الحساب المالي، وstatement غير مكتملة في العقد الحالي. |
-| Users | جزئي قابل للتدرج | توجد routes list/create/update/delete/password/roles في `alx_api`؛ يلزم فصل الحقول الحساسة وعمليات sessions/activity/financial purge قبل إزالة imports من `UserManagementPage`. تم توحيد flags لتقبل `VITE_USE_HTTP_API`. |
-| Settings/Currencies | backend موجود في `alx_api` | توجد routes settings وcurrencies وhistory/CRUD، لكن `SettingsPage` ما زالت تحتوي backup/legacy operations؛ يلزم إنشاء gateway للـbackup قبل إزالة imports. |
-| Finance | جزئي | توجد عقود finance في `alx_api`، لكن `financeAccountingMainEntryActions` ما زال ينفذ تعديل/حذف/FIFO مباشرة؛ لا يجوز تحويله إلى void أو حذف API غير ذري. |
-| Portal/cust_details | جزئي | توجد portal auth/owned services ومigrations لـ`cust_details`، لكن لا يوجد gateway مركب مكافئ لـ`portalUserService` لإدارة portal users/details بشكل ذري. |
-
-## معالجة الاختبارات
-- تبين أن المشروع يستخدم Vitest وليس Jest.
-- تم تثبيت Vitest على `pool=forks` مع `singleFork=true` لتقليل احتمال Segmentation fault الناتج عن تعدد العمال.
-- بعض اختبارات wiring القديمة كانت تتحقق من نصوص legacy بعد نقل المكونات إلى بوابات API؛ سيتم تحديثها إلى عقود API بدل إخفاء الفشل.
-
-## تغييرات بدأت بعد الجرد
-- تحويل `SourcesPage` إلى API-only في القراءة وCRUD مع الحفاظ على ربط الحساب المالي.
-- إضافة تطبيع DTO للمصادر وشركات الشحن.
-- تصحيح pagination من `limit/offset` إلى `page/pageSize` في بوابات الكيانات.
-- توسيع `GatewayQuery` لدعم نمط pagination الخاص بـ`alx_api`.
-- تفعيل `VITE_USE_HTTP_API` لبوابة المستخدمين.
-
-## القيود
-لم يتم تنفيذ أي SQL أو تعديل قاعدة البيانات في هذه المرحلة. أي تغيير schema أو RLS سيحتاج مرحلة مستقلة موثقة ومراجعة عقودها.
 
 
-## تحديث الجلسة — 2026-10-11 23:27 +03:00
-- أضيف endpoint `POST /api/v1/orders/batch-delete` محمي بـ`delete_orders`، وتم ربطه بدالة الحذف الحالية. جرى فحص توقيع الإنتاج للقراءة فقط وتصحيح الاستدعاء إلى `delete_orders_with_dependents(text[])` قبل النشر.
-- لم تُجر تغييرات قاعدة بيانات. فحص Supabase يعرض حالة المشروع `ACTIVE_HEALTHY`، وآخر migration المسجلة `20261006232928 portal_payment_requests_0017`.
-- تنبيه أمني مرتفع قائم في قاعدة الإنتاج: 49 جدولًا عامًا مع RLS معطل، منها 27 لديها سياسات غير مفعلة، و44 دالة `SECURITY DEFINER` متاحة لـ`anon`، ومن بينها وظيفة حذف الطلبات. لم نغير RLS/GRANT لأن ذلك خارج تغيير API الحالي وقد يؤثر على النظام الحي؛ يلزم بند أمني مستقل.
-- تحقق alx_api ناجح: TypeScript/build و30 suite/165 test. تحقق SwiftShip: TypeScript/build والاختبارات الموجهة ناجحة؛ بقي فشل كامل واحد في `defaultAccountsVoucherWiring.test.ts` لأن `useAutoVoucherRules` يعيد بيانات فارغة. لا ينبغي تحديث assertion أو إخفاء الفشل بدل استكمال API الخاص بقواعد القيود التلقائية.
-- لم يتم بعد توثيق نتيجة نشر Render في هذا التقرير؛ سيُتحقق منها بعد رفع التغييرات.
-
-
-## تحقق النشر والخطة التالية — 2026-10-11 23:32:55 +03:00
-- `Aporaad/alx_api@3e487e7` و`Aporaad/swiftship@3219307` دُفعا إلى `main`، وRender أعلن deployment لكل منهما `live`. فحص `/api/v1/health/ready` أعاد 200؛ تجربة طلب batch-delete بلا مصادقة أعادت 401 دون حذف. SwiftShip وalx_web يعيدان 200؛ لم يتغير `alx_web` في هذه الدفعة (HEAD `c7d11c0`).
-- الفحص الصحيح لاستيرادات `legacy-compat` يؤكد أن المرحلة الأولى والثانية مكتملتان في الملفات المدرجة بالخطة؛ `useOrderData` كان تطابقًا نصيًا زائفًا بسبب تعليق فقط.
-- المرحلة التالية حسب الخطة هي خطوة 8 في المرحلة الثالثة. صفحات Couriers/Customers/Employees/Users/UserManagement/Settings ما زالت تتضمن استيرادات مباشرة. قبل قطع Courier يجب توسيع API بأمان لحقول النموذج والإنشاء المالي/المستخدم، بينما provisioning الحالي لا يقبل كلمات المرور. بعد ذلك تزال Finance fallbacks في الخطوة 9.
-- الاختبارات الكاملة للواجهة ما زالت تعرض فشلًا واحدًا غير محلول في دعم auto-entry-rules؛ لا يعتبر ترحيل API مكتملًا قبل معالجة هذا العقد وتشغيل TypeScript والبناء والاختبارات كاملة.
-
-
-## فحص Couriers الفعلي — 2026-10-11 23:35:01 +03:00
-استعلام schema للقراءة فقط في Supabase أكد أن `public.couriers` يحوي: courier_id/account_id/currency/is_active/full_name/name_ar/name_en/courier_type/courier_level/commission_rate/timestamps/audit IDs فقط. الحقول التي يرسلها نموذج Courier حاليًا (phone/email/address/GPS/notes/custom ID) لا تملك أعمدة مباشرة، وAPI repository لا يحفظها. كذلك API provisioning مصمم عمدًا لإنشاء ملف مستخدم وإرسال دعوة reset دون استقبال كلمة مرور، خلاف النموذج الحالي الذي يطلبها. لا يجوز حذف/تجاهل هذه الوظائف أو إضافة DDL/تغيير تدفق كلمة المرور دون اعتماد اختيار المستخدم؛ هذه هي نقطة التوقف الحالية قبل تنفيذ Courier cutover.
-
-
-## فجوة تدفق بيانات الاعتماد — 2026-10-11 23:36:20 +03:00
-بوابة auth الخاصة بـ`alx_api` تعلن صراحة عدم استخدام System PIN، وDTO المستخدم يستبعد `system_pin`، بينما نموذجا Courier وEmployees يجمعان PIN وكلمة مرور. API provisioning الحالي ينشئ الملف ويرسل reset invitation ولا يقبل كلمة المرور أو System PIN. لا يمكن نقل هذه النماذج حرفيًا دون اختيار بين اعتماد الدعوة/عدم استخدام PIN وبين إنشاء تدفق API جديد مُحكم لكلمة المرور وPIN. لا تغييرات نفذت بعد.
-
-
-## استئناف Courier — 2026-10-12 00:20 +03:00
-- استجابةً لتوجيه المستخدم، طُبقت migration `20261012000100_add_courier_profile_fields.sql` التي تضيف فقط الأعمدة `phone/email/address/gps_location/notes` كـ`text NULL`. استعلام `information_schema.columns` الحي أعاد الأعمدة الخمسة، ولم تتغير صفوف البيانات.
-- توسعت عمليات Courier في alx_api للحفظ والتحديث والتحقق والتوثيق، وأزيلت الاستدعاءات المباشرة من `CouriersPage` لعمليات البيانات. إنشاء المستخدم يستخدم مسار كلمة المرور الإداري المحمي بـ`reset_passwords`؛ لا يُستخدم System PIN.
-- `alx_api` check/build و30 suites/168 tests ناجحة؛ SwiftShip check/build واختبارات الربط المستهدفة ناجحة. المجموعة الكاملة للواجهة ما زالت تفشل في `defaultAccountsVoucherWiring.test.ts` لأن `useAutoVoucherRules` فارغ؛ لا يجوز إصلاحه بتحديث assertion فقط.
-- حدود Courier الحالية: `financialAccountService` ما زال legacy لإنشاء/تحديث/اكتشاف الحساب المرتبط؛ يجب نقل هذه العمليات في Finance step 9. لذلك لا تُعلن خطوة Courier كاملة حتى تُزال هذه الاعتمادية.
-- ترتيب النشر المقرر لهذه الدفعة: دفع alx_api ونشره والتحقق من صحته، ثم دفع SwiftShip بعد نجاح API. صفحات Customers/Employees/Users/UserManagement/Settings وبقية Finance لا تزال لاحقة حسب الخطة.
+## حالة التنفيذ بعد النشر — 2026-10-12 00:25 +03:00
+- GitHub: `Aporaad/alx_api@bc19c20` و`Aporaad/swiftship@314c48c` على `main`. Render: deployment API `dep-db5vrubbc2fs7396sbkg` وSwiftShip `dep-db5vssoae00c73a57hb0` كلاهما `live`.
+- Smoke checks: `/api/v1/health/ready` = 200، صفحة SwiftShip = 200، وقراءة/إنشاء Courier بلا مصادقة = 401. لم يحدث إنشاء فعلي لسجل Courier أثناء الاختبار.
+- Supabase schema query أكدت وجود الأعمدة الخمسة فقط كإضافات جديدة `text NULL`. لا تزال كتابة الحساب المالي لـCourier تعتمد على `financialAccountService`؛ سيتم نقلها في Finance step 9 قبل إغلاق القطع الكامل.
+- الفحص الكامل للواجهة: 78 test files ناجحة، 3 متخطاة، وملف واحد فاشل بسبب `useAutoVoucherRules` الذي يعيد قائمة فارغة. هذا معروف من قبل تغيير Courier ويحتاج إصلاحًا في الخطوة المالية، لا تعديل assertions لتجاوز المشكلة.
