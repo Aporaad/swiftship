@@ -49,3 +49,7 @@
 
 ## فحص Couriers الفعلي — 2026-10-11 23:35:01 +03:00
 استعلام schema للقراءة فقط في Supabase أكد أن `public.couriers` يحوي: courier_id/account_id/currency/is_active/full_name/name_ar/name_en/courier_type/courier_level/commission_rate/timestamps/audit IDs فقط. الحقول التي يرسلها نموذج Courier حاليًا (phone/email/address/GPS/notes/custom ID) لا تملك أعمدة مباشرة، وAPI repository لا يحفظها. كذلك API provisioning مصمم عمدًا لإنشاء ملف مستخدم وإرسال دعوة reset دون استقبال كلمة مرور، خلاف النموذج الحالي الذي يطلبها. لا يجوز حذف/تجاهل هذه الوظائف أو إضافة DDL/تغيير تدفق كلمة المرور دون اعتماد اختيار المستخدم؛ هذه هي نقطة التوقف الحالية قبل تنفيذ Courier cutover.
+
+
+## فجوة تدفق بيانات الاعتماد — 2026-10-11 23:36:20 +03:00
+بوابة auth الخاصة بـ`alx_api` تعلن صراحة عدم استخدام System PIN، وDTO المستخدم يستبعد `system_pin`، بينما نموذجا Courier وEmployees يجمعان PIN وكلمة مرور. API provisioning الحالي ينشئ الملف ويرسل reset invitation ولا يقبل كلمة المرور أو System PIN. لا يمكن نقل هذه النماذج حرفيًا دون اختيار بين اعتماد الدعوة/عدم استخدام PIN وبين إنشاء تدفق API جديد مُحكم لكلمة المرور وPIN. لا تغييرات نفذت بعد.
