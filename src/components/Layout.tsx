@@ -694,26 +694,26 @@ export default function Layout() {
       {/* Main Container */}
       <main className="flex-1 flex flex-col min-w-0 h-full p-0 overflow-hidden relative">
 
-      <Header
-        isAr={isAr}
-        isMobileMenuOpen={isMobileMenuOpen}
-        setIsMobileMenuOpen={setIsMobileMenuOpen}
-        activeItem={activeItem}
-        searchText={searchText}
-        setSearchText={setSearchText}
-        handleGlobalSearchKeyPress={handleGlobalSearchKeyPress}
-        setIsSearchOpen={setIsSearchOpen}
-        formattedTime={formattedTime}
-        formattedDate={formattedDate}
-        setIsQuickNavOpen={setIsQuickNavOpen}
-        toggleLanguage={toggleLanguage}
-        unreadCount={unreadCount}
-        setIsPortalApprovalsOpen={setIsPortalApprovalsOpen}
-        pendingPortalCount={pendingPortalCount}
-        setIsJobApplicationsOpen={setIsJobApplicationsOpen}
-        pendingJobsCount={pendingJobsCount}
-        setIsSystemDevModalOpen={setIsSystemDevModalOpen}
-      />
+        <Header
+          isAr={isAr}
+          isMobileMenuOpen={isMobileMenuOpen}
+          setIsMobileMenuOpen={setIsMobileMenuOpen}
+          activeItem={activeItem}
+          searchText={searchText}
+          setSearchText={setSearchText}
+          handleGlobalSearchKeyPress={handleGlobalSearchKeyPress}
+          setIsSearchOpen={setIsSearchOpen}
+          formattedTime={formattedTime}
+          formattedDate={formattedDate}
+          setIsQuickNavOpen={setIsQuickNavOpen}
+          toggleLanguage={toggleLanguage}
+          unreadCount={unreadCount}
+          setIsPortalApprovalsOpen={setIsPortalApprovalsOpen}
+          pendingPortalCount={pendingPortalCount}
+          setIsJobApplicationsOpen={setIsJobApplicationsOpen}
+          pendingJobsCount={pendingJobsCount}
+          setIsSystemDevModalOpen={setIsSystemDevModalOpen}
+        />
 
 
         {/* Sub-routing Pages Outlet Viewport */}
@@ -884,7 +884,7 @@ export default function Layout() {
                     <div className="bg-[#0a0a0c] border border-white/[0.03] p-5 rounded-3xl space-y-3 text-start">
                       <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
                         <MapPin className="w-3.5 h-3.5 text-[#d4af37]" />
-                        <span>{settings.companyAddress || (isAr ? 'المركز الرئيسي - اليمن / المملكة العربية السعودية' : 'Headquarters - Yemen / KSA')}</span>
+                        <span>{settings.companyAddress || (isAr ? 'المركز الرئيسي - اليمن - صنعاء' : 'Headquarters - Yemen / KSA')}</span>
                       </div>
                       <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
                         <Phone className="w-3.5 h-3.5 text-[#d4af37]" />
@@ -892,7 +892,7 @@ export default function Layout() {
                       </div>
                       <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
                         <Globe className="w-3.5 h-3.5 text-[#d4af37]" />
-                        <span>{settings.companyWebsite || 'www.al-xpress.com'}</span>
+                        <span>{settings.companyWebsite || 'www.alx.luxe'}</span>
                       </div>
                     </div>
                   </div>
