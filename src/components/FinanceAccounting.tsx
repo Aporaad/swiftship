@@ -19,7 +19,7 @@ import {
   FolderTree, Wrench, Users, Coins, UserCheck, Eye, ChevronDown, ChevronUp, Edit2, Lock, Trash2, ArrowRightLeft
 } from 'lucide-react';
 import { useAuthSession } from '../features/auth/AuthSessionProvider';
-import { db, doc, updateDoc, writeBatch } from '../data/legacy/legacy-compat.ts';
+import { db, doc, writeBatch } from '../data/legacy/legacy-compat.ts';
 import { notificationService } from '../services/notificationService';
 import AccountingHierarchyManagement from './AccountingHierarchyManagement';
 import AssetsPortfolio from './AssetsPortfolio';
@@ -385,7 +385,7 @@ export default function FinanceAccounting({
 
   // Domain actions live outside the page shell; behavior remains in their original handlers.
   const { handleEditJournalSubmit, handleDeleteJournalSubmit, handleAddAdjustment, handleCustomerFIFOPayment } = createFinanceAccountingMainEntryActions({ adjustData, adjustLoading, adjustSalaryMonth, auditedCustomerId, currentUser, customerLedgerDetails, dbRates, deletePin, editJournalData, employees, entryToDelete, financialAccountService, isAr, isSalaryPayment, notificationService, orders, payAmount, payLoading, payNotes, postingFinancialAccounts, selectedEditEntry, setAdjustData, setAdjustLoading, setDeleteLoading, setDeletePin, setDeletePinError, setEditJournalLoading, setEntryToDelete, setIsAdjustmentModalOpen, setIsDeletePinModalOpen, setIsEditJournalOpen, setIsPayModalOpen, setIsSalaryPayment, setPayAmount, setPayLoading, setPayNotes, setSelectedEditEntry, setSourceAccountId, setTargetAccountId, setTargetType, settings, sourceAccountId, targetAccountId, targetType });
-  const { handleFullCourierReconciliation, handleBulkRemitCourierCash, handleDirectSettleCustody } = createFinanceAccountingCourierActions({ courierAuditSheet, currentUser, db, dbRates, doc, financialAccountService, isAr, notificationService, setBulkReconciliationLoading, setCargoRemitLoading, settings, updateDoc, writeBatch });
+  const { handleFullCourierReconciliation, handleBulkRemitCourierCash, handleDirectSettleCustody } = createFinanceAccountingCourierActions({ courierAuditSheet, currentUser, db, dbRates, doc, financialAccountService, isAr, notificationService, postingFinancialAccounts, setBulkReconciliationLoading, setCargoRemitLoading, settings, writeBatch });
   const { exportLedgerToCSV, triggerPrint } = createFinanceAccountingLedgerActions({ currentUser, filteredLedgerEntries, formatDate, formatDateTime, isAr });
 
 return (

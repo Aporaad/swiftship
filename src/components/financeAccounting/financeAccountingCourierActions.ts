@@ -1,4 +1,10 @@
 import type { Transaction } from '../../types';
+import {
+  financialEntryService,
+  type LegacyVoucherAccountTarget,
+  type LegacyVoucherInput,
+} from '../../services/financialEntryService';
+import { settingsCurrenciesApiGateway } from '../../data/http/settings-currencies-api.gateway';
 
 interface BatchHandle {
   update: (reference: DocReference, data: Record<string, unknown>) => void;
@@ -17,6 +23,14 @@ interface FinanceAccountService {
   convertToDefaultCurrency: (amount: number, fromCurrency: string, toCurrency: string, rates: Record<string, number>) => number;
   recordTransaction: (payload: Transaction) => Promise<void>;
 }
+interface PostingAccountLike {
+  id?: string;
+  currency?: string;
+  curNo?: number;
+  currencyNo?: number;
+  entityType?: string;
+  entityId?: string;
+}
 interface ActionDependencies {
   courierAuditSheet: CourierAuditSheet | null;
   currentUser?: { id?: string } | null;
@@ -24,10 +38,10 @@ interface ActionDependencies {
   doc: (...args: unknown[]) => DocReference;
   financialAccountService: FinanceAccountService; isAr: boolean;
   notificationService: { notify: (payload: NotificationPayload) => Promise<void> };
+  postingFinancialAccounts: PostingAccountLike[];
   setBulkReconciliationLoading: (value: boolean) => void;
   setCargoRemitLoading: (value: boolean) => void;
   settings: { currency?: string };
-  updateDoc: (reference: DocReference, data: Record<string, unknown>) => Promise<void>;
   writeBatch: (db: unknown) => BatchHandle;
 }
 
@@ -47,6 +61,7 @@ interface CustodyRecord {
   amount?: number | string;
   amountSettled?: unknown;
   amountOutstanding?: unknown;
+  currencyOriginalNo?: unknown;
   recipientAccountId?: unknown;
   currency?: string | null;
   expenseNumber?: unknown;
@@ -62,7 +77,62 @@ const errorMessage = (error: unknown, fallback: string): string =>
   error instanceof Error && error.message ? error.message : fallback;
 
 export function createFinanceAccountingCourierActions(dependencies: ActionDependencies) {
-  const { courierAuditSheet, currentUser, db, dbRates, doc, financialAccountService, isAr, notificationService, setBulkReconciliationLoading, setCargoRemitLoading, settings, updateDoc, writeBatch } = dependencies;
+  const { courierAuditSheet, currentUser, db, dbRates, doc, financialAccountService, isAr, notificationService, postingFinancialAccounts, setBulkReconciliationLoading, setCargoRemitLoading, settings, writeBatch } = dependencies;
+
+  const toAccountTarget = (accountId?: string | null): LegacyVoucherAccountTarget | null => {
+    const acc = postingFinancialAccounts.find((a: PostingAccountLike) => a.id === accountId);
+    if (!acc?.id) return null;
+    const resolvedCurNo = Number(acc.curNo ?? acc.currencyNo ?? 0);
+    return {
+      id: acc.id,
+      curNo: Number.isInteger(resolvedCurNo) && resolvedCurNo > 0 ? resolvedCurNo : undefined,
+      currency: acc.currency || settings.currency || 'YER',
+      entityType: acc.entityType,
+      entityId: acc.entityId,
+    };
+  };
+
+  // تسوية العهدة عبر الـAPI: settle_custody_advance يحدّث العهدة ويترحّل قيد التسوية ذرياً
+  // Custody settlement via the API: the RPC updates the custody row and posts the settlement voucher atomically.
+  const settleCustodyViaApi = async (custody: CustodyRecord): Promise<void> => {
+    if (!custody.id) throw new Error(isAr ? 'معرف العهدة غير متاح.' : 'Custody id is unavailable.');
+    const outstanding = Number(custody.amountOutstanding ?? 0) || Number(custody.amountOriginal ?? custody.amount ?? 0);
+    if (!Number.isFinite(outstanding) || outstanding <= 0) {
+      throw new Error(isAr ? 'لا يوجد مبلغ معلق لهذه العهدة لتسويته.' : 'This custody has no outstanding amount to settle.');
+    }
+
+    const curNo = Number(custody.currencyOriginalNo ?? 0);
+    let currencyCode = String(custody.currency || settings.currency || 'YER');
+    if (Number.isInteger(curNo) && curNo > 0) {
+      const currencies = await settingsCurrenciesApiGateway.listCurrencies(false);
+      const match = currencies.find((c: { currencyId?: number }) => Number(c.currencyId) === curNo);
+      if (match?.code) currencyCode = String(match.code);
+    }
+
+    const cashAccountId = (await financialAccountService.ensureSystemAccounts(currencyCode))['sys_cash_account'];
+    const debitTarget = toAccountTarget(String(custody.recipientAccountId ?? ''));
+    const creditTarget = toAccountTarget(cashAccountId);
+    if (!debitTarget || !creditTarget) {
+      throw new Error(isAr ? 'حساب العهدة أو حساب الصندوق غير متوفر في الدفتر النشط.' : 'The custody recipient account or the system cash account is missing from the active register.');
+    }
+
+    const voucherNum = `${String(custody.expenseNumber ?? custody.id ?? 'custody')}-SET`;
+    const voucher: LegacyVoucherInput = {
+      entryNumber: voucherNum,
+      createdAt: Date.now(),
+      description: (isAr
+        ? `تسوية عهدة تلقائية: ${custody.expenseNumber ?? custody.id ?? ''}`
+        : `Auto custody settlement: ${custody.expenseNumber ?? custody.id ?? ''}`).trim(),
+      amount: outstanding,
+      currency: currencyCode,
+      module: 'custody',
+      refNumber: voucherNum,
+      createdByUid: currentUser?.id || 'system',
+      postingStatus: 'posted',
+    };
+    const entry = await financialEntryService.buildLegacyVoucherInput(voucher, debitTarget, creditTarget);
+    await financialEntryService.settleCustodyAdvance(String(custody.id), entry, currentUser?.id || undefined);
+  };
 
 // Full reconciliation and balance clearance for courier
   const handleFullCourierReconciliation = async () => {
@@ -124,38 +194,10 @@ Continue?`
         }
       }
 
-      // 2. Settle all pending open custodies
+      // 2. Settle all pending open custodies — تسوية ذرية عبر settle_custody_advance
       const pendingCustodies = courierAuditSheet.custodies.filter((c: CustodyRecord) => c.status === 'Pending');
       for (const exp of pendingCustodies) {
-        const docRef = doc(db, 'custody_advances', exp.id);
-        batch.update(docRef, {
-          status: 'settled',
-          settledAt: new Date(timestamp).toISOString(),
-          settledByUid: currentUser?.id || 'system',
-          amountSettled: exp.amountOriginal ?? exp.amount ?? 0,
-          amountOutstanding: 0,
-        });
-
-        if (exp.recipientAccountId) {
-          const settledAmount = financialAccountService.convertToDefaultCurrency(
-            parseFloat(String(exp.amount || 0)),
-            exp.currency || 'YER',
-            settings.currency || 'SAR',
-            dbRates
-          );
-          await financialAccountService.recordTransaction({
-            date: timestamp,
-            description: isAr ? `تسوية عهدة تلقائية: ${exp.expenseNumber}` : `Auto custody settlement: ${exp.expenseNumber}`,
-            module: 'custody',
-            refNumber: `${String(exp.expenseNumber ?? exp.id ?? 'custody')}-SET`,
-            amount: settledAmount,
-            currency: 'YER',
-            debitAccount: { id: String(exp.recipientAccountId), code: '2120' },
-            creditAccount: { id: systemAccs['sys_cash_account'], code: '1111-0' },
-            createdByUid: currentUser?.id || 'system',
-            createdByName: 'Finance Auditor'
-          });
-        }
+        await settleCustodyViaApi(exp);
       }
 
       // 3. Remit all unremitted COD cargo cash
@@ -273,21 +315,25 @@ Continue?`
     }
   };
 
-// Live Settle specific Custody record from the interactive sheet
+// Live Settle specific Custody record from the interactive sheet — عبر settle_custody_advance
   const handleDirectSettleCustody = async (custodyDocId: string, recipientName: string) => {
+    const custody = courierAuditSheet?.custodies.find((c: CustodyRecord) => c.id === custodyDocId) || null;
+    if (!custody) {
+      await notificationService.notify({
+        title: isAr ? 'تعذرت التسوية' : 'Settlement Blocked',
+        message: isAr ? 'بيانات العهدة غير متاحة في ورقة التدقيق؛ لا يمكن التسوية عبر الـAPI.' : 'Custody data is unavailable in the audit sheet; API settlement cannot proceed.',
+        type: 'error'
+      });
+      return;
+    }
+
     if (!window.confirm(isAr
       ? `هل أنت متأكد من مراجعة وتصفية هذا السند العهدة؟`
       : `Are you sure you want to discharge and settle this custody entry?`
     )) return;
 
     try {
-      const docRef = doc(db, 'custody_advances', custodyDocId);
-      await updateDoc(docRef, {
-        status: 'settled',
-        settledAt: new Date().toISOString(),
-        settledByUid: currentUser?.id || 'system',
-        amountOutstanding: 0,
-      });
+      await settleCustodyViaApi(custody);
 
       notificationService.notify({
         title: isAr ? 'تم تسوية وتصفير العهدة' : 'Custody Discharged',
@@ -300,7 +346,7 @@ Continue?`
       console.error(err);
       notificationService.notify({
         title: 'Writeback fault',
-        message: errorMessage(err, 'Could not discharge custody row in PostgreSQL.'),
+        message: errorMessage(err, 'Could not discharge custody row through the finance API.'),
         type: 'error'
       });
     }

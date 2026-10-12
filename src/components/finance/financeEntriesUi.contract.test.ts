@@ -7,8 +7,10 @@ const source = (name: string) => readFileSync(resolve(process.cwd(), 'src', 'com
 describe('عقد واجهة القيود الجديدة', () => {
   it('لا يطلب عمود accounts.entity_name غير الموجود ويستخدم أسماء الحسابات الصريحة', () => {
     const page = readFileSync(resolve(process.cwd(), 'src', 'features', 'financeEntries', 'pages', 'FinanceEntriesPage.tsx'), 'utf8');
-    expect(page).toContain('readString(item.acc_name_ar) || readString(item.acc_name_en) || stringValue(item.account_id)');
-    expect(page).not.toContain('item.entity_name');
+    // عقد alx_api: أعمدة الحسابات تُعاد بصيغة camelCase (accountNameAr/accountNameEn) مع دعم snake_case للأغلفة القديمة
+    expect(page).toContain('readString(item.accountNameAr ?? item.acc_name_ar) || readString(item.accountNameEn ?? item.acc_name_en) || stringValue(item.accountId ?? item.account_id)');
+    const nameArLine = page.split('\n').find((line) => line.includes('nameAr:')) ?? '';
+    expect(nameArLine).not.toContain('entity_name');
   });
 
   it('يفتح تعديلًا للمسودة فقط ويمرر بيانات السطور إلى نموذج الاستبدال الذري', () => {

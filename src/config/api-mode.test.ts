@@ -35,8 +35,8 @@ describe('API contract matrix', () => {
       'roles', 'settings', 'shipments', 'siteManagement', 'sources', 'users',
     ];
     expect(API_CONTRACT_MATRIX.length).toBeGreaterThan(0);
-    expect(getApiDomainContract('settings')?.status).toBe('missing');
-    expect(getApiDomainContract('currencies')?.status).toBe('missing');
+    expect(getApiDomainContract('settings')?.status).toBe('available');
+    expect(getApiDomainContract('currencies')?.status).toBe('available');
     for (const domain of registeredDomains) {
       const contract = getApiDomainContract(domain) ??
         getApiDomainContract(domain === 'financeEntries' ? 'finance' : domain);

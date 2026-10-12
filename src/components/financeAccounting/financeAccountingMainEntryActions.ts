@@ -81,6 +81,7 @@ interface PostingAccount {
   accountCode?: string;
   currency?: string;
   curNo?: number;
+  currencyNo?: number;
   entityType?: AccountEntityType;
   entityId?: string;
   entityName?: string;
@@ -148,9 +149,10 @@ export function createFinanceAccountingMainEntryActions(dependencies: ActionDepe
   const toAccountTarget = (accountId?: string | null, fallback?: LegRow | null): LegacyVoucherAccountTarget | null => {
     const acc = postingFinancialAccounts.find((a: PostingAccount) => a.id === accountId);
     if (acc?.id) {
+      const resolvedCurNo = Number(acc.curNo ?? acc.currencyNo ?? 0);
       return {
         id: acc.id,
-        curNo: acc.curNo,
+        curNo: Number.isInteger(resolvedCurNo) && resolvedCurNo > 0 ? resolvedCurNo : undefined,
         currency: acc.currency || settings.currency || 'YER',
         entityType: acc.entityType,
         entityId: acc.entityId,
