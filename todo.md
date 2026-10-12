@@ -2366,3 +2366,14 @@
 - [x] إضافة بوابة Portal Admin للقائمة والإنشاء والتعديل والاعتماد والتعطيل والحذف وحفظ تفاصيل العميل.
 - [x] ربط `CustomerCreateModal` وتدفق اعتماد مستخدم البوابة بالـ API.
 - [ ] التالي حسب الخطة: تحويل Employees ثم Users/UserManagement ثم Settings قبل Finance step 9.
+
+## [2026-10-12 02:40:00 +03:00] — إكمال تحويل Employees و Users و Settings و Finance إلى API-only وإضافة حقول الموظفين
+- [x] [2026-10-12 02:40:00 +03:00] إضافة الحقول الممتدة للموظفين (`phone`, `email`, `disabled`, `address`, `gps_location`, `notes`) إلى جدول `public.employees` بقاعدة البيانات الحية عبر migration `0019_employees_extended_fields.sql`.
+- [x] [2026-10-12 02:40:00 +03:00] تحديث `alx_api` (`operations.contracts.ts`, `operations.schemas.ts`, `operations.repository.ts`, `operations.routes.ts`, `reporting.repository.ts`) لحفظ واسترجاع الحقول الممتدة للموظفين والبحث فيها.
+- [x] [2026-10-12 02:40:00 +03:00] تحديث واجهات ومكونات الموظفين (`EmployeeCreateModal.tsx`, `EmployeesPage.tsx`, `staffApiDataGateway.ts`, `employees.dto.ts`) لتمرير واستعراض وتعديل كافة الحقول الممتدة وتبديل حالة التفعيل/التعطيل بنقاء API-only.
+- [x] [2026-10-12 02:40:00 +03:00] استكمال Settings بالكامل إلى API-only بما يشمل الإعدادات العامة والعملات واللوجستيات والمظهر والنسخ الاحتياطي وإزالة `legacy-compat` تماماً.
+- [x] [2026-10-12 02:40:00 +03:00] استكمال Users و UserManagement إلى API-only بالكامل.
+- [x] [2026-10-12 02:40:00 +03:00] تحويل `FinanceEntriesPage.tsx` إلى API-only بالكامل عبر `ApiClient` وإزالة استدعاءات `supabase` و`legacy-compat`.
+- [x] [2026-10-12 02:40:00 +03:00] تطهير `legacy-boundary.baseline.json` من الصفحات المنقولة (`EmployeesPage`, `SettingsPage`, `UserManagementPage`, `UsersPage`, `RolesPage`, `SourcesPage`, `FinanceEntriesPage`).
+- [x] [2026-10-12 02:40:00 +03:00] اجتياز فحص تجميع TypeScript في `SWIFTSHIP_SYSTEM` و `alx_api` بدون أية أخطاء بنسبة 100% (0 errors) واجتياز اختبارات حدود التوافق (`legacy-boundary.test.ts`) بنجاح (3/3 passed).
+

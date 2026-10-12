@@ -3094,3 +3094,29 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
 - تم تحويل إنشاء وتحديث وحذف وتعطيل واعتماد مستخدمي البوابة وحفظ `cust_details` إلى API، مع إبقاء business logic خارج UI.
 - `npm run check` و`npm run build` في SwiftShip ناجحان.
 - ما زالت تحذيرات build العامة الخاصة ببقية أجزاء Supabase القديمة موجودة خارج نطاق Portal Admin، وسيتم إغلاقها في المراحل اللاحقة.
+
+## [2026-10-12 02:45:00 +03:00] — استكمال تحويل الموظفين والمستخدمين والإعدادات والمالية إلى API-only وتأمين حقول الموظفين الممتدة — Antigravity / Gemini
+- **قاعدة البيانات (Database Schema):**
+  - إضافة الحقول الناقصة إلى جدول `public.employees`: `phone`, `email`, `disabled`, `address`, `gps_location`, `notes` عبر migration `0019_employees_extended_fields.sql`.
+  - توثيق DDL في `db_commends.md` وسجل قاعدة البيانات في `DBdevloping_history.md`.
+- **واجهة برمجة التطبيقات (alx_api):**
+  - تحديث `operations.contracts.ts` و `operations.schemas.ts` لدعم حقول الموظفين الستة في `CreateEmployeeInput` و `UpdateEmployeeInput` ومخططات Zod.
+  - تحديث `operations.repository.ts` في استعلامي `INSERT` و `UPDATE` لحفظ واسترجاع الحقول بالكامل.
+  - تحديث `operations.routes.ts` لتمرير الحقول الممتدة من الـ request body إلى المستودع.
+  - تحديث `reporting.repository.ts` لضم الحقول الممتدة وإتاحة البحث الفوري بالهاتف والإيميل والعنوان ضمن `/api/v1/reporting/employees`.
+- **الواجهة الأمامية ومكونات الموظفين (Frontend & Employee Components):**
+  - تحديث `employees.dto.ts` لدعم الحقول الممتدة في صفوف قاعدة البيانات و DTOs وعقود الإنشاء والتحديث.
+  - تحديث `staffApiDataGateway.ts` بدالة تطبيع `normalizeEmployee` وتمرير الحقول في `createEmployee` و `updateEmployee` و `subscribe`.
+  - تحديث `EmployeeCreateModal.tsx` و `EmployeesPage.tsx` لتمرير وحفظ واستعراض وتعديل كافة الحقول الممتدة، وتفعيل تبديل الحالة التفاعلية (`disabled: !emp.disabled`).
+- **ترحيل الإعدادات والعملات (Settings & Currencies API-only):**
+  - استكمال عقود CRUD وتاريخ أسعار الصرف في `settingsCurrenciesApiGateway.ts` وربط `currencyService.ts` بها بالكامل.
+  - تطهير `SettingsPage.tsx` من استدعاءات `legacy-compat` و `supabase`، وربط اللوجستيات والمظهر والعملات بـ API.
+- **ترحيل القيود المالية (FinanceEntriesPage API-only):**
+  - تطهير صفحة `FinanceEntriesPage.tsx` من استدعاءات Supabase المباشرة وتحويلها بالكامل إلى `ApiClient` (`/api/v1/settings/currencies`, `/api/v1/finance/accounts`, `/api/v1/finance/entry-modules`, `/api/v1/finance/entry-types`, `/api/v1/finance/entries`, `/api/v1/finance/account-movements`, `/api/v1/finance/custody-advances`, `/api/v1/reporting/users`).
+- **تحديث خط الأساس لحدود التوافق (Legacy Boundary Baseline):**
+  - إزالة كافة الصفحات المطهرة من `legacy-boundary.baseline.json`: (`EmployeesPage`, `SettingsPage`, `UserManagementPage`, `UsersPage`, `RolesPage`, `SourcesPage`, `FinanceEntriesPage`).
+  - اجتياز اختبار حدود التوافق (`legacy-boundary.test.ts`) بنسبة 3/3 بنجاح تام.
+- **التحقق البرمجي (Verification):**
+  - اجتياز فحص `npx tsc --noEmit` في `SWIFTSHIP_SYSTEM` بصفر أخطاء (0 errors).
+  - اجتياز فحص `npx tsc --noEmit` في `alx_api` بصفر أخطاء (0 errors).
+

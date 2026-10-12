@@ -32,6 +32,12 @@ type EmployeeWriteInput = {
   commissionRate?: number;
   currency?: string;
   accountId?: string;
+  phone?: string;
+  email?: string;
+  disabled?: boolean;
+  address?: string;
+  gpsLocation?: string;
+  notes?: string;
 };
 type StaffState = {
   couriers: Row[];
@@ -90,6 +96,18 @@ const normalizeCourier = (row: Row): Row => ({
   disabled: row.isActive === false,
 });
 
+const normalizeEmployee = (row: Row): Row => ({
+  ...normalize(row, "employeeId"),
+  phone: String(row.phone ?? ""),
+  email: String(row.email ?? ""),
+  address: String(row.address ?? ""),
+  gpsLocation: String(row.gpsLocation ?? row.gps_location ?? ""),
+  notes: String(row.notes ?? ""),
+  jobsType: String(row.jobType ?? row.jobsType ?? "إداري"),
+  jobType: String(row.jobType ?? row.jobsType ?? "إداري"),
+  disabled: Boolean(row.disabled),
+});
+
 export const staffApiDataGateway = {
   isEnabled: () => import.meta.env.VITE_STAFF_API_READS === "true" || import.meta.env.VITE_USE_HTTP_API === "true",
   isWriteEnabled: () => import.meta.env.VITE_STAFF_API_WRITES === "true" || import.meta.env.VITE_USE_HTTP_API === "true",
@@ -115,7 +133,7 @@ export const staffApiDataGateway = {
 
   async createEmployee(input: EmployeeWriteInput): Promise<Row> {
     const response = await client.post<ApiEnvelope<Row>>("/api/v1/operations/employees", input);
-    return response.data;
+    return normalizeEmployee(response.data);
   },
 
   async updateEmployee(employeeId: string, input: Partial<EmployeeWriteInput>): Promise<Row> {
@@ -123,7 +141,7 @@ export const staffApiDataGateway = {
       `/api/v1/operations/employees/${encodeURIComponent(employeeId)}`,
       input,
     );
-    return response.data;
+    return normalizeEmployee(response.data);
   },
 
   async deleteEmployee(employeeId: string): Promise<void> {
@@ -145,7 +163,7 @@ export const staffApiDataGateway = {
         if (!disposed) {
           handlers.onData({
             couriers: couriers.map(normalizeCourier),
-            employees: employees.map(row => normalize(row, "employeeId")),
+            employees: employees.map(normalizeEmployee),
             orders: orders.map(row => normalize(row, "orderId")),
             accounts: accounts.map(row => normalize(row, "accountId")),
           });

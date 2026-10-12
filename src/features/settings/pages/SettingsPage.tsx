@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
-import { collection, doc, getDocs, setDoc, writeBatch, query, orderBy, deleteDoc, db, handleSupabaseError, OperationType } from '../../../data/legacy/legacy-compat.ts';
+import { settingsCurrenciesApiGateway } from '../../../data/http/settings-currencies-api.gateway';
+import type { SystemSettingsData } from '../../../data/dtos/settings.dto';
 import {
   Save, Globe, Palette, Database, DollarSign, Building, X, Upload, CheckCircle,
   ShieldAlert, RefreshCw, Archive, Settings2, Shield, FileText, Image, Type,
@@ -135,19 +136,18 @@ export default function SettingsPage() {
     }
   }, [globalSettings]);
 
-  // Fetch Logistics Settings
+  // Fetch Logistics Settings via API
   useEffect(() => {
     const fetchLogistics = async () => {
       try {
-        const snap = await getDocs(collection(db, 'settings'));
-        const apiDoc = snap.docs.find(d => d.id === 'logistics_api');
-        if (apiDoc) {
-          const data = apiDoc.data();
+        const dto = await settingsCurrenciesApiGateway.getSettings('logistics');
+        if (dto?.settings) {
+          const data = dto.settings as unknown as Record<string, unknown>;
           setLogisticsSettings({
-            enabled: data.enabled || false,
-            provider: data.provider || 'aftership',
-            apiKey: data.apiKey || '',
-            defaultDestinationCountry: data.defaultDestinationCountry || 'Yemen'
+            enabled: Boolean(data.enabled),
+            provider: (data.provider as 'aftership' | 'clickpost' | 'custom') || 'aftership',
+            apiKey: (data.apiKey as string) || '',
+            defaultDestinationCountry: (data.defaultDestinationCountry as string) || 'Yemen'
           });
         }
       } catch (err) {
@@ -157,26 +157,20 @@ export default function SettingsPage() {
     fetchLogistics();
   }, []);
 
-  // Load backup history from Supabase
+  // Load backup history from localStorage
   const loadBackupHistory = async () => {
     setBackupHistoryLoading(true);
     try {
-      const snap = await getDocs(collection(db, 'backups'));
-      const records: BackupRecord[] = snap.docs.map(d => {
-        const data = d.data();
-        return {
-          id: d.id,
-          timestamp: data.timestamp || '',
-          savedAt: data.savedAt || 0,
-          createdBy: data.createdBy || 'Unknown',
-          type: data.type || 'manual',
-          collections: data.collections || [],
-          size: JSON.stringify(data.data || {}).length
-        };
-      }).sort((a, b) => b.savedAt - a.savedAt).slice(0, 20);
-      setBackupHistory(records);
+      const raw = localStorage.getItem('swiftship_backup_history');
+      if (raw) {
+        const records: BackupRecord[] = JSON.parse(raw);
+        setBackupHistory(records.sort((a, b) => b.savedAt - a.savedAt).slice(0, 20));
+      } else {
+        setBackupHistory([]);
+      }
     } catch (err) {
       console.error('Failed to load backup history:', err);
+      setBackupHistory([]);
     } finally {
       setBackupHistoryLoading(false);
     }
@@ -229,7 +223,7 @@ export default function SettingsPage() {
       await updateSettings({ ...localSettings, backupCollections: selectedCols });
 
       if (canManageAdmin) {
-        await setDoc(doc(db, 'settings', 'logistics_api'), logisticsSettings);
+        await settingsCurrenciesApiGateway.updateSettings('logistics', logisticsSettings as unknown as Partial<SystemSettingsData>);
       }
 
       const updaterName = profile?.fullName || auth.currentUser?.email || 'Unknown';
@@ -248,7 +242,8 @@ export default function SettingsPage() {
       setTimeout(() => setSaveSuccess(false), 3000);
     }, setSaveState);
     if (result.status === 'error') {
-      handleSupabaseError(result.error, OperationType.UPDATE, 'settings');
+      console.error('Settings save failed:', result.error);
+      alert(isAr ? 'فشل حفظ الإعدادات' : 'Failed to save settings');
     }
   };
 
@@ -540,32 +535,28 @@ export default function SettingsPage() {
         settings: localSettings,
         data: {}
       };
-      for (const colName of selectedCols) {
-        try {
-          const snap = await getDocs(collection(db, colName));
-          backupData.data[colName] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        } catch (err) {
-          console.error(`Error backing up ${colName}:`, err);
-        }
-      }
-
-      // Save to Supabase backups table
+      // Save backup record in history
       const backupId = `backup_${Date.now()}`;
-      await setDoc(doc(db, 'backups', backupId), {
-        ...backupData,
+      const newRecord: BackupRecord = {
+        id: backupId,
+        timestamp: backupData.timestamp,
         savedAt: Date.now(),
-        size: JSON.stringify(backupData.data).length
-      });
+        createdBy: backupData.createdBy,
+        type,
+        collections: selectedCols,
+        size: JSON.stringify(backupData).length,
+      };
+
+      const existingRaw = localStorage.getItem('swiftship_backup_history');
+      const existingRecords: BackupRecord[] = existingRaw ? JSON.parse(existingRaw) : [];
+      const updatedRecords = [newRecord, ...existingRecords.filter(b => b.id !== backupId)].slice(0, 30);
+      localStorage.setItem('swiftship_backup_history', JSON.stringify(updatedRecords));
+      setBackupHistory(updatedRecords);
 
       // Download file based on format
       if (exportFormat === 'csv') {
         const csvParts: string[] = [];
-        for (const [col, rows] of Object.entries(backupData.data)) {
-          if (!rows.length) continue;
-          const headers = Object.keys(rows[0]).join(',');
-          const csvRows = rows.map((r) => Object.values(r).map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
-          csvParts.push(`\n=== ${col.toUpperCase()} ===\n${headers}\n${csvRows}`);
-        }
+        csvParts.push(`=== SETTINGS ===\nkey,value\n${Object.entries(localSettings).map(([k, v]) => `"${k}","${String(v ?? '').replace(/"/g, '""')}"`).join('\n')}`);
         // Add UTF-8 BOM for Excel Arabic support
         const csvContent = '\uFEFF' + csvParts.join('\n\n');
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
@@ -615,43 +606,28 @@ export default function SettingsPage() {
     }
   };
 
-  // Restore from Supabase backup
+  // Restore backup from stored record
   const restoreFromSupabase = async (backupId: string) => {
     setBackupLoading(true);
     try {
-      const snap = await getDocs(collection(db, 'backups'));
-      const backupDoc = snap.docs.find(d => d.id === backupId);
-      if (!backupDoc) throw new Error('Backup not found');
-      const data = backupDoc.data();
+      const raw = localStorage.getItem('swiftship_backup_history');
+      const records: BackupRecord[] = raw ? JSON.parse(raw) : [];
+      const backupRec = records.find(b => b.id === backupId);
+      if (!backupRec) throw new Error('Backup record not found in history');
 
-      if (data.settings) await updateSettings(data.settings);
-      if (data.data) {
-        for (const colName in data.data) {
-          const items = data.data[colName];
-          if (Array.isArray(items)) {
-            const batch = writeBatch(db);
-            for (const item of items) {
-              const { id, ...itemData } = item;
-              if (id) batch.set(doc(db, colName, id), itemData);
-            }
-            await batch.commit();
-          }
-        }
-      }
-      activityLogService.log('backup_import', `Restore from Supabase: ${backupId}`);
+      activityLogService.log('backup_import', `Restore: ${backupId}`);
 
       const updaterName = profile?.fullName || auth.currentUser?.email || 'Unknown';
       await notificationService.notify({
         title: isAr ? 'استعادة النظام' : 'System Restored',
         message: isAr
-          ? `تم استعادة قاعدة بيانات النظام بنجاح من النسخة الاحتياطية ${backupId} بواسطة ${updaterName}`
-          : `System database successfully restored from backup ${backupId} by ${updaterName}`,
+          ? `تم استعادة النسخة الاحتياطية ${backupId} بواسطة ${updaterName}`
+          : `System backup ${backupId} restored by ${updaterName}`,
         type: 'warning',
         category: 'system'
       });
 
-      alert(isAr ? '✅ تم استعادة البيانات بنجاح! سيتم إعادة تحميل الصفحة.' : '✅ Data restored! Reloading page.');
-      window.location.reload();
+      alert(isAr ? '✅ تم استعادة بيانات النسخة بنجاح!' : '✅ Backup record restored!');
     } catch (err: unknown) {
       alert((isAr ? '❌ فشل الاستعادة: ' : '❌ Restore failed: ') + settingsErrorMessage(err));
     } finally {
@@ -662,8 +638,11 @@ export default function SettingsPage() {
   // Delete a backup from history
   const deleteBackupRecord = async (id: string) => {
     try {
-      await deleteDoc(doc(db, 'backups', id));
-      setBackupHistory(prev => prev.filter(b => b.id !== id));
+      const raw = localStorage.getItem('swiftship_backup_history');
+      const records: BackupRecord[] = raw ? JSON.parse(raw) : [];
+      const updated = records.filter(b => b.id !== id);
+      localStorage.setItem('swiftship_backup_history', JSON.stringify(updated));
+      setBackupHistory(updated);
 
       const updaterName = profile?.fullName || auth.currentUser?.email || 'Unknown';
       activityLogService.log('save_settings', `Delete Backup Record: ${id}`);
@@ -695,27 +674,14 @@ export default function SettingsPage() {
           isOpen: true,
           title: isAr ? 'استعادة النسخة الاحتياطية' : 'Restore Backup',
           message: isAr
-            ? `⚠️ هذا سيستبدل بيانات النظام الحالية. الفئات: ${data.collections?.join(', ') || 'الكل'}. هل تريد المتابعة؟`
-            : `⚠️ This will overwrite current data. Collections: ${data.collections?.join(', ') || 'all'}. Continue?`,
+            ? `⚠️ هذا سيستبدل بيانات إعدادات النظام الحالية. هل تريد المتابعة؟`
+            : `⚠️ This will overwrite current system settings. Continue?`,
           type: 'warning',
           onConfirm: async () => {
             try {
               if (data.settings) await updateSettings(data.settings);
-              if (data.data) {
-                for (const colName in data.data) {
-                  const items = data.data[colName];
-                  if (Array.isArray(items)) {
-                    const batch = writeBatch(db);
-                    for (const item of items) {
-                      const { id, ...itemData } = item;
-                      if (id) batch.set(doc(db, colName, id), itemData);
-                    }
-                    await batch.commit();
-                  }
-                }
-              }
               activityLogService.log('backup_import', 'Restore from File');
-              alert(isAr ? '✅ تم استعادة البيانات بنجاح!' : '✅ Data restored successfully!');
+              alert(isAr ? '✅ تم استعادة الإعدادات بنجاح!' : '✅ Settings restored successfully!');
               window.location.reload();
             } catch (err: unknown) {
               alert((isAr ? '❌ خطأ في الاستعادة: ' : '❌ Restore error: ') + settingsErrorMessage(err));
@@ -729,6 +695,7 @@ export default function SettingsPage() {
       }
     };
     reader.readAsText(file);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   // ─── RESET COUNTER ──────────────────

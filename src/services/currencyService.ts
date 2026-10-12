@@ -227,8 +227,8 @@ class CurrencyService {
     _updatedBy: string
   ): Promise<{ success: boolean; newSeq?: number; error?: string }> {
     try {
-      await settingsCurrenciesApiGateway.addCurrencyRate(curNo, newPrice);
-      return { success: true };
+      const res = await settingsCurrenciesApiGateway.addCurrencyRate(curNo, newPrice);
+      return { success: true, newSeq: res.sequence };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       console.error('[currencyService] addExchangeRatePrice error:', err);
@@ -237,23 +237,35 @@ class CurrencyService {
   }
 
   /**
-   * تاريخ أسعار العملة — غير متاح مباشرة عبر API الحالي.
-   * Currency rate history — not directly available via current API.
-   * يُعيد مصفوفة فارغة ريثما تُضاف نقطة نهاية API لذلك.
-   * Returns empty array until a dedicated API endpoint is added.
+   * تاريخ أسعار العملة من API
+   * Currency rate history from API
    */
-  async getRateHistory(_curNo: number): Promise<CurPriceEntry[]> {
-    console.warn('[currencyService] getRateHistory: endpoint not yet available in API');
-    return [];
+  async getRateHistory(curNo: number): Promise<CurPriceEntry[]> {
+    try {
+      const rates = await settingsCurrenciesApiGateway.getCurrencyRates(curNo);
+      return rates.map(r => ({
+        id: r.rateId,
+        cur_no: r.currencyId,
+        price: r.price,
+        day_date: r.dayDate,
+        seq: r.sequence,
+        update_by: r.updatedBy || '',
+        created_at: r.createdAt || '',
+        updateBy: r.updatedBy || '',
+        createdAt: r.createdAt || '',
+      }));
+    } catch (err) {
+      console.error('[currencyService] getRateHistory error:', err);
+      return [];
+    }
   }
 
   /**
-   * إضافة عملة جديدة — غير متاح مباشرة عبر API الحالي.
-   * Add new currency — not directly available via current API.
-   * يُعيد خطأ حتى تُضاف نقطة نهاية CRUD كاملة.
+   * إضافة عملة جديدة إلى النظام عبر API
+   * Add new currency to system via API
    */
   async addCurrency(
-    _data: {
+    data: {
       code: string;
       main_name_ar?: string;
       main_nameAR?: string;
@@ -273,34 +285,82 @@ class CurrencyService {
     },
     _createdBy: string
   ): Promise<{ success: boolean; currency?: Currency; error?: string }> {
-    return { success: false, error: 'إضافة العملة تتم عبر واجهة إدارة العملات في API (غير مدعومة حالياً بهذا المسار)' };
+    try {
+      const created = await settingsCurrenciesApiGateway.createCurrency({
+        code: data.code.toUpperCase(),
+        mainNameAr: data.main_name_ar || data.main_nameAR || data.code,
+        subNameAr: data.sub_name_ar || data.sup_nameAR || null,
+        mainNameEn: data.main_name_en || data.main_nameEn || null,
+        subNameEn: data.sub_name_en || data.sup_nameEn || null,
+        symbol: data.symbol || data.code,
+        flag: data.flag || null,
+        isDefault: data.is_default ?? data.isDefault ?? false,
+        isActive: data.is_active ?? data.isActive ?? true,
+      });
+
+      // إضافة السعر المبدئي إذا كان محدداً
+      // Add initial exchange rate if specified
+      if (data.initialRate && data.initialRate > 0) {
+        await settingsCurrenciesApiGateway.addCurrencyRate(created.currencyId, data.initialRate);
+      }
+
+      return { success: true, currency: mapApiCurrencyToCurrency(created) };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error('[currencyService] addCurrency error:', err);
+      return { success: false, error: message };
+    }
   }
 
   /**
-   * تحديث بيانات عملة — غير متاح مباشرة عبر API الحالي.
-   * Update currency metadata — not directly available via current API.
+   * تحديث بيانات عملة عبر API
+   * Update currency metadata via API
    */
   async updateCurrency(
-    _curId: number,
-    _updates: Partial<Currency>
+    curId: number,
+    updates: Partial<Currency>
   ): Promise<{ success: boolean; error?: string }> {
-    return { success: false, error: 'تحديث العملة يتم عبر واجهة إدارة العملات في API (غير مدعومة حالياً بهذا المسار)' };
+    try {
+      await settingsCurrenciesApiGateway.updateCurrency(curId, {
+        code: updates.code ? updates.code.toUpperCase() : undefined,
+        mainNameAr: updates.main_name_ar || updates.main_nameAR,
+        subNameAr: updates.sub_name_ar !== undefined ? updates.sub_name_ar : updates.sup_nameAR,
+        mainNameEn: updates.main_name_en !== undefined ? updates.main_name_en : updates.main_nameEn,
+        subNameEn: updates.sub_name_en !== undefined ? updates.sub_name_en : updates.sup_nameEn,
+        symbol: updates.symbol,
+        flag: updates.flag,
+        isDefault: updates.is_default ?? updates.isDefault,
+        isActive: updates.is_active ?? updates.isActive,
+      });
+      return { success: true };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error('[currencyService] updateCurrency error:', err);
+      return { success: false, error: message };
+    }
   }
 
   /**
-   * تفعيل/تعطيل عملة — غير متاح مباشرة عبر API الحالي.
-   * Toggle currency active status — not directly available via current API.
+   * تفعيل/تعطيل عملة عبر API
+   * Toggle currency active status via API
    */
-  async toggleActive(_curId: number, _isActive: boolean): Promise<{ success: boolean; error?: string }> {
-    return this.updateCurrency(_curId, {});
+  async toggleActive(curId: number, isActive: boolean): Promise<{ success: boolean; error?: string }> {
+    return this.updateCurrency(curId, { isActive, is_active: isActive });
   }
 
   /**
-   * حذف عملة — غير متاح مباشرة عبر API الحالي.
-   * Delete currency — not directly available via current API.
+   * حذف/تعطيل عملة عبر API
+   * Delete/deactivate currency via API
    */
-  async deleteCurrency(_curId: number): Promise<{ success: boolean; error?: string }> {
-    return { success: false, error: 'حذف العملة يتم عبر واجهة إدارة العملات في API (غير مدعومة حالياً بهذا المسار)' };
+  async deleteCurrency(curId: number): Promise<{ success: boolean; error?: string }> {
+    try {
+      const ok = await settingsCurrenciesApiGateway.deleteCurrency(curId);
+      return { success: ok };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error('[currencyService] deleteCurrency error:', err);
+      return { success: false, error: message };
+    }
   }
 }
 

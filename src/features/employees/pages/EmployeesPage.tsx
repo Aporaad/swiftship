@@ -1,4 +1,7 @@
-type AdapterDocument = { id: string; data: () => Record<string, unknown> };
+// EmployeesPage.tsx — API-only version
+// نسخة نقية من صفحة الموظفين تعتمد على alx_api فقط بدون Supabase/legacy-compat
+// Pure API-only employees page without Supabase/legacy-compat dependencies
+
 type EmployeeAccountTransaction = Record<string, unknown> & {
   id: string;
   entryId?: string;
@@ -7,23 +10,10 @@ type EmployeeAccountTransaction = Record<string, unknown> & {
   type?: unknown;
   amount?: unknown;
 };
+
 import React, { useState, useEffect } from 'react';
 import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
 import { CurrencySelect } from '../../../components/common/CurrencySelect';
-import {
-  collection,
-  onSnapshot,
-  doc,
-  updateDoc,
-  setDoc,
-  deleteDoc,
-  query,
-  where,
-  getDocs,
-  db,
-  handleSupabaseError,
-  OperationType
-} from '../../../data/legacy/legacy-compat.ts';
 import {
   Search,
   Edit2,
@@ -54,9 +44,11 @@ import { activityLogService } from '../../../services/activityLogService';
 import { useAccountBalances } from '../../../hooks/useAccountBalances';
 import { useExchangeRates } from '../../../hooks/useExchangeRates';
 import { staffApiDataGateway } from '../../staff/services/staffApiDataGateway';
+import { financeApiDataGateway } from '../../../components/financeAccounting/FinanceApiDataGateway';
+import { usersApiDataGateway } from '../../users/services/usersApiDataGateway';
 
 export default function EmployeesPage() {
-  const { legacyAuth: auth } = useAuthSession();
+  const { user: currentUser } = useAuthSession();
   const { settings, t } = useSettings();
   const { activeCurrencies } = useExchangeRates();
   const { role, hasPermission, loading: roleLoading } = useRole();
@@ -153,34 +145,23 @@ export default function EmployeesPage() {
     notes: ''
   });
 
-  // Subscribe to employees
+  // الاشتراك في قائمة الموظفين عبر API فقط — Subscribe to employees via API only
   useEffect(() => {
     if (roleLoading) return;
-    if (staffApiDataGateway.isEnabled()) {
-      return staffApiDataGateway.subscribe({
+
+    return staffApiDataGateway.subscribe(
+      {
         onData: (state) => {
           setEmployees(state.employees);
           setQueryState(state.employees.length ? asyncState.success(state.employees) : asyncState.empty());
         },
         onError: (error) => {
-          console.error('Error loading employees from API:', error);
-          setQueryState(asyncState.error<unknown[]>(error, 'EMPLOYEES_API_LOAD_FAILED'));
+          console.error('[EmployeesPage] Error loading employees from API:', error);
+          setQueryState(asyncState.error<unknown[]>(error, 'EMPLOYEES_API_REQUIRED'));
         },
-      });
-    }
-    const unsub = onSnapshot(
-      collection(db, 'employees'),
-      (snap) => {
-        const list = snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() }));
-        setEmployees(list);
-        setQueryState(list.length ? asyncState.success(list) : asyncState.empty());
       },
-      (err) => {
-        handleSupabaseError(err, OperationType.LIST, 'employees');
-        setQueryState(asyncState.error<unknown[]>(err, 'EMPLOYEES_LOAD_FAILED'));
-      }
+      { includeEmployees: true, includeOrders: false, includeAccounts: false }
     );
-    return () => unsub();
   }, [roleLoading]);
 
   // Open Edit Modal
@@ -201,7 +182,7 @@ export default function EmployeesPage() {
     setIsEditModalOpen(true);
   };
 
-  // Add Employee Function
+  // إضافة موظف جديد عبر API — Add Employee via API
   const handleAddEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
     if (addLoading) return;
@@ -225,36 +206,26 @@ export default function EmployeesPage() {
 
     const result = await runMutation(async () => {
       const newId = 'emp_' + Math.random().toString(36).substring(2, 11);
-      const now = Date.now();
 
-      const empData = {
+      // إنشاء الموظف عبر Operations API
+      // Create employee via Operations API
+      await staffApiDataGateway.createEmployee({
+        employeeId: newId,
         fullName: addFormData.fullName.trim(),
-        phone: addFormData.phone.trim(),
-        email: addFormData.email.trim(),
-        address: addFormData.address.trim(),
-        jobsType: addFormData.jobsType,
+        nameAr: addFormData.fullName.trim(),
+        jobType: addFormData.jobsType,
         monthlySalary: Number(addFormData.monthlySalary) || 0,
-        currency: addFormData.currency,
         commissionRate: Number(addFormData.commissionRate) || 0,
-        notes: addFormData.notes.trim(),
+        currency: addFormData.currency,
+        phone: addFormData.phone.trim() || undefined,
+        email: addFormData.email.trim() || undefined,
+        address: addFormData.address.trim() || undefined,
+        notes: addFormData.notes.trim() || undefined,
         disabled: false,
-        createdAt: now,
-        createdBy: auth.currentUser?.displayName || 'Admin'
-      };
+      });
 
-      if (staffApiDataGateway.isWriteEnabled()) {
-        await staffApiDataGateway.createEmployee({
-          employeeId: newId,
-          fullName: empData.fullName,
-          nameAr: empData.fullName,
-          jobType: empData.jobsType,
-          monthlySalary: empData.monthlySalary,
-          commissionRate: empData.commissionRate,
-          currency: empData.currency,
-        });
-      } else await setDoc(doc(db, 'employees', newId), empData);
-
-      // Automatically provision financial account (2130-xxxx) for employee payroll ledger
+      // إنشاء الحساب المالي للموظف (2130-xxxx) عبر financialAccountService
+      // Create financial ledger account for employee via financialAccountService
       try {
         await financialAccountService.createAccountForEntity(
           'employee',
@@ -264,30 +235,30 @@ export default function EmployeesPage() {
           Number(addFormData.monthlySalary) || 0
         );
       } catch (accErr) {
-        console.warn('[Employees] Financial account creation error:', accErr);
+        console.warn('[EmployeesPage] Financial account creation error:', accErr);
       }
 
-      // Provision System User in `users` table if requested
+      // إنشاء مستخدم النظام إذا طُلب ذلك عبر Users API
+      // Provision system user via Users API if requested
       if (createSystemUser) {
         try {
-          const userId = 'usr_' + Math.random().toString(36).substring(2, 11);
-          const userPayload = {
-            id: userId,
+          await usersApiDataGateway.createUser({
             username: systemUserFormData.username.trim(),
             email: systemUserFormData.email.trim() || addFormData.email.trim() || `${systemUserFormData.username.trim()}@system.local`,
-            password: systemUserFormData.password,
-            systemPin: systemUserFormData.systemPin.trim(),
             fullName: addFormData.fullName.trim(),
-            phone: addFormData.phone.trim(),
+            password: systemUserFormData.password,
             role: systemUserFormData.role || 'Staff',
-            disabled: false,
+            phone: addFormData.phone.trim(),
             linkedType: 'employee',
             linkedEntity: newId,
-            createdAt: now
-          };
-          await setDoc(doc(db, 'users', userId), userPayload);
+          });
         } catch (uErr: any) {
-          console.error('[Employees] Error provisioning system user:', uErr);
+          console.error('[EmployeesPage] Error provisioning system user via API:', uErr);
+          notificationService.notify({
+            title: isAr ? 'تحذير: فشل إنشاء مستخدم النظام' : 'Warning: System user creation failed',
+            message: uErr?.message || 'Unknown error',
+            type: 'warning'
+          });
         }
       }
 
@@ -323,48 +294,48 @@ export default function EmployeesPage() {
       });
     }, setAddMutationState);
     if (result.status === 'error') {
-      notificationService.notify({ title: isAr ? 'خطأ في الإنشاء' : 'Creation Failed', message: result.error.message, type: 'error' });
+      notificationService.notify({ title: isAr ? 'خطأ في الإنشاء' : 'Creation Failed', message: (result.error as any)?.message || 'Unknown error', type: 'error' });
     }
   };
 
-  // Update Employee Function
+  // تعديل بيانات موظف عبر API — Update Employee via API
   const handleUpdateEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editLoading || !selectedEmployee) return;
 
     const result = await runMutation(async () => {
-      const now = Date.now();
-      if (staffApiDataGateway.isWriteEnabled()) {
-        await staffApiDataGateway.updateEmployee(selectedEmployee.id, {
-          fullName: editFormData.fullName.trim(),
-          nameAr: editFormData.fullName.trim(),
-          jobType: editFormData.jobsType,
-          monthlySalary: Number(editFormData.monthlySalary) || 0,
-          currency: editFormData.currency,
-          commissionRate: Number(editFormData.commissionRate) || 0,
-        });
-      } else await updateDoc(doc(db, 'employees', selectedEmployee.id), {
+      // تحديث بيانات الموظف عبر Operations API
+      // Update employee data via Operations API
+      await staffApiDataGateway.updateEmployee(selectedEmployee.id, {
         fullName: editFormData.fullName.trim(),
-        phone: editFormData.phone.trim(),
-        email: editFormData.email.trim(),
-        address: editFormData.address.trim(),
-        jobsType: editFormData.jobsType,
+        nameAr: editFormData.fullName.trim(),
+        jobType: editFormData.jobsType,
         monthlySalary: Number(editFormData.monthlySalary) || 0,
         currency: editFormData.currency,
         commissionRate: Number(editFormData.commissionRate) || 0,
-        disabled: editFormData.disabled,
-        notes: editFormData.notes.trim(),
-        updatedAt: now
+        phone: editFormData.phone.trim() || undefined,
+        email: editFormData.email.trim() || undefined,
+        address: editFormData.address.trim() || undefined,
+        notes: editFormData.notes.trim() || undefined,
+        disabled: Boolean(editFormData.disabled),
       });
 
-      // Sync financial account name and salary if changed
+      // مزامنة اسم الحساب المالي عند التغيير
+      // Sync financial account name if changed
       if (selectedEmployee.financialAccountId || selectedEmployee.accountId) {
-        const accId = selectedEmployee.financialAccountId || selectedEmployee.accountId;
         if (editFormData.fullName !== selectedEmployee.fullName) {
-          await financialAccountService.updateAccountEntityName(selectedEmployee.id, editFormData.fullName.trim());
+          try {
+            await financialAccountService.updateAccountEntityName(selectedEmployee.id, editFormData.fullName.trim());
+          } catch (accErr) {
+            console.warn('[EmployeesPage] Account name sync error:', accErr);
+          }
         }
         if (editFormData.monthlySalary !== selectedEmployee.monthlySalary) {
-          await financialAccountService.updateMonthlySalary(selectedEmployee.id, Number(editFormData.monthlySalary) || 0);
+          try {
+            await financialAccountService.updateMonthlySalary(selectedEmployee.id, Number(editFormData.monthlySalary) || 0);
+          } catch (salErr) {
+            console.warn('[EmployeesPage] Salary sync error:', salErr);
+          }
         }
       }
 
@@ -380,11 +351,11 @@ export default function EmployeesPage() {
       setSelectedEmployee(null);
     }, setEditMutationState);
     if (result.status === 'error') {
-      notificationService.notify({ title: isAr ? 'خطأ في التعديل' : 'Update Failed', message: result.error.message, type: 'error' });
+      notificationService.notify({ title: isAr ? 'خطأ في التعديل' : 'Update Failed', message: (result.error as any)?.message || 'Unknown error', type: 'error' });
     }
   };
 
-  // Toggle Employee Status
+  // تبديل حالة الموظف عبر API — Toggle Employee Status via API
   const handleToggleStatus = (emp: any) => {
     const actionText = emp.disabled ? (isAr ? 'تفعيل' : 'Activate') : (isAr ? 'تعطيل' : 'Disable');
     setConfirmConfig({
@@ -393,24 +364,23 @@ export default function EmployeesPage() {
       message: isAr ? `هل أنت متأكد من ${actionText} الموظف ${emp.fullName}؟` : `Are you sure you want to ${actionText.toLowerCase()} ${emp.fullName}?`,
       type: emp.disabled ? 'info' : 'warning',
       onConfirm: async () => {
-        const result = await runMutation(() => updateDoc(doc(db, 'employees', emp.id), {
-          disabled: !emp.disabled,
-          updatedAt: Date.now()
-        }), setEditMutationState);
-        if (result.status === 'success-after-mutation') {
+        try {
+          await staffApiDataGateway.updateEmployee(emp.id, {
+            disabled: !emp.disabled,
+          });
           notificationService.notify({
             title: isAr ? 'تم تغيير الحالة' : 'Status Updated',
             message: `${emp.fullName} ${emp.disabled ? (isAr ? 'مُفعَّل الآن' : 'enabled') : (isAr ? 'مُعطَّل الآن' : 'disabled')}`,
             type: emp.disabled ? 'success' : 'warning'
           });
-        } else if (result.status === 'error') {
-          handleSupabaseError(result.error, OperationType.UPDATE, 'employees');
+        } catch (err: any) {
+          notificationService.notify({ title: 'Error', message: err?.message || 'Toggle failed', type: 'error' });
         }
       }
     });
   };
 
-  // Open Statement of Account Modal
+  // فتح كشف الحساب المالي عبر Finance API — Open Statement of Account via Finance API
   const handleOpenStatement = async (emp: any) => {
     const accId = emp.financialAccountId || emp.accountId;
     if (!accId) {
@@ -423,61 +393,21 @@ export default function EmployeesPage() {
 
     setStatementModal({ isOpen: true, employee: emp, transactions: [], loading: true });
     try {
-      // الاستعلام المباشر من جدول أسطر الحسابات الجديد account_trans
-      // Direct query from new ledger lines table account_trans
-      const q = query(
-        collection(db, 'account_trans'),
-        where('accountId', '==', accId)
-      );
-      const snap = await getDocs(q);
-      const rawTxs: EmployeeAccountTransaction[] = snap.docs.map((d: AdapterDocument) => {
-        const row = d.data();
-        return {
-          id: d.id,
-          ...row,
-          type: row.type || row.transType || row.trans_type,
-          amount: row.amount ?? row.amountOriginal
-        };
+      // جلب حركات الحساب عبر Finance API
+      // Fetch account transactions via Finance API
+      const txData = await financeApiDataGateway.getAccountTransactions(accId);
+      const txs = (txData || []).filter((t: any) => {
+        // إبقاء القيود المرحّلة فقط — Keep posted entries only
+        const ps = t.postingStatus || t.posting_status || 'posted';
+        return ps === 'posted';
       });
 
-      // جلب رؤوس القيود المرتبطة من main_entry للتحقق من حالة الترحيل
-      // Fetch linked main_entry headers to check posting status
-      const entryIds = Array.from(new Set(rawTxs
-        .map((transaction) => transaction.entryId || transaction.entry_id)
-        .filter((entryId): entryId is string => typeof entryId === 'string' && entryId.length > 0)));
-      const mainEntryMap = new Map<string, Record<string, unknown>>();
-      if (entryIds.length > 0) {
-        try {
-          const mainSnap = await getDocs(collection(db, 'main_entry'));
-          mainSnap.docs.forEach((d: AdapterDocument) => {
-            if (entryIds.includes(d.id)) {
-              mainEntryMap.set(d.id, d.data());
-            }
-          });
-        } catch (_) { /* fallback */ }
-      }
-
-      // تصفية الحركات: إبقاء القيود المرحّلة فقط
-      // Filter transactions: keep posted entries only
-      const txs = rawTxs.filter(t => {
-        const entryId = t.entryId || t.entry_id;
-        if (entryId) {
-          const mainEntry = mainEntryMap.get(entryId);
-          if (!mainEntry) return false;
-          const ps = mainEntry.postingStatus || mainEntry.posting_status || '';
-          if (ps !== 'posted') return false;
-        }
-        return true;
-      });
-
-
-      txs.sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime());
+      txs.sort((a: any, b: any) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime());
       setStatementModal({ isOpen: true, employee: emp, transactions: txs, loading: false });
     } catch (err) {
-      console.error('Error loading statement of account:', err);
+      console.error('[EmployeesPage] Error loading statement of account via API:', err);
       setStatementModal({ isOpen: true, employee: emp, transactions: [], loading: false });
     }
-
   };
 
   // Check permission
@@ -499,7 +429,7 @@ export default function EmployeesPage() {
     );
   }
 
-  // Filtered employees
+  // فلترة الموظفين — Filter employees
   const filteredEmployees = employees.filter((emp) => {
     const matchSearch =
       (emp.fullName || '').toLowerCase().includes(search.toLowerCase()) ||
@@ -540,6 +470,13 @@ export default function EmployeesPage() {
           <Plus className="w-4 h-4" /> {isAr ? 'تسجيل موظف جديد' : 'Enroll New Employee'}
         </button>
       </div>
+
+      {/* Loading/Error state */}
+      {queryState.status === 'error' && (
+        <div className="bg-rose-950/20 border border-rose-500/30 rounded-2xl p-4 text-rose-400 text-xs font-bold">
+          {isAr ? 'تعذر جلب بيانات الموظفين من API. تأكد من الاتصال بالخادم.' : 'Failed to load employees from API. Check server connection.'}
+        </div>
+      )}
 
       {/* Main Table Container */}
       <div className="bg-[#121215] border border-slate-850 rounded-3xl overflow-hidden shadow-2xl flex flex-col">
@@ -595,7 +532,16 @@ export default function EmployeesPage() {
               </tr>
             </thead>
             <tbody className="text-xs divide-y divide-slate-850 bg-black/10">
-              {filteredEmployees.map((emp) => {
+              {loading ? (
+                <tr>
+                  <td colSpan={8} className="p-16 text-center text-slate-600 font-bold font-mono text-[10px]">
+                    <div className="flex items-center justify-center gap-3">
+                      <div className="w-6 h-6 border-2 border-[#d4af37]/40 border-t-[#d4af37] rounded-full animate-spin" />
+                      {isAr ? 'جاري تحميل سجل الموظفين...' : 'Loading employees...'}
+                    </div>
+                  </td>
+                </tr>
+              ) : filteredEmployees.map((emp) => {
                 const accId = String(emp.financialAccountId || emp.accountId || '');
                 const currentBalance = accId ? liveBalances.byId[accId] ?? liveBalances.byCode[accId] : undefined;
                 const liveBal = currentBalance ?? emp.financialBalance ?? 0;
@@ -663,7 +609,7 @@ export default function EmployeesPage() {
                         <FileText className="w-4 h-4" />
                       </button>
 
-                      {/* Toggle status - requires disable_accounts or edit_employees */}
+                      {/* Toggle status */}
                       <button
                         onClick={() => handleToggleStatus(emp)}
                         title={emp.disabled ? (isAr ? 'تفعيل' : 'Enable') : (isAr ? 'تعطيل' : 'Disable')}
@@ -699,7 +645,7 @@ export default function EmployeesPage() {
                 );
               })}
 
-              {filteredEmployees.length === 0 && (
+              {!loading && filteredEmployees.length === 0 && (
                 <tr>
                   <td colSpan={8} className="p-16 text-center text-slate-600 font-bold uppercase tracking-widest font-mono text-[10px]">
                     [ no_employee_records_found ]
@@ -834,7 +780,7 @@ export default function EmployeesPage() {
                 </label>
 
                 {createSystemUser && (
-                  <div className="p-4 rounded-2xl bg-black/40 border border-slate-800 space-y-3 text-start animate-fade-in">
+                  <div className="p-4 rounded-2xl bg-black/40 border border-slate-800 space-y-3 text-start">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block text-[10px] font-black text-slate-400 mb-1">{isAr ? 'اسم المستخدم للنظام *' : 'System Username *'}</label>
@@ -860,7 +806,7 @@ export default function EmployeesPage() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block text-[10px] font-black text-slate-400 mb-1">{isAr ? 'كلمة المرور *' : 'Password *'}</label>
                         <input
@@ -870,18 +816,6 @@ export default function EmployeesPage() {
                           value={systemUserFormData.password}
                           onChange={(e) => setSystemUserFormData({ ...systemUserFormData, password: e.target.value })}
                           className="w-full bg-black border border-slate-800 rounded-xl p-2.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-[10px] font-black text-slate-400 mb-1">{isAr ? 'رمز PIN للنظام' : 'System PIN'}</label>
-                        <input
-                          type="text"
-                          maxLength={6}
-                          placeholder="1234"
-                          value={systemUserFormData.systemPin}
-                          onChange={(e) => setSystemUserFormData({ ...systemUserFormData, systemPin: e.target.value })}
-                          className="w-full bg-black border border-slate-800 rounded-xl p-2.5 text-xs font-bold text-white focus:border-[#d4af37]/60 outline-none font-mono tracking-widest text-center"
                         />
                       </div>
 
@@ -1159,14 +1093,8 @@ export default function EmployeesPage() {
           : `Permanently delete employee ${deletePinConfig.entityName} and linked financial records?`}
         isAr={isAr}
         onConfirm={async () => {
-          // ربط حذف الموظف بـAPI عند تفعيل علم الكتابة — Route delete through API when write flag is enabled
-          // يستخدم soft-delete ذري عبر API أو purge مباشر عبر Legacy حسب العلم
-          // Uses atomic soft-delete via API or direct purge via Legacy based on feature flag
-          if (staffApiDataGateway.isWriteEnabled()) {
-            await staffApiDataGateway.deleteEmployee(deletePinConfig.entityId);
-          } else {
-            await financialAccountService.purgeEntityAndFinancialFootprint('employee', deletePinConfig.entityId);
-          }
+          // حذف الموظف عبر API — Delete employee via API (soft-delete)
+          await staffApiDataGateway.deleteEmployee(deletePinConfig.entityId);
           await activityLogService.log('delete_user', deletePinConfig.entityName, { employeeId: deletePinConfig.entityId });
           notificationService.notify({
             title: isAr ? 'تم تعطيل الموظف' : 'Employee Deactivated',

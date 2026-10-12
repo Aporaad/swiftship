@@ -86,6 +86,27 @@ export const usersApiDataGateway = {
   },
 
   /**
+   * إنهاء جميع جلسات المستخدم.
+   * Revoke all active sessions for a user.
+   */
+  async revokeUserSessions(userId: string): Promise<void> {
+    await client.post<ApiEnvelope<{ revoked: boolean; userId: string }>>(
+      `/api/v1/users/${encodeURIComponent(userId)}/revoke-sessions`,
+      {},
+    );
+  },
+
+  /**
+   * إنهاء جلسة محددة.
+   * Revoke a specific session.
+   */
+  async terminateSession(sessionId: string): Promise<void> {
+    await client.delete<ApiEnvelope<{ revoked: boolean }>>(
+      `/api/v1/auth/sessions/${encodeURIComponent(sessionId)}`,
+    );
+  },
+
+  /**
    * مراقبة قائمة المستخدمين بالتحديث التلقائي.
    * Subscribe to users list with periodic refresh.
    */

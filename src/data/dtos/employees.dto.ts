@@ -14,6 +14,12 @@ export interface EmployeesDatabaseRow {
   commission_rate: NumericValue | null;
   updated_at: string | null;
   updated_by: string | null;
+  phone?: string | null;
+  email?: string | null;
+  disabled?: boolean | null;
+  address?: string | null;
+  gps_location?: string | null;
+  notes?: string | null;
 }
 
 export interface EmployeesApiDto {
@@ -26,6 +32,12 @@ export interface EmployeesApiDto {
   nameEn: string | null;
   jobType: string | null;
   commissionRate: number | null;
+  phone?: string | null;
+  email?: string | null;
+  disabled?: boolean | null;
+  address?: string | null;
+  gpsLocation?: string | null;
+  notes?: string | null;
   createdAt: IsoUtcString | null;
   updatedAt: IsoUtcString | null;
   createdBy: string | null;
@@ -41,6 +53,12 @@ export interface EmployeesCreateInput {
   currency?: string | null;
   jobType?: string | null;
   commissionRate?: number | null;
+  phone?: string | null;
+  email?: string | null;
+  disabled?: boolean | null;
+  address?: string | null;
+  gpsLocation?: string | null;
+  notes?: string | null;
 }
 export type EmployeesUpdateInput = Partial<EmployeesCreateInput>;
 export type EmployeesViewModel = Partial<EmployeesApiDto> & { id: string };

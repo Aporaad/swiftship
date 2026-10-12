@@ -1,12 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
-import {
-  collection, onSnapshot, doc, updateDoc, setDoc, deleteDoc,
-  query, orderBy, limit, getDocs, where,
-  db, handleSupabaseError, OperationType,
-  initializeApp, deleteApp,
-  getAuth, createUserWithEmailAndPassword
-} from '../../../data/legacy/legacy-compat.ts';
+import { rolesApiDataGateway } from '../../roles/services/rolesApiDataGateway';
+import { financeApiDataGateway } from '../../../components/financeAccounting/FinanceApiDataGateway';
+import { staffApiDataGateway } from '../../staff/services/staffApiDataGateway';
 import {
   Search, Edit2, X, Plus, UserX, UserCheck, Trash2, Users as UsersIcon,
   Shield, Eye, EyeOff, Crown, ShieldAlert, Activity, Clock,
@@ -490,16 +486,17 @@ export default function UserManagementPage() {
     linkedType: 'none', linkedEntity: ''
   });
 
-  // Listen to Employees and Couriers for dynamic user linking
+  // Listen to Employees and Couriers for dynamic user linking via staffApiDataGateway
   useEffect(() => {
     if (roleLoading) return;
-    const unsubEmp = onSnapshot(collection(db, 'employees'), (snap: SnapshotResult) => {
-      setEmployeesList(snap.docs.map(d => toEntity(d.id, d.data())));
-    });
-    const unsubCour = onSnapshot(collection(db, 'couriers'), (snap: SnapshotResult) => {
-      setCouriersList(snap.docs.map(d => toEntity(d.id, d.data())));
-    });
-    return () => { unsubEmp(); unsubCour(); };
+    const unsub = staffApiDataGateway.subscribe({
+      onData: ({ employees, couriers }) => {
+        setEmployeesList(employees.map(e => toEntity(String(e.id), { fullName: asString(e.fullName || e.nameAr || e.nameEn, String(e.id)) })));
+        setCouriersList(couriers.map(c => toEntity(String(c.id), { fullName: asString(c.fullName || c.nameAr || c.nameEn, String(c.id)) })));
+      },
+      onError: (err: unknown) => console.warn('staffApiDataGateway subscribe error:', err),
+    }, { includeEmployees: true });
+    return unsub;
   }, [roleLoading]);
 
   // ── Roles ────────────────────────────────────────────────
@@ -527,135 +524,56 @@ export default function UserManagementPage() {
   });
 
   // ══════════════════════════════════════════════════════════
-  // DATA FETCHING
+  // DATA FETCHING (API-ONLY)
   // ══════════════════════════════════════════════════════════
   useEffect(() => {
     if (roleLoading) return;
-    const unsubRoles = onSnapshot(collection(db, 'roles'), (snap: SnapshotResult) => {
-      const fetchedRoles = snap.docs.map(d => toRole(d.id, d.data()));
-      setRoles(fetchedRoles);
-    }, err => {
-      console.error("[UserManagement] Error listening to roles:", err);
-    });
-    return () => unsubRoles();
-  }, [roleLoading]);
-
-  // Auto-initialize default roles
-  useEffect(() => {
-    if (roleLoading) return;
-    const initRoles = async () => {
+    let disposed = false;
+    const loadRoles = async () => {
       try {
-        const snap = await getDocs(collection(db, 'roles'));
-        const fetchedRoles = snap.docs.map(d => toRole(d.id, d.data()));
-
-        const defaultRoles = [
-          { id: 'Admin', title: isAr ? 'مدير النظام' : 'System Admin', permissions: ['*'] },
-          { id: 'Employee', title: isAr ? 'موظف' : 'Employee', permissions: DEFAULT_ROLE_PERMISSIONS['Employee'] || [] },
-          { id: 'Courier', title: isAr ? 'مندوب' : 'Courier', permissions: DEFAULT_ROLE_PERMISSIONS['Courier'] || [] },
-          { id: 'Accountant', title: isAr ? 'محاسب' : 'Accountant', permissions: DEFAULT_ROLE_PERMISSIONS['Accountant'] || [] }
-        ];
-
-        for (const dr of defaultRoles) {
-          if (!fetchedRoles.find(r => r.id === dr.id)) {
-            try {
-              await setDoc(doc(db, 'roles', dr.id), {
-                title: dr.title,
-                permissions: dr.permissions,
-                createdAt: Date.now(),
-                isDefault: true
-              }, { merge: true });
-            } catch (err) {
-              console.warn(`[UserManagement] Failed to auto-initialize role ${dr.id}:`, err);
-            }
-          }
-        }
+        const fetched = await rolesApiDataGateway.list();
+        if (disposed) return;
+        setRoles(fetched.map(r => toRole(r.id, { title: r.title, permissions: r.permissions })));
       } catch (err) {
-        console.warn("[UserManagement] Failed to fetch roles for initialization:", err);
+        console.warn("[UserManagement] Error loading roles via API:", err);
       }
     };
-    initRoles();
-  }, [roleLoading, isAr]);
-
-  useEffect(() => {
-    if (roleLoading) return;
-    const unsub = onSnapshot(collection(db, 'sessions'), (snap: SnapshotResult) => {
-      const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
-      const all = snap.docs.map(d => {
-        const rawData = d.data();
-        const parsedPayload: unknown = typeof rawData.data === 'string' ? JSON.parse(rawData.data) : rawData.data;
-        const payload = asRecord(parsedPayload);
-
-        const rawLastSeen = rawData.last_seen || rawData.lastSeen || payload.last_seen_at || payload.last_seen;
-        let lastSeenMs = 0;
-        if (typeof rawLastSeen === 'number') lastSeenMs = rawLastSeen;
-        else if (typeof rawLastSeen === 'string') {
-          const parsed = Date.parse(rawLastSeen);
-          if (!isNaN(parsed)) lastSeenMs = parsed;
-        }
-
-        const rawEmail = asString(payload.email, asString(rawData.email));
-        const fullName = asString(payload.full_name, asString(payload.fullName, asString(rawData.fullName, asString(rawData.full_name, rawEmail ? rawEmail.split('@')[0] : 'User'))));
-        const email = rawEmail;
-        const role = asString(payload.role, asString(rawData.role, 'Employee'));
-        const deviceInfo = asString(payload.device_info, asString(payload.deviceInfo, asString(rawData.deviceInfo, asString(rawData.device_info, 'Unknown'))));
-
-        return {
-          id: d.id,
-          ...rawData,
-          ...payload,
-          fullName,
-          email,
-          role,
-          deviceInfo,
-          lastSeen: lastSeenMs,
-          last_seen: lastSeenMs,
-        };
-      });
-
-      setDbSessions(all.filter((session): session is SessionRecord => session.lastSeen > 0 ? session.lastSeen > twentyFourHoursAgo : true));
-    }, err => console.error("Error fetching sessions:", err));
-    return unsub;
+    void loadRoles();
+    return () => { disposed = true; };
   }, [roleLoading]);
 
   useEffect(() => {
     if (roleLoading) return;
-    const unsub = onSnapshot(collection(db, 'users'), (snap: SnapshotResult) => {
-      const all = snap.docs.map(d => toUser(d.id, d.data()));
-      const visibleUsers = all.filter(u => u.role !== 'Courier' && u.roleId !== 'courier' && u.role !== 'courier');
-      setUsers(visibleUsers);
-      setQueryState(visibleUsers.length ? asyncState.success(visibleUsers) : asyncState.empty());
-    }, err => handleSupabaseError(err, OperationType.LIST, 'users'));
+    const unsub = usersApiDataGateway.subscribe({
+      onData: ({ users: apiUsers }) => {
+        const mappedUsers = apiUsers.map(raw => {
+          const id = asString(raw.userId || raw.id);
+          return toUser(id, {
+            ...raw,
+            id,
+            role: asString(raw.role, 'Employee'),
+            createdAt: raw.createdAt ? Date.parse(String(raw.createdAt)) : undefined,
+          });
+        });
+        const visibleUsers = mappedUsers.filter(u => u.role !== 'Courier' && u.roleId !== 'courier' && u.role !== 'courier');
+        setUsers(visibleUsers);
+        setQueryState(visibleUsers.length ? asyncState.success(visibleUsers) : asyncState.empty());
+      },
+      onError: (err: unknown) => {
+        console.error("Error fetching users via API:", err);
+        setQueryState(asyncState.error<ManagedUser[]>(err, 'USERS_API_LOAD_FAILED'));
+      }
+    });
     return unsub;
   }, [roleLoading]);
 
   // ── Subscribe to financial accounts (for employee balance display) ────────────
   useEffect(() => {
     if (roleLoading) return;
-    const unsub = onSnapshot(collection(db, 'accounts'), (snap: SnapshotResult) => {
-      setAccounts(snap.docs.map(d => toAccount(d.id, d.data())));
-    }, (err: unknown) => console.warn('[UserManagement] Could not load accounts:', err));
+    const unsub = financeApiDataGateway.subscribeCollection('accounts', (rows: Record<string, unknown>[]) => {
+      setAccounts(rows.map(d => toAccount(String(d.id), d)));
+    }, (err: unknown) => console.warn('Accounts subscribe error:', err));
     return () => unsub();
-  }, [roleLoading]);
-
-  useEffect(() => {
-    if (roleLoading || !hasPermission('view_activity_log')) return;
-    const q = query(collection(db, 'activity_logs'), orderBy('timestamp', 'desc'), limit(200));
-    const unsub = onSnapshot(q, (snap: SnapshotResult) =>
-      setActivityLogs(snap.docs.map(d => {
-        const data = d.data();
-        return {
-          id: d.id,
-          action: asString(data.action),
-          userId: typeof data.userId === 'string' ? data.userId : undefined,
-          userName: typeof data.userName === 'string' ? data.userName : undefined,
-          userRole: typeof data.userRole === 'string' ? data.userRole : undefined,
-          target: typeof data.target === 'string' ? data.target : undefined,
-          details: asRecord(data.details),
-          timestamp: typeof data.timestamp === 'number' || typeof data.timestamp === 'string' || (typeof data.timestamp === 'object' && data.timestamp !== null && 'toDate' in data.timestamp && typeof data.timestamp.toDate === 'function') ? data.timestamp as TimestampValue : undefined,
-        };
-      }))
-    );
-    return unsub;
   }, [roleLoading]);
 
   // Auto-ban timer: check every minute if temp bans have expired
@@ -664,9 +582,7 @@ export default function UserManagementPage() {
       const now = Date.now();
       const bannedUsers = users.filter(u => u.disabled && u.tempBanUntil && u.tempBanUntil <= now);
       for (const u of bannedUsers) {
-        await updateDoc(doc(db, 'users', u.id), {
-          disabled: false, tempBanUntil: null, updatedAt: now
-        }).catch(console.error);
+        await usersApiDataGateway.updateUser(u.id, { disabled: false }).catch(console.error);
       }
     }, 60_000);
     return () => clearInterval(interval);
@@ -693,31 +609,22 @@ export default function UserManagementPage() {
     if (!selectedUser) return;
     editBlockRef.current = true;
     setEditLoading(true);
-    if (editFormData.username && editFormData.username !== selectedUser.username) {
-      const q = query(collection(db, 'users'), where('username', '==', editFormData.username));
-      const snap = await getDocs(q);
-      if (!snap.empty && snap.docs[0].id !== selectedUser.id) {
-        setEditLoading(false);
-        editBlockRef.current = false;
-        return notificationService.notify({ title: t('خطأ', 'Error'), message: t('اسم المستخدم مستخدم مسبقاً', 'Username already taken'), type: 'error', category: 'system' });
-      }
-    }
     const isRoot = ROOT_EMAILS.includes(selectedUser.email) || selectedUser.isRoot;
     try {
-      await updateDoc(doc(db, 'users', selectedUser.id), {
-        fullName: editFormData.fullName, username: editFormData.username,
+      await usersApiDataGateway.updateUser(selectedUser.id, {
+        fullName: editFormData.fullName,
+        username: editFormData.username,
         role: isRoot ? 'Admin' : editFormData.role,
         disabled: isRoot ? false : editFormData.disabled,
         systemPin: editFormData.systemPin,
         linkedType: editFormData.linkedType !== 'none' ? editFormData.linkedType : null,
         linkedEntity: editFormData.linkedType !== 'none' ? editFormData.linkedEntity : null,
-        updatedAt: Date.now()
       });
       await activityLogService.log('edit_user', editFormData.fullName, { userId: selectedUser.id });
       notificationService.notify({ title: t('تم التحديث', 'Updated'), message: t(`تم تحديث ${editFormData.fullName}`, `${editFormData.fullName} updated`), type: 'info', category: 'system' });
       setIsEditModalOpen(false); setSelectedUser(null);
-    } catch (err) {
-      handleSupabaseError(err, OperationType.UPDATE, 'users');
+    } catch (err: any) {
+      notificationService.notify({ title: t('خطأ', 'Error'), message: err?.message || 'Update failed', type: 'error', category: 'system' });
     } finally {
       setEditLoading(false);
       editBlockRef.current = false;
@@ -734,13 +641,17 @@ export default function UserManagementPage() {
       message: t(`هل أنت متأكد من ${action} حساب ${user.fullName}؟`, `Are you sure you want to ${action.toLowerCase()} ${user.fullName}?`),
       onConfirm: async () => {
         const result = await runMutation(async () => {
-          await updateDoc(doc(db, 'users', user.id), { disabled: !user.disabled, updatedAt: Date.now() });
+          if (user.disabled) {
+            await usersApiDataGateway.updateUser(user.id, { disabled: false });
+          } else {
+            await usersApiDataGateway.disableUser(user.id);
+          }
           await activityLogService.log(user.disabled ? 'enable_user' : 'disable_user', user.fullName, { userId: user.id });
         }, setEditState);
         if (result.status === 'success-after-mutation') {
           notificationService.notify({ title: t('تم', 'Done'), message: `${user.fullName} ${user.disabled ? t('مُفعَّل', 'enabled') : t('مُعطَّل', 'disabled')}`, type: user.disabled ? 'success' : 'warning', category: 'system' });
         } else if (result.status === 'error') {
-          handleSupabaseError(result.error, OperationType.UPDATE, 'users');
+          notificationService.notify({ title: t('خطأ', 'Error'), message: getErrorMessage(result.error), type: 'error', category: 'system' });
         }
       }
     });
@@ -806,35 +717,16 @@ export default function UserManagementPage() {
     if (addLoading || addBlockRef.current) return;
     addBlockRef.current = true;
     setAddLoading(true);
-    let secondaryApp: ReturnType<typeof initializeApp> | undefined;
     try {
-      const emailQ = query(collection(db, 'users'), where('email', '==', addFormData.email.toLowerCase()));
-      if (!(await getDocs(emailQ)).empty) throw new Error(t('البريد مستخدم مسبقاً', 'Email already registered'));
-      if (addFormData.username) {
-        const uQ = query(collection(db, 'users'), where('username', '==', addFormData.username));
-        if (!(await getDocs(uQ)).empty) throw new Error(t('اسم المستخدم مستخدم مسبقاً', 'Username already taken'));
-      }
-      const secondaryAppName = `Secondary-${Date.now()}`;
-      secondaryApp = initializeApp({}, secondaryAppName);
-      const secondaryAuth = getAuth(secondaryApp);
-      const SHARED_SYSTEM_AUTH_PASSWORD = 'swiftship@system_pw_2026';
-      const { user: newUser } = await createUserWithEmailAndPassword(secondaryAuth, addFormData.email.toLowerCase(), SHARED_SYSTEM_AUTH_PASSWORD);
-
-      // ══════════════════════════════════════════════════════════════════════════════
-      // ISOLATION RULE: System User creation writes strictly to `users` table.
-      // NEVER create a financial account or employee record upon System User creation.
-      // قاعدة العزل: إدراج مستخدم النظام يكون حكراً بجدول `users` لحسابات الدخول والصلاحيات.
-      // يُمنع إنشاء حساب مالي أو سجل موظف تلقائي عند إنشاء مستخدم نظام.
-      // ══════════════════════════════════════════════════════════════════════════════
-      await setDoc(doc(db, 'users', newUser.uid), {
-        fullName: addFormData.fullName, email: addFormData.email.toLowerCase(),
-        username: addFormData.username, systemPin: addFormData.systemPin,
-        role: addFormData.role,
+      await usersApiDataGateway.createUser({
+        username: addFormData.username,
+        email: addFormData.email || undefined,
+        fullName: addFormData.fullName,
         password: addFormData.password,
-        disabled: false,
-        linkedType: addFormData.linkedType !== 'none' ? addFormData.linkedType : null,
-        linkedEntity: addFormData.linkedType !== 'none' ? addFormData.linkedEntity : null,
-        createdAt: Date.now()
+        role: addFormData.role,
+        systemPin: addFormData.systemPin || undefined,
+        linkedType: addFormData.linkedType !== 'none' ? addFormData.linkedType : undefined,
+        linkedEntity: addFormData.linkedType !== 'none' ? addFormData.linkedEntity : undefined,
       });
 
       await activityLogService.log('add_user', addFormData.fullName, { email: addFormData.email, role: addFormData.role });
@@ -842,15 +734,10 @@ export default function UserManagementPage() {
       setIsAddModalOpen(false);
       setAddFormData({ fullName: '', username: '', email: '', password: '', systemPin: '', role: 'Employee', linkedType: 'none', linkedEntity: '' });
     } catch (err: unknown) {
-      const authError = asRecord(err) as ErrorLike;
-      let msg = getErrorMessage(err);
-      if (authError.code === 'auth/email-already-in-use') msg = t('البريد مسجل في نظام المصادقة', 'Email already in auth system');
-      else if (authError.code === 'auth/weak-password') msg = t('كلمة المرور ضعيفة جداً (6+ أحرف)', 'Password too weak (min 6 chars)');
-      notificationService.notify({ title: t('خطأ', 'Error'), message: msg, type: 'error', category: 'system' });
+      notificationService.notify({ title: t('خطأ', 'Error'), message: getErrorMessage(err), type: 'error', category: 'system' });
     } finally {
       setAddLoading(false);
       addBlockRef.current = false;
-      if (secondaryApp) await deleteApp(secondaryApp);
     }
   };
 
@@ -863,47 +750,19 @@ export default function UserManagementPage() {
       return notificationService.notify({ title: t('محمي', 'Protected'), message: t('لا يمكن إنهاء جلسة المسؤول الرئيسي', 'Cannot terminate root admin session'), type: 'error', category: 'system' });
     }
 
-    const now = Date.now();
-    let updatePayload: DataRecord = {};
-    let logAction: ActivityAction = 'terminate_session';
-    let logDetails: DataRecord = { targetUserId: user.id, action };
-    let successMsg = '';
-
-    switch (action) {
-      case 'force_logout':
-        updatePayload = { forceLogout: true, forceLogoutAt: now, updatedAt: now };
-        logAction = 'force_logout';
-        successMsg = t(`تم إنهاء جلسة ${user.fullName} فوراً`, `${user.fullName}'s session terminated immediately`);
-        break;
-      case 'disable_account':
-        updatePayload = { disabled: true, forceLogout: true, forceLogoutAt: now, updatedAt: now };
-        logAction = 'disable_user';
-        successMsg = t(`تم تعطيل حساب ${user.fullName} وإنهاء جلسته`, `${user.fullName}'s account disabled and session terminated`);
-        break;
-      case 'temp_ban_1h':
-        updatePayload = { disabled: true, forceLogout: true, forceLogoutAt: now, tempBanUntil: now + 3_600_000, updatedAt: now };
-        logAction = 'temp_ban';
-        logDetails.duration = '1h';
-        successMsg = t(`تم حظر ${user.fullName} لمدة ساعة`, `${user.fullName} banned for 1 hour`);
-        break;
-      case 'temp_ban_24h':
-        updatePayload = { disabled: true, forceLogout: true, forceLogoutAt: now, tempBanUntil: now + 86_400_000, updatedAt: now };
-        logAction = 'temp_ban';
-        logDetails.duration = '24h';
-        successMsg = t(`تم حظر ${user.fullName} لمدة 24 ساعة`, `${user.fullName} banned for 24 hours`);
-        break;
-      case 'temp_ban_72h':
-        updatePayload = { disabled: true, forceLogout: true, forceLogoutAt: now, tempBanUntil: now + 259_200_000, updatedAt: now };
-        logAction = 'temp_ban';
-        logDetails.duration = '72h';
-        successMsg = t(`تم حظر ${user.fullName} لمدة 72 ساعة`, `${user.fullName} banned for 72 hours`);
-        break;
-    }
-
     try {
-      await updateDoc(doc(db, 'users', user.id), updatePayload);
-      await activityLogService.log(logAction, user.fullName, logDetails);
-      notificationService.notify({ title: t('تم التنفيذ', 'Action Applied'), message: successMsg, type: 'error', category: 'system' });
+      if (action === 'force_logout') {
+        await usersApiDataGateway.revokeUserSessions(user.id);
+        notificationService.notify({ title: t('تم التنفيذ', 'Action Applied'), message: t(`تم إنهاء جلسة ${user.fullName} فوراً`, `${user.fullName}'s session terminated immediately`), type: 'info', category: 'system' });
+      } else if (action === 'disable_account') {
+        await usersApiDataGateway.disableUser(user.id);
+        await usersApiDataGateway.revokeUserSessions(user.id);
+        notificationService.notify({ title: t('تم التنفيذ', 'Action Applied'), message: t(`تم تعطيل حساب ${user.fullName} وإنهاء جلسته`, `${user.fullName}'s account disabled and session terminated`), type: 'error', category: 'system' });
+      } else {
+        await usersApiDataGateway.disableUser(user.id);
+        await usersApiDataGateway.revokeUserSessions(user.id);
+        notificationService.notify({ title: t('تم التنفيذ', 'Action Applied'), message: t(`تم حظر ${user.fullName} مؤقتاً`, `${user.fullName} temporarily banned`), type: 'warning', category: 'system' });
+      }
       setIsSessionModalOpen(false);
       setSessionTargetUser(null);
     } catch (err: unknown) {
@@ -999,12 +858,16 @@ export default function UserManagementPage() {
     roleBlockRef.current = true;
     setSavingRole(true);
     try {
-      await setDoc(doc(db, 'roles', roleFormData.id), { title: roleFormData.title, permissions: roleFormData.permissions, updatedAt: Date.now() });
+      if (selectedRole) {
+        await rolesApiDataGateway.update(selectedRole.id, { name: roleFormData.title, permissionCodes: roleFormData.permissions });
+      } else {
+        await rolesApiDataGateway.create({ code: roleFormData.id.toLowerCase(), name: roleFormData.title, permissionCodes: roleFormData.permissions });
+      }
       await activityLogService.log(selectedRole ? 'edit_role' : 'add_role', roleFormData.title, { id: roleFormData.id, permCount: roleFormData.permissions.length });
       notificationService.notify({ title: t('تم الحفظ', 'Saved'), message: t(`تم حفظ دور ${roleFormData.title}`, `Role ${roleFormData.title} saved`), type: 'success', category: 'system' });
       setIsRoleModalOpen(false);
-    } catch (err) {
-      handleSupabaseError(err, OperationType.UPDATE, 'roles');
+    } catch (err: unknown) {
+      notificationService.notify({ title: t('خطأ', 'Error'), message: getErrorMessage(err), type: 'error', category: 'system' });
     } finally {
       setSavingRole(false);
       roleBlockRef.current = false;
@@ -1018,9 +881,13 @@ export default function UserManagementPage() {
       title: t('حذف دور', 'Delete Role'),
       message: t(`هل أنت متأكد من حذف دور "${title}"؟`, `Delete role "${title}"?`),
       onConfirm: async () => {
-        await deleteDoc(doc(db, 'roles', id));
-        await activityLogService.log('delete_role', title, { id });
-        notificationService.notify({ title: t('تم الحذف', 'Deleted'), message: t(`تم حذف دور ${title}`, `Role ${title} deleted`), type: 'error', category: 'system' });
+        try {
+          await rolesApiDataGateway.remove(id);
+          await activityLogService.log('delete_role', title, { id });
+          notificationService.notify({ title: t('تم الحذف', 'Deleted'), message: t(`تم حذف دور ${title}`, `Role ${title} deleted`), type: 'error', category: 'system' });
+        } catch (err: unknown) {
+          notificationService.notify({ title: t('خطأ', 'Error'), message: getErrorMessage(err), type: 'error', category: 'system' });
+        }
       }
     });
   };
@@ -1119,7 +986,7 @@ export default function UserManagementPage() {
       message: t(`هل أنت متأكد من إنهاء جلسة ${session.fullName} على الجهاز "${session.deviceInfo || 'غير معروف'}"؟`, `Are you sure you want to terminate ${session.fullName}'s session on "${session.deviceInfo || 'Unknown'}"?`),
       onConfirm: async () => {
         try {
-          await updateDoc(doc(db, 'sessions', session.id), { forceLogout: true });
+          await usersApiDataGateway.revokeUserSessions(session.id);
           await activityLogService.log('terminate_session', session.fullName, { sessionId: session.id, deviceInfo: session.deviceInfo });
           notificationService.notify({
             title: t('تم تسجيل الخروج', 'Logged Out'),
@@ -1317,17 +1184,17 @@ export default function UserManagementPage() {
       <ConfirmDeletePinModal
         isOpen={deletePinConfig.isOpen}
         onClose={() => setDeletePinConfig({ ...deletePinConfig, isOpen: false })}
-        title={isAr ? 'حذف حساب المستخدم نهائياً' : 'Delete User Account Permanently'}
+        title={isAr ? 'تعطيل حساب المستخدم' : 'Disable User Account'}
         message={isAr
-          ? `هل أنت متأكد من رغبتك في حذف المستخدم ${deletePinConfig.entityName}؟ هذا الإجراء سيقوم بحذف حسابه المالي وكافة قيوده ومصروفاته المرتبطة نهائياً.`
-          : `Are you sure you want to permanently delete user ${deletePinConfig.entityName}? This will purge their financial account, journal transactions, and associated expenses from the database.`}
+          ? `هل أنت متأكد من تعطيل حساب المستخدم ${deletePinConfig.entityName}؟ سيبقى السجل محفوظاً دون حذف القيود المالية.`
+          : `Are you sure you want to disable user ${deletePinConfig.entityName}? The user record and financial history will be preserved.`}
         isAr={isAr}
         onConfirm={async () => {
-          await financialAccountService.purgeEntityAndFinancialFootprint('user', deletePinConfig.entityId);
+          await usersApiDataGateway.disableUser(deletePinConfig.entityId);
           await activityLogService.log('delete_user', deletePinConfig.entityName, { userId: deletePinConfig.entityId });
           notificationService.notify({
             title: isAr ? 'تم الحذف' : 'User Deleted',
-            message: isAr ? `تم حذف المستخدم ${deletePinConfig.entityName} وسجلاته المالية بنجاح` : `User ${deletePinConfig.entityName} deleted successfully`,
+            message: isAr ? `تم تعطيل حساب المستخدم ${deletePinConfig.entityName} بنجاح` : `User ${deletePinConfig.entityName} disabled successfully`,
             type: 'warning'
           });
         }}

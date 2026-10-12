@@ -25,7 +25,7 @@ const apiCollectionPaths: Record<string, string> = {
 };
 
 function isEnabled(): boolean {
-  return import.meta.env.VITE_FINANCE_API_READS === "true" || import.meta.env.VITE_USE_HTTP_API === "true";
+  return true;
 }
 
 function normalizeRows(
@@ -118,6 +118,25 @@ export const financeApiDataGateway = {
     onError: (error: unknown) => void
   ): Unsubscribe {
     return this.subscribeCollection(collectionName, onData, onError);
+  },
+
+  /**
+   * جلب حركات حساب مالي محدد مرة واحدة عبر API
+   * Fetch transactions for a specific financial account once via API
+   */
+  async getAccountTransactions(accountId: string): Promise<Record<string, unknown>[]> {
+    const rows: Record<string, unknown>[] = [];
+    for (let offset = 0; offset < MAX_MOVEMENT_ROWS; offset += MOVEMENT_PAGE_SIZE) {
+      const response = await apiClient.get<ApiEnvelope<Record<string, unknown>[]>>(
+        `/api/v1/finance/accounts/${encodeURIComponent(accountId)}/movements`,
+        { limit: MOVEMENT_PAGE_SIZE, offset },
+      );
+      const page = Array.isArray(response.data) ? response.data : [];
+      rows.push(...page);
+      const total = Number(response.meta?.total ?? rows.length);
+      if (page.length < MOVEMENT_PAGE_SIZE || rows.length >= total) break;
+    }
+    return normalizeRows("account_trans", rows);
   },
 
   subscribeAccountMovements(

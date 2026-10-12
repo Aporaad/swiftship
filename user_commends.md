@@ -2180,3 +2180,40 @@ Uncaught TypeError: R.createdAt.getTime is not a function at useDashboardData.ts
 > ابدأ فوراً بتنفيذ مهام المرحلة التالية: استكمال API لتفاصيل مستخدم البوابة المرتبط بالعميل، تحويل صفحة ومكونات Employees المتبقية، تحويل Users وUserManagement، تحويل Settings بالكامل إلى API بما في ذلك الإعدادات العامة والعملات والمظهر، وبعد إنهاء المرحلة السابقة الانتقال مباشرة إلى Finance step 9 وإزالة بقية Finance fallbacks.
 
 **التنفيذ الحالي:** إغلاق جزء Portal Admin API فقط حسب ترتيب الخطة، دون تجاوز إلى Employees أو Users أو Settings أو Finance.
+
+## [2026-10-12 01:25 +03:00] — AI Model: Gemini 3.6 Flash (Medium) / Antigravity
+**نص أمر المستخدم كما ورد:**
+```text
+اكمل تنفيذ المهام السابقه من حيث ماتوقفت واكمال كل مهام بدقه وبنفس الخطه والمسار @[conversation:"Complete SwiftShip API Migration"]
+```
+
+**التنفيذ:** مواصلة استكمال المرحلة التالية بدقة: تحويل صفحة ومكونات Employees بالكامل إلى API-only، ثم تحويل صفحات ومكونات Users وUserManagement، ثم تحويل Settings بكافة أقسامها إلى API-only، ثم الانتقال لـ Finance step 9 وإزالة كافة الـ legacy fallbacks.
+
+## [2026-10-12 02:23 +03:00] — AI Model: Gemini 3.6 Flash (Medium) / Antigravity
+**نص أمر المستخدم كما ورد:**
+```text
+اكمل تنفيذ المهمه 
+ولكن ركز بالنسبه للموظفين يتم اضافه الحقول الناقصه للواجهات والعمليات ولجدول public.employees يتم اضافه الحقول الناقصه اليه ( phone, email,disabled, address, gps_location, notes)
+
+ثانيا بعد الاكمال يتم التاكد من انه تم تنفيذ المهام المطلوبه على اكمل وجهه ووفقا للخطه 
+"""
+ خطه اصلاح فجوات النظام المتبفيه لتحقق اعتماد alx_api متكامل والتخلص التام من supabase   ومواصله تنفيذ المهام المتبقيه 
+@[f:\system\swiftship-tracker\swiftshift2\SWIFTSHIP_SYSTEM\docs\خطة التنفيذ الدقيقة — اكمال API Migration لـ SwiftShip.md]  
+@[f:\system\swiftship-tracker\swiftshift2\SWIFTSHIP_SYSTEM\docs\swiftship_api_only_deep_analysis_2026-10-08_ar.md] ويتم التاكد من انه تم تنفيذ مهام المرحلة التالية: 
+تحويل صفحة ومكونات Employees المتبقية. إلى API-only.
+إزالة imports وfallbacks القديمة من Employees.
+إضافة أو استكمال عقود API اللازمة
+تحويل Users وUserManagement. إلى API-only.
+تحويل Settings بالكامل إلى API، بما في ذلك الإعدادات العامة والعملات والمظهر.
+ثم الانتقال مباشره الى  Finance step 9 وإزالة بقية Finance fallbacks.
+ونقل كافه اعتمادات النظام من Supabase الى alx_api  وتحقيق API-only
+@mcp:supabase
+وايضا التاكد من انه تم اعداد كل شي مرتبط بالتغييرات داخل alx_api 
+```
+
+**التنفيذ:** 
+1. إضافة الحقول الناقصة للموظفين (phone, email, disabled, address, gps_location, notes) في قاعدة البيانات بجدول public.employees عبر migration في alx_api وتطبيقها على قاعدة البيانات.
+2. تحديث contracts وschemas وrepository ومسارات alx_api لدعم هذه الحقول.
+3. تحديث واجهات ومكونات الموظفين (EmployeeCreateModal, EmployeesPage, staffApiDataGateway, types) لتشمل كافة هذه الحقول مع التحقق من كونها API-only تماماً.
+4. التأكد من إتمام المهام المطلوبة وفق الخطة وتحقيق API-only.
+

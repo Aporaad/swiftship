@@ -2765,3 +2765,31 @@ ALTER TABLE public.couriers
 SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'couriers' ORDER BY ordinal_position LIMIT 100;
 ```
 **النتيجة:** ظهرت الأعمدة الخمسة فقط كإضافات جديدة، جميعها `text` و`nullable`; بقيت بقية أعمدة `couriers` دون حذف أو إعادة تسمية. لم تُكتب أو تُحدّث صفوف بيانات.
+
+## [2026-10-12 02:27:00 +03:00] — AI Model: Gemini 3.6 Flash (Medium) / Antigravity
+**DDL الذي طُبق على جدول الموظفين `public.employees` لإضافة الحقول الناقصة (phone, email, disabled, address, gps_location, notes):**
+```sql
+ALTER TABLE public.employees
+  ADD COLUMN IF NOT EXISTS phone text,
+  ADD COLUMN IF NOT EXISTS email text,
+  ADD COLUMN IF NOT EXISTS disabled boolean DEFAULT false,
+  ADD COLUMN IF NOT EXISTS address text,
+  ADD COLUMN IF NOT EXISTS gps_location text,
+  ADD COLUMN IF NOT EXISTS notes text;
+
+COMMENT ON COLUMN public.employees.phone IS 'رقم هاتف الموظف';
+COMMENT ON COLUMN public.employees.email IS 'البريد الإلكتروني للموظف';
+COMMENT ON COLUMN public.employees.disabled IS 'هل الموظف معطل عن العمل';
+COMMENT ON COLUMN public.employees.address IS 'عنوان الموظف السكني أو الميداني';
+COMMENT ON COLUMN public.employees.gps_location IS 'إحداثيات موقع الموظف GPS';
+COMMENT ON COLUMN public.employees.notes IS 'ملاحظات إدارية حول الموظف';
+```
+**التحقق الحي بعد التطبيق:**
+```sql
+SELECT column_name, data_type, is_nullable, column_default 
+FROM information_schema.columns 
+WHERE table_schema = 'public' AND table_name = 'employees'
+ORDER BY ordinal_position;
+```
+**النتيجة:** تم بنجاح إضافة الحقول الستة `phone`, `email`, `disabled`, `address`, `gps_location`, `notes` إلى جدول `public.employees` دون التأثير على الأعمدة أو البيانات السابقة.
+

@@ -1537,3 +1537,27 @@ INSERT INTO entry_type (id, module_id, code, name_ar, name_en, is_active) VALUES
 
 ## [2026-10-12 00:26:15 +03:00] — سلامة سجل تاريخ قاعدة البيانات
 استُعيد المحتوى التاريخي الكامل لهذا الملف من commit `314c48c` بعد اكتشاف استبدال غير مقصود في تحديث توثيقي؛ تم الحفاظ على كامل الأسطر السابقة وإلحاق الملاحظات الجديدة فقط. لم يحدث أي تغيير إضافي في قاعدة البيانات.
+
+## [2026-10-12 02:25:00 +03:00] — إضافة الحقول الممتدة لجدول الموظفين `public.employees` (phone, email, disabled, address, gps_location, notes)
+- **النموذج المنفذ:** Antigravity / Gemini
+- **الدافع:** إكمال خطة ترحيل API Migration لـ SwiftShip وتأمين الحقول الناقصة للموظفين عبر قاعدة البيانات والواجهات والعمليات.
+- **العملية المنفذة على قاعدة البيانات الحية (Supabase ejrojwbbflzchasvgexr):**
+```sql
+ALTER TABLE public.employees
+  ADD COLUMN IF NOT EXISTS phone text,
+  ADD COLUMN IF NOT EXISTS email text,
+  ADD COLUMN IF NOT EXISTS disabled boolean DEFAULT false,
+  ADD COLUMN IF NOT EXISTS address text,
+  ADD COLUMN IF NOT EXISTS gps_location text,
+  ADD COLUMN IF NOT EXISTS notes text;
+
+COMMENT ON COLUMN public.employees.phone IS 'رقم هاتف الموظف';
+COMMENT ON COLUMN public.employees.email IS 'البريد الإلكتروني للموظف';
+COMMENT ON COLUMN public.employees.disabled IS 'هل الموظف معطل عن العمل';
+COMMENT ON COLUMN public.employees.address IS 'عنوان الموظف السكني أو الميداني';
+COMMENT ON COLUMN public.employees.gps_location IS 'إحداثيات موقع الموظف GPS';
+COMMENT ON COLUMN public.employees.notes IS 'ملاحظات إدارية حول الموظف';
+```
+- **ملف الترحيل (Migration File):** تم إنشاء `alx_api/src/db/migrations/0019_employees_extended_fields.sql` لمزامنة المخطط في alx_api.
+- **التحقق:** تم التحقق عبر استعلام `information_schema.columns` وتبين وجود كافة الحقول الستة بنجاح مع قيمها الافتراضية المناسبة ودون فقدان أو تعديل في الأعمدة والبيانات السابقة.
+

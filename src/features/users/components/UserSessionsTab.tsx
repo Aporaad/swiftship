@@ -1,6 +1,6 @@
 import React from 'react';
 import { Crown, Zap, MonitorCheck, Users as UsersIcon, UserX, Timer, Info } from 'lucide-react';
-import { db, updateDoc, doc } from '../../../data/legacy/legacy-compat.ts';
+import { usersApiDataGateway } from '../services/usersApiDataGateway';
 import { notificationService } from '../../../services/notificationService';
 import { activityLogService } from '../../../services/activityLogService';
 
@@ -46,6 +46,7 @@ export const UserSessionsTab: React.FC<UserSessionsTabProps> = ({
   getRoleBadgeStyle,
   getTimeSince,
   setConfirmConfig,
+  handleRevokeSession,
 }) => {
   const onlineSessionsCount = sessions.filter(isSessionOnline).length;
 
@@ -166,7 +167,12 @@ export const UserSessionsTab: React.FC<UserSessionsTabProps> = ({
                               ),
                               onConfirm: async () => {
                                 try {
-                                  await updateDoc(doc(db, 'sessions', sess.id), { forceLogout: true });
+                                  if (sess.userId) {
+                                    await usersApiDataGateway.revokeUserSessions(sess.userId);
+                                  } else {
+                                    await usersApiDataGateway.terminateSession(sess.id);
+                                  }
+                                  handleRevokeSession(sess.id);
                                   await activityLogService.log('terminate_session', sess.fullName, { sessionId: sess.id, deviceInfo: sess.deviceInfo });
                                   notificationService.notify({
                                     title: t('تم تسجيل الخروج', 'Logged Out'),

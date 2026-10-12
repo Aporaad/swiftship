@@ -132,6 +132,12 @@ export function EmployeeCreateModal({
         monthlySalary: Number(formData.monthlySalary) || 0,
         commissionRate: Number(formData.commissionRate) || 0,
         currency: formData.currency,
+        phone: formData.phone.trim() || undefined,
+        email: formData.email.trim() || undefined,
+        address: formData.address.trim() || undefined,
+        gpsLocation: formData.gps_location.trim() || undefined,
+        notes: formData.notes.trim() || undefined,
+        disabled: false,
       });
       let systemUserId = '';
       if (createSystemUser) {

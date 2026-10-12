@@ -1,31 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
-import { collection, onSnapshot, doc, updateDoc, setDoc, deleteDoc, query, where, getDocs } from '../../../data/legacy/legacy-compat.ts';
-import { db } from '../../../data/legacy/legacy-compat.ts';
-import { handlePostgreSQLError, OperationType, auth } from '../../../data/legacy/legacy-compat.ts';
 import { Search, Edit2, X, Plus, UserX, UserCheck, Trash2, Users as UsersIcon, Shield, Lock, Eye, EyeOff, Crown, ShieldAlert, Coins } from 'lucide-react';
 import { useRole } from '../../../hooks/useRole';
 import { useSettings } from '../../../context/SettingsContext';
 import { notificationService } from '../../../services/notificationService';
 import ConfirmModal from '../../../components/ConfirmModal';
 import ConfirmDeletePinModal from '../../../components/ConfirmDeletePinModal';
-import { financialAccountService } from '../../../services/financialAccountService';
 import { activityLogService } from '../../../services/activityLogService';
 import { usersApiDataGateway } from '../services/usersApiDataGateway';
-// ── legacy يستخدم للتوافق فقط عند عدم توفر API ─────────────────────────
-// legacy is only used when API is unavailable (fallback mode)
+import { rolesApiDataGateway } from '../../roles/services/rolesApiDataGateway';
 
 type DataRecord = Record<string, unknown>;
-type SnapshotDoc = { id: string; data: () => DataRecord };
-type SnapshotResult = { docs: SnapshotDoc[] };
 type UserRecord = DataRecord & { id: string; fullName: string; email: string; username: string; role: string; roleId?: string; disabled: boolean; isRoot?: boolean; systemPin?: string; createdAt?: number };
 type RoleRecord = DataRecord & { id: string; title: string; permissions: string[] };
 type OrderRecord = DataRecord & { orderPartyType?: string; isStaffOrder?: boolean; employeeId?: string; orderPartyId?: string; customerId?: string; amountPaid?: string | number; amountRemaining?: string | number; totalCostYER?: string | number; totalCostSAR?: string | number };
 const asRecord = (value: unknown): DataRecord => typeof value === 'object' && value !== null ? value as DataRecord : {};
 const asString = (value: unknown, fallback = ''): string => typeof value === 'string' ? value : fallback;
 const toUser = (id: string, raw: DataRecord): UserRecord => ({ ...raw, id, fullName: asString(raw.fullName, 'User'), email: asString(raw.email), username: asString(raw.username), role: asString(raw.role, asString(raw.roleId, 'Employee')), roleId: typeof raw.roleId === 'string' ? raw.roleId : undefined, disabled: raw.disabled === true, isRoot: raw.isRoot === true, systemPin: typeof raw.systemPin === 'string' ? raw.systemPin : undefined });
-const toRole = (id: string, raw: DataRecord): RoleRecord => ({ ...raw, id, title: asString(raw.title, id), permissions: Array.isArray(raw.permissions) ? raw.permissions.filter((permission): permission is string => typeof permission === 'string') : [] });
-const toOrder = (id: string, raw: DataRecord): OrderRecord => ({ ...raw, id, orderPartyType: typeof raw.orderPartyType === 'string' ? raw.orderPartyType : undefined, isStaffOrder: raw.isStaffOrder === true, employeeId: typeof raw.employeeId === 'string' ? raw.employeeId : undefined, orderPartyId: typeof raw.orderPartyId === 'string' ? raw.orderPartyId : undefined, customerId: typeof raw.customerId === 'string' ? raw.customerId : undefined, amountPaid: typeof raw.amountPaid === 'string' || typeof raw.amountPaid === 'number' ? raw.amountPaid : undefined, amountRemaining: typeof raw.amountRemaining === 'string' || typeof raw.amountRemaining === 'number' ? raw.amountRemaining : undefined, totalCostYER: typeof raw.totalCostYER === 'string' || typeof raw.totalCostYER === 'number' ? raw.totalCostYER : undefined, totalCostSAR: typeof raw.totalCostSAR === 'string' || typeof raw.totalCostSAR === 'number' ? raw.totalCostSAR : undefined });
 const numericValue = (value: string | number | undefined): number => typeof value === 'number' ? value : Number.parseFloat(value || '0') || 0;
 const errorMessage = (error: unknown): string => error instanceof Error ? error.message : asString(asRecord(error).message, 'Operation failed');
 const fromApiUser = (raw: DataRecord): UserRecord => {
@@ -73,12 +64,21 @@ export default function UsersPage() {
 
   useEffect(() => {
     if (roleLoading) return;
-    const unsubRoles = onSnapshot(collection(db, 'roles'), (snap: SnapshotResult) => {
-      const allRoles = snap.docs.map(d => toRole(d.id, d.data()));
-      const staffRoles = allRoles.filter(r => r.id !== 'courier' && r.id !== 'Courier');
-      setRoles(staffRoles);
-    });
-    return () => unsubRoles();
+    let disposed = false;
+    const loadRoles = async () => {
+      try {
+        const allRoles = await rolesApiDataGateway.list();
+        if (disposed) return;
+        const staffRoles = allRoles
+          .map(r => ({ id: r.id, title: r.title, permissions: r.permissions }))
+          .filter(r => r.id !== 'courier' && r.id !== 'Courier');
+        setRoles(staffRoles);
+      } catch (err) {
+        console.warn('Failed to load roles via API in UsersPage:', err);
+      }
+    };
+    void loadRoles();
+    return () => { disposed = true; };
   }, [roleLoading]);
 
   const [queryState, setQueryState] = useState<AsyncState<unknown[]>>(asyncState.loading());
@@ -119,35 +119,18 @@ export default function UsersPage() {
 
   useEffect(() => {
     if (roleLoading) return;
-    if (usersApiDataGateway.isReadEnabled()) {
-      const unsubscribe = usersApiDataGateway.subscribe({
-        onData: ({ users: apiUsers }) => {
-          const staffOnly = apiUsers.map(raw => fromApiUser(raw)).filter(u => u.role !== 'Courier' && u.roleId !== 'courier' && u.role !== 'courier');
-          setUsers(staffOnly);
-          setQueryState(staffOnly.length ? asyncState.success(staffOnly) : asyncState.empty());
-        },
-        onError: error => {
-          setQueryState(asyncState.error<UserRecord[]>(error, 'USERS_API_LOAD_FAILED'));
-          notificationService.notify({ title: isAr ? 'فشل تحميل المستخدمين' : 'Users API unavailable', message: errorMessage(error), type: 'error' });
-        },
-      });
-      return unsubscribe;
-    }
-    const unsub = onSnapshot(collection(db, 'users'), (snap: SnapshotResult) => {
-      const allUsers = snap.docs.map(d => toUser(d.id, d.data()));
-      const staffOnly = allUsers.filter(u => u.role !== 'Courier' && u.roleId !== 'courier' && u.role !== 'courier');
-      setUsers(staffOnly);
-      setQueryState(staffOnly.length ? asyncState.success(staffOnly) : asyncState.empty());
-    }, (error) => {
-      handlePostgreSQLError(error, OperationType.LIST, 'users');
+    const unsubscribe = usersApiDataGateway.subscribe({
+      onData: ({ users: apiUsers }) => {
+        const staffOnly = apiUsers.map(raw => fromApiUser(raw)).filter(u => u.role !== 'Courier' && u.roleId !== 'courier' && u.role !== 'courier');
+        setUsers(staffOnly);
+        setQueryState(staffOnly.length ? asyncState.success(staffOnly) : asyncState.empty());
+      },
+      onError: error => {
+        setQueryState(asyncState.error<UserRecord[]>(error, 'USERS_API_LOAD_FAILED'));
+        notificationService.notify({ title: isAr ? 'فشل تحميل المستخدمين' : 'Users API unavailable', message: errorMessage(error), type: 'error' });
+      },
     });
-    const unsubOrders = onSnapshot(collection(db, 'orders'), (snap: SnapshotResult) => {
-      setAllOrders(snap.docs.map(entry => toOrder(entry.id, entry.data())));
-    }, (error) => console.error('Error loading employee order statistics:', error));
-    return () => {
-      unsub();
-      unsubOrders();
-    };
+    return unsubscribe;
   }, [roleLoading]);
 
   const getEmployeeOrderPartyStats = (employeeId: string) => {
@@ -190,44 +173,18 @@ export default function UsersPage() {
 
     editBlockRef.current = true;
 
-    // Check if username is taken if changed
-    if (editFormData.username && editFormData.username !== selectedUser.username) {
-      const q = query(collection(db, 'users'), where('username', '==', editFormData.username));
-      const snap = await getDocs(q);
-      if (!snap.empty && snap.docs[0].id !== selectedUser.id) {
-        editBlockRef.current = false;
-        return notificationService.notify({
-          title: isAr ? 'خطأ بالتحقق' : 'Unique ID Conflict',
-          message: isAr ? 'اسم المستخدم هذا مستخدم ومقيد مسبقاً' : 'This ID/Username is already taken globally',
-          type: 'error'
-        });
-      }
-    }
-
     // Prevent changing root user role
     const isRoot = ROOT_EMAILS.includes(selectedUser.email) || selectedUser.isRoot;
     const finalRole = isRoot ? 'Admin' : editFormData.role;
     const finalDisabled = isRoot ? false : editFormData.disabled;
 
     const result = await runMutation(async () => {
-      const apiWrite = usersApiDataGateway.isWriteEnabled() && editFormData.systemPin === (selectedUser.systemPin || '');
-      if (apiWrite) {
-        await usersApiDataGateway.updateUser(selectedUser.id, {
-          fullName: editFormData.fullName,
-          username: editFormData.username,
-          role: finalRole,
-          disabled: finalDisabled,
-        });
-      } else {
-        await updateDoc(doc(db, 'users', selectedUser.id), {
-          fullName: editFormData.fullName,
-          username: editFormData.username,
-          role: finalRole,
-          disabled: finalDisabled,
-          systemPin: editFormData.systemPin,
-          updatedAt: Date.now()
-        });
-      }
+      await usersApiDataGateway.updateUser(selectedUser.id, {
+        fullName: editFormData.fullName,
+        username: editFormData.username,
+        role: finalRole,
+        disabled: finalDisabled,
+      });
       notificationService.notify({
         title: isAr ? 'تم حفظ التعديلات' : 'Staff Dossier Synchronized',
         message: isAr ? `تم تحديث ملف ${editFormData.fullName} بنجاح` : `Updated ${editFormData.fullName}'s profile`,
@@ -260,14 +217,12 @@ export default function UsersPage() {
       message: isAr ? `هل أنت متأكد من ${action} حساب الموظف ${user.fullName}؟` : `Are you sure you want to deactivate ${user.fullName}?`,
       type: user.disabled ? 'info' : 'warning',
       onConfirm: async () => {
-        const result = await runMutation(() => usersApiDataGateway.isWriteEnabled()
-          ? (user.disabled
+        const result = await runMutation(() =>
+          user.disabled
             ? usersApiDataGateway.updateUser(user.id, { disabled: false }).then(() => undefined)
-            : usersApiDataGateway.disableUser(user.id))
-          : updateDoc(doc(db, 'users', user.id), {
-            disabled: !user.disabled,
-            updatedAt: Date.now()
-          }), setEditMutationState);
+            : usersApiDataGateway.disableUser(user.id),
+          setEditMutationState
+        );
         if (result.status === 'success-after-mutation') {
           notificationService.notify({
             title: isAr ? 'تم تحديث وضعية الحساب' : 'Security profile updated',
@@ -275,7 +230,7 @@ export default function UsersPage() {
             type: user.disabled ? 'success' : 'warning'
           });
         } else if (result.status === 'error') {
-          handlePostgreSQLError(result.error, OperationType.UPDATE, 'users');
+          notificationService.notify({ title: isAr ? 'خطأ' : 'Error', message: errorMessage(result.error), type: 'error' });
         }
       }
     });
@@ -304,58 +259,22 @@ export default function UsersPage() {
     addBlockRef.current = true;
 
     const result = await runMutation(async () => {
-      if (usersApiDataGateway.isWriteEnabled()) {
-        // ── مسار HTTP API: إنشاء عبر alx_api مع Argon2id ──────────────────
-        // HTTP API path: create via alx_api with Argon2id password hashing
-        const newUser = await usersApiDataGateway.createUser({
-          username: addFormData.username,
-          email: addFormData.email || undefined,
-          fullName: addFormData.fullName,
-          password: addFormData.password,
-          role: addFormData.role,
-          systemPin: addFormData.systemPin || undefined,
-        });
+      const newUser = await usersApiDataGateway.createUser({
+        username: addFormData.username,
+        email: addFormData.email || undefined,
+        fullName: addFormData.fullName,
+        password: addFormData.password,
+        role: addFormData.role,
+        systemPin: addFormData.systemPin || undefined,
+      });
 
-        notificationService.notify({
-          title: isAr ? 'تم تقييد مستخدم جديد' : 'Credentials Provisioned',
-          message: isAr
-            ? `تم إدراج المستخدم ${newUser.fullName ?? addFormData.fullName} كـ ${addFormData.role} بنجاح`
-            : `User ${addFormData.fullName} provisioned as ${addFormData.role}`,
-          type: 'success',
-        });
-      } else {
-        // ── مسار التوافق الليجاسي (fallback) ──────────────────────
-        // Legacy fallback path when API is not available
-        const emailQuery = query(collection(db, 'users'), where('email', '==', addFormData.email.toLowerCase()));
-        const emailSnap = await getDocs(emailQuery);
-        if (!emailSnap.empty) throw new Error(isAr ? 'البريد الإلكتروني مشحون ومستخدم مسبقاً' : 'Email is already registered');
-
-        if (addFormData.username) {
-          const usernameQuery = query(collection(db, 'users'), where('username', '==', addFormData.username));
-          const usernameSnap = await getDocs(usernameQuery);
-          if (!usernameSnap.empty) throw new Error(isAr ? 'اسم المستخدم مستخدم مسبقاً' : 'Username already taken');
-        }
-
-        const newId = 'usr_' + Math.random().toString(36).substring(2, 11);
-        await setDoc(doc(db, 'users', newId), {
-          fullName: addFormData.fullName,
-          email: addFormData.email.toLowerCase(),
-          username: addFormData.username,
-          systemPin: addFormData.systemPin,
-          role: addFormData.role,
-          password: addFormData.password,
-          disabled: false,
-          createdAt: Date.now(),
-        });
-
-        notificationService.notify({
-          title: isAr ? 'تم تقييد مستخدم جديد' : 'Credentials Provisioned',
-          message: isAr
-            ? `تم إدراج المستخدم ${addFormData.fullName} كـ ${addFormData.role} بنجاح`
-            : `User ${addFormData.fullName} provisioned as ${addFormData.role}`,
-          type: 'success',
-        });
-      }
+      notificationService.notify({
+        title: isAr ? 'تم تقييد مستخدم جديد' : 'Credentials Provisioned',
+        message: isAr
+          ? `تم إدراج المستخدم ${newUser.fullName ?? addFormData.fullName} كـ ${addFormData.role} بنجاح`
+          : `User ${addFormData.fullName} provisioned as ${addFormData.role}`,
+        type: 'success',
+      });
 
       setIsAddModalOpen(false);
       setAddFormData({ fullName: '', username: '', email: '', password: '', systemPin: '', role: 'Employee' });
@@ -813,21 +732,17 @@ export default function UsersPage() {
       <ConfirmDeletePinModal
         isOpen={deletePinConfig.isOpen}
         onClose={() => setDeletePinConfig({ ...deletePinConfig, isOpen: false })}
-        title={usersApiDataGateway.isWriteEnabled() ? (isAr ? 'تعطيل حساب الموظف' : 'Disable Employee Account') : (isAr ? 'حذف حساب الموظف نهائياً' : 'Delete Employee Account Permanently')}
+        title={isAr ? 'تعطيل حساب الموظف' : 'Disable Employee Account'}
         message={isAr
-          ? (usersApiDataGateway.isWriteEnabled() ? `هل أنت متأكد من تعطيل حساب الموظف ${deletePinConfig.entityName}؟ سيبقى السجل محفوظاً دون حذف القيود المالية.` : `هل أنت متأكد من رغبتك في حذف الموظف ${deletePinConfig.entityName}؟ هذا الإجراء سيقوم بحذف حسابه المالي وكافة قيوده ومصروفاته المرتبطة نهائياً.`)
-          : (usersApiDataGateway.isWriteEnabled() ? `Are you sure you want to disable ${deletePinConfig.entityName}? The user record and financial history will be preserved.` : `Are you sure you want to permanently delete user ${deletePinConfig.entityName}? This will purge their financial account, journal transactions, and associated expenses from the database.`)}
+          ? `هل أنت متأكد من تعطيل حساب الموظف ${deletePinConfig.entityName}؟ سيبقى السجل محفوظاً دون حذف القيود المالية.`
+          : `Are you sure you want to disable ${deletePinConfig.entityName}? The user record and financial history will be preserved.`}
         isAr={isAr}
         onConfirm={async () => {
-          if (usersApiDataGateway.isWriteEnabled()) {
-            await usersApiDataGateway.disableUser(deletePinConfig.entityId);
-          } else {
-            await financialAccountService.purgeEntityAndFinancialFootprint('user', deletePinConfig.entityId);
-            await activityLogService.log('delete_user', deletePinConfig.entityName, { userId: deletePinConfig.entityId });
-          }
+          await usersApiDataGateway.disableUser(deletePinConfig.entityId);
+          await activityLogService.log('delete_user', deletePinConfig.entityName, { userId: deletePinConfig.entityId });
           notificationService.notify({
             title: isAr ? 'تم الحذف' : 'User Deleted',
-            message: isAr ? `تم حذف الموظف ${deletePinConfig.entityName} وسجلاته المالية بنجاح` : `User ${deletePinConfig.entityName} deleted successfully`,
+            message: isAr ? `تم تعطيل حساب الموظف ${deletePinConfig.entityName} بنجاح` : `User ${deletePinConfig.entityName} disabled successfully`,
             type: 'warning'
           });
         }}
