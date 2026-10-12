@@ -237,11 +237,51 @@ class CurrencyService {
   }
 
   /**
+   * آخر سعر صرف موثق لعملة مع مرجعه (cur_price_id + seq) عبر API.
+   * Latest documented exchange rate with its (rateId, seq) reference via API.
+   */
+  async getLatestPriceReference(curNo: number): Promise<{ price: number; reference: { id: number; seq: number } } | null> {
+    try {
+      const rates = await settingsCurrenciesApiGateway.getCurrencyRates(curNo);
+      const latest = rates.find(r => Number(r.price) > 0);
+      return latest
+        ? { price: Number(latest.price), reference: { id: latest.rateId, seq: latest.sequence } }
+        : null;
+    } catch (err) {
+      console.error('[currencyService] getLatestPriceReference error:', err);
+      return null;
+    }
+  }
+
+  /**
+   * سعر الصرف الساري في تاريخ محدد (آخر سعر <= التاريخ) مع مرجعه.
+   * Effective rate at a given date (latest rate <= date) with its reference.
+   */
+  async getPriceReferenceAt(curNo: number, effectiveAt: string): Promise<{ price: number; reference: { id: number; seq: number } } | null> {
+    try {
+      const rates = await settingsCurrenciesApiGateway.getCurrencyRates(curNo);
+      const cutoff = new Date(effectiveAt).getTime();
+      const eligible = rates
+        .filter(r => Number(r.price) > 0 && new Date(r.dayDate).getTime() <= cutoff)
+        .sort((a, b) => {
+          const dayDiff = new Date(b.dayDate).getTime() - new Date(a.dayDate).getTime();
+          return dayDiff !== 0 ? dayDiff : b.sequence - a.sequence;
+        });
+      const match = eligible[0];
+      return match
+        ? { price: Number(match.price), reference: { id: match.rateId, seq: match.sequence } }
+        : null;
+    } catch (err) {
+      console.error('[currencyService] getPriceReferenceAt error:', err);
+      return null;
+    }
+  }
+
+  /**
    * تاريخ أسعار العملة من API
    * Currency rate history from API
    */
-  async getRateHistory(curNo: number): Promise<CurPriceEntry[]> {
-    try {
+  async getRateHistory(curNo: number): Promise<CurPriceEntry[]> {    try {
       const rates = await settingsCurrenciesApiGateway.getCurrencyRates(curNo);
       return rates.map(r => ({
         id: r.rateId,

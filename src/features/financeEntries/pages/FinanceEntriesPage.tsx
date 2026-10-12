@@ -66,7 +66,7 @@ export default function FinanceEntriesPage() {
     try {
       setDataQuery(asyncState.loading());
       const [currencyResult, accountResult, moduleResult, typeResult, entryResult, transResult, custodyResult, usersResult] = await Promise.all([
-        apiClient.get<unknown>('/api/v1/settings/currencies').catch(() => ({ data: [] })),
+        apiClient.get<unknown>('/api/v1/currencies').catch(() => ({ data: [] })),
         apiClient.get<unknown>('/api/v1/finance/accounts', { limit: 1000, offset: 0 }).catch(() => ({ data: [] })),
         apiClient.get<unknown>('/api/v1/finance/entry-modules').catch(() => ({ data: [] })),
         apiClient.get<unknown>('/api/v1/finance/entry-types').catch(() => ({ data: [] })),
@@ -85,7 +85,7 @@ export default function FinanceEntriesPage() {
       setUsersMap(uMap);
 
       const loadedCurrencies = unwrapList(currencyResult).map((item) => ({
-        id: numberValue(item.curId ?? item.cur_id ?? item.id),
+        id: numberValue(item.currencyId ?? item.curId ?? item.cur_id ?? item.id),
         code: stringValue(item.code),
         isDefault: booleanValue(item.isDefault ?? item.is_default),
       }));

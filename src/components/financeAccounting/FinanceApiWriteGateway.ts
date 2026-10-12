@@ -86,7 +86,7 @@ function unwrap<T>(response: ApiEnvelope<T>): T {
 
 export const financeApiWriteGateway = {
   isEnabled(): boolean {
-    return import.meta.env.VITE_FINANCE_API_WRITES === "true" || import.meta.env.VITE_USE_HTTP_API === "true";
+    return true;
   },
 
   async createEntry(payload: EntryPayload): Promise<EntryPayload> {
@@ -97,9 +97,32 @@ export const financeApiWriteGateway = {
     return unwrap(response);
   },
 
+  async replaceDraft(entryId: string, payload: EntryPayload): Promise<EntryPayload> {
+    const response = await apiClient.patch<ApiEnvelope<EntryPayload>>(
+      `/api/v1/finance/entries/${encodeURIComponent(entryId)}`,
+      normalizeCreatePayload(payload)
+    );
+    return unwrap(response);
+  },
+
+  async deleteEntry(entryId: string): Promise<EntryPayload> {
+    const response = await apiClient.delete<ApiEnvelope<EntryPayload>>(
+      `/api/v1/finance/entries/${encodeURIComponent(entryId)}`
+    );
+    return unwrap(response);
+  },
+
   async postEntry(entryId: string): Promise<EntryPayload> {
     const response = await apiClient.post<ApiEnvelope<EntryPayload>>(
       `/api/v1/finance/entries/${encodeURIComponent(entryId)}/post`,
+      {}
+    );
+    return unwrap(response);
+  },
+
+  async unpostEntry(entryId: string): Promise<EntryPayload> {
+    const response = await apiClient.post<ApiEnvelope<EntryPayload>>(
+      `/api/v1/finance/entries/${encodeURIComponent(entryId)}/unpost`,
       {}
     );
     return unwrap(response);
@@ -122,6 +145,30 @@ export const financeApiWriteGateway = {
     const response = await apiClient.post<ApiEnvelope<EntryPayload>>(
       `/api/v1/finance/entries/${encodeURIComponent(entryId)}/void`,
       {}
+    );
+    return unwrap(response);
+  },
+
+  async createCustodyAdvance(custody: EntryPayload, entryPayload: EntryPayload): Promise<EntryPayload> {
+    const response = await apiClient.post<ApiEnvelope<EntryPayload>>(
+      "/api/v1/finance/custody-advances",
+      { custody, entry: normalizeCreatePayload(entryPayload) }
+    );
+    return unwrap(response);
+  },
+
+  async settleCustodyAdvance(custodyId: string, entryPayload: EntryPayload): Promise<EntryPayload> {
+    const response = await apiClient.post<ApiEnvelope<EntryPayload>>(
+      `/api/v1/finance/custody-advances/${encodeURIComponent(custodyId)}/settle`,
+      { entry: normalizeCreatePayload(entryPayload) }
+    );
+    return unwrap(response);
+  },
+
+  async recordOrderPayment(orderId: string, paymentAmount: number, entryPayload: EntryPayload): Promise<EntryPayload> {
+    const response = await apiClient.post<ApiEnvelope<EntryPayload>>(
+      `/api/v1/finance/orders/${encodeURIComponent(orderId)}/payments`,
+      { paymentAmount, entry: normalizeCreatePayload(entryPayload) }
     );
     return unwrap(response);
   },

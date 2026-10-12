@@ -16,7 +16,7 @@ import {
   type FinancialEntryInput,
   type FinancialEntryLineInput,
 } from '../../../services/financialEntryService';
-import { supabase } from '../../../data/legacy/legacy-compat.ts';
+import currencyService from '../../../services/currencyService';
 import AccountPickerModal from '../AccountPickerModal';
 import FinancialCalculatorModal from '../FinancialCalculatorModal';
 import { amountInWords } from '../../../lib/numberToWords';
@@ -189,19 +189,8 @@ export default function CompoundEntryForm({
         if (acc.curNo === systemCurrency?.id) {
           updatedRate = '1';
         } else {
-          const { data } = await (supabase as any)
-            .from('cur_price')
-            .select('price')
-            .eq('cur_no', acc.curNo)
-            .order('day_date', { ascending: false })
-            .order('seq', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          if (data?.price) {
-            updatedRate = String(data.price);
-          } else {
-            updatedRate = '1';
-          }
+          const latest = await currencyService.getLatestPriceReference(acc.curNo);
+          updatedRate = latest ? String(latest.price) : '1';
         }
       }
     }

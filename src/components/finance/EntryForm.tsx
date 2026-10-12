@@ -25,7 +25,7 @@ import {
   type FinancialPaymentDetailInput,
   type FinancialPaymentMethod,
 } from '../../services/financialEntryService';
-import { supabase } from '../../data/legacy/legacy-compat.ts';
+import currencyService from '../../services/currencyService';
 import { asyncState, runMutation, type AsyncState } from '../../shared/contracts/ui.contracts';
 import AccountPickerModal from './AccountPickerModal';
 
@@ -290,17 +290,10 @@ export default function EntryForm({
       return;
     }
     const fetchRate = async () => {
-      const { data } = await (supabase as any)
-        .from('cur_price')
-        .select('cur_price_id, seq, price')
-        .eq('cur_no', selectedCurrency.id)
-        .order('day_date', { ascending: false })
-        .order('seq', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (data?.price) {
-        setExchangeRate(String(data.price));
-        setExchangeRatePriceRef({ id: Number(data.cur_price_id || data.id), seq: Number(data.seq) });
+      const latest = await currencyService.getLatestPriceReference(selectedCurrency.id);
+      if (latest) {
+        setExchangeRate(String(latest.price));
+        setExchangeRatePriceRef(latest.reference);
       } else {
         setExchangeRate('');
         setExchangeRatePriceRef(null);
@@ -377,21 +370,11 @@ export default function EntryForm({
     }
 
     const fetchPrice = async (curNo: number, curCode: string) => {
-      const { data, error: priceError } = await (supabase as any)
-        .from('cur_price')
-        .select('cur_price_id, seq, price, day_date')
-        .eq('cur_no', curNo)
-        .order('day_date', { ascending: false })
-        .order('seq', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (priceError || !data || Number(data.price) <= 0) {
+      const latest = await currencyService.getLatestPriceReference(curNo);
+      if (!latest) {
         throw new Error(`لا يوجد سعر صرف موثق لعملة ${curCode}؛ لن يُحفظ القيد.`);
       }
-      return {
-        price: Number(data.price),
-        reference: { id: Number(data.cur_price_id || data.id), seq: Number(data.seq) },
-      };
+      return latest;
     };
 
     if (!selectedCurrency.isDefault && !accountCurrency.isDefault) {
@@ -479,23 +462,14 @@ export default function EntryForm({
   const saveExchangeRateIfModified = async () => {
     if (!selectedCurrency || selectedCurrency.isDefault) return;
     if (!exchangeRate || Number(exchangeRate) <= 0) return;
-    // نتحقق إن كان السعر مختلفاً عن آخر سعر مجلوب
-    const { data: existing } = await (supabase as any)
-      .from('cur_price')
-      .select('cur_price_id, seq, price')
-      .eq('cur_no', selectedCurrency.id)
-      .order('day_date', { ascending: false })
-      .order('seq', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (existing && Number(existing.price) === Number(exchangeRate)) return; // لا تغيير
-    // إدراج سعر جديد
-    // مهم: غلط كبير ان يتم التعامل مع قاعده البيانات مباشره من الواجهه
-    await (supabase as any).from('cur_price').insert({
-      cur_no: selectedCurrency.id,
-      price: Number(exchangeRate),
-      day_date: new Date().toISOString().slice(0, 10),
-    });
+    // نتحقق إن كان السعر مختلفاً عن آخر سعر مجلوب — عبر API
+    const latest = await currencyService.getLatestPriceReference(selectedCurrency.id);
+    if (latest && latest.price === Number(exchangeRate)) return; // لا تغيير
+    const res = await currencyService.addExchangeRatePrice(selectedCurrency.id, Number(exchangeRate), '');
+    if (!res.success) {
+      // القيد نفسه لا يتوقف على تسجيل السعر التاريخي؛ نكتفي بتنبيه المستخدم
+      console.warn('[EntryForm] تعذر تسجيل سعر الصرف الجديد عبر API:', res.error);
+    }
   };
 
   // ─────────────────────────── الإرسال ───────────────────────────

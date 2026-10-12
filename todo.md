@@ -2377,3 +2377,9 @@
 - [x] [2026-10-12 02:40:00 +03:00] تطهير `legacy-boundary.baseline.json` من الصفحات المنقولة (`EmployeesPage`, `SettingsPage`, `UserManagementPage`, `UsersPage`, `RolesPage`, `SourcesPage`, `FinanceEntriesPage`).
 - [x] [2026-10-12 02:40:00 +03:00] اجتياز فحص تجميع TypeScript في `SWIFTSHIP_SYSTEM` و `alx_api` بدون أية أخطاء بنسبة 100% (0 errors) واجتياز اختبارات حدود التوافق (`legacy-boundary.test.ts`) بنجاح (3/3 passed).
 
+## [2026-10-12 04:00:00 +03:00] — حل مشكلة خطأ الصلاحيات عند استدعاء العملات (/api/v1/currencies)
+- [x] [2026-10-12 04:00:00 +03:00] إزالة اشتراط صلاحية `view_exchange_rates` من مسارات القراءة العامة للعملات وأسعار الصرف في `alx_api/src/modules/settings/currencies.routes.ts` (`GET /api/v1/currencies` و `GET /api/v1/currencies/:currencyId` و `GET /api/v1/currencies/:currencyId/rates`) واعتماد المصادقة فقط (`requireAuthenticatedUser`) لأن العملات بيانات مرجعية عامة.
+- [x] [2026-10-12 04:00:00 +03:00] تحديث الاختبارات في `alx_api/tests/settings-currencies.test.ts` واجتياز فحص Jest بنجاح (5/5 passed).
+- [x] [2026-10-12 04:00:00 +03:00] إعادة بناء `alx_api` عبر `npm run build` لتحديث ملفات `dist/` المترجمة بالكامل.
+- [x] [2026-10-12 04:00:00 +03:00] تصحيح مسار استدعاء العملات في `FinanceEntriesPage.tsx` إلى `/api/v1/currencies` ودعم حقل `currencyId`.
+- [x] [2026-10-12 04:00:00 +03:00] التحقق من تجميع TypeScript في `SWIFTSHIP_SYSTEM` و `alx_api` بصفر أخطاء.

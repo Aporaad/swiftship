@@ -16,7 +16,7 @@ import {
   type FinancialEntryLineInput,
   type FinancialPaymentDetailInput,
 } from '../../../services/financialEntryService';
-import { supabase } from '../../../data/legacy/legacy-compat.ts';
+import currencyService from '../../../services/currencyService';
 import AccountPickerModal from '../AccountPickerModal';
 import FinancialCalculatorModal from '../FinancialCalculatorModal';
 import { amountInWords } from '../../../lib/numberToWords';
@@ -221,18 +221,10 @@ export default function VoucherEntryForm({
       return;
     }
     const fetchVoucherRate = async () => {
-      const { data } = await (supabase as any)
-        .from('cur_price')
-        .select('cur_price_id, seq, price')
-        .eq('cur_no', selectedVoucherCurrency.id)
-        .order('day_date', { ascending: false })
-        .order('seq', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (data?.price) {
-        setVoucherExchangeRate(String(data.price));
-        setVoucherPriceRef({ id: Number(data.cur_price_id || data.id), seq: Number(data.seq) });
+      const latest = await currencyService.getLatestPriceReference(selectedVoucherCurrency.id);
+      if (latest) {
+        setVoucherExchangeRate(String(latest.price));
+        setVoucherPriceRef(latest.reference);
       } else {
         setVoucherExchangeRate('1');
         setVoucherPriceRef(null);
@@ -253,17 +245,10 @@ export default function VoucherEntryForm({
         setAccountRatesMap((prev) => ({ ...prev, [acc.curNo]: { price: '1' } }));
       } else if (!accountRatesMap[acc.curNo]) {
         void (async () => {
-          const { data } = await (supabase as any)
-            .from('cur_price')
-            .select('cur_price_id, seq, price')
-            .eq('cur_no', acc.curNo)
-            .order('day_date', { ascending: false })
-            .order('seq', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          const fetchedPrice = data?.price ? String(data.price) : '1';
-          const priceObj = data ? { price: fetchedPrice, id: Number(data.cur_price_id || data.id), seq: Number(data.seq) } : { price: '1' };
+          const latest = await currencyService.getLatestPriceReference(acc.curNo);
+          const priceObj = latest
+            ? { price: String(latest.price), id: latest.reference.id, seq: latest.reference.seq }
+            : { price: '1' };
           setAccountRatesMap((prev) => ({ ...prev, [acc.curNo]: priceObj }));
         })();
       }

@@ -16,7 +16,7 @@ import {
   type FinancialEntryInput,
   type FinancialEntryLineInput,
 } from '../../../services/financialEntryService';
-import { supabase } from '../../../data/legacy/legacy-compat.ts';
+import currencyService from '../../../services/currencyService';
 import AccountPickerModal from '../AccountPickerModal';
 import FinancialCalculatorModal from '../FinancialCalculatorModal';
 import { amountInWords } from '../../../lib/numberToWords';
@@ -193,18 +193,10 @@ export default function GeneralEntryForm({
       return;
     }
     const fetchLatestRate = async () => {
-      const { data } = await (supabase as any)
-        .from('cur_price')
-        .select('cur_price_id, seq, price')
-        .eq('cur_no', selectedEntryCurrency.id)
-        .order('day_date', { ascending: false })
-        .order('seq', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (data?.price) {
-        setEntryExchangeRate(String(data.price));
-        setEntryPriceRef({ id: Number(data.cur_price_id || data.id), seq: Number(data.seq) });
+      const latest = await currencyService.getLatestPriceReference(selectedEntryCurrency.id);
+      if (latest) {
+        setEntryExchangeRate(String(latest.price));
+        setEntryPriceRef(latest.reference);
       } else {
         setEntryExchangeRate('1');
         setEntryPriceRef(null);
@@ -219,18 +211,10 @@ export default function GeneralEntryForm({
     let refObj: { id: number; seq: number } | undefined = undefined;
 
     if (acc && acc.curNo !== defaultCurrency?.id) {
-      const { data } = await (supabase as any)
-        .from('cur_price')
-        .select('cur_price_id, seq, price')
-        .eq('cur_no', acc.curNo)
-        .order('day_date', { ascending: false })
-        .order('seq', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (data?.price) {
-        fetchedRate = String(data.price);
-        refObj = { id: Number(data.cur_price_id || data.id), seq: Number(data.seq) };
+      const latest = await currencyService.getLatestPriceReference(acc.curNo);
+      if (latest) {
+        fetchedRate = String(latest.price);
+        refObj = latest.reference;
       }
     }
 

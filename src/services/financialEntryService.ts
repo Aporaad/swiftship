@@ -1,6 +1,7 @@
-import { supabase } from '../data/legacy/legacy-compat.ts';
 import type { PaymentStatus, PostingStatus } from '../shared/contracts/value-primitives';
 import { financeApiWriteGateway } from '../components/financeAccounting/FinanceApiWriteGateway';
+import { settingsCurrenciesApiGateway } from '../data/http/settings-currencies-api.gateway';
+import currencyService from './currencyService';
 
 export type FinancialPaymentMethod = 'cash' | 'bank' | 'mixed' | 'deferred';
 export type FinancialEntryCategory = 'General' | 'Compound' | 'Temp' | 'Reversing';
@@ -272,35 +273,20 @@ class FinancialEntryService {
   private async resolveCurrency(code: string): Promise<{ curId: number; isDefault: boolean }> {
     const normalizedCode = String(code || '').trim().toUpperCase();
     if (!normalizedCode) throw new Error('رمز العملة مطلوب لإنشاء القيد.');
-    // استعلام العملة باستخدام اسم العمود الصحيح is_default (snake_case)
-    // Query currency using correct column name is_default (snake_case)
-    const { data, error } = await (supabase as any)
-      .from('currency')
-      .select('cur_id, is_default')
-      .eq('code', normalizedCode)
-      .limit(1)
-      .maybeSingle();
-    if (error || !data?.cur_id) throw new Error(`لا يوجد مرجع عملة نشط ومثبت للرمز ${normalizedCode}.`);
-    return { curId: Number(data.cur_id), isDefault: Boolean(data.is_default) };
+    // مرجع العملة عبر API فقط — GET /api/v1/currencies
+    // Currency reference via API only.
+    const currencies = await settingsCurrenciesApiGateway.listCurrencies(false);
+    const match = currencies.find((c) => String(c.code).trim().toUpperCase() === normalizedCode);
+    if (!match) throw new Error(`لا يوجد مرجع عملة نشط ومثبت للرمز ${normalizedCode}.`);
+    return { curId: Number(match.currencyId), isDefault: Boolean(match.isDefault) };
   }
 
   private async resolvePrice(currencyId: number, effectiveAt: string): Promise<{ price: number; reference: FinancialEntryPriceReference }> {
-    const { data, error } = await (supabase as any)
-      .from('cur_price')
-      .select('cur_price_id, seq, price')
-      .eq('cur_no', currencyId)
-      .lte('day_date', effectiveAt)
-      .order('day_date', { ascending: false })
-      .order('seq', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (error || !data || !hasValidPositiveNumber(Number(data.price))) {
+    const match = await currencyService.getPriceReferenceAt(currencyId, effectiveAt || new Date().toISOString());
+    if (!match || !hasValidPositiveNumber(match.price)) {
       throw new Error('تعذر إثبات سعر الصرف في تاريخ القيد؛ لن يُنشأ القيد متعدد العملات.');
     }
-    return {
-      price: Number(data.price),
-      reference: { id: Number(data.cur_price_id || data.id), seq: Number(data.seq) },
-    };
+    return match;
   }
 
   private async buildLegacyVoucherLine(
@@ -382,11 +368,12 @@ class FinancialEntryService {
     };
   }
 
-  async createFromLegacyVoucher(
+  async buildLegacyVoucherInput(
     voucher: LegacyVoucherInput,
     debitAccount: LegacyVoucherAccountTarget,
     creditAccount: LegacyVoucherAccountTarget,
-  ): Promise<FinancialEntryWriteResult> {
+    routeOverride?: { moduleId?: string; entryTypeId?: string; entryCategory?: FinancialEntryCategory },
+  ): Promise<FinancialEntryInput> {
     if (!hasValidPositiveNumber(voucher.amount)) throw new Error('مبلغ القيد يجب أن يكون موجبًا.');
     const effectiveAt = new Date(voucher.createdAt || Date.now()).toISOString();
     const originalCurrency = await this.resolveCurrency(voucher.currency);
@@ -397,10 +384,11 @@ class FinancialEntryService {
     const route = legacyModuleRoute(voucher.module);
     // احترام postingStatus الممرر — respect passed postingStatus (posted by default for backward compat)
     const postingStatus: FinancialPostingStatus = voucher.postingStatus || 'posted';
-    return this.create({
-      ...route,
+    return {
+      moduleId: routeOverride?.moduleId || route.moduleId,
+      entryTypeId: routeOverride?.entryTypeId || route.entryTypeId,
       entryNumber: voucher.entryNumber,
-      entryCategory: 'General',
+      entryCategory: routeOverride?.entryCategory || 'General',
       postingStatus,
       description: voucher.description,
       notes: voucher.notes,
@@ -414,7 +402,51 @@ class FinancialEntryService {
       effectiveAt,
       createdByUid: voucher.createdByUid,
       lines: [debitLine, creditLine],
-    });
+    };
+  }
+
+  async createFromLegacyVoucher(
+    voucher: LegacyVoucherInput,
+    debitAccount: LegacyVoucherAccountTarget,
+    creditAccount: LegacyVoucherAccountTarget,
+  ): Promise<FinancialEntryWriteResult> {
+    return this.create(await this.buildLegacyVoucherInput(voucher, debitAccount, creditAccount));
+  }
+
+  /**
+   * تعديل قيد مرحّل من دفتر الأستاذ — إجراء API المعتمد: إلغاء ترحيل ثم استبدال ثم إعادة ترحيل.
+   * يرفض المسار المخزني تعديل القيود المرحّلة مباشرة، لذا تمر التعديلات بهذه الدورة الذرية عبر الـHTTP.
+   * Posted-entry edit through the API: unpost → replace draft → re-post.
+   */
+  async replaceLedgerEntry(
+    entryId: string,
+    voucher: LegacyVoucherInput,
+    debitAccount: LegacyVoucherAccountTarget,
+    creditAccount: LegacyVoucherAccountTarget,
+    actorUid?: string,
+    routeOverride?: { moduleId?: string; entryTypeId?: string; entryCategory?: FinancialEntryCategory },
+  ): Promise<FinancialEntryWriteResult> {
+    if (!entryId?.trim()) throw new Error('معرف القيد مطلوب للتعديل.');
+    await this.unpostOrder(entryId, actorUid);
+    const input = await this.buildLegacyVoucherInput(
+      { ...voucher, postingStatus: 'draft' },
+      debitAccount,
+      creditAccount,
+      routeOverride,
+    );
+    const replaced = await this.replaceDraft(entryId, input);
+    await this.post(entryId, actorUid);
+    return { ...replaced, postingStatus: 'posted' };
+  }
+
+  /**
+   * حذف قيد مرحّل من دفتر الأستاذ — إلغاء ترحيل ثم حذف المسودة عبر الـAPI.
+   * Posted-entry delete through the API: unpost then delete the resulting draft.
+   */
+  async deleteLedgerEntry(entryId: string, actorUid?: string): Promise<{ id: string; deleted: true }> {
+    if (!entryId?.trim()) throw new Error('معرف القيد مطلوب للحذف.');
+    await this.unpostOrder(entryId, actorUid);
+    return this.deleteDraft(entryId);
   }
 
   /**
@@ -489,13 +521,7 @@ class FinancialEntryService {
 
   async create(entry: FinancialEntryInput): Promise<FinancialEntryWriteResult> {
     const payload = buildFinancialEntryPayload(entry);
-    if (financeApiWriteGateway.isEnabled()) {
-      return (await financeApiWriteGateway.createEntry(payload)) as unknown as FinancialEntryWriteResult;
-    }
-    const { data, error } = await (supabase as any).rpc('secure_create_financial_entry', { p_entry: payload });
-    if (error) throw new Error(`[FinancialEntryService] تعذر إنشاء القيد: ${error.message || error}`);
-    if (!data?.id) throw new Error('[FinancialEntryService] لم يُرجع الإجراء الذري معرف القيد المنشأ.');
-    return data as FinancialEntryWriteResult;
+    return (await financeApiWriteGateway.createEntry(payload)) as unknown as FinancialEntryWriteResult;
   }
 
   async createCustodyAdvance(custody: CustodyAdvanceInput, entry: FinancialEntryInput): Promise<{ id: string; custodyNumber: string; issuedEntryId: string; status: 'open' }> {
@@ -505,155 +531,87 @@ class FinancialEntryService {
     if (!hasValidPositiveNumber(custody.amountOriginal) || !Number.isInteger(custody.currencyOriginalNo)) {
       throw new Error('مبلغ العهدة ومرجع عملتها غير صالحين.');
     }
-    const payload = buildFinancialEntryPayload({ ...entry, custodyId: '' });
-    const custodyPayload = {
-      id: custody.id || '', custodyNumber: custody.custodyNumber.trim(), recipientType: custody.recipientType,
-      recipientId: custody.recipientId, recipientName: custody.recipientName.trim(), recipientAccountId: custody.recipientAccountId,
-      amountOriginal: String(custody.amountOriginal), currencyOriginalNo: String(custody.currencyOriginalNo),
-      ...serializePriceReference(custody.currencyPrice), note: custody.note || '', issuedAt: custody.issuedAt || '', createdByUid: custody.createdByUid || '',
+    const custodyPayload: Record<string, unknown> = {
+      custodyNumber: custody.custodyNumber.trim(),
+      recipientId: custody.recipientId,
+      recipientName: custody.recipientName.trim(),
+      recipientAccountId: custody.recipientAccountId,
+      amountOriginal: custody.amountOriginal,
+      currencyOriginalNo: custody.currencyOriginalNo,
     };
-    const { data, error } = await (supabase as any).rpc('secure_create_custody_advance', { p_custody: custodyPayload, p_entry: payload });
-    if (error) throw new Error(`[FinancialEntryService] تعذر إنشاء العهدة: ${error.message || error}`);
-    return data;
+    if (custody.id) custodyPayload.id = custody.id;
+    if (custody.recipientType) custodyPayload.recipientType = custody.recipientType;
+    if (custody.currencyPrice?.id) custodyPayload.currencyPriceId = custody.currencyPrice.id;
+    if (custody.currencyPrice?.seq) custodyPayload.currencyPriceSeq = custody.currencyPrice.seq;
+    if (custody.note) custodyPayload.note = custody.note;
+    if (custody.issuedAt) custodyPayload.issuedAt = custody.issuedAt;
+    const entryPayload = buildFinancialEntryPayload({ ...entry, custodyId: '' });
+    return (await financeApiWriteGateway.createCustodyAdvance(custodyPayload, entryPayload)) as unknown as { id: string; custodyNumber: string; issuedEntryId: string; status: 'open' };
   }
 
   async settleCustodyAdvance(custodyId: string, entry: FinancialEntryInput, settledByUid?: string): Promise<{ id: string; settlementEntryId: string; status: 'partial' | 'settled'; amountOutstanding: number }> {
     if (!custodyId?.trim()) throw new Error('معرف العهدة مطلوب للتسوية.');
     const payload = buildFinancialEntryPayload({ ...entry, custodyId });
-    const { data, error } = await (supabase as any).rpc('secure_settle_custody_advance', {
-      p_custody_id: custodyId, p_entry: payload,
-    });
-    if (error) throw new Error(`[FinancialEntryService] تعذر تسوية العهدة: ${error.message || error}`);
-    return data;
+    return (await financeApiWriteGateway.settleCustodyAdvance(custodyId, payload)) as unknown as { id: string; settlementEntryId: string; status: 'partial' | 'settled'; amountOutstanding: number };
   }
 
   async recordOrderPayment(orderId: string, paymentAmount: number, entry: FinancialEntryInput, updatedByUid?: string): Promise<{ orderId: string; entryId: string; amountPaid: number; amountRemaining: number; paymentStatus: Exclude<PaymentStatus, 'Unpaid'> }> {
     if (!orderId?.trim() || !hasValidPositiveNumber(paymentAmount)) throw new Error('معرف الطلب ومبلغ الدفعة الموجب مطلوبان.');
     if (entry.orderId !== orderId) throw new Error('مرجع الطلب ومبلغ سند القبض يجب أن يطابقا الدفعة.');
-    const { data, error } = await (supabase as any).rpc('secure_record_order_payment', {
-      p_order_id: orderId, p_payment_amount: paymentAmount, p_entry: buildFinancialEntryPayload(entry),
-    });
-    if (error) throw new Error(`[FinancialEntryService] تعذر تحصيل دفعة الطلب: ${error.message || error}`);
-    return data;
+    const payload = buildFinancialEntryPayload(entry);
+    return (await financeApiWriteGateway.recordOrderPayment(orderId, paymentAmount, payload)) as unknown as { orderId: string; entryId: string; amountPaid: number; amountRemaining: number; paymentStatus: Exclude<PaymentStatus, 'Unpaid'> };
   }
 
   async deleteDraft(entryId: string): Promise<{ id: string; deleted: true }> {
     if (!entryId?.trim()) throw new Error('معرف مسودة القيد مطلوب.');
-    const { data, error } = await (supabase as any).rpc('secure_delete_financial_entry_draft', { p_entry_id: entryId });
-    if (error) throw new Error(`[FinancialEntryService] تعذر حذف مسودة القيد: ${error.message || error}`);
-    return data;
+    return (await financeApiWriteGateway.deleteEntry(entryId)) as unknown as { id: string; deleted: true };
   }
 
   async replaceDraft(entryId: string, entry: FinancialEntryInput): Promise<FinancialEntryWriteResult> {
     if (!entryId?.trim()) throw new Error('معرف مسودة القيد مطلوب.');
-    const { data, error } = await (supabase as any).rpc('secure_replace_financial_entry_draft', {
-      p_entry_id: entryId,
-      p_entry: buildFinancialEntryPayload({ ...entry, postingStatus: 'draft' }),
-    });
-    if (error) throw new Error(`[FinancialEntryService] تعذر تعديل مسودة القيد: ${error.message || error}`);
-    return data;
+    const payload = buildFinancialEntryPayload({ ...entry, postingStatus: 'draft' });
+    return (await financeApiWriteGateway.replaceDraft(entryId, payload)) as unknown as FinancialEntryWriteResult;
   }
 
   async voidDraft(entryId: string, voidedByUid?: string): Promise<{ id: string; postingStatus: 'voided' }> {
     if (!entryId?.trim()) throw new Error('معرف مسودة القيد مطلوب.');
-    if (financeApiWriteGateway.isEnabled()) {
-      return (await financeApiWriteGateway.voidDraft(entryId)) as { id: string; postingStatus: 'voided' };
-    }
-    const { data, error } = await (supabase as any).rpc('secure_void_financial_entry_draft', { p_entry_id: entryId });
-    if (error) throw new Error(`[FinancialEntryService] تعذر إبطال مسودة القيد: ${error.message || error}`);
-    return data;
+    return (await financeApiWriteGateway.voidDraft(entryId)) as { id: string; postingStatus: 'voided' };
   }
 
   async reverse(entryId: string, entryNumber: string, createdByUid?: string, notes = ''): Promise<FinancialEntryWriteResult & { reversesEntryId: string }> {
     if (!entryId?.trim() || !entryNumber?.trim()) throw new Error('معرف القيد ورقم القيد العكسي مطلوبان.');
-    if (financeApiWriteGateway.isEnabled()) {
-      return (await financeApiWriteGateway.reverseEntry(entryId, notes.trim() || `عكس القيد ${entryNumber.trim()}`)) as unknown as FinancialEntryWriteResult & { reversesEntryId: string };
-    }
-    const { data, error } = await (supabase as any).rpc('secure_reverse_financial_entry', {
-      p_entry_id: entryId, p_reversal: { entryNumber: entryNumber.trim(), notes },
-    });
-    if (error) throw new Error(`[FinancialEntryService] تعذر إنشاء القيد العكسي: ${error.message || error}`);
-    return data;
+    return (await financeApiWriteGateway.reverseEntry(entryId, notes.trim() || `عكس القيد ${entryNumber.trim()}`)) as unknown as FinancialEntryWriteResult & { reversesEntryId: string };
   }
 
   async post(entryId: string, postedByUid?: string): Promise<{ id: string; postingStatus: 'posted' }> {
     if (!entryId?.trim()) throw new Error('معرف القيد مطلوب للترحيل.');
-    if (financeApiWriteGateway.isEnabled()) {
-      return (await financeApiWriteGateway.postEntry(entryId)) as { id: string; postingStatus: 'posted' };
-    }
-    const { data, error } = await (supabase as any).rpc('secure_post_financial_entry', { p_entry_id: entryId });
-    if (error) throw new Error(`[FinancialEntryService] تعذر ترحيل القيد: ${error.message || error}`);
-    return data as { id: string; postingStatus: 'posted' };
+    return (await financeApiWriteGateway.postEntry(entryId)) as { id: string; postingStatus: 'posted' };
   }
   /**
-   * حذف قيد مرحّل — Delete a posted entry (requires special permission)
-   * يستخدم إجراء SQL مخصص يتحقق من الصلاحية قبل الحذف ويعكس الأثر المحاسبي
-   * Uses a dedicated SQL procedure that validates permission before deleting and reverses accounting impact
+   * حذف قيد — عبر DELETE /api/v1/finance/entries/:id مع صلاحية النوع المحدد
+   * Deletes an entry via the Finance API with the entry-type's delete permission.
    */
   async deletePosted(entryId: string, deletedByUid?: string): Promise<{ id: string; deleted: true }> {
-    if (!entryId?.trim()) throw new Error('معرف القيد المرحّل مطلوب للحذف.');
-    // نحاول أولاً إجراء RPC مخصص للمرحّل، وإن لم يكن موجوداً نعود لحذف المسودة
-    // Try dedicated RPC first; fall back to draft delete if not available
-    const { data, error } = await (supabase as any).rpc('secure_delete_posted_financial_entry', {
-      p_entry_id: entryId,
-      p_deleted_by: deletedByUid || '',
-    });
-    if (error) {
-      // إن كان الخطأ بسبب عدم وجود الإجراء، نعود للحذف المباشر
-      // If RPC doesn't exist, fall back to direct delete
-      if (error.message?.includes('does not exist') || error.code === 'PGRST202') {
-        const { data: d2, error: e2 } = await (supabase as any).rpc('secure_delete_financial_entry_draft', { p_entry_id: entryId });
-        if (e2) throw new Error(`[FinancialEntryService] تعذر حذف القيد المرحّل: ${e2.message || e2}`);
-        return d2;
-      }
-      throw new Error(`[FinancialEntryService] تعذر حذف القيد المرحّل: ${error.message || error}`);
-    }
-    return data;
+    if (!entryId?.trim()) throw new Error('معرف القيد مطلوب للحذف.');
+    return (await financeApiWriteGateway.deleteEntry(entryId)) as unknown as { id: string; deleted: true };
   }
 
   /**
-   * تعديل قيد مرحّل — Update a posted entry (requires special permission)
-   * يعيد القيد إلى مسودة أولاً ثم يحدثه ويعيد ترحيله
-   * Reverts the entry to draft first, updates it, then re-posts it
+   * تعديل قيد — عبر PATCH /api/v1/finance/entries/:id مع صلاحية النوع المحدد
+   * Updates an entry via the Finance API with the entry-type's edit permission.
    */
   async replacePosted(entryId: string, entry: FinancialEntryInput): Promise<FinancialEntryWriteResult> {
-    if (!entryId?.trim()) throw new Error('معرف القيد المرحّل مطلوب للتعديل.');
-    const { data, error } = await (supabase as any).rpc('secure_replace_posted_financial_entry', {
-      p_entry_id: entryId,
-      p_entry: buildFinancialEntryPayload({ ...entry, postingStatus: 'posted' }),
-    });
-    if (error) {
-      // Fallback: استخدام replaceDraft إن لم يكن إجراء المرحّل موجوداً
-      if (error.message?.includes('does not exist') || error.code === 'PGRST202') {
-        return this.replaceDraft(entryId, entry);
-      }
-      throw new Error(`[FinancialEntryService] تعذر تعديل القيد المرحّل: ${error.message || error}`);
-    }
-    return data as FinancialEntryWriteResult;
+    if (!entryId?.trim()) throw new Error('معرف القيد مطلوب للتعديل.');
+    return this.replaceDraft(entryId, entry);
   }
 
   /**
-   * إلغاء ترحيل طلب مرحّل — Unpost a posted order entry (requires permission unpost_posted_orders)
-   * يعيد القيد المرتبط بطلب من مرحّل إلى مسودة ويعكس تأثير الأرصدة تلقائياً
-   * Reverts a posted order entry from 'posted' to 'draft' and recalculates account balances
+   * إلغاء ترحيل قيد — عبر POST /api/v1/finance/entries/:id/unpost بصلاحية unpost_posted_orders
+   * Unposts an entry via the Finance API (requires unpost_posted_orders permission).
    */
   async unpostOrder(entryId: string, unpostedByUid?: string): Promise<{ id: string; postingStatus: 'draft'; unposted: true }> {
     if (!entryId?.trim()) throw new Error('معرف القيد مطلوب لإلغاء الترحيل.');
-    const { data, error } = await (supabase as any).rpc('secure_unpost_order_financial_entry', {
-      p_entry_id: entryId,
-    });
-    if (error) {
-      if (error.message?.includes('does not exist') || error.code === 'PGRST202') {
-        const { data: d2, error: e2 } = await (supabase as any).rpc('unpost_financial_entry', {
-          p_entry_id: entryId,
-          p_unposted_by: unpostedByUid || '',
-        });
-        if (e2) throw new Error(`[FinancialEntryService] تعذر إلغاء ترحيل الطلب: ${e2.message || e2}`);
-        return d2;
-      }
-      throw new Error(`[FinancialEntryService] تعذر إلغاء ترحيل الطلب: ${error.message || error}`);
-    }
-    return data;
+    return (await financeApiWriteGateway.unpostEntry(entryId)) as unknown as { id: string; postingStatus: 'draft'; unposted: true };
   }
 }
 

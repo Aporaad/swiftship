@@ -1,5 +1,10 @@
 import type * as React from 'react';
-import { collection, db, doc, getDocs, query, where, writeBatch } from '../../data/legacy/legacy-compat.ts';
+import {
+  financialEntryService,
+  type FinancialEntryCategory,
+  type LegacyVoucherAccountTarget,
+  type LegacyVoucherInput,
+} from '../../services/financialEntryService';
 import { financialAccountService } from '../../services/financialAccountService';
 import { notificationService } from '../../services/notificationService';
 import type { AccountEntityType } from '../../services/financialAccountTypes';
@@ -29,18 +34,14 @@ interface ActionDependencies {
   adjustLoading: boolean;
   adjustSalaryMonth: string;
   auditedCustomerId: string;
-  collection: typeof collection;
   currentUser: { id?: string | null; email?: string | null } | null;
   customerLedgerDetails: { customer: { accountId?: string | null; accountCode?: string | null } } | null;
-  db: typeof db;
   dbRates: Record<string, number>;
   deletePin: string;
-  doc: typeof doc;
   editJournalData: EditMainEntryData;
   employees: EmployeeRecord[];
   entryToDelete: FinanceEntryRecord | null;
   financialAccountService: typeof financialAccountService;
-  getDocs: typeof getDocs;
   isAr: boolean;
   isSalaryPayment: boolean;
   notificationService: typeof notificationService;
@@ -49,14 +50,11 @@ interface ActionDependencies {
   payLoading: boolean;
   payNotes: string;
   postingFinancialAccounts: PostingAccount[];
-  query: typeof query;
   selectedEditEntry: FinanceEntryRecord | null;
   settings: { currency?: string };
   sourceAccountId: string;
   targetAccountId: string;
   targetType: string;
-  where: typeof where;
-  writeBatch: typeof writeBatch;
   setAdjustData: StateSetter<AdjustmentData>;
   setAdjustLoading: StateSetter<boolean>;
   setDeleteLoading: StateSetter<boolean>;
@@ -82,6 +80,7 @@ interface PostingAccount {
   id?: string;
   accountCode?: string;
   currency?: string;
+  curNo?: number;
   entityType?: AccountEntityType;
   entityId?: string;
   entityName?: string;
@@ -92,19 +91,35 @@ interface EmployeeRecord {
   systemPin?: string;
 }
 
+interface EntryMeta {
+  moduleId?: string;
+  entryTypeId?: string;
+  entryCategory?: string;
+  entryNumber?: string;
+  orderId?: string;
+  shipmentId?: string;
+}
+
+interface LegRow {
+  id?: string;
+  accountId?: string;
+  currency?: string;
+  currencyOriginal?: string;
+  entry?: EntryMeta;
+}
+
 interface FinanceEntryRecord {
   id?: string;
   mainEntryId?: string;
   refNumber?: string;
+  title?: string;
+  module?: string;
   debitAccountId?: string;
   creditAccountId?: string;
-  allLegs?: Array<{ id?: string; accountId?: string }>;
+  debitLeg?: LegRow;
+  creditLeg?: LegRow;
+  allLegs?: LegRow[];
   [key: string]: unknown;
-}
-
-interface QueryDocumentLike {
-  ref: { type: string; path: string; id: string };
-  data: () => { accountId?: string };
 }
 
 interface CustomerOrderRecord {
@@ -126,8 +141,32 @@ const errorMessage = (error: unknown, fallback: string): string =>
   error instanceof Error && error.message ? error.message : fallback;
 
 export function createFinanceAccountingMainEntryActions(dependencies: ActionDependencies) {
-  const { adjustData, adjustLoading, adjustSalaryMonth, auditedCustomerId, collection, currentUser, customerLedgerDetails, db, dbRates, deletePin, doc, editJournalData, employees, entryToDelete, financialAccountService, getDocs, isAr, isSalaryPayment, notificationService, orders, payAmount, payLoading, payNotes, postingFinancialAccounts, query, selectedEditEntry, setAdjustData, setAdjustLoading, setDeleteLoading, setDeletePin, setDeletePinError, setEditJournalLoading, setEntryToDelete, setIsAdjustmentModalOpen, setIsDeletePinModalOpen, setIsEditJournalOpen, setIsPayModalOpen, setIsSalaryPayment, setPayAmount, setPayLoading, setPayNotes, setSelectedEditEntry, setSourceAccountId, setTargetAccountId, setTargetType, settings, sourceAccountId, targetAccountId, targetType, where, writeBatch } = dependencies;
+  const { adjustData, adjustLoading, adjustSalaryMonth, auditedCustomerId, currentUser, customerLedgerDetails, dbRates, deletePin, editJournalData, employees, entryToDelete, financialAccountService, isAr, isSalaryPayment, notificationService, orders, payAmount, payLoading, payNotes, postingFinancialAccounts, selectedEditEntry, setAdjustData, setAdjustLoading, setDeleteLoading, setDeletePin, setDeletePinError, setEditJournalLoading, setEntryToDelete, setIsAdjustmentModalOpen, setIsDeletePinModalOpen, setIsEditJournalOpen, setIsPayModalOpen, setIsSalaryPayment, setPayAmount, setPayLoading, setPayNotes, setSelectedEditEntry, setSourceAccountId, setTargetAccountId, setTargetType, settings, sourceAccountId, targetAccountId, targetType } = dependencies;
 
+  const actorUid = () => currentUser?.id || undefined;
+
+  const toAccountTarget = (accountId?: string | null, fallback?: LegRow | null): LegacyVoucherAccountTarget | null => {
+    const acc = postingFinancialAccounts.find((a: PostingAccount) => a.id === accountId);
+    if (acc?.id) {
+      return {
+        id: acc.id,
+        curNo: acc.curNo,
+        currency: acc.currency || settings.currency || 'YER',
+        entityType: acc.entityType,
+        entityId: acc.entityId,
+      };
+    }
+    if (fallback?.accountId) {
+      return {
+        id: fallback.accountId,
+        currency: String(fallback.currencyOriginal || fallback.currency || settings.currency || 'YER'),
+      };
+    }
+    return null;
+  };
+
+  // التعديل عبر دورة الـAPI المعتمدة: إلغاء ترحيل ← استبدال المسودة ← إعادة ترحيل
+  // Edit goes through the sanctioned API cycle: unpost -> replace -> re-post.
   const handleEditJournalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedEditEntry) return;
@@ -139,103 +178,64 @@ export function createFinanceAccountingMainEntryActions(dependencies: ActionDepe
       });
     }
 
+    const mainEntryId = selectedEditEntry.mainEntryId || (selectedEditEntry.id && !String(selectedEditEntry.id).startsWith('EXP-UNLINKED-') ? selectedEditEntry.id : '');
+    if (!mainEntryId) {
+      return notificationService.notify({
+        title: isAr ? 'تعذر التعديل' : 'Edit Blocked',
+        message: isAr ? 'لا يوجد قيد رئيسي لهذا السطر؛ التعديل متاح عبر واجهة القيود فقط.' : 'This row has no main entry id; edits are only available through the entries workspace.',
+        type: 'error'
+      });
+    }
+
+    const entryMeta = selectedEditEntry.debitLeg?.entry || selectedEditEntry.creditLeg?.entry || selectedEditEntry.allLegs?.[0]?.entry;
+    if (String(entryMeta?.entryCategory || '') === 'Compound') {
+      return notificationService.notify({
+        title: isAr ? 'تعذر التعديل' : 'Edit Blocked',
+        message: isAr ? 'القيود المركبة تُعدَّل من مساحة عمل القيود ولا تقبل التعديل من محرر الدفتر.' : 'Compound entries must be edited from the entries workspace, not the ledger editor.',
+        type: 'error'
+      });
+    }
+
     setEditJournalLoading(true);
     try {
       const rawAmt = parseFloat(editJournalData.amountOriginal);
-      const convertedAmt = financialAccountService.convertToDefaultCurrency(
-        rawAmt,
-        editJournalData.currencyOriginal,
-        settings.currency || 'YER',
-        dbRates
-      );
-
       const parsedCreatedAt = editJournalData.createdAt ? new Date(editJournalData.createdAt).getTime() : Date.now();
-      const batch = writeBatch(db);
 
-      const affectedAccountIds = new Set<string>();
-
-      {
-        const txId = selectedEditEntry.id;
-        const refNum = selectedEditEntry.refNumber;
-
-        const txQuery = refNum
-          ? query(collection(db, 'account_trans'), where('ref_number', '==', refNum))
-          : query(collection(db, 'account_trans'), where('__name__', '==', txId));
-
-        const txSnap = await getDocs(txQuery);
-        const exchangeRates = dbRates;
-
-        const newDebitAcc = editJournalData.debitAccountId ? postingFinancialAccounts.find((a: PostingAccount) => a.id === editJournalData.debitAccountId) : null;
-        const newCreditAcc = editJournalData.creditAccountId ? postingFinancialAccounts.find((a: PostingAccount) => a.id === editJournalData.creditAccountId) : null;
-
-        if (!txSnap.empty) {
-          for (const txDoc of txSnap.docs) {
-            const txData = txDoc.data();
-            if (txData.accountId) affectedAccountIds.add(txData.accountId);
-
-            const targetAcc = txData.type === 'Debit' ? newDebitAcc : newCreditAcc;
-            const targetAccId = targetAcc ? targetAcc.id : txData.accountId;
-            if (targetAccId) affectedAccountIds.add(targetAccId);
-
-            const targetCurrency = targetAcc?.currency || txData.currency || 'YER';
-
-            const legNewAmount = financialAccountService.convertToTargetCurrency(
-              rawAmt,
-              editJournalData.currencyOriginal,
-              targetCurrency,
-              exchangeRates
-            );
-
-            const updateData: Record<string, unknown> = {
-              amount: legNewAmount,
-              amountOriginal: rawAmt,
-              currencyOriginal: editJournalData.currencyOriginal,
-              description: editJournalData.notes,
-              createdAt: parsedCreatedAt,
-              updatedAt: Date.now()
-            };
-
-            if (targetAcc) {
-              updateData.accountId = targetAcc.id;
-              updateData.accountCode = targetAcc.accountCode;
-              updateData.entityName = targetAcc.entityName;
-              updateData.entityId = targetAcc.entityId;
-              updateData.entityType = targetAcc.entityType;
-              updateData.currency = targetAcc.currency;
-            }
-
-            batch.update(txDoc.ref, updateData);
-
-          }
-        }
-
-        // Update master entry doc in main_entry if exists
-        if (selectedEditEntry.mainEntryId) {
-          const jvRef = doc(db, 'main_entry', selectedEditEntry.mainEntryId);
-          batch.update(jvRef, {
-            amount: rawAmt,
-            currency: editJournalData.currencyOriginal,
-            description: editJournalData.notes,
-            debitAccountId: editJournalData.debitAccountId || selectedEditEntry.debitAccountId,
-            creditAccountId: editJournalData.creditAccountId || selectedEditEntry.creditAccountId,
-            createdAt: parsedCreatedAt,
-            updatedAt: Date.now()
-          });
-        }
+      const debitTarget = toAccountTarget(
+        editJournalData.debitAccountId || selectedEditEntry.debitAccountId,
+        selectedEditEntry.debitLeg,
+      );
+      const creditTarget = toAccountTarget(
+        editJournalData.creditAccountId || selectedEditEntry.creditAccountId,
+        selectedEditEntry.creditLeg,
+      );
+      if (!debitTarget || !creditTarget) {
+        throw new Error(isAr ? 'تعذر تحديد الحساب المدين أو الدائن من دفتر الحسابات.' : 'Debit or credit account could not be resolved from the ledger register.');
       }
 
-      await batch.commit();
+      const voucher: LegacyVoucherInput = {
+        entryNumber: String(selectedEditEntry.refNumber || entryMeta?.entryNumber || ''),
+        createdAt: parsedCreatedAt,
+        description: (editJournalData.notes || selectedEditEntry.title || String(selectedEditEntry.refNumber || '')).trim(),
+        notes: editJournalData.notes,
+        amount: rawAmt,
+        currency: editJournalData.currencyOriginal,
+        module: selectedEditEntry.module || 'adjustment',
+        refNumber: String(selectedEditEntry.refNumber || ''),
+        orderId: entryMeta?.orderId || undefined,
+        shipmentId: entryMeta?.shipmentId || undefined,
+        createdByUid: currentUser?.id || 'system',
+      };
 
-      // Recalculate & sync balances for all affected accounts
-      affectedAccountIds.forEach(accId => {
-        if (accId) {
-          financialAccountService.recalculateAndSyncBalance(accId).catch(console.error);
-        }
+      await financialEntryService.replaceLedgerEntry(mainEntryId, voucher, debitTarget, creditTarget, actorUid(), {
+        moduleId: entryMeta?.moduleId,
+        entryTypeId: entryMeta?.entryTypeId,
+        entryCategory: entryMeta?.entryCategory as FinancialEntryCategory | undefined,
       });
 
       notificationService.notify({
         title: isAr ? 'تم الحفظ' : 'Saved',
-        message: isAr ? 'تم تعديل القيد المالي وتحديث كافة الأرصدة المرتبطة.' : 'Financial entry updated and all associated balances recalculated.',
+        message: isAr ? 'تم تعديل القيد المالي وإعادة ترحيله وتحديث كافة الأرصدة المرتبطة.' : 'Financial entry updated, re-posted, and all associated balances recalculated.',
         type: 'success'
       });
 
@@ -274,48 +274,15 @@ export function createFinanceAccountingMainEntryActions(dependencies: ActionDepe
       return;
     }
 
+    const mainEntryId = entryToDelete.mainEntryId || (entryToDelete.id && !String(entryToDelete.id).startsWith('EXP-UNLINKED-') ? entryToDelete.id : '');
+    if (!mainEntryId) {
+      setDeletePinError(isAr ? 'لا يمكن حذف قيد غير مرتبط بقيد رئيسي عبر الـAPI.' : 'This row is not linked to a main entry and cannot be deleted through the API.');
+      return;
+    }
+
     setDeleteLoading(true);
     try {
-      const affectedAccountIds = new Set<string>();
-      if (entryToDelete.debitAccountId) affectedAccountIds.add(entryToDelete.debitAccountId);
-      if (entryToDelete.creditAccountId) affectedAccountIds.add(entryToDelete.creditAccountId);
-
-      const batch = writeBatch(db);
-
-      // Find all transaction legs related to this voucher
-      if (entryToDelete.allLegs && entryToDelete.allLegs.length > 0) {
-        entryToDelete.allLegs.forEach((leg: { id?: string; accountId?: string }) => {
-          if (leg.id) {
-            batch.delete(doc(db, 'account_trans', leg.id));
-          }
-          if (leg.accountId) affectedAccountIds.add(leg.accountId);
-        });
-      } else if (entryToDelete.id && !entryToDelete.id.startsWith('EXP-UNLINKED-')) {
-        const refNum = entryToDelete.refNumber;
-        const qTx = refNum
-          ? query(collection(db, 'account_trans'), where('ref_number', '==', refNum))
-          : query(collection(db, 'account_trans'), where('__name__', '==', entryToDelete.id));
-        const snap = await getDocs(qTx);
-        snap.docs.forEach((d: QueryDocumentLike) => {
-          batch.delete(d.ref);
-          const data = d.data();
-          if (data.accountId) affectedAccountIds.add(data.accountId);
-        });
-      }
-
-      // Delete master entry document from main_entry if present
-      if (entryToDelete.mainEntryId) {
-        batch.delete(doc(db, 'main_entry', entryToDelete.mainEntryId));
-      }
-
-      await batch.commit();
-
-      // Recalculate & sync balances for all affected accounts in background
-      affectedAccountIds.forEach(accId => {
-        if (accId) {
-          financialAccountService.recalculateAndSyncBalance(accId).catch(console.error);
-        }
-      });
+      await financialEntryService.deleteLedgerEntry(mainEntryId, actorUid());
 
       notificationService.notify({
         title: isAr ? 'تم الحذف' : 'Deleted',
@@ -499,78 +466,54 @@ export function createFinanceAccountingMainEntryActions(dependencies: ActionDepe
         return;
       }
 
-      let remainingPayment = amountVal;
-      const batch = writeBatch(db);
+      const cashAccountId = (await financialAccountService.ensureSystemAccounts('YER'))['sys_cash_account'];
+      const cashTarget = toAccountTarget(cashAccountId);
+      const customerTarget = toAccountTarget(customerLedgerDetails.customer.accountId);
+      if (!cashTarget || !customerTarget) {
+        throw new Error(isAr ? 'حساب الصندوق النظامي أو الحساب المالي للعميل غير متاح في الدفتر النشط.' : 'The system cash account or the customer financial account is not available in the active register.');
+      }
 
-      // Settle unpaid chronological invoices using chronological FIFO queue
+      let remainingPayment = amountVal;
+      let appliedCount = 0;
+
+      // Settle unpaid chronological invoices using chronological FIFO queue.
+      // record_order_payment_v2 يحدّث بيانات الطلب ويترحّل سند القبض ذرياً معاً.
+      // The RPC updates the order fields and posts the receipt voucher atomically.
       for (const ord of unpaidOrders) {
         if (remainingPayment <= 0) break;
 
         const ordRemaining = parseFloat(String(ord.amountRemaining || 0));
-        const ordPaid = parseFloat(String(ord.amountPaid || 0));
-        const ordRef = doc(db, 'orders', ord.id);
+        const allocation = Math.min(remainingPayment, ordRemaining);
+        if (allocation <= 0) continue;
 
-        if (remainingPayment >= ordRemaining) {
-          // Paying off this specific invoice fully
-          batch.update(ordRef, {
-            amountPaid: ordPaid + ordRemaining,
-            amountRemaining: 0,
-            paymentStatus: isAr ? 'خالص' : 'Fully Paid'
-          });
-          remainingPayment -= ordRemaining;
-        } else {
-          // Partial payment applied to this invoice
-          batch.update(ordRef, {
-            amountPaid: ordPaid + remainingPayment,
-            amountRemaining: ordRemaining - remainingPayment,
-            paymentStatus: isAr ? 'دفع جزئي' : 'Partially Paid'
-          });
-          remainingPayment = 0;
-        }
-      }
-
-      // --- Register Credit in Customer's Financial Account ---
-      const customerRecord = customerLedgerDetails.customer;
-      const linkedAccountId = customerRecord.accountId;
-      const linkedAccountCode = customerRecord.accountCode;
-
-      // Record cash inflow directly as a new-model payment voucher.
-      const randStr = Math.floor(1000 + Math.random() * 9000);
-      const voucherNum = `RCV-${randStr}`;
-
-      if (linkedAccountId) {
-        const convertedPaid = financialAccountService.convertToDefaultCurrency(
-          amountVal,
-          'YER',
-          settings.currency || 'YER',
-          dbRates
-        );
-
-        const systemAccs = await financialAccountService.ensureSystemAccounts('YER');
-
-        await financialAccountService.recordTransaction({
-          date: Date.now(),
-          description: isAr
+        const voucherNum = `RCV-${Date.now().toString().slice(-6)}-${Math.floor(1000 + Math.random() * 9000)}`;
+        const voucher: LegacyVoucherInput = {
+          entryNumber: voucherNum,
+          createdAt: Date.now(),
+          description: (isAr
             ? `دفعة نقدية مستلمة على الحساب كشف حساب: ${payNotes || ''}`
-            : `Cash payment received on account statement: ${payNotes || ''}`,
+            : `Cash payment received on account statement: ${payNotes || ''}`).trim(),
+          amount: allocation,
+          currency: 'YER',
           module: 'payment',
           refNumber: voucherNum,
-          amount: convertedPaid,
-          currency: 'YER',
-          debitAccount: { id: systemAccs['sys_cash_account'], code: '1111-0' },
-          creditAccount: { id: linkedAccountId, code: linkedAccountCode || '1130' },
+          orderId: ord.id,
+          paymentMethod: 'cash',
+          postingStatus: 'posted',
           createdByUid: currentUser?.id || 'system',
-          createdByName: 'Finance Auditor'
-        });
-      }
+        };
+        const entry = await financialEntryService.buildLegacyVoucherInput(voucher, cashTarget, customerTarget);
+        await financialEntryService.recordOrderPayment(ord.id, allocation, entry, actorUid());
 
-      await batch.commit();
+        remainingPayment -= allocation;
+        appliedCount += 1;
+      }
 
       notificationService.notify({
         title: isAr ? 'تم استلام وتوريد المبلغ' : 'Payment Deposited',
         message: isAr
-          ? `تم استلام وتحصيل ${amountVal.toLocaleString()} YER وتطبيقها على أقدم الفواتير المستحقة.`
-          : `FIFO accounting applied: Applied ${amountVal.toLocaleString()} YER to chronological outstanding invoices.`,
+          ? `تم استلام وتحصيل ${amountVal.toLocaleString()} YER وتطبيقها على ${appliedCount} من أقدم الفواتير المستحقة.`
+          : `FIFO accounting applied: Applied ${amountVal.toLocaleString()} YER across ${appliedCount} chronological outstanding invoices.`,
         type: 'success'
       });
 
