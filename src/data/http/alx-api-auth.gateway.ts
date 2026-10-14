@@ -27,6 +27,7 @@ import {
   clearTokens,
   getStoredAccessToken as _getToken,
 } from '../../lib/alxApiClient';
+import { requestPinVerification } from './security-pin.api';
 
 /** تحويل نتيجة alx_api login إلى CurrentUserDto المتوافق مع النظام */
 function mapAlxUserToCurrentDto(result: AlxLoginResult): CurrentUserDto {
@@ -221,12 +222,20 @@ export class AlxApiAuthGateway implements AuthGateway {
   }
 
   /**
-   * التحقق من System PIN — غير مطلوب في alx_api (يعيد true دائماً).
-   * Verify system PIN — not required in alx_api (always returns true).
+   * التحقق من System PIN عبر alx_api — لا قيمة ثابتة ولا تجاوز صامت.
+   * Server-side PIN verification through alx_api; no hardcoded value and no silent bypass.
    */
-  async verifySystemPin(_userId: string, _pin: string): Promise<boolean> {
-    // alx_api يعتمد على Argon2id فقط — لا System PIN
-    return true;
+  async verifySystemPin(userId: string, pin: string): Promise<boolean> {
+    // الهوية تُستخرج في الخادم من رمز الوصول؛ نرفض أي معرف لا يطابق تسجيل الدخول المعلّق.
+    const pendingUserId = this.pendingLoginResult?.user?.userId;
+    if (pendingUserId && pendingUserId !== userId) return false;
+    try {
+      const result = await requestPinVerification(pin);
+      return result.configured && result.valid;
+    } catch {
+      // فشل الشبكة أو انتهاء الجلسة لا يُعامل كرمز صحيح — A failed check is never a successful one.
+      return false;
+    }
   }
 
   /**

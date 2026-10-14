@@ -7,8 +7,16 @@
  * Returned Products: Track products returned by customers with reason, status, and financial refund details
  */
 
-import { SELECT_FIELDS } from '../data/contracts/select-fields';
-import { supabase, db, collection, addDoc } from '../data/legacy/legacy-compat.ts';
+import { ApiClient } from '../data/http/api-client';
+
+const apiClient = new ApiClient({
+  baseUrl: import.meta.env.VITE_ALX_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:3001',
+  accessTokenFactory: () =>
+    typeof sessionStorage === 'undefined'
+      ? null
+      : (sessionStorage.getItem('alx_access_token') || sessionStorage.getItem('alx_api_access_token')),
+  maxReadRetries: 0,
+});
 
 // ────────────────────────── Types ──────────────────────────
 
@@ -97,6 +105,84 @@ export interface ReturnedProductStats {
   total_refund_amount: number;
 }
 
+// ────────────────────────── Row mapping ──────────────────────────
+
+type ApiRow = Record<string, unknown>;
+
+const readText = (value: unknown): string | undefined =>
+  value === null || value === undefined ? undefined : String(value);
+const readNumber = (value: unknown): number | undefined => {
+  if (value === null || value === undefined || value === '') return undefined;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : undefined;
+};
+
+/** خرائط الحقول بين واجهة النظام (snake_case) و alx_api (camelCase) */
+const SNAKE_TO_CAMEL: Record<string, string> = {
+  order_id: 'orderId',
+  order_item_id: 'orderItemId',
+  product_id: 'productId',
+  customer_id: 'customerId',
+  customer_name: 'customerName',
+  product_name: 'productName',
+  product_url: 'productUrl',
+  quantity: 'quantity',
+  return_reason: 'returnReason',
+  return_type: 'returnType',
+  return_status: 'returnStatus',
+  return_condition: 'returnCondition',
+  refund_amount: 'refundAmount',
+  refund_currency: 'refundCurrency',
+  is_insured: 'isInsured',
+  insurance_refund: 'insuranceRefund',
+  notes: 'notes',
+  returned_at: 'returnedAt',
+  processed_by: 'processedBy',
+  processed_at: 'processedAt',
+};
+
+const toApiFields = (data: Record<string, unknown>): ApiRow => {
+  const payload: ApiRow = {};
+  for (const [snake, camel] of Object.entries(SNAKE_TO_CAMEL)) {
+    if (snake in data) payload[camel] = data[snake];
+  }
+  return payload;
+};
+
+const fromApiRow = (row: ApiRow): ReturnedProduct => ({
+  return_id: readText(row.returnId ?? row.return_id) ?? '',
+  order_id: readText(row.orderId ?? row.order_id),
+  order_item_id: readText(row.orderItemId ?? row.order_item_id),
+  product_id: readText(row.productId ?? row.product_id),
+  customer_id: readText(row.customerId ?? row.customer_id),
+  customer_name: readText(row.customerName ?? row.customer_name),
+  product_name: readText(row.productName ?? row.product_name),
+  product_url: readText(row.productUrl ?? row.product_url),
+  quantity: readNumber(row.quantity),
+  return_reason: readText(row.returnReason ?? row.return_reason),
+  return_type: readText(row.returnType ?? row.return_type) as ReturnType | undefined,
+  return_status: readText(row.returnStatus ?? row.return_status) as ReturnStatus | undefined,
+  return_condition: readText(row.returnCondition ?? row.return_condition) as ReturnCondition | undefined,
+  refund_amount: readNumber(row.refundAmount ?? row.refund_amount),
+  refund_currency: readText(row.refundCurrency ?? row.refund_currency),
+  is_insured: row.isInsured === null || row.isInsured === undefined ? undefined : Boolean(row.isInsured),
+  insurance_refund: readNumber(row.insuranceRefund ?? row.insurance_refund),
+  notes: readText(row.notes),
+  returned_at: readText(row.returnedAt ?? row.returned_at),
+  processed_by: readText(row.processedBy ?? row.processed_by),
+  processed_at: readText(row.processedAt ?? row.processed_at),
+  created_at: readText(row.createdAt ?? row.created_at),
+  created_by: readText(row.createdBy ?? row.created_by),
+  updated_at: readText(row.updatedAt ?? row.updated_at),
+  updated_by: readText(row.updatedBy ?? row.updated_by),
+});
+
+const extractRows = (data: ApiRow[] | { items?: ApiRow[] } | undefined): ApiRow[] =>
+  Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
+
+const toIso = (value: string): string =>
+  value.includes('T') ? value : new Date(value).toISOString();
+
 // ────────────────────────── CRUD Functions ──────────────────────────
 
 /**
@@ -106,43 +192,21 @@ export interface ReturnedProductStats {
 export async function fetchReturnedProducts(
   filters?: ReturnedProductFilters
 ): Promise<ReturnedProduct[]> {
-  let query = supabase
-    .from('returned_products')
-    .select(SELECT_FIELDS.returnedProduct)
-    .order('created_at', { ascending: false });
+  const query: Record<string, string | number> = { limit: 1000, offset: 0 };
+  if (filters?.order_id) query.orderId = filters.order_id;
+  if (filters?.product_id) query.productId = filters.product_id;
+  if (filters?.customer_id) query.customerId = filters.customer_id;
+  if (filters?.return_status) query.returnStatus = filters.return_status;
+  if (filters?.return_type) query.returnType = filters.return_type;
+  if (filters?.date_from) query.dateFrom = filters.date_from;
+  if (filters?.date_to) query.dateTo = filters.date_to + 'T23:59:59Z';
+  if (filters?.search) query.search = filters.search;
 
-  // تطبيق الفلاتر - Apply filters
-  if (filters?.order_id) {
-    query = query.eq('order_id', filters.order_id);
-  }
-  if (filters?.product_id) {
-    query = query.eq('product_id', filters.product_id);
-  }
-  if (filters?.customer_id) {
-    query = query.eq('customer_id', filters.customer_id);
-  }
-  if (filters?.return_status) {
-    query = query.eq('return_status', filters.return_status);
-  }
-  if (filters?.return_type) {
-    query = query.eq('return_type', filters.return_type);
-  }
-  if (filters?.date_from) {
-    query = query.gte('returned_at', filters.date_from);
-  }
-  if (filters?.date_to) {
-    query = query.lte('returned_at', filters.date_to + 'T23:59:59Z');
-  }
-  if (filters?.search) {
-    const searchTerm = `%${filters.search}%`;
-    query = query.or(
-      `customer_name.ilike.${searchTerm},product_name.ilike.${searchTerm},order_id.ilike.${searchTerm},return_reason.ilike.${searchTerm}`
-    );
-  }
-
-  const { data, error } = await query;
-  if (error) throw new Error(error.message);
-  return data || [];
+  const res = await apiClient.get<{ success: boolean; data: ApiRow[] | { items?: ApiRow[] } }>(
+    '/api/v1/operations/returned-products',
+    query,
+  );
+  return extractRows(res.data).map(fromApiRow);
 }
 
 /**
@@ -150,20 +214,17 @@ export async function fetchReturnedProducts(
  * Create a new returned product record
  */
 export async function createReturnedProduct(
-  returnData: Omit<ReturnedProduct, 'return_id' | 'created_at' | 'updated_at'>,
-  createdBy?: string
+  returnData: Omit<ReturnedProduct, 'return_id' | 'created_at' | 'updated_at'> & { return_id?: string },
 ): Promise<ReturnedProduct> {
-  // توليد معرف فريد للمرتجع - Generate unique return ID
-  const return_id = 'ret_' + Math.random().toString(36).substring(2, 11);
+  const return_id = (returnData.return_id || '').trim() || 'ret_' + Math.random().toString(36).substring(2, 11);
   const now = new Date().toISOString();
 
-  const payload: ReturnedProduct = {
-    return_id,
+  const sanitized: Record<string, unknown> = {
     ...returnData,
-    order_id: (returnData.order_id || '').trim() || undefined,
-    order_item_id: (returnData.order_item_id || '').trim() || undefined,
-    product_id: (returnData.product_id || '').trim() || undefined,
-    customer_id: (returnData.customer_id || '').trim() || undefined,
+    order_id: (returnData.order_id || '').trim() || null,
+    order_item_id: (returnData.order_item_id || '').trim() || null,
+    product_id: (returnData.product_id || '').trim() || null,
+    customer_id: (returnData.customer_id || '').trim() || null,
     quantity: Math.max(1, Number(returnData.quantity) || 1),
     refund_amount: Math.max(0, Number(returnData.refund_amount) || 0),
     insurance_refund: returnData.is_insured
@@ -173,21 +234,23 @@ export async function createReturnedProduct(
     return_type: returnData.return_type || 'استرداد',
     return_condition: returnData.return_condition || 'مستخدم',
     is_insured: Boolean(returnData.is_insured),
-    returned_at: returnData.returned_at
-      ? (returnData.returned_at.includes('T') ? returnData.returned_at : new Date(returnData.returned_at).toISOString())
-      : now,
+    returned_at: returnData.returned_at ? toIso(String(returnData.returned_at)) : now,
     processed_at: returnData.processed_at
-      ? (returnData.processed_at.includes('T') ? returnData.processed_at : new Date(returnData.processed_at).toISOString())
-      : undefined,
-    processed_by: (returnData.processed_by || '').trim() || undefined,
-    created_at: now,
-    created_by: createdBy || 'system',
-    updated_at: now,
-    updated_by: createdBy || 'system',
+      ? toIso(String(returnData.processed_at))
+      : null,
+    processed_by: (returnData.processed_by || '').trim() || null,
   };
+  delete sanitized.return_id;
+  delete sanitized.created_at;
+  delete sanitized.created_by;
+  delete sanitized.updated_at;
+  delete sanitized.updated_by;
 
-  await addDoc(return_id, collection(db, 'returned_products'), payload);
-  return payload;
+  const res = await apiClient.post<{ success: boolean; data: ApiRow }>(
+    '/api/v1/operations/returned-products',
+    { returnId: return_id, ...toApiFields(sanitized) },
+  );
+  return res.data ? fromApiRow(res.data) : fromApiRow({ returnId: return_id, ...toApiFields(sanitized) });
 }
 
 /**
@@ -197,49 +260,16 @@ export async function createReturnedProduct(
 export async function updateReturnedProduct(
   return_id: string,
   updates: Partial<ReturnedProduct>,
-  updatedBy?: string
 ): Promise<ReturnedProduct> {
-  const { data, error } = await supabase
-    .from('returned_products')
-    .update({
-      ...updates,
-      updated_at: new Date().toISOString(),
-      updated_by: updatedBy || null,
-    })
-    .eq('return_id', return_id)
-    .select()
-    .single();
+  const fields = toApiFields(updates as Record<string, unknown>);
+  if (updates.returned_at) fields.returnedAt = toIso(updates.returned_at);
+  if (updates.processed_at) fields.processedAt = toIso(updates.processed_at);
 
-  if (error) throw new Error(error.message);
-  return data;
-}
-
-/**
- * تحديث حالة المرتجع وتسجيل من قام بالمعالجة
- * Update return status and record who processed it
- */
-export async function updateReturnStatus(
-  return_id: string,
-  new_status: ReturnStatus,
-  processed_by?: string
-): Promise<ReturnedProduct> {
-  const now = new Date().toISOString();
-
-  const { data, error } = await supabase
-    .from('returned_products')
-    .update({
-      return_status: new_status,
-      processed_by: processed_by || null,
-      processed_at: new_status !== 'معلق' ? now : null,
-      updated_at: now,
-      updated_by: processed_by || null,
-    })
-    .eq('return_id', return_id)
-    .select()
-    .single();
-
-  if (error) throw new Error(error.message);
-  return data;
+  const res = await apiClient.patch<{ success: boolean; data: ApiRow }>(
+    `/api/v1/operations/returned-products/${encodeURIComponent(return_id)}`,
+    fields,
+  );
+  return res.data ? fromApiRow(res.data) : fromApiRow({ returnId: return_id, ...fields });
 }
 
 /**
@@ -247,12 +277,7 @@ export async function updateReturnStatus(
  * Delete a returned product record
  */
 export async function deleteReturnedProduct(return_id: string): Promise<void> {
-  const { error } = await supabase
-    .from('returned_products')
-    .delete()
-    .eq('return_id', return_id);
-
-  if (error) throw new Error(error.message);
+  await apiClient.delete(`/api/v1/operations/returned-products/${encodeURIComponent(return_id)}`);
 }
 
 /**
@@ -282,19 +307,16 @@ export async function createReturnedProductFromOrderItem(
   order?: any,
   masterProduct?: any,
   orderCurrency: string = 'YER',
-  createdBy?: string
 ): Promise<ReturnedProduct> {
-  const return_id = 'ret_' + Math.random().toString(36).substring(2, 11);
   const now = new Date().toISOString();
   const is_insured = Boolean(orderItem.is_insured);
   const insurance_refund = is_insured ? Number(orderItem.insurance_fee || 0) : 0;
 
-  const payload: ReturnedProduct = {
-    return_id,
-    order_id: (orderItem.order_id || order?.orderNumber || order?.order_number || order?.id || '').trim() || undefined,
-    order_item_id: (orderItem.items_id || orderItem.id || '').trim() || undefined,
-    product_id: (orderItem.product_id || '').trim() || undefined,
-    customer_id: (order?.customer_id || order?.customerId || '').trim() || undefined,
+  return createReturnedProduct({
+    order_id: (orderItem.order_id || order?.orderNumber || order?.order_number || order?.id || '').trim(),
+    order_item_id: (orderItem.items_id || orderItem.id || '').trim(),
+    product_id: (orderItem.product_id || '').trim(),
+    customer_id: (order?.customer_id || order?.customerId || '').trim(),
     customer_name: (order?.customerName || order?.customer_name || order?.customer_id || 'عميل').trim(),
     product_name: (orderItem.product_cooler || masterProduct?.product_name_ar || masterProduct?.productName || 'منتج').trim(),
     product_url: (orderItem.product_url || '').trim(),
@@ -305,21 +327,11 @@ export async function createReturnedProductFromOrderItem(
     return_condition: 'مستخدم',
     refund_amount: Number(orderItem.total_price || (orderItem.product_price ? orderItem.product_price * (orderItem.quantity || 1) : 0)),
     refund_currency: order?.currency || orderCurrency,
-    is_insured: is_insured,
-    insurance_refund: insurance_refund,
+    is_insured,
+    insurance_refund,
     notes: is_insured
       ? 'تم الإرجاع تلقائياً عبر زر إرجاع المنتجات بحركة المنتجات (منتج مؤمن)'
       : 'تم الإرجاع تلقائياً عبر زر إرجاع المنتجات بحركة المنتجات',
     returned_at: now,
-    processed_by: undefined,
-    processed_at: undefined,
-    created_at: now,
-    created_by: createdBy || 'system',
-    updated_at: now,
-    updated_by: createdBy || 'system',
-  };
-
-  await addDoc(return_id, collection(db, 'returned_products'), payload);
-  return payload;
+  });
 }
-

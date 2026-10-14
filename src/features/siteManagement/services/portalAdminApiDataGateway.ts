@@ -15,9 +15,17 @@ const normalize = (row: Record<string, unknown>) => ({
   customerDetails: row.customerDetails ?? {},
 });
 export const portalAdminApiDataGateway = {
+  // قائمة البوابة محدّدة بـ 200 صف لكل صفحة — the portal list endpoint caps pages at 200 rows,
+  // so the admin table collects every page instead of silently truncating.
   async listUsers(): Promise<any[]> {
-    const response = await client.get<Envelope<any[]>>('/api/v1/portal/admin/users', { limit: 200, offset: 0 });
-    return Array.isArray(response.data) ? response.data.map(normalize) : [];
+    const rows: any[] = [];
+    for (let offset = 0; ; offset += 200) {
+      const response = await client.get<Envelope<any[]>>('/api/v1/portal/admin/users', { limit: 200, offset });
+      const pageRows = Array.isArray(response.data) ? response.data : [];
+      rows.push(...pageRows.map(normalize));
+      if (pageRows.length < 200) break;
+    }
+    return rows;
   },
   async createUser(input: Record<string, unknown>): Promise<any> {
     const response = await client.post<Envelope<any>>('/api/v1/portal/admin/users', {
@@ -28,11 +36,7 @@ export const portalAdminApiDataGateway = {
     return normalize(response.data);
   },
   async updateUser(id: string, input: Record<string, unknown>): Promise<any> {
-    const response = await client.patch<Envelope<any>>(`/api/v1/portal/admin/users/${encodeURIComponent(id)}`, {
-      ...input,
-      role: input.role === 'client' ? 'customer' : input.role,
-      approvalStatus: input.approvalStatus ?? input.approval_status,
-    });
+    const response = await client.patch<Envelope<any>>(`/api/v1/portal/admin/users/${encodeURIComponent(id)}`, input);
     return normalize(response.data);
   },
   async setApproval(id: string, approvalStatus: string): Promise<any> {

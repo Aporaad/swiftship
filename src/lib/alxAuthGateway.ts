@@ -127,16 +127,16 @@ export async function alxGetPermissions(): Promise<string[]> {
 // ── إدارة الجلسات ────────────────────────────────────────────────────────────
 
 /**
- * الحصول على قائمة الجلسات النشطة.
- * List active sessions.
+ * الحصول على قائمة جلسات المستخدم الحالية (جلسات المصادقة فقط).
+ * List only the caller's own auth sessions (unwraps the `{ sessions }` envelope).
  */
 export async function alxListSessions(): Promise<readonly Record<string, unknown>[]> {
-  const result = await alxRequest<readonly Record<string, unknown>[]>('/api/v1/auth/sessions', {
+  // الـ API يرجع غلاف `{ sessions }` — الاستخراج الصحيح للجلسات من الغلاف
+  const result = await alxRequest<{ sessions: readonly Record<string, unknown>[] }>('/api/v1/auth/sessions', {
     authenticated: true,
   });
-
   if (!result.success) return [];
-  return result.data;
+  return result.data?.sessions ?? [];
 }
 
 /**

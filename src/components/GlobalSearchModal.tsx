@@ -323,7 +323,8 @@ export default function GlobalSearchModal({ isOpen, onClose, searchQuery }: Glob
       );
 
       if (result && result.success) {
-        toast.success(isAr ? 'تم إرسال إشعار WhatsApp التلقائي للعميل بنجاح! 📲✅' : 'WhatsApp notification auto-sent successfully! 📲✅');
+        // الرسالة أُضيفت لطابور الإرسال الخادمي — لا يدّعي الواجهة أنها أُرسلت.
+        toast.success(isAr ? 'تمت إضافة رسالة WhatsApp إلى قائمة إرسال الإشعارات! 📲' : 'WhatsApp notification queued for delivery! 📲');
       } else {
         toast.error(isAr
           ? `فشل إرسال الإشعار التلقائي: ${result?.errorMsg || result?.status || 'تأكد من إعدادات بوابة WhatsApp'}`

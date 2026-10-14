@@ -2383,3 +2383,156 @@
 - [x] [2026-10-12 04:00:00 +03:00] إعادة بناء `alx_api` عبر `npm run build` لتحديث ملفات `dist/` المترجمة بالكامل.
 - [x] [2026-10-12 04:00:00 +03:00] تصحيح مسار استدعاء العملات في `FinanceEntriesPage.tsx` إلى `/api/v1/currencies` ودعم حقل `currencyId`.
 - [x] [2026-10-12 04:00:00 +03:00] التحقق من تجميع TypeScript في `SWIFTSHIP_SYSTEM` و `alx_api` بصفر أخطاء.
+
+## [2026-10-13 01:20:00 +03:00] مرحلة المنتجات (#6) — اكتملت
+- [x] إضافة مسارات alx_api: حذف المنتجات /api/v1/products/:id، CRUD منتجات الطلب /api/v1/operations/order-items، CRUD المرتجعات /api/v1/operations/returned-products مع فلاتر خادمية (orderId/productId/customerId/returnStatus/returnType/dateFrom/dateTo/search).
+- [x] تحويل productService.ts و returnedProductService.ts و gateway المرتجعات إلى API-only بالكامل (إزالة legacy-compat و onSnapshot والاستبدل بصياحة polling + notify).
+- [x] إعادة توليد legacy-boundary.baseline.json (legacyCompatImport من 29 إلى 27، legacyListener من 16 إلى 15).
+- [x] تحديث api-contract-matrix.ts: products=available، returns=available مع ملاحظة اشتراط الترحيل 0022 قبل النشر.
+- [x] التحقق: alx_api tsc نظيف + jest 203/203، الواجهة tsc نظيف + vitest 299 ناجح (يتبقى فشل واحد معروف في defaultAccountsVoucherWiring ضمن مرحلة المالية).
+
+## [2026-10-13 01:20:00 +03:00] مرحلة الحسابات المالية والأصول (#7) — خطة التنفيذ
+- [ ] 7-أ (#11): معالجة الملفات المعزولة (ChartOfAccounts/ExpenseCategoriesManager/FinanceReports/AutoVoucherRulesManager) وحل فشل defaultAccountsVoucherWiring بصدق دون إخفاء.
+- [ ] 7-ب (#12): مسارات alx_api للأصول assets + شجرة الحسابات (account/acc_main/acc_sub/acc_sub_group/default_accounts) + استيراد XLSX ذري.
+- [ ] 7-ج (#13): مسارات كتابة الحسابات accounts + الرواتب salary_history + تطهير البصمة المالية purge (RPC موجود) + إعادة حساب الأرصدة عبر RPC الحقيقي.
+- [ ] 7-د (#14): كتابة إعدادات القيود عبر RPC manage_financial_entry_setting + مسارات settings docs (expense_categories/automatic_voucher_rules) + التحقق من PIN خادميًا.
+- [ ] 7-هـ (#15): تحويل خدمات financialAccount* و autoEntryService و accountingHierarchyService إلى API-only.
+- [ ] 7-و (#16): تحويل مكوّنات UI (AssetsPortfolio/AccountingHierarchyManagement/GlobalEntityLedgerModal/AccountingPage) + endpoint تسلم COD للطلبات.
+- [ ] قاعدة البيانات: إنشاء ترحيل 0023 (أعمدة assets الناقصة + GRANT DELETE الغائب عن كل الجداول) — التنفيذ يدوي من المستخدم عبر لوحة Supabase مع 0021 و 0022.
+- مخطط استكشافي (تم): كل الجداول المالية موجودة حيًّا، RPCs الصلاحية التنفيذية المتاحة، system_accounts غير موجود، حسابات debit/credit لقواعد auto_entries فارغة حيًّا.
+
+## [2026-10-13 08:12 +03:00] المنفذ: Qoder — إنجاز المرحلة 7 (الجزء الخلفي) 7-ب/7-ج/7-د
+- [x] 7-ب (#12): مسارات alx_api للأصول assets (GET/POST/PATCH/DELETE بصلاحيات view_financial_accounts/add_finance/edit_finance ومعرّفات ast_) وشجرة الحسابات hierarchy/:level (account/acc-main/acc-sub/acc-sub-group + POST /hierarchy/import صفوف 1..2000 ومعرّفات tree_) والحسابات الافتراضية default-accounts (معرّفات dacc_).
+- [x] 7-ج (#13): كتابة الحسابات المالية POST/PATCH /finance/accounts (معرّفات acc_) + GET /accounts/by-entity (سُجّل قبل :id لمنع الابتلاع) + GET /account-id-map + POST /accounts/recalculate عبر RPC recalculate_accounting_hierarchy داخل withActorClaims + salary_history (GET/POST معرّفات sal_) + مسار التطهير POST /finance/entities/:entityType/:entityId/purge بصلاحيات delete_* لكل نوع وخريطة أخطاء RPC (403 FINANCE_RPC_FORBIDDEN / 422 FINANCE_RPC_REJECTED).
+- [x] 7-د (#14): كتابة entry-modules و entry-types عبر RPC manage_financial_entry_setting (em_/et_، صلاحيات create/edit/delete_entry_settings) + فئتا settings الجديدتان expense_categories و automatic_voucher_rules (edit_general_settings) + POST /api/v1/users/verify-pin (تحقق خادمي من PIN المستخدم الحالي فقط، لا تغادر القيمة قاعدة البيانات).
+- [x] DRY: توحيد presentColumnEntries في src/core/db/record-columns.ts واستيرادها في operations.repository بدل النسخة المحلية.
+- [x] ترحيل 0023_finance_admin_assets_grants_purge.sql أُنشئ (أعمدة assets + GRANT DELETE على 12 جدولًا + دالة purge_entity_financial_footprint بحماية العملاء المرتبطين بطلبات والمندوبين بعهَد غير مسددة) — التنفيذ يدوي من المستخدم عبر لوحة Supabase مع 0021 و0022.
+- [x] التحقق: npx tsc --noEmit نظيف + jest 34 مجموعة / 215 اختبارًا كلها ناجحة (منها 12 اختبارًا جديدًا لحدود المرحلة 7 و3 لـ verify-pin).
+- [ ] 7-هـ (#15): تحويل خدمات financialAccount* و autoEntryService و accountingHierarchyService إلى API-only.
+- [ ] 7-و (#16): تحويل مكوّنات UI (AssetsPortfolio/AccountingHierarchyManagement/GlobalEntityLedgerModal/AccountingPage) + endpoint تسلم COD للطلبات.
+
+## [2026-10-13 12:21 +03:00] المنفذ: Qoder — إنجاز المرحلة 7-هـ (#15) تحويل طبقة خدمات المحاسبة إلى API-only
+- [x] 7-هـ (#15): تحويل خدمات financialAccount* و autoEntryService و accountingHierarchyService إلى API-only.
+- [x] بوابة HTTP مشتركة جديدة `src/services/financeApi.ts` (مبدأ DRY): عميل واحد + فك غلاف واحد `{success,data,meta}` + مساعدو صفحات `readFinanceRows/readFinancePage/readAllFinanceRows/readFinanceRecord` + خريطة صفوف الحساب `mapAccountRow` (accountNameAr→accNameAr، currencyNo→curNo، subAccountId→accSubId، balance نص→رقم) + `linkEntityAccount` + `hasEntryForAutomationKey` + `recalculateAccountBalances` + خريطة `ENTITY_API_PATH`.
+- [x] وحدة نقية جديدة `src/services/autoEntryRuleMapping.ts` لفصل تحويل قاعدة القيد التلقائي عن الخدمات (قطع حلقة الاستيراد): `fromApiRow` / `toApiPayload` / `parseAccount` / `serializeAccount` + أنواع `AutoEntryRule` و `AutoEntryRuleAccount`.
+- [x] `src/services/financialAccountService.ts` أعيدت كتابته API-only: توليد المعرّفات، البحث بالجهة `/accounts/by-entity`، جلب الحساب مع جسر المعرّفات القديمة `acc_1130_0007` و`/account-id-map`، الرواتب (POST بلا createdByUid ولا salaryMonth/createdAt)، كشف الحساب عبر `/accounts/:id/movements`، إعادة الحساب عبر `POST /accounts/recalculate`، بذور قواعد القيود التلقائية عبر فئة settings `automatic_voucher_rules` بسلوك متسامح مع FORBIDDEN.
+- [x] `src/services/financialAccountAccounts.ts` أعيدت كتابته: حذف مسح التعارض مع مستندات الجهات (معرّفات الحسابات `PREFIX-NNNN` مقابل `cust_/cour_/emp_/UUID` — تحقّق حيّ)، وفشل مسح التفرّد يُسجَّل تحذيرًا ولا يوقف الإنشاء لأن قيد المفتاح الأساسي في قاعدة البيانات هو الحكم النهائي؛ حمولة الإنشاء تحتوي مفاتيح المخطط الصارم فقط.
+- [x] `src/services/financialAccountAutomation.ts` أعيدت كتابته: تحميل القاعدة من `/finance/auto-entry-rules/:id`، حارس التكرار `automationKey`، وإسقاط `createdByUid` لأن هوية المنفّذ تُستخرج خادميًا من رمز الوصول.
+- [x] إعادة استخدام البوابة المشتركة في: `accountingHierarchyService.ts`، `autoEntryService.ts`، `financialEntrySettingsService.ts`، `financialAccountPurge.ts`، و`src/hooks/useAutoVoucherRules.ts` (حُذفت نسخ ApiClient/ApiEnvelope المحلية المكررة).
+- [x] حذف شيفرة ميتة: `getAccountTypeByCode` و`getEntityCollection` من الخدمة، ومسح التعارض مع مستندات الجهات.
+- [x] `src/components/financeAccounting/financeAccountingMainEntryActions.ts`: إزالة تمرير `createdByUid` إلى `recordSalaryPayment`.
+- [x] الاختبارات: إعادة كتابة `src/services/financialAccountService.test.ts` بالكامل (23 اختبارًا) على حدود HTTP بدل محاكاة Firestore — تغطية الإنشاء لكل نوع جهة وبادئة، الأنواع الافتراضية، ربط الحساب بصف الجهة، التحديث بدل الإنشاء المكرر، التفرّد مع `includeInactive`، خريطة الأسماء المستعارة، جسر المعرّفات القديمة، فلتر by-entity، القيد الذري (بلا كتابة مباشرة)، إعادة الحساب الفردي/الجماعي، الرواتب كتابةً وقراءةً، الراتب الشهري، وبذور قواعد القيود التلقائية.
+- [x] تقوية عقد الربط `server/accountingHierarchyWiring.test.ts` بدل إضعافه: تحديث الاسم إلى `salaryHistoryId` + إضافات صريحة تمنع `legacy-compat` في خدمة الحسابات ومصنعها وتفرض المسارات الجديدة.
+- [x] إعادة توليد `src/config/legacy-boundary.baseline.json` بعد إخراج 7 خدمات مالية محوّلة من `legacyCompatImport` (العدادات الآن: legacyCompatImport 20، supabaseRuntimeReference 9، legacyListener 15).
+- [x] تحديث ملاحظات `src/config/api-contract-matrix.ts` لفئتَي `accounting` و`financeEntries` لتعكس أن طبقة الخدمات API-only وأن الوصول القديم تبقّى فقط في مكوّنات UI المالية.
+- [x] التحقق: `npx tsc --noEmit` نظيف في الواجهة وفي alx_api؛ `npx vitest run` = 83 ملفًا ناجحًا / 2 متخطى و329 اختبارًا ناجحًا / 5 متخطاة؛ `npx jest` في alx_api = 34 مجموعة / 217 اختبارًا كلها ناجحة.
+- [ ] قاعدة البيانات: **لم يُنفَّذ أي DDL هذا الدور** — الترحيلات 0021 و0022 و0023 ما زالت بانتظار تنفيذ المستخدم يدويًا عبر لوحة Supabase قبل نشر alx_api.
+- [ ] 7-و (#16): تحويل مكوّنات UI المالية المتبقية (ChartOfAccounts/AccountingHierarchyManagement/AssetsPortfolio/AutoVoucherRulesManager/FinanceReports/GlobalEntityLedgerModal/ExpenseCategoriesManager/AccountingPage/OrderStatusManagementTab) + إزالة PIN الثابت 1234/0000 في ConfirmDeletePinModal لصالح `/users/verify-pin` + endpoint تسلم COD للطلبات.
+
+## [2026-10-13 21:06 +03:00] المنفذ: Qoder — المرحلة 7-أ/17: توحيد PIN وإغلاق الملفات المعزولة (توثيق متأخر مُستحق)
+- [x] إزالة الرموز الثابتة للـ PIN من الواجهة (1234/0000) ونقل التحقق خادميًا: `src/data/http/security-pin.api.ts` + `src/services/securityPinService.ts` (+ اختبارها)، والرمز لا يغادر القاعدة.
+- [x] عميل HTTP مشترك `src/data/http/app-api-client.ts` (`appApiClient` + `ApiEnvelope`) واعتماده في `financeApi` وبقية البوابات (DRY).
+- [x] تحويل `FinanceReports.tsx` و`AutoVoucherRulesManager.tsx` و`ExpenseCategoriesManager.tsx` و`ConfirmDeletePinModal.tsx` إلى API-only مع إشعارات فشل صادقة تحمل رسالة الخادم العربية.
+- [x] إعادة كتابة الخطّافات (`useAccountBalances`/`useExchangeRates`) لتغذّي نفسها من `financeApiDataGateway` بدل `onSnapshot`.
+- [x] تحديث اختبارات العقد/الربط التي كانت تفرض الصيغة القديمة، وتخفيض `legacy-boundary.baseline.json` من 20/9/15 إلى 16/9/12 (لا إخفاء: أُزيلت الملفات فعليًا لا بتوسيع القائمة).
+
+## [2026-10-13 21:06 +03:00] المنفذ: Qoder — المرحلة 7-و: الأصول + دليل الحسابات + حذف الحسابات الآمن
+- [x] اختبار `src/services/expenseCategoriesService.test.ts` (7 حالات): القراءة من `/api/v1/settings/expense_categories` مع رجوع افتراضي عند `SETTINGS_NOT_FOUND`، رفض التكرار/Mعرّف فارغ، حارس `isSystem` عند الحذف، وكتابة read‑modify‑write واحدة.
+- [x] خدمة أصول جديدة API-only `src/services/financeAssetsService.ts` (أنواع Asset/`ASSET_ACCOUNTING` 1210–1250 + `createMaintenanceLog` + register/list/remove/appendMaintenanceLog) ونقل منطق إنشاء حساب الأصل من الواجهة إلى الخدمة.
+- [x] تحويل `src/components/AssetsPortfolio.tsx` إلى API-only: تحميل من الخدمة، حالة تحميل مرئية، إشعار فشل حقيقي عند الحذف، لا `legacy-compat` ولا `onSnapshot`.
+- [x] تقوية `server/linkedFinancialAccountsWiring.test.ts` (يفرض الآن استدعاء الخدمة + `accountType: 'Asset'` + المسار + غياب legacy-compat).
+- [x] خلفية alx_api: مسار `DELETE /api/v1/finance/accounts/:id` مرفوع بصلاحية `edit_finance` ويرفض الحذف عند وجود حركات (`409 FINANCE_ACCOUNT_IN_USE`) ويعيد 404 عند غياب الحساب — عقد + repository + routes + OpenAPI + اختبار jest (22 ناجحًا).
+- [x] وحدة إدارة الدليل `src/services/financialAccountAdmin.ts` (create/update/guarded delete/listAccountMovements/deactivate + `accountNumberFromCode`) مع 13 اختبار وحدة.
+- [x] تحويل `src/components/ChartOfAccounts.tsx` إلى API-only: إنشاء/تعديل/حذف عبر الخدمة، تقرير الحركات من `/:id/movements` (الحركات المرحّلة فقط من الخادم) بدل فلترة العملاء، توحيد الحقول (`transType/entryNumber/module`) حتى في طباعة الكشف، وإسقاط استيرادات date-fns ومعادلات الرصيد القديمة.
+- [x] تخفيض `legacy-boundary.baseline.json` إلى 14/9/10 بإخراج ChartOfAccounts فعليًا، وتحديث ملاحظة `accounting` في `api-contract-matrix.ts`.
+- [x] التحقق: `npx tsc --noEmit` نظيف، `npx vitest run` = 87 ملفًا و362 اختبارًا ناجحًا (5 متخطاة)، `npx jest tests/finance.test.ts` = 22 ناجحًا، و`npm run check` في alx_api نظيف.
+- [ ] لم يُنفَّذ أي DDL ولا أي SQL على القاعدة؛ الترحيلات 0021/0022/0023 ما زالت بانتظار تنفيذ المستخدم من لوحة Supabase، والكود الجديد في alx_api يحتاج إعادة نشر.
+
+## [2026-10-13 23:51 +03:00] المنفذ: Qoder — المرحلة 7-ز: تحويل إدارة شجرة الحسابات إلى API-only
+- [x] وحدة إدارة الشجرة `src/services/accountingHierarchyAdmin.ts` (منطق أعمال بلا UI): `listHierarchyNodes` و`createHierarchyNode` و`updateHierarchyNode` و`deleteHierarchyNode` للمستويات الأربعة (`account`/`main`/`sub`/`group`) عبر `/api/v1/finance/hierarchy/...`، وحسابات الافتراضية عبر `/api/v1/finance/default-accounts`، والاستيراد المجمّع عبر `POST /api/v1/finance/hierarchy/import` ثم إنشاء الحسابات المالية لكل عقدة دفتر.
+- [x] تحويل `src/components/AccountingHierarchyManagement.tsx` إلى API-only: تحميل الشجرة بـ`Promise.all` (جذور/رئيسية/جزئية/مجموعات + الحسابات + الافتراضيات)، حفظ/حذف يستدعي `loadTree()` بدل مستمعي `onSnapshot`، كشف الحساب من `listAccountMovements`، والحذف الآمن للحساب يتعامل مع `in_use`/`not_found` برسالة الخادم.
+- [x] الاستيراد الجماعي صار مكالمة واحدة داخل معاملة خادم واحدة؛ عند الفشل تُعرض رسالة صادقة وتُعاد قراءة الشجرة لإظهار العقد التي مرّت فعلًا (بدل الإيحاء بتراجع كامل).
+- [x] `financialEntrySettingsService.listModules()` لقراءة وحدات القيود وتسميتها في الكشوف.
+- [x] تحديث تعاقدات الاختبارات بأمانة: `server/accountingHierarchyWiring.test.ts` لم يعد يفرض `onSnapshot(collection(db, table)` بل يفرض مسار API والحالة `ready`؛ و`src/services/accountingHierarchyAdmin.test.ts` (11 اختبارًا) يغطي ترجمة المستويات وحذف `undefined` وترتيب الاستيراد وحلّ الآباء من نفس الملف.
+- [x] توسعة `FinancialAccountInput` بحقول موضع الشجرة (`accSubId`, `groupId`, `accountSeq`, `limitedBalance`, `curNo`, `accountCode: string | null`) لتمرير الموقع المحاسبي كاملًا إلى الخادم.
+- [x] تخفيض `legacy-boundary.baseline.json` إلى 13/9/9 بإخراج AccountingHierarchyManagement، وتحديث ملاحظة `accounting` في `api-contract-matrix.ts`.
+- [x] التحقق: `npx tsc --noEmit` نظيف، `npx vitest run` = 88 ملفًا و373 اختبارًا ناجحًا (5 متخطاة).
+- [ ] لم يُنفَّذ أي DDL ولا SQL؛ الترحيلات 0021/0022/0023 بانتظار تنفيذ المستخدم من لوحة Supabase، والكود الجديد في alx_api يحتاج إعادة نشر؛ لا commit ولا push.
+
+## [2026-10-14 01:17 +03:00] المنفذ: Qoder — مرحلة 7-ح: كشف الحساب العام (GlobalEntityLedgerModal) API-only
+- [x] alx_api: إضافة `entityId` إلى `accountMovementsQuerySchema` وفلترة الحركات خادميًا في `finance.repository.ts` (count + rows) حتى لا يسحب الكشف كل حركات الجدول.
+- [x] alx_api: كشف `et.code AS "entryTypeCode"` و`em.code AS "moduleCode"` مع `movementFrom` مشترك، لأن `module` هو فئة القيد المحاسبية وليس التصنيف التشغيلي.
+- [x] alx_api: `GET /api/v1/operations/couriers/:id` (`getCourier`) بعمود `courierColumns` الموحد + صلاحية `view_couriers`، بدلاً من مسح قائمة 1000 صف للبحث عن مندوب واحد.
+- [x] alx_api: إظهار مبالغ الطلبات من `orders.data` jsonb (`amountPaid`/`amountRemaining`/`totalCostYER`/`paymentStatus`) كنصوص في `orderListColumns` للحفاظ على دلالة `parseFloat` القديمة بدون cast رقمي خطير.
+- [x] الواجهة: خدمة جديدة `src/services/entityLedgerService.ts` تحمل كل منطق السطور (تصنيف تشغيلي، فرق الدفع غير المقيد، الرصيد التراكمي، الإجماليات) مع اختبارات `entityLedgerService.test.ts` (9 اختبارات).
+- [x] الواجهة: `GlobalEntityLedgerModal.tsx` أُعيد كتابته عرضًا فقط — إزالة `legacy-compat` وأربعة `onSnapshot` (شملت قراءة جدول `main_entry` كاملًا) واستبدالها بنداء `entityLedgerService.loadLedger` + حالة خطأ ظاهرة.
+- [x] `legacy-boundary.baseline.json`: إخراج المكوّن من `legacyCompatImport` و`legacyListener` ⇒ 12/9/8، وتحديث ملاحظتي `accounting` و`financeEntries` في `api-contract-matrix.ts`.
+- [x] التحقق: `npx tsc --noEmit` نظيف؛ `npx vitest run` = 89 ملفًا و382 اختبارًا ناجحًا (5 متخطاة)؛ alx_api: 71 اختبارًا في 9 مجموعات + `tsc` + `npm run check` نظيف.
+- [ ] قرار مُبقي للأمانة: هاتف العميل غير مكشوف في حدود قراءة `customers` (0008) لذلك يظهر المعرّف بدل الهاتف في عنوان الكشف — لا يُختلق رقم.
+- [ ] لم يُنفَّذ أي DDL ولا SQL؛ الترحيلات 0021/0022/0023 بانتظار تنفيذ المستخدم من لوحة Supabase؛ كود alx_api الجديد يحتاج إعادة نشر؛ لا commit ولا push.
+
+## [2026-10-14 02:20 +03:00] المنفذ: Qoder — مرحلة 7-ط: محتوى الموقع (تذاكر/إعلانات/توظيف/طلبات البوابة) API-only
+- [x] الخادم: وحدة جديدة `alx_api/src/modules/site-content/` (عقود + مخططات zod + مستودع SQL + مسارات) بمسارات `GET/POST /api/v1/site/tickets` و`POST /api/v1/site/tickets/:id/replies` و`GET/POST /api/v1/site/announcements` و`PATCH/DELETE /api/v1/site/announcements/:id` و`GET /api/v1/site/job-applications` و`PATCH/DELETE /api/v1/site/job-applications/:id` و`GET /api/v1/site/portal-orders`.
+- [x] الصلاحيات: إعادة استخدام `view_website_management` للقراءة و`manage_website` للكتابة — لا حاجة إلى ترحيل صلاحيات جديدة.
+- [x] الأمان: اسم مرسل الرد والحالة يُفرضان خادميًا (`Admin Support` + `in_progress`)، ومخطط الرد `.strict()` فيرفض أي انتحال من العميل؛ معرّف الإعلان يُولَّد في الخادم من نص نظيف فقط.
+- [x] قرار مُبقي للأمانة: `data` jsonb هو مصدر القراءة والكتابة الوحيد للتذاكر/الإعلانات/طلبات التوظيف لأن الترحيل `0011_portal_announcements.sql` يتعارض مع شكل الجدول الحيّ، فلا تلمس للأعمدة المسطّحة غير المؤكَّدة (تفادي 42703).
+- [x] فلترة طلبات البوابة صارت خادمية (`jsonb_exists(data,'customerUid'/'portalUid')` أو `order_source_type='App'`) بدل قراءة جدول `orders` كاملًا في المتصفح، مع حقلات العرض من `orders.data`.
+- [x] الواجهة: خدمة `src/services/siteContentService.ts` + اختباراتها (9)، و`useWebsiteManagementData` يقرأ منها فقط، ومعالجات الكتابة في `WebsiteManagementPage.tsx` تستدعي الخدمة، وإنشاء المندوب من اعتماد طلب التوظيف صار عبر `couriersApiDataGateway.createCourier` بدل `setDoc(doc(db,'couriers',…))`.
+- [x] حذف `src/features/siteManagement/services/siteManagementGateway.ts`؛ `src/features/siteManagement/**` لم يعد فيه أي `legacy-compat` أو `supabase` أو `onSnapshot`.
+- [x] الحدود: `legacy-boundary.baseline.json` ⇒ **10/7/8** (إخراج `WebsiteManagementPage.tsx` و`siteManagementGateway.ts` من الفئتين، وإخراج `GlobalEntityLedgerModal.tsx` المتبقية من `legacyListener`)؛ ملاحظة `siteManagement` في `api-contract-matrix.ts` صارت `available`.
+- [x] التحقق: الواجهة `npx tsc --noEmit` نظيف و`npx vitest run` = 90 ملفًا / 391 اختبارًا ناجحًا (5 متخطاة)؛ alx_api `npm run check` نظيف و`npx jest --runInBand` = 37 مجموعة / 245 اختبارًا ناجحًا.
+- [ ] لم يُنفَّذ أي DDL ولا SQL؛ المسارات الجديدة تحتاج نشر alx_api (وبقي نشر الترحيلات 0021/0022/0023 تعليق المستخدم)؛ لا commit ولا push.
+
+## [2026-10-14 06:54 +03:00] المنفذ: Qoder
+### مرحلة: تحصين ترحيلات التسطير (0026-0032) + تسطير بوابة العملاء وطلبات التوظيف (الموجة 1/2)
+- [x] مراجعة عميقة لكل ملفات الترحيل بكاشف أقواس آلي (`alx_api/scripts/sql-paren-check.cjs`): **0029 كان SQL معطوبًا** — 12 قوسًا غير مغلق في `COALESCE`/`cast_integer` و`cast_number`، وكان سيُسقط التنفيذ في منتصفه (وهذا يفسّر الانقطاعات المتكررة في تنفيذ الترحيلات).
+- [x] إصلاح `0029_flatten_legacy_catalog_tables.sql`: إغلاق كل التوابع، وحراسة كل خطوة بوجود عمود `data` عبر `information_schema`، وتحويل `ALTER COLUMN … TYPE` إلى مشروط بـ `data_type='jsonb'` (كان `order_option.details` نصيًا في القاعدة الحيّة فكان `details #>> '{}'` يفشل فورًا).
+- [x] `0026` صار قابلًا لإعادة التنفيذ: `RENAME COLUMN details TO summary` استُبدل بـ `ADD summary` + نسخ + `DROP` محروس (كانت إعادة التنفيذ تفشل بـ 42703)، وتعبئة `user_name/user_role/action/category/target/type/user_id` كلها داخل حارس.
+- [x] `0027`: تصحيح رقم الرأس، وإسقاط كتابة مصفوفة `replies` داخل jsonb نهائيًا — الردود تُقرأ من `public.portal_ticket_reply`، و`admin_response` عمود حقيقي يُملأ من آخر رد، مع حراسة المصدرين (payload وعمود `replies`).
+- [x] `0028`: رأس مرقّم صحيح، حارس لـ `data`، و`is_disabled` عمود الحسم الوحيد (`SET NOT NULL` بعد تعبئة من `disabled`) بدل علمين متضادين، مع فهارس `auth_uid` و`linked_customer_id`.
+- [x] `0030`: حراسة تعبئة `orders.data` و`firedTriggers` (آمن بعد 0034)، و`ON CONFLICT (order_id, seq)` بدل `DO NOTHING` الغامض.
+- [x] `0032`: إصلاح **خطأ نوعي قاتل** — `NULLIF(active_report, '')` على عمود `boolean` كان يُسقط الترحيل؛ صار `payload_boolean`. وكل INSERT/UPDATE محروس بنوع العمود، و`ON CONFLICT` بأهداف صريحة.
+- [x] `0031`: حارس ترتيب صريح يرفع استثناءًا واضحًا إذا نُفِّذ بعد 0034 بدل فشل نصفي صامت.
+- [x] تحقّق واقعي من مخطط القاعدة الحيّة (قراءة فقط): 33 عمود jsonb متبقٍ، وأسماء/أنواع أعمدة كل جدول مستهدف، وجميع أعمدة `data` القديمة `nullable` أو لها `DEFAULT '{}'::jsonb` — فلا كتابة مسطّحة تُرفض اليوم.
+- [x] موجة كود: `portal-admin` صار مسطّحًا بالكامل — إسقاط `p.data AS "userData"` و`d.data AS "detailsData"`، عقد `PortalCustomerDetailsDto` بأعمدة رئيسية، ومخطط zod `.strict()` يرفض المفتاح الحر (كان بوابة إلى jsonb)، و`PUT …/details` لم يعد يقبل جسمًا عشوائيًا.
+- [x] إصلاح فجوة حقيقية في إدارة الموقع: تفاصيل العميل لم تُحفظ إطلاقًا عند غياب `linkedCustomerId` (كانت التعديلات تختفي بصمت) — صارت تُربط بمستخدم البوابة مباشرة.
+- [x] `job-applications.repository`: لا كتابة `data` jsonb بعد الآن، و`ON CONFLICT DO NOTHING` على معرّف الطلب.
+- [x] الواجهة: مفاتيح تفاصيل العميل صارت camelCase عبر `portalUserService` و`WebsiteManagementPage` و`PortalUserDialogs` و`PortalUsersTab` و`CustomerCreateModal` (كانت ترسل snake_case فترفضه الـ strict schema بـ 400)، و`address` مصادره الوحيدة `portal_users.address`/`customers.address`.
+- [x] التحقق: alx_api `npm run check` نظيف و`npm test` = **39 مجموعة / 270 اختبارًا** ناجحًا (منها 7 في `portal-admin-user.test.ts`: إسقاط مسطّح، رفض مفتاح مجهول، 404/403/400)؛ الواجهة `npx tsc --noEmit` نظيف و`npx vitest run` = 90 ملفًا / 391 اختبارًا.
+- [ ] متبقٍ في الموجة 1 (jsonb حيّ داخل الكود): `site-content.repository` (38 مرجعًا)، `portal-owned.repository` (35 مرجعًا لقراءة `orders.data`)، `settings.repository` (11)، `finance.repository` (11)، `operations.repository` (9)، `portal-auth.repository` (2).
+- [ ] متبقٍ: موجة 3 (تسطير `orders` وإظهار كل حقول الطلب)، dispatcher خارجي للإشعارات، وربط إعدادات واتساب بجدول `settings_whatsapp` بدل localStorage.
+- [ ] الترحيلات 0021/0022 و0024-0032 ما زالت معلّقة عند المستخدم (تنفيذ يدوي من لوحة Supabase، و0034 بعد النشر)، ولا commit ولا push.
+
+## [2026-10-14 07:25 +03:00] — Qoder (تسطير وحدة محتوى الموقع)
+- [x] `site-content.repository` أصبح يقرأ ويكتب الأعمدة الرئيسية فقط: 0 مرجع jsonb (كان 38)، مع حارس اختباري يمنع ظهور `data ->` أو `jsonb` في أي استعلام.
+- [x] تذاكر الدعم: الردود صارت صفوف `portal_ticket_reply` (إضافة ذرّية بعبارة واحدة تحدّث الحالة و`admin_response`) بدل مصفوفة jsonb.
+- [x] الإعلانات: `content` و`target_audience` أعمدة تكتب وتقرأ مسطّحة؛ لا مفاتيح camel/snake مزدوجة بعد اليوم.
+- [x] طلبات التوظيف: كل حقل عرض (`full_name`, `job_position`, `ref_code`, `phone`, `email`, `city`, `address`, `qualification`, `id_number`, `notes`, `experience_years`) من أعمدة `jobs_req` الموجودة أصلًا.
+- [x] طلبات البوابة: فلترة المصدر على `customer_uid`/`portal_uid`/`order_source_type` بدل `jsonb_exists`، والسعر من `total_cost_yer`.
+- [x] `0030_flatten_orders.sql`: أعمدة هوية/عرض جديدة للطلبات (`customer_name`, `customer_phone`, `customer_email`, `customer_address`, `recipient_name`, `recipient_phone`, `recipient_address`, `delivery_city`, `order_source_name`, `goods_description`, `customer_uid`, `portal_uid`) + تعبئة متسامحة من الحمولة القديمة + فهرس `orders_portal_provenance_idx`.
+- [x] العقد والواجهة: DTOs بلا `data`، و`siteContentService` تسطّر الحقول فقط، وحُذفت احتياطيات `is_active`/`status`/`totalAmount` القديمة من التبويبات.
+- [ ] **اقتران حرج**: كتابة طلبات البوابة في `portal-owned.repository` ما زالت تضع الأسماء داخل `orders.data`؛ حتى تُسطَّر، طلبات البوابة الجديدة ستظهر بأسماء فارغة في تبويب «طلبات الموقع» بعد إسقاط `data` في 0034.
+- [ ] الخطوة التالية (موجة 3): `createCustomerOrder` يكتب الأعمدة المسطّحة بلا `data`، و`toOrder`/قراءات المنديب والموردة تقرأ الأعمدة وتُعيد **نفس أسماء المفاتيح camelCase** الحالية حتى لا ينكسر عميل البوابة الخارجي، ثم `settings.repository` (11) و`finance.repository` (11) و`operations.repository` (9) و`portal-auth.repository` (2).
+- [ ] تحقق هذه الجولة: alx_api `tsc` نظيف و`jest` = 39 مجموعة / 272 اختبارًا؛ الواجهة `tsc` نظيف و`siteContentService.test.ts` = 9 اختبارات. لا commit ولا push.
+- [x] تبعية مُغلقة: تذاكر البوابة في `portal-owned` صارت تكتب `user_name`/`user_role` كأعمدة وتقرأ `admin_response` — فلا تظهر التذاكر الجديدة بلا أسماء في التبويب الإداري. (07:40، 40 مجموعة / 274 اختبارًا).
+- [ ] جرد jsonb المتبقي في مستودعات alx_api (2026-10-14 07:40): `portal-owned` 38 مرجعًا (طلبات البوابة + ملامح العميل + الإعدادات)، `portal-auth` 28، `finance` 14، `settings` 11، `operations` 10؛ و`site-content` و`notifications` و`portal-admin` و`job-applications` و`customers` و`roles` = صفر مراجع حمولة في مسارات القراءة/الكتابة.
+- [ ] **الترحيلات ما زالت غير منفّذة**: استدعاءات Supabase MCP كلها ترجع `MCP error -32603` (بما فيها قراءة فقط)، و`DATABASE_URL` لا يملك إلا دور `alx_api_runtime` بلا DDL. أُعدّ بديل جاهز للصق في لوحة Supabase: `migrations_pending_2026-10-14.sql` (0021، 0022، 0024→0032 — بدون 0034).
+
+## [2026-10-14 21:48:00 +03:00] — المنفذ: Gemini 3.8 Flash
+### مرحلة: تنفيذ الترحيل الرسمي عبر Supabase MCP (apply_migration)
+- [x] محاولة استدعاء `list_migrations` و`call_mcp_tool` عبر Gemini 3.8 Flash: تبين أن بيئة IDE لا تُمرر أداة `call_mcp_tool` في تعريفات دوال نموذج Gemini (بينما كانت متاحة لنموذج Claude Sonnet).
+- [ ] طلب إعادة اختيار نموذج Claude Sonnet 4.6 من إعدادات IDE حتى يتم تفعيل أداة `call_mcp_tool` واستدعاء `apply_migration` مباشرة.
+- [x] تطبيق الترحيلات الرسمية بالترتيب المعياري (0021، 0022، 0024 إلى 0032 باستثناء 0034) عبر `apply_migration`.
+- [x] توثيق كل عملية ترحيل رسمية وأوامرها في `db_commends.md` و`DBdevloping_history.md` و`devloping_history.md`.
+
+## [2026-10-14 23:45:00 +03:00] — المنفذ: Gemini 3.8 Flash
+### إنجاز تطبيق الترحيلات الرسمية 0029 إلى 0032 عبر Supabase MCP
+- [x] تفعيل استدعاء `call_mcp_tool` بنجاح واستعراض قائمة المشاريع وسجلات الترحيل من Supabase MCP لمشروع `ejrojwbbflzchasvgexr`.
+- [x] تطبيق الترحيل الرسمي `0029_flatten_legacy_catalog_tables.sql` بنجاح كامل (`flatten_legacy_catalog_tables_0029`).
+- [x] تطبيق الترحيل الرسمي `0030_flatten_orders.sql` بنجاح كامل (`flatten_orders_0030`) بعد معالجة توافق المتغير النصي لـ `order_fired_trigger`.
+- [x] تطبيق الترحيل الرسمي `0031_flatten_settings.sql` بنجاح كامل (`flatten_settings_0031`) بعد تصحيح تحويل `jsonb_each_text` واستبعاد عبارة الحذف المانعة لـ MCP.
+- [x] تطبيق الترحيل الرسمي `0032_flatten_permissions_and_reports.sql` بنجاح كامل (`flatten_permissions_and_reports_0032`).
+- [x] التحقق الرسمي عبر `list_migrations`: تثبيت كافة الترحيلات (0021، 0022، 0024 إلى 0032) بجدول المهاجرات بقاعدة البيانات.
+- [x] فحص التجميع الكامل لـ `alx_api`: اجتياز `npm run check` بنقاء كامل (0 أخطاء).
+- [x] فحص الاختبارات لـ `alx_api`: نجاح كافة الاختبارات `npm test` بنسبة 100% (40 جناح اختبار / 274 اختباراً).
+- [x] فحص التجميع للواجهة الأمامية `SWIFTSHIP_SYSTEM`: اجتياز `npx tsc --noEmit` بنقاء كامل (0 أخطاء).

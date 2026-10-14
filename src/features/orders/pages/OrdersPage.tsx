@@ -49,6 +49,7 @@ import OrderHistoryModal from '../../../components/orders/OrderHistoryModal'; //
 import { buildOrderParties, findOrderParty, toOrderPartyPayload, type OrderParty } from '../../../services/orderPartyService';
 import { calculateOrderPaymentTotals } from '../../../services/orderCurrencyService';
 import { deleteOrdersWithDependents, type OrderDeletionSummary } from '../../../services/orderDeletionService';
+import { pinVerificationMessage, verifyCurrentUserPin } from '../../../services/securityPinService'; // التحقق الخادمي من رمز PIN للعمليات الحساسة
 import type { OrderHistoryContext } from '../../../services/orderHistoryService';
 import { ORDER_STATUS_FALLBACKS } from '../constants/orders.constants';
 import { ORDER_TAB_QUERY_ALIASES } from '../constants/orderTabAliases';
@@ -773,11 +774,15 @@ export default function OrdersPage() { // دالة عرض الطلبات
       setIsBatchUpdating(false);
     }
   };
-  // التحقق من رمز الـ PIN لحذف الطلب أو مجموعة الطلبات.
-  const handleVerifyDeletePin = () => {
-    const systemPin = profile?.systemPin || '000000';
-    if (deletePin.trim() === systemPin.trim()) executeDeleteOrder();
-    else setDeleteError(isAr ? 'رمز الـ PIN غير صحيح' : 'Invalid security PIN');
+  // التحقق من رمز الـ PIN لحذف الطلب أو مجموعة الطلبات — يتم خادميًا لحساب المستخدم الحالي.
+  // PIN verification is server-side against the acting user's own record; no client-side comparison or default PIN.
+  const handleVerifyDeletePin = async () => {
+    const verification = await verifyCurrentUserPin(deletePin);
+    if (verification.status !== 'valid') {
+      setDeleteError(pinVerificationMessage(verification, isAr));
+      return;
+    }
+    await executeDeleteOrder();
   };
 
   // Nested quick-add customer

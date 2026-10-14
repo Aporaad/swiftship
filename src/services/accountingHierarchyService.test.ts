@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { accountingHierarchyService, hierarchyCodeRules, naturalBalanceDelta } from './accountingHierarchyService';
-
 describe('حارس الحسابات المالية', () => {
   it('يمنع الحسابات التنظيمية أو المعطلة من الظهور كحسابات قابلة للقيد', () => {
     const available = accountingHierarchyService.filterPostingAccounts([

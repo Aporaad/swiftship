@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Edit3, Plus, Save, Trash2, X } from 'lucide-react';
-import { financialEntrySettingsService } from '../../services/financialEntrySettingsService';
+import { ENTRY_SETTING_CODE_PATTERN, financialEntrySettingsService } from '../../services/financialEntrySettingsService';
 import type { FinanceEntryType, FinanceModule } from '../../shared/contracts/finance.contracts';
 import { asyncState, runMutation, type AsyncState } from '../../shared/contracts/ui.contracts';
 
@@ -41,8 +41,13 @@ export default function EntrySettingsTab({ modules, entryTypes, canView, canCrea
 
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!editor || !editor.code.trim() || !editor.nameAr.trim() || (editor.kind === 'type' && !editor.moduleId)) {
+    const code = editor?.code.trim().toUpperCase() ?? '';
+    if (!editor || !code || !editor.nameAr.trim() || (editor.kind === 'type' && !editor.moduleId)) {
       setValidationError('أكمل الرمز والاسم والفئة المرتبطة للنوع.');
+      return;
+    }
+    if (!ENTRY_SETTING_CODE_PATTERN.test(code)) {
+      setValidationError('الرمز يجب أن يبدأ بحرف لاتيني كبير ويتبعه أحرف كبيرة أو أرقام أو شرطة سفلية.');
       return;
     }
     if ((editor.exists && !canEdit) || (!editor.exists && !canCreate)) {
@@ -52,8 +57,9 @@ export default function EntrySettingsTab({ modules, entryTypes, canView, canCrea
     setMutationState(asyncState.idle());
     const result = await runMutation(async () => {
       await financialEntrySettingsService.manage(editor.exists ? 'update' : 'create', editor.kind, editor.id, {
-        code: editor.code.trim(), nameAr: editor.nameAr.trim(), nameEn: editor.nameAr.trim(),
-        moduleId: editor.kind === 'type' ? editor.moduleId : undefined, isActive: editor.active,
+        code, nameAr: editor.nameAr.trim(), nameEn: editor.nameAr.trim(),
+        ...(editor.kind === 'type' ? { moduleId: editor.moduleId } : {}),
+        isActive: editor.active,
       });
     }, setMutationState);
     if (result.status === 'success-after-mutation') { setEditor(null); onChanged(); }
@@ -63,7 +69,9 @@ export default function EntrySettingsTab({ modules, entryTypes, canView, canCrea
     if (!canDelete) return setValidationError('لا تملك تصريح حذف إعدادات القيود.');
     if (!window.confirm(`سيُحذف ${kind === 'module' ? 'فئة' : 'نوع'} القيد «${name}». لا تحذف إلا سجلًا غير مستخدم. هل تريد المتابعة؟`)) return;
     setMutationState(asyncState.idle());
-    const result = await runMutation(() => financialEntrySettingsService.manage('delete', kind, id), setMutationState);
+    const result = await runMutation(async () => {
+      await financialEntrySettingsService.manage('delete', kind, id);
+    }, setMutationState);
     if (result.status === 'success-after-mutation') onChanged();
   };
 
@@ -76,7 +84,7 @@ export default function EntrySettingsTab({ modules, entryTypes, canView, canCrea
     {error && <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</div>}
     {editor && <form onSubmit={save} className="grid gap-3 rounded-2xl border border-[#d4af37]/30 bg-slate-950 p-5 md:grid-cols-2">
       <h3 className="md:col-span-2 font-black text-white">{editor.kind === 'module' ? 'فئة قيد' : 'نوع قيد'} {editor.exists ? '— تعديل' : '— جديد'}</h3>
-      <label className="text-xs font-bold text-slate-300">الرمز<input value={editor.code} onChange={(e) => setEditor({ ...editor, code: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 p-2 font-mono text-white" /></label>
+      <label className="text-xs font-bold text-slate-300">الرمز<input value={editor.code} onChange={(e) => setEditor({ ...editor, code: e.target.value.toUpperCase() })} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 p-2 font-mono text-white" /><span className="mt-1 block text-[10px] font-medium text-slate-500">حروف لاتينية كبيرة وأرقام وشرطة سفلية فقط، مثل ORDER_CHARGE.</span></label>
       <label className="text-xs font-bold text-slate-300">الاسم العربي<input value={editor.nameAr} onChange={(e) => setEditor({ ...editor, nameAr: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 p-2 text-white" /></label>
       {editor.kind === 'type' && <label className="text-xs font-bold text-slate-300">الفئة<select value={editor.moduleId} onChange={(e) => setEditor({ ...editor, moduleId: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 p-2 text-white">{modules.map((module) => <option key={module.id} value={module.id}>{module.nameAr}{module.isActive === false ? ' — معطلة' : ''}</option>)}</select></label>}
       <label className="text-xs font-bold text-slate-300">الحالة<select value={editor.active ? 'active' : 'inactive'} onChange={(e) => setEditor({ ...editor, active: e.target.value === 'active' })} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 p-2 text-white"><option value="active">نشط ومتاح للإنشاء</option><option value="inactive">معطّل ومحفوظ للتاريخ</option></select></label>

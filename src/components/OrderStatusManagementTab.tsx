@@ -4,9 +4,8 @@ import {
   Activity, ToggleLeft, ToggleRight, Settings, Info, AlertCircle, Save, X, Sparkles,
   ArrowRightLeft, FileText, Check, Filter, Search
 } from 'lucide-react';
-import { db } from '../data/legacy/legacy-compat.ts';
-import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, getDocs } from '../data/legacy/legacy-compat.ts';
-import { useOrderStatuses, OrderStatusItem, DEFAULT_ORDER_STATUSES } from '../hooks/useOrderStatuses';
+import { db, collection, onSnapshot } from '../data/legacy/legacy-compat.ts';
+import { useOrderStatuses, saveOrderStatus, removeOrderStatus, OrderStatusItem, DEFAULT_ORDER_STATUSES } from '../hooks/useOrderStatuses';
 import { autoEntryService, AutoEntryRule, DEFAULT_AUTO_ENTRIES } from '../services/autoEntryService';
 import { AUTO_ENTRY_AMOUNT_SOURCE_OPTIONS, type AutoEntryAmountSource, getRuleAmountSources } from '../services/autoEntryRules';
 import { AutoEntryAmountSourceList } from './AutoEntryAmountSourceList';
@@ -57,7 +56,7 @@ export default function OrderStatusManagementTab({
 }: OrderStatusManagementTabProps) {
   const { role, hasPermission } = useRole();
   const { activeCurrencies, loading: currenciesLoading } = useExchangeRates();
-  const { statuses, loading: statusesLoading, getFirstStatus, getLastStatus } = useOrderStatuses();
+  const { statuses, loading: statusesLoading, refresh: refreshStatuses, getFirstStatus, getLastStatus } = useOrderStatuses();
   const [autoEntries, setAutoEntries] = useState<AutoEntryRule[]>([]);
   const [accounts, setAccounts] = useState<SystemAccountOption[]>([]);
   const [loadingEntries, setLoadingEntries] = useState(true);
@@ -186,25 +185,7 @@ export default function OrderStatusManagementTab({
     try {
       const targetId = Number(statusFormData.id);
 
-      // If setting as isFirst, clear isFirst from other statuses
-      if (statusFormData.isFirst) {
-        for (const st of statuses) {
-          if (st.id !== targetId && st.isFirst) {
-            await updateDoc(doc(db, 'order_status', String(st.id)), { isFirst: false });
-          }
-        }
-      }
-
-      // If setting as isLast, clear isLast from other statuses
-      if (statusFormData.isLast) {
-        for (const st of statuses) {
-          if (st.id !== targetId && st.isLast) {
-            await updateDoc(doc(db, 'order_status', String(st.id)), { isLast: false });
-          }
-        }
-      }
-
-      const payload = {
+      await saveOrderStatus({
         id: targetId,
         nameAr: statusFormData.nameAr,
         nameEn: statusFormData.nameEn || statusFormData.nameAr,
@@ -214,10 +195,8 @@ export default function OrderStatusManagementTab({
         color: statusFormData.color || 'blue',
         code: statusFormData.code || `stage_${targetId}`,
         description: statusFormData.description || '',
-        updatedAt: Date.now()
-      };
-
-      await setDoc(doc(db, 'order_status', String(targetId)), payload, { merge: true });
+      });
+      await refreshStatuses();
       toast.success(isAr ? 'تم حفظ المرحلة بنجاح' : 'Stage saved successfully');
       setIsStatusModalOpen(false);
     } catch (err) {
@@ -247,7 +226,8 @@ export default function OrderStatusManagementTab({
     }
 
     try {
-      await deleteDoc(doc(db, 'order_status', String(st.id)));
+      await removeOrderStatus(st.id);
+      await refreshStatuses();
       toast.success(isAr ? 'تم حذف المرحلة بنجاح' : 'Stage deleted');
     } catch (err) {
       console.error('Failed to delete status:', err);

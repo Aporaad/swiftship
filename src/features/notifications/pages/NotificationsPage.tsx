@@ -1,31 +1,71 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { asyncState, runMutation, type AsyncState } from '../../../shared/contracts/ui.contracts';
 import { 
   Bell, Package, CheckCircle, AlertTriangle, Clock, X, Settings2, 
   Send, Database, Key, Phone, ShieldCheck, Layers, Play, Check, 
   FileText, Info, ExternalLink, Lock, Settings, HelpCircle, Activity, Sparkles, RefreshCw
 } from 'lucide-react';
-import { collection, onSnapshot, query, orderBy, limit, writeBatch, doc } from '../../../data/legacy/legacy-compat.ts';
-import { db, safeToDate } from '../../../data/legacy/legacy-compat.ts';
 import { formatDistanceToNow } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { useRole } from '../../../hooks/useRole';
-import { useAuthSession } from '../../../features/auth/AuthSessionProvider';
 import { ShieldAlert } from 'lucide-react';
 import { useSettings } from '../../../context/SettingsContext';
 import { whatsappService, WhatsAppConfig, defaultWhatsAppConfig } from '../../../services/whatsappService';
+import { notificationsApiDataGateway, type ApiDeliveryLog, type ApiNotification } from '../services/notificationsApiDataGateway';
 import toast from 'react-hot-toast';
 import { activityLogService } from '../../../services/activityLogService';
 
 type NotificationRecord = { id: string; createdAt: Date | null; read?: boolean; type?: string; eventType?: string; title?: string; message?: string; creatorId?: string; userId?: string; associatedUserIds?: string[]; category?: string };
 type DeliveryLog = { id: string; phone?: string; eventType?: string; message?: string; orderId?: string; status?: string; errorMsg?: string; createdAt: Date | null };
 type TestResult = { success: boolean; status?: string; errorMsg?: string; message?: string };
-type SnapshotDocument = { id: string; data: () => Record<string, unknown> | undefined };
-const asNotificationRecord = (value: unknown): Record<string, unknown> => value !== null && typeof value === 'object' ? value as Record<string, unknown> : {};
+
 const errorMessage = (error: unknown): string => error instanceof Error ? error.message : 'Unknown error';
 
+// تحويل سجل الإشعار من alx_api إلى نموذج العرض المحلي — API record to the view model.
+const toViewNotification = (row: ApiNotification): NotificationRecord => ({
+  id: row.notificationId,
+  createdAt: row.createdAt ? new Date(row.createdAt) : null,
+  read: row.isRead,
+  type: row.type,
+  title: row.title,
+  message: row.message,
+  creatorId: row.creatorId ?? undefined,
+  userId: row.userId ?? undefined,
+  associatedUserIds: [...row.associatedUserIds],
+  category: row.category ?? undefined,
+});
+
+// تحويل سجل الـ Outbox إلى صفوف التبويب «سجل الإرسال» — outbox row to the delivery log view model.
+const toDeliveryLog = (row: ApiDeliveryLog): DeliveryLog => ({
+  id: row.outboxId,
+  phone: row.recipient,
+  eventType: row.templateId ?? row.channel,
+  message: row.message,
+  status: row.status,
+  errorMsg: row.errorMessage ?? undefined,
+  createdAt: row.createdAt ? new Date(row.createdAt) : null,
+});
+
+// عرض حالة الـ Outbox: queued | processing | sent | failed | cancelled
+// Presentation of outbox statuses; queued means waiting for the server-side dispatcher.
+const deliveryStatusView = (status: string | undefined, isAr: boolean): { label: string; className: string } => {
+  switch (status) {
+    case 'sent':
+      return { label: isAr ? 'تم الإرسال' : 'Sent', className: 'bg-emerald-950/20 text-emerald-450 border border-emerald-950/40' };
+    case 'processing':
+      return { label: isAr ? 'قيد الإرسال' : 'Processing', className: 'bg-[#d4af37]/10 text-[#d4af37] border border-[#d4af37]/15' };
+    case 'cancelled':
+      return { label: isAr ? 'ملغي' : 'Cancelled', className: 'bg-slate-950/30 text-slate-500 border border-slate-850' };
+    case 'failed':
+      return { label: isAr ? 'فاشل' : 'Failed', className: 'bg-rose-950/20 text-rose-455 border border-rose-950/40 font-extrabold' };
+    case 'queued':
+      return { label: isAr ? 'في الانتظار' : 'Queued', className: 'bg-sky-950/25 text-sky-400 border border-sky-900/40' };
+    default:
+      return { label: status ?? '-', className: 'bg-slate-950/30 text-slate-500 border border-slate-850' };
+  }
+};
+
 export default function NotificationsPage() {
-  const { legacyAuth: auth } = useAuthSession();
   const { settings } = useSettings();
   const isAr = settings.language === 'ar';
   
@@ -74,42 +114,46 @@ export default function NotificationsPage() {
     onPaymentReceived: useRef<HTMLTextAreaElement>(null)
   };
 
-  // 1. Listen to system notifications — filtered by role's notification category permissions
-  useEffect(() => {
-    if (roleLoading) return;
-    const q = query(collection(db, 'notifications'), orderBy('createdAt', 'desc'), limit(100));
-    const unsub = onSnapshot(q, (snap) => {
+  // 1. تحميل الإشعارات من alx_api — مع تصفية تصنيفية حسب صلاحيات الدور.
+  // 1. Load notifications from alx_api, then filter categories by the role's notification permissions.
+  const loadNotifications = useCallback(async () => {
+    setLoadingAlerts(true);
+    try {
+      const canManage = role === 'Admin' || hasPermission('manage_notifications');
+      const { items } = await notificationsApiDataGateway.listNotifications({
+        limit: 200,
+        offset: 0,
+        scope: canManage ? 'all' : 'mine',
+      });
       const isAdmin = role === 'Admin';
       const canOrderNotif = isAdmin || hasPermission('notify_orders');
       const canFinanceNotif = isAdmin || hasPermission('notify_finance');
       const canSystemNotif = isAdmin || hasPermission('notify_system');
-      const allNotifs = snap.docs.map((d: SnapshotDocument): NotificationRecord => {
-        const data = asNotificationRecord(d.data());
-        return { id: d.id, ...data, createdAt: safeToDate(data.createdAt) };
-      });
-      // Strict category filtering — only show categories the user has permission for
-      const filtered = allNotifs.filter((n: NotificationRecord) => {
-        if (!isAdmin) {
-          const isCreator = n.creatorId === auth.currentUser?.uid;
-          const isTarget = n.userId === auth.currentUser?.uid;
-          const currentUid = auth.currentUser?.uid;
-          const isAssociated = Boolean(currentUid && Array.isArray(n.associatedUserIds) && n.associatedUserIds.includes(currentUid));
-          if (!isCreator && !isTarget && !isAssociated) return false;
-        }
+      // الخادم يحصر الظهور (عام/موجه/مستلم) — والواجهة تحصر التصنيف حسب الصلاحية.
+      // The server enforces visibility; the UI additionally filters categories by permission.
+      const filtered = items.map(toViewNotification).filter((n: NotificationRecord) => {
         const cat = n.category || 'system';
         if (cat === 'order') return canOrderNotif;
         if (cat === 'finance') return canFinanceNotif;
         if (cat === 'system') return canSystemNotif;
-        return isAdmin; // unknown categories only for Admin
+        return isAdmin; // التصنيفات المجهولة للمشرف فقط — unknown categories stay admin-only.
       });
       setNotifications(filtered);
       setAlertsState(filtered.length ? asyncState.success(filtered) : asyncState.empty());
-    }, (error) => {
+    } catch (error) {
       console.error('Error fetching alerts:', error);
       setAlertsState(asyncState.error(error, 'NOTIFICATIONS_LOAD_FAILED'));
-    });
-    return unsub;
-  }, [roleLoading, role, hasPermission, auth]);
+    } finally {
+      setLoadingAlerts(false);
+    }
+  }, [role, hasPermission]);
+
+  useEffect(() => {
+    if (roleLoading) return;
+    void loadNotifications();
+    const interval = setInterval(() => void loadNotifications(), 30000);
+    return () => clearInterval(interval);
+  }, [roleLoading, loadNotifications]);
 
   // 2. Fetch WhatsApp Configurations on startup
   useEffect(() => {
@@ -130,22 +174,28 @@ export default function NotificationsPage() {
     loadConfig();
   }, [isAr]);
 
-  // 3. Listen to WhatsApp logs in real-time
-  useEffect(() => {
-    const qLogs = query(collection(db, 'whatsapp_logs'), orderBy('createdAt', 'desc'), limit(150));
-    const unsubLogs = onSnapshot(qLogs, (snap) => {
-      const rows = snap.docs.map((d: SnapshotDocument): NotificationRecord => {
-        const data = asNotificationRecord(d.data());
-        return { id: d.id, ...data, createdAt: safeToDate(data.createdAt) };
-      });
+  // 3. سجل أحداث الإرسال الخارجي من جدول الـ Outbox — تحديث دوري بدل الاشتراك المباشر.
+  // 3. External delivery log read from the outbox table, refreshed periodically instead of a live subscription.
+  const loadDeliveryLogs = useCallback(async () => {
+    setLoadingLogs(true);
+    try {
+      const { items } = await notificationsApiDataGateway.listDeliveryLogs({ limit: 150 });
+      const rows = items.map(toDeliveryLog);
       setLogs(rows);
       setLogsState(rows.length ? asyncState.success(rows) : asyncState.empty());
-    }, (error) => {
+    } catch (error) {
       console.error('Error fetching logs:', error);
-      setLogsState(asyncState.error(error, 'WHATSAPP_LOGS_LOAD_FAILED'));
-    });
-    return unsubLogs;
+      setLogsState(asyncState.error(error, 'DELIVERY_LOGS_LOAD_FAILED'));
+    } finally {
+      setLoadingLogs(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadDeliveryLogs();
+    const interval = setInterval(() => void loadDeliveryLogs(), 30000);
+    return () => clearInterval(interval);
+  }, [loadDeliveryLogs]);
 
   const markAllAsRead = async () => {
     // Requires manage_notifications permission
@@ -154,13 +204,10 @@ export default function NotificationsPage() {
       return;
     }
     try {
-      const batch = writeBatch(db);
-      notifications.filter(n => !n.read).forEach(n => {
-        batch.update(doc(db, 'notifications', n.id), { read: true });
-      });
-      await batch.commit();
+      await notificationsApiDataGateway.markAllAsRead();
       activityLogService.log('mark_all_read', 'All Notifications');
       toast.success(isAr ? 'تم تحديد جميع الإشعارات كمقروءة' : 'Marked all as read');
+      await loadNotifications();
     } catch (e: unknown) {
       console.error(e);
       toast.error(errorMessage(e) || 'Error executing action');
@@ -170,11 +217,11 @@ export default function NotificationsPage() {
   const markAsRead = async (id: string, read: boolean) => {
     if (read) return;
     try {
-      const batch = writeBatch(db);
-      batch.update(doc(db, 'notifications', id), { read: true });
-      await batch.commit();
+      await notificationsApiDataGateway.markAsRead(id);
+      setNotifications((current) => current.map((n) => (n.id === id ? { ...n, read: true } : n)));
     } catch (e) {
       console.error(e);
+      toast.error(errorMessage(e) || 'Error executing action');
     }
   };
 
@@ -212,7 +259,10 @@ export default function NotificationsPage() {
       setTestResult(result);
       if (result.success) {
         activityLogService.log('send_test_whatsapp', testPhone, { message: testMessage });
-        toast.success(isAr ? 'تم إرسال رسالة تجريبية بنجاح!' : 'Test message emitted successfully!');
+        // الرسالة في قائمة الانتظار الخادمية — الإرسال الفعلي يعمل الخادم الخلفي.
+        // The message is queued in the outbox; the server-side worker performs the actual dispatch.
+        toast.success(isAr ? 'تمت إضافة الرسالة التجريبية إلى قائمة الإرسال!' : 'Test message queued for delivery!');
+        void loadDeliveryLogs();
       } else {
         toast.error(isAr ? `فشل الإرسال: ${result.errorMsg || ''}` : `Emit failed: ${result.errorMsg || ''}`);
       }
@@ -1010,7 +1060,7 @@ export default function NotificationsPage() {
                     <div className="flex justify-between items-center border-b border-slate-850 pb-1.5">
                       <span className="text-[10px] font-black uppercase text-slate-505">{isAr ? 'استجابة البوابة' : 'GATEWAY RESPONSE'}</span>
                       <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${testResult.success ? 'bg-emerald-950/40 text-emerald-400' : 'bg-rose-950/40 text-rose-455'}`}>
-                        {testResult.success ? 'Success' : 'Failed'}
+                        {testResult.success ? (isAr ? 'مقبولة في الطابور' : 'Accepted (queued)') : 'Failed'}
                       </span>
                     </div>
                     <div className="font-sans font-bold text-white text-xs mt-1">
@@ -1119,25 +1169,23 @@ export default function NotificationsPage() {
                           )}
                         </td>
 
-                        {/* Status Label */}
+                        {/* Status Label — حالات جدول الـ Outbox */}
                         <td className="p-4 text-center">
-                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-black inline-block text-center ${
-                            log.status === 'Success' ? 'bg-emerald-950/20 text-emerald-450 border border-emerald-950/40' :
-                            log.status === 'Simulated' ? 'bg-[#d4af37]/10 text-[#d4af37] border border-[#d4af37]/15' :
-                            log.status === 'Skipped' ? 'bg-slate-950/30 text-slate-500 border border-slate-850' :
-                            'bg-rose-950/20 text-rose-455 border border-rose-950/40 font-extrabold'
-                          }`} title={log.errorMsg || ''}>
-                            {log.status === 'Success' && (isAr ? 'تم الإرسال' : 'Success')}
-                            {log.status === 'Simulated' && (isAr ? 'محاكاة ناجحة' : 'Simulated')}
-                            {log.status === 'Skipped' && (isAr ? 'تم التخطي' : 'Skipped')}
-                            {log.status === 'Failed' && (isAr ? 'قيد الفشل' : 'Failed')}
-                          </span>
-                          
-                          {log.status === 'Failed' && log.errorMsg && (
-                            <span className="block text-[9px] text-rose-450/80 font-bold tracking-tight mt-1 max-w-[120px] mx-auto truncate" title={log.errorMsg}>
-                              {log.errorMsg}
-                            </span>
-                          )}
+                          {(() => {
+                            const view = deliveryStatusView(log.status, isAr);
+                            return (
+                              <>
+                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-black inline-block text-center ${view.className}`} title={log.errorMsg || ''}>
+                                  {view.label}
+                                </span>
+                                {log.errorMsg && (
+                                  <span className="block text-[9px] text-rose-450/80 font-bold tracking-tight mt-1 max-w-[120px] mx-auto truncate" title={log.errorMsg}>
+                                    {log.errorMsg}
+                                  </span>
+                                )}
+                              </>
+                            );
+                          })()}
                         </td>
 
                         {/* Timestamps */}

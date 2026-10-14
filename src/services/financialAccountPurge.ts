@@ -1,134 +1,58 @@
-import { collection, db, doc, getDocs, query, where, writeBatch } from '../data/legacy/legacy-compat.ts';
+/**
+ * financialAccountPurge.ts
+ * تطهير البصمة المالية لكيان (عميل/مندوب/موظف/مستخدم) — API-only عبر alx_api.
+ * Entity financial-footprint purge — API-only through alx_api (the SECURITY DEFINER rpc owns the deletion order).
+ */
+import { financeApiClient } from './financeApi';
 
-export async function purgeEntityAndFinancialFootprint(service: any, entityType: 'customer' | 'courier' | 'user' | 'employee', entityId: string): Promise<void> {
-    try {
-      // Step 0: Check if entity is linked to any orders in 'orders' collection
-      const ordersSnap = await getDocs(collection(db, "orders"));
-      const isLinkedToOrders = ordersSnap.docs.some(doc => {
-        const o = doc.data();
-        if (entityType === 'customer') {
-          return o.customerId === entityId || o.customer?.id === entityId;
-        } else if (entityType === 'courier') {
-          return (
-            o.courierId === entityId ||
-            o.driverId === entityId ||
-            o.courier?.id === entityId ||
-            o.deliveryCourierId === entityId ||
-            o.delivery_courier_id === entityId ||
-            o.shippingCourierId === entityId ||
-            o.shipping_courier_id === entityId
-          );
-        } else if (entityType === 'employee') {
-          return o.employeeId === entityId;
-        }
-        return false;
-      });
+export type PurgeableEntityType = 'customer' | 'courier' | 'user' | 'employee' | 'source' | 'shipping_company';
 
-      if (isLinkedToOrders) {
-        const label = entityType === 'customer' ? 'العميل' : (entityType === 'courier' ? 'المندوب' : entityType === 'user' ? 'المستخدم' : 'الموظف');
-        throw new Error(`تعذر الحذف: هذا الـ (${label}) مرتبط بطلبات مسجلة في جدول الطلبات. يرجى فك ارتباط الطلبات أو حذفها أولاً والمحاولة مرة أخرى.`);
-      }
+/** الواجهة تستخدم المفرد والـ API يستخدم اسم الجدول الجمع. */
+const PURGE_TABLE_BY_TYPE: Record<PurgeableEntityType, string> = {
+  customer: 'customers',
+  courier: 'couriers',
+  user: 'users',
+  employee: 'employees',
+  source: 'sources',
+  shipping_company: 'shipping_companies',
+};
 
-      const batch = writeBatch(db);
-      const affectedAccountIds = new Set<string>();
+/** ترجمة أكواد المنع القادمة من قاعدة البيانات إلى رسالة يفهمها المستخدم. */
+const BLOCKED_REASON_AR: Array<[RegExp, string]> = [
+  [/PURGE_BLOCKED_CUSTOMER_HAS_ORDERS/, 'تعذر الحذف: هذا العميل مرتبط بطلبات مسجلة. فكّ ارتباط الطلبات أو احذفها أولاً ثم أعد المحاولة.'],
+  [/PURGE_BLOCKED_COURIER_HAS_OPEN_CUSTODY/, 'تعذر الحذف: على هذا المندوب عُهد غير مسدّدة. صفِّ العُهد المفتوحة أولاً ثم أعد المحاولة.'],
+  [/PURGE_ENTITY_TYPE_NOT_ALLOWED/, 'نوع الكيان غير مسموح بتطهيره مالياً.'],
+  [/PURGE_ENTITY_ID_REQUIRED/, 'معرّف الكيان مطلوب لتنفيذ التطهير.'],
+];
 
-      // 1. Find the associated financial account
-      const accountQuery = query(
-        collection(db, "accounts"),
-        where("entityId", "==", entityId)
-      );
-      const accountSnap = await getDocs(accountQuery);
-      let accountId = "";
+const humanizePurgeError = (error: unknown): Error => {
+  const message = error instanceof Error ? error.message : String(error);
+  const matched = BLOCKED_REASON_AR.find(([pattern]) => pattern.test(message));
+  return new Error(matched ? `${matched[1]} (${message})` : message);
+};
 
-      if (!accountSnap.empty) {
-        const accountDoc = accountSnap.docs[0];
-        accountId = accountDoc.id;
+/**
+ * يحذف الحساب المالي وقيوده وكيانه عبر مسار واحد آمن ثم يعيد احتساب الأرصدة.
+ * Deletes the entity's accounts, entries and the entity row through the guarded rpc, then recalculates balances.
+ */
+export async function purgeEntityAndFinancialFootprint(
+  service: { recalculateAllBalances: () => Promise<unknown> },
+  entityType: PurgeableEntityType,
+  entityId: string,
+): Promise<Record<string, unknown> | null> {
+  const table = PURGE_TABLE_BY_TYPE[entityType];
+  if (!table) throw new Error(`نوع الكيان غير مدعوم للتطهير المالي: ${String(entityType)}`);
+  if (!String(entityId || '').trim()) throw new Error('معرّف الكيان مطلوب لتنفيذ التطهير.');
 
-        // 2. Find all account_trans legs linked to this account
-        // استعلام أسطر الحسابات من جدول account_trans الجديد
-        const txQuery = query(
-          collection(db, "account_trans"),
-          where("accountId", "==", accountId)
-        );
-        const txSnap = await getDocs(txQuery);
-
-        const refNumbers = new Set<string>();
-        const mainEntryIds = new Set<string>();
-
-        txSnap.docs.forEach((d) => {
-          const tx = d.data();
-          const entryId = tx.entryId || tx.mainEntryId;
-          if (entryId) {
-            mainEntryIds.add(entryId);
-          }
-          if (tx.refNumber) {
-            refNumbers.add(tx.refNumber);
-          }
-        });
-
-
-        // 3. Fetch and delete all related transaction double-entry legs
-        const allTxDocsToDelete = new Map<string, any>(); // docId -> docRef
-
-        if (mainEntryIds.size > 0) {
-          const jvIdsArray = Array.from(mainEntryIds);
-          for (const jvId of jvIdsArray) {
-            const q = query(collection(db, "account_trans"), where("entryId", "==", jvId));
-            const snap = await getDocs(q);
-            snap.docs.forEach(docItem => {
-              allTxDocsToDelete.set(docItem.id, docItem.ref);
-              const txData = docItem.data();
-              if (txData.accountId && txData.accountId !== accountId) {
-                affectedAccountIds.add(txData.accountId);
-              }
-            });
-            // حذف رأس القيد من main_entry
-            batch.delete(doc(db, "main_entry", jvId));
-          }
-        }
-
-        if (refNumbers.size > 0) {
-          const refsArray = Array.from(refNumbers);
-          for (const refNo of refsArray) {
-            const q = query(collection(db, "account_trans"), where("refNumber", "==", refNo));
-            const snap = await getDocs(q);
-            snap.docs.forEach(docItem => {
-              allTxDocsToDelete.set(docItem.id, docItem.ref);
-              const txData = docItem.data();
-              if (txData.accountId && txData.accountId !== accountId) {
-                affectedAccountIds.add(txData.accountId);
-              }
-            });
-
-          }
-        }
-
-        // Add direct legs linked to this account
-        txSnap.docs.forEach(d => {
-          allTxDocsToDelete.set(d.id, d.ref);
-        });
-
-        // Delete all collected transaction leg documents using direct refs
-        allTxDocsToDelete.forEach(ref => {
-          batch.delete(ref);
-        });
-
-
-        // Delete the main accounts document
-        batch.delete(accountDoc.ref);
-      }
-
-      // 4. Delete the core entity document
-      const collectionName = entityType === 'user' ? 'users' : (entityType === 'employee' ? 'employees' : (entityType === 'courier' ? 'couriers' : 'customers'));
-      batch.delete(doc(db, collectionName, entityId));
-
-      // 5. Commit all deletions
-      await batch.commit();
-
-      // 6. Recalculate & sync all financial balances system-wide
-      await service.recalculateAllBalances();
-    } catch (err) {
-      console.error(`[purgeEntityAndFinancialFootprint] Purge failed:`, err);
-      throw err;
-    }
+  try {
+    const res = await financeApiClient.post<{ success: boolean; data: { result?: Record<string, unknown> } }>(
+      `/api/v1/finance/entities/${table}/${encodeURIComponent(entityId)}/purge`,
+      {},
+    );
+    await service.recalculateAllBalances();
+    return res?.data?.result ?? null;
+  } catch (error) {
+    console.error('[purgeEntityAndFinancialFootprint] Purge failed:', error);
+    throw humanizePurgeError(error);
   }
+}

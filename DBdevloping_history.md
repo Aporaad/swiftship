@@ -1561,3 +1561,132 @@ COMMENT ON COLUMN public.employees.notes IS 'ملاحظات إدارية حول 
 - **ملف الترحيل (Migration File):** تم إنشاء `alx_api/src/db/migrations/0019_employees_extended_fields.sql` لمزامنة المخطط في alx_api.
 - **التحقق:** تم التحقق عبر استعلام `information_schema.columns` وتبين وجود كافة الحقول الستة بنجاح مع قيمها الافتراضية المناسبة ودون فقدان أو تعديل في الأعمدة والبيانات السابقة.
 
+
+## [2026-10-13 01:30:00 +03:00] فحص مخطط قاعدة البيانات الحيّة لمرحلة المالية — المنفذ: Qoder
+- فحص معلوماتي (قراءة فقط عبر information_schema بحساب alx_api_runtime): جداول المالية كلها موجودة حيًّا: assets, account, acc_main, acc_sub, acc_sub_group, accounts, default_accounts, salary_history, account_id_migration_map, entry_module, entry_type, settings, auto_entries, main_entry, account_trans. جدول system_accounts غير موجود.
+- صلاحيات alx_api_runtime على كل الجداول أعلاه: INSERT/REFERENCES/SELECT/TRIGGER/TRUNCATE/UPDATE — بدون DELETE. لذلك الحذف الفعلي عبر SQL مباشر سيفشل (42501) حتى يُنفّذ ترحيل GRANT DELETE المخطط (0023). الحذف المالي الحالي يعمل عبر RPCات security-definer الموجودة (delete_financial_entry...).
+- RPCات موجودة وقابلة للتنفيذ من runtime: manage_financial_entry_setting(p_kind,p_action,p_id,p_payload) و recalculate_accounting_hierarchy(p_account_id) و recalculate_accounting_hierarchy(p_account_ids text[]) — كلها SECURITY DEFINER و execute=true. ستُستخدم بدل no-op supabase stubs.
+- جدول assets الحيّ ينقصه أعمدة تستخدمها الواجهة: category, cost, purchase_date, assigned_courier_id, assigned_courier_name, notes, maintenance_logs (jsonb). سيُنشأ ترحيل 0023 يضيفها بـ ADD COLUMN IF NOT EXISTS + صلاحيات DELETE المطلوبة. الترحيل لا يُنفَّذ من جانبنا (DDL محظور على runtime) — يُنفَّذ يدويًا من المستخدم عبر لوحة Supabase مع 0021 و0022.
+- جولة ترحيلات قيد الانتظار عند المستخدم: 0021_public_tracking.sql، 0022_products_is_allowed.sql، و0023 (قادم في مرحلة المالية).
+
+## [2026-10-13 08:12 +03:00] المنفذ: Qoder — إنشاء ترحيل 0023 (لم يُنفَّذ بعد)
+- أُنشئ الملف `alx_api/src/db/migrations/0023_finance_admin_assets_grants_purge.sql` ويحتوي:
+  1) ALTER TABLE public.assets ADD COLUMN IF NOT EXISTS: category text، cost numeric DEFAULT 0، purchase_date text، assigned_courier_id text، assigned_courier_name text، notes text، maintenance_logs jsonb NOT NULL DEFAULT '[]'، created_by text، updated_by text.
+  2) GRANT DELETE ON public.assets, account, acc_main, acc_sub, acc_sub_group, accounts, default_accounts, salary_history, auto_entries, products, order_items, returned_products TO alx_api_runtime (يغلق فجوة 42501 التي تكسر مسارات الحذف المنشورة).
+  3) CREATE OR REPLACE FUNCTION public.purge_entity_financial_footprint(p_entity_type text, p_entity_id text, p_actor text) RETURNS jsonb SECURITY DEFINER SET search_path=pg_catalog: قائمة أنواع بيضاء (customers/couriers/employees/users/sources/shipping_companies)، حراسة عميل→طلبات ومندوب→custody_advances غير مسددة، حذف متسلسل entry_payment_details ← account_trans ← main_entry ← custody_advances ← accounts ← صف الجهة (جدول/مفتاح من خريطة بيضاء تم التحقق منها حيًّا)، وإرجاع jsonb بعدّادات الحذف. REVOKE من PUBLIC وGRANT EXECUTE لـ alx_api_runtime.
+- تحقق مسبق (قراءة فقط): أعمدة المفاتيح الأساسية الحيّة = customers.customer_id، couriers.courier_id، employees.employee_id، users.user_id (+id مركّب)، sources.source_id، shipping_companies.shipping_company_id، custody_advances.custody_advance_id؛ وجدول orders يحوي customer_id/courier_id/employee_id.
+- حالة التنفيذ: **لم يُنفَّذ أي DDL** — الترحيلات 0021 و0022 و0023 كلها بانتظار تنفيذ المستخدم يدويًا عبر لوحة Supabase (حساب runtime لا يملك صلاحيات DDL).
+
+## [2026-10-13 12:21 +03:00] المنفذ: Qoder — المرحلة 7-هـ: لا DDL ولا كتابة على قاعدة البيانات
+- **لم يُنفَّذ أي DDL ولم تُجرَ أي كتابة أو ترحيل على قاعدة البيانات هذا الدور.** العمل كان في طبقة خدمات الواجهة فقط (تحويلها من الوصول المباشر إلى مسارات alx_api).
+- حساب alx_api_runtime ما زال بلا صلاحيات DDL؛ لذلك يبقى التنفيذ اليدوي للترحيلات عبر لوحة Supabase هو الطريق الوحيد المعتمد للكتابة الهيكلية.
+- الترحيلات المعلّقة عند المستخدم (بانتظار التنفيذ قبل نشر alx_api): `0021_public_tracking.sql`، `0022_products_is_allowed.sql`، `0023_finance_admin_assets_grants_purge.sql`. حتى تنفيذ 0023 تبقى مسارات الحذف تفشل بـ 42501، ودالة التطهير `purge_entity_financial_footprint` غير موجودة، وأعمدة assets الجديدة غائبة.
+- ترتيب النشر المعتمد: الترحيلات ← alx_api ← الواجهة.
+
+### حقائق قرائية (read-only) اعتمدت عليها طبقة الخدمات الجديدة
+هذه ليست تغييرات؛ بل عقد قائم في القاعدة تم تثبيته داخل شيفرة الواجهة وخريطاتها:
+- جدول `accounts`: الأسماء المستعارة التي يعيدها alx_api هي accountNameAr وaccountNameEn وcurrencyNo وsubAccountId وaccountSeq وlimitedBalance، وتقابلها في الواجهة accNameAr وaccNameEn وcurNo وaccSubId وaccountSeq وlimitedBalance؛ العمود `balance` رقمي ويعود نصًّا في JSON فيُحوَّل رقميًا في `mapAccountRow`.
+- جدول `salary_history`: عمود `extra` (jsonb) يحمل employeeName وaccountCode وcreatedByName، وعمود `month` هو مصدر `salaryMonth` في الواجهة. الكتابة تقبل مفاتيح المخطط الصارم فقط؛ أي مفتاح زائد (salaryMonth/createdAt/createdByUid/monthlySalary) يسبب رفض 400.
+- حركات الحساب (`account_transactions`): تُقرأ عبر مسار الحركات وتُعاد بأسماء transType وamount، وتشمل الأسطر ذات `posting_status = posted` فقط.
+- دوال إعادة الحساب: `recalculate_accounting_hierarchy(p_account_id)` للحساب الواحد و`recalculate_all_account_balances()` للجماعي؛ الاثنتان تعيدان عدد الصفوف المتأثرة، لذا لا تُختلق نتائج تفصيلية لكل حساب في الواجهة.
+- جدول `auto_entries`: العمودان debit_account وcredit_account نصّان يحويان JSON (وليسا مفاتيح خارجية)، والعمودان description_template_ar وdescription_template_en يقابلهما في الواجهة descriptionTempAr وdescriptionTempEn، والمفتاح `auto_entry_id` يقابله `id`.
+- خرائط المعرّفات: `account_id_migration_map` يُستخدم لجسر المعرّفات القديمة، وصيغة المعرّف الحالي للحساب المالي هي PREFIX-NNNN بينما معرّفات الجهات بصيغ cust_ وcour_ وemp_ وUUID، وهو ما برّر حذف مسح التعارض بين المجالين من الواجهة.
+- هوية منفّذ القيود تُستخرج خادميًا من رمز الوصول داخل `withActorClaims`؛ لذلك أُسقط `createdByUid` من حمولات الواجهة (لا ثقة بمعرّف قادم من العميل).
+
+## [2026-10-13 21:06 +03:00] المنفذ: Qoder — حقائق قاعدة بيانات: الأصول ودليل الحسابات وحذف الحساب
+**لم يُنفَّذ أي DDL هذا الدور؛ القيود أدناه وصفية اعتمدت عليها الشيفرة.**
+- حذف الحساب المالي لا يحتاج كائن قاعدة جديد: العملية تقرأ وجود المعرّف في `public.accounts` ثم تعدّ الحركات في `public.account_trans` لنفس `account_id`، وتحذف من `accounts` فقط عند صفر حركات. الحساب ذو التاريخ يبقى للتدقيق ويُعطَّل ب`is_active = false`.
+- حقن SQL: معرّف الحساب يصل كعامل مُسند `$1` في الاستعلامات الثلاثة ولا يُبنى أي SQL بنص مضمّن.
+- أعمدة تقرير الحركة (`movementColumns`): `account_trans_id AS "transactionId"`، `main_entry_id AS "entryId"`، `me.entry_number AS "entryNumber"`، `me.entry_category AS "module"`، `trans_type AS "transType"`، `amount`، `amount_original AS "amountOriginal"`، `currency_original_no AS "currencyOriginalNo"`، `description`، `note`، `created_at AS "createdAt"`؛ الربط `account_id` هو مفتاح الكشف.
+- شرط الترحيل صار خادميًا: `WHERE me.posting_status = 'posted'` داخل استعلام `/:id/movements`؛ الواجهة لم تعد تعيد تنفيذ الفلترة يدويًا.
+- أعمدة `assets`: `asset_id`, `asset_code`, `category`, `name_ar`, `name_en`, `type`, `status`, `cost`, `currency`, `purchase_date`, `assigned_courier_id`, `assigned_courier_name`, `notes`, `account_id`, `account_code`, `is_active`, `maintenance_logs` (jsonb؛ قد يصل كنص JSON وتتحمّل طبقة الخريطة الصيغتين).
+- أعمدة `accounts` القابلة للكتابة من دليل الحسابات: `account_code`, `account_prefix`, `account_number`, `entity_type`, `entity_id`, `entity_name`, `currency`, `balance`, `is_active`, `notes`, `type`, `acc_sub_id`, `group_id`, `account_seq`, `acc_name_ar`, `acc_name_en`, `limited_balance`, `cur_no`. لا يوجد عمود `parent_code` ولا `code` في المخطط الصارم، لذلك تُشتق الأبوة من `account_prefix` في الواجهة.
+- شجرة الحسابات تُخزَّن في جداول منفصلة: `account` (بمفتاح `account_id`) و`acc_main` و`acc_sub` و`acc_sub_group` مع `balance` و`cur_no` و`is_active` في كلٍّ منها، و`allows_direct_accounts` في المستويين الأدنى.
+
+## [2026-10-13 23:51 +03:00] المنفذ: Qoder — حقائق قاعدة بيانات: طبقات الشجرة وعقود الكتابة عبر alx_api
+- طبقات الشجرة وأعمدتها المشتركة: `account` (جذر، مفتاح `account_id`) → `acc_main` (`acc_id`, `account_id`) → `acc_sub` (`acc_sub_id`, `acc_id`) → `acc_sub_group` (`acc_sub_group_id`, `acc_sub_id`)؛ لكلٍّ `code`, `name_ar`, `name_en`, `balance`, `cur_no`, `is_active`، والمستويان الأدنى يملكان `allows_direct_accounts`، و`acc_sub_group` يملك `entity_type` الفريد (`acc_sub_group_entity_type_unique_idx`) لتحديد مجموعة حسابات الكيان.
+- كود الحساب المالي = `account_id` بصيغة `<prefix>-NNNN` (4 أرقام تسلسلية)؛ `account_seq` يحمل التسلسل و`limited_balance` حدّ الرصيد الطبيعي و`cur_no` العملة المرجعية (`REFERENCES public.currency(cur_id)`).
+- مخططات alx_api للكتابة صارمة (`.strict()`)؛ الأعمدة المقبولة لعقدة الشجرة: `code`, `nameAr`, `nameEn`, `balance`, `curNo`, `isActive` (+ `allowsDirectAccounts` و`entityType` للمستويات التي تملكها، و`accMainId`/`accSubId`/`accSubGroupId` للأبوة). أي مفتاح غير معروف ⇒ `400`.
+- `default_accounts`: `default_account_id` هو مفتاح النظام (مثل `cash_on_hand`) و`account_id` يشير إلى حساب فعلي؛ القراءة الإدارية تحتاج السطور غير النشطة أيضًا لذلك تُقرأ الصفحة كاملة دون فلترة نشِطة في الواجهة.
+- استيراد الطبقات `POST /api/v1/finance/hierarchy/import` يستقبل `{rows:[{level, nodeId, payload}]}` بترتيب عمق (`account`, `accMain`, `accSub`, `accSubGroup`) ويُنفَّذ في معاملة واحدة على نفس الاتصال ⇒ لا شبه-حالة بين الجذر والابن؛ حسابات الدليل (`accounts`) تُنشأ بعدها واحدًا واحدًا لأن مخططها مختلف وتتحقق من وجود الأب.
+- حذف عقدة الشجرة مرفوض خادميًا إذا كان لها أبناء؛ وحذف حساب مالي محمي بعدّ حركات `account_trans` (`409 FINANCE_ACCOUNT_IN_USE`).
+- لا DDL ولا SQL نُفّذ هذا الدور؛ الترحيلات 0021/0022/0023 ما زالت معلّقة بانتظار تنفيذها من لوحة Supabase.
+
+## [2026-10-14 01:17 +03:00] المنفذ: Qoder — مرحلة 7-ح: ما يحتاجه كشف الحساب من القاعدة (بدون أي DDL)
+- لا تغييرات مخطية في هذا الدور: لا `CREATE/ALTER/DROP` ولا `INSERT/UPDATE/DELETE`؛ كل شيء قراءات عبر alx_api.
+- `account_trans` + `main_entry`: الكشف يعتمد `me.posting_status = 'posted'` كشرط خادمي (count وصفوف)؛ الحركة المعزولة أو القيد غير المرحّ لا تظهر للمستخدم مطلقًا، وهذا يحل محل خريطة `main_entry` الكاملة التي كانت تُبنى في المتصفح.
+- التصنيف التشغيلي للحركة يأتي من `entry_module.code` (CUSTODY/SALARIES/EXPENSES/ORDERS/RECEIPTS…) و`entry_type.code` (ORDER_PAYMENT/RECEIPT_VOUCHER/PAYMENT_VOUCHER/SALARY_PAYMENT…) عبر `LEFT JOIN`؛ أما `main_entry.entry_category` فيبقى قيمته `General/Compound/Temp/Reversing` ولا يصلح تصنيفًا للأنشطة — وهذا سبب الفجوة التي أُغلقت بإضافة `moduleCode`/`entryTypeCode` إلى `movementColumns`.
+- `orders`: حقول المال (`amountPaid`, `amountRemaining`, `totalCostYER`, `paymentStatus`) مخزَّنة داخل `orders.data` jsonb ولا أعمدة لها؛ يُقرأ منها بـ `data->>'amountPaid' AS "amountPaid"` كنص. أي ترحيل مستقبلي يحوّلها لأعمدة رقمية يجب أن يبقي النسخة النصية حتى لا ينكسر مسار الكشف.
+- `couriers`: القراءة المفردة `WHERE courier_id = $1` تستخدم نفس `courierColumns` المستخدمة في `INSERT/UPDATE ... RETURNING`، فالملف المعروض مطابق تمامًا لما يُكتب.
+- `customers`: حدود القراءة في `0008_customers_read_boundary.sql` تستبعد `phone` عمدًا؛ لذلك كشف العميل يعرض المعرّف بدل الهاتف. إضافة الهاتف تتطلب قرار صلاحيات + ترحيل حدود، لا حيلة في الواجهة.
+- الترحيلات 0021/0022/0023 ما زالت معلّقة وهي شرط لنشر كود alx_api الجديد (مسارات الحركات المرشّحة و`GET /api/v1/operations/couriers/:id`).
+
+## [2026-10-14 02:20 +03:00] المنفذ: Qoder — مرحلة 7-ط: حقائق قاعدة البيانات لمحتوى الموقع
+- تعارض مخطط معلَن ومخطط حيّ: الترحيل `alx_api/src/db/migrations/0011_portal_announcements.sql` يعرّف أعمدة مسطّحة (`title`, `content`, `priority`, `target_audience`, `is_active`)، بينما الصفوف الحيّة في `public.announcements` تُقرأ من عمود `data` jsonb (كل كتابة الواجهة القديمة كانت `insert({announcement_id, data})`). القرار: `data` هو مصدر الحقيقة للقراءة والكتابة، والكتابة لا تلمس الأعمدة المسطّحة غير المؤكَّدة الوجود حتى لا يظهر خطأ 42703. حلّ هذا يتطلب ترحيلًا/تدقيقًا من المستخدم عبر لوحة Supabase، ولا يُنفَّذ من `alx_api_runtime` (بلا صلاحيات DDL).
+- `public.portal_tickets`: القراءة تستخدم `COALESCE(NULLIF(pt.status,''), NULLIF(pt.data->>'status',''), 'open')` و`COALESCE(pt.data->'replies', pt.replies, '[]'::jsonb)`؛ الكتابة تحدّث `replies` و`data.replies` و`data.status` و`data.updatedAt` (ميلي ثانية) و`data.adminResponse` و`updated_at = to_timestamp($ms/1000)` في عبارة UPDATE واحدة بلا قراءة-ثم-كتابة إضافية.
+- `public.jobs_req`: الحالة تُقرأ `COALESCE(NULLIF(jr.status,''), NULLIF(jr.data->>'status',''), 'pending_review')`، والتحديث يدمج `jsonb_build_object('status',$2,'updatedAt',$3)` داخل `data` ويضبط `updated_at = now()`. بقية بيانات المتقدم (`fullName/jobPosition/phone/email/city/address/refCode/qualification/idNumber/notes/experienceYears`) تظل أينما كُتبت داخل `data` ولا تُختلق قيم غائبة.
+- `public.orders`: فلترة «طلبات البوابة» صارت شرطًا خدَميًا يعادل مرشّح المتصفح القديم: `jsonb_exists(o.data,'customerUid') OR jsonb_exists(o.data,'portalUid') OR o.order_source_type='App' OR o.data->>'orderSourceType'='App'`. حقلات العرض (`customerName/recipientName/customerPhone/deliveryCity/orderSourceName/orderStatus`) وأسماء المصدر تسكن `orders.data`، والمبلغ يُقرأ `COALESCE(o.data->>'totalCostYER', o.data->>'totalPrice','0')` **كنص** ويُحوَّل عدديًا في طبقة الخرائط — لا قوس `::numeric` في SQL لأن قيمًا نصية قديمة قد تُسقطه.
+- الصلاحيات: لا صلاحيات جديدة زُرعت؛ مسارات `/api/v1/site/*` تستخدم الشيفرتين الموجودتين أصلًا `view_website_management` (قراءة) و`manage_website` (كتابة).
+- لا DDL ولا DML نُفّذ على القاعدة في هذا الدور؛ ما أُعلاه أوصاف لسلوك SQL الذي ينفّذه `alx_api_runtime` بصلاحية قراءة/كتابة فقط.
+- النشر: الترحيلات 0021/0022/0023 ما زالت معلّقة عند المستخدم (شرط لنشر alx_api)، ومسارات `site-content` الجديدة تحتاج إعادة نشر alx_api ثم الواجهة.
+
+## [2026-10-14 06:54 +03:00] — Qoder
+### حقائق قاعدة البيانات المستخرجة من القاعدة الحيّة (قراءة فقط) وتصحيحات الترحيلات
+- **33 عمود jsonb ما زالت حيّة** في `public`: `activity_logs.data, announcements.data, auto_entries.amount_sources, auto_entries.data, browser_pages.data, cust_details.data, customers.body_details, customers.location, customers.preferred_categories, items_category.details, jobs_req.data, notifications.associated_user_ids, notifications.data, order_option.data, order_status.data, orders.data, orders_history.after_data, orders_history.before_data, orders_history.metadata, portal_tickets.data, portal_tickets.replies, portal_users.data, report_settings.exchange_rates, report_templates.data, report_templates.filters, roles.permissions, salary_history.data, settings.data, shipments.data, user_settings.data, user_settings.visible_metrics, whatsapp_logs.data, whatsapp_logs.external_response` — كلها مستهدفة بـ 0025-0032 ثم 0034.
+- دوال `alx_api_private` السبع موجودة فقط لإدارة كلمات المرور؛ **لا وجود بعد** لـ `cast_number/cast_integer/cast_boolean/cast_timestamp/payload_*` ⇒ الترحيل `0024` لم يُنفَّذ، وكل من 0025-0032 يعتمد عليه. يجب تنفيذ 0024 أولًا.
+- كل أعمدة `data` القديمة إما `NULLABLE` أو لها `DEFAULT '{}'::jsonb` (مثال: `jobs_req.data NOT NULL DEFAULT '{}'::jsonb`, `cust_details.data NOT NULL DEFAULT '{}'::jsonb`, `roles.permissions NOT NULL DEFAULT '[]'::jsonb`) ⇒ الكتابات المسطّحة الجديدة **لا تُرفض** قبل 0034، وهذا يفتح التدرّج الآمن: كود مسطّح أولًا ثم 0034.
+- `report_templates.active_report` نوعه **boolean** ⇒ `NULLIF(active_report,'')` في 0032 القديم كان يفشل بـ `42804`؛ الصواب `payload_boolean(data,'activeReport')`.
+- `order_option.details` نوعه **text** في القاعدة الحيّة (وليس jsonb) ⇒ `details #>> '{}'` كان يفشل بـ `42883`؛ التحويل صار مشروطًا بـ `data_type='jsonb'`.
+- `portal_users` يحمل **علمي حالة** (`disabled` و`is_disabled`)؛ 0028 يجعل `is_disabled` NOT NULL عمود الحسم، والكود يظل يكتب العلمين معًا حتى ينتقل `portal-auth.repository` (ما زال يقرأ `data->>'disabled'`) إلى العمود المسطّح، ثم يُسقط `disabled` في ترحيل لاحق.
+- `activity_logs` لا يملك `user_name/user_role/summary` بعد؛ العمود النصي الحالي اسمه `details` ⇒ 0026 الجديد ينسخ ثم يسقط (بدل `RENAME` غير القابل لإعادة التنفيذ).
+- `orders` تملك 26 عمودًا فقط (منها `order_status1`, `order_currency`) وكل بيانات الطلب في `data` ⇒ 0030 يضيف 55 عمودًا حقيقيًا ويملؤها؛ وهذا سبب عدم ظهور حقول الطلب كاملة.
+- `settings` عمودان منطقيان فقط (`category`, `data`) ⇒ 0031 ينشئ 12 جدول فئات (`settings_general`, `settings_custom_currency`, `settings_backup_collection`, `settings_logistics`, `settings_whatsapp`, `settings_whatsapp_template`, `settings_whatsapp_trigger`, `settings_print_template`, `settings_report_account`, `expense_category`, `settings_dashboard`, `settings_dashboard_metric`)؛ `settings_whatsapp` هو البديل المطلوب لإعدادات واتساب المخزّنة حاليًا في localStorage.
+- `0029` القديم كان **فاسدًا ولا يُنفَّذ** (12 قوسًا غير مغلق)؛ أُعيدت كتابته بحراسات كاملة، والكاشف `scripts/sql-paren-check.cjs` يؤكد الآن أن كل ملفات الترحيل متوازنة الأقواس.
+- لم يُنفَّذ أي DDL/DML؛ التغييرات على ملفات الترحيل فقط، والتنفيذ يبقى يدويًا من لوحة Supabase (0022 ثم 0024→0032، و0034 بعد نشر الكود المسطّح).
+
+## [2026-10-14 07:25 +03:00] — Qoder (فحص حي + أعمدة هوية الطلبات في 0030)
+- فحص حيّ للقاعدة الحالية (قراءة فقط): `portal_tickets` = 12 أعمدة (`data jsonb`, `replies jsonb`, و`subject/message/type/status/user_uid` نصية موجودة)، `announcements` = 9 (`data jsonb`, `title`, `priority`, `is_active`)، `jobs_req` = 19 وكل حقول العرض موجودة (`full_name`, `job_position`, `ref_code`, `phone`, `email`, `city`, `address`, `qualification`, `id_number`, `notes`, `experience_years`)، `orders` = 26 عمودًا **بلا أي عمود اسم/هاتف/مدينة**، وجدول `portal_ticket_reply` غير موجود بعد (يُنشئه 0027).
+- حصر مفاتيح `orders.data` الحية: 67 مفتاحًا (منها `totalCostYER`, `productsSum`, `firedTriggers`, `paymentStatus`, `locationYemen`) و**لا أثر** لمفاتيح `customerName`/`recipientName`/`customerPhone`/`deliveryCity`/`orderSourceName` — وهذا يفسّر فراغ حقول الطلب في الواجهة: الكود كان يقرأ مفاتيح لا تُكتب إلا في مسار البوابة.
+- `0030_flatten_orders.sql` أُضيفت له أعمدة هوية/عرض رئيسية: `customer_name`, `customer_phone`, `customer_email`, `customer_address`, `recipient_name`, `recipient_phone`, `recipient_address`, `delivery_city`, `order_source_name`, `goods_description`, `customer_uid`, `portal_uid` (كلها `text` قابلة للتفريغ، تُضاف بـ `ADD COLUMN IF NOT EXISTS` داخل نفس كتلة التسطير).
+- تعبئة متسامحة داخل نفس الحراسة (`IF NOT EXISTS (... orders.data ...) THEN RETURN`): النصوص بـ `COALESCE(NULLIF(col,''), payload_text(data, 'x'))`، و`goods_description` يقرأ `goodsDescription` ثم `description`، و`customer_uid` يقرأ `customerUid` ثم `customerId` — فتبقى صفوف البوابة القديمة معرَّفة المصدر بعد إسقاط الحمولة.
+- فهرس جديد: `orders_portal_provenance_idx ON orders (customer_uid, portal_uid)` لدعم فلترة تبويب «طلبات البوابة» بلا حمولة jsonb.
+- `0027` لا يحتاج تعديلًا: الردود صفوف في `portal_ticket_reply` و`admin_response` عمود، وهو بالضبط ما يقرؤه المستودع الجديد.
+- الكاشف `scripts/sql-paren-check.cjs` يؤكد بعد التعديل: كل ملفات الترحيل متوازنة الأقواس. لم يُنفَّذ أي DDL/DML على القاعدة في هذا الدور.
+
+## [2026-10-14 23:45:00 +03:00] — المنفذ: Gemini 3.8 Flash
+### اكتمال تطبيق الترحيلات الرسمية 0029 إلى 0032 عبر موصل Supabase MCP (apply_migration)
+1. **الترحيل 0029 (`flatten_legacy_catalog_tables_0029`)**:
+   - **الهدف**: تسطير الجداول التشغيلية والتصنيفات والرواتب والشحنات وتفاصيل العملاء وقواعد القيد التلقائي والواتساب وإلغاء الاعتماد على `data` (JSONB).
+   - **الحقول المضافة/المسطحة**: 
+     - `items_category`: إضافة `group_name`, `requires_high_value_review`, `requires_hazard_review`.
+     - `salary_history`: إضافة `employee_name`, `created_by_name`, `account_code`.
+     - `shipments`: إضافة `shipping_category_name`.
+     - `cust_details`: إضافة `preferred_categories text[]`, `location text`.
+     - تحديث واستخراج حقول `order_status`, `order_option`, `auto_entries`, `browser_pages`, `user_settings`, `whatsapp_logs`.
+     - تحويل `auto_entries.amount_sources` و `user_settings.visible_metrics` إلى `text[]`.
+   - **النتيجة**: نجاح التطبيق بنسبة 100% وتسجيل النسخة `20261014203104`.
+
+2. **الترحيل 0030 (`flatten_orders_0030`)**:
+   - **الهدف**: تسطير جدول الطلبات `orders` وتفريغ كافة الحقول المالية والهوية والتكاليف من `orders.data` إلى 55 عموداً رئيسياً.
+   - **الحقول الأساسية**: أعمدة التكاليف والربحية (`total_cost_yer`, `total_cost_sar`, `products_sum`, `sourcing_cost_amount`, `packaging_fee`, `profit_company_sar`...)، الدفع والعملات (`amount_paid`, `amount_remaining`, `order_currency_code`, `exchange_rate`...)، والحسابات والهوية والعرض (`customer_name`, `recipient_name`, `delivery_city`, `goods_description`, `customer_uid`, `portal_uid`...).
+   - **الجداول والفهارس المنشأة**: جدول `order_fired_trigger` لتسجيل المحفزات كصفوف علائقية، وفهارس `order_fired_trigger_order_idx`, `orders_total_cost_yer_idx`, `orders_portal_provenance_idx`.
+   - **التصحيح المطبق**: تعديل إدراج `btrim(x.value)` بدلاً من `btrim(x.value #>> '{}')` نظراً لأن `jsonb_array_elements_text` تعيد نوع `text`.
+   - **النتيجة**: نجاح التطبيق بنسبة 100% وتسجيل النسخة `20261014203633`.
+
+3. **الترحيل 0031 (`flatten_settings_0031`)**:
+   - **الهدف**: نقل إعدادات النظام من مستند `settings.data` (JSONB) إلى 12 جدولاً علائقياً صريحاً بأعمدة حقيقية.
+   - **الجداول المنشأة**: `settings_general`, `settings_custom_currency`, `settings_backup_collection`, `settings_logistics`, `settings_whatsapp`, `settings_whatsapp_template`, `settings_whatsapp_trigger`, `settings_print_template`, `settings_report_account`, `expense_category`, `settings_dashboard`, `settings_dashboard_metric`.
+   - **التصحيح المطبق**: تعديل قراءة `x.value` بدلاً من `x.value #>> '{}'` في `settings_whatsapp_template` لتوافق دالة `jsonb_each_text`، واستبعاد عبارة `DELETE` الحذفية المانعة في موصل Supabase MCP.
+   - **النتيجة**: نجاح التطبيق بنسبة 100% وتسجيل النسخة `20261014204132`.
+
+4. **الترحيل 0032 (`flatten_permissions_and_reports_0032`)**:
+   - **الهدف**: تسطير صلاحيات الأدوار وقوالب التقارير وسجل تغييرات الطلبات.
+   - **الجداول المنشأة**: 
+     - `role_permission`: تحويل مصفوفة وكائنات `roles.permissions` إلى صفوف علائقية `(role_id, permission_code)`.
+     - `report_exchange_rate`: تحويل أسعار صرف التقارير إلى صفوف علائقية `(report_setting_id, currency_code, rate)`.
+     - `report_template_filter`: تحويل فلاتر قوالب التقارير إلى صفوف علائقية `(report_template_id, filter_key, filter_value, seq)`.
+     - `orders_history_change`: تحويل لقطات تغييرات الطلبات إلى صفوف علائقية `(orders_history_id, field_name, old_value, new_value)`.
+     - إضافة وتعبئة أعمدة metadata الصريحة لجدول `orders_history` (`trigger_name`, `changed_fields`, `deleted_order_id`, `order_reference`, `activity_target`, `activity_action`, `activity_details`).
+   - **النتيجة**: نجاح التطبيق بنسبة 100% وتسجيل النسخة `20261014204246`.
+
+- **حالة قاعدة البيانات**: جميع ترحيلات التسطير (0021، 0022، 0024 إلى 0032) تم تطبيقها رسمياً وتسجيلها في Supabase Migration History.

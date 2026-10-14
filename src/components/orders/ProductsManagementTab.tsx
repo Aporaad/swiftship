@@ -517,13 +517,11 @@ export default function ProductsManagementTab({
       const matchedProduct = products.find(p => p.product_id === item.product_id);
 
       // 3. إضافة المنتج المرتجع تلقائياً إلى جدول returned_products
-      const userIdentifier = auth.currentUser?.email || auth.currentUser?.uid || 'system';
       await createReturnedProductFromOrderItem(
         item,
         matchedOrder,
         matchedProduct,
-        matchedOrder?.currency || orderCurrency,
-        userIdentifier
+        matchedOrder?.currency || orderCurrency
       );
 
       // 4. تحديث حالة بند الطلب في جدول order_items إلى 'مرتجع'

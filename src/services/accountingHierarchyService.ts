@@ -1,4 +1,10 @@
-import { collection, db, doc, getDoc, getDocs } from '../data/legacy/legacy-compat.ts';
+/**
+ * accountingHierarchyService.ts
+ * خدمة شجرة الحسابات والحسابات الافتراضية — API-only عبر alx_api.
+ * Accounting-hierarchy and default-account service — API-only through alx_api (no legacy Supabase access).
+ */
+import currencyService from './currencyService';
+import { readFinanceRecord, readFinanceRows as readRows } from './financeApi';
 
 export type LedgerEntityType =
   | 'customer'
@@ -29,8 +35,30 @@ export interface DefaultAccountBinding {
 }
 
 const readValue = (record: any, camel: string, snake: string) => record?.[camel] ?? record?.[snake];
-const readCode = (record: any) => String(readValue(record, 'accountCode', 'account_code') || record?.code || record?.id || '').trim();
+const readCode = (record: any) => String(readValue(record, 'accountCode', 'account_code') || record?.code || record?.accountId || record?.nodeId || record?.id || '').trim();
+/** الـ API يعيد acc_sub_id باسم subAccountId بينما تستخدم الخدمات القديمة accSubId. */
+const readSubAccountId = (record: any) => record?.accSubId ?? record?.acc_sub_id ?? record?.subAccountId ?? undefined;
 const onlyDigits = (value: string) => String(value || '').replace(/\D/g, '');
+
+/**
+ * يحوّل صف default_accounts إلى ربط حساب افتراضي، ويعيد null للصفوف المعطّلة أو بلا حساب.
+ * Maps a default_accounts row to a binding; disabled rows and rows without an account are dropped.
+ */
+const toDefaultBinding = (row: any): DefaultAccountBinding | null => {
+  if (!row || row.isActive === false || row.is_active === false) return null;
+  const accountId = String(readValue(row, 'accountId', 'account_id') || '').trim();
+  const defaultKey = String(readValue(row, 'defaultKey', 'default_key') || '').trim();
+  if (!accountId || !defaultKey) return null;
+  return {
+    id: String(row.defaultAccountId ?? row.id ?? ''),
+    defaultKey,
+    accountId,
+    accNameAr: String(readValue(row, 'accNameAr', 'acc_name_ar') || row.nameAr || ''),
+    accNameEn: String(readValue(row, 'accNameEn', 'acc_name_en') || row.nameEn || ''),
+    curNo: readValue(row, 'curNo', 'cur_no') == null ? undefined : Number(readValue(row, 'curNo', 'cur_no')),
+    isActive: true,
+  };
+};
 
 export const naturalBalanceDelta = (
   accountType: string | undefined,
@@ -114,7 +142,7 @@ export const hierarchyCodeRules = {
 class AccountingHierarchyService {
   /** يبقى الحساب القديم قابلاً للقيد فقط إلى أن تصنّف الحسابات في الترحيل التالي. */
   isPostingAccount(account: any): boolean {
-    return Boolean(account?.id)
+    return Boolean(account?.id || account?.accountId)
       && account?.isActive !== false
       && account?.is_active !== false
       && account?.isHierarchyNode !== true;
@@ -123,90 +151,80 @@ class AccountingHierarchyService {
   filterPostingAccounts(accounts: any[], requireClassified = false): any[] {
     return (accounts || []).filter((account) => {
       if (!this.isPostingAccount(account)) return false;
-      return !requireClassified || Boolean(readValue(account, 'accSubId', 'acc_sub_id'));
+      return !requireClassified || Boolean(readSubAccountId(account));
     });
   }
 
+  /** وجود هيكل للشجرة = جذر واحد على الأقل وحساب جزئي واحد على الأقل. */
   async hasHierarchyStructure(): Promise<boolean> {
-    const [rootSnapshot, subSnapshot] = await Promise.all([
-      getDocs(collection(db, 'account')),
-      getDocs(collection(db, 'acc_sub')),
+    const [rootRows, subRows] = await Promise.all([
+      readRows('/api/v1/finance/hierarchy/account', { limit: 1 }),
+      readRows('/api/v1/finance/hierarchy/acc-sub', { limit: 1 }),
     ]);
-    return !rootSnapshot.empty && !subSnapshot.empty;
+    return rootRows.length > 0 && subRows.length > 0;
   }
 
   async getDefaultCurrencyId(): Promise<number | undefined> {
-    const snap = await getDocs(collection(db, 'currency'));
-    const currency = snap.docs
-      .map((entry) => ({ id: entry.id, ...entry.data() }))
-      .find((entry: any) => entry.isDefault === true || entry.is_default === true);
-    return currency?.cur_id === undefined ? undefined : Number(currency.cur_id);
+    const currency = await currencyService.getDefaultCurrency();
+    return currency?.cur_id === undefined || currency?.cur_id === null ? undefined : Number(currency.cur_id);
   }
 
   async getCurrencyIdByCode(currencyCode?: string): Promise<number | undefined> {
     const normalizedCode = String(currencyCode || '').trim().toUpperCase();
     if (!normalizedCode) return this.getDefaultCurrencyId();
-    const snap = await getDocs(collection(db, 'currency'));
-    const currency = snap.docs
-      .map((entry) => ({ id: entry.id, ...entry.data() }))
-      .find((entry: any) => String(entry.code || '').toUpperCase() === normalizedCode);
+    const currencies = await currencyService.getAllCurrencies(false);
+    const currency = currencies.find((entry) => String(entry.code || '').toUpperCase() === normalizedCode);
     return currency?.cur_id === undefined ? undefined : Number(currency.cur_id);
   }
 
+  /** يحدد المجموعة التي تُنشأ تحتها حسابات الكيان (entity_type) مع كودها والعملية المرتبطة بها. */
   async getEntityPostingLocation(entityType: LedgerEntityType): Promise<AccountGroupLocation | null> {
-    const snap = await getDocs(collection(db, 'acc_sub_group'));
-    const group = snap.docs
-      .map((entry) => ({ id: entry.id, ...entry.data() }))
-      .find((entry: any) => readValue(entry, 'entityType', 'entity_type') === entityType
-        && entry.isActive !== false
-        && entry.is_active !== false
-        && readValue(entry, 'allowsDirectAccounts', 'allows_direct_accounts') !== false);
+    const rows = await readRows('/api/v1/finance/hierarchy/acc-sub-group', { limit: 1000 });
+    const group = rows.find((entry: any) => readValue(entry, 'entityType', 'entity_type') === entityType
+      && entry.isActive !== false
+      && readValue(entry, 'allowsDirectAccounts', 'allows_direct_accounts') !== false);
     if (!group) return null;
 
     const accountCode = readCode(group);
     const accSubId = String(readValue(group, 'accSubId', 'acc_sub_id') || '').trim();
     if (!accountCode || !accSubId) return null;
     const curNo = readValue(group, 'curNo', 'cur_no');
-    return { accSubId, groupId: group.id, accountCode, currencyId: curNo == null ? undefined : Number(curNo) };
+    const groupId = String(group.nodeId ?? group.accSubGroupId ?? group.id ?? '').trim();
+    return { accSubId, groupId: groupId || undefined, accountCode, currencyId: curNo == null ? undefined : Number(curNo) };
   }
 
   async getNextAccountSequence(location: AccountGroupLocation): Promise<number> {
-    const snap = await getDocs(collection(db, 'accounts'));
-    const siblings = snap.docs
-      .map((entry) => ({ id: entry.id, ...entry.data() }))
-      .filter((account: any) => {
-        const sameGroup = location.groupId && readValue(account, 'groupId', 'group_id') === location.groupId;
-        const sameSub = !location.groupId && readValue(account, 'accSubId', 'acc_sub_id') === location.accSubId;
-        return Boolean(sameGroup || sameSub);
-      });
+    const rows = await readRows('/api/v1/finance/accounts', { limit: 1000 });
+    const siblings = rows.filter((account: any) => {
+      const sameGroup = location.groupId && readValue(account, 'groupId', 'group_id') === location.groupId;
+      const sameSub = !location.groupId && readSubAccountId(account) === location.accSubId;
+      return Boolean(sameGroup || sameSub);
+    });
     return hierarchyCodeRules.nextPostingSequence(location.accountCode, siblings);
   }
 
+  /** قائمة الحسابات الافتراضية كاملة (المرتبطة بحساب فعلي فقط) — every default-account binding that points at a real account. */
+  async listDefaultAccounts(): Promise<DefaultAccountBinding[]> {
+    const rows = await readRows('/api/v1/finance/default-accounts', { limit: 1000, offset: 0 });
+    return rows
+      .map((row: any) => toDefaultBinding(row))
+      .filter((binding: DefaultAccountBinding | null): binding is DefaultAccountBinding => binding !== null);
+  }
+
   async getDefaultAccount(defaultKey: string): Promise<DefaultAccountBinding | null> {
-    const snap = await getDocs(collection(db, 'default_accounts'));
-    const binding = snap.docs
-      .map((entry) => ({ id: entry.id, ...entry.data() }))
-      .find((entry: any) => String(readValue(entry, 'defaultKey', 'default_key') || '') === defaultKey);
-    if (!binding || binding.isActive === false || binding.is_active === false) return null;
-    const accountId = String(readValue(binding, 'accountId', 'account_id') || '').trim();
-    if (!accountId) return null;
-    return {
-      id: String(binding.id),
-      defaultKey,
-      accountId,
-      accNameAr: String(readValue(binding, 'accNameAr', 'acc_name_ar') || binding.nameAr || ''),
-      accNameEn: String(readValue(binding, 'accNameEn', 'acc_name_en') || binding.nameEn || ''),
-      curNo: readValue(binding, 'curNo', 'cur_no') == null ? undefined : Number(readValue(binding, 'curNo', 'cur_no')),
-      isActive: true,
-    };
+    const rows = await readRows('/api/v1/finance/default-accounts', { limit: 1000, search: defaultKey });
+    const binding = rows
+      .map((row: any) => toDefaultBinding(row))
+      .find((entry: DefaultAccountBinding | null): entry is DefaultAccountBinding => entry?.defaultKey === defaultKey);
+    return binding ?? null;
   }
 
   async resolveDefaultPostingAccount(defaultKey: string): Promise<any | null> {
     const binding = await this.getDefaultAccount(defaultKey);
     if (!binding) return null;
-    const account = await getDoc(doc(db, 'accounts', binding.accountId));
-    if (!account.exists()) return null;
-    const resolved = { id: account.id, ...account.data() };
+    const account = await readFinanceRecord(`/api/v1/finance/accounts/${encodeURIComponent(binding.accountId)}`);
+    if (!account) return null;
+    const resolved = { ...account, id: account.accountId ?? binding.accountId };
     return this.isPostingAccount(resolved) ? resolved : null;
   }
 

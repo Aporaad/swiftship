@@ -1,45 +1,62 @@
-import React, { useEffect, useState } from 'react';
-import { collection, onSnapshot, query, orderBy } from '../data/legacy/legacy-compat.ts';
-import { db } from '../data/legacy/legacy-compat.ts';
+import { useEffect, useState } from 'react';
+import { readFinancePage } from '../services/financeApi';
+
+interface ReportTotals {
+  postedLines: number;
+  entryHeaders: number;
+}
+
+const LEDGER_LINES_PATH = '/api/v1/finance/account-movements';
+const ENTRY_HEADERS_PATH = '/api/v1/finance/entries';
 
 /**
  * Compatibility report surface for callers outside the unified FinanceEntries page.
- * The report source is the normalized ledger only: posted main_entry headers and
- * their account_trans lines. No legacy expenditure collection is queried.
+ * مصدر التقرير هو دفتر الأستاذ المُطبع عبر alx_api فقط: مسارات الحركات تُعيد سطور account_trans
+ * المرحّلة (posting_status = posted) حصراً، ورؤوس القيود تُقرأ من main_entry.
+ * The report source is the normalized ledger served by alx_api: the movements route already filters
+ * account_trans to posted lines only, and entry headers come from main_entry. No legacy collection is read.
  */
 export default function FinanceReports() {
-  const [entries, setEntries] = useState<any[]>([]);
-  const [lines, setLines] = useState<any[]>([]);
+  const [totals, setTotals] = useState<ReportTotals | null>(null);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    const unsubEntries = onSnapshot(
-      query(collection(db, 'main_entry'), orderBy('effectiveAt', 'desc')),
-      (snap) => setEntries(snap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }))),
-      (error) => console.warn('FinanceReports: main_entry subscription error:', error),
-    );
-    const unsubLines = onSnapshot(
-      query(collection(db, 'account_trans'), orderBy('createdAt', 'desc')),
-      (snap) => setLines(snap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }))),
-      (error) => console.warn('FinanceReports: account_trans subscription error:', error),
-    );
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        // limit=1 لأن العدد الدقيق يأتي من meta.total — لا حاجة لسحب الصفوف نفسها.
+        // limit=1 because the exact count arrives in meta.total; the rows themselves are not needed.
+        const [lines, entries] = await Promise.all([
+          readFinancePage(LEDGER_LINES_PATH, { limit: 1, offset: 0 }),
+          readFinancePage(ENTRY_HEADERS_PATH, { limit: 1, offset: 0 }),
+        ]);
+        if (cancelled) return;
+        setTotals({ postedLines: lines.total, entryHeaders: entries.total });
+      } catch (err) {
+        console.warn('FinanceReports: تعذر تحميل ملخص دفتر الأستاذ:', err);
+        if (!cancelled) setError(err instanceof Error ? err.message : 'تعذر تحميل التقرير المالي.');
+      }
+    };
+
+    void load();
     return () => {
-      unsubEntries();
-      unsubLines();
+      cancelled = true;
     };
   }, []);
-
-  const entryById = new Map(entries.map((entry) => [entry.id, entry]));
-  const postedLines = lines.filter((tx) => {
-    const entry = entryById.get(tx.entryId || tx.main_entry_id);
-    return tx.entry?.postingStatus === 'posted' || (entry && entry.postingStatus === 'posted');
-  });
 
   return (
     <section aria-label="Normalized financial report" className="space-y-3">
       <h2 className="text-sm font-black text-white">Financial Reports</h2>
-      <p className="text-xs text-slate-400">
-        {postedLines.length.toLocaleString()} posted ledger lines from {entries.length.toLocaleString()} entry headers.
-      </p>
+      {error ? (
+        <p className="text-xs text-rose-400">{error}</p>
+      ) : (
+        <p className="text-xs text-slate-400">
+          {totals === null
+            ? 'جاري تحميل ملخص دفتر الأستاذ…'
+            : `${totals.postedLines.toLocaleString()} posted ledger lines from ${totals.entryHeaders.toLocaleString()} entry headers.`}
+        </p>
+      )}
     </section>
   );
 }

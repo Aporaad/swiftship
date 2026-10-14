@@ -35,6 +35,20 @@ const unwrapList = (value: unknown): UnknownRecord[] => {
 
 const mapRows = <T,>(value: unknown, mapper: (row: UnknownRecord) => T | null): T[] =>
   unwrapList(value).map(mapper).filter((row): row is T => row !== null);
+
+// الـ API يقبل 1000 صف كحد أقصى لكل صفحة — the API caps every page at 1000 rows,
+// so larger inventories are collected page by page instead of over-requesting.
+const readAllPages = async (path: string, pageSize = 1000, maxRows = 5000): Promise<UnknownRecord[]> => {
+  const rows: UnknownRecord[] = [];
+  for (let offset = 0; offset < maxRows; offset += pageSize) {
+    const pageRows = unwrapList(
+      await apiClient.get<unknown>(path, { limit: pageSize, offset }).catch(() => ({ data: [] })),
+    );
+    rows.push(...pageRows);
+    if (pageRows.length < pageSize) break;
+  }
+  return rows;
+};
 const numberValue = (value: unknown): number => typeof value === 'number' ? value : Number(value ?? 0);
 const stringValue = (value: unknown): string => typeof value === 'string' ? value : '';
 const optionalString = (value: unknown): string | undefined => typeof value === 'string' && value.length > 0 ? value : undefined;
@@ -71,7 +85,7 @@ export default function FinanceEntriesPage() {
         apiClient.get<unknown>('/api/v1/finance/entry-modules').catch(() => ({ data: [] })),
         apiClient.get<unknown>('/api/v1/finance/entry-types').catch(() => ({ data: [] })),
         apiClient.get<unknown>('/api/v1/finance/entries', { limit: 500, offset: 0 }).catch(() => ({ data: [] })),
-        apiClient.get<unknown>('/api/v1/finance/account-movements', { limit: 1500, offset: 0 }).catch(() => ({ data: [] })),
+        readAllPages('/api/v1/finance/account-movements'),
         apiClient.get<unknown>('/api/v1/finance/custody-advances', { limit: 500, offset: 0 }).catch(() => ({ data: [] })),
         apiClient.get<unknown>('/api/v1/reporting/users', { limit: 500, offset: 0 }).catch(() => ({ data: [] })),
       ]);

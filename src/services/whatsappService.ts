@@ -1,4 +1,5 @@
 // WhatsApp Notification Service
+import { notificationsApiDataGateway } from '../features/notifications/services/notificationsApiDataGateway';
 
 export interface WhatsAppConfig {
   enabled: boolean;
@@ -112,61 +113,64 @@ export const whatsappService = {
     return result;
   },
 
-  // Directly hit the backend to send a WhatsApp message
+  // تطبيع رقم الهاتف اليمني إلى صيغة دولية — normalize a phone number to international format.
+  normalizePhone(phone: string): string {
+    let cleanPhone = phone.trim().replace(/[\s\-\+\(\)]/g, '');
+    if (cleanPhone.startsWith('00')) cleanPhone = cleanPhone.slice(2);
+    // أرقام محلية (7xxxxxxxx) تُسبق برمز الدولة 967 — local Yemeni numbers get the country code.
+    if (cleanPhone.length === 9 && cleanPhone.startsWith('7')) cleanPhone = `967${cleanPhone}`;
+    return cleanPhone;
+  },
+
+  /**
+   * إرسال رسالة واتساب: تُسجَّل في قائمة انتظار الـ Outbox عبر alx_api،
+   * والعامل الخلفي ينفّذ الإرسال الفعلي. لا ادّعاء إرسال وهمي من المتصفح.
+   * Sending a WhatsApp message queues it in the alx_api outbox; a worker performs the actual
+   * dispatch, so the browser never claims a send it cannot verify.
+   */
   async sendDirect(phone: string, message: string, orderId?: string, eventType: string = 'manual'): Promise<{ success: boolean; status: string; errorMsg?: string }> {
     try {
-      // Normalize phone number (Yemen phone numbers or generic formatting)
-      let cleanPhone = phone.trim().replace(/[\s\-\+\(\)]/g, '');
-      if (cleanPhone.startsWith('00')) {
-        cleanPhone = cleanPhone.substring(2);
-      }
-      // If it's a local 9-digit Yemen number starting with 7, prefix with international country code '967'
-      if (cleanPhone.length === 9 && cleanPhone.startsWith('7')) {
-        cleanPhone = `967${cleanPhone}`;
-      }
-      
-      const response = await fetch('/api/notifications/send-whatsapp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phone: cleanPhone,
-          message,
-          orderId: orderId || null,
-          eventType
-        })
+      const cleanPhone = this.normalizePhone(phone);
+      if (!cleanPhone) return { success: false, status: 'Failed', errorMsg: 'MISSING_PHONE_NUMBER' };
+
+      const result = await notificationsApiDataGateway.sendExternal({
+        recipient: cleanPhone,
+        channel: 'whatsapp',
+        message,
+        templateId: eventType,
+        // مفتاح منع التكرار: الطلب + الحدث + رقم المستلم — idempotency per order/event/recipient.
+        idempotencyKey: `${eventType}:${orderId ?? 'manual'}:${cleanPhone}:${Date.now()}`,
       });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        return { success: false, status: 'Failed', errorMsg: `HTTP ${response.status}: ${errorText}` };
-      }
-      
-      return await response.json();
+      return { success: true, status: result.status === 'queued' ? 'Queued' : result.status };
     } catch (e: any) {
       console.error('Error sending WhatsApp direct:', e);
-      return { success: false, status: 'Failed', errorMsg: e.message };
+      return { success: false, status: 'Failed', errorMsg: e?.message ?? 'SEND_FAILED' };
     }
   },
 
-  // Test credentials connection to the endpoint
-  async testConnection(provider: string, config: any): Promise<{ success: boolean; message: string; isWarning?: boolean }> {
-    try {
-      const response = await fetch('/api/notifications/test-connection', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider, config })
-      });
+  /**
+   * التحقق من اكتمال بيانات البوابة (لا اتصال خارجي من المتصفح):
+   * الاتصال الفعلي يُنفَّذ في الخادم، والمتصفح يتحقق من الحقول المطلوبة فقط.
+   * Validates that the required gateway credentials are present. No outbound call happens in the
+   * browser — real connectivity is verified by the server-side dispatcher.
+   */
+  async testConnection(provider: string, config: WhatsAppConfig['config']): Promise<{ success: boolean; message: string; isWarning?: boolean }> {
+    const required: Array<[keyof WhatsAppConfig['config'], string]> =
+      provider === 'ultramsg'
+        ? [['token', 'token'], ['instanceId', 'instanceId']]
+        : provider === 'twilio'
+          ? [['accountSid', 'accountSid'], ['sender', 'sender']]
+          : [['customUrl', 'customUrl']];
 
-      if (!response.ok) {
-        const errJson = await response.json().catch(() => ({}));
-        throw new Error(errJson.error || `HTTP Error ${response.status}`);
-      }
-
-      return await response.json();
-    } catch (e: any) {
-      console.error('Test Connection Error:', e);
-      throw e;
+    const missing = required.filter(([key]) => !String(config[key] ?? '').trim()).map(([, label]) => label);
+    if (missing.length > 0) {
+      return { success: false, message: `Missing credentials: ${missing.join(', ')}` };
     }
+    return {
+      success: true,
+      isWarning: true,
+      message: 'Credentials are complete; delivery is executed and logged by the alx_api outbox worker.',
+    };
   },
 
   // Interface to dispatch automatically on events

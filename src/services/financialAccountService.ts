@@ -15,38 +15,86 @@
  * against the live transaction history.
  */
 
-import {
-  collection,
-  addDoc,
-  updateDoc,
-  setDoc,
-  doc,
-  getDocs,
-  query,
-  where,
-  orderBy,
-  increment,
-  getDoc,
-  writeBatch,
-} from "../data/legacy/legacy-compat.ts";
-import { currencyService } from "./currencyService";
-import { db, supabase } from "../data/legacy/legacy-compat.ts";
-import { currentSupabaseAuthGateway } from '../data/current-supabase/gateways/auth.gateway';
-import { activityLogService } from "./activityLogService";
-import { accountingHierarchyService, hierarchyCodeRules, naturalBalanceDelta } from "./accountingHierarchyService";
+import { currencyService } from './currencyService';
+import { activityLogService } from './activityLogService';
+import { accountingHierarchyService } from './accountingHierarchyService';
 import { financialEntryService } from './financialEntryService';
-import { Transaction } from "../types";
-//import { Settings } from "../contexts/SettingsContext";
+import { Transaction } from '../types';
+import {
+  financeApiClient,
+  linkEntityAccount,
+  mapAccountRow,
+  readAllFinanceRows,
+  readFinanceRecord,
+  readFinanceRows,
+  recalculateAccountBalances,
+  type ApiEnvelope,
+} from './financeApi';
 
-import { LEGACY_ACCOUNT_PREFIXES } from './financialAccountTypes';
 import type { AccountEntityType, AccountTransaction, AutomaticVoucherEntities, FinancialAccount, JournalEntry } from './financialAccountTypes';
 export type { AccountEntityType, AccountTransaction, AutomaticVoucherEntities, FinancialAccount, JournalEntry } from './financialAccountTypes';
 import { resolveAutomaticVoucherAccount } from './financialAccountAutomaticVoucher';
 import { convertToTargetCurrency as convertToTargetCurrencyValue } from './financialAccountCurrency';
 import { buildDefaultAutomaticVoucherRules } from './financialAccountVoucherRules';
 import { executeAutomaticVoucher } from './financialAccountAutomation';
-import { purgeEntityAndFinancialFootprint } from './financialAccountPurge';
+import { purgeEntityAndFinancialFootprint, type PurgeableEntityType } from './financialAccountPurge';
 import { createFinancialEntityAccount, generateFinancialAccountIdentifiers } from './financialAccountAccounts';
+
+const ACCOUNTS_PATH = '/api/v1/finance/accounts';
+
+/**
+ * يبحث عن حساب بكوده المحاسبي — يستعمل للمراجع التاريخية المكتوبة بصيغة قديمة.
+ * Looks an account up by its code; used for historical references written in the legacy id format.
+ */
+async function findAccountByCode(accountCode: string): Promise<FinancialAccount | null> {
+  const code = String(accountCode || '').trim();
+  if (!code) return null;
+  const rows = await readAllFinanceRows(ACCOUNTS_PATH, { search: code, includeInactive: true });
+  const matched = rows.find((row) => String(row?.accountCode ?? '') === code);
+  return matched ? mapAccountRow(matched) : null;
+}
+
+/** صف سجل راتب كما يعيده API (الحقول الوصفية داخل extra jsonb). */
+interface SalaryHistoryRow {
+  salaryHistoryId: string;
+  employeeId?: string;
+  accountId?: string;
+  amount?: number;
+  currency?: string;
+  month?: string;
+  voucherCode?: string;
+  notes?: string;
+  status?: string;
+  paidAt?: string | number;
+  createdAt?: string | number;
+  extra?: Record<string, unknown>;
+}
+
+/** يعيد صفوف الرواتب بالشكل الذي تعرفه واجهات الرواتب (salaryMonth + الحقول الوصفية). */
+function mapSalaryHistoryRow(row: SalaryHistoryRow) {
+  const { extra, ...fields } = row;
+  return {
+    ...fields,
+    ...(extra ?? {}),
+    id: row.salaryHistoryId,
+    salaryMonth: row.month ?? (extra?.salaryMonth as string | undefined),
+  };
+}
+
+/**
+ * يقرأ وثيقة إعدادات ويعيد null عندما لا توجد بعد.
+ * Reads a settings document, treating "not stored yet" as null instead of an error.
+ */
+async function readSettingsRecord(category: string): Promise<{ settings?: unknown } | null> {
+  try {
+    const res = await financeApiClient.get<ApiEnvelope<{ settings?: unknown }>>(`/api/v1/settings/${category}`);
+    return res?.data ?? null;
+  } catch (error) {
+    if ((error as { code?: string })?.code === 'SETTINGS_NOT_FOUND') return null;
+    throw error;
+  }
+}
+
 class FinancialAccountService {
     private resolveAutomaticVoucherAccount(
     accountConfig: any,
@@ -65,7 +113,7 @@ class FinancialAccountService {
     entityType: AccountEntityType,
     prefixOverride?: string,
   ): Promise<{ prefix: string; accountNumber: string; accountCode: string; code: string; accountId: string }> {
-    return generateFinancialAccountIdentifiers(this, entityType, prefixOverride);
+    return generateFinancialAccountIdentifiers(entityType, prefixOverride);
   }
 
   /**
@@ -97,14 +145,12 @@ class FinancialAccountService {
     entityId: string,
     entityType?: AccountEntityType,
   ): Promise<FinancialAccount | null> {
+    const id = String(entityId || '').trim();
+    if (!id) return null;
     try {
-      const constraints = [where("entityId", "==", entityId)];
-      if (entityType) constraints.push(where("entityType", "==", entityType));
-      const q = query(collection(db, "accounts"), ...constraints);
-      const snap = await getDocs(q);
-      if (snap.empty) return null;
-      const docData = snap.docs[0];
-      return { id: docData.id, ...docData.data() } as FinancialAccount;
+      const rows = await readFinanceRows(`${ACCOUNTS_PATH}/by-entity`, { entityId: id });
+      const matched = entityType ? rows.find((row) => row?.entityType === entityType) : rows[0];
+      return matched ? mapAccountRow(matched) : null;
     } catch (error) {
       console.error("[FinancialAccountService] Error fetching account:", error);
       return null;
@@ -115,63 +161,38 @@ class FinancialAccountService {
    * Get account by account ID directly
    */
   async getAccountById(accountId: string): Promise<FinancialAccount | null> {
+    const id = String(accountId || '').trim();
+    if (!id) return null;
     try {
-      const docRef = await getDoc(doc(db, "accounts", accountId));
-      if (docRef.exists()) {
-        return { id: docRef.id, ...docRef.data() } as FinancialAccount;
+      const direct = await readFinanceRecord(`${ACCOUNTS_PATH}/${encodeURIComponent(id)}`);
+      if (direct) return mapAccountRow(direct);
+
+      // جسر قراءة للمراجع التاريخية فقط: «acc_1130_0001» → «1130-0001».
+      // Read bridge for historical references written in the legacy underscore format.
+      const legacyCode = id.replace(/^acc_/, '').replace(/_/g, '-');
+      if (legacyCode && legacyCode !== id) {
+        const byCode = await findAccountByCode(legacyCode);
+        if (byCode) return byCode;
       }
-      // جسر قراءة مؤقت للمراجع التاريخية فقط إلى حين ترحيل المعرفات النهائي.
-      const legacyCode = String(accountId || '').replace(/^acc_/, '').replace(/_/g, '-');
-      if (legacyCode && legacyCode !== accountId) {
-        const byCode = await getDocs(query(collection(db, "accounts"), where("accountCode", "==", legacyCode)));
-        if (!byCode.empty) {
-          const matched = byCode.docs[0];
-          return { id: matched.id, ...matched.data() } as FinancialAccount;
-        }
+
+      // خريطة ترحيل المعرفات — account_id_migration_map through the API.
+      const mapping = await readFinanceRecord(
+        `/api/v1/finance/account-id-map?oldAccountId=${encodeURIComponent(id)}`,
+      );
+      const mappedAccountId = String((mapping as { newAccountId?: string } | null)?.newAccountId ?? '').trim();
+      if (mappedAccountId) {
+        const mappedAccount = await readFinanceRecord(`${ACCOUNTS_PATH}/${encodeURIComponent(mappedAccountId)}`);
+        if (mappedAccount) return mapAccountRow(mappedAccount);
       }
-      const mappedLegacyId = await getDocs(query(collection(db, "account_id_migration_map"), where("oldAccountId", "==", accountId)));
-      if (!mappedLegacyId.empty) {
-        const mapping = mappedLegacyId.docs[0].data();
-        const mappedAccountId = String(mapping.newAccountId || mapping.new_account_id || '').trim();
-        if (mappedAccountId) {
-          const mappedAccount = await getDoc(doc(db, "accounts", mappedAccountId));
-          if (mappedAccount.exists()) return { id: mappedAccount.id, ...mappedAccount.data() } as FinancialAccount;
-        }
-      }
-      // Fallback: search by entityId if not found by primary doc ID
-      return this.getAccountByEntityId(accountId);
+
+      // Fallback: search by entityId if not found by primary account id
+      return this.getAccountByEntityId(id);
     } catch (error) {
       console.error(
         "[FinancialAccountService] Error fetching account by ID:",
         error,
       );
       return null;
-    }
-  }
-
-  private getAccountTypeByCode(code: string): string {
-    const cleanCode = code.trim().toUpperCase();
-    if (cleanCode.startsWith("REV")) return "Revenue";
-    if (cleanCode.startsWith("EXP")) return "Expense";
-    if (cleanCode.startsWith("AST") || cleanCode.startsWith("ASS"))
-      return "Asset";
-    if (cleanCode.startsWith("LIAB")) return "Liability";
-    if (cleanCode.startsWith("EQU")) return "Equity";
-
-    const firstChar = cleanCode.charAt(0);
-    switch (firstChar) {
-      case "1":
-        return "Asset";
-      case "2":
-        return "Liability";
-      case "3":
-        return "Equity";
-      case "4":
-        return "Revenue";
-      case "5":
-        return "Expense";
-      default:
-        return "Asset";
     }
   }
 
@@ -387,7 +408,8 @@ class FinancialAccountService {
 
   /**
    * Record a salary payment for an employee
-   * Creates an account_transaction + salary_history record atomically
+   * يسجل الراتب في سجل الرواتب فقط؛ لا يمس حساب الموظف (يُخصم من الأرباح عبر المصروفات).
+   * Records the salary in salary_history only — the employee account is untouched (cost is handled via expenses).
    */
   async recordSalaryPayment(params: {
     employeeId: string;
@@ -398,57 +420,30 @@ class FinancialAccountService {
     currency: string;
     salaryMonth: string; // Format: 'YYYY-MM'
     notes?: string;
-    createdByUid?: string;
     createdByName?: string;
   }): Promise<string> {
     const now = Date.now();
     const randStr = Math.floor(1000 + Math.random() * 9000);
     const voucherCode = `SAL-${params.salaryMonth.replace("-", "")}-${randStr}`;
+    const salaryHistoryId = `salary_${params.employeeId}_${params.salaryMonth.replace("-", "")}_${randStr}`;
 
-    // 1. (REMOVED) We no longer record Salary in account_trans
-    // as per the new requirement: it should only deduct from company profits
-    // (handled via Expenses) and not affect the employee's account balance.
-    /*
-    await this.recordTransaction(params.accountId, {
-      accountId: params.accountId,
-      accountCode: params.accountCode,
-      entityType: 'employee',
-      entityId: params.employeeId,
-      entityName: params.employeeName,
-      type: 'Credit',  // Credit = money paid out to employee
-      amount: params.amount,
-      amountOriginal: params.amount,
-      currencyOriginal: params.currency,
-      description: `صرف راتب شهر ${params.salaryMonth} — ${params.employeeName}`,
-      refNumber: voucherCode,
-      module: 'salary',
-      salaryMonth: params.salaryMonth,
-      createdAt: now,
-      createdByUid: params.createdByUid || 'system',
-      createdByName: params.createdByName || 'Admin'
-    });
-    */
-
-    // 2. Record in salary_history collection for the dedicated salary history page
-    const newId = `salary_${params.employeeId}_${params.salaryMonth.replace("-", "")}_${randStr}`;
-    await addDoc(newId,
-      collection(db, "salary_history"), {
+    // paid_at عمود timestamptz فيرسل كنص ISO، والشهر نص «YYYY-MM».
+    // paid_at is timestamptz (ISO string) while month is plain text.
+    await financeApiClient.post<ApiEnvelope<unknown>>('/api/v1/finance/salary-history', {
+      salaryHistoryId,
       employeeId: params.employeeId,
       employeeName: params.employeeName,
       accountId: params.accountId,
       accountCode: params.accountCode,
       amount: params.amount,
       currency: params.currency,
-      salaryMonth: params.salaryMonth,
+      month: params.salaryMonth,
       voucherCode,
       notes: params.notes || "",
       status: "Paid",
-      paidAt: now,
-      createdByUid: params.createdByUid || "system",
+      paidAt: new Date(now).toISOString(),
       createdByName: params.createdByName || "Admin",
-      createdAt: now,
-    }
-    );
+    });
 
     activityLogService.log("salary_payment" as any, params.employeeName, {
       salaryMonth: params.salaryMonth,
@@ -465,16 +460,10 @@ class FinancialAccountService {
    */
   async getSalaryHistory(employeeId?: string): Promise<any[]> {
     try {
-      const q = employeeId
-        ? query(
-          collection(db, "salary_history"),
-          where("employeeId", "==", employeeId),
-          orderBy("createdAt", "desc"),
-        )
-        : query(collection(db, "salary_history"), orderBy("createdAt", "desc"));
-
-      const snap = await getDocs(q);
-      return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      const rows = await readAllFinanceRows('/api/v1/finance/salary-history', {
+        ...(employeeId ? { employeeId } : {}),
+      });
+      return (rows as SalaryHistoryRow[]).map(mapSalaryHistoryRow);
     } catch (error) {
       console.error(
         "[FinancialAccountService] Error fetching salary history:",
@@ -491,15 +480,11 @@ class FinancialAccountService {
     employeeId: string,
     monthlySalary: number,
   ): Promise<void> {
-    try {
-      await updateDoc(doc(db, "employees", employeeId), {
-        monthlySalary,
-        updatedAt: Date.now(),
-      });
-    } catch (error) {
+    const updated = await linkEntityAccount('employee', employeeId, { monthlySalary });
+    if (!updated) {
       console.error(
         "[FinancialAccountService] Error updating monthly salary:",
-        error,
+        `تعذر تحديث الراتب الشهري للموظف ${employeeId}.`,
       );
     }
   }
@@ -594,20 +579,12 @@ class FinancialAccountService {
     entityType?: AccountEntityType,
   ): Promise<FinancialAccount[]> {
     try {
-      let q;
-      if (entityType) {
-        q = query(
-          collection(db, "accounts"),
-          where("entityType", "==", entityType),
-          orderBy("accountCode"),
-        );
-      } else {
-        q = query(collection(db, "accounts"), orderBy("accountCode"));
-      }
-      const snap = await getDocs(q);
-      return snap.docs.map(
-        (d) => ({ id: d.id, ...(d.data() as any) }) as FinancialAccount,
-      );
+      const rows = await readAllFinanceRows(ACCOUNTS_PATH, { includeInactive: true });
+      return rows
+        .filter((row) => !entityType || row?.entityType === entityType)
+        .map(mapAccountRow)
+        .filter((account): account is FinancialAccount => account !== null)
+        .sort((a, b) => String(a.accountCode).localeCompare(String(b.accountCode)));
     } catch (error) {
       console.error(
         "[FinancialAccountService] Error fetching accounts:",
@@ -627,12 +604,14 @@ class FinancialAccountService {
   ): Promise<void> {
     try {
       const account = await this.getAccountByEntityId(entityId);
-      if (!account || !account.id) return;
-      await updateDoc(doc(db, "accounts", account.id), {
-        entityName: newName,
-        ...(currency ? { currency } : {}),
-        updatedAt: Date.now(),
-      });
+      if (!account?.id) return;
+      await financeApiClient.patch<ApiEnvelope<unknown>>(
+        `${ACCOUNTS_PATH}/${encodeURIComponent(account.id)}`,
+        {
+          entityName: newName,
+          ...(currency ? { currency } : {}),
+        },
+      );
     } catch (error) {
       console.error(
         "[FinancialAccountService] Error updating account name:",
@@ -642,54 +621,26 @@ class FinancialAccountService {
   }
 
   /**
-   * Get the PostgreSQL collection name for an entity type
-   */
-  public getEntityCollection(entityType: AccountEntityType): string {
-    switch (entityType) {
-      case "customer":
-        return "customers";
-      case "courier":
-        return "couriers";
-      case "employee":
-        return "employees";
-      case "source":
-        return "sources";
-      case "shipping_company":
-        return "shipping_companies";
-      case "asset":
-        return "assets";
-      case "system":
-        return "system_accounts";
-      default:
-        return "customers";
-    }
-  }
-  /**
    * Compute a ledger summary for a given account (total debit, credit, net balance)
    * by summing all account_trans for that account.
    * Useful for reconciliation and audit reports.
+   * الملخص يعتمد أسطر القيود المرحّلة فقط (posting_status='posted') كما يعيدها API.
    */
   async getLedgerSummary(
     accountId: string,
   ): Promise<{ debit: number; credit: number; net: number; count: number }> {
     try {
-      // الاعتماد الكامل على جدول أسطر الحسابات الجديد account_trans
-      // Relying fully on new ledger lines table account_trans
-      const q = query(
-        collection(db, "account_trans"),
-        where("accountId", "==", accountId),
-        orderBy("createdAt", "desc"),
+      const movements = await readAllFinanceRows(
+        `${ACCOUNTS_PATH}/${encodeURIComponent(accountId)}/movements`,
       );
-      const snap = await getDocs(q);
-      let debit = 0,
-        credit = 0;
-      snap.docs.forEach((d) => {
-        const data = d.data();
-        const type = data.transType || data.trans_type || data.type;
-        if (type === "Debit") debit += parseFloat(data.amount || 0);
-        else credit += parseFloat(data.amount || 0);
-      });
-      return { debit, credit, net: debit - credit, count: snap.size };
+      let debit = 0;
+      let credit = 0;
+      for (const movement of movements) {
+        const amount = Number(movement?.amount ?? 0);
+        if (movement?.transType === 'Debit') debit += amount;
+        else credit += amount;
+      }
+      return { debit, credit, net: debit - credit, count: movements.length };
     } catch (error) {
       console.error(
         "[FinancialAccountService] Error computing ledger summary:",
@@ -702,24 +653,21 @@ class FinancialAccountService {
   /**
    * يطلب من قاعدة البيانات إعادة احتساب رصيد الحساب من account_trans فقط.
    * لا يسمح هذا المسار للواجهة بإعادة بناء الرصيد من جداول ملغاة.
+   * Asks the database to rebuild the balance from posted ledger lines only.
    */
   // Debounce map: prevents cascade recalculations within 2 seconds for same account
   private _recalcDebounce: Map<string, ReturnType<typeof setTimeout>> = new Map();
   async recalculateAndSyncBalance(accountId: string): Promise<number> {
     try {
-      const accountDoc = await getDoc(doc(db, "accounts", accountId));
-      if (!accountDoc.exists()) {
+      const accountPath = `${ACCOUNTS_PATH}/${encodeURIComponent(accountId)}`;
+      const account = await readFinanceRecord(accountPath);
+      if (!account) {
         console.warn(`[recalculateAndSyncBalance] Account ${accountId} not found.`);
         return 0;
       }
-      const { error } = await (supabase as any).rpc('recalculate_accounting_hierarchy', {
-        p_account_id: accountId,
-      });
-      if (error) {
-        throw new Error(error.message || String(error));
-      }
-      const refreshedAccount = await this.getAccountById(accountId);
-      return Number(refreshedAccount?.balance || 0);
+      await recalculateAccountBalances([accountId]);
+      const refreshedAccount = await readFinanceRecord(accountPath);
+      return Number(mapAccountRow(refreshedAccount)?.balance ?? 0);
     } catch (error) {
       console.error("[recalculateAndSyncBalance] Error:", error);
       return 0;
@@ -743,47 +691,17 @@ class FinancialAccountService {
 
   /**
    * Recalculate and sync ALL accounts in the system.
-   * Returns a summary of accounts processed and any errors encountered.
-   * Useful for migration / reconciliation runs.
+   * تعمل دالة قاعدة البيانات على كل الحسابات دفعة واحدة وتعيد عدد ما احتُسب.
+   * The database function processes every account in one call and reports how many were recalculated.
    */
-  async recalculateAllBalances(): Promise<{
-    processed: number;
-    errors: number;
-    results: Array<{ accountId: string; accountCode: string; oldBalance: number; newBalance: number }>;
-  }> {
-    const results: Array<{ accountId: string; accountCode: string; oldBalance: number; newBalance: number }> = [];
-    let errors = 0;
-
+  async recalculateAllBalances(): Promise<{ processed: number; errors: number }> {
     try {
-      const snap = await getDocs(collection(db, "accounts"));
-      const docs = snap.docs;
-
-      // Process in parallel batches of 5 to avoid overwhelming the DB while still being fast
-      const BATCH_SIZE = 5;
-      for (let i = 0; i < docs.length; i += BATCH_SIZE) {
-        const batch = docs.slice(i, i + BATCH_SIZE);
-        await Promise.all(batch.map(async (d) => {
-          const data = d.data() as FinancialAccount;
-          const oldBalance = data.balance || 0;
-          try {
-            const newBalance = await this.recalculateAndSyncBalance(d.id);
-            results.push({
-              accountId: d.id,
-              accountCode: data.accountCode || d.id,
-              oldBalance,
-              newBalance,
-            });
-          } catch (err) {
-            errors++;
-            console.error(`[recalculateAllBalances] Error on account ${d.id}:`, err);
-          }
-        }));
-      }
-    } catch (err) {
-      console.error("[recalculateAllBalances] Fatal error loading accounts:", err);
+      const summary = await recalculateAccountBalances();
+      return { processed: summary.recalculatedCount, errors: summary.success ? 0 : 1 };
+    } catch (error) {
+      console.error("[recalculateAllBalances] Fatal error recalculating balances:", error);
+      return { processed: 0, errors: 1 };
     }
-
-    return { processed: results.length, errors, results };
   }
 
   /**
@@ -827,36 +745,33 @@ class FinancialAccountService {
   }
 
   /**
-   * Safe seed or retrieve automatic voucher rules from automatic_voucher_rules collection
+   * Safe seed or retrieve automatic voucher rules from the settings document
+   * يقرأ قواعد القيود التلقائية من وثيقة الإعدادات ويبذر الناقص منها.
    */
   async ensureAutomaticVoucherRules(): Promise<any[]> {
     const normalizedDefaultRules = buildDefaultAutomaticVoucherRules();
 
     try {
-      const snap = await getDoc(doc(db, "settings", "automatic_voucher_rules"));
-      let currentRules: any[] = [];
-      if (snap.exists()) {
-        const d = snap.data();
-        if (d && d.data && Array.isArray(d.data)) {
-          currentRules = d.data;
-        }
+      const record = await readSettingsRecord('automatic_voucher_rules');
+      const storedRules = (record?.settings as { data?: unknown } | undefined)?.data;
+      const currentRules: any[] = Array.isArray(storedRules) ? storedRules : [];
+
+      const existingRulesIds = new Set(currentRules.map((rule) => rule?.id));
+      const missingRules = normalizedDefaultRules.filter((rule: any) => !existingRulesIds.has(rule.id));
+      if (record && missingRules.length === 0) return currentRules;
+
+      const mergedRules = [...currentRules, ...missingRules];
+      try {
+        await financeApiClient.patch<ApiEnvelope<unknown>>('/api/v1/settings/automatic_voucher_rules', {
+          settings: { data: mergedRules },
+        });
+      } catch (writeError) {
+        // الحفظ يحتاج edit_general_settings؛ القارئ بلا صلاحية يستعمل القواعد المدموجة محلياً.
+        // Seeding needs edit_general_settings; a read-only user still gets the merged rules locally.
+        console.warn('[FinancialAccountService] تعذر حفظ قواعد القيود التلقائية في الإعدادات:', writeError);
       }
 
-      const existingRulesIds = new Set(currentRules.map((r) => r.id));
-      let modified = false;
-
-      for (const rule of normalizedDefaultRules) {
-        if (!existingRulesIds.has(rule.id)) {
-          currentRules.push(rule);
-          modified = true;
-        }
-      }
-
-      if (modified || !snap.exists()) {
-        await setDoc(doc(db, "settings", "automatic_voucher_rules"), { data: currentRules });
-      }
-
-      return currentRules;
+      return mergedRules;
     } catch (e) {
       console.error(
         "[FinancialAccountService] Failed to seed automatic voucher rules:",
@@ -890,9 +805,9 @@ class FinancialAccountService {
    * 6. Recalculates and synces balances for all opposite accounts affected by the deletions.
    */
   async purgeEntityAndFinancialFootprint(
-    entityType: 'customer' | 'courier' | 'user' | 'employee',
+    entityType: PurgeableEntityType,
     entityId: string
-  ): Promise<void> {
+  ): Promise<Record<string, unknown> | null> {
     return purgeEntityAndFinancialFootprint(this, entityType, entityId);
   }
 }

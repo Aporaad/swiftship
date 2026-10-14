@@ -2,7 +2,7 @@ import React from 'react';
 import { Globe, Activity, Users, User, Package, Briefcase, MessageSquare, Megaphone, Shield, Link as LinkIcon, CheckCircle2, Clock, AlertCircle, RefreshCw, Plus, Trash2, Check, X, Eye, Edit2, Send, Server, Key, Lock, Settings as SettingsIcon, ChevronRight, ArrowUpRight, Award, UserCheck, ShieldAlert, Cpu, Phone, Mail, MapPin } from 'lucide-react';
 
 type SiteTab = 'analytics' | 'portal_users' | 'pending' | 'orders' | 'tickets' | 'announcements' | 'jobs' | 'security' | 'api';
-type PortalUser = { id: string; username?: string; email?: string; fullName?: string; phone?: string; portal_role?: string; portalRole?: string; approval_status?: string; approvalStatus?: string; disabled?: boolean; address?: string; customerDetails?: { address?: string; company_name?: string; gps_location?: string } };
+type PortalUser = { id: string; username?: string; email?: string; fullName?: string; phone?: string; portal_role?: string; portalRole?: string; approval_status?: string; approvalStatus?: string; disabled?: boolean; address?: string; customerDetails?: { companyName?: string | null; gpsLocation?: string | null } };
 export interface PortalUsersTabProps {
   activeTab: SiteTab;
   isAr: boolean;
@@ -188,12 +188,12 @@ export const PortalUsersTab: React.FC<PortalUsersTabProps> = (props) => {
                           </td>
 
                           <td className="p-4 max-w-xs truncate text-slate-400">
-                            <div className="font-bold text-slate-300 text-xs">{details.address || user.address || '—'}</div>
-                            {details.company_name && (
-                              <div className="text-[10px] text-[#d4af37] font-bold mt-0.5">🏢 {details.company_name}</div>
+                            <div className="font-bold text-slate-300 text-xs">{user.address || '—'}</div>
+                            {details.companyName && (
+                              <div className="text-[10px] text-[#d4af37] font-bold mt-0.5">🏢 {details.companyName}</div>
                             )}
-                            {details.gps_location && (
-                              <div className="text-[9px] font-mono text-cyan-400 mt-0.5 truncate">📍 {details.gps_location}</div>
+                            {details.gpsLocation && (
+                              <div className="text-[9px] font-mono text-cyan-400 mt-0.5 truncate">📍 {details.gpsLocation}</div>
                             )}
                           </td>
 

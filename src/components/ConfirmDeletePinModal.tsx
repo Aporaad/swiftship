@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { X, ShieldAlert, KeyRound } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { collection, getDocs, query } from '../data/legacy/legacy-compat.ts';
-import { db } from '../data/legacy/legacy-compat.ts';
+import { pinVerificationMessage, verifyCurrentUserPin } from '../services/securityPinService';
 
 interface ConfirmDeletePinModalProps {
   isOpen: boolean;
@@ -39,17 +38,11 @@ export default function ConfirmDeletePinModal({
 
     setLoading(true);
     try {
-      // 1. Verify PIN against users collection or fallbacks
-      const usersQuery = query(collection(db, 'users'));
-      const snap = await getDocs(usersQuery);
-
-      const isValidPin = snap.docs.some(doc => {
-        const data = doc.data();
-        return data.systemPin && String(data.systemPin).trim() === trimmedPin;
-      }) || trimmedPin === '1234' || trimmedPin === '0000';
-
-      if (!isValidPin) {
-        setError(isAr ? 'رمز PIN غير صحيح. تعذر إتمام عملية الحذف.' : 'Invalid PIN code. Access denied.');
+      // التحقق من الرمز يتم خادميًا لحساب المستخدم الحالي — لا مقارنة في المتصفح ولا رمز بديل ثابت.
+      // The PIN is verified server-side against the acting user's own record; no client-side comparison.
+      const verification = await verifyCurrentUserPin(trimmedPin);
+      if (verification.status !== 'valid') {
+        setError(pinVerificationMessage(verification, isAr));
         setLoading(false);
         return;
       }

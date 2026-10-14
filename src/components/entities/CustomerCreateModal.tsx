@@ -143,28 +143,29 @@ export function CustomerCreateModal({
             linkedCustomerId: String(customer.id),
             fullName: formData.fullName,
             phone: formData.phone,
+            address: formData.address,
           },
           {
-            address: formData.address,
-            gps_location: formData.gps_location,
+            gpsLocation: formData.gps_location,
             city: formData.city,
             country: formData.country,
-            company_name: formData.company_name,
-            id_number: formData.id_number,
-            max_debt: Number(formData.max_debt) || 0,
+            companyName: formData.company_name,
+            idNumber: formData.id_number,
+            maxDebt: Number(formData.max_debt) || 0,
             notes: formData.notes,
           },
         );
         portalUserId = portalRes.id;
       } else {
+        // العنوان يُخزّن في customers.address ولا يُكرر داخل تفاصيل العميل.
+        // The address column belongs to the customer record, not the portal details.
         await portalUserService.saveCustomerDetails(String(customer.id), '', {
-          address: formData.address,
-          gps_location: formData.gps_location,
+          gpsLocation: formData.gps_location,
           city: formData.city,
           country: formData.country,
-          company_name: formData.company_name,
-          id_number: formData.id_number,
-          max_debt: Number(formData.max_debt) || 0,
+          companyName: formData.company_name,
+          idNumber: formData.id_number,
+          maxDebt: Number(formData.max_debt) || 0,
           notes: formData.notes,
         });
       }

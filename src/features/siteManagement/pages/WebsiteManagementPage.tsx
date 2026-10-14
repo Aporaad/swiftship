@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { supabase, doc, setDoc, db } from '../../../data/legacy/legacy-compat.ts';
 import { useSettings } from '../../../context/SettingsContext';
 import { financialAccountService } from '../../../services/financialAccountService';
 import toast from 'react-hot-toast';
 
 import { portalUserService } from '../../../services/portalUserService';
+import { siteContentService } from '../../../services/siteContentService';
+import { couriersApiDataGateway } from '../../couriers/services/couriersApiDataGateway';
 import useWebsiteManagementData from '../hooks/useWebsiteManagementData';
 import WebsiteManagementHeader from '../components/WebsiteManagementHeader';
 import WebsiteManagementTabs from '../components/WebsiteManagementTabs';
@@ -64,9 +65,9 @@ export default function WebsiteManagementPage() {
     address: '',
     city: '',
     country: 'اليمن',
-    company_name: '',
-    id_number: '',
-    max_debt: 0,
+    companyName: '',
+    idNumber: '',
+    maxDebt: 0,
     gps_location: '',
     lat: 15.3694,
     lng: 44.1910,
@@ -133,24 +134,8 @@ export default function WebsiteManagementPage() {
     if (!ticketReplyText.trim()) return;
     setActionId(ticketId);
     try {
-      const existing = tickets.find(t => t.id === ticketId) || {};
-      const replies = existing.replies || [];
-      replies.push({
-        id: Math.random().toString(36).slice(2),
-        sender: 'Admin Support',
-        message: ticketReplyText.trim(),
-        createdAt: Date.now(),
-      });
-
-      const cleanPayload = {
-        ...existing,
-        replies,
-        status: 'in_progress',
-        updatedAt: Date.now(),
-      };
-      delete cleanPayload.id;
-
-      await supabase.from('portal_tickets').update({ data: cleanPayload }).eq('portal_ticket_id', ticketId);
+      // المرسل والحالة يحدّدهما الخادم، فلا يُرسل إليهما نص من المتصفح.
+      await siteContentService.replyToTicket(ticketId, ticketReplyText.trim());
       toast.success(isAr ? 'تم إرسال الرد على التذكرة' : 'Reply sent');
       setReplyingTicketId(null);
       setTicketReplyText('');
@@ -169,21 +154,13 @@ export default function WebsiteManagementPage() {
 
     setLoading(true);
     try {
-      const id = `ann_${Date.now()}`;
-      const payload = {
-        announcement_id: id,
+      await siteContentService.createAnnouncement({
         title: annForm.title.trim(),
         content: annForm.content.trim(),
         targetAudience: annForm.targetAudience,
-        target_audience: annForm.targetAudience,
         priority: annForm.priority,
         isActive: true,
-        is_active: true,
-        createdAt: Date.now(),
-        created_at: Date.now(),
-      };
-
-      await supabase.from('announcements').insert({ announcement_id: id, data: payload });
+      });
       toast.success(isAr ? 'تم نشر الإعلان بنجاح!' : 'Announcement published!');
       setShowAnnForm(false);
       setAnnForm({ title: '', content: '', targetAudience: 'all', priority: 'normal' });
@@ -198,16 +175,7 @@ export default function WebsiteManagementPage() {
   const handleToggleAnnActive = async (ann: any) => {
     setActionId(ann.id);
     try {
-      const newStatus = !ann.isActive && !ann.is_active;
-      const cleanPayload = {
-        ...ann,
-        isActive: newStatus,
-        is_active: newStatus,
-        updatedAt: Date.now(),
-      };
-      delete cleanPayload.id;
-
-      await supabase.from('announcements').update({ data: cleanPayload }).eq('announcement_id', ann.id);
+      await siteContentService.setAnnouncementActive(ann.id, !ann.isActive);
       await loadAllData();
     } catch (err: any) {
       toast.error(err.message || 'Error updating status');
@@ -220,7 +188,7 @@ export default function WebsiteManagementPage() {
     if (!window.confirm(isAr ? 'هل أنت متأكد من حذف هذا الإعلان؟' : 'Delete announcement?')) return;
     setActionId(id);
     try {
-      await supabase.from('announcements').delete().eq('announcement_id', id);
+      await siteContentService.deleteAnnouncement(id);
       toast.success(isAr ? 'تم الحذف' : 'Deleted');
       await loadAllData();
     } catch (err: any) {
@@ -234,35 +202,28 @@ export default function WebsiteManagementPage() {
   const handleJobStatus = async (appId: string, status: string) => {
     setActionId(appId);
     try {
-      const existing = jobApplications.find(j => j.id === appId) || {};
-      const cleanPayload = {
-        ...existing,
-        status,
-        updatedAt: Date.now(),
-      };
-      delete cleanPayload.id;
+      const existing = jobApplications.find(j => j.id === appId);
+      await siteContentService.setJobApplicationStatus(appId, status);
 
-      await supabase.from('jobs_req').update({ data: cleanPayload }).eq('jobs_req_id', appId);
-
-      if (status === 'approved' && (existing.jobPosition === 'local_courier' || existing.jobPosition === 'sourcing_courier')) {
+      if (status === 'approved' && (existing?.jobPosition === 'local_courier' || existing?.jobPosition === 'sourcing_courier')) {
         try {
           const courierId = `cour_job_${appId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 10)}`;
           const type = existing.jobPosition === 'sourcing_courier' ? 'sourcing' : 'local';
-          const courierData = {
-            fullName: existing.fullName || '',
-            phone: existing.phone || '',
-            email: existing.email || '',
-            address: `${existing.city || ''} ${existing.address || ''}`.trim(),
-            disabled: false,
+          const fullName = existing.fullName || 'مندوب جديد';
+          await couriersApiDataGateway.createCourier({
+            courierId,
+            fullName,
+            phone: existing.phone,
+            email: existing.email,
+            address: `${existing.city} ${existing.address}`.trim(),
+            isActive: true,
             courierType: type,
             notes: `تم توظيفه واعتماد طلب توظيفه (${existing.refCode || 'طلب توظيف'})`,
-            createdAt: Date.now(),
-          };
-          await setDoc(doc(db, 'couriers', courierId), courierData, { merge: true });
+          });
           await financialAccountService.createAccountForEntity(
             'courier',
             courierId,
-            existing.fullName || 'مندوب جديد',
+            fullName,
             type === 'sourcing' ? 'SAR' : 'YER'
           );
         } catch (_) { }
@@ -281,7 +242,7 @@ export default function WebsiteManagementPage() {
     if (!window.confirm(isAr ? 'حذف طلب التوظيف نهائياً؟' : 'Delete job application?')) return;
     setActionId(appId);
     try {
-      await supabase.from('jobs_req').delete().eq('jobs_req_id', appId);
+      await siteContentService.deleteJobApplication(appId);
       toast.success(isAr ? 'تم الحذف' : 'Deleted');
       await loadAllData();
     } catch (err: any) {
@@ -305,9 +266,9 @@ export default function WebsiteManagementPage() {
       address: '',
       city: '',
       country: 'اليمن',
-      company_name: '',
-      id_number: '',
-      max_debt: 0,
+      companyName: '',
+      idNumber: '',
+      maxDebt: 0,
       gps_location: '',
       lat: 15.3694,
       lng: 44.1910,
@@ -328,13 +289,13 @@ export default function WebsiteManagementPage() {
       disabled: Boolean(user.disabled),
       fullName: user.fullName || user.username || '',
       phone: user.phone || '',
-      address: dt.address || user.address || '',
+      address: user.address || '',
       city: dt.city || '',
       country: dt.country || 'اليمن',
-      company_name: dt.company_name || '',
-      id_number: dt.id_number || '',
-      max_debt: Number(dt.max_debt) || 0,
-      gps_location: dt.gps_location || user.gps_location || '',
+      companyName: dt.companyName || '',
+      idNumber: dt.idNumber || '',
+      maxDebt: Number(dt.maxDebt) || 0,
+      gps_location: dt.gpsLocation || '',
       lat: 15.3694,
       lng: 44.1910,
       notes: dt.notes || user.notes || ''
@@ -377,16 +338,16 @@ export default function WebsiteManagementPage() {
           approval_status: pUserFormData.approval_status as any,
           disabled: pUserFormData.disabled,
           fullName: pUserFormData.fullName || pUserFormData.username,
-          phone: pUserFormData.phone
+          phone: pUserFormData.phone,
+          address: pUserFormData.address
         },
         {
-          address: pUserFormData.address,
-          gps_location: pUserFormData.gps_location,
+          gpsLocation: pUserFormData.gps_location,
           city: pUserFormData.city,
           country: pUserFormData.country,
-          company_name: pUserFormData.company_name,
-          id_number: pUserFormData.id_number,
-          max_debt: Number(pUserFormData.max_debt) || 0,
+          companyName: pUserFormData.companyName,
+          idNumber: pUserFormData.idNumber,
+          maxDebt: Number(pUserFormData.maxDebt) || 0,
           notes: pUserFormData.notes
         }
       );
@@ -415,16 +376,16 @@ export default function WebsiteManagementPage() {
           approval_status: pUserFormData.approval_status as any,
           disabled: pUserFormData.disabled,
           fullName: pUserFormData.fullName,
-          phone: pUserFormData.phone
+          phone: pUserFormData.phone,
+          address: pUserFormData.address
         },
         {
-          address: pUserFormData.address,
-          gps_location: pUserFormData.gps_location,
+          gpsLocation: pUserFormData.gps_location,
           city: pUserFormData.city,
           country: pUserFormData.country,
-          company_name: pUserFormData.company_name,
-          id_number: pUserFormData.id_number,
-          max_debt: Number(pUserFormData.max_debt) || 0,
+          companyName: pUserFormData.companyName,
+          idNumber: pUserFormData.idNumber,
+          maxDebt: Number(pUserFormData.maxDebt) || 0,
           notes: pUserFormData.notes
         }
       );

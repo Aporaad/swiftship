@@ -31,8 +31,16 @@ describe('products management tab wiring', () => {
     expect(productsTab).toContain('item_category_id');
     expect(productsTab).toContain('tracking_number');
 
-    expect(productService).toContain("'/api/v1/operations/products'");
+    expect(productService).toContain("'/api/v1/products'");
     expect(productService).toContain("'/api/v1/operations/order-items'");
+    expect(productService).not.toContain('console.warn');
+    const operationsRoutes = projectFile('alx_api/src/modules/operations/operations.routes.ts');
+    expect(operationsRoutes).toContain("app.get('/api/v1/products'");
+    expect(operationsRoutes).toContain("app.delete('/api/v1/products/:id'");
+    expect(operationsRoutes).toContain("app.get('/api/v1/operations/order-items'");
+    expect(operationsRoutes).toContain("app.post('/api/v1/operations/order-items'");
+    expect(operationsRoutes).toContain("app.patch('/api/v1/operations/order-items/:id'");
+    expect(operationsRoutes).toContain("app.delete('/api/v1/operations/order-items/:id'");
     expect(productsTab).not.toContain('data/legacy/legacy-compat');
     expect(productService).not.toContain('data/legacy/legacy-compat');
   });

@@ -337,6 +337,9 @@ type SessionRecord = DataRecord & { id: string; fullName: string; email: string;
 type ActivityRecord = { id: string; action: string; userId?: string; userName?: string; userRole?: string; target?: string; details?: Record<string, unknown>; timestamp?: TimestampValue };
 type ErrorLike = { message?: string; code?: string };
 
+// معرّف بصيغة نص أو رقم — accepts either textual or numeric ids from the API envelope.
+const asId = (value: unknown): string => (typeof value === 'string' || typeof value === 'number' ? String(value) : '');
+
 const asRecord = (value: unknown): DataRecord =>
   typeof value === 'object' && value !== null ? value as DataRecord : {};
 const asString = (value: unknown, fallback = ''): string => typeof value === 'string' ? value : fallback;
@@ -361,6 +364,37 @@ const toAccount = (id: string, raw: DataRecord): AccountRecord => ({ ...raw, id,
   accountCode: typeof raw.accountCode === 'string' ? raw.accountCode : undefined,
   balance: typeof raw.balance === 'number' ? raw.balance : undefined,
   currency: typeof raw.currency === 'string' ? raw.currency : undefined,
+});
+// جلسة من أعمدة api_sessions المسطّحة (جهاز/متصفح/IP كحقول رئيسية) —
+// an admin-view session built from first-class api_sessions columns, never from Supabase.
+const toSession = (raw: DataRecord): SessionRecord => {
+  const lastUsedRaw = asString(raw.lastUsedAt) || asString(raw.createdAt);
+  const parsed = Date.parse(lastUsedRaw);
+  const lastSeenMs = Number.isNaN(parsed) ? 0 : parsed;
+  const deviceParts = [asString(raw.deviceName), asString(raw.userAgent)].filter(Boolean);
+  const fallbackDevice = deviceParts.length > 0 ? deviceParts.join(' · ') : asString(raw.ipAddress);
+  return {
+    ...raw,
+    id: asId(raw.sessionId),
+    userId: asId(raw.userId),
+    fullName: asString(raw.fullName) || asId(raw.userId) || '—',
+    email: asString(raw.email),
+    role: asString(raw.role, 'Employee'),
+    deviceInfo: fallbackDevice,
+    lastSeen: lastSeenMs,
+    last_seen: lastSeenMs,
+  };
+};
+// قيد نشاط من activity_logs + جدول التفاصيل العلائقي — one flattened activity log entry.
+const toActivity = (raw: DataRecord): ActivityRecord => ({
+  id: asId(raw.id ?? raw.activityLogId),
+  action: asString(raw.action, 'unknown'),
+  userId: asId(raw.userId) || undefined,
+  userName: asString(raw.userName) || undefined,
+  userRole: asString(raw.userRole) || undefined,
+  target: asString(raw.target) || asString(raw.summary) || undefined,
+  details: asRecord(raw.details),
+  timestamp: (typeof raw.createdAt === 'string' || typeof raw.createdAt === 'number' ? raw.createdAt : undefined) as TimestampValue | undefined,
 });
 
 const SESSION_ACTIONS = (isAr: boolean): { id: SessionAction; label: string; desc: string; icon: React.ComponentType; color: string; severity: string }[] => [
@@ -575,6 +609,41 @@ export default function UserManagementPage() {
     }, (err: unknown) => console.warn('Accounts subscribe error:', err));
     return () => unsub();
   }, [roleLoading]);
+
+  // ── الجلسات النشطة: تحميل إداري من api_sessions في alx_api (تحديث كل 30 ثانية) ─────────
+  // ── Live sessions: admin load from alx_api api_sessions, refreshed every 30s ──────────
+  useEffect(() => {
+    if (roleLoading) return;
+    let disposed = false;
+    const refreshSessions = async () => {
+      try {
+        const rows = await usersApiDataGateway.listAllSessions();
+        if (!disposed) setDbSessions(rows.map(toSession));
+      } catch (err: unknown) {
+        console.warn('[UserManagement] Sessions load failed:', getErrorMessage(err));
+      }
+    };
+    void refreshSessions();
+    const interval = setInterval(() => void refreshSessions(), 30_000);
+    return () => { disposed = true; clearInterval(interval); };
+  }, [roleLoading]);
+
+  // ── سجل النشاط: قراءة activity_logs المسطّحة عند الجاهزية وعند فتح التبويب ─────────────
+  // ── Activity log: reads the flattened activity_logs, on ready and when the tab opens ──
+  useEffect(() => {
+    if (roleLoading) return;
+    let disposed = false;
+    const refreshLogs = async () => {
+      try {
+        const rows = await usersApiDataGateway.listActivityLogs({ limit: 500 });
+        if (!disposed) setActivityLogs(rows.map(toActivity));
+      } catch (err: unknown) {
+        console.warn('[UserManagement] Activity log load failed:', getErrorMessage(err));
+      }
+    };
+    void refreshLogs();
+    return () => { disposed = true; };
+  }, [roleLoading, activeTab]);
 
   // Auto-ban timer: check every minute if temp bans have expired
   useEffect(() => {
@@ -986,8 +1055,11 @@ export default function UserManagementPage() {
       message: t(`هل أنت متأكد من إنهاء جلسة ${session.fullName} على الجهاز "${session.deviceInfo || 'غير معروف'}"؟`, `Are you sure you want to terminate ${session.fullName}'s session on "${session.deviceInfo || 'Unknown'}"?`),
       onConfirm: async () => {
         try {
-          await usersApiDataGateway.revokeUserSessions(session.id);
+          // إنهاء هذه الجلسة بعينها عبر المسار الإداري، وليس كل جلسات المستخدم —
+          // terminates this specific session via the admin route, not every session of the user.
+          await usersApiDataGateway.terminateSession(session.id);
           await activityLogService.log('terminate_session', session.fullName, { sessionId: session.id, deviceInfo: session.deviceInfo });
+          setDbSessions(prev => prev.filter(sess => sess.id !== session.id));
           notificationService.notify({
             title: t('تم تسجيل الخروج', 'Logged Out'),
             message: t('تم إرسال أمر الخروج للجلسة بنجاح', 'Logout command sent successfully'),

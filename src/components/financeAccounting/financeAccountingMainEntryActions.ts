@@ -7,6 +7,7 @@ import {
 } from '../../services/financialEntryService';
 import { financialAccountService } from '../../services/financialAccountService';
 import { notificationService } from '../../services/notificationService';
+import { pinVerificationMessage, verifyCurrentUserPin } from '../../services/securityPinService';
 import type { AccountEntityType } from '../../services/financialAccountTypes';
 
 type StateSetter<T> = React.Dispatch<React.SetStateAction<T>>;
@@ -39,7 +40,6 @@ interface ActionDependencies {
   dbRates: Record<string, number>;
   deletePin: string;
   editJournalData: EditMainEntryData;
-  employees: EmployeeRecord[];
   entryToDelete: FinanceEntryRecord | null;
   financialAccountService: typeof financialAccountService;
   isAr: boolean;
@@ -85,11 +85,6 @@ interface PostingAccount {
   entityType?: AccountEntityType;
   entityId?: string;
   entityName?: string;
-}
-
-interface EmployeeRecord {
-  id?: string;
-  systemPin?: string;
 }
 
 interface EntryMeta {
@@ -142,7 +137,7 @@ const errorMessage = (error: unknown, fallback: string): string =>
   error instanceof Error && error.message ? error.message : fallback;
 
 export function createFinanceAccountingMainEntryActions(dependencies: ActionDependencies) {
-  const { adjustData, adjustLoading, adjustSalaryMonth, auditedCustomerId, currentUser, customerLedgerDetails, dbRates, deletePin, editJournalData, employees, entryToDelete, financialAccountService, isAr, isSalaryPayment, notificationService, orders, payAmount, payLoading, payNotes, postingFinancialAccounts, selectedEditEntry, setAdjustData, setAdjustLoading, setDeleteLoading, setDeletePin, setDeletePinError, setEditJournalLoading, setEntryToDelete, setIsAdjustmentModalOpen, setIsDeletePinModalOpen, setIsEditJournalOpen, setIsPayModalOpen, setIsSalaryPayment, setPayAmount, setPayLoading, setPayNotes, setSelectedEditEntry, setSourceAccountId, setTargetAccountId, setTargetType, settings, sourceAccountId, targetAccountId, targetType } = dependencies;
+  const { adjustData, adjustLoading, adjustSalaryMonth, auditedCustomerId, currentUser, customerLedgerDetails, dbRates, deletePin, editJournalData, entryToDelete, financialAccountService, isAr, isSalaryPayment, notificationService, orders, payAmount, payLoading, payNotes, postingFinancialAccounts, selectedEditEntry, setAdjustData, setAdjustLoading, setDeleteLoading, setDeletePin, setDeletePinError, setEditJournalLoading, setEntryToDelete, setIsAdjustmentModalOpen, setIsDeletePinModalOpen, setIsEditJournalOpen, setIsPayModalOpen, setIsSalaryPayment, setPayAmount, setPayLoading, setPayNotes, setSelectedEditEntry, setSourceAccountId, setTargetAccountId, setTargetType, settings, sourceAccountId, targetAccountId, targetType } = dependencies;
 
   const actorUid = () => currentUser?.id || undefined;
 
@@ -267,15 +262,6 @@ export function createFinanceAccountingMainEntryActions(dependencies: ActionDepe
       return;
     }
 
-    // Check PIN against employee systemPins or master fallback PINs ('1234', '0000')
-    const isValidPin = employees.some((emp: EmployeeRecord) => emp.systemPin && emp.systemPin.trim() === trimmedPin) ||
-      trimmedPin === '1234' || trimmedPin === '0000';
-
-    if (!isValidPin) {
-      setDeletePinError(isAr ? 'رمز PIN غير صحيح. يرجى التثبت من الرمز وتكرار المحاولة.' : 'Invalid PIN code. Access denied.');
-      return;
-    }
-
     const mainEntryId = entryToDelete.mainEntryId || (entryToDelete.id && !String(entryToDelete.id).startsWith('EXP-UNLINKED-') ? entryToDelete.id : '');
     if (!mainEntryId) {
       setDeletePinError(isAr ? 'لا يمكن حذف قيد غير مرتبط بقيد رئيسي عبر الـAPI.' : 'This row is not linked to a main entry and cannot be deleted through the API.');
@@ -284,6 +270,14 @@ export function createFinanceAccountingMainEntryActions(dependencies: ActionDepe
 
     setDeleteLoading(true);
     try {
+      // التحقق من الرمز خادميًا لحساب المستخدم الحالي — بلا مقارنة في المتصفح وبلا رمز بديل ثابت.
+      // Server-side PIN check for the acting user; no client-side comparison and no hardcoded master PIN.
+      const verification = await verifyCurrentUserPin(trimmedPin);
+      if (verification.status !== 'valid') {
+        setDeletePinError(pinVerificationMessage(verification, isAr));
+        return;
+      }
+
       await financialEntryService.deleteLedgerEntry(mainEntryId, actorUid());
 
       notificationService.notify({
@@ -377,7 +371,6 @@ export function createFinanceAccountingMainEntryActions(dependencies: ActionDepe
           currency: adjustData.currency,
           salaryMonth: adjustSalaryMonth,
           notes: adjustData.notes || (isAr ? `صرف راتب شهر ${adjustSalaryMonth}` : `Salary payment for ${adjustSalaryMonth}`),
-          createdByUid: currentUser?.id || 'system',
           createdByName: currentUser?.email?.split('@')[0] || 'Finance Auditor'
         });
       }

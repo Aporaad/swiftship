@@ -2,7 +2,7 @@ import React from 'react';
 import { Globe, Activity, Users, User, Package, Briefcase, MessageSquare, Megaphone, Shield, Link as LinkIcon, CheckCircle2, Clock, AlertCircle, RefreshCw, Plus, Trash2, Check, X, Eye, Edit2, Send, Server, Key, Lock, Settings as SettingsIcon, ChevronRight, ArrowUpRight, Award, UserCheck, ShieldAlert, Cpu, Phone, Mail, MapPin } from 'lucide-react';
 
 type SiteTab = 'analytics' | 'portal_users' | 'pending' | 'orders' | 'tickets' | 'announcements' | 'jobs' | 'security' | 'api';
-type PortalOrder = { id: string; orderNumber?: string; trackingNumber?: string; createdAt?: string | number | Date; customerName?: string; recipientName?: string; customerPhone?: string; deliveryCity?: string; orderSourceName?: string; orderStatus?: string; status?: string; totalPrice?: string | number; totalAmount?: string | number };
+type PortalOrder = { id: string; orderNumber?: string; trackingNumber?: string; createdAt?: string | number | Date; customerName?: string; recipientName?: string; customerPhone?: string; deliveryCity?: string; orderSourceName?: string; orderStatus?: string; totalPrice?: string | number };
 export interface PortalOrdersTabProps {
   activeTab: SiteTab;
   isAr: boolean;
@@ -54,8 +54,8 @@ export const PortalOrdersTab: React.FC<PortalOrdersTabProps> = (props) => {
                           <div className="text-[10px] text-slate-500">{ord.customerPhone || ord.deliveryCity}</div>
                         </td>
                         <td className="p-3.5"><span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-[10px] font-bold">{ord.orderSourceName || 'البوابة'}</span></td>
-                        <td className="p-3.5"><span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold">{ord.orderStatus || ord.status || 'معلق'}</span></td>
-                        <td className="p-3.5 font-bold text-white">{ord.totalPrice || ord.totalAmount || 0} YER</td>
+                        <td className="p-3.5"><span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold">{ord.orderStatus || 'معلق'}</span></td>
+                        <td className="p-3.5 font-bold text-white">{ord.totalPrice || 0} YER</td>
                       </tr>
                     ))}
                   </tbody>

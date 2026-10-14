@@ -13,6 +13,10 @@ type CourierWriteInput = {
   currency?: string;
   isActive?: boolean;
   accountId?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  notes?: string;
 };
 
 type CouriersHandlers = {

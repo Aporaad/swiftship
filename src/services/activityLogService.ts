@@ -1,3 +1,5 @@
+import { appApiClient } from '../data/http/app-api-client';
+
 export type ActivityAction =
   | 'login'
   | 'logout'
@@ -73,18 +75,60 @@ export interface ActivityLog {
   timestamp: any;
 }
 
+// عقد الـ API يقبل قيماً فردية فقط (لا كرات JSON ولا مصفوفات) — the API accepts scalar fields only,
+// so non-scalar values are rendered to readable text here instead of being rejected by the server.
+const toDetailValue = (value: unknown): string | number | boolean | null => {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : String(value);
+  if (typeof value === 'string') return value.slice(0, 300);
+  if (Array.isArray(value)) return value.map((item) => String(item)).join(', ').slice(0, 300);
+  try {
+    return JSON.stringify(value).slice(0, 300);
+  } catch {
+    return String(value).slice(0, 300);
+  }
+};
+
+const toFlatDetails = (
+  details?: Record<string, unknown>,
+): Record<string, string | number | boolean | null> | undefined => {
+  if (!details) return undefined;
+  const entries = Object.entries(details)
+    .filter(([key]) => /^[A-Za-z][A-Za-z0-9_]{0,59}$/.test(key))
+    .map(([key, value]) => [key, toDetailValue(value)] as const);
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+};
+
+const categoryOf = (action: string): string => {
+  if (action.includes('user') || action.includes('role') || action.includes('session') || action.includes('password')) return 'users';
+  if (action.includes('order') || action.includes('product') || action.includes('customer')) return 'operations';
+  if (action.includes('account') || action.includes('expense') || action.includes('payment') || action.includes('custody') || action.includes('exchange') || action.includes('currency') || action.includes('salary') || action.includes('financial')) return 'finance';
+  if (action.includes('settings') || action.includes('backup') || action.includes('cache') || action.includes('whatsapp') || action.includes('notification')) return 'settings';
+  return 'system';
+};
+
+/**
+ * سجل النشاط صار خادمياً بالكامل: كل واقعة تُكتب في أعمدة activity_logs المسطّحة.
+ * Activity logging is fully server-backed now: every event writes flat activity_logs columns,
+ * and identity (user name/role) is resolved from the token, never from this client.
+ */
 class ActivityLogService {
-  async log(
-    action: ActivityAction,
-    target: string,
-    details?: Record<string, any>
-  ): Promise<void> {
+  async log(action: ActivityAction, target: string, details?: Record<string, unknown>): Promise<void> {
+    const flatDetails = toFlatDetails(details);
     try {
-      if (import.meta.env.DEV) {
-        console.log(`[ActivityLog] ${action} -> ${target}`, details);
-      }
+      await appApiClient.post('/api/v1/activity-logs', {
+        action,
+        category: categoryOf(action),
+        target: target.slice(0, 300),
+        ...(flatDetails ? { details: flatDetails } : {}),
+      });
     } catch (error) {
-      console.warn('[ActivityLog] Failed to record activity:', error);
+      // الفشل في تسجيل النشاط لا يجب أن يُفشل عملية المستخدم — لكن يُظهر بوضوح في التطوير.
+      // A failed audit write must not break the user's operation, but is surfaced loudly in dev.
+      if (import.meta.env.DEV) {
+        console.warn('[ActivityLog] Failed to record activity via API:', action, target, error);
+      }
     }
   }
 }

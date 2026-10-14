@@ -1,13 +1,37 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CurrencySelect } from './common/CurrencySelect';
 import { CheckCircle2, ChevronDown, ChevronRight, CircleDollarSign, Download, Edit3, FileSpreadsheet, FileText, FolderPlus, Layers3, Loader2, Maximize2, Minimize2, Plus, Printer, Search, Settings2, Trash2, Upload, X } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
-import { addDoc, collection, db, deleteDoc, doc, getDocs, onSnapshot, orderBy, query, updateDoc, where } from '../data/legacy/legacy-compat.ts';
 import { accountingHierarchyService, hierarchyCodeRules, type HierarchyCodeKind } from '../services/accountingHierarchyService';
+import {
+  createDefaultAccount,
+  createHierarchyNode,
+  deleteDefaultAccount,
+  deleteHierarchyNode,
+  importAccountingTree,
+  listDefaultAccountRecords,
+  listHierarchyNodes,
+  updateDefaultAccount,
+  updateHierarchyNode,
+  type DefaultAccountInput,
+  type DefaultAccountRecord,
+  type HierarchyLevel,
+  type HierarchyNode,
+  type HierarchyNodeInput,
+} from '../services/accountingHierarchyAdmin';
+import {
+  createFinancialAccount,
+  deleteFinancialAccount,
+  listAccountMovements,
+  updateFinancialAccount,
+  type FinancialAccountInput,
+} from '../services/financialAccountAdmin';
+import { financialAccountService, type FinancialAccount } from '../services/financialAccountService';
+import { financialEntrySettingsService } from '../services/financialEntrySettingsService';
 import { useAccountBalances } from '../hooks/useAccountBalances';
 import { useExchangeRates } from '../hooks/useExchangeRates';
 import { calculateAccountingTreeBalances, getRecordCurrencyCode, type TreeNodeBalance } from '../services/accountingTreeBalanceService';
-import { buildImportedTreePayload, createKnownTreeNodes, validateAccountingTreeImport, type AccountingImportLevel } from '../services/accountingTreeFileService';
+import { createKnownTreeNodes, validateAccountingTreeImport, type AccountingImportLevel, type TreeImportValidation } from '../services/accountingTreeFileService';
 import { printContent as basePrintContent } from '../lib/printUtils';
 import * as XLSX from 'xlsx';
 
@@ -58,13 +82,12 @@ const isActive = (record: any) => record?.isActive !== false && record?.is_activ
 
 export default function AccountingHierarchyManagement({ isAr, canEdit }: Props) {
   const [activeTab, setActiveTab] = useState<'tree' | 'defaults'>('tree');
-  const [roots, setRoots] = useState<any[]>([]);
-  const [mains, setMains] = useState<any[]>([]);
-  const [subs, setSubs] = useState<any[]>([]);
-  const [groups, setGroups] = useState<any[]>([]);
-  const [accounts, setAccounts] = useState<any[]>([]);
-  const [defaultAccounts, setDefaultAccounts] = useState<any[]>([]);
-  const [currencies, setCurrencies] = useState<any[]>([]);
+  const [roots, setRoots] = useState<HierarchyNode[]>([]);
+  const [mains, setMains] = useState<HierarchyNode[]>([]);
+  const [subs, setSubs] = useState<HierarchyNode[]>([]);
+  const [groups, setGroups] = useState<HierarchyNode[]>([]);
+  const [accounts, setAccounts] = useState<FinancialAccount[]>([]);
+  const [defaultAccounts, setDefaultAccounts] = useState<DefaultAccountRecord[]>([]);
   const [entryModules, setEntryModules] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [defaultSearch, setDefaultSearch] = useState('');
@@ -72,35 +95,64 @@ export default function AccountingHierarchyManagement({ isAr, canEdit }: Props) 
   const [editorKind, setEditorKind] = useState<EditorKind | null>(null);
   const [editing, setEditing] = useState<any | null>(null);
   const [isUnifiedAccountCreate, setIsUnifiedAccountCreate] = useState(false);
-  const [deleting, setDeleting] = useState<{ table: string; item: any } | null>(null);
+  const [deleting, setDeleting] = useState<{ kind: EditorKind; item: any } | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [form, setForm] = useState<any>({});
   const [statementAccount, setStatementAccount] = useState<any | null>(null);
   const [statementTransactions, setStatementTransactions] = useState<any[]>([]);
   const [statementLoading, setStatementLoading] = useState(false);
-  const [importPreview, setImportPreview] = useState<{ rows: any[]; errors: string[]; warnings: string[] } | null>(null);
+  const [importPreview, setImportPreview] = useState<TreeImportValidation | null>(null);
   const [importing, setImporting] = useState(false);
   const [printSections, setPrintSections] = useState<Record<string, boolean>>({});
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
+  const [dataLoading, setDataLoading] = useState(true);
   const importInputRef = useRef<HTMLInputElement>(null);
   const liveBalances = useAccountBalances();
   const { currencies: exchangeCurrencies, loading: exchangeRatesLoading } = useExchangeRates();
-  useEffect(() => {
-    const subscribe = (table: string, setItems: (items: any[]) => void) => onSnapshot(collection(db, table), (snapshot: any) => {
-      setItems(snapshot.docs.map((item: any) => ({ id: item.id, ...item.data() })));
-    }, (listenerError: any) => setError(listenerError?.message || (isAr ? 'تعذر تحميل بيانات الحسابات.' : 'Unable to load accounting data.')));
-    const sources: Array<[string, (items: any[]) => void]> = [
-      ['account', setRoots], ['acc_main', setMains], ['acc_sub', setSubs], ['acc_sub_group', setGroups],
-      ['accounts', setAccounts], ['default_accounts', setDefaultAccounts], ['currency', setCurrencies],
-      ['entry_module', setEntryModules],
-    ];
-    const unsubs = sources.map(([table, setItems]) => subscribe(table, setItems));
-    return () => { unsubs.forEach((unsubscribe) => unsubscribe()); };
+
+  /**
+   * كل القراءات عبر alx_api: المستويات الأربعة + الحسابات المالية + الحسابات الافتراضية.
+   * Loads the four tree levels, the posting accounts and the default bindings through alx_api.
+   */
+  const loadTree = useCallback(async () => {
+    setDataLoading(true);
+    try {
+      const [rootNodes, mainNodes, subNodes, groupNodes, ledgerAccounts, defaultRecords] = await Promise.all([
+        listHierarchyNodes('account'),
+        listHierarchyNodes('main'),
+        listHierarchyNodes('sub'),
+        listHierarchyNodes('group'),
+        financialAccountService.getAllAccounts(),
+        listDefaultAccountRecords(),
+      ]);
+      setRoots(rootNodes);
+      setMains(mainNodes);
+      setSubs(subNodes);
+      setGroups(groupNodes);
+      setAccounts(ledgerAccounts);
+      setDefaultAccounts(defaultRecords);
+    } catch (loadError: any) {
+      setError(loadError?.message || (isAr ? 'تعذر تحميل بيانات الحسابات.' : 'Unable to load accounting data.'));
+    } finally {
+      setDataLoading(false);
+    }
   }, [isAr]);
 
-  const dataLoadState: string = 'ready';
-  const activeCurrencies = useMemo(() => currencies.filter(isActive), [currencies]);
+  useEffect(() => { void loadTree(); }, [loadTree]);
+
+  // تسمي وحدات القيود تكميلي ويحتاج صلاحية منفصلة؛ الفشل يُترك بصمت حتى لا تتعطل الشجرة.
+  // Entry-module labels are optional and need their own permission; a failure must not break the tree.
+  useEffect(() => {
+    let cancelled = false;
+    financialEntrySettingsService.listModules()
+      .then((rows) => { if (!cancelled) setEntryModules(rows); })
+      .catch(() => { if (!cancelled) setEntryModules([]); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const dataLoadState: string = dataLoading ? 'loading' : 'ready';
+  const activeCurrencies = useMemo(() => exchangeCurrencies.filter(isActive), [exchangeCurrencies]);
   const postingAccounts = useMemo(() => accountingHierarchyService.filterPostingAccounts(accounts, true), [accounts]);
   const defaultCurrencyId = activeCurrencies.find((currency) => currency.isDefault || currency.is_default)?.cur_id || activeCurrencies[0]?.cur_id || '';
   const defaultCurrencyCode = useMemo(() => String(exchangeCurrencies.find((currency) => currency.isDefault)?.code || activeCurrencies.find((currency) => currency.isDefault || currency.is_default)?.code || '').toUpperCase(), [activeCurrencies, exchangeCurrencies]);
@@ -259,28 +311,24 @@ export default function AccountingHierarchyManagement({ isAr, canEdit }: Props) 
       setError(message);
     }
   };
+  /**
+   * الاستيراد عبر API: عقد الشجرة تُرسل دفعة واحدة في معاملة الخادم، ثم تُنشأ الحسابات المالية.
+   * Imports through the API: hierarchy rows go in one server transaction, posting accounts follow.
+   */
   const executeImport = async () => {
     if (!canEdit || !importPreview || importPreview.errors.length || !importPreview.rows.length) return;
-    const created: Array<{ table: string; id: string }> = [];
-    const nodes = new Map(createKnownTreeNodes({ roots, mains, subs, groups, accounts }).map((node) => [node.id, node]));
-    const tableByLevel: Record<AccountingImportLevel, string> = { account: 'account', main: 'acc_main', sub: 'acc_sub', group: 'acc_sub_group', ledger: 'accounts' };
     try {
       setImporting(true);
-      for (const row of importPreview.rows) {
-        // The validator guarantees this allowlisted level; this cast closes its legacy row boundary.
-        const level = row.level as AccountingImportLevel;
-        const table = tableByLevel[level];
-        const payload = buildImportedTreePayload(row, nodes);
-        await addDoc(row.id, collection(db, table), payload);
-        created.push({ table, id: row.id });
-        nodes.set(row.id, { id: row.id, level, parentId: row.parentId, accountType: row.accountType, accSubId: level === 'group' ? row.parentId || undefined : undefined });
-      }
+      await importAccountingTree(
+        importPreview.rows,
+        new Map(createKnownTreeNodes({ roots, mains, subs, groups, accounts }).map((node) => [node.id, node])),
+      );
       setImportPreview(null);
     } catch (importError: unknown) {
-      await Promise.all(created.reverse().map(async (createdRow) => {
-        try { await deleteDoc(doc(db, createdRow.table, createdRow.id)); } catch (_) { /* preserving original error is more useful to the operator */ }
-      }));
-      setError(importError instanceof Error ? importError.message : (isAr ? 'تعذر استيراد الشجرة؛ أُجري تراجع عن السجلات التي أضيفت أثناء المحاولة.' : 'The tree import failed; records added during this attempt were rolled back.'));
+      setError(importError instanceof Error ? importError.message : (isAr ? 'تعذر استيراد الشجرة.' : 'The tree import failed.'));
+      // العقد التي مرّت قبل الخطأ تبقى؛ إعادة التحميل تُظهر الحالة الفعلية بدل الإيحاء بتراجع كامل.
+      // Rows committed before the failure remain, so reloading shows the real state instead of implying a rollback.
+      await loadTree();
     } finally {
       setImporting(false);
     }
@@ -303,61 +351,31 @@ export default function AccountingHierarchyManagement({ isAr, canEdit }: Props) 
   const toggle = (id: string) => setExpanded((previous) => ({ ...previous, [id]: !previous[id] }));
   const expandAll = () => setExpanded(Object.fromEntries([...roots, ...mains, ...subs, ...groups].map((item) => [item.id, true])));
   const collapseAll = () => setExpanded(Object.fromEntries([...roots, ...mains, ...subs, ...groups].map((item) => [item.id, false])));
+  /** كشف الحساب: الخادم يعيد الحركات المرحّلة فقط مع مرجع القيد والتصنيف. */
   const openStatement = async (account: any) => {
     setStatementAccount(account);
     setStatementTransactions([]);
     setStatementLoading(true);
     try {
-      const snapshot = await getDocs(query(collection(db, 'account_trans'), where('accountId', '==', account.id), orderBy('createdAt', 'desc')));
-      const rawTrans = snapshot.docs.map((entry: any) => ({ id: entry.id, ...entry.data() }));
-
-      const entryIds = Array.from(new Set(rawTrans.map((t: any) => t.entryId || t.entry_id).filter(Boolean)));
-      const mainEntriesMap = new Map<string, any>();
-      if (entryIds.length > 0) {
-        try {
-          const mainEntriesSnap = await getDocs(collection(db, 'main_entry'));
-          mainEntriesSnap.docs.forEach((d: any) => {
-            if (entryIds.includes(d.id)) {
-              mainEntriesMap.set(d.id, d.data());
-            }
-          });
-        } catch (_) { /* ignore fallback fetch error */ }
-      }
-
-      setStatementTransactions(
-        rawTrans
-          .filter((t: any) => {
-            const entryId = t.entryId || t.entry_id;
-            const mainEntry = mainEntriesMap.get(entryId);
-
-            // استبعاد الحركات التي ليس لها قيد مرتبط وتم إيجاد entry_id فارغ
-            // Exclude transactions with entry_id that has no matching main_entry
-            if (entryId && !mainEntry) return false;
-
-            // استبعاد القيود غير المرحّلة (draft وما يشابهها)
-            // Exclude non-posted entries (draft or any status other than posted)
-            const postingStatus = mainEntry?.postingStatus || mainEntry?.posting_status || '';
-            if (entryId && postingStatus !== 'posted') return false;
-
-            return true;
-          })
-          .map((t: any) => {
-            const mainEntry = mainEntriesMap.get(t.entryId || t.entry_id);
-            return {
-              ...t,
-              module: t.module || t.module_id || t.moduleId || mainEntry?.moduleId || mainEntry?.module_id || mainEntry?.entryCategory || t.entryCategory || t.trans_type,
-            };
-          })
-      );
-
-
+      const movements = account?.id ? await listAccountMovements(String(account.id)) : [];
+      setStatementTransactions(movements.map((movement, index) => ({
+        id: String(movement.transactionId ?? `movement-${index}`),
+        createdAt: movement.createdAt,
+        entryNumber: movement.entryNumber,
+        description: String(movement.description ?? movement.note ?? ''),
+        module: movement.module,
+        transType: movement.transType,
+        amount: Number(movement.amount ?? 0),
+      })));
     } catch (statementError: any) {
       setError(statementError?.message || (isAr ? 'تعذر تحميل كشف الحساب.' : 'Unable to load the account statement.'));
     } finally {
       setStatementLoading(false);
     }
   };
-  const tableFor = (kind: EditorKind) => kind === 'account' ? 'account' : kind === 'main' ? 'acc_main' : kind === 'sub' ? 'acc_sub' : kind === 'group' ? 'acc_sub_group' : kind === 'ledger' ? 'accounts' : 'default_accounts';
+  /** نوع المحرر إلى مستوى الشجرة — default and ledger rows live outside the tree tables. */
+  const hierarchyLevelFor = (kind: EditorKind): HierarchyLevel | null =>
+    kind === 'account' || kind === 'main' || kind === 'sub' || kind === 'group' ? kind : null;
   const recordsFor = (kind: EditorKind) => kind === 'account' ? roots : kind === 'main' ? mains : kind === 'sub' ? subs : kind === 'group' ? groups : kind === 'ledger' ? accounts : defaultAccounts;
 
   const resolveParents = (item?: any, parent?: any) => {
@@ -472,54 +490,86 @@ export default function AccountingHierarchyManagement({ isAr, canEdit }: Props) 
     if (!editorKind || !canEdit) return setError(isAr ? 'لا تملك صلاحية تعديل الحسابات.' : 'You do not have permission to edit accounts.');
     const validationError = validateForm();
     if (validationError) return setError(validationError);
-    const table = tableFor(editorKind);
     const code = String(form.accountCode || '').trim();
     const selectedCurrency = activeCurrencies.find((currency) => Number(currency.cur_id) === Number(form.curNo));
     const common = { accountCode: code, accNameAr: String(form.accNameAr || '').trim(), accNameEn: String(form.accNameEn || '').trim(), curNo: form.curNo ? Number(form.curNo) : null, isActive: Boolean(form.isActive) };
-    let payload: any;
-    if (editorKind === 'account') payload = { ...common, accountType: form.accountType };
-    else if (editorKind === 'main') payload = { ...common, accountId: form.accountId };
-    else if (editorKind === 'sub') payload = { ...common, accMainId: form.accMainId, allowsDirectAccounts: Boolean(form.allowsDirectAccounts) };
-    else if (editorKind === 'group') payload = { ...common, accSubId: form.accSubId, entityType: form.entityType || null, allowsDirectAccounts: Boolean(form.allowsDirectAccounts) };
-    else if (editorKind === 'ledger') {
-      const accountSeq = Number(form.accountSeq || String(code).split('-')[1]);
-      payload = {
-        ...common, id: editing?.id || code, accSubId: form.accSubId, groupId: form.groupId || null,
-        entityType: form.entityType || null, entityId: form.entityId || null, accountSeq,
-        accountPrefix: code.split('-')[0], accountNumber: String(accountSeq).padStart(4, '0'),
-        limitedBalance: Math.max(0, Number(form.limitedBalance || 0)), balance: Number(editing?.balance || 0),
-        type: read(selectedRoot, 'accountType', 'account_type') || form.accountType, entityName: String(form.accNameAr || '').trim(), currency: selectedCurrency?.code || editing?.currency || null,
-      };
-    } else {
-      const selected = postingAccounts.find((account) => account.id === form.accountRefId);
-      payload = {
-        id: editing?.id || String(form.defaultKey), defaultKey: form.defaultKey, accountId: form.accountRefId,
-        accNameAr: String(form.accNameAr || selected?.accNameAr || selected?.entityName || form.defaultKey),
-        accNameEn: String(form.accNameEn || selected?.accNameEn || selected?.entityName || form.defaultKey),
-        curNo: form.curNo ? Number(form.curNo) : read(selected, 'curNo', 'cur_no') || null, isActive: Boolean(form.isActive),
-      };
-    }
+    const level = hierarchyLevelFor(editorKind);
     try {
       setSaving(true);
-      if (editing) await updateDoc(doc(db, table, editing.id), payload);
-      else await addDoc(editorKind === 'default' ? String(form.defaultKey) : editorKind === 'ledger' ? code : code, collection(db, table), payload);
+      if (level) {
+        const nodeInput: HierarchyNodeInput = level === 'account'
+          ? { ...common, accountType: form.accountType }
+          : level === 'main'
+            ? { ...common, accountId: form.accountId }
+            : level === 'sub'
+              ? { ...common, accMainId: form.accMainId, allowsDirectAccounts: Boolean(form.allowsDirectAccounts) }
+              : { ...common, accSubId: form.accSubId, entityType: form.entityType || null, allowsDirectAccounts: Boolean(form.allowsDirectAccounts) };
+        // معرّف العقدة يبقى الكود المحاسبي كما في السجلات القائمة — the node id stays the accounting code.
+        if (editing) await updateHierarchyNode(level, String(editing.id), nodeInput);
+        else await createHierarchyNode(level, code, nodeInput);
+      } else if (editorKind === 'ledger') {
+        const accountSeq = Number(form.accountSeq || String(code).split('-')[1]);
+        const accountInput: FinancialAccountInput = {
+          ...common, accSubId: form.accSubId, groupId: form.groupId || null,
+          entityType: form.entityType || null, entityId: form.entityId || null, accountSeq,
+          accountPrefix: code.split('-')[0], accountNumber: String(accountSeq).padStart(4, '0'),
+          limitedBalance: Math.max(0, Number(form.limitedBalance || 0)), balance: Number(editing?.balance || 0),
+          type: read(selectedRoot, 'accountType', 'account_type') || form.accountType, entityName: String(form.accNameAr || '').trim(), currency: selectedCurrency?.code || editing?.currency || null,
+        };
+        if (editing) await updateFinancialAccount(String(editing.id), accountInput);
+        else await createFinancialAccount(code, accountInput);
+      } else {
+        const selected = postingAccounts.find((account) => account.id === form.accountRefId);
+        const bindingInput: DefaultAccountInput = {
+          defaultKey: form.defaultKey, accountId: form.accountRefId,
+          accNameAr: String(form.accNameAr || selected?.accNameAr || selected?.entityName || form.defaultKey),
+          accNameEn: String(form.accNameEn || selected?.accNameEn || selected?.entityName || form.defaultKey),
+          curNo: form.curNo ? Number(form.curNo) : read(selected, 'curNo', 'cur_no') || null, isActive: Boolean(form.isActive),
+        };
+        // معرّف الربط هو المفتاح النظامي — the binding id stays the system key.
+        if (editing) await updateDefaultAccount(String(editing.id), bindingInput);
+        else await createDefaultAccount(String(form.defaultKey), bindingInput);
+      }
       setEditorKind(null); setEditing(null);
+      await loadTree();
     } catch (saveError: any) {
       setError(saveError?.message || (isAr ? 'تعذر حفظ السجل.' : 'Unable to save the record.'));
     } finally { setSaving(false); }
   };
 
+  /**
+   * الحذف عبر API: الحساب المالي لا يُحذف إن كانت له حركات، والخادم يرفض ويشرح السبب.
+   * Deletion goes through the API; a posting account with ledger history is refused (409) server-side.
+   */
   const remove = async () => {
     if (!deleting) return;
-    try { await deleteDoc(doc(db, deleting.table, deleting.item.id)); setDeleting(null); }
-    catch (deleteError: any) { setError(deleteError?.message || (isAr ? 'تعذر حذف السجل المرتبط.' : 'Unable to delete linked record.')); setDeleting(null); }
+    const id = String(deleting.item?.id ?? '');
+    try {
+      if (deleting.kind === 'ledger') {
+        const result = await deleteFinancialAccount(id);
+        if (result.status !== 'deleted') {
+          setError(result.message || (isAr ? 'تعذر حذف الحساب.' : 'Unable to delete the account.'));
+          setDeleting(null);
+          return;
+        }
+      } else if (deleting.kind === 'default') {
+        await deleteDefaultAccount(id);
+      } else {
+        await deleteHierarchyNode(deleting.kind, id);
+      }
+      setDeleting(null);
+      await loadTree();
+    } catch (deleteError: any) {
+      setError(deleteError?.message || (isAr ? 'تعذر حذف السجل المرتبط.' : 'Unable to delete linked record.'));
+      setDeleting(null);
+    }
   };
 
   const branchAction = (kind: EditorKind, parent: any) => {
     try { openEditor(kind, undefined, { ...parent, suggestedCode: suggestCode(kind, parent) }); }
     catch (suggestionError: any) { setError(suggestionError?.message || (isAr ? 'تعذر توليد الكود.' : 'Unable to generate the code.')); }
   };
-  const renderActions = (table: string, item: any, kind: EditorKind) => canEdit ? <div className="flex items-center gap-1 shrink-0"><button onClick={() => openEditor(kind, item)} className="p-1.5 rounded-lg text-slate-400 hover:text-[#d4af37] hover:bg-[#d4af37]/10" title={isAr ? 'تعديل' : 'Edit'}><Edit3 size={14} /></button><button onClick={() => setDeleting({ table, item })} className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10" title={isAr ? 'حذف' : 'Delete'}><Trash2 size={14} /></button></div> : null;
+  const renderActions = (item: any, kind: EditorKind) => canEdit ? <div className="flex items-center gap-1 shrink-0"><button onClick={() => openEditor(kind, item)} className="p-1.5 rounded-lg text-slate-400 hover:text-[#d4af37] hover:bg-[#d4af37]/10" title={isAr ? 'تعديل' : 'Edit'}><Edit3 size={14} /></button><button onClick={() => setDeleting({ kind, item })} className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10" title={isAr ? 'حذف' : 'Delete'}><Trash2 size={14} /></button></div> : null;
   const compareByAccountingCode = (left: any, right: any) => recordCode(left).localeCompare(recordCode(right), undefined, { numeric: true, sensitivity: 'base' });
   const codeBadge = (item: any, size: 'root' | 'branch' | 'leaf' = 'branch') =>
     <span className={size === 'root' ? 'inline-flex rounded-lg border border-[#d4af37]/40 bg-[#d4af37]/15 px-2 py-0.5 font-mono text-base font-black tracking-wide text-[#f6d56a] shadow-[0_0_14px_rgba(212,175,55,0.12)]'
@@ -535,18 +585,18 @@ export default function AccountingHierarchyManagement({ isAr, canEdit }: Props) 
       <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border font-black ${presentation.badge}`}><CircleDollarSign size={13} /></div>
       <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-1.5"><span className="text-xs font-bold text-slate-50">{recordName(item, isAr)}</span><span className={`rounded border px-1 py-0.5 text-[9px] font-bold ${presentation.badge}`}>{isAr ? presentation.labelAr : presentation.labelEn}</span>{codeBadge(item, 'leaf')}{item.entityName && item.entityName !== recordName(item, isAr) ? <span className="text-[10px] text-slate-400">{item.entityName}</span> : null}</div></div>
       <div className="grid grid-cols-2 gap-1.5 sm:min-w-[180px]"><div className="rounded border border-white/5 bg-black/20 px-2 py-1"><div className="text-[8px] font-bold uppercase tracking-wide text-slate-500">{isAr ? 'العملة' : 'Currency'}</div><div className="mt-0.5 font-mono text-[10px] font-bold text-slate-200">{accountCurrency}</div></div><div className="rounded border border-white/5 bg-black/20 px-2 py-1"><div className="text-[8px] font-bold uppercase tracking-wide text-slate-500">{isAr ? 'الرصيد' : 'Balance'}</div>{balanceSummary(balance)}</div></div>
-      <div className="flex items-center justify-end gap-0.5">{limit > 0 && <span className="me-1 rounded border border-amber-500/30 bg-amber-500/10 px-1 py-0.5 text-[9px] font-bold text-amber-300">{isAr ? `حد ${formatMoney(limit)}` : `Limit ${formatMoney(limit)}`}</span>}<button onClick={() => openStatement(item)} className={`rounded-lg border p-1.5 transition-colors ${presentation.badge}`} title={isAr ? 'عرض كشف الحساب' : 'View account statement'} aria-label={isAr ? `كشف حساب ${recordName(item, isAr)}` : `Statement for ${recordName(item, isAr)}`}><FileText size={12} /></button>{renderActions('accounts', item, 'ledger')}</div>
+      <div className="flex items-center justify-end gap-0.5">{limit > 0 && <span className="me-1 rounded border border-amber-500/30 bg-amber-500/10 px-1 py-0.5 text-[9px] font-bold text-amber-300">{isAr ? `حد ${formatMoney(limit)}` : `Limit ${formatMoney(limit)}`}</span>}<button onClick={() => openStatement(item)} className={`rounded-lg border p-1.5 transition-colors ${presentation.badge}`} title={isAr ? 'عرض كشف الحساب' : 'View account statement'} aria-label={isAr ? `كشف حساب ${recordName(item, isAr)}` : `Statement for ${recordName(item, isAr)}`}><FileText size={12} /></button>{renderActions(item, 'ledger')}</div>
     </div>;
   };
   const renderGroup = (item: any, depth: number) => {
     const children = postingAccounts.filter((account) => read(account, 'groupId', 'group_id') === item.id).sort(compareByAccountingCode); const visible = matches(item) || children.some(matches); if (!visible) return null; const opened = expanded[item.id] !== false; const balance = balanceFor('group', String(item.id));
-    return <div key={item.id} style={{ marginInlineStart: `${depth * 18}px` }}><div className="flex items-center gap-2 py-2 px-3 rounded-xl bg-slate-900/40 border border-slate-800/80"><button onClick={() => toggle(item.id)} className="text-slate-400">{opened ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button><Layers3 size={16} className="text-violet-400" /><div className="min-w-0 flex-1"><div className="text-sm font-bold text-slate-200">{recordName(item, isAr)}</div><div className="mt-1 flex flex-wrap items-center gap-2">{codeBadge(item)}<span className="text-[10px] text-slate-500">{children.length} {isAr ? 'حسابات مالية' : 'posting accounts'}</span></div></div><div className="rounded-lg border border-white/5 bg-black/20 px-2 py-1">{balanceSummary(balance)}</div>{canEdit && <button onClick={() => branchAction('ledger', { accSubId: read(item, 'accSubId', 'acc_sub_id'), groupId: item.id, curNo: read(item, 'curNo', 'cur_no') })} className="p-1.5 rounded-lg text-emerald-400 hover:bg-emerald-500/10" title={isAr ? 'حساب مالي جديد' : 'New posting account'}><Plus size={14} /></button>}{renderActions('acc_sub_group', item, 'group')}</div>{opened && children.map((child) => renderLeaf(child, depth + 1))}</div>;
+    return <div key={item.id} style={{ marginInlineStart: `${depth * 18}px` }}><div className="flex items-center gap-2 py-2 px-3 rounded-xl bg-slate-900/40 border border-slate-800/80"><button onClick={() => toggle(item.id)} className="text-slate-400">{opened ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button><Layers3 size={16} className="text-violet-400" /><div className="min-w-0 flex-1"><div className="text-sm font-bold text-slate-200">{recordName(item, isAr)}</div><div className="mt-1 flex flex-wrap items-center gap-2">{codeBadge(item)}<span className="text-[10px] text-slate-500">{children.length} {isAr ? 'حسابات مالية' : 'posting accounts'}</span></div></div><div className="rounded-lg border border-white/5 bg-black/20 px-2 py-1">{balanceSummary(balance)}</div>{canEdit && <button onClick={() => branchAction('ledger', { accSubId: read(item, 'accSubId', 'acc_sub_id'), groupId: item.id, curNo: read(item, 'curNo', 'cur_no') })} className="p-1.5 rounded-lg text-emerald-400 hover:bg-emerald-500/10" title={isAr ? 'حساب مالي جديد' : 'New posting account'}><Plus size={14} /></button>}{renderActions(item, 'group')}</div>{opened && children.map((child) => renderLeaf(child, depth + 1))}</div>;
   };
   const renderSub = (item: any, depth: number) => {
     const childGroups = groups.filter((group) => read(group, 'accSubId', 'acc_sub_id') === item.id).sort(compareByAccountingCode); const directAccounts = postingAccounts.filter((account) => !read(account, 'groupId', 'group_id') && read(account, 'accSubId', 'acc_sub_id') === item.id).sort(compareByAccountingCode); const visible = matches(item) || childGroups.some(matches) || directAccounts.some(matches); if (!visible) return null; const opened = expanded[item.id] !== false; const balance = balanceFor('sub', String(item.id));
-    return <div key={item.id} style={{ marginInlineStart: `${depth * 18}px` }}><div className="flex items-center gap-2 py-2 px-3 rounded-xl hover:bg-slate-800/60"><button onClick={() => toggle(item.id)} className="text-slate-400">{opened ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button><FolderPlus size={16} className="text-sky-400" /><div className="min-w-0 flex-1"><div className="text-sm font-semibold text-slate-200">{recordName(item, isAr)}</div><div className="mt-1">{codeBadge(item)}</div></div><div className="rounded-lg border border-white/5 bg-black/20 px-2 py-1">{balanceSummary(balance)}</div>{canEdit && <><button onClick={() => branchAction('group', { accSubId: item.id, curNo: read(item, 'curNo', 'cur_no') })} className="p-1.5 rounded-lg text-violet-400 hover:bg-violet-500/10" title={isAr ? 'مجموعة جديدة' : 'New group'}><Layers3 size={14} /></button><button onClick={() => branchAction('ledger', { accSubId: item.id, curNo: read(item, 'curNo', 'cur_no') })} className="p-1.5 rounded-lg text-emerald-400 hover:bg-emerald-500/10" title={isAr ? 'حساب مالي جديد' : 'New posting account'}><Plus size={14} /></button></>}{renderActions('acc_sub', item, 'sub')}</div>{opened && <>{childGroups.map((child) => renderGroup(child, depth + 1))}{directAccounts.map((child) => renderLeaf(child, depth + 1))}</>}</div>;
+    return <div key={item.id} style={{ marginInlineStart: `${depth * 18}px` }}><div className="flex items-center gap-2 py-2 px-3 rounded-xl hover:bg-slate-800/60"><button onClick={() => toggle(item.id)} className="text-slate-400">{opened ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button><FolderPlus size={16} className="text-sky-400" /><div className="min-w-0 flex-1"><div className="text-sm font-semibold text-slate-200">{recordName(item, isAr)}</div><div className="mt-1">{codeBadge(item)}</div></div><div className="rounded-lg border border-white/5 bg-black/20 px-2 py-1">{balanceSummary(balance)}</div>{canEdit && <><button onClick={() => branchAction('group', { accSubId: item.id, curNo: read(item, 'curNo', 'cur_no') })} className="p-1.5 rounded-lg text-violet-400 hover:bg-violet-500/10" title={isAr ? 'مجموعة جديدة' : 'New group'}><Layers3 size={14} /></button><button onClick={() => branchAction('ledger', { accSubId: item.id, curNo: read(item, 'curNo', 'cur_no') })} className="p-1.5 rounded-lg text-emerald-400 hover:bg-emerald-500/10" title={isAr ? 'حساب مالي جديد' : 'New posting account'}><Plus size={14} /></button></>}{renderActions(item, 'sub')}</div>{opened && <>{childGroups.map((child) => renderGroup(child, depth + 1))}{directAccounts.map((child) => renderLeaf(child, depth + 1))}</>}</div>;
   };
-  const renderMain = (item: any, depth: number) => { const children = subs.filter((sub) => read(sub, 'accMainId', 'acc_main_id') === item.id).sort(compareByAccountingCode); const visible = matches(item) || children.some(matches); if (!visible) return null; const opened = expanded[item.id] !== false; const balance = balanceFor('main', String(item.id)); return <div key={item.id} style={{ marginInlineStart: `${depth * 18}px` }}><div className="flex items-center gap-2 py-2 px-3 rounded-xl bg-slate-900/50 border border-slate-800/70"><button onClick={() => toggle(item.id)} className="text-slate-400">{opened ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button><FolderPlus size={16} className="text-amber-400" /><div className="min-w-0 flex-1"><div className="text-sm font-bold text-slate-100">{recordName(item, isAr)}</div><div className="mt-1">{codeBadge(item)}</div></div><div className="rounded-lg border border-white/5 bg-black/20 px-2 py-1">{balanceSummary(balance)}</div>{canEdit && <button onClick={() => branchAction('sub', { accountId: read(item, 'accountId', 'account_id'), accMainId: item.id, curNo: read(item, 'curNo', 'cur_no') })} className="p-1.5 rounded-lg text-sky-400 hover:bg-sky-500/10" title={isAr ? 'حساب جزئي جديد' : 'New detail account'}><Plus size={14} /></button>}{renderActions('acc_main', item, 'main')}</div>{opened && children.map((child) => renderSub(child, depth + 1))}</div>; };
+  const renderMain = (item: any, depth: number) => { const children = subs.filter((sub) => read(sub, 'accMainId', 'acc_main_id') === item.id).sort(compareByAccountingCode); const visible = matches(item) || children.some(matches); if (!visible) return null; const opened = expanded[item.id] !== false; const balance = balanceFor('main', String(item.id)); return <div key={item.id} style={{ marginInlineStart: `${depth * 18}px` }}><div className="flex items-center gap-2 py-2 px-3 rounded-xl bg-slate-900/50 border border-slate-800/70"><button onClick={() => toggle(item.id)} className="text-slate-400">{opened ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button><FolderPlus size={16} className="text-amber-400" /><div className="min-w-0 flex-1"><div className="text-sm font-bold text-slate-100">{recordName(item, isAr)}</div><div className="mt-1">{codeBadge(item)}</div></div><div className="rounded-lg border border-white/5 bg-black/20 px-2 py-1">{balanceSummary(balance)}</div>{canEdit && <button onClick={() => branchAction('sub', { accountId: read(item, 'accountId', 'account_id'), accMainId: item.id, curNo: read(item, 'curNo', 'cur_no') })} className="p-1.5 rounded-lg text-sky-400 hover:bg-sky-500/10" title={isAr ? 'حساب جزئي جديد' : 'New detail account'}><Plus size={14} /></button>}{renderActions(item, 'main')}</div>{opened && children.map((child) => renderSub(child, depth + 1))}</div>; };
   const renderRoot = (item: any) => {
     const children = mains.filter((main) => read(main, 'accountId', 'account_id') === item.id).sort(compareByAccountingCode);
     const visible = matches(item) || children.some(matches);
@@ -557,21 +607,21 @@ export default function AccountingHierarchyManagement({ isAr, canEdit }: Props) 
     const descendantSubIds = new Set(subs.filter((sub) => children.some((main) => main.id === read(sub, 'accMainId', 'acc_main_id'))).map((sub) => sub.id));
     const descendantCount = postingAccounts.filter((account) => descendantSubIds.has(read(account, 'accSubId', 'acc_sub_id'))).length;
     const balance = balanceFor('account', String(item.id));
-    return <div key={item.id} className={`overflow-hidden rounded-2xl border ${presentation.row}`}><div className="flex items-center gap-3 px-4 py-3"><button onClick={() => toggle(item.id)} className={`rounded-lg p-1 transition-colors hover:bg-black/20 ${presentation.accent}`} aria-label={opened ? (isAr ? 'طيّ الفرع' : 'Collapse branch') : (isAr ? 'توسيع الفرع' : 'Expand branch')}>{opened ? <ChevronDown size={18} /> : <ChevronRight size={18} />}</button><div className={`flex h-9 w-9 items-center justify-center rounded-xl border font-black ${presentation.badge}`}><Layers3 size={18} /></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="font-black text-white">{recordName(item, isAr)}</h3><span className={`rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${presentation.badge}`}>{isAr ? presentation.labelAr : presentation.labelEn}</span></div><div className="mt-2 flex flex-wrap items-center gap-2">{codeBadge(item, 'root')}<span className="text-[10px] text-slate-400">{descendantCount} {isAr ? 'حسابات مالية' : 'posting accounts'}</span></div></div><div className="rounded-xl border border-white/10 bg-black/20 px-2.5 py-1.5">{balanceSummary(balance)}</div>{canEdit && <button onClick={() => branchAction('main', { accountId: item.id, accountType, curNo: read(item, 'curNo', 'cur_no') })} className={`rounded-lg p-2 transition-colors hover:bg-black/20 ${presentation.accent}`} title={isAr ? 'حساب فرعي جديد' : 'New subaccount'}><Plus size={15} /></button>}{renderActions('account', item, 'account')}</div>{opened && <div className="border-t border-white/10 p-2">{children.map((child) => renderMain(child, 1))}</div>}</div>;
+    return <div key={item.id} className={`overflow-hidden rounded-2xl border ${presentation.row}`}><div className="flex items-center gap-3 px-4 py-3"><button onClick={() => toggle(item.id)} className={`rounded-lg p-1 transition-colors hover:bg-black/20 ${presentation.accent}`} aria-label={opened ? (isAr ? 'طيّ الفرع' : 'Collapse branch') : (isAr ? 'توسيع الفرع' : 'Expand branch')}>{opened ? <ChevronDown size={18} /> : <ChevronRight size={18} />}</button><div className={`flex h-9 w-9 items-center justify-center rounded-xl border font-black ${presentation.badge}`}><Layers3 size={18} /></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="font-black text-white">{recordName(item, isAr)}</h3><span className={`rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${presentation.badge}`}>{isAr ? presentation.labelAr : presentation.labelEn}</span></div><div className="mt-2 flex flex-wrap items-center gap-2">{codeBadge(item, 'root')}<span className="text-[10px] text-slate-400">{descendantCount} {isAr ? 'حسابات مالية' : 'posting accounts'}</span></div></div><div className="rounded-xl border border-white/10 bg-black/20 px-2.5 py-1.5">{balanceSummary(balance)}</div>{canEdit && <button onClick={() => branchAction('main', { accountId: item.id, accountType, curNo: read(item, 'curNo', 'cur_no') })} className={`rounded-lg p-2 transition-colors hover:bg-black/20 ${presentation.accent}`} title={isAr ? 'حساب فرعي جديد' : 'New subaccount'}><Plus size={15} /></button>}{renderActions(item, 'account')}</div>{opened && <div className="border-t border-white/10 p-2">{children.map((child) => renderMain(child, 1))}</div>}</div>;
   };
 
   const selector = (label: string, value: string, options: any[], onChange: (value: string) => void, placeholder: string) => <label className="text-xs text-slate-400">{label}<select value={value || ''} onChange={(event) => onChange(event.target.value)} className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-700 p-2.5 text-white"><option value="">{placeholder}</option>{options.map((option) => <option key={option.id} value={option.id}>{recordCode(option)} — {recordName(option, isAr)}</option>)}</select></label>;
   const defaultAccountOptions = postingAccounts.filter((account) => !defaultSearch.trim() || `${recordCode(account)} ${recordName(account, isAr)} ${account.entityName || ''}`.toLowerCase().includes(defaultSearch.trim().toLowerCase()));
   const codeHint = editorKind === 'ledger' && selectedSub ? `${hierarchyCodeRules.postingPrefix(recordCode(selectedSub), recordCode(selectedGroup) || undefined)}-0001` : '';
-  const statementDebitTotal = statementTransactions.filter((transaction) => (transaction.transType || transaction.trans_type || transaction.type) === 'Debit').reduce((total, transaction) => total + Number(transaction.amount || 0), 0);
-  const statementCreditTotal = statementTransactions.filter((transaction) => (transaction.transType || transaction.trans_type || transaction.type) === 'Credit').reduce((total, transaction) => total + Number(transaction.amount || 0), 0);
+  const statementDebitTotal = statementTransactions.filter((transaction) => transaction.transType === 'Debit').reduce((total, transaction) => total + Number(transaction.amount || 0), 0);
+  const statementCreditTotal = statementTransactions.filter((transaction) => transaction.transType === 'Credit').reduce((total, transaction) => total + Number(transaction.amount || 0), 0);
 
   return <section className="space-y-5">
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between bg-black/25 border border-[#d4af37]/20 rounded-2xl p-4"><div><h2 className="font-black text-white text-lg">{isAr ? 'شجرة الحسابات المالية' : 'Financial Chart of Accounts'}</h2><p className="text-xs text-slate-500">{isAr ? 'القيد مسموح للحسابات المالية النشطة فقط؛.' : 'Only active posting accounts may be posted to; codes follow the selected parent path.'}</p></div><div className="flex gap-2"><button onClick={() => setActiveTab('tree')} className={`px-3 py-2 rounded-xl text-xs font-bold ${activeTab === 'tree' ? 'bg-[#d4af37] text-black' : 'bg-slate-900 text-slate-300'}`}>{isAr ? 'الشجرة' : 'Tree'}</button><button onClick={() => setActiveTab('defaults')} className={`px-3 py-2 rounded-xl text-xs font-bold ${activeTab === 'defaults' ? 'bg-[#d4af37] text-black' : 'bg-slate-900 text-slate-300'}`}><Settings2 size={14} className="inline me-1" />{isAr ? 'الحسابات الافتراضية' : 'Default accounts'}</button></div></div>
     {error && <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200 flex items-center justify-between"><span>{error}</span><button onClick={() => setError('')}><X size={16} /></button></div>}
     <div id="accounting-tree-print-content" className="hidden" dir={isAr ? 'rtl' : 'ltr'}><div className="header"><h1>{isAr ? 'شجرة الحسابات المالية' : 'Financial Chart of Accounts'}</h1><p>{isAr ? `الأرصدة المجمعة بعملة النظام: ${treeBalances.defaultCurrency || '—'}` : `Aggregated balances in system currency: ${treeBalances.defaultCurrency || '—'}`}</p></div><table><thead><tr><th>{isAr ? 'المستوى' : 'Level'}</th><th>{isAr ? 'الكود' : 'Code'}</th><th>{isAr ? 'الاسم العربي' : 'Arabic name'}</th><th>{isAr ? 'الاسم الإنجليزي' : 'English name'}</th><th>{isAr ? 'الأب' : 'Parent'}</th><th>{isAr ? 'الرصيد الأصلي' : 'Native balance'}</th><th>{isAr ? 'بعملة النظام' : 'System balance'}</th></tr></thead><tbody>{printableRows.map((row) => <tr key={`${row.level}-${row.id}`}><td>{row.level}</td><td>{row.accountCode}</td><td>{row.accNameAr}</td><td>{row.accNameEn}</td><td>{row.parentId}</td><td>{row.nativeBalance} {row.nativeBalanceCurrency}</td><td>{row.systemBalance} {row.systemCurrency}</td></tr>)}</tbody></table></div>
     {activeTab === 'tree' && <><div className="rounded-2xl border border-slate-800 bg-black/20 p-3"><div className="mb-2 flex items-center justify-between gap-3"><div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{isAr ? 'ملخص المعادلة المحاسبية' : 'Accounting equation summary'}</div><div className="font-mono text-[10px] text-slate-500">{treeBalances.defaultCurrency || '—'}</div></div>{exchangeRatesLoading || liveBalances.loading ? <div className="flex items-center justify-center gap-2 py-2 text-xs text-slate-400"><Loader2 size={14} className="animate-spin" />{isAr ? 'جارٍ احتساب الأرصدة وأسعار الصرف...' : 'Calculating balances and exchange rates...'}</div> : <div className="flex flex-wrap items-center justify-center gap-2 text-[10px] font-mono text-slate-400"><span className="font-black text-indigo-400">{isAr ? 'أصول' : 'Assets'} {formatBalance(treeBalances.totals.assets)}</span><span className="font-black text-slate-600">=</span><span className="text-amber-400">{isAr ? 'خصوم' : 'Liab'} {formatBalance(treeBalances.totals.liab)}</span><span className="text-slate-700">+</span><span className="text-[#d4af37]">{isAr ? 'رأس المال' : 'Capital'} {formatBalance(treeBalances.totals.capital)}</span><span className="text-slate-700">+</span><span className={Number(treeBalances.totals.netIncome || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}>{isAr ? 'صافي الدخل' : 'Net income'} {treeBalances.totals.netIncome !== null && treeBalances.totals.netIncome >= 0 ? '+' : ''}{formatBalance(treeBalances.totals.netIncome)}</span><span className="font-black text-slate-600">=</span><span className={`font-black ${treeBalances.totals.isBalanced ? 'text-emerald-400' : 'text-rose-400'}`}>{formatBalance(treeBalances.totals.rightSide)} {treeBalances.defaultCurrency || '—'} {treeBalances.totals.isBalanced ? '✓' : '✗'}</span>{treeBalances.totals.hasMissingExchangeRate && <span className="basis-full text-center text-amber-300">{isAr ? 'لا يمكن اعتماد المعادلة حتى يُسجل سعر صرف لكل عملة مستخدمة.' : 'The equation cannot be relied on until every used currency has a recorded exchange rate.'}</span>}</div>}</div><div className="flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-950/60 p-3 sm:flex-row sm:items-center sm:justify-between"><div className="text-xs text-slate-400"><span className="font-black text-slate-100">{postingAccounts.length}</span> {isAr ? 'حسابًا ماليًا ورقيًا نشطًا ضمن الشجرة' : 'active posting accounts in the hierarchy'}</div><div className="flex flex-wrap gap-2"><button onClick={expandAll} className="inline-flex items-center gap-1.5 rounded-xl border border-sky-400/30 bg-sky-400/10 px-3 py-2 text-xs font-bold text-sky-200 transition-colors hover:bg-sky-400/20"><Maximize2 size={14} /></button><button onClick={collapseAll} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-600 bg-slate-800/70 px-3 py-2 text-xs font-bold text-slate-200 transition-colors hover:bg-slate-700"><Minimize2 size={14} /></button><button onClick={() => printContent(isAr ? 'شجرة الحسابات المالية' : 'Financial chart of accounts', 'accounting-tree-print-content', isAr)} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-600 bg-slate-800/70 px-3 py-2 text-xs font-bold text-slate-200 transition-colors hover:bg-slate-700"><Printer size={14} />{isAr ? 'طباعة' : 'Print'}</button><button onClick={() => setPrintDialogOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-[#d4af37]/30 bg-[#d4af37]/10 px-3 py-2 text-xs font-bold text-[#f0d576] transition-colors hover:bg-[#d4af37]/20"><Printer size={14} />{isAr ? ' طباعة مخصصة' : 'Choose print sections'}</button><button onClick={() => exportTree('csv')} className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-xs font-bold text-emerald-200 transition-colors hover:bg-emerald-400/20"><Download size={14} />CSV</button><button onClick={() => exportTree('xlsx')} className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-xs font-bold text-emerald-200 transition-colors hover:bg-emerald-400/20"><FileSpreadsheet size={14} />XLS</button>{canEdit && <><input ref={importInputRef} onChange={inspectImportFile} accept=".csv,.xls,.xlsx" type="file" className="hidden" /><button onClick={() => importInputRef.current?.click()} className="inline-flex items-center gap-1.5 rounded-xl border border-[#d4af37]/30 bg-[#d4af37]/10 px-3 py-2 text-xs font-bold text-[#f0d576] transition-colors hover:bg-[#d4af37]/20"><Upload size={14} />{isAr ? 'استيراد' : 'Import'}</button></>}</div></div></>}
-    {activeTab === 'tree' ? <><div className="flex flex-col sm:flex-row gap-3 justify-between"><div className="relative max-w-md flex-1"><Search size={16} className="absolute start-3 top-3 text-slate-500" /><input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder={isAr ? 'ابحث بالاسم، الكود أو الكيان...' : 'Search name, code, or entity...'} className="w-full rounded-xl border border-slate-700 bg-slate-950 py-2.5 ps-9 pe-3 text-sm text-white outline-none focus:border-[#d4af37]" /></div>{canEdit && <button onClick={() => openEditor('account')} className="rounded-xl bg-[#d4af37] text-black px-4 py-2.5 text-sm font-black"><Plus size={16} className="inline me-1" />{isAr ? 'حساب جديد' : 'New account'}</button>}</div><div className="space-y-3">{dataLoadState === 'loading' && <div className="flex items-center justify-center gap-2 rounded-2xl border border-slate-700 bg-slate-950/50 p-10 text-sm text-slate-400"><Loader2 size={18} className="animate-spin" />{isAr ? 'جارٍ تحميل الحسابات المالية من قاعدة البيانات...' : 'Loading financial accounts from the database...'}</div>}{dataLoadState === 'ready' && roots.slice().sort((a, b) => recordCode(a).localeCompare(recordCode(b))).map(renderRoot)}{dataLoadState === 'ready' && roots.length === 0 && <div className="p-12 text-center border border-dashed border-rose-500/50 rounded-2xl text-rose-300">{isAr ? 'لم تصل عقد شجرة الحسابات من قاعدة البيانات. راجع رسالة الخطأ أعلاه.' : 'No hierarchy nodes were returned from the database. Review the error above.'}</div>}{dataLoadState === 'ready' && roots.length > 0 && postingAccounts.length === 0 && <div className="p-6 text-center border border-dashed border-amber-500/40 rounded-2xl text-amber-200">{isAr ? 'تم تحميل الشجرة ولكن لم يُرجع مصدر البيانات أي حسابات مالية ورقية نشطة.' : 'The hierarchy loaded, but the data source returned no active posting accounts.'}</div>}</div></> : <><div className="flex justify-between items-center"><p className="text-sm text-slate-400">{isAr ? 'اربط مفاتيح النظام بحسابات مالية ورقية نشطة فقط.' : 'Map system keys to active posting accounts only.'}</p>{canEdit && <button onClick={() => openEditor('default')} className="rounded-xl bg-[#d4af37] text-black px-4 py-2.5 text-sm font-black"><Plus size={16} className="inline me-1" />{isAr ? 'حساب افتراضي' : 'Default account'}</button>}</div><div className="rounded-2xl border border-slate-800 overflow-hidden"><table className="w-full text-sm"><thead className="bg-slate-900/80 text-slate-400 text-xs"><tr><th className="p-3 text-start">{isAr ? 'المفتاح' : 'Key'}</th><th className="p-3 text-start">{isAr ? 'الحساب المالي' : 'Posting account'}</th><th className="p-3 text-start">{isAr ? 'الحالة' : 'Status'}</th><th className="p-3"></th></tr></thead><tbody>{defaultAccounts.slice().sort((a, b) => String(read(a, 'defaultKey', 'default_key')).localeCompare(String(read(b, 'defaultKey', 'default_key')))).map((entry) => { const account = postingAccounts.find((item) => item.id === read(entry, 'accountId', 'account_id')); return <tr key={entry.id} className="border-t border-slate-800/80"><td className="p-3 font-mono text-[#d4af37]">{read(entry, 'defaultKey', 'default_key')}</td><td className="p-3 text-slate-200">{account ? `${recordCode(account)} — ${recordName(account, isAr)}` : <span className="text-rose-400">{isAr ? 'حساب غير متاح' : 'Unavailable account'}</span>}</td><td className="p-3">{isActive(entry) ? <CheckCircle2 size={16} className="text-emerald-400" /> : <span className="text-slate-500">—</span>}</td><td className="p-3">{renderActions('default_accounts', entry, 'default')}</td></tr>; })}{defaultAccounts.length === 0 && <tr><td colSpan={4} className="p-10 text-center text-slate-500">{isAr ? 'لا توجد حسابات افتراضية مرتبطة بعد.' : 'No default accounts have been mapped yet.'}</td></tr>}</tbody></table></div></>}
+    {activeTab === 'tree' ? <><div className="flex flex-col sm:flex-row gap-3 justify-between"><div className="relative max-w-md flex-1"><Search size={16} className="absolute start-3 top-3 text-slate-500" /><input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder={isAr ? 'ابحث بالاسم، الكود أو الكيان...' : 'Search name, code, or entity...'} className="w-full rounded-xl border border-slate-700 bg-slate-950 py-2.5 ps-9 pe-3 text-sm text-white outline-none focus:border-[#d4af37]" /></div>{canEdit && <button onClick={() => openEditor('account')} className="rounded-xl bg-[#d4af37] text-black px-4 py-2.5 text-sm font-black"><Plus size={16} className="inline me-1" />{isAr ? 'حساب جديد' : 'New account'}</button>}</div><div className="space-y-3">{dataLoadState === 'loading' && <div className="flex items-center justify-center gap-2 rounded-2xl border border-slate-700 bg-slate-950/50 p-10 text-sm text-slate-400"><Loader2 size={18} className="animate-spin" />{isAr ? 'جارٍ تحميل الحسابات المالية من قاعدة البيانات...' : 'Loading financial accounts from the database...'}</div>}{dataLoadState === 'ready' && roots.slice().sort((a, b) => recordCode(a).localeCompare(recordCode(b))).map(renderRoot)}{dataLoadState === 'ready' && roots.length === 0 && <div className="p-12 text-center border border-dashed border-rose-500/50 rounded-2xl text-rose-300">{isAr ? 'لم تصل عقد شجرة الحسابات من قاعدة البيانات. راجع رسالة الخطأ أعلاه.' : 'No hierarchy nodes were returned from the database. Review the error above.'}</div>}{dataLoadState === 'ready' && roots.length > 0 && postingAccounts.length === 0 && <div className="p-6 text-center border border-dashed border-amber-500/40 rounded-2xl text-amber-200">{isAr ? 'تم تحميل الشجرة ولكن لم يُرجع مصدر البيانات أي حسابات مالية ورقية نشطة.' : 'The hierarchy loaded, but the data source returned no active posting accounts.'}</div>}</div></> : <><div className="flex justify-between items-center"><p className="text-sm text-slate-400">{isAr ? 'اربط مفاتيح النظام بحسابات مالية ورقية نشطة فقط.' : 'Map system keys to active posting accounts only.'}</p>{canEdit && <button onClick={() => openEditor('default')} className="rounded-xl bg-[#d4af37] text-black px-4 py-2.5 text-sm font-black"><Plus size={16} className="inline me-1" />{isAr ? 'حساب افتراضي' : 'Default account'}</button>}</div><div className="rounded-2xl border border-slate-800 overflow-hidden"><table className="w-full text-sm"><thead className="bg-slate-900/80 text-slate-400 text-xs"><tr><th className="p-3 text-start">{isAr ? 'المفتاح' : 'Key'}</th><th className="p-3 text-start">{isAr ? 'الحساب المالي' : 'Posting account'}</th><th className="p-3 text-start">{isAr ? 'الحالة' : 'Status'}</th><th className="p-3"></th></tr></thead><tbody>{defaultAccounts.slice().sort((a, b) => String(read(a, 'defaultKey', 'default_key')).localeCompare(String(read(b, 'defaultKey', 'default_key')))).map((entry) => { const account = postingAccounts.find((item) => item.id === read(entry, 'accountId', 'account_id')); return <tr key={entry.id} className="border-t border-slate-800/80"><td className="p-3 font-mono text-[#d4af37]">{read(entry, 'defaultKey', 'default_key')}</td><td className="p-3 text-slate-200">{account ? `${recordCode(account)} — ${recordName(account, isAr)}` : <span className="text-rose-400">{isAr ? 'حساب غير متاح' : 'Unavailable account'}</span>}</td><td className="p-3">{isActive(entry) ? <CheckCircle2 size={16} className="text-emerald-400" /> : <span className="text-slate-500">—</span>}</td><td className="p-3">{renderActions(entry, 'default')}</td></tr>; })}{defaultAccounts.length === 0 && <tr><td colSpan={4} className="p-10 text-center text-slate-500">{isAr ? 'لا توجد حسابات افتراضية مرتبطة بعد.' : 'No default accounts have been mapped yet.'}</td></tr>}</tbody></table></div></>}
     {printDialogOpen && <div className="fixed inset-0 z-[1140] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={isAr ? 'اختيار أقسام طباعة الشجرة' : 'Choose chart sections to print'}><div className="w-full max-w-2xl overflow-hidden rounded-3xl border border-[#d4af37]/30 bg-slate-950 shadow-2xl"><div className="flex items-start justify-between gap-4 border-b border-slate-800 p-5"><div><h3 className="font-black text-white">{isAr ? 'اختيار أقسام الطباعة' : 'Choose print sections'}</h3><p className="mt-1 text-xs text-slate-400">{isAr ? 'اختر الأقسام الرئيسية المطلوب تضمين كل فروعها وحساباتها في التقرير.' : 'Select root sections to include all of their branches and accounts in the report.'}</p></div><button onClick={() => setPrintDialogOpen(false)} className="rounded-xl p-2 text-slate-400 hover:bg-slate-800 hover:text-white"><X /></button></div><div className="p-5"><div className="mb-4 flex flex-wrap items-center justify-between gap-2"><div className="text-xs text-slate-400"><span className="font-mono font-black text-[#f0d576]">{printableRows.length}</span> {isAr ? 'صفًا سيظهر في التقرير' : 'rows will appear in the report'}</div><div className="flex gap-2"><button onClick={() => setPrintSections(Object.fromEntries(roots.map((root) => [String(root.id), true])))} className="rounded-lg border border-slate-600 bg-slate-800 px-2.5 py-1.5 text-xs font-bold text-slate-200">{isAr ? 'تحديد الكل' : 'Select all'}</button><button onClick={() => setPrintSections(Object.fromEntries(roots.map((root) => [String(root.id), false])))} className="rounded-lg border border-slate-600 bg-slate-800 px-2.5 py-1.5 text-xs font-bold text-slate-200">{isAr ? 'إلغاء الكل' : 'Clear all'}</button></div></div><div className="space-y-2">{roots.slice().sort((a, b) => recordCode(a).localeCompare(recordCode(b))).map((root) => { const type = String(read(root, 'accountType', 'account_type') || 'Asset'); const presentation = TYPE_PRESENTATION[type] || defaultTypePresentation; const balance = balanceFor('account', String(root.id)); return <label key={root.id} className={`flex cursor-pointer items-center gap-3 rounded-2xl border p-3 transition-colors ${printSections[String(root.id)] !== false ? presentation.row : 'border-slate-800 bg-slate-900/40 opacity-70'}`}><input type="checkbox" checked={printSections[String(root.id)] !== false} onChange={(event) => setPrintSections((previous) => ({ ...previous, [String(root.id)]: event.target.checked }))} className="h-4 w-4 accent-[#d4af37]" /><div className="min-w-0 flex-1"><div className="font-bold text-slate-100">{recordName(root, isAr)}</div><div className="mt-1 font-mono text-[10px] text-slate-500">{recordCode(root)} · {isAr ? presentation.labelAr : presentation.labelEn}</div></div><div className="rounded-lg border border-white/10 bg-black/20 px-2 py-1">{balanceSummary(balance)}</div></label>; })}</div></div><div className="flex justify-end gap-2 border-t border-slate-800 bg-slate-950/80 p-4"><button onClick={() => setPrintDialogOpen(false)} className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-slate-100">{isAr ? 'إلغاء' : 'Cancel'}</button><button onClick={() => { setPrintDialogOpen(false); printContent(); }} disabled={printableRows.length === 0} className="inline-flex items-center gap-2 rounded-xl bg-[#d4af37] px-4 py-2 text-sm font-black text-black disabled:opacity-50"><Printer size={15} />{isAr ? 'طباعة المحدد' : 'Print selected'}</button></div></div></div>}
     {importPreview && <div className="fixed inset-0 z-[1150] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={isAr ? 'معاينة استيراد شجرة الحسابات' : 'Chart tree import preview'}><div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-[#d4af37]/30 bg-slate-950 shadow-2xl"><div className="flex items-start justify-between gap-4 border-b border-slate-800 p-5"><div><h3 className="font-black text-white">{isAr ? 'معاينة استيراد شجرة الحسابات' : 'Chart tree import preview'}</h3><p className="mt-1 text-xs text-slate-400">{isAr ? 'لن تُستورد الأرصدة أو القيود. لا يمكن الاستمرار قبل معالجة جميع الأخطاء.' : 'Balances and journal entries are never imported. All errors must be resolved before continuing.'}</p></div><button onClick={() => setImportPreview(null)} className="rounded-xl p-2 text-slate-400 hover:bg-slate-800 hover:text-white"><X /></button></div><div className="min-h-0 flex-1 overflow-auto p-5"><div className="grid grid-cols-3 gap-2"><div className="rounded-xl border border-slate-700 bg-slate-900/60 p-3"><div className="text-[10px] uppercase text-slate-500">{isAr ? 'صفوف صالحة' : 'Valid rows'}</div><div className="mt-1 font-mono text-lg font-black text-emerald-300">{importPreview.rows.length}</div></div><div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3"><div className="text-[10px] uppercase text-rose-200/70">{isAr ? 'أخطاء' : 'Errors'}</div><div className="mt-1 font-mono text-lg font-black text-rose-300">{importPreview.errors.length}</div></div><div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3"><div className="text-[10px] uppercase text-amber-200/70">{isAr ? 'تحذيرات' : 'Warnings'}</div><div className="mt-1 font-mono text-lg font-black text-amber-300">{importPreview.warnings.length}</div></div></div>{importPreview.errors.length > 0 && <div className="mt-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4"><div className="text-sm font-bold text-rose-200">{isAr ? 'يجب معالجة الأخطاء التالية:' : 'Resolve the following errors:'}</div><ul className="mt-2 space-y-1 text-xs text-rose-100">{importPreview.errors.slice(0, 50).map((item, index) => <li key={`${item}-${index}`}>• {item}</li>)}</ul></div>}{importPreview.warnings.length > 0 && <div className="mt-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4"><div className="text-sm font-bold text-amber-200">{isAr ? 'تحذيرات الاستيراد:' : 'Import warnings:'}</div><ul className="mt-2 space-y-1 text-xs text-amber-100">{importPreview.warnings.slice(0, 50).map((item, index) => <li key={`${item}-${index}`}>• {item}</li>)}</ul></div>}<div className="mt-4 overflow-x-auto rounded-2xl border border-slate-800"><table className="w-full min-w-[740px] text-xs"><thead className="bg-slate-900/80 text-slate-400"><tr><th className="p-3 text-start">{isAr ? 'المستوى' : 'Level'}</th><th className="p-3 text-start">{isAr ? 'الكود' : 'Code'}</th><th className="p-3 text-start">{isAr ? 'الاسم' : 'Name'}</th><th className="p-3 text-start">{isAr ? 'الأب' : 'Parent'}</th><th className="p-3 text-start">{isAr ? 'العملة' : 'Currency'}</th></tr></thead><tbody>{importPreview.rows.slice(0, 30).map((row) => <tr key={`${row.level}-${row.id}`} className="border-t border-slate-800"><td className="p-3 text-slate-300">{row.level}</td><td className="p-3 font-mono text-[#f0d576]">{row.accountCode}</td><td className="p-3 text-slate-100">{row.accNameAr}</td><td className="p-3 font-mono text-slate-400">{row.parentId || '—'}</td><td className="p-3 font-mono text-slate-300">{row.currency}</td></tr>)}</tbody></table></div>{importPreview.rows.length > 30 && <p className="mt-2 text-center text-xs text-slate-500">{isAr ? `يُعرض أول 30 صفًا من أصل ${importPreview.rows.length}.` : `Showing the first 30 of ${importPreview.rows.length} rows.`}</p>}</div><div className="flex justify-end gap-2 border-t border-slate-800 bg-slate-950/80 p-4"><button onClick={() => setImportPreview(null)} disabled={importing} className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-slate-100 disabled:opacity-60">{isAr ? 'إلغاء' : 'Cancel'}</button><button onClick={executeImport} disabled={importing || importPreview.errors.length > 0 || importPreview.rows.length === 0} className="rounded-xl bg-[#d4af37] px-4 py-2 text-sm font-black text-black disabled:cursor-not-allowed disabled:opacity-50">{importing ? (isAr ? 'جارٍ الاستيراد...' : 'Importing...') : (isAr ? 'تأكيد الاستيراد' : 'Confirm import')}</button></div></div></div>}
     {editorKind && <div className="fixed inset-0 z-[1000] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4" role="dialog" aria-modal="true"><div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-[#d4af37]/30 bg-slate-950 shadow-2xl"><div className="flex items-center justify-between px-5 py-4 border-b border-slate-800"><h3 className="font-black text-white">{editing ? (isAr ? 'تعديل' : 'Edit') : (isAr ? 'إضافة' : 'Add')} {editorKind === 'account' ? (isAr ? 'حساب رئيسي' : 'root account') : editorKind === 'main' ? (isAr ? 'حساب فرعي' : 'subaccount') : editorKind === 'sub' ? (isAr ? 'حساب جزئي' : 'detail account') : editorKind === 'group' ? (isAr ? 'مجموعة حسابات' : 'account group') : editorKind === 'ledger' ? (isAr ? 'حساب مالي' : 'posting account') : (isAr ? 'حساب افتراضي' : 'default account')}</h3><button onClick={() => setEditorKind(null)} className="text-slate-400 hover:text-white"><X /></button></div><div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -586,7 +636,7 @@ export default function AccountingHierarchyManagement({ isAr, canEdit }: Props) 
         <label className="text-xs text-slate-400">{isAr ? 'الكود المحاسبي' : 'Accounting code'}<input value={form.accountCode} onChange={(event) => setForm({ ...form, accountCode: event.target.value })} className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-700 p-2.5 text-white" />{codeHint && <span className="mt-1 block text-[10px] text-slate-500">{isAr ? `الصيغة المتوقعة: ${codeHint}` : `Expected format: ${codeHint}`}</span>}</label>
         <label className="text-xs text-slate-400">{isAr ? 'الاسم العربي' : 'Arabic name'}<input value={form.accNameAr} onChange={(event) => setForm({ ...form, accNameAr: event.target.value })} className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-700 p-2.5 text-white" /></label><label className="text-xs text-slate-400">{isAr ? 'الاسم الإنجليزي' : 'English name'}<input value={form.accNameEn} onChange={(event) => setForm({ ...form, accNameEn: event.target.value })} className="mt-1 w-full rounded-xl bg-slate-900 border border-slate-700 p-2.5 text-white" /></label><label className="text-xs text-slate-400">{isAr ? 'العملة المرجعية' : 'Currency reference'}<CurrencySelect
           isAr={isAr}
-          currencies={activeCurrencies.map(currency => ({ id: currency.cur_id, code: currency.code, nameAr: currency.main_nameAR || currency.mainNameAR, nameEn: currency.main_nameEn || currency.mainNameEn }))}
+          currencies={activeCurrencies.map(currency => ({ id: currency.cur_id, code: currency.code, nameAr: currency.main_nameAR || currency.main_name_ar, nameEn: currency.main_nameEn || currency.main_name_en }))}
           optionValue="id"
           includeEmptyOption
           emptyOptionLabel={isAr ? 'عملة النظام الافتراضية' : 'System default currency'}
@@ -624,7 +674,7 @@ export default function AccountingHierarchyManagement({ isAr, canEdit }: Props) 
             </div>
             <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-4"><div className="rounded-xl border border-[#d4af37]/20 bg-[#d4af37]/5 p-3"><div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{isAr ? 'الرصيد الحالي' : 'Current balance'}</div>
               <div className="mt-1 font-mono text-base font-black text-[#f0d576]">{formatMoney(balanceFor('ledger', String(statementAccount.id))?.nativeBalance ?? statementAccount.balance ?? 0)} {currencyCode(statementAccount)}</div></div><div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3"><div className="text-[10px] font-bold uppercase tracking-wide text-emerald-300/70">{isAr ? 'إجمالي المدين' : 'Total debit'}</div><div className="mt-1 font-mono text-base font-black text-emerald-300">{formatMoney(statementDebitTotal)} {currencyCode(statementAccount)}</div></div><div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-3">
-                <div className="text-[10px] font-bold uppercase tracking-wide text-rose-300/70">{isAr ? 'إجمالي الدائن' : 'Total credit'}</div><div className="mt-1 font-mono text-base font-black text-rose-300">{formatMoney(statementCreditTotal)} {currencyCode(statementAccount)}</div></div><div className="rounded-xl border border-slate-700 bg-slate-900/60 p-3"><div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{isAr ? 'عدد الحركات' : 'Transactions'}</div><div className="mt-1 font-mono text-base font-black text-white">{statementTransactions.length}</div></div></div></div><div className="min-h-0 flex-1 overflow-auto p-4">{statementLoading ? <div className="flex h-full items-center justify-center gap-2 text-sm text-slate-400"><Loader2 size={20} className="animate-spin" />{isAr ? 'جارٍ تحميل كشف الحساب...' : 'Loading statement...'}</div> : <table className="w-full min-w-[760px] text-sm"><thead className="sticky top-0 bg-slate-950 text-xs text-slate-400"><tr><th className="p-3 text-start">{isAr ? 'التاريخ' : 'Date'}</th><th className="p-3 text-start">{isAr ? 'المرجع' : 'Reference'}</th><th className="p-3 text-start">{isAr ? 'البيان' : 'Description'}</th><th className="p-3 text-start">{isAr ? 'الوحدة' : 'Module'}</th><th className="p-3 text-end text-emerald-300">{isAr ? 'مدين' : 'Debit'}</th><th className="p-3 text-end text-rose-300">{isAr ? 'دائن' : 'Credit'}</th></tr></thead><tbody>{statementTransactions.map((transaction) => <tr key={transaction.id} className="border-t border-slate-800/80 transition-colors hover:bg-slate-800/50"><td className="p-3 font-mono text-xs text-slate-400">{transaction.createdAt ? new Date(transaction.createdAt).toLocaleDateString(isAr ? 'ar-YE' : undefined) : '—'}</td><td className="p-3 font-mono text-xs text-[#f0d576]">{transaction.entry_id || transaction.entry_number || transaction.refNumber || transaction.mainEntryNumber || '—'}</td><td className="max-w-[260px] p-3 text-xs text-slate-200">{transaction.description || '—'}</td><td className="p-3"><span className="rounded-md border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-[10px] font-bold uppercase text-slate-400">{getModuleName(transaction, isAr)}</span></td><td className="p-3 text-end font-mono text-xs font-bold text-emerald-300">{(transaction.transType || transaction.trans_type || transaction.type) === 'Debit' ? `${formatMoney(transaction.amount)} ${transaction.currency || currencyCode(statementAccount)}` : '—'}</td><td className="p-3 text-end font-mono text-xs font-bold text-rose-300">{(transaction.transType || transaction.trans_type || transaction.type) === 'Credit' ? `${formatMoney(transaction.amount)} ${transaction.currency || currencyCode(statementAccount)}` : '—'}</td></tr>)}{statementTransactions.length === 0 && <tr><td colSpan={6} className="p-12 text-center text-sm text-slate-500">{isAr ? 'لا توجد حركات مسجلة على هذا الحساب.' : 'No transactions are recorded for this account.'}</td></tr>}</tbody></table>}</div><div className="flex justify-end border-t border-slate-800 bg-slate-950/80 p-4"><button onClick={() => setStatementAccount(null)} className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-slate-100 transition-colors hover:bg-slate-700">{isAr ? 'إغلاق' : 'Close'}</button></div></div></div>}
+                <div className="text-[10px] font-bold uppercase tracking-wide text-rose-300/70">{isAr ? 'إجمالي الدائن' : 'Total credit'}</div><div className="mt-1 font-mono text-base font-black text-rose-300">{formatMoney(statementCreditTotal)} {currencyCode(statementAccount)}</div></div><div className="rounded-xl border border-slate-700 bg-slate-900/60 p-3"><div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{isAr ? 'عدد الحركات' : 'Transactions'}</div><div className="mt-1 font-mono text-base font-black text-white">{statementTransactions.length}</div></div></div></div><div className="min-h-0 flex-1 overflow-auto p-4">{statementLoading ? <div className="flex h-full items-center justify-center gap-2 text-sm text-slate-400"><Loader2 size={20} className="animate-spin" />{isAr ? 'جارٍ تحميل كشف الحساب...' : 'Loading statement...'}</div> : <table className="w-full min-w-[760px] text-sm"><thead className="sticky top-0 bg-slate-950 text-xs text-slate-400"><tr><th className="p-3 text-start">{isAr ? 'التاريخ' : 'Date'}</th><th className="p-3 text-start">{isAr ? 'المرجع' : 'Reference'}</th><th className="p-3 text-start">{isAr ? 'البيان' : 'Description'}</th><th className="p-3 text-start">{isAr ? 'الوحدة' : 'Module'}</th><th className="p-3 text-end text-emerald-300">{isAr ? 'مدين' : 'Debit'}</th><th className="p-3 text-end text-rose-300">{isAr ? 'دائن' : 'Credit'}</th></tr></thead><tbody>{statementTransactions.map((transaction) => <tr key={transaction.id} className="border-t border-slate-800/80 transition-colors hover:bg-slate-800/50"><td className="p-3 font-mono text-xs text-slate-400">{transaction.createdAt ? new Date(transaction.createdAt).toLocaleDateString(isAr ? 'ar-YE' : undefined) : '—'}</td><td className="p-3 font-mono text-xs text-[#f0d576]">{transaction.entryNumber || '—'}</td><td className="max-w-[260px] p-3 text-xs text-slate-200">{transaction.description || '—'}</td><td className="p-3"><span className="rounded-md border border-slate-700 bg-slate-900 px-1.5 py-0.5 text-[10px] font-bold uppercase text-slate-400">{getModuleName(transaction, isAr)}</span></td><td className="p-3 text-end font-mono text-xs font-bold text-emerald-300">{transaction.transType === 'Debit' ? `${formatMoney(transaction.amount)} ${currencyCode(statementAccount)}` : '—'}</td><td className="p-3 text-end font-mono text-xs font-bold text-rose-300">{transaction.transType === 'Credit' ? `${formatMoney(transaction.amount)} ${currencyCode(statementAccount)}` : '—'}</td></tr>)}{statementTransactions.length === 0 && <tr><td colSpan={6} className="p-12 text-center text-sm text-slate-500">{isAr ? 'لا توجد حركات مسجلة على هذا الحساب.' : 'No transactions are recorded for this account.'}</td></tr>}</tbody></table>}</div><div className="flex justify-end border-t border-slate-800 bg-slate-950/80 p-4"><button onClick={() => setStatementAccount(null)} className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-slate-100 transition-colors hover:bg-slate-700">{isAr ? 'إغلاق' : 'Close'}</button></div></div></div>}
     <ConfirmModal isOpen={Boolean(deleting)} onClose={() => setDeleting(null)} onConfirm={remove} title={isAr ? 'حذف حساب أو عقدة' : 'Delete account or node'} message={isAr ? 'لا يمكن الحذف عند وجود حسابات أو سجلات مرتبطة. هل تريد المتابعة؟' : 'Deletion is blocked when dependent records exist. Continue?'} confirmText={isAr ? 'حذف' : 'Delete'} type="danger" />
   </section>;
 }

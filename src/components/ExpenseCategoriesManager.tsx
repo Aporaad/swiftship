@@ -1,9 +1,7 @@
-type AdapterDocument = { id: string; data: () => Record<string, unknown> };
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Settings, Plus, Edit2, Trash2, X, AlertTriangle } from 'lucide-react';
-import { db } from '../data/legacy/legacy-compat.ts';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, getDocs } from '../data/legacy/legacy-compat.ts';
-import { useExpenseCategories, ExpenseCategory } from '../hooks/useExpenseCategories';
+import { financialAccountService } from '../services/financialAccountService';
+import { expenseCategoriesService, type ExpenseCategory } from '../services/expenseCategoriesService';
 import { notificationService } from '../services/notificationService';
 
 interface ExpenseCategoriesManagerProps {
@@ -11,7 +9,7 @@ interface ExpenseCategoriesManagerProps {
 }
 
 export default function ExpenseCategoriesManager({ isAr }: ExpenseCategoriesManagerProps) {
-  const categories = useExpenseCategories();
+  const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
   
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -29,13 +27,29 @@ export default function ExpenseCategoriesManager({ isAr }: ExpenseCategoriesMana
 
   const [isLoading, setIsLoading] = useState(false);
 
+  // الفئات والحسابات تُقرأ من alx_api — لا مستمع لحظي، لذا تُحدَّث القائمة من نتيجة كل كتابة.
   useEffect(() => {
-    // Fetch accounts to link
-    const unsubAccs = onSnapshot(collection(db, 'accounts'), (snap) => {
-      setAccounts(snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() })));
-    });
-    return () => unsubAccs();
-  }, []);
+    let cancelled = false;
+    Promise.all([expenseCategoriesService.list(), financialAccountService.getAllAccounts()])
+      .then(([storedCategories, financialAccounts]) => {
+        if (cancelled) return;
+        setCategories(storedCategories);
+        setAccounts(financialAccounts);
+      })
+      .catch((loadError: any) => {
+        if (!cancelled) {
+          console.error('[ExpenseCategoriesManager] تعذر تحميل الفئات أو الحسابات:', loadError);
+          notificationService.notify({
+            title: isAr ? 'فشل التحميل' : 'Load failed',
+            message: loadError?.message || (isAr ? 'تعذر تحميل فئات المصروفات.' : 'Unable to load expense categories.'),
+            type: 'error'
+          });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAr]);
 
   const handleOpenAdd = () => {
     setFormData({ id: '', labelAr: '', labelEn: '', icon: '📝', accountId: '', accountCode: '' });
@@ -68,8 +82,7 @@ export default function ExpenseCategoriesManager({ isAr }: ExpenseCategoriesMana
     if (!window.confirm(isAr ? 'هل أنت متأكد من حذف هذه الفئة؟' : 'Are you sure you want to delete this category?')) return;
 
     try {
-      const newArray = categories.filter(c => c.id !== cat.id);
-      await setDoc(doc(db, 'settings', 'expense_categories'), { data: newArray });
+      setCategories(await expenseCategoriesService.remove(cat.id));
       notificationService.notify({
         title: isAr ? 'تم الحذف' : 'Deleted',
         message: isAr ? 'تم حذف الفئة بنجاح.' : 'Category deleted successfully.',
@@ -104,8 +117,7 @@ export default function ExpenseCategoriesManager({ isAr }: ExpenseCategoriesMana
         accountCode: accCode,
         isSystem: false // User created
       };
-      const newArray = [...categories, newCat];
-      await setDoc(doc(db, 'settings', 'expense_categories'), { data: newArray });
+      setCategories(await expenseCategoriesService.add(newCat));
       
       setIsAddOpen(false);
       notificationService.notify({
@@ -130,13 +142,13 @@ export default function ExpenseCategoriesManager({ isAr }: ExpenseCategoriesMana
       const selectedAcc = accounts.find(a => a.id === formData.accountId || a.entityId === formData.accountId);
       const accCode = selectedAcc ? selectedAcc.accountCode : '';
 
-      const newArray = categories.map(c => 
-        c.id === editingCategory.id 
-          ? { ...c, labelAr: formData.labelAr, labelEn: formData.labelEn, icon: formData.icon, accountId: formData.accountId, accountCode: accCode }
-          : c
-      );
-
-      await setDoc(doc(db, 'settings', 'expense_categories'), { data: newArray });
+      setCategories(await expenseCategoriesService.update(editingCategory.id, {
+        labelAr: formData.labelAr,
+        labelEn: formData.labelEn,
+        icon: formData.icon,
+        accountId: formData.accountId,
+        accountCode: accCode,
+      }));
       
       setIsEditOpen(false);
       setEditingCategory(null);
@@ -277,7 +289,7 @@ export default function ExpenseCategoriesManager({ isAr }: ExpenseCategoriesMana
                   className="w-full bg-slate-900 border border-emerald-500/30 text-emerald-400 rounded-xl p-3 outline-none focus:border-emerald-500 text-xs font-bold font-mono"
                 >
                   <option value="">{isAr ? '-- بدون ربط محاسبي أوتوماتيكي --' : '-- No Automatic Mapping --'}</option>
-                  {accounts.filter(a => a.entityType === 'system' || a.accountType === 'expense').map(a => (
+                  {accounts.filter(a => a.entityType === 'system' || a.type === 'Expense').map(a => (
                     <option key={a.id} value={a.entityId || a.id}>
                       [{a.accountCode}] - {a.entityName}
                     </option>

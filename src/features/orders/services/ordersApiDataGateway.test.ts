@@ -1,22 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { createLegacyOrdersApi, legacyOrdersApi } from './legacyOrdersApi';
-import { ordersApiDataGateway } from './ordersApiDataGateway';
 
 describe('orders API gateway boundary', () => {
   it('does not import or delegate to the legacy Orders adapter', () => {
     const source = readFileSync(resolve(process.cwd(), 'src/features/orders/services/ordersApiDataGateway.ts'), 'utf8');
-    expect(source).not.toContain('legacyOrdersApi');
     expect(source).not.toContain('data/legacy');
     expect(source).toContain("'/api/v1/orders'");
     expect(source).toContain("'/api/v1/shipments'");
     expect(source).toContain("'/api/v1/products'");
-  });
-
-  it('routes historical Orders API exports to the HTTP gateway', () => {
-    expect(legacyOrdersApi).toBe(ordersApiDataGateway);
-    expect(createLegacyOrdersApi()).toBe(ordersApiDataGateway);
   });
 
   it('rejects unsupported writes instead of silently falling back', () => {

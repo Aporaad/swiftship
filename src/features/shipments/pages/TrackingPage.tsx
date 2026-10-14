@@ -26,8 +26,7 @@ import {
   Database,
   Info
 } from 'lucide-react';
-import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, arrayUnion } from '../../../data/legacy/legacy-compat.ts';
-import { db } from '../../../data/legacy/legacy-compat.ts';
+import { ApiClient, ApiClientError } from '../../../data/http/api-client';
 import { useSettings } from '../../../context/SettingsContext';
 import { useOrderStatuses } from '../../../hooks/useOrderStatuses';
 import { Link, useNavigate } from 'react-router-dom';
@@ -51,6 +50,32 @@ interface TrackingUpdate {
   location: string;
   notes?: string;
   createdBy?: string;
+}
+
+const client = new ApiClient({
+  baseUrl: import.meta.env.VITE_ALX_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:3001',
+  accessTokenFactory: () => (typeof sessionStorage === 'undefined' ? null : sessionStorage.getItem('alx_access_token') || sessionStorage.getItem('alx_api_access_token')),
+  maxReadRetries: 0,
+});
+
+const profilePath = (trackingId: string) => `/api/v1/operations/tracking-profiles/${encodeURIComponent(trackingId.toUpperCase())}`;
+
+type ApiRow = Record<string, unknown>;
+
+function readText(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+function readNumber(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+function readArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function isNotFound(error: unknown): boolean {
+  return error instanceof ApiClientError && error.code === 'ENTITY_NOT_FOUND';
 }
 
 export default function TrackingPage() {
@@ -156,6 +181,90 @@ export default function TrackingPage() {
     return 'border-amber-500/20 text-amber-400 bg-amber-950/10';
   };
 
+  function readRecord(value: unknown): ApiRow {
+    if (typeof value === 'string') {
+      try {
+        const parsed: unknown = JSON.parse(value);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as ApiRow : {};
+      } catch {
+        return {};
+      }
+    }
+    return value && typeof value === 'object' && !Array.isArray(value) ? value as ApiRow : {};
+  }
+
+  // Staff fallback: resolve published tracking profiles and internal orders through alx_api.
+  const lookupInternalViaApi = async (queryStr: string): Promise<boolean> => {
+    const publicId = queryStr.toUpperCase();
+    try {
+      const envelope = await client.get<{ success: true; data: ApiRow }>(profilePath(publicId));
+      const row = envelope.data;
+      const profile = readRecord(row.data);
+      const status = readText(row.status) || readText(profile.status) || 'تم تسجيل الطلب';
+      setTrackingData({
+        id: readText(row.trackingId) || publicId,
+        trackingNumber: readText(profile.trackingNumber) || publicId,
+        orderNumber: readText(profile.orderNumber) || readText(row.orderNumber),
+        status,
+        customerName: readText(profile.customerName),
+        customerPhone: readText(profile.customerPhone),
+        customerAddress: readText(profile.customerAddress) || 'صنعاء، اليمن',
+        weight: readNumber(profile.weight),
+        cbm: readNumber(profile.cbm),
+        shippingCompany: readText(profile.shippingCompany),
+        amountPaid: readNumber(profile.amountPaid),
+        amountRemaining: readNumber(profile.amountRemaining),
+        totalCostYER: readNumber(profile.totalCostYER),
+        currency: readText(profile.currency) || 'YER',
+        products: readArray(profile.products),
+        history: readArray(profile.history),
+      });
+      setResolvedSource('public');
+      setGpsLocation(readText(row.locationYemen) || readText(profile.locationYemen) || 'مستودع الفرز والتبريد');
+      setStatusSelector(status);
+      return true;
+    } catch (error) {
+      if (!isNotFound(error)) console.error('[TrackingPage] tracking profile lookup failed:', error);
+    }
+
+    try {
+      const envelope = await client.get<{ success: true; data: ApiRow[] | { items?: ApiRow[] } }>('/api/v1/orders', { limit: 20, offset: 0, search: queryStr });
+      const rows = Array.isArray(envelope.data) ? envelope.data : Array.isArray(envelope.data?.items) ? envelope.data.items : [];
+      const match =
+        rows.find((row) => readText(row.trackingNumber).toUpperCase() === publicId) ??
+        rows.find((row) => readText(row.orderNumber).toUpperCase() === publicId);
+      if (!match) return false;
+      const detail = await client.get<{ success: true; data: ApiRow }>(`/api/v1/orders/${encodeURIComponent(readText(match.orderId))}`);
+      const order = readRecord(detail.data.data);
+      const status = readText(detail.data.orderStatus) || readText(order.orderStatus) || 'تم تسجيل الطلب';
+      setTrackingData({
+        id: readText(detail.data.orderId),
+        trackingNumber: readText(detail.data.trackingNumber) || readText(detail.data.orderNumber) || publicId,
+        orderNumber: readText(detail.data.orderNumber),
+        status,
+        customerName: readText(order.customerName),
+        customerPhone: readText(order.customerPhone),
+        customerAddress: readText(order.customerAddress) || readText(order.destination) || 'صنعاء، اليمن',
+        weight: readNumber(order.totalWeight),
+        cbm: readNumber(order.totalCBM),
+        shippingCompany: readText(order.shippingCompany),
+        amountPaid: readNumber(order.amountPaid),
+        amountRemaining: readNumber(order.amountRemaining),
+        totalCostYER: readNumber(order.totalCostYER),
+        currency: readText(order.currency) || readText(detail.data.currency) || 'YER',
+        products: readArray(order.items),
+        history: readArray(order.history),
+      });
+      setResolvedSource('orders_db');
+      setGpsLocation(readText(order.locationYemen) || 'مستودع الفرز والتبريد');
+      setStatusSelector(status);
+      return true;
+    } catch (error) {
+      console.error('[TrackingPage] order lookup failed:', error);
+      return false;
+    }
+  };
+
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     const queryStr = trackingNumber.trim();
@@ -234,6 +343,11 @@ export default function TrackingPage() {
         }
       }
 
+      // 2. Staff fallback through alx_api: published tracking profiles, then internal orders
+      if (auth.currentUser && (await lookupInternalViaApi(queryStr))) {
+        return;
+      }
+
       // If nothing worked
       setError(
         isAr
@@ -254,29 +368,31 @@ export default function TrackingPage() {
     setLoading(true);
     try {
       const publicId = (trackingData.trackingNumber || trackingData.orderNumber).toUpperCase();
-      const publicRef = doc(db, 'public_tracking', publicId);
 
-      const payload = {
-        trackingNumber: publicId,
+      await client.requestWithBodyForGateway('PUT', profilePath(publicId), {
         orderNumber: trackingData.orderNumber || '',
         status: trackingData.status,
-        customerName: trackingData.customerName || '',
-        customerPhone: trackingData.customerPhone || '',
-        customerAddress: trackingData.customerAddress || '',
-        weight: trackingData.weight || 0,
-        cbm: trackingData.cbm || 0,
-        shippingCompany: trackingData.shippingCompany || '',
-        amountPaid: trackingData.amountPaid || 0,
-        amountRemaining: trackingData.amountRemaining || 0,
-        totalCostYER: trackingData.totalCostYER || 0,
-        currency: trackingData.currency || 'YER',
-        products: trackingData.products || [],
-        history: trackingData.history || [],
         locationYemen: gpsLocation,
-        updatedAt: Date.now()
-      };
-
-      await setDoc(publicRef, payload);
+        data: {
+          trackingNumber: publicId,
+          orderNumber: trackingData.orderNumber || '',
+          status: trackingData.status,
+          customerName: trackingData.customerName || '',
+          customerPhone: trackingData.customerPhone || '',
+          customerAddress: trackingData.customerAddress || '',
+          weight: trackingData.weight || 0,
+          cbm: trackingData.cbm || 0,
+          shippingCompany: trackingData.shippingCompany || '',
+          amountPaid: trackingData.amountPaid || 0,
+          amountRemaining: trackingData.amountRemaining || 0,
+          totalCostYER: trackingData.totalCostYER || 0,
+          currency: trackingData.currency || 'YER',
+          products: trackingData.products || [],
+          history: trackingData.history || [],
+          locationYemen: gpsLocation,
+          updatedAt: Date.now()
+        }
+      });
       setResolvedSource('public'); // Switch search reference so updates sync directly
       setSuccessMsg(isAr ? 'تم نشر وتفعيل واجهة التتبع العامة للعميل بنجاح!' : 'Successfully published tracking portal for Client!');
     } catch (err) {
@@ -313,24 +429,20 @@ export default function TrackingPage() {
 
       // Persist directly based on where we loaded from
       if (resolvedSource === 'public') {
-        const docRef = doc(db, 'public_tracking', trackingData.trackingNumber.toUpperCase());
-        await updateDoc(docRef, {
+        await client.patch(profilePath(trackingData.trackingNumber), {
           status: statusSelector,
           locationYemen: gpsLocation,
-          history: revisedHistory,
-          updatedAt: Date.now()
+          data: {
+            status: statusSelector,
+            locationYemen: gpsLocation,
+            history: revisedHistory,
+            updatedAt: Date.now()
+          }
         });
       } else if (resolvedSource === 'orders_db') {
-        const docRef = doc(db, 'orders', trackingData.id);
-        const statusItem = orderStatusesList.find(s => s.nameAr === statusSelector || s.nameEn === statusSelector || s.code === statusSelector);
-        const statusIdStr = String(statusItem?.id || '2');
-        await updateDoc(docRef, {
-          orderStatusId: statusIdStr,
-          order_status_id: statusIdStr,
-          orderStatus: statusSelector,
-          locationYemen: gpsLocation,
-          history: revisedHistory,
-          updatedAt: Date.now()
+        await client.patch(`/api/v1/orders/${encodeURIComponent(trackingData.id)}/status`, {
+          status: statusSelector,
+          note: `${gpsLocation} — ${newEvent.notes ?? ''}`
         });
       }
 
@@ -366,16 +478,18 @@ export default function TrackingPage() {
       setTrackingData(updatedData);
 
       if (resolvedSource === 'public') {
-        await updateDoc(doc(db, 'public_tracking', trackingData.trackingNumber.toUpperCase()), {
-          history: initialHistory,
+        await client.patch(profilePath(trackingData.trackingNumber), {
           status: 'تم تسجيل الطلب',
-          updatedAt: Date.now()
+          data: {
+            history: initialHistory,
+            status: 'تم تسجيل الطلب',
+            updatedAt: Date.now()
+          }
         });
       } else if (resolvedSource === 'orders_db') {
-        await updateDoc(doc(db, 'orders', trackingData.id), {
-          history: initialHistory,
-          orderStatus: 'تم تسجيل الطلب',
-          updatedAt: Date.now()
+        await client.patch(`/api/v1/orders/${encodeURIComponent(trackingData.id)}/status`, {
+          status: 'تم تسجيل الطلب',
+          note: isAr ? 'إعادة تهيئة المسار وبداية رصد التتبع الموحد للنظام' : 'Reinitialized tracking records'
         });
       }
 

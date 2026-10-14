@@ -97,13 +97,39 @@ export const usersApiDataGateway = {
   },
 
   /**
-   * إنهاء جلسة محددة.
-   * Revoke a specific session.
+   * إنهاء جلسة محددة بأي مستخدم (صلاحيات إدارية).
+   * Admin termination of any specific session (not limited to the caller's own session).
    */
   async terminateSession(sessionId: string): Promise<void> {
+    // المسار الإداري الجديد يخوّل إنهاء جلسة أي مستخدم — admin route allows terminating any user's session
     await client.delete<ApiEnvelope<{ revoked: boolean }>>(
-      `/api/v1/auth/sessions/${encodeURIComponent(sessionId)}`,
+      `/api/v1/sessions/${encodeURIComponent(sessionId)}`,
     );
+  },
+
+  /**
+   * الجلسات الحية لكل المستخدمين — عرض إداري بأسماء أصحابها وأجهزتهم.
+   * Every live session across all users with their name, role, and device info (admin view).
+   */
+  async listAllSessions(): Promise<Record<string, unknown>[]> {
+    const response = await client.get<ApiEnvelope<Record<string, unknown>[]>>('/api/v1/sessions', {
+      limit: 1000,
+      offset: 0,
+    });
+    return Array.isArray(response.data) ? response.data : [];
+  },
+
+  /**
+   * سجل النشاط المسطّح لكل المستخدمين (view_users).
+   * Flat activity-log feed across all users (requires view_users permission).
+   */
+  async listActivityLogs(options?: { userId?: string; action?: string; search?: string; limit?: number }): Promise<Record<string, unknown>[]> {
+    const params: Record<string, unknown> = { limit: options?.limit ?? 200, offset: 0 };
+    if (options?.userId) params['userId'] = options.userId;
+    if (options?.action) params['action'] = options.action;
+    if (options?.search) params['search'] = options.search;
+    const response = await client.get<ApiEnvelope<Record<string, unknown>[]>>('/api/v1/activity-logs', params);
+    return Array.isArray(response.data) ? response.data : [];
   },
 
   /**

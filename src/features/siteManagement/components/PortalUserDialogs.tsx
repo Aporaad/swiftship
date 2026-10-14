@@ -2,8 +2,9 @@ import React from 'react';
 import { Globe, Activity, Users, User, Package, Briefcase, MessageSquare, Megaphone, Shield, Link as LinkIcon, CheckCircle2, Clock, AlertCircle, RefreshCw, Plus, Trash2, Check, X, Eye, Edit2, Send, Server, Key, Lock, Settings as SettingsIcon, ChevronRight, ArrowUpRight, Award, UserCheck, ShieldAlert, Cpu, Phone, Mail, MapPin } from 'lucide-react';
 import LocationMapPickerModal from '../../../components/common/LocationMapPickerModal';
 
-type PortalUserRecord = { id: string; username?: string; email?: string; fullName?: string; phone?: string; customerDetails?: { address?: string; city?: string; country?: string; company_name?: string; max_debt?: string | number; gps_location?: string } };
-type PortalUserFormData = { username: string; email: string; password: string; fullName: string; phone: string; portal_role: string; approval_status: string; disabled: boolean; country: string; city: string; address: string; company_name: string; max_debt: number; id_number: string; notes: string; lat: number; lng: number; gps_location: string };
+type PortalCustomerDetails = { city?: string | null; country?: string | null; companyName?: string | null; maxDebt?: number | null; gpsLocation?: string | null; notes?: string | null };
+type PortalUserRecord = { id: string; username?: string; email?: string; fullName?: string; phone?: string; address?: string; customerDetails?: PortalCustomerDetails };
+type PortalUserFormData = { username: string; email: string; password: string; fullName: string; phone: string; portal_role: string; approval_status: string; disabled: boolean; country: string; city: string; address: string; companyName: string; maxDebt: number; idNumber: string; notes: string; lat: number; lng: number; gps_location: string };
 type LocationData = { country?: string; city?: string; governorate?: string; street?: string; addressDetails?: string; lat?: number; lng?: number; gps_location?: string };
 export interface PortalUserDialogsProps {
   showCreatePUserModal: boolean;
@@ -210,8 +211,8 @@ export const PortalUserDialogs: React.FC<PortalUserDialogsProps> = (props) => {
                     <label className="block text-[10px] font-black text-slate-400 mb-1">{isAr ? 'اسم الشركة / المؤسسة' : 'Company Name'}</label>
                     <input
                       type="text"
-                      value={pUserFormData.company_name}
-                      onChange={e => setPUserFormData({ ...pUserFormData, company_name: e.target.value })}
+                      value={pUserFormData.companyName}
+                      onChange={e => setPUserFormData({ ...pUserFormData, companyName: e.target.value })}
                       className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white outline-none focus:border-[#d4af37]/60"
                     />
                   </div>
@@ -221,8 +222,8 @@ export const PortalUserDialogs: React.FC<PortalUserDialogsProps> = (props) => {
                     <input
                       type="number"
                       min="0"
-                      value={pUserFormData.max_debt}
-                      onChange={e => setPUserFormData({ ...pUserFormData, max_debt: parseFloat(e.target.value) || 0 })}
+                      value={pUserFormData.maxDebt}
+                      onChange={e => setPUserFormData({ ...pUserFormData, maxDebt: parseFloat(e.target.value) || 0 })}
                       className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white font-mono outline-none focus:border-[#d4af37]/60"
                     />
                   </div>
@@ -328,20 +329,20 @@ export const PortalUserDialogs: React.FC<PortalUserDialogsProps> = (props) => {
                   <div className="grid grid-cols-2 gap-2 text-[11px] font-bold text-slate-300">
                     <div><span className="text-slate-500 block text-[10px]">المدينة:</span>{viewingPUser.customerDetails.city || '—'}</div>
                     <div><span className="text-slate-500 block text-[10px]">الدولة:</span>{viewingPUser.customerDetails.country || 'اليمن'}</div>
-                    <div><span className="text-slate-500 block text-[10px]">الشركة:</span>{viewingPUser.customerDetails.company_name || '—'}</div>
-                    <div><span className="text-slate-500 block text-[10px]">سقف الدين:</span>{viewingPUser.customerDetails.max_debt ? `${viewingPUser.customerDetails.max_debt.toLocaleString()} YER` : '—'}</div>
+                    <div><span className="text-slate-500 block text-[10px]">الشركة:</span>{viewingPUser.customerDetails.companyName || '—'}</div>
+                    <div><span className="text-slate-500 block text-[10px]">سقف الدين:</span>{viewingPUser.customerDetails.maxDebt ? `${Number(viewingPUser.customerDetails.maxDebt).toLocaleString()} YER` : '—'}</div>
                   </div>
-                  {viewingPUser.customerDetails.address && (
+                  {viewingPUser.address && (
                     <div className="pt-1 text-xs">
                       <span className="text-slate-500 block text-[10px]">العنوان السكني:</span>
-                      <span className="text-slate-200 font-bold">{viewingPUser.customerDetails.address}</span>
+                      <span className="text-slate-200 font-bold">{viewingPUser.address}</span>
                     </div>
                   )}
-                  {viewingPUser.customerDetails.gps_location && (
+                  {viewingPUser.customerDetails.gpsLocation && (
                     <div className="pt-1 text-xs">
                       <span className="text-slate-500 block text-[10px]">رابط GPS:</span>
-                      <a href={viewingPUser.customerDetails.gps_location} target="_blank" rel="noreferrer" className="text-cyan-400 hover:underline font-mono text-[10px]">
-                        {viewingPUser.customerDetails.gps_location}
+                      <a href={viewingPUser.customerDetails.gpsLocation} target="_blank" rel="noreferrer" className="text-cyan-400 hover:underline font-mono text-[10px]">
+                        {viewingPUser.customerDetails.gpsLocation}
                       </a>
                     </div>
                   )}

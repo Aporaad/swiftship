@@ -1,5 +1,4 @@
 import type { Dispatch, FormEvent, SetStateAction } from "react";
-import { handleSupabaseError, OperationType } from "../../../data/legacy/legacy-compat.ts";
 import { activityLogService } from "../../../services/activityLogService";
 import { financialAccountService } from "../../../services/financialAccountService";
 import { notificationService } from "../../../services/notificationService";
@@ -140,7 +139,6 @@ export function createOrderEntityHandlers(
         });
       } catch (err: unknown) {
         console.error(err);
-        handleSupabaseError(err, OperationType.CREATE, "customers");
       } finally {
         setIsSubmitting(false);
       }

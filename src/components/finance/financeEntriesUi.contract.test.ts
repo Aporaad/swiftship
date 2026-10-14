@@ -50,12 +50,38 @@ describe('عقد واجهة القيود الجديدة', () => {
     expect(custody).not.toContain('recipientId: recipient.id');
   });
 
-  it('يستخدم تقرير المالية دفتر account_trans مع رؤوس main_entry المرحّلة فقط', () => {
+  it('يقرأ تقرير المالية من مسارات alx_api (الحركات المرحّلة ورؤوس القيود) ولا يلمس المجموعات القديمة', () => {
     const report = readFileSync(resolve(process.cwd(), 'src', 'components', 'FinanceReports.tsx'), 'utf8');
-    expect(report).toContain("collection(db, 'account_trans')");
-    expect(report).toContain("collection(db, 'main_entry')");
-    expect(report).toContain("tx.entry?.postingStatus === 'posted'");
+    // مسارات alx_api هي المصدر الوحيد: الحركات تُصفّى إلى المرحّل فقط داخل الخادم.
+    expect(report).toContain("'/api/v1/finance/account-movements'");
+    expect(report).toContain("'/api/v1/finance/entries'");
+    expect(report).toContain('readFinancePage');
+    expect(report).not.toContain('legacy-compat');
+    expect(report).not.toContain("collection(db, 'account_trans')");
     expect(report).not.toContain("collection(db, 'account_transactions')");
+    expect(report).not.toContain("collection(db, 'main_entry')");
+    expect(report).not.toContain('onSnapshot(');
+  });
+
+  it('يتحقق من رمز PIN خادميًا في نوافذ الحذف ولا يقبل رموزًا ثابتة في الواجهة', () => {
+    const root = resolve(process.cwd(), 'src');
+    const pinModal = readFileSync(resolve(root, 'components', 'ConfirmDeletePinModal.tsx'), 'utf8');
+    const entryActions = readFileSync(
+      resolve(root, 'components', 'financeAccounting', 'financeAccountingMainEntryActions.ts'),
+      'utf8',
+    );
+    const ordersPage = readFileSync(resolve(root, 'features', 'orders', 'pages', 'OrdersPage.tsx'), 'utf8');
+    const pinService = readFileSync(resolve(root, 'services', 'securityPinService.ts'), 'utf8');
+
+    for (const file of [pinModal, entryActions, ordersPage]) {
+      expect(file).toContain('verifyCurrentUserPin');
+      expect(file).not.toContain("'1234'");
+      expect(file).not.toContain("'0000'");
+      expect(file).not.toContain("'000000'");
+      expect(file).not.toMatch(/systemPin\s*(===|==|!==)/);
+    }
+    expect(pinModal).not.toContain('legacy-compat');
+    expect(pinService).toContain('not-configured');
   });
 
   it('يعرض تحصيل الطلب بعملة الدفع المحفوظة ويعتمدها عند إنشاء سند القبض', () => {

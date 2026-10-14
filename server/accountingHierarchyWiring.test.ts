@@ -35,7 +35,12 @@ describe('عقد إعادة هيكلة شجرة الحسابات', () => {
     expect(service).toContain('accountingHierarchyService.getDefaultAccount(acc.id)');
     expect(accountFactory).toContain('limitedBalance');
     expect(accountFactory).toContain('hasHierarchyStructure()');
-    expect(service).toContain('const newId = `salary_${params.employeeId}_');
+    expect(service).toContain('const salaryHistoryId = `salary_${params.employeeId}_');
+    // الحسابات المالية تُدار عبر alx_api فقط — لا وصول مباشر لقاعدة البيانات من المتصفح.
+    expect(service).not.toContain('legacy-compat');
+    expect(accountFactory).not.toContain('legacy-compat');
+    expect(service).toContain("/api/v1/finance/salary-history");
+    expect(accountFactory).toContain("'/api/v1/finance/accounts'");
   });
 
   it('يعرض إدارة الشجرة والحسابات الافتراضية ويمنع اختيار العقد التنظيمية', () => {
@@ -43,10 +48,18 @@ describe('عقد إعادة هيكلة شجرة الحسابات', () => {
     const accountingPage = read('src/components/FinanceAccounting.tsx');
     const adjustmentModal = read('src/components/finance/ManualJournalAdjustmentModal.tsx');
     expect(component).toContain("setActiveTab('defaults')");
-    expect(component).toContain("['default_accounts', setDefaultAccounts]");
     expect(component).toContain('filterPostingAccounts(accounts, true)');
-    expect(component).toContain('onSnapshot(collection(db, table)');
     expect(component).toContain("dataLoadState === 'ready'");
+    // الشجرة تُقرأ وتُكتب عبر alx_api فقط — لا المستمعون المباشرون ولا عميل legacy.
+    // Every tree read/write goes through alx_api services: no realtime listeners, no legacy client.
+    expect(component).not.toContain('legacy-compat');
+    expect(component).not.toContain('onSnapshot(');
+    expect(component).toContain("listHierarchyNodes('account')");
+    expect(component).toContain('listDefaultAccountRecords()');
+    expect(component).toContain('listAccountMovements(');
+    expect(component).toContain('importAccountingTree(');
+    expect(component).toContain('createHierarchyNode(');
+    expect(component).toContain('deleteFinancialAccount(');
     expect(component).toContain('rootsForSelectedNature');
     expect(component).toContain('availableMains');
     expect(component).toContain('availableSubs');

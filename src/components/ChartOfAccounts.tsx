@@ -1,17 +1,21 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { CurrencySelect } from './common/CurrencySelect';
 import {
   FolderTree, Folder, FolderOpen, ChevronRight, ChevronDown, PlusCircle, Trash2,
   Search, Scale, X, Activity, ShieldCheck, RefreshCw, Edit2, FileText, FileSpreadsheet, Printer,
   TrendingUp, TrendingDown, DollarSign, ArrowUpRight, ArrowDownLeft
 } from 'lucide-react';
-import { format, startOfDay, endOfDay, subDays, isWithinInterval } from 'date-fns';
 import ConfirmModal from './ConfirmModal';
-import { db } from '../data/legacy/legacy-compat.ts';
-import { collection, addDoc, doc, deleteDoc, updateDoc, onSnapshot, query, where, getDocs, orderBy } from '../data/legacy/legacy-compat.ts';
 import { notificationService } from '../services/notificationService';
-import { useAccountBalances, computeAccountBalance, guessAccountTypeFromCode, AccountType } from '../hooks/useAccountBalances';
-import { financialAccountService } from '../services/financialAccountService';
+import { useAccountBalances, AccountType } from '../hooks/useAccountBalances';
+import { financialAccountService, type FinancialAccount } from '../services/financialAccountService';
+import {
+  accountNumberFromCode,
+  createFinancialAccount,
+  deleteFinancialAccount,
+  listAccountMovements,
+  updateFinancialAccount,
+} from '../services/financialAccountAdmin';
 import { useExchangeRates } from '../hooks/useExchangeRates';
 
 interface ChartOfAccountsProps {
@@ -54,6 +58,18 @@ export interface AccountNode {
   entityName?: string;
 }
 
+/** سطر حركة مرحّلة في تقرير الحساب — normalized posted movement row used by the account report. */
+export interface AccountReportLine {
+  id: string;
+  createdAt?: string | number;
+  entryNumber?: string;
+  description?: string;
+  module?: string;
+  transType?: string;
+  amount: number;
+  currency: string;
+}
+
 export default function ChartOfAccounts({
   isAr,
   settings,
@@ -63,7 +79,7 @@ export default function ChartOfAccounts({
   scannersTotal,
   officeAssetsTotal
 }: ChartOfAccountsProps) {
-  const [customAccounts, setCustomAccounts] = useState<AccountNode[]>([]);
+  const [customAccounts, setCustomAccounts] = useState<FinancialAccount[]>([]);
 
   // ── Live transaction-based balances (real-time from Supabase) ──────────────
   const liveBalances = useAccountBalances();
@@ -75,7 +91,7 @@ export default function ChartOfAccounts({
 
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [reportAccount, setReportAccount] = useState<AccountNode | null>(null);
-  const [reportTransactions, setReportTransactions] = useState<any[]>([]);
+  const [reportTransactions, setReportTransactions] = useState<AccountReportLine[]>([]);
   const [reportLoading, setReportLoading] = useState(false);
 
   const [editingNode, setEditingNode] = useState<AccountNode | null>(null);
@@ -128,15 +144,24 @@ export default function ChartOfAccounts({
     '5300': true,
   });
 
-  // Sync custom accounts from DB (Supabase real-time via adapter)
+  /** تحميل الحسابات المالية من alx_api — لا قراءة مباشرة من قاعدة البيانات في الواجهة. */
+  /** Loads the financial accounts through the service; the component never queries the database itself. */
+  const loadAccounts = useCallback(async () => {
+    try {
+      setCustomAccounts(await financialAccountService.getAllAccounts());
+    } catch (error) {
+      console.error('[ChartOfAccounts] تعذر تحميل الحسابات:', error);
+      notificationService.notify({
+        title: isAr ? 'تعذر تحميل الحسابات' : 'Failed to load accounts',
+        message: error instanceof Error ? error.message : String(error),
+        type: 'error',
+      });
+    }
+  }, [isAr]);
+
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'accounts'), (snap: any) => {
-      setCustomAccounts(snap.docs.map((d: any) => ({ id: d.id, ...d.data() } as any)));
-    }, (error: any) => {
-      console.error("Error loading custom accounts:", error);
-    });
-    return () => unsub();
-  }, []);
+    void loadAccounts();
+  }, [loadAccounts]);
 
 
 
@@ -197,7 +222,7 @@ export default function ChartOfAccounts({
 
     // Merge custom accounts (skip duplicates by code)
     customAccounts.forEach(ca => {
-      const code = ca.accountCode || ca.code;
+      const code = ca.accountCode;
       if (!code) return;
       if (combined.some(sa => sa.code === code)) return; // already present
 
@@ -238,8 +263,8 @@ export default function ChartOfAccounts({
       combined.push({
         id: ca.id,
         code,
-        nameAr: ca.entityName || ca.nameAr || '',
-        nameEn: ca.entityName || ca.nameEn || '',
+        nameAr: ca.entityName || ca.accNameAr || '',
+        nameEn: ca.entityName || ca.accNameEn || '',
         type: type as any,
         parentCode: parentCode || null,
         balance: computedBalance,
@@ -388,32 +413,25 @@ export default function ChartOfAccounts({
     setAccountLoading(true);
     const newId = 'acc_' + newAccount.code;
     try {
-      await addDoc(
-        newId,
-        collection(db, 'accounts'),
-        {
-          code: newAccount.code,
-          accountCode: newAccount.code,
-          accountNumber: newAccount.code.split('-')[1].trim(),
-          nameAr: newAccount.nameAr,
-          nameEn: newAccount.nameEn,
-          entityName: newAccount.nameAr,
-          type: newAccount.type,
-          entityType: 'system',
-          isActive: true,
-          parentCode: newAccount.parentCode || null,
-          accountPrefix: newAccount.parentCode || null,
-          balance: parseFloat(newAccount.balance) || 0,
-          currency: newAccount.currency,
-          createdAt: format(Date.now(), 'yyyy-MM-dd_hh-mm-ss'),
-          //createdAt: new Intl.DateTimeFormat('ar-EG', { dateStyle: 'full' }).format(Date.now()),
-        }
-      );
+      await createFinancialAccount(newId, {
+        accountCode: newAccount.code,
+        accountNumber: accountNumberFromCode(newAccount.code),
+        accNameAr: newAccount.nameAr,
+        accNameEn: newAccount.nameEn,
+        entityName: newAccount.nameAr,
+        type: newAccount.type,
+        entityType: 'system',
+        isActive: true,
+        accountPrefix: newAccount.parentCode || null,
+        balance: parseFloat(newAccount.balance) || 0,
+        currency: newAccount.currency,
+      });
+      await loadAccounts();
       notificationService.notify({ title: isAr ? 'تم إضافة الحساب' : 'Account Created', message: isAr ? `تم إضافة الحساب [${newAccount.nameAr}] للشجرة.` : `Account [${newAccount.nameEn}] created.`, type: 'success' });
       setIsAddOpen(false);
       setNewAccount({ code: '', nameAr: '', nameEn: '', type: 'Asset', parentCode: '', balance: '', currency: 'YER' });
     } catch (err: any) {
-      notificationService.notify({ title: 'PostgreSQL Error', message: err.message, type: 'error' });
+      notificationService.notify({ title: isAr ? 'فشل إنشاء الحساب' : 'Account creation failed', message: err?.message ?? String(err), type: 'error' });
     } finally {
       setAccountLoading(false);
     }
@@ -428,107 +446,88 @@ export default function ChartOfAccounts({
     }
     setAccountLoading(true);
     try {
-      await updateDoc(doc(db, 'accounts', editingNode.id), {
-        code: newAccount.code,
+      await updateFinancialAccount(editingNode.id, {
         accountCode: newAccount.code,
-        nameAr: newAccount.nameAr,
-        nameEn: newAccount.nameEn,
+        accountNumber: accountNumberFromCode(newAccount.code),
+        accNameAr: newAccount.nameAr,
+        accNameEn: newAccount.nameEn,
         entityName: newAccount.nameAr,
         type: newAccount.type,
-        parentCode: newAccount.parentCode || null,
         accountPrefix: newAccount.parentCode || null,
         balance: parseFloat(newAccount.balance) || 0,
         currency: newAccount.currency,
-        updatedAt: Date.now()
       });
+      await loadAccounts();
       notificationService.notify({ title: isAr ? 'تم التعديل' : 'Updated', message: isAr ? 'تم تعديل بيانات الحساب.' : 'Account updated.', type: 'success' });
       setIsEditOpen(false);
       setEditingNode(null);
     } catch (err: any) {
-      notificationService.notify({ title: 'Error', message: err.message, type: 'error' });
+      notificationService.notify({ title: isAr ? 'فشل التعديل' : 'Update failed', message: err?.message ?? String(err), type: 'error' });
     } finally {
       setAccountLoading(false);
     }
   };
 
+  /**
+   * تقرير حركات الحساب: الخادم يعيد الحركات المرحّلة فقط (مرتبطة بـ main_entry).
+   * Account statement: the API already returns posted movements joined with their entry headers,
+   * so the component no longer re-filters drafts client-side.
+   */
   const openReport = async (node: AccountNode) => {
     setReportAccount(node);
     setIsReportOpen(true);
     setReportLoading(true);
     setReportTransactions([]);
     try {
-      const qCode = query(collection(db, 'account_trans'), where('account_code', '==', node.code), orderBy('created_at', 'desc'));
-      const snapCode = await getDocs(qCode);
-      let txs = snapCode.docs.map(d => ({ id: d.id, ...d.data() }));
-
-      if (node.id) {
-        const qId = query(collection(db, 'account_trans'), where('account_id', '==', node.id), orderBy('created_at', 'desc'));
-        const snapId = await getDocs(qId);
-        snapId.docs.forEach(d => {
-          if (!txs.some((t: any) => t.id === d.id)) txs.push({ id: d.id, ...d.data() });
-        });
-        txs.sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
-      }
-
-      // جمع معرّفات القيود المرتبطة من main_entry
-      // Collect linked entry IDs to fetch from main_entry
-      const entryIds = Array.from(new Set(
-        txs.map((t: any) => t.entryId || t.entry_id).filter(Boolean)
-      ));
-      const mainEntryMap = new Map<string, any>();
-      if (entryIds.length > 0) {
-        try {
-          // جلب رؤوس القيود من main_entry للتحقق من حالة الترحيل
-          // Fetch main_entry headers to check posting_status
-          const allEntriesSnap = await getDocs(collection(db, 'main_entry'));
-          allEntriesSnap.docs.forEach((d: any) => {
-            if (entryIds.includes(d.id)) {
-              mainEntryMap.set(d.id, d.data());
-            }
-          });
-        } catch (_) { /* ignore */ }
-      }
-
-      // تصفية الحركات: فقط الحركات المرتبطة بقيود مرحّلة (posting_status === 'posted')
-      // Filter transactions: only those linked to posted entries
-      txs = txs.filter((t: any) => {
-        const entryId = t.entryId || t.entry_id;
-
-        // إذا لم يوجد entryId: إدراج كحركة تاريخية
-        // No entryId: include as legacy transaction
-        if (!entryId) return true;
-
-        const mainEntry = mainEntryMap.get(entryId);
-
-        // إذا لم يُوجد القيد في main_entry: استبعاد
-        // Entry not found in main_entry: exclude
-        if (!mainEntry) return false;
-
-        // استبعاد القيود غير المرحّلة (posting_status !== 'posted')
-        // Exclude non-posted entries
-        const postingStatus = mainEntry?.postingStatus || mainEntry?.posting_status || '';
-        if (postingStatus !== 'posted') return false;
-
-        return true;
-      });
-
-
-      setReportTransactions(txs);
+      const lines = node.id ? await listAccountMovements(node.id) : [];
+      setReportTransactions(lines.map((movement, index) => ({
+        id: String(movement.transactionId ?? `${movement.entryId ?? 'movement'}-${index}`),
+        createdAt: movement.createdAt,
+        entryNumber: movement.entryNumber,
+        description: String(movement.description ?? movement.note ?? ''),
+        module: movement.module,
+        transType: movement.transType,
+        amount: Number(movement.amount ?? 0),
+        currency: node.currency || settings?.currency || 'YER',
+      })));
     } catch (err) {
       console.error(err);
+      notificationService.notify({
+        title: isAr ? 'تعذر تحميل الحركات' : 'Failed to load movements',
+        message: err instanceof Error ? err.message : String(err),
+        type: 'error',
+      });
     } finally {
       setReportLoading(false);
     }
   };
 
 
+  /**
+   * حذف حساب غير مستخدم. الحساب المرتبط بحركات يُرفض حذفه ويُعطَّل بدلًا من ذلك حمايةً للأثر المحاسبي.
+   * Deletes an unused account; an account with ledger history is refused by the API and deactivated instead.
+   */
   const confirmDeleteAccount = async () => {
     if (!showDeleteConfirm) return;
     try {
-      await deleteDoc(doc(db, 'accounts', showDeleteConfirm.id));
-      notificationService.notify({ title: isAr ? 'تم الحذف' : 'Deleted', message: isAr ? 'تم إزالة الحساب.' : 'Account removed.', type: 'success' });
+      const result = await deleteFinancialAccount(showDeleteConfirm.id);
+      if (result.status === 'deleted') {
+        setCustomAccounts(prev => prev.filter(account => account.id !== showDeleteConfirm.id));
+        notificationService.notify({ title: isAr ? 'تم الحذف' : 'Deleted', message: isAr ? 'تم إزالة الحساب.' : 'Account removed.', type: 'success' });
+      } else if (result.status === 'in_use') {
+        notificationService.notify({
+          title: isAr ? 'الحساب مستخدم في قيود' : 'Account has ledger history',
+          message: result.message || (isAr
+            ? 'لا يمكن حذف حساب له حركات مالية؛ سيتم تعطيله بدل الحذف.'
+            : 'An account with posted movements cannot be deleted; it will be deactivated instead.'),
+          type: 'error',
+        });
+      } else {
+        notificationService.notify({ title: isAr ? 'الحساب غير موجود' : 'Account not found', message: result.message || (isAr ? 'لم يُعثر على الحساب.' : 'The account no longer exists.'), type: 'error' });
+      }
+      await loadAccounts();
     } catch (err: any) {
-      notificationService.notify({ title: 'Error', message: err.message, type: 'error' });
+      notificationService.notify({ title: isAr ? 'فشل الحذف' : 'Deletion failed', message: err?.message ?? String(err), type: 'error' });
     } finally {
       setShowDeleteConfirm(null);
     }
@@ -1016,13 +1015,13 @@ export default function ChartOfAccounts({
                   <div className="bg-emerald-950/20 border border-emerald-900/20 rounded-xl p-2 text-center">
                     <span className="block text-[8px] text-emerald-400 font-black uppercase">{isAr ? 'إجمالي المدين' : 'Total Debit'}</span>
                     <span className="text-xs font-mono font-black text-emerald-400">
-                      {reportTransactions.filter(t => (t.transType || t.trans_type || t.type) === 'Debit').reduce((s, t) => s + (t.amount || 0), 0).toLocaleString()} {settings.currency || 'YER'}
+                      {reportTransactions.filter(t => t.transType === 'Debit').reduce((s, t) => s + t.amount, 0).toLocaleString()} {settings.currency || 'YER'}
                     </span>
                   </div>
                   <div className="bg-rose-950/20 border border-rose-900/20 rounded-xl p-2 text-center">
                     <span className="block text-[8px] text-rose-400 font-black uppercase">{isAr ? 'إجمالي الدائن' : 'Total Credit'}</span>
                     <span className="text-xs font-mono font-black text-rose-400">
-                      {reportTransactions.filter(t => (t.transType || t.trans_type || t.type) === 'Credit').reduce((s, t) => s + (t.amount || 0), 0).toLocaleString()} {settings.currency || 'YER'}
+                      {reportTransactions.filter(t => t.transType === 'Credit').reduce((s, t) => s + t.amount, 0).toLocaleString()} {settings.currency || 'YER'}
                     </span>
                   </div>
                   <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-2 text-center">
@@ -1052,34 +1051,24 @@ export default function ChartOfAccounts({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-850/40">
-                    {reportTransactions.map((tx: any) => (
+                    {reportTransactions.map((tx) => (
                       <tr key={tx.id} className="hover:bg-slate-900/20 transition-colors">
                         <td className="p-2 text-[10px] font-mono text-slate-500">
                           {tx.createdAt ? new Date(tx.createdAt).toLocaleDateString('ar-YE') : '—'}
                         </td>
-                        <td className="p-2 text-[9px] font-mono text-[#d4af37]">{tx.entryNumber || tx.entry_number || tx.refNumber || tx.mainEntryNumber || '—'}</td>
+                        <td className="p-2 text-[9px] font-mono text-[#d4af37]">{tx.entryNumber || '—'}</td>
                         <td className="p-2 text-[10px] text-slate-300 max-w-[200px] break-words">{tx.description || '—'}</td>
                         <td className="p-2">
-                          <span className="text-[8px] bg-slate-900 text-slate-500 border border-slate-800 px-1.5 py-0.5 rounded uppercase font-black">{tx.module || tx.moduleId || '—'}</span>
+                          <span className="text-[8px] bg-slate-900 text-slate-500 border border-slate-800 px-1.5 py-0.5 rounded uppercase font-black">{tx.module || '—'}</span>
                         </td>
                         <td className="p-2 text-right text-[10px] font-mono text-emerald-400 font-black">
-                          {(tx.transType || tx.trans_type || tx.type) === 'Debit' ? (
-                            <div className="flex flex-col items-end">
-                              <span>{(tx.amountOriginal || tx.amount_original || tx.amount || 0).toLocaleString()} {tx.currencyOriginal || tx.currency || (settings.currency || 'YER')}</span>
-                              {tx.currencyOriginal && tx.currencyOriginal !== (settings.currency || 'YER') && (
-                                <span className="text-[8px] text-slate-500 font-normal">≈ {(tx.amount || 0).toLocaleString()} {settings.currency || 'YER'}</span>
-                              )}
-                            </div>
+                          {tx.transType === 'Debit' ? (
+                            <span>{tx.amount.toLocaleString()} {tx.currency}</span>
                           ) : '—'}
                         </td>
                         <td className="p-2 text-right text-[10px] font-mono text-rose-400 font-black">
-                          {(tx.transType || tx.trans_type || tx.type) === 'Credit' ? (
-                            <div className="flex flex-col items-end">
-                              <span>{(tx.amountOriginal || tx.amount_original || tx.amount || 0).toLocaleString()} {tx.currencyOriginal || tx.currency || (settings.currency || 'YER')}</span>
-                              {tx.currencyOriginal && tx.currencyOriginal !== (settings.currency || 'YER') && (
-                                <span className="text-[8px] text-slate-500 font-normal">≈ {(tx.amount || 0).toLocaleString()} {settings.currency || 'YER'}</span>
-                              )}
-                            </div>
+                          {tx.transType === 'Credit' ? (
+                            <span>{tx.amount.toLocaleString()} {tx.currency}</span>
                           ) : '—'}
                         </td>
                       </tr>
@@ -1105,14 +1094,14 @@ export default function ChartOfAccounts({
                 onClick={() => {
                   const win = window.open('', '_blank');
                   if (!win) return;
-                  const rows = reportTransactions.map((tx: any) => `
+                  const rows = reportTransactions.map((tx) => `
                     <tr>
                       <td>${tx.createdAt ? new Date(tx.createdAt).toLocaleDateString() : ''}</td>
-                      <td>${tx.refNumber || ''}</td>
+                      <td>${tx.entryNumber || ''}</td>
                       <td>${tx.description || ''}</td>
                       <td>${tx.module || ''}</td>
-                      <td style="color:green">${tx.type === 'Debit' ? (tx.amountOriginal || tx.amount || 0).toLocaleString() + ' ' + (tx.currencyOriginal || 'YER') : ''}</td>
-                      <td style="color:red">${tx.type === 'Credit' ? (tx.amountOriginal || tx.amount || 0).toLocaleString() + ' ' + (tx.currencyOriginal || 'YER') : ''}</td>
+                      <td style="color:green">${tx.transType === 'Debit' ? tx.amount.toLocaleString() + ' ' + tx.currency : ''}</td>
+                      <td style="color:red">${tx.transType === 'Credit' ? tx.amount.toLocaleString() + ' ' + tx.currency : ''}</td>
                     </tr>`).join('');
                   win.document.write(`<html dir="${isAr ? 'rtl' : 'ltr'}"><head><title>${reportAccount.code} — ${isAr ? reportAccount.nameAr : reportAccount.nameEn}</title>
                     <style>body{font-family:monospace;padding:20px;color:#000}table{width:100%;border-collapse:collapse;margin-top:16px;font-size:11px}th{background:#f0f0f0;padding:6px 8px;border:1px solid #ddd;text-align:inherit}td{padding:5px 8px;border:1px solid #eee}h2{margin:0 0 4px}p{margin:0;color:#555;font-size:12px}.bal{font-size:16px;font-weight:bold;margin-top:8px}</style></head>

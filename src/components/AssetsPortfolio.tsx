@@ -1,13 +1,20 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CurrencySelect } from './common/CurrencySelect';
 import {
   Truck, Search, Wrench, X, PlusCircle, Trash2, Calendar, DollarSign,
   Activity, CheckCircle, AlertTriangle, ShieldCheck, RefreshCw, User, ClipboardList, Package, Printer
 } from 'lucide-react';
-import { addAssDoc, db } from '../data/legacy/legacy-compat.ts';
-import { collection, addDoc, doc, deleteDoc, updateDoc, onSnapshot } from '../data/legacy/legacy-compat.ts';
 import { notificationService } from '../services/notificationService';
-import { financialAccountService } from '../services/financialAccountService';
+import {
+  ASSET_ACCOUNTING,
+  createMaintenanceLog,
+  financeAssetsService,
+  type AssetCategory,
+  type AssetStatus,
+  type AssetType,
+  type FinancialAsset,
+  type MaintenanceType,
+} from '../services/financeAssetsService';
 import { jsPDF } from 'jspdf';
 import { formatDate } from '../lib/dateUtils';
 import { useExchangeRates } from '../hooks/useExchangeRates';
@@ -18,48 +25,9 @@ interface AssetsPortfolioProps {
   couriers: any[];
 }
 
-interface MaintenanceLog {
-  logId: string;
-  cost: number;
-  currency: string;
-  type: 'Preventive' | 'Repair' | 'Overhaul';
-  notes: string;
-  doneBy: string;
-  date: string;
-  createdAt: number;
-}
-
-interface Asset {
-  id?: string;
-  assetCode: string;
-  nameAr: string;
-  nameEn: string;
-  category: 'Vehicles' | 'Inspection' | 'Office' | 'Computers' | 'Other';
-  type: 'Fixed' | 'NonFixed';
-  cost: number;
-  currency: string;
-  purchaseDate: string;
-  assignedCourierId: string | null;
-  assignedCourierName: string | null;
-  status: 'Active' | 'UnderMaintenance' | 'Retired';
-  notes: string;
-  maintenanceLogs: MaintenanceLog[];
-  createdAt: number;
-  financialAccountId?: string;
-  financialAccountCode?: string;
-}
-
-const ASSET_ACCOUNTING: Record<Asset['category'], { prefix: string; parentCode: string; nameAr: string }> = {
-  Vehicles: { prefix: '1210', parentCode: '1210', nameAr: 'سيارات ومعدات لوجستية' },
-  Inspection: { prefix: '1220', parentCode: '1220', nameAr: 'أجهزة تفتيش ومستودعات' },
-  Office: { prefix: '1230', parentCode: '1230', nameAr: 'أثاث وتجهيزات مكتبية' },
-  Computers: { prefix: '1240', parentCode: '1240', nameAr: 'أجهزة حاسوب وتقنية' },
-  Other: { prefix: '1250', parentCode: '1250', nameAr: 'أصول ثابتة أخرى' },
-};
-
 export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPortfolioProps) {
   const { activeCurrencies } = useExchangeRates();
-  const [assets, setAssets] = useState<Asset[]>([]);
+  const [assets, setAssets] = useState<FinancialAsset[]>([]);
   const [assetsLoading, setAssetsLoading] = useState(true);
 
   // Filtering & searching states
@@ -73,7 +41,7 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
   const [expandedAssetId, setExpandedAssetId] = useState<string | null>(null);
 
   // New Maintenance overlay
-  const [selectedAssetForMaint, setSelectedAssetForMaint] = useState<Asset | null>(null);
+  const [selectedAssetForMaint, setSelectedAssetForMaint] = useState<FinancialAsset | null>(null);
   const [maintenanceLoading, setMaintenanceLoading] = useState(false);
 
   // Forms
@@ -81,20 +49,20 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
     assetCode: '',
     nameAr: '',
     nameEn: '',
-    category: 'Vehicles' as any,
-    type: 'Fixed' as any,
+    category: 'Vehicles' as AssetCategory,
+    type: 'Fixed' as AssetType,
     cost: '',
     currency: 'YER',
     purchaseDate: formatDate(),
     assignedCourierId: '',
-    status: 'Active' as any,
+    status: 'Active' as AssetStatus,
     notes: ''
   });
 
   const [newMaint, setNewMaint] = useState({
     cost: '',
     currency: 'YER',
-    type: 'Preventive' as any,
+    type: 'Preventive' as MaintenanceType,
     notes: '',
     doneBy: '',
     date: formatDate(),
@@ -110,22 +78,33 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
   }, [settings]);
 
   const convertToYER = (amount: number, currency: string) => {
-    const rate = exchangeRates[currency as 'YER' | 'USD' | 'SAR'] || 1;
     if (currency === 'USD') return amount * exchangeRates.USD;
     if (currency === 'SAR') return amount * exchangeRates.SAR;
     return amount;
   };
 
-  // Sync assets from DB
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'assets'), (snap) => {
-      setAssets(snap.docs.map((doc: { id: any; assetCode: any; data: () => Asset; }) => ({ id: doc.id, ...doc.data() } as Asset)));
+  /** تحميل الأصول من alx_api — الأصول لا تُقرأ من أي مصدر غير الخدمة. */
+  /** Loads assets through the service; the component never reads the database directly. */
+  const loadAssets = useCallback(async () => {
+    setAssetsLoading(true);
+    try {
+      setAssets(await financeAssetsService.list());
+    } catch (error) {
+      console.error('[AssetsPortfolio] تعذر تحميل الأصول:', error);
+      setAssets([]);
+      notificationService.notify({
+        title: isAr ? 'تعذر تحميل الأصول' : 'Failed to load assets',
+        message: error instanceof Error ? error.message : String(error),
+        type: 'error',
+      });
+    } finally {
       setAssetsLoading(false);
-    }, (error) => {
-      console.error("Error fetching assets:", error);
-    });
-    return () => unsub();
-  }, []);
+    }
+  }, [isAr]);
+
+  useEffect(() => {
+    void loadAssets();
+  }, [loadAssets]);
 
   // Filter lists
   const filteredAssets = useMemo(() => {
@@ -199,39 +178,22 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
     setAssetRegisterLoading(true);
     try {
       const courierObj = couriers.find(c => c.id === newAsset.assignedCourierId);
-      const newAssetId = 'asset' + newAsset.assetCode;
-      const accounting = ASSET_ACCOUNTING[newAsset.category as Asset['category']];
-      const account = await financialAccountService.createAccountForEntity(
-        'asset',
-        newAssetId,
-        `${newAsset.assetCode} — ${newAsset.nameAr}`,
-        newAsset.currency,
-        undefined,
-        {
-          accountPrefix: accounting.prefix,
-          parentCode: accounting.parentCode,
-          accountType: 'Asset',
-          notes: `حساب أصل ثابت: ${accounting.nameAr}`,
-          updateEntity: false,
-        },
-      );
-      await addAssDoc(newAssetId, newAsset.assetCode, collection(db, 'assets'), {
+      // الخدمة تنشئ الحساب المالي للأصل ثم تكتب صفّه — the service creates the account, then the row.
+      await financeAssetsService.register({
         assetCode: newAsset.assetCode,
         nameAr: newAsset.nameAr,
         nameEn: newAsset.nameEn,
         category: newAsset.category,
         type: newAsset.type,
-        cost: parseFloat(newAsset.cost),
+        cost: newAsset.cost,
         currency: newAsset.currency,
         purchaseDate: newAsset.purchaseDate,
         assignedCourierId: newAsset.assignedCourierId || null,
         assignedCourierName: courierObj ? courierObj.fullName : null,
         status: newAsset.status,
         notes: newAsset.notes,
-        maintenanceLogs: [],
-        accountId: account.id,
-        createdAt: Date.now()
       });
+      await loadAssets();
 
       notificationService.notify({
         title: isAr ? 'تم قيد الأصل في الدفاتر' : 'Asset Registered',
@@ -256,8 +218,8 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
     } catch (err: any) {
       console.error(err);
       notificationService.notify({
-        title: 'PostgreSQL Error',
-        message: err.message,
+        title: isAr ? 'فشل تسجيل الأصل' : 'Asset registration failed',
+        message: err?.message ?? String(err),
         type: 'error'
       });
     } finally {
@@ -272,7 +234,8 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
     )) return;
 
     try {
-      await deleteDoc(doc(db, 'assets', id));
+      await financeAssetsService.remove(id);
+      setAssets(prev => prev.filter(asset => asset.id !== id));
       notificationService.notify({
         title: isAr ? 'تم الحذف' : 'Success',
         message: isAr ? 'تم إزالة الأصل وسجلات صيانته نهائياً.' : 'Physical asset records removed.',
@@ -280,6 +243,11 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
       });
     } catch (err: any) {
       console.error(err);
+      notificationService.notify({
+        title: isAr ? 'فشل حذف الأصل' : 'Asset deletion failed',
+        message: err?.message ?? String(err),
+        type: 'error'
+      });
     }
   };
 
@@ -289,22 +257,18 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
 
     setMaintenanceLoading(true);
     try {
-      const logId = `MNT-${Math.floor(1000 + Math.random() * 9000)}`;
-      const logObj: MaintenanceLog = {
-        logId,
-        cost: parseFloat(newMaint.cost),
-        currency: newMaint.currency,
-        type: newMaint.type,
-        notes: newMaint.notes,
-        doneBy: newMaint.doneBy || (isAr ? 'ورشة محلية ممتازة' : 'Local Premium Workshop'),
-        date: newMaint.date,
-        createdAt: Date.now()
-      };
-
-      const updatedLogs = [...(selectedAssetForMaint.maintenanceLogs || []), logObj];
-      await updateDoc(doc(db, 'assets', selectedAssetForMaint.id!), {
-        maintenanceLogs: updatedLogs
-      });
+      const updatedAsset = await financeAssetsService.appendMaintenanceLog(
+        selectedAssetForMaint,
+        createMaintenanceLog({
+          cost: newMaint.cost,
+          currency: newMaint.currency,
+          type: newMaint.type,
+          notes: newMaint.notes,
+          doneBy: newMaint.doneBy || (isAr ? 'ورشة محلية ممتازة' : 'Local Premium Workshop'),
+          date: newMaint.date,
+        }),
+      );
+      setAssets(prev => prev.map(asset => (asset.id === updatedAsset.id ? updatedAsset : asset)));
 
       notificationService.notify({
         title: isAr ? 'تم إضافة كشف الصيانة للأصل' : 'Maintenance Logged',
@@ -834,7 +798,7 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
                   <div className="flex gap-2.5">
                     {/* Expand Maintenance Details Toggle */}
                     <button
-                      onClick={() => setExpandedAssetId(isExpanded ? null : asset.id!)}
+                      onClick={() => setExpandedAssetId(isExpanded ? null : asset.id)}
                       className="flex-1 bg-slate-900 hover:bg-slate-800 border border-slate-850 text-slate-300 py-1.5 rounded-xl text-[10px] font-black transition-all flex items-center justify-center gap-1"
                     >
                       <ClipboardList className="w-3.5 h-3.5 text-[#d4af37]" />
@@ -852,7 +816,7 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
 
                     {/* Delete action */}
                     <button
-                      onClick={() => handleDeleteAsset(asset.id!, isAr ? asset.nameAr : asset.nameEn)}
+                      onClick={() => handleDeleteAsset(asset.id, isAr ? asset.nameAr : asset.nameEn)}
                       className="p-1.5 rounded-xl bg-rose-950/25 border border-rose-900/30 hover:bg-rose-950/60 text-rose-400 transition-all cursor-pointer pointer-events-auto"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -900,7 +864,14 @@ export default function AssetsPortfolio({ isAr, settings, couriers }: AssetsPort
             );
           })}
 
-          {filteredAssets.length === 0 && (
+          {assetsLoading && (
+            <div className="p-16 text-center text-[#d4af37] font-semibold font-mono text-[10px] uppercase border border-dashed border-slate-850 rounded-2xl col-span-full flex items-center justify-center gap-2">
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              [ {isAr ? 'جاري تحميل الأصول من الخادم...' : 'loading_assets_from_server'} ]
+            </div>
+          )}
+
+          {!assetsLoading && filteredAssets.length === 0 && (
             <div className="p-16 text-center text-slate-500 font-semibold font-mono text-[10px] uppercase border border-dashed border-slate-850 rounded-2xl col-span-full">
               [ {isAr ? 'لا يوجد أصول مطابقة لمعايير البحث.' : 'no_matching_assets_found_in_portfolio'} ]
             </div>

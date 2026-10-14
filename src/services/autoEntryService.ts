@@ -1,53 +1,20 @@
-import useExchangeRates from '../hooks/useExchangeRates';
-import { collection, getDocs, setDoc, doc, updateDoc, deleteDoc, db, supabase } from '../data/legacy/legacy-compat.ts';
+/**
+ * autoEntryService.ts
+ * خدمة قواعد القيود التلقائية — API-only عبر alx_api (/api/v1/finance/auto-entry-rules).
+ * Automatic entry rules service — API-only through alx_api (no legacy Supabase access).
+ */
+import { financeApiClient, hasEntryForAutomationKey, readFinanceRows } from './financeApi';
+import type { AutoEntryRule, AutoEntryRuleRow } from './autoEntryRuleMapping';
+import { fromApiRow, toApiPayload } from './autoEntryRuleMapping';
 import { financialAccountService } from './financialAccountService';
 import { financialEntryService } from './financialEntryService';
 import {
-  AUTO_ENTRY_AMOUNT_SOURCE_OPTIONS,
-  AutoEntryAmountSource,
-  buildAutomaticVoucherKey,
   calculateAutoEntryAmount,
+  buildAutomaticVoucherKey,
   getRuleAmountSources,
-  normalizeOptionalAutoEntryCurrency,
 } from './autoEntryRules';
 
-export interface AutoEntryRule {
-  id: string;
-  statusId: number;         // رقم المرحلة والمرتبطة بـ order_status.id
-  statusNameAr?: string;    // اسم المرحلة بالعربي للعرض السريع
-  nameAr: string;           // اسم القيد بالعربي
-  nameEn: string;           // اسم القيد بالإنجليزي
-  isActive: boolean;
-  debitAccount: {
-    id: string;             // system account entityId or 'courier_linked' | 'customer_linked'
-    code: string;
-    name: string;
-    type: 'system' | 'dynamic';
-    defaultKey?: string;
-  };
-  creditAccount: {
-    id: string;
-    code: string;
-    name: string;
-    type: 'system' | 'dynamic';
-    defaultKey?: string;
-  };
-  amountSource?: AutoEntryAmountSource;
-  amountSources?: AutoEntryAmountSource[];
-  amountStrategy?: 'sum';
-  customAmount?: number;
-  currency?: string;
-  skipWhenZero?: boolean;
-  descriptionTempAr: string;
-  descriptionTempEn: string;
-  createdAt?: number;
-  /**
-   * ترحيل القيد فوراً أم حفظه كمسودة غير مرحّلة
-   * Auto post the entry immediately (posted) or save it as a draft (draft)
-   * Default: true (posted immediately)
-   */
-  autoPost?: boolean;
-}
+export type { AutoEntryRule, AutoEntryRuleAccount } from './autoEntryRuleMapping';
 
 export const DEFAULT_AUTO_ENTRIES: AutoEntryRule[] = [
   {
@@ -171,26 +138,35 @@ export const DEFAULT_AUTO_ENTRIES: AutoEntryRule[] = [
   }
 ];
 
+async function fetchRules(): Promise<AutoEntryRule[]> {
+  const rows = await readFinanceRows('/api/v1/finance/auto-entry-rules', { limit: 1000, offset: 0 });
+  return (rows as AutoEntryRuleRow[]).map(fromApiRow);
+}
+
 export const autoEntryService = {
   /**
-   * Ensuring auto_entries collection is seeded with defaults if empty
+   * قراءة القواعد كما هي من alx_api بلا بذر وبلا ابتلاع للأخطاء — تستخدمها الواجهات التي يجب أن تُظهر الفشل.
+   * Reads the stored rules as-is (no seeding, no swallowed errors) for UI providers that must surface failures.
+   */
+  async loadRules(): Promise<AutoEntryRule[]> {
+    return fetchRules();
+  },
+
+  /**
+   * قراءة القواعد من API وبذر الافتراضيات إن كانت فارغة.
+   * Reads rules from the API and seeds the defaults when the table is empty.
    */
   async ensureAutoEntries(): Promise<AutoEntryRule[]> {
     try {
-      const snap = await getDocs(collection(db, 'auto_entries'));
-      if (snap.empty) {
-        for (const rule of DEFAULT_AUTO_ENTRIES) {
-          await setDoc(doc(db, 'auto_entries', rule.id), {
-            ...rule,
-            createdAt: Date.now()
-          });
-        }
-        return DEFAULT_AUTO_ENTRIES;
+      const rules = await fetchRules();
+      if (rules.length > 0) return rules;
+      for (const rule of DEFAULT_AUTO_ENTRIES) {
+        await financeApiClient.post('/api/v1/finance/auto-entry-rules', { autoEntryId: rule.id, ...toApiPayload(rule) });
       }
-      return snap.docs.map(d => ({ id: d.id, ...d.data() } as AutoEntryRule));
+      return fetchRules();
     } catch (err) {
       console.error('[autoEntryService] ensureAutoEntries failed:', err);
-      return DEFAULT_AUTO_ENTRIES;
+      return [];
     }
   },
 
@@ -209,31 +185,36 @@ export const autoEntryService = {
   },
 
   /**
-   * Create or update an auto entry rule
+   * إنشاء أو تحديث قاعدة قيد تلقائي — create or update through the API.
    */
   async saveAutoEntry(rule: AutoEntryRule): Promise<void> {
+    const payload = toApiPayload(rule);
     const id = rule.id || `auto_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const { currency, ...ruleWithoutCurrency } = rule;
-    const normalizedCurrency = normalizeOptionalAutoEntryCurrency(currency);
-    const payload = {
-      ...ruleWithoutCurrency,
-      id,
-      updatedAt: Date.now(),
-      ...(normalizedCurrency ? { currency: normalizedCurrency } : {}),
-    };
-    if (!normalizedCurrency) {
-      const { error } = await (supabase as any).from('auto_entries').update({ currency: null }).eq('auto_entry_id', id);
-      if (error) console.warn('[autoEntryService] Unable to clear the stored voucher currency:', error.message);
+    if (rule.id) {
+      try {
+        await financeApiClient.patch(`/api/v1/finance/auto-entry-rules/${encodeURIComponent(rule.id)}`, payload);
+        return;
+      } catch (error) {
+        // قاعدة غير موجودة بعد → أنشئها بالمعرّف نفسه (upsert سابق عبر setDoc).
+        // Rule not stored yet → create it with the same id (previous setDoc upsert behaviour).
+        if ((error as { code?: string }).code !== 'ENTITY_NOT_FOUND') throw error;
+      }
     }
-    // كتابة مستبدِلة متعمدة: حذف currency من الوثيقة عند الاعتماد على عملة الطلب الافتراضية.
-    await setDoc(doc(db, 'auto_entries', id), payload);
+    await financeApiClient.post('/api/v1/finance/auto-entry-rules', { autoEntryId: id, ...payload });
   },
 
   /**
    * Delete an auto entry rule
    */
   async deleteAutoEntry(ruleId: string): Promise<void> {
-    await deleteDoc(doc(db, 'auto_entries', ruleId));
+    await financeApiClient.delete(`/api/v1/finance/auto-entry-rules/${encodeURIComponent(ruleId)}`);
+  },
+
+  /**
+   * فحص منع التكرار عبر API — automation-key duplicate check through the entries API.
+   */
+  async hasEntryForAutomationKey(automationKey: string): Promise<boolean> {
+    return hasEntryForAutomationKey(automationKey);
   },
 
   /**
@@ -344,13 +325,8 @@ export const autoEntryService = {
             const totalAmount = activeAllocations.reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
             if (!(totalAmount > 0)) continue;
 
-            // التحقق من عدم تنفيذ القيد مسبقاً (منع التكرار) — duplicate check
-            const previousExec = await (supabase as any)
-              .from('main_entry')
-              .select('main_entry_id')
-              .eq('automation_key', automationKey)
-              .limit(1);
-            if ((previousExec.data || []).length > 0) {
+            // التحقق من عدم تنفيذ القيد مسبقاً (منع التكرار) — duplicate check via API
+            if (await this.hasEntryForAutomationKey(automationKey)) {
               console.info('[autoEntryService] Compound entry duplicate prevented.', { automationKey });
               executedRuleIds.push(rule.id);
               continue;

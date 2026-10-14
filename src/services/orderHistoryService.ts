@@ -1,5 +1,13 @@
-import { collection, getDocs, limit, orderBy, query, where } from '../data/legacy/legacy-compat.ts';
-import { db } from '../data/legacy/legacy-compat.ts';
+import { ApiClient } from '../data/http/api-client';
+
+const client = new ApiClient({
+  baseUrl: import.meta.env.VITE_ALX_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:3001',
+  accessTokenFactory: () => (typeof sessionStorage === 'undefined' ? null : sessionStorage.getItem('alx_access_token') || sessionStorage.getItem('alx_api_access_token')),
+  maxReadRetries: 0,
+});
+
+type ApiEnvelope<T> = { success: true; data: T };
+type ApiRow = Record<string, unknown>;
 
 export type OrderHistoryContext = {
   orderId?: string;
@@ -40,9 +48,6 @@ const REDUNDANT_LEGACY_ACTIVITY_EVENTS = new Set([
   'activity.delete_order',
 ]);
 
-type OrderHistoryDocument = { id: string; data: () => unknown };
-type OrderHistorySnapshot = { docs?: OrderHistoryDocument[] };
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -52,46 +57,47 @@ function readText(value: unknown): string | undefined {
 }
 
 function readRecord(value: unknown): Record<string, unknown> | undefined {
-  return isRecord(value) ? value : undefined;
-}
-
-type TimestampLike = { toDate: () => Date };
-
-function isTimestampLike(value: unknown): value is TimestampLike {
-  return isRecord(value) && typeof value.toDate === 'function';
+  if (isRecord(value)) return value;
+  if (typeof value === 'string' && value.trim().startsWith('{')) {
+    try {
+      const parsed = JSON.parse(value);
+      return isRecord(parsed) ? parsed : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
 }
 
 function readTime(value: unknown): string | number | undefined {
   if (typeof value === 'string' || typeof value === 'number') return value;
   if (value instanceof Date) return value.toISOString();
-  return isTimestampLike(value) ? value.toDate().toISOString() : undefined;
+  return undefined;
 }
 
-function readEvent(doc: OrderHistoryDocument): OrderHistoryEvent {
-  const data = doc.data();
-  const event = isRecord(data) ? data : {};
+function readEvent(row: ApiRow): OrderHistoryEvent {
   return {
-    id: doc.id,
-    orderId: readText(event.orderId ?? event.order_id),
-    orderNumber: readText(event.orderNumber ?? event.order_number),
-    shipmentId: readText(event.shipmentId ?? event.shipment_id),
-    mainEntryId: readText(event.mainEntryId ?? event.main_entry_id),
-    accountTransId: readText(event.accountTransId ?? event.account_trans_id),
-    activityLogId: readText(event.activityLogId ?? event.activity_log_id),
-    eventType: readText(event.eventType ?? event.event_type) ?? 'legacy.unknown',
-    eventCategory: readText(event.eventCategory ?? event.event_category) ?? 'legacy',
-    operation: readText(event.operation) ?? 'unknown',
-    entityType: readText(event.entityType ?? event.entity_type) ?? 'unknown',
-    actorId: readText(event.actorId ?? event.actor_id),
-    actorName: readText(event.actorName ?? event.actor_name),
-    actorRole: readText(event.actorRole ?? event.actor_role),
-    source: readText(event.source),
-    summary: readText(event.summary),
-    beforeData: readRecord(event.beforeData ?? event.before_data),
-    afterData: readRecord(event.afterData ?? event.after_data),
-    metadata: readRecord(event.metadata),
-    occurredAt: readTime(event.occurredAt ?? event.occurred_at),
-    createdAt: readTime(event.createdAt ?? event.created_at),
+    id: readText(row.historyId ?? row.ordersHistoryId ?? row.id) ?? '',
+    orderId: readText(row.orderId ?? row.order_id),
+    orderNumber: readText(row.orderNumber ?? row.order_number),
+    shipmentId: readText(row.shipmentId ?? row.shipment_id),
+    mainEntryId: readText(row.mainEntryId ?? row.main_entry_id),
+    accountTransId: readText(row.accountTransId ?? row.account_trans_id),
+    activityLogId: readText(row.activityLogId ?? row.activity_log_id),
+    eventType: readText(row.eventType ?? row.event_type) ?? 'legacy.unknown',
+    eventCategory: readText(row.eventCategory ?? row.event_category) ?? 'legacy',
+    operation: readText(row.operation) ?? 'unknown',
+    entityType: readText(row.entityType ?? row.entity_type) ?? 'unknown',
+    actorId: readText(row.actorId ?? row.actor_id),
+    actorName: readText(row.actorName ?? row.actor_name),
+    actorRole: readText(row.actorRole ?? row.actor_role),
+    source: readText(row.source),
+    summary: readText(row.summary),
+    beforeData: readRecord(row.beforeData ?? row.before_data),
+    afterData: readRecord(row.afterData ?? row.after_data),
+    metadata: readRecord(row.metadata),
+    occurredAt: readTime(row.occurredAt ?? row.occurred_at),
+    createdAt: readTime(row.createdAt ?? row.created_at),
   };
 }
 
@@ -108,26 +114,36 @@ function deduplicate(events: OrderHistoryEvent[]): OrderHistoryEvent[] {
     .sort((left, right) => eventTime(right) - eventTime(left));
 }
 
+async function fetchHistoryRows(path: string, query?: Record<string, string | number>): Promise<ApiRow[]> {
+  const response = await client.get<ApiEnvelope<ApiRow[] | { items?: ApiRow[] }>>(path, query);
+  const data = response.data;
+  return Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
+}
+
+async function resolveOrderIdByNumber(orderNumber: string): Promise<string | null> {
+  const rows = await fetchHistoryRows('/api/v1/orders', { search: orderNumber, limit: 20, offset: 0 });
+  const match = rows.find((row) => readText(row.orderNumber) === orderNumber);
+  return match ? readText(match.orderId) ?? null : null;
+}
+
 class OrderHistoryService {
   async listForContext(context: OrderHistoryContext): Promise<OrderHistoryEvent[]> {
-    const history = collection(db, 'orders_history');
-    const reads: Promise<OrderHistorySnapshot>[] = [];
-
-    if (context.orderId) {
-      reads.push(getDocs(query(history, where('orderId', '==', context.orderId), orderBy('occurredAt', 'desc'), limit(250))));
-    }
-
-    if (context.orderNumber && context.orderNumber !== context.orderId) {
-      reads.push(getDocs(query(history, where('orderNumber', '==', context.orderNumber), orderBy('occurredAt', 'desc'), limit(250))));
-    }
+    const reads: Promise<ApiRow[]>[] = [];
 
     if (context.shipmentId) {
-      reads.push(getDocs(query(history, where('shipmentId', '==', context.shipmentId), orderBy('occurredAt', 'desc'), limit(250))));
+      reads.push(fetchHistoryRows(`/api/v1/shipments/${encodeURIComponent(context.shipmentId)}/tracking`));
+    }
+
+    const orderId = context.orderId
+      ?? (context.orderNumber ? await resolveOrderIdByNumber(context.orderNumber) : null);
+
+    if (orderId) {
+      reads.push(fetchHistoryRows(`/api/v1/orders/${encodeURIComponent(orderId)}/history`));
     }
 
     if (reads.length === 0) return [];
-    const snapshots = await Promise.all(reads);
-    return deduplicate(snapshots.flatMap((snapshot) => (snapshot?.docs ? snapshot.docs.map(readEvent) : [])));
+    const rows = (await Promise.all(reads)).flat();
+    return deduplicate(rows.map(readEvent).filter((event) => event.id));
   }
 }
 

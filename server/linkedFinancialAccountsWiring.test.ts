@@ -14,18 +14,30 @@ describe('linked financial accounts wiring', () => {
     expect(chart).toContain("code: '2150'");
     expect(chart).toContain("code: '1240'");
     expect(chart).toContain("code: '1250'");
+    // دليل الحسابات يعمل على API فقط — the chart reads/writes through alx_api, never the legacy client.
+    expect(chart).not.toContain('legacy-compat');
+    expect(chart).not.toContain('onSnapshot(');
+    expect(chart).toContain("from '../services/financialAccountAdmin'");
+    expect(chart).toContain('listAccountMovements(');
   });
 
   it('creates accounts from every source, carrier and asset entry path', () => {
     const sources = read('../src/features/sources/pages/SourcesPage.tsx');
     const orders = read('../src/features/orders/services/orderEntityHandlers.ts');
     const assets = read('../src/components/AssetsPortfolio.tsx');
+    const assetsService = read('../src/services/financeAssetsService.ts');
     expect(sources).toContain("ensureFinancialAccount('source'");
     expect(sources).toContain("ensureFinancialAccount('shipping_company'");
     expect(orders).toContain('"source"');
     expect(orders).toContain('"shipping_company"');
-    expect(assets).toContain("'asset',");
+    expect(assets).toContain('financeAssetsService.register(');
     expect(assets).toContain('ASSET_ACCOUNTING');
+    expect(assets).not.toContain('legacy-compat');
+    // إنشاء حساب الأصل انتقل من المكوّن إلى الخدمة — asset account creation now lives in the service layer.
+    expect(assetsService).toContain("'asset',");
+    expect(assetsService).toContain('createAccountForEntity(');
+    expect(assetsService).toContain("accountType: 'Asset'");
+    expect(assetsService).toContain("'/api/v1/finance/assets'");
   });
 
   it('creates foreign keys, indexes and database-side automatic linking', () => {

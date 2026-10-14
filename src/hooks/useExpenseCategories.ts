@@ -1,34 +1,35 @@
-import { useState, useEffect } from 'react';
+/**
+ * useExpenseCategories.ts
+ * مزود فئات المصروفات — يقرأ من إعدادات النظام عبر alx_api فقط.
+ * Expense-category provider — reads the settings document through alx_api only.
+ */
+import { useEffect, useState } from 'react';
+import {
+  DEFAULT_EXPENSE_CATEGORIES,
+  expenseCategoriesService,
+  type ExpenseCategory,
+} from '../services/expenseCategoriesService';
 
-export interface ExpenseCategory {
-  id: string;
-  labelAr: string;
-  labelEn: string;
-  icon?: string;
-  accountId?: string; // Linked account from chart of accounts
-  accountCode?: string;
-  isSystem?: boolean; // Can't be deleted if system
-}
+export type { ExpenseCategory };
+export { DEFAULT_EXPENSE_CATEGORIES };
 
-// Fallback initial categories to seed
-export const DEFAULT_EXPENSE_CATEGORIES: ExpenseCategory[] = [
-  { id: 'wages', labelAr: 'أجور التوصيل', labelEn: 'Delivery Wages', icon: '🚚', isSystem: true, accountId: 'sys_delivery_cost', accountCode: '5000-2788' },
-  { id: 'marketing', labelAr: 'تسويق وإعلانات', labelEn: 'Marketing', icon: '📈' },
-  { id: 'office', labelAr: 'مستلزمات مكتبية', labelEn: 'Office Supplies', icon: '📎' },
-  { id: 'maintenance', labelAr: 'صيانة وإصلاح', labelEn: 'Maintenance', icon: '🔧' },
-  { id: 'fuel', labelAr: 'وقود ومحروقات', labelEn: 'Fuel', icon: '⛽' },
-  { id: 'rent', labelAr: 'إيجارات', labelEn: 'Rent', icon: '🏢' },
-  { id: 'salary', labelAr: 'رواتب موظفين', labelEn: 'Salaries', icon: '👨‍💼', isSystem: true },
-  { id: 'custody', labelAr: 'عهدة مناديب', labelEn: 'Custody / Receivables', icon: '💳', isSystem: true },
-  { id: 'factory', labelAr: 'دفعات المصانع', labelEn: 'Factory Payouts', icon: '🏭', isSystem: true },
-  { id: 'other', labelAr: 'أخرى', labelEn: 'Other', icon: '📄', isSystem: true }
-];
-
-export function useExpenseCategories() {
+export function useExpenseCategories(): ExpenseCategory[] {
+  // تُعرض الافتراضية فورًا حتى لا تنتظر الواجهة الشبكة، ثم تُستبدل بالمخزّن على الخادم.
   const [categories, setCategories] = useState<ExpenseCategory[]>(DEFAULT_EXPENSE_CATEGORIES);
 
   useEffect(() => {
-    setCategories(DEFAULT_EXPENSE_CATEGORIES);
+    let cancelled = false;
+    expenseCategoriesService
+      .list()
+      .then((stored) => {
+        if (!cancelled) setCategories(stored);
+      })
+      .catch((error) => {
+        console.warn('[useExpenseCategories] تعذر تحميل فئات المصروفات من الخادم:', error);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return categories;

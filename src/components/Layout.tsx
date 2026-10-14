@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { SELECT_FIELDS } from '../data/contracts/select-fields';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
-import { collection, query, where, onSnapshot, getDocs, writeBatch, doc, setDoc } from '../data/legacy/legacy-compat.ts';
+import { collection, query, onSnapshot, getDocs, writeBatch, doc, setDoc } from '../data/legacy/legacy-compat.ts';
 import { db } from '../data/legacy/legacy-compat.ts';
 import { clearAllLocalData } from '../data/legacy/legacy-compat.ts';
 import { formatDate, formatDateTime, formatTime, now } from '../lib/dateUtils';
@@ -66,6 +66,7 @@ import PendingPortalApprovalsModal from './PendingPortalApprovalsModal';
 import JobApplicationsModal from './JobApplicationsModal';
 import { activityLogService } from '../services/activityLogService';
 import { notificationService } from '../services/notificationService';
+import { notificationsApiDataGateway } from '../features/notifications/services/notificationsApiDataGateway';
 import { supabase } from '../data/legacy/legacy-compat.ts';
 import Header from './layout/Header';
 import Sidebar from './layout/Sidebar';
@@ -306,32 +307,46 @@ export default function Layout() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  // عداد الإشعارات غير المقروءة من alx_api — unread badge polled from the API (no live listener).
   useEffect(() => {
     if (!auth.currentUser || roleLoading || !role) return;
 
-    const q = query(collection(db, 'notifications'), where('read', '==', false));
-    const unsub = onSnapshot(q, (snap: any) => {
-      const allowedDocs = snap.docs.filter((doc: any) => {
-        const data = doc.data();
-        if (role !== 'Admin') {
-          const isCreator = data.creatorId === auth.currentUser?.uid;
-          const isTarget = data.userId === auth.currentUser?.uid;
-          const isAssociated = Array.isArray(data.associatedUserIds) && data.associatedUserIds.includes(auth.currentUser?.uid);
-          if (!isCreator && !isTarget && !isAssociated) return false;
-        }
-        const category = data.category || 'system';
-        if (category === 'finance' && !hasPermission('notify_finance') && role !== 'Admin') return false;
-        if (category === 'order' && !hasPermission('notify_orders') && role !== 'Admin') return false;
-        if (category === 'system' && !hasPermission('notify_system') && role !== 'Admin') return false;
-        return true;
-      });
-      setUnreadCount(allowedDocs.length);
-    }, (error: any) => {
-      console.error("Error listening to notifications:", error);
-    });
+    let cancelled = false;
+    const loadUnread = async () => {
+      try {
+        const canManage = role === 'Admin' || hasPermission('manage_notifications');
+        const { items } = await notificationsApiDataGateway.listNotifications({
+          limit: 200,
+          offset: 0,
+          isRead: false,
+          scope: canManage ? 'all' : 'mine',
+        });
+        const isAdmin = role === 'Admin';
+        const canOrderNotif = isAdmin || hasPermission('notify_orders');
+        const canFinanceNotif = isAdmin || hasPermission('notify_finance');
+        const canSystemNotif = isAdmin || hasPermission('notify_system');
+        // نفس قاعدة التصنيف في صفحة الإشعارات حتى لا يختلف العداد عن المحتوى.
+        // Same category rule as the notifications page so the badge matches the feed.
+        const allowed = items.filter((item) => {
+          const category = item.category || 'system';
+          if (category === 'finance') return canFinanceNotif;
+          if (category === 'order') return canOrderNotif;
+          if (category === 'system') return canSystemNotif;
+          return isAdmin;
+        });
+        if (!cancelled) setUnreadCount(allowed.length);
+      } catch (error) {
+        console.error('Error listening to notifications:', error);
+      }
+    };
 
-    return () => unsub();
-  }, [role, roleLoading, hasPermission]);
+    void loadUnread();
+    const interval = setInterval(() => void loadUnread(), 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [role, roleLoading, hasPermission, auth.currentUser]);
 
   // Inactivity/Idle session automatic logout
   useEffect(() => {

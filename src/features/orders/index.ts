@@ -1,6 +1,6 @@
 export type { OrdersViewModel } from './types';
 export type { OrdersFeatureApi } from './api';
-export { legacyOrdersApi, createLegacyOrdersApi } from './services/legacyOrdersApi';
+export { ordersApiDataGateway } from './services/ordersApiDataGateway';
 export { useOrderData } from './hooks/useOrderData';
 export { useOrderFilters } from './hooks/useOrderFilters';
 export { useOrderCalculations } from './hooks/useOrderCalculations';

@@ -2,7 +2,7 @@ import React from 'react';
 import { Globe, Activity, Users, User, Package, Briefcase, MessageSquare, Megaphone, Shield, Link as LinkIcon, CheckCircle2, Clock, AlertCircle, RefreshCw, Plus, Trash2, Check, X, Eye, Edit2, Send, Server, Key, Lock, Settings as SettingsIcon, ChevronRight, ArrowUpRight, Award, UserCheck, ShieldAlert, Cpu, Phone, Mail, MapPin } from 'lucide-react';
 
 type SiteTab = 'analytics' | 'portal_users' | 'pending' | 'orders' | 'tickets' | 'announcements' | 'jobs' | 'security' | 'api';
-type Announcement = { id: string; title: string; content: string; priority?: string; targetAudience?: string; isActive?: boolean; is_active?: boolean };
+type Announcement = { id: string; title: string; content: string; priority?: string; targetAudience?: string; isActive?: boolean };
 type AnnouncementForm = { title: string; targetAudience: string; priority: string; content: string };
 export interface AnnouncementsTabProps {
   activeTab: SiteTab;
@@ -109,10 +109,10 @@ export const AnnouncementsTab: React.FC<AnnouncementsTabProps> = (props) => {
                 <div className="flex items-center gap-2 shrink-0">
                   <button
                     onClick={() => handleToggleAnnActive(ann)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer border ${ann.isActive || ann.is_active ? 'bg-emerald-950/40 text-emerald-400 border-emerald-800/40' : 'bg-slate-900 text-slate-500 border-slate-800'
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer border ${ann.isActive ? 'bg-emerald-950/40 text-emerald-400 border-emerald-800/40' : 'bg-slate-900 text-slate-500 border-slate-800'
                       }`}
                   >
-                    {ann.isActive || ann.is_active ? (isAr ? 'نشط' : 'Active') : (isAr ? 'معطل' : 'Inactive')}
+                    {ann.isActive ? (isAr ? 'نشط' : 'Active') : (isAr ? 'معطل' : 'Inactive')}
                   </button>
                   <button onClick={() => handleDeleteAnn(ann.id)} className="p-2 text-rose-400 hover:bg-rose-950/40 rounded-xl cursor-pointer">
                     <Trash2 className="w-4 h-4" />

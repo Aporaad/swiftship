@@ -8,9 +8,6 @@ describe('explicit read projections', () => {
       'currencyRate',
       'jobRequest',
       'portalUser',
-      'product',
-      'orderItem',
-      'returnedProduct',
       'user',
     ]);
   });
