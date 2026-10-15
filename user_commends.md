@@ -2364,3 +2364,8 @@ Uncaught TypeError: R.createdAt.getTime is not a function at useDashboardData.ts
 - التوجيه: إكمال ترحيل ملفات قاعدة البيانات المعلّقة واستكمال ما تبقى من جلسة التحول لنظام API-only.
 - التنفيذ: تطبيق كافة الترحيلات المعلّقة رسمياً عبر Supabase MCP (0010, 0023, 0036, 0037) وتثبيتها في `schema_migrations`، واجتياز فحوصات التجميع والاختبارات 100%.
 
+## [2026-10-16 02:00:00 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+```text
+قم بعمل push للتغييرات المحليه الى المستودع في swiftship
+```
+- التوجيه: رفع (push) جميع الـ commits والتغييرات المحلية إلى المستودع البعيد `swiftship` على فرع `main`.

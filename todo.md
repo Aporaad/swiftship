@@ -2555,3 +2555,9 @@
 - [ ] تنفيذ `migrations_pending_2026-10-15.sql` من لوحة Supabase (دور `alx_api_runtime` بلا صلاحيات DDL) ثم إعادة نشر `alx_api` فالواجهة.
 - [ ] تنفيذ `0034_drop_legacy_jsonb_payloads.sql` لاحقًا وبعد التأكد من نشر الكود المسطّح بالكامل.
 - [ ] Wave 2/Wave 4 المتبقية: إزالة jsonb من `portal-owned`/`portal-auth`/`settings`/`finance`/`operations` وجلسات الإدارة وسجل النشاط.
+
+## [2026-10-16 02:00:00 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+### رفع التغييرات المحلية إلى المستودع البعيد (Push to swiftship repository)
+- [x] فحص حالة المستودع المحلي وشجرة العمل والتأكد من مطابقة الـ remotes (`swiftship`).
+- [ ] مزامنة ورفع التعديلات والـ commits المحلية إلى المستودع البعيد `swiftship/main`.
+- [ ] التأكد من نجاح أمر الـ push ومطابقة HEAD المحلي مع HEAD البعيد.
