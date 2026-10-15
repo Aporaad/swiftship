@@ -2355,3 +2355,12 @@ Uncaught TypeError: R.createdAt.getTime is not a function at useDashboardData.ts
 @mcp:supabase:
 ```
 - التوجيه: مراجعة سجل الجلسة السابقة واستكمال تنفيذ ما تبقى منها وترحيل ملفات قاعدة البيانات.
+
+## [2026-10-16 01:08:22 +03:00] — AI Model: Gemini 3.8 Flash (Medium)
+```text
+قم باكمال ترحيل ملفات قاعده البيانات @[conversation:"API Migration And Database Migration"]
+@mcp:supabase:
+```
+- التوجيه: إكمال ترحيل ملفات قاعدة البيانات المعلّقة واستكمال ما تبقى من جلسة التحول لنظام API-only.
+- التنفيذ: تطبيق كافة الترحيلات المعلّقة رسمياً عبر Supabase MCP (0010, 0023, 0036, 0037) وتثبيتها في `schema_migrations`، واجتياز فحوصات التجميع والاختبارات 100%.
+
