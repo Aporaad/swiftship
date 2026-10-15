@@ -30,6 +30,22 @@ export interface OrdersTableProps {
   formatCreatedAt: (value: unknown) => string;
 }
 
+/**
+ * تسمية مرحلة الطلب: رقم المرحلة + اسمها. الاسم يأتي أولًا من أعمدة الـ API المسطّحة ثم من كتالوج المراحل ثم من نص الحالة.
+ * Stage label: id plus name, resolved from the flattened API columns, then the stages catalog, then the stored status text.
+ */
+function formatOrderStatusLabel(order: OrdersTableRow, statuses: OrderStatusRow[], isAr: boolean): string {
+  const stageId = order.orderStatusId ?? order.order_status_id;
+  const catalogStage = stageId === null || stageId === undefined
+    ? undefined
+    : statuses.find((stage) => String(stage.sortOrder) === String(stageId) || String(stage.id) === String(stageId));
+  const name = isAr
+    ? order.orderStatusNameAr || catalogStage?.nameAr || order.orderStatus
+    : order.orderStatusNameEn || catalogStage?.nameEn || order.orderStatus;
+  const label = String(name ?? '').trim();
+  return stageId === null || stageId === undefined ? (label || '—') : `${stageId} : ${label}`;
+}
+
 /** Presentation-only table for the live, enriched and filtered orders list. */
 export function OrdersTable({
   orders,
@@ -111,14 +127,9 @@ export function OrdersTable({
               {/* Logistics Status */}
               <td className="p-4 text-start">
                 <div className="flex flex-col space-y-1">
-                  {(() => {
-                    const currentStatusItem = orderStatusesList.find(s => s.sortOrder == ord.order_status_id || s.sortOrder == ord.order_status_id || s.id == ord.order_status_id);
-                    return (
-                      <span className="px-2.5 py-0.5 rounded-xl border border-[#d4af37]/20 bg-[#d4af37]/5 text-[#d4af37] font-bold max-w-max text-[10px]">
-                        {ord.order_status_id + ' : ' + (isAr ? currentStatusItem?.nameAr : currentStatusItem?.nameEn) /*مهم: هنا يجب جلب اسم المرحله من جدول المراحل بناء على رقم المرحله*/}
-                      </span>
-                    );
-                  })()}
+                  <span className="px-2.5 py-0.5 rounded-xl border border-[#d4af37]/20 bg-[#d4af37]/5 text-[#d4af37] font-bold max-w-max text-[10px]">
+                    {formatOrderStatusLabel(ord, orderStatusesList, isAr)}
+                  </span>
 
                   <span className="text-[10px] text-slate-500 font-bold">{ord.orderSourceName || ord.orderSourceType}</span>
                 </div>

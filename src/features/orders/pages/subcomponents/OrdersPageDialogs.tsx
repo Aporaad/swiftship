@@ -302,6 +302,7 @@ export function OrdersPageDialogs(props: OrdersPageDialogsProps) {
         employees={employees}
         sources={sources}
         couriers={couriers}
+        financialAccounts={financialAccounts}
         shippingCompanies={shippingCompanies}
         activeCurrencies={activeCurrencies}
         packagingOptions={packagingOptions}

@@ -204,11 +204,15 @@ export function useRole(enableHeartbeat: boolean = false) {
     setLoading(false);
   }, [user]);
 
-  const hasPermission = (permission: string) => {
+  // الدالة تُثبت بم useCallback: هويتها المستقرة تمنع تأثيرات useState/ useEffect من إعادة
+  // إطلاق جلب الإشعارات عند كل رسم — بدون التثبيت كان عدّاد الشارة يجلب الطلبات كل ثانية.
+  // Stable identity: effects that list hasPermission as a dependency must not re-fire on every render,
+  // otherwise the unread-badge poller issued one notifications request per render (freeze + HTTP 429 storm).
+  const hasPermission = useCallback((permission: string) => {
     if (!permissions || !Array.isArray(permissions)) return false;
     if (permissions.includes('*')) return true;
     return permissions.includes(permission);
-  };
+  }, [permissions]);
 
   return { role, permissions, hasPermission, loading, profile, sessionId, signOut: performSignOut };
 }

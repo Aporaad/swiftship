@@ -3357,3 +3357,26 @@ Commit `a2d725b5a061bcf79b3626c756f63feedd847aec` رُفع إلى `main`، ون�
   - فحص سلامة تجميع خادم الـ API: اجتياز `npm run check` (TypeScript) في مجلد `alx_api` بنجاح كامل (0 أخطاء).
   - فحص حزمة اختبارات الـ API: اجتياز `npm test` بنجاح 100% (40 جناح اختبار / 274 اختباراً).
   - فحص سلامة تجميع واجهات النظام: اجتياز `npx tsc --noEmit` في المجلد الرئيسي بنجاح كامل (0 أخطاء).
+
+## [2026-10-15 05:10:00 +03:00] — Qoder
+### إصلاح تجميد النظام، تقوية رسائل أخطاء التحقق، إغلاق القطع في القراءة، وحزم الترحيلات المعلّقة
+- **`src/hooks/useRole.ts` (سبب التجميد الجذري)**:
+  - كانت `hasPermission` تُعرَّف كدالة جديدة داخل جسم الخطاف في كل رسم، بينما تستخدمها تأثيرات `Layout` (شارة العدّاد غير المقروء) ضمن `useEffect deps`. النتيجة: كل رسم = تأثير جديد = طلب إشعارات جديد، ولأن `Layout` يعرض ساعة تتحدث كل ثانية تحوّل الأمر إلى استطلاع لكل ثانية وأغلق المتصفح بحملة `HTTP 429` (سجل الكونسول المرفق أظهر مئات الطلبات المتكررة على `/api/v1/notifications/unread-count`).
+  - الإصلاح: تثبيت الهوية بـ `useCallback` مع اعتماد `permissions` فقط، مع تعليق عربي/إنجليزي يشرح المنع:
+    `const hasPermission = useCallback((permission: string) => { ... }, [permissions]);`
+  - لم يُمَسّ السلوك الوظيفي للصلاحية (نفس منطق `*` والفحص المباشر)، بل أُصلحت عدم الاستقرار فقط.
+- **`src/shared/contracts/error.contracts.ts`**: إضافة `describeError(error, fallback)` — تقرأ تفاصيل الـAPI (`error.details` القادمة من `validationIssues()` في الخادم) وتبني نصًا يسمّي الحقول المخالفة (`field: message`) بحد أقصى 5 مشاكل، وتستبدل الرسالة العامة `An unexpected error occurred.` بالنص الاحتياطي المناسب. الهدف: خطأ 400/422 يشرح نفسه في الواجهة بدل إخفاء السبب.
+- **`src/features/orders/services/createOrderHandler.ts`**: استبدال الابتلاع الصامت للخطأ في `catch` — لم يعد يُعرض «تعذّر حفظ الطلب» وحده، بل `describeError(err, ...)` داخل `notificationService.notify` (نفس الرسالة بالعربية والإنجليزية). لم تُغيَّر أي قاعدة تحقق لتقليل الأخطاء.
+- **`src/features/orders/services/ordersApiDataGateway.ts`**:
+  - `makeApiCollection` كان يقرأ صفحة واحدة `{ limit: 100 }`، فتظهر القوائم منقوصة (حسابات مالية/منتجات/طلبات) حين تتجاوز الحد. أُصلح بتقسيم صفحات: `PAGE_SIZE = 1000` (السقف الذي يسمح به الخادم) حتى `MAX_ROWS = 5000` مع توقف عند صفحة أقصر من الحد.
+  - قراءة `settings` (قواعد القيود التلقائية `/api/v1/finance/auto-entry-rules`) رُفعت من `limit: 100` إلى `1000` في `subscribe` و`get` معًا.
+- **التحقق من عقد الحسابات في الواجهة**: `FinanceEntriesPage` يبني `isPosting: Boolean(item.subAccountId)` و`currencyCode` من خريطة العملات — مطابق لإسقاط الخادم `acc_sub_id AS "subAccountId"`، وتم تعزيز العقد بدل تخفيفه.
+- **الاختبارات (تصحيح توقعات قديمة بلا إضعاف)**:
+  - `src/services/financeAssetsService.test.ts`: Fixture سجلات الصيانة صار مصفوفة صفوف ابنة (`[{ logId, cost, currency, type, notes, doneBy, date, createdAt }]`) بدل نص JSON؛ اختبار جديد يثبت أن سجلًا مخزَّنًا كنص/jsonb **لا** يحوَّل إلى صفوف (`maintenanceLogs` تبقى `[]`) — أي لا رجوع لحقل جامع.
+  - `src/components/finance/financeEntriesUi.contract.test.ts`: استبدال التوقع القديم بعقد camelCase المنشور + نفي صريح لعدم ظهور الأعمدة القديمة (`not.toContain('acc_name_ar')`, `not.toContain('entity_name')`).
+  - `src/shared/contracts/error.contracts.test.ts` (جديد، 5 اختبارات): بناء نص الحقول، الرسالة/الاحتياطي، سقف 5 مشاكل، التفاصيل غير الصالحة، تحليل المغلّف، وحارس انحدار يقرأ نص `useRole.ts` ويستلزم `useCallback`.
+- **ملف حزمة الترحيلات المعلّقة**: `migrations_pending_2026-10-15.sql` (455 سطرًا) يجمع ما يحتاج DDL بالترتيب 0010 ثم 0023 ثم 0036 ثم 0037، مع تعليق صريح باستبعاد 0034 لأنه إسقاط نهائي يجب أن يكون آخر خطوة بعد نشر الكود المسطّح.
+- **ترحيل جديد**: `alx_api/src/db/migrations/0037_sync_order_status_id_from_text.sql` — إعادة تهيئة `order_status_id` من نص المرحلة (عربي حرفيًا، ثم إنجليزي احتياطيًا، ثم `data->>'orderStatusId'` للصفوف بلا نص قبل إسقاطه) مع `IS DISTINCT FROM` لكل خطوة وحارس `RAISE EXCEPTION` يمنع اختتام الإصلاح مع أي تباعدٍ متبقٍ.
+- **التنظيف**: حذف ملفات الفحص المؤقتة غير المتتبَّعة `alx_api/tmp-*.ts` و`probe-out*.txt` (ملفات العمل المؤقتة لهذا المسار فقط).
+- **نتائج الفحص النهائي**: واجهة النظام `npx tsc --noEmit` = 0 أخطاء؛ `npx vitest run` الكامل = 91 ملف اختبار ناجح (2 متخطى) و397 اختبارًا ناجحًا (5 متخطى)؛ `alx_api` `npx tsc --noEmit` = 0 أخطاء و`npx jest` = 41 حزمة / 284 اختبارًا ناجحًا.
+- **حالة النشر**: لم يُنفَّذ أي commit أو push. الترتيب المطلوب: تنفيذ حزمة DDL من لوحة Supabase، ثم إعادة نشر `alx_api`، ثم الواجهة.

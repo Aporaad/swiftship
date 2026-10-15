@@ -67,8 +67,10 @@ export function enrichOrders(
 
     const sourceId = order.orderSourceId || order.order_source_id;
     const source = sources.find(record => record.id === sourceId);
+    // اسم المصدر يصل مسطّحاً من الـAPI (JOIN على جدول المصادر)، ويسبق البحث المحلي حين تسقط قائمة المصادر.
+    // The API returns the flattened source name via its sources JOIN; use it before the local lookup so the column never blanks out.
     const sourceName = readText(
-      source?.name || order.orderSourceType || order.order_source_type
+      source?.name || order.orderSourceName || order.orderSourceType || order.order_source_type
     );
 
     return {

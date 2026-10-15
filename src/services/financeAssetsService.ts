@@ -91,28 +91,21 @@ const toNumber = (value: unknown): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-/** عمود maintenance_logs قد يرجع نصًا مخزّنًا قديمًا — نصّفه ونقبل السجلات الصالحة فقط. */
+/** سجلات الصيانة صفوف ابنة من alx_api — child rows from alx_api; only valid objects are kept. */
 function toMaintenanceLogs(value: unknown): MaintenanceLog[] {
-  let rows: unknown = value;
-  if (typeof rows === 'string') {
-    try {
-      rows = JSON.parse(rows);
-    } catch {
-      return [];
-    }
-  }
+  const rows = value;
   if (!Array.isArray(rows)) return [];
   return rows
     .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')
     .map((entry) => ({
-      logId: toText(entry.logId ?? entry.log_id),
+      logId: toText(entry.logId),
       cost: toNumber(entry.cost),
       currency: toText(entry.currency),
       type: (toText(entry.type) || 'Repair') as MaintenanceType,
       notes: toText(entry.notes),
-      doneBy: toText(entry.doneBy ?? entry.done_by),
+      doneBy: toText(entry.doneBy),
       date: toText(entry.date),
-      createdAt: toNumber(entry.createdAt ?? entry.created_at),
+      createdAt: toNumber(entry.createdAt),
     }));
 }
 

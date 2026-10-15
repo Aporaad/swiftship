@@ -575,7 +575,7 @@ export default function EditOrderModal({
       const payStatus = remainingYER <= 0 ? 'Paid' : valPaid > 0 ? 'Partial Paid' : 'Unpaid';
 
       const payload = {
-        // أعمدة مباشرة - تُكتب في الأعمدة الأساسية وتُحذف من data
+        // أعمدة مباشرة تُكتب في جدول الطلبات عبر الـAPI - Direct identity columns written through the API
         customerId: formData.customerId || '',
         orderPartyId: formData.orderPartyId || formData.customerId || '',
         orderPartyType: formData.orderPartyType || 'customer',
@@ -589,17 +589,15 @@ export default function EditOrderModal({
         deliveryCourierId: formData.deliveryCourierId || null,
         shippingCourierId: formData.shippingCourierId || null,
         createdByName: normalizedOrder.createdByName || normalizedOrder.created_by_name || 'Admin',
-        updatedAt: new Date().toISOString(),
-        updatedBy: 'Admin',
-        // بيانات مالية وحسابية - تُخزَّن في data
+        // مالية: كل مفتاح هنا عمود مستقل في public.orders، والعملة تُرسل رمزاً (currency = الدفع، orderCurrency = الشراء).
+        // Financial keys: each one is its own column in public.orders; currency is the payment code and orderCurrency the purchase code.
         externalOrderNumber: formData.externalOrderNumber,
         shippingCompany: formData.shippingCompany,
         deliveryCourierFee: numericValue(formData.deliveryCourierFee) || 0,
         deliveryCourierFeeCurrency: formData.deliveryCourierFeeCurrency || settings?.currency || 'YER',
         deliveryCourierFeeOrderCurrency: currencyTotals.deliveryFeeOrderCurrency,
-        currency: orderCurrency,
+        currency: paymentCurrency,
         orderCurrency,
-        paidCurrency: paymentCurrency,
         exchangeRate: currencyTotals.paymentExchangeRate,
         exchangeRateYER: formData.exchangeRateYER,
         exchangeRateUSD: formData.exchangeRateUSD,
@@ -607,7 +605,6 @@ export default function EditOrderModal({
         companyProfitRate: formData.companyProfitRate,
         packagingFee: numericValue(formData.packagingFee) || 0,
         productInsuranceFee: itemsInsuranceSum,
-        product_insurance_fee: itemsInsuranceSum,
         sheinRedPrice: numericValue(formData.sheinRedPrice) || 0,
         productsSum,
         totalCostSAR: totalOrderSAR,
@@ -624,10 +621,9 @@ export default function EditOrderModal({
       };
 
 
-      // تحديث بيانات الطلب الأساسية في جدول الطلبات عبر Gateway
-      await ordersApiDataGateway.commands.updateOrderRecord(normalizedOrder.id, payload as any).catch(() => {
-        // HTTP API update fallback handling
-      });
+      // تحديث بيانات الطلب الأساسية في جدول الطلبات عبر الـAPI — الفشل يُبلَّغ ولا يُابتلع.
+      // Core order data update through the API — a failure is surfaced, never swallowed.
+      await ordersApiDataGateway.commands.updateOrderRecord(normalizedOrder.id, payload);
 
       const targetOrderId = normalizedOrder.id || normalizedOrder.orderNumber;
 

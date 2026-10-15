@@ -21,6 +21,8 @@ import type {
 } from '../../../data/dtos/shipments.dto';
 import type { OrdersFeatureApi } from '../api';
 import { ordersApiDataGateway } from '../services/ordersApiDataGateway';
+import { mapAccountRow } from '../../../services/financeApi';
+import type { FinancialAccount } from '../../../services/financialAccountTypes';
 import type { OrderRecord, ShipmentRecord } from '../types';
 
 type LegacyEntityFields = {
@@ -170,6 +172,26 @@ function readNumber(value: unknown): number {
   return Number(value === null ? null : undefined);
 }
 
+/**
+ * list حقول الحساب بصيغة alx_api ثم يبقي الحسابات الطرفية القابلة للترحيل فقط.
+ * Normalizes alx_api account rows (subAccountId/accountNameAr/currencyNo) and keeps only
+ * the leaf accounts a payment can actually be posted against.
+ */
+function toPostingAccountRecords(rows: readonly Record<string, unknown>[]): FinancialAccountRecord[] {
+  return rows
+    .map((row) => mapAccountRow(row))
+    .filter((account: FinancialAccount | null): account is FinancialAccount =>
+      account !== null && Boolean(account.accSubId) && account.isActive !== false)
+    .map((account) => ({
+      ...account,
+      id: String(account.id ?? ''),
+      name: readText(account.accNameAr) || readText(account.entityName) || String(account.id ?? ''),
+      currency: readText(account.currency) || '',
+      curNo: readNumber(account.curNo),
+      accSubId: String(account.accSubId ?? ''),
+    })) as FinancialAccountRecord[];
+}
+
 /** Data needed by the orders page; shapes remain legacy-compatible during phase 9. */
 export interface OrderDataState {
   orders: OrderRecord[];
@@ -237,26 +259,7 @@ export function useOrderData(
     });
 
     const unsubFinancialAccounts = api.collections.accounts.subscribe(({ records }) => {
-      setFinancialAccounts(
-        records
-          .filter(isEntityRecord)
-          .filter((account) =>
-            account.isActive !== false &&
-            Boolean(account.accSubId || account.acc_sub_id),
-          )
-          .map((account) => ({
-            ...account,
-            id: account.id,
-            name:
-              readText(account.accNameAr) ||
-              readText(account.acc_name_ar) ||
-              readText(account.accountName) ||
-              account.id,
-            currency: readText(account.currency) || readText(account.currencyCode) || '',
-            curNo: readNumber(account.curNo ?? account.cur_no),
-            accSubId: String(account.accSubId ?? account.acc_sub_id ?? ''),
-          })),
-      );
+      setFinancialAccounts(toPostingAccountRecords(records));
     });
 
     const unsubSources = api.collections.sources.subscribe(({ records }) => {

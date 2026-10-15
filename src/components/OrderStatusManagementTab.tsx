@@ -4,9 +4,10 @@ import {
   Activity, ToggleLeft, ToggleRight, Settings, Info, AlertCircle, Save, X, Sparkles,
   ArrowRightLeft, FileText, Check, Filter, Search
 } from 'lucide-react';
-import { db, collection, onSnapshot } from '../data/legacy/legacy-compat.ts';
 import { useOrderStatuses, saveOrderStatus, removeOrderStatus, OrderStatusItem, DEFAULT_ORDER_STATUSES } from '../hooks/useOrderStatuses';
 import { autoEntryService, AutoEntryRule, DEFAULT_AUTO_ENTRIES } from '../services/autoEntryService';
+import { financialAccountService } from '../services/financialAccountService';
+import type { FinancialAccount } from '../services/financialAccountTypes';
 import { AUTO_ENTRY_AMOUNT_SOURCE_OPTIONS, type AutoEntryAmountSource, getRuleAmountSources } from '../services/autoEntryRules';
 import { AutoEntryAmountSourceList } from './AutoEntryAmountSourceList';
 import { AutoEntryCurrencySelector } from './AutoEntryCurrencySelector';
@@ -14,33 +15,27 @@ import { useRole } from '../hooks/useRole';
 import { useExchangeRates } from '../hooks/useExchangeRates';
 import toast from 'react-hot-toast';
 
-type AdapterDocument = { id: string; data: () => Record<string, unknown> };
 type SystemAccountOption = {
   id: string;
   entityId?: string;
   entityType?: string;
   accountCode?: string;
   entityName?: string;
-  name?: string;
 };
 
-function readAccountText(record: Record<string, unknown>, key: string): string | undefined {
-  const value = record[key];
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
-  return undefined;
-}
-
-function toSystemAccountOption(document: AdapterDocument): SystemAccountOption {
-  const data = document.data();
-  return {
-    id: document.id,
-    entityId: readAccountText(data, 'entityId'),
-    entityType: readAccountText(data, 'entityType'),
-    accountCode: readAccountText(data, 'accountCode'),
-    entityName: readAccountText(data, 'entityName'),
-    name: readAccountText(data, 'name'),
-  };
+/** يبني خيار الحساب النظامي من صف حساب API واحد — لا قراءة من قاعدة البيانات في الواجهة. */
+/** Builds a system-account option from one API account row; the component never queries the database. */
+function toSystemAccountOptions(rows: FinancialAccount[]): SystemAccountOption[] {
+  return rows
+    .filter((account) => account.entityType === 'system' && account.isActive !== false)
+    .map((account) => ({
+      id: String(account.id ?? ''),
+      entityId: account.entityId || undefined,
+      entityType: account.entityType,
+      accountCode: account.accountCode || undefined,
+      entityName: account.entityName || account.accNameAr || undefined,
+    }))
+    .filter((account) => account.id.length > 0);
 }
 
 interface OrderStatusManagementTabProps {
@@ -125,30 +120,33 @@ export default function OrderStatusManagementTab({
 
   // Load auto entries and financial accounts
   useEffect(() => {
-    autoEntryService.ensureAutoEntries();
+    let disposed = false;
 
-    const unsubEntries = onSnapshot(collection(db, 'auto_entries'), (snap) => {
-      const list = snap.docs.map((d: AdapterDocument) => ({ id: d.id, ...d.data() } as AutoEntryRule));
-      if (list.length > 0) {
-        setAutoEntries(list);
-      } else {
-        setAutoEntries(DEFAULT_AUTO_ENTRIES);
+    const load = async () => {
+      setLoadingEntries(true);
+      try {
+        const [rules, accountsRows] = await Promise.all([
+          autoEntryService.ensureAutoEntries(),
+          financialAccountService.getAllAccounts(),
+        ]);
+        if (disposed) return;
+        setAutoEntries(rules.length > 0 ? rules : DEFAULT_AUTO_ENTRIES);
+        setAccounts(toSystemAccountOptions(accountsRows));
+      } catch (err) {
+        console.error('[OrderStatusManagementTab] Failed to load entries or accounts:', err);
+        toast.error(isAr
+          ? 'تعذر تحميل القيود التلقائية أو الحسابات المالية'
+          : 'Failed to load auto entries or financial accounts');
+      } finally {
+        if (!disposed) setLoadingEntries(false);
       }
-      setLoadingEntries(false);
-    }, (err) => {
-      console.warn('[OrderStatusManagementTab] Error loading auto_entries:', err);
-      setAutoEntries(DEFAULT_AUTO_ENTRIES);
-      setLoadingEntries(false);
-    });
-
-    const unsubAccs = onSnapshot(collection(db, 'accounts'), (snap) => {
-      setAccounts(snap.docs.map((document: AdapterDocument) => toSystemAccountOption(document)));
-    });
-
-    return () => {
-      unsubEntries();
-      unsubAccs();
     };
+
+    void load();
+    return () => {
+      disposed = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Handle Opening Status Modal
@@ -1087,7 +1085,7 @@ export default function OrderStatusManagementTab({
                       if (acc) {
                         setEntryFormData(prev => ({
                           ...prev,
-                          debitAccount: { id: acc.entityId || acc.id, code: acc.accountCode || '', name: acc.entityName || acc.name || acc.accountCode || '', type: 'system' }
+                          debitAccount: { id: acc.entityId || acc.id, code: acc.accountCode || '', name: acc.entityName || acc.accountCode || '', type: 'system' }
                         }));
                       }
                     }}
@@ -1153,7 +1151,7 @@ export default function OrderStatusManagementTab({
                       if (acc) {
                         setEntryFormData(prev => ({
                           ...prev,
-                          creditAccount: { id: acc.entityId || acc.id, code: acc.accountCode || '', name: acc.entityName || acc.name || acc.accountCode || '', type: 'system' }
+                          creditAccount: { id: acc.entityId || acc.id, code: acc.accountCode || '', name: acc.entityName || acc.accountCode || '', type: 'system' }
                         }));
                       }
                     }}

@@ -79,15 +79,20 @@ export default function FinanceEntriesPage() {
   const refresh = useCallback(async () => {
     try {
       setDataQuery(asyncState.loading());
+      // أي فشل في هذه القراءات يصل إلى حالة الخطأ في الأسفل — قائمة حسابات فارغة صامتة تعني واجهة معطوبة.
+      // Every core read propagates to the page error state; a silently empty account list would masquerade as a working UI.
       const [currencyResult, accountResult, moduleResult, typeResult, entryResult, transResult, custodyResult, usersResult] = await Promise.all([
-        apiClient.get<unknown>('/api/v1/currencies').catch(() => ({ data: [] })),
-        apiClient.get<unknown>('/api/v1/finance/accounts', { limit: 1000, offset: 0 }).catch(() => ({ data: [] })),
-        apiClient.get<unknown>('/api/v1/finance/entry-modules').catch(() => ({ data: [] })),
-        apiClient.get<unknown>('/api/v1/finance/entry-types').catch(() => ({ data: [] })),
-        apiClient.get<unknown>('/api/v1/finance/entries', { limit: 500, offset: 0 }).catch(() => ({ data: [] })),
+        apiClient.get<unknown>('/api/v1/currencies'),
+        apiClient.get<unknown>('/api/v1/finance/accounts', { limit: 1000, offset: 0 }),
+        apiClient.get<unknown>('/api/v1/finance/entry-modules'),
+        apiClient.get<unknown>('/api/v1/finance/entry-types'),
+        apiClient.get<unknown>('/api/v1/finance/entries', { limit: 500, offset: 0 }),
         readAllPages('/api/v1/finance/account-movements'),
-        apiClient.get<unknown>('/api/v1/finance/custody-advances', { limit: 500, offset: 0 }).catch(() => ({ data: [] })),
-        apiClient.get<unknown>('/api/v1/reporting/users', { limit: 500, offset: 0 }).catch(() => ({ data: [] })),
+        apiClient.get<unknown>('/api/v1/finance/custody-advances', { limit: 500, offset: 0 }),
+        // أسماء منشئي القيود تزيينية فقط — فشلها لا يُسقط الدفتر، لكنها تُسجَّل.
+        // Creator names only decorate rows: their failure is logged, not fatal.
+        apiClient.get<unknown>('/api/v1/reporting/users', { limit: 500, offset: 0 })
+          .catch((error) => { console.error('[FinanceEntriesPage] تعذر تحميل أسماء المنشئين:', error); return { data: [] }; }),
       ]);
 
       const uMap = new Map<string, string>();
@@ -106,18 +111,21 @@ export default function FinanceEntriesPage() {
       const currencyCodeById = new Map(loadedCurrencies.map((item) => [item.id, item.code]));
       setCurrencies(loadedCurrencies);
 
+      // الحساب الورقي القابل للقييد هو من يحمل acc_sub_id (subAccountId في الـ API)؛ العُقد الشجرية ليست حسابات.
+      // A leaf posting account carries a sub-account id; hierarchy nodes are not postable.
       setAccounts(unwrapList(accountResult).map((item) => ({
-        id: stringValue(item.accountId ?? item.account_id ?? item.id),
-        nameAr: readString(item.accountNameAr ?? item.acc_name_ar) || readString(item.accountNameEn ?? item.acc_name_en) || stringValue(item.accountId ?? item.account_id),
-        nameEn: optionalString(item.accountNameEn ?? item.acc_name_en),
-        curNo: numberValue(item.currencyNo ?? item.cur_no),
-        currencyCode: currencyCodeById.get(numberValue(item.currencyNo ?? item.cur_no)) || stringValue(item.currency) || '—',
-        isActive: booleanValue(item.isActive ?? item.is_active),
-        isPosting: Boolean(item.subAccountId ?? item.acc_sub_id),
-        accSubId: optionalString(item.subAccountId ?? item.acc_sub_id),
-        entityId: optionalString(item.entityId ?? item.entity_id),
-        entityType: optionalString(item.entityType ?? item.entity_type),
-        entityName: readString(item.entityName ?? item.entity_name) || readString(item.accountNameAr ?? item.acc_name_ar) || stringValue(item.accountId ?? item.account_id),
+        id: stringValue(item.accountId ?? item.id),
+        nameAr: readString(item.accountNameAr) || readString(item.accountNameEn) || stringValue(item.accountId ?? item.id),
+        nameEn: optionalString(item.accountNameEn),
+        curNo: numberValue(item.currencyNo),
+        currencyCode: currencyCodeById.get(numberValue(item.currencyNo)) || stringValue(item.currency) || '—',
+        isActive: booleanValue(item.isActive),
+        isPosting: Boolean(item.subAccountId),
+        accSubId: optionalString(item.subAccountId),
+        entityId: optionalString(item.entityId),
+        entityType: optionalString(item.entityType),
+        entityName: readString(item.entityName) || readString(item.accountNameAr) || stringValue(item.accountId ?? item.id),
+        balance: numberValue(item.balance),
       })));
 
       setModules(unwrapList(moduleResult).map((item) => ({

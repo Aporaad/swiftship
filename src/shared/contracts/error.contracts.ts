@@ -68,3 +68,22 @@ export function errorDetailsFromUnknown(error: unknown, fallbackCode = 'UNKNOWN_
   if (typeof error === 'string') return { code: fallbackCode, message: error };
   return { code: fallbackCode, message: 'An unexpected error occurred.' };
 }
+
+/**
+ * وصف قابل للتشخيص لخطأ الـAPI: يضمّن مشاكل التحقق الحقليّة داخل نص الرسالة.
+ * Turns an API failure into a readable string that names the offending fields, so a 400/422
+ * explains itself in the UI instead of surfacing a generic blocker.
+ */
+export function describeError(error: unknown, fallback = 'Unknown error'): string {
+  const details = errorDetailsFromUnknown(error, 'UNKNOWN_ERROR');
+  const issues = Array.isArray(details.details)
+    ? details.details
+        .filter(isRecord)
+        .filter((issue) => typeof issue.message === 'string')
+        .map((issue) => `${typeof issue.field === 'string' && issue.field.length > 0 ? issue.field : 'request'}: ${String(issue.message)}`)
+        .slice(0, 5)
+    : [];
+  const genericMessage = 'An unexpected error occurred.';
+  const message = !details.message || details.message === genericMessage ? fallback : details.message;
+  return issues.length > 0 ? `${message} (${issues.join('; ')})` : message;
+}

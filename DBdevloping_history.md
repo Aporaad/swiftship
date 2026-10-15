@@ -1690,3 +1690,21 @@ COMMENT ON COLUMN public.employees.notes IS 'ملاحظات إدارية حول 
    - **النتيجة**: نجاح التطبيق بنسبة 100% وتسجيل النسخة `20261014204246`.
 
 - **حالة قاعدة البيانات**: جميع ترحيلات التسطير (0021، 0022، 0024 إلى 0032) تم تطبيقها رسمياً وتسجيلها في Supabase Migration History.
+
+## [2026-10-15 05:10:00 +03:00] — Qoder
+### تدقيق حالة قاعدة البيانات الحية بعد الترحيلات + تحديد الـ DDL المعلّق
+- **التدقيق بعد تنفيذ الترحيلات (0025 → 0032)**: الفحص المباشر للقاعدة الحية (ref `ejrojwbbflzchasvgexr`) أكّد أن بيانات jsonb انتقلت إلى الأعمدة الرئيسية في النطاقات المرحَّلة: `notifications` صارت تحمل `title/message/type/category/is_public/is_read/creator_id/creator_name` + جدول الاستقبال `public.notification_recipient`، و`orders` تحمل أعمدة الهوية والمرحلة والعملات والمبالغ. **حقل `data` لم يُسقط بعد** — إسقاطه محجوز للترحيل `0034_drop_legacy_jsonb_payloads.sql` الذي يجب أن يُنفَّذ بعد نشر الكود المسطّح بالكامل.
+- **قيد الصلاحيات (سبب التعليق)**: دور التشغيل `alx_api_runtime` يملك DML فقط ولا يملك أي حق `CREATE/ALTER/DROP`، وكل محاولات إنشاء الجداول/Aعمدة من التطبيق أو عبر موصل Supabase MCP فشلت (`MCP error -32603` و`list_projects` محجوب بالسياسة). لذلك أي بنية ناقصة يجب أن ينفّذها المشغّل من لوحة Supabase.
+- **الأصول (`public.assets`) — سبب خطأ قسم الأصول**:
+  - الأعمدة الحية فقط: `asset_id, created_at, asset_code, account_id, status, currency, is_active, type, account_code, name_ar, name_en, updated_at, created_by, updated_by`.
+  - الأعمدة التي يقرأها الـAPI وغير موجودة: `category`, `cost`, `purchase_date`, `assigned_courier_id`, `assigned_courier_name` → أخطاء `42703 column "category" does not exist`.
+  - الجدول الابن مفقود كليًا: `42P01 relation "public.asset_maintenance_log" does not exist` (سجلات الصيانة يجب أن تكون صفوفًا، لا نصًا ولا jsonb).
+  - العلاج: الترحيل `0023_finance_admin_assets_grants_purge.sql` (لم يُطبَّق).
+- **الإشعارات — بقية الخطأ بعد إصلاح التجميد**: مسارا سجلات التسليم والإرسال الخارجي يفشلان لأن جدول الصندوق غير موجود: `to_regclass('alx_api_private.notification_outbox') IS NULL`. العلاج: الترحيل `0010_notifications_outbox.sql` (لم يُطبَّق).
+- **حذف الطلبات**: `DELETE /api/v1/orders/{id}` وحذف الدفعة يرجعان 500 بسبب قيد/مشغّل يتعلق بسجل التغييرات عند الحذف. العلاج: الترحيل `0036_fix_order_deletion.sql` (لم يُطبَّق).
+- **حالة قائمة الحسابات (`public.accounts`)**: 80 صفًا كلها نشطة و17 قيمة `acc_sub_id` مميزة؛ الحساب القابل للترحيل هو من يحمل `acc_sub_id` (أوراق)، والأوراق النقدية/البنكية = `sub 111` (3 حسابات) و`sub 112` (3 حسابات)؛ المعرّفات بصيغة `1110-0001`. إسقاط الـAPI يعمل ويوصل `acc_sub_id AS "subAccountId"` — أي أن غياب القائمة في الواجهة لم يكن نقص بنية بل أثرًا جانبيًا لعاصفة الطلبات.
+- **دليل المراحل (`public.order_status`)**: 12 مرحلة، `order_status_id` نصي 1..12 يساوي `sort_order` (1 معلق … 9 تم التسليم `is_last` … 12 لم يتم الدفع).
+- **خلل سلامة بيانات مكتشَف**: تباعد `orders.order_status_id` عن `orders.order_status1` — العينات الحية أظهرت 4 من 5 صفوف غير متطابقة، والنص هو الأحدث كتابةً (المسارات القديمة كانت تحدّث النص وحده). النص المرجّح هو الأصل والمعروف يُعاد تهيئته منه فقط.
+- **الترحيل الجديد `0037_sync_order_status_id_from_text.sql`**: يعيد تهيئة المعرّف بثلاث مراحل مقيّدة بـ `IS DISTINCT FROM` (مطابقة عربية حرفية، ثم إنجليزية عند غياب مطابقة عربية، ثم `data->>'orderStatusId'` للصفوف بلا نص قبل إسقاط `data`)، وينتهي بحارس `DO $$ ... RAISE EXCEPTION 'order_status_id is inconsistent ...'` يمنع الاختتام عند أي تباعد متبقٍّ.
+- **المحاكاة الحية للتحقق (بدون كتابة)**: نُفِّذ نص 0037 داخل معاملة `BEGIN ... ROLLBACK` على القاعدة الحية: 4 صفوف تم إصلاحها، وفحص الحارس بعد الإصلاح أعطى `STILL DIVERGENT: 0` مع تطابق الصفوف (مثال: `order_status_id = 4` ↔ «وصل مستودع السعودية») ثم تراجعت المعاملة كاملة.
+- **حصيلة الحالة**: الترحيلات المطبَّقة = 0021، 0022، 0024 → 0032. المعلَّقة وتحتاج لوحة Supabase = 0010، 0023، 0036، 0037 (مجمَّعة في `migrations_pending_2026-10-15.sql`)، ثم 0034 آخرًا.

@@ -156,6 +156,95 @@ export interface OrderApiDto {
   updatedBy: string | null;
 }
 
+/**
+ * تفاصيل الطلب المسطّحة — كل مفتاح هنا عمود حقيقي في public.orders ويرسله الواجهة إلى alx_api.
+ * Flat order detail — every key here is a real column in public.orders sent by the UI to alx_api.
+ * لا توجد أي حمولة jsonb في مسار الكتابة. / The write path carries no jsonb payload.
+ */
+export interface OrderDetailPayload {
+  totalCostYER?: number | null;
+  totalCostSAR?: number | null;
+  productsSum?: number | null;
+  sourcingCostAmount?: number | null;
+  sourcingCostSource?: string | null;
+  deliveryCourierFee?: number | null;
+  deliveryCourierFeeCurrency?: string | null;
+  deliveryCourierFeeOrderCurrency?: number | null;
+  shippingCostSAR?: number | null;
+  shippingCourierFeeRate?: number | null;
+  productInsuranceFee?: number | null;
+  packagingFee?: number | null;
+  packagingFeeRate?: number | null;
+  profitCompanySAR?: number | null;
+  profitSaudiSAR?: number | null;
+  profitPerKgRate?: number | null;
+  companyProfitRate?: number | null;
+  sheinRedPrice?: number | null;
+  cbmShippingRateValue?: number | null;
+  totalCBM?: number | null;
+  totalWeight?: number | null;
+  amountPaid?: number | null;
+  amountRemaining?: number | null;
+  cashAmount?: number | null;
+  bankAmount?: number | null;
+  paymentMethod?: string | null;
+  bankReference?: string | null;
+  payLater?: boolean | null;
+  exchangeRate?: number | null;
+  exchangeRateUSD?: number | null;
+  exchangeRateYER?: number | null;
+  customerAccountId?: string | null;
+  cashAccountId?: string | null;
+  bankAccountId?: string | null;
+  bankCommissionRate?: number | null;
+  bankCommissionType?: string | null;
+  bankCommissionEnabled?: boolean | null;
+  couponRate?: number | null;
+  couponValue?: number | null;
+  couponEnabled?: boolean | null;
+  deliveryStatus?: string | null;
+  locationYemen?: string | null;
+  shippingCompany?: string | null;
+  internalNotes?: string | null;
+  cartShareCode?: string | null;
+  addShippingEnabled?: boolean | null;
+  homeDeliveryEnabled?: boolean | null;
+  packagingFeeEnabled?: boolean | null;
+  deductSourcingCostFromCourier?: boolean | null;
+  viaShippingAgent?: boolean | null;
+  directApprove?: boolean | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  customerEmail?: string | null;
+  customerAddress?: string | null;
+  recipientName?: string | null;
+  recipientPhone?: string | null;
+  recipientAddress?: string | null;
+  deliveryCity?: string | null;
+  orderSourceName?: string | null;
+  goodsDescription?: string | null;
+  customerUid?: string | null;
+  portalUid?: string | null;
+  createdByName?: string | null;
+}
+
+// مفاتيح التفاصيل المسطّحة وقتياً حتى يستطيع بوابة الـAPI تقسيم حمولة التعديل بين الأعمدة الرئيسية والتفاصيل.
+// Runtime flat-detail key list so the API gateway can split an update payload between identity columns and detail columns.
+export const orderDetailPayloadKeys: readonly (keyof OrderDetailPayload)[] = [
+  'totalCostYER', 'totalCostSAR', 'productsSum', 'sourcingCostAmount', 'sourcingCostSource',
+  'deliveryCourierFee', 'deliveryCourierFeeCurrency', 'deliveryCourierFeeOrderCurrency', 'shippingCostSAR',
+  'shippingCourierFeeRate', 'productInsuranceFee', 'packagingFee', 'packagingFeeRate', 'profitCompanySAR',
+  'profitSaudiSAR', 'profitPerKgRate', 'companyProfitRate', 'sheinRedPrice', 'cbmShippingRateValue',
+  'totalCBM', 'totalWeight', 'amountPaid', 'amountRemaining', 'cashAmount', 'bankAmount', 'paymentMethod',
+  'bankReference', 'payLater', 'exchangeRate', 'exchangeRateUSD', 'exchangeRateYER', 'customerAccountId',
+  'cashAccountId', 'bankAccountId', 'bankCommissionRate', 'bankCommissionType', 'bankCommissionEnabled',
+  'couponRate', 'couponValue', 'couponEnabled', 'deliveryStatus', 'locationYemen', 'shippingCompany',
+  'internalNotes', 'cartShareCode', 'addShippingEnabled', 'homeDeliveryEnabled', 'packagingFeeEnabled',
+  'deductSourcingCostFromCourier', 'viaShippingAgent', 'directApprove', 'customerName', 'customerPhone',
+  'customerEmail', 'customerAddress', 'recipientName', 'recipientPhone', 'recipientAddress', 'deliveryCity',
+  'orderSourceName', 'goodsDescription', 'customerUid', 'portalUid', 'createdByName',
+];
+
 export interface OrderCreateInput {
   orderNumber: string;
   status?: string | null;
@@ -164,6 +253,7 @@ export interface OrderCreateInput {
   orderStatusId?: string | null;
   orderSourceId?: string | null;
   orderSourceType?: string | null;
+  externalOrderNumber?: string | null;
   deliveryCourierId?: string | null;
   shippingCourierId?: string | null;
   orderPartyId?: string | null;
@@ -174,10 +264,13 @@ export interface OrderCreateInput {
   orderPartyAccountId?: string | null;
   totalAmount?: number | null;
   currency?: string | null;
+  orderCurrency?: string | null;
+  orderCurrencyPrice?: number | null;
   notes?: string | null;
   paymentStatus?: string | null;
   orderDate?: IsoUtcString | null;
-  orderData?: Partial<OrderSupplementalData>;
+  orderDetail?: OrderDetailPayload;
+  firedTriggers?: readonly string[];
   recipientName?: string | null;
   deliveryCity?: string | null;
   totalPrice?: number | null;

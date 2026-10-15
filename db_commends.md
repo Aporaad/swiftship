@@ -2962,3 +2962,69 @@ SELECT k.key AS key, count(*)::int AS used_by_rows, max(left(k.value #>> '{}', 6
 -- النتيجة: نجاح كامل (Success: true) - Version: 20261014204246
 ```
 - تم التحقق عبر استدعاء `list_migrations` الرسمي: ظهرت الترحيلات الأربعة جميعها مسجلة وموثقة في سجل ترحيلات Supabase `schema_migrations`.
+
+## [2026-10-15 05:10:00 +03:00] — AI Model: Qoder (Claude Sonnet 4.6)
+### أوامر وفحوصات هذا المسار — كلها قراءة فقط أو داخل معاملة متراجعة (لا تغيير دائم)
+```sql
+-- 1) فحص بنية جدول الأصول (قراءة فقط) — كشف الأعمدة الناقصة التي تسبب خطأ قسم الأصول (42703/42P01)
+SELECT column_name, data_type
+  FROM information_schema.columns
+ WHERE table_schema = 'public' AND table_name = 'assets'
+ ORDER BY ordinal_position;
+-- النتيجة الحية: asset_id, created_at, asset_code, account_id, status, currency, is_active,
+--               type, account_code, name_ar, name_en, updated_at, created_by, updated_by
+-- لا يوجد: category, cost, purchase_date, assigned_courier_id, assigned_courier_name
+
+-- 2) فحص وجود الجدول الابن لسجلات صيانة الأصول (قراءة فقط)
+SELECT to_regclass('public.asset_maintenance_log') AS maintenance_log_table;
+-- النتيجة: NULL  => الجدول غير موجود (يُنشئه الترحيل 0023)
+
+-- 3) فحص وجود صندوق إرسال الإشعارات (قراءة فقط) — سبب خطأ سجلات التسليم/الإرسال الخارجي
+SELECT to_regclass('alx_api_private.notification_outbox') AS outbox_table;
+-- النتيجة: NULL  => الجدول غير موجود (يُنشئه الترحيل 0010)
+
+-- 4) فحص صحة أعمدة الإشعارات المسطّحة بعد الترحيل 0025 (قراءة فقط)
+SELECT column_name FROM information_schema.columns
+ WHERE table_schema = 'public' AND table_name = 'notifications'
+   AND column_name IN ('title','message','type','category','is_public','is_read','creator_id','creator_name');
+-- النتيجة: الأعمدة الثمانية موجودة — التسطير تم فعلًا وبياناته مقروءة من الأعمدة الرئيسية
+
+-- 5) فحص دليل المراحل (قراءة فقط)
+SELECT order_status_id, sort_order, name_ar, name_en, is_last
+  FROM public.order_status ORDER BY sort_order;
+-- النتيجة: 12 مرحلة؛ order_status_id نصي 1..12 يطابق sort_order
+
+-- 6) كشف تباعد مرحلة الطلب بين النص والمعرّف (قراءة فقط)
+SELECT o.order_id, o.order_status1, o.order_status_id, os.order_status_id AS resolved_id
+  FROM public.orders o
+  LEFT JOIN public.order_status os ON btrim(os.name_ar) = btrim(o.order_status1)
+ WHERE o.order_status_id IS DISTINCT FROM os.order_status_id;
+-- النتيجة: 4 من 5 صفوف عيّنة متباعدة، والنص (order_status1) هو الأحدث كتابةً
+
+-- 7) محاكاة الترحيل 0037 على القاعدة الحية داخل معاملة متراجعة (BEGIN ... ROLLBACK — لا تغيير دائم)
+--    نص 0037 كما هو (الإسقاط الثلاثي من order_status العربي ثم الإنجليزي ثم data->>'orderStatusId')
+--    بدون 'BEGIN;' الافتتاحي وبدون 'COMMIT;' الختامي، مع استبدال COMMIT بـ ROLLBACK
+BEGIN;
+-- ... (جسم 0037: ثلاث عبارات UPDATE مقيّدة بـ IS DISTINCT FROM + حارس DO/RAISE EXCEPTION) ...
+-- ثم فحص بعد الإصلاح:
+SELECT count(*) AS still_divergent
+  FROM public.orders o
+  JOIN public.order_status os ON btrim(os.name_ar) = btrim(o.order_status1)
+ WHERE o.order_status_id IS DISTINCT FROM os.order_status_id;
+ROLLBACK;
+-- النتيجة: 4 صفوف يُصلحها الإسقاط، الحارس لم يرمز استثناءً، STILL DIVERGENT = 0،
+--          وعيّنة بعد المحاكاة: order_status_id = "4" ↔ «وصل مستودع السعودية». كل التغييرات تراجعت.
+
+-- 8) فحص قائمة الحسابات المالية وقابلية الترحيل (قراءة فقط)
+SELECT count(*) AS total, count(*) FILTER (WHERE is_active) AS active,
+       count(DISTINCT acc_sub_id) AS distinct_subs
+  FROM public.accounts;
+-- النتيجة: 80 حسابًا، كلها نشطة، 17 acc_sub_id مميزًا؛ sub 111 = نقدية (3)، sub 112 = بنكية (3)
+--          معرّفات بصيغة 1110-0001، والإسقاط يعيد acc_sub_id AS "subAccountId"
+
+-- 9) فحص إسقاط قائمة الطلبات (قراءة فقط) — إثبات أن حقول المصدر/الحالة/العملة تصل من JOIN
+--    (orderListColumns + orderListFrom في operations.repository.ts نُفِّذت مباشرة بعينة محدودة)
+-- النتيجة: orderStatus/orderStatusNameAr/orderStatusNameEn/orderSourceName/orderSourceType/
+--          currency/orderCurrency/المبالغ وحالة الدفع كلها معادة بالقيم الصحيحة
+```
+- ملاحظة تنفيذية: لم يُنفَّذ أي `CREATE/ALTER/DROP` — دور `alx_api_runtime` بلا صلاحيات DDL، والموصل المباشر محجوب (`MCP error -32603`)؛ لذلك حُزمت الترحيلات المعلّقة (0010، 0023، 0036، 0037) في `migrations_pending_2026-10-15.sql` لينفّذها المشغّل من لوحة Supabase، ويبقى `0034_drop_legacy_jsonb_payloads.sql` آخرًا بعد نشر الكود المسطّح.

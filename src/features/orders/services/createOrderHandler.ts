@@ -1,5 +1,7 @@
 import type { Dispatch, FormEvent, SetStateAction } from "react";
 import type { OrderParty } from "../../../services/orderPartyService";
+import type { OrderDetailPayload } from "../../../data/dtos/orders.dto";
+import { describeError } from "../../../shared/contracts/error.contracts";
 import { activityLogService } from "../../../services/activityLogService";
 import { autoEntryService } from "../../../services/autoEntryService";
 import { financialAccountService } from "../../../services/financialAccountService";
@@ -391,37 +393,67 @@ export function createOrderHandler(
       );
       const orderCreatedThroughAggregate = Boolean(createOrderAggregate);
       if (createOrderAggregate) {
-        const orderData: Record<string, unknown> = { ...payload };
-        delete orderData.orderNumber;
-        delete orderData.trackingNumber;
-        delete orderData.customerId;
-        delete orderData.orderStatusId;
-        delete orderData.order_status_id;
-        delete orderData.orderStatus;
-        delete orderData.status;
-        delete orderData.currency;
-        delete orderData.orderCurrency;
-        delete orderData.orderCurrencyPrice;
-        delete orderData.orderSourceId;
-        delete orderData.orderSourceType;
-        delete orderData.deliveryCourierId;
-        delete orderData.delivery_courier_id;
-        delete orderData.shippingCourierId;
-        delete orderData.shipping_courier_id;
-        delete orderData.orderPartyId;
-        delete orderData.orderPartyType;
-        delete orderData.isStaffOrder;
-        delete orderData.employeeId;
-        delete orderData.courierId;
-        delete orderData.orderPartyAccountId;
-        delete orderData.createdByName;
-        delete orderData.updatedBy;
-        delete orderData.externalOrderNumber;
-        delete orderData.createdAt;
+        // كل مفتاح أدناه عمود مستقل في public.orders؛ لا تُرسل أي حمولة jsonb إلى الـAPI.
+        // Every key below is an independent column in public.orders; no jsonb payload is sent to the API.
+        const orderDetail: OrderDetailPayload = {
+          totalCostYER: payload.totalCostYER,
+          totalCostSAR: payload.totalCostSAR,
+          productsSum: payload.productsSum,
+          sourcingCostAmount: payload.sourcingCostAmount,
+          sourcingCostSource: payload.sourcing_cost,
+          deliveryCourierFee: payload.deliveryCourierFee,
+          deliveryCourierFeeCurrency: payload.deliveryCourierFeeCurrency,
+          deliveryCourierFeeOrderCurrency: payload.deliveryCourierFeeOrderCurrency,
+          shippingCostSAR: payload.shippingCostSAR,
+          shippingCourierFeeRate: payload.shippingCourierFeeRate,
+          productInsuranceFee: payload.productInsuranceFee,
+          packagingFee: payload.packagingFee,
+          packagingFeeRate: payload.packagingFeeRate,
+          profitCompanySAR: payload.profitCompanySAR,
+          profitSaudiSAR: payload.profitSaudiSAR,
+          profitPerKgRate: payload.profitPerKgRate,
+          companyProfitRate: payload.companyProfitRate,
+          sheinRedPrice: payload.sheinRedPrice,
+          cbmShippingRateValue: payload.cbmShippingRateValue,
+          totalCBM: payload.totalCBM,
+          totalWeight: payload.totalWeight,
+          amountPaid: payload.amountPaid,
+          amountRemaining: payload.amountRemaining,
+          cashAmount: payload.cashAmount,
+          bankAmount: payload.bankAmount,
+          paymentMethod: payload.paymentMethod,
+          bankReference: payload.bankReference,
+          payLater: payload.payLater,
+          exchangeRate: payload.exchangeRate,
+          exchangeRateUSD: payload.exchangeRateUSD,
+          exchangeRateYER: payload.exchangeRateYER,
+          cashAccountId: payload.cashAccountId,
+          bankAccountId: payload.bankAccountId,
+          bankCommissionRate: payload.bankCommissionRate,
+          bankCommissionType: payload.bankCommissionType,
+          bankCommissionEnabled: payload.bankCommissionEnabled,
+          couponRate: payload.couponRate,
+          couponValue: payload.couponValue,
+          couponEnabled: payload.couponEnabled,
+          deliveryStatus: payload.deliveryStatus,
+          locationYemen: payload.locationYemen,
+          shippingCompany: payload.shippingCompany,
+          cartShareCode: payload.cartShareCode,
+          addShippingEnabled: payload.addShippingEnabled,
+          homeDeliveryEnabled: payload.homeDeliveryEnabled,
+          packagingFeeEnabled: payload.packagingFeeEnabled,
+          deductSourcingCostFromCourier: payload.deductSourcingCostFromCourier,
+          viaShippingAgent: payload.viaShippingAgent,
+          directApprove: payload.directApprove,
+          customerName: formData.customerName || undefined,
+          customerPhone: formData.customerPhone || undefined,
+          customerAddress: formData.customerAddress || undefined,
+          orderSourceName: formData.orderSourceName || undefined,
+          createdByName: payload.createdByName,
+        };
         await createOrderAggregate({
           order: {
             orderNumber: payload.orderNumber,
-            status: payload.orderStatus,
             trackingNumber: payload.trackingNumber,
             customerId: payload.customerId,
             orderStatusId: payload.orderStatusId,
@@ -430,14 +462,18 @@ export function createOrderHandler(
             isStaffOrder: payload.isStaffOrder,
             employeeId: payload.employeeId,
             courierId: payload.courierId,
+            orderPartyAccountId: payload.orderPartyAccountId,
             deliveryCourierId: payload.deliveryCourierId,
             shippingCourierId: payload.shippingCourierId,
             orderSourceId: payload.orderSourceId,
             orderSourceType: payload.orderSourceType,
-            currency: payload.currency,
+            externalOrderNumber: payload.externalOrderNumber,
+            currency: formData.currency || undefined,
+            orderCurrency: orderCurrency || undefined,
             paymentStatus: payload.paymentStatus,
             notes: (formData as unknown as Record<string, unknown>).notes ? String((formData as unknown as Record<string, unknown>).notes) : undefined,
-            orderData,
+            firedTriggers: initialFiredTriggers.filter(trigger => trigger.length > 0),
+            orderDetail,
           },
           items: items.map(item => ({
             productId: item.product_id || item.productId,
@@ -938,9 +974,11 @@ export function createOrderHandler(
       resetCreateForm();
     } catch (err) {
       console.error(err);
+      // إظهار سبب الـAPI الحقيقي بدل رسالة عامة: رسائل التحقق الحقلي تصل في تفاصيل الخطأ.
+      // Surface the real API reason (field-level validation issues travel in error details).
       notificationService.notify({
-        title: "Error",
-        message: "Could not create order document due to a write blocker.",
+        title: isAr ? "تعذّر إنشاء الطلب" : "Could not create order",
+        message: describeError(err, isAr ? "تعذّر حفظ الطلب." : "Order could not be saved."),
         type: "error",
         category: "order",
       });

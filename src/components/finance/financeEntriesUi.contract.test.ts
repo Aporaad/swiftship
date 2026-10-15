@@ -7,10 +7,15 @@ const source = (name: string) => readFileSync(resolve(process.cwd(), 'src', 'com
 describe('عقد واجهة القيود الجديدة', () => {
   it('لا يطلب عمود accounts.entity_name غير الموجود ويستخدم أسماء الحسابات الصريحة', () => {
     const page = readFileSync(resolve(process.cwd(), 'src', 'features', 'financeEntries', 'pages', 'FinanceEntriesPage.tsx'), 'utf8');
-    // عقد alx_api: أعمدة الحسابات تُعاد بصيغة camelCase (accountNameAr/accountNameEn) مع دعم snake_case للأغلفة القديمة
-    expect(page).toContain('readString(item.accountNameAr ?? item.acc_name_ar) || readString(item.accountNameEn ?? item.acc_name_en) || stringValue(item.accountId ?? item.account_id)');
+    // عقد alx_api فقط: الأسماء تأتي camelCase (accountNameAr/accountNameEn) ولا مراجع snake_case قديمة.
+    expect(page).toContain('readString(item.accountNameAr) || readString(item.accountNameEn) || stringValue(item.accountId ?? item.id)');
+    expect(page).not.toContain('acc_name_ar');
+    expect(page).not.toContain('entity_name');
     const nameArLine = page.split('\n').find((line) => line.includes('nameAr:')) ?? '';
     expect(nameArLine).not.toContain('entity_name');
+    // الحساب القابل للقييد يُشتق من acc_sub_id (subAccountId) وليس من اسم الكيان.
+    // Postability comes from the sub-account id, never from an entity name.
+    expect(page).toContain('isPosting: Boolean(item.subAccountId)');
   });
 
   it('يفتح تعديلًا للمسودة فقط ويمرر بيانات السطور إلى نموذج الاستبدال الذري', () => {

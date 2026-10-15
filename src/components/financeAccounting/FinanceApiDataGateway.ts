@@ -1,3 +1,4 @@
+import { mapAccountRow } from "../../services/financeApi";
 import { ApiClient } from "../../data/http/api-client";
 
 type ApiEnvelope<T> = { success: true; data: T; meta?: { total?: number } };
@@ -13,8 +14,8 @@ const apiClient = new ApiClient({
   maxReadRetries: 0,
 });
 
-const MOVEMENT_PAGE_SIZE = 1_000;
-const MAX_MOVEMENT_ROWS = 20_000;
+const PAGE_SIZE = 1_000;
+const MAX_ROWS = 20_000;
 
 const apiCollectionPaths: Record<string, string> = {
   accounts: "/api/v1/finance/accounts",
@@ -28,16 +29,29 @@ function isEnabled(): boolean {
   return true;
 }
 
+/**
+ * يوحّد صفوف الحسابات القادمة من alx_api على شكل واحد تعرفه نماذج القيود والسندات.
+ * Normalizes API account rows into the shape the entry/voucher forms filter on: a leaf posting
+ * account is one that carries a sub-account id (acc_sub_id), never a hierarchy node.
+ */
+function normalizeAccountRow(row: Record<string, unknown>): Record<string, unknown> {
+  const account = mapAccountRow(row) as unknown as Record<string, unknown>;
+  const accSubId = String(account.accSubId ?? "").trim();
+  return {
+    ...account,
+    accSubId: accSubId || undefined,
+    isPosting: accSubId.length > 0,
+    isHierarchyNode: accSubId.length === 0,
+    name: account.accNameAr || account.entityName || account.id,
+    accountName: account.accNameAr || account.accNameEn || account.id,
+  };
+}
+
 function normalizeRows(
   collectionName: string,
   rows: Record<string, unknown>[]
 ): Record<string, unknown>[] {
-  if (collectionName === "accounts")
-    return rows.map(row => ({
-      ...row,
-      id: row.accountId ?? row.id,
-      accountName: row.accountNameAr ?? row.accountNameEn,
-    }));
+  if (collectionName === "accounts") return rows.map(normalizeAccountRow);
   if (collectionName === "main_entry")
     return rows.map(row => ({
       ...row,
@@ -58,19 +72,38 @@ function normalizeRows(
   return rows.map(row => ({ ...row, id: row.autoEntryId ?? row.id }));
 }
 
+function movementsPath(accountId: string): string {
+  return `/api/v1/finance/accounts/${encodeURIComponent(accountId)}/movements`;
+}
+
+async function fetchAllPages<T extends Record<string, unknown>>(
+  path: string,
+  query: Record<string, string | number | boolean | undefined> = {}
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let offset = 0; offset < MAX_ROWS; offset += PAGE_SIZE) {
+    const response = await apiClient.get<ApiEnvelope<ApiPage<T>>>(path, {
+      ...query,
+      limit: PAGE_SIZE,
+      offset,
+    });
+    const page = Array.isArray(response.data)
+      ? response.data
+      : (response.data.items ?? []);
+    rows.push(...page);
+    const total = Number(response.meta?.total ?? rows.length);
+    if (page.length < PAGE_SIZE || rows.length >= total) break;
+  }
+  return rows;
+}
+
 async function fetchRows<T extends Record<string, unknown>>(
   collectionName: string
 ): Promise<T[]> {
   const path = apiCollectionPaths[collectionName];
   if (!path)
     throw new Error(`FINANCE_API_COLLECTION_UNSUPPORTED:${collectionName}`);
-  const response = await apiClient.get<ApiEnvelope<ApiPage<T>>>(path, {
-    limit: 100,
-    offset: 0,
-  });
-  const rows = Array.isArray(response.data)
-    ? response.data
-    : (response.data.items ?? []);
+  const rows = await fetchAllPages<T>(path, collectionName === "accounts" ? { includeInactive: true } : {});
   return normalizeRows(collectionName, rows) as T[];
 }
 
@@ -125,17 +158,7 @@ export const financeApiDataGateway = {
    * Fetch transactions for a specific financial account once via API
    */
   async getAccountTransactions(accountId: string): Promise<Record<string, unknown>[]> {
-    const rows: Record<string, unknown>[] = [];
-    for (let offset = 0; offset < MAX_MOVEMENT_ROWS; offset += MOVEMENT_PAGE_SIZE) {
-      const response = await apiClient.get<ApiEnvelope<Record<string, unknown>[]>>(
-        `/api/v1/finance/accounts/${encodeURIComponent(accountId)}/movements`,
-        { limit: MOVEMENT_PAGE_SIZE, offset },
-      );
-      const page = Array.isArray(response.data) ? response.data : [];
-      rows.push(...page);
-      const total = Number(response.meta?.total ?? rows.length);
-      if (page.length < MOVEMENT_PAGE_SIZE || rows.length >= total) break;
-    }
+    const rows = await fetchAllPages(movementsPath(accountId));
     return normalizeRows("account_trans", rows);
   },
 
@@ -147,17 +170,7 @@ export const financeApiDataGateway = {
     let disposed = false;
     const load = async () => {
       try {
-        const rows: Record<string, unknown>[] = [];
-        for (let offset = 0; offset < MAX_MOVEMENT_ROWS; offset += MOVEMENT_PAGE_SIZE) {
-          const response = await apiClient.get<ApiEnvelope<Record<string, unknown>[]>>(
-            `/api/v1/finance/accounts/${encodeURIComponent(accountId)}/movements`,
-            { limit: MOVEMENT_PAGE_SIZE, offset },
-          );
-          const page = Array.isArray(response.data) ? response.data : [];
-          rows.push(...page);
-          const total = Number(response.meta?.total ?? rows.length);
-          if (page.length < MOVEMENT_PAGE_SIZE || rows.length >= total) break;
-        }
+        const rows = await fetchAllPages(movementsPath(accountId));
         if (!disposed) onData(normalizeRows("account_trans", rows));
       } catch (error) {
         if (!disposed) onError(error);

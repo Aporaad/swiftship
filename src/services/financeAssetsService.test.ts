@@ -38,7 +38,9 @@ const assetRow = {
   assignedCourierName: null,
   status: 'Active',
   notes: null,
-  maintenanceLogs: '[{"logId":"MNT-1","cost":"250","currency":"USD","type":"Repair","notes":"n","doneBy":"d","date":"2026-02-01","createdAt":1}]',
+  maintenanceLogs: [
+    { logId: 'MNT-1', cost: 250, currency: 'USD', type: 'Repair', notes: 'n', doneBy: 'd', date: '2026-02-01', createdAt: 1 },
+  ],
   accountId: 'acc-1',
   accountCode: '1210-0001',
   isActive: true,
@@ -71,11 +73,22 @@ describe('خدمة الأصول المالية', () => {
     vi.clearAllMocks();
   });
 
-  it('يقرأ الأصول من alx_api ويطبّع الحقول وسجلات الصيانة المخزّنة نصًا', async () => {
+  it('يقرأ الأصول من alx_api ويطبّع الحقول وسجلات الصيانة كصفوف ابنة', async () => {
     mocks.readAllFinanceRows.mockResolvedValue([assetRow, { assetCode: 'بلا معرف' }]);
 
     await expect(financeAssetsService.list()).resolves.toEqual([sampleAsset]);
     expect(mocks.readAllFinanceRows).toHaveBeenCalledWith('/api/v1/finance/assets');
+  });
+
+  it('يرفض سجلات الصيانة المخزّنة كنص أو jsonb فلا تتحول إلى صفوف', async () => {
+    // لا حقول جامعة: السجل النصي ليس صف صيانة ولا يُقرأ مطلقًا.
+    // A text/jsonb payload is not a child row and must never be parsed into the view model.
+    mocks.readAllFinanceRows.mockResolvedValue([
+      { ...assetRow, maintenanceLogs: '[{"logId":"MNT-9","cost":1}]' },
+    ]);
+
+    const [asset] = await financeAssetsService.list();
+    expect(asset?.maintenanceLogs).toEqual([]);
   });
 
   it('يرفض التسجيل بلا رمز أو أسماء أو تكلفة موجبة', async () => {

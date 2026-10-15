@@ -574,24 +574,18 @@ class FinancialAccountService {
 
   /**
    * Get all accounts with optional filtering by entity type
+   * الفشل يصل إلى المستدعي بدل إرجاع قائمة فارغة تُظهر واجهة بلا حسابات.
+   * Read failures propagate to the caller instead of masquerading as "no accounts".
    */
   async getAllAccounts(
     entityType?: AccountEntityType,
   ): Promise<FinancialAccount[]> {
-    try {
-      const rows = await readAllFinanceRows(ACCOUNTS_PATH, { includeInactive: true });
-      return rows
-        .filter((row) => !entityType || row?.entityType === entityType)
-        .map(mapAccountRow)
-        .filter((account): account is FinancialAccount => account !== null)
-        .sort((a, b) => String(a.accountCode).localeCompare(String(b.accountCode)));
-    } catch (error) {
-      console.error(
-        "[FinancialAccountService] Error fetching accounts:",
-        error,
-      );
-      return [];
-    }
+    const rows = await readAllFinanceRows(ACCOUNTS_PATH, { includeInactive: true });
+    return rows
+      .filter((row) => !entityType || row?.entityType === entityType)
+      .map(mapAccountRow)
+      .filter((account): account is FinancialAccount => account !== null)
+      .sort((a, b) => String(a.accountCode).localeCompare(String(b.accountCode)));
   }
 
   /**

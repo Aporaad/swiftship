@@ -295,6 +295,8 @@ export interface OrderRecord {
   customerAddress?: string | null;
   orderStatusId?: string | number | null;
   order_status_id?: string | number | null;
+  orderStatusNameAr?: string | null;
+  orderStatusNameEn?: string | null;
   orderSourceId?: string | null;
   order_source_id?: string | null;
   orderSourceName?: string | null;

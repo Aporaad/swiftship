@@ -1,10 +1,23 @@
 import { ApiClient, ApiClientError } from '../../../data/http/api-client';
+import { orderDetailPayloadKeys, type OrderDetailPayload } from '../../../data/dtos/orders.dto';
 import type { OrdersFeatureApi, OrdersCollectionRepository, OrdersWritePayload } from '../api';
 import type { OrderFeatureRecord, ShipmentFeatureRecord } from '../types';
 
 type ApiEnvelope<T> = { success: true; data: T };
 type ApiRow = Record<string, unknown> & { id?: string };
 type ApiCollectionConfig = { readPath: string; writePath?: string; idKey: string };
+
+// مفاتيح المرحلة لا تُرسل لمسار البيانات؛ مسار الحالة وحده يحرّك الترتيب ويحرس التراجع.
+// Stage keys never go to the data route; only the status route moves the sequence and guards regression.
+const ORDER_STAGE_KEYS = new Set(['status', 'orderStatus', 'orderStatusId', 'order_status_id']);
+const pickOrderDetail = (changes: OrdersWritePayload): OrderDetailPayload => {
+  const detail: Record<string, unknown> = {};
+  for (const key of orderDetailPayloadKeys) {
+    const value = Reflect.get(changes, key);
+    if (value !== undefined) detail[key] = value;
+  }
+  return detail as OrderDetailPayload;
+};
 
 const client = new ApiClient({
   baseUrl: import.meta.env.VITE_ALX_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:3001',
@@ -19,9 +32,21 @@ const normalize = <T extends ApiRow>(row: T, idKey: string): T & { id: string } 
 const extractRows = <T extends ApiRow>(data: T[] | { items?: T[] } | undefined): T[] => Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
 
 function makeApiCollection<T extends ApiRow>(config: ApiCollectionConfig): OrdersCollectionRepository<T> {
+  // الصفحات تُجمع بالكامل: الـAPI يقبل 1000 صف كحد أقصى لكل صفحة، والقطة القديمة عند 100 كانت
+  // تُخفي البيانات حين تتجاوز القائمة الحدّ (حسابات/منتجات/طلبات) فتظهر القوائم منقوصة.
+  // Pages are collected in full: the API caps a page at 1000 rows, and the old single 100-row read
+  // silently hid every row past the cap, making pickers and lists look empty or partial.
+  const PAGE_SIZE = 1000;
+  const MAX_ROWS = 5000;
   const list = async (): Promise<readonly T[]> => {
-    const response = await client.get<ApiEnvelope<T[] | { items?: T[] }>>(config.readPath, { limit: 100, offset: 0 });
-    return extractRows(response.data).map((row) => normalize(row, config.idKey) as T);
+    const rows: T[] = [];
+    for (let offset = 0; offset < MAX_ROWS; offset += PAGE_SIZE) {
+      const response = await client.get<ApiEnvelope<T[] | { items?: T[] }>>(config.readPath, { limit: PAGE_SIZE, offset });
+      const pageRows = extractRows(response.data);
+      rows.push(...pageRows);
+      if (pageRows.length < PAGE_SIZE) break;
+    }
+    return rows.map((row) => normalize(row, config.idKey) as T);
   };
   const pathFor = (id: string) => `${config.writePath ?? config.readPath}/${encodeURIComponent(id)}`;
   return {
@@ -96,11 +121,15 @@ const canonicalProduct = (payload: OrdersWritePayload, id: string): Record<strin
 });
 
 const settings = {
+  // قواعد القيود التلقائية تُقرأ كاملة: صفحة واحدة بحد 100 كانت تُسقط القواعد التي تتجاوز الحد
+  // فتتوقف القيود التلقائية بصمت؛ 1000 هو أقصى صفحة يقبلها الـAPI.
+  // Auto-entry rules are read in full: a 100-row page silently dropped rules past the cap,
+  // which stops automatic vouchers without any error; 1000 is the API's maximum page size.
   subscribe(onData: (record: ApiRow | null) => void, onError?: (error: unknown) => void) {
     let disposed = false;
     const refresh = async () => {
       try {
-        const response = await client.get<ApiEnvelope<ApiRow[] | { items?: ApiRow[] }>>('/api/v1/finance/auto-entry-rules', { limit: 100, offset: 0 });
+        const response = await client.get<ApiEnvelope<ApiRow[] | { items?: ApiRow[] }>>('/api/v1/finance/auto-entry-rules', { limit: 1000, offset: 0 });
         if (!disposed) onData({ id: 'automatic-voucher-rules', data: extractRows(response.data) });
       } catch (error) { if (!disposed) onError?.(error); }
     };
@@ -109,7 +138,7 @@ const settings = {
     return () => { disposed = true; clearInterval(timer); };
   },
   async get() {
-    const response = await client.get<ApiEnvelope<ApiRow[] | { items?: ApiRow[] }>>('/api/v1/finance/auto-entry-rules', { limit: 100, offset: 0 });
+    const response = await client.get<ApiEnvelope<ApiRow[] | { items?: ApiRow[] }>>('/api/v1/finance/auto-entry-rules', { limit: 1000, offset: 0 });
     return { id: 'automatic-voucher-rules', data: extractRows(response.data) };
   },
   set: async () => unsupported('settings:set'),
@@ -141,9 +170,27 @@ export const ordersApiDataGateway: OrdersFeatureApi = {
       return { id: String(response.data.orderId ?? id) };
     },
     async updateOrderRecord(id, changes) {
+      const detail = pickOrderDetail(changes);
+      const dataBody: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(changes)) {
+        if (ORDER_STAGE_KEYS.has(key)) continue;
+        if (key in detail) continue;
+        dataBody[key] = value;
+      }
+      if (Object.keys(detail).length > 0) dataBody.orderDetail = detail;
+      // تعديل البيانات يمرّ على مسار الأعمدة المسطّحة، وتغيير المرحلة يمرّ على مسارها المحروس بالتسلسل.
+      // Data edits go to the flat-column route; stage changes go to the sequence-guarded status route.
+      if (Object.keys(dataBody).length > 0) {
+        await client.patch<ApiEnvelope<ApiRow>>(`/api/v1/orders/${encodeURIComponent(id)}`, dataBody);
+      }
       const status = changes.status ?? changes.orderStatus;
-      if (typeof status !== 'string') return unsupported('orders:update');
-      await client.patch<ApiEnvelope<ApiRow>>(`/api/v1/orders/${encodeURIComponent(id)}/status`, { status });
+      const orderStatusId = typeof changes.orderStatusId === 'string' ? changes.orderStatusId : undefined;
+      if (typeof status === 'string' || orderStatusId) {
+        await client.patch<ApiEnvelope<ApiRow>>(`/api/v1/orders/${encodeURIComponent(id)}/status`, {
+          status: typeof status === 'string' ? status : undefined,
+          orderStatusId,
+        });
+      }
     },
     async createOrderItem() { return unsupported('orderItems:create'); },
     async createShipmentRecord(id, payload) {
